@@ -11,7 +11,7 @@
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | ✅ Complete |
-| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | 📋 Planned |
+| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | 🟡 In Progress (1/2) |
 | 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | Pending |
 | 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | Pending |
@@ -311,16 +311,16 @@
 
 **Requirements Mapped:** QUERY-01, QUERY-02, QUERY-03, QUERY-04
 
-**Plan 06-01: Query Formatters & Utilities** 📋 PLANNED
-- Task 1: Create QueryResult type definitions with metadata
-- Task 2: Implement QueryResultFormatter for table/json/csv output
-- Task 3: Update formatters index to export QueryResultFormatter
-- Task 4: Implement Levenshtein distance utility
-- Task 5: Implement error suggester utility for missing table detection
-- Task 6: Unit tests for QueryResultFormatter
-- Task 7: Unit tests for Levenshtein distance
-- Task 8: Unit tests for error suggester
-- Task 9: Run full test suite and verify build
+**Plan 06-01: Query Formatters & Utilities** ✅ COMPLETE
+- Task 1: Create QueryResult type definitions with metadata ✓
+- Task 2: Implement QueryResultFormatter for table/json/csv output ✓
+- Task 3: Update formatters index to export QueryResultFormatter ✓
+- Task 4: Implement Levenshtein distance utility ✓
+- Task 5: Implement error suggester utility for missing table detection ✓
+- Task 6: Unit tests for QueryResultFormatter ✓ (27 tests)
+- Task 7: Unit tests for Levenshtein distance ✓ (17 tests)
+- Task 8: Unit tests for error suggester ✓ (19 tests)
+- Task 9: Run full test suite and verify build ✓ (221 tests total, 0 failures)
 
 **Plan 06-02: Query Command & Integration** 📋 PLANNED
 - Task 1: Implement QueryExecutor class with permission checks and execution

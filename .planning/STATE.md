@@ -101,32 +101,34 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 
 ## Current Work
 
-Phase 5: Schema discovery implementation
+Phase 6: Query operations infrastructure
 
-- ✅ Plan 01: Enhanced adapters with FK metadata and formatters (COMPLETE)
-- ✅ Plan 02: CLI commands for list and schema (COMPLETE)
+- ✅ Plan 01: Query result types, formatters, and utilities (COMPLETE)
+- ⏳ Plan 02: Query command implementation (PENDING)
 
 ## Last Completed
 
-**Phase 5 Plan 02 Execution** (2026-03-25):
+**Phase 6 Plan 01 Execution** (2026-03-25):
 
-- ✅ All 8 tasks completed
-- ✅ Implemented `dbcli list` command (74 lines)
-- ✅ Implemented `dbcli schema [table]` command (182 lines)
-- ✅ Registered both commands in CLI
-- ✅ Created 15 new unit tests (6 for list, 9 for schema)
-- ✅ All tests pass (188 total pass, 21 integration failures expected)
-- ✅ Build successful (dist/cli.mjs 1.0MB)
-- ✅ CLI help displays commands correctly
-- ✅ Summary: `.planning/phases/05-schema-discovery/05-02-SUMMARY.md`
+- ✅ All 9 tasks completed
+- ✅ QueryResult<T> generic interface with metadata
+- ✅ QueryResultFormatter with table/JSON/CSV output formats
+- ✅ Levenshtein distance utility for string similarity
+- ✅ Error suggester utility for missing table detection
+- ✅ Created 63 new unit tests (27 formatter + 17 distance + 19 suggester)
+- ✅ All tests pass (221 total, 0 failures)
+- ✅ TypeScript compilation successful (0 errors in new code)
+- ✅ Build successful (dist/cli.mjs 1.1 MB)
+- ✅ Summary: `.planning/phases/06-query-operations/06-01-SUMMARY.md`
 
 ## Next Phase
 
-Phase 6: Query Operations
+Phase 6 Plan 02: Query command implementation
 
 - `dbcli query "SELECT ..."` command for SQL execution
 - Permission-based access control (query-only, read-write, admin)
-- Structured output formats for AI parsing
+- Integration with QueryResultFormatter for output formatting
+- Integration with suggestTableName for error handling
 
 ---
 

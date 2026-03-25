@@ -38,7 +38,10 @@ export interface ColumnSchema {
   /** Whether column is primary key */
   primaryKey?: boolean
   /** Foreign key reference if applicable */
-  foreignKey?: string
+  foreignKey?: {
+    table: string
+    column: string
+  }
 }
 
 /**
@@ -53,6 +56,15 @@ export interface TableSchema {
   rowCount?: number
   /** Storage engine (PostgreSQL/MySQL) */
   engine?: string
+  /** Primary key column names */
+  primaryKey?: string[]
+  /** Foreign key constraints with metadata */
+  foreignKeys?: Array<{
+    name: string
+    columns: string[]
+    refTable: string
+    refColumns: string[]
+  }>
 }
 
 /**

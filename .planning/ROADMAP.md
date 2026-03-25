@@ -8,7 +8,7 @@
 |---|-------|------|--------------|-------|--------|
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
-| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | 🔄 Planned |
+| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
@@ -134,24 +134,24 @@
 
 **Requirements Mapped:** INIT-02
 
-**Plan 03-01: Adapter Foundation** 🔄 PLANNED
-- Task 1: Define DatabaseAdapter interface and types
-- Task 2: Create AdapterFactory for database-system-aware instantiation
-- Task 3: Implement error-mapper with categorized error messages and hints
-- Task 4: Create public exports in src/adapters/index.ts
-- Task 5: Write unit tests for AdapterFactory instantiation logic
-- Task 6: Write unit tests for error-mapper error categorization
-- Task 7: Verify full test suite passes and types compile
+**Plan 03-01: Adapter Foundation** ✅ COMPLETE
+- ✓ Task 1: Define DatabaseAdapter interface and types
+- ✓ Task 2: Create AdapterFactory for database-system-aware instantiation
+- ✓ Task 3: Implement error-mapper with categorized error messages and hints
+- ✓ Task 4: Create public exports in src/adapters/index.ts
+- ✓ Task 5: Write unit tests for AdapterFactory instantiation logic
+- ✓ Task 6: Write unit tests for error-mapper error categorization
+- ✓ Task 7: Verify full test suite passes and types compile
 
-**Plan 03-02: Adapter Implementation** 🔄 PLANNED
-- Task 1: Implement PostgreSQLAdapter with Bun.sql
-- Task 2: Implement MySQLAdapter with Bun.sql for MySQL and MariaDB
-- Task 3: Update AdapterFactory to import real adapter implementations
-- Task 4: Add connection testing to dbcli init command
-- Task 5: Write integration tests for PostgreSQL adapter
-- Task 6: Write integration tests for MySQL adapter
-- Task 7: Update init integration tests to include connection testing scenarios
-- Task 8: Verify full test suite and build
+**Plan 03-02: Adapter Implementation** ✅ COMPLETE
+- ✓ Task 1: Implement PostgreSQLAdapter with Bun.sql (243 lines)
+- ✓ Task 2: Implement MySQLAdapter with Bun.sql for MySQL and MariaDB (244 lines)
+- ✓ Task 3: Update AdapterFactory to import real adapter implementations
+- ✓ Task 4: Add connection testing to dbcli init command
+- ✓ Task 5: Write integration tests for PostgreSQL adapter (9 tests)
+- ✓ Task 6: Write integration tests for MySQL adapter (9 tests)
+- ✓ Task 7: Update init integration tests to include connection testing scenarios (3 tests)
+- ✓ Task 8: Verify full test suite and build (99 tests pass, 0 fail)
 
 **Success Criteria:**
 1. `dbcli init` successfully tests PostgreSQL connection

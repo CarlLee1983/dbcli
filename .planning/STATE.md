@@ -6,7 +6,7 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool.
 
-**Current Focus:** Phase 2 Plan 02 ✅ Complete — Init Command Ready
+**Current Focus:** Phase 3 Plan 01 ✅ Complete — Database Adapter Infrastructure Ready
 
 ---
 
@@ -33,7 +33,7 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 |-------|------|--------|
 | 1 | Project Scaffold | ✅ Complete |
 | 2 | Init & Config | ✅ Complete (Plan 01 + 02) |
-| 3 | DB Connection | Pending |
+| 3 | DB Connection | ✅ In Progress (Plan 01 complete) |
 | 4 | Permission Model | Pending |
 | 5 | Schema Discovery | Pending |
 | 6 | Query Operations | Pending |
@@ -68,22 +68,31 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 
 ## Recent Execution
 
-**Phase 2 Plan 02 Execution** (2026-03-25):
-- ✅ All 5 tasks completed
-- ✅ Interactive prompts module with @inquirer/prompts and fallback
-- ✅ dbcli init command with full initialization workflow
-- ✅ CLI integration and command registration
-- ✅ 13 comprehensive integration tests covering all scenarios
-- ✅ Full build verification (dist/cli.mjs functional)
-- ✅ Summary: `.planning/phases/02-init-config/02-02-SUMMARY.md`
+**Phase 3 Plan 01 Execution** (2026-03-25):
+- ✅ All 7 tasks completed
+- ✅ DatabaseAdapter interface with 6 core methods
+- ✅ AdapterFactory with system-aware routing (PostgreSQL/MySQL/MariaDB)
+- ✅ Error mapping module with 5 error categories + Traditional Chinese hints
+- ✅ Public API exports in src/adapters/index.ts
+- ✅ 12 comprehensive unit tests (factory + error-mapper)
+- ✅ TypeScript compilation verified
+- ✅ Full test suite passes (78 tests, no regressions)
+- ✅ Build successful (dist/cli.mjs functional)
+- ✅ Summary: `.planning/phases/03-db-connection/03-01-SUMMARY.md`
+
+## Current Work
+
+Phase 3: Database connection adapter infrastructure
+- ✅ Plan 01: Adapter types, factory, error mapping (COMPLETE)
+- 📋 Plan 02: PostgreSQL/MySQL/MariaDB implementations (NEXT)
+- 📋 Plan 03: Connection testing and validation (PLANNED)
 
 ## Next Phase
 
-Phase 3: Implement database connection and connection testing
-- Database driver integration (postgresql, mysql, mariadb)
-- Connection pooling and health checks
-- Connection validation before configuration save
-- Error handling for connection failures
+Phase 4: Permission model implementation
+- Permission level enforcement (Query-only, Read-Write, Admin)
+- SQL operation categorization and validation
+- Permission-based access control for all commands
 
 ---
 
@@ -95,4 +104,4 @@ Phase 3: Implement database connection and connection testing
 
 ---
 
-*Last updated: 2026-03-25 after Phase 2 Plan 01 execution*
+*Last updated: 2026-03-25 after Phase 3 Plan 01 execution*

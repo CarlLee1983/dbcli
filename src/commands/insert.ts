@@ -136,7 +136,7 @@ export async function insertCommand(
     if (error instanceof PermissionError) {
       console.error('❌ 權限被拒')
       console.error(`   操作: ${error.classification.type}`)
-      console.error(`   需要: ${error.requiredPermission} 模式或更高")
+      console.error(`   需要: ${error.requiredPermission} 模式或更高`)
       console.error(`   訊息: ${error.message}`)
       process.exit(1)
     }

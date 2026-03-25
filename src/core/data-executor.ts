@@ -305,23 +305,25 @@ export class DataExecutor {
         }
       }
 
-      // 4. DELETE 必須強制確認（無法跳過）
-      console.log('\n⚠️  警告: DELETE 操作是破壞性的，無法撤銷！')
-      console.log('\n生成的 SQL:')
-      console.log(`  ${sql}`)
-      console.log('\n參數:')
-      console.log(`  ${JSON.stringify(params, null, 2)}`)
+      // 4. DELETE 通常要求確認（除非 --force 標記）
+      if (!options?.force) {
+        console.log('\n⚠️  警告: DELETE 操作是破壞性的，無法撤銷！')
+        console.log('\n生成的 SQL:')
+        console.log(`  ${sql}`)
+        console.log('\n參數:')
+        console.log(`  ${JSON.stringify(params, null, 2)}`)
 
-      const confirmed = await promptUser.confirm(
-        '是否真的要執行此 DELETE 操作? 此操作無法撤銷。'
-      )
-      if (!confirmed) {
-        return {
-          status: 'success',
-          operation: 'delete',
-          rows_affected: 0,
-          timestamp,
-          sql,
+        const confirmed = await promptUser.confirm(
+          '是否真的要執行此 DELETE 操作? 此操作無法撤銷。'
+        )
+        if (!confirmed) {
+          return {
+            status: 'success',
+            operation: 'delete',
+            rows_affected: 0,
+            timestamp,
+            sql,
+          }
         }
       }
 

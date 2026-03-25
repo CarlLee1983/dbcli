@@ -140,17 +140,18 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     }
 
     try {
-      // Query pg_tables to get table list and row counts
+      // Query pg_stat_user_tables to get table list and row count estimates
       const query = `
         SELECT
-          t.tablename as table_name,
-          (SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = t.tablename) as row_count
-        FROM pg_tables t
-        WHERE t.schemaname = 'public'
-        ORDER BY t.tablename
+          schemaname,
+          relname as table_name,
+          n_live_tup as row_count
+        FROM pg_stat_user_tables
+        ORDER BY relname
       `
 
       const results = await this.execute<{
+        schemaname: string
         table_name: string
         row_count: number | null
       }>(query)
@@ -216,6 +217,51 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         is_primary_key: boolean
       }>(columnQuery, [tableName])
 
+      // Extract foreign key constraints
+      const fkQuery = `
+        SELECT
+          tc.constraint_name as name,
+          array_agg(kcu.column_name) as columns,
+          ccu.table_name as ref_table,
+          array_agg(ccu.column_name) as ref_columns
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+          ON tc.table_name = kcu.table_name AND tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage AS ccu
+          ON ccu.constraint_name = tc.constraint_name
+        WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
+        GROUP BY tc.constraint_name, ccu.table_name
+      `
+
+      const fkResults = await this.execute<{
+        name: string
+        columns: string[]
+        ref_table: string
+        ref_columns: string[]
+      }>(fkQuery, [tableName])
+
+      // Create map of single-column foreign keys for quick lookup
+      const fkMap = new Map<string, { table: string; column: string }>()
+      for (const fk of fkResults) {
+        if (fk.columns.length === 1 && fk.ref_columns.length === 1) {
+          fkMap.set(fk.columns[0], { table: fk.ref_table, column: fk.ref_columns[0] })
+        }
+      }
+
+      // Extract primary key constraint
+      const pkQuery = `
+        SELECT array_agg(a.attname) as columns
+        FROM (
+          SELECT a.attname
+          FROM pg_index i
+          JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+          WHERE i.indisprimary AND i.indrelid = $1::regclass
+          ORDER BY a.attnum
+        ) a
+      `
+
+      const pkResults = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
+
       // Get row count
       const countResult = await this.execute<{ count: number }>(
         `SELECT COUNT(*) as count FROM "${tableName}"`
@@ -229,10 +275,17 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           nullable: col.nullable,
           default: col.default_value || undefined,
           primaryKey: col.is_primary_key,
-          foreignKey: undefined
+          foreignKey: fkMap.get(col.name)
         })),
         rowCount: countResult[0]?.count || 0,
-        engine: 'PostgreSQL'
+        engine: 'PostgreSQL',
+        primaryKey: pkResults[0]?.columns || [],
+        foreignKeys: fkResults.map(fk => ({
+          name: fk.name,
+          columns: fk.columns,
+          refTable: fk.ref_table,
+          refColumns: fk.ref_columns
+        }))
       }
 
       return schema

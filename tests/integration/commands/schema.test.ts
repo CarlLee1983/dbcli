@@ -93,6 +93,6 @@ describe('dbcli schema command', () => {
     const cmd = schemaCommand
     const options = cmd.options
     const refreshOption = options.find((opt: any) => opt.name() === 'refresh')
-    expect(refreshOption.description()).toContain('Refresh')
+    expect((refreshOption as any).description).toContain('Refresh')
   })
 })

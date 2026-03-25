@@ -48,16 +48,16 @@ export const initCommand = new Command('init')
  * Init 命令的實際處理器
  */
 async function initCommandHandler(
-  options: Record<string, any>
+  options: Record<string, unknown>
 ): Promise<void> {
   // 1. 加載現有配置
-  let existingConfig = await configModule.read('.dbcli')
+  const existingConfig = await configModule.read('.dbcli')
 
   // 2. 嘗試從 .env 解析資料庫配置
   let envConfig = null
   try {
     envConfig = parseEnvDatabase(process.env)
-  } catch (error) {
+  } catch {
     if (options.interactive) {
       // 在互動模式下，.env 解析失敗不是致命的，我們會提示用戶
       console.log('注意: 無法解析 .env 配置，將使用互動提示')
@@ -83,7 +83,7 @@ async function initCommandHandler(
   const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb')
 
   // 4. 為每個連接參數收集值
-  let connection: Partial<ConnectionConfig> = {
+  const connection: Partial<ConnectionConfig> = {
     system: system as 'postgresql' | 'mysql' | 'mariadb'
   }
 
@@ -159,7 +159,7 @@ async function initCommandHandler(
 
   // 6. 合併新配置
   const newConfig = configModule.merge(existingConfig, {
-    connection: connection as any,
+    connection: connection as ConnectionConfig,
     permission: permission as 'query-only' | 'read-write' | 'admin'
   })
 

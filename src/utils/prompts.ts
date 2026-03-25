@@ -50,7 +50,7 @@ export async function text(
   try {
     const { text: inquirerText } = await import('@inquirer/prompts')
     return await inquirerText({ message, default: defaultValue })
-  } catch (error) {
+  } catch {
     // Fallback: use simple console prompts
     const displayMessage = defaultValue
       ? `${message} [${defaultValue}]: `
@@ -74,7 +74,7 @@ export async function select(
   try {
     const { select: inquirerSelect } = await import('@inquirer/prompts')
     return await inquirerSelect({ message, choices })
-  } catch (error) {
+  } catch {
     // Fallback: print choices and ask user to select
     console.log(message)
     choices.forEach((choice, index) => {
@@ -103,7 +103,7 @@ export async function confirm(message: string): Promise<boolean> {
   try {
     const { confirm: inquirerConfirm } = await import('@inquirer/prompts')
     return await inquirerConfirm({ message })
-  } catch (error) {
+  } catch {
     // Fallback: simple y/n prompt
     const answer = await readLineFromStdin(`${message} (y/n): `)
     return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'

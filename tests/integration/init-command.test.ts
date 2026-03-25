@@ -167,9 +167,9 @@ describe('Init Command Integration Tests', () => {
       permission: 'invalid-permission',
       schema: {},
       metadata: { version: '1.0' }
-    }
+    } as unknown
 
-    expect(() => configModule.validate(invalidConfig as any)).toThrow()
+    expect(() => configModule.validate(invalidConfig)).toThrow()
   })
 
   test('應該拒絕無效的埠號範圍', () => {
@@ -186,16 +186,16 @@ describe('Init Command Integration Tests', () => {
       permission: 'query-only' as const,
       schema: {},
       metadata: { version: '1.0' }
-    }
+    } as unknown
 
-    expect(() => configModule.validate(invalidConfig as any)).toThrow()
+    expect(() => configModule.validate(invalidConfig)).toThrow()
   })
 
   test('應該拒絕無效的資料庫系統', () => {
     // 驗證：無效系統
     const invalidConfig = {
       connection: {
-        system: 'mongodb' as any,
+        system: 'mongodb' as unknown,
         host: 'localhost',
         port: 5432,
         user: 'user',
@@ -207,7 +207,7 @@ describe('Init Command Integration Tests', () => {
       metadata: { version: '1.0' }
     }
 
-    expect(() => configModule.validate(invalidConfig)).toThrow()
+    expect(() => configModule.validate(invalidConfig as unknown)).toThrow()
   })
 
   test('應該支援多個資料庫系統的連接字符串', () => {

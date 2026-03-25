@@ -14,7 +14,7 @@
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | ✅ Complete |
 | 7 | Data Modification | `dbcli insert`, `dbcli update`, `dbcli delete` with safeguards | DATA-01, DATA-02 | 3 | ✅ Complete |
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | ✅ Complete |
-| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ⏳ In Progress (1/2) |
+| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ✅ Complete |
 | 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | Pending |
 
 ---
@@ -475,11 +475,25 @@
 - Implement `dbcli skill --install` to auto-write skill to AI agent config locations
 - Ensure skill updates automatically as dbcli evolves
 
+**Status:** ✅ COMPLETE
+
+**Plan 09-01: SkillGenerator** ✅ COMPLETE
+- ✓ SkillGenerator class with CLI introspection (runtime command collection)
+- ✓ Permission-based filtering (query-only, read-write, admin)
+- ✓ SKILL.md rendering with frontmatter and examples
+
+**Plan 09-02: Skill Command Integration** ✅ COMPLETE (2026-03-25)
+- ✓ skillCommand handler with three output modes (stdout, file, install)
+- ✓ Cross-platform installation (claude, gemini, copilot, cursor)
+- ✓ ensureDir() using Bun shell mkdir -p with fs.mkdir fallback
+- ✓ 11 integration tests (all passing)
+
 **Success Criteria:**
-1. `dbcli skill` outputs complete skill; AI agents understand all commands
-2. `dbcli skill --install claude` writes to `.claude/` directory
-3. Skill correctly reflects current permission level (Query-only hides insert/update)
-4. Skill examples are copy-paste ready
+1. ✓ `dbcli skill` outputs complete skill; AI agents understand all commands
+2. ✓ `dbcli skill --install claude` writes to `.claude/` directory
+3. ✓ Skill correctly reflects current permission level (Query-only hides insert/update)
+4. ✓ Skill examples are copy-paste ready
+5. ✓ Multi-platform support (claude, gemini, copilot, cursor)
 
 **Complexity:** Medium | **Risk:** Low (documentation focused; AI platform formats may evolve)
 **Dependencies:** Phase 6, 7, 8 (can run parallel) | **Estimated Duration:** 2 phases

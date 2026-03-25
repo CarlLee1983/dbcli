@@ -1,4 +1,5 @@
 // Shared type definitions for dbcli
+export type { DataExecutionResult, DataExecutionOptions } from './data'
 
 /**
  * 資料庫連接環境變數（來自 .env 解析）

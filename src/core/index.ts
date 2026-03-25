@@ -4,3 +4,4 @@
  */
 
 export { SchemaDiffEngine } from './schema-diff'
+export { SkillGenerator } from './skill-generator'

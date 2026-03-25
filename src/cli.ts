@@ -8,6 +8,7 @@ import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
 import { exportCommand } from './commands/export'
+import { skillCommand } from './commands/skill'
 
 const program = new Command()
   .name('dbcli')
@@ -107,6 +108,21 @@ program
         process.exit(1)
       }
       return exportCommand(sql, options)
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+// Register skill command
+program
+  .command('skill')
+  .description('Generate AI agent skill documentation (SKILL.md)')
+  .option('--install <platform>', 'Install to platform directory (claude, gemini, copilot, cursor)')
+  .option('--output <path>', 'Write skill to file instead of stdout')
+  .action(async (options: any) => {
+    try {
+      await skillCommand(program, options)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

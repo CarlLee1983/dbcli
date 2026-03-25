@@ -9,7 +9,7 @@
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
-| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Planned |
+| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
 | 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
@@ -191,11 +191,11 @@
 
 **Requirements Mapped:** INIT-05
 
-**Plan 04-01: Permission Guard** 📋 PLANNED
-- Task 1: Implement SQL classifier with statement normalization and keyword extraction
-- Task 2: Implement permission guard module with classification and enforcement
-- Task 3: Write comprehensive unit tests for SQL classifier and permission enforcement (40+ cases)
-- Task 4: Integrate permission-guard module into project and verify full test suite
+**Plan 04-01: Permission Guard** ✅ COMPLETE
+- ✓ Task 1: Implement SQL classifier with statement normalization and keyword extraction
+- ✓ Task 2: Implement permission guard module with classification and enforcement
+- ✓ Task 3: Write comprehensive unit tests for SQL classifier and permission enforcement (82 cases)
+- ✓ Task 4: Integrate permission-guard module into project and verify full test suite
 
 **Key Work Items:**
 - Define three permission levels with capability matrix:

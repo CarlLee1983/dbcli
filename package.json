@@ -22,6 +22,8 @@
     "prepublishOnly": "bun run build",
     "test": "vitest",
     "test:run": "vitest --run",
+    "test:bench": "vitest --run --bench",
+    "bench": "bun run test:bench",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""

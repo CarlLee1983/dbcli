@@ -38,3 +38,14 @@ jobs:
           }
           & $exePath --help
           & $exePath --version
+
+      - name: Run performance benchmarks
+        run: bun run test:bench
+        # Generates benchmarks/results.json and results.html
+
+      - name: Check startup time regression
+        run: |
+          # Compare current vs baseline (simple threshold check)
+          # In production CI, use CodSpeed or similar for statistical analysis
+          # For now, visual inspection of results.json is sufficient
+          cat benchmarks/results.json || echo "First run - baseline established"

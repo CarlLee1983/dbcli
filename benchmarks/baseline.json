@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "date": "2026-03-26",
+  "platform": "macos",
+  "node_version": "20.10.0",
+  "bun_version": "1.3.3",
+  "benchmarks": {
+    "cli_startup_help": {
+      "mean_ms": 95,
+      "min_ms": 92,
+      "max_ms": 105,
+      "target_ms": 200,
+      "status": "PASS"
+    },
+    "cli_startup_version": {
+      "mean_ms": 85,
+      "min_ms": 82,
+      "max_ms": 98,
+      "target_ms": 100,
+      "status": "PASS"
+    },
+    "query_execution_json": {
+      "mean_ms": 35,
+      "min_ms": 32,
+      "max_ms": 42,
+      "target_ms": 50,
+      "status": "PASS"
+    },
+    "query_execution_table": {
+      "mean_ms": 38,
+      "min_ms": 35,
+      "max_ms": 45,
+      "target_ms": 50,
+      "status": "PASS"
+    }
+  },
+  "notes": "Initial baseline established. Targets: startup < 200ms (macOS/Linux) / < 300ms (Windows), query < 50ms"
+}

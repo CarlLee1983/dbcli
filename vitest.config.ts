@@ -19,5 +19,11 @@ export default defineConfig({
       branches: 80,
       statements: 80,
     } as any,
+    benchmark: {
+      include: ['tests/perf/**/*.bench.ts'],
+      exclude: ['node_modules'],
+      outputJson: './benchmarks/results.json',
+      outputFile: './benchmarks/results.html'
+    }
   },
 })

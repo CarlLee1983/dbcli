@@ -10,8 +10,8 @@
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
-| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | 📋 Planned |
-| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
+| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | ✅ Complete |
+| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | 📋 Planned |
 | 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | Pending |
 | 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | Pending |
@@ -246,26 +246,26 @@
 
 **Requirements Mapped:** SCHEMA-01, SCHEMA-02, SCHEMA-03
 
-**Plan 05-01: Adapter & Formatter Infrastructure** 📋 PLANNED
-- Task 1: Extend ColumnSchema and TableSchema interfaces with FK metadata
-- Task 2: Enhance PostgreSQL adapter getTableSchema with FK extraction
-- Task 3: Enhance MySQL adapter getTableSchema with FK extraction
-- Task 4: Create table-formatter.ts for CLI table output
-- Task 5: Create json-formatter.ts for AI-parseable output
-- Task 6: Create formatters index.ts with exports
-- Task 7: Write unit tests for table-formatter
-- Task 8: Write unit tests for json-formatter
-- Task 9: Run full test suite and verify build
+**Plan 05-01: Adapter & Formatter Infrastructure** ✅ COMPLETE
+- ✓ Task 1: Extend ColumnSchema and TableSchema interfaces with FK metadata
+- ✓ Task 2: Enhance PostgreSQL adapter getTableSchema with FK extraction
+- ✓ Task 3: Enhance MySQL adapter getTableSchema with FK extraction
+- ✓ Task 4: Create table-formatter.ts for CLI table output
+- ✓ Task 5: Create json-formatter.ts for AI-parseable output
+- ✓ Task 6: Create formatters index.ts with exports
+- ✓ Task 7: Write unit tests for table-formatter
+- ✓ Task 8: Write unit tests for json-formatter
+- ✓ Task 9: Run full test suite and verify build
 
-**Plan 05-02: Commands & Integration** 📋 PLANNED
-- Task 1: Implement `dbcli list` command
-- Task 2: Implement `dbcli schema [table]` and `dbcli schema` commands
-- Task 3: Register list and schema commands in CLI
-- Task 4: Write integration tests for `dbcli list` command
-- Task 5: Write integration tests for `dbcli schema` command
-- Task 6: Update .dbcli config to support schema field
-- Task 7: Verify CLI help and manual testing setup
-- Task 8: Run full test suite and verify build
+**Plan 05-02: Commands & Integration** ✅ COMPLETE
+- ✓ Task 1: Implement `dbcli list` command
+- ✓ Task 2: Implement `dbcli schema [table]` and `dbcli schema` commands
+- ✓ Task 3: Register list and schema commands in CLI
+- ✓ Task 4: Write integration tests for `dbcli list` command
+- ✓ Task 5: Write integration tests for `dbcli schema` command
+- ✓ Task 6: Update .dbcli config to support schema field
+- ✓ Task 7: Verify CLI help and manual testing setup
+- ✓ Task 8: Run full test suite and verify build
 
 **Success Criteria:**
 1. `dbcli list` correctly lists all tables (PostgreSQL and MySQL)
@@ -301,15 +301,34 @@
 
 **Goal:** Implement core `dbcli query` command—the most frequent AI agent interaction point.
 
+**Plans:**
+- [06-01-PLAN.md](.planning/phases/06-query-operations/06-01-PLAN.md) — Query formatters and utilities (9 tasks, Wave 1)
+- [06-02-PLAN.md](.planning/phases/06-query-operations/06-02-PLAN.md) — Query command and integration (6 tasks, Wave 2)
+
+**Wave Structure:**
+- Wave 1: Plan 06-01 (QueryResult types, formatters: table/json/csv, utilities: Levenshtein distance, error suggestion)
+- Wave 2: Plan 06-02 (QueryExecutor, query command, CLI registration, tests)
+
 **Requirements Mapped:** QUERY-01, QUERY-02, QUERY-03, QUERY-04
 
-**Key Work Items:**
-- Implement `dbcli query "SQL"` command
-- Integrate Phase 4 PermissionGuard (pre-execution check)
-- Implement output formatters (table, JSON, CSV)
-- Add query result metadata (row count, execution time, column types)
-- Enhance error messages (SQL syntax hints, "Did you mean: [similar_table]?" for missing tables)
-- Add safety LIMIT in Query-only mode (auto-append `LIMIT 1000`, configurable)
+**Plan 06-01: Query Formatters & Utilities** 📋 PLANNED
+- Task 1: Create QueryResult type definitions with metadata
+- Task 2: Implement QueryResultFormatter for table/json/csv output
+- Task 3: Update formatters index to export QueryResultFormatter
+- Task 4: Implement Levenshtein distance utility
+- Task 5: Implement error suggester utility for missing table detection
+- Task 6: Unit tests for QueryResultFormatter
+- Task 7: Unit tests for Levenshtein distance
+- Task 8: Unit tests for error suggester
+- Task 9: Run full test suite and verify build
+
+**Plan 06-02: Query Command & Integration** 📋 PLANNED
+- Task 1: Implement QueryExecutor class with permission checks and execution
+- Task 2: Implement query command with CLI interface
+- Task 3: Register query command in CLI entry point
+- Task 4: Unit tests for query command logic
+- Task 5: Integration tests for query command (real database)
+- Task 6: Run full test suite and verify build
 
 **Success Criteria:**
 1. `dbcli query "SELECT * FROM users"` returns properly formatted results
@@ -317,9 +336,25 @@
 3. Query-only mode rejects `DELETE FROM users`
 4. Missing table error suggests: "Did you mean: 'user' or 'users_old'?"
 5. Large result sets auto-limit with user notification
+6. All tests pass (unit + integration)
+7. Build succeeds
 
 **Complexity:** Medium | **Risk:** Low (builds on stable earlier phases)
-**Dependencies:** Phase 3, 4, 5 | **Estimated Duration:** 2 phases
+**Dependencies:** Phase 3, 4, 5 | **Estimated Duration:** 2 plans (~90 min execution time)
+
+**Key Decisions (from research):**
+- CSV formatter hand-rolled (RFC 4180 compliant, no external dependencies)
+- Levenshtein distance for table name suggestions (simple algorithm, 30 lines)
+- Auto-limit to 1000 rows in query-only mode (safety default)
+- Runtime type inference from result data (no information_schema queries)
+- Error handling with table suggestions proactively (don't rely on error message parsing)
+
+**Pitfalls to Avoid:**
+- Unbounded result sets causing memory bloat (auto-limit in query-only mode)
+- Missing table detection via fragile error parsing (instead: proactive table listing + distance comparison)
+- CSV escaping failures (test with commas, quotes, newlines, mixed special chars)
+- Permission bypass via parameterized queries (verify permission guard strips params correctly)
+- Execution time measurement including formatting overhead (measure only DB execution)
 
 ---
 
@@ -498,8 +533,9 @@ Once V1 ships, track:
 7. ✅ PLAN-03-01.md and PLAN-03-02.md created — atomic task breakdown for Phase 3
 8. ✅ PLAN-04-01.md created — atomic task breakdown for Phase 4
 9. ✅ PLAN-05-01.md and PLAN-05-02.md created — atomic task breakdown for Phase 5
-10. **→ Ready for execution** — Run `/gsd:execute-phase 05-schema-discovery` to begin Phase 5
+10. ✅ PLAN-06-01.md and PLAN-06-02.md created — atomic task breakdown for Phase 6
+11. **→ Ready for execution** — Run `/gsd:execute-phase 06-query-operations` to begin Phase 6
 
 ---
 
-*Last updated: 2026-03-25 after Phase 5 planning*
+*Last updated: 2026-03-25 after Phase 6 planning*

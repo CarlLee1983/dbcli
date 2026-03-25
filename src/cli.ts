@@ -4,6 +4,7 @@ import { initCommand } from './commands/init'
 import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
+import { insertCommand } from './commands/insert'
 
 const program = new Command()
   .name('dbcli')
@@ -26,6 +27,22 @@ program
   .action(async (sql: string, options: any) => {
     try {
       await queryCommand(sql, options)
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+// Register insert command
+program
+  .command('insert <table>')
+  .description('Insert data into database table')
+  .option('--data <json>', 'JSON object to insert')
+  .option('--dry-run', 'Show generated SQL without executing')
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (table: string, options: any) => {
+    try {
+      await insertCommand(table, options)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

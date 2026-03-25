@@ -6,8 +6,8 @@
 
 | # | Phase | Goal | Requirements | Plans | Status |
 |---|-------|------|--------------|-------|--------|
-| 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✓ Planned |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | Pending |
+| 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
+| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ➜ In Progress |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |

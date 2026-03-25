@@ -16,6 +16,7 @@ import { configModule } from '@/core/config'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
 import { ConnectionConfig } from '@/types'
+import { AdapterFactory, ConnectionError } from '@/adapters'
 
 /**
  * 建立並配置 init 命令
@@ -181,7 +182,29 @@ async function initCommandHandler(
     }
   }
 
-  // 8. 寫入配置
+  // 8. 測試資料庫連接
+  console.log('測試資料庫連接...')
+  const adapter = AdapterFactory.createAdapter(newConfig.connection)
+
+  try {
+    await adapter.connect()
+    const isHealthy = await adapter.testConnection()
+    if (isHealthy) {
+      console.log('✓ 資料庫連接成功')
+    }
+  } catch (error) {
+    if (error instanceof ConnectionError) {
+      console.error(`✗ 連接失敗: ${error.message}`)
+      console.error('提示:')
+      error.hints.forEach((hint) => console.error(`  • ${hint}`))
+      process.exit(1)
+    }
+    throw error
+  } finally {
+    await adapter.disconnect()
+  }
+
+  // 9. 寫入配置
   await configModule.write('.dbcli', newConfig)
   console.log('✓ 配置已保存至 .dbcli')
 }

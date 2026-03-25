@@ -11,9 +11,9 @@
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | ✅ Complete |
-| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | 🟡 In Progress (1/2) |
-| 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
-| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | Pending |
+| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | ✅ Complete |
+| 7 | Data Modification | `dbcli insert`, `dbcli update`, `dbcli delete` with safeguards | DATA-01, DATA-02 | 3 | ✅ Complete |
+| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | 📋 Planned |
 | 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | Pending |
 | 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | Pending |
 
@@ -322,13 +322,13 @@
 - Task 8: Unit tests for error suggester ✓ (19 tests)
 - Task 9: Run full test suite and verify build ✓ (221 tests total, 0 failures)
 
-**Plan 06-02: Query Command & Integration** 📋 PLANNED
-- Task 1: Implement QueryExecutor class with permission checks and execution
-- Task 2: Implement query command with CLI interface
-- Task 3: Register query command in CLI entry point
-- Task 4: Unit tests for query command logic
-- Task 5: Integration tests for query command (real database)
-- Task 6: Run full test suite and verify build
+**Plan 06-02: Query Command & Integration** ✅ COMPLETE
+- Task 1: Implement QueryExecutor class with permission checks and execution ✓
+- Task 2: Implement query command with CLI interface ✓
+- Task 3: Register query command in CLI entry point ✓
+- Task 4: Unit tests for query command logic ✓
+- Task 5: Integration tests for query command (real database) ✓
+- Task 6: Run full test suite and verify build ✓
 
 **Success Criteria:**
 1. `dbcli query "SELECT * FROM users"` returns properly formatted results
@@ -360,28 +360,50 @@
 
 ### Phase 7: Data Modification
 
-**Goal:** Implement `dbcli insert` and `dbcli update` commands with safety safeguards.
+**Goal:** Implement `dbcli insert`, `dbcli update`, and `dbcli delete` commands with safety safeguards.
+
+**Plans:**
+- [07-01-PLAN.md](.planning/phases/07-data-modification/07-01-PLAN.md) — DataExecutor foundation (5 tasks, Wave 1)
+- [07-02-PLAN.md](.planning/phases/07-data-modification/07-02-PLAN.md) — UPDATE command (5 tasks, Wave 2)
+- [07-03-PLAN.md](.planning/phases/07-data-modification/07-03-PLAN.md) — DELETE command (5 tasks, Wave 2)
+
+**Wave Structure:**
+- Wave 1: Plan 07-01 (DataExecutor, INSERT command, CLI registration)
+- Wave 2: Plan 07-02 and 07-03 parallel (UPDATE and DELETE commands)
 
 **Requirements Mapped:** DATA-01, DATA-02
 
-**Key Work Items:**
-- Implement `dbcli insert [table]` with interactive field prompts or JSON stdin
-- Implement `dbcli update [table]` requiring WHERE clause, accepting JSON stdin
-- Enforce permission checks (Read-Write or Admin required)
-- Add pre-execution confirmation (show SQL, require y/n)
-- Return confirmation message with affected row count
-- Support `--dry-run` mode (show SQL without executing)
-- Use parameterized queries to prevent SQL injection
+**Plan 07-01: DataExecutor & INSERT** ✅ COMPLETE
+- ✓ Task 1: Create DataExecutor class with INSERT, UPDATE, DELETE execution methods
+- ✓ Task 2: Implement INSERT command handler with parameterized queries
+- ✓ Task 3: Register INSERT command in CLI
+- ✓ Task 4: Write unit and integration tests for DataExecutor INSERT methods
+- ✓ Task 5: Verify build and test suite
+
+**Plan 07-02: UPDATE Command** ✅ COMPLETE
+- ✓ Task 1: Implement UPDATE command handler with WHERE clause parsing
+- ✓ Task 2: Register UPDATE command in CLI
+- ✓ Task 3: Write unit tests for DataExecutor UPDATE methods
+- ✓ Task 4: Write integration tests for UPDATE command
+- ✓ Task 5: Verify build and full test suite
+
+**Plan 07-03: DELETE Command** ✅ COMPLETE
+- ✓ Task 1: Implement DELETE command handler with WHERE clause parsing
+- ✓ Task 2: Admin-only permission enforcement at CLI level
+- ✓ Task 3: Register DELETE command in CLI with --force flag
+- ✓ Task 4: Write unit tests for DataExecutor DELETE methods
+- ✓ Task 5: Write integration tests for DELETE command, verify full suite
 
 **Success Criteria:**
-1. `dbcli insert users --data '{"name":"Alice","email":"a@b.com"}'` inserts and confirms
-2. `dbcli update users --where "id=1" --data '{"name":"Bob"}'` updates successfully
-3. Query-only mode rejects both commands
-4. `--dry-run` shows SQL without side effects
-5. Parameterized queries prevent SQL injection
+1. `dbcli insert users --data '{"name":"Alice"}'` inserts and confirms
+2. `dbcli update users --where "id=1" --set '{"name":"Bob"}'` updates successfully
+3. `dbcli delete users --where "id=1" --force` deletes (admin-only)
+4. Query-only mode rejects all write operations
+5. `--dry-run` shows SQL without side effects
+6. All tests pass (unit + integration)
 
 **Complexity:** Medium | **Risk:** Medium (SQL injection prevention critical)
-**Dependencies:** Phase 3, 4, 6 | **Estimated Duration:** 2 phases
+**Dependencies:** Phase 3, 4, 6 | **Estimated Duration:** 3 plans
 
 ---
 
@@ -389,23 +411,53 @@
 
 **Goal:** Implement incremental schema updates and data export with streaming support.
 
+**Plans:**
+- [08-01-PLAN.md](.planning/phases/08-schema-refresh-export/08-01-PLAN.md) — SchemaDiffEngine and types (4 tasks, Wave 1)
+- [08-02-PLAN.md](.planning/phases/08-schema-refresh-export/08-02-PLAN.md) — Schema refresh & export commands (6 tasks, Wave 2)
+
+**Wave Structure:**
+- Wave 1: Plan 08-01 (SchemaDiffEngine, type definitions, unit tests)
+- Wave 2: Plan 08-02 (schema --refresh, export commands, CLI registration, integration tests)
+
 **Requirements Mapped:** SCHEMA-04, EXPORT-01
 
-**Key Work Items:**
-- Implement incremental schema refresh (compare current `.dbcli` with database, update only deltas)
-- Generate schema diff report (added/removed/modified tables and columns)
-- Implement `dbcli export "SQL" --format json|csv` command
-- Support export to stdout (pipe-able) or `--output file.json`
-- Implement streaming for large result sets (prevent memory overflow)
+**Plan 08-01: SchemaDiffEngine Foundation** 📋 PLANNED
+- Task 1: Create schema-diff.ts type definitions (SchemaDiffReport, ColumnDiff, TableDiffDetail)
+- Task 2: Implement SchemaDiffEngine class with two-phase diff algorithm
+- Task 3: Write comprehensive unit tests (15+ tests: table detection, column detection, type normalization, FK preservation)
+- Task 4: Export SchemaDiffEngine from core module index
+
+**Plan 08-02: Commands & Integration** 📋 PLANNED
+- Task 1: Extend schema.ts with --refresh flag handler and immutable merge
+- Task 2: Create export.ts command handler with QueryExecutor integration
+- Task 3: Register schema --refresh and export commands in CLI
+- Task 4: Write integration tests for schema refresh workflow (10+ tests)
+- Task 5: Write integration tests for export command (12+ tests)
+- Task 6: Verify full build and test suite
 
 **Success Criteria:**
 1. Adding table to database, then `dbcli schema --refresh` only updates new entries
-2. `dbcli export "SELECT * FROM users" --format csv` outputs valid CSV
-3. Exporting 100K rows uses stable memory (streaming not buffering)
+2. `dbcli export "SELECT * FROM users" --format csv` outputs valid RFC 4180 CSV
+3. Exporting 100K rows uses stable memory (CSV formatter generates line-by-line)
 4. `dbcli export "..." | jq` works for piped JSON processing
+5. Query-only mode auto-limits exports to 1000 rows
+6. File output with `--output file.json` works correctly
 
-**Complexity:** Medium | **Risk:** Medium (streaming support varies per DB driver)
-**Dependencies:** Phase 3, 5, 6 | **Estimated Duration:** 2 phases
+**Complexity:** Medium | **Risk:** Medium (type normalization, auto-limit respect)
+**Dependencies:** Phase 3, 5, 6 (Plan 08-01 depends on 05, 06; Plan 08-02 depends on 08-01) | **Estimated Duration:** 2 plans
+
+**Key Decisions (locked in CONTEXT.md):**
+- D-01: Schema diffing compares in-memory snapshot (from .dbcli) against live DB
+- D-02: Diff reports track: added/removed tables, added/removed/modified columns
+- D-03: Immutable merge preserves metadata.createdAt, updates schemaLastUpdated
+- D-04: Export uses buffered results (Bun.sql Promise<T[]>), not adapter-level streaming
+- D-05: Formats: standard JSON (not newline-delimited), RFC 4180 CSV
+- D-06: Query-only respects 1000-row auto-limit; Read-Write/Admin unlimited
+- D-07: CLI supports `--output file` for file export; default stdout (pipe-able)
+- D-08: "Streaming" via CSV line-by-line generation + shell stdout piping
+- D-09: No adapter interface changes needed
+- D-10: `dbcli schema --refresh [table]` with optional table filter
+- D-11: `dbcli export "SQL" --format json|csv [--output file]`
 
 ---
 
@@ -477,11 +529,11 @@ Phase 1 (Scaffold)
         └────────────────────────────── Phase 10 (Polish & Distribution)
 ```
 
-**Critical Path:** 1 → 2 → 3 → 4 → 5 → 6 → 7 (longest dependency chain)
+**Critical Path:** 1 → 2 → 3 → 4 → 5 → 6 → 7/8 (longest dependency chain)
 
 **Parallelization Opportunities:**
 - Phase 9 can start after Phase 6 completes (doesn't need insert/update)
-- Phase 8 (Schema Refresh and Export) are independent subtasks (can split developers)
+- Phase 8 (Schema Refresh and Export) independent subtasks per plan structure (01 → 02)
 
 ---
 
@@ -509,6 +561,7 @@ At this point, dbcli is **usable for read-only AI agent scenarios**. Insert/upda
 | AI platform skill format changes | Low | Medium | Template-based design; each platform has separate module; easy to update |
 | Large data export memory bloat | Medium | Medium | Force streaming in Phase 8; set reasonable LIMIT defaults |
 | Schema introspection query syntax | Medium | Medium | Keep database-specific queries in each adapter; test with real databases |
+| Type normalization in diff algorithm | Medium | Low | Lowercase comparison + structural parsing of complex types (Phase 8 Plan 01) |
 
 ---
 
@@ -534,8 +587,10 @@ Once V1 ships, track:
 8. ✅ PLAN-04-01.md created — atomic task breakdown for Phase 4
 9. ✅ PLAN-05-01.md and PLAN-05-02.md created — atomic task breakdown for Phase 5
 10. ✅ PLAN-06-01.md and PLAN-06-02.md created — atomic task breakdown for Phase 6
-11. **→ Ready for execution** — Run `/gsd:execute-phase 06-query-operations` to begin Phase 6
+11. ✅ PLAN-07-01.md, PLAN-07-02.md, PLAN-07-03.md created — atomic task breakdown for Phase 7
+12. ✅ PLAN-08-01.md and PLAN-08-02.md created — atomic task breakdown for Phase 8
+13. **→ Ready for execution** — Run `/gsd:execute-phase 08-schema-refresh-export` to begin Phase 8
 
 ---
 
-*Last updated: 2026-03-25 after Phase 6 planning*
+*Last updated: 2026-03-25 after Phase 8 planning*

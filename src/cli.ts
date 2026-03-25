@@ -1,6 +1,8 @@
 import { Command } from 'commander'
 import pkg from '../package.json'
 import { initCommand } from './commands/init'
+import { listCommand } from './commands/list'
+import { schemaCommand } from './commands/schema'
 
 const program = new Command()
   .name('dbcli')
@@ -10,6 +12,8 @@ const program = new Command()
 
 // Register commands
 program.addCommand(initCommand)
+program.addCommand(listCommand)
+program.addCommand(schemaCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

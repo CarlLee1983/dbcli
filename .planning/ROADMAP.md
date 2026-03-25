@@ -9,7 +9,7 @@
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
-| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
+| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Planned |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
 | 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
@@ -183,7 +183,19 @@
 
 **Goal:** Implement coarse-grained permission system for all subsequent commands.
 
+**Plans:**
+- [04-01-PLAN.md](.planning/phases/04-permission-model/04-01-PLAN.md) — SQL classifier and permission enforcement (4 tasks, Wave 1)
+
+**Wave Structure:**
+- Wave 1: Plan 04-01 (SQL classifier, permission guard, tests)
+
 **Requirements Mapped:** INIT-05
+
+**Plan 04-01: Permission Guard** 📋 PLANNED
+- Task 1: Implement SQL classifier with statement normalization and keyword extraction
+- Task 2: Implement permission guard module with classification and enforcement
+- Task 3: Write comprehensive unit tests for SQL classifier and permission enforcement (40+ cases)
+- Task 4: Integrate permission-guard module into project and verify full test suite
 
 **Key Work Items:**
 - Define three permission levels with capability matrix:
@@ -192,17 +204,31 @@
   - **Admin**: + DELETE, DROP, ALTER
 - Implement `PermissionGuard` module (SQL statement classification + permission check)
 - Build SQL statement classifier (parse keywords: SELECT, INSERT, UPDATE, DELETE, ALTER, DROP)
-- Store permission level in `.dbcli` config
-- Add permission selection step to `dbcli init`
+- Store permission level in `.dbcli` config (✓ already done in Phase 2)
+- Add permission selection step to `dbcli init` (✓ already done in Phase 2)
 
 **Success Criteria:**
 1. Query-only mode rejects INSERT with clear error message
-2. Read-Write mode rejects DROP TABLE
-3. Admin mode allows all operations
+2. Read-Write mode rejects DROP TABLE with clear error message
+3. Admin mode allows all operations (SELECT, INSERT, UPDATE, DELETE, DROP)
 4. Permission checks work with CTE, subqueries, and edge cases
 
 **Complexity:** Low-Medium | **Risk:** Low (SQL classification edge cases)
-**Dependencies:** Phase 1, 2 | **Estimated Duration:** 1-2 phases
+**Dependencies:** Phase 2, 3 | **Estimated Duration:** 1 phase (~20 min execution time)
+
+**Key Decisions (from research):**
+- Lightweight regex + keyword detection (not full SQL parser) for CLI permission checking
+- Character state machine for comment/string handling (more reliable than regex)
+- Outer keyword determines classification (CTE/subquery/UNION don't change operation type)
+- Default-deny approach: if confidence is LOW, user must use admin mode
+- No external dependencies (pure TypeScript string processing)
+
+**Pitfalls to Avoid:**
+- Comment keywords not stripped (→ use character state machine, not regex)
+- CTE + dangerous operation misclassified (→ classify by outer keyword, not CTE presence)
+- String literals with keywords blocked incorrectly (→ strip strings before keyword extraction)
+- Parameterized queries interfering (→ remove ? and $N before processing)
+- Over-blocking due to LOW confidence (→ explicit confidence levels, allow safe patterns)
 
 ---
 
@@ -430,8 +456,9 @@ Once V1 ships, track:
 5. ✅ PLAN-01.md created — atomic task breakdown for Phase 1
 6. ✅ PLAN-02-01.md and PLAN-02-02.md created — atomic task breakdown for Phase 2
 7. ✅ PLAN-03-01.md and PLAN-03-02.md created — atomic task breakdown for Phase 3
-8. **→ Ready for execution** — Run `/gsd:execute-phase 03-db-connection` to begin Phase 3
+8. ✅ PLAN-04-01.md created — atomic task breakdown for Phase 4
+9. **→ Ready for execution** — Run `/gsd:execute-phase 04-permission-model` to begin Phase 4
 
 ---
 
-*Last updated: 2026-03-25 after Phase 3 planning*
+*Last updated: 2026-03-25 after Phase 4 planning*

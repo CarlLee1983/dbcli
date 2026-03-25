@@ -30,13 +30,14 @@ function parseWhereClause(whereClause: string): Record<string, any> {
   for (const part of andParts) {
     // 匹配 "column=value" 模式
     const match = part.match(/^(\w+)\s*=\s*(.+)$/)
-    if (!match) {
+    if (!match || !match[1] || !match[2]) {
       throw new Error(
         `無法解析 WHERE 子句: "${part}"。使用格式 "column=value" 或 "col1=val1 AND col2=val2"`
       )
     }
 
-    const [_, column, valueStr] = match
+    const column: string = match[1]
+    const valueStr: string = match[2]
     let value: any = valueStr.trim()
 
     // 移除引號

@@ -1,0 +1,15 @@
+{
+  "connection": {
+    "system": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "user": "dbuser",
+    "password": "dbpass",
+    "database": "myapp"
+  },
+  "permission": "query-only",
+  "schema": {},
+  "metadata": {
+    "version": "1.0"
+  }
+}

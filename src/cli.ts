@@ -5,6 +5,7 @@ import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
 import { insertCommand } from './commands/insert'
+import { updateCommand } from './commands/update'
 
 const program = new Command()
   .name('dbcli')
@@ -43,6 +44,23 @@ program
   .action(async (table: string, options: any) => {
     try {
       await insertCommand(table, options)
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+// Register update command
+program
+  .command('update <table>')
+  .description('Update data in database table')
+  .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
+  .option('--set <json>', 'JSON with fields to update (required, e.g. \'{"name":"Bob"}\')')
+  .option('--dry-run', 'Show generated SQL without executing')
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (table: string, options: any) => {
+    try {
+      await updateCommand(table, options)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

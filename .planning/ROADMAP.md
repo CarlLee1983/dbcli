@@ -4,18 +4,18 @@
 
 **[10] phases** | **[19] requirements mapped** | All v1 requirements covered ✓
 
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 3 |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 4 |
-| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 3 |
-| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 3 |
-| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 4 |
-| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 5 |
-| 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 3 |
-| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 3 |
-| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 4 |
-| 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 4 |
+| # | Phase | Goal | Requirements | Plans | Status |
+|---|-------|------|--------------|-------|--------|
+| 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✓ Planned |
+| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | Pending |
+| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
+| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
+| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
+| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
+| 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
+| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | Pending |
+| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | Pending |
+| 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | Pending |
 
 ---
 
@@ -25,24 +25,41 @@
 
 **Goal:** Establish runnable project skeleton with CLI entry point, test framework, and build process.
 
+**Plan:** [01-PLAN.md](.planning/phases/01-project-scaffold/01-PLAN.md) — Single plan with 6 atomic tasks across 1 wave
+
 **Requirements Mapped:** None (infrastructure)
 
-**Key Work Items:**
-- Initialize Bun project (`package.json`, `tsconfig.json`, `bunfig.toml`)
-- Select CLI framework (Commander.js or Citty) and create entry point `src/cli.ts`
-- Establish directory structure: `src/commands/`, `src/core/`, `src/adapters/`, `src/utils/`
-- Configure Vitest testing environment with smoke test
-- Setup ESLint + Prettier
-- Create `.gitignore`, initial `README.md`
-- Configure npm `bin` field for publication
+**Key Deliverables:**
+- ✓ Bun project initialization (package.json, tsconfig.json, bunfig.toml)
+- ✓ Commander.js v13.0+ CLI entry point (src/cli.ts)
+- ✓ Directory structure (src/commands/, src/core/, src/adapters/, src/utils/, src/types/)
+- ✓ Vitest test framework with 80% coverage threshold (node environment, no jsdom needed)
+- ✓ ESLint + Prettier for code quality
+- ✓ .gitignore, initial README.md
+- ✓ npm bin field pointing to bundled output
+- ✓ GitHub Actions matrix CI (macOS, Linux, Windows × Bun 1.3.3 + latest)
 
 **Success Criteria:**
 1. `bun run dev -- --help` displays CLI help message
-2. `bun test` passes at least one smoke test
-3. `bun run build` produces working CLI bundle
+2. `bun test --run` passes 2 smoke tests (--help, --version)
+3. `bun run build` produces working executable (dist/cli.mjs)
+4. `./dist/cli.mjs --version` works without `bun run` prefix
+5. GitHub Actions CI includes matrix testing on all platforms
 
 **Complexity:** Low | **Risk:** Low
-**Dependencies:** None | **Estimated Duration:** 1 phase
+**Dependencies:** None | **Estimated Duration:** 1 phase (30-45 min execution time)
+
+**Key Decisions (Locked from research):**
+- Commander.js v13.0+ (proven, standard, TypeScript-native)
+- Bun's native bundler (integrated, 5ms startup vs Node's 50ms)
+- Vitest 1.2+ (10-20x faster than Jest, excellent Bun integration)
+- GitHub Actions from day one (catch cross-platform issues early)
+
+**Pitfalls Addressed:**
+- Cross-platform testing matrix prevents "works on my Mac" failures
+- Build process verified to produce direct executable with correct shebang
+- Test infrastructure matches production environment (node, not jsdom for CLI code)
+- npm bin field configured correctly (Phase 10 npm publish will depend on this)
 
 ---
 
@@ -290,7 +307,7 @@ Phase 1 (Scaffold)
         │   │   │   │   └── Phase 8 (Schema Refresh & Export)
         │   │   │   └── Phase 9 (AI Integration) ← Can start after Phase 6
         │   │   └────────────────────────────────────────────┐
-        └────────────────────────────────────── Phase 10 (Polish & Distribution)
+        └────────────────────────────────── Phase 10 (Polish & Distribution)
 ```
 
 **Critical Path:** 1 → 2 → 3 → 4 → 5 → 6 → 7 (longest dependency chain)
@@ -342,8 +359,10 @@ Once V1 ships, track:
 1. ✅ PROJECT.md created — captures vision and constraints
 2. ✅ REQUIREMENTS.md created — defines 19 specific v1 requirements
 3. ✅ ROADMAP.md created — 10 phases with dependencies and success criteria
-4. **→ Ready for Phase 1 planning** — Run `/gsd:plan-phase 1` to begin execution
+4. ✅ RESEARCH.md completed — validates tech stack and patterns
+5. ✅ PLAN-01.md created — atomic task breakdown for Phase 1
+6. **→ Ready for execution** — Run `/gsd:execute-phase 01-project-scaffold` to begin Phase 1
 
 ---
 
-*Last updated: 2026-03-25 after roadmap creation*
+*Last updated: 2026-03-25 after Phase 1 planning*

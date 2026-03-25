@@ -47,3 +47,29 @@ export interface DbcliConfig {
   schema?: Record<string, unknown>
   metadata?: Metadata
 }
+
+/**
+ * Represents a single CLI command in the skill documentation
+ */
+export interface SkillCommand {
+  name: string
+  description: string
+  args: string[]
+  options: Array<{
+    flag: string
+    description: string
+    required: boolean
+  }>
+  permissionLevel: 'query-only' | 'read-write' | 'admin'
+  examples: string[]
+}
+
+/**
+ * Options for SkillGenerator instantiation
+ * NOTE: permissionLevel is passed separately from config (not config.permission)
+ */
+export interface SkillGeneratorOptions {
+  program: any
+  config: DbcliConfig
+  permissionLevel: Permission
+}

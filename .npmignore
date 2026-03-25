@@ -1,0 +1,57 @@
+# Source code (only dist/ is published)
+src/
+*.ts
+!dist/
+
+# Tests and fixtures
+tests/
+test/
+*.test.ts
+*.spec.ts
+__tests__/
+
+# Build artifacts
+.dist/
+build/
+tmp/
+dist.tmp/
+
+# Dependencies (not shipped)
+node_modules/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD configs (internal only)
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Development tools
+.vscode/
+.idea/
+.eslintignore
+.eslintrc.*
+.prettierrc*
+bunfig.toml
+tsconfig.json
+vitest.config.ts
+
+# Documentation (keep README.md, CHANGELOG.md from files array)
+docs/
+.planning/
+examples/
+CONTRIBUTING.md
+
+# Config files
+.env*
+.npmrc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Root files (not needed in distribution)
+README.dev.md

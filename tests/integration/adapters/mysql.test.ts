@@ -119,7 +119,7 @@ describe('MySQL Adapter Integration Tests', () => {
       const results = await adapter.execute<{ count: number }>('SELECT 1 as count')
       expect(results).toBeInstanceOf(Array)
       expect(results.length).toBeGreaterThan(0)
-      expect(results[0].count).toBe(1)
+      expect(results[0]?.count).toBe(1)
     } finally {
       await adapter.disconnect()
     }
@@ -149,7 +149,7 @@ describe('MySQL Adapter Integration Tests', () => {
       // Get first table to test
       const tables = await adapter.listTables()
       if (tables.length > 0) {
-        const schema = await adapter.getTableSchema(tables[0].name)
+        const schema = await adapter.getTableSchema(tables[0]!.name)
         expect(schema).toHaveProperty('name')
         expect(schema).toHaveProperty('columns')
         expect(Array.isArray(schema.columns)).toBe(true)

@@ -3,7 +3,8 @@
  * Implements the DatabaseAdapter interface for PostgreSQL connections
  */
 
-import { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema, ConnectionError } from './types'
+import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
+import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 
 /**

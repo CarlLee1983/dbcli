@@ -4,7 +4,8 @@
  * Note: MariaDB is a MySQL fork with compatible protocol and schema
  */
 
-import { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema, ConnectionError } from './types'
+import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
+import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 
 /**

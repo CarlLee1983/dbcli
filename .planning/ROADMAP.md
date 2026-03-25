@@ -13,8 +13,8 @@
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | ✅ Complete |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | ✅ Complete |
 | 7 | Data Modification | `dbcli insert`, `dbcli update`, `dbcli delete` with safeguards | DATA-01, DATA-02 | 3 | ✅ Complete |
-| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | 📋 Planned |
-| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | Pending |
+| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | ✅ Complete |
+| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ⏳ In Progress (1/2) |
 | 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | Pending |
 
 ---

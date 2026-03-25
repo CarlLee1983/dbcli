@@ -7,7 +7,7 @@
 | # | Phase | Goal | Requirements | Plans | Status |
 |---|-------|------|--------------|-------|--------|
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ➜ In Progress |
+| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Planned |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
@@ -67,24 +67,56 @@
 
 **Goal:** Implement `dbcli init` command with .env parsing, interactive prompts, and .dbcli config generation.
 
+**Plans:**
+- [02-01-PLAN.md](.planning/phases/02-init-config/02-01-PLAN.md) — Infrastructure (env parser, config module, validation, 7 tasks)
+- [02-02-PLAN.md](.planning/phases/02-init-config/02-02-PLAN.md) — Init command implementation (5 tasks)
+
+**Wave Structure:**
+- Wave 1: Plan 02-01 (infrastructure, no dependencies)
+- Wave 2: Plan 02-02 (init command, depends on 02-01)
+
 **Requirements Mapped:** INIT-01, INIT-03, INIT-04
 
-**Key Work Items:**
-- Implement .env parser supporting `DATABASE_URL`, `DB_HOST/PORT/USER/PASSWORD/NAME` formats
-- Implement interactive prompts using `@inquirer/prompts` or `@clack/prompts`
-- Define `.dbcli` JSON schema (connection, permission, schema blocks)
-- Generate database-specific defaults (PostgreSQL: port 5432, MySQL: 3306, etc.)
-- Build .dbcli read/write module (immutable operations: read → merge → write)
-- Add input validation using Zod
+**Plan 02-01: Infrastructure**
+- Task 1: TypeScript interfaces (DatabaseEnv, ConnectionConfig, DbcliConfig)
+- Task 2: Custom error classes (EnvParseError, ConfigError)
+- Task 3: Zod validation schemas
+- Task 4: .env parser (DATABASE_URL + DB_* component formats)
+- Task 5: Database defaults module
+- Task 6: Immutable config read/write/merge module
+- Task 7: Comprehensive unit tests (env parser, config, validation)
+
+**Plan 02-02: Init Command**
+- Task 1: Interactive prompts module with @inquirer/prompts + fallback
+- Task 2: dbcli init command implementation (hybrid .env + interactive)
+- Task 3: Register init command in CLI entry point
+- Task 4: Integration tests for init flow
+- Task 5: Verify build and end-to-end execution
 
 **Success Criteria:**
 1. In project with `.env`, `dbcli init` auto-fills known values and only prompts missing ones
 2. In project without `.env`, `dbcli init` provides complete interactive walkthrough
 3. Generated `.dbcli` file has valid JSON format with all required fields
 4. Re-running `dbcli init` on existing config prompts for override confirmation
+5. All tests pass (unit + integration)
+6. `./dist/cli.mjs init --help` works
 
-**Complexity:** Medium | **Risk:** Medium (varies .env formats)
-**Dependencies:** Phase 1 | **Estimated Duration:** 2 phases
+**Complexity:** Medium | **Risk:** Medium (varies .env formats, Bun prompt library compatibility)
+**Dependencies:** Phase 1 | **Estimated Duration:** 2 plans (~90 min execution time)
+
+**Key Decisions (from research):**
+- Use @inquirer/prompts with fallback to minimal synchronous prompts for Bun compatibility
+- RFC 3986 percent-decoding for DATABASE_URL passwords
+- Immutable config operations (copy-on-write semantics, no mutations)
+- Zod schemas for validation (type-safe, meaningful error messages)
+- Bun.file for config I/O (per CLAUDE.md)
+
+**Pitfalls Addressed:**
+- DATABASE_URL percent-encoding (special chars in passwords)
+- Incomplete DB_* component variables (validation catches missing values)
+- .dbcli file overwrite protection (prompt before rewriting)
+- Prompt library hang/timeout risk (fallback system provides graceful degradation)
+- Schema defaults not applied (centralized in adapters/defaults.ts)
 
 ---
 
@@ -359,10 +391,11 @@ Once V1 ships, track:
 1. ✅ PROJECT.md created — captures vision and constraints
 2. ✅ REQUIREMENTS.md created — defines 19 specific v1 requirements
 3. ✅ ROADMAP.md created — 10 phases with dependencies and success criteria
-4. ✅ RESEARCH.md completed — validates tech stack and patterns
+4. ✅ RESEARCH.md completed (Phase 2) — validates tech stack and patterns
 5. ✅ PLAN-01.md created — atomic task breakdown for Phase 1
-6. **→ Ready for execution** — Run `/gsd:execute-phase 01-project-scaffold` to begin Phase 1
+6. ✅ PLAN-02-01.md and PLAN-02-02.md created — atomic task breakdown for Phase 2
+7. **→ Ready for execution** — Run `/gsd:execute-phase 02-init-config` to begin Phase 2
 
 ---
 
-*Last updated: 2026-03-25 after Phase 1 planning*
+*Last updated: 2026-03-25 after Phase 2 planning*

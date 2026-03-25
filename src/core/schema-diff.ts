@@ -50,18 +50,18 @@ export class SchemaDiffEngine {
       if (!previousSchema) continue
 
       // 將欄位列表轉換為 Map，便於快速查詢
-      const currentColsMap = new Map(currentSchema.columns.map(c => [c.name, c]))
-      const previousColsMap = new Map(previousSchema.columns.map(c => [c.name, c]))
+      const currentColsMap = new Map<string, ColumnSchema>(currentSchema.columns.map((c: ColumnSchema) => [c.name, c]))
+      const previousColsMap = new Map<string, ColumnSchema>(previousSchema.columns.map((c: ColumnSchema) => [c.name, c]))
 
       // 偵測欄位層級的變更
-      const columnsAdded = Array.from(currentColsMap.keys()).filter(c => !previousColsMap.has(c))
-      const columnsRemoved = Array.from(previousColsMap.keys()).filter(c => !currentColsMap.has(c))
+      const columnsAdded: string[] = Array.from(currentColsMap.keys()).filter((c: string) => !previousColsMap.has(c))
+      const columnsRemoved: string[] = Array.from(previousColsMap.keys()).filter((c: string) => !currentColsMap.has(c))
 
       // 偵測修改過的欄位（名稱相同，但其他屬性改變）
       const columnsModified: ColumnDiff[] = []
-      for (const colName of Array.from(currentColsMap.keys()).filter(c => previousColsMap.has(c))) {
-        const prev = previousColsMap.get(colName)!
-        const curr = currentColsMap.get(colName)!
+      for (const colName of Array.from(currentColsMap.keys()).filter((c: string) => previousColsMap.has(c))) {
+        const prev = previousColsMap.get(colName) as ColumnSchema
+        const curr = currentColsMap.get(colName) as ColumnSchema
         if (this.columnChanged(prev, curr)) {
           columnsModified.push({
             name: colName,

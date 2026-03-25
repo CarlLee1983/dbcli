@@ -24,7 +24,7 @@ describe('SchemaDiffEngine', () => {
       },
       permission: 'admin',
       schema: {},
-      metadata: {}
+      metadata: { version: '1.0' }
     }
   })
 
@@ -150,9 +150,9 @@ describe('SchemaDiffEngine', () => {
       const engine = new SchemaDiffEngine(adapter, config)
       const report = await engine.diff()
 
-      expect(report.tablesModified['users'].columnsAdded).toContain('created_at')
-      expect(report.tablesModified['users'].columnsAdded).toContain('email')
-      expect(report.tablesModified['users'].columnsAdded).toHaveLength(2)
+      expect(report.tablesModified['users']?.columnsAdded).toContain('created_at')
+      expect(report.tablesModified['users']?.columnsAdded).toContain('email')
+      expect(report.tablesModified['users']?.columnsAdded).toHaveLength(2)
     })
 
     test('should detect columns removed from existing table', async () => {
@@ -181,8 +181,8 @@ describe('SchemaDiffEngine', () => {
       const engine = new SchemaDiffEngine(adapter, config)
       const report = await engine.diff()
 
-      expect(report.tablesModified['users'].columnsRemoved).toContain('deprecated_field')
-      expect(report.tablesModified['users'].columnsRemoved).toHaveLength(1)
+      expect(report.tablesModified['users']?.columnsRemoved).toContain('deprecated_field')
+      expect(report.tablesModified['users']?.columnsRemoved).toHaveLength(1)
     })
 
     test('should detect column modifications (type, nullable, default)', async () => {
@@ -210,10 +210,11 @@ describe('SchemaDiffEngine', () => {
       const engine = new SchemaDiffEngine(adapter, config)
       const report = await engine.diff()
 
-      expect(report.tablesModified['users'].columnsModified).toHaveLength(1)
-      expect(report.tablesModified['users'].columnsModified[0].name).toBe('email')
-      expect(report.tablesModified['users'].columnsModified[0].previous.type).toBe('varchar(100)')
-      expect(report.tablesModified['users'].columnsModified[0].current.type).toBe('varchar(255)')
+      const userModified = report.tablesModified['users']
+      expect(userModified?.columnsModified).toHaveLength(1)
+      expect(userModified?.columnsModified[0]?.name).toBe('email')
+      expect(userModified?.columnsModified[0]?.previous.type).toBe('varchar(100)')
+      expect(userModified?.columnsModified[0]?.current.type).toBe('varchar(255)')
     })
   })
 
@@ -271,8 +272,9 @@ describe('SchemaDiffEngine', () => {
       const report = await engine.diff()
 
       // 應該報告欄位為修改狀態
-      expect(report.tablesModified['users'].columnsModified).toHaveLength(1)
-      expect(report.tablesModified['users'].columnsModified[0].name).toBe('name')
+      const userModified2 = report.tablesModified['users']
+      expect(userModified2?.columnsModified).toHaveLength(1)
+      expect(userModified2?.columnsModified[0]?.name).toBe('name')
     })
 
     test('NUMERIC(10,2) case-insensitive comparison', async () => {
@@ -348,7 +350,7 @@ describe('SchemaDiffEngine', () => {
       const report = await engine.diff()
 
       // 驗證差異報告包含欄位新增
-      expect(report.tablesModified['users'].columnsAdded).toContain('created_at')
+      expect(report.tablesModified['users']?.columnsAdded).toContain('created_at')
       // 驗證外鍵元數據未遺失（透過檢查適配器返回的架構）
       expect(newUsersSchema.foreignKeys).toHaveLength(1)
     })
@@ -395,8 +397,9 @@ describe('SchemaDiffEngine', () => {
       const report = await engine.diff()
 
       // 驗證欄位類型變更被偵測
-      expect(report.tablesModified['users'].columnsModified).toHaveLength(1)
-      expect(report.tablesModified['users'].columnsModified[0].name).toBe('role_id')
+      const userModified3 = report.tablesModified['users']
+      expect(userModified3?.columnsModified).toHaveLength(1)
+      expect(userModified3?.columnsModified[0]?.name).toBe('role_id')
     })
   })
 

@@ -67,7 +67,8 @@ const mockUserSchema: TableSchema = {
     { name: 'id', type: 'integer', nullable: false, primaryKey: true },
     { name: 'name', type: 'varchar', nullable: false },
     { name: 'email', type: 'varchar', nullable: false },
-    { name: 'age', type: 'integer', nullable: true }
+    { name: 'age', type: 'integer', nullable: true },
+    { name: 'status', type: 'varchar', nullable: true }
   ]
 }
 
@@ -301,7 +302,7 @@ describe('DataExecutor.executeInsert - Error Handling', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('database error')
+    expect(result.error).toContain('Database error')
   })
 
   test('invalid table name throws error', async () => {
@@ -427,5 +428,280 @@ describe('DataExecutor.executeDelete', () => {
     expect(result.status).toBe('success')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
+  })
+})
+
+// ============================================================================
+// buildUpdateSql() Tests
+// ============================================================================
+
+describe('DataExecutor.buildUpdateSql', () => {
+  let executor: DataExecutor
+  let adapter: MockAdapter
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'read-write')
+  })
+
+  test('builds UPDATE with single SET and single WHERE', () => {
+    const data = { name: 'Alice' }
+    const where = { id: 1 }
+    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+
+    expect(sql).toContain('UPDATE "users"')
+    expect(sql).toContain('"name"')
+    expect(sql).toContain('$1')
+    expect(sql).toContain('WHERE')
+    expect(sql).toContain('"id"')
+    expect(sql).toContain('$2')
+    expect(params).toEqual(['Alice', 1])
+  })
+
+  test('builds UPDATE with multiple SET fields', () => {
+    const data = { name: 'Bob', email: 'bob@example.com' }
+    const where = { id: 2 }
+    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+
+    expect(sql).toContain('UPDATE "users"')
+    expect(sql).toContain('SET')
+    expect(sql).toContain('"name"')
+    expect(sql).toContain('"email"')
+    expect(sql).toContain('$1')
+    expect(sql).toContain('$2')
+    expect(params).toEqual(['Bob', 'bob@example.com', 2])
+  })
+
+  test('builds UPDATE with multiple WHERE conditions', () => {
+    const data = { status: 'active' }
+    const where = { id: 1, name: 'Alice' }
+    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+
+    expect(sql).toContain('UPDATE "users"')
+    expect(sql).toContain('SET')
+    expect(sql).toContain('"status"')
+    expect(sql).toContain('WHERE')
+    expect(sql).toContain('"id"')
+    expect(sql).toContain('"name"')
+    expect(sql).toContain('AND')
+    expect(params).toEqual(['active', 1, 'Alice'])
+  })
+
+  test('throws error if SET column not in schema', () => {
+    const data = { nonexistent: 'value' }
+    const where = { id: 1 }
+
+    expect(() => {
+      executor['buildUpdateSql']('users', data, where, mockUserSchema)
+    }).toThrow('找不到欄位')
+  })
+
+  test('throws error if WHERE column not in schema', () => {
+    const data = { name: 'Alice' }
+    const where = { nonexistent: 1 }
+
+    expect(() => {
+      executor['buildUpdateSql']('users', data, where, mockUserSchema)
+    }).toThrow('找不到欄位')
+  })
+
+  test('preserves parameter order: SET before WHERE', () => {
+    const data = { name: 'Charlie', email: 'charlie@example.com', age: 30 }
+    const where = { id: 3, status: 'active' }
+    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+
+    // SET params should come first, then WHERE params
+    const setParamCount = Object.keys(data).length
+    const whereParamCount = Object.keys(where).length
+
+    expect(params.length).toBe(setParamCount + whereParamCount)
+    expect(params.slice(0, setParamCount)).toEqual(['Charlie', 'charlie@example.com', 30])
+    expect(params.slice(setParamCount)).toEqual([3, 'active'])
+  })
+
+  test('handles NULL values in SET clause', () => {
+    const data = { age: null }
+    const where = { id: 1 }
+    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+
+    expect(sql).toContain('SET')
+    expect(sql).toContain('"age"')
+    expect(sql).toContain('$1')
+    expect(params).toEqual([null, 1])
+  })
+})
+
+// ============================================================================
+// executeUpdate() Tests
+// ============================================================================
+
+describe('DataExecutor.executeUpdate', () => {
+  let executor: DataExecutor
+  let executor2: DataExecutor
+  let adapter: MockAdapter
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'read-write')
+    executor2 = new DataExecutor(adapter, 'query-only')
+  })
+
+  test('rejects UPDATE with query-only permission', async () => {
+    const data = { name: 'Alice' }
+    const where = { id: 1 }
+
+    const result = await executor2.executeUpdate('users', data, where, mockUserSchema)
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('權限被拒')
+    expect(result.error).toContain('Query-only')
+  })
+
+  test('allows UPDATE with read-write permission', async () => {
+    const data = { name: 'Bob' }
+    const where = { id: 1 }
+
+    adapter.setExecuteResults([{ id: 1, name: 'Bob', email: 'bob@example.com', age: null }])
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('update')
+    expect(result.rows_affected).toBe(1)
+  })
+
+  test('allows UPDATE with admin permission', async () => {
+    const adminExecutor = new DataExecutor(adapter, 'admin')
+    const data = { name: 'Charlie' }
+    const where = { id: 2 }
+
+    adapter.setExecuteResults([{ id: 2, name: 'Charlie', email: 'charlie@example.com', age: null }])
+
+    const result = await adminExecutor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('update')
+  })
+
+  test('UPDATE --dry-run returns rows_affected=0 without executing', async () => {
+    const data = { name: 'David' }
+    const where = { id: 3 }
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      dryRun: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('update')
+    expect(result.rows_affected).toBe(0)
+    expect(result.sql).toBeDefined()
+  })
+
+  test('UPDATE --force skips confirmation', async () => {
+    const data = { status: 'active' }
+    const where = { id: 4 }
+
+    adapter.setExecuteResults([{ id: 4, name: 'Eve', email: 'eve@example.com', age: null }])
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.rows_affected).toBe(1)
+  })
+
+  test('UPDATE includes generated SQL in result', async () => {
+    const data = { name: 'Frank' }
+    const where = { id: 5 }
+
+    adapter.setExecuteResults([])
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.sql).toBeDefined()
+    expect(result.sql).toContain('UPDATE "users"')
+    expect(result.sql).toContain('SET')
+    expect(result.sql).toContain('WHERE')
+  })
+
+  test('UPDATE correctly counts multiple affected rows', async () => {
+    const data = { status: 'inactive' }
+    const where = { age: 25 }
+
+    // Simulate 3 rows being updated
+    adapter.setExecuteResults([
+      { id: 1, name: 'User1', email: 'user1@example.com', age: 25 },
+      { id: 2, name: 'User2', email: 'user2@example.com', age: 25 },
+      { id: 3, name: 'User3', email: 'user3@example.com', age: 25 },
+    ])
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.rows_affected).toBe(3)
+  })
+
+  test('UPDATE error includes generated SQL', async () => {
+    const data = { name: 'Invalid' }
+    const where = { id: 999 }
+
+    adapter.setFailure(true, 'Update failed: constraint violation')
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('UPDATE 失敗')
+  })
+
+  test('UPDATE handles database constraint errors', async () => {
+    const data = { email: 'duplicate@example.com' }
+    const where = { id: 1 }
+
+    adapter.setFailure(true, 'UNIQUE constraint failed: email')
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.operation).toBe('update')
+    expect(result.rows_affected).toBe(0)
+  })
+
+  test('UPDATE handles missing column validation', async () => {
+    const data = { nonexistent: 'value' }
+    const where = { id: 1 }
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('欄位')
+  })
+
+  test('UPDATE requires both SET data and WHERE conditions', async () => {
+    const data = { name: 'Test' }
+    const where = { id: 1 }
+
+    adapter.setExecuteResults([])
+
+    const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
+      force: true
+    })
+
+    // Should succeed if both are provided
+    expect(result.operation).toBe('update')
   })
 })

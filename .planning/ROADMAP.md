@@ -15,7 +15,7 @@
 | 7 | Data Modification | `dbcli insert`, `dbcli update`, `dbcli delete` with safeguards | DATA-01, DATA-02 | 3 | ✅ Complete |
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | ✅ Complete |
 | 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ✅ Complete |
-| 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | Pending |
+| 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | ⏳ In Progress (1/2) |
 
 ---
 

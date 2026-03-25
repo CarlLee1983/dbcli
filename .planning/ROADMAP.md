@@ -7,7 +7,7 @@
 | # | Phase | Goal | Requirements | Plans | Status |
 |---|-------|------|--------------|-------|--------|
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Planned |
+| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ 01 Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
@@ -77,14 +77,14 @@
 
 **Requirements Mapped:** INIT-01, INIT-03, INIT-04
 
-**Plan 02-01: Infrastructure**
-- Task 1: TypeScript interfaces (DatabaseEnv, ConnectionConfig, DbcliConfig)
-- Task 2: Custom error classes (EnvParseError, ConfigError)
-- Task 3: Zod validation schemas
-- Task 4: .env parser (DATABASE_URL + DB_* component formats)
-- Task 5: Database defaults module
-- Task 6: Immutable config read/write/merge module
-- Task 7: Comprehensive unit tests (env parser, config, validation)
+**Plan 02-01: Infrastructure** ✅ COMPLETE
+- ✓ Task 1: TypeScript interfaces (DatabaseEnv, ConnectionConfig, DbcliConfig)
+- ✓ Task 2: Custom error classes (EnvParseError, ConfigError)
+- ✓ Task 3: Zod validation schemas
+- ✓ Task 4: .env parser (DATABASE_URL + DB_* component formats with RFC 3986 support)
+- ✓ Task 5: Database defaults module (PostgreSQL, MySQL, MariaDB)
+- ✓ Task 6: Immutable config read/write/merge module (copy-on-write semantics)
+- ✓ Task 7: Comprehensive unit tests (51 tests, all passing)
 
 **Plan 02-02: Init Command**
 - Task 1: Interactive prompts module with @inquirer/prompts + fallback

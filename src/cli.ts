@@ -7,6 +7,7 @@ import { queryCommand } from './commands/query'
 import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
+import { exportCommand } from './commands/export'
 
 const program = new Command()
   .name('dbcli')
@@ -78,6 +79,34 @@ program
   .action(async (table: string, options: any) => {
     try {
       await deleteCommand(table, options)
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+// Register export command
+program
+  .command('export <sql>')
+  .description('Export query results to JSON or CSV format')
+  .option(
+    '--format <format>',
+    'Output format: json or csv (required)',
+    'json'
+  )
+  .option(
+    '--output <path>',
+    'Output file path (if omitted, write to stdout)',
+    undefined
+  )
+  .action(async (sql: string, options: any) => {
+    try {
+      // Validate format before calling
+      if (!options.format || !['json', 'csv'].includes(options.format)) {
+        console.error('❌ Invalid format. Use --format json or --format csv')
+        process.exit(1)
+      }
+      return exportCommand(sql, options)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

@@ -11,6 +11,7 @@ import { describe, test, expect } from 'vitest'
 import { configModule } from '@/core/config'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { getDefaultsForSystem } from '@/adapters/defaults'
+import { AdapterFactory, ConnectionError } from '@/adapters'
 
 describe('Init Command Integration Tests', () => {
   test('應該從 DATABASE_URL 格式解析配置', () => {
@@ -248,5 +249,84 @@ describe('Init Command Integration Tests', () => {
       DB_NAME: 'db'
     })
     expect(mysql?.port).toBe(3306)
+  })
+
+  test('init command tests connection with valid credentials', async () => {
+    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
+    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+
+    // 驗證：使用有效的認證建立連接
+    const config = {
+      system: 'postgresql' as const,
+      host: 'localhost',
+      port: 5432,
+      user: 'postgres',
+      password: 'postgres',
+      database: 'postgres'
+    }
+
+    const adapter = AdapterFactory.createAdapter(config)
+    try {
+      await adapter.connect()
+      const isHealthy = await adapter.testConnection()
+      expect(isHealthy).toBe(true)
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test('init command fails gracefully with invalid credentials', async () => {
+    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
+    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+
+    // 驗證：無效密碼拋出 ConnectionError
+    const config = {
+      system: 'postgresql' as const,
+      host: 'localhost',
+      port: 5432,
+      user: 'postgres',
+      password: 'wrong_password',
+      database: 'postgres'
+    }
+
+    const adapter = AdapterFactory.createAdapter(config)
+    try {
+      await adapter.connect()
+      expect(false).toBe(true) // 不應該到達這裡
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConnectionError)
+      const connErr = error as ConnectionError
+      expect(connErr.code).toBe('AUTH_FAILED')
+      expect(connErr.hints.length).toBeGreaterThan(0)
+    }
+  })
+
+  test('init command shows connection hints on error', async () => {
+    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
+    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+
+    // 驗證：連接錯誤包含有用的提示
+    const config = {
+      system: 'postgresql' as const,
+      host: '10.255.255.1', // 無法到達的 IP
+      port: 5432,
+      user: 'postgres',
+      password: 'postgres',
+      database: 'postgres',
+      timeout: 1000
+    }
+
+    const adapter = AdapterFactory.createAdapter(config)
+    try {
+      await adapter.connect()
+      expect(false).toBe(true) // 不應該到達這裡
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConnectionError)
+      const connErr = error as ConnectionError
+      expect(['ECONNREFUSED', 'ETIMEDOUT'].includes(connErr.code)).toBe(true)
+      // 驗證提示包含有用的信息
+      expect(connErr.hints.length).toBeGreaterThan(0)
+      expect(connErr.hints.some(hint => hint.includes('防火牆') || hint.includes('ping') || hint.includes('超時'))).toBe(true)
+    }
   })
 })

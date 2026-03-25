@@ -105,14 +105,14 @@ export async function suggestTableName(
 function extractTableNameFromError(errorMessage: string): string | null {
   // PostgreSQL format: relation "table" or relation 'table' or relation `table`
   const pgMatch = errorMessage.match(/relation\s+['""`](\w+)['""`]/i)
-  if (pgMatch) {
-    return pgMatch[1]
+  if (pgMatch && pgMatch[1]) {
+    return pgMatch[1] as string
   }
 
   // MySQL format: table `table` or table "table" or table 'table'
   const mysqlMatch = errorMessage.match(/table\s+['""`](\w+)['""`]/i)
-  if (mysqlMatch) {
-    return mysqlMatch[1]
+  if (mysqlMatch && mysqlMatch[1]) {
+    return mysqlMatch[1] as string
   }
 
   return null

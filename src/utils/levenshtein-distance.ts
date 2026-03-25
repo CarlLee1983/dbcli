@@ -19,37 +19,53 @@
  * @returns The Levenshtein distance (minimum edits required)
  */
 export function levenshteinDistance(a: string, b: string): number {
-  // Initialize matrix with dimensions (b.length + 1) x (a.length + 1)
-  const matrix: number[][] = []
+  const lenA = a.length
+  const lenB = b.length
 
-  // Initialize first column (delete all characters from b)
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i]
+  // Create matrix for dynamic programming
+  const dp: number[][] = []
+  for (let i = 0; i <= lenB; i++) {
+    const row: number[] = []
+    for (let j = 0; j <= lenA; j++) {
+      row[j] = 0
+    }
+    dp[i] = row
   }
 
-  // Initialize first row (insert all characters from a)
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j
+  // Initialize first column and row
+  for (let i = 0; i <= lenB; i++) {
+    const row = dp[i]
+    if (row !== undefined) {
+      row[0] = i
+    }
+  }
+  for (let j = 0; j <= lenA; j++) {
+    const firstRow = dp[0]
+    if (firstRow !== undefined) {
+      firstRow[j] = j
+    }
   }
 
   // Fill matrix using dynamic programming
-  // Each cell (i, j) represents the distance between b[0...i-1] and a[0...j-1]
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
+  for (let i = 1; i <= lenB; i++) {
+    const currentRow = dp[i]
+    const prevRow = dp[i - 1]
+    if (!currentRow || !prevRow) continue
+
+    for (let j = 1; j <= lenA; j++) {
       if (b.charAt(i - 1) === a.charAt(j - 1)) {
         // Characters match: no operation needed
-        matrix[i][j] = matrix[i - 1][j - 1]
+        currentRow[j] = prevRow[j - 1] ?? 0
       } else {
         // Characters differ: take minimum of three operations
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // Substitution
-          matrix[i][j - 1] + 1, // Insertion
-          matrix[i - 1][j] + 1 // Deletion
-        )
+        const sub = (prevRow[j - 1] ?? 0) + 1
+        const ins = (currentRow[j - 1] ?? 0) + 1
+        const del = (prevRow[j] ?? 0) + 1
+        currentRow[j] = Math.min(sub, ins, del)
       }
     }
   }
 
   // Return distance between full strings
-  return matrix[b.length][a.length]
+  return dp[lenB]?.[lenA] ?? 0
 }

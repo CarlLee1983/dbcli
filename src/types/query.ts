@@ -56,5 +56,3 @@ export interface QueryResult<T> {
   /** Optional: metadata about query type and affected rows */
   metadata?: QueryMetadata
 }
-
-export default QueryResult

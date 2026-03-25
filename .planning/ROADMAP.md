@@ -8,7 +8,7 @@
 |---|-------|------|--------------|-------|--------|
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
-| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
+| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | 🔄 Planned |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
@@ -124,23 +124,58 @@
 
 **Goal:** Create database adapter abstraction layer supporting PostgreSQL, MySQL, MariaDB; validate `.dbcli` config can connect successfully.
 
+**Plans:**
+- [03-01-PLAN.md](.planning/phases/03-db-connection/03-01-PLAN.md) — Adapter interface, factory, error mapping (7 tasks, Wave 1)
+- [03-02-PLAN.md](.planning/phases/03-db-connection/03-02-PLAN.md) — PostgreSQL/MySQL adapters, init integration, tests (8 tasks, Wave 2)
+
+**Wave Structure:**
+- Wave 1: Plan 03-01 (types, factory, error mapping)
+- Wave 2: Plan 03-02 (adapter implementations, init integration)
+
 **Requirements Mapped:** INIT-02
 
-**Key Work Items:**
-- Define `DatabaseAdapter` interface (`connect`, `disconnect`, `execute`, `getSchema`, `listTables`)
-- Implement PostgreSQL adapter (using `postgres` or `pg`)
-- Implement MySQL/MariaDB adapter (using `mysql2`)
-- Create Adapter Factory based on `.dbcli` `system` field
-- Add connection test to `dbcli init` final step
-- Implement error handling (timeout, auth failed, host unreachable)
+**Plan 03-01: Adapter Foundation** 🔄 PLANNED
+- Task 1: Define DatabaseAdapter interface and types
+- Task 2: Create AdapterFactory for database-system-aware instantiation
+- Task 3: Implement error-mapper with categorized error messages and hints
+- Task 4: Create public exports in src/adapters/index.ts
+- Task 5: Write unit tests for AdapterFactory instantiation logic
+- Task 6: Write unit tests for error-mapper error categorization
+- Task 7: Verify full test suite passes and types compile
+
+**Plan 03-02: Adapter Implementation** 🔄 PLANNED
+- Task 1: Implement PostgreSQLAdapter with Bun.sql
+- Task 2: Implement MySQLAdapter with Bun.sql for MySQL and MariaDB
+- Task 3: Update AdapterFactory to import real adapter implementations
+- Task 4: Add connection testing to dbcli init command
+- Task 5: Write integration tests for PostgreSQL adapter
+- Task 6: Write integration tests for MySQL adapter
+- Task 7: Update init integration tests to include connection testing scenarios
+- Task 8: Verify full test suite and build
 
 **Success Criteria:**
 1. `dbcli init` successfully tests PostgreSQL connection
 2. `dbcli init` successfully tests MySQL connection
 3. Connection failures display clear error messages with troubleshooting hints
+4. All error categories recognized (ECONNREFUSED, ETIMEDOUT, AUTH_FAILED, ENOTFOUND, UNKNOWN)
+5. Adapter interface enables clean CLI commands without driver-specific imports
 
 **Complexity:** Medium | **Risk:** Medium (driver compatibility, Bun native module support)
 **Dependencies:** Phase 1, 2 | **Estimated Duration:** 2 phases
+
+**Key Decisions (from research):**
+- Use Bun's native SQL API (Bun.sql) for PostgreSQL, MySQL, MariaDB — zero npm dependencies, unified API
+- Adapter pattern decouples CLI commands from driver implementations
+- Single connection per CLI invocation (no pooling needed for CLI tool)
+- Comprehensive error mapping (5 categories) with actionable troubleshooting hints
+- Validate connection before saving config (fail fast with clear feedback)
+
+**Pitfalls to Avoid:**
+- Bun.sql documentation lag (docs may show only SQLite examples; verify PostgreSQL/MySQL support)
+- Connection timeout not configurable (expose timeout in ConnectionOptions)
+- localhost vs 127.0.0.1 hostname resolution issues (provide both in error hints)
+- Error messages leaking sensitive info (sanitize URLs in error output)
+- MySQL vs MariaDB dialect differences (test both systems separately, use single adapter for compatibility)
 
 ---
 
@@ -339,7 +374,7 @@ Phase 1 (Scaffold)
         │   │   │   │   └── Phase 8 (Schema Refresh & Export)
         │   │   │   └── Phase 9 (AI Integration) ← Can start after Phase 6
         │   │   └────────────────────────────────────────────┐
-        └────────────────────────────────── Phase 10 (Polish & Distribution)
+        └────────────────────────────── Phase 10 (Polish & Distribution)
 ```
 
 **Critical Path:** 1 → 2 → 3 → 4 → 5 → 6 → 7 (longest dependency chain)
@@ -394,8 +429,9 @@ Once V1 ships, track:
 4. ✅ RESEARCH.md completed (Phase 2) — validates tech stack and patterns
 5. ✅ PLAN-01.md created — atomic task breakdown for Phase 1
 6. ✅ PLAN-02-01.md and PLAN-02-02.md created — atomic task breakdown for Phase 2
-7. **→ Ready for execution** — Run `/gsd:execute-phase 02-init-config` to begin Phase 2
+7. ✅ PLAN-03-01.md and PLAN-03-02.md created — atomic task breakdown for Phase 3
+8. **→ Ready for execution** — Run `/gsd:execute-phase 03-db-connection` to begin Phase 3
 
 ---
 
-*Last updated: 2026-03-25 after Phase 2 planning*
+*Last updated: 2026-03-25 after Phase 3 planning*

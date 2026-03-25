@@ -167,20 +167,35 @@ export function detectCompositePatterns(
 /**
  * Extract first SQL keyword from statement
  * Skips empty tokens and parameter markers
+ * For WITH clauses, finds the outer operation keyword
  */
 export function extractFirstKeyword(sql: string): string {
   const cleaned = removeParameterMarkers(sql)
   const tokens = cleaned.split(/\s+/).filter((token) => token.length > 0)
+
+  let firstKeyword = 'UNKNOWN'
 
   for (const token of tokens) {
     // Skip parameter markers (shouldn't be present after removeParameterMarkers, but safe check)
     if (token.startsWith('$') || token === '?') {
       continue
     }
-    return token.toUpperCase()
+    firstKeyword = token.toUpperCase()
+    break
   }
 
-  return 'UNKNOWN'
+  // If first keyword is WITH (CTE), find the outer operation keyword
+  if (firstKeyword === 'WITH') {
+    // Look for the main operation keyword after the closing parenthesis of the CTE
+    const upper = cleaned.toUpperCase()
+    // Find pattern: ") KEYWORD" where KEYWORD is the outer operation
+    const outerMatch = upper.match(/\)\s+(SELECT|INSERT|UPDATE|DELETE|WITH)/i)
+    if (outerMatch && outerMatch[1]) {
+      return outerMatch[1].toUpperCase()
+    }
+  }
+
+  return firstKeyword
 }
 
 /**

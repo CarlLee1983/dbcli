@@ -20,8 +20,21 @@ jobs:
       - run: bun run build
       - run: bun run dev -- --help
       - run: bun run dev -- --version
-      - name: Verify bundled CLI
+
+      - name: Verify executable (Unix/macOS/Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
-          chmod +x dist/cli.mjs || true
           ./dist/cli.mjs --help
           ./dist/cli.mjs --version
+
+      - name: Verify executable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = "dist/cli.mjs"
+          if (-not (Test-Path $exePath)) {
+            throw "Executable not found: $exePath"
+          }
+          & $exePath --help
+          & $exePath --version

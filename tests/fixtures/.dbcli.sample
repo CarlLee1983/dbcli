@@ -1,0 +1,15 @@
+{
+  "connection": {
+    "system": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "user": "testuser",
+    "password": "testpass",
+    "database": "testdb"
+  },
+  "permission": "query-only",
+  "schema": {},
+  "metadata": {
+    "version": "1.0"
+  }
+}

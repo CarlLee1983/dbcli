@@ -143,26 +143,28 @@ export class MySQLAdapter implements DatabaseAdapter {
     }
 
     try {
-      // Query information_schema.TABLES for table list
+      // Query information_schema.TABLES for table list with row count and engine info
       const query = `
         SELECT
-          table_name,
-          table_rows as row_count
+          TABLE_NAME as table_name,
+          TABLE_ROWS as row_count,
+          ENGINE as engine
         FROM information_schema.TABLES
-        WHERE table_schema = DATABASE()
-        ORDER BY table_name
+        WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME
       `
 
       const results = await this.execute<{
         table_name: string
         row_count: number | null
+        engine: string
       }>(query)
 
       return results.map((row) => ({
         name: row.table_name,
         columns: [],
         rowCount: row.row_count || 0,
-        engine: this.system === 'mariadb' ? 'MariaDB' : 'MySQL'
+        engine: row.engine
       }))
     } catch (error) {
       throw mapError(error, this.system, this.options)
@@ -209,10 +211,60 @@ export class MySQLAdapter implements DatabaseAdapter {
         is_primary_key: boolean
       }>(columnQuery, [tableName])
 
+      // Extract foreign key constraints
+      const fkQuery = `
+        SELECT
+          rc.CONSTRAINT_NAME as name,
+          GROUP_CONCAT(kcu.COLUMN_NAME) as columns,
+          rc.REFERENCED_TABLE_NAME as ref_table,
+          GROUP_CONCAT(kcu.REFERENCED_COLUMN_NAME) as ref_columns
+        FROM information_schema.REFERENTIAL_CONSTRAINTS rc
+        JOIN information_schema.KEY_COLUMN_USAGE kcu
+          ON rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND rc.TABLE_NAME = kcu.TABLE_NAME
+        WHERE kcu.TABLE_NAME = ? AND rc.CONSTRAINT_SCHEMA = DATABASE()
+        GROUP BY rc.CONSTRAINT_NAME
+      `
+
+      const fkResults = await this.execute<{
+        name: string
+        columns: string
+        ref_table: string
+        ref_columns: string
+      }>(fkQuery, [tableName])
+
+      // Create map of single-column foreign keys for quick lookup
+      const fkMap = new Map<string, { table: string; column: string }>()
+      for (const fk of fkResults) {
+        const cols = fk.columns.split(',').map(c => c.trim())
+        const refCols = fk.ref_columns.split(',').map(c => c.trim())
+        if (cols.length === 1 && refCols.length === 1) {
+          fkMap.set(cols[0], { table: fk.ref_table, column: refCols[0] })
+        }
+      }
+
+      // Extract primary key columns
+      const pkQuery = `
+        SELECT COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_NAME = ? AND COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = DATABASE()
+        ORDER BY ORDINAL_POSITION
+      `
+
+      const pkResults = await this.execute<{ COLUMN_NAME: string }>(pkQuery, [tableName])
+
       // Get row count
       const countResult = await this.execute<{ count: number }>(
         `SELECT COUNT(*) as count FROM \`${tableName}\``
       )
+
+      // Get engine type
+      const tableQuery = `
+        SELECT ENGINE as engine
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+      `
+
+      const tableResults = await this.execute<{ engine: string }>(tableQuery, [tableName])
 
       const schema: TableSchema = {
         name: tableName,
@@ -222,10 +274,17 @@ export class MySQLAdapter implements DatabaseAdapter {
           nullable: col.nullable,
           default: col.default_value || undefined,
           primaryKey: col.is_primary_key,
-          foreignKey: undefined
+          foreignKey: fkMap.get(col.name)
         })),
         rowCount: countResult[0]?.count || 0,
-        engine: this.system === 'mariadb' ? 'MariaDB' : 'MySQL'
+        engine: tableResults[0]?.engine || 'MySQL',
+        primaryKey: pkResults.map(r => r.COLUMN_NAME),
+        foreignKeys: fkResults.map(fk => ({
+          name: fk.name,
+          columns: fk.columns.split(',').map(c => c.trim()),
+          refTable: fk.ref_table,
+          refColumns: fk.ref_columns.split(',').map(c => c.trim())
+        }))
       }
 
       return schema

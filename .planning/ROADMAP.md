@@ -7,7 +7,7 @@
 | # | Phase | Goal | Requirements | Plans | Status |
 |---|-------|------|--------------|-------|--------|
 | 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ 01 Complete |
+| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | Pending |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | Pending |
 | 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
@@ -86,12 +86,12 @@
 - ✓ Task 6: Immutable config read/write/merge module (copy-on-write semantics)
 - ✓ Task 7: Comprehensive unit tests (51 tests, all passing)
 
-**Plan 02-02: Init Command**
-- Task 1: Interactive prompts module with @inquirer/prompts + fallback
-- Task 2: dbcli init command implementation (hybrid .env + interactive)
-- Task 3: Register init command in CLI entry point
-- Task 4: Integration tests for init flow
-- Task 5: Verify build and end-to-end execution
+**Plan 02-02: Init Command** ✅ COMPLETE
+- ✓ Task 1: Interactive prompts module with @inquirer/prompts + fallback
+- ✓ Task 2: dbcli init command implementation (hybrid .env + interactive)
+- ✓ Task 3: Register init command in CLI entry point
+- ✓ Task 4: Integration tests for init flow (13 tests, all passing)
+- ✓ Task 5: Verify build and end-to-end execution
 
 **Success Criteria:**
 1. In project with `.env`, `dbcli init` auto-fills known values and only prompts missing ones

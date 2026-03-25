@@ -8,10 +8,12 @@ import { Command } from 'commander'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
+import { SchemaDiffEngine } from '@/core/schema-diff'
+import type { TableSchema } from '@/adapters/types'
 
 export const schemaCommand = new Command()
   .name('schema')
-  .description('Display table schema or scan database schema')
+  .description('Display table schema, scan database schema, or refresh existing schema with detected changes')
   .argument('[table]', 'Optional: table name to inspect (if omitted, scans all tables)')
   .option(
     '--format <format>',
@@ -22,6 +24,11 @@ export const schemaCommand = new Command()
     '--config <path>',
     'Path to .dbcli config file',
     '.dbcli'
+  )
+  .option(
+    '--refresh',
+    'Refresh schema by detecting changes from database',
+    false
   )
   .option(
     '--force',
@@ -40,6 +47,7 @@ async function schemaAction(
   options: {
     format: string
     config: string
+    refresh: boolean
     force: boolean
   }
 ) {
@@ -57,7 +65,10 @@ async function schemaAction(
     await adapter.connect()
 
     try {
-      if (table) {
+      if (options.refresh) {
+        // Handle schema refresh (NEW)
+        await handleSchemaRefresh(adapter, config, options)
+      } else if (table) {
         // 單個表格架構檢查
         await handleSingleTableSchema(adapter, table, options.format)
       } else {
@@ -117,6 +128,64 @@ async function handleSingleTableSchema(
       console.log(`🔧 引擎: ${schema.engine}`)
     }
   }
+}
+
+/**
+ * 處理架構刷新 - 檢測增量更改並應用
+ */
+async function handleSchemaRefresh(
+  adapter: any,
+  config: any,
+  options: { config: string; refresh: boolean; force: boolean }
+): Promise<void> {
+  const diffEngine = new SchemaDiffEngine(adapter, config)
+  const report = await diffEngine.diff()
+
+  // Check if changes exist
+  if (
+    report.tablesAdded.length === 0 &&
+    report.tablesRemoved.length === 0 &&
+    Object.keys(report.tablesModified).length === 0
+  ) {
+    console.log('✅ Schema is up-to-date (no changes detected)')
+    return
+  }
+
+  // Display changes
+  console.log('🔍 Schema changes detected:')
+  console.log(`   ${report.summary}`)
+
+  // Require --force to apply
+  if (!options.force) {
+    console.log('   Use --force to apply changes')
+    return
+  }
+
+  // Build new schema object with all table entries
+  const newSchema: Record<string, TableSchema> = { ...config.schema }
+
+  // Add/update tables detected as added or modified
+  for (const tableName of report.tablesAdded.concat(Object.keys(report.tablesModified))) {
+    const fullSchema = await adapter.getTableSchema(tableName)
+    newSchema[tableName] = fullSchema
+  }
+
+  // Remove deleted tables (implicitly by not including them in new schema)
+  report.tablesRemoved.forEach((t: string) => delete newSchema[t])
+
+  // Apply immutable merge to config
+  const updatedConfig = configModule.merge(config, {
+    schema: newSchema,
+    metadata: {
+      ...config.metadata,
+      schemaLastUpdated: new Date().toISOString(),
+      schemaTableCount: Object.keys(newSchema).length
+    }
+  })
+
+  // Write updated config
+  await configModule.write(options.config, updatedConfig)
+  console.log(`✅ Schema updated in .dbcli`)
 }
 
 /**

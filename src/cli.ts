@@ -6,6 +6,7 @@ import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
 import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
+import { deleteCommand } from './commands/delete'
 
 const program = new Command()
   .name('dbcli')
@@ -61,6 +62,22 @@ program
   .action(async (table: string, options: any) => {
     try {
       await updateCommand(table, options)
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+// Register delete command
+program
+  .command('delete <table>')
+  .description('Delete data from database table (Admin-only)')
+  .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
+  .option('--dry-run', 'Show generated SQL without executing')
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (table: string, options: any) => {
+    try {
+      await deleteCommand(table, options)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

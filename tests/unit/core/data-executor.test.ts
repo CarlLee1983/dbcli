@@ -705,3 +705,339 @@ describe('DataExecutor.executeUpdate', () => {
     expect(result.operation).toBe('update')
   })
 })
+
+// ============================================================================
+// buildDeleteSql() Tests
+// ============================================================================
+
+describe('DataExecutor.buildDeleteSql', () => {
+  let executor: DataExecutor
+  let adapter: MockAdapter
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'admin')
+  })
+
+  test('builds DELETE with single WHERE condition', () => {
+    const where = { id: 1 }
+    const { sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
+
+    expect(sql).toContain('DELETE FROM "users"')
+    expect(sql).toContain('WHERE')
+    expect(sql).toContain('"id"')
+    expect(sql).toContain('$1')
+    expect(params).toEqual([1])
+  })
+
+  test('builds DELETE with multiple WHERE conditions (AND)', () => {
+    const where = { id: 1, status: 'inactive' }
+    const { sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
+
+    expect(sql).toContain('DELETE FROM "users"')
+    expect(sql).toContain('WHERE')
+    expect(sql).toContain('"id"')
+    expect(sql).toContain('"status"')
+    expect(sql).toContain('AND')
+    expect(sql).toContain('$1')
+    expect(sql).toContain('$2')
+    expect(params).toEqual([1, 'inactive'])
+  })
+
+  test('builds DELETE with complex WHERE (multiple conditions)', () => {
+    const where = { id: 5, name: 'TestUser', status: 'archived' }
+    const { sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
+
+    expect(sql).toContain('DELETE FROM')
+    expect(params).toHaveLength(3)
+    expect(params).toEqual([5, 'TestUser', 'archived'])
+  })
+
+  test('validates WHERE column exists in schema', () => {
+    const where = { nonexistent: 1 }
+
+    expect(() => {
+      executor['buildDeleteSql']('users', where, mockUserSchema)
+    }).toThrow('找不到欄位')
+  })
+
+  test('preserves parameter order matching WHERE conditions', () => {
+    const where = { status: 'inactive', id: 10, name: 'Old' }
+    const { sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
+
+    expect(params).toHaveLength(3)
+    expect(Array.isArray(params)).toBe(true)
+  })
+})
+
+// ============================================================================
+// executeDelete() Permission Tests
+// ============================================================================
+
+describe('DataExecutor.executeDelete - Permissions', () => {
+  let adapter: MockAdapter
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    adapter.setExecuteResults([])
+  })
+
+  test('query-only permission rejects DELETE', async () => {
+    const executor = new DataExecutor(adapter, 'query-only')
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Admin')
+    expect(result.operation).toBe('delete')
+  })
+
+  test('read-write permission rejects DELETE', async () => {
+    const executor = new DataExecutor(adapter, 'read-write')
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Admin')
+  })
+
+  test('admin permission allows DELETE', async () => {
+    const executor = new DataExecutor(adapter, 'admin')
+    const where = { id: 1 }
+    adapter.setExecuteResults([{ id: 1, name: 'ToDelete', email: 'delete@example.com' }])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
+  })
+
+  test('error message for non-admin shows Admin-only requirement', async () => {
+    const executor = new DataExecutor(adapter, 'read-write')
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.error).toContain('Admin')
+    expect(result.error).toContain('DELETE')
+  })
+})
+
+// ============================================================================
+// executeDelete() WHERE Validation Tests
+// ============================================================================
+
+describe('DataExecutor.executeDelete - WHERE Validation', () => {
+  let adapter: MockAdapter
+  let executor: DataExecutor
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'admin')
+    adapter.setExecuteResults([])
+  })
+
+  test('DELETE with valid WHERE clause succeeds', async () => {
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
+  })
+
+  test('DELETE with missing column in WHERE throws error', async () => {
+    const where = { nonexistent_column: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('欄位')
+  })
+})
+
+// ============================================================================
+// executeDelete() Execution Tests
+// ============================================================================
+
+describe('DataExecutor.executeDelete - Execution', () => {
+  let adapter: MockAdapter
+  let executor: DataExecutor
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'admin')
+  })
+
+  test('successful DELETE with single row affected', async () => {
+    const where = { id: 1 }
+    adapter.setExecuteResults([{ id: 1, name: 'Deleted', email: 'deleted@example.com' }])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true,
+      dryRun: false
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
+    expect(result.rows_affected).toBe(1)
+    expect(result.timestamp).toBeDefined()
+    expect(result.sql).toBeDefined()
+  })
+
+  test('successful DELETE with multiple rows affected', async () => {
+    const where = { status: 'inactive' }
+    adapter.setExecuteResults([
+      { id: 1, name: 'User1', email: 'user1@example.com', status: 'inactive' },
+      { id: 2, name: 'User2', email: 'user2@example.com', status: 'inactive' },
+      { id: 3, name: 'User3', email: 'user3@example.com', status: 'inactive' }
+    ])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.rows_affected).toBe(3)
+  })
+
+  test('DELETE with complex WHERE clause', async () => {
+    const where = { id: 1, status: 'archived' }
+    adapter.setExecuteResults([])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
+    expect(result.sql).toContain('DELETE FROM')
+    expect(result.sql).toContain('WHERE')
+  })
+
+  test('--dry-run mode returns rows_affected=0 without executing', async () => {
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      dryRun: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.rows_affected).toBe(0)
+    expect(result.sql).toBeDefined()
+    expect(result.sql).toContain('DELETE FROM')
+  })
+
+  test('--force mode skips confirmation', async () => {
+    const where = { id: 1 }
+    adapter.setExecuteResults([{ id: 1, name: 'ToDelete', email: 'delete@example.com' }])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true,
+      dryRun: false
+    })
+
+    expect(result.status).toBe('success')
+  })
+
+  test('DELETE includes generated SQL in result', async () => {
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true,
+      dryRun: true
+    })
+
+    expect(result.sql).toBeDefined()
+    expect(result.sql).toContain('DELETE FROM "users"')
+    expect(result.sql).toContain('WHERE')
+    expect(result.sql).toContain('"id"')
+  })
+
+  test('DELETE returns timestamp in ISO 8601 format', async () => {
+    const where = { id: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+})
+
+// ============================================================================
+// executeDelete() Error Handling Tests
+// ============================================================================
+
+describe('DataExecutor.executeDelete - Error Handling', () => {
+  let adapter: MockAdapter
+  let executor: DataExecutor
+
+  beforeEach(() => {
+    adapter = new MockAdapter()
+    executor = new DataExecutor(adapter, 'admin')
+  })
+
+  test('database error in DELETE is caught and returned', async () => {
+    const where = { id: 1 }
+    adapter.setFailure(true, 'Database connection lost')
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('DELETE 失敗')
+    expect(result.error).toContain('Database connection lost')
+  })
+
+  test('DELETE with constraint error is handled gracefully', async () => {
+    const where = { id: 1 }
+    adapter.setFailure(true, 'FOREIGN KEY constraint failed')
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.operation).toBe('delete')
+    expect(result.rows_affected).toBe(0)
+  })
+
+  test('DELETE with invalid table name throws error from adapter', async () => {
+    const where = { id: 1 }
+    adapter.setFailure(true, 'Table not found: invalid_table')
+
+    const result = await executor.executeDelete('invalid_table', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('DELETE 失敗')
+  })
+
+  test('DELETE with missing WHERE column shows validation error', async () => {
+    const where = { nonexistent: 1 }
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('欄位')
+  })
+})

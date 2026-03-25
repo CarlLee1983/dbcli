@@ -10,7 +10,7 @@
 | 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
 | 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
 | 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
-| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | Pending |
+| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | 📋 Planned |
 | 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | Pending |
 | 7 | Data Modification | `dbcli insert` and `dbcli update` with safeguards | DATA-01, DATA-02 | 2 | Pending |
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | Pending |
@@ -236,25 +236,64 @@
 
 **Goal:** Implement `dbcli list` and `dbcli schema [table]` commands; populate `.dbcli` with schema metadata for offline AI reference.
 
+**Plans:**
+- [05-01-PLAN.md](.planning/phases/05-schema-discovery/05-01-PLAN.md) — Adapter enhancements + formatters (9 tasks, Wave 1)
+- [05-02-PLAN.md](.planning/phases/05-schema-discovery/05-02-PLAN.md) — CLI commands + integration (8 tasks, Wave 2)
+
+**Wave Structure:**
+- Wave 1: Plan 05-01 (enhance adapters with FK extraction, create formatters)
+- Wave 2: Plan 05-02 (list and schema commands, CLI registration)
+
 **Requirements Mapped:** SCHEMA-01, SCHEMA-02, SCHEMA-03
 
-**Key Work Items:**
-- Implement per-adapter `listTables()` (table name, engine, row count estimate)
-- Implement per-adapter `getTableSchema(tableName)` (column name, type, nullable, default, PK/FK)
-- Implement per-adapter `getRelationships()` (foreign key constraints)
-- Create `dbcli list` command with table-format output
-- Create `dbcli schema [table]` command showing detailed structure
-- Create `dbcli schema` (no args) to write full database schema to `.dbcli`
-- Support `--format json` for AI parsing
+**Plan 05-01: Adapter & Formatter Infrastructure** 📋 PLANNED
+- Task 1: Extend ColumnSchema and TableSchema interfaces with FK metadata
+- Task 2: Enhance PostgreSQL adapter getTableSchema with FK extraction
+- Task 3: Enhance MySQL adapter getTableSchema with FK extraction
+- Task 4: Create table-formatter.ts for CLI table output
+- Task 5: Create json-formatter.ts for AI-parseable output
+- Task 6: Create formatters index.ts with exports
+- Task 7: Write unit tests for table-formatter
+- Task 8: Write unit tests for json-formatter
+- Task 9: Run full test suite and verify build
+
+**Plan 05-02: Commands & Integration** 📋 PLANNED
+- Task 1: Implement `dbcli list` command
+- Task 2: Implement `dbcli schema [table]` and `dbcli schema` commands
+- Task 3: Register list and schema commands in CLI
+- Task 4: Write integration tests for `dbcli list` command
+- Task 5: Write integration tests for `dbcli schema` command
+- Task 6: Update .dbcli config to support schema field
+- Task 7: Verify CLI help and manual testing setup
+- Task 8: Run full test suite and verify build
 
 **Success Criteria:**
 1. `dbcli list` correctly lists all tables (PostgreSQL and MySQL)
-2. `dbcli schema users` displays complete column structure with types, constraints, FKs
-3. `dbcli schema` populates `.dbcli` schema block; AI can read it offline
-4. `--format json` output is valid JSON
+2. `dbcli list --format json` outputs valid JSON
+3. `dbcli schema users` displays complete column structure with types, constraints, FKs
+4. `dbcli schema [table] --format json` outputs full metadata
+5. `dbcli schema` (no args) scans database and populates `.dbcli` schema block
+6. All formatters work correctly (table + JSON output)
+7. All tests pass (unit + integration)
+8. Build succeeds
 
 **Complexity:** Medium-High | **Risk:** Medium (information_schema query syntax differs per DB)
-**Dependencies:** Phase 3, 4 | **Estimated Duration:** 2-3 phases
+**Dependencies:** Phase 3, 4 | **Estimated Duration:** 2 plans (~120 min execution time)
+
+**Key Decisions (from research):**
+- Extend adapter interfaces to capture FK relationships for AI-friendly schema output
+- Separate output formatters (table vs JSON) for human and machine consumption
+- Store complete schema metadata in `.dbcli` for offline AI reference
+- Use information_schema queries (database-specific) for schema introspection
+- Progress tracking for large database scans
+- --force flag to skip confirmation on schema overwrite
+
+**Pitfalls to Avoid:**
+- Missing FK references (affects AI JOIN generation)
+- Row count performance on large tables (use estimates, not exact counts)
+- Character encoding issues in column names/types (use UTF-8, test with non-ASCII identifiers)
+- Incomplete schema after partial scan (collect in memory, write once at end)
+- Schema drift undetected (add --refresh flag for manual updates)
 
 ---
 
@@ -434,6 +473,7 @@ At this point, dbcli is **usable for read-only AI agent scenarios**. Insert/upda
 | `.env` format variability | Low | High | Use mature `dotenv` package + custom `DATABASE_URL` parser |
 | AI platform skill format changes | Low | Medium | Template-based design; each platform has separate module; easy to update |
 | Large data export memory bloat | Medium | Medium | Force streaming in Phase 8; set reasonable LIMIT defaults |
+| Schema introspection query syntax | Medium | Medium | Keep database-specific queries in each adapter; test with real databases |
 
 ---
 
@@ -457,8 +497,9 @@ Once V1 ships, track:
 6. ✅ PLAN-02-01.md and PLAN-02-02.md created — atomic task breakdown for Phase 2
 7. ✅ PLAN-03-01.md and PLAN-03-02.md created — atomic task breakdown for Phase 3
 8. ✅ PLAN-04-01.md created — atomic task breakdown for Phase 4
-9. **→ Ready for execution** — Run `/gsd:execute-phase 04-permission-model` to begin Phase 4
+9. ✅ PLAN-05-01.md and PLAN-05-02.md created — atomic task breakdown for Phase 5
+10. **→ Ready for execution** — Run `/gsd:execute-phase 05-schema-discovery` to begin Phase 5
 
 ---
 
-*Last updated: 2026-03-25 after Phase 4 planning*
+*Last updated: 2026-03-25 after Phase 5 planning*

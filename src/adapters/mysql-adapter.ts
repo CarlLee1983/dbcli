@@ -37,13 +37,14 @@ export class MySQLAdapter implements DatabaseAdapter {
   async connect(): Promise<void> {
     try {
       // Create connection using mysql2/promise
+      // Note: mysql2/promise does not support connectionTimeout in createConnection
+      // Timeout should be configured at query execution level if needed
       this.db = await mysql.createConnection({
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,
         password: this.options.password || undefined,
-        database: this.options.database,
-        timeout: this.options.timeout || 5000
+        database: this.options.database
       })
 
       // Test connection with lightweight query

@@ -25,7 +25,7 @@ program.addCommand(schemaCommand)
 // Register query command
 program
   .command('query <sql>')
-  .description('Execute SQL query against the database')
+  .description(t('query.description'))
   .option('--format <type>', 'Output format: table, json, csv', 'table')
   .option('--limit <number>', 'Limit result rows (overrides auto-limit)', undefined, parseInt)
   .option('--no-limit', 'Disable auto-limit in query-only mode')
@@ -41,7 +41,7 @@ program
 // Register insert command
 program
   .command('insert <table>')
-  .description('Insert data into database table')
+  .description(t('insert.description'))
   .option('--data <json>', 'JSON object to insert')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
@@ -57,7 +57,7 @@ program
 // Register update command
 program
   .command('update <table>')
-  .description('Update data in database table')
+  .description(t('update.description'))
   .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
   .option('--set <json>', 'JSON with fields to update (required, e.g. \'{"name":"Bob"}\')')
   .option('--dry-run', 'Show generated SQL without executing')
@@ -74,7 +74,7 @@ program
 // Register delete command
 program
   .command('delete <table>')
-  .description('Delete data from database table (Admin-only)')
+  .description(t('delete.description'))
   .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
@@ -90,7 +90,7 @@ program
 // Register export command
 program
   .command('export <sql>')
-  .description('Export query results to JSON or CSV format')
+  .description(t('export.description'))
   .option(
     '--format <format>',
     'Output format: json or csv (required)',
@@ -118,7 +118,7 @@ program
 // Register skill command
 program
   .command('skill')
-  .description('Generate AI agent skill documentation (SKILL.md)')
+  .description(t('skill.description'))
   .option('--install <platform>', 'Install to platform directory (claude, gemini, copilot, cursor)')
   .option('--output <path>', 'Write skill to file instead of stdout')
   .action(async (options: any) => {

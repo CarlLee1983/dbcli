@@ -149,8 +149,9 @@ dbcli schema users           # Show structure of 'users' table
 
 **Options:**
 - `--format json` — Output as JSON
-- `--refresh` — Detect and update schema changes (requires --force for approval)
-- `--force` — Skip confirmation for schema refresh/overwrite
+- `--refresh` — Detect and update schema changes incrementally (requires --force for approval)
+- `--reset` — Clear all existing schema data and re-fetch from database (useful after switching DB connections)
+- `--force` — Skip confirmation for schema refresh/overwrite/reset
 
 **Examples:**
 ```bash
@@ -160,11 +161,11 @@ dbcli schema users
 # JSON output with full metadata
 dbcli schema users --format json
 
-# Update schema with new tables
-dbcli schema --refresh
-
-# Auto-approve schema refresh
+# Update schema with new tables (incremental)
 dbcli schema --refresh --force
+
+# Clear and re-fetch all schema (after switching DB)
+dbcli schema --reset --force
 
 # Scan entire database
 dbcli schema

@@ -250,7 +250,10 @@ dbcli schema
 # 掃描整個資料庫架構
 
 dbcli schema --refresh --force
-# 檢測並應用架構變更
+# 檢測並應用架構變更（增量）
+
+dbcli schema --reset --force
+# 清空舊 schema 並重新從 DB 抓取（切換 DB 後使用）
 ```
 
 ### 執行查詢

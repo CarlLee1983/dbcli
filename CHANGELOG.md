@@ -24,6 +24,7 @@ Added table and column-level blacklisting to protect sensitive data from AI agen
 - **i18n support:** Blacklist messages in English and Traditional Chinese
 - **Performance:** < 1ms overhead per query (O(1) Set/Map lookups)
 - **103 new tests:** 83 core + 12 CLI wiring + 8 formatter security tests
+- **`dbcli schema --reset`:** Clear all existing schema data and re-fetch from database — solves stale schema after switching DB connections
 
 ### Configuration
 

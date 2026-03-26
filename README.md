@@ -46,6 +46,12 @@ npx @carllee1983/dbcli init
 npx @carllee1983/dbcli query "SELECT * FROM users"
 ```
 
+#### Update
+
+```bash
+npm update -g @carllee1983/dbcli
+```
+
 #### Development Installation
 
 ```bash

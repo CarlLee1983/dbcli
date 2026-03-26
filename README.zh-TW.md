@@ -26,6 +26,16 @@ bun add -D @carllee1983/dbcli
 npm install --save-dev @carllee1983/dbcli
 ```
 
+### 更新
+
+```bash
+# Bun
+bun update @carllee1983/dbcli
+
+# npm
+npm update --save-dev @carllee1983/dbcli
+```
+
 ### 初始化
 
 ```bash

@@ -2,11 +2,12 @@
  * 核心模組索引
  * 從此處匯出所有核心功能和引擎
  *
- * Wave 1: Schema Infrastructure (已完成)
+ * Wave 1: Schema Infrastructure (完成)
  * Wave 2: Incremental Updates & Atomic Writing
  * Wave 3: Concurrent Safety & Error Recovery
  * Wave 4: Performance Optimization & Indexing
  * Wave 5: Integration & Testing
+ * Phase 13: Data Access Control Blacklist
  */
 
 // Wave 1 exports
@@ -27,6 +28,11 @@ export { ErrorRecoveryManager } from './error-recovery'
 // Wave 4 exports - Performance optimization & indexing
 export { ColumnIndexBuilder } from './column-index'
 export { SchemaOptimizer } from './schema-optimizer'
+
+// Phase 13 exports - Data Access Control Blacklist
+export { BlacklistManager } from './blacklist-manager'
+export { BlacklistValidator, BlacklistError } from './blacklist-validator'
+export type { BlacklistConfig, ColumnBlacklist, BlacklistState } from '@/types/blacklist'
 
 // Re-export type definitions
 export type { SchemaIndex, CacheStats, LoaderOptions, TableSchemaRef } from '@/types/schema-cache'

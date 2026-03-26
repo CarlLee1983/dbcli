@@ -5,7 +5,7 @@
  */
 
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test'
-import { SchemaCacheManager } from './schema-cache'
+import { SchemaCacheManager } from '@/core/schema-cache'
 import { join } from 'path'
 import { mkdir, rm } from 'fs/promises'
 

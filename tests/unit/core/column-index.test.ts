@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { ColumnIndexBuilder } from './column-index'
+import { ColumnIndexBuilder } from '@/core/column-index'
 import type { TableSchema } from '@/adapters/types'
 
 const mockSchemas: Record<string, TableSchema> = {

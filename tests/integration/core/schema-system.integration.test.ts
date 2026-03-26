@@ -9,12 +9,12 @@
  */
 
 import { test, expect } from 'bun:test'
-import { SchemaUpdater } from './schema-updater'
-import { SchemaCacheManager } from './schema-cache'
-import { ConcurrentLockManager } from './concurrent-lock'
-import { ErrorRecoveryManager } from './error-recovery'
-import { ColumnIndexBuilder } from './column-index'
-import { SchemaOptimizer } from './schema-optimizer'
+import { SchemaUpdater } from '@/core/schema-updater'
+import { SchemaCacheManager } from '@/core/schema-cache'
+import { ConcurrentLockManager } from '@/core/concurrent-lock'
+import { ErrorRecoveryManager } from '@/core/error-recovery'
+import { ColumnIndexBuilder } from '@/core/column-index'
+import { SchemaOptimizer } from '@/core/schema-optimizer'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { tmpdir } from 'os'

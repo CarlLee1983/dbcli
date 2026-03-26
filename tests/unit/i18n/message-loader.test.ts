@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { MessageLoader, t, t_vars } from './message-loader'
+import { MessageLoader, t, t_vars } from '@/i18n/message-loader'
 
 // Note: MessageLoader is a singleton, so these tests verify behavior
 // during the current process context. The first test to run will

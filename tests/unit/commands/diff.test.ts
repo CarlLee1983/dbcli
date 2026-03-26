@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { compareSnapshots, type SchemaSnapshot } from './diff'
+import { compareSnapshots, type SchemaSnapshot } from '@/commands/diff'
 
 describe('compareSnapshots', () => {
   const before: SchemaSnapshot = {

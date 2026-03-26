@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { SkillGenerator } from './skill-generator'
+import { SkillGenerator } from '@/core/skill-generator'
 import type { SkillCommand, DbcliConfig, Permission } from '@/types'
 
 /**

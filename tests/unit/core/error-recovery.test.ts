@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { ErrorRecoveryManager } from './error-recovery'
+import { ErrorRecoveryManager } from '@/core/error-recovery'
 import type { DbcliConfig } from '@/utils/validation'
 import { tmpdir } from 'os'
 import { join } from 'path'

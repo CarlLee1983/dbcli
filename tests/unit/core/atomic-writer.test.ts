@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { AtomicFileWriter } from './atomic-writer'
+import { AtomicFileWriter } from '@/core/atomic-writer'
 import { tmpdir } from 'os'
 import { join } from 'path'
 

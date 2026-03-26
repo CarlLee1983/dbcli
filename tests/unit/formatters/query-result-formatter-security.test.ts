@@ -4,8 +4,8 @@
  */
 
 import { test, expect, describe } from 'bun:test'
-import { QueryResultFormatter } from './query-result-formatter'
-import type { QueryResult } from '../types/query'
+import { QueryResultFormatter } from '@/formatters/query-result-formatter'
+import type { QueryResult } from '@/types/query'
 
 const formatter = new QueryResultFormatter()
 

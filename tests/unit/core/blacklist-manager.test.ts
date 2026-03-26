@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { BlacklistManager } from './blacklist-manager'
+import { BlacklistManager } from '@/core/blacklist-manager'
 import type { DbcliConfig } from '@/types'
 
 const baseConfig: DbcliConfig = {

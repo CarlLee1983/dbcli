@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { HealthChecker } from './health-checker'
+import { HealthChecker } from '@/core/health-checker'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 
 function createMockAdapter(executeImpl: (sql: string) => any[]): DatabaseAdapter {

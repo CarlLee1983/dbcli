@@ -3,10 +3,10 @@
  */
 
 import { test, expect } from 'bun:test'
-import { SchemaUpdater } from './schema-updater'
+import { SchemaUpdater } from '@/core/schema-updater'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
-import { SchemaCacheManager } from './schema-cache'
+import { SchemaCacheManager } from '@/core/schema-cache'
 
 /**
  * Mock Database Adapter for testing

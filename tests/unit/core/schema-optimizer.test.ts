@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { SchemaOptimizer } from './schema-optimizer'
+import { SchemaOptimizer } from '@/core/schema-optimizer'
 import type { TableSchema } from '@/adapters/types'
 
 const wellFormedSchemas: Record<string, TableSchema> = {

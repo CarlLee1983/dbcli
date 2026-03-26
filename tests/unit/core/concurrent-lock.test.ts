@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { ConcurrentLockManager } from './concurrent-lock'
+import { ConcurrentLockManager } from '@/core/concurrent-lock'
 import { tmpdir } from 'os'
 import { join } from 'path'
 

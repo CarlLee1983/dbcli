@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getSizeCategory, type SizeCategory } from './size-category'
+import { getSizeCategory, type SizeCategory } from '@/core/size-category'
 
 describe('getSizeCategory', () => {
   it('returns "small" for < 10_000 rows', () => {

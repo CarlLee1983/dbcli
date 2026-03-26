@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldBlockQuery } from './query-size-guard'
+import { shouldBlockQuery } from '@/commands/query-size-guard'
 
 describe('shouldBlockQuery', () => {
   it('blocks SELECT * on huge table without WHERE or LIMIT', () => {

@@ -14,7 +14,7 @@ import {
   getOrInitBlacklist,
   parseColumnIdentifier,
   isValidTableName
-} from './blacklist'
+} from '@/commands/blacklist'
 
 // Create a temp .dbcli file for testing
 async function createTempConfig(blacklist?: any): Promise<string> {

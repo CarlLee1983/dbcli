@@ -5,7 +5,7 @@
  */
 
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test'
-import { SchemaIndexBuilder } from './schema-index'
+import { SchemaIndexBuilder } from '@/core/schema-index'
 import type { DbcliConfig } from '@/types'
 import { join } from 'path'
 import { mkdir, rm } from 'fs/promises'

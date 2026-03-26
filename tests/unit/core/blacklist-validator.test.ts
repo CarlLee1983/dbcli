@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { BlacklistManager } from './blacklist-manager'
-import { BlacklistValidator } from './blacklist-validator'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import type { DbcliConfig } from '@/types'
 

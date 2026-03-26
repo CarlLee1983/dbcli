@@ -10,6 +10,7 @@ import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
 import { exportCommand } from './commands/export'
 import { skillCommand } from './commands/skill'
+import { blacklistCommand } from './commands/blacklist'
 
 const program = new Command()
   .name('dbcli')
@@ -129,6 +130,9 @@ program
       process.exit(1)
     }
   })
+
+// Register blacklist command
+program.addCommand(blacklistCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

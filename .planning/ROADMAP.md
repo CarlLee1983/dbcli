@@ -712,7 +712,7 @@ Once V1 ships, track:
 
 **Depends on:** Phase 11 (Schema Optimization)
 
-**Plans:** 2 plans (1 complete, 1 planned)
+**Plans:** 2/2 plans complete
 
 #### Plan 12-01: Message Services Architecture ✅ COMPLETE
 

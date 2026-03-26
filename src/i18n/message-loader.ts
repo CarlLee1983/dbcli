@@ -1,5 +1,3 @@
-import path from 'node:path'
-
 export interface Messages {
   [key: string]: any
 }
@@ -82,7 +80,7 @@ export class MessageLoader {
    */
   t(key: string): string {
     const parts = key.split('.')
-    let value = this.messages
+    let value: Messages | string | undefined = this.messages
 
     // Try to navigate through current language messages
     for (const part of parts) {

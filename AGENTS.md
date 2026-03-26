@@ -1,9 +1,3 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
-
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
@@ -109,3 +103,29 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## dbcli 開發模式
+
+本專案開發時 `dbcli` 尚未安裝到 PATH，使用 `bun run src/cli.ts` 替代 `dbcli`：
+
+```bash
+bun run src/cli.ts list
+bun run src/cli.ts schema users --format json
+bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
+```
+
+## dbcli 使用規範
+
+操作資料庫前，必須依序執行：
+
+1. `bun run src/cli.ts blacklist list` — 確認敏感資料已受保護
+2. `bun run src/cli.ts schema <table> --format json` — 確認目標表的真實欄位名稱
+3. 再執行 `query` / `insert` / `update` / `export` 等操作
+
+**嚴禁猜測欄位名。** 務必先用 `schema` 確認。
+
+注意事項：
+- 優先使用 `--format json`
+- 寫入前用 `--dry-run` 預覽 SQL
+- query-only 模式會自動加 `LIMIT 1000`，查 `information_schema` 時加 `--no-limit`
+- SKILL.md 唯一來源在 `assets/SKILL.md`，`dbcli skill --install <platform>` 負責搬運

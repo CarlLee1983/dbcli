@@ -1,14 +1,15 @@
 /**
  * dbcli skill 命令
- * 生成、顯示、安裝 AI 代理技能文檔（SKILL.md）
+ * 讀取靜態 SKILL.md 並輸出或安裝到指定平台目錄
  */
 
 import * as path from 'node:path'
 import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
-import { SkillGenerator } from '@/core/skill-generator'
-import { configModule } from '@/core/config'
 import type { Command } from 'commander'
+
+/** 靜態 SKILL.md 的絕對路徑（基於專案根目錄） */
+const SKILL_SOURCE_PATH = path.resolve(import.meta.dir, '../../assets/SKILL.md')
 
 export interface SkillOptions {
   install?: string  // 平台: claude, gemini, copilot, cursor
@@ -23,36 +24,25 @@ export interface SkillOptions {
  *   dbcli skill --install claude   # 安裝到 ~/.claude/skills/dbcli/SKILL.md
  */
 export async function skillCommand(
-  program: Command,
+  _program: Command,
   options: SkillOptions
 ): Promise<void> {
   try {
-    // 1. 讀取配置以取得權限級別
-    const config = await configModule.read('.dbcli')
-    if (!config.connection) {
-      throw new Error('Run "dbcli init" to initialize project')
+    // 1. 讀取靜態 SKILL.md（唯一來源）
+    const skillFile = Bun.file(SKILL_SOURCE_PATH)
+    if (!(await skillFile.exists())) {
+      throw new Error(`Skill source not found: ${SKILL_SOURCE_PATH}`)
     }
+    const skillMarkdown = await skillFile.text()
 
-    // 2. 使用正確的選項物件建立 SkillGenerator
-    const skillGen = new SkillGenerator({
-      program,
-      config,
-      permissionLevel: config.permission
-    })
-
-    // 3. 生成 SKILL.md 內容
-    const skillMarkdown = skillGen.generateSkillMarkdown()
-
-    // 4. 根據選項處理輸出
+    // 2. 根據選項處理輸出
     if (options.output) {
-      // 寫入指定的檔案
       await Bun.file(options.output).write(skillMarkdown)
       console.error(`Skill written to ${options.output}`)
       return
     }
 
     if (options.install) {
-      // 安裝到平台特定的目錄
       const installPath = getInstallPath(options.install)
       await ensureDir(path.dirname(installPath))
       await Bun.file(installPath).write(skillMarkdown)
@@ -60,7 +50,7 @@ export async function skillCommand(
       return
     }
 
-    // 5. 預設: 列印到標準輸出（用於管道傳輸）
+    // 3. 預設: 列印到標準輸出（用於管道傳輸）
     console.log(skillMarkdown)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

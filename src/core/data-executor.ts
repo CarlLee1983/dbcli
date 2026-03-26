@@ -17,7 +17,8 @@ import { promptUser } from '@/utils/prompts'
 export class DataExecutor {
   constructor(
     private adapter: DatabaseAdapter,
-    private permission: Permission
+    private permission: Permission,
+    private dbSystem: 'postgresql' | 'mysql' = 'postgresql'
   ) {}
 
   /**
@@ -60,7 +61,8 @@ export class DataExecutor {
         ? dataKeys.map((_, index) => `$${index + 1}`).join(', ')
         : dataKeys.map(() => '?').join(', ')
 
-    const sql = `INSERT INTO "${tableName}" (${columns.map((col) => `"${col}"`).join(', ')}) VALUES (${placeholders})`
+    const quote = this.getQuoteChar()
+    const sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map((col) => `${quote}${col}${quote}`).join(', ')}) VALUES (${placeholders})`
 
     return {
       sql,
@@ -356,12 +358,17 @@ export class DataExecutor {
   // ============================================================================
 
   /**
-   * 取得資料庫系統類型（用於決定參數標記）
+   * 取得資料庫系統類型（用於決定參數標記和識別符引號）
    */
   private getSystemType(): 'postgresql' | 'mysql' {
-    // 這裡應該從適配器取得系統類型
-    // 暫時預設為 postgresql，實際應該傳入或檢測
-    return 'postgresql'
+    return this.dbSystem
+  }
+
+  /**
+   * 獲取識別符引號符號（表名、欄位名）
+   */
+  private getQuoteChar(): string {
+    return this.dbSystem === 'mysql' ? '`' : '"'
   }
 
   /**
@@ -388,13 +395,14 @@ export class DataExecutor {
 
     // 建立 UPDATE SET 子句
     const systemType = this.getSystemType()
+    const quote = this.getQuoteChar()
     let paramIndex = 1
 
     const setClause = dataKeys
       .map((key) => {
         const placeholder =
           systemType === 'postgresql' ? `$${paramIndex++}` : '?'
-        return `"${key}" = ${placeholder}`
+        return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(', ')
 
@@ -403,11 +411,11 @@ export class DataExecutor {
       .map((key) => {
         const placeholder =
           systemType === 'postgresql' ? `$${paramIndex++}` : '?'
-        return `"${key}" = ${placeholder}`
+        return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(' AND ')
 
-    const sql = `UPDATE "${tableName}" SET ${setClause} WHERE ${whereClause}`
+    const sql = `UPDATE ${quote}${tableName}${quote} SET ${setClause} WHERE ${whereClause}`
     const params = [...dataKeys.map((key) => data[key]), ...whereKeys.map((key) => where[key])]
 
     return { sql, params }
@@ -435,17 +443,18 @@ export class DataExecutor {
 
     // 建立 WHERE 子句
     const systemType = this.getSystemType()
+    const quote = this.getQuoteChar()
     let paramIndex = 1
 
     const whereClause = whereKeys
       .map((key) => {
         const placeholder =
           systemType === 'postgresql' ? `$${paramIndex++}` : '?'
-        return `"${key}" = ${placeholder}`
+        return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(' AND ')
 
-    const sql = `DELETE FROM "${tableName}" WHERE ${whereClause}`
+    const sql = `DELETE FROM ${quote}${tableName}${quote} WHERE ${whereClause}`
     const params = whereKeys.map((key) => where[key])
 
     return { sql, params }

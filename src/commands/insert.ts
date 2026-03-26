@@ -103,7 +103,8 @@ export async function insertCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 7. 建立 DataExecutor 並執行 INSERT
-      const executor = new DataExecutor(adapter, config.permission)
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const executor = new DataExecutor(adapter, config.permission, dbSystem)
       const result = await executor.executeInsert(table, data, schema, {
         dryRun: options.dryRun,
         force: options.force,

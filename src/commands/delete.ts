@@ -118,7 +118,8 @@ export async function deleteCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 8. 建立 DataExecutor 並執行 DELETE
-      const executor = new DataExecutor(adapter, config.permission)
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const executor = new DataExecutor(adapter, config.permission, dbSystem)
       const result = await executor.executeDelete(table, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,

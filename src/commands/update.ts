@@ -126,7 +126,8 @@ export async function updateCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 9. 建立 DataExecutor 並執行 UPDATE
-      const executor = new DataExecutor(adapter, config.permission)
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const executor = new DataExecutor(adapter, config.permission, dbSystem)
       const result = await executor.executeUpdate(table, setData, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,

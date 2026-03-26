@@ -9,6 +9,9 @@ import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { BlacklistValidator } from '@/core/blacklist-validator'
+import { BlacklistError } from '@/types/blacklist'
 
 /**
  * Query 命令操作處理器
@@ -40,8 +43,12 @@ export async function queryCommand(
     await adapter.connect()
 
     try {
+      // 3b. Construct blacklist validator (manager handles undefined config.blacklist gracefully)
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+
       // 4. Create QueryExecutor
-      const executor = new QueryExecutor(adapter, config.permission)
+      const executor = new QueryExecutor(adapter, config.permission, blacklistValidator)
 
       // 5. Execute query
       const autoLimit = !options.noLimit
@@ -62,6 +69,11 @@ export async function queryCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (error instanceof BlacklistError) {
+      console.error(error.message)
+      process.exit(1)
+    }
+
     if (error instanceof PermissionError) {
       console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)

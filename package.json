@@ -1,8 +1,11 @@
 {
-  "name": "dbcli",
+  "name": "@carllee/dbcli",
   "version": "0.1.0",
   "description": "Database CLI for AI agents",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "dbcli": "./dist/cli.mjs"
   },

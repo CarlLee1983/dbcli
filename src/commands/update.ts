@@ -8,6 +8,9 @@ import { AdapterFactory, ConnectionError } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { BlacklistValidator } from '@/core/blacklist-validator'
+import { BlacklistError } from '@/types/blacklist'
 
 /**
  * 從字串格式的 WHERE 子句解析出條件對象
@@ -128,7 +131,10 @@ export async function updateCommand(
 
       // 9. 建立 DataExecutor 並執行 UPDATE
       const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
-      const executor = new DataExecutor(adapter, config.permission, dbSystem)
+      // Construct blacklist validator from config
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      const executor = new DataExecutor(adapter, config.permission, dbSystem, blacklistValidator)
       const result = await executor.executeUpdate(table, setData, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,
@@ -154,6 +160,18 @@ export async function updateCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    // 黑名單錯誤
+    if (error instanceof BlacklistError) {
+      const output = {
+        status: 'error',
+        operation: 'update',
+        rows_affected: 0,
+        error: error.message,
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
     // 權限錯誤
     if (error instanceof PermissionError) {
       console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))

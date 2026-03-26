@@ -87,6 +87,82 @@ describe('TableSchemaJSONFormatter', () => {
     expect(parsed.metadata.engine).toBe('InnoDB')
   })
 
+  test('includes new fields: estimatedRowCount, sizeCategory, tableType, indexes', () => {
+    const formatter = new TableSchemaJSONFormatter()
+    const schema: TableSchema = {
+      name: 'large_table',
+      columns: [
+        { name: 'id', type: 'INT', nullable: false, primaryKey: true }
+      ],
+      estimatedRowCount: 150000,
+      tableType: 'table',
+      indexes: [
+        { name: 'idx_id', columns: ['id'] }
+      ],
+      rowCount: 150000,
+      engine: 'InnoDB',
+      primaryKey: ['id'],
+      foreignKeys: []
+    }
+
+    const result = formatter.format(schema)
+    const parsed = JSON.parse(result)
+
+    expect(parsed.estimatedRowCount).toBe(150000)
+    expect(parsed.sizeCategory).toBe('large')
+    expect(parsed.tableType).toBe('table')
+    expect(Array.isArray(parsed.indexes)).toBe(true)
+    expect(parsed.indexes.length).toBe(1)
+    expect(parsed.indexes[0].name).toBe('idx_id')
+  })
+
+  test('calculates sizeCategory based on estimatedRowCount', () => {
+    const formatter = new TableSchemaJSONFormatter()
+
+    const mediumSchema: TableSchema = {
+      name: 'medium',
+      columns: [],
+      estimatedRowCount: 25000,
+      tableType: 'table'
+    }
+
+    const result = formatter.format(mediumSchema)
+    const parsed = JSON.parse(result)
+
+    expect(parsed.sizeCategory).toBe('medium')
+  })
+
+  test('defaults estimatedRowCount to rowCount when not provided', () => {
+    const formatter = new TableSchemaJSONFormatter()
+    const schema: TableSchema = {
+      name: 'legacy',
+      columns: [],
+      rowCount: 15000,
+      tableType: 'view'
+    }
+
+    const result = formatter.format(schema)
+    const parsed = JSON.parse(result)
+
+    expect(parsed.estimatedRowCount).toBe(15000)
+    expect(parsed.sizeCategory).toBe('medium')
+  })
+
+  test('handles missing estimatedRowCount and rowCount gracefully', () => {
+    const formatter = new TableSchemaJSONFormatter()
+    const schema: TableSchema = {
+      name: 'unknown',
+      columns: []
+    }
+
+    const result = formatter.format(schema)
+    const parsed = JSON.parse(result)
+
+    expect(parsed.estimatedRowCount).toBeNull()
+    expect(parsed.sizeCategory).toBeNull()
+    expect(parsed.tableType).toBe('table')
+  })
+
   test('includes empty arrays for missing constraints', () => {
     const formatter = new TableSchemaJSONFormatter()
     const schema: TableSchema = {

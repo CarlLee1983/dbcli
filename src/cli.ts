@@ -11,6 +11,8 @@ import { deleteCommand } from './commands/delete'
 import { exportCommand } from './commands/export'
 import { skillCommand } from './commands/skill'
 import { blacklistCommand } from './commands/blacklist'
+import { checkCommand } from './commands/check'
+import { diffCommand } from './commands/diff'
 
 const program = new Command()
   .name('dbcli')
@@ -133,6 +135,12 @@ program
 
 // Register blacklist command
 program.addCommand(blacklistCommand)
+
+// Register check command
+program.addCommand(checkCommand)
+
+// Register diff command
+program.addCommand(diffCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

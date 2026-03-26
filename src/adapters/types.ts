@@ -42,6 +42,12 @@ export interface ColumnSchema {
     table: string
     column: string
   }
+  /** Whether column is auto-incremented */
+  autoIncrement?: boolean
+  /** Column comment/description */
+  comment?: string | null
+  /** Enum values if column is ENUM type */
+  enumValues?: string[]
 }
 
 /**
@@ -65,6 +71,16 @@ export interface TableSchema {
     refTable: string
     refColumns: string[]
   }>
+  /** Table indexes with column information */
+  indexes?: Array<{
+    name: string
+    columns: string[]
+    unique: boolean
+  }>
+  /** Estimated row count in table */
+  estimatedRowCount?: number
+  /** Type of table (table or view) */
+  tableType?: 'table' | 'view'
 }
 
 /**

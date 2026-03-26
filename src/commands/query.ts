@@ -38,6 +38,20 @@ export async function queryCommand(
       throw new Error('Run "dbcli init" first')
     }
 
+    // 2b. Size guard: block full-table SELECT on huge tables
+    const mainTable = extractMainTable(sql)
+    if (mainTable && config.schema && !options.noLimit) {
+      const tableSchema = (config.schema as Record<string, any>)[mainTable]
+      if (tableSchema) {
+        const { shouldBlockQuery } = await import('./query-size-guard')
+        const guard = shouldBlockQuery(sql, tableSchema)
+        if (guard.blocked) {
+          console.error(`\u26A0 ${guard.reason}`)
+          process.exit(1)
+        }
+      }
+    }
+
     // 3. Create database adapter
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
@@ -90,4 +104,9 @@ export async function queryCommand(
     console.error(t_vars('errors.message', { message: (error as Error).message }))
     process.exit(1)
   }
+}
+
+function extractMainTable(sql: string): string | null {
+  const match = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
+  return match ? match[1] : null
 }

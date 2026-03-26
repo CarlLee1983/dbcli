@@ -64,7 +64,10 @@ async function listAction(options: { format: string; config: string }) {
       }
 
       // 摘要
-      console.log(`\n✓ Found ${tables.length} tables`)
+      const tableCount = tables.filter(t => (t as any).tableType !== 'view').length
+      const viewCount = tables.filter(t => (t as any).tableType === 'view').length
+      const viewSuffix = viewCount > 0 ? ` (${viewCount} views)` : ''
+      console.log(`\n\u2713 Found ${tableCount} tables${viewSuffix}`)
     } finally {
       await adapter.disconnect()
     }

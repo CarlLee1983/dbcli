@@ -137,6 +137,20 @@ async function handleSingleTableSchema(
     if (schema.engine) {
       console.log(`Engine: ${schema.engine}`)
     }
+
+    if (schema.estimatedRowCount !== undefined) {
+      const { getSizeCategory } = await import('@/core/size-category')
+      const category = getSizeCategory(schema.estimatedRowCount)
+      console.log(`Estimated rows: ~${schema.estimatedRowCount.toLocaleString()} (${category})`)
+    }
+
+    if (schema.indexes && schema.indexes.length > 0) {
+      console.log(`\nIndexes:`)
+      schema.indexes.forEach((idx: any) => {
+        const uniqueTag = idx.unique ? ' [UNIQUE]' : ''
+        console.log(`   ${idx.name}: (${idx.columns.join(', ')})${uniqueTag}`)
+      })
+    }
   }
 }
 
@@ -246,7 +260,10 @@ async function handleSchemaReset(
       rowCount: fullSchema.rowCount,
       engine: fullSchema.engine,
       primaryKey: fullSchema.primaryKey || [],
-      foreignKeys: fullSchema.foreignKeys || []
+      foreignKeys: fullSchema.foreignKeys || [],
+      indexes: fullSchema.indexes || [],
+      estimatedRowCount: fullSchema.estimatedRowCount || 0,
+      tableType: fullSchema.tableType || 'table'
     }
 
     processed++
@@ -300,7 +317,10 @@ async function handleFullDatabaseScan(
       rowCount: fullSchema.rowCount,
       engine: fullSchema.engine,
       primaryKey: fullSchema.primaryKey || [],
-      foreignKeys: fullSchema.foreignKeys || []
+      foreignKeys: fullSchema.foreignKeys || [],
+      indexes: fullSchema.indexes || [],
+      estimatedRowCount: fullSchema.estimatedRowCount || 0,
+      tableType: fullSchema.tableType || 'table'
     }
 
     processed++

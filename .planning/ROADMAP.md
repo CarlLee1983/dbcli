@@ -601,7 +601,7 @@ Once V1 ships, track:
 **Goal:** Optimize schema storage and performance for 100-500 table databases using hybrid storage + LRU caching + atomic updates + field indexing.
 
 **Plans:**
-- [11-PLAN.md](.planning/phases/11-schema-optimization/11-PLAN.md) — Infrastructure (schema cache, index, loader) — Wave 1
+3/1 plans complete
 - [11-PLAN-WAVES2-5.md](.planning/phases/11-schema-optimization/11-PLAN-WAVES2-5.md) — Complete architecture (updater, atomic writer, column index, optimizer, integration tests) — Waves 2-5
 
 **Wave Structure:**

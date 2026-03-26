@@ -77,6 +77,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
       output += '\n' + footerLines.join(' | ')
     }
 
+    // Add security notification if columns were filtered
+    if (result.metadata?.securityNotification) {
+      output += '\n' + result.metadata.securityNotification
+    }
+
     return output
   }
 
@@ -101,6 +106,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
 
     if (footerLines.length > 0) {
       output += '\n' + footerLines.join(' | ')
+    }
+
+    // Add security notification if columns were filtered
+    if (result.metadata?.securityNotification) {
+      output += '\n' + result.metadata.securityNotification
     }
 
     return output
@@ -132,7 +142,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
   private formatCSV(result: QueryResult<Record<string, any>>): string {
     if (result.rows.length === 0) {
       // Headers only for empty result
-      return result.columnNames.map(name => this.escapeCSVField(name)).join(',')
+      let csvOutput = result.columnNames.map(name => this.escapeCSVField(name)).join(',')
+      if (result.metadata?.securityNotification) {
+        csvOutput += '\n# ' + result.metadata.securityNotification
+      }
+      return csvOutput
     }
 
     const lines: string[] = []
@@ -145,6 +159,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
       const csvRow = result.columnNames.map(col => this.escapeCSVField(row[col])).join(',')
       lines.push(csvRow)
     })
+
+    // Add security notification as comment line
+    if (result.metadata?.securityNotification) {
+      lines.push(`# ${result.metadata.securityNotification}`)
+    }
 
     return lines.join('\n')
   }

@@ -60,13 +60,26 @@ export const MetadataSchema = z
   .default({})
 
 /**
+ * Blacklist configuration schema
+ * Optional field for backward compatibility with existing .dbcli files
+ */
+export const BlacklistConfigSchema = z
+  .object({
+    tables: z.array(z.string()).default([]),
+    columns: z.record(z.array(z.string())).default({})
+  })
+  .optional()
+  .default({ tables: [], columns: {} })
+
+/**
  * DbcliConfig 完整模式
  */
 export const DbcliConfigSchema = z.object({
   connection: ConnectionConfigSchema,
   permission: PermissionSchema,
   schema: z.record(z.any()).optional().default({}),
-  metadata: MetadataSchema
+  metadata: MetadataSchema,
+  blacklist: BlacklistConfigSchema
 })
 
 /**

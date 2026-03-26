@@ -48,6 +48,7 @@ export interface DbcliConfig {
   permission: Permission
   schema?: Record<string, unknown>
   metadata?: Metadata
+  blacklist?: import('./blacklist').BlacklistConfig
 }
 
 /**

@@ -16,7 +16,9 @@
 | 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | ✅ Complete |
 | 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ✅ Complete |
 | 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | ⏳ In Progress (1/2) |
+| 11 | Schema Optimization | Hybrid storage + LRU cache + atomic updates for 100-500 table support | — | 2 | 📋 Planned (0/2) |
 
+---
 ---
 
 ## Phase Details
@@ -587,6 +589,103 @@ Once V1 ships, track:
 - **Adoption**: GitHub stars, npm downloads, reported issues/PRs
 - **AI Feedback**: Error messages helpful? Skill documentation clear? Permission model intuitive?
 
+12. ✅ PLAN-08-01.md and PLAN-08-02.md created — atomic task breakdown for Phase 8
+13. **→ Ready for execution** — Run `/gsd:execute-phase 08-schema-refresh-export` to begin Phase 8
+
+---
+
+*Last updated: 2026-03-25 after Phase 8 planning*
+
+### Phase 11: Schema 管理优化
+
+**Goal:** Optimize schema storage and performance for 100-500 table databases using hybrid storage + LRU caching + atomic updates + field indexing.
+
+**Plans:**
+- [11-PLAN.md](.planning/phases/11-schema-optimization/11-PLAN.md) — Infrastructure (schema cache, index, loader) — Wave 1
+- [11-PLAN-WAVES2-5.md](.planning/phases/11-schema-optimization/11-PLAN-WAVES2-5.md) — Complete architecture (updater, atomic writer, column index, optimizer, integration tests) — Waves 2-5
+
+**Wave Structure:**
+- Wave 1: SchemaLayeredLoader, SchemaCacheManager, SchemaIndexBuilder (150+ lines each)
+- Wave 2: SchemaUpdater, AtomicFileWriter (incremental updates + atomic writes)
+- Wave 3: Concurrency locks + backup/restore + rollback
+- Wave 4: ColumnIndexBuilder, SchemaOptimizer (O(1) field queries + diagnostics)
+- Wave 5: Integration tests, benchmarks, documentation
+
+**Requirements Mapped:** None (performance & optimization)
+
+**Key Work Items:**
+- File structure: .dbcli/schemas/{index.json, hot-schemas.json, cold/*.json}
+- Two-layer cache: hot tables (preload) + cold tables (lazy load via LRU)
+- Incremental updates: DIFF algorithm + atomic write with backup
+- Field indexing: O(1) column lookup by name/type
+- Concurrent safety: atomic rename pattern + backup restore
+
+**Success Criteria:**
+1. Init time < 100ms (100+ tables, index + hot-schemas only)
+2. Hot table query < 1ms (in-memory)
+3. Cold table load 10-50ms (first access), < 5ms (cached)
+4. Field query < 1ms (O(1) hash lookup)
+5. Incremental update < 50ms (only changed parts)
+6. Concurrent updates safe (atomic rename prevents corruption)
+7. All tests pass (90+ cases across 5 waves)
+8. Benchmarks show 80%+ improvement over flat JSON loading
+
+**Performance Targets (from CONTEXT.md):**
+- Startup + first query for new 100-table database: balance both concerns
+- Schema refresh with 10 new tables: 50ms write time
+- Field search across 500 tables: O(1) response
+- Concurrent dbcli instances: atomic writes prevent data loss
+
+**Complexity:** High | **Risk:** Medium (concurrent file I/O, performance edge cases)
+**Dependencies:** Phase 1-10 (none, optimization layer on top) | **Estimated Duration:** 5 waves (~300 min execution)
+
+**Key Decisions (locked in CONTEXT.md):**
+- D-01: Two-tier cache (hot tables preloaded, cold lazy-loaded via LRU)
+- D-02: Hot/cold split based on schema file size (assume size ∝ usage)
+- D-03: Atomic writes via temp file + rename pattern (prevent corruption)
+- D-04: Incremental DIFF (only changed tables in update)
+- D-05: No external cache service (Redis) — keep CLI standalone
+- D-06: Manual schema refresh (no hot reload) — business schema changes infrequent
+- D-07: LRU cache config: max 100 tables, 50MB limit, size-aware eviction
+
+**Code Patterns (from RESEARCH.md):**
+- Pattern 1: Hybrid storage + layered loading
+- Pattern 2: Atomic file writes (temp + rename)
+- Pattern 3: Incremental DIFF and patch application
+- Pattern 4: Column index hash tables (O(1) lookups)
+
+**Pitfalls to Avoid (from RESEARCH.md):**
+- ✓ Concurrent writes corruption (atomic rename)
+- ✓ Startup delay explosion (layered loading, LRU)
+- ✓ Field query O(n) traversal (hash index)
+- ✓ Environment var missing on init (non-strict mode, graceful degradation)
+- ✓ DIFF algorithm missing field changes (deep comparison, type/nullable/default)
+
+**Codebase Integration:**
+- src/core/schema-cache.ts - LRU cache management
+- src/core/schema-index.ts - Index building and loading
+- src/core/schema-loader.ts - Layered initialization
+- src/core/schema-updater.ts - Incremental refresh
+- src/core/atomic-writer.ts - Atomic file writes with backup
+- src/core/column-index.ts - Field indexing
+- src/core/schema-optimizer.ts - Performance diagnostics
+- src/types/schema-cache.ts - Type definitions
+- src/commands/schema.ts - Extended with --refresh, --analyze, --backup flags
+- src/benchmarks/schema-performance.bench.ts - Performance baseline
+
+**Tech Stack (from RESEARCH.md):**
+- `lru-cache@10.4.3` - O(1) cache with size limits
+- `zod@3.22+` - Schema validation (existing)
+- `stream-json@1.8+` - Optional for > 1MB files
+- Bun.file API for I/O (no additional dependencies)
+
+**Next Steps:**
+1. Execute Wave 1: Build caching infrastructure
+2. Execute Waves 2-3: Add incremental updates and concurrency
+3. Execute Waves 4-5: Optimize queries and integrate
+4. Profile with 100-500 table benchmarks
+5. Integrate into Phase 12 (command flow)
+
 ---
 
 ## Next Steps
@@ -603,8 +702,10 @@ Once V1 ships, track:
 10. ✅ PLAN-06-01.md and PLAN-06-02.md created — atomic task breakdown for Phase 6
 11. ✅ PLAN-07-01.md, PLAN-07-02.md, PLAN-07-03.md created — atomic task breakdown for Phase 7
 12. ✅ PLAN-08-01.md and PLAN-08-02.md created — atomic task breakdown for Phase 8
-13. **→ Ready for execution** — Run `/gsd:execute-phase 08-schema-refresh-export` to begin Phase 8
+13. ✅ PLAN-09-01.md and PLAN-09-02.md created — atomic task breakdown for Phase 9
+14. ✅ PLAN-10-*.md created — atomic task breakdown for Phase 10
+15. **→ Phase 11 Planning Complete** — Run `/gsd:execute-phase 11-schema-optimization --wave 1` to begin Wave 1
 
 ---
 
-*Last updated: 2026-03-25 after Phase 8 planning*
+*Last updated: 2026-03-26 after Phase 11 planning (Schema Optimization)*

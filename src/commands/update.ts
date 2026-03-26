@@ -3,6 +3,7 @@
  * 透過 --where 和 --set 旗標更新資料庫資料表中的資料
  */
 
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
@@ -19,7 +20,7 @@ import { PermissionError } from '@/core/permission-guard'
  */
 function parseWhereClause(whereClause: string): Record<string, any> {
   if (!whereClause || whereClause.trim() === '') {
-    throw new Error('WHERE 子句不能為空')
+    throw new Error('WHERE clause cannot be empty')
   }
 
   const conditions: Record<string, any> = {}
@@ -32,7 +33,7 @@ function parseWhereClause(whereClause: string): Record<string, any> {
     const match = part.match(/^(\w+)\s*=\s*(.+)$/)
     if (!match) {
       throw new Error(
-        `無法解析 WHERE 子句: "${part}"。使用格式 "column=value" 或 "col1=val1 AND col2=val2"`
+        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
       )
     }
 
@@ -76,18 +77,18 @@ export async function updateCommand(
   try {
     // 1. 驗證資料表名稱
     if (!table || table.trim() === '') {
-      throw new Error('資料表名稱必需')
+      throw new Error('Table name required')
     }
     table = table.trim()
 
     // 2. 驗證 --where 旗標
     if (!options.where || options.where.trim() === '') {
-      throw new Error('UPDATE 需要 --where 子句 (例如: --where "id=1")')
+      throw new Error('UPDATE requires --where clause (e.g. --where "id=1")')
     }
 
     // 3. 驗證 --set 旗標
     if (!options.set || options.set.trim() === '') {
-      throw new Error('UPDATE 需要 --set 旗標含有 JSON 資料 (例如: --set \'{"name":"Bob"}\')')
+      throw new Error('UPDATE requires --set flag with JSON data (e.g. --set \'{"name":"Bob"}\')')
     }
 
     // 4. 解析 WHERE 條件字串
@@ -95,7 +96,7 @@ export async function updateCommand(
     try {
       whereConditions = parseWhereClause(options.where)
     } catch (error) {
-      throw new Error(`WHERE 子句解析失敗: ${(error as Error).message}`)
+      throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
     }
 
     // 5. 解析 --set JSON
@@ -103,18 +104,18 @@ export async function updateCommand(
     try {
       setData = JSON.parse(options.set)
     } catch (error) {
-      throw new Error(`--set 中的 JSON 無效: ${(error as Error).message}`)
+      throw new Error(t_vars('errors.invalid_json', { message: (error as Error).message }))
     }
 
     // 驗證 setData 是物件而非陣列或原始值
     if (!setData || typeof setData !== 'object' || Array.isArray(setData)) {
-      throw new Error('--set 的 JSON 必須是物件 (例如: {"name":"Bob","email":"b@example.com"})')
+      throw new Error('JSON in --set must be an object (e.g. {"name":"Bob","email":"b@example.com"})')
     }
 
     // 6. 載入組態
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
-      throw new Error('執行 "dbcli init" 以設定資料庫連線')
+      throw new Error('Run "dbcli init" to configure database connection')
     }
 
     // 7. 建立資料庫適配器
@@ -155,17 +156,15 @@ export async function updateCommand(
   } catch (error) {
     // 權限錯誤
     if (error instanceof PermissionError) {
-      console.error('❌ 權限被拒')
-      console.error(`   操作: ${error.classification.type}`)
-      console.error(`   需要: ${error.requiredPermission} 模式或更高`)
-      console.error(`   訊息: ${error.message}`)
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
+      console.error(`   Operation: ${error.classification.type}`)
+      console.error(`   Message: ${error.message}`)
       process.exit(1)
     }
 
     // 連接錯誤
     if (error instanceof ConnectionError) {
-      console.error('❌ 資料庫連線失敗')
-      console.error(`   ${error.message}`)
+      console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 

@@ -3,6 +3,7 @@
  * 透過 --where 旗標從資料庫資料表中刪除資料（僅限 Admin）
  */
 
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
@@ -19,7 +20,7 @@ import { PermissionError } from '@/core/permission-guard'
  */
 function parseWhereClause(whereClause: string): Record<string, any> {
   if (!whereClause || whereClause.trim() === '') {
-    throw new Error('DELETE 需要 --where 子句 (例如: --where "id=1")')
+    throw new Error('DELETE requires --where clause (e.g. --where "id=1")')
   }
 
   const conditions: Record<string, any> = {}
@@ -32,7 +33,7 @@ function parseWhereClause(whereClause: string): Record<string, any> {
     const match = part.match(/^(\w+)\s*=\s*(.+)$/)
     if (!match || !match[1] || !match[2]) {
       throw new Error(
-        `無法解析 WHERE 子句: "${part}"。使用格式 "column=value" 或 "col1=val1 AND col2=val2"`
+        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
       )
     }
 
@@ -77,13 +78,13 @@ export async function deleteCommand(
   try {
     // 1. 驗證資料表名稱
     if (!table || table.trim() === '') {
-      throw new Error('資料表名稱必需')
+      throw new Error('Table name required')
     }
     table = table.trim()
 
     // 2. 驗證 --where 旗標（強制）
     if (!options.where || options.where.trim() === '') {
-      throw new Error('DELETE 需要 --where 子句 (例如: --where "id=1")')
+      throw new Error('DELETE requires --where clause (e.g. --where "id=1")')
     }
 
     // 3. 解析 WHERE 條件字串
@@ -91,19 +92,19 @@ export async function deleteCommand(
     try {
       whereConditions = parseWhereClause(options.where)
     } catch (error) {
-      throw new Error(`WHERE 子句解析失敗: ${(error as Error).message}`)
+      throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
     }
 
     // 4. 載入組態
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
-      throw new Error('執行 "dbcli init" 以設定資料庫連線')
+      throw new Error('Run "dbcli init" to configure database connection')
     }
 
     // 5. 驗證 Admin 權限（DELETE 操作必須 Admin）
     if (config.permission !== 'admin') {
       throw new PermissionError(
-        '權限被拒: DELETE 操作需要 Admin 權限。',
+        t('delete.admin_only'),
         { type: 'DELETE', isDangerous: true, keywords: ['DELETE'], isComposite: false, confidence: 'HIGH' },
         config.permission
       )
@@ -147,17 +148,15 @@ export async function deleteCommand(
   } catch (error) {
     // 權限錯誤
     if (error instanceof PermissionError) {
-      console.error('❌ 權限被拒')
-      console.error(`   操作: ${error.classification.type}`)
-      console.error(`   需要: Admin 權限（DELETE 僅限 Admin）`)
-      console.error(`   訊息: ${error.message}`)
+      console.error(t_vars('errors.permission_denied', { required: 'admin' }))
+      console.error(`   Operation: ${error.classification.type}`)
+      console.error(`   Message: ${error.message}`)
       process.exit(1)
     }
 
     // 連接錯誤
     if (error instanceof ConnectionError) {
-      console.error('❌ 資料庫連線失敗')
-      console.error(`   ${error.message}`)
+      console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 

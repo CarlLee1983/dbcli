@@ -5,6 +5,7 @@
  */
 
 import { Command } from 'commander'
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { TableListFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
@@ -34,7 +35,7 @@ async function listAction(options: { format: string; config: string }) {
     const config = await configModule.read(options.config)
 
     if (!config.connection) {
-      console.error('❌ 未配置資料庫。執行: dbcli init')
+      console.error('Database not configured. Run: dbcli init')
       process.exit(1)
     }
 
@@ -49,7 +50,7 @@ async function listAction(options: { format: string; config: string }) {
       const tables = await adapter.listTables()
 
       if (tables.length === 0) {
-        console.log('ℹ️  資料庫中未找到表格')
+        console.log(t('list.no_tables'))
         return
       }
 
@@ -63,15 +64,15 @@ async function listAction(options: { format: string; config: string }) {
       }
 
       // 摘要
-      console.log(`\n✓ 找到 ${tables.length} 個表格`)
+      console.log(`\n✓ Found ${tables.length} tables`)
     } finally {
       await adapter.disconnect()
     }
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`❌ 錯誤: ${error.message}`)
+      console.error(t_vars('errors.message', { message: error.message }))
       if (error instanceof ConnectionError) {
-        error.hints.forEach((hint: string) => console.error(`   💡 ${hint}`))
+        error.hints.forEach((hint: string) => console.error(`   Hint: ${hint}`))
       }
     }
     process.exit(1)

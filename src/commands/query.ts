@@ -3,6 +3,7 @@
  * 執行 SQL 查詢並返回結果，支持多種輸出格式
  */
 
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
@@ -62,22 +63,19 @@ export async function queryCommand(
     }
   } catch (error) {
     if (error instanceof PermissionError) {
-      console.error('❌ Permission Denied')
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Required: ${error.requiredPermission} mode`)
       console.error(`   Message: ${error.message}`)
       process.exit(1)
     }
 
     if (error instanceof ConnectionError) {
-      console.error('❌ Database Connection Failed')
-      console.error(`   ${error.message}`)
+      console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 
     // Other errors (missing table, syntax, etc.)
-    console.error('❌ Query Error')
-    console.error(`   ${(error as Error).message}`)
+    console.error(t_vars('errors.message', { message: (error as Error).message }))
     process.exit(1)
   }
 }

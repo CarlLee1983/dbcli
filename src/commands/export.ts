@@ -3,6 +3,7 @@
  * 執行 SQL 查詢並導出結果，支持 JSON/CSV 格式和檔案輸出
  */
 
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
@@ -59,7 +60,7 @@ export async function exportCommand(
       if (options.output) {
         const file = Bun.file(options.output)
         await file.write(formatted)
-        console.error(`✅ Exported to ${options.output} (${result.rowCount} rows)`)
+        console.error(t_vars('export.exported', { count: result.rowCount, file: options.output }))
       } else {
         console.log(formatted)
       }
@@ -68,22 +69,19 @@ export async function exportCommand(
     }
   } catch (error) {
     if (error instanceof PermissionError) {
-      console.error('❌ Permission Denied')
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Required: ${error.requiredPermission} mode`)
       console.error(`   Message: ${error.message}`)
       process.exit(1)
     }
 
     if (error instanceof ConnectionError) {
-      console.error('❌ Database Connection Failed')
-      console.error(`   ${error.message}`)
+      console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 
     // Other errors
-    console.error('❌ Export Error')
-    console.error(`   ${(error as Error).message}`)
+    console.error(t_vars('errors.message', { message: (error as Error).message }))
     process.exit(1)
   }
 }

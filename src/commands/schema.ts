@@ -5,6 +5,7 @@
  */
 
 import { Command } from 'commander'
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
@@ -56,7 +57,7 @@ async function schemaAction(
     const config = await configModule.read(options.config)
 
     if (!config.connection) {
-      console.error('❌ 未配置資料庫。執行: dbcli init')
+      console.error('Database not configured. Run: dbcli init')
       process.exit(1)
     }
 
@@ -80,9 +81,9 @@ async function schemaAction(
     }
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`❌ 錯誤: ${error.message}`)
+      console.error(t_vars('errors.message', { message: error.message }))
       if (error instanceof ConnectionError) {
-        error.hints.forEach((hint: string) => console.error(`   💡 ${hint}`))
+        error.hints.forEach((hint: string) => console.error(`   Hint: ${hint}`))
       }
     }
     process.exit(1)
@@ -103,29 +104,29 @@ async function handleSingleTableSchema(
     const formatter = new TableSchemaJSONFormatter()
     console.log(formatter.format(schema))
   } else {
-    console.log(`\n📋 表格: ${schema.name}\n`)
+    console.log(`\nTable: ${schema.name}\n`)
 
     if (schema.primaryKey && schema.primaryKey.length > 0) {
-      console.log(`🔑 主鍵: ${schema.primaryKey.join(', ')}`)
+      console.log(`Primary Key: ${schema.primaryKey.join(', ')}`)
     }
 
     if (schema.foreignKeys && schema.foreignKeys.length > 0) {
-      console.log(`🔗 外鍵:`)
+      console.log(`Foreign Keys:`)
       schema.foreignKeys.forEach((fk: any) => {
         console.log(`   ${fk.name}: ${fk.columns.join(',')} → ${fk.refTable}(${fk.refColumns.join(',')})`)
       })
     }
 
-    console.log(`\n${schema.columns.length} 個列:\n`)
+    console.log(`\n${schema.columns.length} columns:\n`)
 
     const formatter = new TableFormatter()
     console.log(formatter.format(schema.columns))
 
     if (schema.rowCount !== undefined) {
-      console.log(`\n📊 行數: ~${schema.rowCount.toLocaleString()}`)
+      console.log(`\nRow count: ~${schema.rowCount.toLocaleString()}`)
     }
     if (schema.engine) {
-      console.log(`🔧 引擎: ${schema.engine}`)
+      console.log(`Engine: ${schema.engine}`)
     }
   }
 }

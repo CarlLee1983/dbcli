@@ -5,6 +5,7 @@
 
 import * as path from 'node:path'
 import { homedir } from 'node:os'
+import { t, t_vars } from '@/i18n/message-loader'
 import { SkillGenerator } from '@/core/skill-generator'
 import { configModule } from '@/core/config'
 import type { Command } from 'commander'
@@ -29,7 +30,7 @@ export async function skillCommand(
     // 1. 讀取配置以取得權限級別
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
-      throw new Error('執行 "dbcli init" 初始化專案')
+      throw new Error('Run "dbcli init" to initialize project')
     }
 
     // 2. 使用正確的選項物件建立 SkillGenerator
@@ -46,7 +47,7 @@ export async function skillCommand(
     if (options.output) {
       // 寫入指定的檔案
       await Bun.file(options.output).write(skillMarkdown)
-      console.error(`✅ Skill 已寫入 ${options.output}`)
+      console.error(`Skill written to ${options.output}`)
       return
     }
 
@@ -55,7 +56,7 @@ export async function skillCommand(
       const installPath = getInstallPath(options.install)
       await ensureDir(path.dirname(installPath))
       await Bun.file(installPath).write(skillMarkdown)
-      console.error(`✅ Skill 已安裝到 ${options.install}：${installPath}`)
+      console.error(t_vars('skill.installed', { path: installPath }))
       return
     }
 
@@ -63,7 +64,7 @@ export async function skillCommand(
     console.log(skillMarkdown)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`❌ Skill 生成失敗：${message}`)
+    console.error(t_vars('errors.message', { message }))
     process.exit(1)
   }
 }
@@ -92,7 +93,7 @@ function getInstallPath(platform: string): string {
 
     default:
       throw new Error(
-        `未知的平台: ${platform}。支援的平台: claude, gemini, copilot, cursor`
+        `Unknown platform: ${platform}. Supported platforms: claude, gemini, copilot, cursor`
       )
   }
 }
@@ -112,7 +113,7 @@ async function ensureDir(dirPath: string): Promise<void> {
       const { mkdir } = await import('node:fs/promises')
       await mkdir(dirPath, { recursive: true })
     } catch (fsError) {
-      throw new Error(`無法建立目錄: ${dirPath}`)
+      throw new Error(`Cannot create directory: ${dirPath}`)
     }
   }
 }

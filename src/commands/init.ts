@@ -11,6 +11,7 @@
  */
 
 import { Command } from 'commander'
+import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { configModule } from '@/core/config'
 import { getDefaultsForSystem } from '@/adapters/defaults'
@@ -44,9 +45,9 @@ export const initCommand = new Command('init')
       await initCommandHandler(options)
     } catch (error) {
       if (error instanceof Error) {
-        console.error(`錯誤: ${error.message}`)
+        console.error(t_vars('errors.message', { message: error.message }))
       } else {
-        console.error(`錯誤: ${String(error)}`)
+        console.error(t_vars('errors.message', { message: String(error) }))
       }
       process.exit(1)
     }
@@ -83,8 +84,7 @@ async function initCommandHandler(
     envConfig = parseEnvDatabase(process.env)
   } catch {
     if (shouldPrompt) {
-      // 在交互模式下，.env 解析失敗不是致命的，我們會提示用戶
-      console.log('注意: 無法解析 .env 配置，將使用互動提示')
+      console.log(t('init.env_parse_note'))
     }
   }
 
@@ -93,7 +93,7 @@ async function initCommandHandler(
 
   // 在需要提示且沒有提供系統值時才提示
   if (shouldPrompt && !options.system && !envConfig?.system) {
-    system = await promptUser.select('選擇資料庫系統:', [
+    system = await promptUser.select(t('init.select_system'), [
       'postgresql',
       'mysql',
       'mariadb'
@@ -102,7 +102,7 @@ async function initCommandHandler(
 
   // 驗證系統值
   if (!['postgresql', 'mysql', 'mariadb'].includes(system)) {
-    throw new Error(`無效的資料庫系統: ${system}`)
+    throw new Error(`Invalid database system: ${system}`)
   }
 
   const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb')
@@ -119,11 +119,11 @@ async function initCommandHandler(
   // 否則詢問實際的連接值
   if (options.useEnvRefs && shouldPrompt) {
     // 環境變量引用模式：只詢問環境變量名稱，不詢問實際值
-    let envHost = options.envHost || await promptUser.text('資料庫主機環境變數:', 'DB_HOST')
-    let envPort = options.envPort || await promptUser.text('資料庫埠號環境變數:', 'DB_PORT')
-    let envUser = options.envUser || await promptUser.text('資料庫用戶環境變數:', 'DB_USER')
-    let envPassword = options.envPassword || await promptUser.text('資料庫密碼環境變數:', 'DB_PASSWORD')
-    let envDatabase = options.envDatabase || await promptUser.text('資料庫名稱環境變數:', 'DB_DATABASE')
+    let envHost = options.envHost || await promptUser.text(t('init.prompt_host'), 'DB_HOST')
+    let envPort = options.envPort || await promptUser.text(t('init.prompt_port'), 'DB_PORT')
+    let envUser = options.envUser || await promptUser.text(t('init.prompt_user'), 'DB_USER')
+    let envPassword = options.envPassword || await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD')
+    let envDatabase = options.envDatabase || await promptUser.text(t('init.prompt_name'), 'DB_DATABASE')
 
     // 直接轉換為環境變量引用配置
     configForWrite = {
@@ -139,7 +139,7 @@ async function initCommandHandler(
     let permission = options.permission || 'query-only'
 
     if (shouldPrompt && !options.permission) {
-      permission = await promptUser.select('選擇權限級別:', [
+      permission = await promptUser.select(t('init.prompt_permission'), [
         'query-only',
         'read-write',
         'admin'
@@ -148,7 +148,7 @@ async function initCommandHandler(
 
     // 驗證權限值
     if (!['query-only', 'read-write', 'admin'].includes(permission)) {
-      throw new Error(`無效的權限級別: ${permission}`)
+      throw new Error(`Invalid permission level: ${permission}`)
     }
 
     // 合併配置並保存
@@ -164,23 +164,23 @@ async function initCommandHandler(
     if (fileExists && !options.force) {
       if (shouldPrompt) {
         const overwrite = await promptUser.confirm(
-          '檔案 .dbcli 已存在。是否覆蓋?'
+          t('init.config_exists_overwrite')
         )
         if (!overwrite) {
-          console.log('已取消。配置未更改。')
+          console.log(t('init.cancelled'))
           return
         }
       } else {
-        throw new Error('.dbcli 已存在。使用 --force 選項覆蓋。')
+        throw new Error('.dbcli exists. Use --force option to overwrite.')
       }
     }
 
     // 跳過連接測試（因為只有環境變量引用，沒有實際的連接值）
-    console.log('⏭️  環境變量引用模式，跳過連接測試')
+    console.log('⏭️  Skipping connection test in env-ref mode')
 
     // 寫入配置
     await configModule.write('.dbcli', newConfig)
-    console.log('✓ 配置已保存至 .dbcli')
+    console.log(t('init.config_saved'))
     return
   }
 
@@ -190,7 +190,7 @@ async function initCommandHandler(
     options.host ||
     envConfig?.host ||
     (shouldPrompt
-      ? await promptUser.text('資料庫主機:', defaults.host || 'localhost')
+      ? await promptUser.text(t('init.prompt_host'), defaults.host || 'localhost')
       : defaults.host || 'localhost')
 
   // 埠號
@@ -198,12 +198,12 @@ async function initCommandHandler(
     options.port ||
     (envConfig?.port ? String(envConfig.port) : null) ||
     (shouldPrompt
-      ? await promptUser.text('資料庫埠號:', String(defaults.port || 5432))
+      ? await promptUser.text(t('init.prompt_port'), String(defaults.port || 5432))
       : String(defaults.port || 5432))
 
   const port = parseInt(portStr, 10)
   if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(`無效的埠號: ${portStr}`)
+    throw new Error(`Invalid port: ${portStr}`)
   }
   connection.port = port
 
@@ -212,13 +212,13 @@ async function initCommandHandler(
     options.user ||
     envConfig?.user ||
     (shouldPrompt
-      ? await promptUser.text('資料庫用戶名:')
+      ? await promptUser.text(t('init.prompt_user'))
       : '')
 
   // 當使用 --use-env-refs 時，可以不提供實際的連接值（會從環境變量讀取）
   // 否則非交互模式下必須提供這些值
   if (!connection.user && !shouldPrompt && !options.useEnvRefs) {
-    throw new Error('非互動模式下需要提供 --user 選項')
+    throw new Error('Non-interactive mode requires --user option')
   }
 
   // 密碼
@@ -226,7 +226,7 @@ async function initCommandHandler(
     options.password ||
     envConfig?.password ||
     (shouldPrompt
-      ? await promptUser.text('資料庫密碼 (可選):')
+      ? await promptUser.text(t('init.prompt_password'))
       : '')
 
   // 資料庫名稱
@@ -234,20 +234,20 @@ async function initCommandHandler(
     options.name ||
     envConfig?.database ||
     (shouldPrompt
-      ? await promptUser.text('資料庫名稱:')
+      ? await promptUser.text(t('init.prompt_name'))
       : '')
 
   // 當使用 --use-env-refs 時，可以不提供實際的連接值（會從環境變量讀取）
   // 否則非交互模式下必須提供這些值
   if (!connection.database && !shouldPrompt && !options.useEnvRefs) {
-    throw new Error('非互動模式下需要提供 --name 選項')
+    throw new Error('Non-interactive mode requires --name option')
   }
 
   // 5. 選擇權限級別
   let permission = options.permission || 'query-only'
 
   if (shouldPrompt && !options.permission) {
-    permission = await promptUser.select('選擇權限級別:', [
+    permission = await promptUser.select(t('init.prompt_permission'), [
       'query-only',
       'read-write',
       'admin'
@@ -256,7 +256,7 @@ async function initCommandHandler(
 
   // 驗證權限值
   if (!['query-only', 'read-write', 'admin'].includes(permission)) {
-    throw new Error(`無效的權限級別: ${permission}`)
+    throw new Error(`Invalid permission level: ${permission}`)
   }
 
   // 6. 如果啟用 --use-env-refs（非交互模式），轉換為環境變量引用
@@ -273,9 +273,9 @@ async function initCommandHandler(
 
     if (!envHost || !envPort || !envUser || !envPassword || !envDatabase) {
       throw new Error(
-        '使用 --use-env-refs 時，必須指定環境變量名稱。\n' +
-        '提供選項：--env-host, --env-port, --env-user, --env-password, --env-database\n' +
-        '或使用交互模式：執行 "bun dev init --use-env-refs"（不加 --no-interactive）'
+        'When using --use-env-refs, environment variable names must be specified.\n' +
+        'Provide options: --env-host, --env-port, --env-user, --env-password, --env-database\n' +
+        'Or use interactive mode: run "bun dev init --use-env-refs" without --no-interactive'
       )
     }
 
@@ -301,21 +301,21 @@ async function initCommandHandler(
   if (fileExists && !options.force) {
     if (shouldPrompt) {
       const overwrite = await promptUser.confirm(
-        '檔案 .dbcli 已存在。是否覆蓋?'
+        t('init.config_exists_overwrite')
       )
       if (!overwrite) {
-        console.log('已取消。配置未更改。')
+        console.log(t('init.cancelled'))
         return
       }
     } else {
-      throw new Error('.dbcli 已存在。使用 --force 選項覆蓋。')
+      throw new Error('.dbcli exists. Use --force option to overwrite.')
     }
   }
 
   // 8. 測試資料庫連接（除非 --skip-test 或使用 --use-env-refs）
   // 注：使用 --use-env-refs 時不進行連接測試，因為需要環境變量實際被設置
   if (!options.skipTest && !options.useEnvRefs) {
-    console.log('測試資料庫連接...')
+    console.log(t('init.connection_testing'))
 
     // 解析實際的連接參數（處理環境變量引用）
     // 在測試連接時需要實際的環境變量值，而不是空字符串
@@ -325,9 +325,9 @@ async function initCommandHandler(
         const envValue = process.env[envKey]
         if (!envValue) {
           throw new Error(
-            `無法進行連接測試: 環境變量 ${envKey} 未定義\n` +
-            `請在 .env 或環境變量中設置 ${envKey}。\n` +
-            `提示: 檢查 .env 文件或執行 'export ${envKey}=<值>' 後重試`
+            `Cannot test connection: environment variable ${envKey} is not defined\n` +
+            `Set ${envKey} in .env or environment variables.\n` +
+            `Hint: Check .env file or run 'export ${envKey}=<value>' and retry`
           )
         }
         return envValue
@@ -350,12 +350,12 @@ async function initCommandHandler(
       await adapter.connect()
       const isHealthy = await adapter.testConnection()
       if (isHealthy) {
-        console.log('✓ 資料庫連接成功')
+        console.log(t('init.connection_success'))
       }
     } catch (error) {
       if (error instanceof ConnectionError) {
-        console.error(`✗ 連接失敗: ${error.message}`)
-        console.error('提示:')
+        console.error(t_vars('errors.connection_failed', { message: error.message }))
+        console.error('Hints:')
         error.hints.forEach((hint) => console.error(`  • ${hint}`))
         process.exit(1)
       }
@@ -364,10 +364,10 @@ async function initCommandHandler(
       await adapter.disconnect()
     }
   } else {
-    console.log('⏭️  跳過連接測試（--skip-test）')
+    console.log('⏭️  Skipping connection test (--skip-test)')
   }
 
   // 9. 寫入配置
   await configModule.write('.dbcli', newConfig)
-  console.log('✓ 配置已保存至 .dbcli')
+  console.log(t('init.config_saved'))
 }

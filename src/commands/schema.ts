@@ -61,7 +61,7 @@ async function schemaAction(
     }
 
     // 使用配置創建適配器
-    const adapter = AdapterFactory.create(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
 
     try {

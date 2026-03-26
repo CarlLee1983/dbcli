@@ -1,0 +1,9 @@
+# 敏感信息 - 絕不提交
+.env.local
+.env.*.local
+credentials.json
+
+# 暫存檔案
+*.tmp
+*.bak
+*.swp

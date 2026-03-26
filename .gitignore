@@ -22,6 +22,12 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.production.local
 .env.local
 
+# dbcli sensitive information
+.dbcli/.env.local
+.dbcli/.env.*.local
+.dbcli/credentials.json
+.dbcli.backup
+
 # caches
 .eslintcache
 .cache

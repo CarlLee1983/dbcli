@@ -39,7 +39,7 @@ async function listAction(options: { format: string; config: string }) {
     }
 
     // 使用配置創建適配器
-    const adapter = AdapterFactory.create(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection)
 
     // 連接到資料庫
     await adapter.connect()

@@ -23,7 +23,12 @@
     "success": "模式已更新",
     "not_found": "資料庫中找不到表格",
     "refresh_prompt": "模式有變更。是否套用？ (y/n)：",
-    "columns_header": "欄位"
+    "columns_header": "欄位",
+    "scanning_database": "🔍 正在掃描資料庫架構...",
+    "tables_found": "📍 找到 {count} 個表格。正在獲取架構詳情...",
+    "processing_tables": "   處理了 {processed}/{total} 個表格",
+    "schema_exists_warning": "⚠️ 資料庫架構已存在於 .dbcli",
+    "use_force_to_override": "   使用 --force 進行覆蓋而無需確認"
   },
   "list": {
     "description": "列出資料庫中的所有表格",

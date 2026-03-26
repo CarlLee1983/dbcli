@@ -197,13 +197,13 @@ async function handleFullDatabaseScan(
   config: any,
   options: { config: string; format: string; force: boolean }
 ): Promise<void> {
-  console.log('🔍 正在掃描資料庫架構...')
+  console.log(t('schema.scanning_database'))
 
-  // 獲取所有表格
+  // Get all tables
   const tables = await adapter.listTables()
-  console.log(`📍 找到 ${tables.length} 個表格。正在獲取架構詳情...\n`)
+  console.log(t_vars('schema.tables_found', { count: tables.length }))
 
-  // 構建架構對象
+  // Build schema object
   const schemaData: Record<string, any> = {}
   let processed = 0
 
@@ -219,16 +219,16 @@ async function handleFullDatabaseScan(
     }
 
     processed++
-    // 每 10 個表格或最後顯示進度
+    // Show progress every 10 tables or at the end
     if (processed % 10 === 0 || processed === tables.length) {
-      console.log(`   處理了 ${processed}/${tables.length} 個表格`)
+      console.log(t_vars('schema.processing_tables', { processed, total: tables.length }))
     }
   }
 
-  // 檢查架構是否已在配置中存在
+  // Check if schema already exists in config
   if (config.schema && Object.keys(config.schema).length > 0 && !options.force) {
-    console.log('\n⚠️  資料庫架構已存在於 .dbcli')
-    console.log('   使用 --force 進行覆蓋而無需確認')
+    console.log('\n' + t('schema.schema_exists_warning'))
+    console.log(t('schema.use_force_to_override'))
     // 在交互模式中可以在此進行提示；目前直接退出
     process.exit(0)
   }

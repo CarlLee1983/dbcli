@@ -23,7 +23,12 @@
     "success": "Schema updated",
     "not_found": "Table not found in database",
     "refresh_prompt": "Schema has changes. Apply? (y/n): ",
-    "columns_header": "Columns"
+    "columns_header": "Columns",
+    "scanning_database": "🔍 Scanning database schema...",
+    "tables_found": "📍 Found {count} table(s). Fetching schema details...",
+    "processing_tables": "   Processed {processed}/{total} table(s)",
+    "schema_exists_warning": "⚠️ Database schema already exists in .dbcli",
+    "use_force_to_override": "   Use --force to override without confirmation"
   },
   "list": {
     "description": "List all tables in the database",

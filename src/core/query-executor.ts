@@ -2,7 +2,7 @@
  * Query Executor — Handles SQL execution with permission checks and error handling
  *
  * Responsibility: Execute queries with permission enforcement, auto-limiting,
- * and intelligent error handling with table name suggestions.
+ * blacklist column filtering, and intelligent error handling with table name suggestions.
  */
 
 import type { DatabaseAdapter } from '@/adapters/types'
@@ -10,6 +10,7 @@ import type { Permission } from '@/types'
 import type { QueryResult } from '@/types/query'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
+import type { BlacklistValidator } from '@/core/blacklist-validator'
 
 /**
  * QueryExecutor class for executing SQL queries with permission checks
@@ -17,7 +18,8 @@ import { suggestTableName } from '@/utils/error-suggester'
 export class QueryExecutor {
   constructor(
     private adapter: DatabaseAdapter,
-    private permission: Permission
+    private permission: Permission,
+    private blacklistValidator?: BlacklistValidator
   ) {}
 
   /**
@@ -27,6 +29,7 @@ export class QueryExecutor {
    * @param options Execution options (autoLimit, limitValue)
    * @returns QueryResult with rows and metadata
    * @throws PermissionError if query violates permission level
+   * @throws BlacklistError if table is blacklisted
    * @throws Error for database execution errors
    */
   async execute(
@@ -52,28 +55,57 @@ export class QueryExecutor {
         console.error(`Query-only mode: auto-limiting to ${limitValue} rows`)
       }
 
-      // 3. Execute query and measure time
+      // 3. Check table blacklist before execution (for SELECT queries)
+      if (this.blacklistValidator) {
+        const tableName = extractTableName(sql)
+        if (tableName) {
+          // checkTableBlacklist throws BlacklistError if blocked
+          this.blacklistValidator.checkTableBlacklist(classification.type, tableName, [])
+        }
+      }
+
+      // 4. Execute query and measure time
       const start = performance.now()
       const rows = await this.adapter.execute<Record<string, any>>(executeSql)
       const executionTimeMs = Math.round(performance.now() - start)
 
-      // 4. Collect result metadata
-      const columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
+      // 5. Collect result metadata
+      let columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
       const columnTypes = columnNames.map(col => {
         const value = rows[0]?.[col]
         return inferColumnType(value)
       })
 
-      // 5. Build QueryResult object
+      // 6. Apply blacklist column filtering if validator is present
+      let filteredRows = rows
+      let securityNotification: string | undefined
+
+      if (this.blacklistValidator) {
+        const tableName = extractTableName(sql)
+        if (tableName) {
+          const filterResult = this.blacklistValidator.filterColumns(tableName, rows, columnNames)
+          filteredRows = filterResult.filteredRows
+          if (filterResult.omittedColumns.length > 0) {
+            columnNames = columnNames.filter(col => !filterResult.omittedColumns.includes(col))
+            securityNotification = this.blacklistValidator.buildSecurityNotification(
+              tableName,
+              filterResult.omittedColumns
+            )
+          }
+        }
+      }
+
+      // 7. Build QueryResult object
       const result: QueryResult<Record<string, any>> = {
-        rows,
-        rowCount: rows.length,
+        rows: filteredRows,
+        rowCount: filteredRows.length,
         columnNames,
         columnTypes,
         executionTimeMs,
         metadata: {
           statement: classification.type as any,
-          affectedRows: rows.length
+          affectedRows: filteredRows.length,
+          ...(securityNotification ? { securityNotification } : {})
         }
       }
 
@@ -81,6 +113,11 @@ export class QueryExecutor {
     } catch (error) {
       // Permission errors pass through as-is
       if (error instanceof PermissionError) {
+        throw error
+      }
+
+      // BlacklistError passes through as-is
+      if (error instanceof Error && error.name === 'BlacklistError') {
         throw error
       }
 
@@ -112,6 +149,41 @@ export class QueryExecutor {
       throw error
     }
   }
+}
+
+/**
+ * Extract the primary table name from a SQL query.
+ * Uses regex to find the FROM clause table name.
+ *
+ * @param sql SQL query string
+ * @returns Table name or null if not found
+ */
+export function extractTableName(sql: string): string | null {
+  // Handle common SELECT ... FROM table patterns
+  const match = sql.match(/\bFROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
+  if (match) {
+    return match[1]
+  }
+
+  // Handle INSERT INTO table patterns
+  const insertMatch = sql.match(/\bINSERT\s+INTO\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
+  if (insertMatch) {
+    return insertMatch[1]
+  }
+
+  // Handle UPDATE table patterns
+  const updateMatch = sql.match(/\bUPDATE\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
+  if (updateMatch) {
+    return updateMatch[1]
+  }
+
+  // Handle DELETE FROM table patterns
+  const deleteMatch = sql.match(/\bDELETE\s+FROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
+  if (deleteMatch) {
+    return deleteMatch[1]
+  }
+
+  return null
 }
 
 /**

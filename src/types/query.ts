@@ -18,6 +18,8 @@ export interface QueryMetadata {
   affectedRows?: number
   /** Query execution time in milliseconds */
   executionTimeMs?: number
+  /** Security notification when columns were omitted due to blacklist */
+  securityNotification?: string
 }
 
 /**

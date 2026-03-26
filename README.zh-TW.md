@@ -8,7 +8,7 @@ dbcli 是一個統一的資料庫 CLI 工具，能讓 AI 代理（Claude Code、
 
 ## 核心價值
 
-**AI 代理能透過單一的、權限受控的 CLI 工具安全且智慧地訪問專案資料庫。**
+**AI 代理能透過單一的、權限受控的 CLI 工具安全且智慧地訪問專案資料庫，並提供敏感資料保護。**
 
 ## 快速開始
 
@@ -118,6 +118,14 @@ dbcli init
 
 - `dbcli export "SELECT ..." [--format json|csv]` — 導出查詢結果
 
+### 資料存取控制（黑名單）
+
+- `dbcli blacklist table add/remove <table>` — 封鎖或解除封鎖整個表
+- `dbcli blacklist column add/remove <table>.<column>` — 隱藏或顯示特定欄位
+- `dbcli blacklist list` — 查看目前黑名單設定
+- 欄位黑名單在查詢結果中自動省略，並顯示安全通知
+- 可透過 `DBCLI_OVERRIDE_BLACKLIST=true` 環境變數覆蓋（僅限管理員）
+
 ### AI 整合
 
 - 生成 dbcli 技能文檔（Claude Code 相容）
@@ -126,7 +134,7 @@ dbcli init
 
 ## 權限模型
 
-dbcli 使用三層粗粒度權限模型：
+dbcli 使用三層粗粒度權限模型，並搭配黑名單系統提供敏感表和欄位的細粒度保護（見[資料存取控制](#資料存取控制)）：
 
 ### 1. Query-only（查詢只讀）
 
@@ -156,6 +164,53 @@ dbcli 使用三層粗粒度權限模型：
 - 所有讀寫操作
 - DELETE 無限制
 - 可跳過確認（`--force`）
+
+## 資料存取控制
+
+dbcli 提供黑名單系統，與權限模型協同運作，防止 AI 代理存取敏感表或欄位，無論其權限等級為何。
+
+### 表層級黑名單
+
+封鎖表後，所有操作（查詢、插入、更新、刪除）均會被拒絕，並顯示明確的錯誤訊息。
+
+```bash
+dbcli blacklist table add secrets_vault
+dbcli query "SELECT * FROM secrets_vault"
+# 錯誤：表 'secrets_vault' 已被列入黑名單
+```
+
+### 欄位層級黑名單
+
+黑名單欄位會從 SELECT 結果中自動省略，並在輸出中顯示安全通知，讓 AI 代理了解結果集已被過濾。
+
+```bash
+dbcli blacklist column add users.password_hash
+dbcli query "SELECT * FROM users"
+# [安全通知] 已省略黑名單欄位：password_hash
+```
+
+### 黑名單配置範例
+
+黑名單規則儲存在 `.dbcli` 配置檔案中：
+
+```json
+{
+  "blacklist": {
+    "tables": ["audit_logs", "secrets_vault"],
+    "columns": {
+      "users": ["password_hash", "ssn"]
+    }
+  }
+}
+```
+
+### 覆蓋黑名單
+
+管理員可透過環境變數在緊急情況下繞過黑名單：
+
+```bash
+DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
+```
 
 ## 常見命令
 
@@ -264,6 +319,30 @@ dbcli skill --output ./SKILL.md
 
 dbcli skill --install claude
 # 安裝至 Claude Code 技能目錄
+```
+
+### 管理黑名單
+
+```bash
+# 查看目前黑名單
+dbcli blacklist list
+
+# 封鎖整個表
+dbcli blacklist table add audit_logs
+dbcli blacklist table add secrets_vault
+
+# 從黑名單移除表
+dbcli blacklist table remove audit_logs
+
+# 隱藏敏感欄位
+dbcli blacklist column add users.password_hash
+dbcli blacklist column add users.ssn
+
+# 從黑名單移除欄位
+dbcli blacklist column remove users.ssn
+
+# 管理員覆蓋黑名單（緊急使用）
+DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 ```
 
 ## 環境配置

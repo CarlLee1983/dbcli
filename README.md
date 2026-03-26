@@ -4,7 +4,7 @@
 
 A unified database CLI tool that enables AI agents (Claude Code, Gemini, Copilot, Cursor) to safely query, discover, and operate on databases.
 
-**Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool.
+**Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
 ## Internationalization (i18n)
 
@@ -377,9 +377,63 @@ dbcli skill --install cursor
 
 ---
 
+#### `dbcli blacklist`
+
+Manage the data access blacklist to block AI agents from accessing sensitive tables or columns.
+
+**Usage:**
+```bash
+dbcli blacklist list
+dbcli blacklist table add <table>
+dbcli blacklist table remove <table>
+dbcli blacklist column add <table>.<column>
+dbcli blacklist column remove <table>.<column>
+```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `dbcli blacklist list` | Show current blacklist (tables and columns) |
+| `dbcli blacklist table add <table>` | Add table to blacklist (blocks all operations) |
+| `dbcli blacklist table remove <table>` | Remove table from blacklist |
+| `dbcli blacklist column add <table>.<column>` | Add column to blacklist (omitted from SELECT results) |
+| `dbcli blacklist column remove <table>.<column>` | Remove column from blacklist |
+
+**Behavior:**
+- Table blacklist blocks all operations on that table (query, insert, update, delete)
+- Column blacklist silently omits columns from SELECT results and shows a security notification
+- Blacklist rules are stored in `.dbcli` and apply to all permission levels
+- Override for admin use via `DBCLI_OVERRIDE_BLACKLIST=true` environment variable
+
+**Examples:**
+```bash
+# View current blacklist
+dbcli blacklist list
+
+# Block all access to sensitive tables
+dbcli blacklist table add audit_logs
+dbcli blacklist table add secrets_vault
+
+# Hide sensitive columns from query results
+dbcli blacklist column add users.password_hash
+dbcli blacklist column add users.ssn
+
+# Remove a table from blacklist
+dbcli blacklist table remove audit_logs
+
+# Remove a column from blacklist
+dbcli blacklist column remove users.ssn
+
+# Override blacklist (admin use only)
+DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
+```
+
+---
+
 ## Permission Model
 
-dbcli implements a coarse-grained permission system with three levels. Permission level is set during `dbcli init` and stored in `.dbcli` config file.
+dbcli implements a coarse-grained permission system with three levels. Permission level is set during `dbcli init` and stored in `.dbcli` config file. The blacklist system works alongside permissions to provide fine-grained protection for sensitive tables and columns (see [Data Access Control](#data-access-control)).
 
 ### Permission Levels
 
@@ -439,6 +493,79 @@ dbcli delete users --where "id=1" --force  # Only Admin can delete
 - **Applications:** Use Read-Write for normal CRUD operations; prevents DROP TABLE accidents
 - **Maintenance:** Use Admin only for schema changes, bulk deletes, or emergency operations
 - **Principle of Least Privilege:** Assign minimum permission level needed for each use case
+
+---
+
+## Data Access Control
+
+dbcli provides a blacklist system that works alongside the permission model to prevent AI agents from accessing sensitive tables or columns, regardless of their permission level.
+
+### Table-Level Blacklist
+
+Blocking a table prevents all operations on it — queries, inserts, updates, and deletes are all refused with a clear error message.
+
+```bash
+# Block a table
+dbcli blacklist table add secrets_vault
+
+# Attempting access is blocked at all permission levels
+dbcli query "SELECT * FROM secrets_vault"
+# ERROR: Table 'secrets_vault' is blacklisted
+```
+
+### Column-Level Blacklist
+
+Blacklisted columns are silently omitted from SELECT results. A security notification is shown in the output so the agent is aware that the result set has been filtered.
+
+```bash
+# Blacklist sensitive columns
+dbcli blacklist column add users.password_hash
+dbcli blacklist column add users.ssn
+
+# Query returns all other columns; notification shown
+dbcli query "SELECT * FROM users"
+# [Security] Columns omitted by blacklist: password_hash, ssn
+```
+
+### Security Notifications
+
+Whenever a blacklist rule filters query output, dbcli appends a notification line to the result. This ensures AI agents do not silently operate on incomplete data without awareness.
+
+### Override via Environment Variable
+
+Administrators can bypass the blacklist for emergency or maintenance operations using the `DBCLI_OVERRIDE_BLACKLIST=true` environment variable:
+
+```bash
+DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
+```
+
+This override is logged and should only be used by administrators when necessary.
+
+### Blacklist Configuration
+
+Blacklist rules are stored in the `.dbcli` config file and can also be set manually:
+
+```json
+{
+  "blacklist": {
+    "tables": ["audit_logs", "secrets_vault"],
+    "columns": {
+      "users": ["password_hash", "ssn"]
+    }
+  }
+}
+```
+
+### Blacklist vs. Permissions
+
+The blacklist and permission model are complementary layers of access control:
+
+| Layer | Controls | Applies To |
+|-------|----------|------------|
+| **Permission Model** | Operation type (read/write/delete) | All tables |
+| **Blacklist** | Specific tables and columns | Targeted sensitive data |
+
+A Query-only agent cannot write to any table, and also cannot read blacklisted tables or columns — both restrictions apply simultaneously.
 
 ---
 

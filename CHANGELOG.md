@@ -5,11 +5,47 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-03-26
+## [0.2.0-beta] - 2026-03-26
+
+### Data Access Control — Blacklist System
+
+Added table and column-level blacklisting to protect sensitive data from AI agent access.
+
+### Added
+
+- **`dbcli blacklist` command suite:** Manage blacklist rules via CLI
+  - `blacklist list` — display current blacklist configuration
+  - `blacklist table add/remove <table>` — manage table-level blacklist
+  - `blacklist column add/remove <table>.<column>` — manage column-level blacklist
+- **Table-level blacklisting:** Reject all operations (query, insert, update, delete) on blacklisted tables
+- **Column-level blacklisting:** Automatically omit blacklisted columns from SELECT results
+- **Security notifications:** Footer in table/CSV/JSON output when columns are filtered (e.g., "Security: 2 column(s) were omitted based on your blacklist")
+- **Context-aware override:** `DBCLI_OVERRIDE_BLACKLIST=true` environment variable for temporary bypass with warning
+- **i18n support:** Blacklist messages in English and Traditional Chinese
+- **Performance:** < 1ms overhead per query (O(1) Set/Map lookups)
+- **103 new tests:** 83 core + 12 CLI wiring + 8 formatter security tests
+
+### Configuration
+
+Blacklist rules stored in `.dbcli`:
+```json
+{
+  "blacklist": {
+    "tables": ["audit_logs", "secrets_vault"],
+    "columns": {
+      "users": ["password_hash", "ssn"]
+    }
+  }
+}
+```
+
+---
+
+## [0.1.0-beta] - 2026-03-26
 
 ### Initial Release - AI-Ready Database CLI
 
-dbcli v1.0.0 is a complete, production-ready CLI tool enabling AI agents and developers to safely interact with PostgreSQL, MySQL, and MariaDB databases through a permission-controlled interface.
+dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents and developers to safely interact with PostgreSQL, MySQL, and MariaDB databases through a permission-controlled interface.
 
 **Key Achievement:** Single command-line tool bridging AI agents (Claude Code, Gemini, Copilot, Cursor) to database access without requiring multiple MPC integrations.
 
@@ -176,9 +212,8 @@ dbcli v1.0.0 is a complete, production-ready CLI tool enabling AI agents and dev
 
 ## Known Limitations (V1)
 
-- **Single database per project:** Multi-connection support deferred to V1.1
-- **Coarse-grained permissions:** Per-table/column access control not in scope
-- **No audit logging:** WHO/WHAT/WHEN tracking deferred to V1.1
+- **Single database per project:** Multi-connection support deferred to a future version
+- **No audit logging:** WHO/WHAT/WHEN tracking deferred to a future version
 - **Read-only schema:** No schema modification commands (ALTER TABLE, etc.) in V1
 - **CLI-only:** No visual schema designer, REPL, or interactive shell in V1
 

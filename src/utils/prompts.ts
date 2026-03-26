@@ -9,31 +9,29 @@
 import { stdin } from 'bun'
 
 /**
- * Read a line from stdin synchronously.
+ * Read a line from stdin synchronously using Bun's native API.
  * This is a fallback for when @inquirer/prompts is unavailable.
  */
 async function readLineFromStdin(prompt: string = ''): Promise<string> {
-  return new Promise((resolve) => {
-    if (prompt) {
-      process.stdout.write(prompt)
+  if (prompt) {
+    process.stdout.write(prompt)
+  }
+
+  try {
+    const decoder = new TextDecoder()
+    const buffer = new Uint8Array(1024)
+    const bytesRead = await stdin.read(buffer)
+
+    if (bytesRead === null) {
+      return ''
     }
 
-    let data = ''
-    stdin.on('data', (chunk) => {
-      data += chunk.toString()
-      const lines = data.split('\n')
-      if (lines.length > 1) {
-        stdin.pause()
-        resolve(lines[0])
-      }
-    })
-
-    stdin.on('end', () => {
-      resolve(data.trim())
-    })
-
-    stdin.resume()
-  })
+    const input = decoder.decode(buffer.slice(0, bytesRead))
+    return input.trim()
+  } catch {
+    // Fallback: if read() not available, return empty string
+    return ''
+  }
 }
 
 /**

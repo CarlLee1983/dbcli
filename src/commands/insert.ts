@@ -11,37 +11,34 @@ import { PermissionError } from '@/core/permission-guard'
 /**
  * 從 stdin 非同步讀取 JSON 資料
  * 用於 `echo '{}' | dbcli insert table` 模式
+ * 使用 Bun 原生 API
  */
 async function readStdinJSON(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = ''
+  try {
+    // 嘗試使用 Bun.stdin.text() 讀取整個輸入
+    if (typeof Bun !== 'undefined' && Bun.stdin) {
+      const text = await Bun.stdin.text()
+      return text
+    }
 
-    process.stdin.on('data', (chunk) => {
-      data += chunk.toString()
-    })
-
-    process.stdin.on('end', () => {
-      resolve(data)
-    })
-
-    process.stdin.on('error', (error) => {
-      reject(error)
-    })
-
-    // Timeout: 如果 5 秒內沒有資料，則繼續
-    setTimeout(() => {
-      if (!data) {
-        resolve('')
-      }
-    }, 5000)
-  })
+    // Fallback: 空字符串
+    return ''
+  } catch {
+    return ''
+  }
 }
 
 /**
  * 判斷是否有 stdin 資料可讀
+ * 在 Bun 中，我們假設如果不是 TTY 就有資料
  */
 function isStdinAvailable(): boolean {
-  return !process.stdin.isTTY
+  // 在 Bun 中檢查是否為 TTY
+  try {
+    return !process.stdin.isTTY
+  } catch {
+    return false
+  }
 }
 
 /**

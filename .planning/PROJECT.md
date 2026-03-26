@@ -1,5 +1,18 @@
 # dbcli — Database CLI for AI Agents
 
+## Current Milestone: v14.0 — Data Access Control & Sensitive Data Protection
+
+**Goal:** Implement table and column-level blacklisting to prevent AI agents from querying or modifying sensitive data.
+
+**Target Features:**
+- Table-level blacklist (block all operations on specific tables)
+- Column-level blacklist (hide specific columns from query results)
+- Flexible configuration via `.dbcli` config + CLI commands
+- Security notifications in CLI output footer
+- Context-aware overrides for blacklist rules
+
+---
+
 ## What This Is
 
 dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Gemini, Copilot, Cursor) to safely query, discover, and operate on databases. It acts as a bridge between AI agents and multiple database systems (PostgreSQL, MySQL, MariaDB), abstracting away connection complexity and enforcing permission-based access control. Developers initialize once per project, then AI agents can intelligently interact with the database without requiring manual schema discovery or SQL syntax knowledge.

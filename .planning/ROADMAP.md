@@ -2,22 +2,77 @@
 
 ## Current Milestone
 
-**v13.0** ✅ COMPLETE — Schema optimization and performance enhancement.
-See [Archived v13.0 Roadmap](milestones/v13.0-ROADMAP.md) for full details.
+**v14.0** — Data Access Control & Sensitive Data Protection
+Focus: Implement table and column-level blacklisting to secure sensitive data from AI agent access.
+
+## Milestone Status
+
+| Phase | Goal | Status | Plans |
+|-------|------|--------|-------|
+| 13 | Blacklist Infrastructure (Table & Column) | 📋 Planning | — |
+
+**Total:** 1 phase planned
 
 ## Historical Milestones
 
 | Version | Phases | Plans | Status | Archive |
 |---------|--------|-------|--------|---------|
-| v13.0 | 11 | 20 | ✅ Complete | [Roadmap](milestones/v13.0-ROADMAP.md) / [Requirements](milestones/v13.0-REQUIREMENTS.md) |
+| v13.0 | 12 | 25 | ✅ Complete | [Roadmap](milestones/v13.0-ROADMAP.md) / [Requirements](milestones/v13.0-REQUIREMENTS.md) |
 | v1.0.0 | 10 | 19 | ✅ Complete | Phases 1-10 (core functionality) |
 
-## Next Milestone (v14.0+)
+---
 
-*To be defined via `/gsd:new-milestone` workflow*
+## Phase 13: Data Access Control — Blacklist Infrastructure
+
+**Goal:** Implement table and column-level blacklisting to prevent AI agents from accessing sensitive data.
+
+**Status:** 📋 Planning
+
+**Requirements Mapped:** BL-01, BL-02, BL-03, BL-04, NF-01 through NF-04
+
+**Key Features:**
+1. Table-level blacklist (reject all operations on blacklisted tables)
+2. Column-level blacklist (omit blacklisted columns from SELECT results)
+3. CLI commands for managing blacklist (list, add table, add column, remove)
+4. Security notifications in CLI output (display which columns were filtered)
+5. Context-aware overrides via environment variable
+
+**Configuration (`.dbcli`):**
+```json
+{
+  "blacklist": {
+    "tables": ["audit_logs", "secrets_vault"],
+    "columns": {
+      "user": ["password", "api_key"],
+      "payment": ["ssn", "credit_card"]
+    }
+  }
+}
+```
+
+**CLI Commands:**
+- `dbcli blacklist list` — Show current blacklist
+- `dbcli blacklist table add <table>` — Blacklist a table
+- `dbcli blacklist column add <table>.<column>` — Blacklist a column
+
+**Success Criteria:**
+1. ✅ Users can define table blacklist in `.dbcli`
+2. ✅ Blacklisted tables reject all operations (SELECT, INSERT, UPDATE, DELETE)
+3. ✅ Users can define column blacklist per table
+4. ✅ Blacklisted columns omitted from query results
+5. ✅ Security notification displays when columns are filtered
+6. ✅ CLI commands allow interactive blacklist management
+7. ✅ 30+ unit tests covering all scenarios
+8. ✅ Zero performance regression (< 1ms overhead)
+9. ✅ All existing tests pass (backward compatible)
+
+**Complexity:** Medium | **Risk:** Medium (permission model impact)
+**Dependencies:** Phase 12 (i18n system for error messages)
+**Estimated Duration:** 2-3 phases in v14.0
 
 ---
----
+
+## Detailed Phase Archive
 
 ## Phase Details
 

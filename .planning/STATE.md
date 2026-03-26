@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v13.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-03-26T06:59:15.769Z"
+milestone: v14.0
+milestone_name: "Data Access Control & Sensitive Data Protection"
+status: gathering-requirements
+last_updated: "2026-03-26T15:30:00.000Z"
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 22
-  completed_plans: 25
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # STATE.md — Current Project State

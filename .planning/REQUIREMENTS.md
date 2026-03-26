@@ -43,11 +43,42 @@ All requirements map to specific phases in ROADMAP.md.
 
 ---
 
-## v2 Requirements (Deferred)
+## v14.0 Requirements — Data Access Control & Sensitive Data Protection
+
+### Blacklist Infrastructure
+
+- [ ] **BL-01**: Table-level blacklisting (reject all operations on blacklisted tables)
+- [ ] **BL-02**: Column-level blacklisting (omit blacklisted columns from all SELECT operations)
+- [ ] **BL-03**: Blacklist management via CLI commands (list, add, remove)
+- [ ] **BL-04**: Security notifications (display which columns were omitted from results)
+- [ ] **BL-05**: Context-aware overrides (temporary override via environment variable)
+
+### Requirements Mapping
+
+| Req ID | Description | Phase | Type |
+|--------|-------------|-------|------|
+| BL-01 | Table-level blacklisting | 13 | Core |
+| BL-02 | Column-level blacklisting | 13 | Core |
+| BL-03 | CLI commands for blacklist management | 13 | Core |
+| BL-04 | Security notifications in output | 13 | Core |
+| BL-05 | Context-aware overrides | 13.1+ | Future |
+
+### Non-Functional Requirements
+
+- [ ] **NF-01**: Performance — Blacklist check adds < 1ms overhead
+- [ ] **NF-02**: Security — Blacklist config not exposed in skill output
+- [ ] **NF-03**: Backward compatibility — Existing configs work unchanged
+- [ ] **NF-04**: Test coverage — 30+ unit tests for all blacklist scenarios
+
+---
+
+## v2+ Requirements (Deferred)
 
 - Audit logging (WHO, WHAT, WHEN, WHY for all operations)
 - Multi-connection management (multiple databases per project)
 - Interactive SQL shell (similar to `psql` or `mysql` CLI)
+- Row-level security (filter rows based on conditions)
+- Role-based blacklist (different blacklist per permission level)
 - Bulk data import/export operations
 - ORM code generation from schema
 

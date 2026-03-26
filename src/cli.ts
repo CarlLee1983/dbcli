@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import pkg from '../package.json'
+import { t } from './i18n/message-loader'
 import { initCommand } from './commands/init'
 import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'

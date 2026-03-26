@@ -269,6 +269,19 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         `SELECT COUNT(*) as count FROM "${tableName}"`
       )
 
+      // Ensure primaryKey is always an array
+      const primaryKeyArray = Array.isArray(pkResults[0]?.columns)
+        ? pkResults[0].columns
+        : []
+
+      // Ensure all foreign key arrays are proper arrays
+      const safeForeignKeys = fkResults.map(fk => ({
+        name: fk.name,
+        columns: Array.isArray(fk.columns) ? fk.columns : [],
+        refTable: fk.ref_table,
+        refColumns: Array.isArray(fk.ref_columns) ? fk.ref_columns : []
+      }))
+
       const schema: TableSchema = {
         name: tableName,
         columns: columns.map((col) => ({
@@ -281,13 +294,8 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         })),
         rowCount: countResult[0]?.count || 0,
         engine: 'PostgreSQL',
-        primaryKey: pkResults[0]?.columns || [],
-        foreignKeys: fkResults.map(fk => ({
-          name: fk.name,
-          columns: fk.columns,
-          refTable: fk.ref_table,
-          refColumns: fk.ref_columns
-        }))
+        primaryKey: primaryKeyArray,
+        foreignKeys: safeForeignKeys
       }
 
       return schema

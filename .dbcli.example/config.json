@@ -1,6 +1,6 @@
 {
   "connection": {
-    "system": "mysql",
+    "system": "postgresql",
     "host": {
       "$env": "DB_HOST"
     },
@@ -14,13 +14,12 @@
       "$env": "DB_PASSWORD"
     },
     "database": {
-      "$env": "DB_NAME"
+      "$env": "DB_DATABASE"
     }
   },
   "permission": "query-only",
   "schema": {},
   "metadata": {
-    "version": "1.0",
-    "createdAt": "2026-03-26T03:18:29.652Z"
+    "version": "1.0"
   }
 }

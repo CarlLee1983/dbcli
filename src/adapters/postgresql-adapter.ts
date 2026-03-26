@@ -1,18 +1,20 @@
 /**
- * PostgreSQL database adapter using Bun.sql
+ * PostgreSQL database adapter using pg package
  * Implements the DatabaseAdapter interface for PostgreSQL connections
  */
 
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
+import { Pool, type PoolClient } from 'pg'
 
 /**
- * PostgreSQL adapter implementation using Bun.sql
+ * PostgreSQL adapter implementation using pg library
  * Handles connection management, query execution, and schema introspection
  */
 export class PostgreSQLAdapter implements DatabaseAdapter {
-  private db: any = null
+  private pool: Pool | null = null
+  private client: PoolClient | null = null
   private options: ConnectionOptions
 
   constructor(options: ConnectionOptions) {
@@ -31,16 +33,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async connect(): Promise<void> {
     try {
-      const connectionUrl = this.buildConnectionString()
-
-      // Create connection using Bun.sql
-      // Note: Bun.sql() constructor creates a connection pool
-      // For simple connections, we use sql.query() directly
-      const sql = require('bun:sql')
-
-      this.db = sql({
-        url: connectionUrl,
-        timeout: this.options.timeout || 5000
+      // Create connection pool with options
+      this.pool = new Pool({
+        host: this.options.host,
+        port: this.options.port,
+        user: this.options.user,
+        password: this.options.password,
+        database: this.options.database,
+        connectionTimeoutMillis: this.options.timeout || 5000,
+        statement_timeout: this.options.timeout || 5000
       })
 
       // Test connection with lightweight query
@@ -56,12 +57,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async disconnect(): Promise<void> {
     try {
-      if (this.db) {
-        // Close connection if available
-        if (typeof this.db.close === 'function') {
-          await this.db.close()
-        }
-        this.db = null
+      if (this.client) {
+        await this.client.release()
+        this.client = null
+      }
+      if (this.pool) {
+        await this.pool.end()
+        this.pool = null
       }
     } catch {
       // Silently ignore errors during disconnect
@@ -74,7 +76,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if test fails
    */
   async testConnection(): Promise<boolean> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new ConnectionError(
         'UNKNOWN',
         '資料庫連接未建立',
@@ -103,7 +105,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     sql: string,
     params?: (string | number | boolean | null)[]
   ): Promise<T[]> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new ConnectionError(
         'UNKNOWN',
         '資料庫連接未建立',
@@ -115,11 +117,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // Use parameterized query to prevent SQL injection
       // PostgreSQL uses $1, $2, ... placeholders
       const result = params
-        ? await this.db.query(sql, params)
-        : await this.db.query(sql)
+        ? await this.pool.query(sql, params)
+        : await this.pool.query(sql)
 
-      // Convert result to array if needed
-      return Array.isArray(result) ? result : (result.rows || [])
+      // Return rows from result
+      return result.rows as T[]
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
     }
@@ -131,7 +133,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async listTables(): Promise<TableSchema[]> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new ConnectionError(
         'UNKNOWN',
         '資料庫連接未建立',
@@ -175,7 +177,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async getTableSchema(tableName: string): Promise<TableSchema> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new ConnectionError(
         'UNKNOWN',
         '資料庫連接未建立',
@@ -294,12 +296,4 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   * Build PostgreSQL connection string from options
-   * @returns Connection URL string
-   */
-  private buildConnectionString(): string {
-    const { host, port, user, password, database } = this.options
-    return `postgresql://${user}${password ? `:${password}` : ''}@${host}:${port}/${database}`
-  }
 }

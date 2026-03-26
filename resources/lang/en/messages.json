@@ -1,0 +1,79 @@
+{
+  "init": {
+    "description": "Initialize dbcli configuration with .env parsing and interactive prompts",
+    "welcome": "Welcome to dbcli",
+    "select_system": "Select database system:",
+    "prompt_host": "Database host: ",
+    "prompt_port": "Database port: ",
+    "prompt_user": "Database user: ",
+    "prompt_password": "Database password: ",
+    "prompt_name": "Database name: ",
+    "prompt_permission": "Permission level (query-only, read-write, admin): ",
+    "env_parse_note": "Note: Unable to parse .env configuration, using interactive prompts",
+    "connection_testing": "Testing database connection...",
+    "connection_success": "✓ Database connection successful",
+    "connection_failed": "✗ Database connection failed",
+    "config_saved": "Configuration saved to .dbcli",
+    "config_exists_overwrite": "Configuration file .dbcli already exists. Overwrite? (y/n): ",
+    "cancelled": "Cancelled. Configuration not changed."
+  },
+  "schema": {
+    "description": "Retrieve table structure or list all tables",
+    "fetching": "Fetching schema...",
+    "success": "Schema updated",
+    "not_found": "Table not found in database",
+    "refresh_prompt": "Schema has changes. Apply? (y/n): ",
+    "columns_header": "Columns"
+  },
+  "list": {
+    "description": "List all tables in the database",
+    "no_tables": "No tables found in database"
+  },
+  "query": {
+    "description": "Execute SQL query",
+    "executing": "Executing query...",
+    "no_results": "No results returned",
+    "result_count": "Results: {count} row(s)"
+  },
+  "errors": {
+    "message": "Error: {message}",
+    "invalid_config": "Invalid configuration: {field}",
+    "connection_failed": "Failed to connect to database: {message}",
+    "permission_denied": "Permission denied (required: {required})",
+    "table_not_found": "Table not found: {table}",
+    "unsupported_lang": "Language '{lang}' not supported, using English",
+    "invalid_json": "Invalid JSON: {message}"
+  },
+  "success": {
+    "inserted": "Successfully inserted {count} row(s)",
+    "updated": "Successfully updated {count} row(s)",
+    "deleted": "Successfully deleted {count} row(s)",
+    "no_changes": "No changes to apply"
+  },
+  "insert": {
+    "description": "Insert data into a table",
+    "prompt_data": "Enter JSON data to insert: ",
+    "confirm": "Insert {count} row(s) into {table}? (y/n): "
+  },
+  "update": {
+    "description": "Update data in a table",
+    "prompt_where": "Enter WHERE clause (e.g., id=1): ",
+    "prompt_set": "Enter JSON updates (e.g., {\"status\": \"active\"}): ",
+    "confirm": "Update rows in {table}? (y/n): "
+  },
+  "delete": {
+    "description": "Delete data from a table",
+    "prompt_where": "Enter WHERE clause (e.g., id=1): ",
+    "confirm": "Delete rows from {table}? (y/n): ",
+    "admin_only": "Delete command requires admin permission"
+  },
+  "export": {
+    "description": "Export query results",
+    "formats": "Supported formats: json, csv",
+    "exported": "Exported {count} rows to {file}"
+  },
+  "skill": {
+    "description": "Generate AI skill documentation",
+    "installed": "Skill installed to {path}"
+  }
+}

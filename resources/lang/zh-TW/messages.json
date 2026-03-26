@@ -1,0 +1,79 @@
+{
+  "init": {
+    "description": "初始化 dbcli 配置，解析 .env 並進行互動式提示",
+    "welcome": "歡迎使用 dbcli",
+    "select_system": "選擇資料庫系統：",
+    "prompt_host": "資料庫主機：",
+    "prompt_port": "資料庫埠號：",
+    "prompt_user": "資料庫使用者：",
+    "prompt_password": "資料庫密碼：",
+    "prompt_name": "資料庫名稱：",
+    "prompt_permission": "權限等級（query-only, read-write, admin）：",
+    "env_parse_note": "提示：無法解析 .env 配置，使用互動式提示",
+    "connection_testing": "正在測試資料庫連接...",
+    "connection_success": "✓ 資料庫連接成功",
+    "connection_failed": "✗ 資料庫連接失敗",
+    "config_saved": "配置已保存至 .dbcli",
+    "config_exists_overwrite": "配置檔案 .dbcli 已存在。是否覆蓋？ (y/n)：",
+    "cancelled": "已取消。配置未更改。"
+  },
+  "schema": {
+    "description": "檢索表格結構或列出所有表格",
+    "fetching": "正在抓取模式...",
+    "success": "模式已更新",
+    "not_found": "資料庫中找不到表格",
+    "refresh_prompt": "模式有變更。是否套用？ (y/n)：",
+    "columns_header": "欄位"
+  },
+  "list": {
+    "description": "列出資料庫中的所有表格",
+    "no_tables": "資料庫中未找到表格"
+  },
+  "query": {
+    "description": "執行 SQL 查詢",
+    "executing": "正在執行查詢...",
+    "no_results": "未返回任何結果",
+    "result_count": "結果：{count} 列"
+  },
+  "errors": {
+    "message": "錯誤：{message}",
+    "invalid_config": "配置無效：{field}",
+    "connection_failed": "無法連接到資料庫：{message}",
+    "permission_denied": "權限被拒（需要：{required}）",
+    "table_not_found": "找不到表格：{table}",
+    "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
+    "invalid_json": "無效的 JSON：{message}"
+  },
+  "success": {
+    "inserted": "成功插入 {count} 列",
+    "updated": "成功更新 {count} 列",
+    "deleted": "成功刪除 {count} 列",
+    "no_changes": "沒有變更要套用"
+  },
+  "insert": {
+    "description": "插入資料到表格",
+    "prompt_data": "輸入要插入的 JSON 資料：",
+    "confirm": "將 {count} 列插入到 {table}？ (y/n)："
+  },
+  "update": {
+    "description": "更新表格中的資料",
+    "prompt_where": "輸入 WHERE 子句 (例如：id=1)：",
+    "prompt_set": "輸入 JSON 更新 (例如：{\"status\": \"active\"})：",
+    "confirm": "更新 {table} 中的列？ (y/n)："
+  },
+  "delete": {
+    "description": "刪除表格中的資料",
+    "prompt_where": "輸入 WHERE 子句 (例如：id=1)：",
+    "confirm": "刪除 {table} 中的列？ (y/n)：",
+    "admin_only": "刪除命令需要管理員權限"
+  },
+  "export": {
+    "description": "匯出查詢結果",
+    "formats": "支援的格式：json、csv",
+    "exported": "已將 {count} 列匯出至 {file}"
+  },
+  "skill": {
+    "description": "生成 AI 技能文檔",
+    "installed": "技能已安裝至 {path}"
+  }
+}

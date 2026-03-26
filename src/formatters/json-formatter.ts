@@ -4,6 +4,7 @@
  */
 
 import type { ColumnSchema, TableSchema } from '../adapters/types'
+import { getSizeCategory } from '../core/size-category'
 
 export interface OutputFormatter<T> {
   format(data: T, options?: { compact?: boolean }): string
@@ -30,11 +31,18 @@ export class JSONFormatter implements OutputFormatter<ColumnSchema[] | TableSche
 export class TableSchemaJSONFormatter implements OutputFormatter<TableSchema> {
   format(table: TableSchema, options?: { compact?: boolean }): string {
     const spacing = options?.compact ? undefined : 2
+    const rowCount = table.estimatedRowCount ?? table.rowCount
     const output = {
       name: table.name,
+      estimatedRowCount: rowCount ?? null,
+      sizeCategory: rowCount !== undefined && rowCount !== null
+        ? getSizeCategory(rowCount)
+        : null,
+      tableType: table.tableType ?? 'table',
       columns: table.columns,
       primaryKey: table.primaryKey || [],
       foreignKeys: table.foreignKeys || [],
+      indexes: table.indexes || [],
       metadata: {
         rowCount: table.rowCount,
         engine: table.engine

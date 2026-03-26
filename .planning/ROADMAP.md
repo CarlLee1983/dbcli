@@ -1,22 +1,20 @@
 # dbcli Roadmap
 
-## Overview
+## Current Milestone
 
-**[10] phases** | **[19] requirements mapped** | All v1 requirements covered ✓
+**v13.0** ✅ COMPLETE — Schema optimization and performance enhancement.
+See [Archived v13.0 Roadmap](milestones/v13.0-ROADMAP.md) for full details.
 
-| # | Phase | Goal | Requirements | Plans | Status |
-|---|-------|------|--------------|-------|--------|
-| 1 | Project Scaffold | CLI framework, build setup, test infrastructure | — | 1 | ✅ Complete |
-| 2 | Init & Config | `dbcli init` with .env parsing and .dbcli config | INIT-01, INIT-03, INIT-04 | 2 | ✅ Complete |
-| 3 | DB Connection | Multi-database adapter layer (PostgreSQL, MySQL, MariaDB) | INIT-02 | 2 | ✅ Complete |
-| 4 | Permission Model | Coarse-grained permission system | INIT-05 | 1 | ✅ Complete |
-| 5 | Schema Discovery | `dbcli list` and `dbcli schema` commands | SCHEMA-01, SCHEMA-02, SCHEMA-03 | 2 | ✅ Complete |
-| 6 | Query Operations | `dbcli query` with structured output and error handling | QUERY-01, QUERY-02, QUERY-03, QUERY-04 | 2 | ✅ Complete |
-| 7 | Data Modification | `dbcli insert`, `dbcli update`, `dbcli delete` with safeguards | DATA-01, DATA-02 | 3 | ✅ Complete |
-| 8 | Schema Refresh & Export | Incremental schema updates and data export | SCHEMA-04, EXPORT-01 | 2 | ✅ Complete |
-| 9 | AI Integration | Skill documentation and cross-platform support | AI-01, AI-02, AI-03 | 2 | ✅ Complete |
-| 10 | Polish & Distribution | npm publish, cross-platform validation, docs | — | 2 | ⏳ In Progress (1/2) |
-| 11 | Schema Optimization | Hybrid storage + LRU cache + atomic updates for 100-500 table support | — | 2 | 📋 Planned (0/2) |
+## Historical Milestones
+
+| Version | Phases | Plans | Status | Archive |
+|---------|--------|-------|--------|---------|
+| v13.0 | 11 | 20 | ✅ Complete | [Roadmap](milestones/v13.0-ROADMAP.md) / [Requirements](milestones/v13.0-REQUIREMENTS.md) |
+| v1.0.0 | 10 | 19 | ✅ Complete | Phases 1-10 (core functionality) |
+
+## Next Milestone (v14.0+)
+
+*To be defined via `/gsd:new-milestone` workflow*
 
 ---
 ---

@@ -1,8 +1,33 @@
 # dbcli — Database CLI for AI Agents
 
+**Languages:** [English](./README.md) | [繁體中文](./README.zh-TW.md)
+
 A unified database CLI tool that enables AI agents (Claude Code, Gemini, Copilot, Cursor) to safely query, discover, and operate on databases.
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool.
+
+## Internationalization (i18n)
+
+dbcli supports multiple languages via the `DBCLI_LANG` environment variable:
+
+```bash
+# English (default)
+dbcli init
+
+# Traditional Chinese
+DBCLI_LANG=zh-TW dbcli init
+
+# Or set in .env
+export DBCLI_LANG=zh-TW
+dbcli init
+```
+
+**Supported languages:**
+- `en` — English (default)
+- `zh-TW` — Traditional Chinese (Taiwan)
+
+All messages, help text, error messages, and command output respond to the language setting automatically.
+
 
 ## Quick Start
 

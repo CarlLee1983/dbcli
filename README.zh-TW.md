@@ -17,13 +17,13 @@ dbcli 是一個統一的資料庫 CLI 工具，能讓 AI 代理（Claude Code、
 使用 Bun 安裝：
 
 ```bash
-bun add -D dbcli
+bun add -D @carllee1983/dbcli
 ```
 
 或使用 npm：
 
 ```bash
-npm install --save-dev dbcli
+npm install --save-dev @carllee1983/dbcli
 ```
 
 ### 初始化

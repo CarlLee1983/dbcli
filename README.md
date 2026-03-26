@@ -36,14 +36,14 @@ All messages, help text, error messages, and command output respond to the langu
 #### Global Installation (Recommended)
 
 ```bash
-npm install -g dbcli
+npm install -g @carllee1983/dbcli
 ```
 
 #### Zero-Install (No Installation Needed)
 
 ```bash
-npx dbcli init
-npx dbcli query "SELECT * FROM users"
+npx @carllee1983/dbcli init
+npx @carllee1983/dbcli query "SELECT * FROM users"
 ```
 
 #### Development Installation

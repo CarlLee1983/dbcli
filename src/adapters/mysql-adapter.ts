@@ -142,26 +142,31 @@ export class MySQLAdapter implements DatabaseAdapter {
     }
 
     try {
-      // Query information_schema.TABLES for table list with row count and engine info
+      // Query information_schema.TABLES and count columns for each table
       const query = `
         SELECT
-          TABLE_NAME as table_name,
-          TABLE_ROWS as row_count,
-          ENGINE as engine
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-        ORDER BY TABLE_NAME
+          t.TABLE_NAME as table_name,
+          t.TABLE_ROWS as row_count,
+          t.ENGINE as engine,
+          COUNT(c.COLUMN_NAME) as column_count
+        FROM information_schema.TABLES t
+        LEFT JOIN information_schema.COLUMNS c
+          ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+        WHERE t.TABLE_SCHEMA = DATABASE()
+        GROUP BY t.TABLE_NAME, t.TABLE_ROWS, t.ENGINE
+        ORDER BY t.TABLE_NAME
       `
 
       const results = await this.execute<{
         table_name: string
         row_count: number | null
         engine: string
+        column_count: number
       }>(query)
 
       return results.map((row) => ({
         name: row.table_name,
-        columns: [],
+        columns: Array(row.column_count).fill(null),
         rowCount: row.row_count || 0,
         engine: row.engine
       }))

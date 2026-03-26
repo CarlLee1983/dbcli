@@ -1,15 +1,16 @@
 /**
- * MySQL database adapter using Bun.sql
+ * MySQL database adapter using mysql2/promise
  * Implements the DatabaseAdapter interface for MySQL and MariaDB connections
  * Note: MariaDB is a MySQL fork with compatible protocol and schema
  */
 
+import mysql from 'mysql2/promise'
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 
 /**
- * MySQL adapter implementation using Bun.sql
+ * MySQL adapter implementation using mysql2/promise
  * Works for both MySQL 8.0+ and MariaDB 10.5+
  * Handles connection management, query execution, and schema introspection
  */
@@ -35,13 +36,13 @@ export class MySQLAdapter implements DatabaseAdapter {
    */
   async connect(): Promise<void> {
     try {
-      const connectionUrl = this.buildConnectionString()
-
-      // Create connection using Bun.sql
-      const sql = require('bun:sql')
-
-      this.db = sql({
-        url: connectionUrl,
+      // Create connection using mysql2/promise
+      this.db = await mysql.createConnection({
+        host: this.options.host,
+        port: this.options.port,
+        user: this.options.user,
+        password: this.options.password || undefined,
+        database: this.options.database,
         timeout: this.options.timeout || 5000
       })
 
@@ -60,10 +61,8 @@ export class MySQLAdapter implements DatabaseAdapter {
   async disconnect(): Promise<void> {
     try {
       if (this.db) {
-        // Close connection if available
-        if (typeof this.db.close === 'function') {
-          await this.db.close()
-        }
+        // Close mysql2 connection
+        await this.db.end()
         this.db = null
       }
     } catch {
@@ -116,13 +115,12 @@ export class MySQLAdapter implements DatabaseAdapter {
 
     try {
       // Use parameterized query to prevent SQL injection
-      // MySQL uses ? placeholders
-      const result = params
-        ? await this.db.query(sql, params)
-        : await this.db.query(sql)
+      // mysql2/promise returns [rows, fields]
+      const [rows] = params
+        ? await this.db.execute(sql, params)
+        : await this.db.execute(sql)
 
-      // Convert result to array if needed
-      return Array.isArray(result) ? result : (result.rows || [])
+      return Array.isArray(rows) ? rows : []
     } catch (error) {
       throw mapError(error, this.system, this.options)
     }
@@ -293,12 +291,4 @@ export class MySQLAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   * Build MySQL connection string from options
-   * @returns Connection URL string
-   */
-  private buildConnectionString(): string {
-    const { host, port, user, password, database } = this.options
-    return `mysql://${user}${password ? `:${password}` : ''}@${host}:${port}/${database}`
-  }
 }

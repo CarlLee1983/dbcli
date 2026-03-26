@@ -9,29 +9,40 @@
 import { stdin } from 'bun'
 
 /**
- * Read a line from stdin synchronously using Bun's native API.
+ * Read a line from stdin using Node.js compatible API.
  * This is a fallback for when @inquirer/prompts is unavailable.
  */
 async function readLineFromStdin(prompt: string = ''): Promise<string> {
-  if (prompt) {
-    process.stdout.write(prompt)
-  }
-
-  try {
-    const decoder = new TextDecoder()
-    const buffer = new Uint8Array(1024)
-    const bytesRead = await stdin.read(buffer)
-
-    if (bytesRead === null) {
-      return ''
+  return new Promise((resolve) => {
+    if (prompt) {
+      process.stdout.write(prompt)
     }
 
-    const input = decoder.decode(buffer.slice(0, bytesRead))
-    return input.trim()
-  } catch {
-    // Fallback: if read() not available, return empty string
-    return ''
-  }
+    let data = ''
+    const chunks: Buffer[] = []
+
+    const onData = (chunk: Buffer) => {
+      chunks.push(chunk)
+      data = Buffer.concat(chunks).toString()
+      const lines = data.split('\n')
+
+      if (lines.length > 1) {
+        process.stdin.pause()
+        process.stdin.removeListener('data', onData)
+        process.stdin.removeListener('end', onEnd)
+        resolve(lines[0].trim())
+      }
+    }
+
+    const onEnd = () => {
+      process.stdin.removeListener('data', onData)
+      resolve(data.trim())
+    }
+
+    process.stdin.on('data', onData)
+    process.stdin.on('end', onEnd)
+    process.stdin.resume()
+  })
 }
 
 /**
@@ -45,6 +56,15 @@ export async function text(
   message: string,
   defaultValue?: string
 ): Promise<string> {
+  // Skip inquirer if not a TTY (e.g., piped input)
+  if (!process.stdin.isTTY) {
+    const displayMessage = defaultValue
+      ? `${message} [${defaultValue}]: `
+      : `${message}: `
+    const answer = await readLineFromStdin(displayMessage)
+    return answer.trim() || defaultValue || ''
+  }
+
   try {
     const { text: inquirerText } = await import('@inquirer/prompts')
     return await inquirerText({ message, default: defaultValue })
@@ -69,6 +89,23 @@ export async function select(
   message: string,
   choices: string[]
 ): Promise<string> {
+  // Skip inquirer if not a TTY (e.g., piped input)
+  if (!process.stdin.isTTY) {
+    console.log(message)
+    choices.forEach((choice, index) => {
+      console.log(`  ${index + 1}) ${choice}`)
+    })
+
+    const answer = await readLineFromStdin('Select option (number): ')
+    const selectedIndex = parseInt(answer, 10) - 1
+
+    if (selectedIndex >= 0 && selectedIndex < choices.length) {
+      return choices[selectedIndex]
+    }
+
+    return choices[0]
+  }
+
   try {
     const { select: inquirerSelect } = await import('@inquirer/prompts')
     return await inquirerSelect({ message, choices })
@@ -86,7 +123,6 @@ export async function select(
       return choices[selectedIndex]
     }
 
-    // Default to first choice if invalid
     return choices[0]
   }
 }
@@ -98,6 +134,12 @@ export async function select(
  * @returns True if user confirms (y/yes), false otherwise
  */
 export async function confirm(message: string): Promise<boolean> {
+  // Skip inquirer if not a TTY (e.g., piped input)
+  if (!process.stdin.isTTY) {
+    const answer = await readLineFromStdin(`${message} (y/n): `)
+    return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
+  }
+
   try {
     const { confirm: inquirerConfirm } = await import('@inquirer/prompts')
     return await inquirerConfirm({ message })

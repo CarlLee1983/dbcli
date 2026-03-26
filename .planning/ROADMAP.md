@@ -704,6 +704,58 @@ Once V1 ships, track:
 14. ✅ PLAN-10-*.md created — atomic task breakdown for Phase 10
 15. **→ Phase 11 Planning Complete** — Run `/gsd:execute-phase 11-schema-optimization --wave 1` to begin Wave 1
 
+### Phase 12: i18n System Transformation — English Primary + Traditional Chinese Support
+
+**Goal:** Establish i18n infrastructure enabling dbcli to support English as primary language with Traditional Chinese fallback, preparing for Phase 13+ multilingual expansion.
+
+**Requirements Mapped:** i18n-01, i18n-02, i18n-04, i18n-05
+
+**Depends on:** Phase 11 (Schema Optimization)
+
+**Plans:** 2 plans (1 complete, 1 planned)
+
+#### Plan 12-01: Message Services Architecture ✅ COMPLETE
+
+**Objective:** Establish the i18n infrastructure with MessageLoader singleton, JSON message catalogs, and test coverage.
+
+**Key Deliverables:**
+- ✓ MessageLoader singleton class (src/i18n/message-loader.ts, 145 lines)
+  - Synchronous JSON loading via require()
+  - Language selection: DBCLI_LANG environment variable (default: en)
+  - Fallback chain: requested language → English → key name
+  - Export convenience functions: t(), t_vars()
+- ✓ Type definitions (src/i18n/types.ts)
+- ✓ Message catalogs (70 keys each)
+  - resources/lang/en/messages.json (English)
+  - resources/lang/zh-TW/messages.json (Traditional Chinese)
+- ✓ Unit tests: 12 tests, 100% passing
+  - Language selection, fallback behavior, interpolation, singleton pattern
+- ✓ CLI integration (src/cli.ts imports MessageLoader)
+- ✓ Documentation (src/i18n/README.md)
+
+**Success Criteria:**
+1. MessageLoader initializes synchronously with < 2ms overhead
+2. DBCLI_LANG controls language selection at startup
+3. Missing messages fall back to English, then to key name
+4. Variable interpolation replaces {varName} correctly
+5. 12+ unit tests all passing (100%)
+6. CLI startup remains < 150ms (verified: 112ms)
+7. Zero regressions (353+ tests passing)
+
+**Status:** ✅ Complete (2026-03-26)
+**Commits:** 28eddae, a3e8306
+
+#### Plan 12-02: Command Refactoring (Planned)
+
+**Objective:** Refactor all dbcli commands to use MessageLoader, replacing hardcoded Chinese strings with i18n function calls.
+
+**Planned Deliverables:**
+- Command refactoring (init, list, schema, query, insert, update, delete, export, skill)
+- Integration tests with language switching
+- Validation of all 70+ message keys used
+
+**Dependencies:** Plan 12-01 (Message Services Architecture)
+
 ---
 
-*Last updated: 2026-03-26 after Phase 11 planning (Schema Optimization)*
+*Last updated: 2026-03-26 after Phase 12 Plan 01 completion*

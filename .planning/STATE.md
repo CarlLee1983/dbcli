@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v13.0
-milestone_name: "Schema Optimization & Performance Enhancement"
-status: complete
-last_updated: "2026-03-26T13:30:00.000Z"
+milestone_name: milestone
+status: executing-phase-12
+last_updated: "2026-03-26T14:30:00Z"
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 11
-  total_plans: 20
-  completed_plans: 20
-  total_tests: 341
-  passing_tests: 341
-  test_pass_rate: 100%
+  current_phase: 12
+  current_plan: 1
+  total_plans: 22
+  completed_plans: 21
 ---
 
 # STATE.md — Current Project State
@@ -22,7 +21,7 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool.
 
-**Current Focus:** Phase 11 — schema-optimization (Plan 01 completed)
+**Current Focus:** Phase 12 — i18n System Transformation
 
 ---
 
@@ -57,7 +56,9 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 | 8 | Schema Refresh & Export | ✅ Complete (2/2 plans) | 2 |
 | 9 | AI Integration | ✅ Complete (2/2 plans) | 2 |
 | 10 | Polish & Distribution | ✅ Complete (2/2 plans) | 2 |
-| | | | **Total: 19/19 plans** |
+| 11 | Schema Optimization | ✅ Complete (2/2 plans) | 2 |
+| 12 | i18n: 繁體中文 → 英文 | 🏗️ In Progress (1/2) | 2 |
+| | | | **Total: 22/22 plans (21 complete)** |
 
 ---
 
@@ -103,7 +104,30 @@ See: `.planning/PROJECT.md` (last updated 2026-03-25)
 - ✅ Build successful (dist/cli.mjs 978 KB)
 - ✅ Summary: `.planning/phases/05-schema-discovery/05-01-SUMMARY.md`
 
-## Latest Completion
+## Latest Execution
+
+**Phase 12 Plan 01 Execution** (2026-03-26):
+
+- ✅ All 8 tasks completed
+- ✅ MessageLoader singleton class (src/i18n/message-loader.ts, 145 lines)
+  - Synchronous JSON loading via require()
+  - Language selection: DBCLI_LANG env variable (default: en)
+  - Fallback chain: requested lang → English → key name
+  - t() and t_vars() convenience functions
+- ✅ Type definitions (src/i18n/types.ts, 19 lines)
+- ✅ Message catalogs: 70 keys each
+  - English: resources/lang/en/messages.json
+  - Traditional Chinese: resources/lang/zh-TW/messages.json
+- ✅ Unit tests: 12/12 passing
+  - Language selection, fallback behavior, interpolation, singleton pattern
+- ✅ CLI integration: src/cli.ts imports MessageLoader
+  - Startup time: 112ms (target: <150ms, overhead: <2ms)
+- ✅ Documentation: src/i18n/README.md (145 lines)
+- ✅ Build successful: 2.55 MB
+- ✅ Zero regressions: 353+ tests passing
+- ✅ Summary: `.planning/phases/12-dbcli/12-01-SUMMARY.md`
+
+## Previous Completion
 
 **Phase 10 Plan 02 Execution** (2026-03-26):
 
@@ -341,8 +365,17 @@ Phase 10: Polish & Distribution (COMPLETE)
 **All 11 phases complete. All 20 plans complete (10 core + Phase 11 Plan 02).**
 
 **Phase 11: Schema Optimization (COMPLETE)**
+
 - ✅ Plan 01: Schema cache infrastructure
 - ✅ Plan 02: SchemaUpdater + concurrent safety + performance optimization
+
+---
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 12 added: 將 dbcli 系統語言從繁體中文改為英文，支援多語系（英文與繁體中文）
 
 ---
 
@@ -354,4 +387,4 @@ Phase 10: Polish & Distribution (COMPLETE)
 
 ---
 
-*Last updated: 2026-03-26 after Phase 11 Plan 02 execution (schema-optimization-complete)*
+*Last updated: 2026-03-26 after Phase 12 addition (i18n-system-planning)*

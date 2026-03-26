@@ -47,7 +47,14 @@
     "permission_denied": "Permission denied (required: {required})",
     "table_not_found": "Table not found: {table}",
     "unsupported_lang": "Language '{lang}' not supported, using English",
-    "invalid_json": "Invalid JSON: {message}"
+    "invalid_json": "Invalid JSON: {message}",
+    "table_blacklisted": "Error: Table '{table}' is blacklisted for {operation} operations",
+    "table_already_blacklisted": "Error: Table '{table}' is already blacklisted",
+    "table_not_in_blacklist": "Error: Table '{table}' is not in the blacklist",
+    "column_already_blacklisted": "Error: Column '{table}.{column}' is already blacklisted",
+    "column_not_in_blacklist": "Error: Column '{table}.{column}' is not in the blacklist",
+    "invalid_table_name": "Error: Invalid table name: {table}",
+    "invalid_column_format": "Error: Invalid column format. Use 'table.column'"
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",
@@ -80,5 +87,22 @@
   "skill": {
     "description": "Generate AI skill documentation",
     "installed": "Skill installed to {path}"
+  },
+  "blacklist": {
+    "description": "Manage sensitive data blacklist to prevent AI access",
+    "list_title": "Current Blacklist Configuration",
+    "tables_label": "Blacklisted tables",
+    "columns_label": "Blacklisted columns",
+    "none": "No tables or columns are currently blacklisted",
+    "table_added": "✓ Table '{table}' added to blacklist",
+    "table_removed": "✓ Table '{table}' removed from blacklist",
+    "column_added": "✓ Column '{table}.{column}' added to blacklist",
+    "column_removed": "✓ Column '{table}.{column}' removed from blacklist"
+  },
+  "security": {
+    "columns_omitted": "Security: {count} column(s) were omitted based on your blacklist"
+  },
+  "warnings": {
+    "blacklist_override_used": "Warning: Blacklist override enabled (DBCLI_OVERRIDE_BLACKLIST=true). Executing {operation} on blacklisted table '{table}'"
   }
 }

@@ -47,7 +47,14 @@
     "permission_denied": "權限被拒（需要：{required}）",
     "table_not_found": "找不到表格：{table}",
     "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
-    "invalid_json": "無效的 JSON：{message}"
+    "invalid_json": "無效的 JSON：{message}",
+    "table_blacklisted": "錯誤: 表格 '{table}' 的 {operation} 操作已被黑名單",
+    "table_already_blacklisted": "錯誤: 表格 '{table}' 已在黑名單中",
+    "table_not_in_blacklist": "錯誤: 表格 '{table}' 不在黑名單中",
+    "column_already_blacklisted": "錯誤: 欄位 '{table}.{column}' 已在黑名單中",
+    "column_not_in_blacklist": "錯誤: 欄位 '{table}.{column}' 不在黑名單中",
+    "invalid_table_name": "錯誤: 無效的表格名稱: {table}",
+    "invalid_column_format": "錯誤: 無效的欄位格式。使用 'table.column'"
   },
   "success": {
     "inserted": "成功插入 {count} 列",
@@ -80,5 +87,22 @@
   "skill": {
     "description": "生成 AI 技能文檔",
     "installed": "技能已安裝至 {path}"
+  },
+  "blacklist": {
+    "description": "管理敏感資料黑名單以防止 AI 存取",
+    "list_title": "目前黑名單配置",
+    "tables_label": "已黑名單的表格",
+    "columns_label": "已黑名單的欄位",
+    "none": "目前沒有黑名單表格或欄位",
+    "table_added": "✓ 表格 '{table}' 已新增至黑名單",
+    "table_removed": "✓ 表格 '{table}' 已從黑名單移除",
+    "column_added": "✓ 欄位 '{table}.{column}' 已新增至黑名單",
+    "column_removed": "✓ 欄位 '{table}.{column}' 已從黑名單移除"
+  },
+  "security": {
+    "columns_omitted": "安全: {count} 個欄位根據你的黑名單已被隱藏"
+  },
+  "warnings": {
+    "blacklist_override_used": "警告: 已啟用黑名單覆蓋 (DBCLI_OVERRIDE_BLACKLIST=true)。執行 {operation} 在已黑名單的表格 '{table}' 上"
   }
 }

@@ -12,7 +12,7 @@
 
 // Wave 1 exports
 export { SchemaDiffEngine } from './schema-diff'
-export { SkillGenerator } from './skill-generator'
+
 export { SchemaLayeredLoader } from './schema-loader'
 export { SchemaIndexBuilder } from './schema-index'
 export { SchemaCacheManager } from './schema-cache'
@@ -33,6 +33,17 @@ export { SchemaOptimizer } from './schema-optimizer'
 export { BlacklistManager } from './blacklist-manager'
 export { BlacklistValidator, BlacklistError } from './blacklist-validator'
 export type { BlacklistConfig, ColumnBlacklist, BlacklistState } from '@/types/blacklist'
+
+// Size category utility
+export { getSizeCategory } from './size-category'
+export type { SizeCategory } from './size-category'
+
+// Health check engine
+export { HealthChecker } from './health-checker'
+export type { CheckOptions } from './health-checker'
+
+// Check types
+export type { CheckReport, CheckType, NullCheckResult, OrphanCheckResult, DuplicateCheckResult, EmptyStringCheckResult } from '@/types/check'
 
 // Re-export type definitions
 export type { SchemaIndex, CacheStats, LoaderOptions, TableSchemaRef } from '@/types/schema-cache'

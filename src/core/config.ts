@@ -61,14 +61,19 @@ function isEnvReference(value: unknown): value is EnvReference {
  * @param config - 要解析的配置物件
  * @param env - 環境變量對象（通常是 process.env）
  * @param parentKey - 父物件的鍵名（用於類型推斷）
+ * @param strict - 如果為 true，環境變量缺失時拋出錯誤；如果為 false，保留引用
  * @returns 解析後的配置
- * @throws ConfigError 如果環境變量未找到
+ * @throws ConfigError 如果在 strict 模式下環境變量未找到
  */
-function resolveEnvReferences(config: any, env: Record<string, string>, parentKey?: string): any {
+function resolveEnvReferences(config: any, env: Record<string, string>, parentKey?: string, strict: boolean = false): any {
   if (isEnvReference(config)) {
     const envKey = config.$env
     const value = env[envKey]
     if (!value) {
+      // 在非 strict 模式下，保留環境變量引用而不是拋出錯誤
+      if (!strict) {
+        return config
+      }
       throw new ConfigError(
         `環境變量未定義: ${envKey}\n` +
         `請在 .env 或環境變量中設置 ${envKey}。\n` +
@@ -89,13 +94,13 @@ function resolveEnvReferences(config: any, env: Record<string, string>, parentKe
   }
 
   if (Array.isArray(config)) {
-    return config.map(item => resolveEnvReferences(item, env, parentKey))
+    return config.map(item => resolveEnvReferences(item, env, parentKey, strict))
   }
 
   if (typeof config === 'object' && config !== null) {
     const resolved: any = {}
     for (const [key, value] of Object.entries(config)) {
-      resolved[key] = resolveEnvReferences(value, env, key)
+      resolved[key] = resolveEnvReferences(value, env, key, strict)
     }
     return resolved
   }
@@ -146,8 +151,9 @@ export const configModule = {
           const content = await configFile.text()
           const config = JSON.parse(content)
 
-          // 解析環境變量引用 { "$env": "KEY" }
-          const resolvedConfig = resolveEnvReferences(config, process.env)
+          // 在讀取配置時使用非 strict 模式，保留缺失的環境變量引用
+          // 這樣即使環境變量未定義，也不會拋出錯誤
+          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false)
 
           // 嘗試讀取 .env.local 中的敏感信息（舊方式，保持向後相容）
           const envPath = join(path, '.env.local')
@@ -171,8 +177,8 @@ export const configModule = {
       if (exists) {
         const content = await file.text()
         const raw = JSON.parse(content)
-        // 解析環境變量引用
-        const resolved = resolveEnvReferences(raw, process.env)
+        // 在讀取配置時使用非 strict 模式，保留缺失的環境變量引用
+        const resolved = resolveEnvReferences(raw, process.env, undefined, false)
         return DbcliConfigSchema.parse(resolved)
       }
 

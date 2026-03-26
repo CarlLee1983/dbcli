@@ -31,6 +31,11 @@ export const initCommand = new Command('init')
   .option('--system <system>', 'Database system (postgresql, mysql, mariadb)')
   .option('--permission <permission>', 'Permission level (query-only, read-write, admin)', 'query-only')
   .option('--use-env-refs', 'Generate config with environment variable references (for .env)', false)
+  .option('--env-host <var>', 'Environment variable name for database host (when using --use-env-refs)')
+  .option('--env-port <var>', 'Environment variable name for database port (when using --use-env-refs)')
+  .option('--env-user <var>', 'Environment variable name for database user (when using --use-env-refs)')
+  .option('--env-password <var>', 'Environment variable name for database password (when using --use-env-refs)')
+  .option('--env-database <var>', 'Environment variable name for database name (when using --use-env-refs)')
   .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
@@ -56,21 +61,38 @@ async function initCommandHandler(
   // 1. 加載現有配置
   const existingConfig = await configModule.read('.dbcli')
 
-  // 2. 嘗試從 .env 解析資料庫配置
+  // 2. 判斷是否應該進入交互模式
+  // 如果使用 --use-env-refs 且提供了所有 --env-* 選項，則自動進入非交互模式
+  const isUsingEnvRefs = options.useEnvRefs
+  const hasAllEnvOptions = isUsingEnvRefs &&
+    options.envHost &&
+    options.envPort &&
+    options.envUser &&
+    options.envPassword &&
+    options.envDatabase
+
+  // shouldPrompt: 是否應該提示用戶輸入？
+  // - 如果 --no-interactive，則不提示
+  // - 如果 --use-env-refs 且提供了所有 --env-*，則不提示
+  // - 否則提示
+  const shouldPrompt = !options.noInteractive && !hasAllEnvOptions
+
+  // 3. 嘗試從 .env 解析資料庫配置
   let envConfig = null
   try {
     envConfig = parseEnvDatabase(process.env)
   } catch {
-    if (options.interactive) {
-      // 在互動模式下，.env 解析失敗不是致命的，我們會提示用戶
+    if (shouldPrompt) {
+      // 在交互模式下，.env 解析失敗不是致命的，我們會提示用戶
       console.log('注意: 無法解析 .env 配置，將使用互動提示')
     }
   }
 
-  // 3. 確定資料庫系統
+  // 4. 確定資料庫系統
   let system = options.system || envConfig?.system || 'postgresql'
 
-  if (options.interactive && !options.system && !envConfig?.system) {
+  // 在需要提示且沒有提供系統值時才提示
+  if (shouldPrompt && !options.system && !envConfig?.system) {
     system = await promptUser.select('選擇資料庫系統:', [
       'postgresql',
       'mysql',
@@ -90,11 +112,84 @@ async function initCommandHandler(
     system: system as 'postgresql' | 'mysql' | 'mariadb'
   }
 
+  // 提前聲明 configForWrite（後面會被賦值）
+  let configForWrite: ConnectionConfig
+
+  // 如果使用 --use-env-refs，在交互模式下只詢問環境變量名稱
+  // 否則詢問實際的連接值
+  if (options.useEnvRefs && shouldPrompt) {
+    // 環境變量引用模式：只詢問環境變量名稱，不詢問實際值
+    let envHost = options.envHost || await promptUser.text('資料庫主機環境變數:', 'DB_HOST')
+    let envPort = options.envPort || await promptUser.text('資料庫埠號環境變數:', 'DB_PORT')
+    let envUser = options.envUser || await promptUser.text('資料庫用戶環境變數:', 'DB_USER')
+    let envPassword = options.envPassword || await promptUser.text('資料庫密碼環境變數:', 'DB_PASSWORD')
+    let envDatabase = options.envDatabase || await promptUser.text('資料庫名稱環境變數:', 'DB_DATABASE')
+
+    // 直接轉換為環境變量引用配置
+    configForWrite = {
+      system: connection.system as 'postgresql' | 'mysql' | 'mariadb',
+      host: { $env: envHost } as any,
+      port: { $env: envPort } as any,
+      user: { $env: envUser } as any,
+      password: { $env: envPassword } as any,
+      database: { $env: envDatabase } as any
+    }
+
+    // 跳過後續的連接參數收集，直接進行選擇權限級別
+    let permission = options.permission || 'query-only'
+
+    if (shouldPrompt && !options.permission) {
+      permission = await promptUser.select('選擇權限級別:', [
+        'query-only',
+        'read-write',
+        'admin'
+      ])
+    }
+
+    // 驗證權限值
+    if (!['query-only', 'read-write', 'admin'].includes(permission)) {
+      throw new Error(`無效的權限級別: ${permission}`)
+    }
+
+    // 合併配置並保存
+    const newConfig = configModule.merge(existingConfig, {
+      connection: configForWrite,
+      permission: permission as 'query-only' | 'read-write' | 'admin'
+    })
+
+    // 檢查現有文件並提示覆蓋確認
+    const configFile = Bun.file('.dbcli')
+    const fileExists = await configFile.exists()
+
+    if (fileExists && !options.force) {
+      if (shouldPrompt) {
+        const overwrite = await promptUser.confirm(
+          '檔案 .dbcli 已存在。是否覆蓋?'
+        )
+        if (!overwrite) {
+          console.log('已取消。配置未更改。')
+          return
+        }
+      } else {
+        throw new Error('.dbcli 已存在。使用 --force 選項覆蓋。')
+      }
+    }
+
+    // 跳過連接測試（因為只有環境變量引用，沒有實際的連接值）
+    console.log('⏭️  環境變量引用模式，跳過連接測試')
+
+    // 寫入配置
+    await configModule.write('.dbcli', newConfig)
+    console.log('✓ 配置已保存至 .dbcli')
+    return
+  }
+
+  // 正常模式：詢問實際的連接值
   // 主機名
   connection.host =
     options.host ||
     envConfig?.host ||
-    (options.interactive
+    (shouldPrompt
       ? await promptUser.text('資料庫主機:', defaults.host || 'localhost')
       : defaults.host || 'localhost')
 
@@ -102,7 +197,7 @@ async function initCommandHandler(
   const portStr =
     options.port ||
     (envConfig?.port ? String(envConfig.port) : null) ||
-    (options.interactive
+    (shouldPrompt
       ? await promptUser.text('資料庫埠號:', String(defaults.port || 5432))
       : String(defaults.port || 5432))
 
@@ -116,11 +211,13 @@ async function initCommandHandler(
   connection.user =
     options.user ||
     envConfig?.user ||
-    (options.interactive
+    (shouldPrompt
       ? await promptUser.text('資料庫用戶名:')
       : '')
 
-  if (!connection.user && !options.interactive) {
+  // 當使用 --use-env-refs 時，可以不提供實際的連接值（會從環境變量讀取）
+  // 否則非交互模式下必須提供這些值
+  if (!connection.user && !shouldPrompt && !options.useEnvRefs) {
     throw new Error('非互動模式下需要提供 --user 選項')
   }
 
@@ -128,7 +225,7 @@ async function initCommandHandler(
   connection.password =
     options.password ||
     envConfig?.password ||
-    (options.interactive
+    (shouldPrompt
       ? await promptUser.text('資料庫密碼 (可選):')
       : '')
 
@@ -136,18 +233,20 @@ async function initCommandHandler(
   connection.database =
     options.name ||
     envConfig?.database ||
-    (options.interactive
+    (shouldPrompt
       ? await promptUser.text('資料庫名稱:')
       : '')
 
-  if (!connection.database && !options.interactive) {
+  // 當使用 --use-env-refs 時，可以不提供實際的連接值（會從環境變量讀取）
+  // 否則非交互模式下必須提供這些值
+  if (!connection.database && !shouldPrompt && !options.useEnvRefs) {
     throw new Error('非互動模式下需要提供 --name 選項')
   }
 
   // 5. 選擇權限級別
   let permission = options.permission || 'query-only'
 
-  if (options.interactive && !options.permission) {
+  if (shouldPrompt && !options.permission) {
     permission = await promptUser.select('選擇權限級別:', [
       'query-only',
       'read-write',
@@ -160,17 +259,33 @@ async function initCommandHandler(
     throw new Error(`無效的權限級別: ${permission}`)
   }
 
-  // 6. 如果啟用 --use-env-refs，轉換為環境變量引用
-  let configForWrite = connection as ConnectionConfig
+  // 6. 如果啟用 --use-env-refs（非交互模式），轉換為環境變量引用
+  // 註：交互模式已在前面處理完並返回
+  configForWrite = connection as ConnectionConfig
 
   if (options.useEnvRefs) {
+    // 非交互模式下需要提供環境變量名稱
+    const envHost = options.envHost
+    const envPort = options.envPort
+    const envUser = options.envUser
+    const envPassword = options.envPassword
+    const envDatabase = options.envDatabase
+
+    if (!envHost || !envPort || !envUser || !envPassword || !envDatabase) {
+      throw new Error(
+        '使用 --use-env-refs 時，必須指定環境變量名稱。\n' +
+        '提供選項：--env-host, --env-port, --env-user, --env-password, --env-database\n' +
+        '或使用交互模式：執行 "bun dev init --use-env-refs"（不加 --no-interactive）'
+      )
+    }
+
     configForWrite = {
       system: connection.system as 'postgresql' | 'mysql' | 'mariadb',
-      host: { $env: 'DB_HOST' } as any,
-      port: { $env: 'DB_PORT' } as any,
-      user: { $env: 'DB_USER' } as any,
-      password: { $env: 'DB_PASSWORD' } as any,
-      database: { $env: 'DB_NAME' } as any
+      host: { $env: envHost } as any,
+      port: { $env: envPort } as any,
+      user: { $env: envUser } as any,
+      password: { $env: envPassword } as any,
+      database: { $env: envDatabase } as any
     }
   }
 
@@ -184,7 +299,7 @@ async function initCommandHandler(
   const fileExists = await configFile.exists()
 
   if (fileExists && !options.force) {
-    if (options.interactive) {
+    if (shouldPrompt) {
       const overwrite = await promptUser.confirm(
         '檔案 .dbcli 已存在。是否覆蓋?'
       )
@@ -197,26 +312,36 @@ async function initCommandHandler(
     }
   }
 
-  // 8. 測試資料庫連接（除非 --skip-test）
-  if (!options.skipTest) {
+  // 8. 測試資料庫連接（除非 --skip-test 或使用 --use-env-refs）
+  // 注：使用 --use-env-refs 時不進行連接測試，因為需要環境變量實際被設置
+  if (!options.skipTest && !options.useEnvRefs) {
     console.log('測試資料庫連接...')
 
     // 解析實際的連接參數（處理環境變量引用）
-    const resolveValue = (value: any): string | number => {
+    // 在測試連接時需要實際的環境變量值，而不是空字符串
+    const resolveValue = (value: any, fieldName: string): string | number => {
       if (typeof value === 'object' && value !== null && '$env' in value) {
         const envKey = value.$env
-        return process.env[envKey] || ''
+        const envValue = process.env[envKey]
+        if (!envValue) {
+          throw new Error(
+            `無法進行連接測試: 環境變量 ${envKey} 未定義\n` +
+            `請在 .env 或環境變量中設置 ${envKey}。\n` +
+            `提示: 檢查 .env 文件或執行 'export ${envKey}=<值>' 後重試`
+          )
+        }
+        return envValue
       }
       return value
     }
 
     const testConnection: ConnectionConfig = {
       system: newConfig.connection.system,
-      host: String(resolveValue(newConfig.connection.host)),
-      port: parseInt(String(resolveValue(newConfig.connection.port)), 10) || 5432,
-      user: String(resolveValue(newConfig.connection.user)),
-      password: String(resolveValue(newConfig.connection.password)) || '',
-      database: String(resolveValue(newConfig.connection.database))
+      host: String(resolveValue(newConfig.connection.host, 'host')),
+      port: parseInt(String(resolveValue(newConfig.connection.port, 'port')), 10) || 5432,
+      user: String(resolveValue(newConfig.connection.user, 'user')),
+      password: String(resolveValue(newConfig.connection.password, 'password')) || '',
+      database: String(resolveValue(newConfig.connection.database, 'database'))
     }
 
     const adapter = AdapterFactory.createAdapter(testConnection)

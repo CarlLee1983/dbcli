@@ -9,7 +9,7 @@ Focus: Implement table and column-level blacklisting to secure sensitive data fr
 
 | Phase | Goal | Status | Plans |
 |-------|------|--------|-------|
-| 13 | Blacklist Infrastructure (Table & Column) | 🚀 Ready for Execution | 1 |
+| 13 | 1/1 | Complete   | 2026-03-26 |
 
 **Total:** 1 phase (1 plan ready)
 
@@ -123,7 +123,7 @@ Focus: Implement table and column-level blacklisting to secure sensitive data fr
 **Goal:** Implement `dbcli init` command with .env parsing, interactive prompts, and .dbcli config generation.
 
 **Plans:**
-- [02-01-PLAN.md](.planning/phases/02-init-config/02-01-PLAN.md) — Infrastructure (env parser, config module, validation, 7 tasks)
+1/1 plans complete
 - [02-02-PLAN.md](.planning/phases/02-init-config/02-02-PLAN.md) — Init command implementation (5 tasks)
 
 **Wave Structure:**

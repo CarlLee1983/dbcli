@@ -47,10 +47,10 @@ All requirements map to specific phases in ROADMAP.md.
 
 ### Blacklist Infrastructure
 
-- [ ] **BL-01**: Table-level blacklisting (reject all operations on blacklisted tables)
-- [ ] **BL-02**: Column-level blacklisting (omit blacklisted columns from all SELECT operations)
-- [ ] **BL-03**: Blacklist management via CLI commands (list, add, remove)
-- [ ] **BL-04**: Security notifications (display which columns were omitted from results)
+- [x] **BL-01**: Table-level blacklisting (reject all operations on blacklisted tables)
+- [x] **BL-02**: Column-level blacklisting (omit blacklisted columns from all SELECT operations)
+- [x] **BL-03**: Blacklist management via CLI commands (list, add, remove)
+- [x] **BL-04**: Security notifications (display which columns were omitted from results)
 - [ ] **BL-05**: Context-aware overrides (temporary override via environment variable)
 
 ### Requirements Mapping
@@ -65,10 +65,10 @@ All requirements map to specific phases in ROADMAP.md.
 
 ### Non-Functional Requirements
 
-- [ ] **NF-01**: Performance — Blacklist check adds < 1ms overhead
-- [ ] **NF-02**: Security — Blacklist config not exposed in skill output
-- [ ] **NF-03**: Backward compatibility — Existing configs work unchanged
-- [ ] **NF-04**: Test coverage — 30+ unit tests for all blacklist scenarios
+- [x] **NF-01**: Performance — Blacklist check adds < 1ms overhead
+- [x] **NF-02**: Security — Blacklist config not exposed in skill output
+- [x] **NF-03**: Backward compatibility — Existing configs work unchanged
+- [x] **NF-04**: Test coverage — 30+ unit tests for all blacklist scenarios
 
 ---
 

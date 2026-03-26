@@ -10,6 +10,18 @@ import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 
 /**
+ * Parse enum values from MySQL COLUMN_TYPE string
+ * e.g. "enum('a','b','c')" → ['a', 'b', 'c']
+ */
+function parseEnumValues(columnType: string): string[] | undefined {
+  const match = columnType.match(/^enum\((.+)\)$/i)
+  if (!match) return undefined
+  return match[1]
+    .split(',')
+    .map(v => v.trim().replace(/^'|'$/g, ''))
+}
+
+/**
  * MySQL adapter implementation using mysql2/promise
  * Works for both MySQL 8.0+ and MariaDB 10.5+
  * Handles connection management, query execution, and schema introspection
@@ -148,12 +160,13 @@ export class MySQLAdapter implements DatabaseAdapter {
           t.TABLE_NAME as table_name,
           t.TABLE_ROWS as row_count,
           t.ENGINE as engine,
+          t.TABLE_TYPE as table_type,
           COUNT(c.COLUMN_NAME) as column_count
         FROM information_schema.TABLES t
         LEFT JOIN information_schema.COLUMNS c
           ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
         WHERE t.TABLE_SCHEMA = DATABASE()
-        GROUP BY t.TABLE_NAME, t.TABLE_ROWS, t.ENGINE
+        GROUP BY t.TABLE_NAME, t.TABLE_ROWS, t.ENGINE, t.TABLE_TYPE
         ORDER BY t.TABLE_NAME
       `
 
@@ -161,6 +174,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         table_name: string
         row_count: number | null
         engine: string
+        table_type: string
         column_count: number
       }>(query)
 
@@ -168,7 +182,9 @@ export class MySQLAdapter implements DatabaseAdapter {
         name: row.table_name,
         columns: Array(row.column_count).fill(null),
         rowCount: row.row_count || 0,
-        engine: row.engine
+        engine: row.engine,
+        estimatedRowCount: row.row_count || 0,
+        tableType: (row.table_type === 'VIEW' ? 'view' : 'table') as 'table' | 'view'
       }))
     } catch (error) {
       throw mapError(error, this.system, this.options)
@@ -200,7 +216,9 @@ export class MySQLAdapter implements DatabaseAdapter {
           COLUMN_TYPE as type,
           IS_NULLABLE = 'YES' as nullable,
           COLUMN_DEFAULT as default_value,
-          COLUMN_KEY = 'PRI' as is_primary_key
+          COLUMN_KEY = 'PRI' as is_primary_key,
+          EXTRA LIKE '%auto_increment%' as auto_increment,
+          COLUMN_COMMENT as comment
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = ?
@@ -213,6 +231,8 @@ export class MySQLAdapter implements DatabaseAdapter {
         nullable: boolean
         default_value: string | null
         is_primary_key: boolean
+        auto_increment: boolean
+        comment: string
       }>(columnQuery, [tableName])
 
       // Extract foreign key constraints
@@ -252,6 +272,25 @@ export class MySQLAdapter implements DatabaseAdapter {
         .filter(col => col.is_primary_key)
         .map(col => col.name)
 
+      // Extract index information (excluding PRIMARY)
+      const indexQuery = `
+        SELECT
+          INDEX_NAME as name,
+          GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns,
+          NOT NON_UNIQUE as is_unique
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND INDEX_NAME != 'PRIMARY'
+        GROUP BY INDEX_NAME, NON_UNIQUE
+      `
+
+      const indexResults = await this.execute<{
+        name: string
+        columns: string
+        is_unique: boolean
+      }>(indexQuery, [tableName])
+
       // Get row count
       const countResult = await this.execute<{ count: number }>(
         `SELECT COUNT(*) as count FROM \`${tableName}\``
@@ -266,6 +305,16 @@ export class MySQLAdapter implements DatabaseAdapter {
 
       const tableResults = await this.execute<{ engine: string }>(tableQuery, [tableName])
 
+      // Get estimated row count from information_schema (zero-cost)
+      const estimateQuery = `
+        SELECT TABLE_ROWS as estimated_rows
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+      `
+      const estimateResults = await this.execute<{ estimated_rows: number | null }>(
+        estimateQuery, [tableName]
+      )
+
       const schema: TableSchema = {
         name: tableName,
         columns: columns.map((col) => ({
@@ -274,7 +323,10 @@ export class MySQLAdapter implements DatabaseAdapter {
           nullable: col.nullable,
           default: col.default_value || undefined,
           primaryKey: col.is_primary_key,
-          foreignKey: fkMap.get(col.name)
+          foreignKey: fkMap.get(col.name),
+          autoIncrement: col.auto_increment,
+          comment: col.comment || null,
+          enumValues: parseEnumValues(col.type)
         })),
         rowCount: countResult[0]?.count || 0,
         engine: tableResults[0]?.engine || 'MySQL',
@@ -284,7 +336,13 @@ export class MySQLAdapter implements DatabaseAdapter {
           columns: fk.columns.split(',').map(c => c.trim()),
           refTable: fk.ref_table,
           refColumns: fk.ref_columns.split(',').map(c => c.trim())
-        }))
+        })),
+        indexes: indexResults.map(idx => ({
+          name: idx.name,
+          columns: idx.columns.split(',').map(c => c.trim()),
+          unique: idx.is_unique
+        })),
+        estimatedRowCount: estimateResults[0]?.estimated_rows || 0
       }
 
       return schema

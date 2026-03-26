@@ -10,6 +10,8 @@ import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { promptUser } from '@/utils/prompts'
+import type { BlacklistValidator } from '@/core/blacklist-validator'
+import { BlacklistError } from '@/types/blacklist'
 
 /**
  * 資料執行器類，用於執行 INSERT、UPDATE、DELETE 操作
@@ -18,7 +20,8 @@ export class DataExecutor {
   constructor(
     private adapter: DatabaseAdapter,
     private permission: Permission,
-    private dbSystem: 'postgresql' | 'mysql' = 'postgresql'
+    private dbSystem: 'postgresql' | 'mysql' = 'postgresql',
+    private blacklistValidator?: BlacklistValidator
   ) {}
 
   /**
@@ -91,6 +94,11 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
+      // 0. Check table blacklist before doing anything else
+      if (this.blacklistValidator) {
+        this.blacklistValidator.checkTableBlacklist('INSERT', tableName, [])
+      }
+
       // 1. 強制權限檢查 - INSERT 需要 read-write 或 admin
       enforcePermission('INSERT INTO dummy', this.permission)
 
@@ -140,6 +148,11 @@ export class DataExecutor {
         sql,
       }
     } catch (error) {
+      // BlacklistError passes through to caller
+      if (error instanceof BlacklistError) {
+        throw error
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error)
 
       // 權限錯誤特殊處理
@@ -184,6 +197,11 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
+      // 0. Check table blacklist before doing anything else
+      if (this.blacklistValidator) {
+        this.blacklistValidator.checkTableBlacklist('UPDATE', tableName, [])
+      }
+
       // 1. 強制權限檢查
       enforcePermission('UPDATE dummy', this.permission)
 
@@ -237,6 +255,11 @@ export class DataExecutor {
         sql,
       }
     } catch (error) {
+      // BlacklistError passes through to caller
+      if (error instanceof BlacklistError) {
+        throw error
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error)
 
       if (error instanceof PermissionError) {
@@ -278,6 +301,11 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
+      // 0. Check table blacklist before doing anything else
+      if (this.blacklistValidator) {
+        this.blacklistValidator.checkTableBlacklist('DELETE', tableName, [])
+      }
+
       // 1. DELETE 需要 admin 權限（更嚴格的限制）
       if (this.permission !== 'admin') {
         return {
@@ -341,6 +369,11 @@ export class DataExecutor {
         sql,
       }
     } catch (error) {
+      // BlacklistError passes through to caller
+      if (error instanceof BlacklistError) {
+        throw error
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error)
 
       return {

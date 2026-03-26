@@ -32,6 +32,11 @@ export const schemaCommand = new Command()
     false
   )
   .option(
+    '--reset',
+    'Clear all existing schema data and re-fetch from database',
+    false
+  )
+  .option(
     '--force',
     'Skip confirmation when updating schema data',
     false
@@ -49,6 +54,7 @@ async function schemaAction(
     format: string
     config: string
     refresh: boolean
+    reset: boolean
     force: boolean
   }
 ) {
@@ -66,7 +72,10 @@ async function schemaAction(
     await adapter.connect()
 
     try {
-      if (options.refresh) {
+      if (options.reset) {
+        // Clear all schema and re-fetch from database
+        await handleSchemaReset(adapter, config, options)
+      } else if (options.refresh) {
         // Handle schema refresh (NEW)
         await handleSchemaRefresh(adapter, config, options)
       } else if (table) {
@@ -187,6 +196,82 @@ async function handleSchemaRefresh(
   // Write updated config
   await configModule.write(options.config, updatedConfig)
   console.log(`✅ Schema updated in .dbcli`)
+}
+
+/**
+ * 處理 schema 重置 — 清空現有 schema 後重新從 DB 抓取
+ */
+async function handleSchemaReset(
+  adapter: any,
+  config: any,
+  options: { config: string; format: string; force: boolean }
+): Promise<void> {
+  const existingCount = config.schema ? Object.keys(config.schema).length : 0
+
+  if (existingCount > 0 && !options.force) {
+    console.log(`⚠ This will clear ${existingCount} existing table schemas and re-fetch from database.`)
+    console.log('  Use --force to confirm.')
+    return
+  }
+
+  console.log('🗑 Clearing existing schema data...')
+
+  // Clear schema and re-scan
+  const configWithoutSchema = {
+    ...config,
+    schema: {},
+    metadata: {
+      ...config.metadata,
+      schemaLastUpdated: undefined,
+      schemaTableCount: 0
+    }
+  }
+
+  // Write cleared config first (in case scan fails, at least old stale data is gone)
+  await configModule.write(options.config, configWithoutSchema)
+
+  // Now do a full fresh scan
+  console.log(t('schema.scanning_database'))
+  const tables = await adapter.listTables()
+  console.log(t_vars('schema.tables_found', { count: tables.length }))
+
+  const schemaData: Record<string, any> = {}
+  let processed = 0
+
+  for (const table of tables) {
+    const fullSchema = await adapter.getTableSchema(table.name)
+    schemaData[table.name] = {
+      name: fullSchema.name,
+      columns: fullSchema.columns,
+      rowCount: fullSchema.rowCount,
+      engine: fullSchema.engine,
+      primaryKey: fullSchema.primaryKey || [],
+      foreignKeys: fullSchema.foreignKeys || []
+    }
+
+    processed++
+    if (processed % 10 === 0 || processed === tables.length) {
+      console.log(t_vars('schema.processing_tables', { processed, total: tables.length }))
+    }
+  }
+
+  const updatedConfig = {
+    ...configWithoutSchema,
+    schema: schemaData,
+    metadata: {
+      ...configWithoutSchema.metadata,
+      schemaLastUpdated: new Date().toISOString(),
+      schemaTableCount: tables.length
+    }
+  }
+
+  await configModule.write(options.config, updatedConfig)
+
+  if (existingCount > 0) {
+    console.log(`\n✅ Schema reset complete — cleared ${existingCount} old tables, fetched ${tables.length} tables from database`)
+  } else {
+    console.log(`\n✅ Schema fetched — ${tables.length} tables from database`)
+  }
 }
 
 /**

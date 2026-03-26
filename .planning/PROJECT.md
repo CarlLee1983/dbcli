@@ -105,21 +105,29 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | CLI-first, not MPC | Need to support Claude Code, Gemini, Copilot, Cursor — a single MCP wouldn't cover all. CLI + skill is more portable. | ✓ Good — enables maximum platform support |
-| Coarse-grained permissions | Fine-grained (per-table, per-column) is complex for V1. Coarse roles are sufficient to prevent accidental writes. | — Pending — revisit if abuse cases emerge |
+| Coarse-grained permissions | Fine-grained (per-table, per-column) is complex for V1. Coarse roles are sufficient to prevent accidental writes. | ✓ Extended — v14.0 added table/column blacklisting on top of coarse roles |
 | Hybrid init (read .env first) | Minimizes manual input for developers who already have .env. Falls back to prompts for missing values. | — Pending — validate UX in real usage |
 | JSON for .dbcli config | Human-readable, widely supported, DB-system-aware (parameters differ per DB). | — Pending — may add YAML alternative if requested |
 | Single connection in V1 | Multi-connection adds complexity. Most projects use one primary DB. Can add in V2 if needed. | — Pending |
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 
-## Current State (v13.0 Complete)
+## Current State (v14.0 — Phase 13 Complete)
 
-**Latest Release:** v13.0 (2026-03-26)
-- ✅ 11 phases complete, 20 plans executed
-- ✅ 19/19 requirements satisfied
-- ✅ 341+ tests, 100% pass rate
-- ✅ Schema optimization: 87ms startup (100+ tables), O(1) column lookups
+**Latest Release:** v14.0 (2026-03-26)
+- ✅ Phase 13 complete: 3 plans executed (1 core + 2 gap closure), verification passed 10/10
+- ✅ 230+ tests passing, 83 new blacklist tests added
+- ✅ Table and column-level blacklisting fully operational end-to-end
+- ✅ All 8 requirements satisfied (BL-01 through BL-04, NF-01 through NF-04)
 
-**What's Shipped:**
+**What's Shipped (v14.0):**
+1. Table-level blacklist — reject all operations on blacklisted tables
+2. Column-level blacklist — omit blacklisted columns from SELECT results
+3. CLI management commands: `blacklist list`, `blacklist table add/remove`, `blacklist column add/remove`
+4. Security notifications in table/CSV/JSON output when columns are filtered
+5. Context-aware override via `DBCLI_OVERRIDE_BLACKLIST` environment variable
+6. Performance: < 1ms overhead per query (7 benchmarks verified)
+
+**What's Shipped (v13.0 and prior):**
 1. Full database CLI with init, list, schema, query, insert, update, delete, export
 2. Multi-database support (PostgreSQL, MySQL, MariaDB)
 3. Permission-based access control (Query-only, Read-Write, Admin)
@@ -174,4 +182,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-03-26 after v13.0 completion*
+*Last updated: 2026-03-26 after v14.0 Phase 13 completion*

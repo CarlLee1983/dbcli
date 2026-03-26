@@ -2,7 +2,7 @@
 
 *A living document updated after each milestone. Lessons feed forward into future planning.*
 
-## Milestone: v14.0 — Data Access Control
+## Milestone: v0.2.0-beta — Data Access Control
 
 **Shipped:** 2026-03-26
 **Phases:** 1 | **Plans:** 3 (1 core + 2 gap closure)
@@ -49,13 +49,13 @@
 
 | Milestone | Phases | Plans | Key Change |
 |-----------|--------|-------|------------|
-| v14.0 | 1 | 3 | Gap closure workflow validated; --gaps-only execution mode |
+| v0.2.0-beta | 1 | 3 | Gap closure workflow validated; --gaps-only execution mode |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Key Metric |
 |-----------|-------|------------|
-| v14.0 | 230+ | 10/10 verification, 0 regressions, < 1ms blacklist overhead |
+| v0.2.0-beta | 230+ | 10/10 verification, 0 regressions, < 1ms blacklist overhead |
 
 ### Top Lessons (Verified Across Milestones)
 

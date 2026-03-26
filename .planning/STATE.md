@@ -1,6 +1,6 @@
 ---
 gsd_state_version: 1.0
-milestone: v14.0
+milestone: v0.2.0-beta
 milestone_name: Data Access Control
 status: milestone_complete
 last_updated: "2026-03-26T08:45:00.000Z"
@@ -19,17 +19,17 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** Milestone v14.0 complete — planning next milestone
+**Current Focus:** Milestone v0.2.0-beta complete — planning next milestone
 
 ---
 
 ## Milestone Status
 
-**v14.0 — Data Access Control:** COMPLETE (2026-03-26)
+**v0.2.0-beta — Data Access Control:** COMPLETE (2026-03-26)
 - Phase 13: Data Access Control — Blacklist Infrastructure (3/3 plans, verification 10/10)
 
 **Prior milestones:**
-- v13.0 — i18n + Schema Optimization (Phases 11-12)
+- v0.1.0-beta — i18n + Schema Optimization (Phases 11-12)
 - v1.0.0 — Core Functionality (Phases 1-10)
 
 ---
@@ -54,4 +54,4 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 ---
 
-*Last updated: 2026-03-26 after v14.0 milestone completion*
+*Last updated: 2026-03-26 after v0.2.0-beta milestone completion*

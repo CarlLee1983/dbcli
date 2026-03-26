@@ -1,35 +1,30 @@
 # Milestones
 
-## v14.0 Data Access Control (Shipped: 2026-03-26)
+## v0.2.0-beta — Data Access Control (Shipped: 2026-03-26)
 
-**Phases completed:** 13 phases, 25 plans, 105 tasks
+**Scope:** Phase 13 (1 phase, 3 plans)
 
 **Key accomplishments:**
+- Table and column-level blacklisting with O(1) Set/Map lookups
+- CLI management commands (blacklist list/table/column add/remove)
+- Security notifications in all output formats (table, CSV, JSON)
+- End-to-end CLI wiring across all 4 execution commands
+- Context-aware override via DBCLI_OVERRIDE_BLACKLIST env var
+- 103 new tests, < 1ms performance overhead
 
-- Objective:
-- Infrastructure for database configuration management with .env parsing, validation, and immutable operations.
-- 完整的 `dbcli init` 命令實現，包括互動式提示、.env 解析、配置生成和驗證。
-- PostgreSQL Adapter Tests (9 tests):
-- 1. SQL Classifier Module
-- Query result types and formatting infrastructure for Phase 6 query command implementation.
-- Query execution infrastructure with permission enforcement and intelligent error handling for `dbcli query` command.
-- 一句話摘要:
-- 實現內容：
-- Status:
-- Incremental schema diffing algorithm implementation with comprehensive type normalization and foreign key preservation.
-- Files Modified:
-- Dynamic, permission-aware SKILL.md generation for AI agent integration
-- One-liner:
-- One-liner:
-- What was built:
-- 文件：
-- Status
-- 文件：
-- 規劃時間:
-- One-liner:
-- One-liner:
-- Table and column-level data blacklist with O(1) Set/Map lookups, CLI management commands, i18n security notifications, and 83 new tests covering all scenarios
-- One-liner:
-- One-liner:
+---
+
+## v0.1.0-beta — Core Functionality + i18n + Schema Optimization (Shipped: 2026-03-26)
+
+**Scope:** Phases 1-12 (12 phases, 25 plans)
+
+**Key accomplishments:**
+- Full database CLI: init, list, schema, query, insert, update, delete, export
+- Multi-database support (PostgreSQL, MySQL, MariaDB)
+- Permission-based access control (Query-only, Read-Write, Admin)
+- AI integration with dynamic SKILL.md generation
+- Schema optimization with LRU cache, atomic updates, concurrent safety
+- i18n system (English primary + Traditional Chinese)
+- npm-published package, cross-platform CI/CD
 
 ---

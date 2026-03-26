@@ -45,7 +45,7 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] Support cross-platform AI agent usage
 - [x] Skill dynamically reflects dbcli capabilities
 
-**Data Access Control** — v14.0 (Phase 13)
+**Data Access Control** — v0.2.0-beta (Phase 13)
 - [x] Table-level blacklisting (reject all operations on blacklisted tables)
 - [x] Column-level blacklisting (omit blacklisted columns from SELECT)
 - [x] CLI commands for blacklist management (list, add, remove)
@@ -97,22 +97,22 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | CLI-first, not MPC | Need to support Claude Code, Gemini, Copilot, Cursor — a single MCP wouldn't cover all. CLI + skill is more portable. | ✓ Good — enables maximum platform support |
-| Coarse-grained permissions | Fine-grained (per-table, per-column) is complex for V1. Coarse roles are sufficient to prevent accidental writes. | ✓ Extended — v14.0 added table/column blacklisting on top of coarse roles |
+| Coarse-grained permissions | Fine-grained (per-table, per-column) is complex for V1. Coarse roles are sufficient to prevent accidental writes. | ✓ Extended — v0.2.0-beta added table/column blacklisting on top of coarse roles |
 | Hybrid init (read .env first) | Minimizes manual input for developers who already have .env. Falls back to prompts for missing values. | — Pending — validate UX in real usage |
 | JSON for .dbcli config | Human-readable, widely supported, DB-system-aware (parameters differ per DB). | — Pending — may add YAML alternative if requested |
 | Single connection in V1 | Multi-connection adds complexity. Most projects use one primary DB. Can add in V2 if needed. | — Pending |
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
-| Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v14.0 shipped; consider RBAC if needed later |
+| Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v14.0 — Phase 13 Complete)
+## Current State (v0.2.0-beta — Phase 13 Complete)
 
-**Latest Release:** v14.0 (2026-03-26)
+**Latest Release:** v0.2.0-beta (2026-03-26)
 - ✅ Phase 13 complete: 3 plans executed (1 core + 2 gap closure), verification passed 10/10
 - ✅ 230+ tests passing, 83 new blacklist tests added
 - ✅ Table and column-level blacklisting fully operational end-to-end
 - ✅ All 8 requirements satisfied (BL-01 through BL-04, NF-01 through NF-04)
 
-**What's Shipped (v14.0):**
+**What's Shipped (v0.2.0-beta):**
 1. Table-level blacklist — reject all operations on blacklisted tables
 2. Column-level blacklist — omit blacklisted columns from SELECT results
 3. CLI management commands: `blacklist list`, `blacklist table add/remove`, `blacklist column add/remove`
@@ -120,7 +120,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 5. Context-aware override via `DBCLI_OVERRIDE_BLACKLIST` environment variable
 6. Performance: < 1ms overhead per query (7 benchmarks verified)
 
-**What's Shipped (v13.0 and prior):**
+**What's Shipped (v0.1.0-beta and prior):**
 1. Full database CLI with init, list, schema, query, insert, update, delete, export
 2. Multi-database support (PostgreSQL, MySQL, MariaDB)
 3. Permission-based access control (Query-only, Read-Write, Admin)
@@ -128,9 +128,9 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 5. Schema optimization with LRU cache, atomic updates, and concurrent safety
 6. npm-published package, cross-platform CI/CD
 
-**See:** [v13.0 Milestone Summary](reports/MILESTONE_SUMMARY-v13.0.md) | [Audit Report](MILESTONE-AUDIT.md)
+**See:** [v0.1.0-beta Milestone Summary](reports/MILESTONE_SUMMARY-v13.0.md) | [Audit Report](MILESTONE-AUDIT.md)
 
-## Next Milestone Goals (v15.0+)
+## Next Milestone Goals
 
 Potential directions (prioritize based on usage and feedback):
 
@@ -165,7 +165,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (v1.0, v13.0, v14.0, etc.):
+**After each milestone** (v0.1.0-beta, v0.2.0-beta, etc.):
 1. Archive milestone roadmap and requirements
 2. Full review of all sections
 3. Core Value check — still the right priority?
@@ -175,4 +175,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-03-26 after v14.0 milestone completion*
+*Last updated: 2026-03-26 after v0.2.0-beta milestone completion*

@@ -1,0 +1,26 @@
+{
+  "connection": {
+    "system": "mysql",
+    "host": {
+      "$env": "DB_HOST"
+    },
+    "port": {
+      "$env": "DB_PORT"
+    },
+    "user": {
+      "$env": "DB_USER"
+    },
+    "password": {
+      "$env": "DB_PASSWORD"
+    },
+    "database": {
+      "$env": "DB_NAME"
+    }
+  },
+  "permission": "query-only",
+  "schema": {},
+  "metadata": {
+    "version": "1.0",
+    "createdAt": "2026-03-26T03:18:29.652Z"
+  }
+}

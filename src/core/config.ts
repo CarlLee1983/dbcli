@@ -34,6 +34,76 @@ const DEFAULT_CONFIG: DbcliConfig = {
 }
 
 /**
+ * 環境變量引用介面
+ * 支持 { "$env": "ENV_VAR_NAME" } 的引用語法
+ */
+interface EnvReference {
+  $env: string
+}
+
+/**
+ * 檢查值是否為環境變量引用
+ */
+function isEnvReference(value: unknown): value is EnvReference {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '$env' in value &&
+    typeof (value as EnvReference).$env === 'string'
+  )
+}
+
+/**
+ * 遞迴解析和替換配置中的環境變量引用
+ * 支持嵌套物件和陣列
+ * 自動轉換類型（port 應轉為數字）
+ *
+ * @param config - 要解析的配置物件
+ * @param env - 環境變量對象（通常是 process.env）
+ * @param parentKey - 父物件的鍵名（用於類型推斷）
+ * @returns 解析後的配置
+ * @throws ConfigError 如果環境變量未找到
+ */
+function resolveEnvReferences(config: any, env: Record<string, string>, parentKey?: string): any {
+  if (isEnvReference(config)) {
+    const envKey = config.$env
+    const value = env[envKey]
+    if (!value) {
+      throw new ConfigError(
+        `環境變量未定義: ${envKey}\n` +
+        `請在 .env 或環境變量中設置 ${envKey}。\n` +
+        `提示: 檢查 .env 文件或執行 'export ${envKey}=<值>'`
+      )
+    }
+
+    // 根據鍵名進行類型轉換
+    if (parentKey === 'port') {
+      const portNum = parseInt(value, 10)
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        throw new ConfigError(`${envKey} 必須是有效的端口號 (1-65535)，得到: ${value}`)
+      }
+      return portNum
+    }
+
+    return value
+  }
+
+  if (Array.isArray(config)) {
+    return config.map(item => resolveEnvReferences(item, env, parentKey))
+  }
+
+  if (typeof config === 'object' && config !== null) {
+    const resolved: any = {}
+    for (const [key, value] of Object.entries(config)) {
+      resolved[key] = resolveEnvReferences(value, env, key)
+    }
+    return resolved
+  }
+
+  return config
+}
+
+/**
  * 從 .env 格式檔案中提取密碼
  */
 function parseEnvPassword(content: string): string | null {
@@ -76,18 +146,21 @@ export const configModule = {
           const content = await configFile.text()
           const config = JSON.parse(content)
 
-          // 嘗試讀取 .env.local 中的敏感信息
+          // 解析環境變量引用 { "$env": "KEY" }
+          const resolvedConfig = resolveEnvReferences(config, process.env)
+
+          // 嘗試讀取 .env.local 中的敏感信息（舊方式，保持向後相容）
           const envPath = join(path, '.env.local')
           const envFile = Bun.file(envPath)
           if (await envFile.exists()) {
             const envContent = await envFile.text()
             const password = parseEnvPassword(envContent)
-            if (password) {
-              config.connection.password = password
+            if (password && !resolvedConfig.connection.password) {
+              resolvedConfig.connection.password = password
             }
           }
 
-          return DbcliConfigSchema.parse(config)
+          return DbcliConfigSchema.parse(resolvedConfig)
         }
       }
 
@@ -98,7 +171,9 @@ export const configModule = {
       if (exists) {
         const content = await file.text()
         const raw = JSON.parse(content)
-        return DbcliConfigSchema.parse(raw)
+        // 解析環境變量引用
+        const resolved = resolveEnvReferences(raw, process.env)
+        return DbcliConfigSchema.parse(resolved)
       }
 
       // 都不存在，返回預設配置
@@ -195,27 +270,37 @@ export const configModule = {
 
       // 目錄方式：分離 config 和 .env.local
       if (isDirectory || path.endsWith('.dbcli')) {
-        // 提取密碼
-        const password = config.connection.password
-        const configWithoutPassword = {
-          ...config,
-          connection: {
-            ...config.connection,
-            password: undefined
+        // 檢查是否使用環境變量引用（password 是 { "$env": "..." } 對象）
+        const hasEnvReferences = isEnvReference((config.connection as any).password)
+
+        if (hasEnvReferences) {
+          // 新方式：使用環境變量引用，直接寫入 config.json
+          const configPath = join(path, 'config.json')
+          const configJson = JSON.stringify(config, null, 2)
+          await Bun.file(configPath).write(configJson)
+        } else {
+          // 舊方式：密碼分離到 .env.local
+          const password = config.connection.password
+          const configWithoutPassword = {
+            ...config,
+            connection: {
+              ...config.connection,
+              password: undefined
+            }
           }
-        }
-        delete (configWithoutPassword.connection as any).password
+          delete (configWithoutPassword.connection as any).password
 
-        // 寫入 config.json（不含密碼）
-        const configPath = join(path, 'config.json')
-        const configJson = JSON.stringify(configWithoutPassword, null, 2)
-        await Bun.file(configPath).write(configJson)
+          // 寫入 config.json（不含密碼）
+          const configPath = join(path, 'config.json')
+          const configJson = JSON.stringify(configWithoutPassword, null, 2)
+          await Bun.file(configPath).write(configJson)
 
-        // 寫入 .env.local（密碼）
-        if (password) {
-          const envPath = join(path, '.env.local')
-          const envContent = `# 資料庫敏感信息 - 請勿提交到 git\n# Database Credentials - DO NOT commit to git\n\nDBCLI_PASSWORD=${password}\n`
-          await Bun.file(envPath).write(envContent)
+          // 寫入 .env.local（密碼）
+          if (password) {
+            const envPath = join(path, '.env.local')
+            const envContent = `# 資料庫敏感信息 - 請勿提交到 git\n# Database Credentials - DO NOT commit to git\n\nDBCLI_PASSWORD=${password}\n`
+            await Bun.file(envPath).write(envContent)
+          }
         }
       } else {
         // 舊式檔案方式（向後相容）

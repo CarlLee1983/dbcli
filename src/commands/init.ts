@@ -30,6 +30,8 @@ export const initCommand = new Command('init')
   .option('--name <name>', 'Database name')
   .option('--system <system>', 'Database system (postgresql, mysql, mariadb)')
   .option('--permission <permission>', 'Permission level (query-only, read-write, admin)', 'query-only')
+  .option('--use-env-refs', 'Generate config with environment variable references (for .env)', false)
+  .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
   .action(async (options) => {
@@ -158,9 +160,22 @@ async function initCommandHandler(
     throw new Error(`無效的權限級別: ${permission}`)
   }
 
-  // 6. 合併新配置
+  // 6. 如果啟用 --use-env-refs，轉換為環境變量引用
+  let configForWrite = connection as ConnectionConfig
+
+  if (options.useEnvRefs) {
+    configForWrite = {
+      system: connection.system as 'postgresql' | 'mysql' | 'mariadb',
+      host: { $env: 'DB_HOST' } as any,
+      port: { $env: 'DB_PORT' } as any,
+      user: { $env: 'DB_USER' } as any,
+      password: { $env: 'DB_PASSWORD' } as any,
+      database: { $env: 'DB_NAME' } as any
+    }
+  }
+
   const newConfig = configModule.merge(existingConfig, {
-    connection: connection as ConnectionConfig,
+    connection: configForWrite,
     permission: permission as 'query-only' | 'read-write' | 'admin'
   })
 
@@ -182,26 +197,49 @@ async function initCommandHandler(
     }
   }
 
-  // 8. 測試資料庫連接
-  console.log('測試資料庫連接...')
-  const adapter = AdapterFactory.createAdapter(newConfig.connection)
+  // 8. 測試資料庫連接（除非 --skip-test）
+  if (!options.skipTest) {
+    console.log('測試資料庫連接...')
 
-  try {
-    await adapter.connect()
-    const isHealthy = await adapter.testConnection()
-    if (isHealthy) {
-      console.log('✓ 資料庫連接成功')
+    // 解析實際的連接參數（處理環境變量引用）
+    const resolveValue = (value: any): string | number => {
+      if (typeof value === 'object' && value !== null && '$env' in value) {
+        const envKey = value.$env
+        return process.env[envKey] || ''
+      }
+      return value
     }
-  } catch (error) {
-    if (error instanceof ConnectionError) {
-      console.error(`✗ 連接失敗: ${error.message}`)
-      console.error('提示:')
-      error.hints.forEach((hint) => console.error(`  • ${hint}`))
-      process.exit(1)
+
+    const testConnection: ConnectionConfig = {
+      system: newConfig.connection.system,
+      host: String(resolveValue(newConfig.connection.host)),
+      port: parseInt(String(resolveValue(newConfig.connection.port)), 10) || 5432,
+      user: String(resolveValue(newConfig.connection.user)),
+      password: String(resolveValue(newConfig.connection.password)) || '',
+      database: String(resolveValue(newConfig.connection.database))
     }
-    throw error
-  } finally {
-    await adapter.disconnect()
+
+    const adapter = AdapterFactory.createAdapter(testConnection)
+
+    try {
+      await adapter.connect()
+      const isHealthy = await adapter.testConnection()
+      if (isHealthy) {
+        console.log('✓ 資料庫連接成功')
+      }
+    } catch (error) {
+      if (error instanceof ConnectionError) {
+        console.error(`✗ 連接失敗: ${error.message}`)
+        console.error('提示:')
+        error.hints.forEach((hint) => console.error(`  • ${hint}`))
+        process.exit(1)
+      }
+      throw error
+    } finally {
+      await adapter.disconnect()
+    }
+  } else {
+    console.log('⏭️  跳過連接測試（--skip-test）')
   }
 
   // 9. 寫入配置

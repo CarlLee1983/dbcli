@@ -142,27 +142,37 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     }
 
     try {
-      // Query pg_stat_user_tables to get table list and row count estimates
+      // Query pg_class to get tables and views with estimated row counts
       const query = `
         SELECT
-          schemaname,
-          relname as table_name,
-          n_live_tup as row_count
-        FROM pg_stat_user_tables
-        ORDER BY relname
+          c.relname as table_name,
+          c.reltuples::bigint as estimated_rows,
+          CASE c.relkind
+            WHEN 'r' THEN 'table'
+            WHEN 'v' THEN 'view'
+            WHEN 'm' THEN 'view'
+            ELSE 'table'
+          END as table_type
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relkind IN ('r', 'v', 'm')
+        ORDER BY c.relname
       `
 
       const results = await this.execute<{
-        schemaname: string
         table_name: string
-        row_count: number | null
+        estimated_rows: number | null
+        table_type: string
       }>(query)
 
       return results.map((row) => ({
         name: row.table_name,
         columns: [],
-        rowCount: row.row_count || 0,
-        engine: 'PostgreSQL'
+        rowCount: Math.max(0, row.estimated_rows || 0),
+        engine: 'PostgreSQL',
+        estimatedRowCount: Math.max(0, row.estimated_rows || 0),
+        tableType: row.table_type as 'table' | 'view'
       }))
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
@@ -186,7 +196,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     }
 
     try {
-      // Query information_schema for column details
+      // Query information_schema for column details including autoIncrement and comment
       const columnQuery = `
         SELECT
           c.column_name as name,
@@ -198,16 +208,21 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
               SELECT 1 FROM information_schema.table_constraints tc
               JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
-              WHERE tc.table_name = t.table_name
+              WHERE tc.table_name = $1
+                AND tc.table_schema = 'public'
                 AND tc.constraint_type = 'PRIMARY KEY'
                 AND kcu.column_name = c.column_name
             )
-          ) as is_primary_key
+          ) as is_primary_key,
+          (c.column_default LIKE 'nextval%') as auto_increment,
+          pgd.description as comment
         FROM information_schema.columns c
-        JOIN information_schema.tables t
-          ON c.table_name = t.table_name
+        LEFT JOIN pg_catalog.pg_statio_all_tables st
+          ON st.schemaname = c.table_schema AND st.relname = c.table_name
+        LEFT JOIN pg_catalog.pg_description pgd
+          ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position
         WHERE c.table_name = $1
-          AND t.table_schema = 'public'
+          AND c.table_schema = 'public'
         ORDER BY c.ordinal_position
       `
 
@@ -217,7 +232,32 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         nullable: boolean
         default_value: string | null
         is_primary_key: boolean
+        auto_increment: boolean
+        comment: string | null
       }>(columnQuery, [tableName])
+
+      // Query enum values for columns with enum types
+      const enumQuery = `
+        SELECT
+          c.column_name as name,
+          array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
+        FROM information_schema.columns c
+        JOIN pg_type t ON t.typname = c.udt_name
+        JOIN pg_enum e ON e.enumtypid = t.oid
+        WHERE c.table_name = $1
+          AND c.table_schema = 'public'
+        GROUP BY c.column_name
+      `
+
+      const enumResults = await this.execute<{
+        name: string
+        enum_values: string[]
+      }>(enumQuery, [tableName])
+
+      const enumMap = new Map<string, string[]>()
+      for (const row of enumResults) {
+        enumMap.set(row.name, Array.isArray(row.enum_values) ? row.enum_values : [])
+      }
 
       // Extract foreign key constraints
       const fkQuery = `
@@ -249,6 +289,39 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           fkMap.set(fk.columns[0], { table: fk.ref_table, column: fk.ref_columns[0] })
         }
       }
+
+      // Query non-primary indexes
+      const indexQuery = `
+        SELECT
+          i.relname as name,
+          array_agg(a.attname ORDER BY array_position(ix.indkey, a.attnum)) as columns,
+          ix.indisunique as is_unique
+        FROM pg_index ix
+        JOIN pg_class t ON t.oid = ix.indrelid
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        WHERE t.relname = $1
+          AND n.nspname = 'public'
+          AND NOT ix.indisprimary
+        GROUP BY i.relname, ix.indisunique
+      `
+
+      const indexResults = await this.execute<{
+        name: string
+        columns: string[]
+        is_unique: boolean
+      }>(indexQuery, [tableName])
+
+      // Get estimated row count from pg_class
+      const estimateQuery = `
+        SELECT reltuples::bigint as estimated_rows
+        FROM pg_class
+        WHERE relname = $1
+      `
+      const estimateResults = await this.execute<{ estimated_rows: number | null }>(
+        estimateQuery, [tableName]
+      )
 
       // Extract primary key constraint
       const pkQuery = `
@@ -290,12 +363,21 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           nullable: col.nullable,
           default: col.default_value || undefined,
           primaryKey: col.is_primary_key,
-          foreignKey: fkMap.get(col.name)
+          foreignKey: fkMap.get(col.name),
+          autoIncrement: col.auto_increment,
+          comment: col.comment || null,
+          enumValues: enumMap.get(col.name)
         })),
         rowCount: countResult[0]?.count || 0,
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
-        foreignKeys: safeForeignKeys
+        foreignKeys: safeForeignKeys,
+        indexes: indexResults.map(idx => ({
+          name: idx.name,
+          columns: Array.isArray(idx.columns) ? idx.columns : [],
+          unique: idx.is_unique
+        })),
+        estimatedRowCount: Math.max(0, estimateResults[0]?.estimated_rows || 0)
       }
 
       return schema

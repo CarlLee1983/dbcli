@@ -60,7 +60,7 @@ export class TableListFormatter implements OutputFormatter<TableSchema[]> {
     tables.forEach(t => {
       table.push([
         t.name,
-        t.columns.length.toString(),
+        (t.columnCount ?? t.columns.length).toString(),
         (t.rowCount ?? '?').toString(),
         t.engine || 'N/A'
       ])

@@ -180,7 +180,8 @@ export class MySQLAdapter implements DatabaseAdapter {
 
       return results.map((row) => ({
         name: row.table_name,
-        columns: Array(row.column_count).fill(null),
+        columns: [],
+        columnCount: row.column_count,
         rowCount: row.row_count || 0,
         engine: row.engine,
         estimatedRowCount: row.row_count || 0,

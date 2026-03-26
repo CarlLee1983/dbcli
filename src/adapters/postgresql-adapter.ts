@@ -152,7 +152,9 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
             WHEN 'v' THEN 'view'
             WHEN 'm' THEN 'view'
             ELSE 'table'
-          END as table_type
+          END as table_type,
+          (SELECT COUNT(*) FROM information_schema.columns ic
+           WHERE ic.table_schema = 'public' AND ic.table_name = c.relname)::int as column_count
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public'
@@ -164,11 +166,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         table_name: string
         estimated_rows: number | null
         table_type: string
+        column_count: number
       }>(query)
 
       return results.map((row) => ({
         name: row.table_name,
         columns: [],
+        columnCount: row.column_count,
         rowCount: Math.max(0, row.estimated_rows || 0),
         engine: 'PostgreSQL',
         estimatedRowCount: Math.max(0, row.estimated_rows || 0),

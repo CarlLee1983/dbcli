@@ -77,6 +77,8 @@ export interface TableSchema {
     columns: string[]
     unique: boolean
   }>
+  /** Column count (used by listTables when full column details are not loaded) */
+  columnCount?: number
   /** Estimated row count in table */
   estimatedRowCount?: number
   /** Type of table (table or view) */

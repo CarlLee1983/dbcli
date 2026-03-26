@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "0.3.1-beta",
+  "version": "0.3.2-beta",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -15,6 +15,7 @@
   },
   "files": [
     "dist/",
+    "assets/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

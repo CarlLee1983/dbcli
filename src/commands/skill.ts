@@ -8,8 +8,24 @@ import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
 import type { Command } from 'commander'
 
-/** 靜態 SKILL.md 的絕對路徑（基於專案根目錄） */
-const SKILL_SOURCE_PATH = path.resolve(import.meta.dir, '../../assets/SKILL.md')
+/**
+ * 找到 package root（包含 package.json 的目錄）
+ * 支援開發模式（src/commands/）和 bundle 模式（dist/）
+ */
+function findPackageRoot(): string {
+  let dir = import.meta.dir
+  for (let i = 0; i < 5; i++) {
+    if (Bun.file(path.join(dir, 'package.json')).size > 0) {
+      return dir
+    }
+    dir = path.dirname(dir)
+  }
+  // fallback: 從 import.meta.dir 往上兩層（開發模式 src/commands/ → root）
+  return path.resolve(import.meta.dir, '../..')
+}
+
+/** 靜態 SKILL.md 的絕對路徑（基於 package root） */
+const SKILL_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'SKILL.md')
 
 export interface SkillOptions {
   install?: string  // 平台: claude, gemini, copilot, cursor

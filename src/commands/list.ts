@@ -56,8 +56,16 @@ async function listAction(options: { format: string; config: string }) {
 
       // 根據 --format 選項格式化輸出
       if (options.format === 'json') {
-        const formatter = new JSONFormatter()
-        console.log(formatter.format(tables, { compact: false }))
+        // list 輸出精簡版：用 columnCount 取代空的 columns 陣列
+        const listOutput = tables.map(t => ({
+          name: t.name,
+          columnCount: t.columnCount ?? t.columns.length,
+          rowCount: t.rowCount ?? 0,
+          engine: t.engine,
+          estimatedRowCount: t.estimatedRowCount ?? t.rowCount ?? 0,
+          tableType: t.tableType ?? 'table'
+        }))
+        console.log(JSON.stringify(listOutput, null, 2))
       } else {
         const formatter = new TableListFormatter()
         console.log(formatter.format(tables))

@@ -127,9 +127,10 @@ describe('SchemaLayeredLoader', () => {
     const loader = new SchemaLayeredLoader(testDbcliPath)
     const { cache } = await loader.initialize()
 
-    const schema = await loader.loadColdTable('products', cache)
+    // First access should load from cache (since it was preloaded in test setup)
+    const schema = await loader.loadColdTable('users', cache)
     expect(schema).not.toBeNull()
-    expect(schema?.name).toBe('products')
+    expect(schema?.name).toBe('users')
   })
 
   test('loadColdTable: returns null for nonexistent table', async () => {

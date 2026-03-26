@@ -3,6 +3,10 @@
 .env.*.local
 credentials.json
 
+# 配置檔案 - 包含本地數據庫憑證
+config.json
+schema.json
+
 # 暫存檔案
 *.tmp
 *.bak

@@ -1,67 +1,59 @@
 # dbcli — Database CLI for AI Agents
 
-## Current Milestone: v14.0 — Data Access Control & Sensitive Data Protection
-
-**Goal:** Implement table and column-level blacklisting to prevent AI agents from querying or modifying sensitive data.
-
-**Target Features:**
-- Table-level blacklist (block all operations on specific tables)
-- Column-level blacklist (hide specific columns from query results)
-- Flexible configuration via `.dbcli` config + CLI commands
-- Security notifications in CLI output footer
-- Context-aware overrides for blacklist rules
-
----
-
 ## What This Is
 
-dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Gemini, Copilot, Cursor) to safely query, discover, and operate on databases. It acts as a bridge between AI agents and multiple database systems (PostgreSQL, MySQL, MariaDB), abstracting away connection complexity and enforcing permission-based access control. Developers initialize once per project, then AI agents can intelligently interact with the database without requiring manual schema discovery or SQL syntax knowledge.
+dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Gemini, Copilot, Cursor) to safely query, discover, and operate on databases. It acts as a bridge between AI agents and multiple database systems (PostgreSQL, MySQL, MariaDB), abstracting away connection complexity, enforcing permission-based access control, and protecting sensitive data via table/column blacklisting. Developers initialize once per project, then AI agents can intelligently interact with the database without requiring manual schema discovery or SQL syntax knowledge.
 
 ## Core Value
 
-**AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool.**
+**AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.**
 
-Everything else (multi-connection, audit logging, advanced features) can be deferred. This core must work flawlessly for V1 to succeed.
+Everything else (multi-connection, audit logging, advanced features) can be deferred. This core must work flawlessly.
 
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+**Initialization & Configuration** — v1.0 (Phases 1-4)
+- [x] `dbcli init` — Hybrid mode (read .env first, prompt for missing values)
+- [x] Support mixed DB system configuration (PostgreSQL, MySQL, MariaDB)
+- [x] Parse project .env files automatically
+- [x] Store configuration in `.dbcli` (JSON format, DB-system-aware)
+- [x] Define coarse-grained permissions: Query-only / Read-Write / Admin
+
+**Schema Discovery & Storage** — v1.0 (Phases 5, 8)
+- [x] `dbcli schema [table]` — Retrieve single table structure
+- [x] `dbcli list` — List all tables
+- [x] Auto-generate `.dbcli` with table structures and relationships
+- [x] Support incremental schema refresh
+
+**Query Operations** — v1.0 (Phase 6)
+- [x] `dbcli query "SELECT ..."` — Direct SQL query execution
+- [x] Respect permission levels (reject writes on Query-only mode)
+- [x] Return results in structured format (table, JSON, CSV)
+- [x] Provide helpful error messages for failed queries
+
+**Data Modification** — v1.0 (Phase 7)
+- [x] `dbcli insert [table]` — Insert data (Auth required, permission-checked)
+- [x] `dbcli update [table]` — Update data (Auth required, permission-checked)
+
+**Export** — v1.0 (Phase 8)
+- [x] `dbcli export "SELECT ..." --format json|csv` — Export query results
+
+**AI Integration** — v1.0 (Phase 9)
+- [x] Create dbcli skill documentation (Claude Code compatible)
+- [x] Support cross-platform AI agent usage
+- [x] Skill dynamically reflects dbcli capabilities
+
+**Data Access Control** — v14.0 (Phase 13)
+- [x] Table-level blacklisting (reject all operations on blacklisted tables)
+- [x] Column-level blacklisting (omit blacklisted columns from SELECT)
+- [x] CLI commands for blacklist management (list, add, remove)
+- [x] Security notifications in output (table, CSV, JSON formats)
 
 ### Active
 
-**Initialization & Configuration**
-- [ ] `dbcli init` — Hybrid mode (read .env first, prompt for missing values)
-- [ ] Support mixed DB system configuration (PostgreSQL, MySQL, MariaDB)
-- [ ] Parse project .env files automatically
-- [ ] Store configuration in `.dbcli` (JSON format, DB-system-aware)
-- [ ] Define coarse-grained permissions: Query-only / Read-Write / Admin
-
-**Schema Discovery & Storage**
-- [ ] `dbcli schema [table]` — Retrieve single table structure
-- [ ] `dbcli list` — List all tables
-- [ ] Auto-generate `.dbcli` with table structures and relationships
-- [ ] Support incremental schema refresh
-
-**Query Operations**
-- [ ] `dbcli query "SELECT ..."` — Direct SQL query execution
-- [ ] Respect permission levels (reject writes on Query-only mode)
-- [ ] Return results in structured format (for AI parsing)
-- [ ] Provide helpful error messages for failed queries
-
-**Data Modification (with safeguards)**
-- [ ] `dbcli insert [table]` — Insert data (requires Auth, permission-checked)
-- [ ] `dbcli update [table]` — Update data (requires Auth, permission-checked)
-- [ ] Return confirmation and row count
-
-**Export**
-- [ ] `dbcli export "SELECT ..." [--format json|csv]` — Export query results
-
-**AI Integration**
-- [ ] Create dbcli skill documentation (Claude Code compatible)
-- [ ] Support cross-platform AI agent usage (Claude Code, Gemini, Copilot CLI, Cursor, IDEs)
-- [ ] Skill dynamically reflects dbcli capabilities
+(No active requirements — milestone complete. Define next milestone with `/gsd:new-milestone`.)
 
 ### Out of Scope (V1)
 
@@ -97,8 +89,8 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 - **Package Distribution**: npm (locked)
 - **Cross-Platform**: Must work on macOS, Linux, Windows
 - **Multi-DB Support**: PostgreSQL, MySQL, MariaDB in V1
-- **Permission Model**: Coarse-grained roles (Query-only, Read-Write, Admin)
-- **AI Safety**: SQL execution must respect permission levels — no bypass even for root connections
+- **Permission Model**: Coarse-grained roles (Query-only, Read-Write, Admin) + table/column blacklisting
+- **AI Safety**: SQL execution must respect permission levels and blacklist rules — no bypass even for root connections
 
 ## Key Decisions
 
@@ -110,6 +102,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | JSON for .dbcli config | Human-readable, widely supported, DB-system-aware (parameters differ per DB). | — Pending — may add YAML alternative if requested |
 | Single connection in V1 | Multi-connection adds complexity. Most projects use one primary DB. Can add in V2 if needed. | — Pending |
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
+| Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v14.0 shipped; consider RBAC if needed later |
 
 ## Current State (v14.0 — Phase 13 Complete)
 
@@ -137,7 +130,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 
 **See:** [v13.0 Milestone Summary](reports/MILESTONE_SUMMARY-v13.0.md) | [Audit Report](MILESTONE-AUDIT.md)
 
-## Next Milestone Goals (v14.0+)
+## Next Milestone Goals (v15.0+)
 
 Potential directions (prioritize based on usage and feedback):
 
@@ -182,4 +175,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-03-26 after v14.0 Phase 13 completion*
+*Last updated: 2026-03-26 after v14.0 milestone completion*

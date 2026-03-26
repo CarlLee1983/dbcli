@@ -240,15 +240,11 @@ export class MySQLAdapter implements DatabaseAdapter {
         }
       }
 
-      // Extract primary key columns
-      const pkQuery = `
-        SELECT COLUMN_NAME
-        FROM information_schema.KEY_COLUMN_USAGE
-        WHERE TABLE_NAME = ? AND COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = DATABASE()
-        ORDER BY ORDINAL_POSITION
-      `
-
-      const pkResults = await this.execute<{ COLUMN_NAME: string }>(pkQuery, [tableName])
+      // Extract primary key columns from already-fetched column data
+      // (COLUMN_KEY is only available in COLUMNS table, not KEY_COLUMN_USAGE)
+      const primaryKeyColumns = columns
+        .filter(col => col.is_primary_key)
+        .map(col => col.name)
 
       // Get row count
       const countResult = await this.execute<{ count: number }>(
@@ -276,7 +272,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         })),
         rowCount: countResult[0]?.count || 0,
         engine: tableResults[0]?.engine || 'MySQL',
-        primaryKey: pkResults.map(r => r.COLUMN_NAME),
+        primaryKey: primaryKeyColumns,
         foreignKeys: fkResults.map(fk => ({
           name: fk.name,
           columns: fk.columns.split(',').map(c => c.trim()),

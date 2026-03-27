@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import pkg from '../package.json'
 import { t } from './i18n/message-loader'
+import { createLogger, setGlobalLogger, LogLevel } from './utils/logger'
 import { initCommand } from './commands/init'
 import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
@@ -19,7 +20,31 @@ const program = new Command()
   .name('dbcli')
   .description('Database CLI for AI agents')
   .version(pkg.version)
+  .option('--no-color', 'Disable colored output')
+  .option('-v, --verbose', 'Increase verbosity (-v verbose, -vv debug)', (_, prev) => prev + 1, 0)
+  .option('-q, --quiet', 'Suppress non-essential output')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+
+program.hook('preAction', (thisCommand) => {
+  const opts = thisCommand.opts()
+
+  // Handle --no-color: set env var before picocolors reads it
+  if (opts.color === false) {
+    process.env.NO_COLOR = '1'
+  }
+
+  // Handle -q / -v / -vv
+  let level = LogLevel.NORMAL
+  if (opts.quiet) {
+    level = LogLevel.QUIET
+  } else if (opts.verbose >= 2) {
+    level = LogLevel.DEBUG
+  } else if (opts.verbose >= 1) {
+    level = LogLevel.VERBOSE
+  }
+
+  setGlobalLogger(createLogger(level))
+})
 
 // Register commands
 program.addCommand(initCommand)

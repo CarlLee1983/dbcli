@@ -4,6 +4,7 @@
  */
 
 import type { ColumnSchema, TableSchema } from '../adapters/types'
+import { colors } from '../utils/colors'
 
 // Using require for cli-table3 due to CommonJS export
 const Table = require('cli-table3')
@@ -19,7 +20,7 @@ export interface OutputFormatter<T> {
 export class TableFormatter implements OutputFormatter<ColumnSchema[]> {
   format(columns: ColumnSchema[]): string {
     const table = new Table({
-      head: ['Column', 'Type', 'Nullable', 'Default', 'Key'],
+      head: ['Column', 'Type', 'Nullable', 'Default', 'Key'].map(h => colors.bold(h)),
       style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
       colWidths: [25, 25, 10, 25, 20]
     })
@@ -52,7 +53,7 @@ export class TableFormatter implements OutputFormatter<ColumnSchema[]> {
 export class TableListFormatter implements OutputFormatter<TableSchema[]> {
   format(tables: TableSchema[]): string {
     const table = new Table({
-      head: ['Table', 'Columns', 'Rows', 'Engine'],
+      head: ['Table', 'Columns', 'Rows', 'Engine'].map(h => colors.bold(h)),
       style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
       colWidths: [30, 12, 15, 15]
     })

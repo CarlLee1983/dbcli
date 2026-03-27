@@ -8,7 +8,7 @@
     "prompt_user": "Database user: ",
     "prompt_password": "Database password: ",
     "prompt_name": "Database name: ",
-    "prompt_permission": "Permission level (query-only, read-write, admin): ",
+    "prompt_permission": "Permission level (query-only, read-write, data-admin, admin): ",
     "env_parse_note": "Note: Unable to parse .env configuration, using interactive prompts",
     "connection_testing": "Testing database connection...",
     "connection_success": "✓ Database connection successful",
@@ -77,7 +77,7 @@
     "description": "Delete data from a table",
     "prompt_where": "Enter WHERE clause (e.g., id=1): ",
     "confirm": "Delete rows from {table}? (y/n): ",
-    "admin_only": "Delete command requires admin permission"
+    "admin_only": "Delete command requires data-admin or admin permission"
   },
   "export": {
     "description": "Export query results",

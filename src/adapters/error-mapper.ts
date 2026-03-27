@@ -26,13 +26,13 @@ export function mapError(
   if (errCode === 'ECONNREFUSED' || errMsg.includes('refused')) {
     return new ConnectionError(
       'ECONNREFUSED',
-      `無法連接至 ${options.host}:${options.port} — 伺服器未運行或未監聽該埠號`,
+      `Cannot connect to ${options.host}:${options.port} — server is not running or not listening on this port`,
       [
-        `確認 ${system} 服務已啟動: ${
+        `Check that the ${system} service is running: ${
           system === 'postgresql' ? 'systemctl status postgresql' : 'systemctl status mysql'
         }`,
-        `確認埠號正確: ${system === 'postgresql' ? '預設 5432' : '預設 3306'}`,
-        `檢查 ${options.host} 是否可達: ping ${options.host} 或 telnet ${options.host} ${options.port}`,
+        `Verify the port is correct: ${system === 'postgresql' ? 'default 5432' : 'default 3306'}`,
+        `Check that ${options.host} is reachable: ping ${options.host} or telnet ${options.host} ${options.port}`,
       ]
     )
   }
@@ -41,11 +41,11 @@ export function mapError(
   if (errCode === 'ETIMEDOUT' || errMsg.includes('timeout') || errMsg.includes('timed out')) {
     return new ConnectionError(
       'ETIMEDOUT',
-      `連接超時 (${options.timeout || 5000}ms) — 可能是防火牆阻擋或網路延遲`,
+      `Connection timed out (${options.timeout || 5000}ms) — may be blocked by a firewall or slow network`,
       [
-        `檢查防火牆: ${system === 'postgresql' ? '允許 TCP 5432' : '允許 TCP 3306'}`,
-        `增加超時時間: 編輯 .dbcli 並新增 "timeout": 15000`,
-        `確認網路連接: ping ${options.host} -c 3`,
+        `Check firewall rules: ${system === 'postgresql' ? 'allow TCP 5432' : 'allow TCP 3306'}`,
+        `Increase timeout: edit .dbcli and add "timeout": 15000`,
+        `Verify network connectivity: ping ${options.host} -c 3`,
       ]
     )
   }
@@ -60,15 +60,15 @@ export function mapError(
   ) {
     return new ConnectionError(
       'AUTH_FAILED',
-      `認證失敗 — 檢查使用者名稱或密碼`,
+      `Authentication failed — check your username or password`,
       [
-        `驗證認證: ${
+        `Verify credentials: ${
           system === 'postgresql'
             ? `psql -U ${options.user} -h ${options.host}`
             : `mysql -u ${options.user} -h ${options.host}`
         }`,
-        `檢查 pg_hba.conf (PostgreSQL) 或 user privileges (MySQL)`,
-        `重新執行 dbcli init 以更新認證`,
+        `Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)`,
+        `Re-run dbcli init to update credentials`,
       ]
     )
   }
@@ -77,11 +77,11 @@ export function mapError(
   if (errCode === 'ENOTFOUND' || errMsg.includes('not found') || errMsg.includes('getaddrinfo')) {
     return new ConnectionError(
       'ENOTFOUND',
-      `找不到主機: ${options.host}`,
+      `Host not found: ${options.host}`,
       [
-        `檢查主機名拼寫: ${options.host}`,
-        `確認 DNS 可解析: nslookup ${options.host}`,
-        `若使用 localhost，試試 127.0.0.1 (IPv4 vs IPv6 問題)`,
+        `Check the hostname spelling: ${options.host}`,
+        `Verify DNS resolution: nslookup ${options.host}`,
+        `If using localhost, try 127.0.0.1 (IPv4 vs IPv6 issue)`,
       ]
     )
   }
@@ -89,11 +89,11 @@ export function mapError(
   // UNKNOWN: Fallback for unrecognized errors
   return new ConnectionError(
     'UNKNOWN',
-    `連接失敗: ${errMsg}`,
+    `Connection failed: ${errMsg}`,
     [
-      `檢查連接參數: host=${options.host}, port=${options.port}, user=${options.user}`,
-      `查看伺服器日誌: ${system === 'postgresql' ? 'postgresql.log' : 'mysql.log'}`,
-      `嘗試直接用 ${system === 'postgresql' ? 'psql' : 'mysql'} 命令行工具測試`,
+      `Check connection parameters: host=${options.host}, port=${options.port}, user=${options.user}`,
+      `View server logs: ${system === 'postgresql' ? 'postgresql.log' : 'mysql.log'}`,
+      `Try connecting directly with the ${system === 'postgresql' ? 'psql' : 'mysql'} command-line tool`,
     ]
   )
 }

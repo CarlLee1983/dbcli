@@ -1,9 +1,9 @@
 /**
  * Schema Cache Manager - LRU Memory Cache Management
  *
- * 實現兩層快取策略：
- * 1. 熱點表在記憶體中（< 1ms 查詢）
- * 2. 冷點表按需加載並快取（10-50ms）
+ * Implements a two-tier caching strategy:
+ * 1. Hot tables in memory (< 1ms lookup)
+ * 2. Cold tables loaded on-demand and cached (10-50ms)
  */
 
 import { LRUCache } from 'lru-cache'

@@ -37,7 +37,7 @@ export class MySQLAdapter implements DatabaseAdapter {
 
     // Validate port range
     if (options.port < 1 || options.port > 65535) {
-      throw new Error(`無效的埠號: ${options.port}`)
+      throw new Error(`Invalid port number: ${options.port}`)
     }
   }
 
@@ -92,8 +92,8 @@ export class MySQLAdapter implements DatabaseAdapter {
     if (!this.db) {
       throw new ConnectionError(
         'UNKNOWN',
-        '資料庫連接未建立',
-        ['呼叫 connect() 以建立連接']
+        'Database connection not established',
+        ['Call connect() to establish a connection']
       )
     }
 
@@ -121,8 +121,8 @@ export class MySQLAdapter implements DatabaseAdapter {
     if (!this.db) {
       throw new ConnectionError(
         'UNKNOWN',
-        '資料庫連接未建立',
-        ['呼叫 connect() 以建立連接']
+        'Database connection not established',
+        ['Call connect() to establish a connection']
       )
     }
 
@@ -148,8 +148,8 @@ export class MySQLAdapter implements DatabaseAdapter {
     if (!this.db) {
       throw new ConnectionError(
         'UNKNOWN',
-        '資料庫連接未建立',
-        ['呼叫 connect() 以建立連接']
+        'Database connection not established',
+        ['Call connect() to establish a connection']
       )
     }
 
@@ -204,8 +204,8 @@ export class MySQLAdapter implements DatabaseAdapter {
     if (!this.db) {
       throw new ConnectionError(
         'UNKNOWN',
-        '資料庫連接未建立',
-        ['呼叫 connect() 以建立連接']
+        'Database connection not established',
+        ['Call connect() to establish a connection']
       )
     }
 

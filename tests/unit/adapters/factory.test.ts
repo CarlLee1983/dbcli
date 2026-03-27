@@ -36,7 +36,7 @@ test('createAdapter returns MySQLAdapter for mariadb system', () => {
 test('createAdapter throws Error for unsupported database system', () => {
   expect(() => {
     AdapterFactory.createAdapter({ ...validOptions, system: 'unknown' as any })
-  }).toThrow('不支持的資料庫系統: unknown')
+  }).toThrow('Unsupported database system: unknown')
 })
 
 test('createAdapter preserves all ConnectionOptions', () => {

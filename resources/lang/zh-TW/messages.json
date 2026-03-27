@@ -8,7 +8,7 @@
     "prompt_user": "資料庫使用者：",
     "prompt_password": "資料庫密碼：",
     "prompt_name": "資料庫名稱：",
-    "prompt_permission": "權限等級（query-only, read-write, admin）：",
+    "prompt_permission": "權限等級（query-only, read-write, data-admin, admin）：",
     "env_parse_note": "提示：無法解析 .env 配置，使用互動式提示",
     "connection_testing": "正在測試資料庫連接...",
     "connection_success": "✓ 資料庫連接成功",
@@ -77,7 +77,7 @@
     "description": "刪除表格中的資料",
     "prompt_where": "輸入 WHERE 子句 (例如：id=1)：",
     "confirm": "刪除 {table} 中的列？ (y/n)：",
-    "admin_only": "刪除命令需要管理員權限"
+    "admin_only": "刪除命令需要 data-admin 或 admin 權限"
   },
   "export": {
     "description": "匯出查詢結果",

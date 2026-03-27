@@ -1,16 +1,15 @@
 /**
  * Schema Cache System - Type Definitions
  *
- * 支援分層加載和 LRU 快取的型別定義
  * Supports layered loading and LRU caching
  */
 
 /**
- * Schema 全局索引 - 記錄所有表的存儲位置和元數據
+ * Schema global index - records storage location and metadata for all tables
  * Metadata for all tables: location (hot/cold), file path, size estimates
  */
 export interface SchemaIndex {
-  // 表名 → 存儲位置對應
+  // Table name → storage location mapping
   tables: Record<
     string,
     {
@@ -20,9 +19,9 @@ export interface SchemaIndex {
       lastModified: string
     }
   >
-  // 熱點表列表（前 20% 常用表）
+  // Hot table list (top 20% most-used tables)
   hotTables: string[]
-  // 索引元數據
+  // Index metadata
   metadata: {
     version: string
     lastRefreshed: string
@@ -31,7 +30,7 @@ export interface SchemaIndex {
 }
 
 /**
- * 快取統計資訊 - 用於監控和性能追蹤
+ * Cache statistics - for monitoring and performance tracking
  * Cache statistics for monitoring hit rates and capacity
  */
 export interface CacheStats {
@@ -44,7 +43,7 @@ export interface CacheStats {
 }
 
 /**
- * 分層加載選項 - 配置快取和加載行為
+ * Layered loading options - configures cache and loading behavior
  * Loader configuration options for cache and loading behavior
  */
 export interface LoaderOptions {
@@ -56,7 +55,7 @@ export interface LoaderOptions {
 }
 
 /**
- * 表 Schema 參考 - 用於索引中的表描述
+ * Table schema reference - used for table descriptions in the index
  * Reference to a table schema in the index
  */
 export interface TableSchemaRef {

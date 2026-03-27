@@ -1,23 +1,23 @@
 /**
- * Zod 驗證模式用於 .dbcli 配置和連接參數
+ * Zod validation schemas for .dbcli configuration and connection parameters
  *
- * 支持：
- * 1. 直接值：host: "localhost"
- * 2. 環境變量引用：host: { "$env": "DB_HOST" }
+ * Supports:
+ * 1. Direct values: host: "localhost"
+ * 2. Environment variable references: host: { "$env": "DB_HOST" }
  */
 
 import { z } from 'zod'
 
 /**
- * 環境變量引用模式
- * 允許 { "$env": "KEY" } 的引用語法
+ * Environment variable reference schema
+ * Allows { "$env": "KEY" } reference syntax
  */
 const EnvRefSchema = z.object({
   $env: z.string()
 }).strict()
 
 /**
- * 值可以是字符串或環境變量引用
+ * Value can be a string or an environment variable reference
  */
 const StringOrEnvRef = z.union([
   z.string().min(1),
@@ -30,9 +30,9 @@ const NumberOrEnvRef = z.union([
 ])
 
 /**
- * 連接配置模式
- * 驗證資料庫連接的必需欄位和有效值
- * 支持環境變量引用
+ * Connection configuration schema
+ * Validates required fields and valid values for database connections
+ * Supports environment variable references
  */
 export const ConnectionConfigSchema = z.object({
   system: z.enum(['postgresql', 'mysql', 'mariadb']),
@@ -44,12 +44,12 @@ export const ConnectionConfigSchema = z.object({
 })
 
 /**
- * 權限模式
+ * Permission schema
  */
-export const PermissionSchema = z.enum(['query-only', 'read-write', 'admin']).default('query-only')
+export const PermissionSchema = z.enum(['query-only', 'read-write', 'data-admin', 'admin']).default('query-only')
 
 /**
- * 元數據模式
+ * Metadata schema
  */
 export const MetadataSchema = z
   .object({
@@ -72,7 +72,7 @@ export const BlacklistConfigSchema = z
   .default({ tables: [], columns: {} })
 
 /**
- * DbcliConfig 完整模式
+ * DbcliConfig complete schema
  */
 export const DbcliConfigSchema = z.object({
   connection: ConnectionConfigSchema,
@@ -83,7 +83,7 @@ export const DbcliConfigSchema = z.object({
 })
 
 /**
- * 從 Zod 模式推導的型別
+ * Types inferred from Zod schemas
  */
 export type DbcliConfig = z.infer<typeof DbcliConfigSchema>
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>

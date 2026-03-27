@@ -1,16 +1,16 @@
 /**
- * 資料庫系統特定的預設值
- * 用於 env-parser、config 和 init 命令
+ * Database-system-specific default values
+ * Used by env-parser, config, and init commands
  */
 
 import { ConnectionConfig } from '@/types'
 
 /**
- * 為指定的資料庫系統取得預設配置值
+ * Get default configuration values for the specified database system
  *
  * @example
  * getDefaultsForSystem('postgresql')
- * // 返回 { port: 5432, host: 'localhost' }
+ * // returns { port: 5432, host: 'localhost' }
  */
 export function getDefaultsForSystem(
   system: 'postgresql' | 'mysql' | 'mariadb'
@@ -28,8 +28,8 @@ export function getDefaultsForSystem(
         host: 'localhost'
       }
     default:
-      // 應該永遠不會到達這裡（TypeScript 會捕捉）
-      // 但以防萬一提供一個合理的預設值
+      // Should never reach here (TypeScript will catch this)
+      // but provide a sensible fallback just in case
       return {
         port: 3306,
         host: 'localhost'

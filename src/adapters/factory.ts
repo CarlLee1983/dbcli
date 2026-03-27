@@ -30,7 +30,7 @@ export class AdapterFactory {
       case 'mariadb':
         return new MySQLAdapter(options)
       default:
-        throw new Error(`不支持的資料庫系統: ${options.system}`)
+        throw new Error(`Unsupported database system: ${options.system}`)
     }
   }
 }

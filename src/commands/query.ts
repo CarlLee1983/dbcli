@@ -1,6 +1,6 @@
 /**
- * dbcli query 命令
- * 執行 SQL 查詢並返回結果，支持多種輸出格式
+ * dbcli query command
+ * Executes a SQL query and returns results, supporting multiple output formats
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
@@ -14,8 +14,8 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
 /**
- * Query 命令操作處理器
- * 接受 SQL 查詢，執行，並格式化輸出
+ * Query command action handler
+ * Accepts a SQL query, executes it, and formats the output
  */
 export async function queryCommand(
   sql: string,

@@ -22,7 +22,7 @@ test('mapError categorizes ECONNREFUSED error', () => {
 
   expect(result).toBeInstanceOf(ConnectionError)
   expect(result.code).toBe('ECONNREFUSED')
-  expect(result.message).toContain('無法連接')
+  expect(result.message).toContain('Cannot connect')
   expect(result.hints).toBeInstanceOf(Array)
   expect(result.hints.length).toBeGreaterThan(0)
 })
@@ -32,7 +32,7 @@ test('mapError categorizes ETIMEDOUT error', () => {
   const result = mapError(error, 'postgresql', mockOptions)
 
   expect(result.code).toBe('ETIMEDOUT')
-  expect(result.message).toContain('超時')
+  expect(result.message).toContain('timed out')
   expect(result.hints.length).toBeGreaterThan(0)
 })
 
@@ -41,7 +41,7 @@ test('mapError categorizes authentication failed error', () => {
   const result = mapError(error, 'postgresql', mockOptions)
 
   expect(result.code).toBe('AUTH_FAILED')
-  expect(result.message).toContain('認證失敗')
+  expect(result.message).toContain('Authentication failed')
   expect(result.hints.length).toBeGreaterThan(0)
 })
 
@@ -50,7 +50,7 @@ test('mapError categorizes ENOTFOUND error', () => {
   const result = mapError(error, 'postgresql', mockOptions)
 
   expect(result.code).toBe('ENOTFOUND')
-  expect(result.message).toContain('找不到主機')
+  expect(result.message).toContain('Host not found')
   expect(result.hints.length).toBeGreaterThan(0)
 })
 
@@ -59,7 +59,7 @@ test('mapError categorizes unknown error as UNKNOWN', () => {
   const result = mapError(error, 'postgresql', mockOptions)
 
   expect(result.code).toBe('UNKNOWN')
-  expect(result.message).toContain('連接失敗')
+  expect(result.message).toContain('Connection failed')
   expect(result.hints.length).toBeGreaterThan(0)
 })
 

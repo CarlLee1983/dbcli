@@ -1,11 +1,11 @@
 /**
  * Schema Updater - Incremental Schema Update Coordination
  *
- * 管理增量式 Schema 更新流程：
- * 1. 比較前一個快照和當前數據庫架構
- * 2. 生成僅包含變化的 patch
- * 3. 應用 patch 並更新配置
- * 4. 返回詳細的更新結果
+ * Manages the incremental schema update flow:
+ * 1. Compare the previous snapshot with the current database schema
+ * 2. Generate a patch containing only the changes
+ * 3. Apply the patch and update the config
+ * 4. Return detailed update results
  */
 
 import { join } from 'path'

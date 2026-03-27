@@ -1,16 +1,16 @@
 /**
- * 自訂錯誤類用於環境解析和配置操作
+ * Custom error classes for environment parsing and configuration operations
  */
 
 /**
- * .env 解析失敗時拋出
- * 用於：DATABASE_URL 解析失敗、無效的百分比編碼、缺少必要的 DB_* 變數
+ * Thrown when .env parsing fails
+ * Used for: DATABASE_URL parse failures, invalid percent-encoding, missing required DB_* variables
  */
 export class EnvParseError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'EnvParseError'
-    // 維護堆疊追蹤以便除錯
+    // Maintain stack trace for debugging
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, EnvParseError)
     }
@@ -18,14 +18,14 @@ export class EnvParseError extends Error {
 }
 
 /**
- * .dbcli 配置讀取/寫入或驗證失敗時拋出
- * 用於：.dbcli 讀取/寫入失敗、驗證失敗、配置不匹配
+ * Thrown when .dbcli configuration read/write or validation fails
+ * Used for: .dbcli read/write failures, validation errors, configuration mismatches
  */
 export class ConfigError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ConfigError'
-    // 維護堆疊追蹤以便除錯
+    // Maintain stack trace for debugging
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, ConfigError)
     }

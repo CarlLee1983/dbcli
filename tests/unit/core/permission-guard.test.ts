@@ -404,6 +404,65 @@ test('checkPermission: TRUNCATE blocked in read-write', () => {
 })
 
 // ============================================================================
+// Suite 6.5: Permission Checks - Data-Admin Mode
+// ============================================================================
+
+test('checkPermission: SELECT allowed in data-admin', () => {
+  const result = checkPermission('SELECT * FROM users', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: INSERT allowed in data-admin', () => {
+  const result = checkPermission('INSERT INTO users (name) VALUES ($1)', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: UPDATE allowed in data-admin', () => {
+  const result = checkPermission('UPDATE users SET active = true', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: DELETE allowed in data-admin', () => {
+  const result = checkPermission('DELETE FROM users WHERE id = 1', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: SHOW allowed in data-admin', () => {
+  const result = checkPermission('SHOW TABLES', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: DESCRIBE allowed in data-admin', () => {
+  const result = checkPermission('DESCRIBE users', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: EXPLAIN allowed in data-admin', () => {
+  const result = checkPermission('EXPLAIN SELECT * FROM users', 'data-admin')
+  expect(result.allowed).toBe(true)
+})
+
+test('checkPermission: DROP blocked in data-admin', () => {
+  const result = checkPermission('DROP TABLE users', 'data-admin')
+  expect(result.allowed).toBe(false)
+})
+
+test('checkPermission: ALTER blocked in data-admin', () => {
+  const result = checkPermission('ALTER TABLE users ADD COLUMN age INT', 'data-admin')
+  expect(result.allowed).toBe(false)
+})
+
+test('checkPermission: CREATE blocked in data-admin', () => {
+  const result = checkPermission('CREATE TABLE users (id INT)', 'data-admin')
+  expect(result.allowed).toBe(false)
+})
+
+test('checkPermission: TRUNCATE blocked in data-admin', () => {
+  const result = checkPermission('TRUNCATE TABLE users', 'data-admin')
+  expect(result.allowed).toBe(false)
+})
+
+// ============================================================================
 // Suite 7: Permission Checks - Admin Mode
 // ============================================================================
 
@@ -561,6 +620,32 @@ test('integration: Read-Write allows safe data modification', () => {
   for (const query of queries) {
     const result = checkPermission(query, 'read-write')
     expect(result.allowed).toBe(true)
+  }
+})
+
+test('integration: Data-Admin allows full DML but blocks DDL', () => {
+  const allowedQueries = [
+    'SELECT * FROM users',
+    'INSERT INTO users (name) VALUES ($1)',
+    'UPDATE users SET active = true',
+    'DELETE FROM users WHERE id = 1',
+  ]
+
+  for (const query of allowedQueries) {
+    const result = checkPermission(query, 'data-admin')
+    expect(result.allowed).toBe(true)
+  }
+
+  const blockedQueries = [
+    'DROP TABLE users',
+    'ALTER TABLE users ADD COLUMN age INT',
+    'CREATE TABLE new_table (id INT)',
+    'TRUNCATE TABLE users',
+  ]
+
+  for (const query of blockedQueries) {
+    const result = checkPermission(query, 'data-admin')
+    expect(result.allowed).toBe(false)
   }
 })
 

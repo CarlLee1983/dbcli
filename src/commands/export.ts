@@ -1,6 +1,6 @@
 /**
- * dbcli export 命令
- * 執行 SQL 查詢並導出結果，支持 JSON/CSV 格式和檔案輸出
+ * dbcli export command
+ * Executes a SQL query and exports the results, supporting JSON/CSV formats and file output
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
@@ -11,8 +11,8 @@ import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
 
 /**
- * Export 命令操作處理器
- * 接受 SQL 查詢，執行，格式化，輸出到 stdout 或檔案
+ * Export command action handler
+ * Accepts a SQL query, executes it, formats the result, and outputs to stdout or a file
  */
 export async function exportCommand(
   sql: string,

@@ -1,8 +1,8 @@
 /**
- * 資料執行器 — 處理 INSERT、UPDATE、DELETE 操作的執行
+ * Data Executor — handles execution of INSERT, UPDATE, DELETE operations
  *
- * 責任：執行資料修改操作，強制權限檢查，驗證資料欄位，
- * 處理參數化查詢防止 SQL 注入。
+ * Responsibilities: execute data modification operations, enforce permission checks,
+ * validate data columns, handle parameterized queries to prevent SQL injection.
  */
 
 import type { DatabaseAdapter, TableSchema, ColumnSchema } from '@/adapters/types'
@@ -14,7 +14,7 @@ import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
 /**
- * 資料執行器類，用於執行 INSERT、UPDATE、DELETE 操作
+ * DataExecutor class for executing INSERT, UPDATE, DELETE operations
  */
 export class DataExecutor {
   constructor(
@@ -25,39 +25,39 @@ export class DataExecutor {
   ) {}
 
   /**
-   * 構建參數化的 INSERT SQL 語句
-   * 返回 {sql, params} 形式以防止 SQL 注入
+   * Build a parameterized INSERT SQL statement
+   * Returns {sql, params} form to prevent SQL injection
    *
-   * @param tableName 資料表名稱
-   * @param data 要插入的資料物件 {column: value, ...}
-   * @param schema 資料表結構
-   * @returns 參數化 SQL 和參數陣列
-   * @throws Error 如果資料欄位不在表結構中
+   * @param tableName Table name
+   * @param data Data object to insert {column: value, ...}
+   * @param schema Table schema
+   * @returns Parameterized SQL and parameters array
+   * @throws Error if a data column is not found in the table schema
    */
   buildInsertSql(
     tableName: string,
     data: Record<string, any>,
     schema: TableSchema
   ): { sql: string; params: any[] } {
-    // 驗證所有資料欄位都存在於表結構中
+    // Validate that all data columns exist in the table schema
     const columnNames = schema.columns.map((col) => col.name)
     const dataKeys = Object.keys(data)
 
     for (const key of dataKeys) {
       if (!columnNames.includes(key)) {
         throw new Error(
-          `資料表 "${tableName}" 中找不到欄位 "${key}"。有效的欄位: ${columnNames.join(', ')}`
+          `Column "${key}" not found in table "${tableName}". Valid columns: ${columnNames.join(', ')}`
         )
       }
     }
 
-    // 建立參數化查詢
+    // Build parameterized query
     const columns = dataKeys
     const values = dataKeys.map((key) => data[key])
 
-    // 根據資料庫系統類型決定參數標記
-    // PostgreSQL 使用 $1, $2, ...
-    // MySQL 使用 ?
+    // Determine parameter placeholder based on database system type
+    // PostgreSQL uses $1, $2, ...
+    // MySQL uses ?
     const systemType = this.getSystemType()
     const placeholders =
       systemType === 'postgresql'
@@ -74,16 +74,16 @@ export class DataExecutor {
   }
 
   /**
-   * 執行 INSERT 操作
-   * 強制權限檢查，建立 SQL，顯示確認提示，執行
+   * Execute an INSERT operation
+   * Enforces permission check, builds SQL, shows confirmation prompt, executes
    *
-   * @param tableName 資料表名稱
-   * @param data 要插入的資料物件
-   * @param schema 資料表結構
-   * @param options 執行選項 (dryRun, force, verbose)
+   * @param tableName Table name
+   * @param data Data object to insert
+   * @param schema Table schema
+   * @param options Execution options (dryRun, force, verbose)
    * @returns DataExecutionResult
-   * @throws PermissionError 如果權限不足
-   * @throws Error 如果執行失敗
+   * @throws PermissionError if insufficient permissions
+   * @throws Error if execution fails
    */
   async executeInsert(
     tableName: string,
@@ -99,13 +99,13 @@ export class DataExecutor {
         this.blacklistValidator.checkTableBlacklist('INSERT', tableName, [])
       }
 
-      // 1. 強制權限檢查 - INSERT 需要 read-write 或 admin
+      // 1. Enforce permission check - INSERT requires read-write or admin
       enforcePermission('INSERT INTO dummy', this.permission)
 
-      // 2. 建立參數化 SQL
+      // 2. Build parameterized SQL
       const { sql, params } = this.buildInsertSql(tableName, data, schema)
 
-      // 3. 乾執行模式：顯示 SQL 但不執行
+      // 3. Dry-run mode: show SQL but do not execute
       if (options?.dryRun) {
         return {
           status: 'success',
@@ -116,14 +116,14 @@ export class DataExecutor {
         }
       }
 
-      // 4. 非強制模式：顯示 SQL 並要求確認
+      // 4. Non-forced mode: show SQL and require confirmation
       if (!options?.force) {
-        console.log('\n生成的 SQL:')
+        console.log('\nGenerated SQL:')
         console.log(`  ${sql}`)
-        console.log('\n參數:')
+        console.log('\nParameters:')
         console.log(`  ${JSON.stringify(params, null, 2)}`)
 
-        const confirmed = await promptUser.confirm('是否執行此操作?')
+        const confirmed = await promptUser.confirm('Proceed with this operation?')
         if (!confirmed) {
           return {
             status: 'success',
@@ -135,10 +135,10 @@ export class DataExecutor {
         }
       }
 
-      // 5. 執行 INSERT
+      // 5. Execute INSERT
       const result = await this.adapter.execute(sql, params)
 
-      // 返回結果
+      // Return result
       const affectedRows = Array.isArray(result) ? result.length : 0
       return {
         status: 'success',
@@ -155,14 +155,14 @@ export class DataExecutor {
 
       const errorMessage = error instanceof Error ? error.message : String(error)
 
-      // 權限錯誤特殊處理
+      // Special handling for permission errors
       if (error instanceof PermissionError) {
         return {
           status: 'error',
           operation: 'insert',
           rows_affected: 0,
           timestamp,
-          error: '權限被拒: Query-only 模式僅允許 SELECT。使用 Read-Write 或 Admin 模式執行 INSERT。',
+          error: 'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute INSERT.',
         }
       }
 
@@ -171,20 +171,20 @@ export class DataExecutor {
         operation: 'insert',
         rows_affected: 0,
         timestamp,
-        error: `INSERT 失敗: ${errorMessage}`,
+        error: `INSERT failed: ${errorMessage}`,
       }
     }
   }
 
   /**
-   * 執行 UPDATE 操作
-   * 強制權限檢查，建立 SQL，顯示確認提示，執行
+   * Execute an UPDATE operation
+   * Enforces permission check, builds SQL, shows confirmation prompt, executes
    *
-   * @param tableName 資料表名稱
-   * @param data 更新的資料物件
-   * @param where WHERE 子句條件物件
-   * @param schema 資料表結構
-   * @param options 執行選項
+   * @param tableName Table name
+   * @param data Updated data object
+   * @param where WHERE clause condition object
+   * @param schema Table schema
+   * @param options Execution options
    * @returns DataExecutionResult
    */
   async executeUpdate(
@@ -202,10 +202,10 @@ export class DataExecutor {
         this.blacklistValidator.checkTableBlacklist('UPDATE', tableName, [])
       }
 
-      // 1. 強制權限檢查
+      // 1. Enforce permission check
       enforcePermission('UPDATE dummy', this.permission)
 
-      // 2. 建立參數化 UPDATE SQL
+      // 2. Build parameterized UPDATE SQL
       const { sql, params } = this.buildUpdateSql(
         tableName,
         data,
@@ -213,7 +213,7 @@ export class DataExecutor {
         schema
       )
 
-      // 3. 乾執行模式
+      // 3. Dry-run mode
       if (options?.dryRun) {
         return {
           status: 'success',
@@ -224,14 +224,14 @@ export class DataExecutor {
         }
       }
 
-      // 4. 非強制模式：顯示 SQL 並要求確認
+      // 4. Non-forced mode: show SQL and require confirmation
       if (!options?.force) {
-        console.log('\n生成的 SQL:')
+        console.log('\nGenerated SQL:')
         console.log(`  ${sql}`)
-        console.log('\n參數:')
+        console.log('\nParameters:')
         console.log(`  ${JSON.stringify(params, null, 2)}`)
 
-        const confirmed = await promptUser.confirm('是否執行此操作?')
+        const confirmed = await promptUser.confirm('Proceed with this operation?')
         if (!confirmed) {
           return {
             status: 'success',
@@ -243,7 +243,7 @@ export class DataExecutor {
         }
       }
 
-      // 5. 執行 UPDATE
+      // 5. Execute UPDATE
       const result = await this.adapter.execute(sql, params)
       const affectedRows = Array.isArray(result) ? result.length : 0
 
@@ -268,7 +268,7 @@ export class DataExecutor {
           operation: 'update',
           rows_affected: 0,
           timestamp,
-          error: '權限被拒: Query-only 模式僅允許 SELECT。使用 Read-Write 或 Admin 模式執行 UPDATE。',
+          error: 'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute UPDATE.',
         }
       }
 
@@ -277,19 +277,19 @@ export class DataExecutor {
         operation: 'update',
         rows_affected: 0,
         timestamp,
-        error: `UPDATE 失敗: ${errorMessage}`,
+        error: `UPDATE failed: ${errorMessage}`,
       }
     }
   }
 
   /**
-   * 執行 DELETE 操作
-   * Admin-only 操作，需要強制權限檢查
+   * Execute a DELETE operation
+   * Admin-only operation, requires strict permission check
    *
-   * @param tableName 資料表名稱
-   * @param where WHERE 子句條件物件
-   * @param schema 資料表結構
-   * @param options 執行選項
+   * @param tableName Table name
+   * @param where WHERE clause condition object
+   * @param schema Table schema
+   * @param options Execution options
    * @returns DataExecutionResult
    */
   async executeDelete(
@@ -306,25 +306,25 @@ export class DataExecutor {
         this.blacklistValidator.checkTableBlacklist('DELETE', tableName, [])
       }
 
-      // 1. DELETE 需要 admin 權限（更嚴格的限制）
-      if (this.permission !== 'admin') {
+      // 1. DELETE requires data-admin or admin permission
+      if (this.permission !== 'data-admin' && this.permission !== 'admin') {
         return {
           status: 'error',
           operation: 'delete',
           rows_affected: 0,
           timestamp,
-          error: '權限被拒: DELETE 操作需要 Admin 權限。',
+          error: 'Permission denied: DELETE operation requires Data-Admin or Admin permission.',
         }
       }
 
-      // 2. 建立參數化 DELETE SQL
+      // 2. Build parameterized DELETE SQL
       const { sql, params } = this.buildDeleteSql(
         tableName,
         where,
         schema
       )
 
-      // 3. 乾執行模式
+      // 3. Dry-run mode
       if (options?.dryRun) {
         return {
           status: 'success',
@@ -335,16 +335,16 @@ export class DataExecutor {
         }
       }
 
-      // 4. DELETE 通常要求確認（除非 --force 標記）
+      // 4. DELETE usually requires confirmation (unless --force flag)
       if (!options?.force) {
-        console.log('\n⚠️  警告: DELETE 操作是破壞性的，無法撤銷！')
-        console.log('\n生成的 SQL:')
+        console.log('\n⚠️  Warning: DELETE operation is destructive and cannot be undone!')
+        console.log('\nGenerated SQL:')
         console.log(`  ${sql}`)
-        console.log('\n參數:')
+        console.log('\nParameters:')
         console.log(`  ${JSON.stringify(params, null, 2)}`)
 
         const confirmed = await promptUser.confirm(
-          '是否真的要執行此 DELETE 操作? 此操作無法撤銷。'
+          'Are you sure you want to execute this DELETE operation? This cannot be undone.'
         )
         if (!confirmed) {
           return {
@@ -357,7 +357,7 @@ export class DataExecutor {
         }
       }
 
-      // 5. 執行 DELETE
+      // 5. Execute DELETE
       const result = await this.adapter.execute(sql, params)
       const affectedRows = Array.isArray(result) ? result.length : 0
 
@@ -381,7 +381,7 @@ export class DataExecutor {
         operation: 'delete',
         rows_affected: 0,
         timestamp,
-        error: `DELETE 失敗: ${errorMessage}`,
+        error: `DELETE failed: ${errorMessage}`,
       }
     }
   }
@@ -391,21 +391,21 @@ export class DataExecutor {
   // ============================================================================
 
   /**
-   * 取得資料庫系統類型（用於決定參數標記和識別符引號）
+   * Get database system type (used to determine parameter placeholder and identifier quoting)
    */
   private getSystemType(): 'postgresql' | 'mysql' {
     return this.dbSystem
   }
 
   /**
-   * 獲取識別符引號符號（表名、欄位名）
+   * Get identifier quote character (for table names and column names)
    */
   private getQuoteChar(): string {
     return this.dbSystem === 'mysql' ? '`' : '"'
   }
 
   /**
-   * 建立參數化的 UPDATE SQL 語句
+   * Build a parameterized UPDATE SQL statement
    */
   private buildUpdateSql(
     tableName: string,
@@ -417,16 +417,16 @@ export class DataExecutor {
     const whereKeys = Object.keys(where)
     const columnNames = schema.columns.map((col) => col.name)
 
-    // 驗證欄位
+    // Validate columns
     for (const key of [...dataKeys, ...whereKeys]) {
       if (!columnNames.includes(key)) {
         throw new Error(
-          `資料表 "${tableName}" 中找不到欄位 "${key}"`
+          `Column "${key}" not found in table "${tableName}"`
         )
       }
     }
 
-    // 建立 UPDATE SET 子句
+    // Build UPDATE SET clause
     const systemType = this.getSystemType()
     const quote = this.getQuoteChar()
     let paramIndex = 1
@@ -439,7 +439,7 @@ export class DataExecutor {
       })
       .join(', ')
 
-    // 建立 WHERE 子句
+    // Build WHERE clause
     const whereClause = whereKeys
       .map((key) => {
         const placeholder =
@@ -455,7 +455,7 @@ export class DataExecutor {
   }
 
   /**
-   * 建立參數化的 DELETE SQL 語句
+   * Build a parameterized DELETE SQL statement
    */
   private buildDeleteSql(
     tableName: string,
@@ -465,16 +465,16 @@ export class DataExecutor {
     const whereKeys = Object.keys(where)
     const columnNames = schema.columns.map((col) => col.name)
 
-    // 驗證欄位
+    // Validate columns
     for (const key of whereKeys) {
       if (!columnNames.includes(key)) {
         throw new Error(
-          `資料表 "${tableName}" 中找不到欄位 "${key}"`
+          `Column "${key}" not found in table "${tableName}"`
         )
       }
     }
 
-    // 建立 WHERE 子句
+    // Build WHERE clause
     const systemType = this.getSystemType()
     const quote = this.getQuoteChar()
     let paramIndex = 1

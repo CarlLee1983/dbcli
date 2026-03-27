@@ -1,10 +1,10 @@
 /**
  * Schema Index Builder - Index Generation and Management
  *
- * 建構和管理快速查詢索引：
- * 1. 快速定位表的存儲位置（熱/冷）
- * 2. 計算熱點表（按大小排序）
- * 3. 重建索引時的幂等性
+ * Builds and manages fast lookup indices:
+ * 1. Quickly locate table storage location (hot/cold)
+ * 2. Calculate hot tables (sorted by size)
+ * 3. Idempotency when rebuilding the index
  */
 
 import type { SchemaIndex } from '@/types/schema-cache'

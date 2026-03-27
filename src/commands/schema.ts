@@ -1,7 +1,7 @@
 /**
- * dbcli schema 命令
- * 顯示表格架構信息或掃描整個資料庫架構
- * 支持單表檢查或全資料庫架構刷新
+ * dbcli schema command
+ * Displays table schema information or scans the entire database schema
+ * Supports single-table inspection or full-database schema refresh
  */
 
 import { Command } from 'commander'
@@ -44,9 +44,9 @@ export const schemaCommand = new Command()
   .action(schemaAction)
 
 /**
- * Schema 命令操作處理器
- * 如果指定了表格：顯示單個表格架構
- * 如果未指定表格：掃描整個資料庫並更新 .dbcli
+ * Schema command action handler
+ * If a table is specified: display that table's schema
+ * If no table is specified: scan the entire database and update .dbcli
  */
 async function schemaAction(
   table: string | undefined,
@@ -59,7 +59,7 @@ async function schemaAction(
   }
 ) {
   try {
-    // 從 .dbcli 加載配置
+    // Load configuration from .dbcli
     const config = await configModule.read(options.config)
 
     if (!config.connection) {
@@ -67,7 +67,7 @@ async function schemaAction(
       process.exit(1)
     }
 
-    // 使用配置創建適配器
+    // Create adapter from configuration
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
 
@@ -79,10 +79,10 @@ async function schemaAction(
         // Handle schema refresh (NEW)
         await handleSchemaRefresh(adapter, config, options)
       } else if (table) {
-        // 單個表格架構檢查
+        // Single table schema inspection
         await handleSingleTableSchema(adapter, table, options.format)
       } else {
-        // 整個資料庫架構掃描和配置更新
+        // Full database schema scan and config update
         await handleFullDatabaseScan(adapter, config, options)
       }
     } finally {
@@ -100,7 +100,7 @@ async function schemaAction(
 }
 
 /**
- * 處理單個表格架構檢查
+ * Handles single table schema inspection
  */
 async function handleSingleTableSchema(
   adapter: any,
@@ -155,7 +155,7 @@ async function handleSingleTableSchema(
 }
 
 /**
- * 處理架構刷新 - 檢測增量更改並應用
+ * Handles schema refresh - detects incremental changes and applies them
  */
 async function handleSchemaRefresh(
   adapter: any,
@@ -213,7 +213,7 @@ async function handleSchemaRefresh(
 }
 
 /**
- * 處理 schema 重置 — 清空現有 schema 後重新從 DB 抓取
+ * Handles schema reset — clears existing schema then re-fetches from the DB
  */
 async function handleSchemaReset(
   adapter: any,
@@ -292,7 +292,7 @@ async function handleSchemaReset(
 }
 
 /**
- * 處理整個資料庫架構掃描和 .dbcli 更新
+ * Handles full database schema scan and .dbcli update
  */
 async function handleFullDatabaseScan(
   adapter: any,
@@ -334,11 +334,11 @@ async function handleFullDatabaseScan(
   if (config.schema && Object.keys(config.schema).length > 0 && !options.force) {
     console.log('\n' + t('schema.schema_exists_warning'))
     console.log(t('schema.use_force_to_override'))
-    // 在交互模式中可以在此進行提示；目前直接退出
+    // In interactive mode we could prompt here; for now just exit
     process.exit(0)
   }
 
-  // 使用架構更新配置
+  // Update configuration with schema
   const updatedConfig = {
     ...config,
     schema: schemaData,
@@ -351,7 +351,7 @@ async function handleFullDatabaseScan(
 
   await configModule.write(options.config, updatedConfig)
 
-  console.log(`\n✅ 架構已在 .dbcli 中更新`)
-  console.log(`   ${tables.length} 個表格及完整列詳情和關係`)
-  console.log(`   時間戳: ${updatedConfig.metadata.schemaLastUpdated}`)
+  console.log(`\n✅ Schema updated in .dbcli`)
+  console.log(`   ${tables.length} tables with full column details and relationships`)
+  console.log(`   Timestamp: ${updatedConfig.metadata.schemaLastUpdated}`)
 }

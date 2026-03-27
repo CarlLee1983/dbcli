@@ -1,6 +1,6 @@
 /**
- * dbcli delete 命令
- * 透過 --where 旗標從資料庫資料表中刪除資料（僅限 Admin）
+ * dbcli delete command
+ * Deletes rows from a database table via --where flag (Admin only)
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
@@ -13,13 +13,13 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
 /**
- * 從字串格式的 WHERE 子句解析出條件對象
- * 例如: "id=1" → { id: "1" }
- * 例如: "id=1 AND status='active'" → { id: "1", status: "active" }
+ * Parses a WHERE clause string into a conditions object
+ * e.g. "id=1" → { id: "1" }
+ * e.g. "id=1 AND status='active'" → { id: "1", status: "active" }
  *
- * @param whereClause WHERE 條件字串
- * @returns 條件對象 {column: value, ...}
- * @throws Error 如果無法解析 WHERE 子句
+ * @param whereClause WHERE condition string
+ * @returns Conditions object {column: value, ...}
+ * @throws Error if the WHERE clause cannot be parsed
  */
 function parseWhereClause(whereClause: string): Record<string, any> {
   if (!whereClause || whereClause.trim() === '') {
@@ -28,11 +28,11 @@ function parseWhereClause(whereClause: string): Record<string, any> {
 
   const conditions: Record<string, any> = {}
 
-  // 分割 AND 條件
+  // Split AND conditions
   const andParts = whereClause.split(/\s+AND\s+/i)
 
   for (const part of andParts) {
-    // 匹配 "column=value" 模式
+    // Match "column=value" pattern
     const match = part.match(/^(\w+)\s*=\s*(.+)$/)
     if (!match || !match[1] || !match[2]) {
       throw new Error(
@@ -44,17 +44,17 @@ function parseWhereClause(whereClause: string): Record<string, any> {
     const valueStr: string = match[2]
     let value: any = valueStr.trim()
 
-    // 移除引號
+    // Strip quotes
     if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
       value = value.slice(1, -1)
     }
 
-    // 嘗試轉換為數字
+    // Attempt numeric conversion
     if (!isNaN(value) && value !== '') {
       value = Number(value)
     }
 
-    // 處理 true/false
+    // Handle true/false/null literals
     if (value === 'true') value = true
     if (value === 'false') value = false
     if (value === 'null') value = null
@@ -66,9 +66,9 @@ function parseWhereClause(whereClause: string): Record<string, any> {
 }
 
 /**
- * Delete 命令操作處理器
- * 接受 table 和 where 條件，驗證，執行刪除操作，並格式化輸出
- * 限制：僅允許 Admin 權限
+ * Delete command action handler
+ * Accepts table and where conditions, validates, executes the delete operation, and formats output
+ * Restriction: Admin permission only
  */
 export async function deleteCommand(
   table: string,
@@ -79,18 +79,18 @@ export async function deleteCommand(
   }
 ): Promise<void> {
   try {
-    // 1. 驗證資料表名稱
+    // 1. Validate table name
     if (!table || table.trim() === '') {
       throw new Error('Table name required')
     }
     table = table.trim()
 
-    // 2. 驗證 --where 旗標（強制）
+    // 2. Validate --where flag (required)
     if (!options.where || options.where.trim() === '') {
       throw new Error('DELETE requires --where clause (e.g. --where "id=1")')
     }
 
-    // 3. 解析 WHERE 條件字串
+    // 3. Parse WHERE condition string
     let whereConditions: Record<string, any>
     try {
       whereConditions = parseWhereClause(options.where)
@@ -98,14 +98,14 @@ export async function deleteCommand(
       throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
     }
 
-    // 4. 載入組態
+    // 4. Load configuration
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
-    // 5. 驗證 Admin 權限（DELETE 操作必須 Admin）
-    if (config.permission !== 'admin') {
+    // 5. Validate permission (DELETE requires data-admin or admin)
+    if (config.permission !== 'data-admin' && config.permission !== 'admin') {
       throw new PermissionError(
         t('delete.admin_only'),
         { type: 'DELETE', isDangerous: true, keywords: ['DELETE'], isComposite: false, confidence: 'HIGH' },
@@ -113,15 +113,15 @@ export async function deleteCommand(
       )
     }
 
-    // 6. 建立資料庫適配器
+    // 6. Create database adapter
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
 
     try {
-      // 7. 取得資料表結構
+      // 7. Get table schema
       const schema = await adapter.getTableSchema(table)
 
-      // 8. 建立 DataExecutor 並執行 DELETE
+      // 8. Create DataExecutor and execute DELETE
       const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
@@ -132,7 +132,7 @@ export async function deleteCommand(
         force: options.force,
       })
 
-      // 9. 格式化輸出為 JSON
+      // 9. Format output as JSON
       const output = {
         status: result.status,
         operation: result.operation,
@@ -144,7 +144,7 @@ export async function deleteCommand(
 
       console.log(JSON.stringify(output, null, 2))
 
-      // 如果有錯誤，退出碼為 1
+      // Exit with code 1 if there is an error
       if (result.status === 'error') {
         process.exit(1)
       }
@@ -152,7 +152,7 @@ export async function deleteCommand(
       await adapter.disconnect()
     }
   } catch (error) {
-    // 黑名單錯誤
+    // Blacklist error
     if (error instanceof BlacklistError) {
       const output = {
         status: 'error',
@@ -164,21 +164,21 @@ export async function deleteCommand(
       process.exit(1)
     }
 
-    // 權限錯誤
+    // Permission error
     if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: 'admin' }))
+      console.error(t_vars('errors.permission_denied', { required: 'data-admin' }))
       console.error(`   Operation: ${error.classification.type}`)
       console.error(`   Message: ${error.message}`)
       process.exit(1)
     }
 
-    // 連接錯誤
+    // Connection error
     if (error instanceof ConnectionError) {
       console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 
-    // 驗證或其他錯誤
+    // Validation or other errors
     const output = {
       status: 'error',
       operation: 'delete',

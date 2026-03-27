@@ -1,7 +1,7 @@
 /**
- * dbcli list 命令
- * 列出所有資料庫表格及其元數據
- * 支持表格（默認）和 JSON 輸出格式
+ * dbcli list command
+ * Lists all database tables and their metadata
+ * Supports table (default) and JSON output formats
  */
 
 import { Command } from 'commander'
@@ -26,12 +26,12 @@ export const listCommand = new Command()
   .action(listAction)
 
 /**
- * List 命令操作處理器
- * 連接資料庫，獲取表格列表，格式化輸出
+ * List command action handler
+ * Connects to the database, retrieves the table list, and formats output
  */
 async function listAction(options: { format: string; config: string }) {
   try {
-    // 從 .dbcli 加載配置
+    // Load configuration from .dbcli
     const config = await configModule.read(options.config)
 
     if (!config.connection) {
@@ -39,14 +39,14 @@ async function listAction(options: { format: string; config: string }) {
       process.exit(1)
     }
 
-    // 使用配置創建適配器
+    // Create adapter from configuration
     const adapter = AdapterFactory.createAdapter(config.connection)
 
-    // 連接到資料庫
+    // Connect to the database
     await adapter.connect()
 
     try {
-      // 獲取表格列表
+      // Retrieve table list
       const tables = await adapter.listTables()
 
       if (tables.length === 0) {
@@ -54,9 +54,9 @@ async function listAction(options: { format: string; config: string }) {
         return
       }
 
-      // 根據 --format 選項格式化輸出
+      // Format output based on --format option
       if (options.format === 'json') {
-        // list 輸出精簡版：用 columnCount 取代空的 columns 陣列
+        // Compact list output: use columnCount instead of empty columns array
         const listOutput = tables.map(t => ({
           name: t.name,
           columnCount: t.columnCount ?? t.columns.length,
@@ -71,7 +71,7 @@ async function listAction(options: { format: string; config: string }) {
         console.log(formatter.format(tables))
       }
 
-      // 摘要
+      // Summary
       const tableCount = tables.filter(t => (t as any).tableType !== 'view').length
       const viewCount = tables.filter(t => (t as any).tableType === 'view').length
       const viewSuffix = viewCount > 0 ? ` (${viewCount} views)` : ''

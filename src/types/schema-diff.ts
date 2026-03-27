@@ -1,47 +1,47 @@
 /**
- * 模式差異檢測型別定義
- * 用於比較前一個架構快照和即時資料庫架構
+ * Schema diff detection type definitions
+ * Used to compare a previous schema snapshot against the live database schema
  */
 
 import type { ColumnSchema } from '@/adapters/types'
 
 /**
- * 欄位變更紀錄
- * 記錄單一欄位的前後狀態
+ * Column change record
+ * Records the before and after state of a single column
  */
 export interface ColumnDiff {
-  /** 欄位名稱 */
+  /** Column name */
   name: string
-  /** 變更前的欄位架構 */
+  /** Column schema before the change */
   previous: ColumnSchema
-  /** 變更後的欄位架構 */
+  /** Column schema after the change */
   current: ColumnSchema
 }
 
 /**
- * 表格層級的差異詳情
- * 記錄特定表格內的欄位變更（新增、移除、修改）
+ * Table-level diff details
+ * Records column changes (added, removed, modified) within a specific table
  */
 export interface TableDiffDetail {
-  /** 新增的欄位名稱陣列 */
+  /** Array of added column names */
   columnsAdded: string[]
-  /** 移除的欄位名稱陣列 */
+  /** Array of removed column names */
   columnsRemoved: string[]
-  /** 修改過的欄位 - 包含前後狀態對比 */
+  /** Modified columns - includes before/after state comparison */
   columnsModified: ColumnDiff[]
 }
 
 /**
- * 完整的模式差異報告
- * 包含所有表格層級和欄位層級的變更，以及人類可讀的摘要
+ * Complete schema diff report
+ * Contains all table-level and column-level changes, plus a human-readable summary
  */
 export interface SchemaDiffReport {
-  /** 新增的表格名稱陣列 */
+  /** Array of added table names */
   tablesAdded: string[]
-  /** 移除的表格名稱陣列 */
+  /** Array of removed table names */
   tablesRemoved: string[]
-  /** 修改的表格及其欄位變更詳情 - 按表格名稱鍵值對應 */
+  /** Modified tables and their column change details - keyed by table name */
   tablesModified: Record<string, TableDiffDetail>
-  /** 人類可讀的摘要字串，例如 "3 added, 2 removed, 5 modified" */
+  /** Human-readable summary string, e.g. "3 added, 2 removed, 5 modified" */
   summary: string
 }

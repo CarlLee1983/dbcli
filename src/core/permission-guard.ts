@@ -384,6 +384,31 @@ export function checkPermission(
     }
   }
 
+  // Data-Admin allows SELECT, INSERT, UPDATE, DELETE (full DML, no DDL)
+  if (permission === 'data-admin') {
+    const allowedTypes = [
+      'SELECT',
+      'INSERT',
+      'UPDATE',
+      'DELETE',
+      'SHOW',
+      'DESCRIBE',
+      'EXPLAIN',
+    ]
+    if (allowedTypes.includes(classification.type)) {
+      return {
+        allowed: true,
+        reason: `${classification.type} operation allowed in data-admin mode`,
+        classification,
+      }
+    }
+    return {
+      allowed: false,
+      reason: `${classification.type} operation requires admin permission`,
+      classification,
+    }
+  }
+
   // Read-Write allows SELECT, INSERT, UPDATE
   if (permission === 'read-write') {
     const allowedTypes = [
@@ -403,7 +428,7 @@ export function checkPermission(
     }
     return {
       allowed: false,
-      reason: `${classification.type} operation requires admin permission`,
+      reason: `${classification.type} operation requires data-admin or admin permission`,
       classification,
     }
   }

@@ -1,43 +1,43 @@
 /**
- * 資料修改操作的型別定義
- * 定義資料修改（INSERT、UPDATE、DELETE）操作的結果和選項
+ * Type definitions for data modification operations
+ * Defines results and options for data modification (INSERT, UPDATE, DELETE) operations
  */
 
 /**
- * 資料執行操作的結果
- * 用於包裝資料修改操作的執行結果和元數據
+ * Result of a data execution operation
+ * Used to wrap the execution result and metadata of data modification operations
  */
 export interface DataExecutionResult {
-  /** 執行狀態：成功或錯誤 */
+  /** Execution status: success or error */
   status: 'success' | 'error'
 
-  /** 執行的操作類型 */
+  /** Type of operation executed */
   operation: 'insert' | 'update' | 'delete'
 
-  /** 受影響的資料列數 */
+  /** Number of rows affected */
   rows_affected: number
 
-  /** ISO 8601 格式的執行時間戳 */
+  /** Execution timestamp in ISO 8601 format */
   timestamp?: string
 
-  /** 生成的 SQL 語句（用於確認和錯誤訊息） */
+  /** Generated SQL statement (for confirmation and error messages) */
   sql?: string
 
-  /** 錯誤訊息（僅在 status 為 'error' 時） */
+  /** Error message (only when status is 'error') */
   error?: string
 }
 
 /**
- * 資料執行選項
- * 控制資料修改操作的執行方式
+ * Data execution options
+ * Controls how data modification operations are executed
  */
 export interface DataExecutionOptions {
-  /** 乾執行模式：顯示 SQL 但不執行 */
+  /** Dry run mode: display SQL without executing */
   dryRun?: boolean
 
-  /** 跳過確認提示 */
+  /** Skip confirmation prompt */
   force?: boolean
 
-  /** 詳細輸出 */
+  /** Verbose output */
   verbose?: boolean
 }

@@ -1,8 +1,8 @@
 /**
- * 核心模組索引
- * 從此處匯出所有核心功能和引擎
+ * Core module index
+ * Exports all core functionality and engines from here
  *
- * Wave 1: Schema Infrastructure (完成)
+ * Wave 1: Schema Infrastructure (complete)
  * Wave 2: Incremental Updates & Atomic Writing
  * Wave 3: Concurrent Safety & Error Recovery
  * Wave 4: Performance Optimization & Indexing

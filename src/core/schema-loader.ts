@@ -1,8 +1,8 @@
 /**
  * Schema Layered Loader - Layered Loading and Initialization
  *
- * 啟動時的分層加載邏輯，是最關鍵的模組
- * 直接影響啟動性能和整體響應時間
+ * Layered loading logic at startup — the most critical module,
+ * directly affecting startup performance and overall response time
  */
 
 import { SchemaCacheManager } from './schema-cache'

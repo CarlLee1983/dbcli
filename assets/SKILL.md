@@ -28,7 +28,7 @@ dbcli init --use-env-refs           # Store env var references instead of values
 dbcli init --no-interactive --force # Non-interactive, skip overwrite confirmation
 ```
 
-**Key options:** `--system <postgresql|mysql|mariadb>`, `--permission <query-only|read-write|admin>`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`
+**Key options:** `--system <postgresql|mysql|mariadb>`, `--permission <query-only|read-write|data-admin|admin>`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`
 
 ### list
 
@@ -106,7 +106,7 @@ dbcli delete users --where "id=1" --force
 ```
 
 **Options:** `--where <condition>` (required), `--dry-run`, `--force`
-**Permission:** admin
+**Permission:** data-admin+
 
 ### export
 
@@ -164,13 +164,26 @@ dbcli diff --against before.json --format json
 **Options:** `--snapshot <path>`, `--against <path>`, `--format <json|table>`
 **Permission:** query-only+
 
+### status
+
+Show current configuration status (safe for AI agents, no credentials exposed).
+
+```bash
+dbcli status                    # JSON output (default)
+dbcli status --format text      # Human-readable text output
+```
+
+**Output:** `permission`, `system`, `blacklist` summary, `version`
+**Permission:** query-only+
+
 ## Permission Levels
 
 | Level | Allowed Operations |
 |-------|-------------------|
 | query-only | SELECT, list, schema, export |
 | read-write | query-only + INSERT, UPDATE |
-| admin | read-write + DELETE |
+| data-admin | read-write + DELETE (full DML, no DDL) |
+| admin | data-admin + DROP, ALTER, CREATE, TRUNCATE |
 
 Set via `dbcli init --permission <level>` or in `.dbcli` config.
 
@@ -182,9 +195,10 @@ All commands support `--config <path>` to specify a custom config file (default:
 
 **Before any database operation, follow this sequence:**
 
-1. `dbcli blacklist list` — Confirm sensitive data is protected
-2. `dbcli schema <table> --format json` — Verify actual column names
-3. Then execute `query` / `insert` / `update` / `export`
+1. `dbcli status` — Check current permission level and system info (safe — no credentials exposed)
+2. `dbcli blacklist list` — Confirm sensitive data is protected
+3. `dbcli schema <table> --format json` — Verify actual column names
+4. Then execute `query` / `insert` / `update` / `export` / `delete` according to your permission level
 
 **Never guess column names.** Naming conventions vary across projects (e.g. `frozen_balance` vs `freeze`, `amount` vs `balance_variable`). Always confirm with `schema` first.
 

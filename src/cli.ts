@@ -13,6 +13,7 @@ import { skillCommand } from './commands/skill'
 import { blacklistCommand } from './commands/blacklist'
 import { checkCommand } from './commands/check'
 import { diffCommand } from './commands/diff'
+import { statusCommand } from './commands/status'
 
 const program = new Command()
   .name('dbcli')
@@ -141,6 +142,9 @@ program.addCommand(checkCommand)
 
 // Register diff command
 program.addCommand(diffCommand)
+
+// Register status command
+program.addCommand(statusCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

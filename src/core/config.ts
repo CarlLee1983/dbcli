@@ -1,12 +1,12 @@
 /**
- * 不可變配置讀取/寫入/合併模組
+ * Immutable config read/write/merge module
  *
- * 提供使用複製語義（copy-on-write）的原子操作
- * 所有操作返回新對象，永不修改輸入
+ * Provides atomic operations using copy-on-write semantics.
+ * All operations return new objects and never mutate input.
  *
- * 支持兩種配置方式：
- * 1. 目錄方式（推薦）: .dbcli/ (config.json + .env.local)
- * 2. 檔案方式（舊版）: .dbcli (單個 JSON 檔案)
+ * Supports two configuration modes:
+ * 1. Directory mode (recommended): .dbcli/ (config.json + .env.local)
+ * 2. File mode (legacy): .dbcli (single JSON file)
  */
 
 import { DbcliConfig, DbcliConfigSchema } from '@/utils/validation'
@@ -15,7 +15,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 /**
- * 預設配置值
+ * Default configuration values
  */
 const DEFAULT_CONFIG: DbcliConfig = {
   connection: {
@@ -34,15 +34,15 @@ const DEFAULT_CONFIG: DbcliConfig = {
 }
 
 /**
- * 環境變量引用介面
- * 支持 { "$env": "ENV_VAR_NAME" } 的引用語法
+ * Environment variable reference interface
+ * Supports { "$env": "ENV_VAR_NAME" } reference syntax
  */
 interface EnvReference {
   $env: string
 }
 
 /**
- * 檢查值是否為環境變量引用
+ * Check if a value is an environment variable reference
  */
 function isEnvReference(value: unknown): value is EnvReference {
   return (
@@ -54,38 +54,38 @@ function isEnvReference(value: unknown): value is EnvReference {
 }
 
 /**
- * 遞迴解析和替換配置中的環境變量引用
- * 支持嵌套物件和陣列
- * 自動轉換類型（port 應轉為數字）
+ * Recursively resolve and replace environment variable references in config
+ * Supports nested objects and arrays
+ * Automatically converts types (port should be a number)
  *
- * @param config - 要解析的配置物件
- * @param env - 環境變量對象（通常是 process.env）
- * @param parentKey - 父物件的鍵名（用於類型推斷）
- * @param strict - 如果為 true，環境變量缺失時拋出錯誤；如果為 false，保留引用
- * @returns 解析後的配置
- * @throws ConfigError 如果在 strict 模式下環境變量未找到
+ * @param config - Config object to resolve
+ * @param env - Environment variable object (usually process.env)
+ * @param parentKey - Key name of the parent object (used for type inference)
+ * @param strict - If true, throw on missing env vars; if false, preserve the reference
+ * @returns Resolved config
+ * @throws ConfigError if an environment variable is not found in strict mode
  */
 function resolveEnvReferences(config: any, env: Record<string, string>, parentKey?: string, strict: boolean = false): any {
   if (isEnvReference(config)) {
     const envKey = config.$env
     const value = env[envKey]
     if (!value) {
-      // 在非 strict 模式下，保留環境變量引用而不是拋出錯誤
+      // In non-strict mode, preserve the env var reference instead of throwing
       if (!strict) {
         return config
       }
       throw new ConfigError(
-        `環境變量未定義: ${envKey}\n` +
-        `請在 .env 或環境變量中設置 ${envKey}。\n` +
-        `提示: 檢查 .env 文件或執行 'export ${envKey}=<值>'`
+        `Environment variable not defined: ${envKey}\n` +
+        `Please set ${envKey} in .env or your environment.\n` +
+        `Hint: check your .env file or run 'export ${envKey}=<value>'`
       )
     }
 
-    // 根據鍵名進行類型轉換
+    // Type conversion based on key name
     if (parentKey === 'port') {
       const portNum = parseInt(value, 10)
       if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-        throw new ConfigError(`${envKey} 必須是有效的端口號 (1-65535)，得到: ${value}`)
+        throw new ConfigError(`${envKey} must be a valid port number (1-65535), got: ${value}`)
       }
       return portNum
     }
@@ -109,7 +109,7 @@ function resolveEnvReferences(config: any, env: Record<string, string>, parentKe
 }
 
 /**
- * 從 .env 格式檔案中提取密碼
+ * Extract password from a .env format file
  */
 function parseEnvPassword(content: string): string | null {
   const match = content.match(/^DBCLI_PASSWORD=(.+)$/m)
@@ -117,22 +117,22 @@ function parseEnvPassword(content: string): string | null {
 }
 
 /**
- * 配置模組：讀取、驗證、合併、寫入
+ * Config module: read, validate, merge, write
  */
 export const configModule = {
   /**
-   * 讀取配置（支持目錄和檔案兩種方式）
-   * 1. 如果 path 是目錄：讀取 .dbcli/config.json 和 .dbcli/.env.local
-   * 2. 如果 path 是檔案：讀取舊式單檔案 .dbcli (向後相容)
-   * 如果都不存在，返回預設配置
+   * Read config (supports both directory and file modes)
+   * 1. If path is a directory: reads .dbcli/config.json and .dbcli/.env.local
+   * 2. If path is a file: reads legacy single-file .dbcli (backward compatible)
+   * Returns default config if neither exists
    *
-   * @param path - .dbcli 目錄或檔案路徑
+   * @param path - Path to .dbcli directory or file
    * @returns DbcliConfig
-   * @throws ConfigError 如果 JSON 無效或驗證失敗
+   * @throws ConfigError if JSON is invalid or validation fails
    */
   async read(path: string): Promise<DbcliConfig> {
     try {
-      // 檢查是否為目錄
+      // Check if path is a directory
       let isDirectory = false
       try {
         const stat = await Bun.file(path).stat()
@@ -141,7 +141,7 @@ export const configModule = {
         isDirectory = false
       }
 
-      // 嘗試讀取目錄方式（新）
+      // Try directory mode (new)
       if (isDirectory) {
         const configPath = join(path, 'config.json')
         const configFile = Bun.file(configPath)
@@ -151,11 +151,11 @@ export const configModule = {
           const content = await configFile.text()
           const config = JSON.parse(content)
 
-          // 在讀取配置時使用非 strict 模式，保留缺失的環境變量引用
-          // 這樣即使環境變量未定義，也不會拋出錯誤
+          // Use non-strict mode when reading config, preserving missing env var references
+          // This prevents errors even when env vars are not defined
           const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false)
 
-          // 嘗試讀取 .env.local 中的敏感信息（舊方式，保持向後相容）
+          // Try reading sensitive info from .env.local (legacy approach, for backward compatibility)
           const envPath = join(path, '.env.local')
           const envFile = Bun.file(envPath)
           if (await envFile.exists()) {
@@ -170,58 +170,58 @@ export const configModule = {
         }
       }
 
-      // 嘗試舊式檔案方式（向後相容）
+      // Try legacy file mode (backward compatible)
       const file = Bun.file(path)
       const exists = await file.exists()
 
       if (exists) {
         const content = await file.text()
         const raw = JSON.parse(content)
-        // 在讀取配置時使用非 strict 模式，保留缺失的環境變量引用
+        // Use non-strict mode when reading config, preserving missing env var references
         const resolved = resolveEnvReferences(raw, process.env, undefined, false)
         return DbcliConfigSchema.parse(resolved)
       }
 
-      // 都不存在，返回預設配置
+      // Neither exists, return default config
       return { ...DEFAULT_CONFIG }
     } catch (error) {
       if (error instanceof Error && error.message.includes('JSON')) {
-        throw new ConfigError(`無法解析 .dbcli 文件：${error.message}`)
+        throw new ConfigError(`Failed to parse .dbcli file: ${error.message}`)
       }
       throw new ConfigError(
-        `無法讀取 .dbcli 配置: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read .dbcli config: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   },
 
   /**
-   * 驗證原始資料符合 DbcliConfig 模式
+   * Validate raw data against the DbcliConfig schema
    *
-   * @param raw - 要驗證的原始資料
-   * @returns DbcliConfig 已驗證的配置
-   * @throws ConfigError 如果驗證失敗
+   * @param raw - Raw data to validate
+   * @returns DbcliConfig validated config
+   * @throws ConfigError if validation fails
    */
   validate(raw: unknown): DbcliConfig {
     try {
       return DbcliConfigSchema.parse(raw)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new ConfigError(`無效的 .dbcli 配置結構: ${errorMessage}`)
+      throw new ConfigError(`Invalid .dbcli config structure: ${errorMessage}`)
     }
   },
 
   /**
-   * 使用不可變語義合併兩個配置對象
+   * Merge two config objects with immutable semantics
    *
-   * 特性：
-   * - 返回新對象（從不修改輸入）
-   * - 深度合併嵌套對象（connection、metadata、schema）
-   * - 保留現有的 metadata.createdAt
-   * - 如果沒有 createdAt，設置當前時間戳
+   * Characteristics:
+   * - Returns a new object (never mutates input)
+   * - Deep merges nested objects (connection, metadata, schema)
+   * - Preserves existing metadata.createdAt
+   * - Sets current timestamp if createdAt is absent
    *
-   * @param existing - 現有配置
-   * @param updates - 要應用的更新（部分配置）
-   * @returns DbcliConfig 新的合併配置
+   * @param existing - Existing config
+   * @param updates - Updates to apply (partial config)
+   * @returns DbcliConfig new merged config
    */
   merge(existing: DbcliConfig, updates: Partial<DbcliConfig>): DbcliConfig {
     const mergedConfig: DbcliConfig = {
@@ -238,7 +238,7 @@ export const configModule = {
       metadata: {
         ...existing.metadata,
         ...(updates.metadata || {}),
-        // 保留原始的 createdAt，如果不存在則設置新值
+        // Preserve original createdAt, set new value if absent
         createdAt: existing.metadata?.createdAt || new Date().toISOString(),
         version: (existing.metadata?.version || '1.0')
       }
@@ -248,44 +248,44 @@ export const configModule = {
   },
 
   /**
-   * 寫入配置到 .dbcli（支持目錄和檔案）
+   * Write config to .dbcli (supports directory and file modes)
    *
-   * 目錄方式 (.dbcli/):
-   * - config.json: 主配置（不含密碼）
-   * - .env.local: 敏感信息（密碼）
+   * Directory mode (.dbcli/):
+   * - config.json: main config (without password)
+   * - .env.local: sensitive info (password)
    *
-   * 檔案方式 (.dbcli):
-   * - 單個 JSON 檔案（舊版，向後相容）
+   * File mode (.dbcli):
+   * - Single JSON file (legacy, backward compatible)
    *
-   * 特性：
-   * - 先驗證後寫入（失敗快速）
-   * - 使用 2 空格縮進格式化 JSON
-   * - 使用 Bun.file 進行寫入
+   * Characteristics:
+   * - Validate before write (fail fast)
+   * - JSON formatted with 2-space indentation
+   * - Uses Bun.file for writing
    *
-   * @param path - .dbcli 目錄或檔案路徑
-   * @param config - 要寫入的配置
-   * @throws ConfigError 如果驗證或寫入失敗
+   * @param path - Path to .dbcli directory or file
+   * @param config - Config to write
+   * @throws ConfigError if validation or write fails
    */
   async write(path: string, config: DbcliConfig): Promise<void> {
     try {
-      // 先驗證，確保不寫入無效配置
+      // Validate first to ensure we never write invalid config
       this.validate(config)
 
       const pathObj = Bun.file(path)
       const isDirectory = (await pathObj.exists()) && pathObj.type === 'directory'
 
-      // 目錄方式：分離 config 和 .env.local
+      // Directory mode: separate config and .env.local
       if (isDirectory || path.endsWith('.dbcli')) {
-        // 檢查是否使用環境變量引用（password 是 { "$env": "..." } 對象）
+        // Check if using env var references (password is a { "$env": "..." } object)
         const hasEnvReferences = isEnvReference((config.connection as any).password)
 
         if (hasEnvReferences) {
-          // 新方式：使用環境變量引用，直接寫入 config.json
+          // New approach: using env var references, write directly to config.json
           const configPath = join(path, 'config.json')
           const configJson = JSON.stringify(config, null, 2)
           await Bun.file(configPath).write(configJson)
         } else {
-          // 舊方式：密碼分離到 .env.local
+          // Legacy approach: password separated into .env.local
           const password = config.connection.password
           const configWithoutPassword = {
             ...config,
@@ -296,20 +296,20 @@ export const configModule = {
           }
           delete (configWithoutPassword.connection as any).password
 
-          // 寫入 config.json（不含密碼）
+          // Write config.json (without password)
           const configPath = join(path, 'config.json')
           const configJson = JSON.stringify(configWithoutPassword, null, 2)
           await Bun.file(configPath).write(configJson)
 
-          // 寫入 .env.local（密碼）
+          // Write .env.local (password)
           if (password) {
             const envPath = join(path, '.env.local')
-            const envContent = `# 資料庫敏感信息 - 請勿提交到 git\n# Database Credentials - DO NOT commit to git\n\nDBCLI_PASSWORD=${password}\n`
+            const envContent = `# Database Credentials - DO NOT commit to git\n\nDBCLI_PASSWORD=${password}\n`
             await Bun.file(envPath).write(envContent)
           }
         }
       } else {
-        // 舊式檔案方式（向後相容）
+        // Legacy file mode (backward compatible)
         const json = JSON.stringify(config, null, 2)
         await Bun.file(path).write(json)
       }
@@ -318,7 +318,7 @@ export const configModule = {
         throw error
       }
       throw new ConfigError(
-        `無法寫入 .dbcli 配置: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to write .dbcli config: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   }

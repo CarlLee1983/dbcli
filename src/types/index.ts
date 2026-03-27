@@ -4,7 +4,7 @@ export type { BlacklistConfig, ColumnBlacklist, BlacklistState } from './blackli
 export { BlacklistError } from './blacklist'
 
 /**
- * 資料庫連接環境變數（來自 .env 解析）
+ * Database connection environment variables (parsed from .env)
  */
 export interface DatabaseEnv {
   system: 'postgresql' | 'mysql' | 'mariadb'
@@ -16,7 +16,7 @@ export interface DatabaseEnv {
 }
 
 /**
- * 連接配置（儲存在 .dbcli 文件中）
+ * Connection configuration (stored in .dbcli file)
  */
 export interface ConnectionConfig {
   system: 'postgresql' | 'mysql' | 'mariadb'
@@ -28,12 +28,12 @@ export interface ConnectionConfig {
 }
 
 /**
- * 權限級別（粗粒度訪問控制）
+ * Permission level (coarse-grained access control)
  */
-export type Permission = 'query-only' | 'read-write' | 'admin'
+export type Permission = 'query-only' | 'read-write' | 'data-admin' | 'admin'
 
 /**
- * 元數據信息（審計和版本控制）
+ * Metadata information (auditing and version control)
  */
 export interface Metadata {
   createdAt?: string
@@ -41,7 +41,7 @@ export interface Metadata {
 }
 
 /**
- * DbcliConfig 完整配置結構（儲存在 .dbcli 文件）
+ * DbcliConfig complete configuration structure (stored in .dbcli file)
  */
 export interface DbcliConfig {
   connection: ConnectionConfig

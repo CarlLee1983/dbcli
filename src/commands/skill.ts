@@ -1,6 +1,6 @@
 /**
- * dbcli skill 命令
- * 讀取靜態 SKILL.md 並輸出或安裝到指定平台目錄
+ * dbcli skill command
+ * Reads the static SKILL.md and outputs it or installs it to the specified platform directory
  */
 
 import * as path from 'node:path'
@@ -9,8 +9,8 @@ import { t, t_vars } from '@/i18n/message-loader'
 import type { Command } from 'commander'
 
 /**
- * 找到 package root（包含 package.json 的目錄）
- * 支援開發模式（src/commands/）和 bundle 模式（dist/）
+ * Finds the package root (the directory containing package.json)
+ * Supports dev mode (src/commands/) and bundle mode (dist/)
  */
 function findPackageRoot(): string {
   let dir = import.meta.dir
@@ -20,38 +20,38 @@ function findPackageRoot(): string {
     }
     dir = path.dirname(dir)
   }
-  // fallback: 從 import.meta.dir 往上兩層（開發模式 src/commands/ → root）
+  // fallback: go two levels up from import.meta.dir (dev mode: src/commands/ → root)
   return path.resolve(import.meta.dir, '../..')
 }
 
-/** 靜態 SKILL.md 的絕對路徑（基於 package root） */
+/** Absolute path to the static SKILL.md (relative to package root) */
 const SKILL_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'SKILL.md')
 
 export interface SkillOptions {
-  install?: string  // 平台: claude, gemini, copilot, cursor
-  output?: string   // 自訂輸出檔案路徑
+  install?: string  // platform: claude, gemini, copilot, cursor
+  output?: string   // custom output file path
 }
 
 /**
- * Skill 命令處理器
- * 用法:
- *   dbcli skill                    # 列印到標準輸出
- *   dbcli skill --output ./skill.md  # 寫入檔案
- *   dbcli skill --install claude   # 安裝到 ~/.claude/skills/dbcli/SKILL.md
+ * Skill command handler
+ * Usage:
+ *   dbcli skill                      # Print to stdout
+ *   dbcli skill --output ./skill.md  # Write to file
+ *   dbcli skill --install claude     # Install to ~/.claude/skills/dbcli/SKILL.md
  */
 export async function skillCommand(
   _program: Command,
   options: SkillOptions
 ): Promise<void> {
   try {
-    // 1. 讀取靜態 SKILL.md（唯一來源）
+    // 1. Read static SKILL.md (single source of truth)
     const skillFile = Bun.file(SKILL_SOURCE_PATH)
     if (!(await skillFile.exists())) {
       throw new Error(`Skill source not found: ${SKILL_SOURCE_PATH}`)
     }
     const skillMarkdown = await skillFile.text()
 
-    // 2. 根據選項處理輸出
+    // 2. Handle output based on options
     if (options.output) {
       await Bun.file(options.output).write(skillMarkdown)
       console.error(`Skill written to ${options.output}`)
@@ -66,7 +66,7 @@ export async function skillCommand(
       return
     }
 
-    // 3. 預設: 列印到標準輸出（用於管道傳輸）
+    // 3. Default: print to stdout (for piping)
     console.log(skillMarkdown)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -76,8 +76,8 @@ export async function skillCommand(
 }
 
 /**
- * 取得平台特定的安裝路徑
- * 處理主目錄擴展和跨平台路徑
+ * Returns the platform-specific install path
+ * Handles home directory expansion and cross-platform paths
  */
 function getInstallPath(platform: string): string {
   const home = process.env.HOME || homedir()
@@ -94,7 +94,7 @@ function getInstallPath(platform: string): string {
       return path.join(process.cwd(), '.github', 'skills', 'dbcli', 'SKILL.md')
 
     case 'cursor':
-      // 偏好現代化的 .cursor/rules/*.mdc 格式
+      // Prefer the modern .cursor/rules/*.mdc format
       return path.join(process.cwd(), '.cursor', 'rules', 'dbcli.mdc')
 
     default:
@@ -105,16 +105,16 @@ function getInstallPath(platform: string): string {
 }
 
 /**
- * 確保目錄存在，並建立必要的上層目錄
- * FIX: 使用原生 shell ($) 來進行跨平台 mkdir，而非 Bun.file
+ * Ensures a directory exists, creating parent directories as needed
+ * FIX: Uses native shell ($) for cross-platform mkdir instead of Bun.file
  */
 async function ensureDir(dirPath: string): Promise<void> {
   try {
-    // 使用 Bun 的原生 shell ($) 進行跨平台 mkdir -p
-    // 這能正確處理 Windows/macOS/Linux 的路徑分隔符
+    // Use Bun's native shell ($) for cross-platform mkdir -p
+    // This correctly handles path separators on Windows/macOS/Linux
     await $`mkdir -p ${dirPath}`.quiet()
   } catch (error) {
-    // 如果 shell 語法不可用，嘗試使用 Node.js fs.mkdir 作為後備
+    // If shell syntax is unavailable, fall back to Node.js fs.mkdir
     try {
       const { mkdir } = await import('node:fs/promises')
       await mkdir(dirPath, { recursive: true })

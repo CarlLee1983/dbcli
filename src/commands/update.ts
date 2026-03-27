@@ -1,6 +1,6 @@
 /**
- * dbcli update 命令
- * 透過 --where 和 --set 旗標更新資料庫資料表中的資料
+ * dbcli update command
+ * Updates rows in a database table via --where and --set flags
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
@@ -13,13 +13,13 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
 /**
- * 從字串格式的 WHERE 子句解析出條件對象
- * 例如: "id=1" → { id: "1" }
- * 例如: "id=1 AND status='active'" → { id: "1", status: "active" }
+ * Parses a WHERE clause string into a conditions object
+ * e.g. "id=1" → { id: "1" }
+ * e.g. "id=1 AND status='active'" → { id: "1", status: "active" }
  *
- * @param whereClause WHERE 條件字串
- * @returns 條件對象 {column: value, ...}
- * @throws Error 如果無法解析 WHERE 子句
+ * @param whereClause WHERE condition string
+ * @returns Conditions object {column: value, ...}
+ * @throws Error if the WHERE clause cannot be parsed
  */
 function parseWhereClause(whereClause: string): Record<string, any> {
   if (!whereClause || whereClause.trim() === '') {
@@ -28,11 +28,11 @@ function parseWhereClause(whereClause: string): Record<string, any> {
 
   const conditions: Record<string, any> = {}
 
-  // 分割 AND 條件
+  // Split AND conditions
   const andParts = whereClause.split(/\s+AND\s+/i)
 
   for (const part of andParts) {
-    // 匹配 "column=value" 模式
+    // Match "column=value" pattern
     const match = part.match(/^(\w+)\s*=\s*(.+)$/)
     if (!match) {
       throw new Error(
@@ -43,17 +43,17 @@ function parseWhereClause(whereClause: string): Record<string, any> {
     const [_, column, valueStr] = match
     let value: any = valueStr.trim()
 
-    // 移除引號
+    // Strip quotes
     if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
       value = value.slice(1, -1)
     }
 
-    // 嘗試轉換為數字
+    // Attempt numeric conversion
     if (!isNaN(value) && value !== '') {
       value = Number(value)
     }
 
-    // 處理 true/false
+    // Handle true/false/null literals
     if (value === 'true') value = true
     if (value === 'false') value = false
     if (value === 'null') value = null
@@ -65,8 +65,8 @@ function parseWhereClause(whereClause: string): Record<string, any> {
 }
 
 /**
- * Update 命令操作處理器
- * 接受 table、where 條件和 set 資料，驗證，執行更新操作，並格式化輸出
+ * Update command action handler
+ * Accepts table, where conditions, and set data, validates, executes the update, and formats output
  */
 export async function updateCommand(
   table: string,
@@ -78,23 +78,23 @@ export async function updateCommand(
   }
 ): Promise<void> {
   try {
-    // 1. 驗證資料表名稱
+    // 1. Validate table name
     if (!table || table.trim() === '') {
       throw new Error('Table name required')
     }
     table = table.trim()
 
-    // 2. 驗證 --where 旗標
+    // 2. Validate --where flag
     if (!options.where || options.where.trim() === '') {
       throw new Error('UPDATE requires --where clause (e.g. --where "id=1")')
     }
 
-    // 3. 驗證 --set 旗標
+    // 3. Validate --set flag
     if (!options.set || options.set.trim() === '') {
       throw new Error('UPDATE requires --set flag with JSON data (e.g. --set \'{"name":"Bob"}\')')
     }
 
-    // 4. 解析 WHERE 條件字串
+    // 4. Parse WHERE condition string
     let whereConditions: Record<string, any>
     try {
       whereConditions = parseWhereClause(options.where)
@@ -102,7 +102,7 @@ export async function updateCommand(
       throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
     }
 
-    // 5. 解析 --set JSON
+    // 5. Parse --set JSON
     let setData: Record<string, any>
     try {
       setData = JSON.parse(options.set)
@@ -110,26 +110,26 @@ export async function updateCommand(
       throw new Error(t_vars('errors.invalid_json', { message: (error as Error).message }))
     }
 
-    // 驗證 setData 是物件而非陣列或原始值
+    // Validate setData is an object, not an array or primitive
     if (!setData || typeof setData !== 'object' || Array.isArray(setData)) {
       throw new Error('JSON in --set must be an object (e.g. {"name":"Bob","email":"b@example.com"})')
     }
 
-    // 6. 載入組態
+    // 6. Load configuration
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
-    // 7. 建立資料庫適配器
+    // 7. Create database adapter
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
 
     try {
-      // 8. 取得資料表結構
+      // 8. Get table schema
       const schema = await adapter.getTableSchema(table)
 
-      // 9. 建立 DataExecutor 並執行 UPDATE
+      // 9. Create DataExecutor and execute UPDATE
       const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
@@ -140,7 +140,7 @@ export async function updateCommand(
         force: options.force,
       })
 
-      // 10. 格式化輸出為 JSON
+      // 10. Format output as JSON
       const output = {
         status: result.status,
         operation: result.operation,
@@ -152,7 +152,7 @@ export async function updateCommand(
 
       console.log(JSON.stringify(output, null, 2))
 
-      // 如果有錯誤，退出碼為 1
+      // Exit with code 1 if there is an error
       if (result.status === 'error') {
         process.exit(1)
       }
@@ -160,7 +160,7 @@ export async function updateCommand(
       await adapter.disconnect()
     }
   } catch (error) {
-    // 黑名單錯誤
+    // Blacklist error
     if (error instanceof BlacklistError) {
       const output = {
         status: 'error',
@@ -172,7 +172,7 @@ export async function updateCommand(
       process.exit(1)
     }
 
-    // 權限錯誤
+    // Permission error
     if (error instanceof PermissionError) {
       console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)
@@ -180,13 +180,13 @@ export async function updateCommand(
       process.exit(1)
     }
 
-    // 連接錯誤
+    // Connection error
     if (error instanceof ConnectionError) {
       console.error(t_vars('errors.connection_failed', { message: error.message }))
       process.exit(1)
     }
 
-    // 驗證或其他錯誤
+    // Validation or other errors
     const output = {
       status: 'error',
       operation: 'update',

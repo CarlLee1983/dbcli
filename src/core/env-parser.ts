@@ -1,6 +1,6 @@
 /**
- * .env 檔案解析器
- * 支援 DATABASE_URL 格式和 DB_* 元件格式
+ * .env file parser
+ * Supports DATABASE_URL format and DB_* component format
  */
 
 import { DatabaseEnv } from '@/types'
@@ -8,18 +8,18 @@ import { EnvParseError } from '@/utils/errors'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 
 /**
- * 從 DATABASE_URL 解析連接資訊
- * 支援 RFC 3986 百分比編碼（密碼中的特殊字符）
+ * Parse connection info from DATABASE_URL
+ * Supports RFC 3986 percent-encoding (special characters in passwords)
  *
  * @example
  * parseConnectionUrl('postgresql://user:p%40ssword@localhost:5432/mydb')
- * // 返回 { system: 'postgresql', host: 'localhost', port: 5432, user: 'user', password: 'p@ssword', database: 'mydb' }
+ * // returns { system: 'postgresql', host: 'localhost', port: 5432, user: 'user', password: 'p@ssword', database: 'mydb' }
  */
 export function parseConnectionUrl(url: string): DatabaseEnv {
   try {
     const parsed = new URL(url)
 
-    // 從協議檢測資料庫系統
+    // Detect database system from protocol
     const protocol = parsed.protocol.replace(':', '')
     let system: 'postgresql' | 'mysql' | 'mariadb'
 
@@ -30,66 +30,66 @@ export function parseConnectionUrl(url: string): DatabaseEnv {
     } else if (protocol === 'mariadb') {
       system = 'mariadb'
     } else {
-      throw new Error(`不支援的協議: ${protocol}`)
+      throw new Error(`Unsupported protocol: ${protocol}`)
     }
 
-    // 提取元件，使用百分比解碼處理特殊字符
+    // Extract components, using percent-decoding to handle special characters
     const host = parsed.hostname || 'localhost'
     const port =
       parsed.port !== ''
         ? parseInt(parsed.port, 10)
         : getDefaultsForSystem(system).port || 5432
 
-    // CRITICAL: 解碼使用者名稱和密碼以處理特殊字符
+    // CRITICAL: Decode username and password to handle special characters
     const user = decodeURIComponent(parsed.username || '')
     const password = decodeURIComponent(parsed.password || '')
-    const database = parsed.pathname.slice(1) // 移除前導 /
+    const database = parsed.pathname.slice(1) // Remove leading /
 
     return { system, host, port, user, password, database }
   } catch (error) {
     throw new EnvParseError(
-      `無法解析 DATABASE_URL: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to parse DATABASE_URL: ${error instanceof Error ? error.message : String(error)}`
     )
   }
 }
 
 /**
- * 從環境變數解析資料庫配置
+ * Parse database configuration from environment variables
  *
- * 優先順序：
- * 1. DATABASE_URL（完整連接字符串）
- * 2. DB_* 元件（DB_HOST、DB_PORT、DB_USER、DB_PASSWORD、DB_NAME）
- * 3. 如果都不存在則返回 null
+ * Priority order:
+ * 1. DATABASE_URL (complete connection string)
+ * 2. DB_* components (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+ * 3. Returns null if neither is present
  *
- * @returns DatabaseEnv 或 null 如果未找到資料庫配置
- * @throws EnvParseError 如果元件不完整或無效
+ * @returns DatabaseEnv or null if no database configuration found
+ * @throws EnvParseError if components are incomplete or invalid
  */
 export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | null {
-  // 路徑 1：DATABASE_URL（完整連接字符串）
+  // Path 1: DATABASE_URL (complete connection string)
   if (env.DATABASE_URL) {
     return parseConnectionUrl(env.DATABASE_URL)
   }
 
-  // 路徑 2：DB_* 元件
+  // Path 2: DB_* components
   if (env.DB_HOST || env.DB_USER) {
     const system = (env.DB_SYSTEM || 'postgresql') as 'postgresql' | 'mysql' | 'mariadb'
     const user = env.DB_USER
     const database = env.DB_NAME
 
-    // 驗證必需欄位
+    // Validate required fields
     if (!user) {
-      throw new EnvParseError('使用元件格式時 DB_USER 為必需')
+      throw new EnvParseError('DB_USER is required when using component format')
     }
     if (!database) {
-      throw new EnvParseError('使用元件格式時 DB_NAME 為必需')
+      throw new EnvParseError('DB_NAME is required when using component format')
     }
 
     const defaults = getDefaultsForSystem(system)
     const port = env.DB_PORT ? parseInt(env.DB_PORT, 10) : (defaults.port || 5432)
 
-    // 驗證埠號有效性
+    // Validate port number
     if (isNaN(port) || port < 1 || port > 65535) {
-      throw new EnvParseError(`DB_PORT 必須在 1 到 65535 之間，得到: ${env.DB_PORT}`)
+      throw new EnvParseError(`DB_PORT must be between 1 and 65535, got: ${env.DB_PORT}`)
     }
 
     return {
@@ -102,6 +102,6 @@ export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | nul
     }
   }
 
-  // 未找到任何資料庫配置
+  // No database configuration found
   return null
 }

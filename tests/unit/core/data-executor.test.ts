@@ -104,7 +104,7 @@ describe('DataExecutor.buildInsertSql', () => {
   })
 
   test('validates missing columns in data', () => {
-    const data = { name: 'Charlie', phone: '555-1234' } // phone 不存在
+    const data = { name: 'Charlie', phone: '555-1234' } // phone does not exist
 
     expect(() => {
       executor.buildInsertSql('users', data, mockUserSchema)
@@ -161,7 +161,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('權限被拒')
+    expect(result.error).toContain('Permission denied')
   })
 
   test('read-write permission allows INSERT', async () => {
@@ -176,6 +176,19 @@ describe('DataExecutor.executeInsert - Permissions', () => {
 
     expect(result.status).toBe('success')
     expect(result.operation).toBe('insert')
+  })
+
+  test('data-admin permission allows INSERT', async () => {
+    const executor = new DataExecutor(adapter, 'data-admin')
+    const data = { name: 'Charlie', email: 'charlie@example.com' }
+    adapter.setExecuteResults([{ id: 1 }])
+
+    const result = await executor.executeInsert('users', data, mockUserSchema, {
+      force: true,
+      dryRun: false
+    })
+
+    expect(result.status).toBe('success')
   })
 
   test('admin permission allows INSERT', async () => {
@@ -395,7 +408,7 @@ describe('DataExecutor.executeDelete', () => {
     adapter.setExecuteResults([])
   })
 
-  test('DELETE requires admin permission only', async () => {
+  test('DELETE requires data-admin or admin permission', async () => {
     const executor2 = new DataExecutor(adapter, 'read-write')
     const whereData = { id: 1 }
 
@@ -404,7 +417,19 @@ describe('DataExecutor.executeDelete', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Admin')
+    expect(result.error).toContain('Data-Admin')
+  })
+
+  test('DELETE succeeds with data-admin', async () => {
+    const dataAdminExecutor = new DataExecutor(adapter, 'data-admin')
+    const whereData = { id: 1 }
+
+    const result = await dataAdminExecutor.executeDelete('users', whereData, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
   })
 
   test('DELETE succeeds with admin', async () => {
@@ -493,7 +518,7 @@ describe('DataExecutor.buildUpdateSql', () => {
 
     expect(() => {
       executor['buildUpdateSql']('users', data, where, mockUserSchema)
-    }).toThrow('找不到欄位')
+    }).toThrow('not found in table')
   })
 
   test('throws error if WHERE column not in schema', () => {
@@ -502,7 +527,7 @@ describe('DataExecutor.buildUpdateSql', () => {
 
     expect(() => {
       executor['buildUpdateSql']('users', data, where, mockUserSchema)
-    }).toThrow('找不到欄位')
+    }).toThrow('not found in table')
   })
 
   test('preserves parameter order: SET before WHERE', () => {
@@ -553,7 +578,7 @@ describe('DataExecutor.executeUpdate', () => {
     const result = await executor2.executeUpdate('users', data, where, mockUserSchema)
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('權限被拒')
+    expect(result.error).toContain('Permission denied')
     expect(result.error).toContain('Query-only')
   })
 
@@ -661,7 +686,7 @@ describe('DataExecutor.executeUpdate', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('UPDATE 失敗')
+    expect(result.error).toContain('UPDATE failed')
   })
 
   test('UPDATE handles database constraint errors', async () => {
@@ -688,7 +713,7 @@ describe('DataExecutor.executeUpdate', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('欄位')
+    expect(result.error).toContain('Column')
   })
 
   test('UPDATE requires both SET data and WHERE conditions', async () => {
@@ -758,7 +783,7 @@ describe('DataExecutor.buildDeleteSql', () => {
 
     expect(() => {
       executor['buildDeleteSql']('users', where, mockUserSchema)
-    }).toThrow('找不到欄位')
+    }).toThrow('not found in table')
   })
 
   test('preserves parameter order matching WHERE conditions', () => {
@@ -791,7 +816,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Admin')
+    expect(result.error).toContain('Data-Admin')
     expect(result.operation).toBe('delete')
   })
 
@@ -804,7 +829,20 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Admin')
+    expect(result.error).toContain('Data-Admin')
+  })
+
+  test('data-admin permission allows DELETE', async () => {
+    const executor = new DataExecutor(adapter, 'data-admin')
+    const where = { id: 1 }
+    adapter.setExecuteResults([{ id: 1, name: 'ToDelete', email: 'delete@example.com' }])
+
+    const result = await executor.executeDelete('users', where, mockUserSchema, {
+      force: true
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.operation).toBe('delete')
   })
 
   test('admin permission allows DELETE', async () => {
@@ -820,7 +858,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     expect(result.operation).toBe('delete')
   })
 
-  test('error message for non-admin shows Admin-only requirement', async () => {
+  test('error message for insufficient permission shows data-admin requirement', async () => {
     const executor = new DataExecutor(adapter, 'read-write')
     const where = { id: 1 }
 
@@ -828,7 +866,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
       force: true
     })
 
-    expect(result.error).toContain('Admin')
+    expect(result.error).toContain('Data-Admin')
     expect(result.error).toContain('DELETE')
   })
 })
@@ -866,7 +904,7 @@ describe('DataExecutor.executeDelete - WHERE Validation', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('欄位')
+    expect(result.error).toContain('Column')
   })
 })
 
@@ -1001,7 +1039,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('DELETE 失敗')
+    expect(result.error).toContain('DELETE failed')
     expect(result.error).toContain('Database connection lost')
   })
 
@@ -1027,7 +1065,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('DELETE 失敗')
+    expect(result.error).toContain('DELETE failed')
   })
 
   test('DELETE with missing WHERE column shows validation error', async () => {
@@ -1038,6 +1076,6 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('欄位')
+    expect(result.error).toContain('Column')
   })
 })

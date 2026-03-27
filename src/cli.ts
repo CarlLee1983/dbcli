@@ -16,6 +16,7 @@ import { checkCommand } from './commands/check'
 import { diffCommand } from './commands/diff'
 import { statusCommand } from './commands/status'
 import { doctorCommand } from './commands/doctor'
+import { completionCommand } from './commands/completion'
 
 const program = new Command()
   .name('dbcli')
@@ -172,6 +173,7 @@ program.addCommand(diffCommand)
 // Register status command
 program.addCommand(statusCommand)
 program.addCommand(doctorCommand)
+program.addCommand(completionCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

@@ -207,6 +207,19 @@ dbcli completion --install zsh   # Install for specific shell
 
 **Supported shells:** bash, zsh, fish
 
+### upgrade
+
+Check for updates and self-upgrade dbcli to the latest version from npm.
+
+```bash
+dbcli upgrade                   # Check and upgrade if newer version available
+dbcli upgrade --check           # Only check, do not upgrade
+```
+
+**Options:** `--check`
+
+**Background check:** Every command silently checks the npm registry for a newer version (at most once per 24 hours, cached in `.dbcli/version-check.json`). If a newer version is found, a one-line hint is printed to stderr after the command completes. Pass `-q` / `--quiet` to suppress the hint.
+
 ## Permission Levels
 
 | Level | Allowed Operations |

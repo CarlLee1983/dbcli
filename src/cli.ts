@@ -17,6 +17,12 @@ import { diffCommand } from './commands/diff'
 import { statusCommand } from './commands/status'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
+import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
+import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
+import { join } from 'path'
+
+// Module-level state for background version check
+let _bgVersionCheckResult: { hasUpdate: boolean; latestVersion: string } | null | undefined
 
 const program = new Command()
   .name('dbcli')
@@ -27,7 +33,7 @@ const program = new Command()
   .option('-q, --quiet', 'Suppress non-essential output')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
 
-program.hook('preAction', (thisCommand) => {
+program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()
 
   // Handle --no-color: set env var before picocolors reads it
@@ -46,6 +52,37 @@ program.hook('preAction', (thisCommand) => {
   }
 
   setGlobalLogger(createLogger(level))
+
+  // Background version check: skip for upgrade command itself and when --quiet
+  const isUpgradeCommand = actionCommand.name() === 'upgrade'
+  if (!opts.quiet && !isUpgradeCommand) {
+    const configPath = opts.config ?? '.dbcli'
+    // Fire and forget — never await this
+    void (async () => {
+      try {
+        // Load cache to decide if we need to fetch
+        let cache: VersionCheckCache | null = null
+        try {
+          const cacheFile = Bun.file(join(configPath, 'version-check.json'))
+          if (await cacheFile.exists()) {
+            cache = (await cacheFile.json()) as VersionCheckCache
+          }
+        } catch {
+          // ignore
+        }
+        const result = await checkForUpdate(pkg.version, configPath, cache)
+        _bgVersionCheckResult = result
+      } catch {
+        _bgVersionCheckResult = null
+      }
+    })()
+  }
+})
+
+program.hook('postAction', () => {
+  if (_bgVersionCheckResult?.hasUpdate) {
+    process.stderr.write(formatUpdateHint(_bgVersionCheckResult.latestVersion) + '\n')
+  }
 })
 
 // Register commands
@@ -174,6 +211,7 @@ program.addCommand(diffCommand)
 program.addCommand(statusCommand)
 program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
+program.addCommand(upgradeCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

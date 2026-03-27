@@ -176,6 +176,37 @@ dbcli status --format text      # Human-readable text output
 **Output:** `permission`, `system`, `blacklist` summary, `version`
 **Permission:** query-only+
 
+### doctor
+
+Run diagnostic checks on environment, configuration, connection, and data.
+
+```bash
+dbcli doctor                    # Colored text output
+dbcli doctor --format json      # JSON output for AI agents
+```
+
+**Checks:**
+- Environment: Bun version, dbcli version (compares with npm registry)
+- Configuration: config file exists/valid, permission level, blacklist completeness (detects unprotected sensitive columns)
+- Connection & Data: database connectivity, schema cache freshness (warns if > 7 days), large table warnings (> 1M rows)
+
+**Exit code:** 0 if all pass or warnings only, 1 if any error
+**Options:** `--format <text|json>`
+
+### completion
+
+Generate shell completion scripts for tab auto-complete.
+
+```bash
+dbcli completion bash            # Output bash completion script
+dbcli completion zsh             # Output zsh completion script
+dbcli completion fish            # Output fish completion script
+dbcli completion --install       # Auto-detect shell and install
+dbcli completion --install zsh   # Install for specific shell
+```
+
+**Supported shells:** bash, zsh, fish
+
 ## Permission Levels
 
 | Level | Allowed Operations |
@@ -189,7 +220,12 @@ Set via `dbcli init --permission <level>` or in `.dbcli` config.
 
 ## Global Options
 
-All commands support `--config <path>` to specify a custom config file (default: `.dbcli`).
+| Flag | Description |
+|------|-------------|
+| `--config <path>` | Path to .dbcli config file (default: `.dbcli`) |
+| `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
+| `-q, --quiet` | Suppress non-essential output |
+| `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
 
 ## AI Agent Workflow
 

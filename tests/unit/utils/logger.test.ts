@@ -1,11 +1,15 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { createLogger, LogLevel } from '../../../src/utils/logger'
 
 describe('Logger', () => {
-  let stderrSpy: ReturnType<typeof vi.spyOn>
+  let stderrSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
-    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true)
+  })
+
+  afterEach(() => {
+    stderrSpy.mockRestore()
   })
 
   test('error() always outputs regardless of level', () => {

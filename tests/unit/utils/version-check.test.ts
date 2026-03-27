@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
 import { checkForUpdate, isStale, compareVersions, type VersionCheckCache } from '@/utils/version-check'
 
 describe('compareVersions', () => {
@@ -50,16 +50,18 @@ describe('isStale', () => {
 })
 
 describe('checkForUpdate', () => {
+  let fetchSpy: ReturnType<typeof spyOn>
+
   beforeEach(() => {
-    vi.spyOn(globalThis, 'fetch')
+    fetchSpy = spyOn(globalThis, 'fetch')
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    fetchSpy.mockRestore()
   })
 
   test('returns hasUpdate: true when newer version exists', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue({
+    fetchSpy.mockResolvedValue({
       ok: true,
       json: async () => ({ version: '0.6.0-beta' }),
     } as Response)
@@ -71,7 +73,7 @@ describe('checkForUpdate', () => {
   })
 
   test('returns hasUpdate: false when already on latest', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue({
+    fetchSpy.mockResolvedValue({
       ok: true,
       json: async () => ({ version: '0.5.0-beta' }),
     } as Response)
@@ -83,14 +85,14 @@ describe('checkForUpdate', () => {
   })
 
   test('returns null when fetch fails', async () => {
-    vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Network error'))
+    fetchSpy.mockRejectedValue(new Error('Network error'))
 
     const result = await checkForUpdate('0.5.0-beta', null)
     expect(result).toBeNull()
   })
 
   test('returns null when response is not ok', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue({
+    fetchSpy.mockResolvedValue({
       ok: false,
       status: 404,
     } as Response)
@@ -106,7 +108,7 @@ describe('checkForUpdate', () => {
     }
 
     const result = await checkForUpdate('0.5.0-beta', null, freshCache)
-    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(fetchSpy).not.toHaveBeenCalled()
     expect(result?.hasUpdate).toBe(true)
     expect(result?.latestVersion).toBe('0.6.0-beta')
   })
@@ -117,13 +119,13 @@ describe('checkForUpdate', () => {
       checkedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
     }
 
-    vi.mocked(globalThis.fetch).mockResolvedValue({
+    fetchSpy.mockResolvedValue({
       ok: true,
       json: async () => ({ version: '0.6.0-beta' }),
     } as Response)
 
     const result = await checkForUpdate('0.5.0-beta', null, staleCache)
-    expect(globalThis.fetch).toHaveBeenCalled()
+    expect(fetchSpy).toHaveBeenCalled()
     expect(result?.latestVersion).toBe('0.6.0-beta')
   })
 })

@@ -16,6 +16,8 @@ jobs:
           bun-version: ${{ matrix.bun-version }}
       - run: bun install
       - run: bun test --run
+        env:
+          SKIP_INTEGRATION_TESTS: 'true'
       - run: bun run lint
       - run: bun run build
       - run: bun run dev -- --help

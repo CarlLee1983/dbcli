@@ -157,4 +157,11 @@ export interface DatabaseAdapter {
    * @throws {ConnectionError} If connection test fails
    */
   testConnection(): Promise<boolean>
+
+  /**
+   * Get the database server version string
+   * @returns Raw version string from the server (e.g. "8.0.35", "15.4", "10.11.6-MariaDB")
+   * @throws {ConnectionError} If not connected or query fails
+   */
+  getServerVersion(): Promise<string>
 }

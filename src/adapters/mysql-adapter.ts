@@ -8,6 +8,7 @@ import mysql from 'mysql2/promise'
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
+import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -61,6 +62,15 @@ export class MySQLAdapter implements DatabaseAdapter {
 
       // Test connection with lightweight query
       await this.testConnection()
+
+      // Check server version against minimum requirements
+      try {
+        const rawVersion = await this.getServerVersion()
+        const result = checkDbVersion(rawVersion, this.system)
+        warnIfUnsupported(result)
+      } catch {
+        // Version check is non-critical; silently continue
+      }
     } catch (error) {
       // Pass actual system type for proper error messages
       throw mapError(error, this.system, this.options)
@@ -137,6 +147,15 @@ export class MySQLAdapter implements DatabaseAdapter {
     } catch (error) {
       throw mapError(error, this.system, this.options)
     }
+  }
+
+  /**
+   * Get the database server version string
+   * MySQL returns e.g. "8.0.35", MariaDB returns e.g. "10.11.6-MariaDB"
+   */
+  async getServerVersion(): Promise<string> {
+    const rows = await this.execute<{ version: string }>('SELECT VERSION() as version')
+    return rows[0]?.version ?? 'unknown'
   }
 
   /**

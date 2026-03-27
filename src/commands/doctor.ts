@@ -3,6 +3,8 @@ import { colors } from '@/utils/colors'
 import { configModule } from '@/core/config'
 import { AdapterFactory } from '@/adapters/factory'
 import { getLogger } from '@/utils/logger'
+import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
+import { t_vars } from '@/i18n/message-loader'
 import pkg from '../../package.json'
 import { join } from 'path'
 
@@ -146,6 +148,22 @@ export const runDoctorChecks = {
     }
   },
 
+  checkDatabaseVersion(versionResult: VersionCheckResult): DoctorResult {
+    const vars = {
+      system: versionResult.system,
+      version: versionResult.serverVersion,
+      minVersion: versionResult.minVersion,
+    }
+    return {
+      group: 'Connection & Data',
+      label: 'Database version',
+      status: versionResult.supported ? 'pass' : 'warn',
+      message: versionResult.supported
+        ? t_vars('version.doctor_pass', vars)
+        : t_vars('version.doctor_warn', vars),
+    }
+  },
+
   checkLargeTables(
     tables: Array<{ name: string; estimatedRowCount?: number }>
   ): DoctorResult {
@@ -245,6 +263,15 @@ export const doctorCommand = new Command('doctor')
             status: 'pass',
             message: `Connected to ${config.connection.system} ${config.connection.database}@${config.connection.host}:${config.connection.port}`,
           })
+
+          // Check database server version
+          try {
+            const rawVersion = await adapter.getServerVersion()
+            const versionResult = checkDbVersion(rawVersion, config.connection.system as 'postgresql' | 'mysql' | 'mariadb')
+            results.push(runDoctorChecks.checkDatabaseVersion(versionResult))
+          } catch {
+            logger.debug('Could not retrieve database version')
+          }
 
           try {
             const tables = await adapter.listTables()

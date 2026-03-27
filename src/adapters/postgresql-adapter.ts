@@ -7,6 +7,7 @@ import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } fr
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { Pool, type PoolClient } from 'pg'
+import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -46,6 +47,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
       // Test connection with lightweight query
       await this.testConnection()
+
+      // Check server version against minimum requirements
+      try {
+        const rawVersion = await this.getServerVersion()
+        const result = checkDbVersion(rawVersion, 'postgresql')
+        warnIfUnsupported(result)
+      } catch {
+        // Version check is non-critical; silently continue
+      }
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
     }
@@ -125,6 +135,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
     }
+  }
+
+  /**
+   * Get the database server version string
+   * PostgreSQL returns e.g. "15.4" or "15.4 (Ubuntu 15.4-1.pgdg22.04+1)"
+   */
+  async getServerVersion(): Promise<string> {
+    const rows = await this.execute<{ server_version: string }>('SHOW server_version')
+    return rows[0]?.server_version ?? 'unknown'
   }
 
   /**

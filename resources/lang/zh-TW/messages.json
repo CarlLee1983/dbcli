@@ -104,5 +104,10 @@
   },
   "warnings": {
     "blacklist_override_used": "警告: 已啟用黑名單覆蓋 (DBCLI_OVERRIDE_BLACKLIST=true)。執行 {operation} 在已黑名單的表格 '{table}' 上"
+  },
+  "version": {
+    "unsupported_warning": "{system} {version} 低於最低支援版本 {minVersion}。部分功能可能無法正常運作。",
+    "doctor_pass": "{system} {version}（符合 >= {minVersion}）",
+    "doctor_warn": "{system} {version} 低於支援版本 >= {minVersion}"
   }
 }

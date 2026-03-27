@@ -104,5 +104,10 @@
   },
   "warnings": {
     "blacklist_override_used": "Warning: Blacklist override enabled (DBCLI_OVERRIDE_BLACKLIST=true). Executing {operation} on blacklisted table '{table}'"
+  },
+  "version": {
+    "unsupported_warning": "{system} {version} is below minimum supported version {minVersion}. Some features may not work correctly.",
+    "doctor_pass": "{system} {version} (meets >= {minVersion})",
+    "doctor_warn": "{system} {version} is below supported >= {minVersion}"
   }
 }

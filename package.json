@@ -43,7 +43,7 @@
   ],
   "scripts": {
     "dev": "bun run src/cli.ts",
-    "build": "bun build ./src/cli.ts --outfile ./dist/cli.mjs --target bun && (echo '#!/usr/bin/env bun' && cat dist/cli.mjs) > dist/cli.mjs.tmp && mv dist/cli.mjs.tmp dist/cli.mjs && chmod +x dist/cli.mjs || true",
+    "build": "bun run scripts/build.ts",
     "prepublishOnly": "bun run build",
     "test": "vitest",
     "test:run": "vitest --run",

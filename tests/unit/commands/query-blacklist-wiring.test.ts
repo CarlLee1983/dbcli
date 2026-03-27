@@ -5,8 +5,9 @@
  * BlacklistValidator to QueryExecutor so that blacklist rules take runtime effect.
  */
 
-import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
 import { BlacklistError } from '@/types/blacklist'
+import { QueryExecutor } from '@/core/query-executor'
 
 // Track what QueryExecutor was constructed with
 let capturedBlacklistValidator: any = undefined
@@ -14,13 +15,18 @@ let capturedConfig: any = undefined
 let mockExecuteResult: any = { rows: [], rowCount: 0, columnNames: [], columnTypes: [], executionTimeMs: 1, metadata: { statement: 'SELECT', affectedRows: 0 } }
 let mockExecuteError: Error | null = null
 
+// Spy to be restored
+let executeSpy: any
+
 // Mock the adapter
 const mockAdapter = {
   connect: mock(async () => {}),
   disconnect: mock(async () => {}),
   execute: mock(async () => []),
-  getTableSchema: mock(async () => ({ tableName: 'test', columns: [] })),
+  getTableSchema: mock(async () => ({ name: 'test', columns: [], rowCount: 0, primaryKey: null, foreignKeys: [] })),
   getTables: mock(async () => []),
+  listTables: mock(async () => []),
+  ping: mock(async () => {}),
 }
 
 // Mock AdapterFactory
@@ -52,22 +58,6 @@ mock.module('@/core/config', () => ({
   },
 }))
 
-// Mock QueryExecutor to capture what it was constructed with
-mock.module('@/core/query-executor', () => ({
-  QueryExecutor: class MockQueryExecutor {
-    constructor(_adapter: any, _permission: any, blacklistValidator?: any) {
-      capturedBlacklistValidator = blacklistValidator
-    }
-
-    async execute(_sql: string, _options?: any) {
-      if (mockExecuteError) {
-        throw mockExecuteError
-      }
-      return mockExecuteResult
-    }
-  },
-}))
-
 describe('queryCommand blacklist wiring', () => {
   let exitCode: number | null = null
   let originalExit: typeof process.exit
@@ -83,10 +73,20 @@ describe('queryCommand blacklist wiring', () => {
       exitCode = code ?? 0
       throw new Error(`process.exit(${code})`)
     }) as any
+
+    // Use spyOn instead of mock.module to avoid global pollution
+    executeSpy = spyOn(QueryExecutor.prototype, 'execute').mockImplementation(async function(this: any) {
+      capturedBlacklistValidator = this.blacklistValidator
+      if (mockExecuteError) {
+        throw mockExecuteError
+      }
+      return mockExecuteResult
+    })
   })
 
   afterEach(() => {
     process.exit = originalExit
+    executeSpy.mockRestore()
   })
 
   test('Test 1: queryCommand with blacklisted table throws/exits with blacklist error message', async () => {
@@ -101,11 +101,10 @@ describe('queryCommand blacklist wiring', () => {
 
     const { queryCommand } = await import('@/commands/query')
 
-    let errorMessage = ''
     try {
       await queryCommand('SELECT * FROM sensitive_logs', {})
     } catch (e: any) {
-      errorMessage = e.message
+      // swallow exit error
     }
 
     // Should have called process.exit(1)

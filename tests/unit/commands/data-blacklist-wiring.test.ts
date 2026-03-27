@@ -6,8 +6,9 @@
  * that blacklist rules take runtime effect.
  */
 
-import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
 import { BlacklistError } from '@/types/blacklist'
+import { DataExecutor } from '@/core/data-executor'
 
 // Track what DataExecutor was constructed with (4th arg)
 let capturedBlacklistValidator: any = undefined
@@ -20,19 +21,28 @@ let mockExecuteResult: any = {
 }
 let mockExecuteError: Error | null = null
 
+// Spies to be restored
+let insertSpy: any
+let updateSpy: any
+let deleteSpy: any
+
 // Mock the adapter
 const mockAdapter = {
   connect: mock(async () => {}),
   disconnect: mock(async () => {}),
   execute: mock(async () => []),
   getTableSchema: mock(async () => ({
-    tableName: 'payments',
+    name: 'payments',
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true },
       { name: 'amount', type: 'decimal', nullable: false, primaryKey: false },
     ],
+    rowCount: 0,
+    primaryKey: 'id',
+    foreignKeys: []
   })),
-  getTables: mock(async () => []),
+  listTables: mock(async () => []),
+  ping: mock(async () => {}),
 }
 
 // Mock AdapterFactory
@@ -55,42 +65,6 @@ mock.module('@/core/config', () => ({
   },
 }))
 
-// Mock DataExecutor to capture 4th argument and control behavior
-mock.module('@/core/data-executor', () => ({
-  DataExecutor: class MockDataExecutor {
-    constructor(_adapter: any, _permission: any, _dbSystem: any, blacklistValidator?: any) {
-      capturedBlacklistValidator = blacklistValidator
-    }
-
-    async executeInsert(_table: string, _data: any, _schema: any, _options?: any) {
-      if (mockExecuteError) {
-        throw mockExecuteError
-      }
-      return { ...mockExecuteResult, operation: 'insert' }
-    }
-
-    async executeUpdate(_table: string, _set: any, _where: any, _schema: any, _options?: any) {
-      if (mockExecuteError) {
-        throw mockExecuteError
-      }
-      return { ...mockExecuteResult, operation: 'update' }
-    }
-
-    async executeDelete(_table: string, _where: any, _schema: any, _options?: any) {
-      if (mockExecuteError) {
-        throw mockExecuteError
-      }
-      return { ...mockExecuteResult, operation: 'delete' }
-    }
-  },
-}))
-
-// Mock message loader
-mock.module('@/i18n/message-loader', () => ({
-  t: (key: string) => key,
-  t_vars: (key: string, vars: Record<string, any>) => `${key}: ${JSON.stringify(vars)}`,
-}))
-
 describe('insert/update/delete command blacklist wiring', () => {
   let exitCode: number | null = null
   let originalExit: typeof process.exit
@@ -105,10 +79,32 @@ describe('insert/update/delete command blacklist wiring', () => {
       exitCode = code ?? 0
       throw new Error(`process.exit(${code})`)
     }) as any
+
+    // Use spyOn instead of mock.module to avoid global pollution
+    insertSpy = spyOn(DataExecutor.prototype, 'executeInsert').mockImplementation(async function(this: any) {
+      capturedBlacklistValidator = this.blacklistValidator
+      if (mockExecuteError) throw mockExecuteError
+      return { ...mockExecuteResult, operation: 'insert' }
+    })
+
+    updateSpy = spyOn(DataExecutor.prototype, 'executeUpdate').mockImplementation(async function(this: any) {
+      capturedBlacklistValidator = this.blacklistValidator
+      if (mockExecuteError) throw mockExecuteError
+      return { ...mockExecuteResult, operation: 'update' }
+    })
+
+    deleteSpy = spyOn(DataExecutor.prototype, 'executeDelete').mockImplementation(async function(this: any) {
+      capturedBlacklistValidator = this.blacklistValidator
+      if (mockExecuteError) throw mockExecuteError
+      return { ...mockExecuteResult, operation: 'delete' }
+    })
   })
 
   afterEach(() => {
     process.exit = originalExit
+    insertSpy.mockRestore()
+    updateSpy.mockRestore()
+    deleteSpy.mockRestore()
   })
 
   // ===== INSERT COMMAND TESTS =====

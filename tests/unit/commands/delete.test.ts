@@ -1,10 +1,62 @@
 /**
  * Unit tests for delete command
  * Tests DELETE command functionality including validation and execution
+ *
+ * Uses spyOn to mock configModule and AdapterFactory to prevent real DB access
+ * and avoid interactive confirmation prompts during testing.
  */
 
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { deleteCommand } from '@/commands/delete'
+import { AdapterFactory } from '@/adapters'
+import { configModule } from '@/core/config'
+
+// Spies to be restored
+let createAdapterSpy: any
+let configReadSpy: any
+
+// Mock adapter (no real DB connection)
+const mockAdapter = {
+  connect: async () => {},
+  disconnect: async () => {},
+  execute: async () => [],
+  getTableSchema: async () => ({
+    name: 'users',
+    columns: [
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+      { name: 'name', type: 'varchar', nullable: true },
+    ],
+    rowCount: 0,
+    primaryKey: ['id'],
+    foreignKeys: [],
+  }),
+  listTables: async () => [],
+  testConnection: async () => true,
+  getServerVersion: async () => '15.0',
+}
+
+// Default mock config — query-only permission prevents reaching confirmation prompt
+const mockConfig = {
+  connection: {
+    system: 'postgresql' as const,
+    host: 'localhost',
+    port: 5432,
+    user: 'test',
+    password: 'test',
+    database: 'testdb',
+  },
+  permission: 'query-only',
+}
+
+beforeEach(() => {
+  createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+  configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => mockConfig as any)
+})
+
+afterEach(() => {
+  createAdapterSpy.mockRestore()
+  configReadSpy.mockRestore()
+})
 
 // ============================================================================
 // Command Structure Tests
@@ -88,7 +140,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
     process.exit = originalExit
     console.log = originalLog
 
-    // Should fail on config, not on WHERE parsing
+    // Should fail on permission check, not on WHERE parsing
     expect(errorThrown).toBe(true)
   })
 
@@ -111,7 +163,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
     process.exit = originalExit
     console.log = originalLog
 
-    // Should fail on config, not WHERE parsing
+    // Should fail on permission check, not WHERE parsing
     expect(errorThrown).toBe(true)
   })
 })
@@ -172,6 +224,9 @@ describe('deleteCommand - Argument Validation', () => {
 
 describe('deleteCommand - Configuration', () => {
   test('requires database configuration to exist', async () => {
+    // Override to return config without connection
+    configReadSpy.mockImplementation(async () => ({ permission: 'admin' }) as any)
+
     let errorThrown = false
     const originalExit = process.exit
     const originalLog = console.log
@@ -210,7 +265,7 @@ describe('deleteCommand - Execution Options', () => {
     try {
       await deleteCommand('users', { where: 'id=1', dryRun: true })
     } catch (error) {
-      // Expected to fail on config
+      // Expected to fail on permission
     }
 
     process.exit = originalExit
@@ -230,7 +285,7 @@ describe('deleteCommand - Execution Options', () => {
     try {
       await deleteCommand('users', { where: 'id=1', force: true })
     } catch (error) {
-      // Expected to fail on config
+      // Expected to fail on permission
     }
 
     process.exit = originalExit
@@ -249,7 +304,7 @@ describe('deleteCommand - Execution Options', () => {
     try {
       await deleteCommand('users', { where: 'id=1', dryRun: true, force: true })
     } catch (error) {
-      // Expected to fail on config
+      // Expected to fail on permission
     }
 
     process.exit = originalExit

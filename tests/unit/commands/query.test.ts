@@ -3,9 +3,11 @@
  * Tests command logic, permission enforcement, formatting, and error handling
  */
 
-import { describe, test, expect, beforeEach, spyOn, mock } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test'
 import type { DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
+import { AdapterFactory } from '@/adapters'
+import { configModule } from '@/core/config'
 
 // Mock adapter for testing
 class MockAdapter implements DatabaseAdapter {
@@ -65,21 +67,10 @@ class MockAdapter implements DatabaseAdapter {
 
 let mockAdapter: MockAdapter
 let mockConfig: DbcliConfig
+let createAdapterSpy: any
+let configReadSpy: any
 
-// Mock modules
-mock.module('@/adapters', () => ({
-  AdapterFactory: {
-    createAdapter: () => mockAdapter
-  },
-  ConnectionError: class ConnectionError extends Error {}
-}))
-
-mock.module('@/core/config', () => ({
-  configModule: {
-    read: async () => mockConfig
-  }
-}))
-
+// Mock formatters via mock.module (safe — no other test imports @/formatters)
 mock.module('@/formatters', () => ({
   QueryResultFormatter: class {
     format(result: any, options?: any) {
@@ -103,12 +94,15 @@ mock.module('@/formatters', () => ({
   TableSchemaJSONFormatter: class { format() { return '{}' } },
 }))
 
-// Import after mocks are set up
+// Import after formatters mock is set up
 const { queryCommand } = await import('@/commands/query')
 
 describe('Query Command', () => {
   beforeEach(() => {
     mockAdapter = new MockAdapter()
+    // spyOn instead of mock.module to prevent global leakage
+    createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+    configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => mockConfig)
     mockConfig = {
       connection: {
         system: 'postgresql',
@@ -122,6 +116,11 @@ describe('Query Command', () => {
       schema: {},
       metadata: { version: '1.0' }
     }
+  })
+
+  afterEach(() => {
+    createAdapterSpy.mockRestore()
+    configReadSpy.mockRestore()
   })
 
   describe('Argument Validation', () => {

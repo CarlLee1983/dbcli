@@ -4,11 +4,15 @@
  * Verifies that insert.ts, update.ts, and delete.ts correctly construct
  * BlacklistManager + BlacklistValidator and pass them to DataExecutor so
  * that blacklist rules take runtime effect.
+ *
+ * Uses spyOn instead of mock.module to prevent global mock leakage across test files.
  */
 
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
 import { BlacklistError } from '@/types/blacklist'
 import { DataExecutor } from '@/core/data-executor'
+import { AdapterFactory } from '@/adapters'
+import { configModule } from '@/core/config'
 
 // Track what DataExecutor was constructed with (4th arg)
 let capturedBlacklistValidator: any = undefined
@@ -25,6 +29,8 @@ let mockExecuteError: Error | null = null
 let insertSpy: any
 let updateSpy: any
 let deleteSpy: any
+let createAdapterSpy: any
+let configReadSpy: any
 
 // Mock the adapter
 const mockAdapter = {
@@ -45,26 +51,6 @@ const mockAdapter = {
   ping: mock(async () => {}),
 }
 
-// Mock AdapterFactory
-mock.module('@/adapters', () => ({
-  AdapterFactory: {
-    createAdapter: mock(() => mockAdapter),
-  },
-  ConnectionError: class ConnectionError extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ConnectionError'
-    }
-  },
-}))
-
-// Mock configModule
-mock.module('@/core/config', () => ({
-  configModule: {
-    read: mock(async () => capturedConfig),
-  },
-}))
-
 describe('insert/update/delete command blacklist wiring', () => {
   let exitCode: number | null = null
   let originalExit: typeof process.exit
@@ -80,7 +66,12 @@ describe('insert/update/delete command blacklist wiring', () => {
       throw new Error(`process.exit(${code})`)
     }) as any
 
-    // Use spyOn instead of mock.module to avoid global pollution
+    // spyOn AdapterFactory.createAdapter to return mock adapter (no global leakage)
+    createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+
+    // spyOn configModule.read to return test config (no global leakage)
+    configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => capturedConfig)
+
     insertSpy = spyOn(DataExecutor.prototype, 'executeInsert').mockImplementation(async function(this: any) {
       capturedBlacklistValidator = this.blacklistValidator
       if (mockExecuteError) throw mockExecuteError
@@ -105,6 +96,8 @@ describe('insert/update/delete command blacklist wiring', () => {
     insertSpy.mockRestore()
     updateSpy.mockRestore()
     deleteSpy.mockRestore()
+    createAdapterSpy.mockRestore()
+    configReadSpy.mockRestore()
   })
 
   // ===== INSERT COMMAND TESTS =====

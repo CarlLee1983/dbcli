@@ -3,11 +3,15 @@
  *
  * Verifies that query.ts correctly constructs and passes BlacklistManager +
  * BlacklistValidator to QueryExecutor so that blacklist rules take runtime effect.
+ *
+ * Uses spyOn instead of mock.module to prevent global mock leakage across test files.
  */
 
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
 import { BlacklistError } from '@/types/blacklist'
 import { QueryExecutor } from '@/core/query-executor'
+import { AdapterFactory } from '@/adapters'
+import { configModule } from '@/core/config'
 
 // Track what QueryExecutor was constructed with
 let capturedBlacklistValidator: any = undefined
@@ -15,8 +19,10 @@ let capturedConfig: any = undefined
 let mockExecuteResult: any = { rows: [], rowCount: 0, columnNames: [], columnTypes: [], executionTimeMs: 1, metadata: { statement: 'SELECT', affectedRows: 0 } }
 let mockExecuteError: Error | null = null
 
-// Spy to be restored
+// Spy references to be restored
 let executeSpy: any
+let createAdapterSpy: any
+let configReadSpy: any
 
 // Mock the adapter
 const mockAdapter = {
@@ -29,20 +35,7 @@ const mockAdapter = {
   ping: mock(async () => {}),
 }
 
-// Mock AdapterFactory
-mock.module('@/adapters', () => ({
-  AdapterFactory: {
-    createAdapter: mock(() => mockAdapter),
-  },
-  ConnectionError: class ConnectionError extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ConnectionError'
-    }
-  },
-}))
-
-// Mock QueryResultFormatter
+// Mock QueryResultFormatter via mock.module (safe — no other test imports @/formatters)
 mock.module('@/formatters', () => ({
   QueryResultFormatter: class QueryResultFormatter {
     format() {
@@ -53,13 +46,6 @@ mock.module('@/formatters', () => ({
   TableListFormatter: class { format() { return '' } },
   JSONFormatter: class { format() { return '{}' } },
   TableSchemaJSONFormatter: class { format() { return '{}' } },
-}))
-
-// Mock configModule
-mock.module('@/core/config', () => ({
-  configModule: {
-    read: mock(async () => capturedConfig),
-  },
 }))
 
 describe('queryCommand blacklist wiring', () => {
@@ -78,7 +64,13 @@ describe('queryCommand blacklist wiring', () => {
       throw new Error(`process.exit(${code})`)
     }) as any
 
-    // Use spyOn instead of mock.module to avoid global pollution
+    // spyOn AdapterFactory.createAdapter to return mock adapter (no global leakage)
+    createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+
+    // spyOn configModule.read to return test config (no global leakage)
+    configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => capturedConfig)
+
+    // spyOn QueryExecutor.prototype.execute to capture blacklistValidator
     executeSpy = spyOn(QueryExecutor.prototype, 'execute').mockImplementation(async function(this: any) {
       capturedBlacklistValidator = this.blacklistValidator
       if (mockExecuteError) {
@@ -91,6 +83,8 @@ describe('queryCommand blacklist wiring', () => {
   afterEach(() => {
     process.exit = originalExit
     executeSpy.mockRestore()
+    createAdapterSpy.mockRestore()
+    configReadSpy.mockRestore()
   })
 
   test('Test 1: queryCommand with blacklisted table throws/exits with blacklist error message', async () => {

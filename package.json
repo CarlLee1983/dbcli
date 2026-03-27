@@ -9,6 +9,27 @@
   "bin": {
     "dbcli": "./dist/cli.mjs"
   },
+  "license": "MIT",
+  "author": "Carl Lee",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CarlLee1983/dbcli.git"
+  },
+  "homepage": "https://github.com/CarlLee1983/dbcli#readme",
+  "bugs": {
+    "url": "https://github.com/CarlLee1983/dbcli/issues"
+  },
+  "keywords": [
+    "database",
+    "cli",
+    "ai",
+    "agent",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "permissions",
+    "blacklist"
+  ],
   "engines": {
     "node": ">=18.0.0",
     "bun": ">=1.3.3"

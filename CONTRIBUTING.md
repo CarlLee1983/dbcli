@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/dbcli.git
+git clone https://github.com/CarlLee1983/dbcli.git
 cd dbcli
 
 # Install dependencies using Bun
@@ -340,7 +340,7 @@ Before submitting a PR, ensure:
 
 ## Questions?
 
-- Check existing [Issues](https://github.com/your-org/dbcli/issues)
+- Check existing [Issues](https://github.com/CarlLee1983/dbcli/issues)
 - Read [Project Documentation](./README.md)
 - See [i18n README](./src/i18n/README.md)
 

@@ -15,7 +15,11 @@
     "connection_failed": "✗ 資料庫連接失敗",
     "config_saved": "配置已保存至 .dbcli",
     "config_exists_overwrite": "配置檔案 .dbcli 已存在。是否覆蓋？ (y/n)：",
-    "cancelled": "已取消。配置未更改。"
+    "cancelled": "已取消。配置未更改。",
+    "skip_test_env_ref": "跳過連線測試（環境變數參照模式）",
+    "skip_test": "跳過連線測試（--skip-test）",
+    "connection_hints": "提示：",
+    "config_exists_use_force": ".dbcli 已存在。使用 --force 選項覆蓋。"
   },
   "schema": {
     "description": "檢索表格結構或列出所有表格",
@@ -54,7 +58,14 @@
     "column_already_blacklisted": "錯誤: 欄位 '{table}.{column}' 已在黑名單中",
     "column_not_in_blacklist": "錯誤: 欄位 '{table}.{column}' 不在黑名單中",
     "invalid_table_name": "錯誤: 無效的表格名稱: {table}",
-    "invalid_column_format": "錯誤: 無效的欄位格式。使用 'table.column'"
+    "invalid_column_format": "錯誤: 無效的欄位格式。使用 'table.column'",
+    "invalid_system": "無效的資料庫系統：{system}",
+    "invalid_permission": "無效的權限等級：{permission}",
+    "invalid_port": "無效的埠號：{port}",
+    "require_user": "非互動模式需要 --user 選項",
+    "require_name": "非互動模式需要 --name 選項",
+    "env_refs_missing_options": "使用 --use-env-refs 時，必須指定環境變數名稱。\n請提供選項：--env-host、--env-port、--env-user、--env-password、--env-database\n或使用互動模式：執行 \"dbcli init --use-env-refs\"（不加 --no-interactive）",
+    "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試"
   },
   "success": {
     "inserted": "成功插入 {count} 列",

@@ -238,7 +238,18 @@ dbcli init
 
 dbcli init --host db.example.com --port 5432 --user admin --password secret --name prod_db --system postgresql
 # 非交互式初始化
+
+dbcli init --use-env-refs
+# 交互式：提示輸入環境變數名稱，config 中儲存 {"$env": "DB_HOST"} 而非實際值
+
+dbcli init --use-env-refs --system mysql \
+  --env-host DB_HOST --env-port DB_PORT \
+  --env-user DB_USER --env-password DB_PASSWORD \
+  --env-database DB_DATABASE --no-interactive
+# 非交互式環境變數參照模式，適合 CI/CD
 ```
+
+> **`--use-env-refs` 說明：** 使用此選項時，config 中儲存的是環境變數名稱（如 `{"$env": "DB_HOST"}`）而非實際值。這樣可以避免將敏感資訊寫入 config 檔案，適合多環境部署或 CI/CD 場景。連線時 dbcli 會自動從環境變數讀取實際值。
 
 ### 列出表
 

@@ -5,6 +5,34 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2-beta] - 2026-03-27
+
+### Fixed
+
+- **`init --use-env-refs` permission bug**: Interactive env-ref mode now correctly offers all 4 permission levels (was missing `data-admin`)
+- **`init` i18n completeness**: All 10 hardcoded English messages replaced with i18n keys (supports en/zh-TW)
+- **`init` duplicate code**: Extracted shared `.dbcli exists` overwrite check into `checkOverwrite()` helper
+- **`--use-env-refs` help text**: Improved option description to clarify CI/CD and multi-env use case
+- **Documentation**: Added `--use-env-refs` to README (en/zh-TW), CHANGELOG, and SKILL.md with AI agent guidance
+
+---
+
+## [0.5.1-beta] - 2026-03-27
+
+### Added
+
+- **Database version check**: Warns on stderr when connected database version is below minimum supported (PostgreSQL 12+, MySQL 8.0+, MariaDB 10.5+). Non-blocking — connection proceeds normally.
+- **`dbcli doctor` DB version check**: New "Database version" item in Connection & Data group.
+- **`dbcli init --use-env-refs`**: Store environment variable references (`{"$env": "DB_HOST"}`) in config instead of actual values. Supports interactive and non-interactive modes with `--env-host`, `--env-port`, `--env-user`, `--env-password`, `--env-database` options. Suitable for CI/CD and multi-environment deployments.
+
+### Fixed
+
+- **`init` permission bug**: Interactive env-ref mode now correctly offers all 4 permission levels (was missing `data-admin`)
+- **`init` i18n**: All hardcoded English messages in init command replaced with i18n keys (10 messages)
+- **`init` duplicate code**: Extracted shared `.dbcli exists` overwrite check into `checkOverwrite()` helper
+
+---
+
 ## [0.5.0-beta] - 2026-03-27
 
 ### UX & Developer Experience — Colors, Logging, Diagnostics, and Tooling

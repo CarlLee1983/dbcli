@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "0.5.1-beta",
+  "version": "0.5.2-beta",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {

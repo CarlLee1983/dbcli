@@ -15,7 +15,11 @@
     "connection_failed": "✗ Database connection failed",
     "config_saved": "Configuration saved to .dbcli",
     "config_exists_overwrite": "Configuration file .dbcli already exists. Overwrite? (y/n): ",
-    "cancelled": "Cancelled. Configuration not changed."
+    "cancelled": "Cancelled. Configuration not changed.",
+    "skip_test_env_ref": "Skipping connection test in env-ref mode",
+    "skip_test": "Skipping connection test (--skip-test)",
+    "connection_hints": "Hints:",
+    "config_exists_use_force": ".dbcli exists. Use --force option to overwrite."
   },
   "schema": {
     "description": "Retrieve table structure or list all tables",
@@ -54,7 +58,14 @@
     "column_already_blacklisted": "Error: Column '{table}.{column}' is already blacklisted",
     "column_not_in_blacklist": "Error: Column '{table}.{column}' is not in the blacklist",
     "invalid_table_name": "Error: Invalid table name: {table}",
-    "invalid_column_format": "Error: Invalid column format. Use 'table.column'"
+    "invalid_column_format": "Error: Invalid column format. Use 'table.column'",
+    "invalid_system": "Invalid database system: {system}",
+    "invalid_permission": "Invalid permission level: {permission}",
+    "invalid_port": "Invalid port: {port}",
+    "require_user": "Non-interactive mode requires --user option",
+    "require_name": "Non-interactive mode requires --name option",
+    "env_refs_missing_options": "When using --use-env-refs, environment variable names must be specified.\nProvide options: --env-host, --env-port, --env-user, --env-password, --env-database\nOr use interactive mode: run \"dbcli init --use-env-refs\" without --no-interactive",
+    "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry"
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",

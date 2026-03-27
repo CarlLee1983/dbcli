@@ -30,6 +30,8 @@ dbcli init --no-interactive --force # Non-interactive, skip overwrite confirmati
 
 **Key options:** `--system <postgresql|mysql|mariadb>`, `--permission <query-only|read-write|data-admin|admin>`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`
 
+> **AI agent note on `--use-env-refs`:** If an existing `.dbcli` config contains `{"$env": "DB_HOST"}` style references, the connection values are read from environment variables at runtime. Do NOT re-run `init` to replace these references with actual values — the env-ref format is intentional for CI/CD and multi-environment setups.
+
 ### list
 
 List all tables.

@@ -19,6 +19,35 @@ import { promptUser } from '@/utils/prompts'
 import { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 
+const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
+
+/**
+ * Check if .dbcli exists and handle overwrite confirmation
+ * Shared by both env-ref and normal mode paths
+ */
+async function checkOverwrite(
+  shouldPrompt: boolean,
+  force: boolean
+): Promise<boolean> {
+  const configFile = Bun.file('.dbcli')
+  const fileExists = await configFile.exists()
+
+  if (!fileExists || force) return true
+
+  if (shouldPrompt) {
+    const overwrite = await promptUser.confirm(
+      t('init.config_exists_overwrite')
+    )
+    if (!overwrite) {
+      console.log(t('init.cancelled'))
+      return false
+    }
+    return true
+  }
+
+  throw new Error(t('init.config_exists_use_force'))
+}
+
 /**
  * Build and configure the init command
  */
@@ -31,12 +60,12 @@ export const initCommand = new Command('init')
   .option('--name <name>', 'Database name')
   .option('--system <system>', 'Database system (postgresql, mysql, mariadb)')
   .option('--permission <permission>', 'Permission level (query-only, read-write, data-admin, admin)', 'query-only')
-  .option('--use-env-refs', 'Generate config with environment variable references (for .env)', false)
-  .option('--env-host <var>', 'Environment variable name for database host (when using --use-env-refs)')
-  .option('--env-port <var>', 'Environment variable name for database port (when using --use-env-refs)')
-  .option('--env-user <var>', 'Environment variable name for database user (when using --use-env-refs)')
-  .option('--env-password <var>', 'Environment variable name for database password (when using --use-env-refs)')
-  .option('--env-database <var>', 'Environment variable name for database name (when using --use-env-refs)')
+  .option('--use-env-refs', 'Store env var references in config instead of actual values (for CI/CD or multi-env)', false)
+  .option('--env-host <var>', 'Env var name for host (with --use-env-refs)')
+  .option('--env-port <var>', 'Env var name for port (with --use-env-refs)')
+  .option('--env-user <var>', 'Env var name for user (with --use-env-refs)')
+  .option('--env-password <var>', 'Env var name for password (with --use-env-refs)')
+  .option('--env-database <var>', 'Env var name for database (with --use-env-refs)')
   .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
@@ -102,7 +131,7 @@ async function initCommandHandler(
 
   // Validate system value
   if (!['postgresql', 'mysql', 'mariadb'].includes(system)) {
-    throw new Error(`Invalid database system: ${system}`)
+    throw new Error(t_vars('errors.invalid_system', { system }))
   }
 
   const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb')
@@ -138,17 +167,18 @@ async function initCommandHandler(
     // Skip subsequent connection parameter collection, go directly to permission selection
     let permission = options.permission || 'query-only'
 
-    if (shouldPrompt && !options.permission) {
+    if (!options.permission) {
       permission = await promptUser.select(t('init.prompt_permission'), [
         'query-only',
         'read-write',
+        'data-admin',
         'admin'
       ])
     }
 
     // Validate permission value
-    if (!['query-only', 'read-write', 'data-admin', 'admin'].includes(permission)) {
-      throw new Error(`Invalid permission level: ${permission}`)
+    if (!VALID_PERMISSIONS.includes(permission)) {
+      throw new Error(t_vars('errors.invalid_permission', { permission }))
     }
 
     // Merge config and save
@@ -158,25 +188,11 @@ async function initCommandHandler(
     })
 
     // Check existing file and prompt for overwrite confirmation
-    const configFile = Bun.file('.dbcli')
-    const fileExists = await configFile.exists()
-
-    if (fileExists && !options.force) {
-      if (shouldPrompt) {
-        const overwrite = await promptUser.confirm(
-          t('init.config_exists_overwrite')
-        )
-        if (!overwrite) {
-          console.log(t('init.cancelled'))
-          return
-        }
-      } else {
-        throw new Error('.dbcli exists. Use --force option to overwrite.')
-      }
-    }
+    const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+    if (!canProceed) return
 
     // Skip connection test (only env-var references, no actual connection values)
-    console.log('⏭️  Skipping connection test in env-ref mode')
+    console.log(`⏭️  ${t('init.skip_test_env_ref')}`)
 
     // Write config
     await configModule.write('.dbcli', newConfig)
@@ -203,7 +219,7 @@ async function initCommandHandler(
 
   const port = parseInt(portStr, 10)
   if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid port: ${portStr}`)
+    throw new Error(t_vars('errors.invalid_port', { port: portStr }))
   }
   connection.port = port
 
@@ -218,7 +234,7 @@ async function initCommandHandler(
   // When using --use-env-refs, actual connection values are optional (read from env vars)
   // Otherwise, non-interactive mode requires these values
   if (!connection.user && !shouldPrompt && !options.useEnvRefs) {
-    throw new Error('Non-interactive mode requires --user option')
+    throw new Error(t('errors.require_user'))
   }
 
   // Password
@@ -240,7 +256,7 @@ async function initCommandHandler(
   // When using --use-env-refs, actual connection values are optional (read from env vars)
   // Otherwise, non-interactive mode requires these values
   if (!connection.database && !shouldPrompt && !options.useEnvRefs) {
-    throw new Error('Non-interactive mode requires --name option')
+    throw new Error(t('errors.require_name'))
   }
 
   // 5. Select permission level
@@ -256,8 +272,8 @@ async function initCommandHandler(
   }
 
   // Validate permission value
-  if (!['query-only', 'read-write', 'data-admin', 'admin'].includes(permission)) {
-    throw new Error(`Invalid permission level: ${permission}`)
+  if (!VALID_PERMISSIONS.includes(permission)) {
+    throw new Error(t_vars('errors.invalid_permission', { permission }))
   }
 
   // 6. If --use-env-refs is enabled (non-interactive mode), convert to env-var references
@@ -273,11 +289,7 @@ async function initCommandHandler(
     const envDatabase = options.envDatabase
 
     if (!envHost || !envPort || !envUser || !envPassword || !envDatabase) {
-      throw new Error(
-        'When using --use-env-refs, environment variable names must be specified.\n' +
-        'Provide options: --env-host, --env-port, --env-user, --env-password, --env-database\n' +
-        'Or use interactive mode: run "bun dev init --use-env-refs" without --no-interactive'
-      )
+      throw new Error(t('errors.env_refs_missing_options'))
     }
 
     configForWrite = {
@@ -296,22 +308,8 @@ async function initCommandHandler(
   })
 
   // 7. Check existing file and prompt for overwrite confirmation
-  const configFile = Bun.file('.dbcli')
-  const fileExists = await configFile.exists()
-
-  if (fileExists && !options.force) {
-    if (shouldPrompt) {
-      const overwrite = await promptUser.confirm(
-        t('init.config_exists_overwrite')
-      )
-      if (!overwrite) {
-        console.log(t('init.cancelled'))
-        return
-      }
-    } else {
-      throw new Error('.dbcli exists. Use --force option to overwrite.')
-    }
-  }
+  const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+  if (!canProceed) return
 
   // 8. Test database connection (unless --skip-test or using --use-env-refs)
   // Note: connection test is skipped with --use-env-refs since env vars must actually be set
@@ -320,16 +318,12 @@ async function initCommandHandler(
 
     // Resolve actual connection parameters (handles env-var references)
     // Actual env var values are needed during connection testing, not empty strings
-    const resolveValue = (value: any, fieldName: string): string | number => {
+    const resolveValue = (value: any, _fieldName: string): string | number => {
       if (typeof value === 'object' && value !== null && '$env' in value) {
         const envKey = value.$env
         const envValue = process.env[envKey]
         if (!envValue) {
-          throw new Error(
-            `Cannot test connection: environment variable ${envKey} is not defined\n` +
-            `Set ${envKey} in .env or environment variables.\n` +
-            `Hint: Check .env file or run 'export ${envKey}=<value>' and retry`
-          )
+          throw new Error(t_vars('errors.env_var_not_defined', { envKey }))
         }
         return envValue
       }
@@ -356,7 +350,7 @@ async function initCommandHandler(
     } catch (error) {
       if (error instanceof ConnectionError) {
         console.error(t_vars('errors.connection_failed', { message: error.message }))
-        console.error('Hints:')
+        console.error(t('init.connection_hints'))
         error.hints.forEach((hint) => console.error(`  • ${hint}`))
         process.exit(1)
       }
@@ -365,7 +359,8 @@ async function initCommandHandler(
       await adapter.disconnect()
     }
   } else {
-    console.log('⏭️  Skipping connection test (--skip-test)')
+    const msgKey = options.useEnvRefs ? 'init.skip_test_env_ref' : 'init.skip_test'
+    console.log(`⏭️  ${t(msgKey)}`)
   }
 
   // 9. Write config

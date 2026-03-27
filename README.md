@@ -96,8 +96,26 @@ Initialize a new dbcli project with database connection configuration.
 
 **Usage:**
 ```bash
-dbcli init
+dbcli init [OPTIONS]
 ```
+
+**Options:**
+- `--system <type>` — Database system: `postgresql`, `mysql`, `mariadb`
+- `--host <host>` — Database host
+- `--port <port>` — Database port
+- `--user <user>` — Database user
+- `--password <pass>` — Database password
+- `--name <db>` — Database name
+- `--permission <level>` — Permission level: `query-only`, `read-write`, `data-admin`, `admin`
+- `--use-env-refs` — Store environment variable references instead of actual values in config
+- `--env-host <var>` — Env var name for host (with `--use-env-refs`)
+- `--env-port <var>` — Env var name for port (with `--use-env-refs`)
+- `--env-user <var>` — Env var name for user (with `--use-env-refs`)
+- `--env-password <var>` — Env var name for password (with `--use-env-refs`)
+- `--env-database <var>` — Env var name for database (with `--use-env-refs`)
+- `--skip-test` — Skip connection test
+- `--no-interactive` — Non-interactive mode (requires all options)
+- `--force` — Overwrite existing config without confirmation
 
 **Behavior:**
 - Reads `.env` file if present (auto-fills DATABASE_URL, DB_* variables)
@@ -116,7 +134,19 @@ dbcli init
 
 # Specify permission level
 echo "PERMISSION_LEVEL=admin" >> .env && dbcli init
+
+# Store env var references instead of values (interactive)
+dbcli init --use-env-refs
+
+# Store env var references (non-interactive)
+dbcli init --use-env-refs --system mysql \
+  --env-host DB_HOST --env-port DB_PORT \
+  --env-user DB_USER --env-password DB_PASSWORD \
+  --env-database DB_DATABASE \
+  --no-interactive
 ```
+
+> **`--use-env-refs`:** When enabled, the config stores environment variable names (e.g., `{"$env": "DB_HOST"}`) instead of actual values. This avoids writing sensitive credentials into the config file, making it suitable for multi-environment deployments and CI/CD pipelines. At connection time, dbcli automatically reads the actual values from the referenced environment variables.
 
 ---
 

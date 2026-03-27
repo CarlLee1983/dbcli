@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'bun:test'
 import { compareSnapshots, type SchemaSnapshot } from '@/commands/diff'
 
 describe('compareSnapshots', () => {

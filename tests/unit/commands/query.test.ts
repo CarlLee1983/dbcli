@@ -3,8 +3,7 @@
  * Tests command logic, permission enforcement, formatting, and error handling
  */
 
-import { describe, test, expect, beforeEach, vi } from 'vitest'
-import { queryCommand } from '@/commands/query'
+import { describe, test, expect, beforeEach, spyOn, mock } from 'bun:test'
 import type { DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 
@@ -64,21 +63,24 @@ class MockAdapter implements DatabaseAdapter {
   }
 }
 
+let mockAdapter: MockAdapter
+let mockConfig: DbcliConfig
+
 // Mock modules
-vi.mock('@/adapters', () => ({
+mock.module('@/adapters', () => ({
   AdapterFactory: {
     createAdapter: () => mockAdapter
   },
   ConnectionError: class ConnectionError extends Error {}
 }))
 
-vi.mock('@/core/config', () => ({
+mock.module('@/core/config', () => ({
   configModule: {
     read: async () => mockConfig
   }
 }))
 
-vi.mock('@/formatters', () => ({
+mock.module('@/formatters', () => ({
   QueryResultFormatter: class {
     format(result: any, options?: any) {
       const format = options?.format || 'table'
@@ -94,11 +96,15 @@ vi.mock('@/formatters', () => ({
       // table format
       return `Table: ${result.rowCount} rows`
     }
-  }
+  },
+  TableFormatter: class { format() { return '' } },
+  TableListFormatter: class { format() { return '' } },
+  JSONFormatter: class { format() { return '{}' } },
+  TableSchemaJSONFormatter: class { format() { return '{}' } },
 }))
 
-let mockAdapter: MockAdapter
-let mockConfig: DbcliConfig
+// Import after mocks are set up
+const { queryCommand } = await import('@/commands/query')
 
 describe('Query Command', () => {
   beforeEach(() => {
@@ -116,15 +122,12 @@ describe('Query Command', () => {
       schema: {},
       metadata: { version: '1.0' }
     }
-
-    // Reset console mocks
-    vi.clearAllMocks()
   })
 
   describe('Argument Validation', () => {
     test('should reject missing SQL argument', async () => {
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -140,8 +143,8 @@ describe('Query Command', () => {
     })
 
     test('should reject empty SQL string', async () => {
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -157,7 +160,7 @@ describe('Query Command', () => {
     })
 
     test('should accept valid SQL string', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', {})
 
@@ -169,8 +172,8 @@ describe('Query Command', () => {
   describe('Configuration Loading', () => {
     test('should require initialized database', async () => {
       mockConfig.connection = undefined as any
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -188,7 +191,7 @@ describe('Query Command', () => {
 
   describe('Result Formatting', () => {
     test('should format as table by default', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', {})
 
@@ -197,7 +200,7 @@ describe('Query Command', () => {
     })
 
     test('should format as JSON when requested', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', { format: 'json' })
 
@@ -206,7 +209,7 @@ describe('Query Command', () => {
     })
 
     test('should format as CSV when requested', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', { format: 'csv' })
 
@@ -219,7 +222,7 @@ describe('Query Command', () => {
   describe('Permission Enforcement', () => {
     test('should allow SELECT in query-only mode', async () => {
       mockConfig.permission = 'query-only'
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', {})
 
@@ -229,8 +232,8 @@ describe('Query Command', () => {
 
     test('should block INSERT in query-only mode', async () => {
       mockConfig.permission = 'query-only'
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -247,7 +250,7 @@ describe('Query Command', () => {
 
     test('should allow INSERT in read-write mode', async () => {
       mockConfig.permission = 'read-write'
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('INSERT INTO users VALUES (1, "Eve")', {})
 
@@ -257,7 +260,7 @@ describe('Query Command', () => {
 
     test('should allow everything in admin mode', async () => {
       mockConfig.permission = 'admin'
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('DROP TABLE users', {})
 
@@ -269,8 +272,8 @@ describe('Query Command', () => {
   describe('Error Handling', () => {
     test('should display connection error with hints', async () => {
       mockAdapter.setFailure(true, 'connection error')
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -287,8 +290,8 @@ describe('Query Command', () => {
 
     test('should display query error', async () => {
       mockAdapter.setFailure(true, 'syntax error')
-      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      const logSpy = spyOn(console, 'error').mockImplementation(() => {})
+      const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
       })
 
@@ -307,7 +310,7 @@ describe('Query Command', () => {
 
   describe('Auto-limit Behavior', () => {
     test('should not include --limit in default case', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', {})
 
@@ -316,7 +319,7 @@ describe('Query Command', () => {
     })
 
     test('should respect custom limit option', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', { limit: 500 })
 
@@ -325,7 +328,7 @@ describe('Query Command', () => {
     })
 
     test('should disable auto-limit with --no-limit', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
       await queryCommand('SELECT * FROM users', { noLimit: true })
 

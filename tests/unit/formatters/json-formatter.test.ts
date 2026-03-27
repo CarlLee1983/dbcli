@@ -2,7 +2,7 @@
  * Unit tests for JSON formatter
  */
 
-import { test, expect, describe } from 'vitest'
+import { test, expect, describe } from 'bun:test'
 import { JSONFormatter, TableSchemaJSONFormatter } from '../../../src/formatters/json-formatter'
 import type { ColumnSchema, TableSchema } from '../../../src/adapters/types'
 

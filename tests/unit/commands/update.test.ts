@@ -9,7 +9,7 @@
  * 3. Integration tests would cover full end-to-end behavior
  */
 
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 
 // ============================================================================
 // Placeholder: Main logic is tested via DataExecutor unit tests

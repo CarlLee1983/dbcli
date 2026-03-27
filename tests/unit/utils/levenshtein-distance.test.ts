@@ -2,7 +2,7 @@
  * Unit tests for Levenshtein distance utility
  */
 
-import { test, expect, describe } from 'vitest'
+import { test, expect, describe } from 'bun:test'
 import { levenshteinDistance } from '../../../src/utils/levenshtein-distance'
 
 describe('levenshteinDistance', () => {

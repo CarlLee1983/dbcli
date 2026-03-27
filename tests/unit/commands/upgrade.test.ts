@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { formatUpgradeMessage, formatAlreadyUpToDate, formatUpdateHint } from '@/commands/upgrade'
 
 describe('formatAlreadyUpToDate', () => {

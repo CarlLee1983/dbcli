@@ -3,7 +3,7 @@
  * Tests command argument validation, data parsing, permission enforcement
  */
 
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 
 // Note: insertCommand has complex stdin handling that's difficult to test with mocks
 // Unit tests for the DataExecutor class cover the core logic

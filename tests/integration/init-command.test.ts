@@ -7,7 +7,7 @@
  * - 預設值
  */
 
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { configModule } from '@/core/config'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { getDefaultsForSystem } from '@/adapters/defaults'

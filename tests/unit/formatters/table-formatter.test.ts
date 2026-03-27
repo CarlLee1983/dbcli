@@ -2,7 +2,7 @@
  * Unit tests for table formatter
  */
 
-import { test, expect, describe } from 'vitest'
+import { test, expect, describe } from 'bun:test'
 import { TableFormatter, TableListFormatter } from '../../../src/formatters/table-formatter'
 import type { ColumnSchema, TableSchema } from '../../../src/adapters/types'
 

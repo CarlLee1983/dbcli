@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, beforeEach } from 'bun:test'
 import { runDoctorChecks, type DoctorResult } from '../../../src/commands/doctor'
 
 describe('doctor checks', () => {

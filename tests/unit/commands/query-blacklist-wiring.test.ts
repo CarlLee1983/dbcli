@@ -49,6 +49,10 @@ mock.module('@/formatters', () => ({
       return 'formatted output'
     }
   },
+  TableFormatter: class { format() { return '' } },
+  TableListFormatter: class { format() { return '' } },
+  JSONFormatter: class { format() { return '{}' } },
+  TableSchemaJSONFormatter: class { format() { return '{}' } },
 }))
 
 // Mock configModule

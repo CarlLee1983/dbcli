@@ -3,7 +3,7 @@
  * Tests INSERT, UPDATE, DELETE execution with permission checks and error handling
  */
 
-import { describe, test, expect, beforeEach, vi } from 'vitest'
+import { describe, test, expect, beforeEach } from 'bun:test'
 import { DataExecutor } from '@/core/data-executor'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'

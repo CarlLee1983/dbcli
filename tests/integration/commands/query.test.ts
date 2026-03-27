@@ -3,7 +3,7 @@
  * Tests against real database with actual query execution
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { queryCommand } from '@/commands/query'
 import { PostgreSQLAdapter } from '@/adapters'
 import type { DbcliConfig } from '@/utils/validation'

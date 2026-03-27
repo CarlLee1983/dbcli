@@ -2,7 +2,7 @@
  * Zod 驗證模式單元測試
  */
 
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import {
   DbcliConfigSchema,
   ConnectionConfigSchema,

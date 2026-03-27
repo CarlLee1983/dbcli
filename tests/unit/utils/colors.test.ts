@@ -1,63 +1,48 @@
-import { describe, test, expect, afterEach } from 'vitest'
-import { colors } from '../../../src/utils/colors'
+import { describe, test, expect } from 'bun:test'
+import pc from 'picocolors'
 
+// picocolors 在非 TTY 下（bun test / CI）不輸出色碼是正確行為
+// 測試應驗證 colors 模組正確委派給 picocolors，而非假設一定有 ANSI 碼
 describe('colors', () => {
-  const originalNoColor = process.env.NO_COLOR
-
-  afterEach(() => {
-    if (originalNoColor === undefined) {
-      delete process.env.NO_COLOR
-    } else {
-      process.env.NO_COLOR = originalNoColor
-    }
-  })
-
-  test('success wraps text in green', () => {
-    delete process.env.NO_COLOR
+  test('success delegates to pc.green', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.success('ok')
-    expect(result).toContain('ok')
-    expect(result).not.toBe('ok')
+    expect(result).toBe(pc.green('ok'))
   })
 
-  test('error wraps text in red', () => {
-    delete process.env.NO_COLOR
+  test('error delegates to pc.red', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.error('fail')
-    expect(result).toContain('fail')
-    expect(result).not.toBe('fail')
+    expect(result).toBe(pc.red('fail'))
   })
 
-  test('warn wraps text in yellow', () => {
-    delete process.env.NO_COLOR
+  test('warn delegates to pc.yellow', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.warn('caution')
-    expect(result).toContain('caution')
-    expect(result).not.toBe('caution')
+    expect(result).toBe(pc.yellow('caution'))
   })
 
-  test('info wraps text in blue', () => {
-    delete process.env.NO_COLOR
+  test('info delegates to pc.blue', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.info('note')
-    expect(result).toContain('note')
-    expect(result).not.toBe('note')
+    expect(result).toBe(pc.blue('note'))
   })
 
-  test('dim wraps text in dim', () => {
-    delete process.env.NO_COLOR
+  test('dim delegates to pc.dim', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.dim('faded')
-    expect(result).toContain('faded')
-    expect(result).not.toBe('faded')
+    expect(result).toBe(pc.dim('faded'))
   })
 
-  test('bold wraps text in bold', () => {
-    delete process.env.NO_COLOR
+  test('bold delegates to pc.bold', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.bold('strong')
-    expect(result).toContain('strong')
-    expect(result).not.toBe('strong')
+    expect(result).toBe(pc.bold('strong'))
   })
 
-  test('keyword returns blue bold text', () => {
-    delete process.env.NO_COLOR
+  test('keyword delegates to pc.blue(pc.bold())', async () => {
+    const { colors } = await import('../../../src/utils/colors')
     const result = colors.keyword('SELECT')
-    expect(result).toContain('SELECT')
-    expect(result).not.toBe('SELECT')
+    expect(result).toBe(pc.blue(pc.bold('SELECT')))
   })
 })

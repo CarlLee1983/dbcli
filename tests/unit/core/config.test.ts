@@ -2,7 +2,7 @@
  * 配置模組單元測試
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { configModule } from '@/core/config'
 import { ConfigError } from '@/utils/errors'
 import { DbcliConfig } from '@/utils/validation'

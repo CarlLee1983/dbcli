@@ -3,7 +3,7 @@
  * Tests all three output formats: table, JSON, CSV
  */
 
-import { test, expect, describe } from 'vitest'
+import { test, expect, describe } from 'bun:test'
 import { QueryResultFormatter } from '../../../src/formatters/query-result-formatter'
 import type { QueryResult } from '../../../src/types/query'
 

@@ -3,7 +3,7 @@
  * Tests DELETE command functionality including validation and execution
  */
 
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'bun:test'
 import { deleteCommand } from '@/commands/delete'
 
 // ============================================================================

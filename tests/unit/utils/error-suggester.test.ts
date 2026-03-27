@@ -2,7 +2,7 @@
  * Unit tests for error suggester utility
  */
 
-import { test, expect, describe, beforeEach } from 'vitest'
+import { test, expect, describe, beforeEach } from 'bun:test'
 import { suggestTableName } from '../../../src/utils/error-suggester'
 import type { DatabaseAdapter, TableSchema } from '../../../src/adapters/types'
 

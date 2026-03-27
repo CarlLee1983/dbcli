@@ -3,7 +3,7 @@
  * 測試 SchemaDiffEngine 的差異檢測演算法和型別正規化
  */
 
-import { describe, test, expect, beforeEach } from 'vitest'
+import { describe, test, expect, beforeEach } from 'bun:test'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import type { DatabaseAdapter, TableSchema, ColumnSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'

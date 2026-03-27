@@ -1,15 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, mock } from 'bun:test'
 import { HealthChecker } from '@/core/health-checker'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 
 function createMockAdapter(executeImpl: (sql: string) => any[]): DatabaseAdapter {
   return {
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    testConnection: vi.fn().mockResolvedValue(true),
-    listTables: vi.fn().mockResolvedValue([]),
-    getTableSchema: vi.fn().mockResolvedValue({ name: 'test', columns: [] }),
-    execute: vi.fn().mockImplementation((sql: string) => Promise.resolve(executeImpl(sql))),
+    connect: mock(() => Promise.resolve()),
+    disconnect: mock(() => Promise.resolve()),
+    testConnection: mock(() => Promise.resolve(true)),
+    listTables: mock(() => Promise.resolve([])),
+    getTableSchema: mock(() => Promise.resolve({ name: 'test', columns: [] })),
+    execute: mock((sql: string) => Promise.resolve(executeImpl(sql))),
   }
 }
 

@@ -1,0 +1,303 @@
+import { Command } from 'commander'
+import { colors } from '@/utils/colors'
+import { configModule } from '@/core/config'
+import { AdapterFactory } from '@/adapters/factory'
+import { getLogger } from '@/utils/logger'
+import pkg from '../../package.json'
+import { join } from 'path'
+
+export interface DoctorResult {
+  group: string
+  label: string
+  status: 'pass' | 'warn' | 'error'
+  message: string
+}
+
+const SENSITIVE_PATTERNS = [
+  'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
+  'access_key', 'private_key', 'credential', 'auth_token',
+  'refresh_token', 'session_token', 'ssn', 'credit_card',
+]
+
+function compareSemver(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+export const runDoctorChecks = {
+  checkBunVersion(current: string, required: string): DoctorResult {
+    const passes = compareSemver(current, required) >= 0
+    return {
+      group: 'Environment',
+      label: 'Bun version',
+      status: passes ? 'pass' : 'error',
+      message: passes
+        ? `Bun v${current} (meets >= ${required})`
+        : `Bun v${current} is below required >= ${required}`,
+    }
+  },
+
+  async checkLatestVersion(currentVersion: string): Promise<DoctorResult> {
+    try {
+      const response = await fetch(
+        'https://registry.npmjs.org/@carllee1983/dbcli/latest',
+        { signal: AbortSignal.timeout(5000) }
+      )
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data = (await response.json()) as { version: string }
+      const latest = data.version
+      const isLatest = currentVersion === latest
+      return {
+        group: 'Environment',
+        label: 'dbcli version',
+        status: isLatest ? 'pass' : 'warn',
+        message: isLatest
+          ? `dbcli v${currentVersion} (latest)`
+          : `dbcli v${currentVersion} (latest: ${latest})`,
+      }
+    } catch {
+      return {
+        group: 'Environment',
+        label: 'dbcli version',
+        status: 'pass',
+        message: `dbcli v${currentVersion} (version check skipped)`,
+      }
+    }
+  },
+
+  async checkConfigExists(
+    configPath: string,
+    existsFn?: (path: string) => Promise<boolean>
+  ): Promise<DoctorResult> {
+    const exists = existsFn
+      ? await existsFn(configPath)
+      : await Bun.file(configPath).exists() ||
+        await Bun.file(join(configPath, 'config.json')).exists()
+    return {
+      group: 'Configuration',
+      label: 'Config exists',
+      status: exists ? 'pass' : 'error',
+      message: exists
+        ? `Config found: ${configPath}`
+        : `No config found at ${configPath}. Run "dbcli init" first.`,
+    }
+  },
+
+  checkBlacklistCompleteness(
+    tableColumns: Map<string, string[]>,
+    blacklistedColumns: Map<string, Set<string>>
+  ): DoctorResult {
+    const unprotected: string[] = []
+    for (const [table, columns] of tableColumns) {
+      const blacklisted = blacklistedColumns.get(table) ?? new Set()
+      for (const col of columns) {
+        const colLower = col.toLowerCase()
+        const isSensitive = SENSITIVE_PATTERNS.some(p => colLower.includes(p))
+        if (isSensitive && !blacklisted.has(col)) {
+          unprotected.push(`${table}.${col}`)
+        }
+      }
+    }
+    if (unprotected.length === 0) {
+      return {
+        group: 'Configuration',
+        label: 'Blacklist completeness',
+        status: 'pass',
+        message: 'All detected sensitive columns are protected',
+      }
+    }
+    return {
+      group: 'Configuration',
+      label: 'Blacklist completeness',
+      status: 'warn',
+      message: `Consider protecting: ${unprotected.join(', ')}`,
+    }
+  },
+
+  checkSchemaCacheFreshness(lastUpdated: string | null): DoctorResult {
+    if (!lastUpdated) {
+      return {
+        group: 'Connection & Data',
+        label: 'Schema cache',
+        status: 'warn',
+        message: 'No schema cache found — run "dbcli schema --refresh"',
+      }
+    }
+    const ageMs = Date.now() - new Date(lastUpdated).getTime()
+    const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000))
+    if (ageDays > 7) {
+      return {
+        group: 'Connection & Data',
+        label: 'Schema cache',
+        status: 'warn',
+        message: `Schema cache is ${ageDays} days old — run "dbcli schema --refresh"`,
+      }
+    }
+    return {
+      group: 'Connection & Data',
+      label: 'Schema cache',
+      status: 'pass',
+      message: `Schema cache is ${ageDays} day(s) old`,
+    }
+  },
+
+  checkLargeTables(
+    tables: Array<{ name: string; estimatedRowCount?: number }>
+  ): DoctorResult {
+    const large = tables.filter(t => (t.estimatedRowCount ?? 0) > 1_000_000)
+    if (large.length === 0) {
+      return {
+        group: 'Connection & Data',
+        label: 'Large tables',
+        status: 'pass',
+        message: 'No tables exceed 1M rows',
+      }
+    }
+    const list = large
+      .map(t => `${t.name} (${((t.estimatedRowCount ?? 0) / 1_000_000).toFixed(1)}M rows)`)
+      .join(', ')
+    return {
+      group: 'Connection & Data',
+      label: 'Large tables',
+      status: 'warn',
+      message: `Large tables: ${list}`,
+    }
+  },
+
+  formatTextOutput(results: DoctorResult[], version: string): string {
+    const lines: string[] = [`dbcli doctor v${version}`, '']
+    const groups = ['Environment', 'Configuration', 'Connection & Data']
+    for (const group of groups) {
+      const groupResults = results.filter(r => r.group === group)
+      if (groupResults.length === 0) continue
+      lines.push(group)
+      for (const r of groupResults) {
+        const icon =
+          r.status === 'pass' ? colors.success('✓') :
+          r.status === 'warn' ? colors.warn('⚠') :
+          colors.error('✗')
+        lines.push(`  ${icon} ${r.message}`)
+      }
+      lines.push('')
+    }
+    const passed = results.filter(r => r.status === 'pass').length
+    const warnings = results.filter(r => r.status === 'warn').length
+    const errors = results.filter(r => r.status === 'error').length
+    lines.push(`Summary: ${passed} passed, ${warnings} warning(s), ${errors} error(s)`)
+    return lines.join('\n')
+  },
+}
+
+export const doctorCommand = new Command('doctor')
+  .description('Run diagnostic checks on dbcli configuration, environment, and connection')
+  .option('--format <type>', 'Output format: text, json', 'text')
+  .action(async (options) => {
+    const logger = getLogger()
+    const results: DoctorResult[] = []
+    const configPath = doctorCommand.parent?.opts().config ?? '.dbcli'
+
+    // --- Environment ---
+    const bunVersion = (process.versions as Record<string, string>).bun ?? 'unknown'
+    const requiredBun = (pkg.engines as Record<string, string>)?.bun?.replace('>=', '') ?? '1.3.3'
+    results.push(runDoctorChecks.checkBunVersion(bunVersion, requiredBun))
+    results.push(await runDoctorChecks.checkLatestVersion(pkg.version))
+
+    // --- Configuration ---
+    const configExists = await runDoctorChecks.checkConfigExists(configPath)
+    results.push(configExists)
+
+    if (configExists.status !== 'error') {
+      try {
+        const config = await configModule.read(configPath)
+        results.push({
+          group: 'Configuration',
+          label: 'Config valid',
+          status: 'pass',
+          message: 'Config valid',
+        })
+        results.push({
+          group: 'Configuration',
+          label: 'Permission',
+          status: 'pass',
+          message: `Permission: ${config.permission}`,
+        })
+
+        const blacklistedColumns = new Map<string, Set<string>>()
+        if (config.blacklist?.columns) {
+          for (const [table, cols] of Object.entries(config.blacklist.columns)) {
+            blacklistedColumns.set(table, new Set(cols as string[]))
+          }
+        }
+
+        // --- Connection & Data ---
+        try {
+          const adapter = AdapterFactory.createAdapter(config.connection as Parameters<typeof AdapterFactory.createAdapter>[0])
+          await adapter.connect()
+
+          results.push({
+            group: 'Connection & Data',
+            label: 'Connection',
+            status: 'pass',
+            message: `Connected to ${config.connection.system} ${config.connection.database}@${config.connection.host}:${config.connection.port}`,
+          })
+
+          try {
+            const tables = await adapter.listTables()
+            const tableColumns = new Map<string, string[]>()
+            for (const t of tables) {
+              tableColumns.set(t.name, t.columns.map(c => c.name))
+            }
+            results.push(runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns))
+            results.push(runDoctorChecks.checkLargeTables(tables))
+          } catch {
+            logger.debug('Could not list tables for blacklist/large table check')
+          }
+
+          try {
+            const indexPath = join(configPath, 'schemas', 'index.json')
+            const indexFile = Bun.file(indexPath)
+            if (await indexFile.exists()) {
+              const indexContent = await indexFile.text()
+              const index = JSON.parse(indexContent) as { updatedAt?: string }
+              results.push(runDoctorChecks.checkSchemaCacheFreshness(index.updatedAt ?? null))
+            } else {
+              results.push(runDoctorChecks.checkSchemaCacheFreshness(null))
+            }
+          } catch {
+            results.push(runDoctorChecks.checkSchemaCacheFreshness(null))
+          }
+
+          await adapter.disconnect()
+        } catch (error) {
+          results.push({
+            group: 'Connection & Data',
+            label: 'Connection',
+            status: 'error',
+            message: `Connection failed: ${(error as Error).message}`,
+          })
+        }
+      } catch (error) {
+        results.push({
+          group: 'Configuration',
+          label: 'Config valid',
+          status: 'error',
+          message: `Config invalid: ${(error as Error).message}`,
+        })
+      }
+    }
+
+    const hasError = results.some(r => r.status === 'error')
+    if (options.format === 'json') {
+      console.log(JSON.stringify({ results, hasError }, null, 2))
+    } else {
+      console.log(runDoctorChecks.formatTextOutput(results, pkg.version))
+    }
+    if (hasError) {
+      process.exit(1)
+    }
+  })

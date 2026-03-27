@@ -35,18 +35,8 @@ const mockAdapter = {
   ping: mock(async () => {}),
 }
 
-// Mock QueryResultFormatter via mock.module (safe — no other test imports @/formatters)
-mock.module('@/formatters', () => ({
-  QueryResultFormatter: class QueryResultFormatter {
-    format() {
-      return 'formatted output'
-    }
-  },
-  TableFormatter: class { format() { return '' } },
-  TableListFormatter: class { format() { return '' } },
-  JSONFormatter: class { format() { return '{}' } },
-  TableSchemaJSONFormatter: class { format() { return '{}' } },
-}))
+// No mock.module for @/formatters — it leaks globally on Windows and breaks formatter tests.
+// The real formatters work fine here since we only assert exitCode and capturedBlacklistValidator.
 
 describe('queryCommand blacklist wiring', () => {
   let exitCode: number | null = null

@@ -5,7 +5,7 @@
  * validate data columns, handle parameterized queries to prevent SQL injection.
  */
 
-import type { DatabaseAdapter, TableSchema, ColumnSchema } from '@/adapters/types'
+import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'

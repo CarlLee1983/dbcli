@@ -5,7 +5,7 @@
  */
 
 import mysql from 'mysql2/promise'
-import type { DatabaseAdapter, ConnectionOptions, TableSchema, ColumnSchema } from './types'
+import type { DatabaseAdapter, ConnectionOptions, TableSchema } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'

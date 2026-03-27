@@ -3,11 +3,13 @@
  * Tests command logic, permission enforcement, formatting, and error handling
  */
 
-import { describe, test, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import type { DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { AdapterFactory } from '@/adapters'
 import { configModule } from '@/core/config'
+import { QueryResultFormatter } from '@/formatters'
+import { queryCommand } from '@/commands/query'
 
 // Mock adapter for testing
 class MockAdapter implements DatabaseAdapter {
@@ -69,40 +71,28 @@ let mockAdapter: MockAdapter
 let mockConfig: DbcliConfig
 let createAdapterSpy: any
 let configReadSpy: any
-
-// Mock formatters via mock.module (safe — no other test imports @/formatters)
-mock.module('@/formatters', () => ({
-  QueryResultFormatter: class {
-    format(result: any, options?: any) {
-      const format = options?.format || 'table'
-      if (format === 'json') {
-        return JSON.stringify(result, null, 2)
-      } else if (format === 'csv') {
-        const headers = result.columnNames.join(',')
-        const rows = result.rows
-          .map((row: any) => result.columnNames.map((col: string) => row[col]).join(','))
-          .join('\n')
-        return `${headers}\n${rows}`
-      }
-      // table format
-      return `Table: ${result.rowCount} rows`
-    }
-  },
-  TableFormatter: class { format() { return '' } },
-  TableListFormatter: class { format() { return '' } },
-  JSONFormatter: class { format() { return '{}' } },
-  TableSchemaJSONFormatter: class { format() { return '{}' } },
-}))
-
-// Import after formatters mock is set up
-const { queryCommand } = await import('@/commands/query')
+let formatterSpy: any
 
 describe('Query Command', () => {
   beforeEach(() => {
     mockAdapter = new MockAdapter()
-    // spyOn instead of mock.module to prevent global leakage
     createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
     configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => mockConfig)
+    formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation(
+      (result: any, options?: any) => {
+        const format = options?.format || 'table'
+        if (format === 'json') {
+          return JSON.stringify(result, null, 2)
+        } else if (format === 'csv') {
+          const headers = result.columnNames.join(',')
+          const rows = result.rows
+            .map((row: any) => result.columnNames.map((col: string) => row[col]).join(','))
+            .join('\n')
+          return `${headers}\n${rows}`
+        }
+        return `Table: ${result.rowCount} rows`
+      }
+    )
     mockConfig = {
       connection: {
         system: 'postgresql',
@@ -121,6 +111,7 @@ describe('Query Command', () => {
   afterEach(() => {
     createAdapterSpy.mockRestore()
     configReadSpy.mockRestore()
+    formatterSpy.mockRestore()
   })
 
   describe('Argument Validation', () => {

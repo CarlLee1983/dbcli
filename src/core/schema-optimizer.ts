@@ -7,7 +7,7 @@
  * - Potential issues
  */
 
-import type { TableSchema, ColumnSchema } from '@/adapters/types'
+import type { TableSchema } from '@/adapters/types'
 
 /**
  * Optimization issue - detected problem or warning

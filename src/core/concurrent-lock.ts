@@ -106,8 +106,10 @@ export class ConcurrentLockManager {
         const lockContent = await lockFile.json()
         const lockAge = Date.now() - lockContent.timestamp
 
-        // If lock is older than timeout, consider it stale and remove it
-        if (lockAge > this.lockTimeoutMs) {
+        // If lock is older than 3x timeout, consider it stale and remove it
+        // Use 3x multiplier to ensure acquisition timeout fires before stale detection
+        const staleLockThresholdMs = this.lockTimeoutMs * 3
+        if (lockAge > staleLockThresholdMs) {
           await Bun.spawn(['rm', '-f', this.lockPath]).exited
         } else {
           return false // Lock is held by another process

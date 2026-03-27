@@ -5,6 +5,31 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0-beta] - 2026-03-27
+
+### UX & Developer Experience — Colors, Logging, Diagnostics, and Tooling
+
+### Added
+
+- **Color system** (`picocolors`): Semantic color helpers (`success`/`error`/`warn`/`info`/`dim`/`bold`) with automatic `NO_COLOR` support
+- **SQL syntax highlighting**: Keywords (blue bold), strings (green), numbers (yellow) — applied in verbose mode and dry-run preview
+- **Leveled logger**: Four levels — quiet (`-q`), normal (default), verbose (`-v`), debug (`-vv`) — all output to stderr to keep stdout clean for structured data
+- **`--no-color` global flag**: Disable colored output; also respects `NO_COLOR` environment variable (<https://no-color.org/>)
+- **`-v, --verbose` global flag**: Increase verbosity (`-v` = verbose, `-vv` = debug)
+- **`-q, --quiet` global flag**: Suppress non-essential output
+- **`dbcli doctor` command**: Full self-diagnostic — checks Bun version, dbcli version (npm registry), config validity, permission level, blacklist completeness (detects unprotected sensitive columns like `password`/`token`/`secret`), database connectivity, schema cache freshness, and large table warnings (> 1M rows). Supports `--format json` for AI agents. Exits with code 1 on errors.
+- **`dbcli completion` command**: Shell auto-completion script generation for bash, zsh, and fish. `--install` flag auto-writes to the shell rc file using idempotent marker blocks.
+- **`dbcli upgrade` command**: Self-update from npm registry. `--check` flag for check-only mode.
+- **Background version check**: Every command silently checks the npm registry (at most once per 24 hours, cached in `.dbcli/version-check.json`). Shows a one-line hint to stderr after the command completes if a newer version is available. Suppressed by `--quiet`.
+- **Table formatter colorization**: Table headers now display in bold
+- **62 new tests**: colors (7), sql-highlight (6), logger (10), doctor (12), completion (8), upgrade/version-check (19)
+
+### Dependencies
+
+- Added `picocolors` (~0.4 KB) as production dependency
+
+---
+
 ## [0.2.0-beta] - 2026-03-26
 
 ### Data Access Control — Blacklist System

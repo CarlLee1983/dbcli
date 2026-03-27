@@ -29,11 +29,11 @@ npm install --save-dev @carllee1983/dbcli
 ### 更新
 
 ```bash
-# Bun
-bun update @carllee1983/dbcli
+# 自動更新（推薦）
+dbcli upgrade
 
-# npm
-npm update --save-dev @carllee1983/dbcli
+# 或手動更新
+bun update @carllee1983/dbcli
 ```
 
 ### 初始化
@@ -141,6 +141,12 @@ dbcli init
 - 生成 dbcli 技能文檔（Claude Code 相容）
 - 支援跨平台 AI 代理使用（Claude Code、Gemini、Copilot CLI、Cursor、IDE）
 - 技能動態反映 dbcli 功能
+
+### 診斷與維護
+
+- `dbcli doctor` — 執行環境、設定、連線與資料的全面診斷
+- `dbcli upgrade` — 檢查更新並自動升級 dbcli
+- `dbcli completion [shell]` — 產生 shell 自動補全腳本（bash、zsh、fish）
 
 ## 權限模型
 
@@ -357,6 +363,62 @@ dbcli blacklist column remove users.ssn
 # 管理員覆蓋黑名單（緊急使用）
 DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 ```
+
+#### `dbcli doctor`
+
+執行環境、設定、連線與資料的全面診斷。
+
+```bash
+dbcli doctor                    # 彩色文字輸出
+dbcli doctor --format json      # JSON 輸出供 AI agent 使用
+```
+
+**檢查項目：**
+- **環境：** Bun 版本相容性、dbcli 版本（與 npm registry 比對）
+- **設定：** 設定檔存在/合法、權限等級、blacklist 完整性
+- **連線與資料：** 資料庫連線測試、schema cache 新鮮度（> 7 天警告）、大表警告（> 1M 列）
+
+**選項：** `--format <text|json>`
+
+---
+
+#### `dbcli completion [shell]`
+
+產生 shell 自動補全腳本。
+
+```bash
+dbcli completion bash            # 輸出 bash 補全腳本
+dbcli completion zsh             # 輸出 zsh 補全腳本
+dbcli completion fish            # 輸出 fish 補全腳本
+dbcli completion --install       # 自動偵測 shell 並安裝
+dbcli completion --install zsh   # 指定 shell 安裝
+```
+
+**支援 shell：** bash、zsh、fish
+
+---
+
+#### `dbcli upgrade`
+
+檢查更新並自動升級 dbcli。
+
+```bash
+dbcli upgrade                   # 檢查並升級
+dbcli upgrade --check           # 僅檢查，不升級
+```
+
+**背景檢查：** 每個指令靜默檢查 npm registry（每 24 小時一次），有新版時在指令完成後顯示提示。
+
+## 全域選項
+
+以下選項適用於所有指令：
+
+| 選項 | 說明 |
+|------|------|
+| `--config <path>` | 指定 .dbcli 設定檔路徑（預設：`.dbcli`） |
+| `-v, --verbose` | 增加輸出詳細度（`-v` 詳細、`-vv` 除錯） |
+| `-q, --quiet` | 靜音模式，抑制非必要輸出 |
+| `--no-color` | 關閉彩色輸出（支援 `NO_COLOR` 環境變數） |
 
 ## 環境配置
 

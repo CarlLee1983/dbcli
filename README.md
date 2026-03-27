@@ -49,6 +49,10 @@ npx @carllee1983/dbcli query "SELECT * FROM users"
 #### Update
 
 ```bash
+# Self-update (recommended)
+dbcli upgrade
+
+# Or via npm
 npm update -g @carllee1983/dbcli
 ```
 
@@ -435,6 +439,68 @@ dbcli blacklist column remove users.ssn
 # Override blacklist (admin use only)
 DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 ```
+
+---
+
+#### `dbcli doctor`
+
+Run diagnostic checks on environment, configuration, connection, and data.
+
+```bash
+dbcli doctor                    # Colored text output
+dbcli doctor --format json      # JSON output for AI agents
+```
+
+**Checks:**
+- **Environment:** Bun version compatibility, dbcli version (compares with npm registry)
+- **Configuration:** Config file exists/valid, permission level, blacklist completeness
+- **Connection & Data:** Database connectivity, schema cache freshness (> 7 days warning), large table warnings (> 1M rows)
+
+**Options:** `--format <text|json>`
+**Exit code:** 0 = all pass or warnings only, 1 = errors found
+
+---
+
+#### `dbcli completion [shell]`
+
+Generate shell completion scripts for tab auto-complete.
+
+```bash
+dbcli completion bash            # Output bash completion to stdout
+dbcli completion zsh             # Output zsh completion to stdout
+dbcli completion fish            # Output fish completion to stdout
+dbcli completion --install       # Auto-detect shell and install to rc file
+dbcli completion --install zsh   # Install for specific shell
+```
+
+**Supported shells:** bash, zsh, fish
+
+---
+
+#### `dbcli upgrade`
+
+Check for updates and self-upgrade dbcli.
+
+```bash
+dbcli upgrade                   # Check and upgrade if newer version available
+dbcli upgrade --check           # Only check, do not upgrade
+```
+
+**Options:** `--check` — check only, don't install
+**Background check:** dbcli silently checks npm registry once per 24 hours. If a newer version is found, a hint is shown after command output.
+
+---
+
+## Global Options
+
+All commands support these global options:
+
+| Flag | Description |
+|------|-------------|
+| `--config <path>` | Path to .dbcli config file (default: `.dbcli`) |
+| `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
+| `-q, --quiet` | Suppress non-essential output |
+| `--no-color` | Disable colored output (respects `NO_COLOR` env var) |
 
 ---
 

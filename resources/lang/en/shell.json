@@ -1,0 +1,21 @@
+{
+  "welcome": "Connected to {system} ({database}@{host}:{port})",
+  "welcome_permission": "Permission: {permission}",
+  "prompt": "dbcli",
+  "continuation_prompt": "   ...",
+  "goodbye": "Goodbye.",
+  "error_no_config": "No .dbcli config found. Run 'dbcli init' first.",
+  "error_connection_failed": "Connection failed: {message}",
+  "error_reconnecting": "Connection lost. Attempting to reconnect...",
+  "error_reconnect_failed": "Reconnection failed: {message}",
+  "error_reconnect_success": "Reconnected successfully.",
+  "error_command_failed": "Command error: {message}",
+  "error_sql_failed": "SQL error: {message}",
+  "error_permission": "Permission denied. Required: {required} (current: {current})",
+  "error_blacklisted": "Table '{table}' is blacklisted.",
+  "sql_mode_hint": "SQL-only mode. Only SQL statements are accepted.",
+  "multiline_cancelled": "Multiline input cancelled.",
+  "timing_display": "Time: {ms}ms",
+  "rows_display": "{count} row(s)",
+  "unknown_command": "Unknown command: '{command}'. Type '.help' for available commands."
+}

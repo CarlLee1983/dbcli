@@ -1,0 +1,21 @@
+{
+  "welcome": "已連線至 {system}（{database}@{host}:{port}）",
+  "welcome_permission": "權限等級：{permission}",
+  "prompt": "dbcli",
+  "continuation_prompt": "   ...",
+  "goodbye": "再見。",
+  "error_no_config": "找不到 .dbcli 設定檔。請先執行 'dbcli init'。",
+  "error_connection_failed": "連線失敗：{message}",
+  "error_reconnecting": "連線已中斷，嘗試重新連線...",
+  "error_reconnect_failed": "重新連線失敗：{message}",
+  "error_reconnect_success": "重新連線成功。",
+  "error_command_failed": "指令錯誤：{message}",
+  "error_sql_failed": "SQL 錯誤：{message}",
+  "error_permission": "權限不足。需要：{required}（目前：{current}）",
+  "error_blacklisted": "表格 '{table}' 已被列入黑名單。",
+  "sql_mode_hint": "純 SQL 模式。僅接受 SQL 語句。",
+  "multiline_cancelled": "已取消多行輸入。",
+  "timing_display": "耗時：{ms}ms",
+  "rows_display": "{count} 筆資料",
+  "unknown_command": "未知指令：'{command}'。輸入 '.help' 查看可用指令。"
+}

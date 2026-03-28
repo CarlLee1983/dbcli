@@ -1,13 +1,15 @@
 import enMessages from '../../resources/lang/en/messages.json'
 import zhTWMessages from '../../resources/lang/zh-TW/messages.json'
+import shellEnMessages from '../../resources/lang/en/shell.json'
+import shellZhTWMessages from '../../resources/lang/zh-TW/shell.json'
 
 export interface Messages {
   [key: string]: any
 }
 
 const BUNDLED_MESSAGES: Record<string, Messages> = {
-  en: enMessages as Messages,
-  'zh-TW': zhTWMessages as Messages,
+  en: { ...(enMessages as Messages), shell: shellEnMessages },
+  'zh-TW': { ...(zhTWMessages as Messages), shell: shellZhTWMessages },
 }
 
 /**

@@ -18,6 +18,7 @@ import { statusCommand } from './commands/status'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
+import { shellCommand } from './commands/shell'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { join } from 'path'
 
@@ -212,6 +213,7 @@ program.addCommand(statusCommand)
 program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)
+program.addCommand(shellCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

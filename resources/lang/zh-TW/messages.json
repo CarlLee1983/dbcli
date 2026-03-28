@@ -120,5 +120,28 @@
     "unsupported_warning": "{system} {version} 低於最低支援版本 {minVersion}。部分功能可能無法正常運作。",
     "doctor_pass": "{system} {version}（符合 >= {minVersion}）",
     "doctor_warn": "{system} {version} 低於支援版本 >= {minVersion}"
+  },
+  "migrate": {
+    "description": "Schema DDL 操作（CREATE/DROP/ALTER TABLE、INDEX、CONSTRAINT、ENUM）",
+    "dry_run_preview": "[預覽] 產生的 SQL（未執行）：",
+    "executing": "執行 DDL 中...",
+    "success": "DDL 執行成功",
+    "confirm_drop": "這是破壞性操作（{operation}），確定繼續？",
+    "permission_required": "DDL 操作需要 admin 權限（目前：{permission}）",
+    "blacklist_blocked": "表格 \"{table}\" 已被列入黑名單 — DDL 操作被阻擋",
+    "schema_refreshed": "已更新表格 \"{table}\" 的 Schema 快取",
+    "no_sql_generated": "未產生 SQL（此操作不適用於此資料庫）",
+    "create_description": "建立新表格",
+    "drop_description": "刪除表格",
+    "add_column_description": "新增欄位至表格",
+    "drop_column_description": "刪除表格欄位",
+    "alter_column_description": "修改表格欄位",
+    "add_index_description": "新增索引至表格",
+    "drop_index_description": "刪除索引",
+    "add_constraint_description": "新增約束至表格",
+    "drop_constraint_description": "刪除表格約束",
+    "add_enum_description": "建立列舉型別（僅 PostgreSQL）",
+    "alter_enum_description": "新增列舉值",
+    "drop_enum_description": "刪除列舉型別"
   }
 }

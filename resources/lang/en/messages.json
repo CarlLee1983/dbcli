@@ -120,5 +120,28 @@
     "unsupported_warning": "{system} {version} is below minimum supported version {minVersion}. Some features may not work correctly.",
     "doctor_pass": "{system} {version} (meets >= {minVersion})",
     "doctor_warn": "{system} {version} is below supported >= {minVersion}"
+  },
+  "migrate": {
+    "description": "Schema DDL operations (CREATE/DROP/ALTER TABLE, INDEX, CONSTRAINT, ENUM)",
+    "dry_run_preview": "[DRY RUN] Generated SQL (not executed):",
+    "executing": "Executing DDL...",
+    "success": "DDL executed successfully",
+    "confirm_drop": "This is a destructive operation ({operation}). Proceed?",
+    "permission_required": "DDL operations require admin permission (current: {permission})",
+    "blacklist_blocked": "Table \"{table}\" is blacklisted — DDL operations are blocked",
+    "schema_refreshed": "Schema cache updated for table \"{table}\"",
+    "no_sql_generated": "No SQL generated (operation not applicable for this database)",
+    "create_description": "Create a new table",
+    "drop_description": "Drop a table",
+    "add_column_description": "Add a column to a table",
+    "drop_column_description": "Drop a column from a table",
+    "alter_column_description": "Alter a column in a table",
+    "add_index_description": "Add an index to a table",
+    "drop_index_description": "Drop an index",
+    "add_constraint_description": "Add a constraint to a table",
+    "drop_constraint_description": "Drop a constraint from a table",
+    "add_enum_description": "Create an enum type (PostgreSQL only)",
+    "alter_enum_description": "Add a value to an enum type",
+    "drop_enum_description": "Drop an enum type"
   }
 }

@@ -8,6 +8,7 @@ import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
+import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -388,7 +389,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           primaryKey: col.is_primary_key,
           foreignKey: fkMap.get(col.name),
           autoIncrement: col.auto_increment,
-          comment: col.comment || null,
+          comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: enumMap.get(col.name)
         })),
         rowCount: countResult[0]?.count || 0,

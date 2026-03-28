@@ -9,6 +9,7 @@ import type { DatabaseAdapter, ConnectionOptions, TableSchema } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
+import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -57,8 +58,12 @@ export class MySQLAdapter implements DatabaseAdapter {
         port: this.options.port,
         user: this.options.user,
         password: this.options.password || undefined,
-        database: this.options.database
+        database: this.options.database,
+        charset: 'utf8mb4'
       })
+
+      // Ensure utf8mb4 for information_schema comments
+      await this.db.execute('SET NAMES utf8mb4')
 
       // Test connection with lightweight query
       await this.testConnection()
@@ -345,7 +350,7 @@ export class MySQLAdapter implements DatabaseAdapter {
           primaryKey: col.is_primary_key,
           foreignKey: fkMap.get(col.name),
           autoIncrement: col.auto_increment,
-          comment: col.comment || null,
+          comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: parseEnumValues(col.type)
         })),
         rowCount: countResult[0]?.count || 0,

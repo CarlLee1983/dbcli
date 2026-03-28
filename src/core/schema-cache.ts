@@ -177,6 +177,24 @@ export class SchemaCacheManager {
    *
    * @returns Cache stats including hit rate and capacity
    */
+  /**
+   * Remove a table from all cache tiers (hot + LRU)
+   * Used after DROP TABLE to keep cache consistent
+   */
+  invalidateTable(tableName: string): void {
+    this.hotSchemas.delete(tableName)
+    this.cache.delete(tableName)
+  }
+
+  /**
+   * Insert or update a table schema in cache
+   * Used after CREATE TABLE or ALTER TABLE to keep cache consistent
+   */
+  refreshTable(tableName: string, schema: TableSchema): void {
+    this.hotSchemas.set(tableName, schema)
+    this.cache.set(tableName, schema)
+  }
+
   getStats(): CacheStats {
     const cacheSize = this.cache.calculatedSize || 0
     const cacheHitRate =

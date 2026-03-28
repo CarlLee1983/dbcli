@@ -19,6 +19,7 @@ import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
 import { shellCommand } from './commands/shell'
+import { migrateCommand } from './commands/migrate'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { join } from 'path'
 
@@ -172,11 +173,8 @@ program
   )
   .action(async (sql: string, options: any) => {
     try {
-      // Validate format before calling
-      if (!options.format || !['json', 'csv'].includes(options.format)) {
-        console.error('❌ Invalid format. Use --format json or --format csv')
-        process.exit(1)
-      }
+      const { validateFormat } = await import('./utils/validation')
+      validateFormat(options.format, ['json', 'csv'], 'export')
       return exportCommand(sql, options)
     } catch (error) {
       console.error((error as Error).message)
@@ -214,6 +212,7 @@ program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)
 program.addCommand(shellCommand)
+program.addCommand(migrateCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

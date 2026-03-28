@@ -43,6 +43,13 @@ export class QueryExecutor {
       // 1. Enforce permission before execution
       const classification = enforcePermission(sql, this.permission)
 
+      // 1b. Warn on dangerous DDL operations even in admin mode
+      if (classification.isDangerous && this.permission === 'admin') {
+        console.error(
+          `⚠ Warning: executing ${classification.type} operation (admin mode)`
+        )
+      }
+
       // 2. Auto-limit in query-only mode (safety default)
       let executeSql = sql
       if (

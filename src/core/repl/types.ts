@@ -53,7 +53,7 @@ export const SQL_KEYWORDS_FOR_COMPLETION: readonly string[] = [
 export const DBCLI_COMMANDS: readonly string[] = [
   'list', 'schema', 'query', 'insert', 'update', 'delete',
   'export', 'blacklist', 'check', 'diff', 'status', 'doctor',
-  'skill', 'init', 'completion', 'upgrade',
+  'skill', 'init', 'completion', 'upgrade', 'migrate',
 ] as const
 
 export const META_COMMANDS: readonly string[] = [

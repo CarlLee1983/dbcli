@@ -239,6 +239,58 @@ Inside the shell:
 - Multi-line SQL: keeps accumulating until `;` is found
 - History persists across sessions (~/.dbcli_history)
 
+### migrate
+
+Schema DDL operations. **All commands default to dry-run** — use `--execute` to actually run the SQL. Destructive operations (DROP) also require `--force`.
+
+```bash
+# Create table
+dbcli migrate create posts \
+  --column "id:serial:pk" \
+  --column "title:varchar(200):not-null" \
+  --column "body:text" \
+  --column "created_at:timestamp:default=now()"
+
+# Drop table (dry-run by default)
+dbcli migrate drop posts
+dbcli migrate drop posts --execute --force   # Actually drop
+
+# Add/drop/alter column
+dbcli migrate add-column users bio text --nullable
+dbcli migrate drop-column users temp_field --execute --force
+dbcli migrate alter-column users name --type "varchar(200)"
+dbcli migrate alter-column users email --rename user_email
+dbcli migrate alter-column users status --set-default "'active'"
+dbcli migrate alter-column users bio --drop-default
+dbcli migrate alter-column users bio --set-nullable
+dbcli migrate alter-column users email --drop-nullable
+
+# Index management
+dbcli migrate add-index users --columns email --unique
+dbcli migrate add-index users --columns "last_name,first_name" --name idx_fullname
+dbcli migrate drop-index idx_fullname --execute --force
+
+# Constraint management
+dbcli migrate add-constraint orders --fk user_id --references users.id --on-delete cascade
+dbcli migrate add-constraint users --unique email
+dbcli migrate add-constraint users --check "age >= 0"
+dbcli migrate drop-constraint orders fk_orders_user_id --execute --force
+
+# Enum (PostgreSQL only — MySQL uses inline ENUM in column type)
+dbcli migrate add-enum status active inactive suspended
+dbcli migrate alter-enum status --add-value archived
+dbcli migrate drop-enum status --execute --force
+```
+
+**Column spec format:** `name:type[:modifier[:modifier...]]`
+- Modifiers: `pk`, `not-null`, `unique`, `auto-increment`, `default=<value>`, `references=<table>.<column>`
+- Serial types: `serial`, `bigserial`, `smallserial` (auto-expand per DB dialect)
+
+**Options (all subcommands):** `--execute`, `--force`, `--config <path>`
+**Permission:** admin
+
+**AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
+
 ## Permission Levels
 
 | Level | Allowed Operations |
@@ -246,7 +298,7 @@ Inside the shell:
 | query-only | SELECT, list, schema, export |
 | read-write | query-only + INSERT, UPDATE |
 | data-admin | read-write + DELETE (full DML, no DDL) |
-| admin | data-admin + DROP, ALTER, CREATE, TRUNCATE |
+| admin | data-admin + DDL (migrate create/drop/alter, DROP, ALTER, CREATE, TRUNCATE) |
 
 Set via `dbcli init --permission <level>` or in `.dbcli` config.
 

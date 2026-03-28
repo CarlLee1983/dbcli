@@ -5,6 +5,79 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-03-28
+
+### Stable Release
+
+dbcli v1.0.0 is the first stable release. All three milestones are complete:
+- **M1 (v0.6.0):** Smart REPL — interactive shell with SQL + dbcli commands
+- **M2 (v0.8.0):** Schema DDL — CREATE/DROP/ALTER TABLE, INDEX, CONSTRAINT, ENUM
+- **M3 (v1.0.0):** Stabilization — documentation, permission matrix, known limitations update
+
+### Added
+
+- **`dbcli migrate` command group** (12 subcommands): Full DDL operations with cross-database support
+  - `migrate create <table>` — CREATE TABLE with `--column` spec format (`"id:serial:pk"`)
+  - `migrate drop <table>` — DROP TABLE with double confirmation (`--execute --force`)
+  - `migrate add-column` / `drop-column` / `alter-column` — Column management
+  - `migrate add-index` / `drop-index` — Index management (MySQL `--table` option for DROP)
+  - `migrate add-constraint` / `drop-constraint` — FK, UNIQUE, CHECK constraints
+  - `migrate add-enum` / `alter-enum` / `drop-enum` — PostgreSQL native ENUM support
+- **DDLGenerator interface** with PostgreSQL and MySQL/MariaDB dialect implementations
+  - PostgreSQL: SERIAL, native ENUM types, ALTER COLUMN TYPE, double-quote identifiers
+  - MySQL: AUTO_INCREMENT, inline ENUM, MODIFY COLUMN, backtick identifiers
+- **DDLExecutor**: Unified execution pipeline — admin permission check → blacklist protection → SQL generation → dry-run/execute → schema cache auto-refresh
+- **Default dry-run for DDL**: All `migrate` commands preview SQL without `--execute`. Destructive operations also require `--force`
+- **142 new tests**: column-parser (17), PG DDL (35), MySQL DDL (25), factory (5), DDL executor (22), schema cache DDL (6), CLI migrate (26), live-db migrate lifecycle (6)
+
+### Fixed
+
+- **Schema comment encoding**: Fixed double-encoded UTF-8 comments from MySQL/MariaDB `information_schema` (e.g., `å¸³è™Ÿ` → `帳號`)
+- **MySQL connection charset**: Added `charset: utf8mb4` and `SET NAMES utf8mb4`
+- **DDL multi-line SQL execution**: Fixed statement splitting to use `;\n` instead of `\n`
+- **MySQL DROP INDEX**: Added `--table` option (MariaDB requires `ON <table>`)
+
+### Changed
+
+- **Permission model**: 4 levels — query-only, read-write, data-admin, admin (DDL requires admin)
+- **Known Limitations**: Removed "Read-only schema" and "CLI-only" (both resolved). Added "No migration version tracking" as post-v1.0 item
+- **Test infrastructure**: `docker-compose.test.yml` for MySQL 8 + PostgreSQL 16 integration testing
+- **Package scripts**: Added `test:unit`, `test:integration`, `test:docker`
+- **SKILL.md**: Updated with full `migrate` command reference and AI agent guidelines
+
+### Test Results (v1.0.0)
+
+- Unit/Core: 1082 pass, 0 fail
+- Live DB (MariaDB 10.11): 61 pass
+- Docker Adapter (MySQL 8 + PG 16): 18 pass
+
+---
+
+## [0.6.1-beta] - 2026-03-28
+
+### Encoding Fix & Test Infrastructure
+
+### Fixed
+
+- **Schema comment encoding**: Fixed double-encoded UTF-8 comments from MySQL/MariaDB `information_schema`. Comments stored through latin1 (cp1252) connections now correctly display CJK characters (e.g., `å¸³è™Ÿ` → `帳號`)
+- **MySQL connection charset**: Added `charset: utf8mb4` and `SET NAMES utf8mb4` to MySQL adapter connections
+
+### Added
+
+- **`fixDoubleEncodedUtf8()` utility** (`src/utils/encoding.ts`): Detects and reverses cp1252-to-UTF-8 double encoding with full cp1252 reverse mapping table. Applied to schema comments in both MySQL and PostgreSQL adapters
+- **`docker-compose.test.yml`**: MySQL 8.4 (port 3307) + PostgreSQL 16 (port 5433) for integration testing, with health checks and tmpfs for fast ephemeral storage
+- **Environment-driven adapter tests**: `mysql.test.ts` and `postgresql.test.ts` now read connection from `MYSQL_*` / `PG_*` env vars, falling back to docker-compose defaults. Auto-skip when DB is unreachable
+- **`live-db.test.ts`**: 55 comprehensive CLI-level integration tests covering all commands against live MariaDB — list, schema, query, blacklist CRUD, insert/update/delete lifecycle, export, check, diff, status, doctor, shell, format validation, SQL injection protection
+- **New test scripts**: `test:unit`, `test:integration`, `test:docker` in package.json
+
+### Test Results
+
+- Unit/Core: 940 pass
+- Live DB (MariaDB 10.11): 55 pass
+- Adapter (Docker MySQL 8 + PG 16): 18 pass
+
+---
+
 ## [0.6.0-beta] - 2026-03-28
 
 ### Interactive Shell — Smart REPL
@@ -285,12 +358,11 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 
 ---
 
-## Known Limitations (V1)
+## Known Limitations
 
-- **Single database per project:** Multi-connection support deferred to a future version
-- **No audit logging:** WHO/WHAT/WHEN tracking deferred to a future version
-- **Read-only schema:** No schema modification commands (ALTER TABLE, etc.) in V1
-- **CLI-only:** No visual schema designer, REPL, or interactive shell in V1
+- **Single database per project:** Each directory uses one `.dbcli` config. For multi-database setups, use separate directories or `--config` flag. This is by design, not a technical limitation.
+- **No audit logging:** WHO/WHAT/WHEN tracking deferred to post-v1.0
+- **No migration version tracking:** `migrate` commands execute DDL directly without version history or rollback. The `migrate` namespace is reserved for future migration tracking support.
 
 ---
 

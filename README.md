@@ -519,6 +519,72 @@ dbcli upgrade --check           # Only check, do not upgrade
 **Options:** `--check` — check only, don't install
 **Background check:** dbcli silently checks npm registry once per 24 hours. If a newer version is found, a hint is shown after command output.
 
+#### `dbcli shell`
+
+Interactive database shell with SQL execution, auto-completion, and syntax highlighting.
+
+**Usage:**
+```bash
+dbcli shell          # Interactive mode (SQL + dbcli commands)
+dbcli shell --sql    # SQL-only mode
+```
+
+**Inside the shell:**
+- Type SQL statements ending with `;` to execute queries
+- Type dbcli commands without the `dbcli` prefix (e.g., `schema users`, `list`)
+- Press Tab for context-aware auto-completion (SQL keywords, table/column names)
+- Use `.help` for meta commands (`.quit`, `.clear`, `.format`, `.history`, `.timing`)
+- Multi-line SQL: input accumulates until `;` is found
+- History persists across sessions in `~/.dbcli_history`
+
+**Permission:** Inherits from config. SQL and commands are fully permission/blacklist enforced.
+
+#### `dbcli migrate`
+
+Schema DDL operations. **All commands default to dry-run** — use `--execute` to actually run the SQL.
+
+**Usage:**
+```bash
+# Create table
+dbcli migrate create posts \
+  --column "id:serial:pk" \
+  --column "title:varchar(200):not-null" \
+  --column "body:text" \
+  --column "created_at:timestamp:default=now()"
+
+# Execute (actually run the SQL)
+dbcli migrate create posts --column "id:serial:pk" --execute
+
+# Drop table (destructive — requires --execute --force)
+dbcli migrate drop posts --execute --force
+
+# Column operations
+dbcli migrate add-column users bio text --nullable --execute
+dbcli migrate alter-column users name --type "varchar(200)" --execute
+dbcli migrate alter-column users email --rename user_email --execute
+dbcli migrate drop-column users temp_field --execute --force
+
+# Index operations
+dbcli migrate add-index users --columns email --unique --execute
+dbcli migrate drop-index idx_users_email --table users --execute --force
+
+# Constraint operations
+dbcli migrate add-constraint orders --fk user_id --references users.id --on-delete cascade --execute
+dbcli migrate add-constraint users --unique email --execute
+dbcli migrate add-constraint users --check "age >= 0" --execute
+dbcli migrate drop-constraint orders fk_orders_user_id --execute --force
+
+# Enum (PostgreSQL only)
+dbcli migrate add-enum status active inactive suspended --execute
+dbcli migrate alter-enum status --add-value archived --execute
+dbcli migrate drop-enum status --execute --force
+```
+
+**Column spec format:** `name:type[:modifier...]` — Modifiers: `pk`, `not-null`, `unique`, `auto-increment`, `default=<value>`, `references=<table>.<column>`
+
+**Options (all subcommands):** `--execute` (run SQL), `--force` (skip confirmation for DROP), `--config <path>`
+**Permission:** admin only
+
 ---
 
 ## Global Options
@@ -542,9 +608,10 @@ dbcli implements a coarse-grained permission system with three levels. Permissio
 
 | Level | Allowed Commands | Blocked Commands | Use Case |
 |-------|------------------|------------------|----------|
-| **Query-only** | `init`, `list`, `schema`, `query`, `export` (limited to 1000 rows) | `insert`, `update`, `delete` | Read-only AI agents, data analysts, reporting |
-| **Read-Write** | + `insert`, `update` | `delete` | Application developers, content managers |
-| **Admin** | All commands | — | Database administrators, schema modifications |
+| **Query-only** | `init`, `list`, `schema`, `query`, `export` (limited to 1000 rows) | `insert`, `update`, `delete`, `migrate` | Read-only AI agents, data analysts, reporting |
+| **Read-Write** | + `insert`, `update` | `delete`, `migrate` | Application developers, content managers |
+| **Data-Admin** | + `delete` | `migrate` | Full DML access, no DDL |
+| **Admin** | All commands including `migrate` (DDL) | — | Database administrators, schema modifications |
 
 ### Configuration
 
@@ -583,11 +650,12 @@ dbcli delete users --where "id=1"  # ERROR: Admin only
 
 #### Admin Mode (Database Administrator)
 ```bash
-# Allowed: Everything
+# Allowed: Everything including DDL
 dbcli query "SELECT * FROM users"
 dbcli insert users --data '{"name": "Eve"}'
 dbcli update users --where "id=1" --set '{"status": "active"}'
-dbcli delete users --where "id=1" --force  # Only Admin can delete
+dbcli delete users --where "id=1" --force  # Data-Admin+ can delete
+dbcli migrate create posts --column "id:serial:pk" --execute  # Admin only
 ```
 
 ### Best Practices

@@ -11,10 +11,11 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { unlinkSync } from 'fs'
+import { SKIP_BY_ENV } from './helpers'
 
 const CWD = import.meta.dir + '/../..'
 
-let SKIP = false
+let SKIP = SKIP_BY_ENV
 
 /** Run a CLI command and return { stdout, stderr, exitCode } */
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -80,6 +81,11 @@ function cleanupFile(path: string) {
 }
 
 beforeAll(async () => {
+  if (SKIP_BY_ENV) {
+    console.log('⏭ SKIP_INTEGRATION_TESTS=true — skipping live DB tests')
+    return
+  }
+
   const check = await run('status --format json')
   SKIP = check.exitCode !== 0
   if (SKIP) {

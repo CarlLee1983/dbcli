@@ -5,6 +5,27 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0-beta] - 2026-03-28
+
+### Interactive Shell — Smart REPL
+
+### Added
+
+- **`dbcli shell` command:** Interactive database shell with SQL execution and dbcli command dispatch
+- **SQL-only mode:** `--sql` flag restricts to SQL statements only
+- **Auto-completion (Tab):** Context-aware completion for SQL keywords, table names, column names, and dbcli commands
+- **Multi-line SQL:** Accumulates input until `;` is found, with `...>` continuation prompt
+- **SQL syntax highlighting:** Real-time colorization of keywords, strings, and numbers in verbose mode
+- **Meta commands:** `.help`, `.quit`/`.exit`, `.clear`, `.format`, `.history`, `.timing`
+- **Persistent history:** Stored in `~/.dbcli_history` (max 1000 entries), with up/down navigation and Ctrl+R search
+- **Permission & blacklist integration:** Full enforcement within REPL session — SQL goes through PermissionGuard, query results go through blacklist filtering
+- **Auto-reconnect:** Attempts to reconnect once on connection errors, then displays error without crashing the session
+- **Error resilience:** SQL/permission/connection errors never crash the session
+- **i18n support:** All shell messages available in English and Traditional Chinese
+- **102 new tests:** input-classifier (25), multiline-buffer (10), meta-commands (15), completer (17), history-manager (8), command-dispatcher (12), repl-engine (12), shell-command (3)
+
+---
+
 ## [0.5.2-beta] - 2026-03-27
 
 ### Fixed

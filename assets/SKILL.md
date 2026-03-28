@@ -222,6 +222,23 @@ dbcli upgrade --check           # Only check, do not upgrade
 
 **Background check:** Every command silently checks the npm registry for a newer version (at most once per 24 hours, cached in `.dbcli/version-check.json`). If a newer version is found, a one-line hint is printed to stderr after the command completes. Pass `-q` / `--quiet` to suppress the hint.
 
+### `dbcli shell`
+
+Start an interactive database shell.
+
+```bash
+dbcli shell          # Interactive mode with SQL + dbcli commands
+dbcli shell --sql    # SQL-only mode
+```
+
+Inside the shell:
+- Type SQL statements ending with `;` to execute
+- Type dbcli commands without the `dbcli` prefix (e.g., `schema users`)
+- Use Tab for auto-completion (SQL keywords, table names, column names)
+- Type `.help` for meta commands (.quit, .clear, .format, .history, .timing)
+- Multi-line SQL: keeps accumulating until `;` is found
+- History persists across sessions (~/.dbcli_history)
+
 ## Permission Levels
 
 | Level | Allowed Operations |

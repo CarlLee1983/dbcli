@@ -12,6 +12,7 @@ import { configModule } from '@/core/config'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { AdapterFactory, ConnectionError } from '@/adapters'
+import { shouldSkipTests, SKIP_BY_ENV } from './helpers'
 
 describe('Init Command Integration Tests', () => {
   test('應該從 DATABASE_URL 格式解析配置', () => {
@@ -252,8 +253,7 @@ describe('Init Command Integration Tests', () => {
   })
 
   test('init command tests connection with valid credentials', async () => {
-    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
-    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
 
     // 驗證：使用有效的認證建立連接
     const config = {
@@ -276,8 +276,7 @@ describe('Init Command Integration Tests', () => {
   })
 
   test('init command fails gracefully with invalid credentials', async () => {
-    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
-    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
 
     // 驗證：無效密碼拋出 ConnectionError
     const config = {
@@ -302,8 +301,7 @@ describe('Init Command Integration Tests', () => {
   })
 
   test('init command shows connection hints on error', async () => {
-    // 跳過測試如果 SKIP_INTEGRATION_TESTS 已設置
-    if (process.env.SKIP_INTEGRATION_TESTS === 'true') return
+    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
 
     // 驗證：連接錯誤包含有用的提示
     const config = {

@@ -2,66 +2,65 @@
  * MySQL adapter integration tests
  * Tests real database connections if available, skips otherwise
  *
- * Requirements: MySQL 8.0+ or MariaDB 10.5+ running on localhost:3306
- * Default credentials: user=root, password=root, database=mysql
+ * Connection via env vars (fallback to docker-compose.test.yml defaults):
+ *   MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_USER=dbcli MYSQL_PASSWORD=testpass MYSQL_DATABASE=dbcli_test
  *
  * To skip: Set SKIP_INTEGRATION_TESTS=true
  */
 
-import { test, expect, describe } from 'bun:test'
+import { test, expect, describe, beforeAll } from 'bun:test'
 import { MySQLAdapter } from 'src/adapters/mysql-adapter'
 import { ConnectionError } from 'src/adapters'
 import type { ConnectionOptions } from 'src/adapters/types'
+import { shouldSkipTests } from '../helpers'
 
-// Check if integration tests should be skipped
-const SKIP_TESTS = process.env.SKIP_INTEGRATION_TESTS === 'true'
+let SKIP_TESTS = false
 
-// Mock MySQL connection options
+// Read connection from env vars, fallback to docker-compose defaults
 const validOptions: ConnectionOptions = {
   system: 'mysql',
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: 'root',
-  database: 'mysql'
+  host: process.env.MYSQL_HOST || 'localhost',
+  port: Number(process.env.MYSQL_PORT || 3307),
+  user: process.env.MYSQL_USER || 'dbcli',
+  password: process.env.MYSQL_PASSWORD || 'testpass',
+  database: process.env.MYSQL_DATABASE || 'dbcli_test'
 }
 
 const validMariaDBOptions: ConnectionOptions = {
-  system: 'mariadb',
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: 'root',
-  database: 'mysql'
+  ...validOptions,
+  system: 'mariadb'
 }
 
 const invalidOptions: ConnectionOptions = {
-  system: 'mysql',
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: 'wrong_password_definitely_invalid_xyz',
-  database: 'mysql'
+  ...validOptions,
+  password: 'wrong_password_definitely_invalid_xyz'
 }
 
 const unreachableOptions: ConnectionOptions = {
   system: 'mysql',
-  host: '10.255.255.1', // Non-routable IP
+  host: '10.255.255.1',
   port: 3306,
   user: 'root',
   password: 'root',
   database: 'mysql',
-  timeout: 1000 // Short timeout for faster failure
+  timeout: 1000
 }
 
 describe('MySQL Adapter Integration Tests', () => {
+  beforeAll(async () => {
+    SKIP_TESTS = await shouldSkipTests(validOptions)
+    if (SKIP_TESTS) {
+      console.log('⏭ MySQL not reachable — skipping integration tests')
+    }
+  })
+
   test('connect() succeeds with valid credentials', async () => {
     if (SKIP_TESTS) return
 
     const adapter = new MySQLAdapter(validOptions)
     try {
       await adapter.connect()
-      expect(true).toBe(true) // Connection succeeded
+      expect(true).toBe(true)
     } finally {
       await adapter.disconnect()
     }
@@ -73,7 +72,7 @@ describe('MySQL Adapter Integration Tests', () => {
     const adapter = new MySQLAdapter(invalidOptions)
     try {
       await adapter.connect()
-      expect(false).toBe(true) // Should not reach here
+      expect(false).toBe(true)
     } catch (error) {
       expect(error).toBeInstanceOf(ConnectionError)
       const connErr = error as ConnectionError
@@ -88,14 +87,14 @@ describe('MySQL Adapter Integration Tests', () => {
     const adapter = new MySQLAdapter(unreachableOptions)
     try {
       await adapter.connect()
-      expect(false).toBe(true) // Should not reach here
+      expect(false).toBe(true)
     } catch (error) {
       expect(error).toBeInstanceOf(ConnectionError)
       const connErr = error as ConnectionError
       expect(['ECONNREFUSED', 'ETIMEDOUT'].includes(connErr.code)).toBe(true)
       expect(connErr.hints.length).toBeGreaterThan(0)
     }
-  })
+  }, 15_000)
 
   test('testConnection() returns true when connected', async () => {
     if (SKIP_TESTS) return
@@ -133,7 +132,6 @@ describe('MySQL Adapter Integration Tests', () => {
       await adapter.connect()
       const tables = await adapter.listTables()
       expect(tables).toBeInstanceOf(Array)
-      // MySQL system database has tables
       expect(tables.length).toBeGreaterThanOrEqual(0)
     } finally {
       await adapter.disconnect()
@@ -146,7 +144,6 @@ describe('MySQL Adapter Integration Tests', () => {
     const adapter = new MySQLAdapter(validOptions)
     try {
       await adapter.connect()
-      // Get first table to test
       const tables = await adapter.listTables()
       if (tables.length > 0) {
         const schema = await adapter.getTableSchema(tables[0]!.name)
@@ -165,7 +162,6 @@ describe('MySQL Adapter Integration Tests', () => {
     const adapter = new MySQLAdapter(validOptions)
     await adapter.connect()
     await adapter.disconnect()
-    // Should not throw when disconnecting again
     await expect(adapter.disconnect()).resolves.toBeUndefined()
   })
 
@@ -175,7 +171,7 @@ describe('MySQL Adapter Integration Tests', () => {
     const adapter = new MySQLAdapter(validMariaDBOptions)
     try {
       await adapter.connect()
-      expect(true).toBe(true) // MariaDB connection succeeds with MySQL adapter
+      expect(true).toBe(true)
     } finally {
       await adapter.disconnect()
     }

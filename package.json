@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "0.6.0-beta",
+  "version": "1.0.0",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -45,7 +45,10 @@
     "dev": "bun run src/cli.ts",
     "build": "bun run scripts/build.ts",
     "prepublishOnly": "bun run build",
-    "test": "vitest",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit tests/core",
+    "test:integration": "bun test tests/integration",
+    "test:docker": "docker compose -f docker-compose.test.yml up -d --wait && bun test tests/integration/adapters; docker compose -f docker-compose.test.yml down",
     "test:run": "vitest --run",
     "test:bench": "vitest bench --run",
     "bench": "bun run test:bench",

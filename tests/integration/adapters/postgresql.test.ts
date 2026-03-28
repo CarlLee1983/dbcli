@@ -2,57 +2,60 @@
  * PostgreSQL adapter integration tests
  * Tests real database connections if available, skips otherwise
  *
- * Requirements: PostgreSQL 12+ running on localhost:5432
- * Default credentials: user=postgres, password=postgres, database=postgres
+ * Connection via env vars (fallback to docker-compose.test.yml defaults):
+ *   PG_HOST=localhost PG_PORT=5433 PG_USER=dbcli PG_PASSWORD=testpass PG_DATABASE=dbcli_test
  *
  * To skip: Set SKIP_INTEGRATION_TESTS=true
  */
 
-import { test, expect, describe } from 'bun:test'
+import { test, expect, describe, beforeAll } from 'bun:test'
 import { PostgreSQLAdapter } from 'src/adapters/postgresql-adapter'
 import { ConnectionError } from 'src/adapters'
 import type { ConnectionOptions } from 'src/adapters/types'
+import { shouldSkipTests } from '../helpers'
 
-// Check if integration tests should be skipped
-const SKIP_TESTS = process.env.SKIP_INTEGRATION_TESTS === 'true'
+let SKIP_TESTS = false
 
-// Mock PostgreSQL connection options
+// Read connection from env vars, fallback to docker-compose defaults
 const validOptions: ConnectionOptions = {
   system: 'postgresql',
-  host: 'localhost',
-  port: 5432,
-  user: 'postgres',
-  password: 'postgres',
-  database: 'postgres'
+  host: process.env.PG_HOST || 'localhost',
+  port: Number(process.env.PG_PORT || 5433),
+  user: process.env.PG_USER || 'dbcli',
+  password: process.env.PG_PASSWORD || 'testpass',
+  database: process.env.PG_DATABASE || 'dbcli_test'
 }
 
 const invalidOptions: ConnectionOptions = {
-  system: 'postgresql',
-  host: 'localhost',
-  port: 5432,
-  user: 'postgres',
-  password: 'wrong_password_definitely_invalid_xyz',
-  database: 'postgres'
+  ...validOptions,
+  password: 'wrong_password_definitely_invalid_xyz'
 }
 
 const unreachableOptions: ConnectionOptions = {
   system: 'postgresql',
-  host: '10.255.255.1', // Non-routable IP
+  host: '10.255.255.1',
   port: 5432,
   user: 'postgres',
   password: 'postgres',
   database: 'postgres',
-  timeout: 1000 // Short timeout for faster failure
+  timeout: 1000
 }
 
 describe('PostgreSQL Adapter Integration Tests', () => {
+  beforeAll(async () => {
+    SKIP_TESTS = await shouldSkipTests(validOptions)
+    if (SKIP_TESTS) {
+      console.log('⏭ PostgreSQL not reachable — skipping integration tests')
+    }
+  })
+
   test('connect() succeeds with valid credentials', async () => {
     if (SKIP_TESTS) return
 
     const adapter = new PostgreSQLAdapter(validOptions)
     try {
       await adapter.connect()
-      expect(true).toBe(true) // Connection succeeded
+      expect(true).toBe(true)
     } finally {
       await adapter.disconnect()
     }
@@ -64,7 +67,7 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     const adapter = new PostgreSQLAdapter(invalidOptions)
     try {
       await adapter.connect()
-      expect(false).toBe(true) // Should not reach here
+      expect(false).toBe(true)
     } catch (error) {
       expect(error).toBeInstanceOf(ConnectionError)
       const connErr = error as ConnectionError
@@ -79,7 +82,7 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     const adapter = new PostgreSQLAdapter(unreachableOptions)
     try {
       await adapter.connect()
-      expect(false).toBe(true) // Should not reach here
+      expect(false).toBe(true)
     } catch (error) {
       expect(error).toBeInstanceOf(ConnectionError)
       const connErr = error as ConnectionError
@@ -124,7 +127,6 @@ describe('PostgreSQL Adapter Integration Tests', () => {
       await adapter.connect()
       const tables = await adapter.listTables()
       expect(tables).toBeInstanceOf(Array)
-      // postgres database should have system tables
       expect(tables.length).toBeGreaterThanOrEqual(0)
     } finally {
       await adapter.disconnect()
@@ -137,7 +139,6 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     const adapter = new PostgreSQLAdapter(validOptions)
     try {
       await adapter.connect()
-      // Get first table to test
       const tables = await adapter.listTables()
       if (tables.length > 0) {
         const schema = await adapter.getTableSchema(tables[0]!.name)
@@ -156,7 +157,6 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     const adapter = new PostgreSQLAdapter(validOptions)
     await adapter.connect()
     await adapter.disconnect()
-    // Should not throw when disconnecting again
     await expect(adapter.disconnect()).resolves.toBeUndefined()
   })
 
@@ -165,7 +165,6 @@ describe('PostgreSQL Adapter Integration Tests', () => {
 
     const adapter = new PostgreSQLAdapter(validOptions)
     await adapter.connect()
-    // Multiple disconnects should not throw
     await adapter.disconnect()
     await adapter.disconnect()
     await adapter.disconnect()

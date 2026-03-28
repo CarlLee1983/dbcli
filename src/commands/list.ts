@@ -9,6 +9,9 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { TableListFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['table', 'json'] as const
 
 export const listCommand = new Command()
   .name('list')
@@ -31,6 +34,8 @@ export const listCommand = new Command()
  */
 async function listAction(options: { format: string; config: string }) {
   try {
+    validateFormat(options.format, ALLOWED_FORMATS, 'list')
+
     // Load configuration from .dbcli
     const config = await configModule.read(options.config)
 

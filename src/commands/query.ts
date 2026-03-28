@@ -12,6 +12,9 @@ import { PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 
 /**
  * Query command action handler
@@ -29,6 +32,10 @@ export async function queryCommand(
     // 1. Argument validation
     if (!sql || sql.trim() === '') {
       throw new Error('SQL query required')
+    }
+
+    if (options.format) {
+      validateFormat(options.format, ALLOWED_FORMATS, 'query')
     }
     sql = sql.trim()
 

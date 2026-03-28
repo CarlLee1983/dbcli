@@ -11,6 +11,9 @@ import { TableFormatter, TableSchemaJSONFormatter, JSONFormatter } from '@/forma
 import { configModule } from '@/core/config'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import type { TableSchema } from '@/adapters/types'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['table', 'json'] as const
 
 export const schemaCommand = new Command()
   .name('schema')
@@ -59,6 +62,8 @@ async function schemaAction(
   }
 ) {
   try {
+    validateFormat(options.format, ALLOWED_FORMATS, 'schema')
+
     // Load configuration from .dbcli
     const config = await configModule.read(options.config)
 

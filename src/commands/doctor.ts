@@ -5,8 +5,11 @@ import { AdapterFactory } from '@/adapters/factory'
 import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
+import { validateFormat } from '@/utils/validation'
 import pkg from '../../package.json'
 import { join } from 'path'
+
+const ALLOWED_FORMATS = ['text', 'json'] as const
 
 export interface DoctorResult {
   group: string
@@ -215,6 +218,8 @@ export const doctorCommand = new Command('doctor')
   .description('Run diagnostic checks on dbcli configuration, environment, and connection')
   .option('--format <type>', 'Output format: text, json', 'text')
   .action(async (options) => {
+    validateFormat(options.format, ALLOWED_FORMATS, 'doctor')
+
     const logger = getLogger()
     const results: DoctorResult[] = []
     const configPath = doctorCommand.parent?.opts().config ?? '.dbcli'

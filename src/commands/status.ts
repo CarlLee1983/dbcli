@@ -6,12 +6,17 @@
 
 import { Command } from 'commander'
 import { configModule } from '@/core/config'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['text', 'json'] as const
 
 export const statusCommand = new Command('status')
   .description('Show current configuration status (safe for AI agents, no credentials exposed)')
   .option('--format <type>', 'Output format: text, json', 'json')
   .action(async (options) => {
     try {
+      validateFormat(options.format, ALLOWED_FORMATS, 'status')
+
       const config = await configModule.read('.dbcli')
 
       if (!config.connection) {

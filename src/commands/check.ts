@@ -5,6 +5,9 @@ import { HealthChecker } from '@/core/health-checker'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { getSizeCategory } from '@/core/size-category'
 import type { CheckType, CheckReport } from '@/types/check'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['json', 'table'] as const
 
 export const checkCommand = new Command()
   .name('check')
@@ -30,6 +33,8 @@ async function checkAction(
   }
 ) {
   try {
+    validateFormat(options.format, ALLOWED_FORMATS, 'check')
+
     const config = await configModule.read(options.config)
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')

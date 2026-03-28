@@ -2,6 +2,9 @@ import { Command } from 'commander'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { configModule } from '@/core/config'
 import type { ColumnSchema } from '@/adapters/types'
+import { validateFormat } from '@/utils/validation'
+
+const ALLOWED_FORMATS = ['json', 'table'] as const
 
 export interface SchemaSnapshot {
   tables: Record<string, {
@@ -143,6 +146,8 @@ async function diffAction(options: {
   config: string
 }) {
   try {
+    validateFormat(options.format, ALLOWED_FORMATS, 'diff')
+
     if (!options.snapshot && !options.against) {
       console.error('Specify --snapshot <path> to save, or --against <path> to compare')
       process.exit(1)

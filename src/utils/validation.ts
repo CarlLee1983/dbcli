@@ -87,3 +87,20 @@ export const DbcliConfigSchema = z.object({
  */
 export type DbcliConfig = z.infer<typeof DbcliConfigSchema>
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>
+
+/**
+ * Validate --format option value against allowed formats.
+ * Throws with clear error message if invalid.
+ */
+export function validateFormat(
+  value: string,
+  allowedFormats: readonly string[],
+  commandName: string
+): void {
+  if (!allowedFormats.includes(value)) {
+    const allowed = allowedFormats.join(', ')
+    throw new Error(
+      `Invalid format "${value}" for ${commandName}. Allowed: ${allowed}`
+    )
+  }
+}

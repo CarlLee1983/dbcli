@@ -5,6 +5,7 @@
  */
 
 import { test, expect, describe } from 'bun:test'
+import fs from 'fs'
 
 const CWD = import.meta.dir + '/../../..'
 
@@ -29,8 +30,7 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   
   const proc = Bun.spawn(fullArgs, {
     cwd: CWD,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    stdio: ['inherit', 'pipe', 'pipe'],
     env: { ...process.env, NO_COLOR: '1' }
   })
 
@@ -56,8 +56,8 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     const msg = `FAIL: migrate ${args} (exit ${exitCode})\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n`
-     process.stderr.write(msg)
+     const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
+     fs.writeSync(2, msg)
      throw new Error(`migrate ${args} failed with exit code ${exitCode}`);
   }
   

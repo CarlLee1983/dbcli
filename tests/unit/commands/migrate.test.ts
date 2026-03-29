@@ -25,7 +25,7 @@ function shellSplit(cmd: string): string[] {
 
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
-  const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', 'migrate', ...argv], {
+  const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json'], {
     cwd: CWD,
     stdout: 'pipe',
     stderr: 'pipe',

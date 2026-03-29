@@ -28,36 +28,46 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const argv = shellSplit(args)
   const fullArgs = ['bun', 'run', './src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
   
+  // In CI, let it inherit stdio so we can SEE what's happening
+  const isCI = !!process.env.GITHUB_ACTIONS
   const proc = Bun.spawn(fullArgs, {
     cwd: CWD,
-    stdio: ['inherit', 'pipe', 'pipe'],
+    stdout: isCI ? 'inherit' : 'pipe',
+    stderr: isCI ? 'inherit' : 'pipe',
     env: { ...process.env, NO_COLOR: '1' }
   })
 
-  const stdoutChunks: Uint8Array[] = []
-  const stderrChunks: Uint8Array[] = []
+  let stdout = ''
+  let stderr = ''
 
-  const stdoutPromise = (async () => {
-    for await (const chunk of proc.stdout) {
-      stdoutChunks.push(chunk)
-    }
-  })()
+  if (!isCI) {
+    const stdoutChunks: Uint8Array[] = []
+    const stderrChunks: Uint8Array[] = []
 
-  const stderrPromise = (async () => {
-    for await (const chunk of proc.stderr) {
-      stderrChunks.push(chunk)
-    }
-  })()
+    const stdoutPromise = (async () => {
+      for await (const chunk of proc.stdout!) {
+        stdoutChunks.push(chunk)
+      }
+    })()
 
-  await Promise.all([stdoutPromise, stderrPromise])
+    const stderrPromise = (async () => {
+      for await (const chunk of proc.stderr!) {
+        stderrChunks.push(chunk)
+      }
+    })()
+
+    await Promise.all([stdoutPromise, stderrPromise])
+    stdout = new TextDecoder().decode(Buffer.concat(stdoutChunks)).trim()
+    stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
+  }
+
   const exitCode = await proc.exited
 
-  const stdout = new TextDecoder().decode(Buffer.concat(stdoutChunks)).trim()
-  const stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
-
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
-     fs.writeSync(2, msg)
+     if (!isCI) {
+       const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
+       fs.writeSync(2, msg)
+     }
      throw new Error(`migrate ${args} failed with exit code ${exitCode}`);
   }
   

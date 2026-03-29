@@ -30,7 +30,8 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const configPath = join(CWD, 'tests/fixtures/admin.dbcli.json')
   const cliPath = join(CWD, 'src/cli.ts')
   
-  const fullArgs = ['bun', 'run', cliPath, '--quiet', 'migrate', ...argv, '--config', configPath]
+  // Try to use bun directly on the file if bun run is failing
+  const fullArgs = ['bun', cliPath, '--quiet', 'migrate', ...argv, '--config', configPath]
   
   const proc = Bun.spawnSync(fullArgs, {
     cwd: CWD,
@@ -43,8 +44,9 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
      const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
-     fs.writeSync(2, msg)
-     throw new Error(`migrate ${args} failed with exit code ${exitCode}\nSTDOUT: ${stdout}\nSTDERR: ${stderr}`);
+     // Use console.log instead of fs.writeSync to see if it shows up in failed test summary
+     console.log(msg)
+     throw new Error(`migrate ${args} failed with exit code ${exitCode}\n${stdout}\n${stderr}`);
   }
   
   return { stdout, stderr, exitCode }

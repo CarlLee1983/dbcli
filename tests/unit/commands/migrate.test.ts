@@ -26,24 +26,42 @@ function shellSplit(cmd: string): string[] {
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
   const fullArgs = ['bun', 'run', 'src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
-  // console.log(`SPAWN: ${fullArgs.join(' ')}`)
+  
   const proc = Bun.spawn(fullArgs, {
     cwd: CWD,
     stdout: 'pipe',
     stderr: 'pipe',
     env: { ...process.env, NO_COLOR: '1' }
   })
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text()
-  ])
+
+  const stdoutChunks: Uint8Array[] = []
+  const stderrChunks: Uint8Array[] = []
+
+  const stdoutPromise = (async () => {
+    for await (const chunk of proc.stdout) {
+      stdoutChunks.push(chunk)
+    }
+  })()
+
+  const stderrPromise = (async () => {
+    for await (const chunk of proc.stderr) {
+      stderrChunks.push(chunk)
+    }
+  })()
+
+  await Promise.all([stdoutPromise, stderrPromise])
   const exitCode = await proc.exited
+
+  const stdout = new TextDecoder().decode(Buffer.concat(stdoutChunks)).trim()
+  const stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
+
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     console.error(`CMD: migrate ${args} -> exit ${exitCode}`);
-     if (stdout) console.error(`STDOUT: ${stdout}`);
-     if (stderr) console.error(`STDERR: ${stderr}`);
+     console.log(`FAIL: migrate ${args} (exit ${exitCode})`);
+     if (stdout) console.log(`STDOUT: ${stdout}`);
+     if (stderr) console.log(`STDERR: ${stderr}`);
   }
-  return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode }
+  
+  return { stdout, stderr, exitCode }
 }
 
 function parseJSON(text: string, context?: string) {

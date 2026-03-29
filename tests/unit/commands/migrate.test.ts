@@ -30,47 +30,16 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const configPath = join(CWD, 'tests/fixtures/admin.dbcli.json')
   const cliPath = join(CWD, 'src/cli.ts')
   
-  if (process.env.GITHUB_ACTIONS) {
-    console.log(`[DEBUG] CLI path: ${cliPath} exists: ${fs.existsSync(cliPath)}`)
-    console.log(`[DEBUG] Config path: ${configPath} exists: ${fs.existsSync(configPath)}`)
-  }
-
   const fullArgs = ['bun', 'run', cliPath, '--quiet', 'migrate', ...argv, '--config', configPath]
   
-  // In CI, let it inherit stdio so we can SEE what's happening
-  const isCI = !!process.env.GITHUB_ACTIONS
-  const proc = Bun.spawn(fullArgs, {
+  const proc = Bun.spawnSync(fullArgs, {
     cwd: CWD,
-    stdout: isCI ? 'inherit' : 'pipe',
-    stderr: isCI ? 'inherit' : 'pipe',
     env: { ...process.env, NO_COLOR: '1' }
   })
 
-  let stdout = ''
-  let stderr = ''
-
-  if (!isCI) {
-    const stdoutChunks: Uint8Array[] = []
-    const stderrChunks: Uint8Array[] = []
-
-    const stdoutPromise = (async () => {
-      for await (const chunk of proc.stdout!) {
-        stdoutChunks.push(chunk)
-      }
-    })()
-
-    const stderrPromise = (async () => {
-      for await (const chunk of proc.stderr!) {
-        stderrChunks.push(chunk)
-      }
-    })()
-
-    await Promise.all([stdoutPromise, stderrPromise])
-    stdout = new TextDecoder().decode(Buffer.concat(stdoutChunks)).trim()
-    stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
-  }
-
-  const exitCode = await proc.exited
+  const stdout = proc.stdout.toString().trim()
+  const stderr = proc.stderr.toString().trim()
+  const exitCode = proc.exitCode
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
      const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`

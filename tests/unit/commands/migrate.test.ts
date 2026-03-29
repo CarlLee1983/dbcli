@@ -28,7 +28,14 @@ function shellSplit(cmd: string): string[] {
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
   const configPath = join(CWD, 'tests/fixtures/admin.dbcli.json')
-  const fullArgs = ['bun', 'run', './src/cli.ts', '--quiet', 'migrate', ...argv, '--config', configPath]
+  const cliPath = join(CWD, 'src/cli.ts')
+  
+  if (process.env.GITHUB_ACTIONS) {
+    console.log(`[DEBUG] CLI path: ${cliPath} exists: ${fs.existsSync(cliPath)}`)
+    console.log(`[DEBUG] Config path: ${configPath} exists: ${fs.existsSync(configPath)}`)
+  }
+
+  const fullArgs = ['bun', 'run', cliPath, '--quiet', 'migrate', ...argv, '--config', configPath]
   
   // In CI, let it inherit stdio so we can SEE what's happening
   const isCI = !!process.env.GITHUB_ACTIONS

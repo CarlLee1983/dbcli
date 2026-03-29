@@ -66,11 +66,9 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const exitCode = await proc.exited
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     if (!isCI) {
-       const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
-       fs.writeSync(2, msg)
-     }
-     throw new Error(`migrate ${args} failed with exit code ${exitCode}`);
+     const msg = `\n--- FAIL: migrate ${args} (exit ${exitCode}) ---\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n-----------------------------------\n`
+     fs.writeSync(2, msg)
+     throw new Error(`migrate ${args} failed with exit code ${exitCode}\nSTDOUT: ${stdout}\nSTDERR: ${stderr}`);
   }
   
   return { stdout, stderr, exitCode }

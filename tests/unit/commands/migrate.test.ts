@@ -30,8 +30,8 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const configPath = join(CWD, 'tests/fixtures/admin.dbcli.json')
   const cliPath = join(CWD, 'src/cli.ts')
   
-  // Try to use bun directly on the file if bun run is failing
   const fullArgs = ['bun', cliPath, '--quiet', 'migrate', ...argv, '--config', configPath]
+  // console.log(`[TRACE] Running: ${fullArgs.join(' ')}`)
   
   const proc = Bun.spawnSync(fullArgs, {
     cwd: CWD,

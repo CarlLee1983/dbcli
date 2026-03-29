@@ -25,7 +25,9 @@ function shellSplit(cmd: string): string[] {
 
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
-  const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json'], {
+  const fullArgs = ['bun', 'run', 'src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
+  // console.log(`SPAWN: ${fullArgs.join(' ')}`)
+  const proc = Bun.spawn(fullArgs, {
     cwd: CWD,
     stdout: 'pipe',
     stderr: 'pipe',
@@ -37,10 +39,9 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   ])
   const exitCode = await proc.exited
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     // For commands that should pass, log if they fail
-     // console.log(`CMD: migrate ${args} -> exit ${exitCode}`);
-     // if (stdout) console.log(`STDOUT: ${stdout}`);
-     // if (stderr) console.log(`STDERR: ${stderr}`);
+     console.error(`CMD: migrate ${args} -> exit ${exitCode}`);
+     if (stdout) console.error(`STDOUT: ${stdout}`);
+     if (stderr) console.error(`STDERR: ${stderr}`);
   }
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode }
 }

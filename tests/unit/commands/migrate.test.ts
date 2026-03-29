@@ -24,7 +24,6 @@ function shellSplit(cmd: string): string[] {
 }
 
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  console.log(`[DEBUG] Starting run: migrate ${args}`)
   const argv = shellSplit(args)
   const fullArgs = ['bun', 'run', 'src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
   
@@ -57,9 +56,7 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     console.log(`FAIL: migrate ${args} (exit ${exitCode})`);
-     if (stdout) console.log(`STDOUT: ${stdout}`);
-     if (stderr) console.log(`STDERR: ${stderr}`);
+     throw new Error(`migrate ${args} failed with exit code ${exitCode}\nSTDOUT: ${stdout}\nSTDERR: ${stderr}`);
   }
   
   return { stdout, stderr, exitCode }

@@ -1,0 +1,14 @@
+{
+  "connection": {
+    "system": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "user": "admin",
+    "password": "password",
+    "database": "testdb"
+  },
+  "permission": "admin",
+  "metadata": {
+    "version": "1.0"
+  }
+}

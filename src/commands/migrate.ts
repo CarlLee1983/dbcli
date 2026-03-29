@@ -18,7 +18,7 @@ import type { ConstraintType } from '@/adapters/ddl/types'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
-async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
+export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
   const configPath = opts.config || '.dbcli'
   const config = await configModule.read(configPath)
   if (!config.connection) {
@@ -26,7 +26,12 @@ async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { con
   }
 
   const adapter = AdapterFactory.createAdapter(config.connection)
-  await adapter.connect()
+  
+  // Skip connection for dry-run if we don't need to refresh schema
+  const isDryRun = !opts.execute
+  if (!isDryRun) {
+    await adapter.connect()
+  }
 
   try {
     const generator = DDLGeneratorFactory.create(config.connection.system)
@@ -53,7 +58,9 @@ async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { con
       process.exit(1)
     }
   } finally {
-    await adapter.disconnect()
+    if (!isDryRun) {
+      await adapter.disconnect()
+    }
   }
 }
 

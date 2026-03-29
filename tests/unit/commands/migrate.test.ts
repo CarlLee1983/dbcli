@@ -6,6 +6,7 @@
 
 import { test, expect, describe } from 'bun:test'
 import fs from 'fs'
+import { join } from 'path'
 
 const CWD = import.meta.dir + '/../../..'
 
@@ -26,7 +27,8 @@ function shellSplit(cmd: string): string[] {
 
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
-  const fullArgs = ['bun', 'run', './src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
+  const configPath = join(CWD, 'tests/fixtures/admin.dbcli.json')
+  const fullArgs = ['bun', 'run', './src/cli.ts', '--quiet', 'migrate', ...argv, '--config', configPath]
   
   // In CI, let it inherit stdio so we can SEE what's happening
   const isCI = !!process.env.GITHUB_ACTIONS

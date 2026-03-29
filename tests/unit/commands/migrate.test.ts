@@ -24,6 +24,7 @@ function shellSplit(cmd: string): string[] {
 }
 
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  console.log(`[DEBUG] Starting run: migrate ${args}`)
   const argv = shellSplit(args)
   const fullArgs = ['bun', 'run', 'src/cli.ts', '--quiet', 'migrate', ...argv, '--config', 'tests/fixtures/admin.dbcli.json']
   

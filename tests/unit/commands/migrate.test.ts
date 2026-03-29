@@ -56,7 +56,9 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
   const stderr = new TextDecoder().decode(Buffer.concat(stderrChunks)).trim()
 
   if (exitCode !== 0 && !args.includes('create test_table') && !args.includes('--help')) {
-     throw new Error(`migrate ${args} failed with exit code ${exitCode}\nSTDOUT: ${stdout}\nSTDERR: ${stderr}`);
+     const msg = `FAIL: migrate ${args} (exit ${exitCode})\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\n`
+     process.stderr.write(msg)
+     throw new Error(`migrate ${args} failed with exit code ${exitCode}`);
   }
   
   return { stdout, stderr, exitCode }

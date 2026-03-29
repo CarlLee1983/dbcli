@@ -18,7 +18,7 @@ import type { ConstraintType } from '@/adapters/ddl/types'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
-async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
+export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
   const configPath = opts.config || '.dbcli'
   const config = await configModule.read(configPath)
   if (!config.connection) {

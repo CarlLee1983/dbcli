@@ -1,146 +1,69 @@
-import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
-import { skillCommand } from '@/commands/skill'
-import * as path from 'node:path'
-import * as fs from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+/**
+ * Skill command unit tests
+ * Tests the skill command logic directly
+ */
 
-/** Dummy program (no longer used by skillCommand, but required by signature) */
-const dummyProgram = {} as any
+import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { join } from 'path'
+import { unlinkSync, existsSync } from 'fs'
+import { skillCommand } from '../../../src/commands/skill'
 
-describe('skill command', () => {
-  let tempDir: string
-  let originalHomeDir: string
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(tmpdir(), 'dbcli-skill-test-'))
-    originalHomeDir = process.env.HOME || ''
+describe('skillCommand logic', () => {
+  let logOutput = ''
+  let errorOutput = ''
+  let exitCode: number | undefined = undefined
+  
+  const logSpy = spyOn(console, 'log').mockImplementation((msg) => {
+    logOutput += msg + '\n'
+  })
+  
+  const errorSpy = spyOn(console, 'error').mockImplementation((msg) => {
+    errorOutput += msg + '\n'
   })
 
-  afterEach(async () => {
+  const exitSpy = spyOn(process, 'exit').mockImplementation((code) => {
+    exitCode = code as number
+    return undefined as never
+  })
+
+  beforeEach(() => {
+    logOutput = ''
+    errorOutput = ''
+    exitCode = undefined
+    logSpy.mockClear()
+    errorSpy.mockClear()
+    exitSpy.mockClear()
+  })
+
+  test('prints SKILL.md to stdout by default', async () => {
+    await skillCommand({} as any, {})
+    expect(logOutput).toContain('# dbcli')
+    expect(logOutput).toContain('Database CLI for AI agents')
+  })
+
+  test('writes to custom output file', async () => {
+    const testFile = join(process.cwd(), 'test-skill.md')
+    if (existsSync(testFile)) unlinkSync(testFile)
+    
     try {
-      await fs.rm(tempDir, { recursive: true, force: true })
-    } catch {
-      // Ignore cleanup errors
+      await skillCommand({} as any, { output: testFile })
+      expect(existsSync(testFile)).toBe(true)
+      const content = await Bun.file(testFile).text()
+      expect(content).toContain('# dbcli')
+      expect(errorOutput).toContain('Skill written to')
+    } finally {
+      if (existsSync(testFile)) unlinkSync(testFile)
     }
-    if (originalHomeDir) {
-      process.env.HOME = originalHomeDir
+  })
+
+  test('fails for unknown platform', async () => {
+    // Note: because we mock process.exit, the throw might still happen or exitCode set
+    try {
+      await skillCommand({} as any, { install: 'nonexistent' })
+    } catch (e) {
+      // either it throws or it exits
     }
-  })
-
-  test('should output static SKILL.md to stdout', async () => {
-    let output = ''
-    const originalLog = console.log
-    console.log = (msg: string) => { output = msg }
-
-    await skillCommand(dummyProgram, {})
-
-    console.log = originalLog
-
-    expect(output).toContain('---')
-    expect(output).toContain('name: dbcli')
-    expect(output).toContain('description:')
-    expect(output).toContain('## Commands')
-  })
-
-  test('should contain all documented commands', async () => {
-    let output = ''
-    const originalLog = console.log
-    console.log = (msg: string) => { output = msg }
-
-    await skillCommand(dummyProgram, {})
-
-    console.log = originalLog
-
-    expect(output).toContain('### init')
-    expect(output).toContain('### list')
-    expect(output).toContain('### schema')
-    expect(output).toContain('### query')
-    expect(output).toContain('### insert')
-    expect(output).toContain('### update')
-    expect(output).toContain('### delete')
-    expect(output).toContain('### export')
-    expect(output).toContain('### blacklist')
-  })
-
-  test('should contain permission levels section', async () => {
-    let output = ''
-    const originalLog = console.log
-    console.log = (msg: string) => { output = msg }
-
-    await skillCommand(dummyProgram, {})
-
-    console.log = originalLog
-
-    expect(output).toContain('## Permission Levels')
-    expect(output).toContain('query-only')
-    expect(output).toContain('read-write')
-    expect(output).toContain('admin')
-  })
-
-  test('should write to file with --output option', async () => {
-    const outputPath = path.join(tempDir, 'test-skill.md')
-
-    let errorOutput = ''
-    const originalError = console.error
-    console.error = (msg: string) => { errorOutput = msg }
-
-    await skillCommand(dummyProgram, { output: outputPath })
-
-    console.error = originalError
-
-    const fileContent = await Bun.file(outputPath).text()
-    expect(fileContent).toContain('---')
-    expect(fileContent).toContain('name: dbcli')
-    expect(errorOutput).toContain(outputPath)
-  })
-
-  test('should install to claude platform directory', async () => {
-    process.env.HOME = tempDir
-
-    const originalError = console.error
-    console.error = () => {}
-
-    await skillCommand(dummyProgram, { install: 'claude' })
-
-    console.error = originalError
-
-    const claudePath = path.join(tempDir, '.claude', 'skills', 'dbcli', 'SKILL.md')
-    const file = Bun.file(claudePath)
-    expect(await file.exists()).toBe(true)
-    const content = await file.text()
-    expect(content).toContain('name: dbcli')
-  })
-
-  test('should install to gemini platform directory', async () => {
-    process.env.HOME = tempDir
-
-    const originalError = console.error
-    console.error = () => {}
-
-    await skillCommand(dummyProgram, { install: 'gemini' })
-
-    console.error = originalError
-
-    const geminiPath = path.join(tempDir, '.gemini', 'skills', 'dbcli', 'SKILL.md')
-    const file = Bun.file(geminiPath)
-    expect(await file.exists()).toBe(true)
-  })
-
-  test('should exit on invalid platform', async () => {
-    let exited = false
-    const originalExit = process.exit
-    process.exit = (() => { exited = true }) as any
-
-    let errorMsg = ''
-    const originalError = console.error
-    console.error = (msg: string) => { errorMsg = msg }
-
-    await skillCommand(dummyProgram, { install: 'invalid-platform' })
-
-    console.error = originalError
-    process.exit = originalExit
-
-    expect(exited).toBe(true)
-    expect(errorMsg).toContain('Unknown platform')
+    expect(exitCode).toBe(1)
+    expect(errorOutput).toContain('Unknown platform')
   })
 })

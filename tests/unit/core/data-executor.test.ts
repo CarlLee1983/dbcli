@@ -5,7 +5,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test'
 import { DataExecutor } from '@/core/data-executor'
-import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
+import type { DatabaseAdapter, ExecutionResult, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 
 // ============================================================================
@@ -34,11 +34,12 @@ class MockAdapter implements DatabaseAdapter {
 
   async disconnect(): Promise<void> {}
 
-  async execute<T>(sql: string, params?: any[]): Promise<T[]> {
+  async execute<T>(sql: string, params?: any[]): Promise<ExecutionResult<T>> {
     if (this.shouldFail) {
       throw new Error(this.failureMessage || 'Query failed')
     }
-    return (this.executeResults || []) as T[]
+    const rows = (this.executeResults || []) as T[]
+    return { rows, affectedRows: rows.length }
   }
 
   async listTables() {
@@ -54,6 +55,10 @@ class MockAdapter implements DatabaseAdapter {
 
   async testConnection(): Promise<boolean> {
     return true
+  }
+
+  async getServerVersion(): Promise<string> {
+    return 'test'
   }
 }
 

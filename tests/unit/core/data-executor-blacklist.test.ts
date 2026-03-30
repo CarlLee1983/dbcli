@@ -15,10 +15,14 @@ function createMockAdapter(): DatabaseAdapter {
   return {
     connect: async () => {},
     disconnect: async () => {},
-    execute: async <T = unknown>(_sql: string, _params?: any[]) => [] as T[],
+    execute: async <T = unknown>(_sql: string, _params?: any[]) => ({
+      rows: [] as T[],
+      affectedRows: 0
+    }),
     listTables: async () => [],
     getTableSchema: async () => ({ name: '', columns: [], rowCount: 0, primaryKey: null, foreignKeys: [] }),
-    ping: async () => {}
+    testConnection: async () => true,
+    getServerVersion: async () => 'test'
   }
 }
 

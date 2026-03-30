@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
-import type { DatabaseAdapter } from '@/adapters/types'
+import type { DatabaseAdapter, ExecutionResult } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { AdapterFactory } from '@/adapters'
 import { configModule } from '@/core/config'
@@ -29,20 +29,20 @@ class MockAdapter implements DatabaseAdapter {
 
   async disconnect(): Promise<void> {}
 
-  async execute<T>(sql: string): Promise<T[]> {
+  async execute<T>(sql: string): Promise<ExecutionResult<T>> {
     if (this.shouldFail) {
       throw new Error(this.failureMessage || 'Query failed')
     }
 
-    // Return mock data based on query
     if (sql.includes('SELECT')) {
-      return [
+      const data = [
         { id: 1, name: 'Alice', email: 'alice@example.com' },
         { id: 2, name: 'Bob', email: 'bob@example.com' }
       ] as T[]
+      return { rows: data, affectedRows: data.length }
     }
 
-    return [] as T[]
+    return { rows: [] as T[], affectedRows: 0 }
   }
 
   async listTables() {
@@ -64,6 +64,10 @@ class MockAdapter implements DatabaseAdapter {
 
   async testConnection(): Promise<boolean> {
     return true
+  }
+
+  async getServerVersion(): Promise<string> {
+    return 'test'
   }
 }
 

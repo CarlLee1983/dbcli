@@ -37,6 +37,7 @@ dbcli init
 
 ```bash
 npm install -g @carllee1983/dbcli
+# 或使用 Bun：bun install -g @carllee1983/dbcli
 ```
 
 #### 免安裝（無需事先安裝）
@@ -44,6 +45,7 @@ npm install -g @carllee1983/dbcli
 ```bash
 npx @carllee1983/dbcli init
 npx @carllee1983/dbcli query "SELECT * FROM users"
+# 或使用 Bun：bunx @carllee1983/dbcli init
 ```
 
 #### 更新
@@ -59,11 +61,14 @@ npm update -g @carllee1983/dbcli
 #### 開發安裝
 
 ```bash
-git clone <repository>
+git clone https://github.com/CarlLee1983/dbcli.git
 cd dbcli
 bun install
-bun run dev -- --help
+bun run src/cli.ts -- --help
+# 或：bun run dev -- --help
 ```
+
+若 `dbcli` 未在 `PATH` 中，請使用 `bun run src/cli.ts <子指令> ...`（與 `bun run dev -- <子指令> ...` 相同）。
 
 ### 第一步
 
@@ -132,8 +137,8 @@ dbcli init
 export DATABASE_URL="postgresql://user:pass@localhost/mydb"
 dbcli init
 
-# 指定權限等級
-echo "PERMISSION_LEVEL=admin" >> .env && dbcli init
+# 指定權限等級（使用 --permission；若搭配 --no-interactive 須一併提供連線等選項）
+dbcli init --permission admin
 
 # 儲存環境變數參照（互動）
 dbcli init --use-env-refs
@@ -224,12 +229,14 @@ dbcli query "SELECT * FROM users"
 
 **選項：**
 - `--format json|table|csv` — 輸出格式（預設：table）
-- `--output file` — 寫入檔案而非 stdout
+- `--limit <數字>` — 限制列數（覆寫 query-only 下的自動上限）
+- `--no-limit` — 在 query-only 模式下關閉自動 1000 列上限
 
 **行為：**
 - 依權限限制操作（Query-only 會阻擋 INSERT/UPDATE/DELETE）
-- Query-only 模式自動限制最多 1000 列（並顯示提示）
+- Query-only 模式預設自動限制最多 1000 列（並顯示提示），除非使用 `--no-limit` 或 `--limit`
 - 回傳含中繼資料的結構化結果（列數、執行時間等）
+- 若要將 CSV／JSON 寫入檔案，請用 shell 重新導向或 `export` 指令
 
 **範例：**
 ```bash
@@ -239,8 +246,8 @@ dbcli query "SELECT * FROM users"
 # JSON
 dbcli query "SELECT * FROM users" --format json
 
-# 匯出 CSV
-dbcli query "SELECT * FROM users" --format csv --output users.csv
+# CSV 輸出至 stdout（重新導向成檔案）
+dbcli query "SELECT * FROM users" --format csv > users.csv
 
 # 串接其他工具
 dbcli query "SELECT * FROM products" --format json | jq '.data[] | .name'
@@ -316,9 +323,9 @@ dbcli update users --where "id=2" --set '{"email": "new@example.com"}' --force
 
 ---
 
-#### `dbcli delete [table]`（僅 Admin 權限）
+#### `dbcli delete [table]`（需要 Data-Admin 或 Admin 權限）
 
-刪除資料列（僅管理員，安全考量）。
+刪除資料列（query-only 與 read-write 不可用；需較高 DML 權限）。
 
 **用法：**
 ```bash
@@ -472,6 +479,70 @@ DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 
 ---
 
+#### `dbcli check`
+
+對單一資料表執行資料品質檢查，或掃描全部資料表。
+
+**用法：**
+```bash
+dbcli check users
+dbcli check --all
+dbcli check --all --include-large
+```
+
+**選項：**
+- `--all` — 檢查所有表（預設略過極大表，除非加 `--include-large`）
+- `--include-large` — 與 `--all` 一併使用時一併檢查極大表
+- `--checks <類型>` — 逗號分隔：`nulls`、`duplicates`、`orphans`、`emptyStrings`
+- `--sample <數字>` — 大表取樣列數（預設：`10000`）
+- `--format json|table` — 輸出格式（預設：`json`）
+- `--config <path>` — 設定路徑（預設：`.dbcli`）
+
+**範例：**
+```bash
+dbcli check orders --format table
+dbcli check --all --checks nulls,duplicates --format json
+```
+
+---
+
+#### `dbcli diff`
+
+儲存 schema 快照，或將目前資料庫與先前快照比對（表、欄位、索引）。
+
+**用法：**
+```bash
+dbcli diff --snapshot ./schema-before.json
+dbcli diff --against ./schema-before.json
+dbcli diff --against ./schema-before.json --format table
+```
+
+**選項：**
+- `--snapshot <path>` — 將目前 schema 寫入 JSON 檔
+- `--against <path>` — 與已存快照比對差異
+- `--format json|table` — 輸出格式（預設：`json`）
+- `--config <path>` — 設定路徑（預設：`.dbcli`）
+
+---
+
+#### `dbcli status`
+
+顯示不含連線憑證的設定摘要（權限、資料庫系統、黑名單筆數、設定中繼版本），適合提供給 AI 代理。
+
+**用法：**
+```bash
+dbcli status
+dbcli status --format text
+dbcli status --format json
+```
+
+**選項：**
+- `--format text|json` — 輸出格式（預設：`json`）
+
+**注意：** 此指令固定讀取專案預設路徑 `.dbcli`（不使用全域 `--config` 旗標）。
+
+---
+
 #### `dbcli doctor`
 
 對環境、設定、連線與資料執行診斷檢查。
@@ -619,8 +690,8 @@ dbcli 採用粗粒度權限系統，共四個等級。權限在 `dbcli init` 時
 
 ```bash
 dbcli init
-# 提示：「Permission level? (query-only / read-write / admin)」
-# 儲存於 ~/.dbcli： "permissionLevel": "query-only"
+# 提示：權限等級（query-only / read-write / data-admin / admin）
+# 儲存於專案 .dbcli/config.json： "permission": "query-only"
 ```
 
 ### 依權限的範例
@@ -644,8 +715,8 @@ dbcli query "SELECT * FROM users"
 dbcli insert users --data '{"name": "Alice"}'
 dbcli update users --where "id=1" --set '{"name": "Bob"}'
 
-# 阻擋：刪除（安全設計）
-dbcli delete users --where "id=1"  # 錯誤：僅 Admin
+# 阻擋：刪除（須 data-admin 或 admin）
+dbcli delete users --where "id=1"  # 錯誤：read-write 無法執行 DELETE
 ```
 
 #### Admin 模式（資料庫管理員）
@@ -836,7 +907,7 @@ dbcli skill --install claude
 權限或設定變更後，可重新產生 skill：
 
 ```bash
-# 例如將 ~/.dbcli 中 permissionLevel 改為 admin
+# 例如編輯 .dbcli/config.json，將 "permission" 設為 "admin"（或重新執行 dbcli init）
 dbcli skill  # 會顯示 delete 與 migrate 等指令
 
 # 再安裝一次以更新 AI 平台
@@ -875,8 +946,8 @@ mysql -h 127.0.0.1 -u root
 **處理方式：**
 
 ```bash
-# 檢查 .dbcli 中的 host
-cat ~/.dbcli | grep host
+# 檢查專案設定中的 host（目錄型配置：.dbcli/config.json）
+grep host .dbcli/config.json
 
 # 測試 DNS
 ping your-hostname.com
@@ -896,18 +967,18 @@ dbcli init
 **處理方式：** 以較高權限重新初始化：
 
 ```bash
-rm ~/.dbcli
-dbcli init  # 選擇 read-write 或 admin
+rm -rf .dbcli   # 移除專案設定（具破壞性 — 請先備份）
+dbcli init      # 選擇 read-write、data-admin 或 admin
 ```
 
-#### 「Permission denied: DELETE requires Admin」
+#### 「Permission denied: DELETE operation requires Data-Admin or Admin」
 
-僅 Admin 可刪除列（安全設計）。
+DELETE 在 query-only 與 read-write 下不允許。
 
-**處理方式：** 以 Admin 重新初始化，或洽管理員。
+**處理方式：** 改用 `data-admin` 或 `admin` 權限（重新執行 `dbcli init`，或編輯 `.dbcli/config.json`），或洽管理員。
 
 ```bash
-dbcli init  # 選擇 admin
+dbcli init  # 選擇 data-admin 或 admin
 dbcli delete users --where "id=1" --force
 ```
 
@@ -1028,7 +1099,12 @@ chmod +x dist/cli.mjs
 
 ## 開發
 
-開發環境、測試與發布流程見 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+```bash
+bun test        # 執行測試
+bun run build   # 建置 CLI 至 dist/（發布前使用）
+```
+
+完整環境、測試與發布流程見 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
 

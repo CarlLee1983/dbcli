@@ -37,6 +37,7 @@ All messages, help text, error messages, and command output respond to the langu
 
 ```bash
 npm install -g @carllee1983/dbcli
+# or: bun install -g @carllee1983/dbcli
 ```
 
 #### Zero-Install (No Installation Needed)
@@ -44,6 +45,7 @@ npm install -g @carllee1983/dbcli
 ```bash
 npx @carllee1983/dbcli init
 npx @carllee1983/dbcli query "SELECT * FROM users"
+# or with Bun: bunx @carllee1983/dbcli init
 ```
 
 #### Update
@@ -59,11 +61,14 @@ npm update -g @carllee1983/dbcli
 #### Development Installation
 
 ```bash
-git clone <repository>
+git clone https://github.com/CarlLee1983/dbcli.git
 cd dbcli
 bun install
-bun run dev -- --help
+bun run src/cli.ts -- --help
+# or: bun run dev -- --help
 ```
+
+When `dbcli` is not on your `PATH`, use `bun run src/cli.ts <subcommand> ...` (same as `bun run dev -- <subcommand> ...`).
 
 ### First Steps
 
@@ -132,8 +137,8 @@ dbcli init
 export DATABASE_URL="postgresql://user:pass@localhost/mydb"
 dbcli init
 
-# Specify permission level
-echo "PERMISSION_LEVEL=admin" >> .env && dbcli init
+# Specify permission level (use --permission; combine with other flags for --no-interactive)
+dbcli init --permission admin
 
 # Store env var references instead of values (interactive)
 dbcli init --use-env-refs
@@ -224,12 +229,14 @@ dbcli query "SELECT * FROM users"
 
 **Options:**
 - `--format json|table|csv` — Output format (default: table)
-- `--output file` — Write to file instead of stdout
+- `--limit <number>` — Cap rows (overrides the automatic limit in query-only mode)
+- `--no-limit` — Disable the automatic 1000-row cap in query-only mode
 
 **Behavior:**
 - Enforces permission-based restrictions (Query-only mode blocks INSERT/UPDATE/DELETE)
-- Auto-limits results to 1000 rows in Query-only mode (notification shown)
+- Auto-limits results to 1000 rows in Query-only mode (notification shown), unless `--no-limit` or `--limit` applies
 - Returns structured results with metadata (row count, execution time)
+- To write CSV/JSON to a file, use shell redirection or the `export` command
 
 **Examples:**
 ```bash
@@ -239,8 +246,8 @@ dbcli query "SELECT * FROM users"
 # JSON (for AI/programmatic parsing)
 dbcli query "SELECT * FROM users" --format json
 
-# CSV export
-dbcli query "SELECT * FROM users" --format csv --output users.csv
+# CSV to stdout (redirect to a file)
+dbcli query "SELECT * FROM users" --format csv > users.csv
 
 # Pipe to other tools
 dbcli query "SELECT * FROM products" --format json | jq '.data[] | .name'
@@ -316,9 +323,9 @@ dbcli update users --where "id=2" --set '{"email": "new@example.com"}' --force
 
 ---
 
-#### `dbcli delete [table]` (Requires Admin permission only)
+#### `dbcli delete [table]` (Requires Data-Admin or Admin permission)
 
-Delete rows (admin-only for safety).
+Delete rows (blocked for query-only and read-write; requires elevated DML permission).
 
 **Usage:**
 ```bash
@@ -472,6 +479,70 @@ DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 
 ---
 
+#### `dbcli check`
+
+Run data-quality checks on one table, or scan all tables.
+
+**Usage:**
+```bash
+dbcli check users
+dbcli check --all
+dbcli check --all --include-large
+```
+
+**Options:**
+- `--all` — Check every table (skips very large tables unless `--include-large`)
+- `--include-large` — Include huge tables when using `--all`
+- `--checks <types>` — Comma-separated: `nulls`, `duplicates`, `orphans`, `emptyStrings`
+- `--sample <number>` — Sample size for large tables (default: `10000`)
+- `--format json|table` — Output format (default: `json`)
+- `--config <path>` — Config path (default: `.dbcli`)
+
+**Examples:**
+```bash
+dbcli check orders --format table
+dbcli check --all --checks nulls,duplicates --format json
+```
+
+---
+
+#### `dbcli diff`
+
+Save a schema snapshot or compare the live database to a previous snapshot (tables, columns, indexes).
+
+**Usage:**
+```bash
+dbcli diff --snapshot ./schema-before.json
+dbcli diff --against ./schema-before.json
+dbcli diff --against ./schema-before.json --format table
+```
+
+**Options:**
+- `--snapshot <path>` — Write the current schema to a JSON file
+- `--against <path>` — Diff live schema vs. the saved snapshot
+- `--format json|table` — Output format (default: `json`)
+- `--config <path>` — Config path (default: `.dbcli`)
+
+---
+
+#### `dbcli status`
+
+Show non-sensitive configuration summary (permission level, DB system, blacklist counts, config metadata version). Does not print connection credentials — intended for AI agents.
+
+**Usage:**
+```bash
+dbcli status
+dbcli status --format text
+dbcli status --format json
+```
+
+**Options:**
+- `--format text|json` — Output format (default: `json`)
+
+**Note:** This command reads the default project config path `.dbcli` (not the global `--config` flag).
+
+---
+
 #### `dbcli doctor`
 
 Run diagnostic checks on environment, configuration, connection, and data.
@@ -619,8 +690,8 @@ Permission level is set during initialization:
 
 ```bash
 dbcli init
-# Prompts: "Permission level? (query-only / read-write / admin)"
-# Stored in ~/.dbcli as: "permissionLevel": "query-only"
+# Prompts: permission level (query-only / read-write / data-admin / admin)
+# Stored in project .dbcli/config.json as: "permission": "query-only"
 ```
 
 ### Permission-Based Examples
@@ -644,8 +715,8 @@ dbcli query "SELECT * FROM users"
 dbcli insert users --data '{"name": "Alice"}'
 dbcli update users --where "id=1" --set '{"name": "Bob"}'
 
-# Blocked: Delete (safety feature)
-dbcli delete users --where "id=1"  # ERROR: Admin only
+# Blocked: Delete (requires data-admin or admin)
+dbcli delete users --where "id=1"  # ERROR: Permission denied (read-write cannot DELETE)
 ```
 
 #### Admin Mode (Database Administrator)
@@ -768,7 +839,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Claude Code (Anthropic)
 
-1. Install dbcli globally: `npm install -g dbcli`
+1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init` (choose permission level)
 3. Install skill: `dbcli skill --install claude`
 4. Restart Claude Code extension
@@ -780,7 +851,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Gemini CLI (Google)
 
-1. Install dbcli globally: `npm install -g dbcli`
+1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install gemini`
 4. Start Gemini: `gemini start`
@@ -792,7 +863,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### GitHub Copilot CLI
 
-1. Install dbcli globally: `npm install -g dbcli`
+1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install copilot`
 4. Install Copilot CLI: `npm install -g @github-next/github-copilot-cli`
@@ -804,7 +875,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Cursor IDE
 
-1. Install dbcli globally: `npm install -g dbcli`
+1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install cursor`
 4. Open Cursor editor
@@ -820,7 +891,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 ```bash
 # 1. Install and initialize
-npm install -g dbcli
+npm install -g @carllee1983/dbcli
 dbcli init  # Choose "query-only" for safety
 
 # 2. Install skill to Claude Code
@@ -841,7 +912,7 @@ dbcli dynamically generates skills based on your current configuration:
 
 ```bash
 # When permission level changes, skill updates automatically
-# Edit ~/.dbcli and change "permissionLevel" to "admin"
+# Edit .dbcli/config.json and set "permission" to "admin" (or re-run dbcli init)
 dbcli skill  # Now shows delete and admin commands
 
 # Re-install to push changes to AI platform
@@ -880,8 +951,8 @@ Hostname resolution failed (typo or DNS issue).
 **Solutions:**
 
 ```bash
-# Verify hostname in .dbcli
-cat ~/.dbcli | grep host
+# Verify hostname in project config (directory layout: .dbcli/config.json)
+grep host .dbcli/config.json
 
 # Test DNS resolution
 ping your-hostname.com
@@ -901,18 +972,18 @@ Trying to write with Query-only permission level.
 **Solution:** Re-initialize with higher permission level:
 
 ```bash
-rm ~/.dbcli  # Remove old config
-dbcli init  # Re-run, choose "read-write" or "admin"
+rm -rf .dbcli   # Remove project config (destructive — backup if needed)
+dbcli init      # Re-run, choose "read-write", "data-admin", or "admin"
 ```
 
-#### "Permission denied: DELETE requires Admin"
+#### "Permission denied: DELETE operation requires Data-Admin or Admin"
 
-Only Admin can delete rows (safety feature).
+DELETE is not allowed in query-only or read-write mode.
 
-**Solution:** Re-initialize with Admin permission, or ask administrator.
+**Solution:** Use `data-admin` or `admin` permission (re-run `dbcli init`, or edit `.dbcli/config.json`), or ask an administrator.
 
 ```bash
-dbcli init  # Choose "admin"
+dbcli init  # Choose "data-admin" or "admin"
 dbcli delete users --where "id=1" --force
 ```
 
@@ -975,11 +1046,11 @@ npx is downloading and caching package.
 **Solution:** This is normal on first run. Subsequent runs are instant:
 
 ```bash
-npx dbcli init  # First run: 30s (downloads)
-npx dbcli init  # Second run: <1s (cached)
+npx @carllee1983/dbcli init  # First run: 30s (downloads)
+npx @carllee1983/dbcli init  # Second run: <1s (cached)
 
 # Or install globally for faster startup
-npm install -g dbcli
+npm install -g @carllee1983/dbcli
 dbcli init  # All future runs: <1s
 ```
 
@@ -996,8 +1067,8 @@ npm .cmd wrapper not created or PATH not updated.
 ```bash
 # Restart terminal to refresh PATH
 # OR reinstall globally
-npm uninstall -g dbcli
-npm install -g dbcli
+npm uninstall -g @carllee1983/dbcli
+npm install -g @carllee1983/dbcli
 
 # Verify installation
 where dbcli  # Windows command to find executable
@@ -1039,7 +1110,12 @@ chmod +x dist/cli.mjs
 
 ## Development
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, testing, and release process.
+```bash
+bun test        # run test suite
+bun run build   # bundle CLI to dist/ (used before publish)
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release process.
 
 ---
 

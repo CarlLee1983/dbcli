@@ -115,7 +115,7 @@ export class MySQLAdapter implements DatabaseAdapter {
     try {
       // Execute lightweight SELECT 1 query
       const result = await this.execute<{ count: number }>('SELECT 1 as count')
-      return result.length > 0
+      return result.rows.length > 0
     } catch (error) {
       throw mapError(error, this.system, this.options)
     }
@@ -126,13 +126,13 @@ export class MySQLAdapter implements DatabaseAdapter {
    * Prevents SQL injection using parameter binding
    * @param sql Query string with ? placeholders
    * @param params Array of parameter values
-   * @returns Array of result rows
+   * @returns Execution result with rows and metadata
    * @throws ConnectionError if not connected or query fails
    */
   async execute<T>(
     sql: string,
     params?: (string | number | boolean | null)[]
-  ): Promise<T[]> {
+  ): Promise<ExecutionResult<T>> {
     if (!this.db) {
       throw new ConnectionError(
         'UNKNOWN',
@@ -144,12 +144,27 @@ export class MySQLAdapter implements DatabaseAdapter {
     try {
       // Use parameterized query to prevent SQL injection
       // mysql2/promise returns [rows, fields]
-      const [rows] = params
+      const [result] = params
         ? await this.db.execute(sql, params)
         : await this.db.execute(sql)
 
-      return Array.isArray(rows) ? rows : []
+      // Handle query results (array of rows)
+      if (Array.isArray(result)) {
+        return {
+          rows: result as T[],
+          affectedRows: result.length
+        }
+      }
+
+      // Handle DML results (ResultSetHeader)
+      const header = result as any // ResultSetHeader
+      return {
+        rows: [],
+        affectedRows: header.affectedRows || 0,
+        lastInsertId: header.insertId
+      }
     } catch (error) {
+      // Pass actual system type for proper error messages
       throw mapError(error, this.system, this.options)
     }
   }
@@ -159,8 +174,8 @@ export class MySQLAdapter implements DatabaseAdapter {
    * MySQL returns e.g. "8.0.35", MariaDB returns e.g. "10.11.6-MariaDB"
    */
   async getServerVersion(): Promise<string> {
-    const rows = await this.execute<{ version: string }>('SELECT VERSION() as version')
-    return rows[0]?.version ?? 'unknown'
+    const result = await this.execute<{ version: string }>('SELECT VERSION() as version')
+    return result.rows[0]?.version ?? 'unknown'
   }
 
   /**
@@ -194,7 +209,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         ORDER BY t.TABLE_NAME
       `
 
-      const results = await this.execute<{
+      const result = await this.execute<{
         table_name: string
         row_count: number | null
         engine: string
@@ -202,7 +217,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         column_count: number
       }>(query)
 
-      return results.map((row) => ({
+      return result.rows.map((row) => ({
         name: row.table_name,
         columns: [],
         columnCount: row.column_count,
@@ -250,7 +265,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         ORDER BY ORDINAL_POSITION
       `
 
-      const columns = await this.execute<{
+      const columnResult = await this.execute<{
         name: string
         type: string
         nullable: boolean
@@ -259,6 +274,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         auto_increment: boolean
         comment: string
       }>(columnQuery, [tableName])
+      const columns = columnResult.rows
 
       // Extract foreign key constraints
       const fkQuery = `
@@ -274,12 +290,13 @@ export class MySQLAdapter implements DatabaseAdapter {
         GROUP BY rc.CONSTRAINT_NAME
       `
 
-      const fkResults = await this.execute<{
+      const fkResult = await this.execute<{
         name: string
         columns: string
         ref_table: string
         ref_columns: string
       }>(fkQuery, [tableName])
+      const fkResults = fkResult.rows
 
       // Create map of single-column foreign keys for quick lookup
       const fkMap = new Map<string, { table: string; column: string }>()
@@ -310,11 +327,12 @@ export class MySQLAdapter implements DatabaseAdapter {
         GROUP BY INDEX_NAME, NON_UNIQUE
       `
 
-      const indexResults = await this.execute<{
+      const indexResult = await this.execute<{
         name: string
         columns: string
         is_unique: boolean
       }>(indexQuery, [tableName])
+      const indexResults = indexResult.rows
 
       // Get row count
       const countResult = await this.execute<{ count: number }>(
@@ -328,7 +346,8 @@ export class MySQLAdapter implements DatabaseAdapter {
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       `
 
-      const tableResults = await this.execute<{ engine: string }>(tableQuery, [tableName])
+      const tableResult = await this.execute<{ engine: string }>(tableQuery, [tableName])
+      const tableResults = tableResult.rows
 
       // Get estimated row count from information_schema (zero-cost)
       const estimateQuery = `
@@ -336,9 +355,10 @@ export class MySQLAdapter implements DatabaseAdapter {
         FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       `
-      const estimateResults = await this.execute<{ estimated_rows: number | null }>(
+      const estimateResult = await this.execute<{ estimated_rows: number | null }>(
         estimateQuery, [tableName]
       )
+      const estimateResults = estimateResult.rows
 
       const schema: TableSchema = {
         name: tableName,
@@ -353,7 +373,7 @@ export class MySQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: parseEnumValues(col.type)
         })),
-        rowCount: countResult[0]?.count || 0,
+        rowCount: countResult.rows[0]?.count || 0,
         engine: tableResults[0]?.engine || 'MySQL',
         primaryKey: primaryKeyColumns,
         foreignKeys: fkResults.map(fk => ({
@@ -375,5 +395,6 @@ export class MySQLAdapter implements DatabaseAdapter {
       throw mapError(error, this.system, this.options)
     }
   }
+
 
 }

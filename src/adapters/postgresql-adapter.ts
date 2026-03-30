@@ -98,7 +98,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     try {
       // Execute lightweight SELECT 1 query
       const result = await this.execute<{ count: number }>('SELECT 1 as count')
-      return result.length > 0
+      return result.rows.length > 0
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
     }
@@ -109,13 +109,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * Prevents SQL injection using parameter binding
    * @param sql Query string with $1, $2, ... placeholders
    * @param params Array of parameter values
-   * @returns Array of result rows
+   * @returns Execution result with rows and metadata
    * @throws ConnectionError if not connected or query fails
    */
   async execute<T>(
     sql: string,
     params?: (string | number | boolean | null)[]
-  ): Promise<T[]> {
+  ): Promise<ExecutionResult<T>> {
     if (!this.pool) {
       throw new ConnectionError(
         'UNKNOWN',
@@ -131,8 +131,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         ? await this.pool.query(sql, params)
         : await this.pool.query(sql)
 
-      // Return rows from result
-      return result.rows as T[]
+      // Return ExecutionResult
+      return {
+        rows: result.rows as T[],
+        affectedRows: result.rowCount ?? 0
+      }
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
     }
@@ -143,8 +146,8 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * PostgreSQL returns e.g. "15.4" or "15.4 (Ubuntu 15.4-1.pgdg22.04+1)"
    */
   async getServerVersion(): Promise<string> {
-    const rows = await this.execute<{ server_version: string }>('SHOW server_version')
-    return rows[0]?.server_version ?? 'unknown'
+    const result = await this.execute<{ server_version: string }>('SHOW server_version')
+    return result.rows[0]?.server_version ?? 'unknown'
   }
 
   /**
@@ -182,14 +185,14 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         ORDER BY c.relname
       `
 
-      const results = await this.execute<{
+      const result = await this.execute<{
         table_name: string
         estimated_rows: number | null
         table_type: string
         column_count: number
       }>(query)
 
-      return results.map((row) => ({
+      return result.rows.map((row) => ({
         name: row.table_name,
         columns: [],
         columnCount: row.column_count,
@@ -250,7 +253,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         ORDER BY c.ordinal_position
       `
 
-      const columns = await this.execute<{
+      const columnResult = await this.execute<{
         name: string
         type: string
         nullable: boolean
@@ -259,6 +262,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         auto_increment: boolean
         comment: string | null
       }>(columnQuery, [tableName])
+      const columns = columnResult.rows
 
       // Query enum values for columns with enum types
       const enumQuery = `
@@ -273,10 +277,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         GROUP BY c.column_name
       `
 
-      const enumResults = await this.execute<{
+      const enumResult = await this.execute<{
         name: string
         enum_values: string[]
       }>(enumQuery, [tableName])
+      const enumResults = enumResult.rows
 
       const enumMap = new Map<string, string[]>()
       for (const row of enumResults) {
@@ -299,12 +304,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         GROUP BY tc.constraint_name, ccu.table_name
       `
 
-      const fkResults = await this.execute<{
+      const fkResult = await this.execute<{
         name: string
         columns: string[]
         ref_table: string
         ref_columns: string[]
       }>(fkQuery, [tableName])
+      const fkResults = fkResult.rows
 
       // Create map of single-column foreign keys for quick lookup
       const fkMap = new Map<string, { table: string; column: string }>()
@@ -331,11 +337,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         GROUP BY i.relname, ix.indisunique
       `
 
-      const indexResults = await this.execute<{
+      const indexResult = await this.execute<{
         name: string
         columns: string[]
         is_unique: boolean
       }>(indexQuery, [tableName])
+      const indexResults = indexResult.rows
 
       // Get estimated row count from pg_class
       const estimateQuery = `
@@ -343,9 +350,10 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         FROM pg_class
         WHERE relname = $1
       `
-      const estimateResults = await this.execute<{ estimated_rows: number | null }>(
+      const estimateResult = await this.execute<{ estimated_rows: number | null }>(
         estimateQuery, [tableName]
       )
+      const estimateResults = estimateResult.rows
 
       // Extract primary key constraint
       const pkQuery = `
@@ -359,7 +367,8 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         ) a
       `
 
-      const pkResults = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
+      const pkResult = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
+      const pkResults = pkResult.rows
 
       // Get row count
       const countResult = await this.execute<{ count: number }>(
@@ -392,7 +401,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: enumMap.get(col.name)
         })),
-        rowCount: countResult[0]?.count || 0,
+        rowCount: countResult.rows[0]?.count || 0,
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
         foreignKeys: safeForeignKeys,

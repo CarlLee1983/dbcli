@@ -73,8 +73,11 @@ export class QueryExecutor {
 
       // 4. Execute query and measure time
       const start = performance.now()
-      const rows = await this.adapter.execute<Record<string, any>>(executeSql)
+      const resultData = await this.adapter.execute<Record<string, any>>(executeSql)
       const executionTimeMs = Math.round(performance.now() - start)
+
+      const rows = resultData.rows
+      const affectedRows = resultData.affectedRows
 
       // 5. Collect result metadata
       let columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
@@ -111,7 +114,7 @@ export class QueryExecutor {
         executionTimeMs,
         metadata: {
           statement: classification.type as any,
-          affectedRows: filteredRows.length,
+          affectedRows: affectedRows,
           ...(securityNotification ? { securityNotification } : {})
         }
       }

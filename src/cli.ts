@@ -171,6 +171,7 @@ program
     'Output file path (if omitted, write to stdout)',
     undefined
   )
+  .option('--force', 'Skip overwrite confirmation', false)
   .action(async (sql: string, options: any) => {
     try {
       const { validateFormat } = await import('./utils/validation')

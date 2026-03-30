@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-30
+
+### Changed
+
+- **Adapter `execute()` 回傳型別重構**: 從 `T[]` 改為 `ExecutionResult<T>`，包含 `rows`、`affectedRows`、`lastInsertId` 欄位，DML 操作（INSERT/UPDATE/DELETE）現在回傳正確的 affected rows 計數
+- **Export 覆寫確認**: `export --output` 寫入已存在檔案時會提示確認，可用 `--force` 跳過
+- **`ExecutionResult<T>` 介面**: 新增統一的查詢結果型別定義於 `src/adapters/types.ts`
+
+---
+
 ## [1.0.0] - 2026-03-28
 
 ### Stable Release

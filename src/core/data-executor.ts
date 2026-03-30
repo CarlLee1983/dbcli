@@ -139,11 +139,10 @@ export class DataExecutor {
       const result = await this.adapter.execute(sql, params)
 
       // Return result
-      const affectedRows = Array.isArray(result) ? result.length : 0
       return {
         status: 'success',
         operation: 'insert',
-        rows_affected: affectedRows,
+        rows_affected: result.affectedRows,
         timestamp,
         sql,
       }
@@ -245,12 +244,11 @@ export class DataExecutor {
 
       // 5. Execute UPDATE
       const result = await this.adapter.execute(sql, params)
-      const affectedRows = Array.isArray(result) ? result.length : 0
 
       return {
         status: 'success',
         operation: 'update',
-        rows_affected: affectedRows,
+        rows_affected: result.affectedRows,
         timestamp,
         sql,
       }
@@ -359,12 +357,11 @@ export class DataExecutor {
 
       // 5. Execute DELETE
       const result = await this.adapter.execute(sql, params)
-      const affectedRows = Array.isArray(result) ? result.length : 0
 
       return {
         status: 'success',
         operation: 'delete',
-        rows_affected: affectedRows,
+        rows_affected: result.affectedRows,
         timestamp,
         sql,
       }

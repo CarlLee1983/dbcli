@@ -105,6 +105,18 @@ export class ConnectionError extends Error {
 }
 
 /**
+ * Result of a database query or command execution
+ */
+export interface ExecutionResult<T> {
+  /** Array of result rows as objects (for SELECT queries) */
+  rows: T[]
+  /** Number of rows affected by the operation (for INSERT/UPDATE/DELETE) */
+  affectedRows: number
+  /** Last inserted ID if applicable (for INSERT operations) */
+  lastInsertId?: number | string
+}
+
+/**
  * Database adapter interface - contract for all database implementations
  * Defines methods that all database adapters must implement
  */
@@ -128,10 +140,10 @@ export interface DatabaseAdapter {
    * Prevents SQL injection by using parameter binding
    * @param sql Query string with parameter placeholders ($1, $2, etc. for PostgreSQL or ? for MySQL)
    * @param params Array of parameter values in order
-   * @returns Array of result rows as objects
+   * @returns Execution result containing rows and metadata
    * @throws {ConnectionError} If query execution fails
    */
-  execute<T>(sql: string, params?: (string | number | boolean | null)[]): Promise<T[]>
+  execute<T>(sql: string, params?: (string | number | boolean | null)[]): Promise<ExecutionResult<T>>
 
   /**
    * List all tables in the connected database

@@ -9,6 +9,7 @@ import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
+import { promptUser } from '@/utils/prompts'
 
 /**
  * Export command action handler
@@ -19,6 +20,7 @@ export async function exportCommand(
   options: {
     format: 'json' | 'csv'
     output?: string
+    force?: boolean
   }
 ): Promise<void> {
   try {
@@ -59,6 +61,18 @@ export async function exportCommand(
       // 7. Output to file or stdout
       if (options.output) {
         const file = Bun.file(options.output)
+        const exists = await file.exists()
+
+        if (exists && !options.force) {
+          const confirmed = await promptUser.confirm(
+            t_vars('export.overwrite_confirmation', { file: options.output })
+          )
+          if (!confirmed) {
+            console.error('Operation cancelled by user')
+            return
+          }
+        }
+
         await file.write(formatted)
         console.error(t_vars('export.exported', { count: result.rowCount, file: options.output }))
       } else {

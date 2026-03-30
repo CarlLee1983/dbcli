@@ -85,7 +85,7 @@ describe('dbcli export command', () => {
 
   test('export command accepts optional output path', async () => {
     try {
-      await exportCommand('SELECT 1', { format: 'json', output: '/tmp/test.json' })
+      await exportCommand('SELECT 1', { format: 'json', output: '/tmp/test.json', force: true })
     } catch {
       // Expected: process.exit(1) via mock (no config)
     }

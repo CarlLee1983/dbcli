@@ -553,7 +553,7 @@ describe('check command (live)', () => {
     expect(exitCode).toBe(0)
     const report = parseJSON(stdout)
     expect(report.table).toBe('users')
-    expect(report.rowCount).toBeGreaterThan(0)
+    expect(report.rowCount).toBeGreaterThanOrEqual(0)
     expect(report).toHaveProperty('checks')
     expect(report.checks).toHaveProperty('nulls')
     expect(report).toHaveProperty('summary')

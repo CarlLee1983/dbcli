@@ -116,10 +116,11 @@ Export query results to file or stdout.
 
 ```bash
 dbcli export "SELECT * FROM users" --format csv --output users.csv
+dbcli export "SELECT * FROM users" --format csv --output users.csv --force  # Skip overwrite confirmation
 dbcli export "SELECT * FROM users" --format json | jq '.[]'
 ```
 
-**Options:** `--format <json|csv>` (required), `--output <path>`
+**Options:** `--format <json|csv>` (required), `--output <path>`, `--force`
 **Permission:** query-only+
 
 ### blacklist

@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to query, inspect schemas, insert/update/delete data, export results, and manage sensitive data blacklists. Supports MySQL, PostgreSQL, MariaDB. Trigger when working with databases, running SQL, exploring table structures, or protecting sensitive columns/tables from AI access.
+description: Database CLI for AI agents with permission-based access control. Use to query, inspect schemas, insert/update/delete data, export results, and manage sensitive data blacklists. Supports MySQL, PostgreSQL, MariaDB with multiple named connections per project and custom env files. Trigger when working with databases, running SQL, exploring table structures, switching between database environments, or protecting sensitive columns/tables from AI access.
 ---
 
 # dbcli
@@ -22,15 +22,42 @@ dbcli query "SELECT * FROM users"   # Execute SQL
 Initialize `.dbcli` configuration file. Typically run manually by the developer — avoid running on behalf of the user unless explicitly requested.
 
 ```bash
-dbcli init
+dbcli init                                              # Single connection (v1 format)
 dbcli init --system mysql --host localhost --port 3306 --user root --name mydb
-dbcli init --use-env-refs           # Store env var references instead of values
-dbcli init --no-interactive --force # Non-interactive, skip overwrite confirmation
+dbcli init --use-env-refs                               # Store env var references
+dbcli init --no-interactive --force                     # Non-interactive mode
+
+# Multi-connection (v2 format)
+dbcli init --conn-name staging --env-file .env.staging   # Named connection with custom env file
+dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-test
+dbcli init --remove staging                              # Remove a named connection
+dbcli init --rename staging:production                   # Rename a connection
 ```
 
-**Key options:** `--system <postgresql|mysql|mariadb>`, `--permission <query-only|read-write|data-admin|admin>`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`
+**Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
+
+**Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
 
 > **AI agent note on `--use-env-refs`:** If an existing `.dbcli` config contains `{"$env": "DB_HOST"}` style references, the connection values are read from environment variables at runtime. Do NOT re-run `init` to replace these references with actual values — the env-ref format is intentional for CI/CD and multi-environment setups.
+
+### use
+
+Switch or display the default database connection (v2 multi-connection config).
+
+```bash
+dbcli use                   # Show current default connection
+dbcli use staging           # Switch default to 'staging'
+dbcli use --list            # List all connections (* marks default)
+```
+
+Any command can also use `--use <name>` to temporarily select a connection without changing the default:
+
+```bash
+dbcli query --use staging "SELECT * FROM users LIMIT 10"
+dbcli list --use prod
+```
+
+**Requires v2 config** (created with `dbcli init --conn-name`).
 
 ### list
 
@@ -308,6 +335,7 @@ Set via `dbcli init --permission <level>` or in `.dbcli` config.
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | Path to .dbcli config file (default: `.dbcli`) |
+| `--use <connection>` | Use a specific named connection (v2 config) |
 | `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
 | `-q, --quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |

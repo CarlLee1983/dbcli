@@ -11,13 +11,16 @@
  */
 
 import { Command } from 'commander'
+import { join } from 'path'
 import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { configModule } from '@/core/config'
+import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
 import { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError } from '@/adapters'
+import type { DbcliConfigV2 } from '@/utils/validation'
 
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
 
@@ -48,6 +51,140 @@ async function checkOverwrite(
   throw new Error(t('init.config_exists_use_force'))
 }
 
+async function handleRemove(configPath: string, name: string): Promise<void> {
+  const configFile = Bun.file(join(configPath, 'config.json'))
+  if (!(await configFile.exists())) {
+    throw new Error('找不到設定檔')
+  }
+
+  const raw = JSON.parse(await configFile.text())
+  if (detectConfigVersion(raw) !== 2) {
+    throw new Error('移除連線需要 V2 格式設定')
+  }
+
+  const config = await readV2Config(configPath)
+  if (!config.connections[name]) {
+    throw new Error(`連線 '${name}' 不存在`)
+  }
+
+  const connectionCount = Object.keys(config.connections).length
+  if (connectionCount <= 1) {
+    throw new Error('無法移除最後一個連線')
+  }
+
+  const { [name]: _removed, ...remaining } = config.connections
+  const newDefault = config.default === name
+    ? Object.keys(remaining)[0]
+    : config.default
+
+  const updated: DbcliConfigV2 = {
+    ...config,
+    default: newDefault,
+    connections: remaining
+  }
+
+  await writeV2Config(configPath, updated)
+
+  if (config.default === name) {
+    console.log(`已移除連線 '${name}'，預設連線已切換為 '${newDefault}'`)
+  } else {
+    console.log(`已移除連線 '${name}'`)
+  }
+}
+
+async function handleRename(configPath: string, renameArg: string): Promise<void> {
+  const [oldName, newName] = renameArg.split(':')
+  if (!oldName || !newName) {
+    throw new Error('用法：--rename <舊名稱>:<新名稱>')
+  }
+
+  const configFile = Bun.file(join(configPath, 'config.json'))
+  if (!(await configFile.exists())) {
+    throw new Error('找不到設定檔')
+  }
+
+  const raw = JSON.parse(await configFile.text())
+  if (detectConfigVersion(raw) !== 2) {
+    throw new Error('重新命名連線需要 V2 格式設定')
+  }
+
+  const config = await readV2Config(configPath)
+  if (!config.connections[oldName]) {
+    throw new Error(`連線 '${oldName}' 不存在`)
+  }
+  if (config.connections[newName]) {
+    throw new Error(`連線 '${newName}' 已存在`)
+  }
+
+  const entries = Object.entries(config.connections).map(
+    ([key, value]) => [key === oldName ? newName : key, value] as const
+  )
+
+  const updated: DbcliConfigV2 = {
+    ...config,
+    default: config.default === oldName ? newName : config.default,
+    connections: Object.fromEntries(entries)
+  }
+
+  await writeV2Config(configPath, updated)
+  console.log(`已將連線 '${oldName}' 重新命名為 '${newName}'`)
+}
+
+async function writeV2InitConfig(
+  configPath: string,
+  connectionName: string,
+  connection: ConnectionConfig,
+  permission: string,
+  envFile?: string
+): Promise<void> {
+  const configJsonPath = join(configPath, 'config.json')
+  const configFile = Bun.file(configJsonPath)
+  let existingV2: DbcliConfigV2 | null = null
+
+  // Check for existing v2 config
+  if (await configFile.exists()) {
+    const raw = JSON.parse(await configFile.text())
+    if (detectConfigVersion(raw) === 2) {
+      existingV2 = await readV2Config(configPath)
+    }
+  }
+
+  // Build connection entry
+  const connEntry: any = {
+    ...connection,
+    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin'
+  }
+  if (envFile) {
+    connEntry.envFile = envFile
+  }
+
+  // Build v2 config
+  const v2Config: DbcliConfigV2 = existingV2
+    ? {
+        ...existingV2,
+        connections: {
+          ...existingV2.connections,
+          [connectionName]: connEntry
+        }
+      }
+    : {
+        version: 2,
+        default: connectionName,
+        connections: {
+          [connectionName]: connEntry
+        },
+        schema: {},
+        metadata: { version: '1.0', createdAt: new Date().toISOString() },
+        blacklist: { tables: [], columns: {} }
+      }
+
+  // Ensure directory exists
+  await Bun.$`mkdir -p ${configPath}`
+
+  await writeV2Config(configPath, v2Config)
+  console.log(t('init.config_saved'))
+}
+
 /**
  * Build and configure the init command
  */
@@ -69,6 +206,10 @@ export const initCommand = new Command('init')
   .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
+  .option('--conn-name <name>', 'Connection name (creates v2 multi-connection config)')
+  .option('--env-file <path>', 'Path to env file for this connection')
+  .option('--remove <name>', 'Remove a named connection')
+  .option('--rename <names>', 'Rename a connection (format: old:new)')
   .action(async (options) => {
     try {
       await initCommandHandler(options)
@@ -88,6 +229,24 @@ export const initCommand = new Command('init')
 async function initCommandHandler(
   options: Record<string, unknown>
 ): Promise<void> {
+  const configPath = '.dbcli'
+
+  // Handle --remove
+  if (options.remove) {
+    await handleRemove(configPath, options.remove as string)
+    return
+  }
+
+  // Handle --rename
+  if (options.rename) {
+    await handleRename(configPath, options.rename as string)
+    return
+  }
+
+  // Determine if this is a v2 init
+  const isV2Init = !!(options.connName || options.envFile)
+  const connectionName = (options.connName as string) || 'default'
+
   // 1. Load existing config
   const existingConfig = await configModule.read('.dbcli')
 
@@ -193,6 +352,12 @@ async function initCommandHandler(
 
     // Skip connection test (only env-var references, no actual connection values)
     console.log(`⏭️  ${t('init.skip_test_env_ref')}`)
+
+    // V2 init path (env-refs interactive mode)
+    if (isV2Init) {
+      await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+      return
+    }
 
     // Write config
     await configModule.write('.dbcli', newConfig)
@@ -364,6 +529,12 @@ async function initCommandHandler(
   }
 
   // 9. Write config
+  // V2 init path
+  if (isV2Init) {
+    await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+    return
+  }
+
   await configModule.write('.dbcli', newConfig)
   console.log(t('init.config_saved'))
 }

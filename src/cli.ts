@@ -20,6 +20,7 @@ import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
 import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
+import { useCommand } from './commands/use'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { join } from 'path'
 
@@ -215,6 +216,7 @@ program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)
 program.addCommand(shellCommand)
 program.addCommand(migrateCommand)
+program.addCommand(useCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

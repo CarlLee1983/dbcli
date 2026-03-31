@@ -16,6 +16,26 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 /**
+ * 全域 --use 連線名稱，由 CLI preAction hook 設定
+ * 所有呼叫 configModule.read() 的指令都能自動繼承此值
+ */
+let _globalConnectionName: string | undefined
+
+/**
+ * 設定全域連線名稱（由 cli.ts preAction hook 呼叫）
+ */
+export function setGlobalConnectionName(name: string | undefined): void {
+  _globalConnectionName = name
+}
+
+/**
+ * 取得目前全域連線名稱（主要供測試使用）
+ */
+export function getGlobalConnectionName(): string | undefined {
+  return _globalConnectionName
+}
+
+/**
  * Default configuration values
  */
 const DEFAULT_CONFIG: DbcliConfig = {
@@ -132,6 +152,9 @@ export const configModule = {
    * @throws ConfigError if JSON is invalid or validation fails
    */
   async read(path: string, connectionName?: string): Promise<DbcliConfig> {
+    // 優先使用明確傳入的 connectionName，fallback 到全域 --use 值
+    const effectiveConnectionName = connectionName ?? _globalConnectionName
+
     try {
       // Check if path is a directory
       let isDirectory = false
@@ -155,7 +178,7 @@ export const configModule = {
           // V2 detection: handle multi-connection format
           if (detectConfigVersion(config) === 2) {
             const v2Config = DbcliConfigV2Schema.parse(config)
-            const resolved = resolveConnection(v2Config, connectionName)
+            const resolved = resolveConnection(v2Config, effectiveConnectionName)
 
             // Load env file for the connection
             await loadConnectionEnv(resolved, configPath)

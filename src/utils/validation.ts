@@ -89,6 +89,36 @@ export type DbcliConfig = z.infer<typeof DbcliConfigSchema>
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>
 
 /**
+ * Named connection schema (v2 format)
+ * Extends ConnectionConfigSchema with per-connection permission and optional envFile
+ */
+export const NamedConnectionSchema = ConnectionConfigSchema.extend({
+  permission: PermissionSchema,
+  envFile: z.string().optional()
+})
+
+/**
+ * V2 config schema with multiple named connections
+ */
+export const DbcliConfigV2Schema = z.object({
+  version: z.literal(2),
+  default: z.string().min(1),
+  connections: z.record(NamedConnectionSchema).refine(
+    (conns) => Object.keys(conns).length > 0,
+    { message: 'At least one connection is required' }
+  ),
+  schema: z.record(z.any()).optional().default({}),
+  metadata: MetadataSchema,
+  blacklist: BlacklistConfigSchema
+}).refine(
+  (config) => config.default in config.connections,
+  { message: 'Default connection must exist in connections', path: ['default'] }
+)
+
+export type NamedConnection = z.infer<typeof NamedConnectionSchema>
+export type DbcliConfigV2 = z.infer<typeof DbcliConfigV2Schema>
+
+/**
  * Validate --format option value against allowed formats.
  * Throws with clear error message if invalid.
  */

@@ -19,7 +19,27 @@
     "skip_test_env_ref": "Skipping connection test in env-ref mode",
     "skip_test": "Skipping connection test (--skip-test)",
     "connection_hints": "Hints:",
-    "config_exists_use_force": ".dbcli exists. Use --force option to overwrite."
+    "config_exists_use_force": ".dbcli exists. Use --force option to overwrite.",
+    "connection_added": "Connection '{{name}}' added",
+    "connection_removed": "Connection '{{name}}' removed",
+    "connection_removed_switched": "Connection '{{name}}' removed. Default connection switched to '{{newDefault}}'",
+    "connection_renamed": "Connection '{{oldName}}' renamed to '{{newName}}'",
+    "v1_migration_prompt": "Detected old config format. Create new format and import existing connection as 'default'?",
+    "config_saved_v2": "V2 configuration saved to .dbcli",
+    "config_not_found": "Configuration file not found",
+    "requires_v2_remove": "Removing a connection requires V2 config format",
+    "requires_v2_rename": "Renaming a connection requires V2 config format",
+    "connection_not_found": "Connection '{{name}}' does not exist",
+    "cannot_remove_last": "Cannot remove the last connection",
+    "connection_already_exists": "Connection '{{name}}' already exists",
+    "rename_invalid_format": "Usage: --rename <old-name>:<new-name>"
+  },
+  "use": {
+    "description": "Switch or display the default database connection",
+    "switched": "Switched default connection to {{name}}",
+    "current": "Current default connection: {{name}}",
+    "requires_v2": "This feature requires v2 config format. Use 'dbcli init --conn-name <name>' to create one",
+    "available": "Available connections"
   },
   "schema": {
     "description": "Retrieve table structure or list all tables",

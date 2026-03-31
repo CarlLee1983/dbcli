@@ -6,7 +6,9 @@ import { describe, test, expect } from 'bun:test'
 import {
   DbcliConfigSchema,
   ConnectionConfigSchema,
-  PermissionSchema
+  PermissionSchema,
+  NamedConnectionSchema,
+  DbcliConfigV2Schema
 } from '@/utils/validation'
 import { ZodError } from 'zod'
 
@@ -223,6 +225,107 @@ describe('validation', () => {
       }
 
       expect(() => DbcliConfigSchema.parse(invalid)).toThrow(ZodError)
+    })
+  })
+
+  describe('V2 Config Schemas', () => {
+    describe('NamedConnectionSchema', () => {
+      test('should validate connection with direct values', () => {
+        const result = NamedConnectionSchema.parse({
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'dev',
+          password: 'secret',
+          database: 'myapp',
+          permission: 'read-write'
+        })
+        expect(result.system).toBe('postgresql')
+        expect(result.permission).toBe('read-write')
+        expect(result.envFile).toBeUndefined()
+      })
+
+      test('should validate connection with envFile', () => {
+        const result = NamedConnectionSchema.parse({
+          system: 'postgresql',
+          host: { $env: 'DB_HOST' },
+          port: { $env: 'DB_PORT' },
+          user: { $env: 'DB_USER' },
+          password: { $env: 'DB_PASSWORD' },
+          database: { $env: 'DB_NAME' },
+          permission: 'query-only',
+          envFile: '.env.staging'
+        })
+        expect(result.envFile).toBe('.env.staging')
+      })
+
+      test('should default permission to query-only', () => {
+        const result = NamedConnectionSchema.parse({
+          system: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          user: 'root',
+          password: '',
+          database: 'test'
+        })
+        expect(result.permission).toBe('query-only')
+      })
+    })
+
+    describe('DbcliConfigV2Schema', () => {
+      test('should validate complete v2 config', () => {
+        const result = DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'local',
+          connections: {
+            local: {
+              system: 'postgresql',
+              host: 'localhost',
+              port: 5432,
+              user: 'dev',
+              password: 'secret',
+              database: 'myapp',
+              permission: 'read-write'
+            }
+          }
+        })
+        expect(result.version).toBe(2)
+        expect(result.default).toBe('local')
+        expect(result.connections.local.system).toBe('postgresql')
+      })
+
+      test('should reject config without connections', () => {
+        expect(() => DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'local'
+        })).toThrow()
+      })
+
+      test('should reject config with empty connections', () => {
+        expect(() => DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'local',
+          connections: {}
+        })).toThrow()
+      })
+
+      test('should reject config where default does not exist in connections', () => {
+        expect(() => DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'nonexistent',
+          connections: {
+            local: {
+              system: 'postgresql',
+              host: 'localhost',
+              port: 5432,
+              user: 'dev',
+              password: 'secret',
+              database: 'myapp',
+              permission: 'read-write'
+            }
+          }
+        })).toThrow()
+      })
     })
   })
 })

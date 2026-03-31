@@ -19,7 +19,27 @@
     "skip_test_env_ref": "跳過連線測試（環境變數參照模式）",
     "skip_test": "跳過連線測試（--skip-test）",
     "connection_hints": "提示：",
-    "config_exists_use_force": ".dbcli 已存在。使用 --force 選項覆蓋。"
+    "config_exists_use_force": ".dbcli 已存在。使用 --force 選項覆蓋。",
+    "connection_added": "已新增連線 '{{name}}'",
+    "connection_removed": "已移除連線 '{{name}}'",
+    "connection_removed_switched": "已移除連線 '{{name}}'，預設連線已切換為 '{{newDefault}}'",
+    "connection_renamed": "已將連線 '{{oldName}}' 重新命名為 '{{newName}}'",
+    "v1_migration_prompt": "偵測到舊格式設定，將建立新格式並將現有連線匯入為 'default'，是否繼續？",
+    "config_saved_v2": "V2 設定已儲存至 .dbcli",
+    "config_not_found": "找不到設定檔",
+    "requires_v2_remove": "移除連線需要 V2 格式設定",
+    "requires_v2_rename": "重新命名連線需要 V2 格式設定",
+    "connection_not_found": "連線 '{{name}}' 不存在",
+    "cannot_remove_last": "無法移除最後一個連線",
+    "connection_already_exists": "連線 '{{name}}' 已存在",
+    "rename_invalid_format": "用法：--rename <舊名稱>:<新名稱>"
+  },
+  "use": {
+    "description": "切換或顯示預設資料庫連線",
+    "switched": "已切換預設連線為 {{name}}",
+    "current": "目前預設連線：{{name}}",
+    "requires_v2": "此功能需要新格式設定。請使用 dbcli init --conn-name <名稱> 建立多連線設定",
+    "available": "可用連線"
   },
   "schema": {
     "description": "檢索表格結構或列出所有表格",

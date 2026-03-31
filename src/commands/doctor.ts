@@ -5,7 +5,8 @@ import { AdapterFactory } from '@/adapters/factory'
 import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
-import { validateFormat } from '@/utils/validation'
+import { validateFormat, DbcliConfigV2Schema } from '@/utils/validation'
+import { detectConfigVersion } from '@/core/config-v2'
 import pkg from '../../package.json'
 import { join } from 'path'
 
@@ -190,6 +191,70 @@ export const runDoctorChecks = {
     }
   },
 
+  async checkV2Config(configPath: string): Promise<DoctorResult[]> {
+    const results: DoctorResult[] = []
+    const configFile = Bun.file(join(configPath, 'config.json'))
+
+    if (!(await configFile.exists())) return results
+
+    let raw: any
+    try {
+      raw = JSON.parse(await configFile.text())
+    } catch {
+      return results
+    }
+
+    if (detectConfigVersion(raw) !== 2) return results
+
+    let config: any
+    try {
+      config = DbcliConfigV2Schema.parse(raw)
+    } catch {
+      results.push({
+        group: 'Configuration',
+        label: 'V2 config validation',
+        status: 'error',
+        message: 'V2 設定檔格式無效'
+      })
+      return results
+    }
+
+    // Check default points to existing connection
+    if (!config.connections[config.default]) {
+      results.push({
+        group: 'Configuration',
+        label: 'Default connection',
+        status: 'error',
+        message: `預設連線 '${config.default}' 不存在於 connections 中`
+      })
+    } else {
+      results.push({
+        group: 'Configuration',
+        label: 'Default connection',
+        status: 'pass',
+        message: `預設連線 '${config.default}' 有效`
+      })
+    }
+
+    // Check envFile existence for each connection
+    for (const [name, conn] of Object.entries(config.connections) as any) {
+      if (conn.envFile) {
+        const envPath = join(configPath, '..', conn.envFile)
+        const exists = await Bun.file(envPath).exists()
+        results.push({
+          group: 'Configuration',
+          label: `Env file (${name})`,
+          status: exists ? 'pass' : 'error',
+          message: exists
+            ? `${conn.envFile} 存在`
+            : `連線 '${name}' 的 env 檔案 ${conn.envFile} 不存在`
+        })
+      }
+    }
+
+    return results
+  },
+
   formatTextOutput(results: DoctorResult[], version: string): string {
     const lines: string[] = [`dbcli doctor v${version}`, '']
     const groups = ['Environment', 'Configuration', 'Connection & Data']
@@ -249,6 +314,10 @@ export const doctorCommand = new Command('doctor')
           status: 'pass',
           message: `Permission: ${config.permission}`,
         })
+
+        // V2-specific checks
+        const v2Results = await runDoctorChecks.checkV2Config(configPath)
+        results.push(...v2Results)
 
         const blacklistedColumns = new Map<string, Set<string>>()
         if (config.blacklist?.columns) {

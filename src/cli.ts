@@ -20,7 +20,9 @@ import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
 import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
+import { useCommand } from './commands/use'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
+import { setGlobalConnectionName } from './core/config'
 import { join } from 'path'
 
 // Module-level state for background version check
@@ -34,9 +36,14 @@ const program = new Command()
   .option('-v, --verbose', 'Increase verbosity (-v verbose, -vv debug)', (_, prev) => prev + 1, 0)
   .option('-q, --quiet', 'Suppress non-essential output')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .option('--use <connection>', 'Use a specific named connection (v2 config)')
 
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()
+
+  // 串接 --use 選項：設定全域連線名稱，讓所有子指令透過 configModule.read() 自動繼承
+  const useConnection = opts.use as string | undefined
+  setGlobalConnectionName(useConnection)
 
   // Handle --no-color: set env var before picocolors reads it
   if (opts.color === false) {
@@ -214,6 +221,7 @@ program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)
 program.addCommand(shellCommand)
 program.addCommand(migrateCommand)
+program.addCommand(useCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

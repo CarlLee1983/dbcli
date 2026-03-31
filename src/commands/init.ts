@@ -11,13 +11,16 @@
  */
 
 import { Command } from 'commander'
+import { join } from 'path'
 import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { configModule } from '@/core/config'
+import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
 import { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError } from '@/adapters'
+import type { DbcliConfigV2 } from '@/utils/validation'
 
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
 
@@ -26,13 +29,14 @@ const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as
  * Shared by both env-ref and normal mode paths
  */
 async function checkOverwrite(
+  configPath: string,
   shouldPrompt: boolean,
   force: boolean
 ): Promise<boolean> {
-  const configFile = Bun.file('.dbcli')
-  const fileExists = await configFile.exists()
+  const fileExists = await Bun.file(configPath).exists()
+  const dirConfigExists = await Bun.file(join(configPath, 'config.json')).exists()
 
-  if (!fileExists || force) return true
+  if ((!fileExists && !dirConfigExists) || force) return true
 
   if (shouldPrompt) {
     const overwrite = await promptUser.confirm(
@@ -46,6 +50,180 @@ async function checkOverwrite(
   }
 
   throw new Error(t('init.config_exists_use_force'))
+}
+
+async function handleRemove(configPath: string, name: string): Promise<void> {
+  const configFile = Bun.file(join(configPath, 'config.json'))
+  if (!(await configFile.exists())) {
+    throw new Error(t('init.config_not_found'))
+  }
+
+  const raw = JSON.parse(await configFile.text())
+  if (detectConfigVersion(raw) !== 2) {
+    throw new Error(t('init.requires_v2_remove'))
+  }
+
+  const config = await readV2Config(configPath)
+  if (!config.connections[name]) {
+    throw new Error(t_vars('init.connection_not_found', { name }))
+  }
+
+  const connectionCount = Object.keys(config.connections).length
+  if (connectionCount <= 1) {
+    throw new Error(t('init.cannot_remove_last'))
+  }
+
+  const { [name]: _removed, ...remaining } = config.connections
+  const newDefault = config.default === name
+    ? Object.keys(remaining)[0]
+    : config.default
+
+  const updated: DbcliConfigV2 = {
+    ...config,
+    default: newDefault,
+    connections: remaining
+  }
+
+  await writeV2Config(configPath, updated)
+
+  if (config.default === name) {
+    console.log(t_vars('init.connection_removed_switched', { name, newDefault }))
+  } else {
+    console.log(t_vars('init.connection_removed', { name }))
+  }
+}
+
+async function handleRename(configPath: string, renameArg: string): Promise<void> {
+  const [oldName, newName] = renameArg.split(':')
+  if (!oldName || !newName) {
+    throw new Error(t('init.rename_invalid_format'))
+  }
+
+  const configFile = Bun.file(join(configPath, 'config.json'))
+  if (!(await configFile.exists())) {
+    throw new Error(t('init.config_not_found'))
+  }
+
+  const raw = JSON.parse(await configFile.text())
+  if (detectConfigVersion(raw) !== 2) {
+    throw new Error(t('init.requires_v2_rename'))
+  }
+
+  const config = await readV2Config(configPath)
+  if (!config.connections[oldName]) {
+    throw new Error(t_vars('init.connection_not_found', { name: oldName }))
+  }
+  if (config.connections[newName]) {
+    throw new Error(t_vars('init.connection_already_exists', { name: newName }))
+  }
+
+  const entries = Object.entries(config.connections).map(
+    ([key, value]) => [key === oldName ? newName : key, value] as const
+  )
+
+  const updated: DbcliConfigV2 = {
+    ...config,
+    default: config.default === oldName ? newName : config.default,
+    connections: Object.fromEntries(entries)
+  }
+
+  await writeV2Config(configPath, updated)
+  console.log(t_vars('init.connection_renamed', { oldName, newName }))
+}
+
+async function writeV2InitConfig(
+  configPath: string,
+  connectionName: string,
+  connection: ConnectionConfig,
+  permission: string,
+  envFile?: string
+): Promise<void> {
+  const configJsonPath = join(configPath, 'config.json')
+  const configFile = Bun.file(configJsonPath)
+  let existingV2: DbcliConfigV2 | null = null
+
+  // Check for existing v2 config, or migrate from V1
+  // configFile is join(configPath, 'config.json') — valid when configPath is a directory
+  if (await configFile.exists()) {
+    const raw = JSON.parse(await configFile.text())
+    if (detectConfigVersion(raw) === 2) {
+      existingV2 = await readV2Config(configPath)
+    } else {
+      // Directory-based V1 config — import it as 'default' connection
+      const v1Config = await configModule.read(configPath)
+      existingV2 = {
+        version: 2,
+        default: 'default',
+        connections: {
+          default: {
+            ...v1Config.connection,
+            permission: v1Config.permission
+          }
+        },
+        schema: v1Config.schema || {},
+        metadata: v1Config.metadata || { version: '1.0' },
+        blacklist: v1Config.blacklist || { tables: [], columns: {} }
+      }
+    }
+  } else {
+    // Check if configPath itself is a legacy V1 file (e.g. a single .dbcli JSON file)
+    const legacyFile = Bun.file(configPath)
+    if (await legacyFile.exists()) {
+      const raw = JSON.parse(await legacyFile.text())
+      if (detectConfigVersion(raw) !== 2) {
+        // V1 single-file config — import it as 'default' connection
+        const v1Config = await configModule.read(configPath)
+        existingV2 = {
+          version: 2,
+          default: 'default',
+          connections: {
+            default: {
+              ...v1Config.connection,
+              permission: v1Config.permission
+            }
+          },
+          schema: v1Config.schema || {},
+          metadata: v1Config.metadata || { version: '1.0' },
+          blacklist: v1Config.blacklist || { tables: [], columns: {} }
+        }
+      }
+    }
+  }
+
+  // Build connection entry
+  const connEntry: any = {
+    ...connection,
+    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin'
+  }
+  if (envFile) {
+    connEntry.envFile = envFile
+  }
+
+  // Build v2 config
+  const v2Config: DbcliConfigV2 = existingV2
+    ? {
+        ...existingV2,
+        connections: {
+          ...existingV2.connections,
+          [connectionName]: connEntry
+        }
+      }
+    : {
+        version: 2,
+        default: connectionName,
+        connections: {
+          [connectionName]: connEntry
+        },
+        schema: {},
+        metadata: { version: '1.0', createdAt: new Date().toISOString() },
+        blacklist: { tables: [], columns: {} }
+      }
+
+  // Ensure directory exists
+  await Bun.$`mkdir -p ${configPath}`
+
+  await writeV2Config(configPath, v2Config)
+  console.log(t('init.config_saved'))
 }
 
 /**
@@ -69,6 +247,10 @@ export const initCommand = new Command('init')
   .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
+  .option('--conn-name <name>', 'Connection name (creates v2 multi-connection config)')
+  .option('--env-file <path>', 'Path to env file for this connection')
+  .option('--remove <name>', 'Remove a named connection')
+  .option('--rename <names>', 'Rename a connection (format: old:new)')
   .action(async (options) => {
     try {
       await initCommandHandler(options)
@@ -88,8 +270,26 @@ export const initCommand = new Command('init')
 async function initCommandHandler(
   options: Record<string, unknown>
 ): Promise<void> {
+  const configPath = (initCommand.parent?.opts().config as string | undefined) ?? '.dbcli'
+
+  // Handle --remove
+  if (options.remove) {
+    await handleRemove(configPath, options.remove as string)
+    return
+  }
+
+  // Handle --rename
+  if (options.rename) {
+    await handleRename(configPath, options.rename as string)
+    return
+  }
+
+  // Determine if this is a v2 init
+  const isV2Init = !!(options.connName || options.envFile)
+  const connectionName = (options.connName as string) || 'default'
+
   // 1. Load existing config
-  const existingConfig = await configModule.read('.dbcli')
+  const existingConfig = await configModule.read(configPath)
 
   // 2. Determine whether to enter interactive mode
   // If --use-env-refs is set and all --env-* options are provided, automatically go non-interactive
@@ -188,14 +388,20 @@ async function initCommandHandler(
     })
 
     // Check existing file and prompt for overwrite confirmation
-    const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+    const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)
     if (!canProceed) return
 
     // Skip connection test (only env-var references, no actual connection values)
     console.log(`⏭️  ${t('init.skip_test_env_ref')}`)
 
+    // V2 init path (env-refs interactive mode)
+    if (isV2Init) {
+      await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+      return
+    }
+
     // Write config
-    await configModule.write('.dbcli', newConfig)
+    await configModule.write(configPath, newConfig)
     console.log(t('init.config_saved'))
     return
   }
@@ -308,7 +514,7 @@ async function initCommandHandler(
   })
 
   // 7. Check existing file and prompt for overwrite confirmation
-  const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+  const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)
   if (!canProceed) return
 
   // 8. Test database connection (unless --skip-test or using --use-env-refs)
@@ -364,6 +570,12 @@ async function initCommandHandler(
   }
 
   // 9. Write config
-  await configModule.write('.dbcli', newConfig)
+  // V2 init path
+  if (isV2Init) {
+    await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+    return
+  }
+
+  await configModule.write(configPath, newConfig)
   console.log(t('init.config_saved'))
 }

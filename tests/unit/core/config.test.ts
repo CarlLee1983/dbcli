@@ -8,6 +8,7 @@ import { ConfigError } from '@/utils/errors'
 import { DbcliConfig } from '@/utils/validation'
 import { existsSync, unlinkSync } from 'fs'
 import path from 'path'
+import { $ } from 'bun'
 
 // 用於測試的臨時路徑
 const TEST_CONFIG_PATH = '/tmp/test.dbcli.json'
@@ -196,6 +197,108 @@ describe('configModule', () => {
 
       // schema 應該被深度合併，而不是替換
       expect(result.schema).toEqual({ table1: 'data', table2: 'newdata' })
+    })
+  })
+
+  describe('configModule v2 integration', () => {
+    const V2_CONFIG_PATH = '/tmp/test-v2-dbcli'
+
+    beforeEach(async () => {
+      await $`mkdir -p ${V2_CONFIG_PATH}`
+    })
+
+    afterEach(async () => {
+      await $`rm -rf ${V2_CONFIG_PATH}`
+    })
+
+    test('should read v2 config and return v1-compatible result', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'myapp',
+            permission: 'read-write'
+          }
+        },
+        schema: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} }
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+
+      expect(result.connection.system).toBe('postgresql')
+      expect(result.connection.host).toBe('localhost')
+      expect(result.permission).toBe('read-write')
+    })
+
+    test('should read v2 config with connectionName parameter', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'myapp',
+            permission: 'read-write'
+          },
+          staging: {
+            system: 'postgresql',
+            host: 'staging.example.com',
+            port: 5432,
+            user: 'admin',
+            password: 'stagingpass',
+            database: 'staging_db',
+            permission: 'query-only'
+          }
+        },
+        schema: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} }
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH, 'staging')
+
+      expect(result.connection.host).toBe('staging.example.com')
+      expect(result.permission).toBe('query-only')
+    })
+
+    test('should still read v1 config without breaking', async () => {
+      const v1Config = {
+        connection: {
+          system: 'mysql',
+          host: 'db.example.com',
+          port: 3306,
+          user: 'admin',
+          password: 'secret',
+          database: 'production'
+        },
+        permission: 'read-write',
+        schema: {},
+        metadata: { version: '1.0' }
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v1Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+
+      expect(result.connection.system).toBe('mysql')
+      expect(result.connection.host).toBe('db.example.com')
+      expect(result.permission).toBe('read-write')
     })
   })
 

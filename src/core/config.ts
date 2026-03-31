@@ -9,10 +9,31 @@
  * 2. File mode (legacy): .dbcli (single JSON file)
  */
 
-import { DbcliConfig, DbcliConfigSchema } from '@/utils/validation'
+import { DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
+import { detectConfigVersion, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+
+/**
+ * 全域 --use 連線名稱，由 CLI preAction hook 設定
+ * 所有呼叫 configModule.read() 的指令都能自動繼承此值
+ */
+let _globalConnectionName: string | undefined
+
+/**
+ * 設定全域連線名稱（由 cli.ts preAction hook 呼叫）
+ */
+export function setGlobalConnectionName(name: string | undefined): void {
+  _globalConnectionName = name
+}
+
+/**
+ * 取得目前全域連線名稱（主要供測試使用）
+ */
+export function getGlobalConnectionName(): string | undefined {
+  return _globalConnectionName
+}
 
 /**
  * Default configuration values
@@ -130,7 +151,10 @@ export const configModule = {
    * @returns DbcliConfig
    * @throws ConfigError if JSON is invalid or validation fails
    */
-  async read(path: string): Promise<DbcliConfig> {
+  async read(path: string, connectionName?: string): Promise<DbcliConfig> {
+    // 優先使用明確傳入的 connectionName，fallback 到全域 --use 值
+    const effectiveConnectionName = connectionName ?? _globalConnectionName
+
     try {
       // Check if path is a directory
       let isDirectory = false
@@ -150,6 +174,45 @@ export const configModule = {
         if (configExists) {
           const content = await configFile.text()
           const config = JSON.parse(content)
+
+          // V2 detection: handle multi-connection format
+          if (detectConfigVersion(config) === 2) {
+            const v2Config = DbcliConfigV2Schema.parse(config)
+            const resolved = resolveConnection(v2Config, effectiveConnectionName)
+
+            // Load env file for the connection
+            await loadConnectionEnv(resolved, configPath)
+
+            // Legacy .env.local fallback for backward compatibility
+            // Ensures connections without envFile can still read passwords from .env.local
+            const envLocalPath = join(path, '.env.local')
+            const envLocalFile = Bun.file(envLocalPath)
+            let legacyPassword: string | null = null
+            if (await envLocalFile.exists()) {
+              const envContent = await envLocalFile.text()
+              legacyPassword = parseEnvPassword(envContent)
+              if (legacyPassword && !process.env.DBCLI_PASSWORD) {
+                process.env.DBCLI_PASSWORD = legacyPassword
+              }
+            }
+
+            // Resolve $env references after loading env files
+            const resolvedConnection = resolveEnvReferences(resolved.connection, process.env, undefined, false)
+
+            // Apply legacy password if connection password is still empty
+            if (!resolvedConnection.password && legacyPassword) {
+              resolvedConnection.password = legacyPassword
+            }
+
+            // Return v1-compatible shape
+            return DbcliConfigSchema.parse({
+              connection: resolvedConnection,
+              permission: resolved.permission,
+              schema: v2Config.schema,
+              metadata: v2Config.metadata,
+              blacklist: v2Config.blacklist
+            })
+          }
 
           // Use non-strict mode when reading config, preserving missing env var references
           // This prevents errors even when env vars are not defined
@@ -185,6 +248,7 @@ export const configModule = {
       // Neither exists, return default config
       return { ...DEFAULT_CONFIG }
     } catch (error) {
+      if (error instanceof ConfigError) throw error
       if (error instanceof Error && error.message.includes('JSON')) {
         throw new ConfigError(`Failed to parse .dbcli file: ${error.message}`)
       }

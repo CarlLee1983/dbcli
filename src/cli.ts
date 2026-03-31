@@ -34,6 +34,7 @@ const program = new Command()
   .option('-v, --verbose', 'Increase verbosity (-v verbose, -vv debug)', (_, prev) => prev + 1, 0)
   .option('-q, --quiet', 'Suppress non-essential output')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .option('--use <connection>', 'Use a specific named connection (v2 config)')
 
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()

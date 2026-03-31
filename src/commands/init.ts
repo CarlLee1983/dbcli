@@ -29,13 +29,14 @@ const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as
  * Shared by both env-ref and normal mode paths
  */
 async function checkOverwrite(
+  configPath: string,
   shouldPrompt: boolean,
   force: boolean
 ): Promise<boolean> {
-  const configFile = Bun.file('.dbcli')
-  const fileExists = await configFile.exists()
+  const fileExists = await Bun.file(configPath).exists()
+  const dirConfigExists = await Bun.file(join(configPath, 'config.json')).exists()
 
-  if (!fileExists || force) return true
+  if ((!fileExists && !dirConfigExists) || force) return true
 
   if (shouldPrompt) {
     const overwrite = await promptUser.confirm(
@@ -141,11 +142,51 @@ async function writeV2InitConfig(
   const configFile = Bun.file(configJsonPath)
   let existingV2: DbcliConfigV2 | null = null
 
-  // Check for existing v2 config
+  // Check for existing v2 config, or migrate from V1
+  // configFile is join(configPath, 'config.json') — valid when configPath is a directory
   if (await configFile.exists()) {
     const raw = JSON.parse(await configFile.text())
     if (detectConfigVersion(raw) === 2) {
       existingV2 = await readV2Config(configPath)
+    } else {
+      // Directory-based V1 config — import it as 'default' connection
+      const v1Config = await configModule.read(configPath)
+      existingV2 = {
+        version: 2,
+        default: 'default',
+        connections: {
+          default: {
+            ...v1Config.connection,
+            permission: v1Config.permission
+          }
+        },
+        schema: v1Config.schema || {},
+        metadata: v1Config.metadata || { version: '1.0' },
+        blacklist: v1Config.blacklist || { tables: [], columns: {} }
+      }
+    }
+  } else {
+    // Check if configPath itself is a legacy V1 file (e.g. a single .dbcli JSON file)
+    const legacyFile = Bun.file(configPath)
+    if (await legacyFile.exists()) {
+      const raw = JSON.parse(await legacyFile.text())
+      if (detectConfigVersion(raw) !== 2) {
+        // V1 single-file config — import it as 'default' connection
+        const v1Config = await configModule.read(configPath)
+        existingV2 = {
+          version: 2,
+          default: 'default',
+          connections: {
+            default: {
+              ...v1Config.connection,
+              permission: v1Config.permission
+            }
+          },
+          schema: v1Config.schema || {},
+          metadata: v1Config.metadata || { version: '1.0' },
+          blacklist: v1Config.blacklist || { tables: [], columns: {} }
+        }
+      }
     }
   }
 
@@ -347,7 +388,7 @@ async function initCommandHandler(
     })
 
     // Check existing file and prompt for overwrite confirmation
-    const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+    const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)
     if (!canProceed) return
 
     // Skip connection test (only env-var references, no actual connection values)
@@ -473,7 +514,7 @@ async function initCommandHandler(
   })
 
   // 7. Check existing file and prompt for overwrite confirmation
-  const canProceed = await checkOverwrite(shouldPrompt, !!options.force)
+  const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)
   if (!canProceed) return
 
   // 8. Test database connection (unless --skip-test or using --use-env-refs)

@@ -7,20 +7,21 @@ import { readV2Config, writeV2Config } from '@/core/config-v2'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { join } from 'path'
+import { t, t_vars } from '@/i18n/message-loader'
 
 /**
- * Switch the default connection in v2 config
+ * Switch the default connection in v2 config.
+ * Accepts an already-loaded config to avoid a redundant read.
  */
 export async function switchDefault(
   configPath: string,
-  name: string
+  name: string,
+  config: DbcliConfigV2
 ): Promise<void> {
-  const config = await readV2Config(configPath)
-
   if (!config.connections[name]) {
     const available = Object.keys(config.connections).join(', ')
     throw new ConfigError(
-      `連線 '${name}' 不存在。可用連線：${available}`
+      `${t_vars('init.connection_not_found', { name })}. ${t('use.available')}: ${available}`
     )
   }
 
@@ -52,15 +53,13 @@ export function listConnectionsForDisplay(config: DbcliConfigV2): string[] {
 async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
   const configFile = Bun.file(join(configPath, 'config.json'))
   if (!(await configFile.exists())) {
-    throw new ConfigError('找不到設定檔。請先執行 dbcli init')
+    throw new ConfigError(t('init.config_not_found'))
   }
 
   const raw = JSON.parse(await configFile.text())
 
   if (!raw.version || raw.version !== 2 || !raw.connections) {
-    throw new ConfigError(
-      '此功能需要新格式設定。請使用 dbcli init --conn-name <名稱> 建立多連線設定'
-    )
+    throw new ConfigError(t('use.requires_v2'))
   }
 
   return readV2Config(configPath)
@@ -73,28 +72,23 @@ export const useCommand = new Command('use')
   .action(async (name: string | undefined, options: any) => {
     try {
       const configPath = useCommand.parent?.opts().config ?? '.dbcli'
+      const config = await ensureV2Config(configPath)
 
       if (options.list || !name) {
-        const config = await ensureV2Config(configPath)
-        const lines = listConnectionsForDisplay(config)
-
         if (!name) {
-          console.log(`目前預設連線：${config.default}`)
+          console.log(t_vars('use.current', { name: config.default }))
         }
 
-        if (options.list || !name) {
-          console.log('')
-          for (const line of lines) {
-            console.log(line)
-          }
+        console.log('')
+        for (const line of listConnectionsForDisplay(config)) {
+          console.log(line)
         }
         return
       }
 
       // Switch default
-      await ensureV2Config(configPath)
-      await switchDefault(configPath, name)
-      console.log(`已切換預設連線為 ${name}`)
+      await switchDefault(configPath, name, config)
+      console.log(t_vars('use.switched', { name }))
     } catch (error) {
       if (error instanceof Error) {
         console.error(error.message)

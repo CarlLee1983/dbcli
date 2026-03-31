@@ -45,13 +45,13 @@ describe('use command', () => {
 
   describe('switchDefault', () => {
     test('should switch default connection', async () => {
-      await switchDefault(CONFIG_DIR, 'staging')
+      await switchDefault(CONFIG_DIR, 'staging', baseV2Config as any)
       const updated = JSON.parse(await Bun.file(join(CONFIG_DIR, 'config.json')).text())
       expect(updated.default).toBe('staging')
     })
 
     test('should throw for non-existent connection', async () => {
-      expect(switchDefault(CONFIG_DIR, 'nonexistent')).rejects.toThrow(/不存在/)
+      expect(switchDefault(CONFIG_DIR, 'nonexistent', baseV2Config as any)).rejects.toThrow(/nonexistent/)
     })
   })
 

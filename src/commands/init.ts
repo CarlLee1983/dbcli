@@ -54,22 +54,22 @@ async function checkOverwrite(
 async function handleRemove(configPath: string, name: string): Promise<void> {
   const configFile = Bun.file(join(configPath, 'config.json'))
   if (!(await configFile.exists())) {
-    throw new Error('找不到設定檔')
+    throw new Error(t('init.config_not_found'))
   }
 
   const raw = JSON.parse(await configFile.text())
   if (detectConfigVersion(raw) !== 2) {
-    throw new Error('移除連線需要 V2 格式設定')
+    throw new Error(t('init.requires_v2_remove'))
   }
 
   const config = await readV2Config(configPath)
   if (!config.connections[name]) {
-    throw new Error(`連線 '${name}' 不存在`)
+    throw new Error(t_vars('init.connection_not_found', { name }))
   }
 
   const connectionCount = Object.keys(config.connections).length
   if (connectionCount <= 1) {
-    throw new Error('無法移除最後一個連線')
+    throw new Error(t('init.cannot_remove_last'))
   }
 
   const { [name]: _removed, ...remaining } = config.connections
@@ -86,34 +86,34 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
   await writeV2Config(configPath, updated)
 
   if (config.default === name) {
-    console.log(`已移除連線 '${name}'，預設連線已切換為 '${newDefault}'`)
+    console.log(t_vars('init.connection_removed_switched', { name, newDefault }))
   } else {
-    console.log(`已移除連線 '${name}'`)
+    console.log(t_vars('init.connection_removed', { name }))
   }
 }
 
 async function handleRename(configPath: string, renameArg: string): Promise<void> {
   const [oldName, newName] = renameArg.split(':')
   if (!oldName || !newName) {
-    throw new Error('用法：--rename <舊名稱>:<新名稱>')
+    throw new Error(t('init.rename_invalid_format'))
   }
 
   const configFile = Bun.file(join(configPath, 'config.json'))
   if (!(await configFile.exists())) {
-    throw new Error('找不到設定檔')
+    throw new Error(t('init.config_not_found'))
   }
 
   const raw = JSON.parse(await configFile.text())
   if (detectConfigVersion(raw) !== 2) {
-    throw new Error('重新命名連線需要 V2 格式設定')
+    throw new Error(t('init.requires_v2_rename'))
   }
 
   const config = await readV2Config(configPath)
   if (!config.connections[oldName]) {
-    throw new Error(`連線 '${oldName}' 不存在`)
+    throw new Error(t_vars('init.connection_not_found', { name: oldName }))
   }
   if (config.connections[newName]) {
-    throw new Error(`連線 '${newName}' 已存在`)
+    throw new Error(t_vars('init.connection_already_exists', { name: newName }))
   }
 
   const entries = Object.entries(config.connections).map(
@@ -127,7 +127,7 @@ async function handleRename(configPath: string, renameArg: string): Promise<void
   }
 
   await writeV2Config(configPath, updated)
-  console.log(`已將連線 '${oldName}' 重新命名為 '${newName}'`)
+  console.log(t_vars('init.connection_renamed', { oldName, newName }))
 }
 
 async function writeV2InitConfig(

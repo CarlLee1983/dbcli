@@ -229,7 +229,7 @@ export const initCommand = new Command('init')
 async function initCommandHandler(
   options: Record<string, unknown>
 ): Promise<void> {
-  const configPath = '.dbcli'
+  const configPath = (initCommand.parent?.opts().config as string | undefined) ?? '.dbcli'
 
   // Handle --remove
   if (options.remove) {
@@ -248,7 +248,7 @@ async function initCommandHandler(
   const connectionName = (options.connName as string) || 'default'
 
   // 1. Load existing config
-  const existingConfig = await configModule.read('.dbcli')
+  const existingConfig = await configModule.read(configPath)
 
   // 2. Determine whether to enter interactive mode
   // If --use-env-refs is set and all --env-* options are provided, automatically go non-interactive
@@ -360,7 +360,7 @@ async function initCommandHandler(
     }
 
     // Write config
-    await configModule.write('.dbcli', newConfig)
+    await configModule.write(configPath, newConfig)
     console.log(t('init.config_saved'))
     return
   }
@@ -535,6 +535,6 @@ async function initCommandHandler(
     return
   }
 
-  await configModule.write('.dbcli', newConfig)
+  await configModule.write(configPath, newConfig)
   console.log(t('init.config_saved'))
 }

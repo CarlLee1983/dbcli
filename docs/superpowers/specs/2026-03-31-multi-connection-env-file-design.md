@@ -60,23 +60,23 @@
 # 基本用法（建立名為 default 的連線）
 dbcli init
 
-# 指定連線名稱
-dbcli init --name staging
+# 指定連線名稱（使用 --conn-name，因為 --name 已用於 Database name）
+dbcli init --conn-name staging
 
 # 指定 env 檔案
-dbcli init --name staging --env-file .env.staging
+dbcli init --conn-name staging --env-file .env.staging
 
 # 組合使用（非互動模式）
-dbcli init --name prod --env-file .env.production --system postgresql --use-env-refs --skip-test
+dbcli init --conn-name prod --env-file .env.production --system postgresql --use-env-refs --skip-test
 
 # 移除連線
 dbcli init --remove staging
 
-# 重新命名
-dbcli init --rename staging production
+# 重新命名（使用冒號分隔）
+dbcli init --rename staging:production
 ```
 
-- 不帶 `--name` 時，連線名稱為 `default`
+- 不帶 `--conn-name` 時，連線名稱為 `default`
 - 如果 config 已存在且是 v2 格式，新增連線進 `connections`（同名則提示覆蓋）
 - 如果 config 不存在，建立全新的 v2 格式
 - `--env-file` 指定的路徑存入該連線的 `envFile` 欄位，init 過程中也從該檔案載入變數

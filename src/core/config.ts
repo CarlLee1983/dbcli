@@ -181,7 +181,7 @@ export const configModule = {
             const resolved = resolveConnection(v2Config, effectiveConnectionName)
 
             // Load env file for the connection
-            await loadConnectionEnv(resolved, configPath)
+            await loadConnectionEnv(resolved, path)
 
             // Legacy .env.local fallback for backward compatibility
             // Ensures connections without envFile can still read passwords from .env.local

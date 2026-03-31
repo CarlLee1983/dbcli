@@ -183,8 +183,26 @@ export const configModule = {
             // Load env file for the connection
             await loadConnectionEnv(resolved, configPath)
 
-            // Resolve $env references after loading env file
+            // Legacy .env.local fallback for backward compatibility
+            // Ensures connections without envFile can still read passwords from .env.local
+            const envLocalPath = join(path, '.env.local')
+            const envLocalFile = Bun.file(envLocalPath)
+            let legacyPassword: string | null = null
+            if (await envLocalFile.exists()) {
+              const envContent = await envLocalFile.text()
+              legacyPassword = parseEnvPassword(envContent)
+              if (legacyPassword && !process.env.DBCLI_PASSWORD) {
+                process.env.DBCLI_PASSWORD = legacyPassword
+              }
+            }
+
+            // Resolve $env references after loading env files
             const resolvedConnection = resolveEnvReferences(resolved.connection, process.env, undefined, false)
+
+            // Apply legacy password if connection password is still empty
+            if (!resolvedConnection.password && legacyPassword) {
+              resolvedConnection.password = legacyPassword
+            }
 
             // Return v1-compatible shape
             return DbcliConfigSchema.parse({

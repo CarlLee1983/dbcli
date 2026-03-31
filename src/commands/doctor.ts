@@ -244,7 +244,7 @@ export const runDoctorChecks = {
         results.push({
           group: 'Configuration',
           label: `Env file (${name})`,
-          status: exists ? 'pass' : 'warn',
+          status: exists ? 'pass' : 'error',
           message: exists
             ? `${conn.envFile} 存在`
             : `連線 '${name}' 的 env 檔案 ${conn.envFile} 不存在`

@@ -110,7 +110,10 @@ export const DbcliConfigV2Schema = z.object({
   schema: z.record(z.any()).optional().default({}),
   metadata: MetadataSchema,
   blacklist: BlacklistConfigSchema
-})
+}).refine(
+  (config) => config.default in config.connections,
+  { message: 'Default connection must exist in connections', path: ['default'] }
+)
 
 export type NamedConnection = z.infer<typeof NamedConnectionSchema>
 export type DbcliConfigV2 = z.infer<typeof DbcliConfigV2Schema>

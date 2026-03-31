@@ -308,6 +308,24 @@ describe('validation', () => {
           connections: {}
         })).toThrow()
       })
+
+      test('should reject config where default does not exist in connections', () => {
+        expect(() => DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'nonexistent',
+          connections: {
+            local: {
+              system: 'postgresql',
+              host: 'localhost',
+              port: 5432,
+              user: 'dev',
+              password: 'secret',
+              database: 'myapp',
+              permission: 'read-write'
+            }
+          }
+        })).toThrow()
+      })
     })
   })
 })

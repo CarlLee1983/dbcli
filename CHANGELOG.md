@@ -5,6 +5,29 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-31
+
+### Added
+
+- **Multi-connection Support (v2)**: Support for multiple named database connections in a single project.
+  - New `dbcli use` command to switch between connections.
+  - Named connections with custom `.env` files via `init --conn-name` and `--env-file`.
+  - Global `--use <name>` flag to execute commands against a specific connection.
+- **Unified DDL Interface (`migrate`)**: Abstracted DDL operations that work across PostgreSQL, MySQL, and MariaDB.
+  - 12 subcommands for managing tables, columns, indexes, and constraints.
+  - Intelligent SQL generation per database dialect.
+  - Default dry-run mode for safety.
+- **Enhanced Data Health Checks**: Added `rowCount` and `size` checks to the `dbcli check` command.
+- **Comprehensive Documentation**: Updated README (en/zh-TW) with Internals & Strategy sections and new command references.
+
+### Changed
+
+- **Schema Update Strategy**: Refined how and when the schema snapshot in `.dbcli` is updated.
+  - Automatic snapshot refresh after successful `migrate` operations.
+  - Real-time schema fetching for data modification commands without affecting the snapshot.
+
+---
+
 ## [1.1.0] - 2026-03-30
 
 ### Changed

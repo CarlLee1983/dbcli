@@ -91,9 +91,57 @@ dbcli skill --install claude
 
 ---
 
-## API Reference
+## Multi-connection Support (v2)
 
-### Commands
+dbcli supports multiple named database connections within a single project. This is useful for managing different environments (development, staging, production) or multiple databases.
+
+### Initializing Named Connections
+
+To create a named connection, use the `--conn-name` option during `init`. You can also specify a custom `.env` file for that connection.
+
+```bash
+# Add a staging connection using .env.staging
+dbcli init --conn-name staging --env-file .env.staging
+
+# Add a production connection with environment variable references
+dbcli init --conn-name prod --env-file .env.production --use-env-refs
+```
+
+### Managing Connections
+
+Use the `dbcli use` command to switch between connections or list them.
+
+```bash
+# List all connections (* marks the current default)
+dbcli use --list
+
+# Switch the default connection to 'staging'
+dbcli use staging
+
+# Show the current default connection
+dbcli use
+
+# Remove a connection
+dbcli init --remove staging
+
+# Rename a connection
+dbcli init --rename staging:production
+```
+
+### Using a Specific Connection Temporarily
+
+You can use the `--use <name>` global flag to execute any command against a specific connection without changing the default.
+
+```bash
+# Query the production database once
+dbcli query "SELECT count(*) FROM users" --use prod
+
+# Check staging table health
+dbcli check users --use staging
+```
+
+---
+
 
 #### `dbcli init`
 
@@ -104,7 +152,7 @@ Initialize a new dbcli project with database connection configuration.
 dbcli init [OPTIONS]
 ```
 
-**Options:**
+**Options (Basic):**
 - `--system <type>` — Database system: `postgresql`, `mysql`, `mariadb`
 - `--host <host>` — Database host
 - `--port <port>` — Database port
@@ -113,14 +161,15 @@ dbcli init [OPTIONS]
 - `--name <db>` — Database name
 - `--permission <level>` — Permission level: `query-only`, `read-write`, `data-admin`, `admin`
 - `--use-env-refs` — Store environment variable references instead of actual values in config
-- `--env-host <var>` — Env var name for host (with `--use-env-refs`)
-- `--env-port <var>` — Env var name for port (with `--use-env-refs`)
-- `--env-user <var>` — Env var name for user (with `--use-env-refs`)
-- `--env-password <var>` — Env var name for password (with `--use-env-refs`)
-- `--env-database <var>` — Env var name for database (with `--use-env-refs`)
 - `--skip-test` — Skip connection test
 - `--no-interactive` — Non-interactive mode (requires all options)
 - `--force` — Overwrite existing config without confirmation
+
+**Options (Multi-connection v2):**
+- `--conn-name <name>` — Create a named connection (e.g., `staging`, `prod`)
+- `--env-file <path>` — Load credentials from a specific `.env` file for this connection
+- `--remove <name>` — Remove a named connection from the config
+- `--rename <old:new>` — Rename an existing connection (format: `old:new`)
 
 **Behavior:**
 - Reads `.env` file if present (auto-fills DATABASE_URL, DB_* variables)
@@ -133,15 +182,9 @@ dbcli init [OPTIONS]
 # Interactive initialization
 dbcli init
 
-# With environment variables pre-set
-export DATABASE_URL="postgresql://user:pass@localhost/mydb"
-dbcli init
-
-# Specify permission level (use --permission; combine with other flags for --no-interactive)
-dbcli init --permission admin
-
-# Store env var references instead of values (interactive)
-dbcli init --use-env-refs
+# Multi-connection setup
+dbcli init --conn-name staging --env-file .env.staging
+dbcli init --conn-name prod --env-file .env.production --use-env-refs
 
 # Store env var references (non-interactive)
 dbcli init --use-env-refs --system mysql \
@@ -150,6 +193,34 @@ dbcli init --use-env-refs --system mysql \
   --env-database DB_DATABASE \
   --no-interactive
 ```
+
+---
+
+#### `dbcli use` (Requires v2 config)
+
+Manage or switch the default database connection in multi-connection projects.
+
+**Usage:**
+```bash
+dbcli use [connection-name] [OPTIONS]
+```
+
+**Options:**
+- `--list` — List all connections and show the current default
+
+**Examples:**
+```bash
+# Show current default connection
+dbcli use
+
+# Switch default connection to 'prod'
+dbcli use prod
+
+# List all connections
+dbcli use --list
+```
+
+---
 
 > **`--use-env-refs`:** When enabled, the config stores environment variable names (e.g., `{"$env": "DB_HOST"}`) instead of actual values. This avoids writing sensitive credentials into the config file, making it suitable for multi-environment deployments and CI/CD pipelines. At connection time, dbcli automatically reads the actual values from the referenced environment variables.
 
@@ -481,22 +552,32 @@ DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 
 #### `dbcli check`
 
-Run data-quality checks on one table, or scan all tables.
+Run data-quality and health checks on tables.
 
 **Usage:**
 ```bash
-dbcli check users
-dbcli check --all
-dbcli check --all --include-large
+dbcli check [table] [OPTIONS]
 ```
 
 **Options:**
-- `--all` — Check every table (skips very large tables unless `--include-large`)
-- `--include-large` — Include huge tables when using `--all`
-- `--checks <types>` — Comma-separated: `nulls`, `duplicates`, `orphans`, `emptyStrings`
-- `--sample <number>` — Sample size for large tables (default: `10000`)
-- `--format json|table` — Output format (default: `json`)
-- `--config <path>` — Config path (default: `.dbcli`)
+- `--all` — Check every table (skips huge tables unless `--include-large`)
+- `--include-large` — Include huge tables in `--all` scan
+- `--checks <types>` — Comma-separated checks: `nulls`, `duplicates`, `orphans`, `emptyStrings`, `rowCount`, `size`
+- `--sample <number>` — Sample size for large tables (default: 10000)
+- `--format json|table` — Output format (default: json)
+
+**Examples:**
+```bash
+# Check users table
+dbcli check users
+
+# Run specific checks only
+dbcli check orders --checks nulls,orphans --format table
+# Scan all tables
+dbcli check --all
+```
+
+---
 
 **Examples:**
 ```bash
@@ -668,6 +749,40 @@ All commands support these global options:
 | `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
 | `-q, --quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output (respects `NO_COLOR` env var) |
+
+---
+
+## Internals & Strategy
+
+### Schema Update Strategy
+
+dbcli maintains a schema snapshot in your `.dbcli` config file. This allows AI agents to understand the database structure without constant network overhead. Understanding when this cache updates is key:
+
+1.  **Manual Updates:**
+    *   `dbcli schema`: Performs a full scan of the database.
+    *   `dbcli schema --refresh`: Incremental update. Detects changes and updates only the affected tables.
+    *   `dbcli schema --reset`: Clears the cache and re-fetches everything.
+2.  **Automatic Updates (DDL):**
+    *   When you execute DDL through `dbcli migrate` (e.g., `add-column`), the CLI automatically re-scans the affected table and updates the `.dbcli` snapshot after successful execution.
+3.  **Real-time Validation (Non-cached):**
+    *   Commands like `insert`, `update`, `delete`, and `check` fetch the latest schema from the database immediately before execution to ensure data integrity, but they **do not** update the long-term snapshot in `.dbcli`.
+
+> **Note:** If you change the database schema using external tools (like DBeaver or migration scripts), you **must** run `dbcli schema --refresh` to sync the snapshot so AI agents can see the changes.
+
+### How `dbcli migrate` Works
+
+The `migrate` command follows a strict safety pipeline to prevent accidental database corruption:
+
+1.  **Permission Check:** Verifies the user has `admin` privileges. DDL is blocked for all other levels.
+2.  **Blacklist Check:** Ensures the operation isn't targeting a table restricted in the security blacklist.
+3.  **Dialect-Specific Generation:** The `DDLGenerator` translates your request into the correct SQL for your system:
+    *   **PostgreSQL:** Uses `SERIAL`, native `ENUM` types, and double-quoted identifiers.
+    *   **MySQL/MariaDB:** Uses `AUTO_INCREMENT`, inline `ENUM` definitions, and backticked identifiers.
+4.  **Dry-run (Default):** All commands output the generated SQL for review without executing it.
+5.  **Execution & Confirmation:**
+    *   Requires the `--execute` flag to run.
+    *   Destructive operations (like `drop`) require both `--execute` and `--force`.
+6.  **Snapshot Sync:** After successful execution, it automatically triggers a schema refresh for the modified table to keep your `.dbcli` file up to date.
 
 ---
 

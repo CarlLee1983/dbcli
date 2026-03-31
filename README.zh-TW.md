@@ -76,6 +76,9 @@ bun run src/cli.ts -- --help
 # 以資料庫連線初始化專案
 dbcli init
 
+# 具備自動補全功能的互動式 Shell
+dbcli shell
+
 # 列出可用資料表
 dbcli list
 
@@ -85,15 +88,66 @@ dbcli schema users
 # 查詢資料
 dbcli query "SELECT * FROM users"
 
+# 修改結構 (DDL)
+dbcli migrate create posts --column "id:int:pk" "title:varchar(100)"
+
 # 產生 AI 代理 skill
 dbcli skill --install claude
 ```
 
 ---
 
-## API 參考
+## 多重連線支援 (v2)
 
-### 指令
+dbcli 支援在單一專案中管理多個具名的資料庫連線。這對於管理不同環境（開發、測試、正式）或多個資料庫非常有用。
+
+### 初始化具名連線
+
+若要建立具名連線，請在 `init` 時使用 `--conn-name` 選項。您也可以為該連線指定自訂的 `.env` 檔案。
+
+```bash
+# 使用 .env.staging 建立名為 staging 的連線
+dbcli init --conn-name staging --env-file .env.staging
+
+# 建立名為 prod 的正式環境連線，並使用環境變數引用
+dbcli init --conn-name prod --env-file .env.production --use-env-refs
+```
+
+### 管理連線
+
+使用 `dbcli use` 指令切換連線或列出所有連線。
+
+```bash
+# 列出所有連線（* 標記目前的預設值）
+dbcli use --list
+
+# 將預設連線切換至 'staging'
+dbcli use staging
+
+# 顯示目前的預設連線
+dbcli use
+
+# 移除連線
+dbcli init --remove staging
+
+# 重新命名連線
+dbcli init --rename staging:production
+```
+
+### 臨時使用特定連線
+
+您可以使用 `--use <name>` 全域旗標，針對特定連線執行任一指令，而無需變更預設設定。
+
+```bash
+# 針對正式資料庫執行一次查詢
+dbcli query "SELECT count(*) FROM users" --use prod
+
+# 檢查測試環境資料表的健康狀態
+dbcli check users --use staging
+```
+
+---
+
 
 #### `dbcli init`
 
@@ -104,7 +158,7 @@ dbcli skill --install claude
 dbcli init [OPTIONS]
 ```
 
-**選項：**
+**選項 (基本)：**
 - `--system <type>` — 資料庫系統：`postgresql`、`mysql`、`mariadb`
 - `--host <host>` — 主機
 - `--port <port>` — 埠號
@@ -113,15 +167,15 @@ dbcli init [OPTIONS]
 - `--name <db>` — 資料庫名稱
 - `--permission <level>` — 權限等級：`query-only`、`read-write`、`data-admin`、`admin`
 - `--use-env-refs` — 在設定檔中儲存環境變數名稱參照，而非實際值
-- `--env-host <var>` — 主機對應的環境變數名（搭配 `--use-env-refs`）
-- `--env-port <var>` — 埠號
-- `--env-user <var>` — 使用者
-- `--env-password <var>` — 密碼
-- `--env-database <var>` — 資料庫名稱
 - `--skip-test` — 略過連線測試
 - `--no-interactive` — 非互動模式（須提供所有必要選項）
 - `--force` — 覆寫既有設定且不詢問確認
 
+**選項 (多重連線 v2)：**
+- `--conn-name <name>` — 建立具名連線（例如 `staging`、`prod`）
+- `--env-file <path>` — 從指定的 `.env` 檔案載入此連線的憑證
+- `--remove <name>` — 從設定中移除具名連線
+- `--rename <old:new>` — 重新命名現有連線（格式：`舊名:新名`）
 **行為：**
 - 若存在 `.env` 會讀取（自動帶入 DATABASE_URL、DB_* 等變數）
 - 缺少的欄位會互動提示（主機、埠、使用者、密碼、資料庫名、權限等級）
@@ -133,15 +187,9 @@ dbcli init [OPTIONS]
 # 互動式初始化
 dbcli init
 
-# 預先設定環境變數
-export DATABASE_URL="postgresql://user:pass@localhost/mydb"
-dbcli init
-
-# 指定權限等級（使用 --permission；若搭配 --no-interactive 須一併提供連線等選項）
-dbcli init --permission admin
-
-# 儲存環境變數參照（互動）
-dbcli init --use-env-refs
+# 多重連線設定
+dbcli init --conn-name staging --env-file .env.staging
+dbcli init --conn-name prod --env-file .env.production --use-env-refs
 
 # 儲存環境變數參照（非互動）
 dbcli init --use-env-refs --system mysql \
@@ -150,6 +198,34 @@ dbcli init --use-env-refs --system mysql \
   --env-database DB_DATABASE \
   --no-interactive
 ```
+
+---
+
+#### `dbcli use` (需要 v2 設定)
+
+在多重連線專案中管理或切換預設資料庫連線。
+
+**用法：**
+```bash
+dbcli use [連線名稱] [選項]
+```
+
+**選項：**
+- `--list` — 列出所有連線並顯示目前的預設值
+
+**範例：**
+```bash
+# 顯示目前的預設連線
+dbcli use
+
+# 將預設連線切換至 'prod'
+dbcli use prod
+
+# 列出所有連線
+dbcli use --list
+```
+
+---
 
 > **`--use-env-refs`：** 啟用後，設定檔會儲存環境變數名稱（例如 `{"$env": "DB_HOST"}`）而非實際值，避免將憑證寫入檔案，適合多環境與 CI/CD。連線時 dbcli 會自動從對應環境變數讀取實際值。
 
@@ -481,27 +557,30 @@ DBCLI_OVERRIDE_BLACKLIST=true dbcli query "SELECT * FROM secrets_vault"
 
 #### `dbcli check`
 
-對單一資料表執行資料品質檢查，或掃描全部資料表。
+執行資料品質與健康檢查。
 
 **用法：**
 ```bash
-dbcli check users
-dbcli check --all
-dbcli check --all --include-large
+dbcli check [資料表] [選項]
 ```
 
 **選項：**
 - `--all` — 檢查所有表（預設略過極大表，除非加 `--include-large`）
 - `--include-large` — 與 `--all` 一併使用時一併檢查極大表
-- `--checks <類型>` — 逗號分隔：`nulls`、`duplicates`、`orphans`、`emptyStrings`
+- `--checks <類型>` — 逗號分隔：`nulls`、`duplicates`、`orphans`、`emptyStrings`、`rowCount`、`size`
 - `--sample <數字>` — 大表取樣列數（預設：`10000`）
 - `--format json|table` — 輸出格式（預設：`json`）
-- `--config <path>` — 設定路徑（預設：`.dbcli`）
 
 **範例：**
 ```bash
-dbcli check orders --format table
-dbcli check --all --checks nulls,duplicates --format json
+# 檢查 users 表
+dbcli check users
+
+# 僅執行特定檢查
+dbcli check orders --checks nulls,orphans --format table
+
+# 掃描所有資料表
+dbcli check --all
 ```
 
 ---
@@ -668,6 +747,40 @@ dbcli migrate drop-enum status --execute --force
 | `-v, --verbose` | 提高詳細度（`-v` 詳細、`-vv` 除錯） |
 | `-q, --quiet` | 抑制非必要輸出 |
 | `--no-color` | 關閉彩色輸出（亦遵守 `NO_COLOR` 環境變數） |
+
+---
+
+## 內部機制與策略
+
+### Schema 更新策略
+
+dbcli 會在您的 `.dbcli` 設定檔中維護一份 Schema 快照。這讓 AI 代理無需頻繁連網即可理解資料庫結構。了解此快取何時更新至關重要：
+
+1.  **手動更新：**
+    *   `dbcli schema`：執行全量資料庫掃描。
+    *   `dbcli schema --refresh`：增量更新。偵測變更並僅更新受影響的資料表。
+    *   `dbcli schema --reset`：清除快取並重新抓取所有內容。
+2.  **自動更新 (DDL)：**
+    *   當您透過 `dbcli migrate` 執行 DDL 指令（例如 `add-column`）時，CLI 會在成功執行後自動重新掃描該資料表，並更新 `.dbcli` 中的快照。
+3.  **即時驗證（不存入快取）：**
+    *   `insert`、`update`、`delete` 與 `check` 等指令在執行前會立即從資料庫抓取最新 Schema 以確保資料完整性，但它們**不會**更新 `.dbcli` 中的長期快照。
+
+> **注意：** 若您使用外部工具（如 DBeaver 或遷移腳本）變更資料庫結構，您**必須**執行 `dbcli schema --refresh` 同步快照，AI 代理才能看到變更。
+
+### `dbcli migrate` 的原理
+
+`migrate` 指令遵循嚴格的安全流程，以防止意外損壞資料庫：
+
+1.  **權限檢查：** 驗證使用者是否具備 `admin` 權限。其他等級皆無法執行 DDL。
+2.  **黑名單檢查：** 確保操作目標未包含在安全黑名單中。
+3.  **資料庫方言生成：** `DDLGenerator` 會根據您的系統將請求轉換為正確的 SQL：
+    *   **PostgreSQL：** 使用 `SERIAL`、原生 `ENUM` 型別以及雙引號識別字。
+    *   **MySQL/MariaDB：** 使用 `AUTO_INCREMENT`、行內 `ENUM` 定義以及反引號識別字。
+4.  **測試執行 (預設)：** 所有指令預設僅輸出產生的 SQL 供審核，不實際執行。
+5.  **執行與確認：**
+    *   需要加上 `--execute` 旗標才會執行。
+    *   破壞性操作（如 `drop`）需要同時具備 `--execute` 與 `--force`。
+6.  **快照同步：** 成功執行後，會自動觸發該資料表的 Schema 更新，保持 `.dbcli` 檔案為最新狀態。
 
 ---
 

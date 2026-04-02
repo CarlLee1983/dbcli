@@ -51,6 +51,20 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] CLI commands for blacklist management (list, add, remove)
 - [x] Security notifications in output (table, CSV, JSON formats)
 
+**Multi-Connection Support** — v1.2 (Phase 14)
+- [x] `dbcli init --conn-name` — Support multiple named database connections
+- [x] `dbcli use` — Switch between named connections
+- [x] Global `--use <name>` flag for all commands
+
+**Interactive Shell (REPL)** — v1.2 (Phase 15)
+- [x] `dbcli shell` — Interactive mode with SQL and dbcli commands
+- [x] Auto-completion and multi-line SQL support
+- [x] Persistent command history
+
+**Skill Update Reminders** — v1.3 (Phase 16)
+- [x] Automated reminders for outdated AI agent skills
+- [x] Background check for skill updates across platforms
+
 ### Active
 
 (No active requirements — milestone complete. Define next milestone with `/gsd:new-milestone`.)
@@ -99,36 +113,35 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | CLI-first, not MPC | Need to support Claude Code, Gemini, Copilot, Cursor — a single MCP wouldn't cover all. CLI + skill is more portable. | ✓ Good — enables maximum platform support |
 | Coarse-grained permissions | Fine-grained (per-table, per-column) is complex for V1. Coarse roles are sufficient to prevent accidental writes. | ✓ Extended — v0.2.0-beta added table/column blacklisting on top of coarse roles |
 | Hybrid init (read .env first) | Minimizes manual input for developers who already have .env. Falls back to prompts for missing values. | — Pending — validate UX in real usage |
-| JSON for .dbcli config | Human-readable, widely supported, DB-system-aware (parameters differ per DB). | — Pending — may add YAML alternative if requested |
-| Single connection in V1 | Multi-connection adds complexity. Most projects use one primary DB. Can add in V2 if needed. | — Pending |
+| JSON for .dbcli config | Human-readable, widely supported, DB-system-aware (parameters differ per DB). | ✓ Good — v2 config supports multi-connection |
+| Multi-connection in V1.2 | Added support for multiple databases per project as it was a highly requested feature for complex environments. | ✓ Good — v1.2.0 shipped |
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v0.2.0-beta — Phase 13 Complete)
+## Current State (v1.3.0 — Phase 16 Complete)
 
-**Latest Release:** v0.2.0-beta (2026-03-26)
-- ✅ Phase 13 complete: 3 plans executed (1 core + 2 gap closure), verification passed 10/10
-- ✅ 230+ tests passing, 83 new blacklist tests added
-- ✅ Table and column-level blacklisting fully operational end-to-end
-- ✅ All 8 requirements satisfied (BL-01 through BL-04, NF-01 through NF-04)
+**Latest Release:** v1.3.0 (2026-04-02)
+- ✅ Phase 16 complete: Skill update reminders implemented
+- ✅ 250+ tests passing
+- ✅ Multi-connection support (v2 config) and Interactive Shell (REPL) fully operational
+- ✅ Automated version checking and self-upgrade mechanism
 
-**What's Shipped (v0.2.0-beta):**
-1. Table-level blacklist — reject all operations on blacklisted tables
-2. Column-level blacklist — omit blacklisted columns from SELECT results
-3. CLI management commands: `blacklist list`, `blacklist table add/remove`, `blacklist column add/remove`
-4. Security notifications in table/CSV/JSON output when columns are filtered
-5. Context-aware override via `DBCLI_OVERRIDE_BLACKLIST` environment variable
-6. Performance: < 1ms overhead per query (7 benchmarks verified)
+**What's Shipped (v1.3.0):**
+1. Skill update reminders — automated check for outdated AI agent skills
+2. Multi-connection support — named connections and switching with `dbcli use`
+3. Interactive Shell (REPL) — `dbcli shell` with auto-completion and history
+4. Unified DDL interface — `dbcli migrate` for cross-database schema changes
 
-**What's Shipped (v0.1.0-beta and prior):**
+**What's Shipped (v1.0.0 and prior):**
 1. Full database CLI with init, list, schema, query, insert, update, delete, export
 2. Multi-database support (PostgreSQL, MySQL, MariaDB)
 3. Permission-based access control (Query-only, Read-Write, Admin)
 4. AI integration with SKILL.md generation
 5. Schema optimization with LRU cache, atomic updates, and concurrent safety
-6. npm-published package, cross-platform CI/CD
+6. Table and column-level blacklisting
+7. npm-published package, cross-platform CI/CD
 
-**See:** [v0.1.0-beta Milestone Summary](reports/MILESTONE_SUMMARY-v13.0.md) | [Audit Report](MILESTONE-AUDIT.md)
+**See:** [v13.0 Milestone Summary](reports/MILESTONE_SUMMARY-v13.0.md)
 
 ## Next Milestone Goals
 
@@ -175,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-03-26 after v0.2.0-beta milestone completion*
+*Last updated: 2026-04-02 after v1.3.0 release*

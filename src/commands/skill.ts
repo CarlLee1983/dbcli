@@ -3,6 +3,7 @@
  * Reads the static SKILL.md and outputs it or installs it to the specified platform directory
  */
 
+import { $ } from 'bun'
 import * as path from 'node:path'
 import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
@@ -31,6 +32,12 @@ export interface SkillOptions {
   install?: string  // platform: claude, gemini, copilot, cursor
   output?: string   // custom output file path
 }
+
+/**
+ * Supported platforms for skill installation
+ */
+export const SUPPORTED_PLATFORMS = ['claude', 'gemini', 'copilot', 'cursor'] as const
+export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
 
 /**
  * Skill command handler
@@ -76,10 +83,44 @@ export async function skillCommand(
 }
 
 /**
+ * Checks if any installed skills are outdated compared to the current package version.
+ * Returns a list of platforms that need updates.
+ */
+export async function checkSkillUpdates(): Promise<string[]> {
+  const outdated: string[] = []
+
+  try {
+    const sourceFile = Bun.file(SKILL_SOURCE_PATH)
+    if (!(await sourceFile.exists())) return []
+    const sourceContent = await sourceFile.text()
+
+    for (const platform of SUPPORTED_PLATFORMS) {
+      try {
+        const installPath = getInstallPath(platform)
+        const installedFile = Bun.file(installPath)
+
+        if (await installedFile.exists()) {
+          const installedContent = await installedFile.text()
+          if (installedContent !== sourceContent) {
+            outdated.push(platform)
+          }
+        }
+      } catch {
+        // Skip platforms with errors (e.g. invalid paths)
+      }
+    }
+  } catch {
+    // Silent fail for check
+  }
+
+  return outdated
+}
+
+/**
  * Returns the platform-specific install path
  * Handles home directory expansion and cross-platform paths
  */
-function getInstallPath(platform: string): string {
+export function getInstallPath(platform: string): string {
   const home = process.env.HOME || homedir()
   const platformLower = platform.toLowerCase()
 
@@ -99,7 +140,7 @@ function getInstallPath(platform: string): string {
 
     default:
       throw new Error(
-        `Unknown platform: ${platform}. Supported platforms: claude, gemini, copilot, cursor`
+        `Unknown platform: ${platform}. Supported platforms: ${SUPPORTED_PLATFORMS.join(', ')}`
       )
   }
 }

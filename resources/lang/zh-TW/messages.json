@@ -115,9 +115,27 @@
     "formats": "支援的格式：json、csv",
     "exported": "已將 {count} 列匯出至 {file}"
   },
+  "upgrade": {
+    "description": "檢查更新並將 dbcli 升級至最新版本",
+    "checking": "正在檢查更新...",
+    "already_up_to_date": "✓ 已經是最新版本 (v{version})",
+    "new_version_available": "發現新版本：v{version}",
+    "current_version": "目前版本：v{version}",
+    "latest_version": "最新版本：v{version}",
+    "update_hint": "[提示] dbcli v{version} 已發布。執行 \"dbcli upgrade\" 進行升級。",
+    "install_hint": "執行 \"dbcli upgrade\" 安裝更新。",
+    "upgrading": "正在升級...",
+    "success": "✓ 成功升級至 v{version}",
+    "skill_recheck_hint": "提示：若已安裝 AI 技能，請執行 \"dbcli skill --install <platform>\" 確認技能為最新版本。",
+    "failed": "✗ 升級失敗。請嘗試手動執行：",
+    "manual_hint": "bun add -g @carllee1983/dbcli@latest",
+    "network_error": "⚠ 無法檢查更新（網路錯誤或註冊表不可用）"
+  },
   "skill": {
     "description": "生成 AI 技能文檔",
-    "installed": "技能已安裝至 {path}"
+    "installed": "技能已安裝至 {path}",
+    "update_available": "以下平台的技能需要更新：",
+    "update_hint": "執行 \"dbcli skill --install <platform>\" 進行更新。"
   },
   "blacklist": {
     "description": "管理敏感資料黑名單以防止 AI 存取",

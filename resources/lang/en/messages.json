@@ -115,9 +115,27 @@
     "formats": "Supported formats: json, csv",
     "exported": "Exported {count} rows to {file}"
   },
+  "upgrade": {
+    "description": "Check for updates and upgrade dbcli to the latest version",
+    "checking": "Checking for updates...",
+    "already_up_to_date": "✓ Already up to date (v{version})",
+    "new_version_available": "New version available: v{version}",
+    "current_version": "Current version : v{version}",
+    "latest_version": "Latest version  : v{version}",
+    "update_hint": "[INFO] dbcli v{version} available. Run \"dbcli upgrade\" to upgrade.",
+    "install_hint": "Run \"dbcli upgrade\" to install the update.",
+    "upgrading": "Upgrading...",
+    "success": "✓ Successfully upgraded to v{version}",
+    "skill_recheck_hint": "Hint: If you have installed AI skills, run \"dbcli skill --install <platform>\" to ensure they are up to date.",
+    "failed": "✗ Upgrade failed. Try running manually:",
+    "manual_hint": "bun add -g @carllee1983/dbcli@latest",
+    "network_error": "⚠ Could not check for updates (network error or registry unavailable)"
+  },
   "skill": {
     "description": "Generate AI skill documentation",
-    "installed": "Skill installed to {path}"
+    "installed": "Skill installed to {path}",
+    "update_available": "Skill updates available for the following platforms:",
+    "update_hint": "Run \"dbcli skill --install <platform>\" to update."
   },
   "blacklist": {
     "description": "Manage sensitive data blacklist to prevent AI access",

@@ -17,11 +17,12 @@ import { diffCommand } from './commands/diff'
 import { statusCommand } from './commands/status'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
-import { upgradeCommand, formatUpdateHint } from './commands/upgrade'
+import { upgradeCommand, formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
 import { useCommand } from './commands/use'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
+import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
 import { join } from 'path'
 
@@ -88,9 +89,19 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   }
 })
 
-program.hook('postAction', () => {
+program.hook('postAction', async (thisCommand, actionCommand) => {
+  // Show dbcli update hint
   if (_bgVersionCheckResult?.hasUpdate) {
     process.stderr.write(formatUpdateHint(_bgVersionCheckResult.latestVersion) + '\n')
+  }
+
+  // Show skill update reminder (skip for upgrade/skill commands to avoid double output)
+  const isUpgradeOrSkill = ['upgrade', 'skill'].includes(actionCommand.name())
+  if (!thisCommand.opts().quiet && !isUpgradeOrSkill) {
+    const outdatedSkills = await checkSkillUpdates()
+    if (outdatedSkills.length > 0) {
+      process.stderr.write(formatSkillUpdateReminder(outdatedSkills) + '\n')
+    }
   }
 })
 
@@ -104,7 +115,7 @@ program
   .command('query <sql>')
   .description(t('query.description'))
   .option('--format <type>', 'Output format: table, json, csv', 'table')
-  .option('--limit <number>', 'Limit result rows (overrides auto-limit)', undefined, parseInt)
+  .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) => parseInt(val, 10))
   .option('--no-limit', 'Disable auto-limit in query-only mode')
   .action(async (sql: string, options: any) => {
     try {

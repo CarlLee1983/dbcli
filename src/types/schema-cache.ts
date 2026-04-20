@@ -52,6 +52,8 @@ export interface LoaderOptions {
   hotTableThreshold?: number
   enableStreaming?: boolean
   streamingTimeout?: number
+  /** V2 named connection — layered files under `.dbcli/schemas/<name>/` */
+  connectionName?: string
 }
 
 /**

@@ -147,6 +147,17 @@ describe('SchemaIndexBuilder', () => {
     expect(loadedIndex?.hotTables.length).toBe(originalIndex.hotTables.length)
   })
 
+  test('saveIndex/loadIndex: connectionName nests under schemas/<name>/', async () => {
+    const index = await SchemaIndexBuilder.buildIndex(mockConfig)
+    await SchemaIndexBuilder.saveIndex(testDbcliPath, index, 'prod')
+
+    const indexPath = join(testDbcliPath, 'schemas', 'prod', 'index.json')
+    expect(await Bun.file(indexPath).exists()).toBe(true)
+
+    const loaded = await SchemaIndexBuilder.loadIndex(testDbcliPath, 'prod')
+    expect(loaded?.metadata.totalTables).toBe(index.metadata.totalTables)
+  })
+
   test('loadIndex: returns null for missing index', async () => {
     const emptyPath = join('/tmp', `dbcli-empty-index-${Date.now()}`)
     await mkdir(join(emptyPath, 'schemas'), { recursive: true })

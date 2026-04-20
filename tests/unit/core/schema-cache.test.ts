@@ -239,3 +239,43 @@ describe('SchemaCacheManager', () => {
     expect(schema2).toEqual(schema3)
   })
 })
+
+describe('SchemaCacheManager connectionName isolation', () => {
+  test('reads layered files from schemas/<name>/', async () => {
+    const testDbcliPath = join('/tmp', `dbcli-cache-conn-${Date.now()}`)
+    const root = join(testDbcliPath, 'schemas', 'staging')
+    await mkdir(join(root, 'cold'), { recursive: true })
+
+    const indexData = {
+      tables: {
+        users: {
+          location: 'hot',
+          file: 'hot-schemas.json',
+          estimatedSize: 1,
+          lastModified: new Date().toISOString(),
+        },
+      },
+      hotTables: ['users'],
+      metadata: {
+        version: '1.0',
+        lastRefreshed: new Date().toISOString(),
+        totalTables: 1,
+      },
+    }
+    await Bun.file(join(root, 'index.json')).write(JSON.stringify(indexData, null, 2))
+    await Bun.file(join(root, 'hot-schemas.json')).write(
+      JSON.stringify({ schemas: { users: mockTableSchema } }, null, 2)
+    )
+
+    const manager = new SchemaCacheManager(testDbcliPath, { connectionName: 'staging' })
+    await manager.initialize()
+    const schema = await manager.getTableSchema('users')
+    expect(schema?.name).toBe('users')
+
+    try {
+      await rm(testDbcliPath, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  })
+})

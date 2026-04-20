@@ -10,6 +10,7 @@ import { SchemaIndexBuilder } from './schema-index'
 import type { SchemaIndex, LoaderOptions } from '@/types/schema-cache'
 import type { TableSchema } from '@/adapters/types'
 import { join } from 'path'
+import { resolveSchemaPath } from '@/utils/schema-path'
 
 /**
  * Schema Layered Loader
@@ -17,7 +18,9 @@ import { join } from 'path'
  */
 export class SchemaLayeredLoader {
   private dbcliPath: string
-  private options: Required<LoaderOptions>
+  /** V2 named connection for `.dbcli/schemas/<name>/` */
+  private connectionName: string | undefined
+  private options: Required<Omit<LoaderOptions, 'connectionName'>>
   private cache: SchemaCacheManager | null = null
   private index: SchemaIndex | null = null
   private loadTime: number = 0
@@ -29,6 +32,7 @@ export class SchemaLayeredLoader {
    */
   constructor(dbcliPath: string, options?: LoaderOptions) {
     this.dbcliPath = dbcliPath
+    this.connectionName = options?.connectionName
     this.options = {
       maxCacheItems: options?.maxCacheItems || 100,
       maxCacheSize: options?.maxCacheSize || 52428800, // 50MB
@@ -64,12 +68,16 @@ export class SchemaLayeredLoader {
       await this.ensureDirectories()
 
       // Load index
-      this.index = await SchemaIndexBuilder.loadIndex(this.dbcliPath)
+      this.index = await SchemaIndexBuilder.loadIndex(
+        this.dbcliPath,
+        this.connectionName
+      )
 
       // Initialize cache manager with options
       this.cache = new SchemaCacheManager(this.dbcliPath, {
         maxCacheItems: this.options.maxCacheItems,
         maxCacheSize: this.options.maxCacheSize,
+        connectionName: this.connectionName,
       })
 
       // Preload hot schemas and index
@@ -98,6 +106,7 @@ export class SchemaLayeredLoader {
         this.cache = new SchemaCacheManager(this.dbcliPath, {
           maxCacheItems: this.options.maxCacheItems,
           maxCacheSize: this.options.maxCacheSize,
+          connectionName: this.connectionName,
         })
       }
 
@@ -140,10 +149,8 @@ export class SchemaLayeredLoader {
    * @private
    */
   private async ensureDirectories(): Promise<void> {
-    const dirs = [
-      join(this.dbcliPath, 'schemas'),
-      join(this.dbcliPath, 'schemas', 'cold'),
-    ]
+    const base = resolveSchemaPath(this.dbcliPath, this.connectionName)
+    const dirs = [base, join(base, 'cold')]
 
     for (const dir of dirs) {
       try {

@@ -10,6 +10,7 @@
 import type { SchemaIndex } from '@/types/schema-cache'
 import type { DbcliConfig, TableSchema } from '@/types'
 import { join } from 'path'
+import { resolveSchemaPath } from '@/utils/schema-path'
 
 /**
  * Schema Index Builder
@@ -24,9 +25,12 @@ export class SchemaIndexBuilder {
    * @param dbcliPath Path to .dbcli directory
    * @returns Parsed SchemaIndex or null if file doesn't exist
    */
-  static async loadIndex(dbcliPath: string): Promise<SchemaIndex | null> {
+  static async loadIndex(
+    dbcliPath: string,
+    connectionName?: string
+  ): Promise<SchemaIndex | null> {
     try {
-      const indexPath = join(dbcliPath, 'schemas', 'index.json')
+      const indexPath = join(resolveSchemaPath(dbcliPath, connectionName), 'index.json')
       const file = Bun.file(indexPath)
 
       if (!(await file.exists())) {
@@ -111,13 +115,15 @@ export class SchemaIndexBuilder {
    * @param dbcliPath Path to .dbcli directory
    * @param index SchemaIndex to persist
    */
-  static async saveIndex(dbcliPath: string, index: SchemaIndex): Promise<void> {
+  static async saveIndex(
+    dbcliPath: string,
+    index: SchemaIndex,
+    connectionName?: string
+  ): Promise<void> {
     try {
-      // Ensure directory exists
-      const schemasDir = join(dbcliPath, 'schemas')
+      const schemasDir = resolveSchemaPath(dbcliPath, connectionName)
       await this.ensureDir(schemasDir)
 
-      // Write index file
       const indexPath = join(schemasDir, 'index.json')
       const indexFile = Bun.file(indexPath)
       await indexFile.write(JSON.stringify(index, null, 2))

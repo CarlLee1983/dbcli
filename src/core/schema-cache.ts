@@ -10,6 +10,7 @@ import { LRUCache } from 'lru-cache'
 import type { SchemaIndex, CacheStats } from '@/types/schema-cache'
 import type { TableSchema, ColumnSchema } from '@/adapters/types'
 import { join } from 'path'
+import { resolveSchemaPath } from '@/utils/schema-path'
 
 /**
  * Schema Cache Manager
@@ -20,19 +21,26 @@ export class SchemaCacheManager {
   private index: SchemaIndex | null = null
   private hotSchemas: Map<string, TableSchema> = new Map()
   private dbcliPath: string
+  /** Root for index.json, hot-schemas.json, cold/ (V2: per-connection subfolder) */
+  private schemaRoot: string
   private maxItems: number
   private maxSize: number
 
   /**
    * Constructor
    * @param dbcliPath Path to .dbcli directory
-   * @param options Cache configuration
+   * @param options Cache configuration (optional `connectionName` for V2 isolation)
    */
   constructor(
     dbcliPath: string,
-    options?: { maxCacheItems?: number; maxCacheSize?: number }
+    options?: {
+      maxCacheItems?: number
+      maxCacheSize?: number
+      connectionName?: string
+    }
   ) {
     this.dbcliPath = dbcliPath
+    this.schemaRoot = resolveSchemaPath(dbcliPath, options?.connectionName)
     this.maxItems = options?.maxCacheItems || 100
     this.maxSize = options?.maxCacheSize || 52428800 // 50MB
 
@@ -56,16 +64,15 @@ export class SchemaCacheManager {
    */
   async initialize(): Promise<void> {
     try {
-      // Load index from .dbcli/schemas/index.json
-      const indexPath = join(this.dbcliPath, 'schemas', 'index.json')
+      // Load index from schemas root (V1: .dbcli/schemas/, V2: .dbcli/schemas/<name>/)
+      const indexPath = join(this.schemaRoot, 'index.json')
       const indexFile = Bun.file(indexPath)
       if (await indexFile.exists()) {
         const indexContent = await indexFile.text()
         this.index = JSON.parse(indexContent)
       }
 
-      // Load hot schemas from .dbcli/schemas/hot-schemas.json
-      const hotPath = join(this.dbcliPath, 'schemas', 'hot-schemas.json')
+      const hotPath = join(this.schemaRoot, 'hot-schemas.json')
       const hotFile = Bun.file(hotPath)
       if (await hotFile.exists()) {
         const hotContent = await hotFile.text()
@@ -121,7 +128,7 @@ export class SchemaCacheManager {
 
     try {
       // Load from cold storage file
-      const filePath = join(this.dbcliPath, 'schemas', tableInfo.file)
+      const filePath = join(this.schemaRoot, tableInfo.file)
       const file = Bun.file(filePath)
 
       if (!(await file.exists())) {

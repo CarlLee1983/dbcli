@@ -36,6 +36,33 @@ export function getGlobalConnectionName(): string | undefined {
 }
 
 /**
+ * Resolved V2 connection name for schema directory isolation (e.g. `.dbcli/schemas/<name>/`).
+ * Returns undefined for V1 config or legacy file-mode path so callers use `.dbcli/schemas/`.
+ */
+export async function getSchemaIsolationConnectionName(
+  dbcliPath: string
+): Promise<string | undefined> {
+  const effectiveName = getGlobalConnectionName()
+  try {
+    const stat = await Bun.file(dbcliPath).stat()
+    const isDirectory = stat?.isDirectory() ?? false
+    if (!isDirectory) return undefined
+
+    const configJsonPath = join(dbcliPath, 'config.json')
+    const configFile = Bun.file(configJsonPath)
+    if (!(await configFile.exists())) return undefined
+
+    const raw: unknown = JSON.parse(await configFile.text())
+    if (detectConfigVersion(raw) !== 2) return undefined
+
+    const v2Config = DbcliConfigV2Schema.parse(raw)
+    return resolveConnection(v2Config, effectiveName).name
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Default configuration values
  */
 const DEFAULT_CONFIG: DbcliConfig = {

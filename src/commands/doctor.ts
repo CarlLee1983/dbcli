@@ -9,6 +9,8 @@ import { validateFormat, DbcliConfigV2Schema } from '@/utils/validation'
 import { detectConfigVersion } from '@/core/config-v2'
 import pkg from '../../package.json'
 import { join } from 'path'
+import { resolveSchemaPath } from '@/utils/schema-path'
+import { getSchemaIsolationConnectionName } from '@/core/config'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -376,7 +378,11 @@ export const doctorCommand = new Command('doctor')
           }
 
           try {
-            const indexPath = join(configPath, 'schemas', 'index.json')
+            const schemaConnName = await getSchemaIsolationConnectionName(configPath)
+            const indexPath = join(
+              resolveSchemaPath(configPath, schemaConnName),
+              'index.json'
+            )
             const indexFile = Bun.file(indexPath)
             let indexParsed: unknown = null
             if (await indexFile.exists()) {

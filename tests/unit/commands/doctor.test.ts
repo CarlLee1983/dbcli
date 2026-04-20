@@ -1,7 +1,26 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
-import { runDoctorChecks, type DoctorResult } from '../../../src/commands/doctor'
+import { describe, test, expect } from 'bun:test'
+import {
+  runDoctorChecks,
+  resolveSchemaLastUpdated,
+  type DoctorResult,
+} from '../../../src/commands/doctor'
 
 describe('doctor checks', () => {
+  test('resolveSchemaLastUpdated prefers index metadata.lastRefreshed', () => {
+    const ts = '2026-04-01T12:00:00.000Z'
+    expect(
+      resolveSchemaLastUpdated(
+        { metadata: { lastRefreshed: ts }, hotTables: [], tables: {} },
+        { schemaLastUpdated: '2026-03-01T00:00:00.000Z' }
+      )
+    ).toBe(ts)
+  })
+
+  test('resolveSchemaLastUpdated falls back to config schemaLastUpdated when no index', () => {
+    const ts = '2026-04-20T08:00:00.000Z'
+    expect(resolveSchemaLastUpdated(null, { schemaLastUpdated: ts })).toBe(ts)
+  })
+
   test('checkBunVersion passes when version meets requirement', () => {
     const result = runDoctorChecks.checkBunVersion('1.3.3', '1.3.3')
     expect(result.status).toBe('pass')

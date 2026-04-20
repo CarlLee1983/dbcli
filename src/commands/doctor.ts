@@ -25,6 +25,22 @@ const SENSITIVE_PATTERNS = [
   'refresh_token', 'session_token', 'ssn', 'credit_card',
 ]
 
+/** Layered index uses metadata.lastRefreshed; schema --refresh sets config.metadata.schemaLastUpdated */
+export function resolveSchemaLastUpdated(
+  indexJson: unknown,
+  configMetadata: { schemaLastUpdated?: string } | undefined
+): string | null {
+  if (indexJson && typeof indexJson === 'object') {
+    const idx = indexJson as {
+      updatedAt?: string
+      metadata?: { lastRefreshed?: string }
+    }
+    const fromIndex = idx.metadata?.lastRefreshed ?? idx.updatedAt
+    if (fromIndex) return fromIndex
+  }
+  return configMetadata?.schemaLastUpdated ?? null
+}
+
 function compareSemver(a: string, b: string): number {
   const pa = a.split('.').map(Number)
   const pb = b.split('.').map(Number)
@@ -362,15 +378,16 @@ export const doctorCommand = new Command('doctor')
           try {
             const indexPath = join(configPath, 'schemas', 'index.json')
             const indexFile = Bun.file(indexPath)
+            let indexParsed: unknown = null
             if (await indexFile.exists()) {
-              const indexContent = await indexFile.text()
-              const index = JSON.parse(indexContent) as { updatedAt?: string }
-              results.push(runDoctorChecks.checkSchemaCacheFreshness(index.updatedAt ?? null))
-            } else {
-              results.push(runDoctorChecks.checkSchemaCacheFreshness(null))
+              indexParsed = JSON.parse(await indexFile.text()) as unknown
             }
+            const lastUpdated = resolveSchemaLastUpdated(indexParsed, config.metadata)
+            results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
           } catch {
-            results.push(runDoctorChecks.checkSchemaCacheFreshness(null))
+            results.push(
+              runDoctorChecks.checkSchemaCacheFreshness(config.metadata?.schemaLastUpdated ?? null)
+            )
           }
 
           await adapter.disconnect()

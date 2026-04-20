@@ -381,5 +381,32 @@ describe('configModule', () => {
         configModule.write(TEST_CONFIG_PATH, invalid as unknown as DbcliConfig)
       ).rejects.toThrow(ConfigError)
     })
+
+    test('應該保留 schema refresh metadata', async () => {
+      const config: DbcliConfig = {
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: 'pass',
+          database: 'db'
+        },
+        permission: 'query-only',
+        schema: {},
+        metadata: {
+          version: '1.0',
+          schemaLastUpdated: '2026-04-20T00:00:00Z',
+          schemaTableCount: 12
+        }
+      }
+
+      await configModule.write(TEST_CONFIG_PATH, config)
+
+      const written = JSON.parse(await Bun.file(TEST_CONFIG_PATH).text())
+
+      expect(written.metadata.schemaLastUpdated).toBe('2026-04-20T00:00:00Z')
+      expect(written.metadata.schemaTableCount).toBe(12)
+    })
   })
 })

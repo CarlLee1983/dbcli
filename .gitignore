@@ -42,3 +42,6 @@ docs/superpowers/
 
 # worktrees
 .worktrees/
+
+# omx
+.omx/

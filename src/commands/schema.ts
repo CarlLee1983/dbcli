@@ -176,6 +176,15 @@ async function handleSchemaRefresh(
     report.tablesRemoved.length === 0 &&
     Object.keys(report.tablesModified).length === 0
   ) {
+    const updatedConfig = configModule.merge(config, {
+      metadata: {
+        ...config.metadata,
+        schemaLastUpdated: new Date().toISOString(),
+        schemaTableCount: Object.keys(config.schema || {}).length
+      }
+    })
+
+    await configModule.write(options.config, updatedConfig)
     console.log('✅ Schema is up-to-date (no changes detected)')
     return
   }

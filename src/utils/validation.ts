@@ -54,7 +54,9 @@ export const PermissionSchema = z.enum(['query-only', 'read-write', 'data-admin'
 export const MetadataSchema = z
   .object({
     createdAt: z.string().datetime().optional(),
-    version: z.string().default('1.0')
+    version: z.string().default('1.0'),
+    schemaLastUpdated: z.string().datetime().optional(),
+    schemaTableCount: z.number().int().nonnegative().optional()
   })
   .optional()
   .default({})

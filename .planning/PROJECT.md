@@ -118,19 +118,19 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.3.0 — Phase 16 Complete)
+## Current State (v1.5.0 — Phase 18 Complete)
 
-**Latest Release:** v1.3.0 (2026-04-02)
-- ✅ Phase 16 complete: Skill update reminders implemented
-- ✅ 250+ tests passing
-- ✅ Multi-connection support (v2 config) and Interactive Shell (REPL) fully operational
-- ✅ Automated version checking and self-upgrade mechanism
+**Latest Release:** v1.5.0 (2026-04-21)
+- ✅ Layered Schema Cache (Wave 1) complete
+- ✅ Per-connection schema isolation implemented
+- ✅ SKILL.md documentation updated for connection-aware AI usage
+- ✅ 350+ tests passing
 
-**What's Shipped (v1.3.0):**
-1. Skill update reminders — automated check for outdated AI agent skills
-2. Multi-connection support — named connections and switching with `dbcli use`
-3. Interactive Shell (REPL) — `dbcli shell` with auto-completion and history
-4. Unified DDL interface — `dbcli migrate` for cross-database schema changes
+**What's Shipped (v1.5.0):**
+1. Layered Schema Cache (Wave 1) — integrated file-based persistence for schemas
+2. Per-connection isolation — each connection has its own schema directory
+3. Improved Migration UX — proactive hints during schema migration
+4. Documentation update — clarified schema storage layout in SKILL.md
 
 **What's Shipped (v1.0.0 and prior):**
 1. Full database CLI with init, list, schema, query, insert, update, delete, export
@@ -188,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-04-02 after v1.3.0 release*
+*Last updated: 2026-04-21 after v1.5.0 release*

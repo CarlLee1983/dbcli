@@ -3,9 +3,10 @@
  * Routes to correct adapter implementation based on database system type
  */
 
-import type { ConnectionOptions, DatabaseAdapter } from './types'
+import type { ConnectionOptions, DatabaseAdapter, QueryableAdapter } from './types'
 import { PostgreSQLAdapter } from './postgresql-adapter'
 import { MySQLAdapter } from './mysql-adapter'
+import { MongoDBAdapter } from './mongodb-adapter'
 
 /**
  * Factory for creating database adapters
@@ -33,7 +34,22 @@ export class AdapterFactory {
         throw new Error(`Unsupported database system: ${options.system}`)
     }
   }
+
+  /**
+   * Create a MongoDB adapter instance for queryable MongoDB operations
+   * MongoDB adapters support read-focused operations via QueryableAdapter interface
+   *
+   * @param options Connection configuration (system must be 'mongodb')
+   * @returns QueryableAdapter instance for MongoDB
+   * @throws {Error} If system type is not 'mongodb'
+   */
+  static createMongoDBAdapter(options: ConnectionOptions): QueryableAdapter {
+    if (options.system !== 'mongodb') {
+      throw new Error('createMongoDBAdapter requires system: mongodb')
+    }
+    return new MongoDBAdapter(options)
+  }
 }
 
 // Export adapter classes for testing
-export { PostgreSQLAdapter, MySQLAdapter }
+export { PostgreSQLAdapter, MySQLAdapter, MongoDBAdapter }

@@ -5,6 +5,24 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-04-21
+
+### Added
+
+- **Documentation Update**: Added per-connection schema isolation details to `SKILL.md` for AI agents.
+  - Clarified schema storage layout in `.dbcli/schemas/`.
+  - Added usage examples for `--use <connection>` with schema commands.
+
+## [1.4.0] - 2026-04-21
+
+### Added
+
+- **Layered Schema Cache (Wave 1)**: Integrated file-based persistence for database schemas.
+  - New `SchemaWriter` for saving schema snapshots to `.dbcli/schemas/`.
+  - Layered schema loading (Hot/Cold) integrated into `configModule`.
+  - Per-connection isolation: Each connection now has its own schema directory (`.dbcli/schemas/<connection>/`).
+- **Improved Migration UX**: Added proactive hints during schema migration to ensure data consistency.
+
 ## [1.3.0] - 2026-04-02
 
 ### Added

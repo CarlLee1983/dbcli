@@ -75,16 +75,22 @@ dbcli list --format json
 Display table schema or scan entire database.
 
 ```bash
-dbcli schema                        # Scan all tables, save to .dbcli
+dbcli schema                        # Scan all tables, save to .dbcli/schemas/
 dbcli schema users                  # Show single table schema
 dbcli schema users --format json
 dbcli schema --refresh              # Detect and apply schema changes
 dbcli schema --reset                # Clear all schema data and re-fetch
 dbcli schema --reset --force        # Skip confirmation
+
+# Per-connection schema isolation (v2 multi-connection config)
+dbcli schema --use staging          # Scan staging DB; saves to .dbcli/schemas/staging/
+dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod/
 ```
 
-**Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`
+**Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`
 **Permission:** query-only+
+
+**Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
 ### query
 

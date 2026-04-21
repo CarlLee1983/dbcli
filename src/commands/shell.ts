@@ -7,20 +7,20 @@ import { configModule } from '../core/config'
 import { AdapterFactory } from '../adapters/factory'
 import { ReplEngine } from '../core/repl/repl-engine'
 import { createCompleter } from '../core/repl/completer'
+import { resolveConfigPath } from '@/utils/config-path'
 import type { ReplContext } from '../core/repl/types'
 import type { DbcliConfig } from '../types'
 import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
+import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
 
 const HISTORY_PATH = join(homedir(), '.dbcli_history')
 
 export const shellCommand = new Command('shell')
   .description('Interactive database shell with auto-completion and syntax highlighting')
   .option('--sql', 'SQL-only mode (skip dbcli command parsing)')
-  .action(async (options: { sql?: boolean }) => {
-    // Issue 3 fix: get global --config option from parent command
-    const globalOpts = shellCommand.optsWithGlobals?.() ?? {}
-    const configPath = (globalOpts as any).config ?? '.dbcli'
+  .action(async (options: { sql?: boolean }, command) => {
+    const configPath = resolveConfigPath(command)
     await runShell(options, configPath)
   })
 
@@ -34,8 +34,10 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     process.exit(1)
   }
 
-  // Connect to database
-  const adapter = AdapterFactory.createAdapter(config.connection)
+  const isMongoDB = config.connection.system === 'mongodb'
+  const adapter = isMongoDB
+    ? new MongoShellAdapter(AdapterFactory.createMongoDBAdapter(config.connection))
+    : AdapterFactory.createAdapter(config.connection)
   try {
     await adapter.connect()
   } catch (error: any) {
@@ -43,14 +45,20 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     process.exit(1)
   }
 
-  // Build context from schema cache
-  const schemaData = (config.schema ?? {}) as Record<string, unknown>
-  const tableNames = Object.keys(schemaData)
-  const columnsByTable: Record<string, string[]> = {}
-  for (const [table, data] of Object.entries(schemaData)) {
-    const tableData = data as any
-    if (tableData?.columns && Array.isArray(tableData.columns)) {
-      columnsByTable[table] = tableData.columns.map((c: any) => c.name)
+  // Build context from schema cache or MongoDB collections
+  let tableNames: string[] = []
+  let columnsByTable: Record<string, string[]> = {}
+  if (isMongoDB) {
+    const collections = await adapter.listTables()
+    tableNames = collections.map((collection) => collection.name)
+  } else {
+    const schemaData = (config.schema ?? {}) as Record<string, unknown>
+    tableNames = Object.keys(schemaData)
+    for (const [table, data] of Object.entries(schemaData)) {
+      const tableData = data as any
+      if (tableData?.columns && Array.isArray(tableData.columns)) {
+        columnsByTable[table] = tableData.columns.map((c: any) => c.name)
+      }
     }
   }
 
@@ -73,12 +81,24 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     port: String(config.connection.port),
   })))
   console.error(pc.dim(t_vars('shell.welcome_permission', { permission: config.permission })))
+  if (isMongoDB) {
+    console.error(pc.dim('MongoDB shell: use `query <json>` with `--collection <name>` for reads.'))
+  }
 
   if (options.sql) {
     console.error(pc.dim(t('shell.sql_mode_hint')))
   }
 
   console.error('')
+
+  if (!(process.stdin.isTTY ?? false)) {
+    const input = await Bun.stdin.text()
+    await runBatchSession(engine, input)
+    console.error(pc.dim(t('shell.goodbye')))
+    await engine.saveHistory()
+    await adapter.disconnect()
+    process.exit(0)
+  }
 
   // Create readline interface
   const rl = createInterface({
@@ -137,4 +157,18 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     }
     rl.prompt()
   })
+}
+
+export async function runBatchSession(engine: ReplEngine, input: string): Promise<void> {
+  const lines = input.replace(/\r\n/g, '\n').split('\n')
+  for (const line of lines) {
+    if (line.trim() === '' && lines.length > 1) continue
+    const result = await engine.processInput(line)
+    if (result.output) {
+      console.log(result.output)
+    }
+    if (result.action === 'quit') {
+      return
+    }
+  }
 }

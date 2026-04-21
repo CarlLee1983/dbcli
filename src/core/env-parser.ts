@@ -58,7 +58,7 @@ export function parseConnectionUrl(url: string): DatabaseEnv {
  *
  * Priority order:
  * 1. DATABASE_URL (complete connection string)
- * 2. DB_* components (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+ * 2. DB_* components (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME/DB_DATABASE)
  * 3. Returns null if neither is present
  *
  * @returns DatabaseEnv or null if no database configuration found
@@ -74,14 +74,14 @@ export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | nul
   if (env.DB_HOST || env.DB_USER) {
     const system = (env.DB_SYSTEM || 'postgresql') as 'postgresql' | 'mysql' | 'mariadb'
     const user = env.DB_USER
-    const database = env.DB_NAME
+    const database = env.DB_NAME || env.DB_DATABASE
 
     // Validate required fields
     if (!user) {
       throw new EnvParseError('DB_USER is required when using component format')
     }
     if (!database) {
-      throw new EnvParseError('DB_NAME is required when using component format')
+      throw new EnvParseError('DB_NAME or DB_DATABASE is required when using component format')
     }
 
     const defaults = getDefaultsForSystem(system)

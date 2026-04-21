@@ -123,8 +123,8 @@ export class ReplEngine {
       // Resolve the dbcli CLI entry point path
       const cliPath = new URL('../../cli.ts', import.meta.url).pathname
 
-      // Build argv: [command, ...args]
-      const argv = [parsed.command, ...parsed.args]
+      // Build argv: [command, --config, current-config, ...args]
+      const argv = [parsed.command, '--config', this.context.configPath, ...parsed.args]
 
       // Spawn a subprocess to run the dbcli command
       const proc = Bun.spawn(

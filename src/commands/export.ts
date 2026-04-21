@@ -10,6 +10,7 @@ import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
 import { promptUser } from '@/utils/prompts'
+import { resolveConfigPath } from '@/utils/config-path'
 
 /**
  * Export command action handler
@@ -21,7 +22,9 @@ export async function exportCommand(
     format: 'json' | 'csv'
     output?: string
     force?: boolean
-  }
+    config?: string
+  },
+  command?: import('commander').Command
 ): Promise<void> {
   try {
     // 1. Argument validation
@@ -34,7 +37,8 @@ export async function exportCommand(
     sql = sql.trim()
 
     // 2. Load configuration
-    const config = await configModule.read('.dbcli')
+    const configPath = resolveConfigPath(command, options)
+    const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }

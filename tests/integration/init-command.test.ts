@@ -50,6 +50,18 @@ describe('Init Command Integration Tests', () => {
     expect(result?.database).toBe('production')
   })
 
+  test('應該接受 DB_DATABASE 作為 DB_* 元件的資料庫名稱別名', () => {
+    const result = parseEnvDatabase({
+      DB_SYSTEM: 'postgresql',
+      DB_HOST: 'db.example.com',
+      DB_USER: 'admin',
+      DB_DATABASE: 'production'
+    })
+
+    expect(result).not.toBeNull()
+    expect(result?.database).toBe('production')
+  })
+
   test('應該在沒有 .env 時返回 null', () => {
     // 驗證：沒有配置時返回 null
     const result = parseEnvDatabase({})

@@ -1,26 +1,28 @@
 /**
  * Live Database Integration Tests
  *
- * Tests all dbcli commands against the actual MariaDB connection
- * configured in the project's .dbcli file.
+ * Tests all dbcli commands against an explicit live database config
+ * from `.dbcli/config.json` or `LIVE_DB_CONFIG_PATH`.
  *
- * Auto-skips if the database is not reachable.
+ * Auto-skips if no live config is available or the database is not reachable.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { unlinkSync } from 'fs'
+import { copyFileSync, existsSync, mkdtempSync, rmSync, unlinkSync } from 'fs'
 import { SKIP_BY_ENV } from './helpers'
 
 const CWD = import.meta.dir + '/../..'
 
 let SKIP = SKIP_BY_ENV
+let LIVE_CONFIG_PATH = ''
+let TEMP_CONFIG_ROOT = ''
 
 /** Run a CLI command and return { stdout, stderr, exitCode } */
 async function run(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const argv = shellSplit(args)
-  const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', ...argv], {
+  const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', '--config', LIVE_CONFIG_PATH, ...argv], {
     cwd: CWD,
     stdout: 'pipe',
     stderr: 'pipe',
@@ -80,10 +82,30 @@ function cleanupFile(path: string) {
   try { unlinkSync(path) } catch {}
 }
 
+function cleanupDir(path: string) {
+  try { rmSync(path, { recursive: true, force: true }) } catch {}
+}
+
 beforeAll(async () => {
   if (SKIP_BY_ENV) {
     console.log('⏭ SKIP_INTEGRATION_TESTS=true — skipping live DB tests')
     return
+  }
+
+  const sourceConfigPath = resolveLiveConfigPath()
+  if (!sourceConfigPath) {
+    SKIP = true
+    console.log('⏭ No live .dbcli config found — skipping live DB tests')
+    return
+  }
+
+  TEMP_CONFIG_ROOT = mkdtempSync(join(tmpdir(), 'dbcli-live-'))
+  LIVE_CONFIG_PATH = TEMP_CONFIG_ROOT
+  copyFileSync(join(sourceConfigPath, 'config.json'), join(TEMP_CONFIG_ROOT, 'config.json'))
+
+  const sourceEnvLocalPath = join(sourceConfigPath, '.env.local')
+  if (existsSync(sourceEnvLocalPath)) {
+    copyFileSync(sourceEnvLocalPath, join(TEMP_CONFIG_ROOT, '.env.local'))
   }
 
   const check = await run('status --format json')
@@ -92,6 +114,27 @@ beforeAll(async () => {
     console.log('⏭ Database not reachable via dbcli — skipping live DB tests')
   }
 })
+
+afterAll(() => {
+  if (TEMP_CONFIG_ROOT) {
+    cleanupDir(TEMP_CONFIG_ROOT)
+  }
+})
+
+function resolveLiveConfigPath(): string | null {
+  const candidates = [
+    process.env.LIVE_DB_CONFIG_PATH,
+    join(CWD, '.dbcli')
+  ].filter((candidate): candidate is string => Boolean(candidate))
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'config.json'))) {
+      return candidate
+    }
+  }
+
+  return null
+}
 
 // ============================================================================
 // 1. list
@@ -649,7 +692,7 @@ describe('status and doctor commands (live)', () => {
 })
 
 // ============================================================================
-// 11. shell (piped stdin — non-interactive)
+// 11. shell (piped stdin — non-interactive batch session)
 // ============================================================================
 describe('shell command (live)', () => {
   test('shell starts and responds to .help', async () => {
@@ -677,12 +720,8 @@ describe('shell command (live)', () => {
     expect(output).toContain('.help')
   })
 
-  test('shell executes SQL via --sql flag', async () => {
+  test('shell executes query via piped stdin', async () => {
     if (SKIP) return
-    // Non-TTY piped stdin has timing issues with the REPL readline.
-    // Instead, verify SQL execution via the query command through shell.
-    // We already tested SQL execution extensively in query tests.
-    // Here we just verify the shell can start and exit cleanly.
     const proc = Bun.spawn(['bun', 'run', 'src/cli.ts', 'shell'], {
       cwd: CWD,
       stdin: 'pipe',
@@ -691,6 +730,7 @@ describe('shell command (live)', () => {
       env: { ...process.env, NO_COLOR: '1' },
     })
 
+    proc.stdin!.write('query "SELECT 1 as val" --format json\n')
     proc.stdin!.write('.quit\n')
     proc.stdin!.end()
 
@@ -702,6 +742,7 @@ describe('shell command (live)', () => {
     const output = stdout + stderr
 
     expect(output).toContain('Connected to')
+    expect(parseJSON(output).rows[0].val).toBe(1)
     expect(exitCode).toBe(0)
   })
 })

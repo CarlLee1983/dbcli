@@ -6,6 +6,7 @@
 
 import { Command } from 'commander'
 import { configModule } from '@/core/config'
+import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
@@ -17,7 +18,8 @@ export const statusCommand = new Command('status')
     try {
       validateFormat(options.format, ALLOWED_FORMATS, 'status')
 
-      const config = await configModule.read('.dbcli')
+      const configPath = resolveConfigPath(statusCommand)
+      const config = await configModule.read(configPath)
 
       if (!config.connection) {
         console.error('No configuration found. Run "dbcli init" first.')

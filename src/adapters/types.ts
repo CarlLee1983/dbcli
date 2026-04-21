@@ -21,6 +21,8 @@ export interface ConnectionOptions {
   database: string
   /** MongoDB connection URI (optional, for MongoDB connections) */
   uri?: string
+  /** MongoDB auth database — used when building URI from host/port/user/password (default: 'admin') */
+  authSource?: string
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
 }
@@ -145,7 +147,10 @@ export interface DatabaseAdapter {
    * @returns Execution result containing rows and metadata
    * @throws {ConnectionError} If query execution fails
    */
-  execute<T>(sql: string, params?: (string | number | boolean | null)[]): Promise<ExecutionResult<T>>
+  execute<T>(
+    sql: string,
+    params?: (string | number | boolean | null)[]
+  ): Promise<ExecutionResult<T>>
 
   /**
    * List all tables in the connected database

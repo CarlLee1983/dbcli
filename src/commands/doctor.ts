@@ -7,6 +7,7 @@ import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-chec
 import { t_vars } from '@/i18n/message-loader'
 import { validateFormat, DbcliConfigV2Schema } from '@/utils/validation'
 import { detectConfigVersion } from '@/core/config-v2'
+import { resolveConfigPath } from '@/utils/config-path'
 import pkg from '../../package.json'
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
@@ -297,6 +298,65 @@ export const runDoctorChecks = {
   },
 }
 
+export async function collectMongoDoctorResults(
+  config: any
+): Promise<DoctorResult[]> {
+  const results: DoctorResult[] = []
+  const adapter = AdapterFactory.createMongoDBAdapter(config.connection)
+
+  await adapter.connect()
+  try {
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'pass',
+      message: `Connected to mongodb ${String(config.connection.database) || '(default db)'}`,
+    })
+
+    try {
+      const version = await adapter.getServerVersion()
+      results.push({
+        group: 'Connection & Data',
+        label: 'Server version',
+        status: 'pass',
+        message: `MongoDB ${version}`,
+      })
+    } catch {
+      // Ignore version probe failure; connection already proved healthy.
+    }
+
+    const collections = await adapter.listCollections()
+    results.push(runDoctorChecks.checkLargeTables(
+      collections.map((collection) => ({
+        name: collection.name,
+        estimatedRowCount: collection.documentCount,
+      }))
+    ))
+
+    results.push({
+      group: 'Connection & Data',
+      label: 'Collections',
+      status: 'pass',
+      message: collections.length === 0
+        ? 'No collections found'
+        : `Found ${collections.length} collection(s)`,
+    })
+
+    results.push({
+      group: 'Connection & Data',
+      label: 'Schema cache',
+      status: 'warn',
+      message: config.metadata?.schemaLastUpdated
+        ? `Schema cache timestamp present: ${config.metadata.schemaLastUpdated}`
+        : 'Schema cache is not tracked for MongoDB — run collection inspections instead',
+    })
+  } finally {
+    await adapter.disconnect()
+  }
+
+  return results
+}
+
 export const doctorCommand = new Command('doctor')
   .description('Run diagnostic checks on dbcli configuration, environment, and connection')
   .option('--format <type>', 'Output format: text, json', 'text')
@@ -305,7 +365,7 @@ export const doctorCommand = new Command('doctor')
 
     const logger = getLogger()
     const results: DoctorResult[] = []
-    const configPath = doctorCommand.parent?.opts().config ?? '.dbcli'
+    const configPath = resolveConfigPath(doctorCommand)
 
     // --- Environment ---
     const bunVersion = (process.versions as Record<string, string>).bun ?? 'unknown'
@@ -346,57 +406,61 @@ export const doctorCommand = new Command('doctor')
 
         // --- Connection & Data ---
         try {
-          const adapter = AdapterFactory.createAdapter(config.connection as Parameters<typeof AdapterFactory.createAdapter>[0])
-          await adapter.connect()
+          if (config.connection.system === 'mongodb') {
+            results.push(...await collectMongoDoctorResults(config))
+          } else {
+            const adapter = AdapterFactory.createAdapter(config.connection as Parameters<typeof AdapterFactory.createAdapter>[0])
+            await adapter.connect()
 
-          results.push({
-            group: 'Connection & Data',
-            label: 'Connection',
-            status: 'pass',
-            message: `Connected to ${config.connection.system} ${config.connection.database}@${config.connection.host}:${config.connection.port}`,
-          })
+            results.push({
+              group: 'Connection & Data',
+              label: 'Connection',
+              status: 'pass',
+              message: `Connected to ${config.connection.system} ${config.connection.database}@${config.connection.host}:${config.connection.port}`,
+            })
 
-          // Check database server version
-          try {
-            const rawVersion = await adapter.getServerVersion()
-            const versionResult = checkDbVersion(rawVersion, config.connection.system as 'postgresql' | 'mysql' | 'mariadb')
-            results.push(runDoctorChecks.checkDatabaseVersion(versionResult))
-          } catch {
-            logger.debug('Could not retrieve database version')
-          }
-
-          try {
-            const tables = await adapter.listTables()
-            const tableColumns = new Map<string, string[]>()
-            for (const t of tables) {
-              tableColumns.set(t.name, t.columns.map(c => c.name))
+            // Check database server version
+            try {
+              const rawVersion = await adapter.getServerVersion()
+              const versionResult = checkDbVersion(rawVersion, config.connection.system as 'postgresql' | 'mysql' | 'mariadb')
+              results.push(runDoctorChecks.checkDatabaseVersion(versionResult))
+            } catch {
+              logger.debug('Could not retrieve database version')
             }
-            results.push(runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns))
-            results.push(runDoctorChecks.checkLargeTables(tables))
-          } catch {
-            logger.debug('Could not list tables for blacklist/large table check')
-          }
 
-          try {
-            const schemaConnName = await getSchemaIsolationConnectionName(configPath)
-            const indexPath = join(
-              resolveSchemaPath(configPath, schemaConnName),
-              'index.json'
-            )
-            const indexFile = Bun.file(indexPath)
-            let indexParsed: unknown = null
-            if (await indexFile.exists()) {
-              indexParsed = JSON.parse(await indexFile.text()) as unknown
+            try {
+              const tables = await adapter.listTables()
+              const tableColumns = new Map<string, string[]>()
+              for (const t of tables) {
+                tableColumns.set(t.name, t.columns.map(c => c.name))
+              }
+              results.push(runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns))
+              results.push(runDoctorChecks.checkLargeTables(tables))
+            } catch {
+              logger.debug('Could not list tables for blacklist/large table check')
             }
-            const lastUpdated = resolveSchemaLastUpdated(indexParsed, config.metadata)
-            results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
-          } catch {
-            results.push(
-              runDoctorChecks.checkSchemaCacheFreshness(config.metadata?.schemaLastUpdated ?? null)
-            )
-          }
 
-          await adapter.disconnect()
+            try {
+              const schemaConnName = await getSchemaIsolationConnectionName(configPath)
+              const indexPath = join(
+                resolveSchemaPath(configPath, schemaConnName),
+                'index.json'
+              )
+              const indexFile = Bun.file(indexPath)
+              let indexParsed: unknown = null
+              if (await indexFile.exists()) {
+                indexParsed = JSON.parse(await indexFile.text()) as unknown
+              }
+              const lastUpdated = resolveSchemaLastUpdated(indexParsed, config.metadata)
+              results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
+            } catch {
+              results.push(
+                runDoctorChecks.checkSchemaCacheFreshness(config.metadata?.schemaLastUpdated ?? null)
+              )
+            }
+
+            await adapter.disconnect()
+          }
         } catch (error) {
           results.push({
             group: 'Connection & Data',

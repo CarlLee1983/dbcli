@@ -1236,6 +1236,17 @@ bun run test:docker       # integration tests with docker-compose.test.yml (MySQ
 bun run build             # bundle CLI to dist/ (used before publish)
 ```
 
+Live database integration tests use `.dbcli/config.json` by default. If your live
+config lives elsewhere, set `LIVE_DB_CONFIG_PATH=/path/to/.dbcli` before running:
+
+```bash
+LIVE_DB_CONFIG_PATH=/path/to/.dbcli bun test tests/integration/live-db.test.ts
+```
+
+If no live config is available, `tests/integration/live-db.test.ts` skips instead
+of falling back to the default PostgreSQL configuration. Set
+`SKIP_INTEGRATION_TESTS=true` to skip all integration tests.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release process.
 
 ---

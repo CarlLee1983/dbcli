@@ -21,6 +21,7 @@ import { promptUser } from '@/utils/prompts'
 import { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import type { DbcliConfigV2 } from '@/utils/validation'
+import { resolveConfigPath } from '@/utils/config-path'
 
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
 
@@ -39,9 +40,7 @@ async function checkOverwrite(
   if ((!fileExists && !dirConfigExists) || force) return true
 
   if (shouldPrompt) {
-    const overwrite = await promptUser.confirm(
-      t('init.config_exists_overwrite')
-    )
+    const overwrite = await promptUser.confirm(t('init.config_exists_overwrite'))
     if (!overwrite) {
       console.log(t('init.cancelled'))
       return false
@@ -74,14 +73,12 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
   }
 
   const { [name]: _removed, ...remaining } = config.connections
-  const newDefault = config.default === name
-    ? Object.keys(remaining)[0]
-    : config.default
+  const newDefault = config.default === name ? Object.keys(remaining)[0] : config.default
 
   const updated: DbcliConfigV2 = {
     ...config,
     default: newDefault,
-    connections: remaining
+    connections: remaining,
   }
 
   await writeV2Config(configPath, updated)
@@ -124,7 +121,7 @@ async function handleRename(configPath: string, renameArg: string): Promise<void
   const updated: DbcliConfigV2 = {
     ...config,
     default: config.default === oldName ? newName : config.default,
-    connections: Object.fromEntries(entries)
+    connections: Object.fromEntries(entries),
   }
 
   await writeV2Config(configPath, updated)
@@ -157,12 +154,12 @@ async function writeV2InitConfig(
         connections: {
           default: {
             ...v1Config.connection,
-            permission: v1Config.permission
-          }
+            permission: v1Config.permission,
+          },
         },
         schema: v1Config.schema || {},
         metadata: v1Config.metadata || { version: '1.0' },
-        blacklist: v1Config.blacklist || { tables: [], columns: {} }
+        blacklist: v1Config.blacklist || { tables: [], columns: {} },
       }
     }
   } else {
@@ -179,12 +176,12 @@ async function writeV2InitConfig(
           connections: {
             default: {
               ...v1Config.connection,
-              permission: v1Config.permission
-            }
+              permission: v1Config.permission,
+            },
           },
           schema: v1Config.schema || {},
           metadata: v1Config.metadata || { version: '1.0' },
-          blacklist: v1Config.blacklist || { tables: [], columns: {} }
+          blacklist: v1Config.blacklist || { tables: [], columns: {} },
         }
       }
     }
@@ -193,7 +190,7 @@ async function writeV2InitConfig(
   // Build connection entry
   const connEntry: any = {
     ...connection,
-    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin'
+    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   }
   if (envFile) {
     connEntry.envFile = envFile
@@ -205,18 +202,18 @@ async function writeV2InitConfig(
         ...existingV2,
         connections: {
           ...existingV2.connections,
-          [connectionName]: connEntry
-        }
+          [connectionName]: connEntry,
+        },
       }
     : {
         version: 2,
         default: connectionName,
         connections: {
-          [connectionName]: connEntry
+          [connectionName]: connEntry,
         },
         schema: {},
         metadata: { version: '1.0', createdAt: new Date().toISOString() },
-        blacklist: { tables: [], columns: {} }
+        blacklist: { tables: [], columns: {} },
       }
 
   // Ensure directory exists
@@ -236,9 +233,25 @@ export const initCommand = new Command('init')
   .option('--user <user>', 'Database user')
   .option('--password <password>', 'Database password')
   .option('--name <name>', 'Database name')
-  .option('--system <system>', 'Database system (postgresql, mysql, mariadb)')
-  .option('--permission <permission>', 'Permission level (query-only, read-write, data-admin, admin)', 'query-only')
-  .option('--use-env-refs', 'Store env var references in config instead of actual values (for CI/CD or multi-env)', false)
+  .option('--system <system>', 'Database system (postgresql, mysql, mariadb, mongodb)')
+  .option(
+    '--uri <uri>',
+    'MongoDB connection URI (mongodb://user:pass@host:port/db?authSource=admin)'
+  )
+  .option(
+    '--auth-source <authSource>',
+    'MongoDB auth database (default: admin when user/password are set)'
+  )
+  .option(
+    '--permission <permission>',
+    'Permission level (query-only, read-write, data-admin, admin)',
+    'query-only'
+  )
+  .option(
+    '--use-env-refs',
+    'Store env var references in config instead of actual values (for CI/CD or multi-env)',
+    false
+  )
   .option('--env-host <var>', 'Env var name for host (with --use-env-refs)')
   .option('--env-port <var>', 'Env var name for port (with --use-env-refs)')
   .option('--env-user <var>', 'Env var name for user (with --use-env-refs)')
@@ -253,7 +266,7 @@ export const initCommand = new Command('init')
   .option('--rename <names>', 'Rename a connection (format: old:new)')
   .action(async (options) => {
     try {
-      await initCommandHandler(options)
+      await initCommandHandler(options, initCommand)
     } catch (error) {
       if (error instanceof Error) {
         console.error(t_vars('errors.message', { message: error.message }))
@@ -268,9 +281,10 @@ export const initCommand = new Command('init')
  * Actual handler for the init command
  */
 async function initCommandHandler(
-  options: Record<string, unknown>
+  options: Record<string, unknown>,
+  command: Command
 ): Promise<void> {
-  const configPath = (initCommand.parent?.opts().config as string | undefined) ?? '.dbcli'
+  const configPath = resolveConfigPath(command)
 
   // Handle --remove
   if (options.remove) {
@@ -294,7 +308,8 @@ async function initCommandHandler(
   // 2. Determine whether to enter interactive mode
   // If --use-env-refs is set and all --env-* options are provided, automatically go non-interactive
   const isUsingEnvRefs = options.useEnvRefs
-  const hasAllEnvOptions = isUsingEnvRefs &&
+  const hasAllEnvOptions =
+    isUsingEnvRefs &&
     options.envHost &&
     options.envPort &&
     options.envUser &&
@@ -325,20 +340,34 @@ async function initCommandHandler(
     system = await promptUser.select(t('init.select_system'), [
       'postgresql',
       'mysql',
-      'mariadb'
+      'mariadb',
+      'mongodb',
     ])
   }
 
   // Validate system value
-  if (!['postgresql', 'mysql', 'mariadb'].includes(system)) {
+  if (!['postgresql', 'mysql', 'mariadb', 'mongodb'].includes(system)) {
     throw new Error(t_vars('errors.invalid_system', { system }))
   }
 
-  const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb')
+  const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb' | 'mongodb')
+
+  // 4a. MongoDB: handle separately and return early
+  if (system === 'mongodb') {
+    await handleMongoDBInit({
+      options,
+      configPath,
+      connectionName,
+      isV2Init,
+      existingConfig,
+      shouldPrompt,
+    })
+    return
+  }
 
   // 4. Collect values for each connection parameter
   const connection: Partial<ConnectionConfig> = {
-    system: system as 'postgresql' | 'mysql' | 'mariadb'
+    system: system as 'postgresql' | 'mysql' | 'mariadb',
   }
 
   // Declare configForWrite early (will be assigned later)
@@ -348,11 +377,13 @@ async function initCommandHandler(
   // Otherwise ask for actual connection values
   if (options.useEnvRefs && shouldPrompt) {
     // Env-ref mode: only ask for environment variable names, not actual values
-    let envHost = options.envHost || await promptUser.text(t('init.prompt_host'), 'DB_HOST')
-    let envPort = options.envPort || await promptUser.text(t('init.prompt_port'), 'DB_PORT')
-    let envUser = options.envUser || await promptUser.text(t('init.prompt_user'), 'DB_USER')
-    let envPassword = options.envPassword || await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD')
-    let envDatabase = options.envDatabase || await promptUser.text(t('init.prompt_name'), 'DB_DATABASE')
+    let envHost = options.envHost || (await promptUser.text(t('init.prompt_host'), 'DB_HOST'))
+    let envPort = options.envPort || (await promptUser.text(t('init.prompt_port'), 'DB_PORT'))
+    let envUser = options.envUser || (await promptUser.text(t('init.prompt_user'), 'DB_USER'))
+    let envPassword =
+      options.envPassword || (await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD'))
+    let envDatabase =
+      options.envDatabase || (await promptUser.text(t('init.prompt_name'), 'DB_DATABASE'))
 
     // Directly convert to env-ref config
     configForWrite = {
@@ -361,7 +392,7 @@ async function initCommandHandler(
       port: { $env: envPort } as any,
       user: { $env: envUser } as any,
       password: { $env: envPassword } as any,
-      database: { $env: envDatabase } as any
+      database: { $env: envDatabase } as any,
     }
 
     // Skip subsequent connection parameter collection, go directly to permission selection
@@ -372,7 +403,7 @@ async function initCommandHandler(
         'query-only',
         'read-write',
         'data-admin',
-        'admin'
+        'admin',
       ])
     }
 
@@ -384,7 +415,7 @@ async function initCommandHandler(
     // Merge config and save
     const newConfig = configModule.merge(existingConfig, {
       connection: configForWrite,
-      permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin'
+      permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
     })
 
     // Check existing file and prompt for overwrite confirmation
@@ -396,7 +427,13 @@ async function initCommandHandler(
 
     // V2 init path (env-refs interactive mode)
     if (isV2Init) {
-      await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+      await writeV2InitConfig(
+        configPath,
+        connectionName,
+        configForWrite,
+        permission as string,
+        options.envFile as string | undefined
+      )
       return
     }
 
@@ -433,9 +470,7 @@ async function initCommandHandler(
   connection.user =
     options.user ||
     envConfig?.user ||
-    (shouldPrompt
-      ? await promptUser.text(t('init.prompt_user'))
-      : '')
+    (shouldPrompt ? await promptUser.text(t('init.prompt_user')) : '')
 
   // When using --use-env-refs, actual connection values are optional (read from env vars)
   // Otherwise, non-interactive mode requires these values
@@ -447,17 +482,13 @@ async function initCommandHandler(
   connection.password =
     options.password ||
     envConfig?.password ||
-    (shouldPrompt
-      ? await promptUser.text(t('init.prompt_password'))
-      : '')
+    (shouldPrompt ? await promptUser.text(t('init.prompt_password')) : '')
 
   // Database name
   connection.database =
     options.name ||
     envConfig?.database ||
-    (shouldPrompt
-      ? await promptUser.text(t('init.prompt_name'))
-      : '')
+    (shouldPrompt ? await promptUser.text(t('init.prompt_name')) : '')
 
   // When using --use-env-refs, actual connection values are optional (read from env vars)
   // Otherwise, non-interactive mode requires these values
@@ -473,7 +504,7 @@ async function initCommandHandler(
       'query-only',
       'read-write',
       'data-admin',
-      'admin'
+      'admin',
     ])
   }
 
@@ -504,13 +535,13 @@ async function initCommandHandler(
       port: { $env: envPort } as any,
       user: { $env: envUser } as any,
       password: { $env: envPassword } as any,
-      database: { $env: envDatabase } as any
+      database: { $env: envDatabase } as any,
     }
   }
 
   const newConfig = configModule.merge(existingConfig, {
     connection: configForWrite,
-    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin'
+    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
 
   // 7. Check existing file and prompt for overwrite confirmation
@@ -542,7 +573,7 @@ async function initCommandHandler(
       port: parseInt(String(resolveValue(newConfig.connection.port, 'port')), 10) || 5432,
       user: String(resolveValue(newConfig.connection.user, 'user')),
       password: String(resolveValue(newConfig.connection.password, 'password')) || '',
-      database: String(resolveValue(newConfig.connection.database, 'database'))
+      database: String(resolveValue(newConfig.connection.database, 'database')),
     }
 
     const adapter = AdapterFactory.createAdapter(testConnection)
@@ -572,10 +603,130 @@ async function initCommandHandler(
   // 9. Write config
   // V2 init path
   if (isV2Init) {
-    await writeV2InitConfig(configPath, connectionName, configForWrite, permission as string, options.envFile as string | undefined)
+    await writeV2InitConfig(
+      configPath,
+      connectionName,
+      configForWrite,
+      permission as string,
+      options.envFile as string | undefined
+    )
     return
   }
 
+  await configModule.write(configPath, newConfig)
+  console.log(t('init.config_saved'))
+}
+
+async function handleMongoDBInit(ctx: {
+  options: Record<string, unknown>
+  configPath: string
+  connectionName: string
+  isV2Init: boolean
+  existingConfig: any
+  shouldPrompt: boolean
+}): Promise<void> {
+  const { options, configPath, connectionName, isV2Init, existingConfig } = ctx
+  // Use TTY check for interactive prompts (Commander --no-interactive sets options.interactive=false)
+  const isInteractive = options.interactive !== false && process.stdin.isTTY
+
+  // URI mode: --uri flag or interactive prompt
+  let mongoUri = options.uri as string | undefined
+  if (!mongoUri && isInteractive) {
+    const input = await promptUser.text(
+      'MongoDB URI (e.g. mongodb://user:pass@host:27017/db?authSource=admin) — 留空用 host/port/user/password',
+      ''
+    )
+    if (input.trim()) mongoUri = input.trim()
+  }
+
+  // Database name (required even in URI mode for schema cache labelling)
+  let database = (options.name as string | undefined) || ''
+  if (!database && isInteractive) {
+    database = await promptUser.text('Database name', 'testdb')
+  }
+  if (!database && !isInteractive) {
+    throw new Error(t('errors.require_name'))
+  }
+
+  // Build connection config
+  const authSource = (options.authSource as string | undefined) || ''
+  const mongoConfig = mongoUri
+    ? {
+        system: 'mongodb' as const,
+        uri: mongoUri,
+        database,
+        host: '',
+        port: 27017,
+        user: '',
+        password: '',
+      }
+    : {
+        system: 'mongodb' as const,
+        host: (options.host as string) || 'localhost',
+        port: parseInt((options.port as string) || '27017', 10),
+        user: (options.user as string) || '',
+        password: (options.password as string) || '',
+        database,
+        ...(authSource ? { authSource } : {}),
+      }
+
+  // Permission
+  let permission = (options.permission as string) || 'query-only'
+  if (isInteractive && !options.permission) {
+    permission = await promptUser.select(t('init.prompt_permission'), [
+      'query-only',
+      'read-write',
+      'data-admin',
+      'admin',
+    ])
+  }
+  if (!VALID_PERMISSIONS.includes(permission as any)) {
+    throw new Error(t_vars('errors.invalid_permission', { permission }))
+  }
+
+  // Overwrite check
+  const canProceed = await checkOverwrite(configPath, isInteractive, !!options.force)
+  if (!canProceed) return
+
+  // Connection test
+  if (!options.skipTest) {
+    console.log(t('init.connection_testing'))
+    const mongoAdapter = AdapterFactory.createMongoDBAdapter(mongoConfig as any)
+    try {
+      await mongoAdapter.connect()
+      await mongoAdapter.testConnection()
+      console.log(t('init.connection_success'))
+    } catch (error) {
+      if (error instanceof ConnectionError) {
+        console.error(t_vars('errors.connection_failed', { message: error.message }))
+        console.error(t('init.connection_hints'))
+        error.hints.forEach((hint) => console.error(`  • ${hint}`))
+        process.exit(1)
+      }
+      throw error
+    } finally {
+      await mongoAdapter.disconnect()
+    }
+  } else {
+    console.log(`⏭️  ${t('init.skip_test')}`)
+  }
+
+  // Write config
+  if (isV2Init) {
+    await writeV2InitConfig(
+      configPath,
+      connectionName,
+      mongoConfig as any,
+      permission,
+      options.envFile as string | undefined
+    )
+    return
+  }
+
+  const newConfig = configModule.merge(existingConfig, {
+    connection: mongoConfig as any,
+    permission: permission as any,
+  })
   await configModule.write(configPath, newConfig)
   console.log(t('init.config_saved'))
 }

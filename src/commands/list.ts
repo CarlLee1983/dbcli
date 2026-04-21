@@ -9,6 +9,7 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { TableListFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
+import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
@@ -32,12 +33,15 @@ export const listCommand = new Command()
  * List command action handler
  * Connects to the database, retrieves the table list, and formats output
  */
-async function listAction(options: { format: string; config: string }) {
+async function listAction(
+  options: { format: string; config: string },
+  command: Command
+) {
   try {
     validateFormat(options.format, ALLOWED_FORMATS, 'list')
 
     // Load configuration from .dbcli
-    const config = await configModule.read(options.config)
+    const config = await configModule.read(resolveConfigPath(command, options))
 
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')

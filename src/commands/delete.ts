@@ -11,6 +11,7 @@ import { PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
+import { resolveConfigPath } from '@/utils/config-path'
 
 /**
  * Parses a WHERE clause string into a conditions object
@@ -76,7 +77,9 @@ export async function deleteCommand(
     where: string
     dryRun?: boolean
     force?: boolean
-  }
+    config?: string
+  },
+  command?: import('commander').Command
 ): Promise<void> {
   try {
     // 1. Validate table name
@@ -99,7 +102,8 @@ export async function deleteCommand(
     }
 
     // 4. Load configuration
-    const config = await configModule.read('.dbcli')
+    const configPath = resolveConfigPath(command, options)
+    const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" to configure database connection')
     }

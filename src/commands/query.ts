@@ -12,6 +12,7 @@ import { PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
+import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
@@ -27,7 +28,9 @@ export async function queryCommand(
     limit?: number
     noLimit?: boolean
     collection?: string
-  }
+    config?: string
+  },
+  command?: import('commander').Command
 ): Promise<void> {
   try {
     // 1. Argument validation
@@ -41,7 +44,8 @@ export async function queryCommand(
     sql = sql.trim()
 
     // 2. Load configuration
-    const config = await configModule.read('.dbcli')
+    const configPath = resolveConfigPath(command, options)
+    const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }
@@ -81,13 +85,13 @@ export async function queryCommand(
       const autoLimit = !options.noLimit
       const result = await executor.execute(sql, {
         autoLimit,
-        limitValue: options.limit
+        limitValue: options.limit,
       })
 
       // 6. Format output
       const formatter = new QueryResultFormatter()
       const output = formatter.format(result, {
-        format: options.format || 'table'
+        format: options.format || 'table',
       })
 
       // 7. Print results
@@ -154,8 +158,14 @@ async function mongoQueryBranch(
   await mongoAdapter.connect()
   try {
     const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
+    const columnNames = result.rows.length > 0 ? Object.keys(result.rows[0]) : []
+    const queryResult = {
+      rows: result.rows,
+      rowCount: result.rows.length,
+      columnNames,
+    }
     const formatter = new QueryResultFormatter()
-    const output = formatter.format(result as any, { format: format as any })
+    const output = formatter.format(queryResult as any, { format: format as any })
     console.log(output)
   } finally {
     await mongoAdapter.disconnect()

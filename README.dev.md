@@ -17,6 +17,14 @@ Before running `npm publish`:
    bun test --run unit/
    ```
 
+   For live database integration tests, use an explicit config path if needed:
+   ```bash
+   LIVE_DB_CONFIG_PATH=/path/to/.dbcli bun test tests/integration/live-db.test.ts
+   ```
+
+   If no live config is available, `tests/integration/live-db.test.ts` skips
+   instead of falling back to the default PostgreSQL configuration.
+
 3. **Update version in package.json:**
    ```bash
    npm version minor  # Updates package.json version + creates git tag
@@ -101,6 +109,9 @@ Then publish a patch fix.
 - **Cross-platform support:** Shebang `#!/usr/bin/env bun` works on all platforms
   - macOS/Linux: Direct shebang execution
   - Windows: npm creates .cmd wrapper automatically (no manual creation needed)
+- **Live integration tests:** `tests/integration/live-db.test.ts` reads `.dbcli/config.json`
+  by default or `LIVE_DB_CONFIG_PATH` when you need to point at another config
+  directory. Set `SKIP_INTEGRATION_TESTS=true` to skip all integration tests.
 
 ### Troubleshooting
 

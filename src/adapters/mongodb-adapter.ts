@@ -20,9 +20,10 @@ export class MongoDBAdapter implements QueryableAdapter {
 
   private buildUri(): string {
     if (this.options.uri) return this.options.uri
-    const { user, password, host, port, database } = this.options
+    const { user, password, host, port, database, authSource } = this.options
     if (user && password) {
-      return `mongodb://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`
+      const auth = authSource ?? 'admin'
+      return `mongodb://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}?authSource=${auth}`
     }
     return `mongodb://${host}:${port}/${database}`
   }
@@ -35,9 +36,11 @@ export class MongoDBAdapter implements QueryableAdapter {
       await this.client.connect()
     } catch (err) {
       const message = (err as Error).message ?? 'Unknown error'
-      const code = message.includes('ECONNREFUSED') ? 'ECONNREFUSED'
-        : message.includes('ETIMEDOUT') ? 'ETIMEDOUT'
-        : 'UNKNOWN'
+      const code = message.includes('ECONNREFUSED')
+        ? 'ECONNREFUSED'
+        : message.includes('ETIMEDOUT')
+          ? 'ETIMEDOUT'
+          : 'UNKNOWN'
       throw new ConnectionError(code, `MongoDB 連線失敗: ${message}`, [
         '請確認 MongoDB 服務正在執行',
         '請確認連線設定（URI 或 host/port）正確',
@@ -106,7 +109,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     if (!this.client) {
       throw new ConnectionError('UNKNOWN', '尚未連線，請先呼叫 connect()', [])
     }
-    const info = await this.client.db().admin().serverInfo() as { version?: string }
+    const info = (await this.client.db().admin().serverInfo()) as { version?: string }
     return info.version ?? 'unknown'
   }
 }

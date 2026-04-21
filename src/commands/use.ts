@@ -6,6 +6,7 @@ import { Command } from 'commander'
 import { readV2Config, writeV2Config } from '@/core/config-v2'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
+import { resolveConfigPath } from '@/utils/config-path'
 import { join } from 'path'
 import { t, t_vars } from '@/i18n/message-loader'
 
@@ -71,7 +72,7 @@ export const useCommand = new Command('use')
   .option('--list', 'List all connections')
   .action(async (name: string | undefined, options: any) => {
     try {
-      const configPath = useCommand.parent?.opts().config ?? '.dbcli'
+      const configPath = resolveConfigPath(useCommand)
       const config = await ensureV2Config(configPath)
 
       if (options.list || !name) {

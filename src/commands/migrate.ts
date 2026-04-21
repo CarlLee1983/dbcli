@@ -15,11 +15,12 @@ import { DDLExecutor } from '@/core/ddl-executor'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import type { DDLOperation, DDLExecutionOptions } from '@/types/ddl'
 import type { ConstraintType } from '@/adapters/ddl/types'
+import { resolveConfigPath } from '@/utils/config-path'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
 export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
-  const configPath = opts.config || '.dbcli'
+  const configPath = resolveConfigPath(undefined, opts)
   const config = await configModule.read(configPath)
   if (!config.connection) {
     throw new Error('Run "dbcli init" to configure database connection')

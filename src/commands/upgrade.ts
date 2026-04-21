@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { checkForUpdate } from '@/utils/version-check'
+import { resolveConfigPath } from '@/utils/config-path'
 import { checkSkillUpdates } from '@/commands/skill'
 import { t, t_vars } from '@/i18n/message-loader'
 import pkg from '../../package.json'
@@ -35,7 +36,7 @@ export const upgradeCommand = new Command('upgrade')
   .description(t('upgrade.description'))
   .option('--check', 'Only check for updates, do not upgrade')
   .action(async (options) => {
-    const configPath = upgradeCommand.parent?.opts().config ?? '.dbcli'
+    const configPath = resolveConfigPath(upgradeCommand)
     const currentVersion = pkg.version
 
     console.log(colors.bold(t('upgrade.checking')))

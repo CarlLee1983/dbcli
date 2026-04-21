@@ -24,6 +24,7 @@ import { useCommand } from './commands/use'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
+import { resolveConfigPath } from './utils/config-path'
 import { join } from 'path'
 
 // Module-level state for background version check
@@ -66,7 +67,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   // Background version check: skip for upgrade command itself and when --quiet
   const isUpgradeCommand = actionCommand.name() === 'upgrade'
   if (!opts.quiet && !isUpgradeCommand) {
-    const configPath = opts.config ?? '.dbcli'
+    const configPath = resolveConfigPath(actionCommand)
     // Fire and forget — never await this
     void (async () => {
       try {
@@ -118,9 +119,9 @@ program
   .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) => parseInt(val, 10))
   .option('--no-limit', 'Disable auto-limit in query-only mode')
   .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
-  .action(async (sql: string, options: any) => {
+  .action(async (sql: string, options: any, command) => {
     try {
-      await queryCommand(sql, options)
+      await queryCommand(sql, options, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -134,9 +135,9 @@ program
   .option('--data <json>', 'JSON object to insert')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any) => {
+  .action(async (table: string, options: any, command) => {
     try {
-      await insertCommand(table, options)
+      await insertCommand(table, options, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -151,9 +152,9 @@ program
   .option('--set <json>', 'JSON with fields to update (required, e.g. \'{"name":"Bob"}\')')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any) => {
+  .action(async (table: string, options: any, command) => {
     try {
-      await updateCommand(table, options)
+      await updateCommand(table, options, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -167,9 +168,9 @@ program
   .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any) => {
+  .action(async (table: string, options: any, command) => {
     try {
-      await deleteCommand(table, options)
+      await deleteCommand(table, options, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -191,11 +192,11 @@ program
     undefined
   )
   .option('--force', 'Skip overwrite confirmation', false)
-  .action(async (sql: string, options: any) => {
+  .action(async (sql: string, options: any, command) => {
     try {
       const { validateFormat } = await import('./utils/validation')
       validateFormat(options.format, ['json', 'csv'], 'export')
-      return exportCommand(sql, options)
+      return exportCommand(sql, options, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

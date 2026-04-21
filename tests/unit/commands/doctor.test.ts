@@ -1,9 +1,11 @@
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, spyOn } from 'bun:test'
 import {
   runDoctorChecks,
   resolveSchemaLastUpdated,
+  collectMongoDoctorResults,
   type DoctorResult,
 } from '../../../src/commands/doctor'
+import { AdapterFactory } from '@/adapters'
 
 describe('doctor checks', () => {
   test('resolveSchemaLastUpdated prefers index metadata.lastRefreshed', () => {
@@ -114,5 +116,34 @@ describe('doctor checks', () => {
     expect(output).toContain('1 passed')
     expect(output).toContain('1 warning')
     expect(output).toContain('1 error')
+  })
+
+  test('collectMongoDoctorResults returns MongoDB-specific checks', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listCollections: async () => [{ name: 'users', documentCount: 2 }],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
+    const results = await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        uri: 'mongodb://localhost:27017/testdb',
+        host: '',
+        port: 27017,
+        user: '',
+        password: '',
+        database: 'testdb',
+      },
+      metadata: {},
+    })
+
+    expect(results.some((result) => result.label === 'Connection' && result.status === 'pass')).toBe(true)
+    expect(results.some((result) => result.label === 'Collections' && result.status === 'pass')).toBe(true)
+    spy.mockRestore()
   })
 })

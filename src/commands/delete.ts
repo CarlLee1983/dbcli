@@ -104,6 +104,11 @@ export async function deleteCommand(
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
+    if (config.connection?.system === 'mongodb') {
+      console.error('此命令目前不支援 MongoDB')
+      process.exit(1)
+    }
+
     // 5. Validate permission (DELETE requires data-admin or admin)
     if (config.permission !== 'data-admin' && config.permission !== 'admin') {
       throw new PermissionError(

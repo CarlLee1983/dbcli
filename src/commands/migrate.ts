@@ -25,6 +25,11 @@ export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions 
     throw new Error('Run "dbcli init" to configure database connection')
   }
 
+  if (config.connection?.system === 'mongodb') {
+    console.error('此命令目前不支援 MongoDB')
+    process.exit(1)
+  }
+
   const adapter = AdapterFactory.createAdapter(config.connection)
   
   // Skip connection for dry-run if we don't need to refresh schema

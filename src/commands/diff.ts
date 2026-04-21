@@ -159,6 +159,11 @@ async function diffAction(options: {
       process.exit(1)
     }
 
+    if (config.connection?.system === 'mongodb') {
+      console.error('此命令目前不支援 MongoDB')
+      process.exit(1)
+    }
+
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
 

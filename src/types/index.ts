@@ -16,16 +16,34 @@ export interface DatabaseEnv {
 }
 
 /**
- * Connection configuration (stored in .dbcli file)
+ * SQL Connection configuration (stored in .dbcli file)
  */
-export interface ConnectionConfig {
+export interface SqlConnectionConfig {
   system: 'postgresql' | 'mysql' | 'mariadb'
-  host: string
-  port: number
-  user: string
-  password: string
-  database: string
+  host: string | { $env: string }
+  port: number | { $env: string }
+  user: string | { $env: string }
+  password: string | { $env: string }
+  database: string | { $env: string }
 }
+
+/**
+ * MongoDB Connection configuration (stored in .dbcli file)
+ */
+export interface MongoDBConnectionConfig {
+  system: 'mongodb'
+  uri?: string | { $env: string }
+  host: string | { $env: string }
+  port: number | { $env: string }
+  user: string | { $env: string }
+  password: string | { $env: string }
+  database: string | { $env: string }
+}
+
+/**
+ * Connection configuration (stored in .dbcli file) — union of SQL and MongoDB
+ */
+export type ConnectionConfig = SqlConnectionConfig | MongoDBConnectionConfig
 
 /**
  * Permission level (coarse-grained access control)

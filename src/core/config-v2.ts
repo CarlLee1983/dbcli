@@ -28,16 +28,18 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
 
 /**
  * Resolved connection result — what commands receive
+ * Supports both SQL and MongoDB connections
  */
 export interface ResolvedConnection {
   name: string
   connection: {
-    system: 'postgresql' | 'mysql' | 'mariadb'
+    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
     host: string | { $env: string }
     port: number | { $env: string }
     user: string | { $env: string }
     password: string | { $env: string }
     database: string | { $env: string }
+    uri?: string | { $env: string }
   }
   permission: 'query-only' | 'read-write' | 'data-admin' | 'admin'
   envFile?: string

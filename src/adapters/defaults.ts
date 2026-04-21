@@ -3,7 +3,7 @@
  * Used by env-parser, config, and init commands
  */
 
-import { ConnectionConfig } from '@/types'
+import type { ConnectionConfig } from '@/types'
 
 /**
  * Get default configuration values for the specified database system

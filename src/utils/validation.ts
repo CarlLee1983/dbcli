@@ -26,11 +26,31 @@ const StringOrEnvRef = z.union([z.string().min(1), EnvRefSchema])
 const NumberOrEnvRef = z.union([z.number().int().min(1).max(65535), EnvRefSchema])
 
 /**
- * Connection configuration schema
+ * MongoDB optional fields: accepts empty string as default (unlike StringOrEnvRef which requires min(1))
+ */
+const OptStringOrEnvRef = z.union([z.string(), EnvRefSchema]).optional().default('')
+const OptNumberOrEnvRef = z.union([z.number().int(), EnvRefSchema]).optional().default(27017)
+
+/**
+ * MongoDB connection schema — all SQL fields optional (defaulted), uri optional.
+ * After parse(), host/port/user/password/database are always strings (empty by default).
+ */
+export const MongoDBConnectionConfigSchema = z.object({
+  system: z.literal('mongodb'),
+  uri: z.union([z.string(), EnvRefSchema]).optional(),
+  host: OptStringOrEnvRef,
+  port: OptNumberOrEnvRef,
+  user: OptStringOrEnvRef,
+  password: OptStringOrEnvRef,
+  database: OptStringOrEnvRef,
+})
+
+/**
+ * SQL connection configuration schema
  * Validates required fields and valid values for database connections
  * Supports environment variable references
  */
-export const ConnectionConfigSchema = z.object({
+const SqlConnectionConfigSchema = z.object({
   system: z.enum(['postgresql', 'mysql', 'mariadb']),
   host: StringOrEnvRef,
   port: NumberOrEnvRef,
@@ -38,6 +58,11 @@ export const ConnectionConfigSchema = z.object({
   password: z.union([z.string(), EnvRefSchema]).default(''),
   database: StringOrEnvRef,
 })
+
+/**
+ * Connection configuration schema (union of SQL and MongoDB)
+ */
+export const ConnectionConfigSchema = z.union([SqlConnectionConfigSchema, MongoDBConnectionConfigSchema])
 
 /**
  * Permission schema
@@ -89,13 +114,20 @@ export type DbcliConfig = z.infer<typeof DbcliConfigSchema>
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>
 
 /**
- * Named connection schema (v2 format)
- * Extends ConnectionConfigSchema with per-connection permission and optional envFile
+ * Named connection schemas (v2 format)
+ * Extends SQL/MongoDB connection schemas with per-connection permission and optional envFile
  */
-export const NamedConnectionSchema = ConnectionConfigSchema.extend({
+const SqlNamedConnectionSchema = SqlConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
 })
+
+const MongoDBNamedConnectionSchema = MongoDBConnectionConfigSchema.extend({
+  permission: PermissionSchema,
+  envFile: z.string().optional(),
+})
+
+export const NamedConnectionSchema = z.union([SqlNamedConnectionSchema, MongoDBNamedConnectionSchema])
 
 /**
  * V2 config schema with multiple named connections

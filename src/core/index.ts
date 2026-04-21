@@ -16,6 +16,7 @@ export { SchemaDiffEngine } from './schema-diff'
 export { SchemaLayeredLoader } from './schema-loader'
 export { SchemaIndexBuilder } from './schema-index'
 export { SchemaCacheManager } from './schema-cache'
+export { SchemaWriter } from './schema-writer'
 
 // Wave 2 exports - Incremental updates & atomic writing
 export { SchemaUpdater } from './schema-updater'

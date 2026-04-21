@@ -472,9 +472,9 @@ dbcli skill --install cursor          # Install to Cursor IDE
 ```
 
 **Behavior:**
-- Dynamically generates SKILL.md from CLI introspection
-- Filters commands by permission level (Query-only hides write commands)
-- Supports multiple output modes: stdout, file, platform installation
+- Ships a canonical **`assets/SKILL.md`** in the package (single source of truth)
+- Prints that file to **stdout**, writes it with **`--output`**, or copies it to a **platform-specific path** with **`--install`**
+- Actual database access is still enforced by your `.dbcli` permission level and blacklist — the skill text describes the full CLI surface
 
 **Examples:**
 ```bash
@@ -669,7 +669,10 @@ dbcli upgrade --check           # Only check, do not upgrade
 ```
 
 **Options:** `--check` — check only, don't install
-**Background check:** dbcli silently checks npm registry once per 24 hours. If a newer version is found, a hint is shown after command output.
+
+**Background checks (stderr, skipped when `--quiet` or for `upgrade` / `skill`):**
+- **CLI version:** dbcli checks the npm registry (cached, about once per 24 hours). If a newer package exists, a one-line hint prints after normal command output.
+- **Installed skills:** If you used `dbcli skill --install <platform>`, dbcli compares each installed copy to the bundled `assets/SKILL.md`. When they differ, a short reminder lists which platforms to re-install (`dbcli skill --install <platform>`). Run `dbcli upgrade` to see the same skill status together with version info.
 
 #### `dbcli shell`
 
@@ -746,6 +749,7 @@ All commands support these global options:
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | Path to .dbcli config file (default: `.dbcli`) |
+| `--use <connection>` | Use a named v2 connection for this invocation only (does not change the default) |
 | `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
 | `-q, --quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output (respects `NO_COLOR` env var) |
@@ -928,7 +932,7 @@ A Query-only agent cannot write to any table, and also cannot read blacklisted t
 
 ## AI Integration Guide
 
-dbcli generates AI-consumable skill documentation and can be integrated into your favorite AI development tools.
+dbcli ships AI-consumable skill documentation (`assets/SKILL.md`) and can copy it into your favorite AI development tool directories.
 
 ### Quick Start
 
@@ -960,7 +964,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Restart Claude Code extension
 5. In Claude Code chat, ask: "Show me the database schema" or "Query active users"
 
-**Skill location:** `~/.claude/skills/SKILL.md`
+**Skill location:** `~/.claude/skills/dbcli/SKILL.md`
 
 ---
 
@@ -972,7 +976,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Start Gemini: `gemini start`
 5. In chat, request: "Query the users table" or "Show database tables"
 
-**Skill location:** `~/.local/share/gemini/skills/` (Linux) or platform equivalent
+**Skill location:** `~/.gemini/skills/dbcli/SKILL.md`
 
 ---
 
@@ -984,7 +988,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Install Copilot CLI: `npm install -g @github-next/github-copilot-cli`
 5. Use copilot preview: `copilot --help` and explore dbcli integration
 
-**Skill location:** Per Copilot configuration
+**Skill location:** `.github/skills/dbcli/SKILL.md` under the **current working directory** when you run `dbcli skill --install copilot` (typically your project root).
 
 ---
 
@@ -996,7 +1000,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Open Cursor editor
 5. Use Cursor's Composer: "Insert a new user" or "Export user data"
 
-**Skill location:** `~/.cursor/skills/`
+**Skill location:** `.cursor/rules/dbcli.mdc` under the **current working directory** when you run `dbcli skill --install cursor` (project-level Cursor rule).
 
 ---
 
@@ -1021,18 +1025,17 @@ dbcli skill --install claude
 # - Provide analysis
 ```
 
-### Skill Refresh
+### Updating the skill after upgrades
 
-dbcli dynamically generates skills based on your current configuration:
+The markdown installed by `dbcli skill` is the bundled **`assets/SKILL.md`**. It is **not** regenerated from your live config. When you **upgrade dbcli** or the bundled skill changes, re-copy it to each platform you use:
 
 ```bash
-# When permission level changes, skill updates automatically
-# Edit .dbcli/config.json and set "permission" to "admin" (or re-run dbcli init)
-dbcli skill  # Now shows delete and admin commands
-
-# Re-install to push changes to AI platform
 dbcli skill --install claude
+dbcli skill --install gemini
+# ... etc.
 ```
+
+If an installed copy is older than the bundled file, dbcli prints a **stderr reminder** after most commands (see **`dbcli upgrade`**). Changing **permission level** or **blacklist** in `.dbcli` affects what the CLI allows at runtime — keep project context (e.g. `dbcli status`, `dbcli blacklist list`) in mind for agents even though the skill text lists the full command set.
 
 ---
 
@@ -1226,8 +1229,11 @@ chmod +x dist/cli.mjs
 ## Development
 
 ```bash
-bun test        # run test suite
-bun run build   # bundle CLI to dist/ (used before publish)
+bun test                  # full test suite (Bun test runner)
+bun run test:unit         # unit + core tests only
+bun run test:integration  # integration tests
+bun run test:docker       # integration tests with docker-compose.test.yml (MySQL + PostgreSQL)
+bun run build             # bundle CLI to dist/ (used before publish)
 ```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release process.

@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { detectConfigVersion, readV2Config, writeV2Config, resolveConnection } from '@/core/config-v2'
+import {
+  detectConfigVersion,
+  readV2Config,
+  writeV2Config,
+  resolveConnection,
+  patchConnectionSchema,
+} from '@/core/config-v2'
 import { join } from 'path'
 
 const TMP_DIR = '/tmp/dbcli-config-v2-test'
@@ -15,17 +21,21 @@ describe('config-v2', () => {
 
   describe('detectConfigVersion', () => {
     test('should return 2 for v2 config', () => {
-      expect(detectConfigVersion({
-        version: 2,
-        default: 'local',
-        connections: { local: {} }
-      })).toBe(2)
+      expect(
+        detectConfigVersion({
+          version: 2,
+          default: 'local',
+          connections: { local: {} },
+        })
+      ).toBe(2)
     })
 
     test('should return 1 for v1 config', () => {
-      expect(detectConfigVersion({
-        connection: { system: 'postgresql' }
-      })).toBe(1)
+      expect(
+        detectConfigVersion({
+          connection: { system: 'postgresql' },
+        })
+      ).toBe(1)
     })
 
     test('should return 1 for empty object', () => {
@@ -49,7 +59,7 @@ describe('config-v2', () => {
           user: 'dev',
           password: 'secret',
           database: 'myapp',
-          permission: 'read-write' as const
+          permission: 'read-write' as const,
         },
         staging: {
           system: 'postgresql' as const,
@@ -59,12 +69,12 @@ describe('config-v2', () => {
           password: 'stagingpass',
           database: 'myapp_staging',
           permission: 'query-only' as const,
-          envFile: '.env.staging'
-        }
+          envFile: '.env.staging',
+        },
       },
       schema: {},
       metadata: { version: '1.0' },
-      blacklist: { tables: [], columns: {} }
+      blacklist: { tables: [], columns: {} },
     }
 
     test('should resolve default connection when no name given', () => {
@@ -101,12 +111,12 @@ describe('config-v2', () => {
             user: 'dev',
             password: 'secret',
             database: 'myapp',
-            permission: 'query-only' as const
-          }
+            permission: 'query-only' as const,
+          },
         },
         schema: {},
         metadata: { version: '1.0' },
-        blacklist: { tables: [], columns: {} }
+        blacklist: { tables: [], columns: {} },
       }
 
       await writeV2Config(configPath, config)
@@ -115,6 +125,94 @@ describe('config-v2', () => {
       expect(read.version).toBe(2)
       expect(read.default).toBe('local')
       expect(read.connections.local.host).toBe('localhost')
+    })
+  })
+
+  describe('patchConnectionSchema', () => {
+    const BASE_CONFIG = {
+      version: 2 as const,
+      default: 'staging',
+      connections: {
+        staging: {
+          system: 'postgresql' as const,
+          host: 'staging.db',
+          port: 5432,
+          user: 'dev',
+          password: 'secret',
+          database: 'staging_db',
+          permission: 'query-only' as const,
+        },
+        prod: {
+          system: 'postgresql' as const,
+          host: 'prod.db',
+          port: 5432,
+          user: 'admin',
+          password: 'prodpass',
+          database: 'prod_db',
+          permission: 'query-only' as const,
+        },
+      },
+      schema: {},
+      schemas: {},
+      metadata: { version: '2.0' },
+      blacklist: { tables: [], columns: {} },
+    }
+
+    test('writes schema to correct connection slot', async () => {
+      const configPath = join(TMP_DIR, '.dbcli')
+      await writeV2Config(configPath, BASE_CONFIG)
+
+      const stagingSchema = { users: { name: 'users', columns: [{ name: 'id' }] } }
+      await patchConnectionSchema(configPath, 'staging', stagingSchema)
+
+      const updated = await readV2Config(configPath)
+      expect(updated.schemas?.staging).toEqual(stagingSchema)
+      expect(updated.schemas?.prod).toBeUndefined()
+    })
+
+    test('two connections stay isolated', async () => {
+      const configPath = join(TMP_DIR, '.dbcli')
+      await writeV2Config(configPath, BASE_CONFIG)
+
+      const stagingSchema = { users: { name: 'users' } }
+      const prodSchema = { orders: { name: 'orders' } }
+
+      await patchConnectionSchema(configPath, 'staging', stagingSchema)
+      await patchConnectionSchema(configPath, 'prod', prodSchema)
+
+      const updated = await readV2Config(configPath)
+      expect(updated.schemas?.staging).toEqual(stagingSchema)
+      expect(updated.schemas?.prod).toEqual(prodSchema)
+    })
+
+    test('updates metadata without touching connections', async () => {
+      const configPath = join(TMP_DIR, '.dbcli')
+      await writeV2Config(configPath, BASE_CONFIG)
+
+      const ts = '2026-04-21T10:00:00.000Z'
+      await patchConnectionSchema(
+        configPath,
+        'staging',
+        {},
+        { schemaLastUpdated: ts, schemaTableCount: 3 }
+      )
+
+      const updated = await readV2Config(configPath)
+      expect(updated.metadata.schemaLastUpdated).toBe(ts)
+      expect(updated.metadata.schemaTableCount).toBe(3)
+      expect(updated.connections.staging.host).toBe('staging.db')
+      expect(updated.default).toBe('staging')
+    })
+
+    test('second patch replaces first for same connection', async () => {
+      const configPath = join(TMP_DIR, '.dbcli')
+      await writeV2Config(configPath, BASE_CONFIG)
+
+      await patchConnectionSchema(configPath, 'staging', { users: { name: 'users' } })
+      await patchConnectionSchema(configPath, 'staging', { orders: { name: 'orders' } })
+
+      const updated = await readV2Config(configPath)
+      expect(updated.schemas?.staging).toEqual({ orders: { name: 'orders' } })
     })
   })
 })

@@ -8,42 +8,27 @@ import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter, JSONFormatter } from '@/formatters'
-import { configModule } from '@/core/config'
+import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
+import { patchConnectionSchema, readV2Config } from '@/core/config-v2'
 import { SchemaDiffEngine } from '@/core/schema-diff'
+import { SchemaWriter } from '@/core'
 import type { TableSchema } from '@/adapters/types'
+import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
 
 export const schemaCommand = new Command()
   .name('schema')
-  .description('Display table schema, scan database schema, or refresh existing schema with detected changes')
+  .description(
+    'Display table schema, scan database schema, or refresh existing schema with detected changes'
+  )
   .argument('[table]', 'Optional: table name to inspect (if omitted, scans all tables)')
-  .option(
-    '--format <format>',
-    'Output format: table (default) or json',
-    'table'
-  )
-  .option(
-    '--config <path>',
-    'Path to .dbcli config file',
-    '.dbcli'
-  )
-  .option(
-    '--refresh',
-    'Refresh schema by detecting changes from database',
-    false
-  )
-  .option(
-    '--reset',
-    'Clear all existing schema data and re-fetch from database',
-    false
-  )
-  .option(
-    '--force',
-    'Skip confirmation when updating schema data',
-    false
-  )
+  .option('--format <format>', 'Output format: table (default) or json', 'table')
+  .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .option('--refresh', 'Refresh schema by detecting changes from database', false)
+  .option('--reset', 'Clear all existing schema data and re-fetch from database', false)
+  .option('--force', 'Skip confirmation when updating schema data', false)
   .action(schemaAction)
 
 /**
@@ -72,6 +57,25 @@ async function schemaAction(
       process.exit(1)
     }
 
+    // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
+    const connectionName = await getSchemaIsolationConnectionName(options.config)
+
+    // Determine how many tables exist in this connection's dedicated schema slot.
+    // V2: read the connection-specific slot only — the fallback shared `schema` must not
+    //     mislead the "schema already exists" guard on a first-time per-connection scan.
+    // V1: simply count config.schema tables.
+    let existingSchemaCount: number
+    if (connectionName !== undefined) {
+      try {
+        const v2Raw = await readV2Config(options.config)
+        existingSchemaCount = Object.keys(v2Raw.schemas?.[connectionName] ?? {}).length
+      } catch {
+        existingSchemaCount = 0
+      }
+    } else {
+      existingSchemaCount = Object.keys(config.schema ?? {}).length
+    }
+
     // Create adapter from configuration
     const adapter = AdapterFactory.createAdapter(config.connection)
     await adapter.connect()
@@ -79,16 +83,16 @@ async function schemaAction(
     try {
       if (options.reset) {
         // Clear all schema and re-fetch from database
-        await handleSchemaReset(adapter, config, options)
+        await handleSchemaReset(adapter, config, options, connectionName, existingSchemaCount)
       } else if (options.refresh) {
         // Handle schema refresh (NEW)
-        await handleSchemaRefresh(adapter, config, options)
+        await handleSchemaRefresh(adapter, config, options, connectionName)
       } else if (table) {
         // Single table schema inspection
         await handleSingleTableSchema(adapter, table, options.format)
       } else {
         // Full database schema scan and config update
-        await handleFullDatabaseScan(adapter, config, options)
+        await handleFullDatabaseScan(adapter, config, options, connectionName, existingSchemaCount)
       }
     } finally {
       await adapter.disconnect()
@@ -127,7 +131,9 @@ async function handleSingleTableSchema(
     if (schema.foreignKeys && schema.foreignKeys.length > 0) {
       console.log(`Foreign Keys:`)
       schema.foreignKeys.forEach((fk: any) => {
-        console.log(`   ${fk.name}: ${fk.columns.join(',')} → ${fk.refTable}(${fk.refColumns.join(',')})`)
+        console.log(
+          `   ${fk.name}: ${fk.columns.join(',')} → ${fk.refTable}(${fk.refColumns.join(',')})`
+        )
       })
     }
 
@@ -165,7 +171,8 @@ async function handleSingleTableSchema(
 async function handleSchemaRefresh(
   adapter: any,
   config: any,
-  options: { config: string; refresh: boolean; force: boolean }
+  options: { config: string; refresh: boolean; force: boolean },
+  connectionName: string | undefined
 ): Promise<void> {
   const diffEngine = new SchemaDiffEngine(adapter, config)
   const report = await diffEngine.diff()
@@ -180,11 +187,11 @@ async function handleSchemaRefresh(
       metadata: {
         ...config.metadata,
         schemaLastUpdated: new Date().toISOString(),
-        schemaTableCount: Object.keys(config.schema || {}).length
-      }
+        schemaTableCount: Object.keys(config.schema || {}).length,
+      },
     })
 
-    await configModule.write(options.config, updatedConfig)
+    await writeSchema(options.config, updatedConfig, connectionName)
     console.log('✅ Schema is up-to-date (no changes detected)')
     return
   }
@@ -217,12 +224,16 @@ async function handleSchemaRefresh(
     metadata: {
       ...config.metadata,
       schemaLastUpdated: new Date().toISOString(),
-      schemaTableCount: Object.keys(newSchema).length
-    }
+      schemaTableCount: Object.keys(newSchema).length,
+    },
   })
 
-  // Write updated config
-  await configModule.write(options.config, updatedConfig)
+  // Wave 1 Integration: Persist to layered storage
+  const writer = new SchemaWriter(options.config)
+  await writer.save(newSchema, connectionName)
+  console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
+
+  await writeSchema(options.config, updatedConfig, connectionName)
   console.log(`✅ Schema updated in .dbcli`)
 }
 
@@ -232,31 +243,46 @@ async function handleSchemaRefresh(
 async function handleSchemaReset(
   adapter: any,
   config: any,
-  options: { config: string; format: string; force: boolean }
+  options: { config: string; format: string; force: boolean },
+  connectionName: string | undefined,
+  existingCount: number
 ): Promise<void> {
-  const existingCount = config.schema ? Object.keys(config.schema).length : 0
-
   if (existingCount > 0 && !options.force) {
-    console.log(`⚠ This will clear ${existingCount} existing table schemas and re-fetch from database.`)
-    console.log('  Use --force to confirm.')
+    // Wave 1: check if layered cache actually exists
+    const { SchemaLayeredLoader } = await import('@/core/schema-loader')
+    const loader = new SchemaLayeredLoader(options.config, { connectionName })
+    const { index } = await loader.initialize()
+
+    if (!index || Object.keys(index.tables).length === 0) {
+      console.log(
+        `⚠ This will clear ${existingCount} existing table schemas and re-fetch from database.`
+      )
+      console.log('💡 Hint: Schema found in config.json but layered cache files are missing.')
+      console.log('   Use --force to migrate to optimized layered storage.')
+    } else {
+      console.log(
+        `⚠ This will clear ${existingCount} existing table schemas and re-fetch from database.`
+      )
+      console.log('  Use --force to confirm.')
+    }
     return
   }
 
   console.log('🗑 Clearing existing schema data...')
 
-  // Clear schema and re-scan
+  const emptyMeta = { schemaLastUpdated: undefined, schemaTableCount: 0 }
   const configWithoutSchema = {
     ...config,
     schema: {},
-    metadata: {
-      ...config.metadata,
-      schemaLastUpdated: undefined,
-      schemaTableCount: 0
-    }
+    metadata: { ...config.metadata, ...emptyMeta },
   }
 
   // Write cleared config first (in case scan fails, at least old stale data is gone)
-  await configModule.write(options.config, configWithoutSchema)
+  await writeSchema(options.config, configWithoutSchema as DbcliConfig, connectionName)
+  
+  // Wave 1 Integration: Clear layered storage
+  const writer = new SchemaWriter(options.config)
+  await writer.clear(connectionName)
 
   // Now do a full fresh scan
   console.log(t('schema.scanning_database'))
@@ -277,7 +303,7 @@ async function handleSchemaReset(
       foreignKeys: fullSchema.foreignKeys || [],
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
-      tableType: fullSchema.tableType || 'table'
+      tableType: fullSchema.tableType || 'table',
     }
 
     processed++
@@ -292,14 +318,20 @@ async function handleSchemaReset(
     metadata: {
       ...configWithoutSchema.metadata,
       schemaLastUpdated: new Date().toISOString(),
-      schemaTableCount: tables.length
-    }
+      schemaTableCount: tables.length,
+    },
   }
 
-  await configModule.write(options.config, updatedConfig)
+  // Wave 1 Integration: Persist to layered storage
+  await writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
+
+  await writeSchema(options.config, updatedConfig as DbcliConfig, connectionName)
 
   if (existingCount > 0) {
-    console.log(`\n✅ Schema reset complete — cleared ${existingCount} old tables, fetched ${tables.length} tables from database`)
+    console.log(
+      `\n✅ Schema reset complete — cleared ${existingCount} old tables, fetched ${tables.length} tables from database`
+    )
   } else {
     console.log(`\n✅ Schema fetched — ${tables.length} tables from database`)
   }
@@ -311,7 +343,9 @@ async function handleSchemaReset(
 async function handleFullDatabaseScan(
   adapter: any,
   config: any,
-  options: { config: string; format: string; force: boolean }
+  options: { config: string; format: string; force: boolean },
+  connectionName: string | undefined,
+  existingSchemaCount: number
 ): Promise<void> {
   console.log(t('schema.scanning_database'))
 
@@ -334,7 +368,7 @@ async function handleFullDatabaseScan(
       foreignKeys: fullSchema.foreignKeys || [],
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
-      tableType: fullSchema.tableType || 'table'
+      tableType: fullSchema.tableType || 'table',
     }
 
     processed++
@@ -344,28 +378,67 @@ async function handleFullDatabaseScan(
     }
   }
 
-  // Check if schema already exists in config
-  if (config.schema && Object.keys(config.schema).length > 0 && !options.force) {
-    console.log('\n' + t('schema.schema_exists_warning'))
-    console.log(t('schema.use_force_to_override'))
+  // Check if schema already exists for this connection
+  if (existingSchemaCount > 0 && !options.force) {
+    // Wave 1: check if layered cache actually exists
+    const { SchemaLayeredLoader } = await import('@/core/schema-loader')
+    const loader = new SchemaLayeredLoader(options.config, { connectionName })
+    const { index } = await loader.initialize()
+
+    if (!index || Object.keys(index.tables).length === 0) {
+      console.log('\n' + t('schema.schema_exists_warning'))
+      console.log('💡 Hint: Schema found in config.json but layered cache files are missing.')
+      console.log('   Run with --force to migrate your schema to optimized layered storage.')
+    } else {
+      console.log('\n' + t('schema.schema_exists_warning'))
+      console.log(t('schema.use_force_to_override'))
+    }
     // In interactive mode we could prompt here; for now just exit
     process.exit(0)
   }
 
-  // Update configuration with schema
+  const now = new Date().toISOString()
   const updatedConfig = {
     ...config,
     schema: schemaData,
     metadata: {
       ...config.metadata,
-      schemaLastUpdated: new Date().toISOString(),
-      schemaTableCount: tables.length
-    }
+      schemaLastUpdated: now,
+      schemaTableCount: tables.length,
+    },
   }
 
-  await configModule.write(options.config, updatedConfig)
+  // Wave 1 Integration: Persist to layered storage
+  const writer = new SchemaWriter(options.config)
+  await writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
+
+  await writeSchema(options.config, updatedConfig as DbcliConfig, connectionName)
 
   console.log(`\n✅ Schema updated in .dbcli`)
   console.log(`   ${tables.length} tables with full column details and relationships`)
-  console.log(`   Timestamp: ${updatedConfig.metadata.schemaLastUpdated}`)
+  console.log(`   Timestamp: ${now}`)
+}
+
+/**
+ * Write schema changes: V2 config → patch per-connection slot; V1 → full config write.
+ */
+async function writeSchema(
+  configPath: string,
+  config: DbcliConfig,
+  connectionName: string | undefined
+): Promise<void> {
+  if (connectionName !== undefined) {
+    await patchConnectionSchema(
+      configPath,
+      connectionName,
+      (config.schema ?? {}) as Record<string, unknown>,
+      {
+        schemaLastUpdated: config.metadata?.schemaLastUpdated,
+        schemaTableCount: config.metadata?.schemaTableCount,
+      }
+    )
+  } else {
+    await configModule.write(configPath, config)
+  }
 }

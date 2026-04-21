@@ -8,7 +8,8 @@
  */
 
 import type { SchemaIndex } from '@/types/schema-cache'
-import type { DbcliConfig, TableSchema } from '@/types'
+import type { DbcliConfig } from '@/types'
+import type { TableSchema } from '@/adapters/types'
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
 
@@ -163,18 +164,13 @@ export class SchemaIndexBuilder {
    * @private
    */
   private static async ensureDir(dirPath: string): Promise<void> {
+    const { mkdirSync } = await import('fs')
     try {
-      const dir = Bun.file(dirPath)
-      if (!(await dir.exists())) {
-        // Use mkdir -p via shell
-        const proc = Bun.spawn(['mkdir', '-p', dirPath])
-        const exitCode = await proc.exited
-        if (exitCode !== 0) {
-          throw new Error(`mkdir failed with code ${exitCode}`)
-        }
-      }
+      mkdirSync(dirPath, { recursive: true })
     } catch (error) {
-      throw new Error(`Failed to ensure directory ${dirPath}: ${error}`)
+      if ((error as any).code !== 'EEXIST') {
+        throw new Error(`Failed to ensure directory ${dirPath}: ${error}`)
+      }
     }
   }
 

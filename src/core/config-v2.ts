@@ -55,9 +55,7 @@ export function resolveConnection(
 
   if (!conn) {
     const available = Object.keys(config.connections).join(', ')
-    throw new ConfigError(
-      `連線 '${connectionName}' 不存在。可用連線：${available}`
-    )
+    throw new ConfigError(`連線 '${connectionName}' 不存在。可用連線：${available}`)
   }
 
   const { permission, envFile, ...connectionFields } = conn
@@ -66,7 +64,7 @@ export function resolveConnection(
     name: connectionName,
     connection: connectionFields,
     permission,
-    envFile
+    envFile,
   }
 }
 
@@ -103,15 +101,37 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
 /**
  * Write a v2 config to disk
  */
-export async function writeV2Config(
-  path: string,
-  config: DbcliConfigV2
-): Promise<void> {
+export async function writeV2Config(path: string, config: DbcliConfigV2): Promise<void> {
   DbcliConfigV2Schema.parse(config)
 
   const configPath = join(path, 'config.json')
   const json = JSON.stringify(config, null, 2)
   await Bun.write(configPath, json)
+}
+
+/**
+ * Patch the schema for a single named connection without touching other V2 fields.
+ * Safe to call from schema commands — preserves connections, default, blacklist, etc.
+ */
+export async function patchConnectionSchema(
+  dbcliPath: string,
+  connectionName: string,
+  schema: Record<string, unknown>,
+  metadataUpdate?: { schemaLastUpdated?: string; schemaTableCount?: number }
+): Promise<void> {
+  const v2Config = await readV2Config(dbcliPath)
+  const updated = {
+    ...v2Config,
+    schemas: {
+      ...v2Config.schemas,
+      [connectionName]: schema,
+    },
+    metadata: {
+      ...v2Config.metadata,
+      ...(metadataUpdate ?? {}),
+    },
+  }
+  await writeV2Config(dbcliPath, updated)
 }
 
 /**
@@ -131,6 +151,6 @@ export function listConnections(config: DbcliConfigV2): Array<{
     host: conn.host,
     port: conn.port,
     database: conn.database,
-    isDefault: name === config.default
+    isDefault: name === config.default,
   }))
 }

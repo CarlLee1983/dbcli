@@ -72,13 +72,13 @@ const DEFAULT_CONFIG: DbcliConfig = {
     port: 5432,
     user: '',
     password: '',
-    database: ''
+    database: '',
   },
   permission: 'query-only',
   schema: {},
   metadata: {
-    version: '1.0'
-  }
+    version: '1.0',
+  },
 }
 
 /**
@@ -113,7 +113,12 @@ function isEnvReference(value: unknown): value is EnvReference {
  * @returns Resolved config
  * @throws ConfigError if an environment variable is not found in strict mode
  */
-function resolveEnvReferences(config: any, env: Record<string, string>, parentKey?: string, strict: boolean = false): any {
+function resolveEnvReferences(
+  config: any,
+  env: Record<string, string>,
+  parentKey?: string,
+  strict: boolean = false
+): any {
   if (isEnvReference(config)) {
     const envKey = config.$env
     const value = env[envKey]
@@ -124,8 +129,8 @@ function resolveEnvReferences(config: any, env: Record<string, string>, parentKe
       }
       throw new ConfigError(
         `Environment variable not defined: ${envKey}\n` +
-        `Please set ${envKey} in .env or your environment.\n` +
-        `Hint: check your .env file or run 'export ${envKey}=<value>'`
+          `Please set ${envKey} in .env or your environment.\n` +
+          `Hint: check your .env file or run 'export ${envKey}=<value>'`
       )
     }
 
@@ -142,7 +147,7 @@ function resolveEnvReferences(config: any, env: Record<string, string>, parentKe
   }
 
   if (Array.isArray(config)) {
-    return config.map(item => resolveEnvReferences(item, env, parentKey, strict))
+    return config.map((item) => resolveEnvReferences(item, env, parentKey, strict))
   }
 
   if (typeof config === 'object' && config !== null) {
@@ -224,20 +229,50 @@ export const configModule = {
             }
 
             // Resolve $env references after loading env files
-            const resolvedConnection = resolveEnvReferences(resolved.connection, process.env, undefined, false)
+            const resolvedConnection = resolveEnvReferences(
+              resolved.connection,
+              process.env,
+              undefined,
+              false
+            )
 
             // Apply legacy password if connection password is still empty
             if (!resolvedConnection.password && legacyPassword) {
               resolvedConnection.password = legacyPassword
             }
 
+            // Load schema from layered cache if it exists (Wave 1 integration)
+            let schema = (v2Config.schemas ?? {})[resolved.name] ?? v2Config.schema
+            try {
+              const { SchemaLayeredLoader } = await import('./schema-loader')
+              const loader = new SchemaLayeredLoader(path, { connectionName: resolved.name })
+              const { cache, index } = await loader.initialize()
+              
+              if (index && Object.keys(index.tables).length > 0) {
+                // If layered cache exists, we use it.
+                // For simplicity in this wave, we load all tables into the returned config object
+                // to maintain compatibility with existing commands.
+                const layeredSchema: Record<string, any> = {}
+                for (const tableName of Object.keys(index.tables)) {
+                  const s = await cache.getTableSchema(tableName)
+                  if (s) layeredSchema[tableName] = s
+                }
+                if (Object.keys(layeredSchema).length > 0) {
+                  schema = layeredSchema
+                }
+              }
+            } catch (error) {
+              // Graceful fallback to config.json schema
+              console.warn('Warning: Failed to load layered schema cache, falling back to config.json')
+            }
+
             // Return v1-compatible shape
             return DbcliConfigSchema.parse({
               connection: resolvedConnection,
               permission: resolved.permission,
-              schema: v2Config.schema,
+              schema,
               metadata: v2Config.metadata,
-              blacklist: v2Config.blacklist
+              blacklist: v2Config.blacklist,
             })
           }
 
@@ -320,19 +355,19 @@ export const configModule = {
       ...updates,
       connection: {
         ...existing.connection,
-        ...(updates.connection || {})
+        ...(updates.connection || {}),
       },
       schema: {
         ...existing.schema,
-        ...(updates.schema || {})
+        ...(updates.schema || {}),
       },
       metadata: {
         ...existing.metadata,
         ...(updates.metadata || {}),
         // Preserve original createdAt, set new value if absent
         createdAt: existing.metadata?.createdAt || new Date().toISOString(),
-        version: (existing.metadata?.version || '1.0')
-      }
+        version: existing.metadata?.version || '1.0',
+      },
     }
 
     return mergedConfig
@@ -382,8 +417,8 @@ export const configModule = {
             ...config,
             connection: {
               ...config.connection,
-              password: undefined
-            }
+              password: undefined,
+            },
           }
           delete (configWithoutPassword.connection as any).password
 
@@ -412,5 +447,5 @@ export const configModule = {
         `Failed to write .dbcli config: ${error instanceof Error ? error.message : String(error)}`
       )
     }
-  }
+  },
 }

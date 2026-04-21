@@ -39,13 +39,13 @@ describe('configModule', () => {
           port: 3306,
           user: 'admin',
           password: 'secret',
-          database: 'production'
+          database: 'production',
         },
         permission: 'read-write',
         schema: {},
         metadata: {
-          version: '1.0'
-        }
+          version: '1.0',
+        },
       })
 
       await Bun.file(TEST_CONFIG_PATH).write(configJson)
@@ -67,9 +67,9 @@ describe('configModule', () => {
       const invalidConfig = {
         connection: {
           system: 'postgresql',
-          host: 'localhost'
+          host: 'localhost',
           // 缺少必需欄位
-        }
+        },
       }
 
       await Bun.file(TEST_CONFIG_PATH).write(JSON.stringify(invalidConfig))
@@ -87,11 +87,11 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: 'pass',
-          database: 'db'
+          database: 'db',
         },
         permission: 'query-only',
         schema: {},
-        metadata: { version: '1.0' }
+        metadata: { version: '1.0' },
       }
 
       const result = configModule.validate(valid)
@@ -102,8 +102,8 @@ describe('configModule', () => {
       const invalid = {
         connection: {
           system: 'postgresql',
-          host: 'localhost'
-        }
+          host: 'localhost',
+        },
       }
 
       expect(() => configModule.validate(invalid)).toThrow(ConfigError)
@@ -117,9 +117,9 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: '',
-          database: 'db'
+          database: 'db',
         },
-        permission: 'invalid-permission'
+        permission: 'invalid-permission',
       }
 
       expect(() => configModule.validate(invalid)).toThrow(ConfigError)
@@ -134,11 +134,11 @@ describe('configModule', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only',
       schema: { table1: 'data' },
-      metadata: { version: '1.0', createdAt: '2026-01-01T00:00:00Z' }
+      metadata: { version: '1.0', createdAt: '2026-01-01T00:00:00Z' },
     }
 
     test('應該返回新對象（不修改輸入）', () => {
@@ -153,7 +153,7 @@ describe('configModule', () => {
 
     test('應該不可變地合併嵌套對象（connection）', () => {
       const updates = {
-        connection: { port: 3306 }
+        connection: { port: 3306 },
       }
 
       const result = configModule.merge(baseConfig, updates)
@@ -168,11 +168,11 @@ describe('configModule', () => {
       const originalCreatedAt = '2025-01-01T00:00:00Z'
       const config = {
         ...baseConfig,
-        metadata: { version: '1.0', createdAt: originalCreatedAt }
+        metadata: { version: '1.0', createdAt: originalCreatedAt },
       }
 
       const result = configModule.merge(config, {
-        permission: 'admin'
+        permission: 'admin',
       })
 
       expect(result.metadata.createdAt).toBe(originalCreatedAt)
@@ -181,7 +181,7 @@ describe('configModule', () => {
     test('應該在沒有 createdAt 時設置新時間戳', () => {
       const config: DbcliConfig = {
         ...baseConfig,
-        metadata: { version: '1.0' }
+        metadata: { version: '1.0' },
       }
 
       const result = configModule.merge(config, {})
@@ -192,7 +192,7 @@ describe('configModule', () => {
 
     test('應該合併 schema', () => {
       const result = configModule.merge(baseConfig, {
-        schema: { table2: 'newdata' }
+        schema: { table2: 'newdata' },
       })
 
       // schema 應該被深度合併，而不是替換
@@ -223,12 +223,12 @@ describe('configModule', () => {
             user: 'dev',
             password: 'secret',
             database: 'myapp',
-            permission: 'read-write'
-          }
+            permission: 'read-write',
+          },
         },
         schema: {},
         metadata: { version: '1.0' },
-        blacklist: { tables: [], columns: {} }
+        blacklist: { tables: [], columns: {} },
       }
 
       await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
@@ -252,7 +252,7 @@ describe('configModule', () => {
             user: 'dev',
             password: 'secret',
             database: 'myapp',
-            permission: 'read-write'
+            permission: 'read-write',
           },
           staging: {
             system: 'postgresql',
@@ -261,12 +261,12 @@ describe('configModule', () => {
             user: 'admin',
             password: 'stagingpass',
             database: 'staging_db',
-            permission: 'query-only'
-          }
+            permission: 'query-only',
+          },
         },
         schema: {},
         metadata: { version: '1.0' },
-        blacklist: { tables: [], columns: {} }
+        blacklist: { tables: [], columns: {} },
       }
 
       await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
@@ -277,6 +277,75 @@ describe('configModule', () => {
       expect(result.permission).toBe('query-only')
     })
 
+    test('should return per-connection schema from schemas dict (V2)', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'staging',
+        connections: {
+          staging: {
+            system: 'postgresql',
+            host: 'staging.db',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'staging_db',
+            permission: 'query-only',
+          },
+          prod: {
+            system: 'postgresql',
+            host: 'prod.db',
+            port: 5432,
+            user: 'admin',
+            password: 'prodpass',
+            database: 'prod_db',
+            permission: 'query-only',
+          },
+        },
+        schema: { shared_table: { name: 'shared_table' } },
+        schemas: {
+          staging: { users: { name: 'users' } },
+          prod: { orders: { name: 'orders' } },
+        },
+        metadata: { version: '2.0' },
+        blacklist: { tables: [], columns: {} },
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const stagingResult = await configModule.read(V2_CONFIG_PATH, 'staging')
+      expect(stagingResult.schema).toEqual({ users: { name: 'users' } })
+
+      const prodResult = await configModule.read(V2_CONFIG_PATH, 'prod')
+      expect(prodResult.schema).toEqual({ orders: { name: 'orders' } })
+    })
+
+    test('should fall back to shared schema when schemas dict has no entry (V2)', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'myapp',
+            permission: 'read-write',
+          },
+        },
+        schema: { legacy_table: { name: 'legacy_table' } },
+        schemas: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+      expect(result.schema).toEqual({ legacy_table: { name: 'legacy_table' } })
+    })
+
     test('should still read v1 config without breaking', async () => {
       const v1Config = {
         connection: {
@@ -285,11 +354,11 @@ describe('configModule', () => {
           port: 3306,
           user: 'admin',
           password: 'secret',
-          database: 'production'
+          database: 'production',
         },
         permission: 'read-write',
         schema: {},
-        metadata: { version: '1.0' }
+        metadata: { version: '1.0' },
       }
 
       await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v1Config, null, 2))
@@ -311,11 +380,11 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: 'pass',
-          database: 'db'
+          database: 'db',
         },
         permission: 'query-only',
         schema: {},
-        metadata: { version: '1.0' }
+        metadata: { version: '1.0' },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -335,11 +404,11 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: 'pass',
-          database: 'db'
+          database: 'db',
         },
         permission: 'query-only',
         schema: {},
-        metadata: { version: '1.0' }
+        metadata: { version: '1.0' },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -355,9 +424,9 @@ describe('configModule', () => {
       const invalid = {
         connection: {
           system: 'postgresql',
-          host: 'localhost'
+          host: 'localhost',
           // 缺少必需欄位
-        }
+        },
       }
 
       await expect(
@@ -373,8 +442,8 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: '',
-          database: 'db'
-        }
+          database: 'db',
+        },
       }
 
       await expect(
@@ -390,15 +459,15 @@ describe('configModule', () => {
           port: 5432,
           user: 'user',
           password: 'pass',
-          database: 'db'
+          database: 'db',
         },
         permission: 'query-only',
         schema: {},
         metadata: {
           version: '1.0',
           schemaLastUpdated: '2026-04-20T00:00:00Z',
-          schemaTableCount: 12
-        }
+          schemaTableCount: 12,
+        },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)

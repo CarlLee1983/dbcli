@@ -12,22 +12,18 @@ import { z } from 'zod'
  * Environment variable reference schema
  * Allows { "$env": "KEY" } reference syntax
  */
-const EnvRefSchema = z.object({
-  $env: z.string()
-}).strict()
+const EnvRefSchema = z
+  .object({
+    $env: z.string(),
+  })
+  .strict()
 
 /**
  * Value can be a string or an environment variable reference
  */
-const StringOrEnvRef = z.union([
-  z.string().min(1),
-  EnvRefSchema
-])
+const StringOrEnvRef = z.union([z.string().min(1), EnvRefSchema])
 
-const NumberOrEnvRef = z.union([
-  z.number().int().min(1).max(65535),
-  EnvRefSchema
-])
+const NumberOrEnvRef = z.union([z.number().int().min(1).max(65535), EnvRefSchema])
 
 /**
  * Connection configuration schema
@@ -40,13 +36,15 @@ export const ConnectionConfigSchema = z.object({
   port: NumberOrEnvRef,
   user: StringOrEnvRef,
   password: z.union([z.string(), EnvRefSchema]).default(''),
-  database: StringOrEnvRef
+  database: StringOrEnvRef,
 })
 
 /**
  * Permission schema
  */
-export const PermissionSchema = z.enum(['query-only', 'read-write', 'data-admin', 'admin']).default('query-only')
+export const PermissionSchema = z
+  .enum(['query-only', 'read-write', 'data-admin', 'admin'])
+  .default('query-only')
 
 /**
  * Metadata schema
@@ -56,7 +54,7 @@ export const MetadataSchema = z
     createdAt: z.string().datetime().optional(),
     version: z.string().default('1.0'),
     schemaLastUpdated: z.string().datetime().optional(),
-    schemaTableCount: z.number().int().nonnegative().optional()
+    schemaTableCount: z.number().int().nonnegative().optional(),
   })
   .optional()
   .default({})
@@ -68,7 +66,7 @@ export const MetadataSchema = z
 export const BlacklistConfigSchema = z
   .object({
     tables: z.array(z.string()).default([]),
-    columns: z.record(z.array(z.string())).default({})
+    columns: z.record(z.array(z.string())).default({}),
   })
   .optional()
   .default({ tables: [], columns: {} })
@@ -81,7 +79,7 @@ export const DbcliConfigSchema = z.object({
   permission: PermissionSchema,
   schema: z.record(z.any()).optional().default({}),
   metadata: MetadataSchema,
-  blacklist: BlacklistConfigSchema
+  blacklist: BlacklistConfigSchema,
 })
 
 /**
@@ -96,26 +94,30 @@ export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>
  */
 export const NamedConnectionSchema = ConnectionConfigSchema.extend({
   permission: PermissionSchema,
-  envFile: z.string().optional()
+  envFile: z.string().optional(),
 })
 
 /**
  * V2 config schema with multiple named connections
  */
-export const DbcliConfigV2Schema = z.object({
-  version: z.literal(2),
-  default: z.string().min(1),
-  connections: z.record(NamedConnectionSchema).refine(
-    (conns) => Object.keys(conns).length > 0,
-    { message: 'At least one connection is required' }
-  ),
-  schema: z.record(z.any()).optional().default({}),
-  metadata: MetadataSchema,
-  blacklist: BlacklistConfigSchema
-}).refine(
-  (config) => config.default in config.connections,
-  { message: 'Default connection must exist in connections', path: ['default'] }
-)
+export const DbcliConfigV2Schema = z
+  .object({
+    version: z.literal(2),
+    default: z.string().min(1),
+    connections: z
+      .record(NamedConnectionSchema)
+      .refine((conns) => Object.keys(conns).length > 0, {
+        message: 'At least one connection is required',
+      }),
+    schema: z.record(z.any()).optional().default({}),
+    schemas: z.record(z.record(z.any())).optional().default({}),
+    metadata: MetadataSchema,
+    blacklist: BlacklistConfigSchema,
+  })
+  .refine((config) => config.default in config.connections, {
+    message: 'Default connection must exist in connections',
+    path: ['default'],
+  })
 
 export type NamedConnection = z.infer<typeof NamedConnectionSchema>
 export type DbcliConfigV2 = z.infer<typeof DbcliConfigV2Schema>
@@ -131,8 +133,6 @@ export function validateFormat(
 ): void {
   if (!allowedFormats.includes(value)) {
     const allowed = allowedFormats.join(', ')
-    throw new Error(
-      `Invalid format "${value}" for ${commandName}. Allowed: ${allowed}`
-    )
+    throw new Error(`Invalid format "${value}" for ${commandName}. Allowed: ${allowed}`)
   }
 }

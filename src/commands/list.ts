@@ -6,7 +6,7 @@
 
 import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { TableListFormatter, JSONFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
 import { validateFormat } from '@/utils/validation'
@@ -42,6 +42,11 @@ async function listAction(options: { format: string; config: string }) {
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')
       process.exit(1)
+    }
+
+    // MongoDB: use QueryableAdapter path for collections
+    if (config.connection.system === 'mongodb') {
+      return mongoListBranch(config, options.format)
     }
 
     // Create adapter from configuration
@@ -92,5 +97,37 @@ async function listAction(options: { format: string; config: string }) {
       }
     }
     process.exit(1)
+  }
+}
+
+async function mongoListBranch(config: any, format: string): Promise<void> {
+  const connName = (config.connection.database as string) || 'mongodb'
+
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  await mongoAdapter.connect()
+
+  try {
+    const collections = await mongoAdapter.listCollections()
+
+    if (collections.length === 0) {
+      console.log('No collections found in this database.')
+      return
+    }
+
+    if (format === 'json') {
+      console.log(JSON.stringify(collections, null, 2))
+    } else {
+      console.log(`Collections in ${connName} (mongodb):`)
+      for (const col of collections) {
+        const nameCol = col.name.padEnd(20)
+        const countStr = col.documentCount != null
+          ? ` (est. ${col.documentCount.toLocaleString()} docs)`
+          : ''
+        console.log(`  ${nameCol}${countStr}`)
+      }
+      console.log(`\n✓ Found ${collections.length} collections`)
+    }
+  } finally {
+    await mongoAdapter.disconnect()
   }
 }

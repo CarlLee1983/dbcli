@@ -58,7 +58,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     }
     const collectionName = params?.[0] as string
     const db: Db = this.client.db()
-    const collection = db.collection<T & object>(collectionName)
+    const collection = db.collection(collectionName)
 
     let parsed: unknown
     try {
@@ -69,9 +69,9 @@ export class MongoDBAdapter implements QueryableAdapter {
 
     let docs: T[]
     if (Array.isArray(parsed)) {
-      docs = await collection.aggregate<T>(parsed as object[]).toArray()
+      docs = (await collection.aggregate(parsed as object[]).toArray()) as T[]
     } else {
-      docs = await collection.find<T>(parsed as object).toArray()
+      docs = (await collection.find(parsed as object).toArray()) as T[]
     }
 
     return { rows: docs, affectedRows: docs.length }

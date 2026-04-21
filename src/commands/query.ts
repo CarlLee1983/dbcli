@@ -4,7 +4,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
@@ -26,6 +26,7 @@ export async function queryCommand(
     format?: 'table' | 'json' | 'csv'
     limit?: number
     noLimit?: boolean
+    collection?: string
   }
 ): Promise<void> {
   try {
@@ -43,6 +44,11 @@ export async function queryCommand(
     const config = await configModule.read('.dbcli')
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
+    }
+
+    // 2c. MongoDB: route to QueryableAdapter path
+    if (config.connection.system === 'mongodb') {
+      return mongoQueryBranch(sql, options.collection, config, options.format ?? 'table')
     }
 
     // 2b. Size guard: block full-table SELECT on huge tables
@@ -116,4 +122,42 @@ export async function queryCommand(
 function extractMainTable(sql: string): string | null {
   const match = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
   return match ? match[1] : null
+}
+
+const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
+
+async function mongoQueryBranch(
+  queryStr: string,
+  collection: string | undefined,
+  config: any,
+  format: string
+): Promise<void> {
+  if (SQL_PATTERN.test(queryStr)) {
+    console.error('這是 MongoDB 連線，請使用 JSON filter 語法。')
+    console.error(`範例：dbcli query '{"field": "value"}' --collection <name>`)
+    process.exit(1)
+  }
+
+  if (!collection) {
+    console.error('MongoDB 查詢需要指定 --collection <name>')
+    process.exit(1)
+  }
+
+  try {
+    JSON.parse(queryStr)
+  } catch {
+    console.error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
+    process.exit(1)
+  }
+
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  await mongoAdapter.connect()
+  try {
+    const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
+    const formatter = new QueryResultFormatter()
+    const output = formatter.format(result as any, { format: format as any })
+    console.log(output)
+  } finally {
+    await mongoAdapter.disconnect()
+  }
 }

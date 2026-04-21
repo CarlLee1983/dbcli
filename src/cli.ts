@@ -117,6 +117,7 @@ program
   .option('--format <type>', 'Output format: table, json, csv', 'table')
   .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) => parseInt(val, 10))
   .option('--no-limit', 'Disable auto-limit in query-only mode')
+  .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
   .action(async (sql: string, options: any) => {
     try {
       await queryCommand(sql, options)

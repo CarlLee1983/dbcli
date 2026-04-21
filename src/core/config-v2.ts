@@ -145,14 +145,16 @@ export function listConnections(config: DbcliConfigV2): Array<{
   host: string | { $env: string }
   port: number | { $env: string }
   database: string | { $env: string }
+  uri?: string | { $env: string }
   isDefault: boolean
 }> {
   return Object.entries(config.connections).map(([name, conn]) => ({
     name,
     system: conn.system,
-    host: conn.host,
-    port: conn.port,
-    database: conn.database,
+    host: (conn as any).host ?? '',
+    port: (conn as any).port ?? 27017,
+    database: (conn as any).database ?? '',
+    ...((conn as any).uri !== undefined && { uri: (conn as any).uri }),
     isDefault: name === config.default,
   }))
 }

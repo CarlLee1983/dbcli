@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to query, inspect schemas, insert/update/delete data, export results, and manage sensitive data blacklists. Supports MySQL, PostgreSQL, MariaDB with multiple named connections per project and custom env files. Trigger when working with databases, running SQL, exploring table structures, switching between database environments, or protecting sensitive columns/tables from AI access.
+description: Database CLI for AI agents with permission-based access control. Use to query, inspect schemas, insert/update/delete data, export results, and manage sensitive data blacklists. Supports MySQL, PostgreSQL, MariaDB, and MongoDB with multiple named connections per project and custom env files. Trigger when working with databases, running SQL or MongoDB JSON queries, exploring table/collection structures, switching between database environments, or protecting sensitive columns/tables from AI access.
 ---
 
 # dbcli
@@ -27,6 +27,11 @@ dbcli init --system mysql --host localhost --port 3306 --user root --name mydb
 dbcli init --use-env-refs                               # Store env var references
 dbcli init --no-interactive --force                     # Non-interactive mode
 
+# MongoDB
+dbcli init --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
+dbcli init --system mongodb --host localhost --port 27017 --user admin --password secret --name mydb
+dbcli init --system mongodb --host localhost --port 27017 --name mydb  # No auth
+
 # Multi-connection (v2 format)
 dbcli init --conn-name staging --env-file .env.staging   # Named connection with custom env file
 dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-test
@@ -35,6 +40,8 @@ dbcli init --rename staging:production                   # Rename a connection
 ```
 
 **Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
+
+**MongoDB-specific options:** `--uri <uri>` (full connection URI), `--auth-source <db>` (auth database, default: `admin` when user/password set)
 
 **Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
 
@@ -61,7 +68,7 @@ dbcli list --use prod
 
 ### list
 
-List all tables.
+List all tables (SQL) or collections (MongoDB).
 
 ```bash
 dbcli list
@@ -69,6 +76,8 @@ dbcli list --format json
 ```
 
 **Permission:** query-only+
+
+> **MongoDB:** Lists collections with estimated document count instead of tables.
 
 ### schema
 
@@ -94,16 +103,29 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 
 ### query
 
-Execute SQL query.
+Execute SQL query (MySQL/PostgreSQL/MariaDB) or JSON filter/pipeline (MongoDB).
 
 ```bash
+# SQL databases
 dbcli query "SELECT * FROM users LIMIT 10"
 dbcli query "SELECT id, email FROM users" --format json
 dbcli query "SELECT * FROM logs" --no-limit
+
+# MongoDB: JSON filter (find)
+dbcli query '{"status": "active"}' --collection users
+dbcli query '{"age": {"$gt": 18}}' --collection users --format json
+
+# MongoDB: aggregation pipeline
+dbcli query '[{"$match": {"status": "active"}}, {"$group": {"_id": "$role", "count": {"$sum": 1}}}]' --collection users
 ```
 
-**Options:** `--format <table|json|csv>`, `--limit <number>`, `--no-limit`
+**Options:** `--format <table|json|csv>`, `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB only)
 **Permission:** query-only+
+
+> **MongoDB notes:**
+> - SQL syntax is rejected — use JSON object (filter) or JSON array (pipeline)
+> - `--collection <name>` is required
+> - Auto-limit does not apply; use `$limit` in your pipeline if needed
 
 ### insert
 
@@ -324,6 +346,38 @@ dbcli migrate drop-enum status --execute --force
 **Permission:** admin
 
 **AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
+
+## MongoDB Support
+
+MongoDB connections use a JSON-based query model instead of SQL.
+
+**Supported commands:** `init`, `list`, `query`, `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`
+
+**Not supported (exit with error):** `schema`, `insert`, `update`, `delete`, `export`, `diff`, `migrate`, `check`
+
+### MongoDB-specific workflow
+
+```bash
+# 1. Initialize (URI or individual params)
+dbcli init --system mongodb --uri "mongodb://localhost:27017/mydb"
+
+# 2. List collections
+dbcli list --format json
+
+# 3. Query with JSON filter (find) or pipeline (aggregate)
+dbcli query '{}' --collection orders --format json          # All documents
+dbcli query '{"status": "paid"}' --collection orders        # Filter
+dbcli query '[{"$match": {"status":"paid"}}, {"$count":"total"}]' --collection orders  # Pipeline
+```
+
+### Query syntax
+
+| Intent | Syntax |
+|--------|--------|
+| All documents | `'{}'` |
+| Field filter | `'{"field": "value"}'` |
+| Comparison | `'{"age": {"$gt": 18}}'` |
+| Aggregation | `'[{"$match": {...}}, {"$group": {...}}]'` |
 
 ## Permission Levels
 

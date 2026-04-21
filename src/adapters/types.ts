@@ -8,7 +8,7 @@
  */
 export interface ConnectionOptions {
   /** Database system type */
-  system: 'postgresql' | 'mysql' | 'mariadb'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
   /** Database host address or hostname */
   host: string
   /** Database port number */
@@ -19,6 +19,8 @@ export interface ConnectionOptions {
   password: string
   /** Database name */
   database: string
+  /** MongoDB connection URI (optional, for MongoDB connections) */
+  uri?: string
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
 }
@@ -173,6 +175,59 @@ export interface DatabaseAdapter {
   /**
    * Get the database server version string
    * @returns Raw version string from the server (e.g. "8.0.35", "15.4", "10.11.6-MariaDB")
+   * @throws {ConnectionError} If not connected or query fails
+   */
+  getServerVersion(): Promise<string>
+}
+
+/**
+ * Queryable adapter interface for MongoDB — a read-focused subset of DatabaseAdapter.
+ * execute() accepts JSON query strings; listCollections() replaces listTables().
+ */
+export interface QueryableAdapter {
+  /**
+   * Establish connection and verify credentials
+   * Throws ConnectionError with categorized error type on failure
+   * @throws {ConnectionError} If connection fails (server down, auth failed, timeout, etc.)
+   */
+  connect(): Promise<void>
+
+  /**
+   * Close connection and release resources
+   * Should never throw; safe to call multiple times
+   * Handles cleanup gracefully even if already disconnected
+   */
+  disconnect(): Promise<void>
+
+  /**
+   * Execute arbitrary query with parameterized values
+   * Accepts JSON query strings for MongoDB operations
+   * @param query Query string (JSON format for MongoDB)
+   * @param params Array of parameter values in order
+   * @returns Execution result containing rows and metadata
+   * @throws {ConnectionError} If query execution fails
+   */
+  execute<T>(query: string, params?: unknown[]): Promise<ExecutionResult<T>>
+
+  /**
+   * List all collections in the connected database
+   * Includes metadata such as document count
+   * @returns Array of collection info with basic information
+   * @throws {ConnectionError} If query fails
+   */
+  listCollections(): Promise<{ name: string; documentCount?: number }[]>
+
+  /**
+   * Test connection with lightweight probe query
+   * Executes a ping or equivalent to verify connection is alive
+   * @returns true if connection successful
+   * @throws {ConnectionError} If connection test fails
+   */
+  testConnection(): Promise<boolean>
+
+  /**
+   * Get the database server version string
+   * @returns Raw version string from the server
    * @throws {ConnectionError} If not connected or query fails
    */
   getServerVersion(): Promise<string>

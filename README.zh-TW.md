@@ -95,6 +95,23 @@ dbcli migrate create posts --column "id:int:pk" "title:varchar(100)"
 dbcli skill --install claude
 ```
 
+### MongoDB Atlas / SRV 連線
+
+MongoDB 連線同時支援標準 `mongodb://` URI 與 Atlas 常用的 `mongodb+srv://` URI。
+
+```bash
+# Atlas / SRV 連線
+dbcli init --system mongodb --conn-name atlas --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
+
+# 列出該 MongoDB 連線中的集合
+dbcli list --use atlas
+
+# 以 JSON filter 或 pipeline 查詢某個集合
+dbcli query '{"status":"active"}' --collection users --use atlas
+```
+
+對 MongoDB 而言，`list` 與 `query` 會使用該連線設定中的資料庫；`query` 也必須指定 `--collection <名稱>`。
+
 ---
 
 ## 多重連線支援 (v2)

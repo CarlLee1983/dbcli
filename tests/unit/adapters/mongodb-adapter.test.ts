@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
+import { describe, test, expect, beforeEach, spyOn } from 'bun:test'
 import { MongoDBAdapter } from 'src/adapters/mongodb-adapter'
 import type { ConnectionOptions } from 'src/adapters/types'
 import { ConnectionError } from 'src/adapters/types'
@@ -9,10 +9,12 @@ const mockCollectionDefs = [{ name: 'users' }, { name: 'orders' }]
 class MockMongoClient {
   connected = false
   closed = false
+  lastDbName: string | undefined
   constructor(public uri: string) {}
   async connect() { this.connected = true }
   async close() { this.closed = true }
-  db() {
+  db(name?: string) {
+    this.lastDbName = name
     return {
       collection: (_name: string) => ({
         find: (_filter: object) => ({ toArray: async () => mockDocs }),
@@ -66,6 +68,56 @@ describe('MongoDBAdapter', () => {
       expect(client.uri).toBe('mongodb://localhost:27017/testdb')
     })
 
+    test('expands mongodb+srv uri into a standard multi-host uri before connecting', async () => {
+      const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+        const url = String(input)
+        if (url.includes('type=SRV')) {
+          return new Response(
+            JSON.stringify({
+              Status: 0,
+              Answer: [
+                { data: '0 0 27017 a.example.com.' },
+                { data: '0 0 27017 b.example.com.' },
+              ],
+            })
+          )
+        }
+
+        if (url.includes('type=TXT')) {
+          return new Response(
+            JSON.stringify({
+              Status: 0,
+              Answer: [{ data: '"authSource=admin"' }],
+            })
+          )
+        }
+
+        return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
+      })
+
+      const srvOptions: ConnectionOptions = {
+        system: 'mongodb',
+        uri: 'mongodb+srv://user:pass@cluster.example.com/',
+        host: '',
+        port: 27017,
+        user: '',
+        password: '',
+        database: 'cmg0001',
+      }
+      const srvAdapter = new MongoDBAdapter(srvOptions, MockMongoClient as any)
+
+      try {
+        await srvAdapter.connect()
+
+        const client = (srvAdapter as any).client as MockMongoClient
+        expect(client.uri).toContain('mongodb://user:pass@a.example.com:27017,b.example.com:27017/cmg0001')
+        expect(client.uri).toContain('authSource=admin')
+        expect(client.uri).toContain('tls=true')
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
     test('builds uri from host/port/database when uri not provided', async () => {
       const a = new MongoDBAdapter(hostOptions, MockMongoClient as any)
       await a.connect()
@@ -110,6 +162,8 @@ describe('MongoDBAdapter', () => {
       const result = await adapter.execute<{ name: string }>('{"age": {"$gt": 18}}', ['users'])
       expect(result.rows).toEqual(mockDocs)
       expect(result.affectedRows).toBe(2)
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.lastDbName).toBe('testdb')
     })
 
     test('executes aggregate when query is JSON array', async () => {
@@ -137,6 +191,8 @@ describe('MongoDBAdapter', () => {
       expect(collections[0].name).toBe('users')
       expect(collections[0].documentCount).toBe(100)
       expect(collections[1].name).toBe('orders')
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.lastDbName).toBe('testdb')
     })
 
     test('throws ConnectionError when not connected', async () => {
@@ -149,6 +205,8 @@ describe('MongoDBAdapter', () => {
     test('returns true when connected', async () => {
       await adapter.connect()
       expect(await adapter.testConnection()).toBe(true)
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.lastDbName).toBe('testdb')
     })
 
     test('returns false when not connected', async () => {
@@ -161,6 +219,8 @@ describe('MongoDBAdapter', () => {
       await adapter.connect()
       const version = await adapter.getServerVersion()
       expect(version).toBe('6.0.1')
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.lastDbName).toBe('testdb')
     })
 
     test('throws ConnectionError when not connected', async () => {

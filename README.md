@@ -89,6 +89,23 @@ dbcli query "SELECT * FROM users"
 dbcli skill --install claude
 ```
 
+### MongoDB Atlas / SRV Connections
+
+MongoDB connections are supported via both standard `mongodb://` URIs and Atlas-style `mongodb+srv://` URIs.
+
+```bash
+# Atlas / SRV connection
+dbcli init --system mongodb --conn-name atlas --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
+
+# List collections in the configured MongoDB database
+dbcli list --use atlas
+
+# Query a collection with JSON filter or pipeline
+dbcli query '{"status":"active"}' --collection users --use atlas
+```
+
+For MongoDB, `list` and `query` operate on the database configured for the connection, and `query` requires `--collection <name>`.
+
 ---
 
 ## Multi-connection Support (v2)

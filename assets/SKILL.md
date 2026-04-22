@@ -351,6 +351,8 @@ dbcli migrate drop-enum status --execute --force
 
 MongoDB connections use a JSON-based query model instead of SQL.
 
+Atlas-style `mongodb+srv://` URIs are supported. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
+
 **Supported commands:** `init`, `list`, `query`, `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`
 
 **Not supported (exit with error):** `schema`, `insert`, `update`, `delete`, `export`, `diff`, `migrate`, `check`
@@ -359,7 +361,7 @@ MongoDB connections use a JSON-based query model instead of SQL.
 
 ```bash
 # 1. Initialize (URI or individual params)
-dbcli init --system mongodb --uri "mongodb://localhost:27017/mydb"
+dbcli init --system mongodb --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
 
 # 2. List collections
 dbcli list --format json

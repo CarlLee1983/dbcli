@@ -664,6 +664,7 @@ dbcli doctor --format json      # JSON 輸出（供 AI 代理）
 - **環境：** Bun 版本相容性、dbcli 版本（與 npm registry 比對）
 - **設定：** 設定檔是否存在／有效、權限等級、黑名單完整性
 - **連線與資料：** 資料庫連線、schema 快取新鮮度（超過 7 天警告）、大表警告（超過 100 萬列）
+- **MongoDB SRV 偵測：** 對 `mongodb+srv://` 連線，`doctor` 會回報目前執行環境能否直接解析 SRV 記錄，或只能依賴 dbcli 內建的 DNS-over-HTTPS fallback
 
 **選項：** `--format <text|json>`  
 **結束代碼：** 0 = 全部通過或僅警告，1 = 有錯誤

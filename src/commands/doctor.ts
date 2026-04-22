@@ -12,6 +12,7 @@ import pkg from '../../package.json'
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
 import { getSchemaIsolationConnectionName } from '@/core/config'
+import { resolveSrv } from 'node:dns/promises'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -27,6 +28,11 @@ const SENSITIVE_PATTERNS = [
   'access_key', 'private_key', 'credential', 'auth_token',
   'refresh_token', 'session_token', 'ssn', 'credit_card',
 ]
+
+type MongoSrvLookupDeps = {
+  resolveSrvFn?: typeof resolveSrv
+  fetchFn?: typeof fetch
+}
 
 /** Layered index uses metadata.lastRefreshed; schema --refresh sets config.metadata.schemaLastUpdated */
 export function resolveSchemaLastUpdated(
@@ -187,6 +193,97 @@ export const runDoctorChecks = {
     }
   },
 
+  async checkMongoSrvConnectivity(
+    uri: string | undefined,
+    deps: MongoSrvLookupDeps = {}
+  ): Promise<DoctorResult | null> {
+    if (!uri || !uri.startsWith('mongodb+srv://')) {
+      return null
+    }
+
+    const url = new URL(uri)
+    const srvName = `_mongodb._tcp.${url.hostname}`
+    const resolveSrvFn = deps.resolveSrvFn ?? resolveSrv
+    const fetchFn = deps.fetchFn ?? fetch
+
+    try {
+      const records = await resolveSrvFn(srvName)
+      if (!records.length) {
+        return {
+          group: 'Environment',
+          label: 'MongoDB SRV lookup',
+          status: 'error',
+          message: `No SRV records found for ${url.hostname}`,
+        }
+      }
+
+      return {
+        group: 'Environment',
+        label: 'MongoDB SRV lookup',
+        status: 'pass',
+        message: `MongoDB SRV lookup reachable for ${url.hostname} (${records.length} record(s))`,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const code = (error as { code?: string })?.code
+      const isExecutionEnvIssue =
+        code === 'ECONNREFUSED' ||
+        code === 'ETIMEDOUT' ||
+        message.includes('Unable to connect. Is the computer able to access the url?') ||
+        message.includes('ConnectionRefused')
+
+      if (!isExecutionEnvIssue) {
+        return {
+          group: 'Environment',
+          label: 'MongoDB SRV lookup',
+          status: 'error',
+          message: `MongoDB SRV lookup failed for ${url.hostname}: ${message}`,
+        }
+      }
+
+      try {
+        const response = await fetchFn(
+          `https://dns.google/resolve?name=${encodeURIComponent(srvName)}&type=SRV`,
+          { signal: AbortSignal.timeout(5000) }
+        )
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const payload = (await response.json()) as {
+          Status?: number
+          Answer?: unknown[]
+          Comment?: string
+        }
+
+        if (payload.Status !== 0 || !payload.Answer?.length) {
+          throw new Error(payload.Comment || `No SRV records found for ${url.hostname}`)
+        }
+
+        return {
+          group: 'Environment',
+          label: 'MongoDB SRV lookup',
+          status: 'warn',
+          message:
+            `Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved ` +
+            `${url.hostname}. dbcli can still connect here, but this runtime environment cannot perform direct SRV lookups.`,
+        }
+      } catch (fallbackError) {
+        const fallbackMessage =
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        return {
+          group: 'Environment',
+          label: 'MongoDB SRV lookup',
+          status: 'error',
+          message:
+            `MongoDB SRV lookup failed in this environment (${code || 'unknown'}); ` +
+            `DNS-over-HTTPS fallback also failed: ${fallbackMessage}`,
+        }
+      }
+    }
+  },
+
   checkLargeTables(
     tables: Array<{ name: string; estimatedRowCount?: number }>
   ): DoctorResult {
@@ -216,7 +313,7 @@ export const runDoctorChecks = {
 
     if (!(await configFile.exists())) return results
 
-    let raw: any
+    let raw: unknown
     try {
       raw = JSON.parse(await configFile.text())
     } catch {
@@ -225,7 +322,7 @@ export const runDoctorChecks = {
 
     if (detectConfigVersion(raw) !== 2) return results
 
-    let config: any
+    let config: ReturnType<typeof DbcliConfigV2Schema.parse>
     try {
       config = DbcliConfigV2Schema.parse(raw)
     } catch {
@@ -256,7 +353,9 @@ export const runDoctorChecks = {
     }
 
     // Check envFile existence for each connection
-    for (const [name, conn] of Object.entries(config.connections) as any) {
+    for (const [name, conn] of Object.entries(config.connections) as Array<
+      [string, { envFile?: string }]
+    >) {
       if (conn.envFile) {
         const envPath = join(configPath, '..', conn.envFile)
         const exists = await Bun.file(envPath).exists()
@@ -299,9 +398,29 @@ export const runDoctorChecks = {
 }
 
 export async function collectMongoDoctorResults(
-  config: any
+  config: {
+    connection: {
+      uri?: string
+      database?: string
+      system?: string
+      host?: string
+      port?: number
+      user?: string
+      password?: string
+    }
+    metadata?: { schemaLastUpdated?: string }
+  }
 ): Promise<DoctorResult[]> {
   const results: DoctorResult[] = []
+
+  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(config.connection?.uri)
+  if (srvCheck) {
+    results.push(srvCheck)
+    if (srvCheck.status === 'error') {
+      return results
+    }
+  }
+
   const adapter = AdapterFactory.createMongoDBAdapter(config.connection)
 
   await adapter.connect()

@@ -5,6 +5,13 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-04-22
+
+### Fixed
+
+- **Doctor diagnostics for MongoDB SRV**: `dbcli doctor` now reports whether the current execution environment can resolve `mongodb+srv://` connections directly or only through the DNS-over-HTTPS fallback used by the MongoDB adapter.
+- **Documentation**: Clarified the new MongoDB SRV environment diagnostic in README, README.zh-TW, and `assets/SKILL.md`.
+
 ## [1.5.1] - 2026-04-22
 
 ### Fixed

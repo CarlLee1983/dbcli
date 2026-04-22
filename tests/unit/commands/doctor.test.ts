@@ -102,6 +102,58 @@ describe('doctor checks', () => {
     expect(result.status).toBe('pass')
   })
 
+  test('checkMongoSrvConnectivity passes when SRV lookup succeeds directly', async () => {
+    const result = await runDoctorChecks.checkMongoSrvConnectivity(
+      'mongodb+srv://user:pass@cluster.example.mongodb.net/mydb',
+      {
+        resolveSrvFn: async () => [{ name: 'a.example.com', port: 27017 }],
+      }
+    )
+
+    expect(result).not.toBeNull()
+    expect(result?.status).toBe('pass')
+    expect(result?.message).toContain('reachable')
+  })
+
+  test('checkMongoSrvConnectivity warns when direct SRV lookup fails but DoH fallback works', async () => {
+    const result = await runDoctorChecks.checkMongoSrvConnectivity(
+      'mongodb+srv://user:pass@cluster.example.mongodb.net/mydb',
+      {
+        resolveSrvFn: async () => {
+          const error = new Error('querySrv ECONNREFUSED _mongodb._tcp.cluster.example.mongodb.net')
+          ;(error as { code?: string }).code = 'ECONNREFUSED'
+          throw error
+        },
+        fetchFn: async () =>
+          new Response(JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })),
+      }
+    )
+
+    expect(result).not.toBeNull()
+    expect(result?.status).toBe('warn')
+    expect(result?.message).toContain('DNS-over-HTTPS')
+  })
+
+  test('checkMongoSrvConnectivity errors when direct and fallback lookups fail', async () => {
+    const result = await runDoctorChecks.checkMongoSrvConnectivity(
+      'mongodb+srv://user:pass@cluster.example.mongodb.net/mydb',
+      {
+        resolveSrvFn: async () => {
+          const error = new Error('querySrv ECONNREFUSED _mongodb._tcp.cluster.example.mongodb.net')
+          ;(error as { code?: string }).code = 'ECONNREFUSED'
+          throw error
+        },
+        fetchFn: async () => {
+          throw new Error('Unable to connect. Is the computer able to access the url?')
+        },
+      }
+    )
+
+    expect(result).not.toBeNull()
+    expect(result?.status).toBe('error')
+    expect(result?.message).toContain('DNS-over-HTTPS fallback also failed')
+  })
+
   test('formatTextOutput produces expected structure', () => {
     const results: DoctorResult[] = [
       { group: 'Environment', label: 'Bun version', status: 'pass', message: 'Bun v1.3.3 (meets >= 1.3.3)' },
@@ -128,11 +180,19 @@ describe('doctor checks', () => {
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
 
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue({
+      group: 'Environment',
+      label: 'MongoDB SRV lookup',
+      status: 'warn',
+      message: 'Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved cluster.example.mongodb.net.',
+    })
     const results = await collectMongoDoctorResults({
       connection: {
         system: 'mongodb',
-        uri: 'mongodb://localhost:27017/testdb',
+        uri: 'mongodb+srv://user:pass@cluster.example.mongodb.net/testdb',
         host: '',
         port: 27017,
         user: '',
@@ -142,8 +202,10 @@ describe('doctor checks', () => {
       metadata: {},
     })
 
+    expect(results.some((result) => result.label === 'MongoDB SRV lookup' && result.status === 'warn')).toBe(true)
     expect(results.some((result) => result.label === 'Connection' && result.status === 'pass')).toBe(true)
     expect(results.some((result) => result.label === 'Collections' && result.status === 'pass')).toBe(true)
     spy.mockRestore()
+    srvSpy.mockRestore()
   })
 })

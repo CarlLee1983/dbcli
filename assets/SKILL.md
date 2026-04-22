@@ -248,6 +248,8 @@ dbcli doctor --format json      # JSON output for AI agents
 - Configuration: config file exists/valid, permission level, blacklist completeness (detects unprotected sensitive columns)
 - Connection & Data: database connectivity, schema cache freshness (warns if > 7 days), large table warnings (> 1M rows)
 
+> **MongoDB SRV diagnostics:** When the active connection uses `mongodb+srv://`, `doctor` reports whether the current runtime can resolve SRV records directly or only through the DNS-over-HTTPS fallback used by dbcli. This helps spot execution-environment DNS restrictions even when Compass can connect.
+
 **Exit code:** 0 if all pass or warnings only, 1 if any error
 **Options:** `--format <text|json>`
 

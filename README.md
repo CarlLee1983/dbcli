@@ -654,6 +654,7 @@ dbcli doctor --format json      # JSON output for AI agents
 - **Environment:** Bun version compatibility, dbcli version (compares with npm registry)
 - **Configuration:** Config file exists/valid, permission level, blacklist completeness
 - **Connection & Data:** Database connectivity, schema cache freshness (> 7 days warning), large table warnings (> 1M rows)
+- **MongoDB SRV diagnostics:** For `mongodb+srv://` connections, `doctor` reports whether the current execution environment can resolve SRV records directly or only through the DNS-over-HTTPS fallback used by `dbcli`
 
 **Options:** `--format <text|json>`
 **Exit code:** 0 = all pass or warnings only, 1 = errors found

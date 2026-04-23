@@ -128,4 +128,4 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 - 優先使用 `--format json`
 - 寫入前用 `--dry-run` 預覽 SQL
 - query-only 模式會自動加 `LIMIT 1000`，查 `information_schema` 時加 `--no-limit`
-- SKILL.md 唯一來源在 `assets/SKILL.md`，`dbcli skill --install <platform>` 負責搬運
+- 技能來源：`assets/SKILL.md`（精簡工作流與表格式總覽）與 `assets/reference.md`（完整子命令、旗標與範例），`dbcli skill --install <platform>` 會兩者一併寫入對應目錄

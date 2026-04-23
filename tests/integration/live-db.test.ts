@@ -798,7 +798,7 @@ describe('utility commands (live)', () => {
     const { stdout, exitCode } = await run('skill')
     expect(exitCode).toBe(0)
     expect(stdout).toContain('# dbcli')
-    expect(stdout).toContain('Commands')
+    expect(stdout).toContain('Command overview')
   })
 
   test('completion generates zsh script', async () => {

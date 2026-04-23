@@ -1,12 +1,12 @@
 /**
  * dbcli skill command
- * Reads the static SKILL.md and outputs it or installs it to the specified platform directory
+ * Reads `assets/SKILL.md` (stdout / primary install) and `assets/reference.md` (install only, next to the skill)
  */
 
 import { $ } from 'bun'
 import * as path from 'node:path'
 import { homedir } from 'node:os'
-import { t, t_vars } from '@/i18n/message-loader'
+import { t_vars } from '@/i18n/message-loader'
 import type { Command } from 'commander'
 
 /**
@@ -27,6 +27,9 @@ function findPackageRoot(): string {
 
 /** Absolute path to the static SKILL.md (relative to package root) */
 const SKILL_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'SKILL.md')
+
+/** Long-form command reference (sibling to SKILL in assets/ and in install dir) */
+const REFERENCE_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'reference.md')
 
 export interface SkillOptions {
   install?: string // platform: claude, gemini, copilot, cursor
@@ -53,7 +56,12 @@ export async function skillCommand(_program: Command, options: SkillOptions): Pr
     if (!(await skillFile.exists())) {
       throw new Error(`Skill source not found: ${SKILL_SOURCE_PATH}`)
     }
+    const refFile = Bun.file(REFERENCE_SOURCE_PATH)
+    if (!(await refFile.exists())) {
+      throw new Error(`Skill reference not found: ${REFERENCE_SOURCE_PATH}`)
+    }
     const skillMarkdown = await skillFile.text()
+    const referenceMarkdown = await refFile.text()
 
     // 2. Handle output based on options
     if (options.output) {
@@ -64,9 +72,15 @@ export async function skillCommand(_program: Command, options: SkillOptions): Pr
 
     if (options.install) {
       const installPath = getInstallPath(options.install)
-      await ensureDir(path.dirname(installPath))
-      await Bun.file(installPath).write(skillMarkdown)
-      console.error(t_vars('skill.installed', { path: installPath }))
+      const { referencePath } = await writeSkillInstall(
+        options.install,
+        installPath,
+        skillMarkdown,
+        referenceMarkdown
+      )
+      console.error(
+        t_vars('skill.installed', { path: installPath, referencePath: referencePath ?? '' })
+      )
       return
     }
 
@@ -140,6 +154,32 @@ export function getInstallPath(platform: string): string {
         `Unknown platform: ${platform}. Supported platforms: ${SUPPORTED_PLATFORMS.join(', ')}`
       )
   }
+}
+
+/**
+ * Writes the primary skill file and companion reference.md for progressive disclosure.
+ * For Cursor, the primary file is `.cursor/rules/dbcli.mdc` and reference is under `.cursor/skills/dbcli/`.
+ */
+async function writeSkillInstall(
+  platform: string,
+  installPath: string,
+  skillMarkdown: string,
+  referenceMarkdown: string
+): Promise<{ referencePath: string | null }> {
+  const platformLower = platform.toLowerCase()
+  await ensureDir(path.dirname(installPath))
+  await Bun.file(installPath).write(skillMarkdown)
+
+  if (platformLower === 'cursor') {
+    const refPath = path.join(process.cwd(), '.cursor', 'skills', 'dbcli', 'reference.md')
+    await ensureDir(path.dirname(refPath))
+    await Bun.file(refPath).write(referenceMarkdown)
+    return { referencePath: refPath }
+  }
+
+  const refPath = path.join(path.dirname(installPath), 'reference.md')
+  await Bun.file(refPath).write(referenceMarkdown)
+  return { referencePath: refPath }
 }
 
 /**

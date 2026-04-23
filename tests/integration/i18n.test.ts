@@ -124,7 +124,10 @@ test('export.exported interpolates count and file', () => {
 
 // Test 20: Skill installed message interpolates
 test('skill.installed interpolates path', () => {
-  const msg = t_vars('skill.installed', { path: '/home/user/.claude/skills/dbcli/SKILL.md' })
+  const msg = t_vars('skill.installed', {
+    path: '/home/user/.claude/skills/dbcli/SKILL.md',
+    referencePath: '/home/user/.claude/skills/dbcli/reference.md',
+  })
   expect(msg).toContain('/home/user')
   expect(msg).toContain('SKILL.md')
 })

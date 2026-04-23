@@ -1,5 +1,7 @@
 # Development Guide
 
+Scoped package: **`@carllee1983/dbcli`**. All `npm` / `npx` examples below use this name.
+
 ## npm Publishing Process
 
 ### Pre-Publication Checklist
@@ -9,115 +11,110 @@ Before running `npm publish`:
 1. **Verify build is clean:**
    ```bash
    bun run build
-   ls -lh dist/cli.mjs  # Should be 1.0-1.5MB
+   ls -lh dist/cli.mjs   # expect a few MB (bundled CLI + dependencies)
    ```
 
-2. **Verify test suite passes:**
+2. **Verify tests pass (pick one):**
    ```bash
-   bun test --run unit/
+   # Fast path: unit + core only (matches CI-style smoke)
+   bun run test:unit
+
+   # Full suite (Bun test runner)
+   bun test
    ```
 
-   For live database integration tests, use an explicit config path if needed:
+   For live database integration tests, set an explicit config if needed:
    ```bash
    LIVE_DB_CONFIG_PATH=/path/to/.dbcli bun test tests/integration/live-db.test.ts
    ```
 
    If no live config is available, `tests/integration/live-db.test.ts` skips
-   instead of falling back to the default PostgreSQL configuration.
+   instead of falling back to the default PostgreSQL configuration. Use
+   `SKIP_INTEGRATION_TESTS=true` to skip integration tests when running a broad `bun test`.
 
 3. **Update version in package.json:**
    ```bash
-   npm version minor  # Updates package.json version + creates git tag
-   # OR manually update "version" field in package.json
+   npm version minor   # bumps version + creates git tag (in this repo)
+   # OR edit the "version" field in package.json by hand
    ```
 
 4. **Verify package contents (dry run):**
    ```bash
    npm pack --dry-run
-   # Should list only: dist/*, README.md, CHANGELOG.md, package.json
    ```
+   Expect **`dist/`** (at least `cli.mjs`), **`assets/`** (e.g. `SKILL.md`, `reference.md` for `dbcli skill`), **`README.md`**, **`CHANGELOG.md`**, **`LICENSE`**, and **`package.json`**. There must be **no** `src/`, `tests/`, or `node_modules/`. The listing may also include other root `README*.md` files (npm can still pack them even when `files` is set); dev-only readmes are listed in **`.npmignore`** — re-check with dry-run if you add or remove docs.
 
 5. **Check package size:**
    ```bash
    npm pack
-   ls -lh dbcli-*.tgz  # Must be < 5MB
-   rm dbcli-*.tgz      # Cleanup
+   ls -lh carllee1983-dbcli-*.tgz   # compressed tarball (typically well under 5MB)
+   rm carllee1983-dbcli-*.tgz       # cleanup
    ```
 
 ### Publication
 
-The publication process is automated by npm hooks:
+Publication uses the `prepublishOnly` script in `package.json`:
 
 ```bash
 npm publish
 ```
 
-This invokes (in order):
-1. `prepublishOnly` hook: Runs `bun run build` → ensures fresh dist/cli.mjs
-2. npm creates tarball with `files` whitelist → only intended files included
-3. npm applies `.npmignore` rules → additional safety layer
-4. npm publishes to registry
+What runs (conceptually):
 
-**Note:** The build CANNOT be skipped. If you try to publish with a stale dist/cli.mjs, prepublishOnly will rebuild it.
+1. **`prepublishOnly`:** `bun run build` — rebuilds `dist/cli.mjs` from `src/cli.ts` via `scripts/build.ts`.
+2. **Tarball** — paths from the **`files`** field in `package.json`, further filtered by **`.npmignore`**. (Some npm versions also merge in extra root `README*` files; use dry-run to see exactly what will ship.)
+3. **Registry** — with `"publishConfig": { "access": "public" }`, the scoped package is published as **public**.
+
+A failed `bun run build` will fail the publish, so you should not ship a stale `dist/` from a previous local build.
 
 ### Verification (Post-Publication)
 
 After publishing:
 
-1. **Test installation globally:**
+1. **Global install:**
    ```bash
-   npm install -g dbcli
-   which dbcli  # Should show: /usr/local/bin/dbcli or similar
+   npm install -g @carllee1983/dbcli
+   which dbcli
    dbcli --version
    ```
 
-2. **Test zero-install (npx):**
+2. **Zero-install (npx / bunx):**
    ```bash
-   cd /tmp
-   mkdir test-dbcli && cd test-dbcli
-   npx dbcli --help
-   npx dbcli --version
+   cd /tmp && mkdir -p test-dbcli && cd test-dbcli
+   npx @carllee1983/dbcli --help
+   npx @carllee1983/dbcli --version
+   # or: bunx @carllee1983/dbcli --help
    ```
 
-3. **Test Windows installation (if available):**
-   - On Windows machine: `npm install -g dbcli`
-   - Verify: `dbcli --help` and `dbcli --version` work
-   - npm creates .cmd wrapper automatically; no manual .cmd needed
+3. **Windows (if available):** `npm install -g @carllee1983/dbcli`, then `dbcli --help`. npm creates the `.cmd` stub for the `bin` entry; no hand-written `.cmd` in the repo.
 
 ### Rollback (if needed)
 
-If critical bug discovered after publishing:
+If a bad release must be mitigated:
 
 ```bash
-npm unpublish dbcli@VERSION  # Remove specific version
-# OR
-npm deprecate dbcli@VERSION "Critical bug; use VERSION-1"  # Mark as deprecated
+npm unpublish @carllee1983/dbcli@<VERSION>
+# and/or
+npm deprecate @carllee1983/dbcli@<VERSION> "Reason; use <SAFE_VERSION> instead"
 ```
 
-Then publish a patch fix.
+Then ship a patch version with the fix. Prefer **deprecate** over **unpublish** when consumers may already depend on the version.
 
 ### Configuration Details
 
-- **files whitelist (package.json):** Restricts tarball to source only
-  - Includes: dist/, README.md, CHANGELOG.md, LICENSE
-  - Excludes: src/, tests/, node_modules/, .git/, docs/
-- **prepublishOnly hook:** Ensures build runs before pack
-  - Prevents stale binaries from being published
-  - Runs automatically; cannot be skipped with --no-scripts
-- **engines field:** Declares minimum Node >=18.0.0, Bun >=1.3.3
-  - npm warns if consumer's environment is too old
-- **Cross-platform support:** Shebang `#!/usr/bin/env bun` works on all platforms
-  - macOS/Linux: Direct shebang execution
-  - Windows: npm creates .cmd wrapper automatically (no manual creation needed)
-- **Live integration tests:** `tests/integration/live-db.test.ts` reads `.dbcli/config.json`
-  by default or `LIVE_DB_CONFIG_PATH` when you need to point at another config
-  directory. Set `SKIP_INTEGRATION_TESTS=true` to skip all integration tests.
+- **`files` (in `package.json`):** Publishes `dist/`, `assets/`, `README.md`, `CHANGELOG.md`, `LICENSE`. The `assets/` tree is required for `dbcli skill` to copy bundled `SKILL.md` / `reference.md` from the installed package.
+- **`prepublishOnly`:** `bun run build` so `dist/cli.mjs` matches current source.
+- **`engines`:** Declares `node >= 18.0.0` and `bun >= 1.3.3` so npm can warn on outdated runtimes.
+- **Shebang:** `scripts/build.ts` prepends `#!/usr/bin/env bun` to `dist/cli.mjs`; the `bin` field in `package.json` points at that file.
+- **Live DB tests:** `tests/integration/live-db.test.ts` uses project `.dbcli` by default or `LIVE_DB_CONFIG_PATH` when you point at another config directory. Set `SKIP_INTEGRATION_TESTS=true` to skip all integration tests.
+
+For contributor workflow and release process, see **[CONTRIBUTING.md](./CONTRIBUTING.md)** and the main **[README.md](./README.md)** Development section.
 
 ### Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| prepublishOnly fails (build error) | Fix TypeScript errors in src/, run `bun test --run unit/`, retry `npm publish` |
-| Package size > 5MB | Run `bun build --metafile=meta.json`, analyze output, remove unused dependencies |
-| Windows installation fails | Verify shebang is `#!/usr/bin/env bun` in dist/cli.mjs; npm's .cmd wrapper will be created automatically |
-| npx hangs or times out | Run `npm cache clean --force`, retry `npx dbcli` |
+| Issue | What to do |
+|-------|------------|
+| `prepublishOnly` / build fails | Fix TypeScript or build errors, run `bun run test:unit`, then `bun run build` again. |
+| Tarball unexpectedly large or bloated | Inspect the bundle: e.g. `bun build ./src/cli.ts --outfile=dist/cli.mjs --target=bun --metafile=meta.json` and review the metafile; trim dependencies or dev-only code paths. |
+| Windows: `dbcli` not found after global install | Confirm PATH includes npm’s global `bin`; reinstall `npm i -g @carllee1983/dbcli`. |
+| `npx` download slow or cache weird | `npm cache clean --force` and retry `npx @carllee1983/dbcli --version`. |

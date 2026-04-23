@@ -133,7 +133,7 @@
   },
   "skill": {
     "description": "Generate AI skill documentation",
-    "installed": "Skill installed to {path}",
+    "installed": "Skill: {path}\nReference: {referencePath}",
     "update_available": "Skill updates available for the following platforms:",
     "update_hint": "Run \"dbcli skill --install <platform>\" to update."
   },

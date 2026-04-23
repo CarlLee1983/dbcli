@@ -1,112 +1,87 @@
-# Milestone v13.0 Integration Check Report
+# Integration Check Report
 
-**Date:** 2026-03-26  
-**Auditor:** Claude Code (Integration Verifier)  
-**Status:** COMPLETE - Ready for Release
+**Product:** [dbcli](https://github.com/CarlLee1983/dbcli) (`@carllee1983/dbcli`)  
+**Last reviewed:** 2026-04-23  
+**Scope:** End-to-end wiring of config → adapters → permissions → commands (living checklist, not a one-time “milestone” gate).
 
----
-
-## Executive Summary
-
-dbcli Milestone v13.0 achieves **complete cross-phase integration** with all 10 phases properly wired together. All 19 requirements are implemented with end-to-end flows verified.
-
-**Key Finding:** All user-facing flows work correctly. Module export pattern optimization identified but does not impact functionality.
+**Status:** Re-run this document after refactors, new subcommands, or **minor** release candidates.
 
 ---
 
-## Wiring Verification Summary
+## Executive summary
 
-### Connected Exports → Imports (100% Coverage)
+The CLI is structured as: **read config (v1/v2, multi-connection)** → **open DB via `AdapterFactory`** → **enforce permission + blacklist** → **executors** (query / DML / schema / etc.). The **`skill`** subcommand does **not** generate markdown at runtime; it **copies** the bundled files **`assets/SKILL.md`** and **`assets/reference.md`** from the package (see `src/commands/skill.ts`).
 
-**Phase 2 (Init & Config):** 9/9 commands use configModule  
-**Phase 3 (DB Connection):** 8/8 commands use AdapterFactory  
-**Phase 4 (Permission Model):** 2 executors use enforcePermission()  
-**Phase 5 (Schema Discovery):** 2 commands use formatters  
-**Phase 6 (Query Operations):** 2 commands use QueryExecutor  
-**Phase 7 (Data Modification):** 3 commands use DataExecutor  
-**Phase 8 (Schema Refresh):** schema command uses SchemaDiffEngine  
-**Phase 9 (AI Integration):** skill command uses SkillGenerator  
-
-**Result:** All exports consumed, zero orphaned code
+**Cross-phase wiring** from old roadmap text (e.g. “Milestone v13.0” / a runtime **`SkillGenerator`**) is **not** the current `skill` implementation — the repo uses **static assets** so the skill text is reviewable in Git.
 
 ---
 
-## E2E Flow Verification (6/6 Flows Complete)
+## How to re-verify (maintainer)
 
-| Flow | Phases Involved | Status |
-|---|---|---|
-| User Initialization | 2→3→4 | ✅ Complete |
-| Schema Discovery | 2→3→5→8 | ✅ Complete |
-| Query Execution | 2→3→4→6 | ✅ Complete |
-| Data Modification | 2→3→4→7 | ✅ Complete |
-| Data Export | 2→3→4→6→8 | ✅ Complete |
-| AI Skill Generation | 2→4→9 | ✅ Complete |
+| Step | Command / action | Pass criteria |
+| ---- | ----------------- | ------------- |
+| Build | `bun run build` | `dist/cli.mjs` exists, executable, shebang `#!/usr/bin/env bun` (see `scripts/build.ts`) |
+| TypeScript | (via build / IDE) | No compile errors in `src/` |
+| Unit + core tests | `bun run test:unit` | Fast smoke; some **MongoDB** tests can fail if drivers or env are unavailable — treat as **env-specific** until CI is documented |
+| Optional full suite | `bun test` | May include live DB; use `LIVE_DB_CONFIG_PATH`, `SKIP_INTEGRATION_TESTS` per [README.md](./README.md#development) |
+| Package layout | `npm pack --dry-run` | See [README.dev.md](./README.dev.md): `dist/`, `assets/`, `README.md`, `CHANGELOG.md`, `LICENSE` |
 
----
-
-## Requirements Integration Status (19/19 Implemented)
-
-All requirements have explicit cross-phase wiring:
-
-- ✅ INIT-01 through INIT-05 (Initialization & Configuration)
-- ✅ SCHEMA-01 through SCHEMA-04 (Schema Discovery & Refresh)
-- ✅ QUERY-01 through QUERY-04 (Query Operations)
-- ✅ DATA-01 through DATA-02 (Data Modification)
-- ✅ EXPORT-01 (Schema & Data Export)
-- ✅ AI-01 through AI-03 (AI Integration & Skills)
+> **Build size:** `dist/cli.mjs` is a **single bundle** (on the order of **a few MB** in dev builds). The **publishable `.tgz`** is much smaller. Ignore obsolete snapshots that cited **~1.1 MB** for `dist/` or **~315 kB** tarballs as fixed “truth.”
 
 ---
 
-## Build & Test Results
+## Module wiring (conceptual)
 
-```
-TypeScript Compilation: ✅ 0 errors
-CLI Build: ✅ 1.11 MB (dist/cli.mjs)
-Executable: ✅ Verified working
+| Area | Main entry / pattern | Used by (examples) |
+| ---- | -------------------- | ------------------ |
+| **Config** | `configModule`, v2 connections, `~/.config/dbcli/` + `.dbcli` | Init, any command that needs DB or project paths |
+| **Adapters** | `AdapterFactory` (SQL + MongoDB) | `list`, `query`, `schema` (SQL), `migrate`, … |
+| **Permissions** | `enforcePermission` + permission in config | Query / DML / `migrate` |
+| **Blacklist** | Config + query result redaction | `query`, … |
+| **Schema** | Cache / writers under `.dbcli/schemas/` | `schema`, `migrate` follow-up, `check`, … |
+| **Execution** | `QueryExecutor` and DML paths | `query`, `insert`, `update`, `delete`, `export` |
+| **AI skill** | **Static** `assets/SKILL.md` + `assets/reference.md` | `dbcli skill`, `dbcli skill --install` |
 
-Unit Tests: ✅ 341 passing, 0 failures
-Integration Tests: ⏭️  21 skipped (database required)
-Build Time: ~37ms
-
-Package Size: ✅ 315.5 kB tarball (< 5 MB target)
-```
-
----
-
-## API Coverage Analysis
-
-| Component | Provided By | Used By | Status |
-|---|---|---|---|
-| configModule | Phase 2 | 9 commands | ✅ 100% coverage |
-| AdapterFactory | Phase 3 | 8 commands | ✅ 100% coverage |
-| enforcePermission | Phase 4 | 2 executors | ✅ 100% coverage |
-| Formatters | Phase 5 | 2 commands | ✅ 100% coverage |
-| QueryExecutor | Phase 6 | 2 commands | ✅ 100% coverage |
-| DataExecutor | Phase 7 | 3 commands | ✅ 100% coverage |
-| SchemaDiffEngine | Phase 8 | 1 command | ✅ 100% coverage |
-| SkillGenerator | Phase 9 | 1 command | ✅ 100% coverage |
+> **Name drift:** `SkillGenerator` appears in **`.planning/...`** and old phase write-ups; **runtime behavior** is **`src/commands/skill.ts`** + **`assets/`.**
 
 ---
 
-## Identified Issues & Recommendations
+## Representative E2E flows (high level)
 
-### Issue 1: Module Export Pattern Gap (MINOR - NON-BLOCKING)
+| User flow | Involves (conceptually) | Notes |
+| --------- | ------------------------- | ----- |
+| New project + DB | `init` → config + connection test | v2: `--conn-name`, `--use`, `use` |
+| Discover schema | `schema` (per-connection cache) | See `.dbcli/schemas/<connection>/` |
+| Read / export | `list` / `query` / `export` + permission + blacklist | Query-only `LIMIT` as documented |
+| Write data | `insert` / `update` / `delete` + permission | `--dry-run` for writes where applicable |
+| DDL | `migrate` (defaults to dry-run) | `admin` permission |
+| AI | `skill` / `skill --install` | Copies bundled `SKILL.md` and `reference.md` |
 
-**Problem:** Some modules import directly from subpaths instead of using @/core index
-- configModule imported from @/core/config (could use @/core)
-- enforcePermission imported from @/core/permission-guard (could use @/core)
-- DataExecutor imported from @/core/data-executor (could use @/core)
+---
 
-**Impact:** Low - All imports work correctly, just inconsistent pattern
+## API / “coverage” (intent, not a % gate)
 
-**Status:** Does not block npm publication. Can be optimized in v1.1.0.
+| Component / asset | Role today |
+| ----------------- | ---------- |
+| `configModule` | Project binding and connection resolution |
+| `AdapterFactory` | SQL and MongoDB command entry |
+| `enforcePermission` | Operation vs allowed permission level |
+| `assets/SKILL.md` + `assets/reference.md` | Shipped to users; `skill` copies or prints them |
+| `SchemaDiffEngine` (and `diff` command) | Live vs snapshot schema diffs (see user docs) |
+
+---
+
+## Findings & follow-ups (non-binding)
+
+1. **Import style:** Prefer a consistent barrel (`@/core`) vs deep imports where it helps readability; cosmetic.
+2. **Test matrix:** MongoDB-related tests may need a real driver / network; failures are not always “logic bugs.”
+3. **Planning doc drift:** Treat **code + [README.md](./README.md)** as the integration source of truth; sync `.planning/` if you still rely on it for onboarding.
 
 ---
 
 ## Conclusion
 
-**Integration Verification Status: ✅ PASSED**
+- **Integration model:** config → adapter → permission/blacklist → executors; **`skill` = static assets, not a generator.**
+- **Re-run** this checklist after **wiring changes**, **new database engines**, or **changes to `package.json` `files`**.
 
-All 10 phases properly wired with complete E2E flow coverage. Ready for npm publication.
-
-**Recommendation: APPROVED FOR RELEASE** ✅
+**Publication:** [README.dev.md](./README.dev.md) + [CONTRIBUTING.md](./CONTRIBUTING.md); do not rely on frozen test counts or tarball sizes from earlier milestone snapshots.

@@ -78,6 +78,9 @@ When `dbcli` is not on your `PATH`, use `bun run src/cli.ts <subcommand> ...` (s
 # Initialize project with database connection
 dbcli init
 
+# Interactive shell (SQL + dbcli commands, tab completion)
+dbcli shell
+
 # List available tables
 dbcli list
 
@@ -86,6 +89,9 @@ dbcli schema users
 
 # Query data
 dbcli query "SELECT * FROM users"
+
+# Preview schema DDL (dry-run by default; add --execute to apply)
+dbcli migrate create posts --column "id:serial:pk" --column "title:varchar(200):not-null"
 
 # Generate AI agent skill
 dbcli skill --install claude
@@ -174,13 +180,14 @@ dbcli init [OPTIONS]
 ```
 
 **Options (Basic):**
-- `--system <type>` — Database system: `postgresql`, `mysql`, `mariadb`
+- `--system <type>` — Database system: `postgresql`, `mysql`, `mariadb`, `mongodb`
 - `--host <host>` — Database host
 - `--port <port>` — Database port
 - `--user <user>` — Database user
 - `--password <pass>` — Database password
 - `--name <db>` — Database name
 - `--permission <level>` — Permission level: `query-only`, `read-write`, `data-admin`, `admin`
+- **MongoDB only:** `--uri <uri>` — full connection URI (`mongodb://…` or `mongodb+srv://…`); `--auth-source <db>` — auth database (default `admin` when using user/password)
 - `--use-env-refs` — Store environment variable references instead of actual values in config
 - `--skip-test` — Skip connection test
 - `--no-interactive` — Non-interactive mode (requires all options)
@@ -495,8 +502,8 @@ dbcli skill --install cursor          # Install to Cursor IDE
 ```
 
 **Behavior:**
-- Ships a canonical **`assets/SKILL.md`** in the package (single source of truth)
-- Prints that file to **stdout**, writes it with **`--output`**, or copies it to a **platform-specific path** with **`--install`**
+- Ships canonical **`assets/SKILL.md`** + **`assets/reference.md`** (single source of truth: concise skill + long command reference)
+- Prints the skill to **stdout**, writes it with **`--output`**, or copies it to a **platform-specific path** with **`--install`**
 - Actual database access is still enforced by your `.dbcli` permission level and blacklist — the skill text describes the full CLI surface
 
 **Examples:**
@@ -598,12 +605,8 @@ dbcli check users
 dbcli check orders --checks nulls,orphans --format table
 # Scan all tables
 dbcli check --all
-```
 
----
-
-**Examples:**
-```bash
+# Table view + all-tables with selected checks
 dbcli check orders --format table
 dbcli check --all --checks nulls,duplicates --format json
 ```
@@ -696,7 +699,7 @@ dbcli upgrade --check           # Only check, do not upgrade
 
 **Background checks (stderr, skipped when `--quiet` or for `upgrade` / `skill`):**
 - **CLI version:** dbcli checks the npm registry (cached, about once per 24 hours). If a newer package exists, a one-line hint prints after normal command output.
-- **Installed skills:** If you used `dbcli skill --install <platform>`, dbcli compares each installed copy to the bundled `assets/SKILL.md`. When they differ, a short reminder lists which platforms to re-install (`dbcli skill --install <platform>`). Run `dbcli upgrade` to see the same skill status together with version info.
+- **Installed skills:** If you used `dbcli skill --install <platform>`, dbcli compares each installed primary skill file (`SKILL.md` or `dbcli.mdc`) to the bundled `assets/SKILL.md`. When they differ, a short reminder lists which platforms to re-install (`dbcli skill --install <platform>`). Run `dbcli upgrade` to see the same skill status together with version info. Re-installing also refreshes `reference.md` next to the skill.
 
 #### `dbcli shell`
 
@@ -956,7 +959,7 @@ A Query-only agent cannot write to any table, and also cannot read blacklisted t
 
 ## AI Integration Guide
 
-dbcli ships AI-consumable skill documentation (`assets/SKILL.md`) and can copy it into your favorite AI development tool directories.
+dbcli ships AI-consumable skill files (`assets/SKILL.md` and `assets/reference.md`) and can copy them into your favorite AI tool directories.
 
 ### Quick Start
 
@@ -988,7 +991,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Restart Claude Code extension
 5. In Claude Code chat, ask: "Show me the database schema" or "Query active users"
 
-**Skill location:** `~/.claude/skills/dbcli/SKILL.md`
+**Skill location:** `~/.claude/skills/dbcli/` (SKILL.md + reference.md)
 
 ---
 
@@ -1000,7 +1003,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Start Gemini: `gemini start`
 5. In chat, request: "Query the users table" or "Show database tables"
 
-**Skill location:** `~/.gemini/skills/dbcli/SKILL.md`
+**Skill location:** `~/.gemini/skills/dbcli/` (SKILL.md + reference.md)
 
 ---
 
@@ -1012,7 +1015,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Install Copilot CLI: `npm install -g @github-next/github-copilot-cli`
 5. Use copilot preview: `copilot --help` and explore dbcli integration
 
-**Skill location:** `.github/skills/dbcli/SKILL.md` under the **current working directory** when you run `dbcli skill --install copilot` (typically your project root).
+**Skill location:** `.github/skills/dbcli/` (SKILL.md + reference.md) when you run `dbcli skill --install copilot` in your project root.
 
 ---
 
@@ -1024,7 +1027,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 4. Open Cursor editor
 5. Use Cursor's Composer: "Insert a new user" or "Export user data"
 
-**Skill location:** `.cursor/rules/dbcli.mdc` under the **current working directory** when you run `dbcli skill --install cursor` (project-level Cursor rule).
+**Skill location:** `.cursor/rules/dbcli.mdc` (summary + workflows) and `.cursor/skills/dbcli/reference.md` (full command flags and examples) under the **current working directory** when you run `dbcli skill --install cursor`.
 
 ---
 
@@ -1051,7 +1054,7 @@ dbcli skill --install claude
 
 ### Updating the skill after upgrades
 
-The markdown installed by `dbcli skill` is the bundled **`assets/SKILL.md`**. It is **not** regenerated from your live config. When you **upgrade dbcli** or the bundled skill changes, re-copy it to each platform you use:
+`dbcli skill` copies the bundled **`assets/SKILL.md`** (and for `--install`, **`assets/reference.md`** next to it). It is **not** regenerated from your live config. When you **upgrade dbcli** or the bundled skill changes, re-copy it to each platform you use:
 
 ```bash
 dbcli skill --install claude
@@ -1059,7 +1062,7 @@ dbcli skill --install gemini
 # ... etc.
 ```
 
-If an installed copy is older than the bundled file, dbcli prints a **stderr reminder** after most commands (see **`dbcli upgrade`**). Changing **permission level** or **blacklist** in `.dbcli` affects what the CLI allows at runtime — keep project context (e.g. `dbcli status`, `dbcli blacklist list`) in mind for agents even though the skill text lists the full command set.
+If an installed primary skill file is older than the bundled `assets/SKILL.md`, dbcli prints a **stderr reminder** after most commands (see **`dbcli upgrade`**). Changing **permission level** or **blacklist** in `.dbcli` affects what the CLI allows at runtime — keep project context (e.g. `dbcli status`, `dbcli blacklist list`) in mind for agents even though the skill text lists the full command set.
 
 ---
 
@@ -1236,6 +1239,7 @@ chmod +x dist/cli.mjs
 - **PostgreSQL:** 12.0+
 - **MySQL:** 8.0+
 - **MariaDB:** 10.5+
+- **MongoDB:** 4.4+ (query and collection listing via `mongodb://` and `mongodb+srv://`; see **MongoDB Atlas / SRV Connections** earlier in this document)
 
 ### Runtime
 

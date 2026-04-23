@@ -1,5 +1,17 @@
 # Milestones
 
+## v1.6.0 — Full MongoDB Support & Improved Skill Installation (Shipped: 2026-04-23)
+
+**Scope:** Phase 20 (Full MongoDB DML, diagnostics, documentation refactor)
+
+**Key accomplishments:**
+- **Full MongoDB Support**: Extended query, insert, update, and delete support to MongoDB.
+- **Safeguards**: Integrated `blacklist` and `query-size-guard` for MongoDB.
+- **Improved Skill Installation**: `dbcli skill --install` now deploys both `SKILL.md` and `reference.md`.
+- **Enhanced Security Model**: Secure connection storage in `~/.config/dbcli/` by default.
+
+---
+
 ## v1.5.2 — MongoDB SRV Diagnostics (Shipped: 2026-04-22)
 
 **Scope:** Fixes for MongoDB SRV environment reporting.

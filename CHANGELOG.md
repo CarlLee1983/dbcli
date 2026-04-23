@@ -5,6 +5,22 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-04-23
+
+### Added
+
+- **Full MongoDB Support**: Extended all core operations to support MongoDB.
+  - Data operations: `query`, `insert`, `update`, `delete`.
+  - Safeguards: Integrated `blacklist` protection and `query-size-guard` for MongoDB commands.
+  - Discovery: Implemented schema inspection for MongoDB collections.
+  - Diagnostics: Added comprehensive MongoDB environment and connection diagnostics to `dbcli doctor`.
+- **Improved AI Skill Installation**: `dbcli skill --install` now deploys both `SKILL.md` (high-level workflow) and `reference.md` (full command syntax and examples) to target platforms (Claude Code, Gemini CLI, Copilot, Cursor).
+- **Security model enhancement**: `dbcli init` now defaults to a more secure storage model, placing sensitive connection details in `~/.config/dbcli/` rather than the local project workspace.
+
+### Changed
+
+- **Documentation Refactor**: Updated and synchronized documentation (README, README.zh-TW, SKILL.md) to reflect full MongoDB capabilities and first-step walkthroughs.
+
 ## [1.5.2] - 2026-04-22
 
 ### Fixed

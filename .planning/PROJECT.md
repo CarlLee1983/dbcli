@@ -118,15 +118,26 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.5.2 — Phase 18+ Complete)
+## Current State (v1.6.0 — Phase 20+ Complete)
 
-**Latest Release:** v1.5.2 (2026-04-22)
+**Latest Release:** v1.6.0 (2026-04-23)
+- ✅ Full MongoDB Support (v1.6.0) — extended query, insert, update, delete, schema, list
+- ✅ MongoDB Safeguards (v1.6.0) — integrated blacklist and size guard protection
+- ✅ Improved Skill Installation (v1.6.0) — deploy SKILL.md + reference.md to all platforms
+- ✅ Enhanced Security Model (v1.6.0) — secure connection storage in ~/.config/dbcli/
 - ✅ MongoDB SRV Diagnostics (v1.5.2) — added environment reporting to `doctor`
 - ✅ MongoDB SRV Expansion (v1.5.1) — fixed SRV connection and database consistency
 - ✅ Layered Schema Cache (v1.5.0) — integrated file-based persistence for schemas
 - ✅ Per-connection isolation implemented
 - ✅ SKILL.md documentation updated for connection-aware AI usage
-- ✅ 350+ tests passing
+- ✅ 380+ tests passing
+
+**What's Shipped (v1.6.0):**
+1. **Full MongoDB Support** — Extended all core operations to support MongoDB collections
+2. **MongoDB Safeguards** — Integrated `blacklist` and `query-size-guard` for MongoDB commands
+3. **Improved Skill Installation** — `dbcli skill --install` deploys both `SKILL.md` and `reference.md`
+4. **Enhanced Security Model** — `dbcli init` defaults to secure storage in `~/.config/dbcli/`
+5. **MongoDB SRV Diagnostics** — `dbcli doctor` reports SRV resolution capabilities
 
 **What's Shipped (v1.5.2):**
 1. **Doctor diagnostics for MongoDB SRV** — `dbcli doctor` reports SRV resolution capabilities
@@ -193,4 +204,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-04-23 after v1.5.2 release*
+*Last updated: 2026-04-23 after v1.6.0 release*

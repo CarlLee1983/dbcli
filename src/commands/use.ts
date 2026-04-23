@@ -4,6 +4,7 @@
 
 import { Command } from 'commander'
 import { readV2Config, writeV2Config } from '@/core/config-v2'
+import { configModule } from '@/core/config'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -50,22 +51,50 @@ export function listConnectionsForDisplay(config: DbcliConfigV2): string[] {
 }
 
 /**
- * Check if config is v2 format, throw helpful error if not
+ * Check if config is v2 format, throw helpful error if not.
+ * Supports V1 config by returning a virtual V2 config for display purposes.
  */
 async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
   const storagePath = await resolveConfigStoragePath(configPath)
   const configFile = Bun.file(join(storagePath, 'config.json'))
-  if (!(await configFile.exists())) {
+
+  // Handle case where config might be a legacy single-file .dbcli (not a directory)
+  const legacyFile = Bun.file(configPath)
+
+  if (!(await configFile.exists()) && !(await legacyFile.exists())) {
     throw new ConfigError(t('init.config_not_found'))
   }
 
-  const raw = JSON.parse(await configFile.text())
+  try {
+    const raw = await (async () => {
+      if (await configFile.exists()) return JSON.parse(await configFile.text())
+      return JSON.parse(await legacyFile.text())
+    })()
 
-  if (!raw.version || raw.version !== 2 || !raw.connections) {
+    if (!raw.version || raw.version !== 2 || !raw.connections) {
+      // It's a V1 config. Return a virtual V2 representation.
+      const v1Config = await configModule.read(configPath)
+      return {
+        version: 2,
+        default: 'default',
+        connections: {
+          default: {
+            ...v1Config.connection,
+            permission: v1Config.permission,
+          },
+        },
+        schema: v1Config.schema || {},
+        schemas: { default: v1Config.schema || {} },
+        metadata: v1Config.metadata || { version: '1.0' },
+        blacklist: v1Config.blacklist || { tables: [], columns: {} },
+      } as DbcliConfigV2
+    }
+
+    return readV2Config(storagePath)
+  } catch (error) {
+    if (error instanceof ConfigError) throw error
     throw new ConfigError(t('use.requires_v2'))
   }
-
-  return readV2Config(storagePath)
 }
 
 export const useCommand = new Command('use')

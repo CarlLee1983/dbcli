@@ -23,12 +23,12 @@ const validOptions: ConnectionOptions = {
   port: Number(process.env.PG_PORT || 5433),
   user: process.env.PG_USER || 'dbcli',
   password: process.env.PG_PASSWORD || 'testpass',
-  database: process.env.PG_DATABASE || 'dbcli_test'
+  database: process.env.PG_DATABASE || 'dbcli_test',
 }
 
 const invalidOptions: ConnectionOptions = {
   ...validOptions,
-  password: 'wrong_password_definitely_invalid_xyz'
+  password: 'wrong_password_definitely_invalid_xyz',
 }
 
 const unreachableOptions: ConnectionOptions = {
@@ -38,7 +38,7 @@ const unreachableOptions: ConnectionOptions = {
   user: 'postgres',
   password: 'postgres',
   database: 'postgres',
-  timeout: 1000
+  timeout: 1000,
 }
 
 describe('PostgreSQL Adapter Integration Tests', () => {

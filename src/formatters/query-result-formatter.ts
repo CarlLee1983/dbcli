@@ -56,11 +56,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
 
     const table = new Table({
       head: result.columnNames,
-      style: { compact: false, 'padding-left': 1, 'padding-right': 1 }
+      style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
     })
 
-    result.rows.forEach(row => {
-      table.push(result.columnNames.map(col => this.cellToString(row[col])))
+    result.rows.forEach((row) => {
+      table.push(result.columnNames.map((col) => this.cellToString(row[col])))
     })
 
     let output = table.toString()
@@ -91,7 +91,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
   private formatEmptyTable(result: QueryResult<Record<string, any>>): string {
     const table = new Table({
       head: result.columnNames,
-      style: { compact: false, 'padding-left': 1, 'padding-right': 1 }
+      style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
     })
 
     let output = table.toString()
@@ -129,7 +129,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
       columnNames: result.columnNames,
       columnTypes: result.columnTypes,
       executionTimeMs: result.executionTimeMs,
-      metadata: result.metadata
+      metadata: result.metadata,
     }
 
     return JSON.stringify(output, null, spacing)
@@ -142,7 +142,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
   private formatCSV(result: QueryResult<Record<string, any>>): string {
     if (result.rows.length === 0) {
       // Headers only for empty result
-      let csvOutput = result.columnNames.map(name => this.escapeCSVField(name)).join(',')
+      let csvOutput = result.columnNames.map((name) => this.escapeCSVField(name)).join(',')
       if (result.metadata?.securityNotification) {
         csvOutput += '\n# ' + result.metadata.securityNotification
       }
@@ -152,11 +152,11 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
     const lines: string[] = []
 
     // Add header row
-    lines.push(result.columnNames.map(name => this.escapeCSVField(name)).join(','))
+    lines.push(result.columnNames.map((name) => this.escapeCSVField(name)).join(','))
 
     // Add data rows
-    result.rows.forEach(row => {
-      const csvRow = result.columnNames.map(col => this.escapeCSVField(row[col])).join(',')
+    result.rows.forEach((row) => {
+      const csvRow = result.columnNames.map((col) => this.escapeCSVField(row[col])).join(',')
       lines.push(csvRow)
     })
 

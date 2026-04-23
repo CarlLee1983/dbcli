@@ -9,7 +9,7 @@ describe('shellCommand', () => {
 
   test('has --sql option', () => {
     const opts = shellCommand.options
-    const sqlOpt = opts.find(o => o.long === '--sql')
+    const sqlOpt = opts.find((o) => o.long === '--sql')
     expect(sqlOpt).toBeDefined()
   })
 

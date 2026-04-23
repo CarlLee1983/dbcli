@@ -12,9 +12,15 @@ class MockMongoAdapter implements QueryableAdapter {
     const data = [{ _id: '1', name: 'Alice', city: 'Taipei' }] as T[]
     return { rows: data, affectedRows: data.length }
   }
-  async listCollections() { return [] }
-  async testConnection() { return true }
-  async getServerVersion() { return '6.0.1' }
+  async listCollections() {
+    return []
+  }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return '6.0.1'
+  }
 }
 
 const mongoConfig = {
@@ -39,7 +45,9 @@ let formatterSpy: any
 describe('Query Command - MongoDB', () => {
   beforeEach(() => {
     configReadSpy = spyOn(configModule, 'read').mockResolvedValue(mongoConfig as any)
-    createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(new MockMongoAdapter())
+    createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      new MockMongoAdapter()
+    )
     formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation(
       () => '[{"_id":"1","name":"Alice"}]'
     )
@@ -53,10 +61,14 @@ describe('Query Command - MongoDB', () => {
 
   test('requires --collection option for MongoDB connections', async () => {
     const errSpy = spyOn(console, 'error').mockImplementation(() => {})
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
     try {
       await queryCommand('{"age": 18}', { format: 'json' })
-    } catch { /* exit() */ }
+    } catch {
+      /* exit() */
+    }
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('--collection'))
     errSpy.mockRestore()
     exitSpy.mockRestore()
@@ -64,10 +76,14 @@ describe('Query Command - MongoDB', () => {
 
   test('rejects SQL-like statements with MongoDB error message', async () => {
     const errSpy = spyOn(console, 'error').mockImplementation(() => {})
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
     try {
       await queryCommand('SELECT * FROM users', { collection: 'users', format: 'json' })
-    } catch { /* exit() */ }
+    } catch {
+      /* exit() */
+    }
     const calls = errSpy.mock.calls.flat().join(' ')
     expect(calls).toContain('MongoDB')
     expect(calls).toContain('JSON')
@@ -77,10 +93,14 @@ describe('Query Command - MongoDB', () => {
 
   test('rejects invalid JSON query', async () => {
     const errSpy = spyOn(console, 'error').mockImplementation(() => {})
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
     try {
       await queryCommand('{invalid json}', { collection: 'users', format: 'json' })
-    } catch { /* exit() */ }
+    } catch {
+      /* exit() */
+    }
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('JSON'))
     errSpy.mockRestore()
     exitSpy.mockRestore()

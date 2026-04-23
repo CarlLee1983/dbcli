@@ -4,7 +4,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
@@ -41,11 +41,20 @@ function parseWhereClause(whereClause: string): Record<string, any> {
       )
     }
 
-    const [_, column, valueStr] = match
+    const column = match[1]
+    const valueStr = match[2]
+    if (valueStr === undefined || column === undefined) {
+      throw new Error(
+        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
+      )
+    }
     let value: any = valueStr.trim()
 
     // Strip quotes
-    if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+    if (
+      (value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"'))
+    ) {
       value = value.slice(1, -1)
     }
 
@@ -115,7 +124,9 @@ export async function updateCommand(
 
     // Validate setData is an object, not an array or primitive
     if (!setData || typeof setData !== 'object' || Array.isArray(setData)) {
-      throw new Error('JSON in --set must be an object (e.g. {"name":"Bob","email":"b@example.com"})')
+      throw new Error(
+        'JSON in --set must be an object (e.g. {"name":"Bob","email":"b@example.com"})'
+      )
     }
 
     // 6. Load configuration
@@ -131,7 +142,7 @@ export async function updateCommand(
     }
 
     // 7. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -139,7 +150,9 @@ export async function updateCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 9. Create DataExecutor and execute UPDATE
-      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
+        | 'postgresql'
+        | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)

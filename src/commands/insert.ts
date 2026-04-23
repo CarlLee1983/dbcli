@@ -4,7 +4,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
@@ -108,7 +108,7 @@ export async function insertCommand(
     }
 
     // 5. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -116,7 +116,9 @@ export async function insertCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 7. Create DataExecutor and execute INSERT
-      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
+        | 'postgresql'
+        | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)

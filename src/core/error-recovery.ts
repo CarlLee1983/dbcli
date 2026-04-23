@@ -106,7 +106,7 @@ export class ErrorRecoveryManager {
         timestamp,
         backupPath,
         sizeBytes,
-        reason
+        reason,
       }
     } catch (error) {
       throw new Error(
@@ -130,7 +130,7 @@ export class ErrorRecoveryManager {
         throw new Error(`Backup file not found: ${backupPath}`)
       }
 
-      const content = await backupFile.json() as DbcliConfig
+      const content = (await backupFile.json()) as DbcliConfig
       return content
     } catch (error) {
       throw new Error(
@@ -154,7 +154,7 @@ export class ErrorRecoveryManager {
         return {
           points,
           recoveryDir: this.recoveryDir,
-          maxBackups: this.maxBackups
+          maxBackups: this.maxBackups,
         }
       }
 
@@ -181,7 +181,7 @@ export class ErrorRecoveryManager {
             timestamp,
             backupPath,
             sizeBytes,
-            reason: 'backup'
+            reason: 'backup',
           })
         }
       }
@@ -192,14 +192,14 @@ export class ErrorRecoveryManager {
       return {
         points,
         recoveryDir: this.recoveryDir,
-        maxBackups: this.maxBackups
+        maxBackups: this.maxBackups,
       }
     } catch (error) {
       console.error('Failed to get recovery state:', error)
       return {
         points: [],
         recoveryDir: this.recoveryDir,
-        maxBackups: this.maxBackups
+        maxBackups: this.maxBackups,
       }
     }
   }
@@ -252,10 +252,7 @@ export class ErrorRecoveryManager {
     targetPath: string
   ): Promise<T> {
     // Create backup before starting
-    const recoveryPoint = await this.createRecoveryPoint(
-      currentConfig,
-      'pre-operation-backup'
-    )
+    const recoveryPoint = await this.createRecoveryPoint(currentConfig, 'pre-operation-backup')
 
     try {
       // Execute operation

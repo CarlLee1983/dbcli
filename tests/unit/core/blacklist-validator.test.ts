@@ -15,9 +15,9 @@ const baseConfig: DbcliConfig = {
     port: 5432,
     user: 'user',
     password: 'pass',
-    database: 'testdb'
+    database: 'testdb',
   },
-  permission: 'query-only'
+  permission: 'query-only',
 }
 
 function makeConfig(blacklist?: any): any {
@@ -38,22 +38,30 @@ describe('BlacklistValidator', () => {
 
     it('throws BlacklistError for SELECT on blacklisted table', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} })
-      expect(() => validator.checkTableBlacklist('SELECT', 'audit_logs', [])).toThrow(BlacklistError)
+      expect(() => validator.checkTableBlacklist('SELECT', 'audit_logs', [])).toThrow(
+        BlacklistError
+      )
     })
 
     it('throws BlacklistError for INSERT on blacklisted table', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} })
-      expect(() => validator.checkTableBlacklist('INSERT', 'audit_logs', [])).toThrow(BlacklistError)
+      expect(() => validator.checkTableBlacklist('INSERT', 'audit_logs', [])).toThrow(
+        BlacklistError
+      )
     })
 
     it('throws BlacklistError for UPDATE on blacklisted table', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} })
-      expect(() => validator.checkTableBlacklist('UPDATE', 'audit_logs', [])).toThrow(BlacklistError)
+      expect(() => validator.checkTableBlacklist('UPDATE', 'audit_logs', [])).toThrow(
+        BlacklistError
+      )
     })
 
     it('throws BlacklistError for DELETE on blacklisted table', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} })
-      expect(() => validator.checkTableBlacklist('DELETE', 'audit_logs', [])).toThrow(BlacklistError)
+      expect(() => validator.checkTableBlacklist('DELETE', 'audit_logs', [])).toThrow(
+        BlacklistError
+      )
     })
 
     it('error message includes table name and operation', () => {
@@ -82,7 +90,11 @@ describe('BlacklistValidator', () => {
     it('returns all columns for non-blacklisted table', () => {
       const validator = makeValidator({ tables: [], columns: {} })
       const rows = [{ id: 1, name: 'Alice', email: 'alice@example.com' }]
-      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, ['id', 'name', 'email'])
+      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, [
+        'id',
+        'name',
+        'email',
+      ])
       expect(filteredRows).toEqual(rows)
       expect(omittedColumns).toEqual([])
     })
@@ -90,7 +102,11 @@ describe('BlacklistValidator', () => {
     it('removes one blacklisted column correctly', () => {
       const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
       const rows = [{ id: 1, name: 'Alice', password: 'secret' }]
-      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, ['id', 'name', 'password'])
+      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, [
+        'id',
+        'name',
+        'password',
+      ])
       expect(omittedColumns).toEqual(['password'])
       expect(filteredRows[0]).not.toHaveProperty('password')
       expect(filteredRows[0]).toHaveProperty('id', 1)
@@ -100,7 +116,12 @@ describe('BlacklistValidator', () => {
     it('removes multiple blacklisted columns', () => {
       const validator = makeValidator({ tables: [], columns: { users: ['password', 'api_key'] } })
       const rows = [{ id: 1, name: 'Alice', password: 'secret', api_key: 'key123' }]
-      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, ['id', 'name', 'password', 'api_key'])
+      const { filteredRows, omittedColumns } = validator.filterColumns('users', rows, [
+        'id',
+        'name',
+        'password',
+        'api_key',
+      ])
       expect(omittedColumns).toContain('password')
       expect(omittedColumns).toContain('api_key')
       expect(omittedColumns.length).toBe(2)
@@ -110,7 +131,11 @@ describe('BlacklistValidator', () => {
 
     it('handles empty rows array', () => {
       const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
-      const { filteredRows, omittedColumns } = validator.filterColumns('users', [], ['id', 'password'])
+      const { filteredRows, omittedColumns } = validator.filterColumns(
+        'users',
+        [],
+        ['id', 'password']
+      )
       expect(filteredRows).toEqual([])
       expect(omittedColumns).toEqual(['password'])
     })

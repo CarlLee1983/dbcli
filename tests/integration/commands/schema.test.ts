@@ -113,40 +113,47 @@ describe('dbcli schema command', () => {
   })
 
   test('schema --refresh updates refresh metadata even when no changes are detected', async () => {
-    await Bun.write(TEST_CONFIG_PATH, JSON.stringify({
-      connection: {
-        system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'user',
-        password: 'pass',
-        database: 'db'
-      },
-      permission: 'query-only',
-      schema: {
-        users: {
-          name: 'users',
-          columns: [],
-          primaryKey: [],
-          foreignKeys: [],
-          indexes: [],
-          estimatedRowCount: 0,
-          tableType: 'table'
-        }
-      },
-      metadata: { version: '1.0' }
-    }, null, 2))
+    await Bun.write(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          connection: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'user',
+            password: 'pass',
+            database: 'db',
+          },
+          permission: 'query-only',
+          schema: {
+            users: {
+              name: 'users',
+              columns: [],
+              primaryKey: [],
+              foreignKeys: [],
+              indexes: [],
+              estimatedRowCount: 0,
+              tableType: 'table',
+            },
+          },
+          metadata: { version: '1.0' },
+        },
+        null,
+        2
+      )
+    )
 
     const diffSpy = spyOn(SchemaDiffEngine.prototype, 'diff').mockResolvedValue({
       tablesAdded: [],
       tablesRemoved: [],
       tablesModified: {},
-      summary: '0 added, 0 removed, 0 modified'
+      summary: '0 added, 0 removed, 0 modified',
     } as any)
 
     const adapter = {
       connect: async () => {},
-      disconnect: async () => {}
+      disconnect: async () => {},
     }
     const adapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(adapter as any)
 

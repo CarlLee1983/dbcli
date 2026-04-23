@@ -59,9 +59,7 @@ export class AtomicFileWriter {
       this.checkTimeout(startTime, timeout, 'write initialization')
 
       // Convert content to buffer if needed
-      const buffer = typeof content === 'string'
-        ? Buffer.from(content, 'utf-8')
-        : content
+      const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content
 
       // Write to temporary file
       const tempFile = Bun.file(tempPath)
@@ -108,7 +106,7 @@ export class AtomicFileWriter {
         sizeBytes,
         timestamp: new Date().toISOString(),
         backupCreated,
-        backupPath: backupCreated ? backupPath : undefined
+        backupPath: backupCreated ? backupPath : undefined,
       }
     } catch (error) {
       // Cleanup on error
@@ -202,7 +200,7 @@ export class AtomicFileWriter {
 
       // Write to target using atomic write
       const result = await this.write(targetPath, Buffer.from(content), {
-        createBackup: false // Don't create backup when restoring
+        createBackup: false, // Don't create backup when restoring
       })
 
       return !!result

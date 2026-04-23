@@ -11,8 +11,15 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import type { DbcliConfig } from '@/types'
 
 const baseConfig: DbcliConfig = {
-  connection: { system: 'postgresql', host: 'localhost', port: 5432, user: 'u', password: 'p', database: 'db' },
-  permission: 'admin'
+  connection: {
+    system: 'postgresql',
+    host: 'localhost',
+    port: 5432,
+    user: 'u',
+    password: 'p',
+    database: 'db',
+  },
+  permission: 'admin',
 }
 
 // ─── Setup: Large config for stress testing ────────────────────────────────
@@ -43,8 +50,8 @@ const typicalBlacklist = {
   tables: ['audit_logs', 'secrets_vault', 'internal_config'],
   columns: {
     users: ['password', 'api_key', 'ssn'],
-    payment: ['credit_card', 'cvv', 'bank_account']
-  }
+    payment: ['credit_card', 'cvv', 'bank_account'],
+  },
 }
 const typicalConfig = { ...baseConfig, blacklist: typicalBlacklist }
 const typicalManager = new BlacklistManager(typicalConfig as any)
@@ -57,7 +64,7 @@ const typicalRows = Array.from({ length: 1000 }, (_, i) => ({
   password: `hash_${i}`,
   api_key: `key_${i}`,
   ssn: `ssn_${i}`,
-  created_at: new Date().toISOString()
+  created_at: new Date().toISOString(),
 }))
 const typicalColumnList = Object.keys(typicalRows[0])
 
@@ -139,7 +146,11 @@ describe('Blacklist Performance Benchmarks', () => {
     for (let i = 0; i < ITERATIONS; i++) {
       // Simulate what happens per query: table check + column filter
       if (!manager.isTableBlacklisted('users')) {
-        validator.filterColumns('users', [{ id: i, password: 'hash', email: 'e@e.com' }], ['id', 'password', 'email'])
+        validator.filterColumns(
+          'users',
+          [{ id: i, password: 'hash', email: 'e@e.com' }],
+          ['id', 'password', 'email']
+        )
       }
     }
 

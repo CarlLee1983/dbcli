@@ -1,5 +1,10 @@
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
-import { checkForUpdate, isStale, compareVersions, type VersionCheckCache } from '@/utils/version-check'
+import {
+  checkForUpdate,
+  isStale,
+  compareVersions,
+  type VersionCheckCache,
+} from '@/utils/version-check'
 
 describe('compareVersions', () => {
   test('returns 0 when versions are equal', () => {

@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { configModule } from '@/core/config'
 import type { ColumnSchema } from '@/adapters/types'
 import { validateFormat } from '@/utils/validation'
@@ -7,11 +7,14 @@ import { validateFormat } from '@/utils/validation'
 const ALLOWED_FORMATS = ['json', 'table'] as const
 
 export interface SchemaSnapshot {
-  tables: Record<string, {
-    name: string
-    columns: ColumnSchema[]
-    indexes?: Array<{ name: string; columns: string[]; unique: boolean }>
-  }>
+  tables: Record<
+    string,
+    {
+      name: string
+      columns: ColumnSchema[]
+      indexes?: Array<{ name: string; columns: string[]; unique: boolean }>
+    }
+  >
   createdAt: string
 }
 
@@ -46,8 +49,8 @@ export function compareSnapshots(before: SchemaSnapshot, after: SchemaSnapshot):
   const beforeTables = new Set(Object.keys(before.tables))
   const afterTables = new Set(Object.keys(after.tables))
 
-  const addedTables = Array.from(afterTables).filter(t => !beforeTables.has(t))
-  const removedTables = Array.from(beforeTables).filter(t => !afterTables.has(t))
+  const addedTables = Array.from(afterTables).filter((t) => !beforeTables.has(t))
+  const removedTables = Array.from(beforeTables).filter((t) => !afterTables.has(t))
 
   const addedColumns: DiffColumnEntry[] = []
   const removedColumns: DiffColumnEntry[] = []
@@ -55,29 +58,44 @@ export function compareSnapshots(before: SchemaSnapshot, after: SchemaSnapshot):
   const indexChanges: DiffIndexEntry[] = []
 
   for (const tableName of addedTables) {
-    for (const col of after.tables[tableName].columns) {
-      addedColumns.push({ table: tableName, column: col.name, type: col.type, nullable: col.nullable })
+    const added = after.tables[tableName]
+    if (!added) continue
+    for (const col of added.columns) {
+      addedColumns.push({
+        table: tableName,
+        column: col.name,
+        type: col.type,
+        nullable: col.nullable,
+      })
     }
   }
 
   for (const tableName of removedTables) {
-    for (const col of before.tables[tableName].columns) {
+    const removed = before.tables[tableName]
+    if (!removed) continue
+    for (const col of removed.columns) {
       removedColumns.push({ table: tableName, column: col.name, type: col.type })
     }
   }
 
-  const commonTables = Array.from(afterTables).filter(t => beforeTables.has(t))
+  const commonTables = Array.from(afterTables).filter((t) => beforeTables.has(t))
 
   for (const tableName of commonTables) {
     const beforeTable = before.tables[tableName]
     const afterTable = after.tables[tableName]
+    if (!beforeTable || !afterTable) continue
 
-    const beforeColMap = new Map(beforeTable.columns.map(c => [c.name, c]))
-    const afterColMap = new Map(afterTable.columns.map(c => [c.name, c]))
+    const beforeColMap = new Map(beforeTable.columns.map((c) => [c.name, c]))
+    const afterColMap = new Map(afterTable.columns.map((c) => [c.name, c]))
 
     for (const [name, col] of afterColMap) {
       if (!beforeColMap.has(name)) {
-        addedColumns.push({ table: tableName, column: name, type: col.type, nullable: col.nullable })
+        addedColumns.push({
+          table: tableName,
+          column: name,
+          type: col.type,
+          nullable: col.nullable,
+        })
       }
     }
 
@@ -103,8 +121,8 @@ export function compareSnapshots(before: SchemaSnapshot, after: SchemaSnapshot):
       }
     }
 
-    const beforeIndexes = new Map((beforeTable.indexes || []).map(i => [i.name, i]))
-    const afterIndexes = new Map((afterTable.indexes || []).map(i => [i.name, i]))
+    const beforeIndexes = new Map((beforeTable.indexes || []).map((i) => [i.name, i]))
+    const afterIndexes = new Map((afterTable.indexes || []).map((i) => [i.name, i]))
 
     for (const name of afterIndexes.keys()) {
       if (!beforeIndexes.has(name)) {
@@ -164,7 +182,7 @@ async function diffAction(options: {
       process.exit(1)
     }
 
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -186,7 +204,9 @@ async function diffAction(options: {
 
       if (options.snapshot) {
         await Bun.write(options.snapshot, JSON.stringify(currentSnapshot, null, 2))
-        console.error(`Snapshot saved to ${options.snapshot} (${Object.keys(currentSnapshot.tables).length} tables)`)
+        console.error(
+          `Snapshot saved to ${options.snapshot} (${Object.keys(currentSnapshot.tables).length} tables)`
+        )
         return
       }
 
@@ -202,26 +222,36 @@ async function diffAction(options: {
         if (options.format === 'json') {
           console.log(JSON.stringify(result, null, 2))
         } else {
-          console.log(`\nSchema diff (${beforeSnapshot.createdAt} -> ${currentSnapshot.createdAt}):`)
-          if (result.added.tables.length > 0) console.log(`\n  Added tables: ${result.added.tables.join(', ')}`)
-          if (result.removed.tables.length > 0) console.log(`\n  Removed tables: ${result.removed.tables.join(', ')}`)
+          console.log(
+            `\nSchema diff (${beforeSnapshot.createdAt} -> ${currentSnapshot.createdAt}):`
+          )
+          if (result.added.tables.length > 0)
+            console.log(`\n  Added tables: ${result.added.tables.join(', ')}`)
+          if (result.removed.tables.length > 0)
+            console.log(`\n  Removed tables: ${result.removed.tables.join(', ')}`)
           if (result.added.columns.length > 0) {
             console.log(`\n  Added columns:`)
-            for (const c of result.added.columns) console.log(`    ${c.table}.${c.column} (${c.type})`)
+            for (const c of result.added.columns)
+              console.log(`    ${c.table}.${c.column} (${c.type})`)
           }
           if (result.removed.columns.length > 0) {
             console.log(`\n  Removed columns:`)
-            for (const c of result.removed.columns) console.log(`    ${c.table}.${c.column} (${c.type})`)
+            for (const c of result.removed.columns)
+              console.log(`    ${c.table}.${c.column} (${c.type})`)
           }
           if (result.modified.columns.length > 0) {
             console.log(`\n  Modified columns:`)
-            for (const c of result.modified.columns) console.log(`    ${c.table}.${c.column}: ${c.before.type} -> ${c.after.type}`)
+            for (const c of result.modified.columns)
+              console.log(`    ${c.table}.${c.column}: ${c.before.type} -> ${c.after.type}`)
           }
           if (result.modified.indexes.length > 0) {
             console.log(`\n  Index changes:`)
-            for (const i of result.modified.indexes) console.log(`    ${i.table}.${i.name}: ${i.change}`)
+            for (const i of result.modified.indexes)
+              console.log(`    ${i.table}.${i.name}: ${i.change}`)
           }
-          console.log(`\n  Summary: +${result.summary.added} -${result.summary.removed} ~${result.summary.modified}`)
+          console.log(
+            `\n  Summary: +${result.summary.added} -${result.summary.removed} ~${result.summary.modified}`
+          )
         }
       }
     } finally {

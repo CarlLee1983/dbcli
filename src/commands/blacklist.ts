@@ -27,7 +27,9 @@ export function isValidTableName(name: string): boolean {
 /**
  * Validate column identifier format: "table.column"
  */
-export function parseColumnIdentifier(identifier: string): { table: string; column: string } | null {
+export function parseColumnIdentifier(
+  identifier: string
+): { table: string; column: string } | null {
   const parts = identifier.split('.')
   if (parts.length !== 2) {
     return null
@@ -51,7 +53,7 @@ export function getOrInitBlacklist(config: any): BlacklistConfig {
   }
   return {
     tables: Array.isArray(config.blacklist.tables) ? [...config.blacklist.tables] : [],
-    columns: config.blacklist.columns ? { ...config.blacklist.columns } : {}
+    columns: config.blacklist.columns ? { ...config.blacklist.columns } : {},
   }
 }
 
@@ -104,7 +106,7 @@ export async function blacklistTableAdd(tableName: string, configPath: string): 
 
   const newBlacklist: BlacklistConfig = {
     ...blacklist,
-    tables: [...blacklist.tables, tableName]
+    tables: [...blacklist.tables, tableName],
   }
 
   await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
@@ -129,7 +131,7 @@ export async function blacklistTableRemove(tableName: string, configPath: string
 
   const newBlacklist: BlacklistConfig = {
     ...blacklist,
-    tables: blacklist.tables.filter(t => t !== tableName)
+    tables: blacklist.tables.filter((t) => t !== tableName),
   }
 
   await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
@@ -159,8 +161,8 @@ export async function blacklistColumnAdd(identifier: string, configPath: string)
     ...blacklist,
     columns: {
       ...blacklist.columns,
-      [table]: [...existingCols, column]
-    }
+      [table]: [...existingCols, column],
+    },
   }
 
   await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
@@ -186,7 +188,7 @@ export async function blacklistColumnRemove(identifier: string, configPath: stri
     throw new Error(t_vars('errors.column_not_in_blacklist', { table, column }))
   }
 
-  const updatedCols = existingCols.filter(c => c !== column)
+  const updatedCols = existingCols.filter((c) => c !== column)
   const newColumns = { ...blacklist.columns }
 
   if (updatedCols.length === 0) {
@@ -197,7 +199,7 @@ export async function blacklistColumnRemove(identifier: string, configPath: stri
 
   const newBlacklist: BlacklistConfig = {
     ...blacklist,
-    columns: newColumns
+    columns: newColumns,
   }
 
   await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
@@ -206,8 +208,7 @@ export async function blacklistColumnRemove(identifier: string, configPath: stri
 
 // ─── Command builder ─────────────────────────────────────────────────────────
 
-const blacklistCommand = new Command('blacklist')
-  .description(t('blacklist.description'))
+const blacklistCommand = new Command('blacklist').description(t('blacklist.description'))
 
 // blacklist list
 blacklistCommand
@@ -256,7 +257,7 @@ tableCmd
 const columnCmd = blacklistCommand.command('column').description(t('blacklist.columns_label'))
 
 columnCmd
-  .command("add <table.column>")
+  .command('add <table.column>')
   .description('Add column to blacklist (format: table.column)')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
   .action(async (identifier: string, options: any) => {
@@ -269,7 +270,7 @@ columnCmd
   })
 
 columnCmd
-  .command("remove <table.column>")
+  .command('remove <table.column>')
   .description('Remove column from blacklist (format: table.column)')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
   .action(async (identifier: string, options: any) => {

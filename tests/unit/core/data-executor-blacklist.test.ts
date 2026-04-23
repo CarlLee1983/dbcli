@@ -17,40 +17,81 @@ function createMockAdapter(): DatabaseAdapter {
     disconnect: async () => {},
     execute: async <T = unknown>(_sql: string, _params?: any[]) => ({
       rows: [] as T[],
-      affectedRows: 0
+      affectedRows: 0,
     }),
     listTables: async () => [],
-    getTableSchema: async () => ({ name: '', columns: [], rowCount: 0, primaryKey: null, foreignKeys: [] }),
+    getTableSchema: async () => ({
+      name: '',
+      columns: [],
+      rowCount: 0,
+      primaryKey: null,
+      foreignKeys: [],
+    }),
     testConnection: async () => true,
-    getServerVersion: async () => 'test'
+    getServerVersion: async () => 'test',
   }
 }
 
 const mockSchema: TableSchema = {
   name: 'audit_logs',
   columns: [
-    { name: 'id', type: 'integer', nullable: false, defaultValue: null, isPrimaryKey: true, foreignKey: null },
-    { name: 'action', type: 'varchar', nullable: false, defaultValue: null, isPrimaryKey: false, foreignKey: null }
+    {
+      name: 'id',
+      type: 'integer',
+      nullable: false,
+      defaultValue: null,
+      isPrimaryKey: true,
+      foreignKey: null,
+    },
+    {
+      name: 'action',
+      type: 'varchar',
+      nullable: false,
+      defaultValue: null,
+      isPrimaryKey: false,
+      foreignKey: null,
+    },
   ],
   rowCount: 0,
   primaryKey: 'id',
-  foreignKeys: []
+  foreignKeys: [],
 }
 
 const usersSchema: TableSchema = {
   name: 'users',
   columns: [
-    { name: 'id', type: 'integer', nullable: false, defaultValue: null, isPrimaryKey: true, foreignKey: null },
-    { name: 'name', type: 'varchar', nullable: false, defaultValue: null, isPrimaryKey: false, foreignKey: null }
+    {
+      name: 'id',
+      type: 'integer',
+      nullable: false,
+      defaultValue: null,
+      isPrimaryKey: true,
+      foreignKey: null,
+    },
+    {
+      name: 'name',
+      type: 'varchar',
+      nullable: false,
+      defaultValue: null,
+      isPrimaryKey: false,
+      foreignKey: null,
+    },
   ],
   rowCount: 0,
   primaryKey: 'id',
-  foreignKeys: []
+  foreignKeys: [],
 }
 
 const baseConfig: DbcliConfig = {
-  connection: { system: 'postgresql', host: 'localhost', port: 5432, user: 'u', password: 'p', database: 'db' },
-  permission: 'admin'
+  connection: {
+    system: 'postgresql',
+    host: 'localhost',
+    port: 5432,
+    user: 'u',
+    password: 'p',
+    database: 'db',
+  },
+  permission: 'admin',
 }
 
 function makeValidator(blacklist?: any, overrideEnv?: string): BlacklistValidator {
@@ -93,7 +134,9 @@ describe('DataExecutor with blacklist enforcement', () => {
       const executor = new DataExecutor(adapter, 'admin', 'postgresql', validator)
 
       // users is not blacklisted - should not throw BlacklistError
-      const result = await executor.executeInsert('users', { name: 'Alice' }, usersSchema, { force: true })
+      const result = await executor.executeInsert('users', { name: 'Alice' }, usersSchema, {
+        force: true,
+      })
       expect(result.status).toBe('success')
     })
   })
@@ -105,7 +148,9 @@ describe('DataExecutor with blacklist enforcement', () => {
       const executor = new DataExecutor(adapter, 'admin', 'postgresql', validator)
 
       await expect(
-        executor.executeUpdate('audit_logs', { action: 'new' }, { id: 1 }, mockSchema, { force: true })
+        executor.executeUpdate('audit_logs', { action: 'new' }, { id: 1 }, mockSchema, {
+          force: true,
+        })
       ).rejects.toThrow(BlacklistError)
     })
 
@@ -114,7 +159,13 @@ describe('DataExecutor with blacklist enforcement', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} })
       const executor = new DataExecutor(adapter, 'admin', 'postgresql', validator)
 
-      const result = await executor.executeUpdate('users', { name: 'Bob' }, { id: 1 }, usersSchema, { force: true })
+      const result = await executor.executeUpdate(
+        'users',
+        { name: 'Bob' },
+        { id: 1 },
+        usersSchema,
+        { force: true }
+      )
       expect(result.status).toBe('success')
     })
   })
@@ -145,7 +196,9 @@ describe('DataExecutor with blacklist enforcement', () => {
       const adapter = createMockAdapter()
       const executor = new DataExecutor(adapter, 'admin', 'postgresql')
 
-      const result = await executor.executeInsert('users', { name: 'Alice' }, usersSchema, { force: true })
+      const result = await executor.executeInsert('users', { name: 'Alice' }, usersSchema, {
+        force: true,
+      })
       expect(result.status).toBe('success')
     })
 
@@ -153,7 +206,13 @@ describe('DataExecutor with blacklist enforcement', () => {
       const adapter = createMockAdapter()
       const executor = new DataExecutor(adapter, 'admin', 'postgresql')
 
-      const result = await executor.executeUpdate('users', { name: 'Bob' }, { id: 1 }, usersSchema, { force: true })
+      const result = await executor.executeUpdate(
+        'users',
+        { name: 'Bob' },
+        { id: 1 },
+        usersSchema,
+        { force: true }
+      )
       expect(result.status).toBe('success')
     })
 

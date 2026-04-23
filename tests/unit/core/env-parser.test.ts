@@ -89,7 +89,7 @@ describe('env-parser', () => {
         DB_USER: 'user',
         DB_PASSWORD: 'pass',
         DB_NAME: 'db',
-        DB_SYSTEM: 'postgresql'
+        DB_SYSTEM: 'postgresql',
       }
       const result = parseEnvDatabase(env)
 
@@ -104,7 +104,7 @@ describe('env-parser', () => {
       const env = {
         DB_HOST: 'localhost',
         DB_USER: 'user',
-        DB_DATABASE: 'db'
+        DB_DATABASE: 'db',
       }
 
       const result = parseEnvDatabase(env)
@@ -123,7 +123,7 @@ describe('env-parser', () => {
     test('應該在缺少 DB_USER 時拋出 EnvParseError', () => {
       const env = {
         DB_HOST: 'localhost',
-        DB_NAME: 'db'
+        DB_NAME: 'db',
       }
 
       expect(() => parseEnvDatabase(env)).toThrow(EnvParseError)
@@ -132,7 +132,7 @@ describe('env-parser', () => {
     test('應該在缺少 DB_NAME 時拋出 EnvParseError', () => {
       const env = {
         DB_HOST: 'localhost',
-        DB_USER: 'user'
+        DB_USER: 'user',
       }
 
       expect(() => parseEnvDatabase(env)).toThrow(EnvParseError)
@@ -141,17 +141,19 @@ describe('env-parser', () => {
     test('應該在缺少 DB_NAME 與 DB_DATABASE 時拋出 EnvParseError', () => {
       const env = {
         DB_HOST: 'localhost',
-        DB_USER: 'user'
+        DB_USER: 'user',
       }
 
-      expect(() => parseEnvDatabase(env)).toThrow('DB_NAME or DB_DATABASE is required when using component format')
+      expect(() => parseEnvDatabase(env)).toThrow(
+        'DB_NAME or DB_DATABASE is required when using component format'
+      )
     })
 
     test('DB_SYSTEM 應該預設為 postgresql', () => {
       const env = {
         DB_HOST: 'localhost',
         DB_USER: 'user',
-        DB_NAME: 'db'
+        DB_NAME: 'db',
       }
       const result = parseEnvDatabase(env)
 
@@ -163,7 +165,7 @@ describe('env-parser', () => {
         DB_HOST: 'localhost',
         DB_USER: 'user',
         DB_NAME: 'db',
-        DB_PORT: '3306'
+        DB_PORT: '3306',
       }
       const result = parseEnvDatabase(env)
 
@@ -175,7 +177,7 @@ describe('env-parser', () => {
       const env = {
         DB_HOST: 'localhost',
         DB_USER: 'user',
-        DB_NAME: 'db'
+        DB_NAME: 'db',
       }
       const result = parseEnvDatabase(env)
 
@@ -187,7 +189,7 @@ describe('env-parser', () => {
         DB_HOST: 'localhost',
         DB_USER: 'user',
         DB_NAME: 'db',
-        DB_PORT: 'invalid'
+        DB_PORT: 'invalid',
       }
 
       expect(() => parseEnvDatabase(env)).toThrow(EnvParseError)
@@ -198,7 +200,7 @@ describe('env-parser', () => {
         DB_HOST: 'localhost',
         DB_USER: 'user',
         DB_NAME: 'db',
-        DB_PORT: '99999'
+        DB_PORT: '99999',
       }
 
       expect(() => parseEnvDatabase(env)).toThrow(EnvParseError)

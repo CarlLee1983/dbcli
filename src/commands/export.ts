@@ -4,7 +4,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
@@ -49,7 +49,7 @@ export async function exportCommand(
     }
 
     // 3. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -58,13 +58,13 @@ export async function exportCommand(
 
       // 5. Execute query with auto-limit enabled
       const result = await executor.execute(sql, {
-        autoLimit: true
+        autoLimit: true,
       })
 
       // 6. Format output
       const formatter = new QueryResultFormatter()
       const formatted = formatter.format(result, {
-        format: options.format
+        format: options.format,
       })
 
       // 7. Output to file or stdout

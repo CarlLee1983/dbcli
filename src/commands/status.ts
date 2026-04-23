@@ -28,8 +28,10 @@ export const statusCommand = new Command('status')
 
       const blacklistTables = config.blacklist?.tables ?? []
       const blacklistColumns = config.blacklist?.columns ?? {}
-      const columnCount = Object.values(blacklistColumns)
-        .reduce((sum, cols) => sum + cols.length, 0)
+      const columnCount = Object.values(blacklistColumns).reduce(
+        (sum, cols) => sum + cols.length,
+        0
+      )
 
       const status = {
         permission: config.permission,
@@ -44,7 +46,9 @@ export const statusCommand = new Command('status')
       if (options.format === 'text') {
         console.log(`Permission: ${status.permission}`)
         console.log(`System:     ${status.system}`)
-        console.log(`Blacklist:  ${status.blacklist.tables} table(s), ${status.blacklist.columns} column(s)`)
+        console.log(
+          `Blacklist:  ${status.blacklist.tables} table(s), ${status.blacklist.columns} column(s)`
+        )
         console.log(`Version:    ${status.version}`)
       } else {
         console.log(JSON.stringify(status, null, 2))

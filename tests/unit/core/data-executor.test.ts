@@ -49,7 +49,7 @@ class MockAdapter implements DatabaseAdapter {
   async getTableSchema() {
     return {
       name: 'test',
-      columns: []
+      columns: [],
     }
   }
 
@@ -73,8 +73,8 @@ const mockUserSchema: TableSchema = {
     { name: 'name', type: 'varchar', nullable: false },
     { name: 'email', type: 'varchar', nullable: false },
     { name: 'age', type: 'integer', nullable: true },
-    { name: 'status', type: 'varchar', nullable: true }
-  ]
+    { name: 'status', type: 'varchar', nullable: true },
+  ],
 }
 
 // ============================================================================
@@ -162,7 +162,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('error')
@@ -176,7 +176,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -190,7 +190,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -203,7 +203,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -214,7 +214,7 @@ describe('DataExecutor.executeInsert - Permissions', () => {
     const data = { name: 'David', email: 'david@example.com' }
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.error).toContain('Read-Write')
@@ -241,7 +241,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -255,7 +255,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       dryRun: true,
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -268,7 +268,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -279,7 +279,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
       force: true,
-      dryRun: true
+      dryRun: true,
     })
 
     expect(result.sql).toContain('INSERT INTO "users"')
@@ -291,7 +291,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
     const data = { name: 'Ivy', email: 'ivy@example.com' }
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
@@ -316,7 +316,7 @@ describe('DataExecutor.executeInsert - Error Handling', () => {
     const data = { name: 'Jack', email: 'jack@example.com' }
 
     const result = await executor.executeInsert('users', data, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -351,8 +351,8 @@ describe('DataExecutor.executeInsert - Error Handling', () => {
       name: 'users',
       columns: [
         { name: 'name', type: 'varchar', nullable: false },
-        { name: 'active', type: 'boolean', nullable: false }
-      ]
+        { name: 'active', type: 'boolean', nullable: false },
+      ],
     }
 
     const data = { name: 'Noah', active: true }
@@ -383,7 +383,7 @@ describe('DataExecutor.executeUpdate', () => {
     const whereData = { id: 1 }
 
     const result = await executor2.executeUpdate('users', updateData, whereData, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -395,7 +395,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([])
 
     const result = await executor.executeUpdate('users', updateData, whereData, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -418,7 +418,7 @@ describe('DataExecutor.executeDelete', () => {
     const whereData = { id: 1 }
 
     const result = await executor2.executeDelete('users', whereData, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -430,7 +430,7 @@ describe('DataExecutor.executeDelete', () => {
     const whereData = { id: 1 }
 
     const result = await dataAdminExecutor.executeDelete('users', whereData, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -441,7 +441,7 @@ describe('DataExecutor.executeDelete', () => {
     const whereData = { id: 1 }
 
     const result = await executor.executeDelete('users', whereData, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -452,7 +452,7 @@ describe('DataExecutor.executeDelete', () => {
     const whereData = { id: 1 }
 
     const result = await executor.executeDelete('users', whereData, mockUserSchema, {
-      dryRun: true
+      dryRun: true,
     })
 
     expect(result.status).toBe('success')
@@ -594,7 +594,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([{ id: 1, name: 'Bob', email: 'bob@example.com', age: null }])
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -610,7 +610,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([{ id: 2, name: 'Charlie', email: 'charlie@example.com', age: null }])
 
     const result = await adminExecutor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -622,7 +622,7 @@ describe('DataExecutor.executeUpdate', () => {
     const where = { id: 3 }
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      dryRun: true
+      dryRun: true,
     })
 
     expect(result.status).toBe('success')
@@ -638,7 +638,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([{ id: 4, name: 'Eve', email: 'eve@example.com', age: null }])
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -652,7 +652,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([])
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.sql).toBeDefined()
@@ -673,7 +673,7 @@ describe('DataExecutor.executeUpdate', () => {
     ])
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -687,7 +687,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setFailure(true, 'Update failed: constraint violation')
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -701,7 +701,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setFailure(true, 'UNIQUE constraint failed: email')
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -714,7 +714,7 @@ describe('DataExecutor.executeUpdate', () => {
     const where = { id: 1 }
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -728,7 +728,7 @@ describe('DataExecutor.executeUpdate', () => {
     adapter.setExecuteResults([])
 
     const result = await executor.executeUpdate('users', data, where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     // Should succeed if both are provided
@@ -817,7 +817,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -830,7 +830,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -843,7 +843,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     adapter.setExecuteResults([{ id: 1, name: 'ToDelete', email: 'delete@example.com' }])
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -856,7 +856,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     adapter.setExecuteResults([{ id: 1, name: 'ToDelete', email: 'delete@example.com' }])
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -868,7 +868,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.error).toContain('Data-Admin')
@@ -894,7 +894,7 @@ describe('DataExecutor.executeDelete - WHERE Validation', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -905,7 +905,7 @@ describe('DataExecutor.executeDelete - WHERE Validation', () => {
     const where = { nonexistent_column: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -932,7 +932,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -947,11 +947,11 @@ describe('DataExecutor.executeDelete - Execution', () => {
     adapter.setExecuteResults([
       { id: 1, name: 'User1', email: 'user1@example.com', status: 'inactive' },
       { id: 2, name: 'User2', email: 'user2@example.com', status: 'inactive' },
-      { id: 3, name: 'User3', email: 'user3@example.com', status: 'inactive' }
+      { id: 3, name: 'User3', email: 'user3@example.com', status: 'inactive' },
     ])
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -963,7 +963,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
     adapter.setExecuteResults([])
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('success')
@@ -976,7 +976,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      dryRun: true
+      dryRun: true,
     })
 
     expect(result.status).toBe('success')
@@ -991,7 +991,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
       force: true,
-      dryRun: false
+      dryRun: false,
     })
 
     expect(result.status).toBe('success')
@@ -1002,7 +1002,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
       force: true,
-      dryRun: true
+      dryRun: true,
     })
 
     expect(result.sql).toBeDefined()
@@ -1015,7 +1015,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
     const where = { id: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
@@ -1040,7 +1040,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     adapter.setFailure(true, 'Database connection lost')
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -1053,7 +1053,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     adapter.setFailure(true, 'FOREIGN KEY constraint failed')
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -1066,7 +1066,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     adapter.setFailure(true, 'Table not found: invalid_table')
 
     const result = await executor.executeDelete('invalid_table', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')
@@ -1077,7 +1077,7 @@ describe('DataExecutor.executeDelete - Error Handling', () => {
     const where = { nonexistent: 1 }
 
     const result = await executor.executeDelete('users', where, mockUserSchema, {
-      force: true
+      force: true,
     })
 
     expect(result.status).toBe('error')

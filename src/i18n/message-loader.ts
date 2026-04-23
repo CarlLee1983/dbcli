@@ -108,7 +108,5 @@ export const messageLoader = MessageLoader.getInstance()
 // Export convenience functions
 export const t = (key: string): string => messageLoader.t(key)
 
-export const t_vars = (
-  key: string,
-  vars: Record<string, string | number>
-): string => messageLoader.interpolate(key, vars)
+export const t_vars = (key: string, vars: Record<string, string | number>): string =>
+  messageLoader.interpolate(key, vars)

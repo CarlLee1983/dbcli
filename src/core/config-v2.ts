@@ -5,9 +5,10 @@
  * V1 configs are NOT handled here — they continue using the original config.ts logic.
  */
 
-import { DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
+import { type DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { loadEnvFile } from '@/core/env-loader'
+import { resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
 
 /**
@@ -78,7 +79,7 @@ export async function loadConnectionEnv(
   basePath: string
 ): Promise<void> {
   if (resolved.envFile) {
-    const envPath = join(basePath, '..', resolved.envFile)
+    const envPath = join(basePath, resolved.envFile)
     await loadEnvFile(envPath)
   }
 }
@@ -87,7 +88,8 @@ export async function loadConnectionEnv(
  * Read and validate a v2 config from disk
  */
 export async function readV2Config(path: string): Promise<DbcliConfigV2> {
-  const configPath = join(path, 'config.json')
+  const storagePath = await resolveConfigStoragePath(path)
+  const configPath = join(storagePath, 'config.json')
   const file = Bun.file(configPath)
 
   if (!(await file.exists())) {
@@ -106,7 +108,9 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
 export async function writeV2Config(path: string, config: DbcliConfigV2): Promise<void> {
   DbcliConfigV2Schema.parse(config)
 
-  const configPath = join(path, 'config.json')
+  const storagePath = await resolveConfigStoragePath(path)
+  const configPath = join(storagePath, 'config.json')
+  await Bun.$`mkdir -p ${storagePath}`
   const json = JSON.stringify(config, null, 2)
   await Bun.write(configPath, json)
 }
@@ -121,7 +125,8 @@ export async function patchConnectionSchema(
   schema: Record<string, unknown>,
   metadataUpdate?: { schemaLastUpdated?: string; schemaTableCount?: number }
 ): Promise<void> {
-  const v2Config = await readV2Config(dbcliPath)
+  const storagePath = await resolveConfigStoragePath(dbcliPath)
+  const v2Config = await readV2Config(storagePath)
   const updated = {
     ...v2Config,
     schemas: {
@@ -133,7 +138,7 @@ export async function patchConnectionSchema(
       ...(metadataUpdate ?? {}),
     },
   }
-  await writeV2Config(dbcliPath, updated)
+  await writeV2Config(storagePath, updated)
 }
 
 /**

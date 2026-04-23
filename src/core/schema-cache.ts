@@ -132,9 +132,7 @@ export class SchemaCacheManager {
       const file = Bun.file(filePath)
 
       if (!(await file.exists())) {
-        console.error(
-          `Cold table file not found: ${tableInfo.file} for table ${tableName}`
-        )
+        console.error(`Cold table file not found: ${tableInfo.file} for table ${tableName}`)
         return null
       }
 

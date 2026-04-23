@@ -23,17 +23,17 @@ const validOptions: ConnectionOptions = {
   port: Number(process.env.MYSQL_PORT || 3307),
   user: process.env.MYSQL_USER || 'dbcli',
   password: process.env.MYSQL_PASSWORD || 'testpass',
-  database: process.env.MYSQL_DATABASE || 'dbcli_test'
+  database: process.env.MYSQL_DATABASE || 'dbcli_test',
 }
 
 const validMariaDBOptions: ConnectionOptions = {
   ...validOptions,
-  system: 'mariadb'
+  system: 'mariadb',
 }
 
 const invalidOptions: ConnectionOptions = {
   ...validOptions,
-  password: 'wrong_password_definitely_invalid_xyz'
+  password: 'wrong_password_definitely_invalid_xyz',
 }
 
 const unreachableOptions: ConnectionOptions = {
@@ -43,7 +43,7 @@ const unreachableOptions: ConnectionOptions = {
   user: 'root',
   password: 'root',
   database: 'mysql',
-  timeout: 1000
+  timeout: 1000,
 }
 
 describe('MySQL Adapter Integration Tests', () => {

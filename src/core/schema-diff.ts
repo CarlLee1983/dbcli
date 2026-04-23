@@ -27,21 +27,23 @@ export class SchemaDiffEngine {
 
     // Get the list of tables currently in the database
     const currentTables = await this.adapter.listTables()
-    const currentTableNames = new Set(currentTables.map(t => t.name))
+    const currentTableNames = new Set(currentTables.map((t) => t.name))
 
     // Get the list of tables from the previous config
     const previousTableNames = new Set(Object.keys(this.previousConfig.schema || {}))
 
     // Detect table-level changes
-    const tablesAdded = Array.from(currentTableNames).filter(t => !previousTableNames.has(t))
-    const tablesRemoved = Array.from(previousTableNames).filter(t => !currentTableNames.has(t))
+    const tablesAdded = Array.from(currentTableNames).filter((t) => !previousTableNames.has(t))
+    const tablesRemoved = Array.from(previousTableNames).filter((t) => !currentTableNames.has(t))
 
     // Phase 2: Column-level comparison (for tables present on both sides)
 
     const tablesModified: Record<string, TableDiffDetail> = {}
 
     // Get table names that exist in both old config and new database
-    const unmodifiedTableNames = Array.from(currentTableNames).filter(t => previousTableNames.has(t))
+    const unmodifiedTableNames = Array.from(currentTableNames).filter((t) =>
+      previousTableNames.has(t)
+    )
 
     for (const tableName of unmodifiedTableNames) {
       const currentSchema = await this.adapter.getTableSchema(tableName)
@@ -50,23 +52,33 @@ export class SchemaDiffEngine {
       if (!previousSchema) continue
 
       // Convert column lists to Maps for fast lookup
-      const currentColsMap = new Map<string, ColumnSchema>(currentSchema.columns.map((c: ColumnSchema) => [c.name, c]))
-      const previousColsMap = new Map<string, ColumnSchema>(previousSchema.columns.map((c: ColumnSchema) => [c.name, c]))
+      const currentColsMap = new Map<string, ColumnSchema>(
+        currentSchema.columns.map((c: ColumnSchema) => [c.name, c])
+      )
+      const previousColsMap = new Map<string, ColumnSchema>(
+        previousSchema.columns.map((c: ColumnSchema) => [c.name, c])
+      )
 
       // Detect column-level changes
-      const columnsAdded: string[] = Array.from(currentColsMap.keys()).filter((c: string) => !previousColsMap.has(c))
-      const columnsRemoved: string[] = Array.from(previousColsMap.keys()).filter((c: string) => !currentColsMap.has(c))
+      const columnsAdded: string[] = Array.from(currentColsMap.keys()).filter(
+        (c: string) => !previousColsMap.has(c)
+      )
+      const columnsRemoved: string[] = Array.from(previousColsMap.keys()).filter(
+        (c: string) => !currentColsMap.has(c)
+      )
 
       // Detect modified columns (same name but other attributes changed)
       const columnsModified: ColumnDiff[] = []
-      for (const colName of Array.from(currentColsMap.keys()).filter((c: string) => previousColsMap.has(c))) {
+      for (const colName of Array.from(currentColsMap.keys()).filter((c: string) =>
+        previousColsMap.has(c)
+      )) {
         const prev = previousColsMap.get(colName) as ColumnSchema
         const curr = currentColsMap.get(colName) as ColumnSchema
         if (this.columnChanged(prev, curr)) {
           columnsModified.push({
             name: colName,
             previous: prev,
-            current: curr
+            current: curr,
           })
         }
       }
@@ -76,7 +88,7 @@ export class SchemaDiffEngine {
         tablesModified[tableName] = {
           columnsAdded,
           columnsRemoved,
-          columnsModified
+          columnsModified,
         }
       }
     }
@@ -88,7 +100,7 @@ export class SchemaDiffEngine {
       tablesAdded,
       tablesRemoved,
       tablesModified,
-      summary
+      summary,
     }
   }
 

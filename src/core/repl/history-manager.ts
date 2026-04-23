@@ -10,7 +10,7 @@ export class HistoryManager {
 
   constructor(
     private readonly filePath: string,
-    maxEntries: number = DEFAULT_MAX,
+    maxEntries: number = DEFAULT_MAX
   ) {
     this.maxEntries = maxEntries
     this.entries = this.load()
@@ -51,7 +51,7 @@ export class HistoryManager {
     }
 
     const content = readFileSync(this.filePath, 'utf-8')
-    const lines = content.split('\n').filter(line => line.trim() !== '')
+    const lines = content.split('\n').filter((line) => line.trim() !== '')
 
     if (lines.length > this.maxEntries) {
       return lines.slice(lines.length - this.maxEntries)

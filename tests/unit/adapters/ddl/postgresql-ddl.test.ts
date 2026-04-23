@@ -10,7 +10,7 @@ describe('PostgreSQL createTable', () => {
   test('basic table with serial pk', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
-      { name: 'name', type: 'varchar(50)', nullable: false }
+      { name: 'name', type: 'varchar(50)', nullable: false },
     ]
     const { sql } = gen.createTable('users', cols)
     expect(sql).toContain('CREATE TABLE "users"')
@@ -23,7 +23,7 @@ describe('PostgreSQL createTable', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
       { name: 'email', type: 'varchar(100)', nullable: false, unique: true },
-      { name: 'created_at', type: 'timestamp', default: 'now()' }
+      { name: 'created_at', type: 'timestamp', default: 'now()' },
     ]
     const { sql } = gen.createTable('accounts', cols)
     expect(sql).toContain('"email" VARCHAR(100) NOT NULL UNIQUE')
@@ -33,7 +33,12 @@ describe('PostgreSQL createTable', () => {
   test('table with foreign key reference', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
-      { name: 'user_id', type: 'integer', nullable: false, references: { table: 'users', column: 'id' } }
+      {
+        name: 'user_id',
+        type: 'integer',
+        nullable: false,
+        references: { table: 'users', column: 'id' },
+      },
     ]
     const { sql } = gen.createTable('orders', cols)
     expect(sql).toContain('REFERENCES "users"("id")')
@@ -42,7 +47,7 @@ describe('PostgreSQL createTable', () => {
   test('composite primary key', () => {
     const cols: ColumnDefinition[] = [
       { name: 'user_id', type: 'integer', primaryKey: true, nullable: false },
-      { name: 'role_id', type: 'integer', primaryKey: true, nullable: false }
+      { name: 'role_id', type: 'integer', primaryKey: true, nullable: false },
     ]
     const { sql } = gen.createTable('user_roles', cols)
     expect(sql).toContain('PRIMARY KEY ("user_id", "role_id")')
@@ -67,7 +72,12 @@ describe('PostgreSQL addColumn', () => {
   })
 
   test('adds not-null column with default', () => {
-    const { sql } = gen.addColumn('users', { name: 'age', type: 'integer', nullable: false, default: '0' })
+    const { sql } = gen.addColumn('users', {
+      name: 'age',
+      type: 'integer',
+      nullable: false,
+      default: '0',
+    })
     expect(sql).toContain('NOT NULL')
     expect(sql).toContain('DEFAULT 0')
   })
@@ -117,9 +127,10 @@ describe('PostgreSQL alterColumn', () => {
 
   test('multiple alter operations', () => {
     const { sql } = gen.alterColumn({
-      table: 'users', column: 'name',
+      table: 'users',
+      column: 'name',
       type: 'varchar(200)',
-      setDefault: "'unknown'"
+      setDefault: "'unknown'",
     })
     expect(sql).toContain('TYPE VARCHAR(200)')
     expect(sql).toContain("SET DEFAULT 'unknown'")
@@ -148,8 +159,9 @@ describe('PostgreSQL addIndex', () => {
 
   test('composite index with custom name', () => {
     const { sql } = gen.addIndex({
-      table: 'users', columns: ['last_name', 'first_name'],
-      name: 'idx_fullname'
+      table: 'users',
+      columns: ['last_name', 'first_name'],
+      name: 'idx_fullname',
     })
     expect(sql).toContain('"idx_fullname"')
     expect(sql).toContain('"last_name", "first_name"')
@@ -173,8 +185,10 @@ describe('PostgreSQL dropIndex', () => {
 describe('PostgreSQL addConstraint', () => {
   test('foreign key', () => {
     const { sql } = gen.addConstraint({
-      table: 'orders', type: 'foreign_key',
-      column: 'user_id', references: { table: 'users', column: 'id' }
+      table: 'orders',
+      type: 'foreign_key',
+      column: 'user_id',
+      references: { table: 'users', column: 'id' },
     })
     expect(sql).toContain('FOREIGN KEY ("user_id")')
     expect(sql).toContain('REFERENCES "users"("id")')
@@ -182,31 +196,39 @@ describe('PostgreSQL addConstraint', () => {
 
   test('foreign key with ON DELETE CASCADE', () => {
     const { sql } = gen.addConstraint({
-      table: 'orders', type: 'foreign_key',
-      column: 'user_id', references: { table: 'users', column: 'id' },
-      onDelete: 'cascade'
+      table: 'orders',
+      type: 'foreign_key',
+      column: 'user_id',
+      references: { table: 'users', column: 'id' },
+      onDelete: 'cascade',
     })
     expect(sql).toContain('ON DELETE CASCADE')
   })
 
   test('unique constraint', () => {
     const { sql } = gen.addConstraint({
-      table: 'users', type: 'unique', columns: ['email']
+      table: 'users',
+      type: 'unique',
+      columns: ['email'],
     })
     expect(sql).toContain('UNIQUE ("email")')
   })
 
   test('check constraint', () => {
     const { sql } = gen.addConstraint({
-      table: 'users', type: 'check', expression: 'age >= 0'
+      table: 'users',
+      type: 'check',
+      expression: 'age >= 0',
     })
     expect(sql).toContain('CHECK (age >= 0)')
   })
 
   test('custom constraint name', () => {
     const { sql } = gen.addConstraint({
-      table: 'users', type: 'unique', columns: ['email'],
-      name: 'uq_email_custom'
+      table: 'users',
+      type: 'unique',
+      columns: ['email'],
+      name: 'uq_email_custom',
     })
     expect(sql).toContain('"uq_email_custom"')
   })

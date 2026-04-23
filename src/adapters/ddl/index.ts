@@ -30,5 +30,5 @@ export type {
   IndexDefinition,
   ConstraintDefinition,
   ConstraintType,
-  EnumDefinition
+  EnumDefinition,
 } from './types'

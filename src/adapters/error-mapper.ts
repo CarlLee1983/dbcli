@@ -75,27 +75,19 @@ export function mapError(
 
   // ENOTFOUND: Host not found (DNS resolution failed)
   if (errCode === 'ENOTFOUND' || errMsg.includes('not found') || errMsg.includes('getaddrinfo')) {
-    return new ConnectionError(
-      'ENOTFOUND',
-      `Host not found: ${options.host}`,
-      [
-        `Check the hostname spelling: ${options.host}`,
-        `Verify DNS resolution: nslookup ${options.host}`,
-        `If using localhost, try 127.0.0.1 (IPv4 vs IPv6 issue)`,
-      ]
-    )
+    return new ConnectionError('ENOTFOUND', `Host not found: ${options.host}`, [
+      `Check the hostname spelling: ${options.host}`,
+      `Verify DNS resolution: nslookup ${options.host}`,
+      `If using localhost, try 127.0.0.1 (IPv4 vs IPv6 issue)`,
+    ])
   }
 
   // UNKNOWN: Fallback for unrecognized errors
-  return new ConnectionError(
-    'UNKNOWN',
-    `Connection failed: ${errMsg}`,
-    [
-      `Check connection parameters: host=${options.host}, port=${options.port}, user=${options.user}`,
-      `View server logs: ${system === 'postgresql' ? 'postgresql.log' : 'mysql.log'}`,
-      `Try connecting directly with the ${system === 'postgresql' ? 'psql' : 'mysql'} command-line tool`,
-    ]
-  )
+  return new ConnectionError('UNKNOWN', `Connection failed: ${errMsg}`, [
+    `Check connection parameters: host=${options.host}, port=${options.port}, user=${options.user}`,
+    `View server logs: ${system === 'postgresql' ? 'postgresql.log' : 'mysql.log'}`,
+    `Try connecting directly with the ${system === 'postgresql' ? 'psql' : 'mysql'} command-line tool`,
+  ])
 }
 
 // Re-export ConnectionError for convenience

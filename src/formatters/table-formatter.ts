@@ -20,12 +20,12 @@ export interface OutputFormatter<T> {
 export class TableFormatter implements OutputFormatter<ColumnSchema[]> {
   format(columns: ColumnSchema[]): string {
     const table = new Table({
-      head: ['Column', 'Type', 'Nullable', 'Default', 'Key'].map(h => colors.bold(h)),
+      head: ['Column', 'Type', 'Nullable', 'Default', 'Key'].map((h) => colors.bold(h)),
       style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
-      colWidths: [25, 25, 10, 25, 20]
+      colWidths: [25, 25, 10, 25, 20],
     })
 
-    columns.forEach(col => {
+    columns.forEach((col) => {
       let keyType = ''
       if (col.primaryKey) {
         keyType = 'PK'
@@ -33,13 +33,7 @@ export class TableFormatter implements OutputFormatter<ColumnSchema[]> {
         keyType = `FK → ${col.foreignKey.table}.${col.foreignKey.column}`
       }
 
-      table.push([
-        col.name,
-        col.type,
-        col.nullable ? 'YES' : 'NO',
-        col.default || 'NULL',
-        keyType
-      ])
+      table.push([col.name, col.type, col.nullable ? 'YES' : 'NO', col.default || 'NULL', keyType])
     })
 
     return table.toString()
@@ -53,17 +47,17 @@ export class TableFormatter implements OutputFormatter<ColumnSchema[]> {
 export class TableListFormatter implements OutputFormatter<TableSchema[]> {
   format(tables: TableSchema[]): string {
     const table = new Table({
-      head: ['Table', 'Columns', 'Rows', 'Engine'].map(h => colors.bold(h)),
+      head: ['Table', 'Columns', 'Rows', 'Engine'].map((h) => colors.bold(h)),
       style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
-      colWidths: [30, 12, 15, 15]
+      colWidths: [30, 12, 15, 15],
     })
 
-    tables.forEach(t => {
+    tables.forEach((t) => {
       table.push([
         t.name,
         (t.columnCount ?? t.columns.length).toString(),
         (t.rowCount ?? '?').toString(),
-        t.engine || 'N/A'
+        t.engine || 'N/A',
       ])
     })
 

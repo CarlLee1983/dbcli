@@ -37,7 +37,7 @@ class MockAdapter implements DatabaseAdapter {
     if (sql.includes('SELECT')) {
       const data = [
         { id: 1, name: 'Alice', email: 'alice@example.com' },
-        { id: 2, name: 'Bob', email: 'bob@example.com' }
+        { id: 2, name: 'Bob', email: 'bob@example.com' },
       ] as T[]
       return { rows: data, affectedRows: data.length }
     }
@@ -48,7 +48,7 @@ class MockAdapter implements DatabaseAdapter {
   async listTables() {
     return [
       { name: 'users', columns: [], rowCount: 100 },
-      { name: 'orders', columns: [], rowCount: 50 }
+      { name: 'orders', columns: [], rowCount: 50 },
     ]
   }
 
@@ -57,8 +57,8 @@ class MockAdapter implements DatabaseAdapter {
       name: 'users',
       columns: [
         { name: 'id', type: 'integer', nullable: false },
-        { name: 'name', type: 'varchar', nullable: false }
-      ]
+        { name: 'name', type: 'varchar', nullable: false },
+      ],
     }
   }
 
@@ -104,11 +104,11 @@ describe('Query Command', () => {
         port: 5432,
         user: 'test',
         password: 'test',
-        database: 'testdb'
+        database: 'testdb',
       },
       permission: 'query-only',
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
   })
 

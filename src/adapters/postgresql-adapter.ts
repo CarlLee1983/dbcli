@@ -43,7 +43,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         password: this.options.password,
         database: this.options.database,
         connectionTimeoutMillis: this.options.timeout || 5000,
-        statement_timeout: this.options.timeout || 5000
+        statement_timeout: this.options.timeout || 5000,
       })
 
       // Test connection with lightweight query
@@ -88,11 +88,9 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async testConnection(): Promise<boolean> {
     if (!this.pool) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -117,24 +115,20 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     params?: (string | number | boolean | null)[]
   ): Promise<ExecutionResult<T>> {
     if (!this.pool) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
       // Use parameterized query to prevent SQL injection
       // PostgreSQL uses $1, $2, ... placeholders
-      const result = params
-        ? await this.pool.query(sql, params)
-        : await this.pool.query(sql)
+      const result = params ? await this.pool.query(sql, params) : await this.pool.query(sql)
 
       // Return ExecutionResult
       return {
         rows: result.rows as T[],
-        affectedRows: result.rowCount ?? 0
+        affectedRows: result.rowCount ?? 0,
       }
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
@@ -157,11 +151,9 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async listTables(): Promise<TableSchema[]> {
     if (!this.pool) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -199,7 +191,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         rowCount: Math.max(0, row.estimated_rows || 0),
         engine: 'PostgreSQL',
         estimatedRowCount: Math.max(0, row.estimated_rows || 0),
-        tableType: row.table_type as 'table' | 'view'
+        tableType: row.table_type as 'table' | 'view',
       }))
     } catch (error) {
       throw mapError(error, 'postgresql', this.options)
@@ -215,11 +207,9 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async getTableSchema(tableName: string): Promise<TableSchema> {
     if (!this.pool) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -350,9 +340,9 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         FROM pg_class
         WHERE relname = $1
       `
-      const estimateResult = await this.execute<{ estimated_rows: number | null }>(
-        estimateQuery, [tableName]
-      )
+      const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
+        tableName,
+      ])
       const estimateResults = estimateResult.rows
 
       // Extract primary key constraint
@@ -376,16 +366,14 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       )
 
       // Ensure primaryKey is always an array
-      const primaryKeyArray = Array.isArray(pkResults[0]?.columns)
-        ? pkResults[0].columns
-        : []
+      const primaryKeyArray = Array.isArray(pkResults[0]?.columns) ? pkResults[0].columns : []
 
       // Ensure all foreign key arrays are proper arrays
-      const safeForeignKeys = fkResults.map(fk => ({
+      const safeForeignKeys = fkResults.map((fk) => ({
         name: fk.name,
         columns: Array.isArray(fk.columns) ? fk.columns : [],
         refTable: fk.ref_table,
-        refColumns: Array.isArray(fk.ref_columns) ? fk.ref_columns : []
+        refColumns: Array.isArray(fk.ref_columns) ? fk.ref_columns : [],
       }))
 
       const schema: TableSchema = {
@@ -399,18 +387,18 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           foreignKey: fkMap.get(col.name),
           autoIncrement: col.auto_increment,
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
-          enumValues: enumMap.get(col.name)
+          enumValues: enumMap.get(col.name),
         })),
         rowCount: countResult.rows[0]?.count || 0,
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
         foreignKeys: safeForeignKeys,
-        indexes: indexResults.map(idx => ({
+        indexes: indexResults.map((idx) => ({
           name: idx.name,
           columns: Array.isArray(idx.columns) ? idx.columns : [],
-          unique: idx.is_unique
+          unique: idx.is_unique,
         })),
-        estimatedRowCount: Math.max(0, estimateResults[0]?.estimated_rows || 0)
+        estimatedRowCount: Math.max(0, estimateResults[0]?.estimated_rows || 0),
       }
 
       return schema
@@ -418,5 +406,4 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       throw mapError(error, 'postgresql', this.options)
     }
   }
-
 }

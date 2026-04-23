@@ -116,7 +116,9 @@ program
   .command('query <sql>')
   .description(t('query.description'))
   .option('--format <type>', 'Output format: table, json, csv', 'table')
-  .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) => parseInt(val, 10))
+  .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) =>
+    parseInt(val, 10)
+  )
   .option('--no-limit', 'Disable auto-limit in query-only mode')
   .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
   .action(async (sql: string, options: any, command) => {
@@ -181,16 +183,8 @@ program
 program
   .command('export <sql>')
   .description(t('export.description'))
-  .option(
-    '--format <format>',
-    'Output format: json or csv (required)',
-    'json'
-  )
-  .option(
-    '--output <path>',
-    'Output file path (if omitted, write to stdout)',
-    undefined
-  )
+  .option('--format <format>', 'Output format: json or csv (required)', 'json')
+  .option('--output <path>', 'Output file path (if omitted, write to stdout)', undefined)
   .option('--force', 'Skip overwrite confirmation', false)
   .action(async (sql: string, options: any, command) => {
     try {

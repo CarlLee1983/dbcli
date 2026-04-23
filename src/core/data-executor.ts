@@ -161,7 +161,8 @@ export class DataExecutor {
           operation: 'insert',
           rows_affected: 0,
           timestamp,
-          error: 'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute INSERT.',
+          error:
+            'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute INSERT.',
         }
       }
 
@@ -205,12 +206,7 @@ export class DataExecutor {
       enforcePermission('UPDATE dummy', this.permission)
 
       // 2. Build parameterized UPDATE SQL
-      const { sql, params } = this.buildUpdateSql(
-        tableName,
-        data,
-        where,
-        schema
-      )
+      const { sql, params } = this.buildUpdateSql(tableName, data, where, schema)
 
       // 3. Dry-run mode
       if (options?.dryRun) {
@@ -266,7 +262,8 @@ export class DataExecutor {
           operation: 'update',
           rows_affected: 0,
           timestamp,
-          error: 'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute UPDATE.',
+          error:
+            'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute UPDATE.',
         }
       }
 
@@ -316,11 +313,7 @@ export class DataExecutor {
       }
 
       // 2. Build parameterized DELETE SQL
-      const { sql, params } = this.buildDeleteSql(
-        tableName,
-        where,
-        schema
-      )
+      const { sql, params } = this.buildDeleteSql(tableName, where, schema)
 
       // 3. Dry-run mode
       if (options?.dryRun) {
@@ -417,9 +410,7 @@ export class DataExecutor {
     // Validate columns
     for (const key of [...dataKeys, ...whereKeys]) {
       if (!columnNames.includes(key)) {
-        throw new Error(
-          `Column "${key}" not found in table "${tableName}"`
-        )
+        throw new Error(`Column "${key}" not found in table "${tableName}"`)
       }
     }
 
@@ -430,8 +421,7 @@ export class DataExecutor {
 
     const setClause = dataKeys
       .map((key) => {
-        const placeholder =
-          systemType === 'postgresql' ? `$${paramIndex++}` : '?'
+        const placeholder = systemType === 'postgresql' ? `$${paramIndex++}` : '?'
         return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(', ')
@@ -439,8 +429,7 @@ export class DataExecutor {
     // Build WHERE clause
     const whereClause = whereKeys
       .map((key) => {
-        const placeholder =
-          systemType === 'postgresql' ? `$${paramIndex++}` : '?'
+        const placeholder = systemType === 'postgresql' ? `$${paramIndex++}` : '?'
         return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(' AND ')
@@ -465,9 +454,7 @@ export class DataExecutor {
     // Validate columns
     for (const key of whereKeys) {
       if (!columnNames.includes(key)) {
-        throw new Error(
-          `Column "${key}" not found in table "${tableName}"`
-        )
+        throw new Error(`Column "${key}" not found in table "${tableName}"`)
       }
     }
 
@@ -478,8 +465,7 @@ export class DataExecutor {
 
     const whereClause = whereKeys
       .map((key) => {
-        const placeholder =
-          systemType === 'postgresql' ? `$${paramIndex++}` : '?'
+        const placeholder = systemType === 'postgresql' ? `$${paramIndex++}` : '?'
         return `${quote}${key}${quote} = ${placeholder}`
       })
       .join(' AND ')

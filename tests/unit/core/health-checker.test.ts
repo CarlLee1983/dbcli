@@ -23,9 +23,7 @@ describe('HealthChecker', () => {
     const checker = new HealthChecker(adapter)
     const schema: TableSchema = {
       name: 'users',
-      columns: [
-        { name: 'id', type: 'bigint', nullable: false, primaryKey: true },
-      ],
+      columns: [{ name: 'id', type: 'bigint', nullable: false, primaryKey: true }],
       estimatedRowCount: 100,
     }
 
@@ -70,7 +68,12 @@ describe('HealthChecker', () => {
       name: 'orders',
       columns: [
         { name: 'id', type: 'bigint', nullable: false },
-        { name: 'user_id', type: 'bigint', nullable: false, foreignKey: { table: 'users', column: 'id' } },
+        {
+          name: 'user_id',
+          type: 'bigint',
+          nullable: false,
+          foreignKey: { table: 'users', column: 'id' },
+        },
       ],
       estimatedRowCount: 50,
     }
@@ -117,9 +120,7 @@ describe('HealthChecker', () => {
     const checker = new HealthChecker(adapter)
     const schema: TableSchema = {
       name: 'clean',
-      columns: [
-        { name: 'id', type: 'bigint', nullable: false, primaryKey: true },
-      ],
+      columns: [{ name: 'id', type: 'bigint', nullable: false, primaryKey: true }],
       estimatedRowCount: 50,
     }
 
@@ -147,12 +148,12 @@ describe('HealthChecker', () => {
     }
 
     const report = await checker.check(schema, {
-      blacklistedColumns: new Set(['users.password'])
+      blacklistedColumns: new Set(['users.password']),
     })
     // password column should be skipped in all checks
     const allCheckedCols = [
-      ...report.checks.nulls.map(n => n.column),
-      ...report.checks.emptyStrings.map(e => e.column),
+      ...report.checks.nulls.map((n) => n.column),
+      ...report.checks.emptyStrings.map((e) => e.column),
     ]
     expect(allCheckedCols).not.toContain('password')
   })

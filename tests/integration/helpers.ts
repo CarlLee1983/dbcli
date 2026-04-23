@@ -28,7 +28,9 @@ export async function isDbReachable(
       port,
       socket: {
         data() {},
-        open(socket) { socket.end() },
+        open(socket) {
+          socket.end()
+        },
         error() {},
         connectError() {},
       },

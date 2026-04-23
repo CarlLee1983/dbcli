@@ -12,11 +12,11 @@ describe('skillCommand logic', () => {
   let logOutput = ''
   let errorOutput = ''
   let exitCode: number | undefined = undefined
-  
+
   const logSpy = spyOn(console, 'log').mockImplementation((msg) => {
     logOutput += msg + '\n'
   })
-  
+
   const errorSpy = spyOn(console, 'error').mockImplementation((msg) => {
     errorOutput += msg + '\n'
   })
@@ -44,7 +44,7 @@ describe('skillCommand logic', () => {
   test('writes to custom output file', async () => {
     const testFile = join(process.cwd(), 'test-skill.md')
     if (existsSync(testFile)) unlinkSync(testFile)
-    
+
     try {
       await skillCommand({} as any, { output: testFile })
       expect(existsSync(testFile)).toBe(true)

@@ -70,7 +70,7 @@ export async function queryCommand(
     }
 
     // 3. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -125,7 +125,7 @@ export async function queryCommand(
 
 function extractMainTable(sql: string): string | null {
   const match = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
-  return match ? match[1] : null
+  return match?.[1] ?? null
 }
 
 const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
@@ -158,7 +158,7 @@ async function mongoQueryBranch(
   await mongoAdapter.connect()
   try {
     const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
-    const columnNames = result.rows.length > 0 ? Object.keys(result.rows[0]) : []
+    const columnNames = result.rows[0] ? Object.keys(result.rows[0] as object) : []
     const queryResult = {
       rows: result.rows,
       rowCount: result.rows.length,

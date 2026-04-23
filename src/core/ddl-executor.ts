@@ -9,11 +9,7 @@ import type { DDLGenerator } from '@/adapters/ddl/types'
 import type { Permission } from '@/types'
 import type { BlacklistManager } from '@/core/blacklist-manager'
 import type { SchemaCacheManager } from '@/core/schema-cache'
-import type {
-  DDLOperation,
-  DDLExecutionOptions,
-  DDLExecutionResult
-} from '@/types/ddl'
+import type { DDLOperation, DDLExecutionOptions, DDLExecutionResult } from '@/types/ddl'
 import { getOperationTable, isDestructiveOperation } from '@/types/ddl'
 import { promptUser } from '@/utils/prompts'
 
@@ -51,7 +47,7 @@ export class DDLExecutor {
           warnings: [],
           timestamp,
           dryRun,
-          error: `Permission denied: DDL operations require admin permission (current: ${this.permission})`
+          error: `Permission denied: DDL operations require admin permission (current: ${this.permission})`,
         }
       }
 
@@ -65,7 +61,7 @@ export class DDLExecutor {
           warnings: [],
           timestamp,
           dryRun,
-          error: `Table "${table}" is blacklisted — DDL operations are blocked`
+          error: `Table "${table}" is blacklisted — DDL operations are blocked`,
         }
       }
 
@@ -79,7 +75,7 @@ export class DDLExecutor {
           sql: '',
           warnings,
           timestamp,
-          dryRun: true
+          dryRun: true,
         }
       }
 
@@ -91,7 +87,7 @@ export class DDLExecutor {
           sql,
           warnings,
           timestamp,
-          dryRun: true
+          dryRun: true,
         }
       }
 
@@ -107,7 +103,7 @@ export class DDLExecutor {
             sql,
             warnings: [...warnings, 'Operation cancelled by user'],
             timestamp,
-            dryRun: false
+            dryRun: false,
           }
         }
       }
@@ -116,8 +112,8 @@ export class DDLExecutor {
       // Split by semicolons at end of statements, not within statements
       const statements = sql
         .split(/;\s*\n/)
-        .map(s => s.trim().replace(/;$/, ''))
-        .filter(s => s.length > 0)
+        .map((s) => s.trim().replace(/;$/, ''))
+        .filter((s) => s.length > 0)
       for (const stmt of statements) {
         await this.adapter.execute(stmt)
       }
@@ -133,7 +129,7 @@ export class DDLExecutor {
         sql,
         warnings,
         timestamp,
-        dryRun: false
+        dryRun: false,
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -144,7 +140,7 @@ export class DDLExecutor {
         warnings: [],
         timestamp,
         dryRun,
-        error: `DDL execution failed: ${errorMessage}`
+        error: `DDL execution failed: ${errorMessage}`,
       }
     }
   }

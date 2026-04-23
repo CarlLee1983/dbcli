@@ -62,7 +62,7 @@ describe('suggestTableName', () => {
   test('extracts table name from PostgreSQL relation error', async () => {
     adapter.setTables([
       { name: 'users', columns: [] },
-      { name: 'orders', columns: [] }
+      { name: 'orders', columns: [] },
     ])
 
     const error = 'ERROR: relation "usrs" does not exist'
@@ -75,7 +75,7 @@ describe('suggestTableName', () => {
   test('extracts table name from MySQL table error', async () => {
     adapter.setTables([
       { name: 'users', columns: [] },
-      { name: 'orders', columns: [] }
+      { name: 'orders', columns: [] },
     ])
 
     const error = 'Table `usrs` does not exist'
@@ -87,7 +87,7 @@ describe('suggestTableName', () => {
   test('extracts table name with single quotes', async () => {
     adapter.setTables([
       { name: 'users', columns: [] },
-      { name: 'orders', columns: [] }
+      { name: 'orders', columns: [] },
     ])
 
     const error = "ERROR: relation 'usrs' does not exist"
@@ -97,9 +97,7 @@ describe('suggestTableName', () => {
   })
 
   test('extracts table name with double quotes from MySQL', async () => {
-    adapter.setTables([
-      { name: 'users', columns: [] }
-    ])
+    adapter.setTables([{ name: 'users', columns: [] }])
 
     const error = 'Error: Table "usrs" not found'
     const result = await suggestTableName(error, adapter)
@@ -111,7 +109,7 @@ describe('suggestTableName', () => {
     adapter.setTables([
       { name: 'users', columns: [] },
       { name: 'orders', columns: [] },
-      { name: 'products', columns: [] }
+      { name: 'products', columns: [] },
     ])
 
     const error = 'relation "usrs" does not exist'
@@ -125,7 +123,7 @@ describe('suggestTableName', () => {
       { name: 'users', columns: [] },
       { name: 'user_roles', columns: [] },
       { name: 'user_audit', columns: [] },
-      { name: 'orders', columns: [] }
+      { name: 'orders', columns: [] },
     ])
 
     const error = 'relation "user" does not exist'
@@ -142,7 +140,7 @@ describe('suggestTableName', () => {
       { name: 'users', columns: [] },
       { name: 'user_old', columns: [] },
       { name: 'user_roles', columns: [] },
-      { name: 'user_audit', columns: [] }
+      { name: 'user_audit', columns: [] },
     ])
 
     const error = 'relation "usr" does not exist'
@@ -155,7 +153,7 @@ describe('suggestTableName', () => {
     adapter.setTables([
       { name: 'users', columns: [] }, // distance 1
       { name: 'orders', columns: [] }, // distance > 3
-      { name: 'products', columns: [] } // distance > 3
+      { name: 'products', columns: [] }, // distance > 3
     ])
 
     const error = 'relation "usrs" does not exist'
@@ -170,7 +168,7 @@ describe('suggestTableName', () => {
     adapter.setTables([
       { name: 'alpha', columns: [] },
       { name: 'beta', columns: [] },
-      { name: 'gamma', columns: [] }
+      { name: 'gamma', columns: [] },
     ])
 
     const error = 'relation "xyz" does not exist'
@@ -185,7 +183,7 @@ describe('suggestTableName', () => {
     const tables = [
       { name: 'users', columns: [] },
       { name: 'orders', columns: [] },
-      { name: 'products', columns: [] }
+      { name: 'products', columns: [] },
     ]
     adapter.setTables(tables)
 
@@ -198,7 +196,7 @@ describe('suggestTableName', () => {
   test('handles extraction failure gracefully', async () => {
     adapter.setTables([
       { name: 'users', columns: [] },
-      { name: 'orders', columns: [] }
+      { name: 'orders', columns: [] },
     ])
 
     const error = 'Some other error without table reference'
@@ -232,7 +230,7 @@ describe('suggestTableName', () => {
   test('case-insensitive distance calculation', async () => {
     adapter.setTables([
       { name: 'Users', columns: [] },
-      { name: 'ORDERS', columns: [] }
+      { name: 'ORDERS', columns: [] },
     ])
 
     const error = 'relation "users" does not exist'
@@ -246,7 +244,7 @@ describe('suggestTableName', () => {
     adapter.setTables([
       { name: 'user', columns: [] }, // distance 1 from 'usr'
       { name: 'users', columns: [] }, // distance 2 from 'usr'
-      { name: 'usr_old', columns: [] } // distance 4 from 'usr'
+      { name: 'usr_old', columns: [] }, // distance 4 from 'usr'
     ])
 
     const error = 'relation "usr" does not exist'
@@ -261,7 +259,7 @@ describe('suggestTableName', () => {
   test('handles special characters in table names', async () => {
     adapter.setTables([
       { name: 'user_roles', columns: [] },
-      { name: 'user-audit', columns: [] }
+      { name: 'user-audit', columns: [] },
     ])
 
     const error = 'relation "usr_role" does not exist'
@@ -274,7 +272,7 @@ describe('suggestTableName', () => {
     adapter.setTables([
       { name: 'table1', columns: [] },
       { name: 'table2', columns: [] },
-      { name: 'table3', columns: [] }
+      { name: 'table3', columns: [] },
     ])
 
     const error = 'relation "tabel1" does not exist'
@@ -285,9 +283,7 @@ describe('suggestTableName', () => {
 
   test('handles very long table names', async () => {
     const longName = 'a'.repeat(100)
-    adapter.setTables([
-      { name: longName, columns: [] }
-    ])
+    adapter.setTables([{ name: longName, columns: [] }])
 
     const error = `relation "${longName}" does not exist`
     const result = await suggestTableName(error, adapter)
@@ -296,9 +292,7 @@ describe('suggestTableName', () => {
   })
 
   test('ignores case in error message parsing', async () => {
-    adapter.setTables([
-      { name: 'users', columns: [] }
-    ])
+    adapter.setTables([{ name: 'users', columns: [] }])
 
     const error = 'RELATION "usrs" DOES NOT EXIST'
     const result = await suggestTableName(error, adapter)

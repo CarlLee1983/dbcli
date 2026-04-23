@@ -165,7 +165,7 @@ test('all command descriptions are non-empty strings', () => {
     'update.description',
     'delete.description',
     'export.description',
-    'skill.description'
+    'skill.description',
   ]
 
   for (const key of commands) {

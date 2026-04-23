@@ -594,7 +594,7 @@ test('classifyStatement: keywords array contains expected values', () => {
 
 test('classifyStatement: keywords are deduplicated', () => {
   const result = classifyStatement('SELECT * FROM users WHERE id IN (SELECT id FROM orders)')
-  const selectCount = result.keywords.filter(k => k === 'SELECT').length
+  const selectCount = result.keywords.filter((k) => k === 'SELECT').length
   expect(selectCount).toBe(1)
 })
 

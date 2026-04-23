@@ -4,7 +4,13 @@
  */
 
 // Re-export types from types.ts
-export type { ConnectionOptions, ColumnSchema, TableSchema, DatabaseAdapter, QueryableAdapter } from './types'
+export type {
+  ConnectionOptions,
+  ColumnSchema,
+  TableSchema,
+  DatabaseAdapter,
+  QueryableAdapter,
+} from './types'
 export { ConnectionError } from './types'
 
 // Re-export factory from factory.ts

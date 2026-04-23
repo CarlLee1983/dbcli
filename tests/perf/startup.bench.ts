@@ -11,7 +11,7 @@ describe('Performance: CLI Startup', () => {
     try {
       execSync(`${cliPath} --help`, {
         stdio: 'pipe',
-        timeout: 5000
+        timeout: 5000,
       })
     } catch (error) {
       // Timeout or error - will be caught by benchmark framework
@@ -25,7 +25,7 @@ describe('Performance: CLI Startup', () => {
     try {
       execSync(`${cliPath} --version`, {
         stdio: 'pipe',
-        timeout: 5000
+        timeout: 5000,
       })
     } catch (error) {
       throw error

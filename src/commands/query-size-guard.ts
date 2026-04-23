@@ -40,6 +40,6 @@ export function shouldBlockQuery(
   return {
     blocked: true,
     sizeCategory: category,
-    reason: `Table has ~${tableSizeInfo.estimatedRowCount.toLocaleString()} rows (huge). Add WHERE or LIMIT clause, or use --no-limit to override.`
+    reason: `Table has ~${tableSizeInfo.estimatedRowCount.toLocaleString()} rows (huge). Add WHERE or LIMIT clause, or use --no-limit to override.`,
   }
 }

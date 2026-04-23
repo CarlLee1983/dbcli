@@ -44,9 +44,7 @@ const mockConfig: DbcliConfig = {
     },
     legacy_data: {
       name: 'legacy_data',
-      columns: [
-        { name: 'id', type: 'bigint', nullable: false, primaryKey: true },
-      ],
+      columns: [{ name: 'id', type: 'bigint', nullable: false, primaryKey: true }],
       primaryKey: ['id'],
     },
     old_cache: {
@@ -194,9 +192,7 @@ describe('SchemaIndexBuilder', () => {
 
     expect(index.metadata.version).toBe('1.0')
     expect(index.metadata.lastRefreshed).toBeDefined()
-    expect(new Date(index.metadata.lastRefreshed).getTime()).toBeLessThanOrEqual(
-      Date.now()
-    )
+    expect(new Date(index.metadata.lastRefreshed).getTime()).toBeLessThanOrEqual(Date.now())
   })
 
   test('buildIndex: handles empty config', async () => {

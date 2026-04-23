@@ -72,15 +72,17 @@ export class PermissionError extends Error {
  * Uses regex-based approach for speed and simplicity
  */
 export function normalizeSQL(sql: string): string {
-  return sql
-    // Remove line comments (-- comment)
-    .replace(/--[^\n]*\n/g, '\n')
-    // Remove block comments (/* comment */)
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    // Remove leading/trailing whitespace
-    .trim()
-    // Compress multiple spaces into one
-    .replace(/\s+/g, ' ')
+  return (
+    sql
+      // Remove line comments (-- comment)
+      .replace(/--[^\n]*\n/g, '\n')
+      // Remove block comments (/* comment */)
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      // Remove leading/trailing whitespace
+      .trim()
+      // Compress multiple spaces into one
+      .replace(/\s+/g, ' ')
+  )
 }
 
 /**
@@ -148,9 +150,7 @@ export function stripCommentsAndStrings(sql: string): string {
 /**
  * Detect composite patterns: WITH clause, subqueries, UNION
  */
-export function detectCompositePatterns(
-  sql: string
-): {
+export function detectCompositePatterns(sql: string): {
   hasWithClause: boolean
   hasSubquery: boolean
   hasUnion: boolean
@@ -232,9 +232,7 @@ export function mapKeywordToType(keyword: string): StatementType {
  * Determine if a statement type is destructive
  */
 export function isDestructiveOperation(type: StatementType): boolean {
-  return ['DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT'].includes(
-    type
-  )
+  return ['DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT'].includes(type)
 }
 
 /**
@@ -313,12 +311,7 @@ export function determineConfidence(
   }
 
   // Schema operations - medium confidence
-  const mediumConfidenceTypes = [
-    'CREATE',
-    'ALTER',
-    'DROP',
-    'TRUNCATE',
-  ]
+  const mediumConfidenceTypes = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE']
 
   if (mediumConfidenceTypes.includes(type)) {
     return 'MEDIUM'
@@ -369,10 +362,7 @@ export function classifyStatement(sql: string): StatementClassification {
 /**
  * Check if statement is allowed under given permission level
  */
-export function checkPermission(
-  sql: string,
-  permission: Permission
-): PermissionCheckResult {
+export function checkPermission(sql: string, permission: Permission): PermissionCheckResult {
   const classification = classifyStatement(sql)
 
   // Admin allows everything
@@ -386,15 +376,7 @@ export function checkPermission(
 
   // Data-Admin allows SELECT, INSERT, UPDATE, DELETE (full DML, no DDL)
   if (permission === 'data-admin') {
-    const allowedTypes = [
-      'SELECT',
-      'INSERT',
-      'UPDATE',
-      'DELETE',
-      'SHOW',
-      'DESCRIBE',
-      'EXPLAIN',
-    ]
+    const allowedTypes = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'SHOW', 'DESCRIBE', 'EXPLAIN']
     if (allowedTypes.includes(classification.type)) {
       return {
         allowed: true,
@@ -411,14 +393,7 @@ export function checkPermission(
 
   // Read-Write allows SELECT, INSERT, UPDATE
   if (permission === 'read-write') {
-    const allowedTypes = [
-      'SELECT',
-      'INSERT',
-      'UPDATE',
-      'SHOW',
-      'DESCRIBE',
-      'EXPLAIN',
-    ]
+    const allowedTypes = ['SELECT', 'INSERT', 'UPDATE', 'SHOW', 'DESCRIBE', 'EXPLAIN']
     if (allowedTypes.includes(classification.type)) {
       return {
         allowed: true,
@@ -462,10 +437,7 @@ export function checkPermission(
  * Throws PermissionError if statement not allowed, otherwise returns classification
  * Use in command handlers before execution
  */
-export function enforcePermission(
-  sql: string,
-  permission: Permission
-): StatementClassification {
+export function enforcePermission(sql: string, permission: Permission): StatementClassification {
   const result = checkPermission(sql, permission)
 
   if (!result.allowed) {

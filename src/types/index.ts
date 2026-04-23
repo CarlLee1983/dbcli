@@ -68,4 +68,3 @@ export interface DbcliConfig {
   metadata?: Metadata
   blacklist?: import('./blacklist').BlacklistConfig
 }
-

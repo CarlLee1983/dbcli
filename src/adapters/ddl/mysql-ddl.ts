@@ -10,7 +10,7 @@ import type {
   AlterColumnOptions,
   IndexDefinition,
   ConstraintDefinition,
-  EnumDefinition
+  EnumDefinition,
 } from './types'
 
 function q(name: string): string {
@@ -65,11 +65,11 @@ export class MySQLDDLGenerator implements DDLGenerator {
 
   createTable(table: string, columns: ColumnDefinition[]): DDLResult {
     const warnings: string[] = []
-    const pkCols = columns.filter(c => c.primaryKey)
-    const colDefs = columns.map(c => columnSQL(c))
+    const pkCols = columns.filter((c) => c.primaryKey)
+    const colDefs = columns.map((c) => columnSQL(c))
 
     if (pkCols.length > 0) {
-      colDefs.push(`PRIMARY KEY (${pkCols.map(c => q(c.name)).join(', ')})`)
+      colDefs.push(`PRIMARY KEY (${pkCols.map((c) => q(c.name)).join(', ')})`)
     }
 
     const sql = `CREATE TABLE ${q(table)} (\n  ${colDefs.join(',\n  ')}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
@@ -85,14 +85,14 @@ export class MySQLDDLGenerator implements DDLGenerator {
   addColumn(table: string, column: ColumnDefinition): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} ADD COLUMN ${columnSQL(column)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
   dropColumn(table: string, column: string): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} DROP COLUMN ${q(column)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
@@ -112,30 +112,28 @@ export class MySQLDDLGenerator implements DDLGenerator {
       warnings.push('MySQL MODIFY COLUMN resets column attributes not explicitly specified')
     } else {
       if (options.setDefault !== undefined) {
-        statements.push(
-          `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${options.setDefault};`
-        )
+        statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${options.setDefault};`)
       }
 
       if (options.dropDefault) {
-        statements.push(
-          `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-        )
+        statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`)
       }
 
       if (options.setNullable) {
-        warnings.push('MySQL requires MODIFY COLUMN with full type to change nullability — use --type to specify')
+        warnings.push(
+          'MySQL requires MODIFY COLUMN with full type to change nullability — use --type to specify'
+        )
       }
 
       if (options.dropNullable) {
-        warnings.push('MySQL requires MODIFY COLUMN with full type to change nullability — use --type to specify')
+        warnings.push(
+          'MySQL requires MODIFY COLUMN with full type to change nullability — use --type to specify'
+        )
       }
     }
 
     if (options.rename) {
-      statements.push(
-        `ALTER TABLE ${t} RENAME COLUMN ${c} TO ${q(options.rename)};`
-      )
+      statements.push(`ALTER TABLE ${t} RENAME COLUMN ${c} TO ${q(options.rename)};`)
     }
 
     if (statements.length === 0 && warnings.length === 0) {
@@ -155,7 +153,7 @@ export class MySQLDDLGenerator implements DDLGenerator {
 
     return {
       sql: `CREATE ${unique}INDEX ${q(name)} ON ${q(index.table)} (${cols})${using};`,
-      warnings: []
+      warnings: [],
     }
   }
 
@@ -163,7 +161,7 @@ export class MySQLDDLGenerator implements DDLGenerator {
     const onTable = table ? ` ON ${q(table)}` : ''
     return {
       sql: `DROP INDEX ${q(indexName)}${onTable};`,
-      warnings: table ? [] : ['MySQL requires ON <table> — specify table for this operation']
+      warnings: table ? [] : ['MySQL requires ON <table> — specify table for this operation'],
     }
   }
 
@@ -181,7 +179,7 @@ export class MySQLDDLGenerator implements DDLGenerator {
           : ''
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} FOREIGN KEY (${q(constraint.column!)}) REFERENCES ${q(constraint.references!.table)}(${q(constraint.references!.column)})${onDelete};`,
-          warnings
+          warnings,
         }
       }
       case 'unique': {
@@ -189,14 +187,14 @@ export class MySQLDDLGenerator implements DDLGenerator {
         const cols = constraint.columns!.map(q).join(', ')
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} UNIQUE (${cols});`,
-          warnings
+          warnings,
         }
       }
       case 'check': {
         const name = constraint.name || `ck_${constraint.table}`
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} CHECK (${constraint.expression});`,
-          warnings: ['CHECK constraints enforced in MySQL 8.0.16+ and MariaDB 10.2.1+ only']
+          warnings: ['CHECK constraints enforced in MySQL 8.0.16+ and MariaDB 10.2.1+ only'],
         }
       }
     }
@@ -205,7 +203,7 @@ export class MySQLDDLGenerator implements DDLGenerator {
   dropConstraint(table: string, constraintName: string): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} DROP CONSTRAINT ${q(constraintName)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
@@ -214,21 +212,25 @@ export class MySQLDDLGenerator implements DDLGenerator {
   addEnum(_definition: EnumDefinition): DDLResult {
     return {
       sql: '',
-      warnings: ['MySQL has no standalone ENUM type — use ENUM in column definition instead (e.g., "status:enum(\'a\',\'b\'):not-null")']
+      warnings: [
+        "MySQL has no standalone ENUM type — use ENUM in column definition instead (e.g., \"status:enum('a','b'):not-null\")",
+      ],
     }
   }
 
   alterEnum(_name: string, _addValue: string): DDLResult {
     return {
       sql: '',
-      warnings: ['MySQL has no standalone ENUM type — use ALTER TABLE MODIFY COLUMN to change enum values']
+      warnings: [
+        'MySQL has no standalone ENUM type — use ALTER TABLE MODIFY COLUMN to change enum values',
+      ],
     }
   }
 
   dropEnum(_name: string): DDLResult {
     return {
       sql: '',
-      warnings: ['MySQL has no standalone ENUM type — nothing to drop']
+      warnings: ['MySQL has no standalone ENUM type — nothing to drop'],
     }
   }
 }

@@ -18,9 +18,7 @@ import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 function parseEnumValues(columnType: string): string[] | undefined {
   const match = columnType.match(/^enum\((.+)\)$/i)
   if (!match) return undefined
-  return match[1]
-    .split(',')
-    .map(v => v.trim().replace(/^'|'$/g, ''))
+  return match[1].split(',').map((v) => v.trim().replace(/^'|'$/g, ''))
 }
 
 /**
@@ -59,7 +57,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         user: this.options.user,
         password: this.options.password || undefined,
         database: this.options.database,
-        charset: 'utf8mb4'
+        charset: 'utf8mb4',
       })
 
       // Ensure utf8mb4 for information_schema comments
@@ -105,11 +103,9 @@ export class MySQLAdapter implements DatabaseAdapter {
    */
   async testConnection(): Promise<boolean> {
     if (!this.db) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -134,25 +130,21 @@ export class MySQLAdapter implements DatabaseAdapter {
     params?: (string | number | boolean | null)[]
   ): Promise<ExecutionResult<T>> {
     if (!this.db) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
       // Use parameterized query to prevent SQL injection
       // mysql2/promise returns [rows, fields]
-      const [result] = params
-        ? await this.db.execute(sql, params)
-        : await this.db.execute(sql)
+      const [result] = params ? await this.db.execute(sql, params) : await this.db.execute(sql)
 
       // Handle query results (array of rows)
       if (Array.isArray(result)) {
         return {
           rows: result as T[],
-          affectedRows: result.length
+          affectedRows: result.length,
         }
       }
 
@@ -161,7 +153,7 @@ export class MySQLAdapter implements DatabaseAdapter {
       return {
         rows: [],
         affectedRows: header.affectedRows || 0,
-        lastInsertId: header.insertId
+        lastInsertId: header.insertId,
       }
     } catch (error) {
       // Pass actual system type for proper error messages
@@ -185,11 +177,9 @@ export class MySQLAdapter implements DatabaseAdapter {
    */
   async listTables(): Promise<TableSchema[]> {
     if (!this.db) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -224,7 +214,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         rowCount: row.row_count || 0,
         engine: row.engine,
         estimatedRowCount: row.row_count || 0,
-        tableType: (row.table_type === 'VIEW' ? 'view' : 'table') as 'table' | 'view'
+        tableType: (row.table_type === 'VIEW' ? 'view' : 'table') as 'table' | 'view',
       }))
     } catch (error) {
       throw mapError(error, this.system, this.options)
@@ -241,11 +231,9 @@ export class MySQLAdapter implements DatabaseAdapter {
    */
   async getTableSchema(tableName: string): Promise<TableSchema> {
     if (!this.db) {
-      throw new ConnectionError(
-        'UNKNOWN',
-        'Database connection not established',
-        ['Call connect() to establish a connection']
-      )
+      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
+        'Call connect() to establish a connection',
+      ])
     }
 
     try {
@@ -301,8 +289,8 @@ export class MySQLAdapter implements DatabaseAdapter {
       // Create map of single-column foreign keys for quick lookup
       const fkMap = new Map<string, { table: string; column: string }>()
       for (const fk of fkResults) {
-        const cols = fk.columns.split(',').map(c => c.trim())
-        const refCols = fk.ref_columns.split(',').map(c => c.trim())
+        const cols = fk.columns.split(',').map((c) => c.trim())
+        const refCols = fk.ref_columns.split(',').map((c) => c.trim())
         if (cols.length === 1 && refCols.length === 1) {
           fkMap.set(cols[0], { table: fk.ref_table, column: refCols[0] })
         }
@@ -310,9 +298,7 @@ export class MySQLAdapter implements DatabaseAdapter {
 
       // Extract primary key columns from already-fetched column data
       // (COLUMN_KEY is only available in COLUMNS table, not KEY_COLUMN_USAGE)
-      const primaryKeyColumns = columns
-        .filter(col => col.is_primary_key)
-        .map(col => col.name)
+      const primaryKeyColumns = columns.filter((col) => col.is_primary_key).map((col) => col.name)
 
       // Extract index information (excluding PRIMARY)
       const indexQuery = `
@@ -355,9 +341,9 @@ export class MySQLAdapter implements DatabaseAdapter {
         FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       `
-      const estimateResult = await this.execute<{ estimated_rows: number | null }>(
-        estimateQuery, [tableName]
-      )
+      const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
+        tableName,
+      ])
       const estimateResults = estimateResult.rows
 
       const schema: TableSchema = {
@@ -371,23 +357,23 @@ export class MySQLAdapter implements DatabaseAdapter {
           foreignKey: fkMap.get(col.name),
           autoIncrement: col.auto_increment,
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
-          enumValues: parseEnumValues(col.type)
+          enumValues: parseEnumValues(col.type),
         })),
         rowCount: countResult.rows[0]?.count || 0,
         engine: tableResults[0]?.engine || 'MySQL',
         primaryKey: primaryKeyColumns,
-        foreignKeys: fkResults.map(fk => ({
+        foreignKeys: fkResults.map((fk) => ({
           name: fk.name,
-          columns: fk.columns.split(',').map(c => c.trim()),
+          columns: fk.columns.split(',').map((c) => c.trim()),
           refTable: fk.ref_table,
-          refColumns: fk.ref_columns.split(',').map(c => c.trim())
+          refColumns: fk.ref_columns.split(',').map((c) => c.trim()),
         })),
-        indexes: indexResults.map(idx => ({
+        indexes: indexResults.map((idx) => ({
           name: idx.name,
-          columns: idx.columns.split(',').map(c => c.trim()),
-          unique: idx.is_unique
+          columns: idx.columns.split(',').map((c) => c.trim()),
+          unique: idx.is_unique,
         })),
-        estimatedRowCount: estimateResults[0]?.estimated_rows || 0
+        estimatedRowCount: estimateResults[0]?.estimated_rows || 0,
       }
 
       return schema
@@ -395,6 +381,4 @@ export class MySQLAdapter implements DatabaseAdapter {
       throw mapError(error, this.system, this.options)
     }
   }
-
-
 }

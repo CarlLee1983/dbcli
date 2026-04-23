@@ -2,10 +2,7 @@
  * Schema path isolation: resolved connection name for V2 .dbcli/config.json
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import {
-  setGlobalConnectionName,
-  getSchemaIsolationConnectionName,
-} from '@/core/config'
+import { setGlobalConnectionName, getSchemaIsolationConnectionName } from '@/core/config'
 import { join } from 'path'
 
 const TMP_DIR = '/tmp/dbcli-schema-isolation-name-test'

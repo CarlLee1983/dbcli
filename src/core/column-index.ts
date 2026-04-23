@@ -43,7 +43,7 @@ export class ColumnIndexBuilder {
     columns: new Map(),
     totalColumns: 0,
     totalTables: 0,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   }
 
   /**
@@ -59,7 +59,7 @@ export class ColumnIndexBuilder {
       columns: new Map(),
       totalColumns: 0,
       totalTables: Object.keys(schemas).length,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     }
 
     // Iterate through all tables
@@ -89,7 +89,7 @@ export class ColumnIndexBuilder {
       // New column
       this.index.columns.set(colName, {
         name: column.name,
-        tables: []
+        tables: [],
       })
       this.index.totalColumns++
     }
@@ -97,7 +97,7 @@ export class ColumnIndexBuilder {
     const entry = this.index.columns.get(colName)!
     entry.tables.push({
       tableName,
-      column
+      column,
     })
   }
 
@@ -127,13 +127,16 @@ export class ColumnIndexBuilder {
     pattern: string | RegExp
   ): Array<{ columnName: string; tables: Array<{ tableName: string; column: ColumnSchema }> }> {
     const regex = typeof pattern === 'string' ? new RegExp(pattern, 'i') : pattern
-    const results: Array<{ columnName: string; tables: Array<{ tableName: string; column: ColumnSchema }> }> = []
+    const results: Array<{
+      columnName: string
+      tables: Array<{ tableName: string; column: ColumnSchema }>
+    }> = []
 
     for (const [colName, entry] of this.index.columns.entries()) {
       if (regex.test(entry.name)) {
         results.push({
           columnName: entry.name,
-          tables: entry.tables
+          tables: entry.tables,
         })
       }
     }
@@ -151,7 +154,7 @@ export class ColumnIndexBuilder {
     const results: ColumnSchema[] = []
 
     for (const entry of this.index.columns.values()) {
-      const tableEntry = entry.tables.find(t => t.tableName === tableName)
+      const tableEntry = entry.tables.find((t) => t.tableName === tableName)
       if (tableEntry) {
         results.push(tableEntry.column)
       }
@@ -168,9 +171,7 @@ export class ColumnIndexBuilder {
    * @param type Column type to search for
    * @returns Columns matching this type
    */
-  findColumnsByType(
-    type: string
-  ): Array<{ tableName: string; column: ColumnSchema }> {
+  findColumnsByType(type: string): Array<{ tableName: string; column: ColumnSchema }> {
     const results: Array<{ tableName: string; column: ColumnSchema }> = []
     const typePattern = new RegExp(type, 'i')
 
@@ -242,7 +243,7 @@ export class ColumnIndexBuilder {
               0
             ) / this.index.columns.size
           : 0,
-      timestamp: this.index.timestamp
+      timestamp: this.index.timestamp,
     }
   }
 
@@ -262,7 +263,7 @@ export class ColumnIndexBuilder {
       ),
       totalColumns: this.index.totalColumns,
       totalTables: this.index.totalTables,
-      timestamp: this.index.timestamp
+      timestamp: this.index.timestamp,
     }
 
     return serialized
@@ -278,7 +279,7 @@ export class ColumnIndexBuilder {
       columns: new Map(Object.entries(exported.columns)),
       totalColumns: exported.totalColumns,
       totalTables: exported.totalTables,
-      timestamp: exported.timestamp
+      timestamp: exported.timestamp,
     }
   }
 }

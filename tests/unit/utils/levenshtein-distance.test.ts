@@ -59,10 +59,7 @@ describe('levenshteinDistance', () => {
   })
 
   test('handles longer strings', () => {
-    const dist = levenshteinDistance(
-      'The quick brown fox',
-      'The quick brown dog'
-    )
+    const dist = levenshteinDistance('The quick brown fox', 'The quick brown dog')
     expect(dist).toBe(2) // fox -> dog requires 2 substitutions
   })
 

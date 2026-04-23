@@ -13,7 +13,9 @@ export class MongoShellAdapter implements DatabaseAdapter {
   }
 
   async execute<T>(): Promise<ExecutionResult<T>> {
-    throw new Error('MongoDB shell does not support raw SQL. Use `query <json>` with `--collection`.')
+    throw new Error(
+      'MongoDB shell does not support raw SQL. Use `query <json>` with `--collection`.'
+    )
   }
 
   async listTables(): Promise<TableSchema[]> {

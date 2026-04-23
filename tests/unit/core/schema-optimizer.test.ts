@@ -12,8 +12,8 @@ const wellFormedSchemas: Record<string, TableSchema> = {
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
       { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null }
-    ]
+      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+    ],
   },
   posts: {
     name: 'posts',
@@ -21,9 +21,9 @@ const wellFormedSchemas: Record<string, TableSchema> = {
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
       { name: 'userId', type: 'integer', nullable: false, primaryKey: false, default: null },
       { name: 'title', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'content', type: 'text', nullable: true, primaryKey: false, default: null }
-    ]
-  }
+      { name: 'content', type: 'text', nullable: true, primaryKey: false, default: null },
+    ],
+  },
 }
 
 const problematicSchemas: Record<string, TableSchema> = {
@@ -34,16 +34,16 @@ const problematicSchemas: Record<string, TableSchema> = {
       type: 'varchar',
       nullable: true,
       primaryKey: false,
-      default: null
-    }))
+      default: null,
+    })),
   },
   no_pk_table: {
     name: 'no_pk_table',
     columns: [
       { name: 'col1', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null }
-    ]
-  }
+      { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null },
+    ],
+  },
 }
 
 test('SchemaOptimizer - analyzes well-formed schema', () => {
@@ -60,7 +60,7 @@ test('SchemaOptimizer - detects wide tables', () => {
   const optimizer = new SchemaOptimizer()
   const report = optimizer.analyzeSchema(problematicSchemas)
 
-  const wideTableIssues = report.issues.filter(i => i.type === 'wide-table')
+  const wideTableIssues = report.issues.filter((i) => i.type === 'wide-table')
   expect(wideTableIssues.length).toBeGreaterThan(0)
   expect(wideTableIssues[0].table).toBe('wide_table')
 })
@@ -69,9 +69,9 @@ test('SchemaOptimizer - detects missing primary keys', () => {
   const optimizer = new SchemaOptimizer()
   const report = optimizer.analyzeSchema(problematicSchemas)
 
-  const pkIssues = report.issues.filter(i => i.type === 'no-primary-key')
+  const pkIssues = report.issues.filter((i) => i.type === 'no-primary-key')
   expect(pkIssues.length).toBeGreaterThan(0)
-  expect(pkIssues.some(i => i.table === 'no_pk_table')).toBe(true)
+  expect(pkIssues.some((i) => i.table === 'no_pk_table')).toBe(true)
 })
 
 test('SchemaOptimizer - tracks metrics correctly', () => {
@@ -104,7 +104,7 @@ test('SchemaOptimizer - generates suggestions', () => {
   report = optimizer.analyzeSchema(problematicSchemas)
   suggestions = optimizer.getSuggestions(report)
   expect(suggestions.length).toBeGreaterThan(0)
-  expect(suggestions.some(s => s.includes('primary key'))).toBe(true)
+  expect(suggestions.some((s) => s.includes('primary key'))).toBe(true)
 })
 
 test('SchemaOptimizer - estimates schema size', () => {
@@ -122,15 +122,15 @@ test('SchemaOptimizer - detects all nullable tables', () => {
       name: 'all_nullable',
       columns: [
         { name: 'col1', type: 'varchar', nullable: true, primaryKey: false, default: null },
-        { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null }
-      ]
-    }
+        { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null },
+      ],
+    },
   }
 
   const optimizer = new SchemaOptimizer()
   const report = optimizer.analyzeSchema(allNullableSchemas)
 
-  const nullableIssues = report.issues.filter(i => i.type === 'all-nullable')
+  const nullableIssues = report.issues.filter((i) => i.type === 'all-nullable')
   expect(nullableIssues.length).toBeGreaterThan(0)
 })
 
@@ -138,14 +138,14 @@ test('SchemaOptimizer - detects empty tables', () => {
   const emptySchemas: Record<string, TableSchema> = {
     empty: {
       name: 'empty',
-      columns: []
-    }
+      columns: [],
+    },
   }
 
   const optimizer = new SchemaOptimizer()
   const report = optimizer.analyzeSchema(emptySchemas)
 
-  const emptyIssues = report.issues.filter(i => i.type === 'empty-table')
+  const emptyIssues = report.issues.filter((i) => i.type === 'empty-table')
   expect(emptyIssues.length).toBeGreaterThan(0)
 })
 

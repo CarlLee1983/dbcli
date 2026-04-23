@@ -26,10 +26,7 @@ export class SchemaIndexBuilder {
    * @param dbcliPath Path to .dbcli directory
    * @returns Parsed SchemaIndex or null if file doesn't exist
    */
-  static async loadIndex(
-    dbcliPath: string,
-    connectionName?: string
-  ): Promise<SchemaIndex | null> {
+  static async loadIndex(dbcliPath: string, connectionName?: string): Promise<SchemaIndex | null> {
     try {
       const indexPath = join(resolveSchemaPath(dbcliPath, connectionName), 'index.json')
       const file = Bun.file(indexPath)

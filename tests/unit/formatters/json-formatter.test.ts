@@ -11,7 +11,7 @@ describe('JSONFormatter', () => {
     const formatter = new JSONFormatter()
     const columns: ColumnSchema[] = [
       { name: 'id', type: 'INT', nullable: false, primaryKey: true },
-      { name: 'email', type: 'VARCHAR(255)', nullable: false }
+      { name: 'email', type: 'VARCHAR(255)', nullable: false },
     ]
 
     const result = formatter.format(columns)
@@ -40,7 +40,7 @@ describe('JSONFormatter', () => {
     const result = formatter.format(data, { compact: true })
 
     // Compact JSON has no indentation
-    const lines = result.split('\n').filter(l => l.trim())
+    const lines = result.split('\n').filter((l) => l.trim())
     expect(lines.length).toBeLessThanOrEqual(2)
   })
 
@@ -51,8 +51,8 @@ describe('JSONFormatter', () => {
         name: 'user_id',
         type: 'INT',
         nullable: false,
-        foreignKey: { table: 'users', column: 'id' }
-      }
+        foreignKey: { table: 'users', column: 'id' },
+      },
     ]
 
     const result = formatter.format(columns)
@@ -68,13 +68,11 @@ describe('TableSchemaJSONFormatter', () => {
     const formatter = new TableSchemaJSONFormatter()
     const schema: TableSchema = {
       name: 'users',
-      columns: [
-        { name: 'id', type: 'INT', nullable: false, primaryKey: true }
-      ],
+      columns: [{ name: 'id', type: 'INT', nullable: false, primaryKey: true }],
       rowCount: 500,
       engine: 'InnoDB',
       primaryKey: ['id'],
-      foreignKeys: []
+      foreignKeys: [],
     }
 
     const result = formatter.format(schema)
@@ -91,18 +89,14 @@ describe('TableSchemaJSONFormatter', () => {
     const formatter = new TableSchemaJSONFormatter()
     const schema: TableSchema = {
       name: 'large_table',
-      columns: [
-        { name: 'id', type: 'INT', nullable: false, primaryKey: true }
-      ],
+      columns: [{ name: 'id', type: 'INT', nullable: false, primaryKey: true }],
       estimatedRowCount: 150000,
       tableType: 'table',
-      indexes: [
-        { name: 'idx_id', columns: ['id'] }
-      ],
+      indexes: [{ name: 'idx_id', columns: ['id'] }],
       rowCount: 150000,
       engine: 'InnoDB',
       primaryKey: ['id'],
-      foreignKeys: []
+      foreignKeys: [],
     }
 
     const result = formatter.format(schema)
@@ -123,7 +117,7 @@ describe('TableSchemaJSONFormatter', () => {
       name: 'medium',
       columns: [],
       estimatedRowCount: 25000,
-      tableType: 'table'
+      tableType: 'table',
     }
 
     const result = formatter.format(mediumSchema)
@@ -138,7 +132,7 @@ describe('TableSchemaJSONFormatter', () => {
       name: 'legacy',
       columns: [],
       rowCount: 15000,
-      tableType: 'view'
+      tableType: 'view',
     }
 
     const result = formatter.format(schema)
@@ -152,7 +146,7 @@ describe('TableSchemaJSONFormatter', () => {
     const formatter = new TableSchemaJSONFormatter()
     const schema: TableSchema = {
       name: 'unknown',
-      columns: []
+      columns: [],
     }
 
     const result = formatter.format(schema)
@@ -167,7 +161,7 @@ describe('TableSchemaJSONFormatter', () => {
     const formatter = new TableSchemaJSONFormatter()
     const schema: TableSchema = {
       name: 'simple',
-      columns: [{ name: 'col', type: 'TEXT', nullable: true }]
+      columns: [{ name: 'col', type: 'TEXT', nullable: true }],
     }
 
     const result = formatter.format(schema)
@@ -187,17 +181,17 @@ describe('TableSchemaJSONFormatter', () => {
           name: 'user_id',
           type: 'INT',
           nullable: false,
-          foreignKey: { table: 'users', column: 'id' }
-        }
+          foreignKey: { table: 'users', column: 'id' },
+        },
       ],
       foreignKeys: [
         {
           name: 'fk_orders_user_id',
           columns: ['user_id'],
           refTable: 'users',
-          refColumns: ['id']
-        }
-      ]
+          refColumns: ['id'],
+        },
+      ],
     }
 
     const result = formatter.format(schema)

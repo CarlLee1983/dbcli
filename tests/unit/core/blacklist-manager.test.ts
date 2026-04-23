@@ -13,9 +13,9 @@ const baseConfig: DbcliConfig = {
     port: 5432,
     user: 'user',
     password: 'pass',
-    database: 'testdb'
+    database: 'testdb',
   },
-  permission: 'query-only'
+  permission: 'query-only',
 }
 
 function makeConfig(blacklist?: any): any {
@@ -41,7 +41,7 @@ describe('BlacklistManager', () => {
     it('loads populated column blacklist correctly', () => {
       const config = makeConfig({
         tables: [],
-        columns: { users: ['password', 'api_key'] }
+        columns: { users: ['password', 'api_key'] },
       })
       const manager = new BlacklistManager(config)
       expect(manager.isColumnBlacklisted('users', 'password')).toBe(true)
@@ -75,7 +75,7 @@ describe('BlacklistManager', () => {
     it('returns true for exact column match', () => {
       const config = makeConfig({
         tables: [],
-        columns: { users: ['password'] }
+        columns: { users: ['password'] },
       })
       const manager = new BlacklistManager(config)
       expect(manager.isColumnBlacklisted('users', 'password')).toBe(true)
@@ -84,7 +84,7 @@ describe('BlacklistManager', () => {
     it('returns false for non-blacklisted column', () => {
       const config = makeConfig({
         tables: [],
-        columns: { users: ['password'] }
+        columns: { users: ['password'] },
       })
       const manager = new BlacklistManager(config)
       expect(manager.isColumnBlacklisted('users', 'email')).toBe(false)
@@ -99,7 +99,7 @@ describe('BlacklistManager', () => {
     it('is case-sensitive for column names', () => {
       const config = makeConfig({
         tables: [],
-        columns: { users: ['password'] }
+        columns: { users: ['password'] },
       })
       const manager = new BlacklistManager(config)
       // Column names are case-sensitive
@@ -112,7 +112,7 @@ describe('BlacklistManager', () => {
     it('returns correct list of blacklisted columns', () => {
       const config = makeConfig({
         tables: [],
-        columns: { users: ['password', 'api_key', 'ssn'] }
+        columns: { users: ['password', 'api_key', 'ssn'] },
       })
       const manager = new BlacklistManager(config)
       const cols = manager.getBlacklistedColumns('users')

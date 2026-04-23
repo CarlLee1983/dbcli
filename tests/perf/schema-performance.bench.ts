@@ -18,7 +18,10 @@ import { join } from 'path'
 /**
  * Generate mock schemas for benchmarking
  */
-function generateMockSchemas(tableCount: number, columnsPerTable: number): Record<string, TableSchema> {
+function generateMockSchemas(
+  tableCount: number,
+  columnsPerTable: number
+): Record<string, TableSchema> {
   const schemas: Record<string, TableSchema> = {}
 
   for (let t = 0; t < tableCount; t++) {
@@ -32,13 +35,13 @@ function generateMockSchemas(tableCount: number, columnsPerTable: number): Recor
         type: isId ? 'integer' : c % 3 === 0 ? 'varchar' : c % 3 === 1 ? 'integer' : 'decimal',
         nullable: !isId,
         primaryKey: isId,
-        default: null
+        default: null,
       })
     }
 
     schemas[tableName] = {
       name: tableName,
-      columns
+      columns,
     }
   }
 
@@ -56,7 +59,7 @@ async function benchmarkColumnIndexing() {
   const testSizes = [
     { tables: 10, columns: 20 },
     { tables: 50, columns: 30 },
-    { tables: 100, columns: 50 }
+    { tables: 100, columns: 50 },
   ]
 
   for (const { tables, columns } of testSizes) {
@@ -76,7 +79,7 @@ async function benchmarkColumnIndexing() {
 
     console.log(
       `Build: ${tables}t × ${columns}c = ${elapsed.toFixed(2)}ms, ` +
-      `Lookup (1000x): ${(lookupElapsed / 1000).toFixed(3)}ms/call`
+        `Lookup (1000x): ${(lookupElapsed / 1000).toFixed(3)}ms/call`
     )
   }
 }
@@ -92,7 +95,7 @@ async function benchmarkSchemaOptimization() {
   const testSizes = [
     { tables: 10, columns: 20 },
     { tables: 50, columns: 30 },
-    { tables: 100, columns: 50 }
+    { tables: 100, columns: 50 },
   ]
 
   for (const { tables, columns } of testSizes) {
@@ -107,7 +110,7 @@ async function benchmarkSchemaOptimization() {
 
     console.log(
       `Analysis: ${tables}t × ${columns}c = ${elapsed.toFixed(2)}ms, ` +
-      `Issues: ${report.issues.length}, Suggestions: ${suggestions.length}`
+        `Issues: ${report.issues.length}, Suggestions: ${suggestions.length}`
     )
   }
 }
@@ -134,9 +137,7 @@ async function benchmarkAtomicFileWriter() {
     await writer.write(filePath, content, { createBackup: true })
     const elapsed = performance.now() - start
 
-    console.log(
-      `Write: ${(size / 1024).toFixed(1)}KB (with backup) = ${elapsed.toFixed(2)}ms`
-    )
+    console.log(`Write: ${(size / 1024).toFixed(1)}KB (with backup) = ${elapsed.toFixed(2)}ms`)
   }
 
   // Cleanup
@@ -166,9 +167,7 @@ async function benchmarkPatternMatching() {
     }
     const elapsed = performance.now() - start
 
-    console.log(
-      `Pattern: "${pattern}" (100 iterations) = ${(elapsed / 100).toFixed(3)}ms/call`
-    )
+    console.log(`Pattern: "${pattern}" (100 iterations) = ${(elapsed / 100).toFixed(3)}ms/call`)
   }
 }
 
@@ -195,7 +194,7 @@ async function benchmarkTypeBasedLookups() {
     const results = builder.findColumnsByType(type)
     console.log(
       `Type: "${type}" (100 iterations) = ${(elapsed / 100).toFixed(3)}ms/call, ` +
-      `Found: ${results.length}`
+        `Found: ${results.length}`
     )
   }
 }

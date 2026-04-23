@@ -73,7 +73,11 @@ export const upgradeCommand = new Command('upgrade')
     }
 
     // Newer version available
-    console.log(colors.warn(`\n  ${t_vars('upgrade.new_version_available', { version: result.latestVersion })}`))
+    console.log(
+      colors.warn(
+        `\n  ${t_vars('upgrade.new_version_available', { version: result.latestVersion })}`
+      )
+    )
     console.log(formatUpgradeMessage(currentVersion, result.latestVersion))
     console.log()
 
@@ -94,7 +98,9 @@ export const upgradeCommand = new Command('upgrade')
     const result2 = await proc
 
     if (result2.exitCode === 0) {
-      console.log(colors.success(`\n${t_vars('upgrade.success', { version: result.latestVersion })}`))
+      console.log(
+        colors.success(`\n${t_vars('upgrade.success', { version: result.latestVersion })}`)
+      )
       console.log(colors.dim(`\n  ${t('upgrade.skill_recheck_hint')}`))
     } else {
       console.error(colors.error(`\n${t('upgrade.failed')}`))

@@ -17,18 +17,31 @@ function createMockAdapter(rows: Record<string, any>[]): DatabaseAdapter {
     disconnect: async () => {},
     execute: async <T = Record<string, unknown>>(_sql: string, _params?: any[]) => ({
       rows: rows as T[],
-      affectedRows: rows.length
+      affectedRows: rows.length,
     }),
     listTables: async () => [],
-    getTableSchema: async () => ({ name: '', columns: [], rowCount: 0, primaryKey: null, foreignKeys: [] }),
+    getTableSchema: async () => ({
+      name: '',
+      columns: [],
+      rowCount: 0,
+      primaryKey: null,
+      foreignKeys: [],
+    }),
     testConnection: async () => true,
-    getServerVersion: async () => 'test'
+    getServerVersion: async () => 'test',
   }
 }
 
 const baseConfig: DbcliConfig = {
-  connection: { system: 'postgresql', host: 'localhost', port: 5432, user: 'u', password: 'p', database: 'db' },
-  permission: 'admin'
+  connection: {
+    system: 'postgresql',
+    host: 'localhost',
+    port: 5432,
+    user: 'u',
+    password: 'p',
+    database: 'db',
+  },
+  permission: 'admin',
 }
 
 function makeConfig(blacklist?: any): any {
@@ -43,7 +56,7 @@ function makeValidator(blacklist?: any, overrideEnv?: string): BlacklistValidato
 describe('QueryExecutor with blacklist column filtering', () => {
   const mockRows = [
     { id: 1, name: 'Alice', email: 'alice@example.com', password: 'hash123', api_key: 'key_abc' },
-    { id: 2, name: 'Bob', email: 'bob@example.com', password: 'hash456', api_key: 'key_def' }
+    { id: 2, name: 'Bob', email: 'bob@example.com', password: 'hash456', api_key: 'key_def' },
   ]
 
   it('returns all columns when no blacklist configured', async () => {

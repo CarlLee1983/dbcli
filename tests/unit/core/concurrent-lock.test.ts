@@ -43,7 +43,7 @@ test('ConcurrentLockManager - lock age tracking', async () => {
   await manager.acquireLock('test')
 
   // Wait a bit and check age
-  await new Promise(resolve => setTimeout(resolve, 50))
+  await new Promise((resolve) => setTimeout(resolve, 50))
   const age = manager.getLockAge()
   expect(age).not.toBe(null)
   expect(age!).toBeGreaterThanOrEqual(50)
@@ -64,13 +64,10 @@ test('ConcurrentLockManager - withLock helper', async () => {
 
   let operationExecuted = false
 
-  const result = await manager.withLock(
-    async () => {
-      operationExecuted = true
-      return 'success'
-    },
-    'test-operation'
-  )
+  const result = await manager.withLock(async () => {
+    operationExecuted = true
+    return 'success'
+  }, 'test-operation')
 
   expect(operationExecuted).toBe(true)
   expect(result).toBe('success')

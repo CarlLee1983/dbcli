@@ -16,7 +16,7 @@ const baseV2Config = {
       user: 'dev',
       password: 'secret',
       database: 'myapp',
-      permission: 'read-write'
+      permission: 'read-write',
     },
     staging: {
       system: 'postgresql',
@@ -25,12 +25,12 @@ const baseV2Config = {
       user: 'admin',
       password: 'stagingpass',
       database: 'staging_db',
-      permission: 'query-only'
-    }
+      permission: 'query-only',
+    },
   },
   schema: {},
   metadata: { version: '1.0' },
-  blacklist: { tables: [], columns: {} }
+  blacklist: { tables: [], columns: {} },
 }
 
 describe('use command', () => {
@@ -51,7 +51,9 @@ describe('use command', () => {
     })
 
     test('should throw for non-existent connection', async () => {
-      expect(switchDefault(CONFIG_DIR, 'nonexistent', baseV2Config as any)).rejects.toThrow(/nonexistent/)
+      expect(switchDefault(CONFIG_DIR, 'nonexistent', baseV2Config as any)).rejects.toThrow(
+        /nonexistent/
+      )
     })
   })
 

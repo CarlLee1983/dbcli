@@ -50,10 +50,10 @@ test('SchemaUpdater - generates patch for added tables', async () => {
       port: 5432,
       user: 'test',
       password: 'test',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
-    schema: {}
+    schema: {},
   }
 
   // Set up new table in adapter
@@ -65,16 +65,16 @@ test('SchemaUpdater - generates patch for added tables', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null
+        default: null,
       },
       {
         name: 'name',
         type: 'varchar',
         nullable: false,
         primaryKey: false,
-        default: null
-      }
-    ]
+        default: null,
+      },
+    ],
   }
 
   adapter.setTable('users', newTable)
@@ -109,9 +109,9 @@ test('SchemaUpdater - detects table modifications', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null
-      }
-    ]
+        default: null,
+      },
+    ],
   }
 
   // New schema with additional column
@@ -123,23 +123,23 @@ test('SchemaUpdater - detects table modifications', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null
+        default: null,
       },
       {
         name: 'price',
         type: 'decimal',
         nullable: false,
         primaryKey: false,
-        default: null
-      }
-    ]
+        default: null,
+      },
+    ],
   }
 
   adapter.setTable('products', newTable)
 
   // Verify modification detection
   expect(newTable.columns.length).toBe(2)
-  expect(newTable.columns.some(c => c.name === 'price')).toBe(true)
+  expect(newTable.columns.some((c) => c.name === 'price')).toBe(true)
 })
 
 test('SchemaUpdater - handles table deletion', async () => {
@@ -153,15 +153,15 @@ test('SchemaUpdater - handles table deletion', async () => {
       port: 5432,
       user: 'test',
       password: 'test',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
     schema: {
       deleted_table: {
         name: 'deleted_table',
-        columns: []
-      }
-    }
+        columns: [],
+      },
+    },
   }
 
   // Adapter has no tables (simulating deletion)

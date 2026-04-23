@@ -15,10 +15,7 @@ export interface OutputFormatter<T> {
  * Used by AI agents and tools that need structured output
  */
 export class JSONFormatter implements OutputFormatter<ColumnSchema[] | TableSchema[]> {
-  format(
-    data: ColumnSchema[] | TableSchema[],
-    options?: { compact?: boolean }
-  ): string {
+  format(data: ColumnSchema[] | TableSchema[], options?: { compact?: boolean }): string {
     const spacing = options?.compact ? undefined : 2
     return JSON.stringify(data, null, spacing)
   }
@@ -35,9 +32,7 @@ export class TableSchemaJSONFormatter implements OutputFormatter<TableSchema> {
     const output = {
       name: table.name,
       estimatedRowCount: rowCount ?? null,
-      sizeCategory: rowCount !== undefined && rowCount !== null
-        ? getSizeCategory(rowCount)
-        : null,
+      sizeCategory: rowCount !== undefined && rowCount !== null ? getSizeCategory(rowCount) : null,
       tableType: table.tableType ?? 'table',
       columns: table.columns,
       primaryKey: table.primaryKey || [],
@@ -45,8 +40,8 @@ export class TableSchemaJSONFormatter implements OutputFormatter<TableSchema> {
       indexes: table.indexes || [],
       metadata: {
         rowCount: table.rowCount,
-        engine: table.engine
-      }
+        engine: table.engine,
+      },
     }
     return JSON.stringify(output, null, spacing)
   }

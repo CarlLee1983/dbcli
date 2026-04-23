@@ -14,11 +14,11 @@ describe('QueryResultFormatter - Table Format', () => {
       rows: [
         { id: 1, name: 'Alice' },
         { id: 2, name: 'Bob' },
-        { id: 3, name: 'Charlie' }
+        { id: 3, name: 'Charlie' },
       ],
       rowCount: 3,
       columnNames: ['id', 'name'],
-      executionTimeMs: 42
+      executionTimeMs: 42,
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -38,7 +38,7 @@ describe('QueryResultFormatter - Table Format', () => {
       rows: [],
       rowCount: 0,
       columnNames: ['id', 'email'],
-      executionTimeMs: 5
+      executionTimeMs: 5,
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -53,7 +53,7 @@ describe('QueryResultFormatter - Table Format', () => {
     const result: QueryResult<{ id: number; status: string }> = {
       rows: [{ id: 42, status: 'active' }],
       rowCount: 1,
-      columnNames: ['id', 'status']
+      columnNames: ['id', 'status'],
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -68,7 +68,7 @@ describe('QueryResultFormatter - Table Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ id: 1, name: null, email: undefined }],
       rowCount: 1,
-      columnNames: ['id', 'name', 'email']
+      columnNames: ['id', 'name', 'email'],
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -84,7 +84,7 @@ describe('QueryResultFormatter - Table Format', () => {
       rows: [{ col: 'value' }],
       rowCount: 1,
       columnNames: ['col'],
-      executionTimeMs: 123
+      executionTimeMs: 123,
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -97,7 +97,7 @@ describe('QueryResultFormatter - Table Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ col: 'value' }],
       rowCount: 1,
-      columnNames: ['col']
+      columnNames: ['col'],
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -113,13 +113,13 @@ describe('QueryResultFormatter - JSON Format', () => {
     const result: QueryResult<{ id: number; name: string }> = {
       rows: [
         { id: 1, name: 'Alice' },
-        { id: 2, name: 'Bob' }
+        { id: 2, name: 'Bob' },
       ],
       rowCount: 2,
       columnNames: ['id', 'name'],
       columnTypes: ['integer', 'varchar'],
       executionTimeMs: 42,
-      metadata: { statement: 'SELECT' }
+      metadata: { statement: 'SELECT' },
     }
 
     const output = formatter.format(result, { format: 'json' })
@@ -140,7 +140,7 @@ describe('QueryResultFormatter - JSON Format', () => {
     const result: QueryResult<{ id: number }> = {
       rows: [{ id: 1 }],
       rowCount: 1,
-      columnNames: ['id']
+      columnNames: ['id'],
     }
 
     const output = formatter.format(result, { format: 'json', compact: false })
@@ -153,7 +153,7 @@ describe('QueryResultFormatter - JSON Format', () => {
     const result: QueryResult<{ id: number }> = {
       rows: [{ id: 1 }],
       rowCount: 1,
-      columnNames: ['id']
+      columnNames: ['id'],
     }
 
     const output = formatter.format(result, { format: 'json', compact: true })
@@ -167,7 +167,7 @@ describe('QueryResultFormatter - JSON Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ id: 1, name: null }],
       rowCount: 1,
-      columnNames: ['id', 'name']
+      columnNames: ['id', 'name'],
     }
 
     const output = formatter.format(result, { format: 'json' })
@@ -184,7 +184,7 @@ describe('QueryResultFormatter - JSON Format', () => {
       columnNames: ['col'],
       columnTypes: ['varchar'],
       executionTimeMs: 100,
-      metadata: { statement: 'INSERT', affectedRows: 1 }
+      metadata: { statement: 'INSERT', affectedRows: 1 },
     }
 
     const output = formatter.format(result, { format: 'json' })
@@ -205,10 +205,10 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ id: number; name: string }> = {
       rows: [
         { id: 1, name: 'Alice' },
-        { id: 2, name: 'Bob' }
+        { id: 2, name: 'Bob' },
       ],
       rowCount: 2,
-      columnNames: ['id', 'name']
+      columnNames: ['id', 'name'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -224,7 +224,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ name: string }> = {
       rows: [{ name: 'Smith, Jr.' }],
       rowCount: 1,
-      columnNames: ['name']
+      columnNames: ['name'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -238,7 +238,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ name: string }> = {
       rows: [{ name: 'Jane "Doc" Doe' }],
       rowCount: 1,
-      columnNames: ['name']
+      columnNames: ['name'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -252,7 +252,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ description: string }> = {
       rows: [{ description: 'Line 1\nLine 2' }],
       rowCount: 1,
-      columnNames: ['description']
+      columnNames: ['description'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -266,7 +266,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ id: 1, name: null, email: undefined }],
       rowCount: 1,
-      columnNames: ['id', 'name', 'email']
+      columnNames: ['id', 'name', 'email'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -280,7 +280,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ id: 42, price: 19.99, quantity: 100 }],
       rowCount: 1,
-      columnNames: ['id', 'price', 'quantity']
+      columnNames: ['id', 'price', 'quantity'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -294,7 +294,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [],
       rowCount: 0,
-      columnNames: ['id', 'name', 'email']
+      columnNames: ['id', 'name', 'email'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -307,7 +307,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ address: string }> = {
       rows: [{ address: 'Smith, "Dr." Jones\nApt. 5' }],
       rowCount: 1,
-      columnNames: ['address']
+      columnNames: ['address'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -323,7 +323,7 @@ describe('QueryResultFormatter - CSV Format', () => {
     const result: QueryResult<{ email: string }> = {
       rows: [{ email: 'user@example.com' }],
       rowCount: 1,
-      columnNames: ['email']
+      columnNames: ['email'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -339,7 +339,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<{ col: string }> = {
       rows: [{ col: 'value' }],
       rowCount: 1,
-      columnNames: ['col']
+      columnNames: ['col'],
     }
 
     const output = formatter.format(result)
@@ -354,7 +354,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<{ count: number }> = {
       rows: [{ count: 999999999 }],
       rowCount: 1,
-      columnNames: ['count']
+      columnNames: ['count'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -367,7 +367,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<{ name: string }> = {
       rows: [{ name: '你好世界' }],
       rowCount: 1,
-      columnNames: ['name']
+      columnNames: ['name'],
     }
 
     const output = formatter.format(result, { format: 'csv' })
@@ -380,7 +380,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<{ active: boolean }> = {
       rows: [{ active: true }],
       rowCount: 1,
-      columnNames: ['active']
+      columnNames: ['active'],
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -393,7 +393,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [{ data: { key: 'value' } }],
       rowCount: 1,
-      columnNames: ['data']
+      columnNames: ['data'],
     }
 
     const output = formatter.format(result, { format: 'table' })
@@ -409,12 +409,12 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<Record<string, any>> = {
       rows: [row],
       rowCount: 1,
-      columnNames: cols
+      columnNames: cols,
     }
 
     const output = formatter.format(result, { format: 'csv' })
 
-    cols.forEach(col => {
+    cols.forEach((col) => {
       expect(output).toContain(col)
     })
   })
@@ -426,7 +426,7 @@ describe('QueryResultFormatter - Default and Edge Cases', () => {
     const result: QueryResult<{ id: number; value: string }> = {
       rows,
       rowCount: 100,
-      columnNames: ['id', 'value']
+      columnNames: ['id', 'value'],
     }
 
     const output = formatter.format(result, { format: 'json' })

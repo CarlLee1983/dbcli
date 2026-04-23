@@ -1,5 +1,12 @@
 import type { DatabaseAdapter, TableSchema, ColumnSchema } from '@/adapters/types'
-import type { CheckReport, CheckType, NullCheckResult, OrphanCheckResult, DuplicateCheckResult, EmptyStringCheckResult } from '@/types/check'
+import type {
+  CheckReport,
+  CheckType,
+  NullCheckResult,
+  OrphanCheckResult,
+  DuplicateCheckResult,
+  EmptyStringCheckResult,
+} from '@/types/check'
 import { getSizeCategory } from './size-category'
 
 export interface CheckOptions {
@@ -11,16 +18,13 @@ export interface CheckOptions {
 export class HealthChecker {
   constructor(private adapter: DatabaseAdapter) {}
 
-  async check(
-    schema: TableSchema,
-    options: CheckOptions = {}
-  ): Promise<CheckReport> {
+  async check(schema: TableSchema, options: CheckOptions = {}): Promise<CheckReport> {
     const checks = options.checks || ['nulls', 'duplicates', 'orphans', 'emptyStrings', 'rowCount']
     const sample = options.sample || 10_000
     const blacklisted = options.blacklistedColumns || new Set<string>()
 
     const visibleColumns = schema.columns.filter(
-      c => !blacklisted.has(`${schema.name}.${c.name}`)
+      (c) => !blacklisted.has(`${schema.name}.${c.name}`)
     )
 
     const countResult = await this.adapter.execute<{ count: number }>(
@@ -45,7 +49,7 @@ export class HealthChecker {
       : []
 
     const issues = orphans.length + duplicates.length
-    const warnings = nulls.filter(n => n.nullPercent > 50).length + emptyStrings.length
+    const warnings = nulls.filter((n) => n.nullPercent > 50).length + emptyStrings.length
     const clean = Math.max(0, checks.length - (issues > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0))
 
     return {
@@ -54,9 +58,10 @@ export class HealthChecker {
       sizeCategory: getSizeCategory(schema.estimatedRowCount),
       checks: { nulls, orphans, duplicates, emptyStrings },
       summary: { issues, warnings, clean },
-      skippedColumns: blacklisted.size > 0
-        ? Array.from(blacklisted).filter(c => c.startsWith(`${schema.name}.`))
-        : undefined
+      skippedColumns:
+        blacklisted.size > 0
+          ? Array.from(blacklisted).filter((c) => c.startsWith(`${schema.name}.`))
+          : undefined,
     }
   }
 
@@ -68,7 +73,7 @@ export class HealthChecker {
   ): Promise<NullCheckResult[]> {
     if (totalRows === 0) return []
 
-    const nullableColumns = columns.filter(c => c.nullable)
+    const nullableColumns = columns.filter((c) => c.nullable)
     const results: NullCheckResult[] = []
 
     for (const col of nullableColumns) {
@@ -86,7 +91,7 @@ export class HealthChecker {
           results.push({
             column: col.name,
             nullCount,
-            nullPercent: Number(((nullCount / sampleSize) * 100).toFixed(1))
+            nullPercent: Number(((nullCount / sampleSize) * 100).toFixed(1)),
           })
         }
       } catch {
@@ -101,7 +106,7 @@ export class HealthChecker {
     tableName: string,
     columns: ColumnSchema[]
   ): Promise<OrphanCheckResult[]> {
-    const fkColumns = columns.filter(c => c.foreignKey)
+    const fkColumns = columns.filter((c) => c.foreignKey)
     const results: OrphanCheckResult[] = []
 
     for (const col of fkColumns) {
@@ -122,7 +127,7 @@ export class HealthChecker {
           results.push({
             column: col.name,
             references: `${col.foreignKey.table}.${col.foreignKey.column}`,
-            orphanCount
+            orphanCount,
           })
         }
       } catch {
@@ -137,12 +142,12 @@ export class HealthChecker {
     tableName: string,
     indexes: Array<{ name: string; columns: string[]; unique: boolean }>
   ): Promise<DuplicateCheckResult[]> {
-    const uniqueIndexes = indexes.filter(idx => idx.unique)
+    const uniqueIndexes = indexes.filter((idx) => idx.unique)
     const results: DuplicateCheckResult[] = []
 
     for (const idx of uniqueIndexes) {
       try {
-        const colList = idx.columns.map(c => `\`${c}\``).join(', ')
+        const colList = idx.columns.map((c) => `\`${c}\``).join(', ')
         const sql = `
           SELECT COUNT(*) as dup_count FROM (
             SELECT ${colList}
@@ -158,7 +163,7 @@ export class HealthChecker {
           results.push({
             columns: idx.columns,
             indexName: idx.name,
-            duplicateCount: dupCount
+            duplicateCount: dupCount,
           })
         }
       } catch {
@@ -173,7 +178,7 @@ export class HealthChecker {
     tableName: string,
     columns: ColumnSchema[]
   ): Promise<EmptyStringCheckResult[]> {
-    const stringColumns = columns.filter(c => /varchar|text|char/i.test(c.type))
+    const stringColumns = columns.filter((c) => /varchar|text|char/i.test(c.type))
     const results: EmptyStringCheckResult[] = []
 
     for (const col of stringColumns) {

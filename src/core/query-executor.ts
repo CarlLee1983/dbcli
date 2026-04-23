@@ -45,9 +45,7 @@ export class QueryExecutor {
 
       // 1b. Warn on dangerous DDL operations even in admin mode
       if (classification.isDangerous && this.permission === 'admin') {
-        console.error(
-          `⚠ Warning: executing ${classification.type} operation (admin mode)`
-        )
+        console.error(`⚠ Warning: executing ${classification.type} operation (admin mode)`)
       }
 
       // 2. Auto-limit in query-only mode (safety default)
@@ -81,7 +79,7 @@ export class QueryExecutor {
 
       // 5. Collect result metadata
       let columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
-      const columnTypes = columnNames.map(col => {
+      const columnTypes = columnNames.map((col) => {
         const value = rows[0]?.[col]
         return inferColumnType(value)
       })
@@ -96,7 +94,7 @@ export class QueryExecutor {
           const filterResult = this.blacklistValidator.filterColumns(tableName, rows, columnNames)
           filteredRows = filterResult.filteredRows
           if (filterResult.omittedColumns.length > 0) {
-            columnNames = columnNames.filter(col => !filterResult.omittedColumns.includes(col))
+            columnNames = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
             securityNotification = this.blacklistValidator.buildSecurityNotification(
               tableName,
               filterResult.omittedColumns
@@ -115,8 +113,8 @@ export class QueryExecutor {
         metadata: {
           statement: classification.type as any,
           affectedRows: affectedRows,
-          ...(securityNotification ? { securityNotification } : {})
-        }
+          ...(securityNotification ? { securityNotification } : {}),
+        },
       }
 
       return result
@@ -133,15 +131,9 @@ export class QueryExecutor {
 
       // For database errors, try to suggest missing table
       const errorMessage = (error as Error).message
-      if (
-        errorMessage.includes('does not exist') ||
-        errorMessage.includes('not found')
-      ) {
+      if (errorMessage.includes('does not exist') || errorMessage.includes('not found')) {
         try {
-          const { suggestions, tables } = await suggestTableName(
-            errorMessage,
-            this.adapter
-          )
+          const { suggestions, tables } = await suggestTableName(errorMessage, this.adapter)
           const enhancedError = new Error(
             `${errorMessage}\n` +
               (suggestions.length > 0

@@ -15,10 +15,10 @@ const mockConfig: DbcliConfig = {
     port: 5432,
     user: 'test',
     password: 'test',
-    database: 'testdb'
+    database: 'testdb',
   },
   permission: 'query-only',
-  schema: {}
+  schema: {},
 }
 
 test('ErrorRecoveryManager - initialize creates recovery dir', async () => {
@@ -110,7 +110,7 @@ test('ErrorRecoveryManager - cleanup respects maxBackups', async () => {
   // Create multiple recovery points
   for (let i = 0; i < 4; i++) {
     await manager.createRecoveryPoint(mockConfig, `backup${i}`)
-    await new Promise(resolve => setTimeout(resolve, 5))
+    await new Promise((resolve) => setTimeout(resolve, 5))
   }
 
   // Get recovery state - should respect maxBackups limit

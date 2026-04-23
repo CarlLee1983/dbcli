@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { configModule } from '../core/config'
-import { AdapterFactory } from '../adapters/factory'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { ReplEngine } from '../core/repl/repl-engine'
 import { createCompleter } from '../core/repl/completer'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -35,9 +35,10 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   }
 
   const isMongoDB = config.connection.system === 'mongodb'
+  const connectionOpts = config.connection as ConnectionOptions
   const adapter = isMongoDB
-    ? new MongoShellAdapter(AdapterFactory.createMongoDBAdapter(config.connection))
-    : AdapterFactory.createAdapter(config.connection)
+    ? new MongoShellAdapter(AdapterFactory.createMongoDBAdapter(connectionOpts))
+    : AdapterFactory.createAdapter(connectionOpts)
   try {
     await adapter.connect()
   } catch (error: any) {
@@ -47,7 +48,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
 
   // Build context from schema cache or MongoDB collections
   let tableNames: string[] = []
-  let columnsByTable: Record<string, string[]> = {}
+  const columnsByTable: Record<string, string[]> = {}
   if (isMongoDB) {
     const collections = await adapter.listTables()
     tableNames = collections.map((collection) => collection.name)
@@ -74,12 +75,16 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const complete = createCompleter(context)
 
   // Welcome message
-  console.error(pc.bold(t_vars('shell.welcome', {
-    system: config.connection.system,
-    database: String(config.connection.database),
-    host: String(config.connection.host),
-    port: String(config.connection.port),
-  })))
+  console.error(
+    pc.bold(
+      t_vars('shell.welcome', {
+        system: config.connection.system,
+        database: String(config.connection.database),
+        host: String(config.connection.host),
+        port: String(config.connection.port),
+      })
+    )
+  )
   console.error(pc.dim(t_vars('shell.welcome_permission', { permission: config.permission })))
   if (isMongoDB) {
     console.error(pc.dim('MongoDB shell: use `query <json>` with `--collection <name>` for reads.'))

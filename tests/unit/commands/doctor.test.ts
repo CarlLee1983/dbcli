@@ -44,9 +44,7 @@ describe('doctor checks', () => {
   })
 
   test('checkBlacklistCompleteness warns about sensitive column names', () => {
-    const columns = new Map<string, string[]>([
-      ['users', ['id', 'email', 'password_hash', 'name']]
-    ])
+    const columns = new Map<string, string[]>([['users', ['id', 'email', 'password_hash', 'name']]])
     const blacklistedColumns = new Map<string, Set<string>>()
     const result = runDoctorChecks.checkBlacklistCompleteness(columns, blacklistedColumns)
     expect(result.status).toBe('warn')
@@ -54,12 +52,8 @@ describe('doctor checks', () => {
   })
 
   test('checkBlacklistCompleteness passes when sensitive columns are protected', () => {
-    const columns = new Map<string, string[]>([
-      ['users', ['id', 'email', 'password_hash']]
-    ])
-    const blacklistedColumns = new Map<string, Set<string>>([
-      ['users', new Set(['password_hash'])]
-    ])
+    const columns = new Map<string, string[]>([['users', ['id', 'email', 'password_hash']]])
+    const blacklistedColumns = new Map<string, Set<string>>([['users', new Set(['password_hash'])]])
     const result = runDoctorChecks.checkBlacklistCompleteness(columns, blacklistedColumns)
     expect(result.status).toBe('pass')
   })
@@ -95,9 +89,7 @@ describe('doctor checks', () => {
   })
 
   test('checkLargeTables passes when no large tables', () => {
-    const tables = [
-      { name: 'users', estimatedRowCount: 500 },
-    ]
+    const tables = [{ name: 'users', estimatedRowCount: 500 }]
     const result = runDoctorChecks.checkLargeTables(tables)
     expect(result.status).toBe('pass')
   })
@@ -125,7 +117,9 @@ describe('doctor checks', () => {
           throw error
         },
         fetchFn: async () =>
-          new Response(JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })),
+          new Response(
+            JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })
+          ),
       }
     )
 
@@ -156,9 +150,24 @@ describe('doctor checks', () => {
 
   test('formatTextOutput produces expected structure', () => {
     const results: DoctorResult[] = [
-      { group: 'Environment', label: 'Bun version', status: 'pass', message: 'Bun v1.3.3 (meets >= 1.3.3)' },
-      { group: 'Configuration', label: 'Config exists', status: 'warn', message: 'Schema cache is 12 days old' },
-      { group: 'Connection & Data', label: 'Connection', status: 'error', message: 'Connection refused' },
+      {
+        group: 'Environment',
+        label: 'Bun version',
+        status: 'pass',
+        message: 'Bun v1.3.3 (meets >= 1.3.3)',
+      },
+      {
+        group: 'Configuration',
+        label: 'Config exists',
+        status: 'warn',
+        message: 'Schema cache is 12 days old',
+      },
+      {
+        group: 'Connection & Data',
+        label: 'Connection',
+        status: 'error',
+        message: 'Connection refused',
+      },
     ]
     const output = runDoctorChecks.formatTextOutput(results, '0.4.0-beta')
     expect(output).toContain('dbcli doctor v0.4.0-beta')
@@ -187,7 +196,8 @@ describe('doctor checks', () => {
       group: 'Environment',
       label: 'MongoDB SRV lookup',
       status: 'warn',
-      message: 'Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved cluster.example.mongodb.net.',
+      message:
+        'Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved cluster.example.mongodb.net.',
     })
     const results = await collectMongoDoctorResults({
       connection: {
@@ -202,9 +212,15 @@ describe('doctor checks', () => {
       metadata: {},
     })
 
-    expect(results.some((result) => result.label === 'MongoDB SRV lookup' && result.status === 'warn')).toBe(true)
-    expect(results.some((result) => result.label === 'Connection' && result.status === 'pass')).toBe(true)
-    expect(results.some((result) => result.label === 'Collections' && result.status === 'pass')).toBe(true)
+    expect(
+      results.some((result) => result.label === 'MongoDB SRV lookup' && result.status === 'warn')
+    ).toBe(true)
+    expect(
+      results.some((result) => result.label === 'Connection' && result.status === 'pass')
+    ).toBe(true)
+    expect(
+      results.some((result) => result.label === 'Collections' && result.status === 'pass')
+    ).toBe(true)
     spy.mockRestore()
     srvSpy.mockRestore()
   })

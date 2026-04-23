@@ -13,11 +13,11 @@ describe('migrate core logic', () => {
   let logOutput = ''
   let errorOutput = ''
   let exitCode: number | undefined = undefined
-  
+
   const logSpy = spyOn(console, 'log').mockImplementation((msg) => {
     logOutput += msg + '\n'
   })
-  
+
   const errorSpy = spyOn(console, 'error').mockImplementation((msg) => {
     errorOutput += msg + '\n'
   })
@@ -42,9 +42,9 @@ describe('migrate core logic', () => {
 
   async function runAction(op: any, opts: any = {}) {
     await runDDL(op, { config: FIXTURE_CONFIG, ...opts })
-    return { 
-      stdout: logOutput.trim(), 
-      stderr: errorOutput.trim() 
+    return {
+      stdout: logOutput.trim(),
+      stderr: errorOutput.trim(),
     }
   }
 
@@ -54,15 +54,17 @@ describe('migrate core logic', () => {
       if (start === -1) {
         // If it's empty but we have an exit code, maybe it's a silent failure
         if (exitCode !== undefined) {
-           throw new Error(`Command failed with exit code ${exitCode}. No JSON found. Stderr: "${errorOutput.trim()}"`)
+          throw new Error(
+            `Command failed with exit code ${exitCode}. No JSON found. Stderr: "${errorOutput.trim()}"`
+          )
         }
         throw new Error(`No JSON found in output: "${text}"`)
       }
       return JSON.parse(text.substring(start))
     } catch (e) {
-      console.error(`Failed to parse JSON for ${context || 'unknown'}:`);
-      console.error(`Raw output: "${text}"`);
-      throw e;
+      console.error(`Failed to parse JSON for ${context || 'unknown'}:`)
+      console.error(`Raw output: "${text}"`)
+      throw e
     }
   }
 
@@ -75,8 +77,8 @@ describe('migrate core logic', () => {
         table: 'test_table',
         columns: [
           { name: 'id', type: 'serial', primaryKey: true },
-          { name: 'name', type: 'varchar(50)', nullable: false }
-        ]
+          { name: 'name', type: 'varchar(50)', nullable: false },
+        ],
       })
       const result = parseJSON(stdout, 'createTable')
       expect(result.status).toBe('success')
@@ -104,7 +106,7 @@ describe('migrate core logic', () => {
       const { stdout } = await runAction({
         kind: 'addColumn',
         table: 'users',
-        column: { name: 'bio', type: 'text', nullable: true }
+        column: { name: 'bio', type: 'text', nullable: true },
       })
       const result = parseJSON(stdout, 'addColumn')
       expect(result.sql).toContain('ADD COLUMN')
@@ -115,7 +117,7 @@ describe('migrate core logic', () => {
       const { stdout } = await runAction({
         kind: 'addColumn',
         table: 'users',
-        column: { name: 'age', type: 'integer', default: '0' }
+        column: { name: 'age', type: 'integer', default: '0' },
       })
       const result = parseJSON(stdout, 'addColumn default')
       expect(result.sql).toContain('DEFAULT 0')
@@ -129,7 +131,7 @@ describe('migrate core logic', () => {
       const { stdout } = await runAction({
         kind: 'dropColumn',
         table: 'users',
-        column: 'bio'
+        column: 'bio',
       })
       const result = parseJSON(stdout, 'dropColumn')
       expect(result.sql).toContain('DROP COLUMN')
@@ -144,7 +146,7 @@ describe('migrate core logic', () => {
         kind: 'alterColumn',
         table: 'users',
         column: 'name',
-        options: { type: 'varchar(200)' }
+        options: { type: 'varchar(200)' },
       })
       const result = parseJSON(stdout, 'alterColumn type')
       expect(result.sql).toContain('VARCHAR(200)')
@@ -155,7 +157,7 @@ describe('migrate core logic', () => {
         kind: 'alterColumn',
         table: 'users',
         column: 'email',
-        options: { rename: 'user_email' }
+        options: { rename: 'user_email' },
       })
       const result = parseJSON(stdout, 'alterColumn rename')
       expect(result.sql).toContain('RENAME COLUMN')
@@ -170,7 +172,7 @@ describe('migrate core logic', () => {
       const { stdout } = await runAction({
         kind: 'addIndex',
         table: 'users',
-        index: { columns: ['email'] }
+        index: { columns: ['email'] },
       })
       const result = parseJSON(stdout, 'addIndex')
       expect(result.sql).toContain('CREATE')
@@ -189,8 +191,8 @@ describe('migrate core logic', () => {
         constraint: {
           type: 'foreign_key' as any,
           columns: ['user_id'],
-          references: { table: 'users', columns: ['id'] }
-        }
+          references: { table: 'users', columns: ['id'] },
+        },
       })
       const result = parseJSON(stdout, 'addConstraint fk')
       expect(result.sql).toContain('FOREIGN KEY')
@@ -206,8 +208,8 @@ describe('migrate core logic', () => {
         kind: 'addEnum',
         definition: {
           name: 'status',
-          values: ['active', 'inactive']
-        }
+          values: ['active', 'inactive'],
+        },
       })
       const result = parseJSON(stdout, 'addEnum')
       if (result.status !== 'success') {

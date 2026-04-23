@@ -95,7 +95,7 @@ export class SchemaOptimizer {
           type: 'empty-table',
           message: `Table "${tableName}" has no columns`,
           table: tableName,
-          recommendation: 'Consider removing empty tables'
+          recommendation: 'Consider removing empty tables',
         })
       }
 
@@ -106,19 +106,19 @@ export class SchemaOptimizer {
           type: 'wide-table',
           message: `Table "${tableName}" has ${columnCount} columns (exceeds recommendation)`,
           table: tableName,
-          recommendation: 'Consider normalizing table structure'
+          recommendation: 'Consider normalizing table structure',
         })
       }
 
       // Check for missing primary key
-      const hasPrimaryKey = table.columns.some(c => c.primaryKey)
+      const hasPrimaryKey = table.columns.some((c) => c.primaryKey)
       if (!hasPrimaryKey) {
         issues.push({
           severity: 'warning',
           type: 'no-primary-key',
           message: `Table "${tableName}" has no primary key`,
           table: tableName,
-          recommendation: 'Add a primary key for optimal performance'
+          recommendation: 'Add a primary key for optimal performance',
         })
       }
 
@@ -138,7 +138,7 @@ export class SchemaOptimizer {
             message: `Column "${column.name}" in table "${tableName}" has very long name`,
             table: tableName,
             column: column.name,
-            recommendation: 'Consider using shorter column names'
+            recommendation: 'Consider using shorter column names',
           })
         }
 
@@ -155,7 +155,7 @@ export class SchemaOptimizer {
           type: 'all-nullable',
           message: `Table "${tableName}" has all nullable columns`,
           table: tableName,
-          recommendation: 'Ensure at least some columns are NOT NULL'
+          recommendation: 'Ensure at least some columns are NOT NULL',
         })
       }
     }
@@ -175,12 +175,12 @@ export class SchemaOptimizer {
         maxColumnsInTable,
         tableWithMostColumns,
         maxColumnNameLength,
-        averageColumnNameLength: Math.round(averageColumnNameLength * 100) / 100
+        averageColumnNameLength: Math.round(averageColumnNameLength * 100) / 100,
       },
       cacheRecommendations: {
         recommendedHotTables,
-        reason: 'Most frequently accessed tables should be cached in hot storage'
-      }
+        reason: 'Most frequently accessed tables should be cached in hot storage',
+      },
     }
 
     return report
@@ -204,7 +204,7 @@ export class SchemaOptimizer {
       let score = 0
 
       // Has primary key (+3 points)
-      if (table.columns.some(c => c.primaryKey)) {
+      if (table.columns.some((c) => c.primaryKey)) {
         score += 3
       }
 
@@ -225,7 +225,7 @@ export class SchemaOptimizer {
     return candidates
       .sort((a, b) => b.score - a.score)
       .slice(0, maxCount)
-      .map(c => c.tableName)
+      .map((c) => c.tableName)
   }
 
   /**

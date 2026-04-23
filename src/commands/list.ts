@@ -17,26 +17,15 @@ const ALLOWED_FORMATS = ['table', 'json'] as const
 export const listCommand = new Command()
   .name('list')
   .description('List all tables in the database with metadata')
-  .option(
-    '--format <format>',
-    'Output format: table (default) or json',
-    'table'
-  )
-  .option(
-    '--config <path>',
-    'Path to .dbcli config file',
-    '.dbcli'
-  )
+  .option('--format <format>', 'Output format: table (default) or json', 'table')
+  .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
   .action(listAction)
 
 /**
  * List command action handler
  * Connects to the database, retrieves the table list, and formats output
  */
-async function listAction(
-  options: { format: string; config: string },
-  command: Command
-) {
+async function listAction(options: { format: string; config: string }, command: Command) {
   try {
     validateFormat(options.format, ALLOWED_FORMATS, 'list')
 
@@ -54,7 +43,7 @@ async function listAction(
     }
 
     // Create adapter from configuration
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
 
     // Connect to the database
     await adapter.connect()
@@ -71,13 +60,13 @@ async function listAction(
       // Format output based on --format option
       if (options.format === 'json') {
         // Compact list output: use columnCount instead of empty columns array
-        const listOutput = tables.map(t => ({
+        const listOutput = tables.map((t) => ({
           name: t.name,
           columnCount: t.columnCount ?? t.columns.length,
           rowCount: t.rowCount ?? 0,
           engine: t.engine,
           estimatedRowCount: t.estimatedRowCount ?? t.rowCount ?? 0,
-          tableType: t.tableType ?? 'table'
+          tableType: t.tableType ?? 'table',
         }))
         console.log(JSON.stringify(listOutput, null, 2))
       } else {
@@ -86,8 +75,8 @@ async function listAction(
       }
 
       // Summary
-      const tableCount = tables.filter(t => (t as any).tableType !== 'view').length
-      const viewCount = tables.filter(t => (t as any).tableType === 'view').length
+      const tableCount = tables.filter((t) => (t as any).tableType !== 'view').length
+      const viewCount = tables.filter((t) => (t as any).tableType === 'view').length
       const viewSuffix = viewCount > 0 ? ` (${viewCount} views)` : ''
       console.log(`\n\u2713 Found ${tableCount} tables${viewSuffix}`)
     } finally {
@@ -124,9 +113,8 @@ async function mongoListBranch(config: any, format: string): Promise<void> {
       console.log(`Collections in ${connName} (mongodb):`)
       for (const col of collections) {
         const nameCol = col.name.padEnd(20)
-        const countStr = col.documentCount != null
-          ? ` (est. ${col.documentCount.toLocaleString()} docs)`
-          : ''
+        const countStr =
+          col.documentCount != null ? ` (est. ${col.documentCount.toLocaleString()} docs)` : ''
         console.log(`  ${nameCol}${countStr}`)
       }
       console.log(`\n✓ Found ${collections.length} collections`)

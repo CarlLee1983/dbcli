@@ -155,7 +155,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
     console.log = (() => {}) as any
 
     try {
-      await deleteCommand('users', { where: 'id=1 AND status=\'inactive\'' })
+      await deleteCommand('users', { where: "id=1 AND status='inactive'" })
     } catch (error) {
       errorThrown = true
     }
@@ -332,7 +332,7 @@ describe('deleteCommand - WHERE Clause Edge Cases', () => {
     }) as any
 
     try {
-      await deleteCommand('users', { where: 'name=\'Alice\'' })
+      await deleteCommand('users', { where: "name='Alice'" })
     } catch (err) {
       const msg = (err as Error).message
       if (msg?.includes('無法解析 WHERE 子句')) {

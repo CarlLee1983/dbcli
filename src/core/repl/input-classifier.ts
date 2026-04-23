@@ -7,7 +7,7 @@ const SQL_TERMINATOR = ';'
 
 const sqlKeywordSet = new Set(SQL_KEYWORDS_FOR_DETECTION)
 const dbcliCommandSet = new Set(DBCLI_COMMANDS)
-const metaCommandNames = META_COMMANDS.map(m => m.slice(1))
+const metaCommandNames = META_COMMANDS.map((m) => m.slice(1))
 
 export function classifyInput(raw: string): ClassifiedInput {
   const normalized = raw.trim()

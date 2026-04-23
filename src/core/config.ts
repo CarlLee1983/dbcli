@@ -5,14 +5,15 @@
  * All operations return new objects and never mutate input.
  *
  * Supports two configuration modes:
- * 1. Directory mode (recommended): .dbcli/ (config.json + .env.local)
+ * 1. Project binding mode (recommended): .dbcli/config.json is a stub that points to
+ *    ~/.config/dbcli/projects/<id>/config.json, keeping secrets out of the workspace
  * 2. File mode (legacy): .dbcli (single JSON file)
  */
 
-import { DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
+import { type DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { detectConfigVersion, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
-import { readFileSync } from 'fs'
+import { readProjectBinding, resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
 
 /**
@@ -44,11 +45,12 @@ export async function getSchemaIsolationConnectionName(
 ): Promise<string | undefined> {
   const effectiveName = getGlobalConnectionName()
   try {
-    const stat = await Bun.file(dbcliPath).stat()
+    const storagePath = await resolveConfigStoragePath(dbcliPath)
+    const stat = await Bun.file(storagePath).stat()
     const isDirectory = stat?.isDirectory() ?? false
     if (!isDirectory) return undefined
 
-    const configJsonPath = join(dbcliPath, 'config.json')
+    const configJsonPath = join(storagePath, 'config.json')
     const configFile = Bun.file(configJsonPath)
     if (!(await configFile.exists())) return undefined
 
@@ -79,6 +81,7 @@ const DEFAULT_CONFIG: DbcliConfig = {
   metadata: {
     version: '1.0',
   },
+  blacklist: { tables: [], columns: {} },
 }
 
 /**
@@ -115,7 +118,7 @@ function isEnvReference(value: unknown): value is EnvReference {
  */
 function resolveEnvReferences(
   config: any,
-  env: Record<string, string>,
+  env: Record<string, string | undefined>,
   parentKey?: string,
   strict: boolean = false
 ): any {
@@ -166,7 +169,7 @@ function resolveEnvReferences(
  */
 function parseEnvPassword(content: string): string | null {
   const match = content.match(/^DBCLI_PASSWORD=(.+)$/m)
-  return match ? match[1].trim() : null
+  return match?.[1] != null ? match[1].trim() : null
 }
 
 /**
@@ -188,10 +191,20 @@ export const configModule = {
     const effectiveConnectionName = connectionName ?? _globalConnectionName
 
     try {
+      const binding = await readProjectBinding(path)
+      const storagePath = await resolveConfigStoragePath(path)
+
+      if (binding) {
+        const storageConfigExists = await Bun.file(join(storagePath, 'config.json')).exists()
+        if (!storageConfigExists) {
+          throw new ConfigError(`Bound dbcli config not found: ${join(storagePath, 'config.json')}`)
+        }
+      }
+
       // Check if path is a directory
       let isDirectory = false
       try {
-        const stat = await Bun.file(path).stat()
+        const stat = await Bun.file(storagePath).stat()
         isDirectory = stat?.isDirectory() ?? false
       } catch {
         isDirectory = false
@@ -199,7 +212,7 @@ export const configModule = {
 
       // Try directory mode (new)
       if (isDirectory) {
-        const configPath = join(path, 'config.json')
+        const configPath = join(storagePath, 'config.json')
         const configFile = Bun.file(configPath)
         const configExists = await configFile.exists()
 
@@ -213,11 +226,11 @@ export const configModule = {
             const resolved = resolveConnection(v2Config, effectiveConnectionName)
 
             // Load env file for the connection
-            await loadConnectionEnv(resolved, path)
+            await loadConnectionEnv(resolved, storagePath)
 
             // Legacy .env.local fallback for backward compatibility
             // Ensures connections without envFile can still read passwords from .env.local
-            const envLocalPath = join(path, '.env.local')
+            const envLocalPath = join(storagePath, '.env.local')
             const envLocalFile = Bun.file(envLocalPath)
             let legacyPassword: string | null = null
             if (await envLocalFile.exists()) {
@@ -245,9 +258,9 @@ export const configModule = {
             let schema = (v2Config.schemas ?? {})[resolved.name] ?? v2Config.schema
             try {
               const { SchemaLayeredLoader } = await import('./schema-loader')
-              const loader = new SchemaLayeredLoader(path, { connectionName: resolved.name })
+              const loader = new SchemaLayeredLoader(storagePath, { connectionName: resolved.name })
               const { cache, index } = await loader.initialize()
-              
+
               if (index && Object.keys(index.tables).length > 0) {
                 // If layered cache exists, we use it.
                 // For simplicity in this wave, we load all tables into the returned config object
@@ -263,7 +276,9 @@ export const configModule = {
               }
             } catch (error) {
               // Graceful fallback to config.json schema
-              console.warn('Warning: Failed to load layered schema cache, falling back to config.json')
+              console.warn(
+                'Warning: Failed to load layered schema cache, falling back to config.json'
+              )
             }
 
             // Return v1-compatible shape
@@ -281,7 +296,7 @@ export const configModule = {
           const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false)
 
           // Try reading sensitive info from .env.local (legacy approach, for backward compatibility)
-          const envPath = join(path, '.env.local')
+          const envPath = join(storagePath, '.env.local')
           const envFile = Bun.file(envPath)
           if (await envFile.exists()) {
             const envContent = await envFile.text()
@@ -397,17 +412,20 @@ export const configModule = {
       // Validate first to ensure we never write invalid config
       this.validate(config)
 
-      const pathObj = Bun.file(path)
+      const storagePath = await resolveConfigStoragePath(path)
+      const pathObj = Bun.file(storagePath)
       const isDirectory = (await pathObj.exists()) && pathObj.type === 'directory'
 
       // Directory mode: separate config and .env.local
       if (isDirectory || path.endsWith('.dbcli')) {
+        await Bun.$`mkdir -p ${storagePath}`
+
         // Check if using env var references (password is a { "$env": "..." } object)
         const hasEnvReferences = isEnvReference((config.connection as any).password)
 
         if (hasEnvReferences) {
           // New approach: using env var references, write directly to config.json
-          const configPath = join(path, 'config.json')
+          const configPath = join(storagePath, 'config.json')
           const configJson = JSON.stringify(config, null, 2)
           await Bun.file(configPath).write(configJson)
         } else {
@@ -423,13 +441,13 @@ export const configModule = {
           delete (configWithoutPassword.connection as any).password
 
           // Write config.json (without password)
-          const configPath = join(path, 'config.json')
+          const configPath = join(storagePath, 'config.json')
           const configJson = JSON.stringify(configWithoutPassword, null, 2)
           await Bun.file(configPath).write(configJson)
 
           // Write .env.local (password)
           if (password) {
-            const envPath = join(path, '.env.local')
+            const envPath = join(storagePath, '.env.local')
             const envContent = `# Database Credentials - DO NOT commit to git\n\nDBCLI_PASSWORD=${password}\n`
             await Bun.file(envPath).write(envContent)
           }

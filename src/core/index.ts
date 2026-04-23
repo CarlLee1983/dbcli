@@ -44,11 +44,24 @@ export { HealthChecker } from './health-checker'
 export type { CheckOptions } from './health-checker'
 
 // Check types
-export type { CheckReport, CheckType, NullCheckResult, OrphanCheckResult, DuplicateCheckResult, EmptyStringCheckResult } from '@/types/check'
+export type {
+  CheckReport,
+  CheckType,
+  NullCheckResult,
+  OrphanCheckResult,
+  DuplicateCheckResult,
+  EmptyStringCheckResult,
+} from '@/types/check'
 
 // Re-export type definitions
 export type { SchemaIndex, CacheStats, LoaderOptions, TableSchemaRef } from '@/types/schema-cache'
-export type { SchemaPatch, SchemaRefreshResult, RefreshOptions, WriteResult, AtomicWriteOptions } from '@/types/schema-updater'
+export type {
+  SchemaPatch,
+  SchemaRefreshResult,
+  RefreshOptions,
+  WriteResult,
+  AtomicWriteOptions,
+} from '@/types/schema-updater'
 export type { ColumnIndexEntry, ColumnIndexMap } from '@/core/column-index'
 export type { OptimizationIssue, SchemaReport } from '@/core/schema-optimizer'
 export type { RecoveryPoint, RecoveryState } from '@/core/error-recovery'

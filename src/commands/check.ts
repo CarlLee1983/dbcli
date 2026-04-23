@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { configModule } from '@/core/config'
 import { HealthChecker } from '@/core/health-checker'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -15,7 +15,11 @@ export const checkCommand = new Command()
   .argument('[table]', 'Table to check (omit for --all)')
   .option('--all', 'Check all tables (skips huge tables unless --include-large)', false)
   .option('--include-large', 'Include huge tables in --all scan', false)
-  .option('--checks <types>', 'Comma-separated checks: nulls,duplicates,orphans,emptyStrings', undefined)
+  .option(
+    '--checks <types>',
+    'Comma-separated checks: nulls,duplicates,orphans,emptyStrings',
+    undefined
+  )
   .option('--sample <number>', 'Sample size for large tables (default: 10000)', '10000')
   .option('--format <format>', 'Output format: json (default) or table', 'json')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
@@ -41,7 +45,7 @@ async function checkAction(
       process.exit(1)
     }
 
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -50,9 +54,7 @@ async function checkAction(
       const blacklistedColumns = getBlacklistedColumnSet(blacklistManager)
       const blacklistedTables = getBlacklistedTableSet(blacklistManager)
 
-      const checkTypes = options.checks
-        ? (options.checks.split(',') as CheckType[])
-        : undefined
+      const checkTypes = options.checks ? (options.checks.split(',') as CheckType[]) : undefined
 
       const sampleSize = parseInt(options.sample, 10) || 10_000
 
@@ -66,7 +68,7 @@ async function checkAction(
         const report = await checker.check(schema, {
           checks: checkTypes,
           sample: sampleSize,
-          blacklistedColumns
+          blacklistedColumns,
         })
 
         outputReport(report, options.format)
@@ -95,7 +97,7 @@ async function checkAction(
           const report = await checker.check(schema, {
             checks: checkTypes,
             sample: sampleSize,
-            blacklistedColumns
+            blacklistedColumns,
           })
           reports.push(report)
         }
@@ -150,7 +152,9 @@ function outputReport(report: CheckReport, format: string): void {
     for (const e of report.checks.emptyStrings) {
       console.log(`    ${e.column}: ${e.count} empty strings`)
     }
-    console.log(`  Summary: ${report.summary.issues} issues, ${report.summary.warnings} warnings, ${report.summary.clean} clean`)
+    console.log(
+      `  Summary: ${report.summary.issues} issues, ${report.summary.warnings} warnings, ${report.summary.clean} clean`
+    )
   }
 }
 

@@ -7,7 +7,9 @@ import { listCommand } from '@/commands/list'
 class MockMongoAdapter implements QueryableAdapter {
   async connect() {}
   async disconnect() {}
-  async execute<T>(): Promise<any> { return { rows: [], affectedRows: 0 } }
+  async execute<T>(): Promise<any> {
+    return { rows: [], affectedRows: 0 }
+  }
   async listCollections() {
     return [
       { name: 'users', documentCount: 12450 },
@@ -15,8 +17,12 @@ class MockMongoAdapter implements QueryableAdapter {
       { name: 'products', documentCount: 3200 },
     ]
   }
-  async testConnection() { return true }
-  async getServerVersion() { return '6.0.1' }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return '6.0.1'
+  }
 }
 
 const mongoConfig = {
@@ -40,7 +46,9 @@ let createMongoAdapterSpy: any
 describe('List Command - MongoDB', () => {
   beforeEach(() => {
     configReadSpy = spyOn(configModule, 'read').mockResolvedValue(mongoConfig as any)
-    createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(new MockMongoAdapter())
+    createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      new MockMongoAdapter()
+    )
   })
 
   afterEach(() => {

@@ -11,11 +11,7 @@
 import { join } from 'path'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
-import type {
-  SchemaPatch,
-  SchemaRefreshResult,
-  RefreshOptions
-} from '@/types/schema-updater'
+import type { SchemaPatch, SchemaRefreshResult, RefreshOptions } from '@/types/schema-updater'
 import type { SchemaDiffReport } from '@/types/schema-diff'
 import { SchemaDiffEngine } from './schema-diff'
 import { SchemaCacheManager } from './schema-cache'
@@ -80,56 +76,54 @@ export class SchemaUpdater {
         previousConfig,
         async () => {
           // Execute with lock to ensure concurrent safety
-          return await this.lockManager.withLock(
-            async () => {
-              // Get current schema from database
-              // If specific tables requested, only query those; otherwise get all
-              const currentTables = await this.adapter.listTables()
-              const tablesToQuery = options?.tablesToRefresh
-                ? currentTables.filter(t => options.tablesToRefresh!.includes(t.name))
-                : currentTables
+          return await this.lockManager.withLock(async () => {
+            // Get current schema from database
+            // If specific tables requested, only query those; otherwise get all
+            const currentTables = await this.adapter.listTables()
+            const tablesToQuery = options?.tablesToRefresh
+              ? currentTables.filter((t) => options.tablesToRefresh!.includes(t.name))
+              : currentTables
 
-              const currentSchemas: Record<string, TableSchema> = {}
-              for (const tableInfo of tablesToQuery) {
-                const schema = await this.adapter.getTableSchema(tableInfo.name)
-                currentSchemas[tableInfo.name] = schema
-              }
+            const currentSchemas: Record<string, TableSchema> = {}
+            for (const tableInfo of tablesToQuery) {
+              const schema = await this.adapter.getTableSchema(tableInfo.name)
+              currentSchemas[tableInfo.name] = schema
+            }
 
-              // Build current config from schemas
-              const currentConfig: DbcliConfig = {
-                ...previousConfig,
-                schema: {
-                  ...(previousConfig.schema || {}),
-                  ...currentSchemas
-                }
-              }
+            // Build current config from schemas
+            const currentConfig: DbcliConfig = {
+              ...previousConfig,
+              schema: {
+                ...(previousConfig.schema || {}),
+                ...currentSchemas,
+              },
+            }
 
-              // Generate patch (delta only)
-              const patch = await this.generatePatch(previousConfig, currentConfig)
+            // Generate patch (delta only)
+            const patch = await this.generatePatch(previousConfig, currentConfig)
 
-              // Apply patch to update config
-              const updatedConfig = await this.applyPatch(previousConfig, patch)
+            // Apply patch to update config
+            const updatedConfig = await this.applyPatch(previousConfig, patch)
 
-              // Persist updated config
-              await this.persistConfig(updatedConfig)
+            // Persist updated config
+            await this.persistConfig(updatedConfig)
 
-              // Update cache with new schemas
-              await this.updateCache(patch)
+            // Update cache with new schemas
+            await this.updateCache(patch)
 
-              const totalTime = Date.now() - startTime
+            const totalTime = Date.now() - startTime
 
-              return {
-                added: Object.keys(patch.added).length,
-                modified: Object.keys(patch.modified).length,
-                deleted: patch.deletedTables.length,
-                totalTime,
-                details: `Added ${Object.keys(patch.added).length} tables, ` +
-                  `modified ${Object.keys(patch.modified).length} tables, ` +
-                  `deleted ${patch.deletedTables.length} tables in ${totalTime}ms`
-              }
-            },
-            'schema-refresh'
-          )
+            return {
+              added: Object.keys(patch.added).length,
+              modified: Object.keys(patch.modified).length,
+              deleted: patch.deletedTables.length,
+              totalTime,
+              details:
+                `Added ${Object.keys(patch.added).length} tables, ` +
+                `modified ${Object.keys(patch.modified).length} tables, ` +
+                `deleted ${patch.deletedTables.length} tables in ${totalTime}ms`,
+            }
+          }, 'schema-refresh')
         },
         configPath
       )
@@ -151,10 +145,7 @@ export class SchemaUpdater {
    * @param current Current config state
    * @returns SchemaPatch with only delta changes
    */
-  private async generatePatch(
-    previous: DbcliConfig,
-    current: DbcliConfig
-  ): Promise<SchemaPatch> {
+  private async generatePatch(previous: DbcliConfig, current: DbcliConfig): Promise<SchemaPatch> {
     // Use diff engine to get detailed changes
     const diffEngine = new SchemaDiffEngine(this.adapter, previous)
     const diffReport = await diffEngine.diff()
@@ -163,7 +154,7 @@ export class SchemaUpdater {
       added: {},
       modified: {},
       deletedTables: diffReport.tablesRemoved,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     }
 
     // Tables added - include full schema
@@ -183,12 +174,12 @@ export class SchemaUpdater {
         table: tableName,
         columnsAdded: {},
         columnsRemoved: details.columnsRemoved,
-        columnsModified: {}
+        columnsModified: {},
       }
 
       // Include only added columns
       for (const colName of details.columnsAdded) {
-        const col = currentSchema.columns.find(c => c.name === colName)
+        const col = currentSchema.columns.find((c) => c.name === colName)
         if (col) {
           patch.modified[tableName].columnsAdded[colName] = col
         }
@@ -198,7 +189,7 @@ export class SchemaUpdater {
       for (const colDiff of details.columnsModified) {
         patch.modified[tableName].columnsModified[colDiff.name] = {
           previous: colDiff.previous,
-          current: colDiff.current
+          current: colDiff.current,
         }
       }
     }
@@ -213,10 +204,7 @@ export class SchemaUpdater {
    * @param patch Changes to apply
    * @returns Updated config
    */
-  private async applyPatch(
-    previous: DbcliConfig,
-    patch: SchemaPatch
-  ): Promise<DbcliConfig> {
+  private async applyPatch(previous: DbcliConfig, patch: SchemaPatch): Promise<DbcliConfig> {
     const schema = { ...(previous.schema || {}) }
 
     // Add new tables
@@ -236,7 +224,7 @@ export class SchemaUpdater {
 
       // Remove deleted columns
       existing.columns = existing.columns.filter(
-        col => !changes.columnsRemoved.includes(col.name)
+        (col) => !changes.columnsRemoved.includes(col.name)
       )
 
       // Add new columns
@@ -246,7 +234,7 @@ export class SchemaUpdater {
 
       // Update modified columns
       for (const [colName, { current }] of Object.entries(changes.columnsModified)) {
-        const colIndex = existing.columns.findIndex(c => c.name === colName)
+        const colIndex = existing.columns.findIndex((c) => c.name === colName)
         if (colIndex >= 0) {
           existing.columns[colIndex] = current
         }
@@ -258,8 +246,8 @@ export class SchemaUpdater {
       schema,
       metadata: {
         ...previous.metadata,
-        version: '2.0'
-      }
+        version: '2.0',
+      },
     }
   }
 

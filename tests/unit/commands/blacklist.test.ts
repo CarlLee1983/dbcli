@@ -13,7 +13,7 @@ import {
   blacklistColumnRemove,
   getOrInitBlacklist,
   parseColumnIdentifier,
-  isValidTableName
+  isValidTableName,
 } from '@/commands/blacklist'
 
 // Create a temp .dbcli file for testing
@@ -28,10 +28,10 @@ async function createTempConfig(blacklist?: any): Promise<string> {
       port: 5432,
       user: 'user',
       password: 'pass',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
-    ...(blacklist ? { blacklist } : {})
+    ...(blacklist ? { blacklist } : {}),
   }
 
   await Bun.file(configPath).write(JSON.stringify(config, null, 2))
@@ -107,7 +107,12 @@ describe('blacklistList()', () => {
       console.log = origLog
     }
 
-    expect(output.some(line => line.includes('No tables') || line.includes('blacklisted') || line.includes('currently'))).toBe(true)
+    expect(
+      output.some(
+        (line) =>
+          line.includes('No tables') || line.includes('blacklisted') || line.includes('currently')
+      )
+    ).toBe(true)
   })
 
   it('shows tables when blacklist has tables', async () => {
@@ -122,11 +127,14 @@ describe('blacklistList()', () => {
       console.log = origLog
     }
 
-    expect(output.some(line => line.includes('audit_logs'))).toBe(true)
+    expect(output.some((line) => line.includes('audit_logs'))).toBe(true)
   })
 
   it('shows columns when blacklist has columns', async () => {
-    const configPath = await createTempConfig({ tables: [], columns: { users: ['password', 'api_key'] } })
+    const configPath = await createTempConfig({
+      tables: [],
+      columns: { users: ['password', 'api_key'] },
+    })
     const output: string[] = []
     const origLog = console.log
     console.log = (...args: any[]) => output.push(args.join(' '))
@@ -137,7 +145,7 @@ describe('blacklistList()', () => {
       console.log = origLog
     }
 
-    expect(output.some(line => line.includes('users') || line.includes('password'))).toBe(true)
+    expect(output.some((line) => line.includes('users') || line.includes('password'))).toBe(true)
   })
 })
 
@@ -210,7 +218,10 @@ describe('blacklistColumnAdd()', () => {
 
 describe('blacklistColumnRemove()', () => {
   it('removes column from config', async () => {
-    const configPath = await createTempConfig({ tables: [], columns: { users: ['password', 'api_key'] } })
+    const configPath = await createTempConfig({
+      tables: [],
+      columns: { users: ['password', 'api_key'] },
+    })
     await blacklistColumnRemove('users.password', configPath)
     const config = await readConfig(configPath)
     expect(config.blacklist.columns.users).not.toContain('password')

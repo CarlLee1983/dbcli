@@ -29,8 +29,8 @@ function findPackageRoot(): string {
 const SKILL_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'SKILL.md')
 
 export interface SkillOptions {
-  install?: string  // platform: claude, gemini, copilot, cursor
-  output?: string   // custom output file path
+  install?: string // platform: claude, gemini, copilot, cursor
+  output?: string // custom output file path
 }
 
 /**
@@ -46,10 +46,7 @@ export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
  *   dbcli skill --output ./skill.md  # Write to file
  *   dbcli skill --install claude     # Install to ~/.claude/skills/dbcli/SKILL.md
  */
-export async function skillCommand(
-  _program: Command,
-  options: SkillOptions
-): Promise<void> {
+export async function skillCommand(_program: Command, options: SkillOptions): Promise<void> {
   try {
     // 1. Read static SKILL.md (single source of truth)
     const skillFile = Bun.file(SKILL_SOURCE_PATH)

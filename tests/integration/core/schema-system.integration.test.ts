@@ -68,10 +68,10 @@ test('Integration: Schema refresh detects changes', async () => {
       port: 5432,
       user: 'test',
       password: 'test',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
-    schema: {}
+    schema: {},
   }
 
   const configPath = join(testDir, 'config.json')
@@ -82,8 +82,8 @@ test('Integration: Schema refresh detects changes', async () => {
     name: 'users',
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null }
-    ]
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
+    ],
   })
 
   const updater = new SchemaUpdater(testDir, adapter, cache)
@@ -139,10 +139,10 @@ test('Integration: Error recovery restores on failure', async () => {
       port: 5432,
       user: 'test',
       password: 'test',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
-    schema: { test_table: { name: 'test', columns: [] } }
+    schema: { test_table: { name: 'test', columns: [] } },
   }
 
   const configPath = join(testDir, 'config.json')
@@ -165,7 +165,7 @@ test('Integration: Error recovery restores on failure', async () => {
   expect(operationFailed).toBe(true)
 
   // Verify config was restored
-  const restored = await Bun.file(configPath).json() as DbcliConfig
+  const restored = (await Bun.file(configPath).json()) as DbcliConfig
   expect(restored.schema!['test_table']).toBeDefined()
 
   // Cleanup
@@ -182,16 +182,16 @@ test('Integration: Column index enables fast field searches', () => {
       columns: [
         { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
         { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-        { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null }
-      ]
+        { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+      ],
     },
     products: {
       name: 'products',
       columns: [
         { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-        { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: null }
-      ]
-    }
+        { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: null },
+      ],
+    },
   }
 
   const indexBuilder = new ColumnIndexBuilder()
@@ -200,12 +200,12 @@ test('Integration: Column index enables fast field searches', () => {
   // Find a field name that appears in multiple tables
   const nameColumns = indexBuilder.findColumn('name')
   expect(nameColumns.length).toBeGreaterThan(1)
-  expect(nameColumns.map(c => c.tableName).sort()).toEqual(['products', 'users'])
+  expect(nameColumns.map((c) => c.tableName).sort()).toEqual(['products', 'users'])
 
   // Find primary keys
   const pks = indexBuilder.findPrimaryKeys()
   expect(pks.length).toBe(2)
-  expect(pks.every(pk => pk.column.primaryKey)).toBe(true)
+  expect(pks.every((pk) => pk.column.primaryKey)).toBe(true)
 })
 
 /**
@@ -218,9 +218,15 @@ test('Integration: Schema optimizer analyzes design', () => {
       columns: [
         { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
         { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-        { name: 'created_at', type: 'timestamp', nullable: false, primaryKey: false, default: null }
-      ]
-    }
+        {
+          name: 'created_at',
+          type: 'timestamp',
+          nullable: false,
+          primaryKey: false,
+          default: null,
+        },
+      ],
+    },
   }
 
   const optimizer = new SchemaOptimizer()
@@ -259,10 +265,10 @@ test('Integration: Complete workflow with all components', async () => {
       port: 5432,
       user: 'test',
       password: 'test',
-      database: 'testdb'
+      database: 'testdb',
     },
     permission: 'query-only',
-    schema: {}
+    schema: {},
   }
 
   // Add tables
@@ -270,8 +276,8 @@ test('Integration: Complete workflow with all components', async () => {
     name: 'users',
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null }
-    ]
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
+    ],
   })
 
   // Execute workflow

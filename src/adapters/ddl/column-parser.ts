@@ -16,9 +16,7 @@ export function parseColumnSpec(spec: string): ColumnDefinition {
   const parts = splitSpec(spec)
 
   if (parts.length < 2) {
-    throw new Error(
-      `Invalid column spec "${spec}": expected "name:type[:modifiers]"`
-    )
+    throw new Error(`Invalid column spec "${spec}": expected "name:type[:modifiers]"`)
   }
 
   const [name, type, ...modifiers] = parts
@@ -26,7 +24,7 @@ export function parseColumnSpec(spec: string): ColumnDefinition {
   const column: ColumnDefinition = {
     name: name!,
     type: type!,
-    nullable: true
+    nullable: true,
   }
 
   for (const mod of modifiers) {
@@ -47,13 +45,11 @@ export function parseColumnSpec(spec: string): ColumnDefinition {
       const ref = mod.substring('references='.length)
       const dotIdx = ref.lastIndexOf('.')
       if (dotIdx === -1) {
-        throw new Error(
-          `Invalid references "${ref}": expected "table.column"`
-        )
+        throw new Error(`Invalid references "${ref}": expected "table.column"`)
       }
       column.references = {
         table: ref.substring(0, dotIdx),
-        column: ref.substring(dotIdx + 1)
+        column: ref.substring(dotIdx + 1),
       }
     } else {
       throw new Error(`Unknown column modifier "${mod}" in spec "${spec}"`)

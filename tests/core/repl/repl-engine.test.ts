@@ -141,7 +141,14 @@ describe('ReplEngine', () => {
   test('blocks INSERT INTO blacklisted table', async () => {
     const adapter = createMockAdapter()
     const config: DbcliConfig = {
-      connection: { system: 'postgresql' as const, host: 'localhost', port: 5432, user: 'test', password: '', database: 'test' },
+      connection: {
+        system: 'postgresql' as const,
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: '',
+        database: 'test',
+      },
       permission: 'admin' as const,
       blacklist: { tables: ['secrets'], columns: {} },
       metadata: { version: '1.0' },

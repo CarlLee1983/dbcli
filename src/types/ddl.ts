@@ -8,7 +8,7 @@ import type {
   AlterColumnOptions,
   IndexDefinition,
   ConstraintDefinition,
-  EnumDefinition
+  EnumDefinition,
 } from '@/adapters/ddl/types'
 
 // ---------------------------------------------------------------------------
@@ -87,9 +87,11 @@ export function getOperationTable(op: DDLOperation): string | null {
 
 /** Check if operation is destructive (DROP) */
 export function isDestructiveOperation(op: DDLOperation): boolean {
-  return op.kind === 'dropTable' ||
+  return (
+    op.kind === 'dropTable' ||
     op.kind === 'dropColumn' ||
     op.kind === 'dropIndex' ||
     op.kind === 'dropConstraint' ||
     op.kind === 'dropEnum'
+  )
 }

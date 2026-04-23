@@ -10,7 +10,7 @@ describe('MySQL createTable', () => {
   test('basic table with serial pk', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
-      { name: 'name', type: 'varchar(50)', nullable: false }
+      { name: 'name', type: 'varchar(50)', nullable: false },
     ]
     const { sql } = gen.createTable('users', cols)
     expect(sql).toContain('CREATE TABLE `users`')
@@ -25,7 +25,7 @@ describe('MySQL createTable', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
       { name: 'email', type: 'varchar(100)', nullable: false, unique: true },
-      { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' }
+      { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },
     ]
     const { sql } = gen.createTable('accounts', cols)
     expect(sql).toContain('`email` VARCHAR(100) NOT NULL UNIQUE')
@@ -35,7 +35,12 @@ describe('MySQL createTable', () => {
   test('table with foreign key reference', () => {
     const cols: ColumnDefinition[] = [
       { name: 'id', type: 'serial', primaryKey: true, nullable: false },
-      { name: 'user_id', type: 'integer', nullable: false, references: { table: 'users', column: 'id' } }
+      {
+        name: 'user_id',
+        type: 'integer',
+        nullable: false,
+        references: { table: 'users', column: 'id' },
+      },
     ]
     const { sql } = gen.createTable('orders', cols)
     expect(sql).toContain('REFERENCES `users`(`id`)')
@@ -43,7 +48,7 @@ describe('MySQL createTable', () => {
 
   test('smallserial maps to SMALLINT UNSIGNED', () => {
     const cols: ColumnDefinition[] = [
-      { name: 'id', type: 'smallserial', primaryKey: true, nullable: false }
+      { name: 'id', type: 'smallserial', primaryKey: true, nullable: false },
     ]
     const { sql } = gen.createTable('small', cols)
     expect(sql).toContain('SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT')
@@ -68,7 +73,12 @@ describe('MySQL addColumn', () => {
   })
 
   test('adds not-null column with default', () => {
-    const { sql } = gen.addColumn('users', { name: 'age', type: 'integer', nullable: false, default: '0' })
+    const { sql } = gen.addColumn('users', {
+      name: 'age',
+      type: 'integer',
+      nullable: false,
+      default: '0',
+    })
     expect(sql).toContain('NOT NULL')
     expect(sql).toContain('DEFAULT 0')
   })
@@ -92,7 +102,11 @@ describe('MySQL dropColumn', () => {
 
 describe('MySQL alterColumn', () => {
   test('change type with MODIFY COLUMN', () => {
-    const { sql, warnings } = gen.alterColumn({ table: 'users', column: 'name', type: 'varchar(100)' })
+    const { sql, warnings } = gen.alterColumn({
+      table: 'users',
+      column: 'name',
+      type: 'varchar(100)',
+    })
     expect(sql).toContain('MODIFY COLUMN `name` VARCHAR(100)')
     expect(warnings.length).toBeGreaterThan(0)
   })
@@ -114,21 +128,25 @@ describe('MySQL alterColumn', () => {
 
   test('set nullable without type produces warning', () => {
     const { warnings } = gen.alterColumn({ table: 'users', column: 'bio', setNullable: true })
-    expect(warnings.some(w => w.includes('MODIFY COLUMN'))).toBe(true)
+    expect(warnings.some((w) => w.includes('MODIFY COLUMN'))).toBe(true)
   })
 
   test('type + dropNullable combined in MODIFY', () => {
     const { sql } = gen.alterColumn({
-      table: 'users', column: 'email',
-      type: 'varchar(200)', dropNullable: true
+      table: 'users',
+      column: 'email',
+      type: 'varchar(200)',
+      dropNullable: true,
     })
     expect(sql).toContain('MODIFY COLUMN `email` VARCHAR(200) NOT NULL')
   })
 
   test('type + setDefault combined in MODIFY', () => {
     const { sql } = gen.alterColumn({
-      table: 'users', column: 'status',
-      type: 'varchar(20)', setDefault: "'pending'"
+      table: 'users',
+      column: 'status',
+      type: 'varchar(20)',
+      setDefault: "'pending'",
     })
     expect(sql).toContain("MODIFY COLUMN `status` VARCHAR(20) DEFAULT 'pending'")
   })
@@ -163,8 +181,9 @@ describe('MySQL addIndex', () => {
 
   test('composite index', () => {
     const { sql } = gen.addIndex({
-      table: 'users', columns: ['last_name', 'first_name'],
-      name: 'idx_fullname'
+      table: 'users',
+      columns: ['last_name', 'first_name'],
+      name: 'idx_fullname',
     })
     expect(sql).toContain('`idx_fullname`')
     expect(sql).toContain('`last_name`, `first_name`')
@@ -184,8 +203,10 @@ describe('MySQL dropIndex', () => {
 describe('MySQL addConstraint', () => {
   test('foreign key', () => {
     const { sql } = gen.addConstraint({
-      table: 'orders', type: 'foreign_key',
-      column: 'user_id', references: { table: 'users', column: 'id' }
+      table: 'orders',
+      type: 'foreign_key',
+      column: 'user_id',
+      references: { table: 'users', column: 'id' },
     })
     expect(sql).toContain('FOREIGN KEY (`user_id`)')
     expect(sql).toContain('REFERENCES `users`(`id`)')
@@ -193,26 +214,32 @@ describe('MySQL addConstraint', () => {
 
   test('foreign key with ON DELETE CASCADE', () => {
     const { sql } = gen.addConstraint({
-      table: 'orders', type: 'foreign_key',
-      column: 'user_id', references: { table: 'users', column: 'id' },
-      onDelete: 'cascade'
+      table: 'orders',
+      type: 'foreign_key',
+      column: 'user_id',
+      references: { table: 'users', column: 'id' },
+      onDelete: 'cascade',
     })
     expect(sql).toContain('ON DELETE CASCADE')
   })
 
   test('unique constraint', () => {
     const { sql } = gen.addConstraint({
-      table: 'users', type: 'unique', columns: ['email']
+      table: 'users',
+      type: 'unique',
+      columns: ['email'],
     })
     expect(sql).toContain('UNIQUE (`email`)')
   })
 
   test('check constraint with warning', () => {
     const { sql, warnings } = gen.addConstraint({
-      table: 'users', type: 'check', expression: 'age >= 0'
+      table: 'users',
+      type: 'check',
+      expression: 'age >= 0',
     })
     expect(sql).toContain('CHECK (age >= 0)')
-    expect(warnings.some(w => w.includes('MySQL 8.0.16'))).toBe(true)
+    expect(warnings.some((w) => w.includes('MySQL 8.0.16'))).toBe(true)
   })
 })
 

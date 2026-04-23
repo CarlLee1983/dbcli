@@ -16,15 +16,21 @@ export interface SchemaPatch {
   /** Tables newly added to database */
   added: Record<string, TableSchema>
   /** Tables modified (partial schema with only changed fields) */
-  modified: Record<string, {
-    table: string
-    columnsAdded: Record<string, any>
-    columnsRemoved: string[]
-    columnsModified: Record<string, {
-      previous: any
-      current: any
-    }>
-  }>
+  modified: Record<
+    string,
+    {
+      table: string
+      columnsAdded: Record<string, any>
+      columnsRemoved: string[]
+      columnsModified: Record<
+        string,
+        {
+          previous: any
+          current: any
+        }
+      >
+    }
+  >
   /** Table names that were deleted */
   deletedTables: string[]
   /** Timestamp when patch was created */

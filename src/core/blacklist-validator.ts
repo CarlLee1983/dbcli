@@ -38,7 +38,7 @@ export class BlacklistValidator {
       // Log warning that override is active
       const message = t_vars('warnings.blacklist_override_used', {
         operation,
-        table: tableName
+        table: tableName,
       })
       console.error(message)
       return
@@ -47,7 +47,7 @@ export class BlacklistValidator {
     if (this.manager.isTableBlacklisted(tableName)) {
       const message = t_vars('errors.table_blacklisted', {
         table: tableName,
-        operation
+        operation,
       })
       throw new BlacklistError(message, tableName, operation)
     }
@@ -74,14 +74,14 @@ export class BlacklistValidator {
     }
 
     // Find which columns from the result set are actually blacklisted
-    const omittedColumns = columnList.filter(col => blacklistedColumns.includes(col))
+    const omittedColumns = columnList.filter((col) => blacklistedColumns.includes(col))
 
     if (omittedColumns.length === 0) {
       return { filteredRows: rows, omittedColumns: [] }
     }
 
     // Create new row objects without blacklisted columns (immutable)
-    const filteredRows = rows.map(row => {
+    const filteredRows = rows.map((row) => {
       const newRow: Record<string, any> = {}
       for (const [key, value] of Object.entries(row)) {
         if (!omittedColumns.includes(key)) {
@@ -107,7 +107,7 @@ export class BlacklistValidator {
     }
 
     return t_vars('security.columns_omitted', {
-      count: omittedColumns.length
+      count: omittedColumns.length,
     })
   }
 }

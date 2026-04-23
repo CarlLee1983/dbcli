@@ -3,7 +3,7 @@
  * Supports DATABASE_URL format and DB_* component format
  */
 
-import { DatabaseEnv } from '@/types'
+import type { DatabaseEnv } from '@/types'
 import { EnvParseError } from '@/utils/errors'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 
@@ -35,10 +35,11 @@ export function parseConnectionUrl(url: string): DatabaseEnv {
 
     // Extract components, using percent-decoding to handle special characters
     const host = parsed.hostname || 'localhost'
-    const port =
-      parsed.port !== ''
-        ? parseInt(parsed.port, 10)
-        : getDefaultsForSystem(system).port || 5432
+    const defaultPort = (() => {
+      const p = getDefaultsForSystem(system).port
+      return typeof p === 'number' ? p : 5432
+    })()
+    const port = parsed.port !== '' ? parseInt(parsed.port, 10) : defaultPort
 
     // CRITICAL: Decode username and password to handle special characters
     const user = decodeURIComponent(parsed.username || '')
@@ -64,7 +65,7 @@ export function parseConnectionUrl(url: string): DatabaseEnv {
  * @returns DatabaseEnv or null if no database configuration found
  * @throws EnvParseError if components are incomplete or invalid
  */
-export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | null {
+export function parseEnvDatabase(env: Record<string, string | undefined>): DatabaseEnv | null {
   // Path 1: DATABASE_URL (complete connection string)
   if (env.DATABASE_URL) {
     return parseConnectionUrl(env.DATABASE_URL)
@@ -85,7 +86,8 @@ export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | nul
     }
 
     const defaults = getDefaultsForSystem(system)
-    const port = env.DB_PORT ? parseInt(env.DB_PORT, 10) : (defaults.port || 5432)
+    const defaultPort = typeof defaults.port === 'number' ? defaults.port : 5432
+    const port = env.DB_PORT ? parseInt(env.DB_PORT, 10) : defaultPort
 
     // Validate port number
     if (isNaN(port) || port < 1 || port > 65535) {
@@ -94,11 +96,11 @@ export function parseEnvDatabase(env: Record<string, string>): DatabaseEnv | nul
 
     return {
       system,
-      host: env.DB_HOST || defaults.host || 'localhost',
+      host: env.DB_HOST || (typeof defaults.host === 'string' ? defaults.host : 'localhost'),
       port,
       user,
       password: env.DB_PASSWORD || '',
-      database
+      database,
     }
   }
 

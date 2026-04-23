@@ -69,9 +69,9 @@ describe('SchemaLayeredLoader', () => {
         products: mockConfig.schema?.products,
       },
     }
-    await Bun.file(
-      join(testDbcliPath, 'schemas', 'cold', 'infrequent.json')
-    ).write(JSON.stringify(coldData, null, 2))
+    await Bun.file(join(testDbcliPath, 'schemas', 'cold', 'infrequent.json')).write(
+      JSON.stringify(coldData, null, 2)
+    )
   })
 
   afterAll(async () => {

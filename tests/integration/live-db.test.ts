@@ -50,7 +50,10 @@ function shellSplit(cmd: string): string[] {
     } else if (ch === '"' && !inSingle) {
       inDouble = !inDouble
     } else if (ch === ' ' && !inSingle && !inDouble) {
-      if (current) { args.push(current); current = '' }
+      if (current) {
+        args.push(current)
+        current = ''
+      }
     } else {
       current += ch
     }
@@ -63,7 +66,7 @@ function shellSplit(cmd: string): string[] {
 function parseJSON(text: string): any {
   const lines = text.split('\n')
   // Find contiguous JSON block: starts with { or [
-  const jsonStart = lines.findIndex(l => l.startsWith('{') || l.startsWith('['))
+  const jsonStart = lines.findIndex((l) => l.startsWith('{') || l.startsWith('['))
   if (jsonStart === -1) throw new Error(`No JSON found in: ${text}`)
 
   // Try parsing from jsonStart, progressively adding lines
@@ -79,11 +82,15 @@ function parseJSON(text: string): any {
 
 /** Cleanup helper for temp files */
 function cleanupFile(path: string) {
-  try { unlinkSync(path) } catch {}
+  try {
+    unlinkSync(path)
+  } catch {}
 }
 
 function cleanupDir(path: string) {
-  try { rmSync(path, { recursive: true, force: true }) } catch {}
+  try {
+    rmSync(path, { recursive: true, force: true })
+  } catch {}
 }
 
 beforeAll(async () => {
@@ -122,10 +129,9 @@ afterAll(() => {
 })
 
 function resolveLiveConfigPath(): string | null {
-  const candidates = [
-    process.env.LIVE_DB_CONFIG_PATH,
-    join(CWD, '.dbcli')
-  ].filter((candidate): candidate is string => Boolean(candidate))
+  const candidates = [process.env.LIVE_DB_CONFIG_PATH, join(CWD, '.dbcli')].filter(
+    (candidate): candidate is string => Boolean(candidate)
+  )
 
   for (const candidate of candidates) {
     if (existsSync(join(candidate, 'config.json'))) {
@@ -217,7 +223,9 @@ describe('schema command (live)', () => {
 describe('query command (live)', () => {
   test('executes SELECT and returns JSON', async () => {
     if (SKIP) return
-    const { stdout, exitCode } = await run('query "SELECT id, account FROM users LIMIT 3" --format json')
+    const { stdout, exitCode } = await run(
+      'query "SELECT id, account FROM users LIMIT 3" --format json'
+    )
     expect(exitCode).toBe(0)
     const result = parseJSON(stdout)
     expect(result.rows.length).toBeLessThanOrEqual(3)
@@ -236,7 +244,9 @@ describe('query command (live)', () => {
 
   test('executes SELECT and returns CSV', async () => {
     if (SKIP) return
-    const { stdout, exitCode } = await run('query "SELECT id, account FROM users LIMIT 2" --format csv')
+    const { stdout, exitCode } = await run(
+      'query "SELECT id, account FROM users LIMIT 2" --format csv'
+    )
     expect(exitCode).toBe(0)
     const lines = stdout.split('\n')
     expect(lines[0]).toBe('id,account')
@@ -245,7 +255,9 @@ describe('query command (live)', () => {
 
   test('aggregate query works', async () => {
     if (SKIP) return
-    const { stdout, exitCode } = await run('query "SELECT COUNT(*) as total FROM users" --format json')
+    const { stdout, exitCode } = await run(
+      'query "SELECT COUNT(*) as total FROM users" --format json'
+    )
     expect(exitCode).toBe(0)
     const result = parseJSON(stdout)
     expect(result.rows[0].total).toBeGreaterThan(0)
@@ -417,9 +429,7 @@ describe('write commands dry-run (live)', () => {
 
   test('delete --dry-run shows SQL', async () => {
     if (SKIP) return
-    const { stdout, exitCode } = await run(
-      'delete settings --where "id=99999" --dry-run'
-    )
+    const { stdout, exitCode } = await run('delete settings --where "id=99999" --dry-run')
     expect(exitCode).toBe(0)
     const result = parseJSON(stdout)
     expect(result.status).toBe('success')
@@ -437,9 +447,7 @@ describe('write commands dry-run (live)', () => {
 
   test('update requires --where', async () => {
     if (SKIP) return
-    const { exitCode, stdout, stderr } = await run(
-      `update settings --set '{"val":"x"}'`
-    )
+    const { exitCode, stdout, stderr } = await run(`update settings --set '{"val":"x"}'`)
     expect(exitCode).toBe(1)
     expect(stdout + stderr).toContain('--where')
   })
@@ -453,9 +461,7 @@ describe('write commands dry-run (live)', () => {
 
   test('insert rejects non-existent table', async () => {
     if (SKIP) return
-    const { exitCode, stderr } = await run(
-      `insert nonexistent_xyz --data '{"a":"b"}' --dry-run`
-    )
+    const { exitCode, stderr } = await run(`insert nonexistent_xyz --data '{"a":"b"}' --dry-run`)
     expect(exitCode).toBe(1)
     expect(stderr).toContain("doesn't exist")
   })
@@ -517,17 +523,13 @@ describe('write commands actual execution (live)', () => {
     expect(v2.rows[0].val).toBe('updated')
 
     // DELETE
-    const del = await run(
-      `delete settings --where "id=${insertedId}" --force`
-    )
+    const del = await run(`delete settings --where "id=${insertedId}" --force`)
     expect(del.exitCode).toBe(0)
     const delResult = parseJSON(del.stdout)
     expect(delResult.status).toBe('success')
 
     // Verify DELETE via SELECT
-    const verify3 = await run(
-      `query "SELECT * FROM settings WHERE id=${insertedId}" --format json`
-    )
+    const verify3 = await run(`query "SELECT * FROM settings WHERE id=${insertedId}" --format json`)
     const v3 = parseJSON(verify3.stdout)
     expect(v3.rows.length).toBe(0)
   })
@@ -775,18 +777,14 @@ describe('format validation (live)', () => {
 describe('SQL injection protection (live)', () => {
   test('multi-statement query is rejected by driver', async () => {
     if (SKIP) return
-    const { exitCode, stderr } = await run(
-      'query "SELECT 1; DROP TABLE users;" --format json'
-    )
+    const { exitCode, stderr } = await run('query "SELECT 1; DROP TABLE users;" --format json')
     expect(exitCode).toBe(1)
     expect(stderr.toLowerCase()).toContain('error')
   })
 
   test('comment injection is handled', async () => {
     if (SKIP) return
-    const { exitCode } = await run(
-      'query "SELECT 1 -- comment" --format json'
-    )
+    const { exitCode } = await run('query "SELECT 1 -- comment" --format json')
     expect(exitCode).toBe(0)
   })
 })
@@ -849,9 +847,7 @@ describe('migrate command (live)', () => {
 
   test('add-column dry-run', async () => {
     if (SKIP) return
-    const { stdout, exitCode } = await run(
-      `migrate add-column ${TEST_TABLE} body text --nullable`
-    )
+    const { stdout, exitCode } = await run(`migrate add-column ${TEST_TABLE} body text --nullable`)
     expect(exitCode).toBe(0)
     const result = parseJSON(stdout)
     expect(result.dryRun).toBe(true)
@@ -899,9 +895,7 @@ describe('migrate command (live)', () => {
     expect(schemaResult.columns.length).toBeGreaterThanOrEqual(2)
 
     // ADD COLUMN
-    const addCol = await run(
-      `migrate add-column ${TEST_TABLE} body text --nullable --execute`
-    )
+    const addCol = await run(`migrate add-column ${TEST_TABLE} body text --nullable --execute`)
     expect(addCol.exitCode).toBe(0)
     expect(parseJSON(addCol.stdout).status).toBe('success')
 
@@ -918,16 +912,12 @@ describe('migrate command (live)', () => {
     expect(parseJSON(addIdx.stdout).status).toBe('success')
 
     // ALTER COLUMN (set default)
-    const alter = await run(
-      `migrate alter-column ${TEST_TABLE} body --set-default "''" --execute`
-    )
+    const alter = await run(`migrate alter-column ${TEST_TABLE} body --set-default "''" --execute`)
     expect(alter.exitCode).toBe(0)
     expect(parseJSON(alter.stdout).status).toBe('success')
 
     // DROP COLUMN
-    const dropCol = await run(
-      `migrate drop-column ${TEST_TABLE} body --execute --force`
-    )
+    const dropCol = await run(`migrate drop-column ${TEST_TABLE} body --execute --force`)
     expect(dropCol.exitCode).toBe(0)
     expect(parseJSON(dropCol.stdout).status).toBe('success')
 
@@ -938,9 +928,7 @@ describe('migrate command (live)', () => {
     expect(dropIdx.exitCode).toBe(0)
 
     // DROP TABLE
-    const drop = await run(
-      `migrate drop ${TEST_TABLE} --execute --force`
-    )
+    const drop = await run(`migrate drop ${TEST_TABLE} --execute --force`)
     expect(drop.exitCode).toBe(0)
     expect(parseJSON(drop.stdout).status).toBe('success')
 

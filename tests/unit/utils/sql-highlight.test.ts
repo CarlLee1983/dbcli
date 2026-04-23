@@ -42,7 +42,8 @@ describe('highlightSQL', () => {
   })
 
   test('handles complex query with multiple keywords', () => {
-    const sql = 'SELECT u.id, u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE o.total > 100'
+    const sql =
+      'SELECT u.id, u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE o.total > 100'
     const result = highlightSQL(sql)
     expect(result).toContain('u.id')
     expect(result).toContain('u.name')

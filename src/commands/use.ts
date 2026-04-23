@@ -9,6 +9,7 @@ import { ConfigError } from '@/utils/errors'
 import { resolveConfigPath } from '@/utils/config-path'
 import { join } from 'path'
 import { t, t_vars } from '@/i18n/message-loader'
+import { resolveConfigStoragePath } from '@/core/config-binding'
 
 /**
  * Switch the default connection in v2 config.
@@ -28,7 +29,7 @@ export async function switchDefault(
 
   const updated: DbcliConfigV2 = {
     ...config,
-    default: name
+    default: name,
   }
 
   await writeV2Config(configPath, updated)
@@ -52,7 +53,8 @@ export function listConnectionsForDisplay(config: DbcliConfigV2): string[] {
  * Check if config is v2 format, throw helpful error if not
  */
 async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
-  const configFile = Bun.file(join(configPath, 'config.json'))
+  const storagePath = await resolveConfigStoragePath(configPath)
+  const configFile = Bun.file(join(storagePath, 'config.json'))
   if (!(await configFile.exists())) {
     throw new ConfigError(t('init.config_not_found'))
   }
@@ -63,7 +65,7 @@ async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
     throw new ConfigError(t('use.requires_v2'))
   }
 
-  return readV2Config(configPath)
+  return readV2Config(storagePath)
 }
 
 export const useCommand = new Command('use')

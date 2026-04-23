@@ -3,7 +3,10 @@ import { MongoDBAdapter } from 'src/adapters/mongodb-adapter'
 import type { ConnectionOptions } from 'src/adapters/types'
 import { ConnectionError } from 'src/adapters/types'
 
-const mockDocs = [{ _id: '1', name: 'Alice', age: 30 }, { _id: '2', name: 'Bob', age: 25 }]
+const mockDocs = [
+  { _id: '1', name: 'Alice', age: 30 },
+  { _id: '2', name: 'Bob', age: 25 },
+]
 const mockCollectionDefs = [{ name: 'users' }, { name: 'orders' }]
 
 class MockMongoClient {
@@ -11,8 +14,12 @@ class MockMongoClient {
   closed = false
   lastDbName: string | undefined
   constructor(public uri: string) {}
-  async connect() { this.connected = true }
-  async close() { this.closed = true }
+  async connect() {
+    this.connected = true
+  }
+  async close() {
+    this.closed = true
+  }
   db(name?: string) {
     this.lastDbName = name
     return {
@@ -29,9 +36,13 @@ class MockMongoClient {
 }
 
 class FailingMongoClient {
-  async connect() { throw new Error('ECONNREFUSED connect ECONNREFUSED 127.0.0.1:27017') }
+  async connect() {
+    throw new Error('ECONNREFUSED connect ECONNREFUSED 127.0.0.1:27017')
+  }
   async close() {}
-  db() { return {} as any }
+  db() {
+    return {} as any
+  }
 }
 
 const uriOptions: ConnectionOptions = {
@@ -75,10 +86,7 @@ describe('MongoDBAdapter', () => {
           return new Response(
             JSON.stringify({
               Status: 0,
-              Answer: [
-                { data: '0 0 27017 a.example.com.' },
-                { data: '0 0 27017 b.example.com.' },
-              ],
+              Answer: [{ data: '0 0 27017 a.example.com.' }, { data: '0 0 27017 b.example.com.' }],
             })
           )
         }
@@ -110,7 +118,9 @@ describe('MongoDBAdapter', () => {
         await srvAdapter.connect()
 
         const client = (srvAdapter as any).client as MockMongoClient
-        expect(client.uri).toContain('mongodb://user:pass@a.example.com:27017,b.example.com:27017/cmg0001')
+        expect(client.uri).toContain(
+          'mongodb://user:pass@a.example.com:27017,b.example.com:27017/cmg0001'
+        )
         expect(client.uri).toContain('authSource=admin')
         expect(client.uri).toContain('tls=true')
       } finally {
@@ -156,7 +166,9 @@ describe('MongoDBAdapter', () => {
   })
 
   describe('execute()', () => {
-    beforeEach(async () => { await adapter.connect() })
+    beforeEach(async () => {
+      await adapter.connect()
+    })
 
     test('executes find when query is JSON object', async () => {
       const result = await adapter.execute<{ name: string }>('{"age": {"$gt": 18}}', ['users'])
@@ -167,7 +179,8 @@ describe('MongoDBAdapter', () => {
     })
 
     test('executes aggregate when query is JSON array', async () => {
-      const pipeline = '[{"$match":{"status":"active"}},{"$group":{"_id":"$city","count":{"$sum":1}}}]'
+      const pipeline =
+        '[{"$match":{"status":"active"}},{"$group":{"_id":"$city","count":{"$sum":1}}}]'
       const result = await adapter.execute(pipeline, ['orders'])
       expect(result.rows).toEqual([{ _id: 'NYC', count: 5 }])
     })
@@ -183,7 +196,9 @@ describe('MongoDBAdapter', () => {
   })
 
   describe('listCollections()', () => {
-    beforeEach(async () => { await adapter.connect() })
+    beforeEach(async () => {
+      await adapter.connect()
+    })
 
     test('returns collections with document counts', async () => {
       const collections = await adapter.listCollections()

@@ -8,9 +8,7 @@ export interface ParsedCommand {
 
 const BLOCKED_FROM_REPL = new Set(['shell'])
 
-const knownCommands = new Set(
-  DBCLI_COMMANDS.filter(c => !BLOCKED_FROM_REPL.has(c))
-)
+const knownCommands = new Set(DBCLI_COMMANDS.filter((c) => !BLOCKED_FROM_REPL.has(c)))
 
 export function parseCommandLine(input: string): ParsedCommand {
   const trimmed = input.trim()

@@ -22,7 +22,7 @@ const V2_CONFIG = {
       port: 5432,
       user: 'admin',
       password: 'primary-secret',
-      database: 'app_db'
+      database: 'app_db',
     },
     staging: {
       system: 'postgresql',
@@ -30,11 +30,11 @@ const V2_CONFIG = {
       port: 5433,
       user: 'staging_user',
       password: 'staging-secret',
-      database: 'staging_db'
-    }
+      database: 'staging_db',
+    },
   },
   schema: {},
-  metadata: { version: '2.0' }
+  metadata: { version: '2.0' },
 }
 
 describe('全域連線名稱（--use 串接）', () => {
@@ -70,9 +70,7 @@ describe('全域連線名稱（--use 串接）', () => {
     const configPath = join(TMP_DIR, '.dbcli')
 
     beforeEach(async () => {
-      await Bun.file(join(configPath, 'config.json')).write(
-        JSON.stringify(V2_CONFIG, null, 2)
-      )
+      await Bun.file(join(configPath, 'config.json')).write(JSON.stringify(V2_CONFIG, null, 2))
     })
 
     test('未設定 --use 時應使用 default connection（primary）', async () => {

@@ -61,7 +61,9 @@ export class MongoDBAdapter implements QueryableAdapter {
       }
     }
 
-    const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(srvName)}&type=SRV`)
+    const response = await fetch(
+      `https://dns.google/resolve?name=${encodeURIComponent(srvName)}&type=SRV`
+    )
     if (!response.ok) {
       throw new Error(`SRV lookup failed with HTTP ${response.status}`)
     }
@@ -95,7 +97,9 @@ export class MongoDBAdapter implements QueryableAdapter {
       }
     }
 
-    const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=TXT`)
+    const response = await fetch(
+      `https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=TXT`
+    )
     if (!response.ok) {
       throw new Error(`TXT lookup failed with HTTP ${response.status}`)
     }
@@ -147,7 +151,8 @@ export class MongoDBAdapter implements QueryableAdapter {
           }@`
         : ''
 
-    const path = url.pathname && url.pathname !== '/' ? url.pathname : `/${this.options.database || 'test'}`
+    const path =
+      url.pathname && url.pathname !== '/' ? url.pathname : `/${this.options.database || 'test'}`
     const search = query.toString()
 
     return `mongodb://${userInfo}${hosts.join(',')}${path}${search ? `?${search}` : ''}`

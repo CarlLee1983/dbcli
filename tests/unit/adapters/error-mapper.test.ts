@@ -78,7 +78,11 @@ test('mapError works for all database systems', () => {
 
   const pgResult = mapError(error, 'postgresql', mockOptions)
   const mysqlResult = mapError(error, 'mysql', { ...mockOptions, system: 'mysql', port: 3306 })
-  const mariadbResult = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb', port: 3306 })
+  const mariadbResult = mapError(error, 'mariadb', {
+    ...mockOptions,
+    system: 'mariadb',
+    port: 3306,
+  })
 
   expect(pgResult.code).toBe('ECONNREFUSED')
   expect(mysqlResult.code).toBe('ECONNREFUSED')

@@ -13,7 +13,7 @@ describe('Performance: Query Execution', { skip: !process.env.TEST_DATABASE_URL 
     try {
       execSync(`${cliPath} query "SELECT 1" --format json`, {
         stdio: 'pipe',
-        env: { ...process.env, TEST_DATABASE_URL: process.env.TEST_DATABASE_URL }
+        env: { ...process.env, TEST_DATABASE_URL: process.env.TEST_DATABASE_URL },
       })
     } catch (error) {
       console.warn('Test database not available; skipping query benchmarks')
@@ -28,7 +28,7 @@ describe('Performance: Query Execution', { skip: !process.env.TEST_DATABASE_URL 
       execSync(`${cliPath} query "SELECT 1" --format json`, {
         stdio: 'pipe',
         timeout: 5000,
-        env: { ...process.env }
+        env: { ...process.env },
       })
     } catch (error) {
       throw error
@@ -42,7 +42,7 @@ describe('Performance: Query Execution', { skip: !process.env.TEST_DATABASE_URL 
       execSync(`${cliPath} query "SELECT 1"`, {
         stdio: 'pipe',
         timeout: 5000,
-        env: { ...process.env }
+        env: { ...process.env },
       })
     } catch (error) {
       throw error

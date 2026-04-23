@@ -18,10 +18,16 @@ import { configModule } from '@/core/config'
 import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
-import { ConnectionConfig } from '@/types'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import type { ConnectionConfig } from '@/types'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { resolveConfigPath } from '@/utils/config-path'
+import {
+  getProjectStoragePath,
+  migrateLegacyProjectEnvLocal,
+  resolveConfigStoragePath,
+  writeProjectBinding,
+} from '@/core/config-binding'
 
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
 
@@ -34,10 +40,12 @@ async function checkOverwrite(
   shouldPrompt: boolean,
   force: boolean
 ): Promise<boolean> {
+  const storagePath = await resolveConfigStoragePath(configPath)
   const fileExists = await Bun.file(configPath).exists()
   const dirConfigExists = await Bun.file(join(configPath, 'config.json')).exists()
+  const storageConfigExists = await Bun.file(join(storagePath, 'config.json')).exists()
 
-  if ((!fileExists && !dirConfigExists) || force) return true
+  if ((!fileExists && !dirConfigExists && !storageConfigExists) || force) return true
 
   if (shouldPrompt) {
     const overwrite = await promptUser.confirm(t('init.config_exists_overwrite'))
@@ -52,7 +60,8 @@ async function checkOverwrite(
 }
 
 async function handleRemove(configPath: string, name: string): Promise<void> {
-  const configFile = Bun.file(join(configPath, 'config.json'))
+  const storagePath = await resolveConfigStoragePath(configPath)
+  const configFile = Bun.file(join(storagePath, 'config.json'))
   if (!(await configFile.exists())) {
     throw new Error(t('init.config_not_found'))
   }
@@ -62,7 +71,7 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
     throw new Error(t('init.requires_v2_remove'))
   }
 
-  const config = await readV2Config(configPath)
+  const config = await readV2Config(storagePath)
   if (!config.connections[name]) {
     throw new Error(t_vars('init.connection_not_found', { name }))
   }
@@ -72,8 +81,10 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
     throw new Error(t('init.cannot_remove_last'))
   }
 
-  const { [name]: _removed, ...remaining } = config.connections
-  const newDefault = config.default === name ? Object.keys(remaining)[0] : config.default
+  const remaining = Object.fromEntries(
+    Object.entries(config.connections).filter(([connectionName]) => connectionName !== name)
+  )
+  const newDefault = config.default === name ? Object.keys(remaining)[0]! : config.default
 
   const updated: DbcliConfigV2 = {
     ...config,
@@ -81,7 +92,7 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
     connections: remaining,
   }
 
-  await writeV2Config(configPath, updated)
+  await writeV2Config(storagePath, updated)
 
   if (config.default === name) {
     console.log(t_vars('init.connection_removed_switched', { name, newDefault }))
@@ -96,7 +107,8 @@ async function handleRename(configPath: string, renameArg: string): Promise<void
     throw new Error(t('init.rename_invalid_format'))
   }
 
-  const configFile = Bun.file(join(configPath, 'config.json'))
+  const storagePath = await resolveConfigStoragePath(configPath)
+  const configFile = Bun.file(join(storagePath, 'config.json'))
   if (!(await configFile.exists())) {
     throw new Error(t('init.config_not_found'))
   }
@@ -106,7 +118,7 @@ async function handleRename(configPath: string, renameArg: string): Promise<void
     throw new Error(t('init.requires_v2_rename'))
   }
 
-  const config = await readV2Config(configPath)
+  const config = await readV2Config(storagePath)
   if (!config.connections[oldName]) {
     throw new Error(t_vars('init.connection_not_found', { name: oldName }))
   }
@@ -124,7 +136,7 @@ async function handleRename(configPath: string, renameArg: string): Promise<void
     connections: Object.fromEntries(entries),
   }
 
-  await writeV2Config(configPath, updated)
+  await writeV2Config(storagePath, updated)
   console.log(t_vars('init.connection_renamed', { oldName, newName }))
 }
 
@@ -135,18 +147,39 @@ async function writeV2InitConfig(
   permission: string,
   envFile?: string
 ): Promise<void> {
-  const configJsonPath = join(configPath, 'config.json')
+  const storagePath = getProjectStoragePath(configPath)
+  const configJsonPath = join(storagePath, 'config.json')
   const configFile = Bun.file(configJsonPath)
+  const projectConfigFile = Bun.file(join(configPath, 'config.json'))
   let existingV2: DbcliConfigV2 | null = null
 
   // Check for existing v2 config, or migrate from V1
-  // configFile is join(configPath, 'config.json') — valid when configPath is a directory
+  // configFile is join(storagePath, 'config.json') — valid when storagePath is a directory
   if (await configFile.exists()) {
     const raw = JSON.parse(await configFile.text())
     if (detectConfigVersion(raw) === 2) {
-      existingV2 = await readV2Config(configPath)
+      existingV2 = await readV2Config(storagePath)
     } else {
       // Directory-based V1 config — import it as 'default' connection
+      const v1Config = await configModule.read(storagePath)
+      existingV2 = {
+        version: 2,
+        default: 'default',
+        connections: {
+          default: {
+            ...v1Config.connection,
+            permission: v1Config.permission,
+          },
+        },
+        schema: v1Config.schema || {},
+        schemas: { default: v1Config.schema || {} },
+        metadata: v1Config.metadata || { version: '1.0' },
+        blacklist: v1Config.blacklist || { tables: [], columns: {} },
+      }
+    }
+  } else if (await projectConfigFile.exists()) {
+    const raw = JSON.parse(await projectConfigFile.text())
+    if (detectConfigVersion(raw) === 2) {
       const v1Config = await configModule.read(configPath)
       existingV2 = {
         version: 2,
@@ -158,18 +191,36 @@ async function writeV2InitConfig(
           },
         },
         schema: v1Config.schema || {},
+        schemas: { default: v1Config.schema || {} },
+        metadata: v1Config.metadata || { version: '1.0' },
+        blacklist: v1Config.blacklist || { tables: [], columns: {} },
+      }
+    } else {
+      // V1 config in the project directory — import it as 'default' connection
+      const v1Config = await configModule.read(configPath)
+      existingV2 = {
+        version: 2,
+        default: 'default',
+        connections: {
+          default: {
+            ...v1Config.connection,
+            permission: v1Config.permission,
+          },
+        },
+        schema: v1Config.schema || {},
+        schemas: { default: v1Config.schema || {} },
         metadata: v1Config.metadata || { version: '1.0' },
         blacklist: v1Config.blacklist || { tables: [], columns: {} },
       }
     }
   } else {
     // Check if configPath itself is a legacy V1 file (e.g. a single .dbcli JSON file)
-    const legacyFile = Bun.file(configPath)
+    const legacyFile = Bun.file(storagePath)
     if (await legacyFile.exists()) {
       const raw = JSON.parse(await legacyFile.text())
       if (detectConfigVersion(raw) !== 2) {
         // V1 single-file config — import it as 'default' connection
-        const v1Config = await configModule.read(configPath)
+        const v1Config = await configModule.read(storagePath)
         existingV2 = {
           version: 2,
           default: 'default',
@@ -180,6 +231,7 @@ async function writeV2InitConfig(
             },
           },
           schema: v1Config.schema || {},
+          schemas: { default: v1Config.schema || {} },
           metadata: v1Config.metadata || { version: '1.0' },
           blacklist: v1Config.blacklist || { tables: [], columns: {} },
         }
@@ -212,14 +264,14 @@ async function writeV2InitConfig(
           [connectionName]: connEntry,
         },
         schema: {},
+        schemas: {},
         metadata: { version: '1.0', createdAt: new Date().toISOString() },
         blacklist: { tables: [], columns: {} },
       }
 
-  // Ensure directory exists
-  await Bun.$`mkdir -p ${configPath}`
-
-  await writeV2Config(configPath, v2Config)
+  await writeV2Config(storagePath, v2Config)
+  await migrateLegacyProjectEnvLocal(configPath, storagePath)
+  await writeProjectBinding(configPath, storagePath)
   console.log(t('init.config_saved'))
 }
 
@@ -333,7 +385,8 @@ async function initCommandHandler(
   }
 
   // 4. Determine database system
-  let system = options.system || envConfig?.system || 'postgresql'
+  const systemFromCli = typeof options.system === 'string' ? options.system : undefined
+  let system: string = systemFromCli ?? envConfig?.system ?? 'postgresql'
 
   // Only prompt when prompting is needed and no system value was provided
   if (shouldPrompt && !options.system && !envConfig?.system) {
@@ -377,12 +430,12 @@ async function initCommandHandler(
   // Otherwise ask for actual connection values
   if (options.useEnvRefs && shouldPrompt) {
     // Env-ref mode: only ask for environment variable names, not actual values
-    let envHost = options.envHost || (await promptUser.text(t('init.prompt_host'), 'DB_HOST'))
-    let envPort = options.envPort || (await promptUser.text(t('init.prompt_port'), 'DB_PORT'))
-    let envUser = options.envUser || (await promptUser.text(t('init.prompt_user'), 'DB_USER'))
-    let envPassword =
+    const envHost = options.envHost || (await promptUser.text(t('init.prompt_host'), 'DB_HOST'))
+    const envPort = options.envPort || (await promptUser.text(t('init.prompt_port'), 'DB_PORT'))
+    const envUser = options.envUser || (await promptUser.text(t('init.prompt_user'), 'DB_USER'))
+    const envPassword =
       options.envPassword || (await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD'))
-    let envDatabase =
+    const envDatabase =
       options.envDatabase || (await promptUser.text(t('init.prompt_name'), 'DB_DATABASE'))
 
     // Directly convert to env-ref config
@@ -396,7 +449,9 @@ async function initCommandHandler(
     }
 
     // Skip subsequent connection parameter collection, go directly to permission selection
-    let permission = options.permission || 'query-only'
+    const permissionFromCli =
+      typeof options.permission === 'string' ? options.permission : undefined
+    let permission: string = permissionFromCli ?? 'query-only'
 
     if (!options.permission) {
       permission = await promptUser.select(t('init.prompt_permission'), [
@@ -408,14 +463,14 @@ async function initCommandHandler(
     }
 
     // Validate permission value
-    if (!VALID_PERMISSIONS.includes(permission)) {
+    if (!(VALID_PERMISSIONS as readonly string[]).includes(permission)) {
       throw new Error(t_vars('errors.invalid_permission', { permission }))
     }
 
     // Merge config and save
     const newConfig = configModule.merge(existingConfig, {
       connection: configForWrite,
-      permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
+      permission: permission as (typeof VALID_PERMISSIONS)[number],
     })
 
     // Check existing file and prompt for overwrite confirmation
@@ -438,27 +493,35 @@ async function initCommandHandler(
     }
 
     // Write config
-    await configModule.write(configPath, newConfig)
+    const storagePath = getProjectStoragePath(configPath)
+    await Bun.$`mkdir -p ${storagePath}`
+    await configModule.write(storagePath, newConfig)
+    await migrateLegacyProjectEnvLocal(configPath, storagePath)
+    await writeProjectBinding(configPath, storagePath)
     console.log(t('init.config_saved'))
     return
   }
 
   // Normal mode: ask for actual connection values
+  const strOpt = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+  const portStrOpt = (v: unknown): string | undefined =>
+    typeof v === 'string' || typeof v === 'number' ? String(v) : undefined
+  const defaultHost = typeof defaults.host === 'string' ? defaults.host : 'localhost'
+  const defaultPort = typeof defaults.port === 'number' ? defaults.port : 5432
+
   // Hostname
   connection.host =
-    options.host ||
-    envConfig?.host ||
-    (shouldPrompt
-      ? await promptUser.text(t('init.prompt_host'), defaults.host || 'localhost')
-      : defaults.host || 'localhost')
+    strOpt(options.host) ??
+    envConfig?.host ??
+    (shouldPrompt ? await promptUser.text(t('init.prompt_host'), defaultHost) : defaultHost)
 
   // Port number
   const portStr =
-    options.port ||
-    (envConfig?.port ? String(envConfig.port) : null) ||
+    portStrOpt(options.port) ??
+    (envConfig?.port != null ? String(envConfig.port) : null) ??
     (shouldPrompt
-      ? await promptUser.text(t('init.prompt_port'), String(defaults.port || 5432))
-      : String(defaults.port || 5432))
+      ? await promptUser.text(t('init.prompt_port'), String(defaultPort))
+      : String(defaultPort))
 
   const port = parseInt(portStr, 10)
   if (isNaN(port) || port < 1 || port > 65535) {
@@ -468,8 +531,8 @@ async function initCommandHandler(
 
   // Username
   connection.user =
-    options.user ||
-    envConfig?.user ||
+    strOpt(options.user) ??
+    envConfig?.user ??
     (shouldPrompt ? await promptUser.text(t('init.prompt_user')) : '')
 
   // When using --use-env-refs, actual connection values are optional (read from env vars)
@@ -480,14 +543,14 @@ async function initCommandHandler(
 
   // Password
   connection.password =
-    options.password ||
-    envConfig?.password ||
+    strOpt(options.password) ??
+    envConfig?.password ??
     (shouldPrompt ? await promptUser.text(t('init.prompt_password')) : '')
 
   // Database name
   connection.database =
-    options.name ||
-    envConfig?.database ||
+    strOpt(options.name) ??
+    envConfig?.database ??
     (shouldPrompt ? await promptUser.text(t('init.prompt_name')) : '')
 
   // When using --use-env-refs, actual connection values are optional (read from env vars)
@@ -497,7 +560,8 @@ async function initCommandHandler(
   }
 
   // 5. Select permission level
-  let permission = options.permission || 'query-only'
+  const permissionFromCli = typeof options.permission === 'string' ? options.permission : undefined
+  let permission: string = permissionFromCli ?? 'query-only'
 
   if (shouldPrompt && !options.permission) {
     permission = await promptUser.select(t('init.prompt_permission'), [
@@ -509,7 +573,7 @@ async function initCommandHandler(
   }
 
   // Validate permission value
-  if (!VALID_PERMISSIONS.includes(permission)) {
+  if (!(VALID_PERMISSIONS as readonly string[]).includes(permission)) {
     throw new Error(t_vars('errors.invalid_permission', { permission }))
   }
 
@@ -567,7 +631,7 @@ async function initCommandHandler(
       return value
     }
 
-    const testConnection: ConnectionConfig = {
+    const testConnection: ConnectionOptions = {
       system: newConfig.connection.system,
       host: String(resolveValue(newConfig.connection.host, 'host')),
       port: parseInt(String(resolveValue(newConfig.connection.port, 'port')), 10) || 5432,
@@ -613,7 +677,11 @@ async function initCommandHandler(
     return
   }
 
-  await configModule.write(configPath, newConfig)
+  const storagePath = getProjectStoragePath(configPath)
+  await Bun.$`mkdir -p ${storagePath}`
+  await configModule.write(storagePath, newConfig)
+  await migrateLegacyProjectEnvLocal(configPath, storagePath)
+  await writeProjectBinding(configPath, storagePath)
   console.log(t('init.config_saved'))
 }
 
@@ -727,6 +795,10 @@ async function handleMongoDBInit(ctx: {
     connection: mongoConfig as any,
     permission: permission as any,
   })
-  await configModule.write(configPath, newConfig)
+  const storagePath = getProjectStoragePath(configPath)
+  await Bun.$`mkdir -p ${storagePath}`
+  await configModule.write(storagePath, newConfig)
+  await migrateLegacyProjectEnvLocal(configPath, storagePath)
+  await writeProjectBinding(configPath, storagePath)
   console.log(t('init.config_saved'))
 }

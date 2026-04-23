@@ -9,25 +9,25 @@ export interface CommandInfo {
 }
 
 function extractCommands(program: Command): CommandInfo[] {
-  return program.commands.map(cmd => ({
+  return program.commands.map((cmd) => ({
     name: cmd.name(),
-    options: cmd.options.map(o => o.long ?? o.short ?? '').filter(Boolean),
+    options: cmd.options.map((o) => o.long ?? o.short ?? '').filter(Boolean),
   }))
 }
 
 function extractGlobalOptions(program: Command): string[] {
-  return program.options.map(o => o.long ?? o.short ?? '').filter(Boolean)
+  return program.options.map((o) => o.long ?? o.short ?? '').filter(Boolean)
 }
 
-export function generateBashCompletion(
-  commands: CommandInfo[],
-  globalOptions: string[]
-): string {
-  const cmdNames = commands.map(c => c.name).join(' ')
+export function generateBashCompletion(commands: CommandInfo[], globalOptions: string[]): string {
+  const cmdNames = commands.map((c) => c.name).join(' ')
   const globalOpts = globalOptions.join(' ')
 
   const caseEntries = commands
-    .map(c => `    ${c.name})\n      COMPREPLY=( $(compgen -W "${c.options.join(' ')}" -- "\${cur}") )\n      ;;`)
+    .map(
+      (c) =>
+        `    ${c.name})\n      COMPREPLY=( $(compgen -W "${c.options.join(' ')}" -- "\${cur}") )\n      ;;`
+    )
     .join('\n')
 
   return `#!/bin/bash
@@ -54,22 +54,17 @@ complete -F _dbcli_completions dbcli
 `
 }
 
-export function generateZshCompletion(
-  commands: CommandInfo[],
-  globalOptions: string[]
-): string {
-  const cmdLines = commands
-    .map(c => `    '${c.name}:${c.name} command'`)
-    .join('\n')
+export function generateZshCompletion(commands: CommandInfo[], globalOptions: string[]): string {
+  const cmdLines = commands.map((c) => `    '${c.name}:${c.name} command'`).join('\n')
 
   const subcmdCases = commands
-    .map(c => {
-      const opts = c.options.map(o => `'${o}[${o}]'`).join(' ')
+    .map((c) => {
+      const opts = c.options.map((o) => `'${o}[${o}]'`).join(' ')
       return `  ${c.name})\n    _arguments ${opts}\n    ;;`
     })
     .join('\n')
 
-  const globalOpts = globalOptions.map(o => `'${o}[${o}]'`).join(' ')
+  const globalOpts = globalOptions.map((o) => `'${o}[${o}]'`).join(' ')
 
   return `#compdef dbcli
 # dbcli zsh completion — auto-generated, do not edit
@@ -99,14 +94,8 @@ _dbcli
 `
 }
 
-export function generateFishCompletion(
-  commands: CommandInfo[],
-  globalOptions: string[]
-): string {
-  const lines = [
-    '# dbcli fish completion — auto-generated, do not edit',
-    '',
-  ]
+export function generateFishCompletion(commands: CommandInfo[], globalOptions: string[]): string {
+  const lines = ['# dbcli fish completion — auto-generated, do not edit', '']
 
   for (const opt of globalOptions) {
     const longName = opt.replace(/^--/, '')
@@ -114,13 +103,17 @@ export function generateFishCompletion(
   }
 
   for (const cmd of commands) {
-    lines.push(`complete -c dbcli -n '__fish_use_subcommand' -a ${cmd.name} -d '${cmd.name} command'`)
+    lines.push(
+      `complete -c dbcli -n '__fish_use_subcommand' -a ${cmd.name} -d '${cmd.name} command'`
+    )
   }
 
   for (const cmd of commands) {
     for (const opt of cmd.options) {
       const longName = opt.replace(/^--/, '')
-      lines.push(`complete -c dbcli -n '__fish_seen_subcommand_from ${cmd.name}' -l ${longName} -d '${opt}'`)
+      lines.push(
+        `complete -c dbcli -n '__fish_seen_subcommand_from ${cmd.name}' -l ${longName} -d '${opt}'`
+      )
     }
   }
 
@@ -169,10 +162,7 @@ async function installCompletion(shell: string, script: string): Promise<void> {
     content = await file.text()
   }
 
-  const markerRegex = new RegExp(
-    `${MARKER_START}[\\s\\S]*?${MARKER_END}\\n?`,
-    'g'
-  )
+  const markerRegex = new RegExp(`${MARKER_START}[\\s\\S]*?${MARKER_END}\\n?`, 'g')
   content = content.replace(markerRegex, '')
 
   const block = `\n${MARKER_START}\neval "$(dbcli completion ${shell})"\n${MARKER_END}\n`
@@ -198,9 +188,8 @@ export const completionCommand = new Command('completion')
     const globalOptions = extractGlobalOptions(parentProgram)
 
     if (options.install !== undefined) {
-      const shell = typeof options.install === 'string'
-        ? options.install
-        : (shellArg ?? detectShell())
+      const shell =
+        typeof options.install === 'string' ? options.install : (shellArg ?? detectShell())
       const generators: Record<string, typeof generateBashCompletion> = {
         bash: generateBashCompletion,
         zsh: generateZshCompletion,

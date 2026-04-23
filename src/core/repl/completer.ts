@@ -1,17 +1,28 @@
 // src/core/repl/completer.ts
 import type { ReplContext } from './types'
-import { SQL_KEYWORDS_FOR_COMPLETION, SQL_KEYWORDS_FOR_DETECTION, DBCLI_COMMANDS, META_COMMANDS } from './types'
+import {
+  SQL_KEYWORDS_FOR_COMPLETION,
+  SQL_KEYWORDS_FOR_DETECTION,
+  DBCLI_COMMANDS,
+  META_COMMANDS,
+} from './types'
 
 type CompleterFn = (line: string) => [string[], string]
 
 const TABLE_POSITION_KEYWORDS = new Set([
-  'FROM', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'OUTER', 'CROSS',
-  'INTO', 'UPDATE', 'TABLE',
+  'FROM',
+  'JOIN',
+  'INNER',
+  'LEFT',
+  'RIGHT',
+  'OUTER',
+  'CROSS',
+  'INTO',
+  'UPDATE',
+  'TABLE',
 ])
 
-const COMMANDS_TAKING_TABLE_ARG = new Set([
-  'schema', 'insert', 'update', 'delete', 'check',
-])
+const COMMANDS_TAKING_TABLE_ARG = new Set(['schema', 'insert', 'update', 'delete', 'check'])
 
 export function createCompleter(ctx: ReplContext): CompleterFn {
   const allTableNames = ctx.tableNames
@@ -37,7 +48,7 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 
     // If first word matches a SQL keyword start, complete SQL keywords
     const firstWordUpper = getFirstWord(trimmed).toUpperCase()
-    const sqlKeywordSet = new Set(SQL_KEYWORDS_FOR_DETECTION.map(k => k.toUpperCase()))
+    const sqlKeywordSet = new Set(SQL_KEYWORDS_FOR_DETECTION.map((k) => k.toUpperCase()))
 
     if (sqlKeywordSet.has(firstWordUpper) || firstWordUpper === '') {
       // Inside SQL context — always include SQL keywords, plus context-aware table/column completions
@@ -53,7 +64,7 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
             }
             return matchWithSuffix(uniqueColumns, lastWord)
           })()
-        : [[] as string[], lastWord] as [string[], string]
+        : ([[] as string[], lastWord] as [string[], string])
 
       const merged = [...new Set([...sqlHits[0], ...tableHits[0], ...colHits[0]])]
       return [merged, lastWord]
@@ -80,9 +91,9 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 }
 
 function completeMetaCommands(line: string): [string[], string] {
-  const hits = META_COMMANDS
-    .filter(m => m.startsWith(line.split(/\s+/)[0].toLowerCase()))
-    .map(m => m + ' ')
+  const hits = META_COMMANDS.filter((m) => m.startsWith(line.split(/\s+/)[0].toLowerCase())).map(
+    (m) => m + ' '
+  )
   return [hits, line.split(/\s+/)[0]]
 }
 
@@ -106,24 +117,25 @@ function getPreviousWord(line: string): string {
 
 function isColumnPosition(upperLine: string): boolean {
   const columnKeywords = ['WHERE ', 'AND ', 'OR ', 'ON ', 'SET ', 'SELECT ']
-  return columnKeywords.some(k => upperLine.includes(k))
+  return columnKeywords.some((k) => upperLine.includes(k))
 }
 
 function extractTableFromLine(line: string, tableNames: readonly string[]): string | undefined {
   const upper = line.toUpperCase()
   const fromIdx = upper.lastIndexOf('FROM ')
   if (fromIdx >= 0) {
-    const afterFrom = line.slice(fromIdx + 5).trim().split(/\s+/)[0]
+    const afterFrom = line
+      .slice(fromIdx + 5)
+      .trim()
+      .split(/\s+/)[0]
     const candidate = afterFrom.replace(/[;,]/g, '').toLowerCase()
-    return tableNames.find(t => t.toLowerCase() === candidate)
+    return tableNames.find((t) => t.toLowerCase() === candidate)
   }
   return undefined
 }
 
 function matchWithSuffix(candidates: readonly string[], prefix: string): [string[], string] {
   const lower = prefix.toLowerCase()
-  const hits = candidates
-    .filter(c => c.toLowerCase().startsWith(lower))
-    .map(c => c + ' ')
+  const hits = candidates.filter((c) => c.toLowerCase().startsWith(lower)).map((c) => c + ' ')
   return [hits, prefix]
 }

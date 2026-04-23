@@ -20,11 +20,11 @@ describe('SchemaDiffEngine', () => {
         port: 5432,
         user: 'test',
         password: 'test',
-        database: 'test'
+        database: 'test',
       },
       permission: 'admin',
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
   })
 
@@ -42,7 +42,7 @@ describe('SchemaDiffEngine', () => {
       execute: async () => [],
       listTables: listTablesImpl,
       getTableSchema: getTableSchemaImpl || (async () => createMockTableSchema('')),
-      testConnection: async () => true
+      testConnection: async () => true,
     }
   }
 
@@ -51,7 +51,7 @@ describe('SchemaDiffEngine', () => {
       // 設定配置包含 2 個表格
       config.schema = {
         users: createMockTableSchema('users'),
-        posts: createMockTableSchema('posts')
+        posts: createMockTableSchema('posts'),
       }
 
       // 設定現時資料庫包含 4 個表格（新增 2 個）
@@ -59,7 +59,7 @@ describe('SchemaDiffEngine', () => {
         createMockTableSchema('users'),
         createMockTableSchema('posts'),
         createMockTableSchema('comments'),
-        createMockTableSchema('tags')
+        createMockTableSchema('tags'),
       ]
 
       const adapter = createMockAdapter(async () => currentTables)
@@ -76,14 +76,11 @@ describe('SchemaDiffEngine', () => {
       config.schema = {
         users: createMockTableSchema('users'),
         posts: createMockTableSchema('posts'),
-        legacy_temp: createMockTableSchema('legacy_temp')
+        legacy_temp: createMockTableSchema('legacy_temp'),
       }
 
       // 設定現時資料庫只有 2 個表格（移除 1 個）
-      const currentTables = [
-        createMockTableSchema('users'),
-        createMockTableSchema('posts')
-      ]
+      const currentTables = [createMockTableSchema('users'), createMockTableSchema('posts')]
 
       const adapter = createMockAdapter(async () => currentTables)
       const engine = new SchemaDiffEngine(adapter, config)
@@ -98,19 +95,19 @@ describe('SchemaDiffEngine', () => {
       config.schema = {
         users: createMockTableSchema('users'),
         posts: createMockTableSchema('posts'),
-        comments: createMockTableSchema('comments')
+        comments: createMockTableSchema('comments'),
       }
 
       // 設定現時資料庫也是相同的 3 個表格
       const currentTables = [
         createMockTableSchema('users'),
         createMockTableSchema('posts'),
-        createMockTableSchema('comments')
+        createMockTableSchema('comments'),
       ]
 
       const adapter = createMockAdapter(
         async () => currentTables,
-        async (name: string) => currentTables.find(t => t.name === name)!
+        async (name: string) => currentTables.find((t) => t.name === name)!
       )
 
       const engine = new SchemaDiffEngine(adapter, config)
@@ -127,11 +124,11 @@ describe('SchemaDiffEngine', () => {
       // 舊配置：users 表格有 2 個欄位
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'varchar(100)', false)
+        createMockColumnSchema('name', 'varchar(100)', false),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 新資料庫：users 表格有 4 個欄位（新增 2 個）
@@ -139,7 +136,7 @@ describe('SchemaDiffEngine', () => {
         createMockColumnSchema('id', 'integer', false, true),
         createMockColumnSchema('name', 'varchar(100)', false),
         createMockColumnSchema('created_at', 'timestamp', true),
-        createMockColumnSchema('email', 'varchar(255)', false)
+        createMockColumnSchema('email', 'varchar(255)', false),
       ])
 
       const adapter = createMockAdapter(
@@ -160,17 +157,17 @@ describe('SchemaDiffEngine', () => {
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
         createMockColumnSchema('name', 'varchar(100)', false),
-        createMockColumnSchema('deprecated_field', 'varchar(50)', true)
+        createMockColumnSchema('deprecated_field', 'varchar(50)', true),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 新資料庫：users 表格只有 2 個欄位（移除 1 個）
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'varchar(100)', false)
+        createMockColumnSchema('name', 'varchar(100)', false),
       ])
 
       const adapter = createMockAdapter(
@@ -189,17 +186,17 @@ describe('SchemaDiffEngine', () => {
       // 舊配置：users 表格的 email 欄位是 nullable，預設值不同
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('email', 'varchar(100)', true, false, 'NULL')
+        createMockColumnSchema('email', 'varchar(100)', true, false, 'NULL'),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 新資料庫：users 表格的 email 欄位類型和 nullable 已變更
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('email', 'varchar(255)', false, false, '')
+        createMockColumnSchema('email', 'varchar(255)', false, false, ''),
       ])
 
       const adapter = createMockAdapter(
@@ -222,17 +219,17 @@ describe('SchemaDiffEngine', () => {
     test('VARCHAR vs varchar treated as no change', async () => {
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'VARCHAR(255)', false)
+        createMockColumnSchema('name', 'VARCHAR(255)', false),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 類型改為小寫但內容相同
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'varchar(255)', false)
+        createMockColumnSchema('name', 'varchar(255)', false),
       ])
 
       const adapter = createMockAdapter(
@@ -250,17 +247,17 @@ describe('SchemaDiffEngine', () => {
     test('varchar(100) vs varchar(255) treated as modification', async () => {
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'varchar(100)', false)
+        createMockColumnSchema('name', 'varchar(100)', false),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 類型長度改變
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('name', 'varchar(255)', false)
+        createMockColumnSchema('name', 'varchar(255)', false),
       ])
 
       const adapter = createMockAdapter(
@@ -280,17 +277,17 @@ describe('SchemaDiffEngine', () => {
     test('NUMERIC(10,2) case-insensitive comparison', async () => {
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('price', 'NUMERIC(10,2)', false)
+        createMockColumnSchema('price', 'NUMERIC(10,2)', false),
       ])
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 類型改為小寫但內容相同
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('price', 'numeric(10,2)', false)
+        createMockColumnSchema('price', 'numeric(10,2)', false),
       ])
 
       const adapter = createMockAdapter(
@@ -311,34 +308,34 @@ describe('SchemaDiffEngine', () => {
       // 舊配置：users 表格有外鍵
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('role_id', 'integer', false)
+        createMockColumnSchema('role_id', 'integer', false),
       ])
       oldUsersSchema.foreignKeys = [
         {
           name: 'fk_role',
           columns: ['role_id'],
           refTable: 'roles',
-          refColumns: ['id']
-        }
+          refColumns: ['id'],
+        },
       ]
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 新資料庫：users 表格有新增欄位但外鍵保留
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
         createMockColumnSchema('role_id', 'integer', false),
-        createMockColumnSchema('created_at', 'timestamp', true)
+        createMockColumnSchema('created_at', 'timestamp', true),
       ])
       newUsersSchema.foreignKeys = [
         {
           name: 'fk_role',
           columns: ['role_id'],
           refTable: 'roles',
-          refColumns: ['id']
-        }
+          refColumns: ['id'],
+        },
       ]
 
       const adapter = createMockAdapter(
@@ -359,33 +356,33 @@ describe('SchemaDiffEngine', () => {
       // 舊配置：users 表格的 role_id 是 integer
       const oldUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('role_id', 'integer', false)
+        createMockColumnSchema('role_id', 'integer', false),
       ])
       oldUsersSchema.foreignKeys = [
         {
           name: 'fk_role',
           columns: ['role_id'],
           refTable: 'roles',
-          refColumns: ['id']
-        }
+          refColumns: ['id'],
+        },
       ]
 
       config.schema = {
-        users: oldUsersSchema
+        users: oldUsersSchema,
       }
 
       // 新資料庫：role_id 類型改為 bigint（可能影響外鍵）
       const newUsersSchema = createMockTableSchema('users', [
         createMockColumnSchema('id', 'integer', false, true),
-        createMockColumnSchema('role_id', 'bigint', false)
+        createMockColumnSchema('role_id', 'bigint', false),
       ])
       newUsersSchema.foreignKeys = [
         {
           name: 'fk_role',
           columns: ['role_id'],
           refTable: 'roles',
-          refColumns: ['id']
-        }
+          refColumns: ['id'],
+        },
       ]
 
       const adapter = createMockAdapter(
@@ -409,9 +406,9 @@ describe('SchemaDiffEngine', () => {
       config.schema = {
         users: createMockTableSchema('users', [
           createMockColumnSchema('id', 'integer', false, true),
-          createMockColumnSchema('name', 'varchar(100)', false)
+          createMockColumnSchema('name', 'varchar(100)', false),
         ]),
-        posts: createMockTableSchema('posts')
+        posts: createMockTableSchema('posts'),
       }
 
       // 新資料庫：新增 3 個表格，移除 1 個，修改 1 個（users 表格新增 4 個欄位）
@@ -422,16 +419,16 @@ describe('SchemaDiffEngine', () => {
           createMockColumnSchema('email', 'varchar(255)', false),
           createMockColumnSchema('phone', 'varchar(20)', true),
           createMockColumnSchema('created_at', 'timestamp', true),
-          createMockColumnSchema('updated_at', 'timestamp', true)
+          createMockColumnSchema('updated_at', 'timestamp', true),
         ]),
         createMockTableSchema('comments'),
         createMockTableSchema('tags'),
-        createMockTableSchema('categories')
+        createMockTableSchema('categories'),
       ]
 
       const adapter = createMockAdapter(
         async () => currentTables,
-        async (name: string) => currentTables.find(t => t.name === name)!
+        async (name: string) => currentTables.find((t) => t.name === name)!
       )
 
       const engine = new SchemaDiffEngine(adapter, config)
@@ -445,20 +442,20 @@ describe('SchemaDiffEngine', () => {
       config.schema = {
         users: createMockTableSchema('users', [
           createMockColumnSchema('id', 'integer', false, true),
-          createMockColumnSchema('name', 'varchar(100)', false)
-        ])
+          createMockColumnSchema('name', 'varchar(100)', false),
+        ]),
       }
 
       const currentTables = [
         createMockTableSchema('users', [
           createMockColumnSchema('id', 'integer', false, true),
-          createMockColumnSchema('name', 'varchar(100)', false)
-        ])
+          createMockColumnSchema('name', 'varchar(100)', false),
+        ]),
       ]
 
       const adapter = createMockAdapter(
         async () => currentTables,
-        async (name: string) => currentTables.find(t => t.name === name)!
+        async (name: string) => currentTables.find((t) => t.name === name)!
       )
 
       const engine = new SchemaDiffEngine(adapter, config)
@@ -476,7 +473,7 @@ describe('SchemaDiffEngine', () => {
       const currentTables = [
         createMockTableSchema('users'),
         createMockTableSchema('posts'),
-        createMockTableSchema('comments')
+        createMockTableSchema('comments'),
       ]
 
       const adapter = createMockAdapter(async () => currentTables)
@@ -498,7 +495,7 @@ describe('SchemaDiffEngine', () => {
       config.schema = {
         users: createMockTableSchema('users'),
         posts: createMockTableSchema('posts'),
-        comments: createMockTableSchema('comments')
+        comments: createMockTableSchema('comments'),
       }
 
       // 空的目前架構
@@ -521,31 +518,31 @@ describe('SchemaDiffEngine', () => {
         users: createMockTableSchema('users', [
           createMockColumnSchema('id', 'integer', false, true),
           createMockColumnSchema('name', 'varchar(100)', false),
-          createMockColumnSchema('email', 'varchar(255)', false)
+          createMockColumnSchema('email', 'varchar(255)', false),
         ]),
         posts: createMockTableSchema('posts', [
           createMockColumnSchema('id', 'integer', false, true),
           createMockColumnSchema('title', 'varchar(255)', false),
-          createMockColumnSchema('user_id', 'integer', false)
-        ])
+          createMockColumnSchema('user_id', 'integer', false),
+        ]),
       }
 
       const currentTables = [
         createMockTableSchema('users', [
           createMockColumnSchema('id', 'integer', false, true),
           createMockColumnSchema('name', 'varchar(100)', false),
-          createMockColumnSchema('email', 'varchar(255)', false)
+          createMockColumnSchema('email', 'varchar(255)', false),
         ]),
         createMockTableSchema('posts', [
           createMockColumnSchema('id', 'integer', false, true),
           createMockColumnSchema('title', 'varchar(255)', false),
-          createMockColumnSchema('user_id', 'integer', false)
-        ])
+          createMockColumnSchema('user_id', 'integer', false),
+        ]),
       ]
 
       const adapter = createMockAdapter(
         async () => currentTables,
-        async (name: string) => currentTables.find(t => t.name === name)!
+        async (name: string) => currentTables.find((t) => t.name === name)!
       )
 
       const engine = new SchemaDiffEngine(adapter, config)
@@ -562,17 +559,14 @@ describe('SchemaDiffEngine', () => {
 /**
  * 輔助函數：建立模擬表格架構
  */
-function createMockTableSchema(
-  name: string,
-  columns: ColumnSchema[] = []
-): TableSchema {
+function createMockTableSchema(name: string, columns: ColumnSchema[] = []): TableSchema {
   return {
     name,
     columns: columns.length > 0 ? columns : [createMockColumnSchema('id', 'integer', false, true)],
     rowCount: 0,
     engine: 'InnoDB',
     primaryKey: ['id'],
-    foreignKeys: []
+    foreignKeys: [],
   }
 }
 
@@ -591,6 +585,6 @@ function createMockColumnSchema(
     type,
     nullable,
     primaryKey,
-    default: defaultValue
+    default: defaultValue,
   }
 }

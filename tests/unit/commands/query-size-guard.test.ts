@@ -9,12 +9,16 @@ describe('shouldBlockQuery', () => {
   })
 
   it('allows SELECT * on huge table with WHERE clause', () => {
-    const result = shouldBlockQuery('SELECT * FROM logs WHERE id = 1', { estimatedRowCount: 2_000_000 })
+    const result = shouldBlockQuery('SELECT * FROM logs WHERE id = 1', {
+      estimatedRowCount: 2_000_000,
+    })
     expect(result.blocked).toBe(false)
   })
 
   it('allows SELECT * on huge table with LIMIT', () => {
-    const result = shouldBlockQuery('SELECT * FROM logs LIMIT 100', { estimatedRowCount: 2_000_000 })
+    const result = shouldBlockQuery('SELECT * FROM logs LIMIT 100', {
+      estimatedRowCount: 2_000_000,
+    })
     expect(result.blocked).toBe(false)
   })
 

@@ -116,8 +116,6 @@ function handleHistory(history: readonly string[]): MetaCommandResult {
     return { action: 'continue', output: pc.dim('No history yet.') }
   }
 
-  const lines = history.map((entry, i) =>
-    `  ${pc.dim(String(i + 1).padStart(4))}  ${entry}`
-  )
+  const lines = history.map((entry, i) => `  ${pc.dim(String(i + 1).padStart(4))}  ${entry}`)
   return { action: 'continue', output: lines.join('\n') }
 }

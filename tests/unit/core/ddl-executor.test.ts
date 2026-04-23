@@ -12,11 +12,15 @@ function createMockAdapter(): DatabaseAdapter {
     disconnect: mock(() => Promise.resolve()),
     execute: mock(() => Promise.resolve([])),
     listTables: mock(() => Promise.resolve([])),
-    getTableSchema: mock(() => Promise.resolve({
-      name: 'test', columns: [], primaryKey: []
-    } as TableSchema)),
+    getTableSchema: mock(() =>
+      Promise.resolve({
+        name: 'test',
+        columns: [],
+        primaryKey: [],
+      } as TableSchema)
+    ),
     testConnection: mock(() => Promise.resolve(true)),
-    getServerVersion: mock(() => Promise.resolve('15.0'))
+    getServerVersion: mock(() => Promise.resolve('15.0')),
   }
 }
 
@@ -25,7 +29,7 @@ function createMockBlacklist(blacklistedTables: string[] = []) {
     isTableBlacklisted: (t: string) => blacklistedTables.includes(t),
     isColumnBlacklisted: () => false,
     getBlacklistedColumns: () => [],
-    getBlacklistedTables: () => blacklistedTables
+    getBlacklistedTables: () => blacklistedTables,
   }
 }
 
@@ -36,7 +40,14 @@ function createMockSchemaCache() {
     getTableSchema: mock(() => Promise.resolve(null)),
     initialize: mock(() => Promise.resolve()),
     findFieldsByName: mock(() => Promise.resolve([])),
-    getStats: mock(() => ({ hotTables: 0, cachedTables: 0, cacheSize: 0, cacheHitRate: '0%', maxItems: 100, maxSize: 0 }))
+    getStats: mock(() => ({
+      hotTables: 0,
+      cachedTables: 0,
+      cacheSize: 0,
+      cacheHitRate: '0%',
+      maxItems: 100,
+      maxSize: 0,
+    })),
   }
 }
 
@@ -45,8 +56,8 @@ const createTableOp: DDLOperation = {
   table: 'posts',
   columns: [
     { name: 'id', type: 'serial', primaryKey: true, nullable: false },
-    { name: 'title', type: 'varchar(200)', nullable: false }
-  ]
+    { name: 'title', type: 'varchar(200)', nullable: false },
+  ],
 }
 
 const dropTableOp: DDLOperation = { kind: 'dropTable', table: 'posts' }
@@ -56,7 +67,9 @@ const dropTableOp: DDLOperation = { kind: 'dropTable', table: 'posts' }
 describe('DDLExecutor permission checks', () => {
   test('rejects query-only permission', async () => {
     const executor = new DDLExecutor(
-      createMockAdapter(), new PostgreSQLDDLGenerator(), 'query-only'
+      createMockAdapter(),
+      new PostgreSQLDDLGenerator(),
+      'query-only'
     )
     const result = await executor.execute(createTableOp)
     expect(result.status).toBe('error')
@@ -66,7 +79,9 @@ describe('DDLExecutor permission checks', () => {
 
   test('rejects read-write permission', async () => {
     const executor = new DDLExecutor(
-      createMockAdapter(), new PostgreSQLDDLGenerator(), 'read-write'
+      createMockAdapter(),
+      new PostgreSQLDDLGenerator(),
+      'read-write'
     )
     const result = await executor.execute(createTableOp)
     expect(result.status).toBe('error')
@@ -75,16 +90,16 @@ describe('DDLExecutor permission checks', () => {
 
   test('rejects data-admin permission', async () => {
     const executor = new DDLExecutor(
-      createMockAdapter(), new PostgreSQLDDLGenerator(), 'data-admin'
+      createMockAdapter(),
+      new PostgreSQLDDLGenerator(),
+      'data-admin'
     )
     const result = await executor.execute(createTableOp)
     expect(result.status).toBe('error')
   })
 
   test('allows admin permission', async () => {
-    const executor = new DDLExecutor(
-      createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin'
-    )
+    const executor = new DDLExecutor(createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin')
     const result = await executor.execute(createTableOp)
     expect(result.status).toBe('success')
   })
@@ -153,9 +168,7 @@ describe('DDLExecutor dry-run', () => {
   })
 
   test('dry-run returns generated SQL', async () => {
-    const executor = new DDLExecutor(
-      createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin'
-    )
+    const executor = new DDLExecutor(createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin')
     const result = await executor.execute(createTableOp)
     expect(result.sql).toContain('"posts"')
     expect(result.sql).toContain('"id" SERIAL')
@@ -214,11 +227,7 @@ describe('DDLExecutor schema refresh', () => {
   })
 
   test('no cache does not error', async () => {
-    const executor = new DDLExecutor(
-      createMockAdapter(),
-      new PostgreSQLDDLGenerator(),
-      'admin'
-    )
+    const executor = new DDLExecutor(createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin')
     const result = await executor.execute(createTableOp, { execute: true })
     expect(result.status).toBe('success')
   })
@@ -227,14 +236,13 @@ describe('DDLExecutor schema refresh', () => {
 // ── SQL generation delegation ────────────────────────────────────────────
 
 describe('DDLExecutor SQL generation', () => {
-  const executor = new DDLExecutor(
-    createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin'
-  )
+  const executor = new DDLExecutor(createMockAdapter(), new PostgreSQLDDLGenerator(), 'admin')
 
   test('addColumn', async () => {
     const op: DDLOperation = {
-      kind: 'addColumn', table: 'users',
-      column: { name: 'bio', type: 'text', nullable: true }
+      kind: 'addColumn',
+      table: 'users',
+      column: { name: 'bio', type: 'text', nullable: true },
     }
     const result = await executor.execute(op)
     expect(result.sql).toContain('ADD COLUMN "bio" TEXT')
@@ -249,7 +257,7 @@ describe('DDLExecutor SQL generation', () => {
   test('alterColumn', async () => {
     const op: DDLOperation = {
       kind: 'alterColumn',
-      options: { table: 'users', column: 'name', type: 'varchar(200)' }
+      options: { table: 'users', column: 'name', type: 'varchar(200)' },
     }
     const result = await executor.execute(op)
     expect(result.sql).toContain('TYPE VARCHAR(200)')
@@ -258,7 +266,7 @@ describe('DDLExecutor SQL generation', () => {
   test('addIndex', async () => {
     const op: DDLOperation = {
       kind: 'addIndex',
-      index: { table: 'users', columns: ['email'], unique: true }
+      index: { table: 'users', columns: ['email'], unique: true },
     }
     const result = await executor.execute(op)
     expect(result.sql).toContain('CREATE UNIQUE INDEX')
@@ -268,10 +276,12 @@ describe('DDLExecutor SQL generation', () => {
     const op: DDLOperation = {
       kind: 'addConstraint',
       constraint: {
-        table: 'orders', type: 'foreign_key',
-        column: 'user_id', references: { table: 'users', column: 'id' },
-        onDelete: 'cascade'
-      }
+        table: 'orders',
+        type: 'foreign_key',
+        column: 'user_id',
+        references: { table: 'users', column: 'id' },
+        onDelete: 'cascade',
+      },
     }
     const result = await executor.execute(op)
     expect(result.sql).toContain('FOREIGN KEY')
@@ -281,7 +291,7 @@ describe('DDLExecutor SQL generation', () => {
   test('addEnum', async () => {
     const op: DDLOperation = {
       kind: 'addEnum',
-      definition: { name: 'status', values: ['active', 'inactive'] }
+      definition: { name: 'status', values: ['active', 'inactive'] },
     }
     const result = await executor.execute(op)
     expect(result.sql).toContain('CREATE TYPE "status" AS ENUM')

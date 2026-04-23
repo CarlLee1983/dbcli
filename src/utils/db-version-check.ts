@@ -84,9 +84,7 @@ export function checkDbVersion(
 ): VersionCheckResult {
   const isMariaDB = isMariaDBVersion(rawVersion)
   const system = isMariaDB ? 'mariadb' : declaredSystem
-  const serverVersion = isMariaDB
-    ? extractMariaDBVersion(rawVersion)
-    : rawVersion
+  const serverVersion = isMariaDB ? extractMariaDBVersion(rawVersion) : rawVersion
   const minVersion = MIN_SUPPORTED_VERSIONS[system]
   const supported = compareVersions(serverVersion, minVersion) >= 0
 

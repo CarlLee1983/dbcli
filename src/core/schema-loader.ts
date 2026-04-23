@@ -68,10 +68,7 @@ export class SchemaLayeredLoader {
       await this.ensureDirectories()
 
       // Load index
-      this.index = await SchemaIndexBuilder.loadIndex(
-        this.dbcliPath,
-        this.connectionName
-      )
+      this.index = await SchemaIndexBuilder.loadIndex(this.dbcliPath, this.connectionName)
 
       // Initialize cache manager with options
       this.cache = new SchemaCacheManager(this.dbcliPath, {
@@ -87,9 +84,7 @@ export class SchemaLayeredLoader {
 
       // Log performance for monitoring
       if (this.loadTime > 50) {
-        console.warn(
-          `Schema initialization took ${this.loadTime.toFixed(2)}ms (target: < 100ms)`
-        )
+        console.warn(`Schema initialization took ${this.loadTime.toFixed(2)}ms (target: < 100ms)`)
       }
 
       return {
@@ -127,10 +122,7 @@ export class SchemaLayeredLoader {
    * @param cache SchemaCacheManager instance
    * @returns TableSchema or null if not found
    */
-  async loadColdTable(
-    tableName: string,
-    cache: SchemaCacheManager
-  ): Promise<TableSchema | null> {
+  async loadColdTable(tableName: string, cache: SchemaCacheManager): Promise<TableSchema | null> {
     try {
       return await cache.getTableSchema(tableName)
     } catch (error) {

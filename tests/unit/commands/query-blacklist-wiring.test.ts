@@ -16,7 +16,14 @@ import { configModule } from '@/core/config'
 // Track what QueryExecutor was constructed with
 let capturedBlacklistValidator: any = undefined
 let capturedConfig: any = undefined
-let mockExecuteResult: any = { rows: [], rowCount: 0, columnNames: [], columnTypes: [], executionTimeMs: 1, metadata: { statement: 'SELECT', affectedRows: 0 } }
+let mockExecuteResult: any = {
+  rows: [],
+  rowCount: 0,
+  columnNames: [],
+  columnTypes: [],
+  executionTimeMs: 1,
+  metadata: { statement: 'SELECT', affectedRows: 0 },
+}
 let mockExecuteError: Error | null = null
 
 // Spy references to be restored
@@ -29,7 +36,13 @@ const mockAdapter = {
   connect: mock(async () => {}),
   disconnect: mock(async () => {}),
   execute: mock(async () => []),
-  getTableSchema: mock(async () => ({ name: 'test', columns: [], rowCount: 0, primaryKey: null, foreignKeys: [] })),
+  getTableSchema: mock(async () => ({
+    name: 'test',
+    columns: [],
+    rowCount: 0,
+    primaryKey: null,
+    foreignKeys: [],
+  })),
   getTables: mock(async () => []),
   listTables: mock(async () => []),
   ping: mock(async () => {}),
@@ -61,7 +74,9 @@ describe('queryCommand blacklist wiring', () => {
     configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => capturedConfig)
 
     // spyOn QueryExecutor.prototype.execute to capture blacklistValidator
-    executeSpy = spyOn(QueryExecutor.prototype, 'execute').mockImplementation(async function(this: any) {
+    executeSpy = spyOn(QueryExecutor.prototype, 'execute').mockImplementation(async function (
+      this: any
+    ) {
       capturedBlacklistValidator = this.blacklistValidator
       if (mockExecuteError) {
         throw mockExecuteError
@@ -79,13 +94,24 @@ describe('queryCommand blacklist wiring', () => {
 
   test('Test 1: queryCommand with blacklisted table throws/exits with blacklist error message', async () => {
     capturedConfig = {
-      connection: { system: 'postgresql', host: 'localhost', port: 5432, database: 'test', user: 'user', password: 'pass' },
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        database: 'test',
+        user: 'user',
+        password: 'pass',
+      },
       permission: 'admin',
       blacklist: { tables: ['sensitive_logs'], columns: {} },
     }
 
     // Simulate BlacklistError being thrown by QueryExecutor when it checks the blacklist
-    mockExecuteError = new BlacklistError('Table "sensitive_logs" is blacklisted for SELECT operations', 'sensitive_logs', 'SELECT')
+    mockExecuteError = new BlacklistError(
+      'Table "sensitive_logs" is blacklisted for SELECT operations',
+      'sensitive_logs',
+      'SELECT'
+    )
 
     const { queryCommand } = await import('@/commands/query')
 
@@ -101,7 +127,14 @@ describe('queryCommand blacklist wiring', () => {
 
   test('Test 2: queryCommand with empty blacklist config allows operation', async () => {
     capturedConfig = {
-      connection: { system: 'postgresql', host: 'localhost', port: 5432, database: 'test', user: 'user', password: 'pass' },
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        database: 'test',
+        user: 'user',
+        password: 'pass',
+      },
       permission: 'admin',
       blacklist: { tables: [], columns: {} },
     }
@@ -128,7 +161,14 @@ describe('queryCommand blacklist wiring', () => {
 
   test('Test 3: queryCommand with undefined blacklist config does NOT throw', async () => {
     capturedConfig = {
-      connection: { system: 'postgresql', host: 'localhost', port: 5432, database: 'test', user: 'user', password: 'pass' },
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        database: 'test',
+        user: 'user',
+        password: 'pass',
+      },
       permission: 'admin',
       // No blacklist key
     }
@@ -153,7 +193,14 @@ describe('queryCommand blacklist wiring', () => {
 
   test('Test 4: queryCommand constructs validator and passes to QueryExecutor', async () => {
     capturedConfig = {
-      connection: { system: 'postgresql', host: 'localhost', port: 5432, database: 'test', user: 'user', password: 'pass' },
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        database: 'test',
+        user: 'user',
+        password: 'pass',
+      },
       permission: 'admin',
       blacklist: { tables: [], columns: { users: ['password'] } },
     }

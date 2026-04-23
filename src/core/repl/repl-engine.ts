@@ -29,7 +29,7 @@ export class ReplEngine {
     private readonly adapter: DatabaseAdapter,
     private readonly context: ReplContext,
     historyPath: string,
-    config: DbcliConfig | null = null,
+    config: DbcliConfig | null = null
   ) {
     this.state = { format: 'table', timing: false, connected: true }
     this.buffer = new MultilineBuffer()
@@ -127,14 +127,11 @@ export class ReplEngine {
       const argv = [parsed.command, '--config', this.context.configPath, ...parsed.args]
 
       // Spawn a subprocess to run the dbcli command
-      const proc = Bun.spawn(
-        ['bun', 'run', cliPath, ...argv],
-        {
-          stdout: 'pipe',
-          stderr: 'pipe',
-          env: { ...process.env },
-        }
-      )
+      const proc = Bun.spawn(['bun', 'run', cliPath, ...argv], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: { ...process.env },
+      })
 
       const [stdoutBuf, stderrBuf] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -170,10 +167,12 @@ export class ReplEngine {
     if (!permResult.allowed) {
       return {
         action: 'continue',
-        output: pc.red(t_vars('shell.error_permission', {
-          required: permResult.classification.type === 'UNKNOWN' ? 'admin' : 'read-write',
-          current: this.context.permission,
-        })),
+        output: pc.red(
+          t_vars('shell.error_permission', {
+            required: permResult.classification.type === 'UNKNOWN' ? 'admin' : 'read-write',
+            current: this.context.permission,
+          })
+        ),
       }
     }
 
@@ -183,7 +182,7 @@ export class ReplEngine {
       if (tableName) {
         const blacklistedTables: string[] = this.config.blacklist.tables ?? []
         const isBlacklisted = blacklistedTables.some(
-          t => t.toLowerCase() === tableName.toLowerCase()
+          (t) => t.toLowerCase() === tableName.toLowerCase()
         )
         if (isBlacklisted) {
           return {
@@ -234,7 +233,9 @@ export class ReplEngine {
         } catch (reconnectError: any) {
           return {
             action: 'continue',
-            output: pc.red(t_vars('shell.error_reconnect_failed', { message: reconnectError.message })),
+            output: pc.red(
+              t_vars('shell.error_reconnect_failed', { message: reconnectError.message })
+            ),
           }
         }
       }

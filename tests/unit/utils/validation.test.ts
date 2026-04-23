@@ -8,7 +8,7 @@ import {
   ConnectionConfigSchema,
   PermissionSchema,
   NamedConnectionSchema,
-  DbcliConfigV2Schema
+  DbcliConfigV2Schema,
 } from '@/utils/validation'
 import { ZodError } from 'zod'
 
@@ -21,7 +21,7 @@ describe('validation', () => {
         port: 5432,
         user: 'dbuser',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       const result = ConnectionConfigSchema.parse(valid)
@@ -36,7 +36,7 @@ describe('validation', () => {
         port: 5432,
         user: 'dbuser',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       expect(() => ConnectionConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -49,7 +49,7 @@ describe('validation', () => {
         port: 0,
         user: 'dbuser',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       expect(() => ConnectionConfigSchema.parse(tooLow)).toThrow(ZodError)
@@ -60,7 +60,7 @@ describe('validation', () => {
         port: 99999,
         user: 'dbuser',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       expect(() => ConnectionConfigSchema.parse(tooHigh)).toThrow(ZodError)
@@ -73,7 +73,7 @@ describe('validation', () => {
         port: 5432,
         user: 'dbuser',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       expect(() => ConnectionConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -86,7 +86,7 @@ describe('validation', () => {
         port: 5432,
         user: '',
         password: 'dbpass',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       expect(() => ConnectionConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -99,7 +99,7 @@ describe('validation', () => {
         port: 5432,
         user: 'dbuser',
         password: 'dbpass',
-        database: ''
+        database: '',
       }
 
       expect(() => ConnectionConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -112,7 +112,7 @@ describe('validation', () => {
         port: 5432,
         user: 'dbuser',
         password: '',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       const result = ConnectionConfigSchema.parse(valid)
@@ -125,7 +125,7 @@ describe('validation', () => {
         host: 'localhost',
         port: 5432,
         user: 'dbuser',
-        database: 'mydb'
+        database: 'mydb',
       }
 
       const result = ConnectionConfigSchema.parse(withoutPassword)
@@ -160,13 +160,13 @@ describe('validation', () => {
           port: 5432,
           user: 'dbuser',
           password: 'dbpass',
-          database: 'mydb'
+          database: 'mydb',
         },
         permission: 'query-only',
         schema: {},
         metadata: {
-          version: '1.0'
-        }
+          version: '1.0',
+        },
       }
 
       const result = DbcliConfigSchema.parse(valid)
@@ -176,7 +176,7 @@ describe('validation', () => {
 
     test('應該要求連接對象', () => {
       const invalid = {
-        permission: 'query-only'
+        permission: 'query-only',
       }
 
       expect(() => DbcliConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -190,8 +190,8 @@ describe('validation', () => {
           port: 3306,
           user: 'root',
           password: '',
-          database: 'db'
-        }
+          database: 'db',
+        },
       }
 
       const result = DbcliConfigSchema.parse(minimal)
@@ -207,8 +207,8 @@ describe('validation', () => {
           port: 5432,
           user: 'user',
           password: '',
-          database: 'db'
-        }
+          database: 'db',
+        },
       }
 
       const result = DbcliConfigSchema.parse(config)
@@ -219,9 +219,9 @@ describe('validation', () => {
       const invalid = {
         connection: {
           system: 'postgresql',
-          host: 'localhost'
+          host: 'localhost',
           // 缺少 port、user、password、database
-        }
+        },
       }
 
       expect(() => DbcliConfigSchema.parse(invalid)).toThrow(ZodError)
@@ -238,7 +238,7 @@ describe('validation', () => {
           user: 'dev',
           password: 'secret',
           database: 'myapp',
-          permission: 'read-write'
+          permission: 'read-write',
         })
         expect(result.system).toBe('postgresql')
         expect(result.permission).toBe('read-write')
@@ -254,7 +254,7 @@ describe('validation', () => {
           password: { $env: 'DB_PASSWORD' },
           database: { $env: 'DB_NAME' },
           permission: 'query-only',
-          envFile: '.env.staging'
+          envFile: '.env.staging',
         })
         expect(result.envFile).toBe('.env.staging')
       })
@@ -266,7 +266,7 @@ describe('validation', () => {
           port: 3306,
           user: 'root',
           password: '',
-          database: 'test'
+          database: 'test',
         })
         expect(result.permission).toBe('query-only')
       })
@@ -285,9 +285,9 @@ describe('validation', () => {
               user: 'dev',
               password: 'secret',
               database: 'myapp',
-              permission: 'read-write'
-            }
-          }
+              permission: 'read-write',
+            },
+          },
         })
         expect(result.version).toBe(2)
         expect(result.default).toBe('local')
@@ -295,36 +295,42 @@ describe('validation', () => {
       })
 
       test('should reject config without connections', () => {
-        expect(() => DbcliConfigV2Schema.parse({
-          version: 2,
-          default: 'local'
-        })).toThrow()
+        expect(() =>
+          DbcliConfigV2Schema.parse({
+            version: 2,
+            default: 'local',
+          })
+        ).toThrow()
       })
 
       test('should reject config with empty connections', () => {
-        expect(() => DbcliConfigV2Schema.parse({
-          version: 2,
-          default: 'local',
-          connections: {}
-        })).toThrow()
+        expect(() =>
+          DbcliConfigV2Schema.parse({
+            version: 2,
+            default: 'local',
+            connections: {},
+          })
+        ).toThrow()
       })
 
       test('should reject config where default does not exist in connections', () => {
-        expect(() => DbcliConfigV2Schema.parse({
-          version: 2,
-          default: 'nonexistent',
-          connections: {
-            local: {
-              system: 'postgresql',
-              host: 'localhost',
-              port: 5432,
-              user: 'dev',
-              password: 'secret',
-              database: 'myapp',
-              permission: 'read-write'
-            }
-          }
-        })).toThrow()
+        expect(() =>
+          DbcliConfigV2Schema.parse({
+            version: 2,
+            default: 'nonexistent',
+            connections: {
+              local: {
+                system: 'postgresql',
+                host: 'localhost',
+                port: 5432,
+                user: 'dev',
+                password: 'secret',
+                database: 'myapp',
+                permission: 'read-write',
+              },
+            },
+          })
+        ).toThrow()
       })
     })
   })

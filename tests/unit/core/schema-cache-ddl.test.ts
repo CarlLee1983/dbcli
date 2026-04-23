@@ -10,9 +10,9 @@ const mockSchema: TableSchema = {
   name: 'posts',
   columns: [
     { name: 'id', type: 'serial', nullable: false, primaryKey: true },
-    { name: 'title', type: 'varchar(200)', nullable: false }
+    { name: 'title', type: 'varchar(200)', nullable: false },
   ],
-  primaryKey: ['id']
+  primaryKey: ['id'],
 }
 
 describe('SchemaCacheManager.invalidateTable', () => {
@@ -55,10 +55,7 @@ describe('SchemaCacheManager.refreshTable', () => {
 
     const updated: TableSchema = {
       ...mockSchema,
-      columns: [
-        ...mockSchema.columns,
-        { name: 'body', type: 'text', nullable: true }
-      ]
+      columns: [...mockSchema.columns, { name: 'body', type: 'text', nullable: true }],
     }
     cache.refreshTable('posts', updated)
 

@@ -55,7 +55,7 @@ export class ConcurrentLockManager {
 
       // Wait with exponential backoff before retry
       const waitTime = Math.min(backoffMs, 500)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
       backoffMs = Math.min(backoffMs * 1.5, 500)
     }
   }
@@ -121,7 +121,7 @@ export class ConcurrentLockManager {
         pid: process.pid,
         operation: operationName,
         timestamp: Date.now(),
-        hostname: require('os').hostname()
+        hostname: require('os').hostname(),
       }
 
       // Try to write - this should be atomic enough for our purposes

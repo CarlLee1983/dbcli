@@ -9,7 +9,7 @@
 import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
 import { configModule } from '@/core/config'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DDLGeneratorFactory, parseColumnSpec } from '@/adapters/ddl'
 import { DDLExecutor } from '@/core/ddl-executor'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -19,7 +19,10 @@ import { resolveConfigPath } from '@/utils/config-path'
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
-export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions & { config?: string }): Promise<void> {
+export async function runDDL(
+  operation: DDLOperation,
+  opts: DDLExecutionOptions & { config?: string }
+): Promise<void> {
   const configPath = resolveConfigPath(undefined, opts)
   const config = await configModule.read(configPath)
   if (!config.connection) {
@@ -31,8 +34,8 @@ export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions 
     process.exit(1)
   }
 
-  const adapter = AdapterFactory.createAdapter(config.connection)
-  
+  const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+
   // Skip connection for dry-run if we don't need to refresh schema
   const isDryRun = !opts.execute
   if (!isDryRun) {
@@ -46,19 +49,25 @@ export async function runDDL(operation: DDLOperation, opts: DDLExecutionOptions 
 
     const result = await executor.execute(operation, {
       execute: opts.execute,
-      force: opts.force
+      force: opts.force,
     })
 
     // Output JSON result
-    console.log(JSON.stringify({
-      status: result.status,
-      operation: result.operation,
-      dryRun: result.dryRun,
-      sql: result.sql || undefined,
-      warnings: result.warnings.length > 0 ? result.warnings : undefined,
-      error: result.error || undefined,
-      timestamp: result.timestamp
-    }, null, 2))
+    console.log(
+      JSON.stringify(
+        {
+          status: result.status,
+          operation: result.operation,
+          dryRun: result.dryRun,
+          sql: result.sql || undefined,
+          warnings: result.warnings.length > 0 ? result.warnings : undefined,
+          error: result.error || undefined,
+          timestamp: result.timestamp,
+        },
+        null,
+        2
+      )
+    )
 
     if (result.status === 'error') {
       process.exit(1)
@@ -74,10 +83,16 @@ function handleError(error: unknown): void {
   if (error instanceof ConnectionError) {
     console.error(`Connection failed: ${error.message}`)
   } else {
-    console.error(JSON.stringify({
-      status: 'error',
-      error: (error as Error).message
-    }, null, 2))
+    console.error(
+      JSON.stringify(
+        {
+          status: 'error',
+          error: (error as Error).message,
+        },
+        null,
+        2
+      )
+    )
   }
   process.exit(1)
 }
@@ -92,15 +107,17 @@ function addExecOpts(cmd: Command): Command {
 
 // ── Command registration ─────────────────────────────────────────────────
 
-export const migrateCommand = new Command('migrate')
-  .description(t('migrate.description'))
+export const migrateCommand = new Command('migrate').description(t('migrate.description'))
 
 // create <table>
 addExecOpts(
   migrateCommand
     .command('create <table>')
     .description(t('migrate.create_description'))
-    .option('--column <spec...>', 'Column definitions (e.g., "id:serial:pk" "name:varchar(50):not-null")')
+    .option(
+      '--column <spec...>',
+      'Column definitions (e.g., "id:serial:pk" "name:varchar(50):not-null")'
+    )
 ).action(async (table: string, opts) => {
   try {
     const specs: string[] = opts.column || []
@@ -110,18 +127,20 @@ addExecOpts(
     }
     const columns = specs.map(parseColumnSpec)
     await runDDL({ kind: 'createTable', table, columns }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // drop <table>
 addExecOpts(
-  migrateCommand
-    .command('drop <table>')
-    .description(t('migrate.drop_description'))
+  migrateCommand.command('drop <table>').description(t('migrate.drop_description'))
 ).action(async (table: string, opts) => {
   try {
     await runDDL({ kind: 'dropTable', table }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // add-column <table> <column> <type>
@@ -134,16 +153,23 @@ addExecOpts(
     .option('--unique', 'Add UNIQUE constraint')
 ).action(async (table: string, column: string, type: string, opts) => {
   try {
-    await runDDL({
-      kind: 'addColumn', table,
-      column: {
-        name: column, type,
-        nullable: opts.nullable ?? true,
-        default: opts.default,
-        unique: opts.unique
-      }
-    }, opts)
-  } catch (e) { handleError(e) }
+    await runDDL(
+      {
+        kind: 'addColumn',
+        table,
+        column: {
+          name: column,
+          type,
+          nullable: opts.nullable ?? true,
+          default: opts.default,
+          unique: opts.unique,
+        },
+      },
+      opts
+    )
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // drop-column <table> <column>
@@ -154,7 +180,9 @@ addExecOpts(
 ).action(async (table: string, column: string, opts) => {
   try {
     await runDDL({ kind: 'dropColumn', table, column }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // alter-column <table> <column>
@@ -170,19 +198,25 @@ addExecOpts(
     .option('--drop-nullable', 'Disallow NULL')
 ).action(async (table: string, column: string, opts) => {
   try {
-    await runDDL({
-      kind: 'alterColumn',
-      options: {
-        table, column,
-        type: opts.type,
-        rename: opts.rename,
-        setDefault: opts.setDefault,
-        dropDefault: opts.dropDefault,
-        setNullable: opts.setNullable,
-        dropNullable: opts.dropNullable
-      }
-    }, opts)
-  } catch (e) { handleError(e) }
+    await runDDL(
+      {
+        kind: 'alterColumn',
+        options: {
+          table,
+          column,
+          type: opts.type,
+          rename: opts.rename,
+          setDefault: opts.setDefault,
+          dropDefault: opts.dropDefault,
+          setNullable: opts.setNullable,
+          dropNullable: opts.dropNullable,
+        },
+      },
+      opts
+    )
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // add-index <table>
@@ -197,11 +231,16 @@ addExecOpts(
 ).action(async (table: string, opts) => {
   try {
     const columns = opts.columns.split(',').map((c: string) => c.trim())
-    await runDDL({
-      kind: 'addIndex',
-      index: { table, columns, unique: opts.unique, type: opts.type, name: opts.name }
-    }, opts)
-  } catch (e) { handleError(e) }
+    await runDDL(
+      {
+        kind: 'addIndex',
+        index: { table, columns, unique: opts.unique, type: opts.type, name: opts.name },
+      },
+      opts
+    )
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // drop-index <index>
@@ -213,7 +252,9 @@ addExecOpts(
 ).action(async (indexName: string, opts) => {
   try {
     await runDDL({ kind: 'dropIndex', indexName, table: opts.table }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // add-constraint <table>
@@ -246,23 +287,26 @@ addExecOpts(
       op = {
         kind: 'addConstraint',
         constraint: {
-          table, type, column: opts.fk, name: opts.name,
+          table,
+          type,
+          column: opts.fk,
+          name: opts.name,
           references: { table: refTable, column: refColumn },
-          onDelete: opts.onDelete
-        }
+          onDelete: opts.onDelete,
+        },
       }
     } else if (opts.unique) {
       type = 'unique'
       const columns = opts.unique.split(',').map((c: string) => c.trim())
       op = {
         kind: 'addConstraint',
-        constraint: { table, type, columns, name: opts.name }
+        constraint: { table, type, columns, name: opts.name },
       }
     } else if (opts.check) {
       type = 'check'
       op = {
         kind: 'addConstraint',
-        constraint: { table, type, expression: opts.check, name: opts.name }
+        constraint: { table, type, expression: opts.check, name: opts.name },
       }
     } else {
       console.error('Specify one of: --fk, --unique, --check')
@@ -271,7 +315,9 @@ addExecOpts(
     }
 
     await runDDL(op, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // drop-constraint <table> <constraint>
@@ -282,7 +328,9 @@ addExecOpts(
 ).action(async (table: string, constraintName: string, opts) => {
   try {
     await runDDL({ kind: 'dropConstraint', table, constraintName }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // add-enum <name> <values...>
@@ -293,7 +341,9 @@ addExecOpts(
 ).action(async (name: string, values: string[], opts) => {
   try {
     await runDDL({ kind: 'addEnum', definition: { name, values } }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // alter-enum <name>
@@ -305,16 +355,18 @@ addExecOpts(
 ).action(async (name: string, opts) => {
   try {
     await runDDL({ kind: 'alterEnum', name, addValue: opts.addValue }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })
 
 // drop-enum <name>
 addExecOpts(
-  migrateCommand
-    .command('drop-enum <name>')
-    .description(t('migrate.drop_enum_description'))
+  migrateCommand.command('drop-enum <name>').description(t('migrate.drop_enum_description'))
 ).action(async (name: string, opts) => {
   try {
     await runDDL({ kind: 'dropEnum', name }, opts)
-  } catch (e) { handleError(e) }
+  } catch (e) {
+    handleError(e)
+  }
 })

@@ -26,7 +26,9 @@ describe('MongoDB unsupported commands', () => {
   beforeEach(() => {
     configSpy = spyOn(configModule, 'read').mockResolvedValue(mongoConfig as any)
     errSpy = spyOn(console, 'error').mockImplementation(() => {})
-    exitSpy = spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+    exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
   })
 
   afterEach(() => {
@@ -38,7 +40,9 @@ describe('MongoDB unsupported commands', () => {
   test('insert command exits with MongoDB not-supported message', async () => {
     try {
       await insertCommand('users', { data: '{"name":"test"}' })
-    } catch { /* exit() */ }
+    } catch {
+      /* exit() */
+    }
     const output = errSpy.mock.calls.flat().join(' ')
     expect(output).toContain('MongoDB')
     expect(exitSpy).toHaveBeenCalledWith(1)
@@ -47,7 +51,9 @@ describe('MongoDB unsupported commands', () => {
   test('schema command exits with MongoDB not-supported message', async () => {
     try {
       await schemaCommand.parseAsync(['node', 'dbcli', 'schema'])
-    } catch { /* exit() */ }
+    } catch {
+      /* exit() */
+    }
     const output = errSpy.mock.calls.flat().join(' ')
     expect(output).toContain('MongoDB')
     expect(exitSpy).toHaveBeenCalledWith(1)

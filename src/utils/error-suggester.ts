@@ -42,7 +42,7 @@ export async function suggestTableName(
       const allTables = await getAllTablesFromAdapter(adapter)
       return {
         suggestions: [],
-        tables: allTables
+        tables: allTables,
       }
     }
 
@@ -52,23 +52,23 @@ export async function suggestTableName(
     if (allTables.length === 0) {
       return {
         suggestions: [],
-        tables: []
+        tables: [],
       }
     }
 
     // Calculate distances and filter for suggestions
     const distances = allTables
-      .map(tableName => ({
+      .map((tableName) => ({
         name: tableName,
-        distance: levenshteinDistance(extractedTableName.toLowerCase(), tableName.toLowerCase())
+        distance: levenshteinDistance(extractedTableName.toLowerCase(), tableName.toLowerCase()),
       }))
-      .filter(item => item.distance < 3) // Only suggest if distance < 3
+      .filter((item) => item.distance < 3) // Only suggest if distance < 3
       .sort((a, b) => a.distance - b.distance) // Sort by distance (closest first)
       .slice(0, 3) // Keep top 3 suggestions
 
     return {
-      suggestions: distances.map(d => d.name),
-      tables: allTables
+      suggestions: distances.map((d) => d.name),
+      tables: allTables,
     }
   } catch (error) {
     // If anything goes wrong, return empty suggestions but try to list tables
@@ -77,12 +77,12 @@ export async function suggestTableName(
       const allTables = await getAllTablesFromAdapter(adapter)
       return {
         suggestions: [],
-        tables: allTables
+        tables: allTables,
       }
     } catch {
       return {
         suggestions: [],
-        tables: []
+        tables: [],
       }
     }
   }
@@ -128,7 +128,7 @@ function extractTableNameFromError(errorMessage: string): string | null {
 async function getAllTablesFromAdapter(adapter: DatabaseAdapter): Promise<string[]> {
   try {
     const tables = await adapter.listTables()
-    return tables.map(t => t.name)
+    return tables.map((t) => t.name)
   } catch (error) {
     console.warn('Failed to list tables for suggestions:', error)
     return []

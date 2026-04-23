@@ -48,7 +48,9 @@ export class BlacklistManager {
         if (typeof tableName === 'string') {
           tables.add(tableName.toLowerCase())
         } else {
-          console.warn(`[BlacklistManager] Invalid table name in blacklist config: ${JSON.stringify(tableName)}`)
+          console.warn(
+            `[BlacklistManager] Invalid table name in blacklist config: ${JSON.stringify(tableName)}`
+          )
         }
       }
     } else if (blacklistConfig.tables !== undefined) {
@@ -56,15 +58,23 @@ export class BlacklistManager {
     }
 
     // Load column blacklist
-    if (blacklistConfig.columns && typeof blacklistConfig.columns === 'object' && !Array.isArray(blacklistConfig.columns)) {
+    if (
+      blacklistConfig.columns &&
+      typeof blacklistConfig.columns === 'object' &&
+      !Array.isArray(blacklistConfig.columns)
+    ) {
       for (const [tableName, cols] of Object.entries(blacklistConfig.columns)) {
         if (typeof tableName !== 'string') {
-          console.warn(`[BlacklistManager] Invalid table name key in columns config: ${JSON.stringify(tableName)}`)
+          console.warn(
+            `[BlacklistManager] Invalid table name key in columns config: ${JSON.stringify(tableName)}`
+          )
           continue
         }
 
         if (!Array.isArray(cols)) {
-          console.warn(`[BlacklistManager] blacklist.columns["${tableName}"] must be an array, ignoring`)
+          console.warn(
+            `[BlacklistManager] blacklist.columns["${tableName}"] must be an array, ignoring`
+          )
           continue
         }
 
@@ -73,7 +83,9 @@ export class BlacklistManager {
           if (typeof col === 'string') {
             columnSet.add(col)
           } else {
-            console.warn(`[BlacklistManager] Invalid column name in blacklist.columns["${tableName}"]: ${JSON.stringify(col)}`)
+            console.warn(
+              `[BlacklistManager] Invalid column name in blacklist.columns["${tableName}"]: ${JSON.stringify(col)}`
+            )
           }
         }
 

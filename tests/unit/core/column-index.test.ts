@@ -12,17 +12,17 @@ const mockSchemas: Record<string, TableSchema> = {
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
       { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null }
-    ]
+      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+    ],
   },
   products: {
     name: 'products',
     columns: [
       { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
       { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'price', type: 'decimal', nullable: false, primaryKey: false, default: null }
-    ]
-  }
+      { name: 'price', type: 'decimal', nullable: false, primaryKey: false, default: null },
+    ],
+  },
 }
 
 test('ColumnIndexBuilder - builds index correctly', () => {
@@ -52,7 +52,7 @@ test('ColumnIndexBuilder - finds duplicate column names', () => {
   const results = builder.findColumn('name')
 
   expect(results.length).toBeGreaterThan(1) // In users and products
-  expect(results.map(r => r.tableName).sort()).toEqual(['products', 'users'])
+  expect(results.map((r) => r.tableName).sort()).toEqual(['products', 'users'])
 })
 
 test('ColumnIndexBuilder - returns empty for nonexistent column', () => {
@@ -71,7 +71,7 @@ test('ColumnIndexBuilder - finds columns by pattern', () => {
   const results = builder.findColumnsMatching('id')
 
   expect(results.length).toBeGreaterThan(0)
-  expect(results.some(r => r.columnName.toLowerCase().includes('id'))).toBe(true)
+  expect(results.some((r) => r.columnName.toLowerCase().includes('id'))).toBe(true)
 })
 
 test('ColumnIndexBuilder - gets table columns', () => {
@@ -81,7 +81,7 @@ test('ColumnIndexBuilder - gets table columns', () => {
   const results = builder.getTableColumns('users')
 
   expect(results).toHaveLength(3)
-  expect(results.map(c => c.name).sort()).toEqual(['email', 'id', 'name'])
+  expect(results.map((c) => c.name).sort()).toEqual(['email', 'id', 'name'])
 })
 
 test('ColumnIndexBuilder - finds columns by type', () => {
@@ -91,7 +91,7 @@ test('ColumnIndexBuilder - finds columns by type', () => {
   const results = builder.findColumnsByType('integer')
 
   expect(results.length).toBeGreaterThanOrEqual(2)
-  expect(results.every(r => r.column.type === 'integer')).toBe(true)
+  expect(results.every((r) => r.column.type === 'integer')).toBe(true)
 })
 
 test('ColumnIndexBuilder - finds primary keys', () => {
@@ -101,7 +101,7 @@ test('ColumnIndexBuilder - finds primary keys', () => {
   const results = builder.findPrimaryKeys()
 
   expect(results).toHaveLength(2) // id in users and products
-  expect(results.every(r => r.column.primaryKey)).toBe(true)
+  expect(results.every((r) => r.column.primaryKey)).toBe(true)
 })
 
 test('ColumnIndexBuilder - finds nullable columns', () => {
@@ -111,7 +111,7 @@ test('ColumnIndexBuilder - finds nullable columns', () => {
   const results = builder.findNullableColumns()
 
   expect(results.length).toBeGreaterThan(0)
-  expect(results.every(r => r.column.nullable)).toBe(true)
+  expect(results.every((r) => r.column.nullable)).toBe(true)
 })
 
 test('ColumnIndexBuilder - gets statistics', () => {

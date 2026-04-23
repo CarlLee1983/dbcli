@@ -62,7 +62,10 @@ const SqlConnectionConfigSchema = z.object({
 /**
  * Connection configuration schema (union of SQL and MongoDB)
  */
-export const ConnectionConfigSchema = z.union([SqlConnectionConfigSchema, MongoDBConnectionConfigSchema])
+export const ConnectionConfigSchema = z.union([
+  SqlConnectionConfigSchema,
+  MongoDBConnectionConfigSchema,
+])
 
 /**
  * Permission schema
@@ -127,7 +130,10 @@ const MongoDBNamedConnectionSchema = MongoDBConnectionConfigSchema.extend({
   envFile: z.string().optional(),
 })
 
-export const NamedConnectionSchema = z.union([SqlNamedConnectionSchema, MongoDBNamedConnectionSchema])
+export const NamedConnectionSchema = z.union([
+  SqlNamedConnectionSchema,
+  MongoDBNamedConnectionSchema,
+])
 
 /**
  * V2 config schema with multiple named connections
@@ -136,11 +142,9 @@ export const DbcliConfigV2Schema = z
   .object({
     version: z.literal(2),
     default: z.string().min(1),
-    connections: z
-      .record(NamedConnectionSchema)
-      .refine((conns) => Object.keys(conns).length > 0, {
-        message: 'At least one connection is required',
-      }),
+    connections: z.record(NamedConnectionSchema).refine((conns) => Object.keys(conns).length > 0, {
+      message: 'At least one connection is required',
+    }),
     schema: z.record(z.any()).optional().default({}),
     schemas: z.record(z.record(z.any())).optional().default({}),
     metadata: MetadataSchema,

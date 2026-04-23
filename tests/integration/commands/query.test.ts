@@ -25,11 +25,11 @@ describe('Query Command Integration', () => {
         port: 5432,
         user: 'postgres',
         password: 'postgres',
-        database: 'test_db'
+        database: 'test_db',
       },
       permission: 'query-only',
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
 
     // Mock console for capturing output

@@ -18,7 +18,7 @@ describe('Init Command Integration Tests', () => {
   test('應該從 DATABASE_URL 格式解析配置', () => {
     // 驗證：解析 DATABASE_URL
     const result = parseEnvDatabase({
-      DATABASE_URL: 'postgresql://testuser:testpass@localhost:5432/testdb'
+      DATABASE_URL: 'postgresql://testuser:testpass@localhost:5432/testdb',
     })
 
     expect(result).not.toBeNull()
@@ -38,7 +38,7 @@ describe('Init Command Integration Tests', () => {
       DB_PORT: '3306',
       DB_USER: 'admin',
       DB_PASSWORD: 'secret123',
-      DB_NAME: 'production'
+      DB_NAME: 'production',
     })
 
     expect(result).not.toBeNull()
@@ -55,7 +55,7 @@ describe('Init Command Integration Tests', () => {
       DB_SYSTEM: 'postgresql',
       DB_HOST: 'db.example.com',
       DB_USER: 'admin',
-      DB_DATABASE: 'production'
+      DB_DATABASE: 'production',
     })
 
     expect(result).not.toBeNull()
@@ -71,7 +71,7 @@ describe('Init Command Integration Tests', () => {
   test('應該支援 RFC 3986 百分比編碼的密碼', () => {
     // 驗證：支援特殊字符
     const result = parseEnvDatabase({
-      DATABASE_URL: 'postgresql://user:p%40%24%24w0rd@localhost/db'
+      DATABASE_URL: 'postgresql://user:p%40%24%24w0rd@localhost/db',
     })
 
     expect(result?.password).toBe('p@$$w0rd')
@@ -86,19 +86,19 @@ describe('Init Command Integration Tests', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only' as const,
       schema: {},
       metadata: {
         version: '1.0',
-        createdAt: '2026-03-25T00:00:00Z'
-      }
+        createdAt: '2026-03-25T00:00:00Z',
+      },
     }
 
     // 合併新值
     const merged = configModule.merge(existingConfig, {
-      permission: 'admin'
+      permission: 'admin',
     })
 
     // 驗證：createdAt 保留
@@ -115,11 +115,11 @@ describe('Init Command Integration Tests', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only' as const,
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
 
     const originalCopy = JSON.stringify(original)
@@ -157,11 +157,11 @@ describe('Init Command Integration Tests', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only' as const,
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
 
     expect(() => configModule.validate(validConfig)).not.toThrow()
@@ -176,11 +176,11 @@ describe('Init Command Integration Tests', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'invalid-permission',
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     } as unknown
 
     expect(() => configModule.validate(invalidConfig)).toThrow()
@@ -195,11 +195,11 @@ describe('Init Command Integration Tests', () => {
         port: 99999,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only' as const,
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     } as unknown
 
     expect(() => configModule.validate(invalidConfig)).toThrow()
@@ -214,11 +214,11 @@ describe('Init Command Integration Tests', () => {
         port: 5432,
         user: 'user',
         password: 'pass',
-        database: 'db'
+        database: 'db',
       },
       permission: 'query-only' as const,
       schema: {},
-      metadata: { version: '1.0' }
+      metadata: { version: '1.0' },
     }
 
     expect(() => configModule.validate(invalidConfig as unknown)).toThrow()
@@ -227,19 +227,19 @@ describe('Init Command Integration Tests', () => {
   test('應該支援多個資料庫系統的連接字符串', () => {
     // PostgreSQL
     const pg = parseEnvDatabase({
-      DATABASE_URL: 'postgresql://user:pass@host:5432/db'
+      DATABASE_URL: 'postgresql://user:pass@host:5432/db',
     })
     expect(pg?.system).toBe('postgresql')
 
     // MySQL
     const mysql = parseEnvDatabase({
-      DATABASE_URL: 'mysql://user:pass@host:3306/db'
+      DATABASE_URL: 'mysql://user:pass@host:3306/db',
     })
     expect(mysql?.system).toBe('mysql')
 
     // MariaDB
     const mariadb = parseEnvDatabase({
-      DATABASE_URL: 'mariadb://user:pass@host:3306/db'
+      DATABASE_URL: 'mariadb://user:pass@host:3306/db',
     })
     expect(mariadb?.system).toBe('mariadb')
   })
@@ -250,7 +250,7 @@ describe('Init Command Integration Tests', () => {
       DB_SYSTEM: 'postgresql',
       DB_HOST: 'localhost',
       DB_USER: 'user',
-      DB_NAME: 'db'
+      DB_NAME: 'db',
     })
     expect(pg?.port).toBe(5432)
 
@@ -259,13 +259,24 @@ describe('Init Command Integration Tests', () => {
       DB_SYSTEM: 'mysql',
       DB_HOST: 'localhost',
       DB_USER: 'user',
-      DB_NAME: 'db'
+      DB_NAME: 'db',
     })
     expect(mysql?.port).toBe(3306)
   })
 
   test('init command tests connection with valid credentials', async () => {
-    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
+    if (
+      SKIP_BY_ENV ||
+      (await shouldSkipTests({
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'postgres',
+        password: 'postgres',
+        database: 'postgres',
+      }))
+    )
+      return
 
     // 驗證：使用有效的認證建立連接
     const config = {
@@ -274,7 +285,7 @@ describe('Init Command Integration Tests', () => {
       port: 5432,
       user: 'postgres',
       password: 'postgres',
-      database: 'postgres'
+      database: 'postgres',
     }
 
     const adapter = AdapterFactory.createAdapter(config)
@@ -288,7 +299,18 @@ describe('Init Command Integration Tests', () => {
   })
 
   test('init command fails gracefully with invalid credentials', async () => {
-    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
+    if (
+      SKIP_BY_ENV ||
+      (await shouldSkipTests({
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'postgres',
+        password: 'postgres',
+        database: 'postgres',
+      }))
+    )
+      return
 
     // 驗證：無效密碼拋出 ConnectionError
     const config = {
@@ -297,7 +319,7 @@ describe('Init Command Integration Tests', () => {
       port: 5432,
       user: 'postgres',
       password: 'wrong_password',
-      database: 'postgres'
+      database: 'postgres',
     }
 
     const adapter = AdapterFactory.createAdapter(config)
@@ -313,7 +335,18 @@ describe('Init Command Integration Tests', () => {
   })
 
   test('init command shows connection hints on error', async () => {
-    if (SKIP_BY_ENV || await shouldSkipTests({ system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', password: 'postgres', database: 'postgres' })) return
+    if (
+      SKIP_BY_ENV ||
+      (await shouldSkipTests({
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'postgres',
+        password: 'postgres',
+        database: 'postgres',
+      }))
+    )
+      return
 
     // 驗證：連接錯誤包含有用的提示
     const config = {
@@ -323,7 +356,7 @@ describe('Init Command Integration Tests', () => {
       user: 'postgres',
       password: 'postgres',
       database: 'postgres',
-      timeout: 1000
+      timeout: 1000,
     }
 
     const adapter = AdapterFactory.createAdapter(config)
@@ -336,7 +369,11 @@ describe('Init Command Integration Tests', () => {
       expect(['ECONNREFUSED', 'ETIMEDOUT'].includes(connErr.code)).toBe(true)
       // 驗證提示包含有用的信息
       expect(connErr.hints.length).toBeGreaterThan(0)
-      expect(connErr.hints.some(hint => hint.includes('防火牆') || hint.includes('ping') || hint.includes('超時'))).toBe(true)
+      expect(
+        connErr.hints.some(
+          (hint) => hint.includes('防火牆') || hint.includes('ping') || hint.includes('超時')
+        )
+      ).toBe(true)
     }
   })
 })

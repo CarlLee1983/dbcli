@@ -12,7 +12,7 @@ describe('TableFormatter', () => {
     const columns: ColumnSchema[] = [
       { name: 'id', type: 'INT', nullable: false, primaryKey: true },
       { name: 'email', type: 'VARCHAR(255)', nullable: false },
-      { name: 'created_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP' }
+      { name: 'created_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP' },
     ]
 
     const result = formatter.format(columns)
@@ -33,8 +33,8 @@ describe('TableFormatter', () => {
         name: 'user_id',
         type: 'INT',
         nullable: false,
-        foreignKey: { table: 'users', column: 'id' }
-      }
+        foreignKey: { table: 'users', column: 'id' },
+      },
     ]
 
     const result = formatter.format(columns)
@@ -45,7 +45,7 @@ describe('TableFormatter', () => {
   test('handles columns with no default value as NULL', () => {
     const formatter = new TableFormatter()
     const columns: ColumnSchema[] = [
-      { name: 'optional_field', type: 'VARCHAR(100)', nullable: true }
+      { name: 'optional_field', type: 'VARCHAR(100)', nullable: true },
     ]
 
     const result = formatter.format(columns)
@@ -56,9 +56,7 @@ describe('TableFormatter', () => {
 
   test('displays nullable=false as NO', () => {
     const formatter = new TableFormatter()
-    const columns: ColumnSchema[] = [
-      { name: 'id', type: 'INT', nullable: false }
-    ]
+    const columns: ColumnSchema[] = [{ name: 'id', type: 'INT', nullable: false }]
 
     const result = formatter.format(columns)
 
@@ -74,11 +72,11 @@ describe('TableListFormatter', () => {
         name: 'users',
         columns: [
           { name: 'id', type: 'INT', nullable: false },
-          { name: 'email', type: 'VARCHAR(255)', nullable: false }
+          { name: 'email', type: 'VARCHAR(255)', nullable: false },
         ],
         rowCount: 1000,
-        engine: 'InnoDB'
-      }
+        engine: 'InnoDB',
+      },
     ]
 
     const result = formatter.format(tables)
@@ -97,8 +95,8 @@ describe('TableListFormatter', () => {
     const tables: TableSchema[] = [
       {
         name: 'products',
-        columns: [{ name: 'id', type: 'INT', nullable: false }]
-      }
+        columns: [{ name: 'id', type: 'INT', nullable: false }],
+      },
     ]
 
     const result = formatter.format(tables)

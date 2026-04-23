@@ -4,7 +4,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError } from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
@@ -46,7 +46,10 @@ function parseWhereClause(whereClause: string): Record<string, any> {
     let value: any = valueStr.trim()
 
     // Strip quotes
-    if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+    if (
+      (value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"'))
+    ) {
       value = value.slice(1, -1)
     }
 
@@ -117,13 +120,19 @@ export async function deleteCommand(
     if (config.permission !== 'data-admin' && config.permission !== 'admin') {
       throw new PermissionError(
         t('delete.admin_only'),
-        { type: 'DELETE', isDangerous: true, keywords: ['DELETE'], isComposite: false, confidence: 'HIGH' },
+        {
+          type: 'DELETE',
+          isDangerous: true,
+          keywords: ['DELETE'],
+          isComposite: false,
+          confidence: 'HIGH',
+        },
         config.permission
       )
     }
 
     // 6. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection)
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
@@ -131,7 +140,9 @@ export async function deleteCommand(
       const schema = await adapter.getTableSchema(table)
 
       // 8. Create DataExecutor and execute DELETE
-      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as 'postgresql' | 'mysql'
+      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
+        | 'postgresql'
+        | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)

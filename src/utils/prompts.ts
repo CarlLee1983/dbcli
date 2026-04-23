@@ -52,15 +52,10 @@ async function readLineFromStdin(prompt: string = ''): Promise<string> {
  * @param defaultValue - Default value if user provides empty input
  * @returns The user's input or the default value
  */
-export async function text(
-  message: string,
-  defaultValue?: string
-): Promise<string> {
+export async function text(message: string, defaultValue?: string): Promise<string> {
   // Skip inquirer if not a TTY (e.g., piped input)
   if (!process.stdin.isTTY) {
-    const displayMessage = defaultValue
-      ? `${message} [${defaultValue}]: `
-      : `${message}: `
+    const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
     const answer = await readLineFromStdin(displayMessage)
     return answer.trim() || defaultValue || ''
   }
@@ -70,9 +65,7 @@ export async function text(
     return await inquirerText({ message, default: defaultValue })
   } catch {
     // Fallback: use simple console prompts
-    const displayMessage = defaultValue
-      ? `${message} [${defaultValue}]: `
-      : `${message}: `
+    const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
     const answer = await readLineFromStdin(displayMessage)
     return answer.trim() || defaultValue || ''
   }
@@ -85,10 +78,7 @@ export async function text(
  * @param choices - Array of choices for the user to select from
  * @returns The selected choice
  */
-export async function select(
-  message: string,
-  choices: string[]
-): Promise<string> {
+export async function select(message: string, choices: string[]): Promise<string> {
   // Skip inquirer if not a TTY (e.g., piped input)
   if (!process.stdin.isTTY) {
     console.log(message)
@@ -157,7 +147,7 @@ export async function confirm(message: string): Promise<boolean> {
 export const promptUser = {
   text,
   select,
-  confirm
+  confirm,
 }
 
 export default promptUser

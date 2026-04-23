@@ -10,7 +10,7 @@ import type {
   AlterColumnOptions,
   IndexDefinition,
   ConstraintDefinition,
-  EnumDefinition
+  EnumDefinition,
 } from './types'
 
 function q(name: string): string {
@@ -56,11 +56,11 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
 
   createTable(table: string, columns: ColumnDefinition[]): DDLResult {
     const warnings: string[] = []
-    const pkCols = columns.filter(c => c.primaryKey)
-    const colDefs = columns.map(c => columnSQL(c))
+    const pkCols = columns.filter((c) => c.primaryKey)
+    const colDefs = columns.map((c) => columnSQL(c))
 
     if (pkCols.length > 0) {
-      colDefs.push(`PRIMARY KEY (${pkCols.map(c => q(c.name)).join(', ')})`)
+      colDefs.push(`PRIMARY KEY (${pkCols.map((c) => q(c.name)).join(', ')})`)
     }
 
     const sql = `CREATE TABLE ${q(table)} (\n  ${colDefs.join(',\n  ')}\n);`
@@ -76,14 +76,14 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
   addColumn(table: string, column: ColumnDefinition): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} ADD COLUMN ${columnSQL(column)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
   dropColumn(table: string, column: string): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} DROP COLUMN ${q(column)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
@@ -94,39 +94,27 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
     const c = q(options.column)
 
     if (options.type) {
-      statements.push(
-        `ALTER TABLE ${t} ALTER COLUMN ${c} TYPE ${options.type.toUpperCase()};`
-      )
+      statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} TYPE ${options.type.toUpperCase()};`)
     }
 
     if (options.rename) {
-      statements.push(
-        `ALTER TABLE ${t} RENAME COLUMN ${c} TO ${q(options.rename)};`
-      )
+      statements.push(`ALTER TABLE ${t} RENAME COLUMN ${c} TO ${q(options.rename)};`)
     }
 
     if (options.setDefault !== undefined) {
-      statements.push(
-        `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${options.setDefault};`
-      )
+      statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${options.setDefault};`)
     }
 
     if (options.dropDefault) {
-      statements.push(
-        `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-      )
+      statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`)
     }
 
     if (options.setNullable) {
-      statements.push(
-        `ALTER TABLE ${t} ALTER COLUMN ${c} DROP NOT NULL;`
-      )
+      statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} DROP NOT NULL;`)
     }
 
     if (options.dropNullable) {
-      statements.push(
-        `ALTER TABLE ${t} ALTER COLUMN ${c} SET NOT NULL;`
-      )
+      statements.push(`ALTER TABLE ${t} ALTER COLUMN ${c} SET NOT NULL;`)
     }
 
     if (statements.length === 0) {
@@ -146,7 +134,7 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
 
     return {
       sql: `CREATE ${unique}INDEX ${q(name)} ON ${q(index.table)}${using} (${cols});`,
-      warnings: []
+      warnings: [],
     }
   }
 
@@ -168,7 +156,7 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
           : ''
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} FOREIGN KEY (${q(constraint.column!)}) REFERENCES ${q(constraint.references!.table)}(${q(constraint.references!.column)})${onDelete};`,
-          warnings
+          warnings,
         }
       }
       case 'unique': {
@@ -176,14 +164,14 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
         const cols = constraint.columns!.map(q).join(', ')
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} UNIQUE (${cols});`,
-          warnings
+          warnings,
         }
       }
       case 'check': {
         const name = constraint.name || `ck_${constraint.table}`
         return {
           sql: `ALTER TABLE ${t} ADD CONSTRAINT ${q(name)} CHECK (${constraint.expression});`,
-          warnings
+          warnings,
         }
       }
     }
@@ -192,31 +180,31 @@ export class PostgreSQLDDLGenerator implements DDLGenerator {
   dropConstraint(table: string, constraintName: string): DDLResult {
     return {
       sql: `ALTER TABLE ${q(table)} DROP CONSTRAINT ${q(constraintName)};`,
-      warnings: []
+      warnings: [],
     }
   }
 
   // ── Enum ───────────────────────────────────────────────────────────────
 
   addEnum(definition: EnumDefinition): DDLResult {
-    const vals = definition.values.map(v => `'${v}'`).join(', ')
+    const vals = definition.values.map((v) => `'${v}'`).join(', ')
     return {
       sql: `CREATE TYPE ${q(definition.name)} AS ENUM (${vals});`,
-      warnings: []
+      warnings: [],
     }
   }
 
   alterEnum(name: string, addValue: string): DDLResult {
     return {
       sql: `ALTER TYPE ${q(name)} ADD VALUE '${addValue}';`,
-      warnings: ['PostgreSQL does not support removing enum values']
+      warnings: ['PostgreSQL does not support removing enum values'],
     }
   }
 
   dropEnum(name: string): DDLResult {
     return {
       sql: `DROP TYPE ${q(name)};`,
-      warnings: ['Will fail if any column references this enum type']
+      warnings: ['Will fail if any column references this enum type'],
     }
   }
 }

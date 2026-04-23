@@ -17,7 +17,7 @@ export interface Logger {
 }
 
 function formatArgs(args: unknown[]): string {
-  return args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')
+  return args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')
 }
 
 export function createLogger(level: LogLevel = LogLevel.NORMAL): Logger {

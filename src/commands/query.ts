@@ -52,7 +52,7 @@ export async function queryCommand(
 
     // 2c. MongoDB: route to QueryableAdapter path
     if (config.connection.system === 'mongodb') {
-      return mongoQueryBranch(sql, options.collection, config, options.format ?? 'table')
+      return mongoQueryBranch(sql, options, config)
     }
 
     // 2b. Size guard: block full-table SELECT on huge tables
@@ -132,10 +132,17 @@ const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DES
 
 async function mongoQueryBranch(
   queryStr: string,
-  collection: string | undefined,
-  config: any,
-  format: string
+  options: {
+    format?: 'table' | 'json' | 'csv'
+    limit?: number
+    noLimit?: boolean
+    collection?: string
+  },
+  config: any
 ): Promise<void> {
+  const collection = options.collection
+  const format = options.format ?? 'table'
+
   if (SQL_PATTERN.test(queryStr)) {
     console.error('這是 MongoDB 連線，請使用 JSON filter 語法。')
     console.error(`範例：dbcli query '{"field": "value"}' --collection <name>`)
@@ -154,19 +161,65 @@ async function mongoQueryBranch(
     process.exit(1)
   }
 
+  // Blacklist validation
+  const blacklistManager = new BlacklistManager(config)
+  const blacklistValidator = new BlacklistValidator(blacklistManager)
+
+  try {
+    blacklistValidator.checkTableBlacklist('SELECT', collection, [])
+  } catch (error) {
+    if (error instanceof BlacklistError) {
+      console.error(error.message)
+      process.exit(1)
+    }
+    throw error
+  }
+
+  // Size guard: block unfiltered queries on huge collections
+  if (config.schema && !options.noLimit) {
+    const tableSchema = (config.schema as Record<string, any>)[collection]
+    if (tableSchema) {
+      const { shouldBlockQuery } = await import('./query-size-guard')
+      const isFiltered = queryStr.length > 2
+      const hasLimit = options.limit !== undefined
+      const dummySql = `SELECT * FROM ${collection}${isFiltered ? ' WHERE' : ''}${hasLimit ? ' LIMIT' : ''}`
+
+      const guard = shouldBlockQuery(dummySql, tableSchema)
+      if (guard.blocked) {
+        console.error(`\u26A0 ${guard.reason}`)
+        process.exit(1)
+      }
+    }
+  }
+
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await mongoAdapter.connect()
   try {
-    const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
-    const columnNames = result.rows[0] ? Object.keys(result.rows[0] as object) : []
+    const result = await mongoAdapter.execute<Record<string, any>>(queryStr, [collection])
+
+    // Redact blacklisted columns using validator
+    const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
+    const filterResult = blacklistValidator.filterColumns(collection, result.rows, columnNames)
+
     const queryResult = {
-      rows: result.rows,
-      rowCount: result.rows.length,
-      columnNames,
+      rows: filterResult.filteredRows,
+      rowCount: filterResult.filteredRows.length,
+      columnNames: columnNames.filter((col) => !filterResult.omittedColumns.includes(col)),
     }
+
     const formatter = new QueryResultFormatter()
     const output = formatter.format(queryResult as any, { format: format as any })
+
+    // Add security notification if columns were omitted
+    const securityNote = blacklistValidator.buildSecurityNotification(
+      collection,
+      filterResult.omittedColumns
+    )
+
     console.log(output)
+    if (securityNote) {
+      console.log(`\n\u2139 ${securityNote}`)
+    }
   } finally {
     await mongoAdapter.disconnect()
   }

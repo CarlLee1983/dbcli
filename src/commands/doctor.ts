@@ -413,6 +413,7 @@ export const runDoctorChecks = {
 export async function collectMongoDoctorResults(config: {
   connection: ConnectionConfig
   metadata?: { schemaLastUpdated?: string }
+  blacklistedColumns?: Map<string, Set<string>>
 }): Promise<DoctorResult[]> {
   const results: DoctorResult[] = []
 
@@ -450,12 +451,33 @@ export async function collectMongoDoctorResults(config: {
       // Ignore version probe failure; connection already proved healthy.
     }
 
-    const collections = await adapter.listCollections()
+    const collections = await adapter.listTables()
+
+    // Add inferred column details for blacklist check
+    const tableColumns = new Map<string, string[]>()
+    for (const coll of collections) {
+      try {
+        const schema = await adapter.getTableSchema(coll.name)
+        tableColumns.set(
+          coll.name,
+          schema.columns.map((c: any) => c.name)
+        )
+      } catch {
+        // Ignore schema inference failures
+      }
+    }
+
+    if (config.blacklistedColumns) {
+      results.push(
+        runDoctorChecks.checkBlacklistCompleteness(tableColumns, config.blacklistedColumns)
+      )
+    }
+
     results.push(
       runDoctorChecks.checkLargeTables(
-        collections.map((collection) => ({
-          name: collection.name,
-          estimatedRowCount: collection.documentCount,
+        collections.map((coll) => ({
+          name: coll.name,
+          estimatedRowCount: coll.estimatedRowCount,
         }))
       )
     )
@@ -470,14 +492,12 @@ export async function collectMongoDoctorResults(config: {
           : `Found ${collections.length} collection(s)`,
     })
 
-    results.push({
-      group: 'Connection & Data',
-      label: 'Schema cache',
-      status: 'warn',
-      message: config.metadata?.schemaLastUpdated
-        ? `Schema cache timestamp present: ${config.metadata.schemaLastUpdated}`
-        : 'Schema cache is not tracked for MongoDB — run collection inspections instead',
-    })
+    const lastUpdated = config.metadata?.schemaLastUpdated ?? null
+    const freshness = runDoctorChecks.checkSchemaCacheFreshness(lastUpdated)
+    if (!lastUpdated) {
+      freshness.message = 'Schema cache is not tracked for MongoDB — run "dbcli schema --refresh" to scan collections'
+    }
+    results.push(freshness)
   } catch (error) {
     results.push({
       group: 'Connection & Data',
@@ -543,7 +563,12 @@ export const doctorCommand = new Command('doctor')
         // --- Connection & Data ---
         try {
           if (config.connection.system === 'mongodb') {
-            results.push(...(await collectMongoDoctorResults(config)))
+            results.push(
+              ...(await collectMongoDoctorResults({
+                ...config,
+                blacklistedColumns,
+              }))
+            )
           } else {
             const adapter = AdapterFactory.createAdapter(
               config.connection as ConnectionOptions

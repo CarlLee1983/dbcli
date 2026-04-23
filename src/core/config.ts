@@ -413,11 +413,16 @@ export const configModule = {
       this.validate(config)
 
       const storagePath = await resolveConfigStoragePath(path)
-      const pathObj = Bun.file(storagePath)
-      const isDirectory = (await pathObj.exists()) && pathObj.type === 'directory'
+      let isDirectory = false
+      try {
+        const stat = await Bun.file(storagePath).stat()
+        isDirectory = stat?.isDirectory() ?? false
+      } catch {
+        isDirectory = false
+      }
 
       // Directory mode: separate config and .env.local
-      if (isDirectory || path.endsWith('.dbcli')) {
+      if (isDirectory || path.endsWith('.dbcli') || (path === storagePath && isDirectory)) {
         await Bun.$`mkdir -p ${storagePath}`
 
         // Check if using env var references (password is a { "$env": "..." } object)

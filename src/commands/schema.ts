@@ -60,11 +60,6 @@ async function schemaAction(
       process.exit(1)
     }
 
-    if (config.connection?.system === 'mongodb') {
-      console.error('此命令目前不支援 MongoDB')
-      process.exit(1)
-    }
-
     // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
     const connectionName = await getSchemaIsolationConnectionName(options.config)
 

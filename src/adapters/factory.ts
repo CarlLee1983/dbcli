@@ -30,6 +30,8 @@ export class AdapterFactory {
       case 'mysql':
       case 'mariadb':
         return new MySQLAdapter(options)
+      case 'mongodb':
+        return new MongoDBAdapter(options) as unknown as DatabaseAdapter
       default:
         throw new Error(`Unsupported database system: ${options.system}`)
     }

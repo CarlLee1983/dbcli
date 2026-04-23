@@ -231,6 +231,46 @@ export class MongoDBAdapter implements QueryableAdapter {
     return results
   }
 
+  async listTables(): Promise<any[]> {
+    const collections = await this.listCollections()
+    return collections.map((c) => ({
+      name: c.name,
+      estimatedRowCount: c.documentCount,
+      columns: [], // listTables doesn't need columns usually
+    }))
+  }
+
+  async getTableSchema(collectionName: string): Promise<any> {
+    const db = this.getDatabase()
+    const collection = db.collection(collectionName)
+
+    const estimatedRowCount = await collection.estimatedDocumentCount()
+    const samples = await collection.find().limit(5).toArray()
+
+    const columnMap = new Map<string, Set<string>>()
+    for (const doc of samples) {
+      for (const [key, value] of Object.entries(doc)) {
+        if (!columnMap.has(key)) {
+          columnMap.set(key, new Set())
+        }
+        columnMap.get(key)!.add(typeof value)
+      }
+    }
+
+    const columns = Array.from(columnMap.entries()).map(([name, types]) => ({
+      name,
+      type: Array.from(types).join(' | '),
+      nullable: true, // MongoDB fields are naturally nullable/optional
+    }))
+
+    return {
+      name: collectionName,
+      columns,
+      estimatedRowCount,
+      tableType: 'collection',
+    }
+  }
+
   async testConnection(): Promise<boolean> {
     if (!this.client) return false
     await this.getDatabase().command({ ping: 1 })

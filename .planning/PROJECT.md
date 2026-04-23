@@ -118,19 +118,24 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.5.0 — Phase 18 Complete)
+## Current State (v1.5.2 — Phase 18+ Complete)
 
-**Latest Release:** v1.5.0 (2026-04-21)
-- ✅ Layered Schema Cache (Wave 1) complete
-- ✅ Per-connection schema isolation implemented
+**Latest Release:** v1.5.2 (2026-04-22)
+- ✅ MongoDB SRV Diagnostics (v1.5.2) — added environment reporting to `doctor`
+- ✅ MongoDB SRV Expansion (v1.5.1) — fixed SRV connection and database consistency
+- ✅ Layered Schema Cache (v1.5.0) — integrated file-based persistence for schemas
+- ✅ Per-connection isolation implemented
 - ✅ SKILL.md documentation updated for connection-aware AI usage
 - ✅ 350+ tests passing
 
-**What's Shipped (v1.5.0):**
-1. Layered Schema Cache (Wave 1) — integrated file-based persistence for schemas
-2. Per-connection isolation — each connection has its own schema directory
-3. Improved Migration UX — proactive hints during schema migration
-4. Documentation update — clarified schema storage layout in SKILL.md
+**What's Shipped (v1.5.2):**
+1. **Doctor diagnostics for MongoDB SRV** — `dbcli doctor` reports SRV resolution capabilities
+2. **MongoDB SRV Connections** — `mongodb+srv://` URIs correctly expanded and connected
+3. **Layered Schema Cache (Wave 1)** — integrated file-based persistence for database schemas
+4. **Per-connection isolation** — each connection has its own schema directory
+5. **Improved Migration UX** — proactive hints during schema migration
+6. **Documentation update** — clarified schema storage layout in SKILL.md
+
 
 **What's Shipped (v1.0.0 and prior):**
 1. Full database CLI with init, list, schema, query, insert, update, delete, export
@@ -188,4 +193,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-04-21 after v1.5.0 release*
+*Last updated: 2026-04-23 after v1.5.2 release*

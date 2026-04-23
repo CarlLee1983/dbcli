@@ -1,38 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.5.0
+milestone_name: Cache & Isolation
 status: milestone_complete
-last_updated: "2026-04-21T03:03:05.169Z"
+last_updated: "2026-04-23T03:00:00.000Z"
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 18
+  completed_phases: 18
+  total_plans: 45
+  completed_plans: 45
 ---
 
 # STATE.md — Current Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-03-26)
+See: `.planning/PROJECT.md` (updated 2026-04-23)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** Milestone v0.2.0-beta complete — planning next milestone
+**Current Focus:** Milestone v1.5.0 complete (including v1.5.2 fixes) — planning next roadmap items
 
 ---
 
 ## Milestone Status
 
-**v0.2.0-beta — Data Access Control:** COMPLETE (2026-03-26)
+**v1.5.2 — MongoDB SRV Diagnostics:** COMPLETE (2026-04-22)
+- Fixed SRV environment reporting in `doctor`
 
-- Phase 13: Data Access Control — Blacklist Infrastructure (3/3 plans, verification 10/10)
+**v1.5.1 — MongoDB SRV Expansion:** COMPLETE (2026-04-22)
+- Added `mongodb+srv://` URI support and fixed database consistency
+
+**v1.5.0 — Layered Schema Cache & Isolation:** COMPLETE (2026-04-21)
+- Phase 18: File-based schema persistence and per-connection isolation
 
 **Prior milestones:**
-
-- v0.1.0-beta — i18n + Schema Optimization (Phases 11-12)
-- v1.0.0 — Core Functionality (Phases 1-10)
+- v1.3.0 — Skill Update Reminders
+- v1.2.0 — Multi-connection & REPL
+- v1.0.0 — Stable Release (DDL & Core)
+- v0.2.0-beta — Data Access Control
+- v0.1.0-beta — i18n & Schema Optimization
 
 ---
 

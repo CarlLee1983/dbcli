@@ -1,5 +1,25 @@
 # Milestones
 
+## v1.5.2 — MongoDB SRV Diagnostics (Shipped: 2026-04-22)
+
+**Scope:** Fixes for MongoDB SRV environment reporting.
+
+**Key accomplishments:**
+- **Doctor diagnostics for MongoDB SRV**: `dbcli doctor` now reports SRV resolution capabilities.
+- **Documentation**: Clarified MongoDB SRV environment diagnostic in README and `SKILL.md`.
+
+---
+
+## v1.5.1 — MongoDB SRV Expansion (Shipped: 2026-04-22)
+
+**Scope:** Support for mongodb+srv:// URIs.
+
+**Key accomplishments:**
+- **MongoDB SRV Connections**: `mongodb+srv://` URIs are now correctly expanded and connected.
+- **Database Consistency**: MongoDB operations now consistently use the database configured in the connection string or options.
+
+---
+
 ## v1.5.0 — Layered Schema Cache & Multi-Connection Isolation (Shipped: 2026-04-21)
 
 **Scope:** Phase 18 (1 phase, 3 plans)

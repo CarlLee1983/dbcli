@@ -6,6 +6,8 @@ A unified database CLI tool that enables AI agents (Claude Code, Gemini, Copilot
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
+> **Security update:** `dbcli init` now writes only a small project binding stub into `./.dbcli/config.json`. The full connection configuration is stored under `~/.config/dbcli/projects/<project-id>/config.json`, so sensitive settings do not live inside the project workspace by default.
+
 ## Internationalization (i18n)
 
 dbcli supports multiple languages via the `DBCLI_LANG` environment variable:
@@ -112,6 +114,8 @@ For MongoDB, `list` and `query` operate on the database configured for the conne
 
 dbcli supports multiple named database connections within a single project. This is useful for managing different environments (development, staging, production) or multiple databases.
 
+The project `.dbcli` directory now acts as a binding + cache layer. The actual connection config is stored in `~/.config/dbcli/projects/<project-id>/`, which keeps sensitive settings out of the workspace by default.
+
 ### Initializing Named Connections
 
 To create a named connection, use the `--conn-name` option during `init`. You can also specify a custom `.env` file for that connection.
@@ -191,7 +195,7 @@ dbcli init [OPTIONS]
 **Behavior:**
 - Reads `.env` file if present (auto-fills DATABASE_URL, DB_* variables)
 - Prompts for missing values (host, port, user, password, database name, permission level)
-- Creates `.dbcli` JSON config file in project root
+- Creates a project binding stub in `.dbcli/config.json` and stores the full config under `~/.config/dbcli/projects/<project-id>/`
 - Tests database connection before saving
 
 **Examples:**
@@ -240,6 +244,8 @@ dbcli use --list
 ---
 
 > **`--use-env-refs`:** When enabled, the config stores environment variable names (e.g., `{"$env": "DB_HOST"}`) instead of actual values. This avoids writing sensitive credentials into the config file, making it suitable for multi-environment deployments and CI/CD pipelines. At connection time, dbcli automatically reads the actual values from the referenced environment variables.
+
+> **Storage model:** The project `.dbcli` directory is now a binding + cache layer, not the canonical home for secrets. If you inspect `./.dbcli/config.json`, you should only see the binding metadata; the full config lives in the home storage path shown above.
 
 ---
 

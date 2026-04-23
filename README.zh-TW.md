@@ -6,6 +6,8 @@
 
 **核心價值：** AI 代理可透過單一、具權限控管的 CLI 工具，在敏感資料保護下安全且智慧地存取專案資料庫。
 
+> **安全性更新：** `dbcli init` 現在只會在 `./.dbcli/config.json` 寫入一個很小的專案綁定 stub。完整的連線設定會存放在 `~/.config/dbcli/projects/<project-id>/config.json`，因此敏感設定預設不會留在專案工作區內。
+
 ## 國際化（i18n）
 
 dbcli 透過環境變數 `DBCLI_LANG` 支援多語系：
@@ -146,7 +148,7 @@ dbcli init --conn-name staging --env-file .env.staging
 dbcli init --conn-name prod --env-file .env.production --use-env-refs
 ```
 
-每一條具名連線可以設定不同的 **`--permission`**（例如正式環境只給 `query-only`）。同一專案下的 **schema 快取、黑名單** 等仍共用同一個 `.dbcli` 目錄；切換連線只改「連到哪一台資料庫」，不複製整份專案設定目錄。
+每一條具名連線可以設定不同的 **`--permission`**（例如正式環境只給 `query-only`）。現在專案內的 `.dbcli` 主要扮演**綁定 + 快取層**；真正的連線設定會存到使用者家目錄下的 `~/.config/dbcli/projects/<project-id>/`，避免敏感設定留在工作區。
 
 ### 管理連線（`use` / 移除 / 更名）
 
@@ -208,7 +210,7 @@ dbcli init [OPTIONS]
 **行為：**
 - 若存在 `.env` 會讀取（自動帶入 DATABASE_URL、DB_* 等變數）
 - 缺少的欄位會互動提示（主機、埠、使用者、密碼、資料庫名、權限等級）
-- 在專案根目錄建立 `.dbcli` JSON 設定檔
+- 在 `.dbcli/config.json` 建立專案綁定 stub，並將完整設定儲存在 `~/.config/dbcli/projects/<project-id>/`
 - 儲存前會測試資料庫連線
 
 **範例：**
@@ -257,6 +259,8 @@ dbcli use --list
 ---
 
 > **`--use-env-refs`：** 啟用後，設定檔會儲存環境變數名稱（例如 `{"$env": "DB_HOST"}`）而非實際值，避免將憑證寫入檔案，適合多環境與 CI/CD。連線時 dbcli 會自動從對應環境變數讀取實際值。
+
+> **儲存模型：** 專案內的 `.dbcli` 現在是綁定 + 快取層，不再是秘密資訊的最終儲存地。若你查看 `./.dbcli/config.json`，應只會看到綁定 metadata；完整設定會放在前述 home storage 路徑中。
 
 ---
 

@@ -1,13 +1,15 @@
 import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { configModule } from '@/core/config'
-import { AdapterFactory } from '@/adapters/factory'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import type { ConnectionConfig } from '@/types'
 import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
 import { validateFormat, DbcliConfigV2Schema } from '@/utils/validation'
 import { detectConfigVersion } from '@/core/config-v2'
 import { resolveConfigPath } from '@/utils/config-path'
+import { resolveConfigStoragePath } from '@/core/config-binding'
 import pkg from '../../package.json'
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
@@ -24,9 +26,20 @@ export interface DoctorResult {
 }
 
 const SENSITIVE_PATTERNS = [
-  'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
-  'access_key', 'private_key', 'credential', 'auth_token',
-  'refresh_token', 'session_token', 'ssn', 'credit_card',
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'api_key',
+  'apikey',
+  'access_key',
+  'private_key',
+  'credential',
+  'auth_token',
+  'refresh_token',
+  'session_token',
+  'ssn',
+  'credit_card',
 ]
 
 type MongoSrvLookupDeps = {
@@ -75,10 +88,9 @@ export const runDoctorChecks = {
 
   async checkLatestVersion(currentVersion: string): Promise<DoctorResult> {
     try {
-      const response = await fetch(
-        'https://registry.npmjs.org/@carllee1983/dbcli/latest',
-        { signal: AbortSignal.timeout(5000) }
-      )
+      const response = await fetch('https://registry.npmjs.org/@carllee1983/dbcli/latest', {
+        signal: AbortSignal.timeout(5000),
+      })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = (await response.json()) as { version: string }
       const latest = data.version
@@ -107,8 +119,8 @@ export const runDoctorChecks = {
   ): Promise<DoctorResult> {
     const exists = existsFn
       ? await existsFn(configPath)
-      : await Bun.file(configPath).exists() ||
-        await Bun.file(join(configPath, 'config.json')).exists()
+      : (await Bun.file(configPath).exists()) ||
+        (await Bun.file(join(configPath, 'config.json')).exists())
     return {
       group: 'Configuration',
       label: 'Config exists',
@@ -128,7 +140,7 @@ export const runDoctorChecks = {
       const blacklisted = blacklistedColumns.get(table) ?? new Set()
       for (const col of columns) {
         const colLower = col.toLowerCase()
-        const isSensitive = SENSITIVE_PATTERNS.some(p => colLower.includes(p))
+        const isSensitive = SENSITIVE_PATTERNS.some((p) => colLower.includes(p))
         if (isSensitive && !blacklisted.has(col)) {
           unprotected.push(`${table}.${col}`)
         }
@@ -284,10 +296,8 @@ export const runDoctorChecks = {
     }
   },
 
-  checkLargeTables(
-    tables: Array<{ name: string; estimatedRowCount?: number }>
-  ): DoctorResult {
-    const large = tables.filter(t => (t.estimatedRowCount ?? 0) > 1_000_000)
+  checkLargeTables(tables: Array<{ name: string; estimatedRowCount?: number }>): DoctorResult {
+    const large = tables.filter((t) => (t.estimatedRowCount ?? 0) > 1_000_000)
     if (large.length === 0) {
       return {
         group: 'Connection & Data',
@@ -297,7 +307,7 @@ export const runDoctorChecks = {
       }
     }
     const list = large
-      .map(t => `${t.name} (${((t.estimatedRowCount ?? 0) / 1_000_000).toFixed(1)}M rows)`)
+      .map((t) => `${t.name} (${((t.estimatedRowCount ?? 0) / 1_000_000).toFixed(1)}M rows)`)
       .join(', ')
     return {
       group: 'Connection & Data',
@@ -309,7 +319,8 @@ export const runDoctorChecks = {
 
   async checkV2Config(configPath: string): Promise<DoctorResult[]> {
     const results: DoctorResult[] = []
-    const configFile = Bun.file(join(configPath, 'config.json'))
+    const storagePath = await resolveConfigStoragePath(configPath)
+    const configFile = Bun.file(join(storagePath, 'config.json'))
 
     if (!(await configFile.exists())) return results
 
@@ -330,7 +341,7 @@ export const runDoctorChecks = {
         group: 'Configuration',
         label: 'V2 config validation',
         status: 'error',
-        message: 'V2 設定檔格式無效'
+        message: 'V2 設定檔格式無效',
       })
       return results
     }
@@ -341,14 +352,14 @@ export const runDoctorChecks = {
         group: 'Configuration',
         label: 'Default connection',
         status: 'error',
-        message: `預設連線 '${config.default}' 不存在於 connections 中`
+        message: `預設連線 '${config.default}' 不存在於 connections 中`,
       })
     } else {
       results.push({
         group: 'Configuration',
         label: 'Default connection',
         status: 'pass',
-        message: `預設連線 '${config.default}' 有效`
+        message: `預設連線 '${config.default}' 有效`,
       })
     }
 
@@ -357,7 +368,7 @@ export const runDoctorChecks = {
       [string, { envFile?: string }]
     >) {
       if (conn.envFile) {
-        const envPath = join(configPath, '..', conn.envFile)
+        const envPath = join(storagePath, conn.envFile)
         const exists = await Bun.file(envPath).exists()
         results.push({
           group: 'Configuration',
@@ -365,7 +376,7 @@ export const runDoctorChecks = {
           status: exists ? 'pass' : 'error',
           message: exists
             ? `${conn.envFile} 存在`
-            : `連線 '${name}' 的 env 檔案 ${conn.envFile} 不存在`
+            : `連線 '${name}' 的 env 檔案 ${conn.envFile} 不存在`,
         })
       }
     }
@@ -377,43 +388,38 @@ export const runDoctorChecks = {
     const lines: string[] = [`dbcli doctor v${version}`, '']
     const groups = ['Environment', 'Configuration', 'Connection & Data']
     for (const group of groups) {
-      const groupResults = results.filter(r => r.group === group)
+      const groupResults = results.filter((r) => r.group === group)
       if (groupResults.length === 0) continue
       lines.push(group)
       for (const r of groupResults) {
         const icon =
-          r.status === 'pass' ? colors.success('✓') :
-          r.status === 'warn' ? colors.warn('⚠') :
-          colors.error('✗')
+          r.status === 'pass'
+            ? colors.success('✓')
+            : r.status === 'warn'
+              ? colors.warn('⚠')
+              : colors.error('✗')
         lines.push(`  ${icon} ${r.message}`)
       }
       lines.push('')
     }
-    const passed = results.filter(r => r.status === 'pass').length
-    const warnings = results.filter(r => r.status === 'warn').length
-    const errors = results.filter(r => r.status === 'error').length
+    const passed = results.filter((r) => r.status === 'pass').length
+    const warnings = results.filter((r) => r.status === 'warn').length
+    const errors = results.filter((r) => r.status === 'error').length
     lines.push(`Summary: ${passed} passed, ${warnings} warning(s), ${errors} error(s)`)
     return lines.join('\n')
   },
 }
 
-export async function collectMongoDoctorResults(
-  config: {
-    connection: {
-      uri?: string
-      database?: string
-      system?: string
-      host?: string
-      port?: number
-      user?: string
-      password?: string
-    }
-    metadata?: { schemaLastUpdated?: string }
-  }
-): Promise<DoctorResult[]> {
+export async function collectMongoDoctorResults(config: {
+  connection: ConnectionConfig
+  metadata?: { schemaLastUpdated?: string }
+}): Promise<DoctorResult[]> {
   const results: DoctorResult[] = []
 
-  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(config.connection?.uri)
+  const mongoConn = config.connection.system === 'mongodb' ? config.connection : null
+  const mongoUriString =
+    mongoConn && typeof mongoConn.uri === 'string' ? mongoConn.uri : undefined
+  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(mongoUriString)
   if (srvCheck) {
     results.push(srvCheck)
     if (srvCheck.status === 'error') {
@@ -421,10 +427,10 @@ export async function collectMongoDoctorResults(
     }
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(config.connection)
+  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
 
-  await adapter.connect()
   try {
+    await adapter.connect()
     results.push({
       group: 'Connection & Data',
       label: 'Connection',
@@ -445,20 +451,23 @@ export async function collectMongoDoctorResults(
     }
 
     const collections = await adapter.listCollections()
-    results.push(runDoctorChecks.checkLargeTables(
-      collections.map((collection) => ({
-        name: collection.name,
-        estimatedRowCount: collection.documentCount,
-      }))
-    ))
+    results.push(
+      runDoctorChecks.checkLargeTables(
+        collections.map((collection) => ({
+          name: collection.name,
+          estimatedRowCount: collection.documentCount,
+        }))
+      )
+    )
 
     results.push({
       group: 'Connection & Data',
       label: 'Collections',
       status: 'pass',
-      message: collections.length === 0
-        ? 'No collections found'
-        : `Found ${collections.length} collection(s)`,
+      message:
+        collections.length === 0
+          ? 'No collections found'
+          : `Found ${collections.length} collection(s)`,
     })
 
     results.push({
@@ -468,6 +477,13 @@ export async function collectMongoDoctorResults(
       message: config.metadata?.schemaLastUpdated
         ? `Schema cache timestamp present: ${config.metadata.schemaLastUpdated}`
         : 'Schema cache is not tracked for MongoDB — run collection inspections instead',
+    })
+  } catch (error) {
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'error',
+      message: `Connection failed: ${(error as Error).message}`,
     })
   } finally {
     await adapter.disconnect()
@@ -485,6 +501,7 @@ export const doctorCommand = new Command('doctor')
     const logger = getLogger()
     const results: DoctorResult[] = []
     const configPath = resolveConfigPath(doctorCommand)
+    const storagePath = await resolveConfigStoragePath(configPath)
 
     // --- Environment ---
     const bunVersion = (process.versions as Record<string, string>).bun ?? 'unknown'
@@ -493,7 +510,7 @@ export const doctorCommand = new Command('doctor')
     results.push(await runDoctorChecks.checkLatestVersion(pkg.version))
 
     // --- Configuration ---
-    const configExists = await runDoctorChecks.checkConfigExists(configPath)
+    const configExists = await runDoctorChecks.checkConfigExists(storagePath)
     results.push(configExists)
 
     if (configExists.status !== 'error') {
@@ -526,9 +543,11 @@ export const doctorCommand = new Command('doctor')
         // --- Connection & Data ---
         try {
           if (config.connection.system === 'mongodb') {
-            results.push(...await collectMongoDoctorResults(config))
+            results.push(...(await collectMongoDoctorResults(config)))
           } else {
-            const adapter = AdapterFactory.createAdapter(config.connection as Parameters<typeof AdapterFactory.createAdapter>[0])
+            const adapter = AdapterFactory.createAdapter(
+              config.connection as ConnectionOptions
+            )
             await adapter.connect()
 
             results.push({
@@ -541,7 +560,10 @@ export const doctorCommand = new Command('doctor')
             // Check database server version
             try {
               const rawVersion = await adapter.getServerVersion()
-              const versionResult = checkDbVersion(rawVersion, config.connection.system as 'postgresql' | 'mysql' | 'mariadb')
+              const versionResult = checkDbVersion(
+                rawVersion,
+                config.connection.system as 'postgresql' | 'mysql' | 'mariadb'
+              )
               results.push(runDoctorChecks.checkDatabaseVersion(versionResult))
             } catch {
               logger.debug('Could not retrieve database version')
@@ -551,9 +573,14 @@ export const doctorCommand = new Command('doctor')
               const tables = await adapter.listTables()
               const tableColumns = new Map<string, string[]>()
               for (const t of tables) {
-                tableColumns.set(t.name, t.columns.map(c => c.name))
+                tableColumns.set(
+                  t.name,
+                  t.columns.map((c) => c.name)
+                )
               }
-              results.push(runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns))
+              results.push(
+                runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns)
+              )
               results.push(runDoctorChecks.checkLargeTables(tables))
             } catch {
               logger.debug('Could not list tables for blacklist/large table check')
@@ -561,10 +588,7 @@ export const doctorCommand = new Command('doctor')
 
             try {
               const schemaConnName = await getSchemaIsolationConnectionName(configPath)
-              const indexPath = join(
-                resolveSchemaPath(configPath, schemaConnName),
-                'index.json'
-              )
+              const indexPath = join(resolveSchemaPath(storagePath, schemaConnName), 'index.json')
               const indexFile = Bun.file(indexPath)
               let indexParsed: unknown = null
               if (await indexFile.exists()) {
@@ -574,7 +598,9 @@ export const doctorCommand = new Command('doctor')
               results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
             } catch {
               results.push(
-                runDoctorChecks.checkSchemaCacheFreshness(config.metadata?.schemaLastUpdated ?? null)
+                runDoctorChecks.checkSchemaCacheFreshness(
+                  config.metadata?.schemaLastUpdated ?? null
+                )
               )
             }
 
@@ -598,7 +624,7 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    const hasError = results.some(r => r.status === 'error')
+    const hasError = results.some((r) => r.status === 'error')
     if (options.format === 'json') {
       console.log(JSON.stringify({ results, hasError }, null, 2))
     } else {

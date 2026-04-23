@@ -7,7 +7,7 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
-import { PermissionError } from '@/core/permission-guard'
+import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
@@ -106,12 +106,11 @@ export async function updateCommand(
       throw new Error('UPDATE requires --set flag with JSON data (e.g. --set \'{"name":"Bob"}\')')
     }
 
-    // 4. Parse WHERE condition string
-    let whereConditions: Record<string, any>
-    try {
-      whereConditions = parseWhereClause(options.where)
-    } catch (error) {
-      throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
+    // 4. Load configuration
+    const configPath = resolveConfigPath(command, options)
+    const config = await configModule.read(configPath)
+    if (!config.connection) {
+      throw new Error('Run "dbcli init" to configure database connection')
     }
 
     // 5. Parse --set JSON
@@ -129,16 +128,44 @@ export async function updateCommand(
       )
     }
 
-    // 6. Load configuration
-    const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
-    if (!config.connection) {
-      throw new Error('Run "dbcli init" to configure database connection')
+    if (config.connection?.system === 'mongodb') {
+      enforcePermission('UPDATE dummy', config.permission)
+      const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+      await adapter.connect()
+      try {
+        let filter: Record<string, any>
+        try {
+          filter = JSON.parse(options.where)
+        } catch {
+          // If not JSON, try parsing as simple key=value pairs for convenience
+          filter = parseWhereClause(options.where)
+        }
+
+        // If setData doesn't start with $, wrap it in $set
+        const updateDoc = Object.keys(setData).some((key) => key.startsWith('$'))
+          ? setData
+          : { $set: setData }
+
+        const result = await adapter.update(table, filter, updateDoc)
+        const output = {
+          status: 'success',
+          operation: 'update',
+          rows_affected: result.affectedRows,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      } finally {
+        await adapter.disconnect()
+      }
     }
 
-    if (config.connection?.system === 'mongodb') {
-      console.error('此命令目前不支援 MongoDB')
-      process.exit(1)
+    // 6. Parse WHERE condition string (SQL path)
+    let whereConditions: Record<string, any>
+    try {
+      whereConditions = parseWhereClause(options.where)
+    } catch (error) {
+      throw new Error(`WHERE clause parsing failed: ${(error as Error).message}`)
     }
 
     // 7. Create database adapter

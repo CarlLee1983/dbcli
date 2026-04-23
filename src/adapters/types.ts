@@ -236,4 +236,33 @@ export interface QueryableAdapter {
    * @throws {ConnectionError} If not connected or query fails
    */
   getServerVersion(): Promise<string>
+
+  /**
+   * Insert a single document/row
+   * @param collection Collection or table name
+   * @param data Data object to insert
+   * @returns Execution result
+   */
+  insert(collection: string, data: Record<string, any>): Promise<ExecutionResult<any>>
+
+  /**
+   * Update documents/rows matching filter
+   * @param collection Collection or table name
+   * @param filter Filter object
+   * @param update Update operations (e.g. {$set: ...})
+   * @returns Execution result
+   */
+  update(
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>
+  ): Promise<ExecutionResult<any>>
+
+  /**
+   * Delete documents/rows matching filter
+   * @param collection Collection or table name
+   * @param filter Filter object
+   * @returns Execution result
+   */
+  delete(collection: string, filter: Record<string, any>): Promise<ExecutionResult<any>>
 }

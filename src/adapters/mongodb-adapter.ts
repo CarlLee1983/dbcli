@@ -241,4 +241,36 @@ export class MongoDBAdapter implements QueryableAdapter {
     const info = (await this.getDatabase().admin().serverInfo()) as { version?: string }
     return info.version ?? 'unknown'
   }
+
+  async insert(collection: string, data: Record<string, any>): Promise<ExecutionResult<any>> {
+    const db = this.getDatabase()
+    const result = await db.collection(collection).insertOne(data)
+    return {
+      rows: [],
+      affectedRows: result.acknowledged ? 1 : 0,
+      lastInsertId: result.insertedId.toString(),
+    }
+  }
+
+  async update(
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>
+  ): Promise<ExecutionResult<any>> {
+    const db = this.getDatabase()
+    const result = await db.collection(collection).updateMany(filter, update)
+    return {
+      rows: [],
+      affectedRows: result.modifiedCount,
+    }
+  }
+
+  async delete(collection: string, filter: Record<string, any>): Promise<ExecutionResult<any>> {
+    const db = this.getDatabase()
+    const result = await db.collection(collection).deleteMany(filter)
+    return {
+      rows: [],
+      affectedRows: result.deletedCount,
+    }
+  }
 }

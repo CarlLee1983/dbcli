@@ -7,7 +7,7 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
-import { PermissionError } from '@/core/permission-guard'
+import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
@@ -103,8 +103,23 @@ export async function insertCommand(
     }
 
     if (config.connection.system === 'mongodb') {
-      console.error('此命令目前不支援 MongoDB')
-      process.exit(1)
+      enforcePermission('INSERT INTO dummy', config.permission)
+      const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+      await adapter.connect()
+      try {
+        const result = await adapter.insert(table, data)
+        const output = {
+          status: 'success',
+          operation: 'insert',
+          rows_affected: result.affectedRows,
+          timestamp: new Date().toISOString(),
+          lastInsertId: result.lastInsertId,
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      } finally {
+        await adapter.disconnect()
+      }
     }
 
     // 5. Create database adapter

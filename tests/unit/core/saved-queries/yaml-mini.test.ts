@@ -51,6 +51,12 @@ describe('parseYamlMini', () => {
     expect(() => parseYamlMini('params:\n\tdays: 7')).toThrow(/tab/i)
   })
 
+  test('allows asterisk in string values (not anchor)', () => {
+    expect(parseYamlMini('description: see *.md files')).toEqual({
+      description: 'see *.md files',
+    })
+  })
+
   test('rejects unsupported anchor syntax', () => {
     expect(() => parseYamlMini('a: &x 1')).toThrow(/anchor|unsupported/i)
   })

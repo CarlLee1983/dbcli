@@ -9,8 +9,6 @@
 
 type YamlValue = string | number | boolean | null | YamlValue[] | { [k: string]: YamlValue }
 
-const ANCHOR_RE = /(^|\s)[&*]/
-
 export function parseYamlMini(text: string): Record<string, YamlValue> {
   const lines = text.split('\n').filter((l) => !/^\s*(#.*)?$/.test(l))
   const root: Record<string, YamlValue> = {}
@@ -20,9 +18,6 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
   for (const raw of lines) {
     if (raw.includes('\t')) {
       throw new Error(`YAML mini: tab indentation not supported: "${raw}"`)
-    }
-    if (ANCHOR_RE.test(raw)) {
-      throw new Error(`YAML mini: anchor/reference unsupported: "${raw}"`)
     }
     const indent = raw.match(/^( *)/)![1]!.length
     const line = raw.slice(indent)
@@ -38,6 +33,9 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
     }
     const key = line.slice(0, colon).trim()
     const rest = line.slice(colon + 1).trim()
+    if (/^[&*]\w/.test(rest)) {
+      throw new Error(`YAML mini: anchor/reference unsupported: "${raw}"`)
+    }
 
     if (rest === '') {
       const child: Record<string, YamlValue> = {}

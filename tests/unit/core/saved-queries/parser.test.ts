@@ -2,8 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { parseSavedQuery } from '@/core/saved-queries/parser'
 import { SavedQueryError } from '@/core/saved-queries/types'
 
-const wrap = (sql: string, fm = ''): string =>
-  fm ? `-- ---\n${fm}\n-- ---\n\n${sql}` : sql
+const wrap = (sql: string, fm = ''): string => (fm ? `-- ---\n${fm}\n-- ---\n\n${sql}` : sql)
 
 describe('parseSavedQuery — frontmatter', () => {
   test('parses full frontmatter', () => {
@@ -46,7 +45,12 @@ describe('parseSavedQuery — frontmatter', () => {
 describe('parseSavedQuery — SQL body invariants', () => {
   test('rejects INSERT', () => {
     expect(() =>
-      parseSavedQuery({ key: '@i', file: 'i.sql', source: 'shared', text: 'INSERT INTO t VALUES (1);' })
+      parseSavedQuery({
+        key: '@i',
+        file: 'i.sql',
+        source: 'shared',
+        text: 'INSERT INTO t VALUES (1);',
+      })
     ).toThrow(SavedQueryError)
   })
 
@@ -58,7 +62,12 @@ describe('parseSavedQuery — SQL body invariants', () => {
 
   test('rejects multi-statement', () => {
     expect(() =>
-      parseSavedQuery({ key: '@m', file: 'm.sql', source: 'shared', text: 'SELECT 1; DROP TABLE x;' })
+      parseSavedQuery({
+        key: '@m',
+        file: 'm.sql',
+        source: 'shared',
+        text: 'SELECT 1; DROP TABLE x;',
+      })
     ).toThrow(SavedQueryError)
   })
 
@@ -70,7 +79,12 @@ describe('parseSavedQuery — SQL body invariants', () => {
 
   test('rejects ${...} template', () => {
     expect(() =>
-      parseSavedQuery({ key: '@t', file: 't.sql', source: 'shared', text: 'SELECT * FROM ${table}' })
+      parseSavedQuery({
+        key: '@t',
+        file: 't.sql',
+        source: 'shared',
+        text: 'SELECT * FROM ${table}',
+      })
     ).toThrow(/use :name/i)
   })
 

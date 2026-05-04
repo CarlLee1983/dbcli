@@ -131,7 +131,11 @@ function normaliseParams(value: unknown, input: ParseInput): ParamSpec[] {
   return Object.entries(value as Record<string, any>).map(([name, spec]) => {
     const type = String(spec?.type ?? 'string') as ParamType
     if (!VALID_TYPES.includes(type)) {
-      throw new SavedQueryError(`Param '${name}': invalid type '${type}'`, 'PARSE_ERROR', input.file)
+      throw new SavedQueryError(
+        `Param '${name}': invalid type '${type}'`,
+        'PARSE_ERROR',
+        input.file
+      )
     }
     const hasDefault = spec && Object.prototype.hasOwnProperty.call(spec, 'default')
     return {
@@ -149,7 +153,11 @@ export function validateBody(body: string, input: ParseInput): void {
   const stripped = stripCommentsAndStrings(body)
   const trimmed = stripped.trim()
   if (!trimmed) {
-    throw new SavedQueryError(`Snippet '${input.key}' has empty SQL body`, 'PARSE_ERROR', input.file)
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has empty SQL body`,
+      'PARSE_ERROR',
+      input.file
+    )
   }
 
   const firstKeyword = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? ''

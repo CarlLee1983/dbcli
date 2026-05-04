@@ -957,6 +957,22 @@ A Query-only agent cannot write to any table, and also cannot read blacklisted t
 
 ---
 
+## Saved queries
+
+Save parameterised SELECT snippets and re-run them by name:
+
+```bash
+dbcli queries list
+dbcli queries show @dau
+dbcli q @dau --param days=30 --format json
+```
+
+Snippets live in `.dbcli-shared/queries/` (committed) or `.dbcli/queries/`
+(gitignored, personal override). Each `.sql` file declares its frontmatter
+in a `-- ---` block. Read `assets/reference.md` for the full schema.
+
+---
+
 ## AI Integration Guide
 
 dbcli ships AI-consumable skill files (`assets/SKILL.md` and `assets/reference.md`) and can copy them into your favorite AI tool directories.

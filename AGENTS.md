@@ -118,6 +118,7 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 
 操作資料庫前，必須依序執行：
 
+0. （若需要片段）`bun run src/cli.ts queries list` — 找出可用片段，再以 `q @<name>` 執行
 1. `bun run src/cli.ts blacklist list` — 確認敏感資料已受保護
 2. `bun run src/cli.ts schema <table> --format json` — 確認目標表的真實欄位名稱
 3. 再執行 `query` / `insert` / `update` / `export` 等操作

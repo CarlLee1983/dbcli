@@ -963,6 +963,23 @@ Query-only 代理無法寫入任何表，也無法讀取黑名單表或欄位 �
 
 ---
 
+## 已保存查詢片段（Saved queries）
+
+將參數化的 SELECT 片段保存於版控，並依名稱重複執行：
+
+```bash
+dbcli queries list
+dbcli queries show @dau
+dbcli q @dau --param days=30 --format json
+```
+
+片段位於兩層儲存：`.dbcli-shared/queries/`（commit 進版控、團隊共享）與
+`.dbcli/queries/`（gitignore、個人覆蓋）。每個 `.sql` 檔以 `-- ---` 區塊
+宣告 frontmatter（name、description、engine、params、tags），完整 schema 見
+`assets/reference.md`。
+
+---
+
 ## AI 整合指南
 
 dbcli 內建供 AI 使用的 skill 文件（`assets/SKILL.md` 與 `assets/reference.md`），並可複製到常見 AI 開發工具的目錄。

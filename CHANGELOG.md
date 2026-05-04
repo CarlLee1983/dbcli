@@ -5,6 +5,18 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-05-04
+
+### Added
+
+- `dbcli q @<name>` 執行已保存的參數化 SELECT 片段
+- `dbcli queries list/show/new/edit/check` 管理片段
+- 兩層片段儲存：`.dbcli-shared/queries/`（共享）+ `.dbcli/queries/`（個人覆蓋）
+- 完整安全 invariants：拒絕非 SELECT/WITH、多語句、`${...}` / `{{...}}` 模板語法
+- 子查詢式 size guard 包裹 (`SELECT * FROM (...) AS _dbcli_guard LIMIT 1000`)
+- 內建 YAML 子集 frontmatter parser（無新增 npm 依賴）
+- `queries list/show --format json` 為未來 MCP server 預留契約
+
 ## [1.6.0] - 2026-04-23
 
 ### Added

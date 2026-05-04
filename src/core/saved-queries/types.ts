@@ -1,0 +1,75 @@
+/**
+ * Saved query 型別定義
+ * 整個 saved-queries 模組對外公開的純資料結構
+ */
+
+export type ParamType = 'int' | 'string' | 'float' | 'bool' | 'date' | 'datetime'
+
+export type EngineTag = 'postgres' | 'mysql'
+
+export interface ParamSpec {
+  name: string
+  type: ParamType
+  required: boolean
+  default?: string | number | boolean | null
+  description?: string
+  enum?: Array<string | number>
+}
+
+export interface SavedQueryMeta {
+  /** Display name（frontmatter `name`），未指定時等於 snippet key */
+  name: string
+  /** snippet key，例如 `@dau` 或 `@analytics/revenue` */
+  key: string
+  description?: string
+  /** 未宣告 = undefined，警告等級 */
+  engine?: EngineTag[]
+  params: ParamSpec[]
+  tags: string[]
+}
+
+export interface SavedQuery {
+  meta: SavedQueryMeta
+  sqlBody: string
+  /** absolute or workspace-relative path used in messages */
+  file: string
+  /** `'shared'` | `'local'` */
+  source: SnippetSource
+}
+
+export type SnippetSource = 'shared' | 'local'
+
+export interface ResolvedSnippet {
+  query: SavedQuery
+  /** local 蓋掉 shared 時為 true */
+  hasLocalOverride: boolean
+}
+
+export interface ParsedFrontmatter {
+  meta: SavedQueryMeta
+  /** 解析過程中產生的非致命警告（例如 missing engine） */
+  warnings: string[]
+}
+
+export class SavedQueryError extends Error {
+  constructor(
+    message: string,
+    public readonly code:
+      | 'PARSE_ERROR'
+      | 'NOT_FOUND'
+      | 'AMBIGUOUS'
+      | 'PARAM_MISSING'
+      | 'PARAM_INVALID'
+      | 'ENGINE_MISMATCH'
+      | 'TEMPLATE_SYNTAX'
+      | 'NOT_SELECT'
+      | 'MULTI_STATEMENT'
+      | 'FILE_TOO_LARGE'
+      | 'IO_ERROR',
+    public readonly file?: string
+  ) {
+    super(message)
+    this.name = 'SavedQueryError'
+    Object.setPrototypeOf(this, SavedQueryError.prototype)
+  }
+}

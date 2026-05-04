@@ -27,10 +27,7 @@ export async function loadSnippets(opts: LoadOptions): Promise<Map<string, Resol
   return merged
 }
 
-async function walkAndParse(
-  root: string,
-  source: SnippetSource
-): Promise<Map<string, SavedQuery>> {
+async function walkAndParse(root: string, source: SnippetSource): Promise<Map<string, SavedQuery>> {
   const out = new Map<string, SavedQuery>()
   let entries: string[]
   try {

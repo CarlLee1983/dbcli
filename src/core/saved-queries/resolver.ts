@@ -1,10 +1,7 @@
 import { SavedQueryError, type ResolvedSnippet } from './types'
 import { levenshteinDistance } from '@/utils/levenshtein-distance'
 
-export function resolveByName(
-  map: Map<string, ResolvedSnippet>,
-  name: string
-): ResolvedSnippet {
+export function resolveByName(map: Map<string, ResolvedSnippet>, name: string): ResolvedSnippet {
   const hit = map.get(name)
   if (hit) return hit
   const suggestions = suggestSimilar([...map.keys()], name)

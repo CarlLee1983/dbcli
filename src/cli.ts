@@ -6,6 +6,7 @@ import { initCommand } from './commands/init'
 import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
+import { qCommand } from './commands/q'
 import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
@@ -128,6 +129,24 @@ program
       console.error((error as Error).message)
       process.exit(1)
     }
+  })
+
+// Register saved-query (q) command
+program
+  .command('q <name>')
+  .description(t('q.description'))
+  .option('--format <type>', 'Output format: table, json, csv', 'table')
+  .option('--no-limit', 'Disable size guard wrap (LIMIT 1000)')
+  .option('--dry-run', 'Show final SQL + bind values; do not execute')
+  .option(
+    '--param <kv>',
+    'Pass parameter as key=value (repeatable)',
+    (val: string, prev: string[] = []) => prev.concat([val]),
+    [] as string[]
+  )
+  .option('--param-file <path>', 'JSON file containing param values')
+  .action(async (name: string, options: any, command) => {
+    await qCommand(name, options, command)
   })
 
 // Register insert command

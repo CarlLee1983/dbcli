@@ -55,6 +55,11 @@ function parseScalarOrInlineList(s: string): YamlValue {
     if (inner === '') return []
     return inner.split(',').map((p) => parseScalar(p.trim()))
   }
+  if (s.startsWith('{') && s.endsWith('}')) {
+    const inner = s.slice(1, -1).trim()
+    if (inner === '') return {}
+    throw new Error(`YAML mini: inline map entries unsupported, use block form: "${s}"`)
+  }
   return parseScalar(s)
 }
 

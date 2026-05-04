@@ -147,6 +147,19 @@ describe('queries — extra branches', () => {
     await queriesNew('foo', {})
     expect(exitSpy).toHaveBeenCalledWith(1)
   })
+
+  test('scaffold from `new` round-trips through list/show without parser errors', async () => {
+    await queriesNew('@scaffold-roundtrip', {})
+    logSpy.mockClear()
+    await queriesList({ format: 'json' })
+    const listOut = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    const parsed = JSON.parse(listOut)
+    expect(parsed.find((s: any) => s.name === '@scaffold-roundtrip')).toBeTruthy()
+    logSpy.mockClear()
+    await queriesShow('@scaffold-roundtrip', { format: 'json' })
+    const showOut = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(JSON.parse(showOut).sql).toMatch(/SELECT/i)
+  })
 })
 
 describe('queries commander wiring', () => {

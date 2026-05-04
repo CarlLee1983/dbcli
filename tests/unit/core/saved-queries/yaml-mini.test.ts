@@ -12,6 +12,10 @@ describe('parseYamlMini', () => {
     expect(out).toEqual({ tags: ['analytics', 'daily'] })
   })
 
+  test('parses inline empty map', () => {
+    expect(parseYamlMini('params: {}')).toEqual({ params: {} })
+  })
+
   test('parses nested map (params)', () => {
     const text = [
       'params:',

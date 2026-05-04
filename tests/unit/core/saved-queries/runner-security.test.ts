@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { prepareExecution } from '@/core/saved-queries/runner'
+import { parseSavedQuery } from '@/core/saved-queries/parser'
 import { SavedQueryError, type ResolvedSnippet, type SavedQuery } from '@/core/saved-queries/types'
 
 const make = (
@@ -80,4 +83,26 @@ describe('prepareExecution — guards', () => {
     )
     expect(out.driver.sql).not.toContain('_dbcli_guard')
   })
+})
+
+const fix = (rel: string) =>
+  readFileSync(
+    join(import.meta.dir, '..', '..', '..', 'fixtures', 'saved-queries', 'invalid', rel),
+    'utf8'
+  )
+
+describe('red-line fixtures', () => {
+  for (const f of [
+    'insert.sql',
+    'multi.sql',
+    'template-dollar.sql',
+    'template-handlebar.sql',
+    'too-large.sql',
+  ]) {
+    test(`rejects ${f}`, () => {
+      expect(() =>
+        parseSavedQuery({ key: '@x', file: f, source: 'shared', text: fix(f) })
+      ).toThrow()
+    })
+  }
 })

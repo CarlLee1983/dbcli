@@ -12,8 +12,6 @@ describe('snippet-paths', () => {
     expect(snippetKeyToFile('/tmp/proj', '@analytics/revenue', 'shared')).toBe(
       '/tmp/proj/.dbcli-shared/queries/analytics/revenue.sql'
     )
-    expect(snippetKeyToFile('/tmp/proj', '@dau', 'local')).toBe(
-      '/tmp/proj/.dbcli/queries/dau.sql'
-    )
+    expect(snippetKeyToFile('/tmp/proj', '@dau', 'local')).toBe('/tmp/proj/.dbcli/queries/dau.sql')
   })
 })

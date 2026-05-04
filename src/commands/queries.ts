@@ -41,11 +41,8 @@ export async function queriesList(options: ListOptions): Promise<void> {
     s.query.meta.params.map((p) => p.name).join(', ') || '-',
     s.query.meta.description ?? '',
   ])
-  const widths = header.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length))
-  )
-  const fmt = (cells: string[]) =>
-    cells.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
+  const fmt = (cells: string[]) => cells.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
   console.log(fmt(header))
   for (const r of rows) console.log(fmt(r))
 }

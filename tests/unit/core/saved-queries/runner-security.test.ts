@@ -32,12 +32,7 @@ describe('prepareExecution — engine matching', () => {
 
   test('fails when engine mismatches', () => {
     expect(() =>
-      prepareExecution(
-        make('SELECT 1', ['postgres']),
-        { engine: 'mysql', noLimit: false },
-        {},
-        {}
-      )
+      prepareExecution(make('SELECT 1', ['postgres']), { engine: 'mysql', noLimit: false }, {}, {})
     ).toThrow(SavedQueryError)
   })
 
@@ -53,12 +48,7 @@ describe('prepareExecution — engine matching', () => {
   })
 
   test('warns when engine missing in meta (no throw)', () => {
-    const out = prepareExecution(
-      make('SELECT 1'),
-      { engine: 'postgres', noLimit: false },
-      {},
-      {}
-    )
+    const out = prepareExecution(make('SELECT 1'), { engine: 'postgres', noLimit: false }, {}, {})
     expect(out.warnings.some((w) => /engine/i.test(w))).toBe(true)
   })
 })

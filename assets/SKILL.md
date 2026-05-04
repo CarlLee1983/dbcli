@@ -74,6 +74,24 @@ dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
 - No auto-limit on MongoDB queries — use `$limit` in the pipeline if needed.
 - See reference.md MongoDB section for full syntax and examples.
 
+## Saved queries
+
+Run reusable parameterised SELECT snippets stored in your repo.
+
+| Step | Command |
+|------|---------|
+| 1. Discover | `dbcli queries list` |
+| 2. Inspect | `dbcli queries show @<name>` |
+| 3. Run     | `dbcli q @<name> --param k=v` |
+
+Snippets live in two layers:
+- `.dbcli-shared/queries/` — committed, team-shared
+- `.dbcli/queries/`        — gitignored, personal override
+
+Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
+(name, description, engine, params, tags). See `dbcli queries show @<name> --format json`
+for the machine-readable contract.
+
 ## Common workflows
 
 - **Debug odd state:** `schema` → `check` → `query` with tight `WHERE` → follow FKs from schema JSON. Evidence over theory.

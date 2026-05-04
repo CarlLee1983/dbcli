@@ -114,6 +114,99 @@ dbcli query '[{"$match": {"status": "active"}}, {"$group": {"_id": "$role", "cou
 > - `--collection <name>` is required
 > - Auto-limit does not apply; use `$limit` in your pipeline if needed
 
+### q
+
+Run a saved query snippet by `@name`. Snippets are parameterised SELECT/WITH statements stored under `.dbcli-shared/queries/` (committed, team-shared) or `.dbcli/queries/` (gitignored, personal override). Local snippets always shadow shared ones with the same key.
+
+```bash
+dbcli q @dau                                  # run with declared defaults
+dbcli q @dau --param days=30 --format json    # override a param
+dbcli q @analytics/revenue --param-file params.json
+dbcli q @dau --dry-run                        # show final SQL + bind values
+dbcli q @dau --no-limit                       # disable size guard wrap
+```
+
+**Options:**
+- `--format <table|json|csv>` — output format (default: `table`)
+- `--param <key=value>` — pass a parameter (repeatable)
+- `--param-file <path>` — JSON object whose keys are param names
+- `--no-limit` — skip the `SELECT * FROM (…) AS _dbcli_guard LIMIT 1000` wrap
+- `--dry-run` — print the bound SQL + values without executing
+- `--use <name>` — pick a v2 named connection
+
+**Permission:** query-only+
+
+#### Snippet file format
+
+Each `.sql` file is plain SQL with optional YAML frontmatter inside a leading `-- ---` block. Lines outside frontmatter form the SQL body.
+
+```sql
+-- ---
+-- name: DAU
+-- description: Daily Active Users
+-- engine: postgres        # or [postgres, mysql]
+-- params:
+--   days:
+--     type: int           # int | string | float | bool | date | datetime
+--     default: 7
+--     required: false
+--     description: lookback window in days
+--     enum: [7, 30, 90]
+-- tags: [analytics]
+-- ---
+SELECT COUNT(DISTINCT user_id) AS dau
+FROM events
+WHERE created_at > NOW() - (:days || ' days')::interval;
+```
+
+Param placeholders use `:name`. They are rewritten to `$1, $2, …` (Postgres) or `?, ?, …` (MySQL) at execution time and passed as bind values — string interpolation is never used.
+
+#### Param type coercion
+
+| Declared `type` | Accepts |
+|-----------------|---------|
+| `int` | integer literal |
+| `float` | decimal literal |
+| `bool` | `true` / `false` / `1` / `0` / `yes` / `no` |
+| `string` | any value |
+| `date` | `YYYY-MM-DD` |
+| `datetime` | ISO 8601 |
+
+`enum` (optional) restricts the accepted values; mismatch is a hard error. CLI `--param` overrides `--param-file`, which overrides the snippet's `default`.
+
+#### Safety invariants
+
+- Only `SELECT` / `WITH` (CTE) bodies are accepted; `INSERT/UPDATE/DELETE/DDL` are rejected by the parser.
+- Multi-statement bodies (`SELECT 1; DROP TABLE x`) are rejected.
+- Template syntax inside SQL (`${…}`, `{{…}}`) is rejected — use `:name` parameters.
+- Files exceeding 64 KiB are rejected.
+- `--no-limit` is honoured only at the outermost level; nested subqueries are still wrapped by the size guard.
+
+### queries
+
+Manage saved snippets — list / show / new / edit / check.
+
+```bash
+dbcli queries list                      # all snippets
+dbcli queries list --tag analytics --engine postgres --format json
+dbcli queries show @dau                 # frontmatter + SQL
+dbcli queries show @dau --format json   # MCP-shaped contract
+dbcli queries new @new/sample           # scaffold under .dbcli-shared/queries/
+dbcli queries new @scratch --local      # personal copy under .dbcli/queries/
+dbcli queries edit @dau                 # opens local first, falls back to shared
+dbcli queries edit @dau --shared        # always edit the shared file
+dbcli queries check                     # parse all snippets; exit 1 on errors
+dbcli queries check --strict            # promote warnings (e.g. missing engine) to errors
+```
+
+**`list` options:** `--format <table|json|csv>`, `--tag <tag>`, `--engine <postgres|mysql>`, `--source <local|shared>`
+**`show` options:** `--format <table|json|csv>`
+**`new` options:** `--local`, `--edit`
+**`edit` options:** `--shared`
+**`check` options:** `--strict`, `--format <table|json|csv>`
+
+`--format json` on `list` and `show` emits a stable, machine-readable shape — designed to back a future MCP server without further refactor.
+
 ### insert
 
 Insert data into a table.

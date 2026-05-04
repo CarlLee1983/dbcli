@@ -7,6 +7,7 @@ import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
 import { qCommand } from './commands/q'
+import { queriesCommand } from './commands/queries'
 import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
@@ -248,6 +249,7 @@ program.addCommand(upgradeCommand)
 program.addCommand(shellCommand)
 program.addCommand(migrateCommand)
 program.addCommand(useCommand)
+program.addCommand(queriesCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

@@ -31,6 +31,8 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(originalCwd)
   rmSync(workdir, { recursive: true, force: true })
+  logSpy?.mockRestore?.()
+  exitSpy?.mockRestore?.()
 })
 
 describe('queries list', () => {

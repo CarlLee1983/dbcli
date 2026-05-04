@@ -64,6 +64,26 @@
     "no_results": "No results returned",
     "result_count": "Results: {count} row(s)"
   },
+  "q": {
+    "description": "Run a saved query snippet by @name",
+    "missing_param": "Missing required parameters for snippet '{name}'",
+    "engine_mismatch": "Engine mismatch for snippet '{name}'",
+    "snippet_not_found": "Snippet not found: {name}",
+    "dry_run_header": "Dry-run preview (no execution):"
+  },
+  "queries": {
+    "description": "Manage saved query snippets",
+    "list_description": "List saved snippets",
+    "show_description": "Show a snippet (frontmatter + SQL)",
+    "new_description": "Create a new snippet file",
+    "edit_description": "Open a snippet in $EDITOR",
+    "check_description": "Validate all snippets",
+    "created": "Created {file}",
+    "first_run_hint": "Tip: commit .dbcli-shared/ to share snippets with your team.",
+    "no_snippets": "No snippets found. Create one with: dbcli queries new @<name>",
+    "check_ok": "✓ {count} snippets parsed successfully",
+    "check_failed": "✗ {count} snippet(s) have errors"
+  },
   "errors": {
     "message": "Error: {message}",
     "invalid_config": "Invalid configuration: {field}",

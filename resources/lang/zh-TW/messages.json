@@ -64,6 +64,26 @@
     "no_results": "未返回任何結果",
     "result_count": "結果：{count} 列"
   },
+  "q": {
+    "description": "依 @name 執行已保存的查詢片段",
+    "missing_param": "片段 '{name}' 缺少必要參數",
+    "engine_mismatch": "片段 '{name}' 引擎不符",
+    "snippet_not_found": "找不到片段：{name}",
+    "dry_run_header": "Dry-run 預覽（不會執行）："
+  },
+  "queries": {
+    "description": "管理已保存的查詢片段",
+    "list_description": "列出所有片段",
+    "show_description": "顯示片段內容（frontmatter + SQL）",
+    "new_description": "建立新的片段檔",
+    "edit_description": "以 $EDITOR 開啟片段",
+    "check_description": "驗證所有片段",
+    "created": "已建立 {file}",
+    "first_run_hint": "提示：將 .dbcli-shared/ commit 進版控可與團隊共享片段。",
+    "no_snippets": "尚無任何片段。執行 dbcli queries new @<name> 建立。",
+    "check_ok": "✓ 成功解析 {count} 個片段",
+    "check_failed": "✗ 有 {count} 個片段解析失敗"
+  },
   "errors": {
     "message": "錯誤：{message}",
     "invalid_config": "配置無效：{field}",

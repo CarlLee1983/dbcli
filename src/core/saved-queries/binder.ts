@@ -28,10 +28,7 @@ export function coerceParams(specs: ParamSpec[], raw: RawParamMap): ParamMap {
     out[spec.name] = coerceValue(spec, raw[spec.name])
   }
   if (missing.length > 0) {
-    throw new SavedQueryError(
-      `Missing required parameters: ${missing.join(', ')}`,
-      'PARAM_MISSING'
-    )
+    throw new SavedQueryError(`Missing required parameters: ${missing.join(', ')}`, 'PARAM_MISSING')
   }
   return out
 }
@@ -98,11 +95,7 @@ export interface RewriteResult {
 
 const NAME_RE = /(?<![\w:]):([a-zA-Z_][a-zA-Z0-9_]*)/g
 
-export function rewriteToBind(
-  sqlBody: string,
-  params: ParamMap,
-  engine: EngineTag
-): RewriteResult {
+export function rewriteToBind(sqlBody: string, params: ParamMap, engine: EngineTag): RewriteResult {
   const masked = stripCommentsAndStrings(sqlBody)
   const order: string[] = []
   const indexByName = new Map<string, number>()

@@ -21,9 +21,9 @@ describe('coerceParams', () => {
   })
 
   test('rejects NaN int', () => {
-    expect(() =>
-      coerceParams([{ name: 'n', type: 'int', required: true }], { n: 'abc' })
-    ).toThrow(SavedQueryError)
+    expect(() => coerceParams([{ name: 'n', type: 'int', required: true }], { n: 'abc' })).toThrow(
+      SavedQueryError
+    )
   })
 
   test('rejects missing required', () => {

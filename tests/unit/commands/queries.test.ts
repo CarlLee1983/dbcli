@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  queriesCommand,
   queriesList,
   queriesShow,
   queriesCheck,
@@ -121,6 +122,59 @@ describe('queries new', () => {
 describe('queries edit', () => {
   test('exits 1 when neither local nor shared exists', async () => {
     await queriesEdit('@nope', {})
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
+  test('--shared with missing file exits 1', async () => {
+    await queriesEdit('@nope', { shared: true })
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+})
+
+describe('queries — extra branches', () => {
+  test('list (default format, empty) prints no_snippets hint', async () => {
+    await queriesList({ source: 'local' })
+    const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(out.length).toBeGreaterThan(0)
+  })
+
+  test('show on missing snippet exits 1', async () => {
+    await queriesShow('@missing', {})
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
+  test('new without @ prefix exits 1', async () => {
+    await queriesNew('foo', {})
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+})
+
+describe('queries commander wiring', () => {
+  test('list action callback runs via parseAsync', async () => {
+    await queriesCommand.parseAsync(['list', '--format', 'json'], { from: 'user' })
+    const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(out).toContain('@dau')
+  })
+
+  test('show action callback runs via parseAsync', async () => {
+    await queriesCommand.parseAsync(['show', '@dau', '--format', 'json'], { from: 'user' })
+    const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(out).toContain('SELECT 1')
+  })
+
+  test('check action callback runs via parseAsync', async () => {
+    await queriesCommand.parseAsync(['check'], { from: 'user' })
+    const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(out).toMatch(/snippets parsed successfully/)
+  })
+
+  test('new action callback runs via parseAsync', async () => {
+    await queriesCommand.parseAsync(['new', '@brand-new', '--local'], { from: 'user' })
+    expect(await Bun.file(join(workdir, '.dbcli/queries/brand-new.sql')).exists()).toBe(true)
+  })
+
+  test('edit action callback runs via parseAsync (missing → exit 1)', async () => {
+    await queriesCommand.parseAsync(['edit', '@nope'], { from: 'user' })
     expect(exitSpy).toHaveBeenCalledWith(1)
   })
 })

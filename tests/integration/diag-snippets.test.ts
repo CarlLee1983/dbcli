@@ -116,4 +116,30 @@ describe('builtin diag snippets', () => {
       'Innodb_buffer_pool'
     )
   })
+
+  const TOPICS = [
+    'connections',
+    'long-running',
+    'table-sizes',
+    'index-usage',
+    'missing-indexes',
+    'locks',
+    'db-size',
+    'cache-hit',
+  ] as const
+
+  for (const topic of TOPICS) {
+    for (const engine of ['postgres', 'mysql'] as const) {
+      test(`@diag/${topic} resolves for ${engine}`, async () => {
+        const dirs = resolveSnippetDirs(process.cwd())
+        const map = await loadSnippets({
+          builtinDir: dirs.builtinDir,
+          sharedDir: '/__none__',
+          localDir: '/__none__',
+        })
+        const r = resolveByName(map, `@diag/${topic}`, engine)
+        expect(r.query.sqlBody.length).toBeGreaterThan(0)
+      })
+    }
+  }
 })

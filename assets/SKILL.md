@@ -92,6 +92,25 @@ Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
 (name, description, engine, params, tags). See `dbcli queries show @<name> --format json`
 for the machine-readable contract.
 
+### Built-in diagnostic snippets
+
+dbcli ships ready-made diagnostic queries. Run with `dbcli q @diag/<topic>`:
+
+| key                     | purpose                                  |
+|-------------------------|------------------------------------------|
+| `@diag/connections`     | active sessions                          |
+| `@diag/long-running`    | queries above `min_seconds` (default 30) |
+| `@diag/table-sizes`     | table data/index size with row counts    |
+| `@diag/index-usage`     | indexes by scan count                    |
+| `@diag/missing-indexes` | tables dominated by sequential scans     |
+| `@diag/locks`           | lock-wait chains                         |
+| `@diag/db-size`         | database size summary                    |
+| `@diag/cache-hit`       | buffer cache hit ratios                  |
+
+Engine variants are picked automatically based on the active connection.
+Override any of them by placing a same-named file under `.dbcli-shared/queries/`
+or `.dbcli/queries/`.
+
 ## Common workflows
 
 - **Debug odd state:** `schema` → `check` → `query` with tight `WHERE` → follow FKs from schema JSON. Evidence over theory.

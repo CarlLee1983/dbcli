@@ -49,15 +49,16 @@ describe('queries list', () => {
     const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
     const parsed = JSON.parse(out)
     expect(Array.isArray(parsed)).toBe(true)
-    expect(parsed[0]).toMatchObject({
+    const dau = parsed.find((r: { name: string }) => r.name === '@dau')
+    expect(dau).toMatchObject({
       name: '@dau',
       sources: ['shared'],
       engines: ['postgres'],
     })
   })
 
-  test('--engine mysql filters out postgres-only snippets', async () => {
-    await queriesList({ engine: 'mysql', format: 'json' })
+  test('--engine mysql + source shared filters out postgres-only snippets', async () => {
+    await queriesList({ engine: 'mysql', source: 'shared', format: 'json' })
     const parsed = JSON.parse(logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n'))
     expect(parsed).toEqual([])
   })

@@ -33,11 +33,11 @@ export interface SavedQuery {
   sqlBody: string
   /** absolute or workspace-relative path used in messages */
   file: string
-  /** `'shared'` | `'local'` */
+  /** `'builtin'` | `'shared'` | `'local'` */
   source: SnippetSource
 }
 
-export type SnippetSource = 'shared' | 'local'
+export type SnippetSource = 'builtin' | 'shared' | 'local'
 
 export interface ResolvedSnippet {
   query: SavedQuery

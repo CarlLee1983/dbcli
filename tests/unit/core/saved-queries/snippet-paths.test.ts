@@ -14,4 +14,16 @@ describe('snippet-paths', () => {
     )
     expect(snippetKeyToFile('/tmp/proj', '@dau', 'local')).toBe('/tmp/proj/.dbcli/queries/dau.sql')
   })
+
+  test('resolveSnippetDirs returns builtinDir from packaged assets', () => {
+    const dirs = resolveSnippetDirs('/tmp/workspace')
+    expect(dirs.builtinDir.endsWith('assets/snippets')).toBe(true)
+    expect(dirs.sharedDir).toBe('/tmp/workspace/.dbcli-shared/queries')
+    expect(dirs.localDir).toBe('/tmp/workspace/.dbcli/queries')
+  })
+
+  test('snippetKeyToFile supports builtin source', () => {
+    const p = snippetKeyToFile('/tmp/workspace', '@diag/connections', 'builtin')
+    expect(p.endsWith('assets/snippets/diag/connections.sql')).toBe(true)
+  })
 })

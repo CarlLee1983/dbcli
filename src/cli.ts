@@ -6,6 +6,7 @@ import { initCommand } from './commands/init'
 import { listCommand } from './commands/list'
 import { schemaCommand } from './commands/schema'
 import { queryCommand } from './commands/query'
+import { planCommand } from './commands/plan'
 import { qCommand } from './commands/q'
 import { queriesCommand } from './commands/queries'
 import { insertCommand } from './commands/insert'
@@ -138,6 +139,15 @@ program
       console.error((error as Error).message)
       process.exit(1)
     }
+  })
+
+// Register plan command
+program
+  .command('plan <sql>')
+  .description('Analyze SQL risk without executing')
+  .option('--format <type>', 'Output format: text, json', 'text')
+  .action(async (sql: string, options: Record<string, unknown>, command) => {
+    await planCommand(sql, options as never, command)
   })
 
 // Register saved-query (q) command

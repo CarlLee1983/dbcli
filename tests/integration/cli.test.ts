@@ -13,6 +13,13 @@ describe('CLI smoke tests', () => {
     expect(result.stdout).toMatch(/\d+\.\d+\.\d+/)
     expect(result.code).toBe(0)
   })
+
+  it('should display plan command in help', async () => {
+    const result = await execCommand(['--help'])
+    expect(result.stdout).toContain('plan')
+    expect(result.stdout).toContain('Analyze SQL risk without executing')
+    expect(result.code).toBe(0)
+  })
 })
 
 function execCommand(args: string[]): Promise<{ stdout: string; code: number }> {

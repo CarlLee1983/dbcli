@@ -56,7 +56,7 @@ export class MongoDBAdapter implements QueryableAdapter {
       })
     } catch (error) {
       const code = (error as { code?: string })?.code
-      if (code !== 'ECONNREFUSED') {
+      if (!['ECONNREFUSED', 'ENOTFOUND', 'ETIMEOUT', 'ETIMEDOUT'].includes(code ?? '')) {
         throw error
       }
     }
@@ -92,7 +92,7 @@ export class MongoDBAdapter implements QueryableAdapter {
       return this.parseTxtRecords(records)
     } catch (error) {
       const code = (error as { code?: string })?.code
-      if (code !== 'ECONNREFUSED') {
+      if (!['ECONNREFUSED', 'ENOTFOUND', 'ETIMEOUT', 'ETIMEDOUT'].includes(code ?? '')) {
         throw error
       }
     }

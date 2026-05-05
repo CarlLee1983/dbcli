@@ -118,7 +118,13 @@ dbcli query '[{"$match": {"status": "active"}}, {"$group": {"_id": "$role", "cou
 
 ### q
 
-Run a saved query snippet by `@name`. Snippets are parameterised SELECT/WITH statements stored under `.dbcli-shared/queries/` (committed, team-shared) or `.dbcli/queries/` (gitignored, personal override). Local snippets always shadow shared ones with the same key.
+Run a saved query snippet by `@name`. Snippets are parameterised SELECT/WITH statements resolved from three layers, with **local > shared > builtin** precedence (a local file always shadows shared and builtin variants of the same key):
+
+- `builtin` — bundled with dbcli (e.g. `@diag/*`); read-only at runtime.
+- `.dbcli-shared/queries/` — committed, team-shared.
+- `.dbcli/queries/` — gitignored, personal override.
+
+Engine variants (`name.postgres.sql` / `name.mysql.sql`) at the same layer are merged; the variant matching the active connection's engine is selected at execution time.
 
 ```bash
 dbcli q @dau                                  # run with declared defaults
@@ -186,19 +192,35 @@ Param placeholders use `:name`. They are rewritten to `$1, $2, …` (Postgres) o
 
 ### queries
 
-Manage saved snippets — list / show / new / edit / check.
+Manage saved snippets — discover, inspect, scaffold, and edit local copies. Mutating
+subcommands (`delete`, `rename`, `copy`, `import`) only operate on the local layer
+(`.dbcli/queries/`); builtin and shared snippets are never modified in place.
 
 ```bash
-dbcli queries list                      # all snippets
+# Discovery / inspection
+dbcli queries list                      # all snippets (builtin + shared + local)
 dbcli queries list --tag analytics --engine postgres --format json
+dbcli queries list --source local       # only personal overrides
 dbcli queries show @dau                 # frontmatter + SQL
 dbcli queries show @dau --format json   # MCP-shaped contract
+
+# Authoring
 dbcli queries new @new/sample           # scaffold under .dbcli-shared/queries/
 dbcli queries new @scratch --local      # personal copy under .dbcli/queries/
 dbcli queries edit @dau                 # opens local first, falls back to shared
 dbcli queries edit @dau --shared        # always edit the shared file
 dbcli queries check                     # parse all snippets; exit 1 on errors
 dbcli queries check --strict            # promote warnings (e.g. missing engine) to errors
+
+# Local-layer file management
+dbcli queries delete @scratch                       # remove local file(s); prompts unless --force
+dbcli queries delete @scratch --force
+dbcli queries rename @scratch @analytics/dau        # rename within local layer; preserves engine suffix
+dbcli queries copy @diag/connections @my/connections    # fork builtin/shared into local for editing
+dbcli queries import ./hotfix.sql                   # import an external .sql into .dbcli/queries/
+dbcli queries import ./hotfix.sql --as @diag/custom # override the snippet key
+dbcli queries export @dau --output dau.sql          # write snippet body to a file (stdout if omitted)
+dbcli queries export @diag/connections --engine postgres  # pick a variant when multiple engines exist
 ```
 
 **`list` options:** `--format <table|json|csv>`, `--tag <tag>`, `--engine <postgres|mysql>`, `--source <local|shared>`
@@ -206,6 +228,11 @@ dbcli queries check --strict            # promote warnings (e.g. missing engine)
 **`new` options:** `--local`, `--edit`
 **`edit` options:** `--shared`
 **`check` options:** `--strict`, `--format <table|json|csv>`
+**`delete` options:** `--force` (skip the confirmation prompt). Refuses to run if `@name` has no local copy.
+**`rename` options:** `--force`. Both names must start with `@`. Engine suffix (`.postgres.sql` / `.mysql.sql`) is preserved; frontmatter `name:` is rewritten to the new key.
+**`copy` options:** *(none)*. Copies every variant (all engines) of the source into the local layer; fails if the destination already has a local copy.
+**`import` options:** `--force` (overwrite existing local file), `--as <name>` (override snippet key; defaults to filename without `.postgres` / `.mysql` suffix). Source must be `.sql` and parse cleanly (frontmatter validated, non-SELECT bodies rejected).
+**`export` options:** `--output <path>` (write to file; otherwise stdout), `--engine <postgres|mysql>` (required when the snippet has multiple engine variants).
 
 `--format json` on `list` and `show` emits a stable, machine-readable shape — designed to back a future MCP server without further refactor.
 

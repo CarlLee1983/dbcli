@@ -84,9 +84,14 @@ Run reusable parameterised SELECT snippets stored in your repo.
 | 2. Inspect | `dbcli queries show @<name>` |
 | 3. Run     | `dbcli q @<name> --param k=v` |
 
-Snippets live in two layers:
+Snippets resolve from three layers, **local > shared > builtin** (local wins):
+- `builtin` — bundled with dbcli (e.g. `@diag/*`); read-only at runtime
 - `.dbcli-shared/queries/` — committed, team-shared
-- `.dbcli/queries/`        — gitignored, personal override
+- `.dbcli/queries/` — gitignored, personal override
+
+Manage local snippets with `queries new | edit | delete | rename | copy | import | export`
+(see reference.md). Use `copy` / `import` to fork a builtin or shared snippet into the
+local layer for editing.
 
 Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
 (name, description, engine, params, tags). See `dbcli queries show @<name> --format json`

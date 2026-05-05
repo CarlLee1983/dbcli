@@ -71,4 +71,19 @@ describe('builtin diag snippets', () => {
       'index_name IS NULL'
     )
   })
+
+  test('@diag/locks resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/locks', 'postgres').query.sqlBody).toContain(
+      'pg_blocking_pids'
+    )
+    expect(resolveByName(map, '@diag/locks', 'mysql').query.sqlBody).toContain(
+      'data_lock_waits'
+    )
+  })
 })

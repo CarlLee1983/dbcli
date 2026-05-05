@@ -9,11 +9,11 @@ import { PermissionError } from '@/core/permission-guard'
 import { QueryResultFormatter } from '@/formatters'
 import {
   loadSnippets,
+  mapSystemToEngine,
   prepareExecution,
   resolveByName,
   resolveSnippetDirs,
   SavedQueryError,
-  type EngineTag,
 } from '@/core/saved-queries'
 
 export interface QCommandOptions {
@@ -39,9 +39,12 @@ export async function qCommand(
     if (!config.connection) throw new Error('Run "dbcli init" first')
 
     const engine = mapSystemToEngine(config.connection.system)
+    if (engine === 'mongodb') {
+      throw new Error('Saved queries do not support MongoDB connections')
+    }
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
-    const snippet = resolveByName(map, name)
+    const snippet = resolveByName(map, name, engine)
 
     const cliParams = parseCliParams(options.param ?? [])
     const fileParams = await readParamFile(options.paramFile)
@@ -67,7 +70,7 @@ export async function qCommand(
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       const start = performance.now()
-      const result = await adapter.execute<Record<string, any>>(
+      const result = await adapter.execute<Record<string, unknown>>(
         prepared.driver.sql,
         prepared.driver.values
       )
@@ -84,7 +87,7 @@ export async function qCommand(
           columnTypes: [],
           executionTimeMs,
           metadata: {
-            statement: 'SELECT' as any,
+            statement: 'SELECT',
             affectedRows: 0,
             ...(filtered.omittedColumns.length > 0
               ? {
@@ -105,13 +108,6 @@ export async function qCommand(
   } catch (error) {
     handleQError(error)
   }
-}
-
-function mapSystemToEngine(system: string): EngineTag | 'mongodb' {
-  if (system === 'postgresql') return 'postgres'
-  if (system === 'mysql' || system === 'mariadb') return 'mysql'
-  if (system === 'mongodb') return 'mongodb'
-  throw new Error(`Unsupported connection system for snippets: ${system}`)
 }
 
 function parseCliParams(list: string[]): Record<string, unknown> {

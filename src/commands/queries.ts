@@ -3,8 +3,11 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawn } from 'node:child_process'
 import { t } from '@/i18n/message-loader'
+import { configModule } from '@/core/config'
+import { resolveConfigPath } from '@/utils/config-path'
 import {
   loadSnippets,
+  mapSystemToEngine,
   resolveByName,
   resolveSnippetDirs,
   snippetKeyToFile,
@@ -15,6 +18,19 @@ import {
   type SnippetSource,
 } from '@/core/saved-queries'
 
+async function deriveEngine(): Promise<EngineTag> {
+  try {
+    const cfg = await configModule.read(resolveConfigPath(undefined, {}))
+    if (cfg.connection) {
+      const engine = mapSystemToEngine(cfg.connection.system)
+      if (engine !== 'mongodb') return engine
+    }
+  } catch {
+    // best-effort: fall through to default
+  }
+  return 'postgres'
+}
+
 export interface ListOptions {
   format?: 'table' | 'json' | 'csv'
   tag?: string
@@ -24,7 +40,8 @@ export interface ListOptions {
 
 export async function queriesList(options: ListOptions): Promise<void> {
   const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
-  const filtered = [...map.values()].filter((s) => matches(s, options))
+  const flat = [...map.values()].flat()
+  const filtered = flat.filter((s) => matches(s, options))
   if (options.format === 'json') {
     console.log(JSON.stringify(filtered.map(toJson), null, 2))
     return
@@ -54,7 +71,8 @@ export interface ShowOptions {
 export async function queriesShow(name: string, options: ShowOptions): Promise<void> {
   const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
   try {
-    const snippet = resolveByName(map, name)
+    const engine = await deriveEngine()
+    const snippet = resolveByName(map, name, engine)
     if (options.format === 'json') {
       console.log(
         JSON.stringify({ ...toJson(snippet), sql: snippet.query.sqlBody.trim() }, null, 2)
@@ -137,24 +155,26 @@ export async function queriesCheck(options: CheckOptions): Promise<void> {
   let total = 0
   try {
     const map = await loadSnippets(dirs)
-    for (const snippet of map.values()) {
-      total++
-      try {
-        const text = await Bun.file(snippet.query.file).text()
-        const result = parseSavedQuery({
-          key: snippet.query.meta.key,
-          file: snippet.query.file,
-          source: snippet.query.source,
-          text,
-        })
-        if (options.strict && result.warnings.length > 0) {
-          console.error(`✗ ${snippet.query.meta.key}: ${result.warnings.join('; ')}`)
+    for (const variants of map.values()) {
+      for (const snippet of variants) {
+        total++
+        try {
+          const text = await Bun.file(snippet.query.file).text()
+          const result = parseSavedQuery({
+            key: snippet.query.meta.key,
+            file: snippet.query.file,
+            source: snippet.query.source,
+            text,
+          })
+          if (options.strict && result.warnings.length > 0) {
+            console.error(`✗ ${snippet.query.meta.key}: ${result.warnings.join('; ')}`)
+            failed++
+          }
+        } catch (e) {
+          const msg = e instanceof SavedQueryError ? e.message : (e as Error).message
+          console.error(`✗ ${snippet.query.meta.key}: ${msg}`)
           failed++
         }
-      } catch (e) {
-        const msg = e instanceof SavedQueryError ? e.message : (e as Error).message
-        console.error(`✗ ${snippet.query.meta.key}: ${msg}`)
-        failed++
       }
     }
   } catch (e) {

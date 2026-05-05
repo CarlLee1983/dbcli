@@ -30,7 +30,7 @@ export class HealthChecker {
     const countResult = await this.adapter.execute<{ count: number }>(
       `SELECT COUNT(*) as count FROM \`${schema.name}\``
     )
-    const rowCount = countResult[0]?.count || 0
+    const rowCount = rowsOf(countResult)[0]?.count || 0
 
     const nulls: NullCheckResult[] = checks.includes('nulls')
       ? await this.checkNulls(schema.name, visibleColumns, rowCount, sample)
@@ -84,7 +84,7 @@ export class HealthChecker {
           : `SELECT COUNT(*) - COUNT(\`${col.name}\`) as null_count FROM \`${tableName}\``
 
         const result = await this.adapter.execute<{ null_count: number }>(sql)
-        const nullCount = result[0]?.null_count || 0
+        const nullCount = rowsOf(result)[0]?.null_count || 0
 
         if (nullCount > 0) {
           const sampleSize = Math.min(totalRows, sample)
@@ -121,7 +121,7 @@ export class HealthChecker {
             AND parent.\`${col.foreignKey.column}\` IS NULL
         `
         const result = await this.adapter.execute<{ orphan_count: number }>(sql)
-        const orphanCount = result[0]?.orphan_count || 0
+        const orphanCount = rowsOf(result)[0]?.orphan_count || 0
 
         if (orphanCount > 0) {
           results.push({
@@ -157,7 +157,7 @@ export class HealthChecker {
           ) dups
         `
         const result = await this.adapter.execute<{ dup_count: number }>(sql)
-        const dupCount = result[0]?.dup_count || 0
+        const dupCount = rowsOf(result)[0]?.dup_count || 0
 
         if (dupCount > 0) {
           results.push({
@@ -185,7 +185,7 @@ export class HealthChecker {
       try {
         const sql = `SELECT COUNT(*) as empty_count FROM \`${tableName}\` WHERE \`${col.name}\` = ''`
         const result = await this.adapter.execute<{ empty_count: number }>(sql)
-        const count = result[0]?.empty_count || 0
+        const count = rowsOf(result)[0]?.empty_count || 0
 
         if (count > 0) {
           results.push({ column: col.name, count })
@@ -197,4 +197,8 @@ export class HealthChecker {
 
     return results
   }
+}
+
+function rowsOf<T>(result: { rows: T[] } | T[]): T[] {
+  return Array.isArray(result) ? result : result.rows
 }

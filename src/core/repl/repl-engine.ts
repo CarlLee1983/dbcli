@@ -96,7 +96,7 @@ export class ReplEngine {
     }
   }
 
-  private handleSql(input: string): ProcessResult {
+  private handleSql(input: string): Promise<ProcessResult> | ProcessResult {
     const bufResult = this.buffer.append(input)
 
     if (bufResult.complete) {
@@ -196,10 +196,11 @@ export class ReplEngine {
     const startTime = Date.now()
 
     try {
-      const rows = await this.adapter.execute<Record<string, unknown>>(sql)
+      const result = await this.adapter.execute<Record<string, unknown>>(sql)
       const elapsed = Date.now() - startTime
+      const rows = result.rows
 
-      const columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
+      const columnNames = rows.length > 0 && rows[0] ? Object.keys(rows[0]) : []
       const queryResult: QueryResult<Record<string, unknown>> = {
         rows,
         rowCount: rows.length,

@@ -354,3 +354,16 @@ queriesCommand
       process.exit(1)
     }
   })
+
+queriesCommand
+  .command('copy <src> <dst>')
+  .description(t('queries.copy_description'))
+  .action(async (src: string, dst: string) => {
+    try {
+      const { queriesCopy } = await import('@/commands/queries-copy')
+      await queriesCopy(src, dst)
+    } catch (e) {
+      console.error((e as Error).message)
+      process.exit(1)
+    }
+  })

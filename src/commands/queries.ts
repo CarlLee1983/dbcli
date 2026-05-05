@@ -382,3 +382,20 @@ queriesCommand
       process.exit(1)
     }
   })
+
+queriesCommand
+  .command('export <name>')
+  .description(t('queries.export_description'))
+  .option('--output <path>', 'Write to a file instead of stdout')
+  .option('--engine <engine>', 'Pick a specific variant: postgres | mysql')
+  .action(
+    async (name: string, options: { output?: string; engine?: EngineTag }) => {
+      try {
+        const { queriesExport } = await import('@/commands/queries-export')
+        await queriesExport(name, options)
+      } catch (e) {
+        console.error((e as Error).message)
+        process.exit(1)
+      }
+    }
+  )

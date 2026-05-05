@@ -223,6 +223,16 @@ export interface QueryableAdapter {
   listCollections(): Promise<{ name: string; documentCount?: number }[]>
 
   /**
+   * SQL-compatible collection listing for shared command surfaces.
+   */
+  listTables?(): Promise<TableSchema[]>
+
+  /**
+   * SQL-compatible schema lookup for shared command surfaces.
+   */
+  getTableSchema?(tableName: string): Promise<TableSchema>
+
+  /**
    * Test connection with lightweight probe query
    * Executes a ping or equivalent to verify connection is alive
    * @returns true if connection successful

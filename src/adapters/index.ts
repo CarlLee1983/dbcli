@@ -10,6 +10,7 @@ export type {
   TableSchema,
   DatabaseAdapter,
   QueryableAdapter,
+  ExecutionResult,
 } from './types'
 export { ConnectionError } from './types'
 

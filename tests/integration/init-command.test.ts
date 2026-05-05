@@ -209,7 +209,7 @@ describe('Init Command Integration Tests', () => {
     // 驗證：無效系統
     const invalidConfig = {
       connection: {
-        system: 'mongodb' as unknown,
+        system: 'sqlite' as unknown,
         host: 'localhost',
         port: 5432,
         user: 'user',
@@ -317,7 +317,7 @@ describe('Init Command Integration Tests', () => {
       system: 'postgresql' as const,
       host: 'localhost',
       port: 5432,
-      user: 'postgres',
+      user: '__dbcli_no_such_user__',
       password: 'wrong_password',
       database: 'postgres',
     }

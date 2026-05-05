@@ -451,16 +451,17 @@ export async function collectMongoDoctorResults(config: {
       // Ignore version probe failure; connection already proved healthy.
     }
 
-    const collections = await adapter.listTables()
+    const collections = adapter.listTables ? await adapter.listTables() : []
 
     // Add inferred column details for blacklist check
     const tableColumns = new Map<string, string[]>()
     for (const coll of collections) {
       try {
+        if (!adapter.getTableSchema) continue
         const schema = await adapter.getTableSchema(coll.name)
         tableColumns.set(
           coll.name,
-          schema.columns.map((c: any) => c.name)
+          schema.columns.map((c) => c.name)
         )
       } catch {
         // Ignore schema inference failures

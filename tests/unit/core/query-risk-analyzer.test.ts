@@ -202,3 +202,34 @@ describe('analyzeQueryRisk MVP risk rules', () => {
     expect(result.riskFactors.map((factor) => factor.code)).toContain('unknown_read')
   })
 })
+
+describe('analyzeQueryRisk identifier and CTE handling', () => {
+  test('quoted identifier is recognised as target table', () => {
+    const result = analyze('SELECT id FROM "users" WHERE id = 1')
+    expect(result.targetTables).toEqual(['users'])
+    expect(result.decision).toBe('ALLOW')
+  })
+
+  test('quoted identifier still triggers blacklist BLOCK', () => {
+    const result = analyze('SELECT id FROM "users" WHERE id = 1', {
+      blacklist: { tables: ['users'], columns: {} },
+    })
+    expect(result.decision).toBe('BLOCK')
+    expect(result.targetTables).toEqual(['users'])
+    expect(result.riskFactors.map((factor) => factor.code)).toContain('table_blacklisted')
+  })
+
+  test('CTE alias is not treated as a target table', () => {
+    const result = analyze('WITH recent AS (SELECT id FROM orders) SELECT id FROM recent LIMIT 1')
+    expect(result.targetTables).toEqual(['orders'])
+    expect(result.suggestedCommands).toEqual([])
+  })
+
+  test('partial schema coverage suggests schema for unknown tables only', () => {
+    const result = analyze(
+      'SELECT users.id FROM users JOIN invoices ON invoices.user_id = users.id'
+    )
+    expect(result.targetTables).toEqual(['users', 'invoices'])
+    expect(result.suggestedCommands).toEqual(['dbcli schema invoices --format json'])
+  })
+})

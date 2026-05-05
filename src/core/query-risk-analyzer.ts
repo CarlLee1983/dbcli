@@ -1,9 +1,5 @@
 import type { TableSchema } from '@/adapters/types'
-import {
-  checkPermission,
-  classifyStatement,
-  stripCommentsAndStrings,
-} from '@/core/permission-guard'
+import { checkPermission, classifyStatement } from '@/core/permission-guard'
 import { getSizeCategory } from '@/core/size-category'
 import type { BlacklistConfig } from '@/types/blacklist'
 import type {
@@ -28,6 +24,59 @@ type SqlFacts = {
   hasSelectStar: boolean
   appearsReadLike: boolean
   appearsWriteOrDdlLike: boolean
+}
+
+/**
+ * Strips SQL comments and single-quoted string literals while preserving
+ * double-quoted identifiers (PostgreSQL/ANSI quoted names like "users").
+ * Using this instead of stripCommentsAndStrings keeps quoted table/column
+ * names visible to the table extractor.
+ */
+function stripCommentsAndSingleQuotedStrings(sql: string): string {
+  let result = ''
+  let i = 0
+
+  while (i < sql.length) {
+    const char = sql[i]
+
+    if (char === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i++
+      if (i < sql.length) {
+        result += '\n'
+        i++
+      }
+      continue
+    }
+
+    if (char === '/' && sql[i + 1] === '*') {
+      i += 2
+      while (i < sql.length) {
+        if (sql[i] === '*' && sql[i + 1] === '/') {
+          i += 2
+          break
+        }
+        i++
+      }
+      result += ' '
+      continue
+    }
+
+    if (char === "'") {
+      i++
+      while (i < sql.length && sql[i] !== "'") {
+        if (sql[i] === '\\') i++
+        i++
+      }
+      if (i < sql.length) i++
+      result += ' '
+      continue
+    }
+
+    result += char
+    i++
+  }
+
+  return result
 }
 
 const READ_LIKE_WORDS = ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN', 'WITH']
@@ -55,10 +104,10 @@ export function analyzeQueryRisk(input: AnalyzeQueryRiskInput): QueryRiskResult 
   applyDdlAndUnknownRules(facts, factors)
   applySelectPatternRules(facts, factors)
   applyBlacklistRules(facts, input.blacklist, factors)
-  applySchemaRules(facts, input.schemaLookup, factors)
+  const schemaGap = applySchemaRules(facts, input.schemaLookup, factors)
 
   const recommendations = buildRecommendations(factors, facts)
-  const suggestedCommands = buildSuggestedCommands(facts, factors)
+  const suggestedCommands = buildSuggestedCommands(facts, schemaGap)
 
   return {
     decision: decide(factors),
@@ -72,7 +121,7 @@ export function analyzeQueryRisk(input: AnalyzeQueryRiskInput): QueryRiskResult 
 
 function collectSqlFacts(sql: string): SqlFacts {
   const normalizedSql = normalizeSql(sql)
-  const analysisSql = normalizeSql(stripCommentsAndStrings(sql))
+  const analysisSql = normalizeSql(stripCommentsAndSingleQuotedStrings(sql))
   const classification = classifyStatement(sql)
   const operation = mapStatementTypeToRiskOperation(classification.type)
 
@@ -99,11 +148,14 @@ function normalizeSql(sql: string): string {
 }
 
 function extractTargetTables(sql: string, operation: QueryRiskOperation): string[] {
+  const cteAliases = extractCteAliases(sql)
   const tables = new Set<string>()
 
   const add = (value: string | undefined) => {
     const cleaned = cleanIdentifier(value)
-    if (cleaned) tables.add(cleaned)
+    if (!cleaned) return
+    if (cteAliases.has(cleaned.toLowerCase())) return
+    tables.add(cleaned)
   }
 
   if (operation === 'UPDATE') {
@@ -124,6 +176,26 @@ function extractTargetTables(sql: string, operation: QueryRiskOperation): string
   }
 
   return Array.from(tables)
+}
+
+/**
+ * Returns the set of CTE alias names (lowercased) introduced by a leading
+ * WITH clause. Detects `<name> AS (` patterns occurring after the first
+ * WITH keyword. CTE aliases must be excluded from target tables to avoid
+ * suggesting schema lookups for query-local names.
+ */
+function extractCteAliases(sql: string): Set<string> {
+  const aliases = new Set<string>()
+  const withMatch = sql.match(/\bWITH\b/i)
+  if (!withMatch || withMatch.index === undefined) return aliases
+
+  const tail = sql.slice(withMatch.index + withMatch[0].length)
+  const aliasPattern = /([`"\[]?[\w]+[`"\]]?)\s+AS\s*\(/gi
+  for (const match of tail.matchAll(aliasPattern)) {
+    const cleaned = cleanIdentifier(match[1])
+    if (cleaned) aliases.add(cleaned.toLowerCase())
+  }
+  return aliases
 }
 
 function cleanIdentifier(value: string | undefined): string | null {
@@ -276,12 +348,19 @@ function findBlacklistedColumnsForTable(blacklist: BlacklistConfig, table: strin
   return new Set()
 }
 
+interface SchemaGap {
+  cacheMissing: boolean
+  unknownTables: string[]
+}
+
 function applySchemaRules(
   facts: SqlFacts,
   schemaLookup: SchemaLookup,
   factors: QueryRiskFactor[]
-): void {
-  if (facts.targetTables.length === 0) return
+): SchemaGap {
+  const gap: SchemaGap = { cacheMissing: false, unknownTables: [] }
+
+  if (facts.targetTables.length === 0) return gap
 
   if (!schemaLookup.cacheAvailable) {
     pushFactor(
@@ -290,7 +369,8 @@ function applySchemaRules(
       'warn',
       'Schema cache is missing for the selected connection.'
     )
-    return
+    gap.cacheMissing = true
+    return gap
   }
 
   const knownTables = new Set(Object.keys(schemaLookup.tables).map((table) => table.toLowerCase()))
@@ -305,6 +385,7 @@ function applySchemaRules(
         'warn',
         `Target table ${table} is missing from schema cache.`
       )
+      gap.unknownTables.push(table)
       continue
     }
 
@@ -333,6 +414,8 @@ function applySchemaRules(
       'Multi-table query has partial schema-cache coverage.'
     )
   }
+
+  return gap
 }
 
 function getSchemaForTable(
@@ -413,18 +496,12 @@ function buildRecommendations(factors: QueryRiskFactor[], facts: SqlFacts): stri
   return Array.from(recommendations)
 }
 
-function buildSuggestedCommands(facts: SqlFacts, factors: QueryRiskFactor[]): string[] {
+function buildSuggestedCommands(facts: SqlFacts, gap: SchemaGap): string[] {
   const commands = new Set<string>()
-  const codes = new Set(factors.map((factor) => factor.code))
+  const targets = gap.cacheMissing ? facts.targetTables : gap.unknownTables
 
-  for (const table of facts.targetTables) {
-    if (
-      codes.has('schema_cache_missing') ||
-      codes.has('schema_table_unknown') ||
-      codes.has('partial_schema_coverage')
-    ) {
-      commands.add(`dbcli schema ${table} --format json`)
-    }
+  for (const table of targets) {
+    commands.add(`dbcli schema ${table} --format json`)
   }
 
   return Array.from(commands)

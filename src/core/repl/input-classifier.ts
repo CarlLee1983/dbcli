@@ -17,13 +17,13 @@ export function classifyInput(raw: string): ClassifiedInput {
   }
 
   if (normalized.startsWith(META_PREFIX)) {
-    const cmdName = normalized.split(/\s+/)[0].slice(1)
+    const cmdName = (normalized.split(/\s+/)[0] ?? '').slice(1)
     if (metaCommandNames.includes(cmdName)) {
       return { type: 'meta', raw, normalized }
     }
   }
 
-  const firstWord = normalized.split(/\s+/)[0].toUpperCase()
+  const firstWord = (normalized.split(/\s+/)[0] ?? '').toUpperCase()
 
   if (sqlKeywordSet.has(firstWord)) {
     return { type: 'sql', raw, normalized }

@@ -81,7 +81,7 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 
     // After a command that takes a table arg → complete table names
     const cmdName = words[0]
-    if (COMMANDS_TAKING_TABLE_ARG.has(cmdName)) {
+    if (cmdName && COMMANDS_TAKING_TABLE_ARG.has(cmdName)) {
       return matchWithSuffix(allTableNames, lastWord)
     }
 
@@ -91,10 +91,11 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 }
 
 function completeMetaCommands(line: string): [string[], string] {
-  const hits = META_COMMANDS.filter((m) => m.startsWith(line.split(/\s+/)[0].toLowerCase())).map(
+  const first = line.split(/\s+/)[0] ?? ''
+  const hits = META_COMMANDS.filter((m) => m.startsWith(first.toLowerCase())).map(
     (m) => m + ' '
   )
-  return [hits, line.split(/\s+/)[0]]
+  return [hits, first]
 }
 
 function getLastWord(line: string): string {
@@ -112,7 +113,7 @@ function getPreviousWord(line: string): string {
   if (line.endsWith(' ') || line.endsWith('\t')) {
     return parts[parts.length - 1] || ''
   }
-  return parts.length >= 2 ? parts[parts.length - 2] : ''
+  return parts.length >= 2 ? (parts[parts.length - 2] ?? '') : ''
 }
 
 function isColumnPosition(upperLine: string): boolean {
@@ -127,7 +128,7 @@ function extractTableFromLine(line: string, tableNames: readonly string[]): stri
     const afterFrom = line
       .slice(fromIdx + 5)
       .trim()
-      .split(/\s+/)[0]
+      .split(/\s+/)[0] ?? ''
     const candidate = afterFrom.replace(/[;,]/g, '').toLowerCase()
     return tableNames.find((t) => t.toLowerCase() === candidate)
   }

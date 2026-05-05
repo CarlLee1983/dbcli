@@ -7,7 +7,7 @@ export function resolveConfigPath(
   options?: ConfigOptionValues,
   fallback = '.dbcli'
 ): string {
-  for (let current = command; current; current = current.parent) {
+  for (let current: Command | undefined = command; current; current = current.parent ?? undefined) {
     const source = current.getOptionValueSource('config')
     if (source && source !== 'default') {
       const currentOptions = current.opts() as ConfigOptionValues

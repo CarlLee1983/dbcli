@@ -78,7 +78,7 @@ export class QueryExecutor {
       const affectedRows = resultData.affectedRows
 
       // 5. Collect result metadata
-      let columnNames = rows.length > 0 ? Object.keys(rows[0]) : []
+      let columnNames = rows.length > 0 && rows[0] ? Object.keys(rows[0]) : []
       const columnTypes = columnNames.map((col) => {
         const value = rows[0]?.[col]
         return inferColumnType(value)
@@ -164,25 +164,25 @@ export function extractTableName(sql: string): string | null {
   // Handle common SELECT ... FROM table patterns
   const match = sql.match(/\bFROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
   if (match) {
-    return match[1]
+    return match[1] ?? null
   }
 
   // Handle INSERT INTO table patterns
   const insertMatch = sql.match(/\bINSERT\s+INTO\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
   if (insertMatch) {
-    return insertMatch[1]
+    return insertMatch[1] ?? null
   }
 
   // Handle UPDATE table patterns
   const updateMatch = sql.match(/\bUPDATE\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
   if (updateMatch) {
-    return updateMatch[1]
+    return updateMatch[1] ?? null
   }
 
   // Handle DELETE FROM table patterns
   const deleteMatch = sql.match(/\bDELETE\s+FROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
   if (deleteMatch) {
-    return deleteMatch[1]
+    return deleteMatch[1] ?? null
   }
 
   return null

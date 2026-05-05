@@ -49,7 +49,10 @@ export class SchemaWriter {
     // 4. Persist Hot Schemas
     const hotSchemas: Record<string, TableSchema> = {}
     for (const item of mapping.hot) {
-      hotSchemas[item.table] = schema[item.table]
+      const tableSchema = schema[item.table]
+      if (tableSchema) {
+        hotSchemas[item.table] = tableSchema
+      }
     }
     await this.writer.writeJSON(join(schemaRoot, 'hot-schemas.json'), hotSchemas)
 
@@ -59,7 +62,10 @@ export class SchemaWriter {
       if (!coldGroups[item.file]) {
         coldGroups[item.file] = {}
       }
-      coldGroups[item.file][item.table] = schema[item.table]
+      const tableSchema = schema[item.table]
+      if (tableSchema) {
+        coldGroups[item.file]![item.table] = tableSchema
+      }
     }
 
     // Ensure cold/ directory exists

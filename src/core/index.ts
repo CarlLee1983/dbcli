@@ -65,6 +65,7 @@ export type {
 export type { ColumnIndexEntry, ColumnIndexMap } from '@/core/column-index'
 export type { OptimizationIssue, SchemaReport } from '@/core/schema-optimizer'
 export type { RecoveryPoint, RecoveryState } from '@/core/error-recovery'
+import { SchemaLayeredLoader } from './schema-loader'
 
 /**
  * Convenience function to initialize the schema system

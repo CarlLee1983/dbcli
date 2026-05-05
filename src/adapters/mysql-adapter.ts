@@ -5,7 +5,7 @@
  */
 
 import mysql from 'mysql2/promise'
-import type { DatabaseAdapter, ConnectionOptions, TableSchema } from './types'
+import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
@@ -18,7 +18,7 @@ import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 function parseEnumValues(columnType: string): string[] | undefined {
   const match = columnType.match(/^enum\((.+)\)$/i)
   if (!match) return undefined
-  return match[1].split(',').map((v) => v.trim().replace(/^'|'$/g, ''))
+  return (match[1] ?? '').split(',').map((v) => v.trim().replace(/^'|'$/g, ''))
 }
 
 /**
@@ -292,7 +292,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         const cols = fk.columns.split(',').map((c) => c.trim())
         const refCols = fk.ref_columns.split(',').map((c) => c.trim())
         if (cols.length === 1 && refCols.length === 1) {
-          fkMap.set(cols[0], { table: fk.ref_table, column: refCols[0] })
+          fkMap.set(cols[0]!, { table: fk.ref_table, column: refCols[0]! })
         }
       }
 

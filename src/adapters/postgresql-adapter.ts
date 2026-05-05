@@ -3,7 +3,7 @@
  * Implements the DatabaseAdapter interface for PostgreSQL connections
  */
 
-import type { DatabaseAdapter, ConnectionOptions, TableSchema } from './types'
+import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
 import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { Pool, type PoolClient } from 'pg'
@@ -306,7 +306,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const fkMap = new Map<string, { table: string; column: string }>()
       for (const fk of fkResults) {
         if (fk.columns.length === 1 && fk.ref_columns.length === 1) {
-          fkMap.set(fk.columns[0], { table: fk.ref_table, column: fk.ref_columns[0] })
+          fkMap.set(fk.columns[0]!, { table: fk.ref_table, column: fk.ref_columns[0]! })
         }
       }
 

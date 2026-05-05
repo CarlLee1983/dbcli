@@ -25,7 +25,7 @@ export const MIN_SUPPORTED_VERSIONS: Record<string, string> = {
 export function parseVersionSegments(version: string): number[] {
   const match = version.match(/^(\d+(?:\.\d+)*)/)
   if (!match) return []
-  return match[1].split('.').map(Number)
+  return (match[1] ?? '').split('.').map(Number)
 }
 
 /**
@@ -43,11 +43,11 @@ export function isMariaDBVersion(versionString: string): boolean {
  */
 export function extractMariaDBVersion(versionString: string): string {
   const match = versionString.match(/(\d+\.\d+\.\d+)-MariaDB/i)
-  if (match) return match[1]
+  if (match) return match[1] ?? versionString
 
   // Fallback: try to find version after "5.5.5-" prefix
   const prefixMatch = versionString.match(/^5\.5\.5-(\d+\.\d+\.\d+)/)
-  if (prefixMatch) return prefixMatch[1]
+  if (prefixMatch) return prefixMatch[1] ?? versionString
 
   return versionString
 }
@@ -86,9 +86,9 @@ export function checkDbVersion(
   const system = isMariaDB ? 'mariadb' : declaredSystem
   const serverVersion = isMariaDB ? extractMariaDBVersion(rawVersion) : rawVersion
   const minVersion = MIN_SUPPORTED_VERSIONS[system]
-  const supported = compareVersions(serverVersion, minVersion) >= 0
+  const supported = compareVersions(serverVersion, minVersion ?? '0') >= 0
 
-  return { serverVersion, system, supported, minVersion }
+  return { serverVersion, system, supported, minVersion: minVersion ?? '0' }
 }
 
 /**

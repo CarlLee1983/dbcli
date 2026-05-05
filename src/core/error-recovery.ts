@@ -173,7 +173,7 @@ export class ErrorRecoveryManager {
           const sizeBytes = file.size || 0
           // Extract timestamp from filename (config-{timestamp}.json)
           const match = entry.match(/config-(\d+)\.json/)
-          const timestamp = match
+          const timestamp = match?.[1]
             ? new Date(parseInt(match[1])).toISOString()
             : new Date().toISOString()
 

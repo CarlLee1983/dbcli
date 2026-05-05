@@ -56,4 +56,19 @@ describe('builtin diag snippets', () => {
       'table_io_waits_summary_by_index_usage'
     )
   })
+
+  test('@diag/missing-indexes resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/missing-indexes', 'postgres').query.sqlBody).toContain(
+      'seq_scan'
+    )
+    expect(resolveByName(map, '@diag/missing-indexes', 'mysql').query.sqlBody).toContain(
+      'index_name IS NULL'
+    )
+  })
 })

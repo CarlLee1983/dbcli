@@ -14,4 +14,16 @@ describe('builtin diag snippets', () => {
     expect(pg.query.sqlBody).toContain('pg_stat_activity')
     expect(my.query.sqlBody).toContain('processlist')
   })
+
+  test('@diag/long-running declares min_seconds param', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    const pg = resolveByName(map, '@diag/long-running', 'postgres')
+    expect(pg.query.meta.params[0]?.name).toBe('min_seconds')
+    expect(pg.query.meta.params[0]?.default).toBe(30)
+  })
 })

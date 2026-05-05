@@ -26,7 +26,7 @@ async function run(args: string): Promise<{ stdout: string; stderr: string; exit
     cwd: CWD,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, NO_COLOR: '1' },
+    env: { ...process.env, NO_COLOR: '1', DBCLI_NO_UPDATE_CHECK: '1' },
   })
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -129,14 +129,9 @@ afterAll(() => {
 })
 
 function resolveLiveConfigPath(): string | null {
-  const candidates = [process.env.LIVE_DB_CONFIG_PATH, join(CWD, '.dbcli')].filter(
-    (candidate): candidate is string => Boolean(candidate)
-  )
-
-  for (const candidate of candidates) {
-    if (existsSync(join(candidate, 'config.json'))) {
-      return candidate
-    }
+  const candidate = process.env.LIVE_DB_CONFIG_PATH
+  if (candidate && existsSync(join(candidate, 'config.json'))) {
+    return candidate
   }
 
   return null

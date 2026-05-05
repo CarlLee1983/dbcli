@@ -32,6 +32,14 @@ import { join } from 'path'
 // Module-level state for background version check
 let _bgVersionCheckResult: { hasUpdate: boolean; latestVersion: string } | null | undefined
 
+function shouldSkipBackgroundChecks(): boolean {
+  return (
+    process.env.DBCLI_NO_UPDATE_CHECK === '1' ||
+    process.env.DBCLI_NO_UPDATE_CHECK === 'true' ||
+    process.env.NODE_ENV === 'test'
+  )
+}
+
 const program = new Command()
   .name('dbcli')
   .description('Database CLI for AI agents')
@@ -68,7 +76,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
 
   // Background version check: skip for upgrade command itself and when --quiet
   const isUpgradeCommand = actionCommand.name() === 'upgrade'
-  if (!opts.quiet && !isUpgradeCommand) {
+  if (!opts.quiet && !isUpgradeCommand && !shouldSkipBackgroundChecks()) {
     const configPath = resolveConfigPath(actionCommand)
     // Fire and forget — never await this
     void (async () => {
@@ -100,7 +108,7 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
 
   // Show skill update reminder (skip for upgrade/skill commands to avoid double output)
   const isUpgradeOrSkill = ['upgrade', 'skill'].includes(actionCommand.name())
-  if (!thisCommand.opts().quiet && !isUpgradeOrSkill) {
+  if (!thisCommand.opts().quiet && !isUpgradeOrSkill && !shouldSkipBackgroundChecks()) {
     const outdatedSkills = await checkSkillUpdates()
     if (outdatedSkills.length > 0) {
       process.stderr.write(formatSkillUpdateReminder(outdatedSkills) + '\n')

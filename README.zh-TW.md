@@ -779,6 +779,43 @@ dbcli migrate drop-enum status --execute --force
 
 ---
 
+## 查詢風險規劃
+
+使用 `plan` 在執行前檢查 SQL 安全性。它只讀取本機 dbcli 設定、權限、黑名單規則與已快取的 schema metadata；不會連線到資料庫。
+
+```bash
+dbcli plan "UPDATE users SET status='inactive'" --format json
+```
+
+決策結果：
+
+- `ALLOW` — 未偵測到明顯風險。
+- `WARN` — 執行前應檢查警告。
+- `BLOCK` — 不安全、不支援，或違反安全設定。
+
+文字輸出保持精簡，適合人工閱讀：
+
+```text
+Decision: BLOCK
+Operation: UPDATE
+Target tables: users
+
+Risk factors:
+- UPDATE statement has no WHERE clause.
+
+Recommendations:
+- Add a WHERE clause.
+- Use --dry-run on the actual write command.
+```
+
+JSON 輸出會包含給 AI agent 使用的 `suggestedCommands`：
+
+```bash
+dbcli plan "SELECT id FROM users WHERE id = 1 LIMIT 1" --format json
+```
+
+---
+
 ## 全域選項
 
 所有指令皆支援下列全域選項：

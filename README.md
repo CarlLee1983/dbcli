@@ -771,6 +771,43 @@ dbcli migrate drop-enum status --execute --force
 
 ---
 
+## Query Risk Planning
+
+Use `plan` to inspect SQL safety before execution. It reads local dbcli config, permissions, blacklist rules, and cached schema metadata only; it does not connect to the database.
+
+```bash
+dbcli plan "UPDATE users SET status='inactive'" --format json
+```
+
+Decisions are:
+
+- `ALLOW` — no obvious risk was detected.
+- `WARN` — inspect warnings before executing.
+- `BLOCK` — unsafe, unsupported, or violates configured safety constraints.
+
+Text output is concise for humans:
+
+```text
+Decision: BLOCK
+Operation: UPDATE
+Target tables: users
+
+Risk factors:
+- UPDATE statement has no WHERE clause.
+
+Recommendations:
+- Add a WHERE clause.
+- Use --dry-run on the actual write command.
+```
+
+JSON output includes `suggestedCommands` for agents:
+
+```bash
+dbcli plan "SELECT id FROM users WHERE id = 1 LIMIT 1" --format json
+```
+
+---
+
 ## Global Options
 
 All commands support these global options:

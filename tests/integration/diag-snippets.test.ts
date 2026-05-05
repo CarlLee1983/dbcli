@@ -86,4 +86,19 @@ describe('builtin diag snippets', () => {
       'data_lock_waits'
     )
   })
+
+  test('@diag/db-size resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/db-size', 'postgres').query.sqlBody).toContain(
+      'pg_database_size'
+    )
+    expect(resolveByName(map, '@diag/db-size', 'mysql').query.sqlBody).toContain(
+      'information_schema.tables'
+    )
+  })
 })

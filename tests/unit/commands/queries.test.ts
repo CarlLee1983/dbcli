@@ -49,7 +49,11 @@ describe('queries list', () => {
     const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
     const parsed = JSON.parse(out)
     expect(Array.isArray(parsed)).toBe(true)
-    expect(parsed[0]).toMatchObject({ name: '@dau', source: 'shared', engine: 'postgres' })
+    expect(parsed[0]).toMatchObject({
+      name: '@dau',
+      sources: ['shared'],
+      engines: ['postgres'],
+    })
   })
 
   test('--engine mysql filters out postgres-only snippets', async () => {
@@ -62,6 +66,24 @@ describe('queries list', () => {
     await queriesList({ tag: 'billing', format: 'json' })
     const parsed = JSON.parse(logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n'))
     expect(parsed).toEqual([])
+  })
+
+  test('folds engine variants into one row with sources/engines arrays', async () => {
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/usage.postgres.sql'),
+      `-- ---\n-- name: usage\n-- engine: postgres\n-- ---\nSELECT 1`
+    )
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/usage.mysql.sql'),
+      `-- ---\n-- name: usage\n-- engine: mysql\n-- ---\nSELECT 1`
+    )
+    await queriesList({ format: 'json' })
+    const out = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    const parsed = JSON.parse(out)
+    const usage = parsed.find((r: { name: string }) => r.name === '@usage')
+    expect(usage).toBeDefined()
+    expect(usage.engines).toEqual(['mysql', 'postgres'])
+    expect(usage.sources).toEqual(['shared'])
   })
 })
 

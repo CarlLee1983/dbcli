@@ -40,28 +40,93 @@ export interface ListOptions {
 
 export async function queriesList(options: ListOptions): Promise<void> {
   const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
-  const flat = [...map.values()].flat()
-  const filtered = flat.filter((s) => matches(s, options))
+  const folded = [...map.entries()]
+    .map(([key, variants]) => foldVariants(key, variants))
+    .filter((r) => matchesFolded(r, options))
+
   if (options.format === 'json') {
-    console.log(JSON.stringify(filtered.map(toJson), null, 2))
+    console.log(JSON.stringify(folded, null, 2))
     return
   }
-  if (filtered.length === 0) {
+  if (folded.length === 0) {
     console.log(t('queries.no_snippets'))
     return
   }
-  const header = ['NAME', 'SOURCE', 'ENGINE', 'PARAMS', 'DESCRIPTION']
-  const rows = filtered.map((s) => [
-    s.query.meta.key,
-    s.query.source + (s.hasLocalOverride ? '*' : ''),
-    s.query.meta.engine?.join(',') ?? '-',
-    s.query.meta.params.map((p) => p.name).join(', ') || '-',
-    s.query.meta.description ?? '',
+  const header = ['NAME', 'SOURCES', 'ENGINES', 'PARAMS', 'DESCRIPTION']
+  const cells = folded.map((r) => [
+    r.name + (r.hasLocalOverride ? '*' : ''),
+    r.sources.join(','),
+    r.engines.join(',') || '-',
+    r.params.join(', ') || '-',
+    r.description,
   ])
-  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
-  const fmt = (cells: string[]) => cells.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
+  const widths = header.map((h, i) => Math.max(h.length, ...cells.map((c) => (c[i] ?? '').length)))
+  const fmt = (line: string[]) => line.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
   console.log(fmt(header))
-  for (const r of rows) console.log(fmt(r))
+  for (const c of cells) console.log(fmt(c))
+}
+
+interface FoldedRow {
+  name: string
+  sources: string[]
+  engines: string[]
+  params: string[]
+  description: string
+  tags: string[]
+  hasLocalOverride: boolean
+}
+
+const FOLD_SOURCE_RANK = { builtin: 0, shared: 1, local: 2 } as const
+
+function foldVariants(key: string, variants: ResolvedSnippet[]): FoldedRow {
+  const sources = unique(variants.map((v) => v.query.source)).sort()
+  const engines = unique(variants.flatMap((v) => v.query.meta.engine ?? [])).sort()
+  const tags = unique(variants.flatMap((v) => v.query.meta.tags ?? []))
+  const top = variants
+    .slice()
+    .sort((a, b) => FOLD_SOURCE_RANK[b.query.source] - FOLD_SOURCE_RANK[a.query.source])[0]!
+  return {
+    name: key,
+    sources,
+    engines,
+    params: top.query.meta.params.map((p) => p.name),
+    description: top.query.meta.description ?? '',
+    tags,
+    hasLocalOverride: variants.some((v) => v.hasLocalOverride),
+  }
+}
+
+function unique<T>(xs: T[]): T[] {
+  return [...new Set(xs)]
+}
+
+function snippetToJson(s: ResolvedSnippet): Record<string, unknown> {
+  return {
+    name: s.query.meta.key,
+    source: s.query.source,
+    engine: s.query.meta.engine?.length === 1 ? s.query.meta.engine[0] : s.query.meta.engine,
+    description: s.query.meta.description,
+    params: s.query.meta.params.map((p) => ({
+      name: p.name,
+      type: p.type,
+      ...(p.default !== undefined ? { default: p.default } : {}),
+      ...(p.required ? { required: true } : {}),
+      ...(p.description ? { description: p.description } : {}),
+      ...(p.enum ? { enum: p.enum } : {}),
+    })),
+    tags: s.query.meta.tags,
+    file: s.query.file,
+    hasLocalOverride: s.hasLocalOverride || undefined,
+  }
+}
+
+function matchesFolded(r: FoldedRow, opts: ListOptions): boolean {
+  if (opts.tag && !r.tags.includes(opts.tag)) return false
+  if (opts.engine) {
+    if (r.engines.length > 0 && !r.engines.includes(opts.engine)) return false
+  }
+  if (opts.source && !r.sources.includes(opts.source)) return false
+  return true
 }
 
 export interface ShowOptions {
@@ -75,7 +140,7 @@ export async function queriesShow(name: string, options: ShowOptions): Promise<v
     const snippet = resolveByName(map, name, engine)
     if (options.format === 'json') {
       console.log(
-        JSON.stringify({ ...toJson(snippet), sql: snippet.query.sqlBody.trim() }, null, 2)
+        JSON.stringify({ ...snippetToJson(snippet), sql: snippet.query.sqlBody.trim() }, null, 2)
       )
       return
     }
@@ -187,36 +252,6 @@ export async function queriesCheck(options: CheckOptions): Promise<void> {
     process.exit(1)
   } else {
     console.log(`✓ ${total} snippets parsed successfully`)
-  }
-}
-
-function matches(s: ResolvedSnippet, opts: ListOptions): boolean {
-  if (opts.tag && !s.query.meta.tags.includes(opts.tag)) return false
-  if (opts.engine) {
-    const declared = s.query.meta.engine
-    if (!declared || !declared.includes(opts.engine as EngineTag)) return false
-  }
-  if (opts.source && s.query.source !== opts.source) return false
-  return true
-}
-
-function toJson(s: ResolvedSnippet): Record<string, unknown> {
-  return {
-    name: s.query.meta.key,
-    source: s.query.source,
-    engine: s.query.meta.engine?.length === 1 ? s.query.meta.engine[0] : s.query.meta.engine,
-    description: s.query.meta.description,
-    params: s.query.meta.params.map((p) => ({
-      name: p.name,
-      type: p.type,
-      ...(p.default !== undefined ? { default: p.default } : {}),
-      ...(p.required ? { required: true } : {}),
-      ...(p.description ? { description: p.description } : {}),
-      ...(p.enum ? { enum: p.enum } : {}),
-    })),
-    tags: s.query.meta.tags,
-    file: s.query.file,
-    hasLocalOverride: s.hasLocalOverride || undefined,
   }
 }
 

@@ -101,4 +101,19 @@ describe('builtin diag snippets', () => {
       'information_schema.tables'
     )
   })
+
+  test('@diag/cache-hit resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/cache-hit', 'postgres').query.sqlBody).toContain(
+      'pg_statio_user_tables'
+    )
+    expect(resolveByName(map, '@diag/cache-hit', 'mysql').query.sqlBody).toContain(
+      'Innodb_buffer_pool'
+    )
+  })
 })

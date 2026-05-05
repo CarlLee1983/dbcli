@@ -340,3 +340,17 @@ queriesCommand
       process.exit(1)
     }
   })
+
+queriesCommand
+  .command('rename <old> <new>')
+  .description(t('queries.rename_description'))
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (oldName: string, newName: string, options: { force?: boolean }) => {
+    try {
+      const { queriesRename } = await import('@/commands/queries-rename')
+      await queriesRename(oldName, newName, options)
+    } catch (e) {
+      console.error((e as Error).message)
+      process.exit(1)
+    }
+  })

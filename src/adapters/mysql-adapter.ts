@@ -27,7 +27,7 @@ function parseEnumValues(columnType: string): string[] | undefined {
  * Handles connection management, query execution, and schema introspection
  */
 export class MySQLAdapter implements DatabaseAdapter {
-  private db: any = null
+  private db: mysql.Connection | null = null
   private options: ConnectionOptions
   private system: 'mysql' | 'mariadb'
 
@@ -149,7 +149,7 @@ export class MySQLAdapter implements DatabaseAdapter {
       }
 
       // Handle DML results (ResultSetHeader)
-      const header = result as any // ResultSetHeader
+      const header = result as mysql.ResultSetHeader
       return {
         rows: [],
         affectedRows: header.affectedRows || 0,

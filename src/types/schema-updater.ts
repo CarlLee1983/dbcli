@@ -5,8 +5,8 @@
  */
 
 import type { SchemaDiffReport } from './schema-diff'
-import type { DbcliConfig } from '@/utils/validation'
-import type { TableSchema } from '@/adapters/types'
+
+import type { TableSchema, ColumnSchema } from '@/adapters/types'
 
 /**
  * Schema patch - represents changes between two schema versions
@@ -20,13 +20,13 @@ export interface SchemaPatch {
     string,
     {
       table: string
-      columnsAdded: Record<string, any>
+      columnsAdded: Record<string, ColumnSchema>
       columnsRemoved: string[]
       columnsModified: Record<
         string,
         {
-          previous: any
-          current: any
+          previous: ColumnSchema
+          current: ColumnSchema
         }
       >
     }

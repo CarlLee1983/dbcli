@@ -1,7 +1,7 @@
 import type { MongoClient as MongoClientType, Db } from 'mongodb'
 import { resolveSrv, resolveTxt } from 'node:dns/promises'
 import { ConnectionError } from './types'
-import type { ConnectionOptions, ExecutionResult, QueryableAdapter } from './types'
+import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
 type MongoClientConstructor = new (uri: string, opts?: object) => MongoClientType
 type SrvRecord = { name?: string; target?: string; port: number }
@@ -231,7 +231,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     return results
   }
 
-  async listTables(): Promise<any[]> {
+  async listTables(): Promise<TableSchema[]> {
     const collections = await this.listCollections()
     return collections.map((c) => ({
       name: c.name,
@@ -240,7 +240,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     }))
   }
 
-  async getTableSchema(collectionName: string): Promise<any> {
+  async getTableSchema(collectionName: string): Promise<TableSchema> {
     const db = this.getDatabase()
     const collection = db.collection(collectionName)
 
@@ -267,7 +267,7 @@ export class MongoDBAdapter implements QueryableAdapter {
       name: collectionName,
       columns,
       estimatedRowCount,
-      tableType: 'collection',
+      tableType: 'table',
     }
   }
 
@@ -282,7 +282,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     return info.version ?? 'unknown'
   }
 
-  async insert(collection: string, data: Record<string, any>): Promise<ExecutionResult<any>> {
+  async insert(collection: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     const result = await db.collection(collection).insertOne(data)
     return {
@@ -294,9 +294,9 @@ export class MongoDBAdapter implements QueryableAdapter {
 
   async update(
     collection: string,
-    filter: Record<string, any>,
-    update: Record<string, any>
-  ): Promise<ExecutionResult<any>> {
+    filter: Record<string, unknown>,
+    update: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     const result = await db.collection(collection).updateMany(filter, update)
     return {
@@ -305,7 +305,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     }
   }
 
-  async delete(collection: string, filter: Record<string, any>): Promise<ExecutionResult<any>> {
+  async delete(collection: string, filter: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     const result = await db.collection(collection).deleteMany(filter)
     return {

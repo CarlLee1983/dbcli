@@ -253,7 +253,7 @@ export interface QueryableAdapter {
    * @param data Data object to insert
    * @returns Execution result
    */
-  insert(collection: string, data: Record<string, any>): Promise<ExecutionResult<any>>
+  insert(collection: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>>
 
   /**
    * Update documents/rows matching filter
@@ -264,9 +264,9 @@ export interface QueryableAdapter {
    */
   update(
     collection: string,
-    filter: Record<string, any>,
-    update: Record<string, any>
-  ): Promise<ExecutionResult<any>>
+    filter: Record<string, unknown>,
+    update: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>>
 
   /**
    * Delete documents/rows matching filter
@@ -274,5 +274,5 @@ export interface QueryableAdapter {
    * @param filter Filter object
    * @returns Execution result
    */
-  delete(collection: string, filter: Record<string, any>): Promise<ExecutionResult<any>>
+  delete(collection: string, filter: Record<string, unknown>): Promise<ExecutionResult<unknown>>
 }

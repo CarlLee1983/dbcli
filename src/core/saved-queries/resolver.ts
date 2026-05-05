@@ -21,9 +21,7 @@ export function resolveByName(
 
   const matches = variants.filter((v) => engineMatches(v.query.meta.engine, engine))
   if (matches.length === 0) {
-    const declared = variants
-      .map((v) => v.query.meta.engine?.join(',') ?? 'any')
-      .join(' | ')
+    const declared = variants.map((v) => v.query.meta.engine?.join(',') ?? 'any').join(' | ')
     throw new SavedQueryError(
       `Snippet '${name}' does not support engine '${engine}' (declared: ${declared})`,
       'ENGINE_MISMATCH'

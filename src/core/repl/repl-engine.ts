@@ -153,10 +153,10 @@ export class ReplEngine {
       }
 
       return { action: 'continue', output: stdout.trimEnd() || undefined }
-    } catch (error: any) {
+    } catch (error) {
       return {
         action: 'continue',
-        output: pc.red(t_vars('shell.error_command_failed', { message: error.message })),
+        output: pc.red(t_vars('shell.error_command_failed', { message: (error as Error).message })),
       }
     }
   }
@@ -220,7 +220,7 @@ export class ReplEngine {
 
       this.state = { ...this.state, connected: true }
       return { action: 'continue', output }
-    } catch (error: any) {
+    } catch (error) {
       // Attempt auto-reconnect once on connection errors
       if (this.isConnectionError(error) && this.state.connected) {
         this.state = { ...this.state, connected: false }
@@ -231,11 +231,11 @@ export class ReplEngine {
           console.error(pc.green(t('shell.error_reconnect_success')))
           // Retry the query once
           return this.executeSql(sql)
-        } catch (reconnectError: any) {
+        } catch (reconnectError) {
           return {
             action: 'continue',
             output: pc.red(
-              t_vars('shell.error_reconnect_failed', { message: reconnectError.message })
+              t_vars('shell.error_reconnect_failed', { message: (reconnectError as Error).message })
             ),
           }
         }
@@ -243,7 +243,7 @@ export class ReplEngine {
 
       return {
         action: 'continue',
-        output: pc.red(t_vars('shell.error_sql_failed', { message: error.message })),
+        output: pc.red(t_vars('shell.error_sql_failed', { message: (error as Error).message })),
       }
     }
   }
@@ -254,12 +254,13 @@ export class ReplEngine {
     return match?.[1]
   }
 
-  private isConnectionError(error: any): boolean {
-    const msg = (error.message ?? '').toLowerCase()
+  private isConnectionError(error: unknown): boolean {
+    const e = error as { message?: string; code?: string }
+    const msg = (e.message ?? "").toLowerCase()
     return (
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ECONNRESET' ||
-      error.code === 'ETIMEDOUT' ||
+      e.code === "ECONNREFUSED" ||
+      e.code === "ECONNRESET" ||
+      e.code === "ETIMEDOUT" ||
       msg.includes('connection') ||
       msg.includes('terminated') ||
       msg.includes('socket')

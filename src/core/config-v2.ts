@@ -19,7 +19,7 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
     typeof raw === 'object' &&
     raw !== null &&
     'version' in raw &&
-    (raw as any).version === 2 &&
+    (raw as Record<string, unknown>).version === 2 &&
     'connections' in raw
   ) {
     return 2
@@ -153,13 +153,16 @@ export function listConnections(config: DbcliConfigV2): Array<{
   uri?: string | { $env: string }
   isDefault: boolean
 }> {
-  return Object.entries(config.connections).map(([name, conn]) => ({
-    name,
-    system: conn.system,
-    host: (conn as any).host ?? '',
-    port: (conn as any).port ?? 27017,
-    database: (conn as any).database ?? '',
-    ...((conn as any).uri !== undefined && { uri: (conn as any).uri }),
-    isDefault: name === config.default,
-  }))
+  return Object.entries(config.connections).map(([name, conn]) => {
+    const c = conn as { host?: string | { $env: string }; port?: number | { $env: string }; database?: string | { $env: string }; uri?: string | { $env: string } }
+    return {
+      name,
+      system: conn.system,
+      host: c.host ?? "",
+      port: c.port ?? 27017,
+      database: c.database ?? "",
+      ...(c.uri !== undefined && { uri: c.uri }),
+      isDefault: name === config.default,
+    }
+  })
 }

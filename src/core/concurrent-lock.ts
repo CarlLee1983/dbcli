@@ -132,7 +132,7 @@ export class ConcurrentLockManager {
       // Rename to lock file (atomic on Unix)
       const moveResult = await Bun.spawn(['mv', tempPath, this.lockPath]).exited
       return moveResult === 0
-    } catch (error) {
+    } catch {
       // If file creation fails, lock is likely held
       return false
     }

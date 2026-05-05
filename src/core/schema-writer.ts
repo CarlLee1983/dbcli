@@ -38,7 +38,7 @@ export class SchemaWriter {
 
     // 1. Build Index using the existing builder
     // We wrap schema in a partial config object as expected by the builder
-    const index = await SchemaIndexBuilder.buildIndex({ schema } as any)
+    const index = await SchemaIndexBuilder.buildIndex({ schema })
 
     // 2. Save Index file
     await SchemaIndexBuilder.saveIndex(this.dbcliPath, index, connectionName)
@@ -107,7 +107,7 @@ export class SchemaWriter {
     try {
       mkdirSync(path, { recursive: true })
     } catch (error) {
-      if ((error as any).code !== 'EEXIST') {
+      if ((error as { code?: string }).code !== 'EEXIST') {
         throw new Error(`Error ensuring directory ${path}: ${error}`)
       }
     }

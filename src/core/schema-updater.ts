@@ -12,7 +12,7 @@ import { join } from 'path'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import type { SchemaPatch, SchemaRefreshResult, RefreshOptions } from '@/types/schema-updater'
-import type { SchemaDiffReport } from '@/types/schema-diff'
+
 import { SchemaDiffEngine } from './schema-diff'
 import { SchemaCacheManager } from './schema-cache'
 import { ConcurrentLockManager } from './concurrent-lock'
@@ -228,7 +228,7 @@ export class SchemaUpdater {
       )
 
       // Add new columns
-      for (const [colName, colSchema] of Object.entries(changes.columnsAdded)) {
+      for (const [, colSchema] of Object.entries(changes.columnsAdded)) {
         existing.columns.push(colSchema)
       }
 
@@ -267,14 +267,7 @@ export class SchemaUpdater {
    *
    * @param patch Schema patch with changes
    */
-  private async updateCache(patch: SchemaPatch): Promise<void> {
-    // Add new tables to cache
-    for (const [tableName, schema] of Object.entries(patch.added)) {
-      // Cache will handle storing appropriately
-      // This is a hook point for cache updates
-    }
-
-    // Modified tables are implicitly updated through config reload
-    // Cache will be refreshed on next access
+  private async updateCache(_patch: SchemaPatch): Promise<void> {
+    // Cache is refreshed implicitly on next config reload — see SchemaCacheManager.
   }
 }

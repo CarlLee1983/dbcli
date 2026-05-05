@@ -117,11 +117,11 @@ function isEnvReference(value: unknown): value is EnvReference {
  * @throws ConfigError if an environment variable is not found in strict mode
  */
 function resolveEnvReferences(
-  config: any,
+  config: unknown,
   env: Record<string, string | undefined>,
   parentKey?: string,
   strict: boolean = false
-): any {
+): unknown {
   if (isEnvReference(config)) {
     const envKey = config.$env
     const value = env[envKey]
@@ -154,7 +154,7 @@ function resolveEnvReferences(
   }
 
   if (typeof config === 'object' && config !== null) {
-    const resolved: any = {}
+    const resolved: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(config)) {
       resolved[key] = resolveEnvReferences(value, env, key, strict)
     }
@@ -247,7 +247,7 @@ export const configModule = {
               process.env,
               undefined,
               false
-            )
+            ) as Record<string, unknown>
 
             // Apply legacy password if connection password is still empty
             if (!resolvedConnection.password && legacyPassword) {
@@ -265,7 +265,7 @@ export const configModule = {
                 // If layered cache exists, we use it.
                 // For simplicity in this wave, we load all tables into the returned config object
                 // to maintain compatibility with existing commands.
-                const layeredSchema: Record<string, any> = {}
+                const layeredSchema: Record<string, unknown> = {}
                 for (const tableName of Object.keys(index.tables)) {
                   const s = await cache.getTableSchema(tableName)
                   if (s) layeredSchema[tableName] = s
@@ -274,7 +274,7 @@ export const configModule = {
                   schema = layeredSchema
                 }
               }
-            } catch (error) {
+            } catch {
               // Graceful fallback to config.json schema
               console.warn(
                 'Warning: Failed to load layered schema cache, falling back to config.json'
@@ -293,7 +293,7 @@ export const configModule = {
 
           // Use non-strict mode when reading config, preserving missing env var references
           // This prevents errors even when env vars are not defined
-          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false)
+          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false) as { connection: { password?: string } }
 
           // Try reading sensitive info from .env.local (legacy approach, for backward compatibility)
           const envPath = join(storagePath, '.env.local')
@@ -426,7 +426,7 @@ export const configModule = {
         await Bun.$`mkdir -p ${storagePath}`
 
         // Check if using env var references (password is a { "$env": "..." } object)
-        const hasEnvReferences = isEnvReference((config.connection as any).password)
+        const hasEnvReferences = isEnvReference((config.connection as { password?: unknown }).password)
 
         if (hasEnvReferences) {
           // New approach: using env var references, write directly to config.json
@@ -443,7 +443,7 @@ export const configModule = {
               password: undefined,
             },
           }
-          delete (configWithoutPassword.connection as any).password
+          delete (configWithoutPassword.connection as { password?: unknown }).password
 
           // Write config.json (without password)
           const configPath = join(storagePath, 'config.json')

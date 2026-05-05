@@ -9,7 +9,7 @@
 
 import type { SchemaIndex } from '@/types/schema-cache'
 import type { DbcliConfig } from '@/types'
-import type { TableSchema } from '@/adapters/types'
+
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
 
@@ -57,7 +57,7 @@ export class SchemaIndexBuilder {
    * @returns Complete SchemaIndex object
    */
   static async buildIndex(
-    config: DbcliConfig,
+    config: Pick<DbcliConfig, "schema">,
     options?: { hotTableThreshold?: number }
   ): Promise<SchemaIndex> {
     const hotTableThreshold = options?.hotTableThreshold || 20
@@ -165,7 +165,7 @@ export class SchemaIndexBuilder {
     try {
       mkdirSync(dirPath, { recursive: true })
     } catch (error) {
-      if ((error as any).code !== 'EEXIST') {
+      if ((error as { code?: string }).code !== 'EEXIST') {
         throw new Error(`Failed to ensure directory ${dirPath}: ${error}`)
       }
     }

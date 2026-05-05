@@ -13,7 +13,7 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
   const lines = text.split('\n').filter((l) => !/^\s*(#.*)?$/.test(l))
   const root: Record<string, YamlValue> = {}
   // stack of [indent, container]
-  const stack: Array<{ indent: number; node: any }> = [{ indent: -1, node: root }]
+  const stack: Array<{ indent: number; node: Record<string, unknown> | unknown[] }> = [{ indent: -1, node: root }]
 
   for (const raw of lines) {
     if (raw.includes('\t')) {
@@ -25,7 +25,7 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
     while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) {
       stack.pop()
     }
-    const parent = stack[stack.length - 1]!.node
+    const parent = stack[stack.length - 1]!.node as Record<string, YamlValue>
 
     const colon = line.indexOf(':')
     if (colon === -1) {

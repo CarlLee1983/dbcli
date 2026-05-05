@@ -132,7 +132,7 @@ export class ColumnIndexBuilder {
       tables: Array<{ tableName: string; column: ColumnSchema }>
     }> = []
 
-    for (const [colName, entry] of this.index.columns.entries()) {
+    for (const [, entry] of this.index.columns.entries()) {
       if (regex.test(entry.name)) {
         results.push({
           columnName: entry.name,

@@ -13,7 +13,7 @@ import type { BlacklistManager } from './blacklist-manager'
  * Result of column filtering operation
  */
 export interface FilterColumnsResult {
-  filteredRows: Record<string, any>[]
+  filteredRows: Record<string, unknown>[]
   omittedColumns: string[]
 }
 
@@ -64,7 +64,7 @@ export class BlacklistValidator {
    */
   filterColumns(
     tableName: string,
-    rows: Record<string, any>[],
+    rows: Record<string, unknown>[],
     columnList: string[]
   ): FilterColumnsResult {
     const blacklistedColumns = this.manager.getBlacklistedColumns(tableName)
@@ -82,7 +82,7 @@ export class BlacklistValidator {
 
     // Create new row objects without blacklisted columns (immutable)
     const filteredRows = rows.map((row) => {
-      const newRow: Record<string, any> = {}
+      const newRow: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(row)) {
         if (!omittedColumns.includes(key)) {
           newRow[key] = value

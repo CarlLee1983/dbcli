@@ -77,9 +77,9 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       warnings: ['Snippet has no engine declaration; assuming any engine'],
     }
   }
-  let raw: any
+  let rawParsed: unknown
   try {
-    raw = parseYamlMini(yaml)
+    rawParsed = parseYamlMini(yaml)
   } catch (e) {
     throw new SavedQueryError(
       `Invalid frontmatter in '${input.key}': ${(e as Error).message}`,
@@ -89,6 +89,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   }
 
   const warnings: string[] = []
+  const raw = (rawParsed ?? {}) as Record<string, unknown>
   const engine = normaliseEngine(raw.engine, warnings)
   const params = normaliseParams(raw.params, input)
   const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : []
@@ -128,7 +129,7 @@ function normaliseParams(value: unknown, input: ParseInput): ParamSpec[] {
   if (typeof value !== 'object' || Array.isArray(value)) {
     throw new SavedQueryError(`'params' must be a map`, 'PARSE_ERROR', input.file)
   }
-  return Object.entries(value as Record<string, any>).map(([name, spec]) => {
+  return Object.entries(value as Record<string, Record<string, unknown> | undefined>).map(([name, spec]) => {
     const type = String(spec?.type ?? 'string') as ParamType
     if (!VALID_TYPES.includes(type)) {
       throw new SavedQueryError(

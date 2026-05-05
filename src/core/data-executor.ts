@@ -36,9 +36,9 @@ export class DataExecutor {
    */
   buildInsertSql(
     tableName: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
     schema: TableSchema
-  ): { sql: string; params: any[] } {
+  ): { sql: string; params: (string | number | boolean | null)[] } {
     // Validate that all data columns exist in the table schema
     const columnNames = schema.columns.map((col) => col.name)
     const dataKeys = Object.keys(data)
@@ -69,7 +69,7 @@ export class DataExecutor {
 
     return {
       sql,
-      params: values,
+      params: values as (string | number | boolean | null)[],
     }
   }
 
@@ -87,7 +87,7 @@ export class DataExecutor {
    */
   async executeInsert(
     tableName: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
     schema: TableSchema,
     options?: DataExecutionOptions
   ): Promise<DataExecutionResult> {
@@ -189,8 +189,8 @@ export class DataExecutor {
    */
   async executeUpdate(
     tableName: string,
-    data: Record<string, any>,
-    where: Record<string, any>,
+    data: Record<string, unknown>,
+    where: Record<string, unknown>,
     schema: TableSchema,
     options?: DataExecutionOptions
   ): Promise<DataExecutionResult> {
@@ -289,7 +289,7 @@ export class DataExecutor {
    */
   async executeDelete(
     tableName: string,
-    where: Record<string, any>,
+    where: Record<string, unknown>,
     schema: TableSchema,
     options?: DataExecutionOptions
   ): Promise<DataExecutionResult> {
@@ -399,10 +399,10 @@ export class DataExecutor {
    */
   private buildUpdateSql(
     tableName: string,
-    data: Record<string, any>,
-    where: Record<string, any>,
+    data: Record<string, unknown>,
+    where: Record<string, unknown>,
     schema: TableSchema
-  ): { sql: string; params: any[] } {
+  ): { sql: string; params: (string | number | boolean | null)[] } {
     const dataKeys = Object.keys(data)
     const whereKeys = Object.keys(where)
     const columnNames = schema.columns.map((col) => col.name)
@@ -437,7 +437,7 @@ export class DataExecutor {
     const sql = `UPDATE ${quote}${tableName}${quote} SET ${setClause} WHERE ${whereClause}`
     const params = [...dataKeys.map((key) => data[key]), ...whereKeys.map((key) => where[key])]
 
-    return { sql, params }
+    return { sql, params: params as (string | number | boolean | null)[] }
   }
 
   /**
@@ -445,9 +445,9 @@ export class DataExecutor {
    */
   private buildDeleteSql(
     tableName: string,
-    where: Record<string, any>,
+    where: Record<string, unknown>,
     schema: TableSchema
-  ): { sql: string; params: any[] } {
+  ): { sql: string; params: (string | number | boolean | null)[] } {
     const whereKeys = Object.keys(where)
     const columnNames = schema.columns.map((col) => col.name)
 
@@ -473,6 +473,6 @@ export class DataExecutor {
     const sql = `DELETE FROM ${quote}${tableName}${quote} WHERE ${whereClause}`
     const params = whereKeys.map((key) => where[key])
 
-    return { sql, params }
+    return { sql, params: params as (string | number | boolean | null)[] }
   }
 }

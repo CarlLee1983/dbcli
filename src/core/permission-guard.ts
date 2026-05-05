@@ -290,8 +290,8 @@ export function extractAllKeywords(sql: string): string[] {
  */
 export function determineConfidence(
   type: StatementType,
-  keyword: string,
-  sql: string
+  _keyword: string,
+  _sql: string
 ): 'HIGH' | 'MEDIUM' | 'LOW' {
   // Standard SQL operations - high confidence
   const highConfidenceTypes = [

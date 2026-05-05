@@ -23,9 +23,7 @@ const ENGINE_SUFFIXES: ReadonlyArray<EngineTag> = ['postgres', 'mysql']
  * （例如同一個 snippet 為 postgres 與 mysql 各提供一份實作）。Resolver
  * 會根據目前連線的 engine 挑選對應變體。
  */
-export async function loadSnippets(
-  opts: LoadOptions
-): Promise<Map<string, ResolvedSnippet[]>> {
+export async function loadSnippets(opts: LoadOptions): Promise<Map<string, ResolvedSnippet[]>> {
   const builtin = await walkAndParse(opts.builtinDir, 'builtin')
   const shared = await walkAndParse(opts.sharedDir, 'shared')
   const local = await walkAndParse(opts.localDir, 'local')

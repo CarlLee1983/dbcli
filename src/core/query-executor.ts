@@ -38,7 +38,7 @@ export class QueryExecutor {
       autoLimit?: boolean
       limitValue?: number
     }
-  ): Promise<QueryResult<Record<string, any>>> {
+  ): Promise<QueryResult<Record<string, unknown>>> {
     try {
       // 1. Enforce permission before execution
       const classification = enforcePermission(sql, this.permission)
@@ -71,7 +71,7 @@ export class QueryExecutor {
 
       // 4. Execute query and measure time
       const start = performance.now()
-      const resultData = await this.adapter.execute<Record<string, any>>(executeSql)
+      const resultData = await this.adapter.execute<Record<string, unknown>>(executeSql)
       const executionTimeMs = Math.round(performance.now() - start)
 
       const rows = resultData.rows
@@ -104,14 +104,14 @@ export class QueryExecutor {
       }
 
       // 7. Build QueryResult object
-      const result: QueryResult<Record<string, any>> = {
+      const result: QueryResult<Record<string, unknown>> = {
         rows: filteredRows,
         rowCount: filteredRows.length,
         columnNames,
         columnTypes,
         executionTimeMs,
         metadata: {
-          statement: classification.type as any,
+          statement: classification.type as import("@/types/query").SqlStatementType,
           affectedRows: affectedRows,
           ...(securityNotification ? { securityNotification } : {}),
         },
@@ -141,7 +141,7 @@ export class QueryExecutor {
                 : `Available tables: ${tables.slice(0, 5).join(', ')}...`)
           )
           throw enhancedError
-        } catch (suggestionError) {
+        } catch {
           // If suggestion fails, throw original error
           throw error
         }
@@ -192,7 +192,7 @@ export function extractTableName(sql: string): string | null {
  * Infer SQL column type from a JavaScript value
  * Uses simple runtime type inference for data display
  */
-function inferColumnType(value: any): string {
+function inferColumnType(value: unknown): string {
   if (value === null || value === undefined) {
     return 'null'
   }

@@ -1,12 +1,11 @@
 // src/core/repl/input-classifier.ts
 import type { ClassifiedInput } from './types'
-import { SQL_KEYWORDS_FOR_DETECTION, DBCLI_COMMANDS, META_COMMANDS } from './types'
+import { SQL_KEYWORDS_FOR_DETECTION, META_COMMANDS } from './types'
 
 const META_PREFIX = '.'
 const SQL_TERMINATOR = ';'
 
 const sqlKeywordSet = new Set(SQL_KEYWORDS_FOR_DETECTION)
-const dbcliCommandSet = new Set(DBCLI_COMMANDS)
 const metaCommandNames = META_COMMANDS.map((m) => m.slice(1))
 
 export function classifyInput(raw: string): ClassifiedInput {

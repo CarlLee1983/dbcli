@@ -8,7 +8,6 @@
  * 4. Cleanup on error (rollback)
  */
 
-import { join, dirname } from 'path'
 import type { AtomicWriteOptions, WriteResult } from '@/types/schema-updater'
 
 /**

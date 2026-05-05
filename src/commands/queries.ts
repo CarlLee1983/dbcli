@@ -326,3 +326,17 @@ queriesCommand
   .action(async (options) => {
     await queriesCheck(options)
   })
+
+queriesCommand
+  .command('delete <name>')
+  .description(t('queries.delete_description'))
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (name: string, options: { force?: boolean }) => {
+    try {
+      const { queriesDelete } = await import('@/commands/queries-delete')
+      await queriesDelete(name, options)
+    } catch (e) {
+      console.error((e as Error).message)
+      process.exit(1)
+    }
+  })

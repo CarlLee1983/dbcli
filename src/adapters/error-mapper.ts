@@ -56,6 +56,9 @@ export function mapError(
     errMsg.includes('auth') ||
     errMsg.includes('password') ||
     errMsg.includes('access denied') ||
+    errMsg.includes('does not exist') ||
+    errMsg.includes('role') ||
+    errMsg.includes('user') ||
     errMsg.includes('FATAL')
   ) {
     return new ConnectionError(

@@ -21,7 +21,7 @@ export interface OutputFormatter<T> {
  * - json: Structured JSON with full metadata for AI parsing
  * - csv: RFC 4180 compliant CSV with proper escaping
  */
-export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<string, any>>> {
+export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<string, unknown>>> {
   /**
    * Formats query result in the specified format
    * @param result Query result object containing rows and metadata
@@ -29,7 +29,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * @returns Formatted string in requested format
    */
   format(
-    result: QueryResult<Record<string, any>>,
+    result: QueryResult<Record<string, unknown>>,
     options?: { compact?: boolean; format?: 'table' | 'json' | 'csv' }
   ): string {
     const format = options?.format || 'table'
@@ -49,7 +49,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * Formats result as ASCII table with headers and metadata footer
    * Uses cli-table3 for consistent terminal output
    */
-  private formatTable(result: QueryResult<Record<string, any>>): string {
+  private formatTable(result: QueryResult<Record<string, unknown>>): string {
     if (result.rows.length === 0) {
       return this.formatEmptyTable(result)
     }
@@ -88,7 +88,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
   /**
    * Formats empty result set as table with just headers and footer
    */
-  private formatEmptyTable(result: QueryResult<Record<string, any>>): string {
+  private formatEmptyTable(result: QueryResult<Record<string, unknown>>): string {
     const table = new Table({
       head: result.columnNames,
       style: { compact: false, 'padding-left': 1, 'padding-right': 1 },
@@ -120,7 +120,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * Formats result as JSON for AI parsing
    * Includes all metadata fields for complete result information
    */
-  private formatJSON(result: QueryResult<Record<string, any>>, compact?: boolean): string {
+  private formatJSON(result: QueryResult<Record<string, unknown>>, compact?: boolean): string {
     const spacing = compact ? undefined : 2
 
     const output = {
@@ -139,7 +139,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * Formats result as RFC 4180 compliant CSV
    * Handles proper escaping of commas, quotes, and newlines
    */
-  private formatCSV(result: QueryResult<Record<string, any>>): string {
+  private formatCSV(result: QueryResult<Record<string, unknown>>): string {
     if (result.rows.length === 0) {
       // Headers only for empty result
       let csvOutput = result.columnNames.map((name) => this.escapeCSVField(name)).join(',')
@@ -175,7 +175,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * @param value Field value to escape
    * @returns Properly escaped CSV field
    */
-  private escapeCSVField(value: any): string {
+  private escapeCSVField(value: unknown): string {
     // Handle null/undefined
     if (value === null || value === undefined) {
       return ''
@@ -196,7 +196,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * Converts a cell value to string for table display
    * Handles null, undefined, numbers, and objects appropriately
    */
-  private cellToString(value: any): string {
+  private cellToString(value: unknown): string {
     if (value === null || value === undefined) {
       return ''
     }

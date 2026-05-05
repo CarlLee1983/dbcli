@@ -6,7 +6,6 @@
  * console-based prompts using Bun's built-in stdin.
  */
 
-import { stdin } from 'bun'
 
 /**
  * Read a line from stdin using Node.js compatible API.

@@ -8,7 +8,7 @@
  * Typically loaded from JSON files like resources/lang/en/messages.json
  */
 export interface Messages {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**

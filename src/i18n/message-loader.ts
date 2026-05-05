@@ -4,7 +4,7 @@ import shellEnMessages from '../../resources/lang/en/shell.json'
 import shellZhTWMessages from '../../resources/lang/zh-TW/shell.json'
 
 export interface Messages {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 const BUNDLED_MESSAGES: Record<string, Messages> = {
@@ -53,7 +53,7 @@ export class MessageLoader {
     // Try to navigate through current language messages
     for (const part of parts) {
       if (value && typeof value === 'object') {
-        value = value[part]
+        value = (value as Messages)[part] as Messages | string | undefined
       } else {
         value = undefined
         break
@@ -68,7 +68,7 @@ export class MessageLoader {
     value = this.fallbackMessages
     for (const part of parts) {
       if (value && typeof value === 'object') {
-        value = value[part]
+        value = (value as Messages)[part] as Messages | string | undefined
       } else {
         value = undefined
         break

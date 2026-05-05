@@ -114,6 +114,8 @@ dbcli query '{"status":"active"}' --collection users --use atlas
 
 For MongoDB, `list` and `query` operate on the database configured for the connection, and `query` requires `--collection <name>`.
 
+For a command-by-command support matrix across PostgreSQL, MySQL, MariaDB, and MongoDB, see [docs/feature-matrix.md](./docs/feature-matrix.md).
+
 ---
 
 ## Multi-connection Support (v2)
@@ -1274,11 +1276,14 @@ chmod +x dist/cli.mjs
 
 ```bash
 bun test                  # full test suite (Bun test runner)
+bun run typecheck         # TypeScript compile-time validation
 bun run test:unit         # unit + core tests only
 bun run test:integration  # integration tests
 bun run test:docker       # integration tests with docker-compose.test.yml (MySQL + PostgreSQL)
 bun run build             # bundle CLI to dist/ (used before publish)
 ```
+
+CI treats `bun run typecheck` and `bun test` as the required pass/fail validation gate on every push and pull request. Lint, build, smoke checks, and benchmarks run in addition to that gate.
 
 Live database integration tests use `.dbcli/config.json` by default. If your live
 config lives elsewhere, set `LIVE_DB_CONFIG_PATH=/path/to/.dbcli` before running:

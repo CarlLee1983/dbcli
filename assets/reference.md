@@ -2,6 +2,8 @@
 
 Companion to [SKILL.md](SKILL.md). Exhaustive flags, copy-paste examples, `shell`, `completion`, `upgrade`, `migrate` DDL, and extended MongoDB examples.
 
+For cross-engine support status, see `docs/feature-matrix.md` in the repository.
+
 ## Commands
 
 ### init
@@ -431,13 +433,25 @@ dbcli migrate drop-enum status --execute --force
 
 ## MongoDB Support
 
-MongoDB connections use a JSON-based query model instead of SQL.
+MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB support as a narrower document-database path, not as a full SQL feature equivalent.
 
 Atlas-style `mongodb+srv://` URIs are supported. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
-**Supported commands:** `init`, `list`, `query`, `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `insert`, `update`, `delete`, `status`, `shell`, `doctor`, `upgrade`, `completion`
 
-**Not supported (exit with error):** `schema`, `insert`, `update`, `delete`, `export`, `diff`, `migrate`, `check`
+**Limited support:**
+
+- `schema` samples collection documents to infer field names/types. It does not provide relational constraints, primary keys, foreign keys, or reliable index metadata.
+- `query` accepts only JSON object filters or aggregation pipeline arrays and always requires `--collection <name>`.
+- `insert` inserts one JSON document into the named collection.
+- `update` accepts a JSON filter in `--where` or simple `key=value` conditions. If `--set` does not use MongoDB update operators such as `$set`, dbcli wraps it in `$set`.
+- `delete` deletes all documents matching the JSON/simple filter.
+- MongoDB write paths do not currently provide the same SQL dry-run, relational schema validation, or column-level blacklist filtering guarantees as SQL writes.
+- `shell` blocks raw SQL for MongoDB; use `query <json> --collection <name>` inside the shell.
+
+**Not supported (exit with error):** `q` saved-query execution, `export`, `diff`, `migrate`
+
+**Not a supported MongoDB target:** `check` is designed for relational health checks and emits SQL-style checks.
 
 ### MongoDB-specific workflow
 
@@ -452,6 +466,11 @@ dbcli list --format json
 dbcli query '{}' --collection orders --format json          # All documents
 dbcli query '{"status": "paid"}' --collection orders        # Filter
 dbcli query '[{"$match": {"status":"paid"}}, {"$count":"total"}]' --collection orders  # Pipeline
+
+# 4. Document writes (permission-gated; no SQL dry-run semantics)
+dbcli insert orders --data '{"status":"paid","total":42}'
+dbcli update orders --where '{"status":"pending"}' --set '{"status":"paid"}'
+dbcli delete orders --where '{"status":"cancelled"}' --force
 ```
 
 ### Query syntax

@@ -26,4 +26,19 @@ describe('builtin diag snippets', () => {
     expect(pg.query.meta.params[0]?.name).toBe('min_seconds')
     expect(pg.query.meta.params[0]?.default).toBe(30)
   })
+
+  test('@diag/table-sizes resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/table-sizes', 'postgres').query.sqlBody).toContain(
+      'pg_stat_user_tables'
+    )
+    expect(resolveByName(map, '@diag/table-sizes', 'mysql').query.sqlBody).toContain(
+      'information_schema.tables'
+    )
+  })
 })

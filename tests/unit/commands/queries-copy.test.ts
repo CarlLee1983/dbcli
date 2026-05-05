@@ -30,24 +30,14 @@ describe('queries copy', () => {
       cwd: tmp,
       builtinDirOverride: join(tmp, 'assets/snippets'),
     })
-    expect(
-      await Bun.file(join(tmp, '.dbcli/queries/my/sample.postgres.sql')).exists()
-    ).toBe(true)
-    expect(
-      await Bun.file(join(tmp, '.dbcli/queries/my/sample.mysql.sql')).exists()
-    ).toBe(true)
+    expect(await Bun.file(join(tmp, '.dbcli/queries/my/sample.postgres.sql')).exists()).toBe(true)
+    expect(await Bun.file(join(tmp, '.dbcli/queries/my/sample.mysql.sql')).exists()).toBe(true)
   })
 
   test('refuses to overwrite existing local target', async () => {
     await mkdir(join(tmp, '.dbcli/queries'), { recursive: true })
-    await writeFile(
-      join(tmp, '.dbcli/queries/x.sql'),
-      '-- ---\n-- name: x\n-- ---\nSELECT 1;\n'
-    )
-    await writeFile(
-      join(tmp, '.dbcli/queries/y.sql'),
-      '-- ---\n-- name: y\n-- ---\nSELECT 1;\n'
-    )
+    await writeFile(join(tmp, '.dbcli/queries/x.sql'), '-- ---\n-- name: x\n-- ---\nSELECT 1;\n')
+    await writeFile(join(tmp, '.dbcli/queries/y.sql'), '-- ---\n-- name: y\n-- ---\nSELECT 1;\n')
     await expect(queriesCopy('@y', '@x', { cwd: tmp })).rejects.toThrow(/exists/)
   })
 })

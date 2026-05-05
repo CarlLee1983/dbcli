@@ -24,7 +24,7 @@ function createMockAdapter(rows: Record<string, any>[]): DatabaseAdapter {
       name: '',
       columns: [],
       rowCount: 0,
-      primaryKey: null,
+      primaryKey: undefined,
       foreignKeys: [],
     }),
     testConnection: async () => true,

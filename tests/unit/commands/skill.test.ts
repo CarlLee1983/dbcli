@@ -3,7 +3,7 @@
  * Tests the skill command logic directly
  */
 
-import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { test, expect, describe, spyOn, beforeEach } from 'bun:test'
 import { join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
 import { skillCommand } from '../../../src/commands/skill'
@@ -60,7 +60,7 @@ describe('skillCommand logic', () => {
     // Note: because we mock process.exit, the throw might still happen or exitCode set
     try {
       await skillCommand({} as any, { install: 'nonexistent' })
-    } catch (e) {
+    } catch {
       // either it throws or it exits
     }
     expect(exitCode).toBe(1)

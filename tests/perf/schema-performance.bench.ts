@@ -35,7 +35,7 @@ function generateMockSchemas(
         type: isId ? 'integer' : c % 3 === 0 ? 'varchar' : c % 3 === 1 ? 'integer' : 'decimal',
         nullable: !isId,
         primaryKey: isId,
-        default: null,
+        default: undefined,
       })
     }
 
@@ -67,7 +67,7 @@ async function benchmarkColumnIndexing() {
     const builder = new ColumnIndexBuilder()
 
     const start = performance.now()
-    const index = builder.build(schemas)
+    const _index = builder.build(schemas)
     const elapsed = performance.now() - start
 
     // Measure lookup performance

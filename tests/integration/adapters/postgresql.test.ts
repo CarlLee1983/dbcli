@@ -111,9 +111,9 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     try {
       await adapter.connect()
       const results = await adapter.execute<{ count: number }>('SELECT 1 as count')
-      expect(results).toBeInstanceOf(Array)
-      expect(results.length).toBeGreaterThan(0)
-      expect(results[0]?.count).toBe(1)
+      expect(results.rows).toBeInstanceOf(Array)
+      expect(results.rows.length).toBeGreaterThan(0)
+      expect(results.rows[0]?.count).toBe(1)
     } finally {
       await adapter.disconnect()
     }

@@ -93,7 +93,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
 
     try {
       await deleteCommand('users', { where: '' })
-    } catch (error) {
+    } catch {
       errorThrown = true
     }
 
@@ -133,7 +133,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1' })
-    } catch (error) {
+    } catch {
       errorThrown = true
     }
 
@@ -156,7 +156,7 @@ describe('deleteCommand - WHERE Clause Validation', () => {
 
     try {
       await deleteCommand('users', { where: "id=1 AND status='inactive'" })
-    } catch (error) {
+    } catch {
       errorThrown = true
     }
 
@@ -185,7 +185,7 @@ describe('deleteCommand - Argument Validation', () => {
 
     try {
       await deleteCommand('', { where: 'id=1' })
-    } catch (error) {
+    } catch {
       errorThrown = true
     }
 
@@ -207,7 +207,7 @@ describe('deleteCommand - Argument Validation', () => {
 
     try {
       await deleteCommand('users', { where: undefined as any })
-    } catch (error) {
+    } catch {
       errorThrown = true
     }
 
@@ -238,7 +238,7 @@ describe('deleteCommand - Configuration', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1' })
-    } catch (error) {
+    } catch {
       // Expected: config file not found
       errorThrown = true
     }
@@ -264,7 +264,7 @@ describe('deleteCommand - Execution Options', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1', dryRun: true })
-    } catch (error) {
+    } catch {
       // Expected to fail on permission
     }
 
@@ -284,7 +284,7 @@ describe('deleteCommand - Execution Options', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1', force: true })
-    } catch (error) {
+    } catch {
       // Expected to fail on permission
     }
 
@@ -303,7 +303,7 @@ describe('deleteCommand - Execution Options', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1', dryRun: true, force: true })
-    } catch (error) {
+    } catch {
       // Expected to fail on permission
     }
 

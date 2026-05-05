@@ -20,7 +20,7 @@ export const SKIP_BY_ENV = process.env.SKIP_INTEGRATION_TESTS === 'true'
 export async function isDbReachable(
   host: string,
   port: number,
-  timeoutMs = 2000
+  _timeoutMs = 2000
 ): Promise<boolean> {
   try {
     const socket = await Bun.connect({

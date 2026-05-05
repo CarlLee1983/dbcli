@@ -4,9 +4,7 @@ import {
   checkPermission,
   enforcePermission,
   PermissionError,
-  type StatementClassification,
 } from '@/core/permission-guard'
-import type { Permission } from '@/types'
 
 // ============================================================================
 // Suite 1: Basic Statement Classification

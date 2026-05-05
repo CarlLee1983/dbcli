@@ -91,7 +91,7 @@ describe('SchemaCacheManager', () => {
     // Clean up test directory
     try {
       await rm(testDbcliPath, { recursive: true, force: true })
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   })
@@ -172,8 +172,8 @@ describe('SchemaCacheManager', () => {
 
     const results = await manager.findFieldsByName('email')
     expect(results).toHaveLength(1)
-    expect(results[0].table).toBe('users')
-    expect(results[0].column.name).toBe('email')
+    expect(results[0]!.table).toBe('users')
+    expect(results[0]!.column.name).toBe('email')
   })
 
   test('findFieldsByName: finds multiple matches', async () => {

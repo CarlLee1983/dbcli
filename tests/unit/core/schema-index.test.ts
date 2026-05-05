@@ -69,7 +69,7 @@ describe('SchemaIndexBuilder', () => {
   afterAll(async () => {
     try {
       await rm(testDbcliPath, { recursive: true, force: true })
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   })
@@ -219,7 +219,7 @@ describe('SchemaIndexBuilder', () => {
     const index = await SchemaIndexBuilder.buildIndex(mockConfig)
 
     // First hot table should be one of the larger ones
-    const hotTableName = index.hotTables[0]
+    const hotTableName = index.hotTables[0]!
     const hotTableInfo = index.tables[hotTableName]
 
     // Hot table should have size comparable to largest tables
@@ -227,7 +227,7 @@ describe('SchemaIndexBuilder', () => {
     const sortedSizes = [...allSizes].sort((a, b) => b - a)
 
     expect(hotTableInfo?.estimatedSize).toBeGreaterThanOrEqual(
-      sortedSizes[Math.ceil(sortedSizes.length * 0.2)]
+      sortedSizes[Math.ceil(sortedSizes.length * 0.2)]!
     )
   })
 })

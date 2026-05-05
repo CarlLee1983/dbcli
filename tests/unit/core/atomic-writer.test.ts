@@ -109,7 +109,7 @@ test('AtomicFileWriter - read throws on missing file', async () => {
     expect(true).toBe(false) // Should not reach here
   } catch (error) {
     expect(error instanceof Error).toBe(true)
-    expect(error.message).toContain('File not found')
+    expect((error as Error).message).toContain('File not found')
   }
 })
 
@@ -142,7 +142,7 @@ test('AtomicFileWriter - restore method works', async () => {
   await Bun.spawn(['mkdir', '-p', testDir]).exited
 
   const originalPath = join(testDir, 'original.txt')
-  const backupPath = join(testDir, 'backup.txt')
+  const _backupPath = join(testDir, 'backup.txt')
 
   // Create original and backup
   await writer.write(originalPath, 'original content', { createBackup: false })

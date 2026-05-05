@@ -132,7 +132,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await insertCommand('payments', { data: '{"amount": 100}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -158,7 +158,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await insertCommand('users', { data: '{"name": "Alice"}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -192,7 +192,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await updateCommand('payments', { where: 'id=1', set: '{"amount": 200}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -217,7 +217,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await updateCommand('users', { where: 'id=1', set: '{"name": "Bob"}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -250,7 +250,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await deleteCommand('payments', { where: 'id=1' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -275,7 +275,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await deleteCommand('users', { where: 'id=1' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit errors
     }
 
@@ -306,7 +306,7 @@ describe('insert/update/delete command blacklist wiring', () => {
     capturedBlacklistValidator = undefined
     try {
       await insertCommand('users', { data: '{"name": "Alice"}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit from successful result output
     }
     // Validator should still be constructed (manager handles undefined gracefully)
@@ -318,7 +318,7 @@ describe('insert/update/delete command blacklist wiring', () => {
     capturedBlacklistValidator = undefined
     try {
       await updateCommand('users', { where: 'id=1', set: '{"name": "Bob"}' })
-    } catch (e: any) {
+    } catch {
       // swallow
     }
     expect(capturedBlacklistValidator).toBeDefined()
@@ -352,7 +352,7 @@ describe('insert/update/delete command blacklist wiring', () => {
 
     try {
       await insertCommand('payments', { data: '{"amount": 100}' })
-    } catch (e: any) {
+    } catch {
       // swallow process.exit
     } finally {
       console.log = originalLog

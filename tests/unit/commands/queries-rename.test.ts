@@ -28,17 +28,9 @@ describe('queries rename', () => {
   })
 
   test('refuses if target already exists', async () => {
-    await writeFile(
-      join(tmp, '.dbcli/queries/a.sql'),
-      '-- ---\n-- name: a\n-- ---\nSELECT 1;\n'
-    )
-    await writeFile(
-      join(tmp, '.dbcli/queries/b.sql'),
-      '-- ---\n-- name: b\n-- ---\nSELECT 1;\n'
-    )
-    await expect(
-      queriesRename('@a', '@b', { cwd: tmp, force: true })
-    ).rejects.toThrow(/exists/)
+    await writeFile(join(tmp, '.dbcli/queries/a.sql'), '-- ---\n-- name: a\n-- ---\nSELECT 1;\n')
+    await writeFile(join(tmp, '.dbcli/queries/b.sql'), '-- ---\n-- name: b\n-- ---\nSELECT 1;\n')
+    await expect(queriesRename('@a', '@b', { cwd: tmp, force: true })).rejects.toThrow(/exists/)
   })
 
   test('preserves engine suffix on rename', async () => {

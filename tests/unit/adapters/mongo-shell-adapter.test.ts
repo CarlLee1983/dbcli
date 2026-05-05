@@ -22,6 +22,9 @@ class MockQueryableAdapter implements QueryableAdapter {
   async getServerVersion() {
     return '7.0.0'
   }
+  async insert() { return { rows: [], affectedRows: 1 } }
+  async update() { return { rows: [], affectedRows: 1 } }
+  async delete() { return { rows: [], affectedRows: 1 } }
 }
 
 describe('MongoShellAdapter', () => {
@@ -29,8 +32,8 @@ describe('MongoShellAdapter', () => {
     const adapter = new MongoShellAdapter(new MockQueryableAdapter())
     const tables = await adapter.listTables()
     expect(tables).toHaveLength(1)
-    expect(tables[0].name).toBe('users')
-    expect(tables[0].estimatedRowCount).toBe(2)
+    expect(tables[0]!.name).toBe('users')
+    expect(tables[0]!.estimatedRowCount).toBe(2)
   })
 
   test('rejects raw SQL execution with a helpful error', async () => {

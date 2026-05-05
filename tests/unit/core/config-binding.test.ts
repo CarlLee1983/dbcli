@@ -26,6 +26,7 @@ const SAMPLE_V2_CONFIG = {
     },
   },
   schema: {},
+  schemas: {},
   metadata: { version: '2.0' },
   blacklist: { tables: [], columns: {} },
 }

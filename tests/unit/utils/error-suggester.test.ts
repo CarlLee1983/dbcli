@@ -36,11 +36,10 @@ class MockDatabaseAdapter implements DatabaseAdapter {
     // Not needed for this test
   }
 
-  async execute(): Promise<any[]> {
-    // Not needed for this test
-    return []
-  }
+  async execute<T>(): Promise<import("@/adapters/types").ExecutionResult<T>> {
+    return { rows: [], affectedRows: 0 }
 
+  }
   async getTableSchema(): Promise<TableSchema> {
     // Not needed for this test
     return { name: '', columns: [] }
@@ -49,6 +48,10 @@ class MockDatabaseAdapter implements DatabaseAdapter {
   async testConnection(): Promise<boolean> {
     // Not needed for this test
     return true
+  }
+
+  async getServerVersion(): Promise<string> {
+    return "test-version"
   }
 }
 

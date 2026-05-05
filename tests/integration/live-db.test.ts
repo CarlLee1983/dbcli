@@ -748,7 +748,7 @@ describe('shell command (live)', () => {
 // 12. format validation (cross-cutting)
 // ============================================================================
 describe('format validation (live)', () => {
-  const cases = [
+  const cases: Array<[string, string]> = [
     ['query "SELECT 1" --format invalid', 'query'],
     ['list --format xml', 'list'],
     ['schema users --format yaml', 'schema'],

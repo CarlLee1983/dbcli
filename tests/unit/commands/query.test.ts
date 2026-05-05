@@ -109,6 +109,7 @@ describe('Query Command', () => {
       permission: 'query-only',
       schema: {},
       metadata: { version: '1.0' },
+      blacklist: { tables: [], columns: {} },
     }
   })
 

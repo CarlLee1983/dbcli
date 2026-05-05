@@ -15,7 +15,7 @@ describe('Performance: Query Execution', { skip: !process.env.TEST_DATABASE_URL 
         stdio: 'pipe',
         env: { ...process.env, TEST_DATABASE_URL: process.env.TEST_DATABASE_URL },
       })
-    } catch (error) {
+    } catch {
       console.warn('Test database not available; skipping query benchmarks')
     }
   })

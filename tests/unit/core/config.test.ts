@@ -5,9 +5,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { configModule } from '@/core/config'
 import { ConfigError } from '@/utils/errors'
-import { DbcliConfig } from '@/utils/validation'
+import type { DbcliConfig } from '@/utils/validation'
 import { existsSync, unlinkSync } from 'fs'
-import path from 'path'
 import { $ } from 'bun'
 
 // 用於測試的臨時路徑
@@ -139,6 +138,7 @@ describe('configModule', () => {
       permission: 'query-only',
       schema: { table1: 'data' },
       metadata: { version: '1.0', createdAt: '2026-01-01T00:00:00Z' },
+      blacklist: { tables: [], columns: {} },
     }
 
     test('應該返回新對象（不修改輸入）', () => {
@@ -154,7 +154,7 @@ describe('configModule', () => {
     test('應該不可變地合併嵌套對象（connection）', () => {
       const updates = {
         connection: { port: 3306 },
-      }
+      } as Partial<DbcliConfig>
 
       const result = configModule.merge(baseConfig, updates)
 
@@ -385,6 +385,7 @@ describe('configModule', () => {
         permission: 'query-only',
         schema: {},
         metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -409,6 +410,7 @@ describe('configModule', () => {
         permission: 'query-only',
         schema: {},
         metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -468,6 +470,7 @@ describe('configModule', () => {
           schemaLastUpdated: '2026-04-20T00:00:00Z',
           schemaTableCount: 12,
         },
+        blacklist: { tables: [], columns: {} },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)

@@ -68,21 +68,21 @@ describe('dbcli schema command', () => {
     const cmd = schemaCommand
     const options = cmd.options
     const formatOption = options.find((opt: any) => opt.name() === 'format')
-    expect(formatOption.defaultValue).toBe('table')
+    expect(formatOption!.defaultValue).toBe('table')
   })
 
   test('schema command --force default is false', () => {
     const cmd = schemaCommand
     const options = cmd.options
     const forceOption = options.find((opt: any) => opt.name() === 'force')
-    expect(forceOption.defaultValue).toBe(false)
+    expect(forceOption!.defaultValue).toBe(false)
   })
 
   test('schema command --config default is .dbcli', () => {
     const cmd = schemaCommand
     const options = cmd.options
     const configOption = options.find((opt: any) => opt.name() === 'config')
-    expect(configOption.defaultValue).toBe('.dbcli')
+    expect(configOption!.defaultValue).toBe('.dbcli')
   })
 
   test('schema command supports --refresh option', () => {
@@ -96,7 +96,7 @@ describe('dbcli schema command', () => {
     const cmd = schemaCommand
     const options = cmd.options
     const refreshOption = options.find((opt: any) => opt.name() === 'refresh')
-    expect(refreshOption.defaultValue).toBe(false)
+    expect(refreshOption!.defaultValue).toBe(false)
   })
 
   test('schema command description mentions refresh', () => {

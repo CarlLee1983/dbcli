@@ -80,7 +80,7 @@ describe('MongoDBAdapter', () => {
     })
 
     test('expands mongodb+srv uri into a standard multi-host uri before connecting', async () => {
-      const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+      const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
         const url = String(input)
         if (url.includes('type=SRV')) {
           return new Response(
@@ -101,7 +101,7 @@ describe('MongoDBAdapter', () => {
         }
 
         return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
-      })
+      }) as unknown as typeof fetch)
 
       const srvOptions: ConnectionOptions = {
         system: 'mongodb',
@@ -203,9 +203,9 @@ describe('MongoDBAdapter', () => {
     test('returns collections with document counts', async () => {
       const collections = await adapter.listCollections()
       expect(collections).toHaveLength(2)
-      expect(collections[0].name).toBe('users')
-      expect(collections[0].documentCount).toBe(100)
-      expect(collections[1].name).toBe('orders')
+      expect(collections[0]!.name).toBe('users')
+      expect(collections[0]!.documentCount).toBe(100)
+      expect(collections[1]!.name).toBe('orders')
       const client = (adapter as any).client as MockMongoClient
       expect(client.lastDbName).toBe('testdb')
     })

@@ -2,14 +2,15 @@ import { describe, it, expect, mock } from 'bun:test'
 import { HealthChecker } from '@/core/health-checker'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 
-function createMockAdapter(executeImpl: (sql: string) => any[]): DatabaseAdapter {
+function createMockAdapter(executeImpl: (sql: string) => unknown[]): DatabaseAdapter {
   return {
     connect: mock(() => Promise.resolve()),
     disconnect: mock(() => Promise.resolve()),
     testConnection: mock(() => Promise.resolve(true)),
     listTables: mock(() => Promise.resolve([])),
     getTableSchema: mock(() => Promise.resolve({ name: 'test', columns: [] })),
-    execute: mock((sql: string) => Promise.resolve(executeImpl(sql))),
+    execute: mock((sql: string) => Promise.resolve({ rows: executeImpl(sql), affectedRows: 0 })) as DatabaseAdapter["execute"],
+    getServerVersion: mock(() => Promise.resolve('test-version')),
   }
 }
 
@@ -52,8 +53,8 @@ describe('HealthChecker', () => {
 
     const report = await checker.check(schema)
     expect(report.checks.nulls.length).toBeGreaterThan(0)
-    expect(report.checks.nulls[0].column).toBe('bio')
-    expect(report.checks.nulls[0].nullCount).toBe(30)
+    expect(report.checks.nulls[0]!.column).toBe('bio')
+    expect(report.checks.nulls[0]!.nullCount).toBe(30)
   })
 
   it('detects orphan foreign keys', async () => {
@@ -80,8 +81,8 @@ describe('HealthChecker', () => {
 
     const report = await checker.check(schema)
     expect(report.checks.orphans.length).toBe(1)
-    expect(report.checks.orphans[0].column).toBe('user_id')
-    expect(report.checks.orphans[0].orphanCount).toBe(3)
+    expect(report.checks.orphans[0]!.column).toBe('user_id')
+    expect(report.checks.orphans[0]!.orphanCount).toBe(3)
   })
 
   it('detects empty strings', async () => {
@@ -103,8 +104,8 @@ describe('HealthChecker', () => {
 
     const report = await checker.check(schema)
     expect(report.checks.emptyStrings.length).toBe(1)
-    expect(report.checks.emptyStrings[0].column).toBe('name')
-    expect(report.checks.emptyStrings[0].count).toBe(15)
+    expect(report.checks.emptyStrings[0]!.column).toBe('name')
+    expect(report.checks.emptyStrings[0]!.count).toBe(15)
   })
 
   it('returns clean report for healthy table', async () => {

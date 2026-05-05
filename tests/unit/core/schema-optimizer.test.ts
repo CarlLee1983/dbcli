@@ -10,18 +10,18 @@ const wellFormedSchemas: Record<string, TableSchema> = {
   users: {
     name: 'users',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: undefined },
     ],
   },
   posts: {
     name: 'posts',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'userId', type: 'integer', nullable: false, primaryKey: false, default: null },
-      { name: 'title', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'content', type: 'text', nullable: true, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'userId', type: 'integer', nullable: false, primaryKey: false, default: undefined },
+      { name: 'title', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+      { name: 'content', type: 'text', nullable: true, primaryKey: false, default: undefined },
     ],
   },
 }
@@ -34,14 +34,14 @@ const problematicSchemas: Record<string, TableSchema> = {
       type: 'varchar',
       nullable: true,
       primaryKey: false,
-      default: null,
+      default: undefined,
     })),
   },
   no_pk_table: {
     name: 'no_pk_table',
     columns: [
-      { name: 'col1', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null },
+      { name: 'col1', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+      { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: undefined },
     ],
   },
 }
@@ -62,7 +62,7 @@ test('SchemaOptimizer - detects wide tables', () => {
 
   const wideTableIssues = report.issues.filter((i) => i.type === 'wide-table')
   expect(wideTableIssues.length).toBeGreaterThan(0)
-  expect(wideTableIssues[0].table).toBe('wide_table')
+  expect(wideTableIssues[0]!.table).toBe('wide_table')
 })
 
 test('SchemaOptimizer - detects missing primary keys', () => {
@@ -121,8 +121,8 @@ test('SchemaOptimizer - detects all nullable tables', () => {
     all_nullable: {
       name: 'all_nullable',
       columns: [
-        { name: 'col1', type: 'varchar', nullable: true, primaryKey: false, default: null },
-        { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: null },
+        { name: 'col1', type: 'varchar', nullable: true, primaryKey: false, default: undefined },
+        { name: 'col2', type: 'integer', nullable: true, primaryKey: false, default: undefined },
       ],
     },
   }

@@ -6,7 +6,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
 import { DataExecutor } from '@/core/data-executor'
 import type { DatabaseAdapter, ExecutionResult, TableSchema } from '@/adapters/types'
-import type { Permission } from '@/types'
 
 // ============================================================================
 // Mock Adapter
@@ -34,7 +33,7 @@ class MockAdapter implements DatabaseAdapter {
 
   async disconnect(): Promise<void> {}
 
-  async execute<T>(sql: string, params?: any[]): Promise<ExecutionResult<T>> {
+  async execute<T>(_sql: string, _params?: any[]): Promise<ExecutionResult<T>> {
     if (this.shouldFail) {
       throw new Error(this.failureMessage || 'Query failed')
     }
@@ -538,7 +537,7 @@ describe('DataExecutor.buildUpdateSql', () => {
   test('preserves parameter order: SET before WHERE', () => {
     const data = { name: 'Charlie', email: 'charlie@example.com', age: 30 }
     const where = { id: 3, status: 'active' }
-    const { sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
+    const { sql: _sql, params } = executor['buildUpdateSql']('users', data, where, mockUserSchema)
 
     // SET params should come first, then WHERE params
     const setParamCount = Object.keys(data).length
@@ -793,7 +792,7 @@ describe('DataExecutor.buildDeleteSql', () => {
 
   test('preserves parameter order matching WHERE conditions', () => {
     const where = { status: 'inactive', id: 10, name: 'Old' }
-    const { sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
+    const { sql: _sql, params } = executor['buildDeleteSql']('users', where, mockUserSchema)
 
     expect(params).toHaveLength(3)
     expect(Array.isArray(params)).toBe(true)

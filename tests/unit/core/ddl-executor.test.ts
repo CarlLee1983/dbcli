@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, mock } from 'bun:test'
+import { test, expect, describe, mock } from 'bun:test'
 import { DDLExecutor } from 'src/core/ddl-executor'
 import { PostgreSQLDDLGenerator } from 'src/adapters/ddl/postgresql-ddl'
 import type { DatabaseAdapter, TableSchema } from 'src/adapters/types'
@@ -10,7 +10,7 @@ function createMockAdapter(): DatabaseAdapter {
   return {
     connect: mock(() => Promise.resolve()),
     disconnect: mock(() => Promise.resolve()),
-    execute: mock(() => Promise.resolve([])),
+    execute: mock(() => Promise.resolve({ rows: [], affectedRows: 0 })) as unknown as import('@/adapters/types').DatabaseAdapter['execute'],
     listTables: mock(() => Promise.resolve([])),
     getTableSchema: mock(() =>
       Promise.resolve({

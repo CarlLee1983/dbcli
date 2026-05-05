@@ -93,7 +93,7 @@ test('ConcurrentLockManager - timeout on lock acquisition', async () => {
     expect(true).toBe(false) // Should timeout
   } catch (error) {
     expect(error instanceof Error).toBe(true)
-    expect(error.message).toContain('timeout')
+    expect((error as Error).message).toContain('timeout')
   }
 
   // Cleanup

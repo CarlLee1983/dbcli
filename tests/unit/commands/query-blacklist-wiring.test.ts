@@ -117,7 +117,7 @@ describe('queryCommand blacklist wiring', () => {
 
     try {
       await queryCommand('SELECT * FROM sensitive_logs', {})
-    } catch (e: any) {
+    } catch {
       // swallow exit error
     }
 

@@ -25,6 +25,7 @@ describe('SchemaDiffEngine', () => {
       permission: 'admin',
       schema: {},
       metadata: { version: '1.0' },
+      blacklist: { tables: [], columns: {} },
     }
   })
 
@@ -39,10 +40,11 @@ describe('SchemaDiffEngine', () => {
     return {
       connect: async () => {},
       disconnect: async () => {},
-      execute: async () => [],
+      execute: async () => ({ rows: [], affectedRows: 0 }),
       listTables: listTablesImpl,
       getTableSchema: getTableSchemaImpl || (async () => createMockTableSchema('')),
       testConnection: async () => true,
+      getServerVersion: async () => 'test',
     }
   }
 

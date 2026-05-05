@@ -65,27 +65,20 @@ describe('resolver', () => {
 
   test('resolveByName prefers local > shared > builtin within same engine', () => {
     const map = new Map<string, ResolvedSnippet[]>([
-      [
-        '@x',
-        [mkQuery('@x', 'postgres', 'builtin'), mkQuery('@x', 'postgres', 'local')],
-      ],
+      ['@x', [mkQuery('@x', 'postgres', 'builtin'), mkQuery('@x', 'postgres', 'local')]],
     ])
     const r = resolveByName(map, '@x', 'postgres')
     expect(r.query.source).toBe('local')
   })
 
   test('resolveByName returns engine-agnostic snippet when no engine declared', () => {
-    const map = new Map<string, ResolvedSnippet[]>([
-      ['@x', [mkQuery('@x', undefined, 'shared')]],
-    ])
+    const map = new Map<string, ResolvedSnippet[]>([['@x', [mkQuery('@x', undefined, 'shared')]]])
     const r = resolveByName(map, '@x', 'postgres')
     expect(r.query.source).toBe('shared')
   })
 
   test('resolveByName throws ENGINE_MISMATCH when no variant matches', () => {
-    const map = new Map<string, ResolvedSnippet[]>([
-      ['@x', [mkQuery('@x', 'mysql', 'builtin')]],
-    ])
+    const map = new Map<string, ResolvedSnippet[]>([['@x', [mkQuery('@x', 'mysql', 'builtin')]]])
     expect(() => resolveByName(map, '@x', 'postgres')).toThrow(/ENGINE_MISMATCH|engine/)
   })
 })

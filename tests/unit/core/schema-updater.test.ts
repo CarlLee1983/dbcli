@@ -12,18 +12,21 @@ import { SchemaCacheManager } from '@/core/schema-cache'
  * Mock Database Adapter for testing
  */
 class MockDatabaseAdapter implements DatabaseAdapter {
-  private tables: Map<string, any> = new Map()
+  private tables: Map<string, TableSchema> = new Map()
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
-  async execute(): Promise<any> {}
-  async query(): Promise<any> {}
-  async listTables() {
-    return Array.from(this.tables.entries()).map(([name]) => ({ name }))
+  async execute<T>(): Promise<import("@/adapters/types").ExecutionResult<T>> {
+    return { rows: [], affectedRows: 0 }
   }
-  async getTableSchema(tableName: string) {
-    return this.tables.get(tableName) || { name: tableName, columns: [] }
+  async listTables(): Promise<TableSchema[]> {
+    return Array.from(this.tables.entries()).map(([name]) => ({ name, columns: [] }))
   }
+  async getTableSchema(tableName: string): Promise<TableSchema> {
+    return this.tables.get(tableName) ?? { name: tableName, columns: [] }
+  }
+  async testConnection(): Promise<boolean> { return true }
+  async getServerVersion(): Promise<string> { return "test" }
 
   setTable(name: string, schema: TableSchema) {
     this.tables.set(name, schema)
@@ -54,6 +57,8 @@ test('SchemaUpdater - generates patch for added tables', async () => {
     },
     permission: 'query-only',
     schema: {},
+    metadata: { version: '1.0' },
+    blacklist: { tables: [], columns: {} },
   }
 
   // Set up new table in adapter
@@ -65,21 +70,21 @@ test('SchemaUpdater - generates patch for added tables', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null,
+        default: undefined,
       },
       {
         name: 'name',
         type: 'varchar',
         nullable: false,
         primaryKey: false,
-        default: null,
+        default: undefined,
       },
     ],
   }
 
   adapter.setTable('users', newTable)
 
-  const updater = new SchemaUpdater('/tmp/dbcli-test', adapter, cache)
+  const _updater = new SchemaUpdater('/tmp/dbcli-test', adapter, cache)
 
   // Mock file system for config
   const tempDir = '/tmp/schema-updater-test'
@@ -89,19 +94,19 @@ test('SchemaUpdater - generates patch for added tables', async () => {
   await Bun.write(Bun.file(configPath), JSON.stringify(oldConfig, null, 2))
 
   // Create updater with temp path
-  const testUpdater = new SchemaUpdater(tempDir, adapter, cache)
+  const _testUpdater = new SchemaUpdater(tempDir, adapter, cache)
 
   // This would work in integration tests, but for unit tests we verify the implementation
   expect(newTable.columns.length).toBe(2)
-  expect(newTable.columns[0].primaryKey).toBe(true)
+  expect(newTable.columns[0]!.primaryKey).toBe(true)
 })
 
 test('SchemaUpdater - detects table modifications', async () => {
   const adapter = new MockDatabaseAdapter()
-  const cache = new SchemaCacheManager('/tmp/dbcli-test')
+  const _cache = new SchemaCacheManager('/tmp/dbcli-test')
 
   // Old schema with one column
-  const oldTable: TableSchema = {
+  const _oldTable: TableSchema = {
     name: 'products',
     columns: [
       {
@@ -109,7 +114,7 @@ test('SchemaUpdater - detects table modifications', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null,
+        default: undefined,
       },
     ],
   }
@@ -123,14 +128,14 @@ test('SchemaUpdater - detects table modifications', async () => {
         type: 'integer',
         nullable: false,
         primaryKey: true,
-        default: null,
+        default: undefined,
       },
       {
         name: 'price',
         type: 'decimal',
         nullable: false,
         primaryKey: false,
-        default: null,
+        default: undefined,
       },
     ],
   }
@@ -144,7 +149,7 @@ test('SchemaUpdater - detects table modifications', async () => {
 
 test('SchemaUpdater - handles table deletion', async () => {
   const adapter = new MockDatabaseAdapter()
-  const cache = new SchemaCacheManager('/tmp/dbcli-test')
+  const _cache = new SchemaCacheManager('/tmp/dbcli-test')
 
   const config: DbcliConfig = {
     connection: {
@@ -162,6 +167,8 @@ test('SchemaUpdater - handles table deletion', async () => {
         columns: [],
       },
     },
+    metadata: { version: '1.0' },
+    blacklist: { tables: [], columns: {} },
   }
 
   // Adapter has no tables (simulating deletion)

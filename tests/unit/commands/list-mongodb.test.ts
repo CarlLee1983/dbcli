@@ -7,7 +7,7 @@ import { listCommand } from '@/commands/list'
 class MockMongoAdapter implements QueryableAdapter {
   async connect() {}
   async disconnect() {}
-  async execute<T>(): Promise<any> {
+  async execute(): Promise<any> {
     return { rows: [], affectedRows: 0 }
   }
   async listCollections() {
@@ -23,6 +23,9 @@ class MockMongoAdapter implements QueryableAdapter {
   async getServerVersion() {
     return '6.0.1'
   }
+  async insert() { return { rows: [], affectedRows: 1 } }
+  async update() { return { rows: [], affectedRows: 1 } }
+  async delete() { return { rows: [], affectedRows: 1 } }
 }
 
 const mongoConfig = {

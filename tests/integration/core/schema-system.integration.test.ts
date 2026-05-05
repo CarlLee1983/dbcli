@@ -28,14 +28,17 @@ class MockDatabaseAdapter implements DatabaseAdapter {
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
-  async execute(): Promise<any> {}
-  async query(): Promise<any> {}
-  async listTables() {
-    return Array.from(this.tables.entries()).map(([name]) => ({ name }))
+  async execute<T>(): Promise<import("@/adapters/types").ExecutionResult<T>> {
+    return { rows: [], affectedRows: 0 }
   }
-  async getTableSchema(tableName: string) {
-    return this.tables.get(tableName) || { name: tableName, columns: [] }
+  async listTables(): Promise<TableSchema[]> {
+    return Array.from(this.tables.entries()).map(([name]) => ({ name, columns: [] }))
   }
+  async getTableSchema(tableName: string): Promise<TableSchema> {
+    return this.tables.get(tableName) ?? { name: tableName, columns: [] }
+  }
+  async testConnection(): Promise<boolean> { return true }
+  async getServerVersion(): Promise<string> { return "test" }
 
   setTable(name: string, schema: TableSchema) {
     this.tables.set(name, schema)
@@ -72,6 +75,8 @@ test('Integration: Schema refresh detects changes', async () => {
     },
     permission: 'query-only',
     schema: {},
+    metadata: { version: '1.0' },
+    blacklist: { tables: [], columns: {} },
   }
 
   const configPath = join(testDir, 'config.json')
@@ -81,12 +86,12 @@ test('Integration: Schema refresh detects changes', async () => {
   adapter.setTable('users', {
     name: 'users',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
     ],
   })
 
-  const updater = new SchemaUpdater(testDir, adapter, cache)
+  const _updater = new SchemaUpdater(testDir, adapter, cache)
 
   // This would require more setup in actual test, but demonstrates flow
   expect(await adapter.listTables()).toHaveLength(1)
@@ -143,6 +148,8 @@ test('Integration: Error recovery restores on failure', async () => {
     },
     permission: 'query-only',
     schema: { test_table: { name: 'test', columns: [] } },
+    metadata: { version: '1.0' },
+    blacklist: { tables: [], columns: {} },
   }
 
   const configPath = join(testDir, 'config.json')
@@ -180,22 +187,22 @@ test('Integration: Column index enables fast field searches', () => {
     users: {
       name: 'users',
       columns: [
-        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-        { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-        { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+        { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+        { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: undefined },
       ],
     },
     products: {
       name: 'products',
       columns: [
-        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-        { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: null },
+        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+        { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
       ],
     },
   }
 
   const indexBuilder = new ColumnIndexBuilder()
-  const index = indexBuilder.build(schemas)
+  const _index = indexBuilder.build(schemas)
 
   // Find a field name that appears in multiple tables
   const nameColumns = indexBuilder.findColumn('name')
@@ -216,14 +223,14 @@ test('Integration: Schema optimizer analyzes design', () => {
     users: {
       name: 'users',
       columns: [
-        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-        { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
+        { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+        { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
         {
           name: 'created_at',
           type: 'timestamp',
           nullable: false,
           primaryKey: false,
-          default: null,
+          default: undefined,
         },
       ],
     },
@@ -251,7 +258,7 @@ test('Integration: Complete workflow with all components', async () => {
   await Bun.spawn(['mkdir', '-p', testDir]).exited
 
   const adapter = new MockDatabaseAdapter()
-  const cache = new SchemaCacheManager(testDir)
+  const _cache = new SchemaCacheManager(testDir)
   const lock = new ConcurrentLockManager(testDir)
   const recovery = new ErrorRecoveryManager(testDir)
   const optimizer = new SchemaOptimizer()
@@ -269,14 +276,16 @@ test('Integration: Complete workflow with all components', async () => {
     },
     permission: 'query-only',
     schema: {},
+    metadata: { version: '1.0' },
+    blacklist: { tables: [], columns: {} },
   }
 
   // Add tables
   adapter.setTable('users', {
     name: 'users',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
     ],
   })
 

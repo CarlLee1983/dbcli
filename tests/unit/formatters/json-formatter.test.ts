@@ -92,7 +92,7 @@ describe('TableSchemaJSONFormatter', () => {
       columns: [{ name: 'id', type: 'INT', nullable: false, primaryKey: true }],
       estimatedRowCount: 150000,
       tableType: 'table',
-      indexes: [{ name: 'idx_id', columns: ['id'] }],
+      indexes: [{ name: 'idx_id', columns: ['id'], unique: false }],
       rowCount: 150000,
       engine: 'InnoDB',
       primaryKey: ['id'],

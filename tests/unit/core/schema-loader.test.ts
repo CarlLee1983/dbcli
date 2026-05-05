@@ -77,7 +77,7 @@ describe('SchemaLayeredLoader', () => {
   afterAll(async () => {
     try {
       await rm(testDbcliPath, { recursive: true, force: true })
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   })
@@ -194,8 +194,8 @@ describe('SchemaLayeredLoader', () => {
     expect(result.cache).toBeDefined()
 
     // Verify directories were created
-    const schemasDir = Bun.file(join(newPath, 'schemas'))
-    const coldDir = Bun.file(join(newPath, 'schemas', 'cold'))
+    const _schemasDir = Bun.file(join(newPath, 'schemas'))
+    const _coldDir = Bun.file(join(newPath, 'schemas', 'cold'))
 
     // Cleanup
     await rm(newPath, { recursive: true, force: true })

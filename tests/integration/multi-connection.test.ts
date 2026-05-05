@@ -9,20 +9,21 @@ const CONFIG_DIR = join(TMP_DIR, '.dbcli')
 const CLI = join(import.meta.dir, '../../src/cli.ts')
 
 const v2ConfigBase = {
-  version: 2,
+  version: 2 as const,
   default: 'local',
   connections: {
     local: {
-      system: 'postgresql',
+      system: 'postgresql' as const,
       host: 'localhost',
       port: 5432,
       user: 'dev',
       password: 'secret',
       database: 'myapp',
-      permission: 'read-write',
+      permission: 'read-write' as const,
     },
   },
   schema: {},
+  schemas: {},
   metadata: { version: '1.0' },
   blacklist: { tables: [], columns: {} },
 }
@@ -61,13 +62,13 @@ describe('multi-connection integration', () => {
       connections: {
         ...v2ConfigBase.connections,
         staging: {
-          system: 'postgresql',
+          system: 'postgresql' as const,
           host: 'staging.example.com',
           port: 5432,
           user: 'admin',
           password: 'pass',
           database: 'staging_db',
-          permission: 'query-only',
+          permission: 'query-only' as const,
         },
       },
     }
@@ -97,13 +98,13 @@ describe('multi-connection integration', () => {
       connections: {
         ...v2ConfigBase.connections,
         staging: {
-          system: 'postgresql',
+          system: 'postgresql' as const,
           host: 'staging.example.com',
           port: 5432,
           user: 'admin',
           password: 'pass',
           database: 'staging_db',
-          permission: 'query-only',
+          permission: 'query-only' as const,
         },
       },
     }

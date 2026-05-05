@@ -73,6 +73,7 @@ describe('config-v2', () => {
         },
       },
       schema: {},
+      schemas: {},
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
     }
@@ -115,6 +116,7 @@ describe('config-v2', () => {
           },
         },
         schema: {},
+      schemas: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
       }
@@ -124,7 +126,7 @@ describe('config-v2', () => {
 
       expect(read.version).toBe(2)
       expect(read.default).toBe('local')
-      expect(read.connections.local.host).toBe('localhost')
+      expect(read.connections.local!.host).toBe('localhost')
     })
   })
 
@@ -200,7 +202,7 @@ describe('config-v2', () => {
       const updated = await readV2Config(configPath)
       expect(updated.metadata.schemaLastUpdated).toBe(ts)
       expect(updated.metadata.schemaTableCount).toBe(3)
-      expect(updated.connections.staging.host).toBe('staging.db')
+      expect(updated.connections.staging!.host).toBe('staging.db')
       expect(updated.default).toBe('staging')
     })
 

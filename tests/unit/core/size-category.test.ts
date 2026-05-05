@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { getSizeCategory, type SizeCategory } from '@/core/size-category'
+import { getSizeCategory } from '@/core/size-category'
 
 describe('getSizeCategory', () => {
   it('returns "small" for < 10_000 rows', () => {

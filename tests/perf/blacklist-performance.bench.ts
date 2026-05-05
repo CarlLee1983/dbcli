@@ -66,7 +66,7 @@ const typicalRows = Array.from({ length: 1000 }, (_, i) => ({
   ssn: `ssn_${i}`,
   created_at: new Date().toISOString(),
 }))
-const typicalColumnList = Object.keys(typicalRows[0])
+const typicalColumnList = Object.keys(typicalRows[0] ?? {})
 
 describe('Blacklist Performance Benchmarks', () => {
   it('Table lookup (1000 tables): 1000 lookups in < 10ms', () => {
@@ -99,7 +99,7 @@ describe('Blacklist Performance Benchmarks', () => {
   it('Column filtering (100 rows x 50 cols, omit 5): < 5ms per call', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
     const largeValidator = new BlacklistValidator(largeManager)
-    const columnList = Object.keys(largeRows[0])
+    const columnList = Object.keys(largeRows[0] ?? {})
 
     // Warm up JIT
     largeValidator.filterColumns('table_0', largeRows.slice(0, 5), columnList)

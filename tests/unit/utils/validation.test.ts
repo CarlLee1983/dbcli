@@ -291,7 +291,7 @@ describe('validation', () => {
         })
         expect(result.version).toBe(2)
         expect(result.default).toBe('local')
-        expect(result.connections.local.system).toBe('postgresql')
+        expect(result.connections.local!.system).toBe('postgresql')
       })
 
       test('should reject config without connections', () => {

@@ -82,9 +82,7 @@ describe('builtin diag snippets', () => {
     expect(resolveByName(map, '@diag/locks', 'postgres').query.sqlBody).toContain(
       'pg_blocking_pids'
     )
-    expect(resolveByName(map, '@diag/locks', 'mysql').query.sqlBody).toContain(
-      'data_lock_waits'
-    )
+    expect(resolveByName(map, '@diag/locks', 'mysql').query.sqlBody).toContain('data_lock_waits')
   })
 
   test('@diag/db-size resolves for both engines', async () => {

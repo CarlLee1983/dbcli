@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import {
   checkForUpdate,
   isStale,

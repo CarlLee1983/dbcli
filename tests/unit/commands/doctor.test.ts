@@ -98,7 +98,7 @@ describe('doctor checks', () => {
     const result = await runDoctorChecks.checkMongoSrvConnectivity(
       'mongodb+srv://user:pass@cluster.example.mongodb.net/mydb',
       {
-        resolveSrvFn: async () => [{ name: 'a.example.com', port: 27017 }],
+        resolveSrvFn: (async () => [{ name: "a.example.com", port: 27017, priority: 0, weight: 0 }]) as typeof import("dns/promises").resolveSrv,
       }
     )
 
@@ -116,10 +116,10 @@ describe('doctor checks', () => {
           ;(error as { code?: string }).code = 'ECONNREFUSED'
           throw error
         },
-        fetchFn: async () =>
+        fetchFn: (async () =>
           new Response(
             JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })
-          ),
+          )) as unknown as typeof fetch,
       }
     )
 
@@ -137,9 +137,9 @@ describe('doctor checks', () => {
           ;(error as { code?: string }).code = 'ECONNREFUSED'
           throw error
         },
-        fetchFn: async () => {
-          throw new Error('Unable to connect. Is the computer able to access the url?')
-        },
+        fetchFn: (async () => {
+          throw new Error("Unable to connect. Is the computer able to access the url?")
+        }) as unknown as typeof fetch,
       }
     )
 

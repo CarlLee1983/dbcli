@@ -94,6 +94,7 @@ describe('Init Command Integration Tests', () => {
         version: '1.0',
         createdAt: '2026-03-25T00:00:00Z',
       },
+      blacklist: { tables: [], columns: {} },
     }
 
     // 合併新值
@@ -120,6 +121,7 @@ describe('Init Command Integration Tests', () => {
       permission: 'query-only' as const,
       schema: {},
       metadata: { version: '1.0' },
+      blacklist: { tables: [], columns: {} },
     }
 
     const originalCopy = JSON.stringify(original)

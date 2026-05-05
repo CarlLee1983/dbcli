@@ -21,14 +21,9 @@ describe('queries import', () => {
 
   test('imports a valid sql file into local with derived name', async () => {
     const src = join(extDir, 'my-snippet.sql')
-    await writeFile(
-      src,
-      '-- ---\n-- name: External\n-- engine: postgres\n-- ---\nSELECT 1;\n'
-    )
+    await writeFile(src, '-- ---\n-- name: External\n-- engine: postgres\n-- ---\nSELECT 1;\n')
     await queriesImport(src, { cwd: tmp, force: true })
-    expect(
-      await Bun.file(join(tmp, '.dbcli/queries/my-snippet.sql')).exists()
-    ).toBe(true)
+    expect(await Bun.file(join(tmp, '.dbcli/queries/my-snippet.sql')).exists()).toBe(true)
   })
 
   test('rejects file with invalid frontmatter', async () => {

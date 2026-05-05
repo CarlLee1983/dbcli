@@ -10,17 +10,17 @@ const mockSchemas: Record<string, TableSchema> = {
   users: {
     name: 'users',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'email', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+      { name: 'name', type: 'varchar', nullable: true, primaryKey: false, default: undefined },
     ],
   },
   products: {
     name: 'products',
     columns: [
-      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: null },
-      { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: null },
-      { name: 'price', type: 'decimal', nullable: false, primaryKey: false, default: null },
+      { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: undefined },
+      { name: 'name', type: 'varchar', nullable: false, primaryKey: false, default: undefined },
+      { name: 'price', type: 'decimal', nullable: false, primaryKey: false, default: undefined },
     ],
   },
 }
@@ -41,8 +41,8 @@ test('ColumnIndexBuilder - finds column O(1)', () => {
   const results = builder.findColumn('email')
 
   expect(results).toHaveLength(1)
-  expect(results[0].tableName).toBe('users')
-  expect(results[0].column.type).toBe('varchar')
+  expect(results[0]!.tableName).toBe('users')
+  expect(results[0]!.column.type).toBe('varchar')
 })
 
 test('ColumnIndexBuilder - finds duplicate column names', () => {

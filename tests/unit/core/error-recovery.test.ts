@@ -19,6 +19,8 @@ const mockConfig: DbcliConfig = {
   },
   permission: 'query-only',
   schema: {},
+  metadata: { version: '1.0' },
+  blacklist: { tables: [], columns: {} },
 }
 
 test('ErrorRecoveryManager - initialize creates recovery dir', async () => {

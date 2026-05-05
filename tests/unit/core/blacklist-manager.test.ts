@@ -2,7 +2,7 @@
  * BlacklistManager unit tests
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect } from 'bun:test'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import type { DbcliConfig } from '@/types'
 
@@ -136,7 +136,7 @@ describe('BlacklistManager', () => {
     })
 
     it('returns false when override is not set', () => {
-      const manager = new BlacklistManager(baseConfig, undefined)
+      const _manager = new BlacklistManager(baseConfig, undefined)
       // Can't rely on env in tests; pass explicit false
       const manager2 = new BlacklistManager(baseConfig, 'false')
       expect(manager2.canOverrideBlacklist()).toBe(false)

@@ -38,13 +38,13 @@ describe('dbcli list command', () => {
     const cmd = listCommand
     const options = cmd.options
     const formatOption = options.find((opt: any) => opt.name() === 'format')
-    expect(formatOption.defaultValue).toBe('table')
+    expect(formatOption!.defaultValue).toBe('table')
   })
 
   test('list command --config default is .dbcli', () => {
     const cmd = listCommand
     const options = cmd.options
     const configOption = options.find((opt: any) => opt.name() === 'config')
-    expect(configOption.defaultValue).toBe('.dbcli')
+    expect(configOption!.defaultValue).toBe('.dbcli')
   })
 })

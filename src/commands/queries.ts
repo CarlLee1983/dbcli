@@ -367,3 +367,18 @@ queriesCommand
       process.exit(1)
     }
   })
+
+queriesCommand
+  .command('import <path>')
+  .description(t('queries.import_description'))
+  .option('--force', 'Overwrite existing file without prompting')
+  .option('--as <name>', 'Override snippet name (defaults to filename)')
+  .action(async (path: string, options: { force?: boolean; as?: string }) => {
+    try {
+      const { queriesImport } = await import('@/commands/queries-import')
+      await queriesImport(path, options)
+    } catch (e) {
+      console.error((e as Error).message)
+      process.exit(1)
+    }
+  })

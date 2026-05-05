@@ -41,8 +41,8 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     : AdapterFactory.createAdapter(connectionOpts)
   try {
     await adapter.connect()
-  } catch (error: any) {
-    console.error(pc.red(t_vars('shell.error_connection_failed', { message: error.message })))
+  } catch (error) {
+    console.error(pc.red(t_vars('shell.error_connection_failed', { message: (error as Error).message })))
     process.exit(1)
   }
 
@@ -56,9 +56,9 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     const schemaData = (config.schema ?? {}) as Record<string, unknown>
     tableNames = Object.keys(schemaData)
     for (const [table, data] of Object.entries(schemaData)) {
-      const tableData = data as any
+      const tableData = data as { columns: { name: string }[] }
       if (tableData?.columns && Array.isArray(tableData.columns)) {
-        columnsByTable[table] = tableData.columns.map((c: any) => c.name)
+        columnsByTable[table] = tableData.columns.map((c) => c.name)
       }
     }
   }

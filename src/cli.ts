@@ -131,7 +131,7 @@ program
   )
   .option('--no-limit', 'Disable auto-limit in query-only mode')
   .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
-  .action(async (sql: string, options: any, command) => {
+  .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       await queryCommand(sql, options, command)
     } catch (error) {
@@ -154,7 +154,7 @@ program
     [] as string[]
   )
   .option('--param-file <path>', 'JSON file containing param values')
-  .action(async (name: string, options: any, command) => {
+  .action(async (name: string, options: Record<string, unknown>, command) => {
     await qCommand(name, options, command)
   })
 
@@ -165,7 +165,7 @@ program
   .option('--data <json>', 'JSON object to insert')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any, command) => {
+  .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
       await insertCommand(table, options, command)
     } catch (error) {
@@ -182,9 +182,9 @@ program
   .option('--set <json>', 'JSON with fields to update (required, e.g. \'{"name":"Bob"}\')')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any, command) => {
+  .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
-      await updateCommand(table, options, command)
+      await updateCommand(table, options as never, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -198,9 +198,9 @@ program
   .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (table: string, options: any, command) => {
+  .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
-      await deleteCommand(table, options, command)
+      await deleteCommand(table, options as never, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -214,11 +214,11 @@ program
   .option('--format <format>', 'Output format: json or csv (required)', 'json')
   .option('--output <path>', 'Output file path (if omitted, write to stdout)', undefined)
   .option('--force', 'Skip overwrite confirmation', false)
-  .action(async (sql: string, options: any, command) => {
+  .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       const { validateFormat } = await import('./utils/validation')
-      validateFormat(options.format, ['json', 'csv'], 'export')
-      return exportCommand(sql, options, command)
+      validateFormat(options.format as string, ['json', 'csv'], 'export')
+      return exportCommand(sql, options as never, command)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -231,7 +231,7 @@ program
   .description(t('skill.description'))
   .option('--install <platform>', 'Install to platform directory (claude, gemini, copilot, cursor)')
   .option('--output <path>', 'Write skill to file instead of stdout')
-  .action(async (options: any) => {
+  .action(async (options: Record<string, unknown>) => {
     try {
       await skillCommand(program, options)
     } catch (error) {

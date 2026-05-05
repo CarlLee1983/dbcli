@@ -191,12 +191,12 @@ async function ensureDir(dirPath: string): Promise<void> {
     // Use Bun's native shell ($) for cross-platform mkdir -p
     // This correctly handles path separators on Windows/macOS/Linux
     await $`mkdir -p ${dirPath}`.quiet()
-  } catch (error) {
+  } catch {
     // If shell syntax is unavailable, fall back to Node.js fs.mkdir
     try {
       const { mkdir } = await import('node:fs/promises')
       await mkdir(dirPath, { recursive: true })
-    } catch (fsError) {
+    } catch {
       throw new Error(`Cannot create directory: ${dirPath}`)
     }
   }

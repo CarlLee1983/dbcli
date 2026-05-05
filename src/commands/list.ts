@@ -7,7 +7,7 @@
 import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
-import { TableListFormatter, JSONFormatter } from '@/formatters'
+import { TableListFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
@@ -75,8 +75,8 @@ async function listAction(options: { format: string; config: string }, command: 
       }
 
       // Summary
-      const tableCount = tables.filter((t) => (t as any).tableType !== 'view').length
-      const viewCount = tables.filter((t) => (t as any).tableType === 'view').length
+      const tableCount = tables.filter((t) => (t.tableType) !== 'view').length
+      const viewCount = tables.filter((t) => (t.tableType) === 'view').length
       const viewSuffix = viewCount > 0 ? ` (${viewCount} views)` : ''
       console.log(`\n\u2713 Found ${tableCount} tables${viewSuffix}`)
     } finally {
@@ -93,7 +93,7 @@ async function listAction(options: { format: string; config: string }, command: 
   }
 }
 
-async function mongoListBranch(config: any, format: string): Promise<void> {
+async function mongoListBranch(config: import("@/utils/validation").DbcliConfig, format: string): Promise<void> {
   const connName = (config.connection.database as string) || 'mongodb'
 
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)

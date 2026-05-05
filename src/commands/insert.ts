@@ -3,7 +3,7 @@
  * Inserts data into a database table via JSON stdin or --data flag
  */
 
-import { t, t_vars } from '@/i18n/message-loader'
+import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
@@ -83,7 +83,7 @@ export async function insertCommand(
     }
 
     // 3. Parse JSON
-    let data: Record<string, any>
+    let data: Record<string, unknown>
     try {
       data = JSON.parse(jsonInput)
     } catch (error) {

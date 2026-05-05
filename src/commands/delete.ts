@@ -22,12 +22,12 @@ import { resolveConfigPath } from '@/utils/config-path'
  * @returns Conditions object {column: value, ...}
  * @throws Error if the WHERE clause cannot be parsed
  */
-function parseWhereClause(whereClause: string): Record<string, any> {
+function parseWhereClause(whereClause: string): Record<string, unknown> {
   if (!whereClause || whereClause.trim() === '') {
     throw new Error('DELETE requires --where clause (e.g. --where "id=1")')
   }
 
-  const conditions: Record<string, any> = {}
+  const conditions: Record<string, unknown> = {}
 
   // Split AND conditions
   const andParts = whereClause.split(/\s+AND\s+/i)
@@ -122,7 +122,7 @@ export async function deleteCommand(
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
-        let filter: Record<string, any>
+        let filter: Record<string, unknown>
         try {
           filter = JSON.parse(options.where)
         } catch {
@@ -145,7 +145,7 @@ export async function deleteCommand(
     }
 
     // 5. Parse WHERE condition string (SQL path)
-    let whereConditions: Record<string, any>
+    let whereConditions: Record<string, unknown>
     try {
       whereConditions = parseWhereClause(options.where)
     } catch (error) {

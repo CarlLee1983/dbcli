@@ -3,7 +3,7 @@
  * Executes a SQL query and exports the results, supporting JSON/CSV formats and file output
  */
 
-import { t, t_vars } from '@/i18n/message-loader'
+import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { QueryExecutor } from '@/core/query-executor'

@@ -47,7 +47,7 @@ export function parseColumnIdentifier(
 /**
  * Get or initialize blacklist config from DbcliConfig
  */
-export function getOrInitBlacklist(config: any): BlacklistConfig {
+export function getOrInitBlacklist(config: { blacklist?: { tables?: string[]; columns?: Record<string, string[]> } }): BlacklistConfig {
   if (!config.blacklist) {
     return { tables: [], columns: {} }
   }
@@ -109,7 +109,7 @@ export async function blacklistTableAdd(tableName: string, configPath: string): 
     tables: [...blacklist.tables, tableName],
   }
 
-  await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
+  await configModule.write(configPath, { ...config, blacklist: newBlacklist })
   console.log(t_vars('blacklist.table_added', { table: tableName }))
 }
 
@@ -134,7 +134,7 @@ export async function blacklistTableRemove(tableName: string, configPath: string
     tables: blacklist.tables.filter((t) => t !== tableName),
   }
 
-  await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
+  await configModule.write(configPath, { ...config, blacklist: newBlacklist })
   console.log(t_vars('blacklist.table_removed', { table: tableName }))
 }
 
@@ -165,7 +165,7 @@ export async function blacklistColumnAdd(identifier: string, configPath: string)
     },
   }
 
-  await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
+  await configModule.write(configPath, { ...config, blacklist: newBlacklist })
   console.log(t_vars('blacklist.column_added', { table, column }))
 }
 
@@ -202,7 +202,7 @@ export async function blacklistColumnRemove(identifier: string, configPath: stri
     columns: newColumns,
   }
 
-  await configModule.write(configPath, { ...config, blacklist: newBlacklist } as any)
+  await configModule.write(configPath, { ...config, blacklist: newBlacklist })
   console.log(t_vars('blacklist.column_removed', { table, column }))
 }
 
@@ -215,9 +215,9 @@ blacklistCommand
   .command('list')
   .description(t('blacklist.list_title'))
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
-  .action(async (options: any) => {
+  .action(async (options: Record<string, unknown>) => {
     try {
-      await blacklistList(options.config || DEFAULT_CONFIG_PATH)
+      await blacklistList((options.config as string) || DEFAULT_CONFIG_PATH)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -231,9 +231,9 @@ tableCmd
   .command('add <table>')
   .description('Add table to blacklist')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
-  .action(async (tableName: string, options: any) => {
+  .action(async (tableName: string, options: Record<string, unknown>) => {
     try {
-      await blacklistTableAdd(tableName, options.config || DEFAULT_CONFIG_PATH)
+      await blacklistTableAdd(tableName, (options.config as string) || DEFAULT_CONFIG_PATH)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -244,9 +244,9 @@ tableCmd
   .command('remove <table>')
   .description('Remove table from blacklist')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
-  .action(async (tableName: string, options: any) => {
+  .action(async (tableName: string, options: Record<string, unknown>) => {
     try {
-      await blacklistTableRemove(tableName, options.config || DEFAULT_CONFIG_PATH)
+      await blacklistTableRemove(tableName, (options.config as string) || DEFAULT_CONFIG_PATH)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -260,9 +260,9 @@ columnCmd
   .command('add <table.column>')
   .description('Add column to blacklist (format: table.column)')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
-  .action(async (identifier: string, options: any) => {
+  .action(async (identifier: string, options: Record<string, unknown>) => {
     try {
-      await blacklistColumnAdd(identifier, options.config || DEFAULT_CONFIG_PATH)
+      await blacklistColumnAdd(identifier, (options.config as string) || DEFAULT_CONFIG_PATH)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)
@@ -273,9 +273,9 @@ columnCmd
   .command('remove <table.column>')
   .description('Remove column from blacklist (format: table.column)')
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
-  .action(async (identifier: string, options: any) => {
+  .action(async (identifier: string, options: Record<string, unknown>) => {
     try {
-      await blacklistColumnRemove(identifier, options.config || DEFAULT_CONFIG_PATH)
+      await blacklistColumnRemove(identifier, (options.config as string) || DEFAULT_CONFIG_PATH)
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

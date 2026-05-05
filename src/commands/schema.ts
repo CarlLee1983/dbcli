@@ -7,13 +7,13 @@
 import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
-import { TableFormatter, TableSchemaJSONFormatter, JSONFormatter } from '@/formatters'
+import { TableFormatter, TableSchemaJSONFormatter } from '@/formatters'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
 import { patchConnectionSchema, readV2Config } from '@/core/config-v2'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import { SchemaWriter } from '@/core'
-import type { TableSchema } from '@/adapters/types'
+import type { TableSchema, DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
 
@@ -129,7 +129,7 @@ async function schemaAction(
  * Handles single table schema inspection
  */
 async function handleSingleTableSchema(
-  adapter: any,
+  adapter: DatabaseAdapter,
   tableName: string,
   format: string
 ): Promise<void> {
@@ -147,7 +147,7 @@ async function handleSingleTableSchema(
 
     if (schema.foreignKeys && schema.foreignKeys.length > 0) {
       console.log(`Foreign Keys:`)
-      schema.foreignKeys.forEach((fk: any) => {
+      schema.foreignKeys.forEach((fk: NonNullable<TableSchema["foreignKeys"]>[number]) => {
         console.log(
           `   ${fk.name}: ${fk.columns.join(',')} → ${fk.refTable}(${fk.refColumns.join(',')})`
         )
@@ -174,7 +174,7 @@ async function handleSingleTableSchema(
 
     if (schema.indexes && schema.indexes.length > 0) {
       console.log(`\nIndexes:`)
-      schema.indexes.forEach((idx: any) => {
+      schema.indexes.forEach((idx: NonNullable<TableSchema["indexes"]>[number]) => {
         const uniqueTag = idx.unique ? ' [UNIQUE]' : ''
         console.log(`   ${idx.name}: (${idx.columns.join(', ')})${uniqueTag}`)
       })
@@ -186,8 +186,8 @@ async function handleSingleTableSchema(
  * Handles schema refresh - detects incremental changes and applies them
  */
 async function handleSchemaRefresh(
-  adapter: any,
-  config: any,
+  adapter: DatabaseAdapter,
+  config: DbcliConfig,
   options: { config: string; refresh: boolean; force: boolean },
   connectionName: string | undefined,
   storagePath: string
@@ -259,8 +259,8 @@ async function handleSchemaRefresh(
  * Handles schema reset — clears existing schema then re-fetches from the DB
  */
 async function handleSchemaReset(
-  adapter: any,
-  config: any,
+  adapter: DatabaseAdapter,
+  config: DbcliConfig,
   options: { config: string; format: string; force: boolean },
   connectionName: string | undefined,
   existingCount: number,
@@ -308,7 +308,7 @@ async function handleSchemaReset(
   const tables = await adapter.listTables()
   console.log(t_vars('schema.tables_found', { count: tables.length }))
 
-  const schemaData: Record<string, any> = {}
+  const schemaData: Record<string, unknown> = {}
   let processed = 0
 
   for (const table of tables) {
@@ -360,8 +360,8 @@ async function handleSchemaReset(
  * Handles full database schema scan and .dbcli update
  */
 async function handleFullDatabaseScan(
-  adapter: any,
-  config: any,
+  adapter: DatabaseAdapter,
+  config: DbcliConfig,
   options: { config: string; format: string; force: boolean },
   connectionName: string | undefined,
   existingSchemaCount: number,
@@ -374,7 +374,7 @@ async function handleFullDatabaseScan(
   console.log(t_vars('schema.tables_found', { count: tables.length }))
 
   // Build schema object
-  const schemaData: Record<string, any> = {}
+  const schemaData: Record<string, unknown> = {}
   let processed = 0
 
   for (const table of tables) {

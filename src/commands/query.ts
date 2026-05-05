@@ -3,9 +3,10 @@
  * Executes a SQL query and returns results, supporting multiple output formats
  */
 
-import { t, t_vars } from '@/i18n/message-loader'
+import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
+import type { QueryResult } from '@/types/query'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
@@ -13,7 +14,7 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
-import { validateFormat } from '@/utils/validation'
+import { validateFormat, type DbcliConfig } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 
@@ -58,10 +59,10 @@ export async function queryCommand(
     // 2b. Size guard: block full-table SELECT on huge tables
     const mainTable = extractMainTable(sql)
     if (mainTable && config.schema && !options.noLimit) {
-      const tableSchema = (config.schema as Record<string, any>)[mainTable]
+      const tableSchema = (config.schema as Record<string, unknown>)[mainTable]
       if (tableSchema) {
         const { shouldBlockQuery } = await import('./query-size-guard')
-        const guard = shouldBlockQuery(sql, tableSchema)
+        const guard = shouldBlockQuery(sql, tableSchema as { estimatedRowCount: number })
         if (guard.blocked) {
           console.error(`\u26A0 ${guard.reason}`)
           process.exit(1)
@@ -138,7 +139,7 @@ async function mongoQueryBranch(
     noLimit?: boolean
     collection?: string
   },
-  config: any
+  config: DbcliConfig
 ): Promise<void> {
   const collection = options.collection
   const format = options.format ?? 'table'
@@ -177,14 +178,14 @@ async function mongoQueryBranch(
 
   // Size guard: block unfiltered queries on huge collections
   if (config.schema && !options.noLimit) {
-    const tableSchema = (config.schema as Record<string, any>)[collection]
+    const tableSchema = (config.schema as Record<string, unknown>)[collection]
     if (tableSchema) {
       const { shouldBlockQuery } = await import('./query-size-guard')
       const isFiltered = queryStr.length > 2
       const hasLimit = options.limit !== undefined
       const dummySql = `SELECT * FROM ${collection}${isFiltered ? ' WHERE' : ''}${hasLimit ? ' LIMIT' : ''}`
 
-      const guard = shouldBlockQuery(dummySql, tableSchema)
+      const guard = shouldBlockQuery(dummySql, tableSchema as { estimatedRowCount: number })
       if (guard.blocked) {
         console.error(`\u26A0 ${guard.reason}`)
         process.exit(1)
@@ -195,7 +196,7 @@ async function mongoQueryBranch(
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await mongoAdapter.connect()
   try {
-    const result = await mongoAdapter.execute<Record<string, any>>(queryStr, [collection])
+    const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
 
     // Redact blacklisted columns using validator
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
@@ -208,7 +209,9 @@ async function mongoQueryBranch(
     }
 
     const formatter = new QueryResultFormatter()
-    const output = formatter.format(queryResult as any, { format: format as any })
+    const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
+      format: format as 'table' | 'json' | 'csv',
+    })
 
     // Add security notification if columns were omitted
     const securityNote = blacklistValidator.buildSecurityNotification(

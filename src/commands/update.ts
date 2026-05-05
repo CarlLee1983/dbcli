@@ -3,7 +3,7 @@
  * Updates rows in a database table via --where and --set flags
  */
 
-import { t, t_vars } from '@/i18n/message-loader'
+import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
@@ -22,12 +22,12 @@ import { resolveConfigPath } from '@/utils/config-path'
  * @returns Conditions object {column: value, ...}
  * @throws Error if the WHERE clause cannot be parsed
  */
-function parseWhereClause(whereClause: string): Record<string, any> {
+function parseWhereClause(whereClause: string): Record<string, unknown> {
   if (!whereClause || whereClause.trim() === '') {
     throw new Error('WHERE clause cannot be empty')
   }
 
-  const conditions: Record<string, any> = {}
+  const conditions: Record<string, unknown> = {}
 
   // Split AND conditions
   const andParts = whereClause.split(/\s+AND\s+/i)
@@ -114,7 +114,7 @@ export async function updateCommand(
     }
 
     // 5. Parse --set JSON
-    let setData: Record<string, any>
+    let setData: Record<string, unknown>
     try {
       setData = JSON.parse(options.set)
     } catch (error) {
@@ -133,7 +133,7 @@ export async function updateCommand(
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
-        let filter: Record<string, any>
+        let filter: Record<string, unknown>
         try {
           filter = JSON.parse(options.where)
         } catch {
@@ -161,7 +161,7 @@ export async function updateCommand(
     }
 
     // 6. Parse WHERE condition string (SQL path)
-    let whereConditions: Record<string, any>
+    let whereConditions: Record<string, unknown>
     try {
       whereConditions = parseWhereClause(options.where)
     } catch (error) {

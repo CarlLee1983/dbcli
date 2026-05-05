@@ -101,7 +101,7 @@ export const useCommand = new Command('use')
   .description('Switch or display the default database connection (v2 config)')
   .argument('[name]', 'Connection name to switch to')
   .option('--list', 'List all connections')
-  .action(async (name: string | undefined, options: any) => {
+  .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       const configPath = resolveConfigPath(useCommand)
       const config = await ensureV2Config(configPath)

@@ -41,4 +41,19 @@ describe('builtin diag snippets', () => {
       'information_schema.tables'
     )
   })
+
+  test('@diag/index-usage resolves for both engines', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    expect(resolveByName(map, '@diag/index-usage', 'postgres').query.sqlBody).toContain(
+      'pg_stat_user_indexes'
+    )
+    expect(resolveByName(map, '@diag/index-usage', 'mysql').query.sqlBody).toContain(
+      'table_io_waits_summary_by_index_usage'
+    )
+  })
 })

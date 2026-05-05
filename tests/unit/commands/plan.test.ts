@@ -55,7 +55,7 @@ describe('planCommand', () => {
   })
 
   test('prints concise text output by default and omits suggestedCommands', async () => {
-    await planCommand('UPDATE users SET status = \'inactive\'', {})
+    await planCommand("UPDATE users SET status = 'inactive'", {})
 
     const output = lastLog()
     expect(output).toContain('Decision: BLOCK')
@@ -98,7 +98,9 @@ describe('planCommand', () => {
       // process.exit is mocked to throw
     }
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain('Invalid format "yaml" for plan. Allowed: text, json')
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'Invalid format "yaml" for plan. Allowed: text, json'
+    )
     expect(exitSpy).toHaveBeenCalledWith(1)
     exitSpy.mockRestore()
   })

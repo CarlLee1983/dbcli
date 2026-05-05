@@ -29,10 +29,7 @@ const schemaLookup: SchemaLookup = {
 
 const emptyBlacklist: BlacklistConfig = { tables: [], columns: {} }
 
-function analyze(
-  sql: string,
-  overrides: Partial<Omit<AnalyzeQueryRiskInput, 'sql'>> = {}
-) {
+function analyze(sql: string, overrides: Partial<Omit<AnalyzeQueryRiskInput, 'sql'>> = {}) {
   return analyzeQueryRisk({
     sql,
     permission: overrides.permission ?? ('admin' as Permission),
@@ -43,7 +40,7 @@ function analyze(
 
 describe('analyzeQueryRisk parser foundation', () => {
   test('UPDATE without WHERE returns BLOCK', () => {
-    const result = analyze('UPDATE users SET status = \'inactive\'')
+    const result = analyze("UPDATE users SET status = 'inactive'")
     expect(result.decision).toBe('BLOCK')
     expect(result.operation).toBe('UPDATE')
     expect(result.targetTables).toEqual(['users'])
@@ -68,7 +65,7 @@ describe('analyzeQueryRisk parser foundation', () => {
   })
 
   test('comments do not hide missing WHERE', () => {
-    const result = analyze('UPDATE users SET status = \'inactive\' -- WHERE id = 1\n')
+    const result = analyze("UPDATE users SET status = 'inactive' -- WHERE id = 1\n")
     expect(result.decision).toBe('BLOCK')
     expect(result.riskFactors.map((factor) => factor.code)).toContain('write_missing_where')
   })
@@ -98,7 +95,7 @@ describe('analyzeQueryRisk parser foundation', () => {
 
 describe('analyzeQueryRisk MVP risk rules', () => {
   test('insufficient permission returns BLOCK', () => {
-    const result = analyze('UPDATE users SET status = \'inactive\' WHERE id = 1', {
+    const result = analyze("UPDATE users SET status = 'inactive' WHERE id = 1", {
       permission: 'query-only',
     })
     expect(result.decision).toBe('BLOCK')
@@ -145,7 +142,7 @@ describe('analyzeQueryRisk MVP risk rules', () => {
   })
 
   test('blacklisted updated column returns WARN', () => {
-    const result = analyze('UPDATE users SET email = \'a@example.com\' WHERE id = 1', {
+    const result = analyze("UPDATE users SET email = 'a@example.com' WHERE id = 1", {
       blacklist: { tables: [], columns: { users: ['email'] } },
     })
     expect(result.decision).toBe('WARN')
@@ -177,7 +174,9 @@ describe('analyzeQueryRisk MVP risk rules', () => {
   })
 
   test('multi-table query with partial schema coverage returns WARN', () => {
-    const result = analyze('SELECT users.id FROM users JOIN invoices ON invoices.user_id = users.id')
+    const result = analyze(
+      'SELECT users.id FROM users JOIN invoices ON invoices.user_id = users.id'
+    )
     expect(result.decision).toBe('WARN')
     expect(result.targetTables).toEqual(['users', 'invoices'])
     expect(result.riskFactors.map((factor) => factor.code)).toContain('partial_schema_coverage')

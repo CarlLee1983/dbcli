@@ -1,5 +1,9 @@
 import type { TableSchema } from '@/adapters/types'
-import { checkPermission, classifyStatement, stripCommentsAndStrings } from '@/core/permission-guard'
+import {
+  checkPermission,
+  classifyStatement,
+  stripCommentsAndStrings,
+} from '@/core/permission-guard'
 import { getSizeCategory } from '@/core/size-category'
 import type { BlacklistConfig } from '@/types/blacklist'
 import type {
@@ -81,7 +85,9 @@ function collectSqlFacts(sql: string): SqlFacts {
     hasWhere: /\bWHERE\b/i.test(analysisSql),
     hasLimit: /\bLIMIT\b/i.test(analysisSql),
     hasSelectStar: /^\s*SELECT\s+(?:DISTINCT\s+)?\*/i.test(analysisSql),
-    appearsReadLike: READ_LIKE_WORDS.some((word) => new RegExp(`\\b${word}\\b`, 'i').test(analysisSql)),
+    appearsReadLike: READ_LIKE_WORDS.some((word) =>
+      new RegExp(`\\b${word}\\b`, 'i').test(analysisSql)
+    ),
     appearsWriteOrDdlLike: WRITE_OR_DDL_LIKE_WORDS.some((word) =>
       new RegExp(`\\b${word}\\b`, 'i').test(analysisSql)
     ),
@@ -141,7 +147,9 @@ function extractReferencedColumns(sql: string, operation: QueryRiskOperation): s
     if (selectList && selectList.trim() !== '*') {
       for (const part of selectList.split(',')) {
         const expression = part.trim().replace(/\s+AS\s+[`"\[]?[\w]+[`"\]]?$/i, '')
-        const simpleColumn = expression.match(/^(?:[`"\[]?[\w]+[`"\]]?\.)?([`"\[]?[\w]+[`"\]]?)$/)?.[1]
+        const simpleColumn = expression.match(
+          /^(?:[`"\[]?[\w]+[`"\]]?\.)?([`"\[]?[\w]+[`"\]]?)$/
+        )?.[1]
         add(simpleColumn)
       }
     }
@@ -195,7 +203,12 @@ function applyDdlAndUnknownRules(facts: SqlFacts, factors: QueryRiskFactor[]): v
   }
 
   if (/\bALTER\b/i.test(facts.analysisSql)) {
-    pushFactor(factors, 'destructive_ddl', 'block', 'ALTER statements are unsupported by plan and may be destructive.')
+    pushFactor(
+      factors,
+      'destructive_ddl',
+      'block',
+      'ALTER statements are unsupported by plan and may be destructive.'
+    )
     return
   }
 
@@ -205,7 +218,12 @@ function applyDdlAndUnknownRules(facts: SqlFacts, factors: QueryRiskFactor[]): v
   }
 
   if (facts.operation === 'UNKNOWN' && facts.appearsWriteOrDdlLike) {
-    pushFactor(factors, 'unknown_write_or_ddl', 'block', 'SQL type is unclear and appears write-like or DDL-like.')
+    pushFactor(
+      factors,
+      'unknown_write_or_ddl',
+      'block',
+      'SQL type is unclear and appears write-like or DDL-like.'
+    )
     return
   }
 
@@ -266,7 +284,12 @@ function applySchemaRules(
   if (facts.targetTables.length === 0) return
 
   if (!schemaLookup.cacheAvailable) {
-    pushFactor(factors, 'schema_cache_missing', 'warn', 'Schema cache is missing for the selected connection.')
+    pushFactor(
+      factors,
+      'schema_cache_missing',
+      'warn',
+      'Schema cache is missing for the selected connection.'
+    )
     return
   }
 
@@ -276,7 +299,12 @@ function applySchemaRules(
   for (const table of facts.targetTables) {
     const schema = getSchemaForTable(schemaLookup.tables, table)
     if (!schema || !knownTables.has(table.toLowerCase())) {
-      pushFactor(factors, 'schema_table_unknown', 'warn', `Target table ${table} is missing from schema cache.`)
+      pushFactor(
+        factors,
+        'schema_table_unknown',
+        'warn',
+        `Target table ${table} is missing from schema cache.`
+      )
       continue
     }
 
@@ -298,11 +326,19 @@ function applySchemaRules(
   }
 
   if (facts.targetTables.length > 1 && knownCount > 0 && knownCount < facts.targetTables.length) {
-    pushFactor(factors, 'partial_schema_coverage', 'warn', 'Multi-table query has partial schema-cache coverage.')
+    pushFactor(
+      factors,
+      'partial_schema_coverage',
+      'warn',
+      'Multi-table query has partial schema-cache coverage.'
+    )
   }
 }
 
-function getSchemaForTable(tables: Record<string, TableSchema>, table: string): TableSchema | undefined {
+function getSchemaForTable(
+  tables: Record<string, TableSchema>,
+  table: string
+): TableSchema | undefined {
   return Object.entries(tables).find(([name]) => name.toLowerCase() === table.toLowerCase())?.[1]
 }
 
@@ -333,14 +369,20 @@ function buildRecommendations(factors: QueryRiskFactor[], facts: SqlFacts): stri
   }
 
   if (codes.has('permission_denied')) {
-    recommendations.add('Switch to a connection with sufficient permission only if the operation is intended.')
+    recommendations.add(
+      'Switch to a connection with sufficient permission only if the operation is intended.'
+    )
   }
 
   if (codes.has('table_blacklisted') || codes.has('blacklisted_column')) {
     recommendations.add('Review blacklist rules before accessing sensitive data.')
   }
 
-  if (codes.has('destructive_ddl') || codes.has('unsupported_ddl') || codes.has('unknown_write_or_ddl')) {
+  if (
+    codes.has('destructive_ddl') ||
+    codes.has('unsupported_ddl') ||
+    codes.has('unknown_write_or_ddl')
+  ) {
     recommendations.add('Do not execute this statement through dbcli without manual review.')
   }
 
@@ -352,11 +394,19 @@ function buildRecommendations(factors: QueryRiskFactor[], facts: SqlFacts): stri
     recommendations.add('Add a WHERE clause or LIMIT before querying a large table.')
   }
 
-  if (codes.has('schema_cache_missing') || codes.has('schema_table_unknown') || codes.has('partial_schema_coverage')) {
+  if (
+    codes.has('schema_cache_missing') ||
+    codes.has('schema_table_unknown') ||
+    codes.has('partial_schema_coverage')
+  ) {
     recommendations.add('Refresh schema cache for the target table before executing.')
   }
 
-  if (facts.operation === 'UPDATE' || facts.operation === 'DELETE' || facts.operation === 'INSERT') {
+  if (
+    facts.operation === 'UPDATE' ||
+    facts.operation === 'DELETE' ||
+    facts.operation === 'INSERT'
+  ) {
     recommendations.add('Use --dry-run on the actual write command.')
   }
 
@@ -368,7 +418,11 @@ function buildSuggestedCommands(facts: SqlFacts, factors: QueryRiskFactor[]): st
   const codes = new Set(factors.map((factor) => factor.code))
 
   for (const table of facts.targetTables) {
-    if (codes.has('schema_cache_missing') || codes.has('schema_table_unknown') || codes.has('partial_schema_coverage')) {
+    if (
+      codes.has('schema_cache_missing') ||
+      codes.has('schema_table_unknown') ||
+      codes.has('partial_schema_coverage')
+    ) {
       commands.add(`dbcli schema ${table} --format json`)
     }
   }

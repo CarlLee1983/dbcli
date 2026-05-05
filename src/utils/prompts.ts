@@ -30,7 +30,7 @@ async function readLineFromStdin(prompt: string = ''): Promise<string> {
         process.stdin.pause()
         process.stdin.removeListener('data', onData)
         process.stdin.removeListener('end', onEnd)
-        resolve(lines[0].trim())
+        resolve((lines[0] ?? '').trim())
       }
     }
 
@@ -61,7 +61,7 @@ export async function text(message: string, defaultValue?: string): Promise<stri
   }
 
   try {
-    const { text: inquirerText } = await import('@inquirer/prompts')
+    const { input: inquirerText } = await import('@inquirer/prompts')
     return await inquirerText({ message, default: defaultValue })
   } catch {
     // Fallback: use simple console prompts
@@ -90,10 +90,10 @@ export async function select(message: string, choices: string[]): Promise<string
     const selectedIndex = parseInt(answer, 10) - 1
 
     if (selectedIndex >= 0 && selectedIndex < choices.length) {
-      return choices[selectedIndex]
+      return choices[selectedIndex] ?? choices[0] ?? ''
     }
 
-    return choices[0]
+    return choices[0] ?? ''
   }
 
   try {
@@ -110,10 +110,10 @@ export async function select(message: string, choices: string[]): Promise<string
     const selectedIndex = parseInt(answer, 10) - 1
 
     if (selectedIndex >= 0 && selectedIndex < choices.length) {
-      return choices[selectedIndex]
+      return choices[selectedIndex] ?? choices[0] ?? ''
     }
 
-    return choices[0]
+    return choices[0] ?? ''
   }
 }
 

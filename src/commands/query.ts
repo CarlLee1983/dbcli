@@ -30,6 +30,7 @@ export async function queryCommand(
     limit?: number
     noLimit?: boolean
     collection?: string
+    index?: string
     config?: string
   },
   command?: import('commander').Command
@@ -60,6 +61,11 @@ export async function queryCommand(
     // 2d. Redis: route to QueryableAdapter path
     if (config.connection.system === 'redis') {
       return redisQueryBranch(sql, options, config)
+    }
+
+    // 2e. Elasticsearch: route to QueryableAdapter path
+    if (config.connection.system === 'elasticsearch') {
+      return elasticsearchQueryBranch(sql, options, config)
     }
 
     // 2b. Size guard: block full-table SELECT on huge tables
@@ -294,3 +300,101 @@ async function redisQueryBranch(
     await redisAdapter.disconnect()
   }
 }
+
+async function elasticsearchQueryBranch(
+  queryStr: string,
+  options: {
+    format?: 'table' | 'json' | 'csv'
+    limit?: number
+    noLimit?: boolean
+    collection?: string
+    index?: string
+  },
+  config: DbcliConfig
+): Promise<void> {
+  const indexName = options.index ?? options.collection
+  const format = options.format ?? 'table'
+
+  if (!indexName) {
+    console.error('Elasticsearch 查詢需要指定 --collection <index> 或 --index <index>')
+    process.exit(1)
+  }
+
+  const { enforceElasticsearchPermission } = await import('@/core/permission-guard')
+  try {
+    enforceElasticsearchPermission(
+      {
+        method: 'POST',
+        apiPath: `/${indexName}/_search`,
+        body: queryStr.trim().startsWith('{') ? queryStr : undefined,
+      },
+      config.permission
+    )
+  } catch (error) {
+    if (error instanceof PermissionError) {
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
+      console.error(`   Operation: ${error.classification.type}`)
+      console.error(`   Message: ${error.message}`)
+      process.exit(1)
+    }
+    throw error
+  }
+
+  let effectiveLimit: number
+  if (options.noLimit) {
+    effectiveLimit = 10000
+    console.error(
+      'Elasticsearch --no-limit is capped at size 10000; for more rows use saved-query with search_after.'
+    )
+  } else if (typeof options.limit === 'number') {
+    effectiveLimit = options.limit
+  } else {
+    effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
+    if (config.permission === 'query-only') {
+      console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
+    }
+  }
+
+  const blacklistManager = new BlacklistManager(config)
+  const blacklistValidator = new BlacklistValidator(blacklistManager)
+  try {
+    blacklistValidator.checkTableBlacklist('SELECT', indexName, [])
+  } catch (error) {
+    if (error instanceof BlacklistError) {
+      console.error(error.message)
+      process.exit(1)
+    }
+    throw error
+  }
+
+  const esAdapter = AdapterFactory.createElasticsearchAdapter(
+    config.connection as ConnectionOptions
+  )
+  await esAdapter.connect()
+  try {
+    const result = await esAdapter.execute<Record<string, unknown>>(queryStr, [indexName], {
+      limit: effectiveLimit,
+    })
+    const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
+    const filterResult = blacklistValidator.filterColumns(indexName, result.rows, columnNames)
+    const queryResult = {
+      rows: filterResult.filteredRows,
+      rowCount: filterResult.filteredRows.length,
+      columnNames: columnNames.filter((col) => !filterResult.omittedColumns.includes(col)),
+    }
+    const formatter = new QueryResultFormatter()
+    const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
+      format: format as 'table' | 'json' | 'csv',
+    })
+    const securityNote = blacklistValidator.buildSecurityNotification(
+      indexName,
+      filterResult.omittedColumns
+    )
+
+    console.log(output)
+    if (securityNote) console.log(`\nℹ ${securityNote}`)
+  } finally {
+    await esAdapter.disconnect()
+  }
+}
+

@@ -131,7 +131,8 @@ program
     parseInt(val, 10)
   )
   .option('--no-limit', 'Disable auto-limit in query-only mode')
-  .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
+  .option('--collection <name>', 'MongoDB collection name; Elasticsearch index name')
+  .option('--index <name>', 'Elasticsearch index name (alias for --collection)')
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       await queryCommand(sql, options, command)
@@ -224,7 +225,8 @@ program
   .option('--format <format>', 'Output format: json, jsonl, or csv', 'json')
   .option('--output <path>', 'Output file path (if omitted, write to stdout)', undefined)
   .option('--force', 'Skip overwrite confirmation', false)
-  .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
+  .option('--collection <name>', 'MongoDB collection name; Elasticsearch index name')
+  .option('--index <name>', 'Elasticsearch index name (alias for --collection)')
   .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) =>
     parseInt(val, 10)
   )

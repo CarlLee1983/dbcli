@@ -167,7 +167,17 @@ export class ElasticsearchAdapter implements QueryableAdapter {
   }
 
   async insert(collection: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
-    throw new Error('Method not implemented.')
+    const id = (data._id || data.id) as string
+    const body = { ...data }
+    delete body._id
+    delete body.id
+
+    const response = await this.request<any>('PUT', `/${collection}/_doc/${id || ''}`, body)
+    return {
+      rows: [],
+      affectedRows: response.result === 'created' || response.result === 'updated' ? 1 : 0,
+      lastInsertId: response._id,
+    }
   }
 
   async update(
@@ -175,11 +185,31 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     filter: Record<string, unknown>,
     update: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
-    throw new Error('Method not implemented.')
+    const id = (filter._id || filter.id) as string
+    if (!id) {
+      throw new Error('Elasticsearch update requires _id or id in filter')
+    }
+
+    const response = await this.request<any>('POST', `/${collection}/_update/${id}`, {
+      doc: update,
+    })
+    return {
+      rows: [],
+      affectedRows: response.result === 'updated' || response.result === 'noop' ? 1 : 0,
+    }
   }
 
   async delete(collection: string, filter: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
-    throw new Error('Method not implemented.')
+    const id = (filter._id || filter.id) as string
+    if (!id) {
+      throw new Error('Elasticsearch delete requires _id or id in filter')
+    }
+
+    const response = await this.request<any>('DELETE', `/${collection}/_doc/${id}`)
+    return {
+      rows: [],
+      affectedRows: response.result === 'deleted' ? 1 : 0,
+    }
   }
 
   // ============================================================================

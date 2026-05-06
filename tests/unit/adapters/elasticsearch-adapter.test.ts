@@ -216,3 +216,66 @@ describe('ElasticsearchAdapter execute', () => {
     expect(parsed.size).toBe(100)
   })
 })
+
+describe('ElasticsearchAdapter write operations', () => {
+  let originalFetch: typeof fetch
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test('insert sends PUT to _doc', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    let capturedMethod = ''
+    let capturedUrl = ''
+    // @ts-ignore
+    globalThis.fetch = async (url: string, init: any) => {
+      capturedUrl = url
+      capturedMethod = init.method
+      return new Response(JSON.stringify({ _id: '1', result: 'created' }))
+    }
+    
+    await adapter.insert('users', { _id: '1', name: 'Alice' })
+    expect(capturedMethod).toBe('PUT')
+    expect(capturedUrl).toContain('/users/_doc/1')
+  })
+
+  test('update sends POST to _update', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    let capturedMethod = ''
+    let capturedUrl = ''
+    // @ts-ignore
+    globalThis.fetch = async (url: string, init: any) => {
+      capturedUrl = url
+      capturedMethod = init.method
+      return new Response(JSON.stringify({ _id: '1', result: 'updated' }))
+    }
+    
+    await adapter.update('users', { _id: '1' }, { name: 'Bob' })
+    expect(capturedMethod).toBe('POST')
+    expect(capturedUrl).toContain('/users/_update/1')
+  })
+
+  test('delete sends DELETE to _doc', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    let capturedMethod = ''
+    let capturedUrl = ''
+    // @ts-ignore
+    globalThis.fetch = async (url: string, init: any) => {
+      capturedUrl = url
+      capturedMethod = init.method
+      return new Response(JSON.stringify({ _id: '1', result: 'deleted' }))
+    }
+    
+    await adapter.delete('users', { _id: '1' })
+    expect(capturedMethod).toBe('DELETE')
+    expect(capturedUrl).toContain('/users/_doc/1')
+  })
+})

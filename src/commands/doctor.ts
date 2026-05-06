@@ -418,8 +418,7 @@ export async function collectMongoDoctorResults(config: {
   const results: DoctorResult[] = []
 
   const mongoConn = config.connection.system === 'mongodb' ? config.connection : null
-  const mongoUriString =
-    mongoConn && typeof mongoConn.uri === 'string' ? mongoConn.uri : undefined
+  const mongoUriString = mongoConn && typeof mongoConn.uri === 'string' ? mongoConn.uri : undefined
   const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(mongoUriString)
   if (srvCheck) {
     results.push(srvCheck)
@@ -494,11 +493,7 @@ export async function collectMongoDoctorResults(config: {
     })
 
     const lastUpdated = config.metadata?.schemaLastUpdated ?? null
-    const freshness = runDoctorChecks.checkSchemaCacheFreshness(lastUpdated)
-    if (!lastUpdated) {
-      freshness.message = 'Schema cache is not tracked for MongoDB — run "dbcli schema --refresh" to scan collections'
-    }
-    results.push(freshness)
+    results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
   } catch (error) {
     results.push({
       group: 'Connection & Data',
@@ -571,9 +566,7 @@ export const doctorCommand = new Command('doctor')
               }))
             )
           } else {
-            const adapter = AdapterFactory.createAdapter(
-              config.connection as ConnectionOptions
-            )
+            const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
             await adapter.connect()
 
             results.push({

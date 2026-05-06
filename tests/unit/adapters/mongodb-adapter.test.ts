@@ -300,4 +300,44 @@ describe('MongoDBAdapter', () => {
       await expect(adapter.getServerVersion()).rejects.toBeInstanceOf(ConnectionError)
     })
   })
+
+  describe('getTableSchema()', () => {
+    beforeEach(async () => {
+      await adapter.connect()
+    })
+
+    test('uses default sample size of 50 documents', async () => {
+      await adapter.getTableSchema('users')
+      const client = (adapter as any).client as MockMongoClient
+      const lastFind = client.findCalls[client.findCalls.length - 1]!
+      expect(lastFind.limit).toBe(50)
+    })
+
+    test('honors explicit options.sampleSize', async () => {
+      await adapter.getTableSchema('users', { sampleSize: 200 })
+      const client = (adapter as any).client as MockMongoClient
+      const lastFind = client.findCalls[client.findCalls.length - 1]!
+      expect(lastFind.limit).toBe(200)
+    })
+
+    test('caps sampleSize at 1000', async () => {
+      await adapter.getTableSchema('users', { sampleSize: 9999 })
+      const client = (adapter as any).client as MockMongoClient
+      const lastFind = client.findCalls[client.findCalls.length - 1]!
+      expect(lastFind.limit).toBe(1000)
+    })
+
+    test('falls back to default when sampleSize is below 1', async () => {
+      await adapter.getTableSchema('users', { sampleSize: 0 })
+      const client = (adapter as any).client as MockMongoClient
+      const lastFind = client.findCalls[client.findCalls.length - 1]!
+      expect(lastFind.limit).toBe(50)
+    })
+
+    test('returns inferred columns as union of typeof per field', async () => {
+      const schema = await adapter.getTableSchema('users')
+      const names = schema.columns.map((c) => c.name).sort()
+      expect(names).toEqual(['_id', 'age', 'name'])
+    })
+  })
 })

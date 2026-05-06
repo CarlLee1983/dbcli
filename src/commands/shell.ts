@@ -13,8 +13,38 @@ import type { DbcliConfig } from '../types'
 import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
 import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
+import type { QueryableAdapter } from '@/adapters/types'
 
 const HISTORY_PATH = join(homedir(), '.dbcli_history')
+
+/** Eager column completion is skipped above this collection count to keep shell startup fast. */
+export const MONGO_COMPLETION_EAGER_THRESHOLD = 20
+
+/**
+ * Populate column completion data for a MongoDB shell session.
+ * Eagerly samples each collection's schema when collection count is at or below
+ * the threshold; otherwise returns an empty map (tab completion still gets the
+ * collection names from the caller).
+ */
+export async function populateMongoColumns(
+  mongoAdapter: QueryableAdapter,
+  collectionNames: string[],
+  threshold: number = MONGO_COMPLETION_EAGER_THRESHOLD
+): Promise<Record<string, string[]>> {
+  const columnsByTable: Record<string, string[]> = {}
+  if (!mongoAdapter.getTableSchema) return columnsByTable
+  if (collectionNames.length === 0 || collectionNames.length > threshold) return columnsByTable
+
+  for (const name of collectionNames) {
+    try {
+      const schema = await mongoAdapter.getTableSchema(name)
+      columnsByTable[name] = schema.columns.map((c) => c.name)
+    } catch {
+      // Skip collections that fail to sample; tab completion gracefully misses them.
+    }
+  }
+  return columnsByTable
+}
 
 export const shellCommand = new Command('shell')
   .description('Interactive database shell with auto-completion and syntax highlighting')
@@ -36,22 +66,35 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
 
   const isMongoDB = config.connection.system === 'mongodb'
   const connectionOpts = config.connection as ConnectionOptions
+  const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
   const adapter = isMongoDB
-    ? new MongoShellAdapter(AdapterFactory.createMongoDBAdapter(connectionOpts))
+    ? new MongoShellAdapter(mongoInner!)
     : AdapterFactory.createAdapter(connectionOpts)
   try {
     await adapter.connect()
   } catch (error) {
-    console.error(pc.red(t_vars('shell.error_connection_failed', { message: (error as Error).message })))
+    console.error(
+      pc.red(t_vars('shell.error_connection_failed', { message: (error as Error).message }))
+    )
     process.exit(1)
   }
 
   // Build context from schema cache or MongoDB collections
   let tableNames: string[] = []
-  const columnsByTable: Record<string, string[]> = {}
+  let columnsByTable: Record<string, string[]> = {}
   if (isMongoDB) {
     const collections = await adapter.listTables()
     tableNames = collections.map((collection) => collection.name)
+    if (mongoInner) {
+      columnsByTable = await populateMongoColumns(mongoInner, tableNames)
+      if (collections.length > MONGO_COMPLETION_EAGER_THRESHOLD) {
+        console.error(
+          pc.dim(
+            `MongoDB shell: ${collections.length} collections detected; tab completion limited to collection names (threshold: ${MONGO_COMPLETION_EAGER_THRESHOLD}).`
+          )
+        )
+      }
+    }
   } else {
     const schemaData = (config.schema ?? {}) as Record<string, unknown>
     tableNames = Object.keys(schemaData)

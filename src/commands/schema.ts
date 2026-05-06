@@ -30,6 +30,10 @@ export const schemaCommand = new Command()
   .option('--refresh', 'Refresh schema by detecting changes from database', false)
   .option('--reset', 'Clear all existing schema data and re-fetch from database', false)
   .option('--force', 'Skip confirmation when updating schema data', false)
+  .option(
+    '--sample-size <n>',
+    'MongoDB only: number of documents to sample for schema inference (default 50, max 1000). Ignored on SQL connections.'
+  )
   .action(schemaAction)
 
 /**
@@ -45,6 +49,7 @@ async function schemaAction(
     refresh: boolean
     reset: boolean
     force: boolean
+    sampleSize?: string
   }
 ) {
   try {
@@ -58,6 +63,21 @@ async function schemaAction(
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')
       process.exit(1)
+    }
+
+    // --sample-size is mongo-only; on SQL connections, surface a hint and discard the value.
+    let inferenceOptions: { sampleSize?: number } | undefined
+    if (options.sampleSize !== undefined) {
+      const parsed = Number(options.sampleSize)
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        console.error(`--sample-size must be a positive integer (received ${options.sampleSize})`)
+        process.exit(1)
+      }
+      if (config.connection.system === 'mongodb') {
+        inferenceOptions = { sampleSize: Math.floor(parsed) }
+      } else {
+        console.error('--sample-size is MongoDB-only and is being ignored for this connection.')
+      }
     }
 
     // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
@@ -92,14 +112,22 @@ async function schemaAction(
           options,
           connectionName,
           existingSchemaCount,
-          storagePath
+          storagePath,
+          inferenceOptions
         )
       } else if (options.refresh) {
         // Handle schema refresh (NEW)
-        await handleSchemaRefresh(adapter, config, options, connectionName, storagePath)
+        await handleSchemaRefresh(
+          adapter,
+          config,
+          options,
+          connectionName,
+          storagePath,
+          inferenceOptions
+        )
       } else if (table) {
         // Single table schema inspection
-        await handleSingleTableSchema(adapter, table, options.format)
+        await handleSingleTableSchema(adapter, table, options.format, inferenceOptions)
       } else {
         // Full database schema scan and config update
         await handleFullDatabaseScan(
@@ -108,7 +136,8 @@ async function schemaAction(
           options,
           connectionName,
           existingSchemaCount,
-          storagePath
+          storagePath,
+          inferenceOptions
         )
       }
     } finally {
@@ -131,9 +160,10 @@ async function schemaAction(
 async function handleSingleTableSchema(
   adapter: DatabaseAdapter,
   tableName: string,
-  format: string
+  format: string,
+  inferenceOptions?: { sampleSize?: number }
 ): Promise<void> {
-  const schema = await adapter.getTableSchema(tableName)
+  const schema = await adapter.getTableSchema(tableName, inferenceOptions)
 
   if (format === 'json') {
     const formatter = new TableSchemaJSONFormatter()
@@ -147,7 +177,7 @@ async function handleSingleTableSchema(
 
     if (schema.foreignKeys && schema.foreignKeys.length > 0) {
       console.log(`Foreign Keys:`)
-      schema.foreignKeys.forEach((fk: NonNullable<TableSchema["foreignKeys"]>[number]) => {
+      schema.foreignKeys.forEach((fk: NonNullable<TableSchema['foreignKeys']>[number]) => {
         console.log(
           `   ${fk.name}: ${fk.columns.join(',')} → ${fk.refTable}(${fk.refColumns.join(',')})`
         )
@@ -174,7 +204,7 @@ async function handleSingleTableSchema(
 
     if (schema.indexes && schema.indexes.length > 0) {
       console.log(`\nIndexes:`)
-      schema.indexes.forEach((idx: NonNullable<TableSchema["indexes"]>[number]) => {
+      schema.indexes.forEach((idx: NonNullable<TableSchema['indexes']>[number]) => {
         const uniqueTag = idx.unique ? ' [UNIQUE]' : ''
         console.log(`   ${idx.name}: (${idx.columns.join(', ')})${uniqueTag}`)
       })
@@ -190,7 +220,8 @@ async function handleSchemaRefresh(
   config: DbcliConfig,
   options: { config: string; refresh: boolean; force: boolean },
   connectionName: string | undefined,
-  storagePath: string
+  storagePath: string,
+  inferenceOptions?: { sampleSize?: number }
 ): Promise<void> {
   const diffEngine = new SchemaDiffEngine(adapter, config)
   const report = await diffEngine.diff()
@@ -229,7 +260,7 @@ async function handleSchemaRefresh(
 
   // Add/update tables detected as added or modified
   for (const tableName of report.tablesAdded.concat(Object.keys(report.tablesModified))) {
-    const fullSchema = await adapter.getTableSchema(tableName)
+    const fullSchema = await adapter.getTableSchema(tableName, inferenceOptions)
     newSchema[tableName] = fullSchema
   }
 
@@ -264,7 +295,8 @@ async function handleSchemaReset(
   options: { config: string; format: string; force: boolean },
   connectionName: string | undefined,
   existingCount: number,
-  storagePath: string
+  storagePath: string,
+  inferenceOptions?: { sampleSize?: number }
 ): Promise<void> {
   if (existingCount > 0 && !options.force) {
     // Wave 1: check if layered cache actually exists
@@ -312,7 +344,7 @@ async function handleSchemaReset(
   let processed = 0
 
   for (const table of tables) {
-    const fullSchema = await adapter.getTableSchema(table.name)
+    const fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
     schemaData[table.name] = {
       name: fullSchema.name,
       columns: fullSchema.columns,
@@ -365,7 +397,8 @@ async function handleFullDatabaseScan(
   options: { config: string; format: string; force: boolean },
   connectionName: string | undefined,
   existingSchemaCount: number,
-  storagePath: string
+  storagePath: string,
+  inferenceOptions?: { sampleSize?: number }
 ): Promise<void> {
   console.log(t('schema.scanning_database'))
 
@@ -378,7 +411,7 @@ async function handleFullDatabaseScan(
   let processed = 0
 
   for (const table of tables) {
-    const fullSchema = await adapter.getTableSchema(table.name)
+    const fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
     schemaData[table.name] = {
       name: fullSchema.name,
       columns: fullSchema.columns,

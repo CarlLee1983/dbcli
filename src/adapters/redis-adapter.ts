@@ -65,8 +65,29 @@ export class RedisAdapter implements QueryableAdapter {
         maxRetriesPerRequest: 1,
         enableReadyCheck: true,
       })
-      await (this.client as unknown as { connect(): Promise<void> }).connect()
+      // Suppress ioredis's unhandled "error" event during the connect handshake
+      // — we surface the failure through the rejected connect() Promise. The
+      // mock client used in unit tests doesn't implement on/off, so guard.
+      const emitter = this.client as unknown as {
+        on?: (event: string, fn: () => void) => void
+        off?: (event: string, fn: () => void) => void
+      }
+      const errorSink = () => {}
+      emitter.on?.('error', errorSink)
+      try {
+        await (this.client as unknown as { connect(): Promise<void> }).connect()
+      } finally {
+        emitter.off?.('error', errorSink)
+      }
     } catch (err) {
+      // Ensure background reconnect loops stop after a failed handshake.
+      try {
+        ;(this.client as unknown as { disconnect(): void } | null)?.disconnect()
+      } catch {
+        // ignore
+      }
+      this.client = null
+
       const message = (err as Error).message ?? 'Unknown error'
       const code = inferConnectionCode(message, (err as { code?: string }).code)
       throw new ConnectionError(code, `Redis 連線失敗: ${message}`, [

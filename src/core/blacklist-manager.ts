@@ -90,7 +90,7 @@ export class BlacklistManager {
         }
 
         if (columnSet.size > 0) {
-          columns.set(tableName, columnSet)
+          columns.set(tableName.toLowerCase(), columnSet)
         }
       }
     } else if (blacklistConfig.columns !== undefined) {
@@ -120,7 +120,7 @@ export class BlacklistManager {
    * @returns true if the column is blacklisted
    */
   isColumnBlacklisted(tableName: string, columnName: string): boolean {
-    const columnSet = this.state.columns.get(tableName)
+    const columnSet = this.state.columns.get(tableName.toLowerCase())
     if (!columnSet) {
       return false
     }
@@ -134,7 +134,7 @@ export class BlacklistManager {
    * @returns Array of blacklisted column names, or empty array if none
    */
   getBlacklistedColumns(tableName: string): string[] {
-    const columnSet = this.state.columns.get(tableName)
+    const columnSet = this.state.columns.get(tableName.toLowerCase())
     if (!columnSet) {
       return []
     }

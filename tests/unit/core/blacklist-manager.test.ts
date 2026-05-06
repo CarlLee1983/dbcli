@@ -169,3 +169,32 @@ describe('BlacklistManager', () => {
     })
   })
 })
+
+describe('BlacklistManager Hardening', () => {
+  it('isTableBlacklisted is case-insensitive', () => {
+    const config = {
+      blacklist: {
+        tables: ['Users', 'SECRET_INFO'],
+        columns: {},
+      },
+    }
+    const manager = new BlacklistManager(config as any)
+    expect(manager.isTableBlacklisted('users')).toBe(true)
+    expect(manager.isTableBlacklisted('USERS')).toBe(true)
+    expect(manager.isTableBlacklisted('secret_info')).toBe(true)
+  })
+
+  it('isColumnBlacklisted supports dotted paths', () => {
+    const config = {
+      blacklist: {
+        tables: [],
+        columns: {
+          users: ['profile.email', 'metadata.internal_id'],
+        },
+      },
+    }
+    const manager = new BlacklistManager(config as any)
+    expect(manager.isColumnBlacklisted('users', 'profile.email')).toBe(true)
+    expect(manager.isColumnBlacklisted('users', 'name')).toBe(false)
+  })
+})

@@ -131,6 +131,65 @@ describe('validation', () => {
       const result = ConnectionConfigSchema.parse(withoutPassword)
       expect(result.password).toBe('')
     })
+
+    test('accepts Elasticsearch self-hosted API key connection config', () => {
+      const result = ConnectionConfigSchema.parse({
+        system: 'elasticsearch',
+        protocol: 'https',
+        host: 'es.internal',
+        port: 9200,
+        apiKey: '${ES_API_KEY}',
+        caPath: './certs/ca.crt',
+      })
+
+      expect(result.system).toBe('elasticsearch')
+      expect(result.protocol).toBe('https')
+      expect(result.host).toBe('es.internal')
+      expect(result.port).toBe(9200)
+      expect(result.apiKey).toBe('${ES_API_KEY}')
+      expect(result.user).toBe('')
+      expect(result.password).toBe('')
+      expect(result.database).toBe('')
+    })
+
+    test('accepts Elasticsearch cloudId connection config', () => {
+      const result = ConnectionConfigSchema.parse({
+        system: 'elasticsearch',
+        cloudId: '${ES_CLOUD_ID}',
+        apiKey: '${ES_API_KEY}',
+      })
+
+      expect(result.system).toBe('elasticsearch')
+      expect(result.cloudId).toBe('${ES_CLOUD_ID}')
+      expect(result.apiKey).toBe('${ES_API_KEY}')
+      expect(result.protocol).toBe('https')
+      expect(result.port).toBe(9200)
+    })
+
+    test('accepts Elasticsearch multi-node basic auth config', () => {
+      const result = ConnectionConfigSchema.parse({
+        system: 'elasticsearch',
+        nodes: ['https://es1:9200', 'https://es2:9200'],
+        user: '${ES_USER}',
+        password: '${ES_PASSWORD}',
+      })
+
+      expect(result.system).toBe('elasticsearch')
+      expect(result.nodes).toEqual(['https://es1:9200', 'https://es2:9200'])
+      expect(result.user).toBe('${ES_USER}')
+      expect(result.password).toBe('${ES_PASSWORD}')
+    })
+
+    test('rejects invalid Elasticsearch protocol', () => {
+      expect(() =>
+        ConnectionConfigSchema.parse({
+          system: 'elasticsearch',
+          protocol: 'ftp',
+          host: 'localhost',
+          port: 9200,
+        })
+      ).toThrow(ZodError)
+    })
   })
 
   describe('PermissionSchema', () => {
@@ -331,6 +390,24 @@ describe('validation', () => {
             },
           })
         ).toThrow()
+      })
+
+      test('accepts Elasticsearch named connection in v2 config', () => {
+        const result = DbcliConfigV2Schema.parse({
+          version: 2,
+          default: 'search',
+          connections: {
+            search: {
+              system: 'elasticsearch',
+              nodes: ['https://es1:9200'],
+              apiKey: '${ES_API_KEY}',
+              permission: 'query-only',
+            },
+          },
+        })
+
+        expect(result.connections.search.system).toBe('elasticsearch')
+        expect(result.connections.search.permission).toBe('query-only')
       })
     })
   })

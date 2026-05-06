@@ -73,12 +73,31 @@ export const RedisConnectionConfigSchema = z.object({
 })
 
 /**
- * Connection configuration schema (union of SQL, MongoDB, Redis)
+ * Elasticsearch connection schema
+ */
+export const ElasticsearchConnectionConfigSchema = z.object({
+  system: z.literal('elasticsearch'),
+  protocol: z.enum(['http', 'https']).optional().default('https'),
+  host: OptStringOrEnvRef,
+  port: z.union([z.number().int(), EnvRefSchema]).optional().default(9200),
+  user: OptStringOrEnvRef,
+  password: z.union([z.string(), EnvRefSchema]).optional().default(''),
+  database: OptStringOrEnvRef,
+  nodes: z.array(z.string()).optional(),
+  cloudId: z.union([z.string(), EnvRefSchema]).optional(),
+  apiKey: z.union([z.string(), EnvRefSchema]).optional(),
+  caPath: z.string().optional(),
+  rejectUnauthorized: z.boolean().optional().default(true),
+})
+
+/**
+ * Connection configuration schema (union of SQL, MongoDB, Redis, Elasticsearch)
  */
 export const ConnectionConfigSchema = z.union([
   SqlConnectionConfigSchema,
   MongoDBConnectionConfigSchema,
   RedisConnectionConfigSchema,
+  ElasticsearchConnectionConfigSchema,
 ])
 
 /**
@@ -149,10 +168,16 @@ const RedisNamedConnectionSchema = RedisConnectionConfigSchema.extend({
   envFile: z.string().optional(),
 })
 
+const ElasticsearchNamedConnectionSchema = ElasticsearchConnectionConfigSchema.extend({
+  permission: PermissionSchema,
+  envFile: z.string().optional(),
+})
+
 export const NamedConnectionSchema = z.union([
   SqlNamedConnectionSchema,
   MongoDBNamedConnectionSchema,
   RedisNamedConnectionSchema,
+  ElasticsearchNamedConnectionSchema,
 ])
 
 /**

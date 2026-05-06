@@ -8,7 +8,7 @@
  */
 export interface ConnectionOptions {
   /** Database system type */
-  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
   /** Database host address or hostname */
   host: string
   /** Database port number */
@@ -25,6 +25,18 @@ export interface ConnectionOptions {
   authSource?: string
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
+  /** Elasticsearch protocol (http or https) */
+  protocol?: 'http' | 'https'
+  /** Elasticsearch nodes for round-robin (optional) */
+  nodes?: string[]
+  /** Elasticsearch Cloud ID (optional) */
+  cloudId?: string
+  /** Elasticsearch API Key (optional) */
+  apiKey?: string
+  /** Elasticsearch CA Certificate Path (optional) */
+  caPath?: string
+  /** Whether to reject unauthorized TLS connections (default: true) */
+  rejectUnauthorized?: boolean
 }
 
 /**
@@ -223,15 +235,19 @@ export interface QueryableAdapter {
   /**
    * List all collections in the connected database
    * Includes metadata such as document count
+   * @param options Optional filter for system indices
    * @returns Array of collection info with basic information
    * @throws {ConnectionError} If query fails
    */
-  listCollections(): Promise<{ name: string; documentCount?: number }[]>
+  listCollections(options?: {
+    includeSystem?: boolean
+  }): Promise<{ name: string; documentCount?: number }[]>
 
   /**
    * SQL-compatible collection listing for shared command surfaces.
+   * @param options Optional filter for system indices
    */
-  listTables?(): Promise<TableSchema[]>
+  listTables?(options?: { includeSystem?: boolean }): Promise<TableSchema[]>
 
   /**
    * SQL-compatible schema lookup for shared command surfaces.

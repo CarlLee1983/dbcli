@@ -39,7 +39,49 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     params?: unknown[],
     options?: { limit?: number }
   ): Promise<ExecutionResult<T>> {
-    throw new Error('Method not implemented.')
+    const indexName = params?.[0] as string
+    if (!indexName) {
+      throw new Error('Index name is required as the first parameter to execute()')
+    }
+
+    const isDsl = query.trim().startsWith('{')
+    const limit = options?.limit ?? 100
+    let path = `/${indexName}/_search`
+    let body: any = undefined
+
+    if (isDsl) {
+      body = JSON.parse(query)
+      if (body.size === undefined) {
+        body.size = limit
+      }
+    } else {
+      path += `?q=${encodeURIComponent(query)}&size=${limit}`
+    }
+
+    const response = await this.request<any>(body ? 'POST' : 'GET', path, body)
+    const hits = response.hits?.hits || []
+
+    const rows = hits.map((hit: any) => {
+      const row: any = { _id: hit._id }
+      this.flattenSource('', hit._source || {}, row)
+      return row
+    })
+
+    return {
+      rows: rows as T[],
+      affectedRows: rows.length,
+    }
+  }
+
+  private flattenSource(prefix: string, source: any, target: any) {
+    for (const [key, value] of Object.entries(source)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        this.flattenSource(fullKey, value, target)
+      } else {
+        target[fullKey] = value
+      }
+    }
   }
 
   async listCollections(options?: {

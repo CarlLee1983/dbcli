@@ -162,3 +162,57 @@ describe('ElasticsearchAdapter list/schema', () => {
     expect(columnNames).toContain('profile.age')
   })
 })
+
+describe('ElasticsearchAdapter execute', () => {
+  let originalFetch: typeof fetch
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test('execute handles URI query', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    const mockResponse = {
+      hits: {
+        total: { value: 1, relation: 'eq' },
+        hits: [
+          { _id: '1', _source: { name: 'Alice', profile: { email: 'a@example.com' } } }
+        ]
+      }
+    }
+    
+    let capturedUrl = ''
+    // @ts-ignore
+    globalThis.fetch = async (url: string) => {
+      capturedUrl = url
+      return new Response(JSON.stringify(mockResponse))
+    }
+    
+    const result = await adapter.execute('name:Alice', ['users'], { limit: 10 })
+    expect(capturedUrl).toContain('/users/_search?q=name%3AAlice&size=10')
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]).toEqual({ _id: '1', name: 'Alice', 'profile.email': 'a@example.com' })
+  })
+
+  test('execute handles DSL query', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    const dsl = '{"query":{"match_all":{}}}'
+    let capturedBody = ''
+    // @ts-ignore
+    globalThis.fetch = async (url: string, init: any) => {
+      capturedBody = init.body
+      return new Response(JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }))
+    }
+    
+    await adapter.execute(dsl, ['users'])
+    const parsed = JSON.parse(capturedBody)
+    expect(parsed.query).toEqual({ match_all: {} })
+    expect(parsed.size).toBe(100)
+  })
+})

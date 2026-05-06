@@ -22,3 +22,5 @@ export { mapError } from './error-mapper'
 
 // Re-export MongoDB adapter for direct use in commands
 export { MongoDBAdapter } from './mongodb-adapter'
+export { RedisAdapter } from './redis-adapter'
+export { ElasticsearchAdapter } from './elasticsearch-adapter'

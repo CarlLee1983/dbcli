@@ -812,3 +812,60 @@ describe('enforceRedisPermission', () => {
     expect((caught as PermissionError).message).toContain('not whitelisted')
   })
 })
+
+// ============================================================================
+// Suite 5: Elasticsearch Permission Enforcement
+// ============================================================================
+
+describe('Elasticsearch Permission Guard', () => {
+  const { classifyElasticsearchRequest, enforceElasticsearchPermission } = require('@/core/permission-guard')
+
+  test('classify: _search is SELECT', () => {
+    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/users/_search', body: '{}' })
+    expect(result.type).toBe('SELECT')
+    expect(result.isDangerous).toBe(false)
+  })
+
+  test('classify: GET _doc is SELECT', () => {
+    const result = classifyElasticsearchRequest({ method: 'GET', apiPath: '/users/_doc/1' })
+    expect(result.type).toBe('SELECT')
+  })
+
+  test('classify: PUT _doc is INSERT', () => {
+    const result = classifyElasticsearchRequest({ method: 'PUT', apiPath: '/users/_doc/1', body: '{}' })
+    expect(result.type).toBe('INSERT')
+  })
+
+  test('classify: POST _update is UPDATE', () => {
+    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/users/_update/1', body: '{}' })
+    expect(result.type).toBe('UPDATE')
+  })
+
+  test('classify: DELETE _doc is DELETE', () => {
+    const result = classifyElasticsearchRequest({ method: 'DELETE', apiPath: '/users/_doc/1' })
+    expect(result.type).toBe('DELETE')
+    expect(result.isDangerous).toBe(true)
+  })
+
+  test('classify: _bulk with mixed operations is highest tier', () => {
+    const bulkBody = [
+      '{ "index": { "_index": "test", "_id": "1" } }',
+      '{ "field": "value" }',
+      '{ "delete": { "_index": "test", "_id": "2" } }',
+      ''
+    ].join('\n')
+    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/_bulk', body: bulkBody })
+    expect(result.type).toBe('DELETE') // delete is higher than index
+  })
+
+  test('enforce: query-only blocks bulk delete', () => {
+    const bulkBody = '{ "delete": { "_index": "test", "_id": "2" } }\n'
+    expect(() => enforceElasticsearchPermission({ method: 'POST', apiPath: '/_bulk', body: bulkBody }, 'query-only'))
+      .toThrow(PermissionError)
+  })
+
+  test('enforce: admin allows everything', () => {
+    expect(() => enforceElasticsearchPermission({ method: 'POST', apiPath: '/_all/_settings', body: '{}' }, 'admin'))
+      .not.toThrow()
+  })
+})

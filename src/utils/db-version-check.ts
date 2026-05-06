@@ -7,7 +7,7 @@ import { t_vars } from '@/i18n/message-loader'
 import { colors } from '@/utils/colors'
 
 export interface DbVersionRequirement {
-  system: 'postgresql' | 'mysql' | 'mariadb'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'elasticsearch'
   minVersion: string
 }
 
@@ -15,6 +15,7 @@ export const MIN_SUPPORTED_VERSIONS: Record<string, string> = {
   postgresql: '12.0',
   mysql: '8.0',
   mariadb: '10.5',
+  elasticsearch: '7.10',
 }
 
 /**
@@ -70,7 +71,7 @@ export function compareVersions(a: string, b: string): number {
 
 export interface VersionCheckResult {
   serverVersion: string
-  system: 'postgresql' | 'mysql' | 'mariadb'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'elasticsearch'
   supported: boolean
   minVersion: string
 }
@@ -80,7 +81,7 @@ export interface VersionCheckResult {
  */
 export function checkDbVersion(
   rawVersion: string,
-  declaredSystem: 'postgresql' | 'mysql' | 'mariadb'
+  declaredSystem: 'postgresql' | 'mysql' | 'mariadb' | 'elasticsearch'
 ): VersionCheckResult {
   const isMariaDB = isMariaDBVersion(rawVersion)
   const system = isMariaDB ? 'mariadb' : declaredSystem
@@ -88,7 +89,12 @@ export function checkDbVersion(
   const minVersion = MIN_SUPPORTED_VERSIONS[system]
   const supported = compareVersions(serverVersion, minVersion ?? '0') >= 0
 
-  return { serverVersion, system, supported, minVersion: minVersion ?? '0' }
+  return {
+    serverVersion,
+    system: system as 'postgresql' | 'mysql' | 'mariadb' | 'elasticsearch',
+    supported,
+    minVersion: minVersion ?? '0',
+  }
 }
 
 /**

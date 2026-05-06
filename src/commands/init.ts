@@ -285,11 +285,14 @@ export const initCommand = new Command('init')
   .option('--user <user>', 'Database user')
   .option('--password <password>', 'Database password')
   .option('--name <name>', 'Database name')
-  .option('--system <system>', 'Database system (postgresql, mysql, mariadb, mongodb)')
+  .option('--system <system>', 'Database system (postgresql, mysql, mariadb, mongodb, redis, elasticsearch)')
+  .option('--cloud-id <id>', 'Elasticsearch Cloud ID')
+  .option('--api-key <key>', 'Elasticsearch API Key')
   .option(
     '--uri <uri>',
-    'MongoDB connection URI (mongodb://user:pass@host:port/db?authSource=admin)'
+    'MongoDB connection URI (mongodb://user:pass@host:27017/db?authSource=admin)'
   )
+
   .option(
     '--auth-source <authSource>',
     'MongoDB auth database (default: admin when user/password are set)'
@@ -395,15 +398,21 @@ async function initCommandHandler(
       'mysql',
       'mariadb',
       'mongodb',
+      'redis',
+      'elasticsearch',
     ])
   }
 
   // Validate system value
-  if (!['postgresql', 'mysql', 'mariadb', 'mongodb'].includes(system)) {
+  if (
+    !['postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch'].includes(system)
+  ) {
     throw new Error(t_vars('errors.invalid_system', { system }))
   }
 
-  const defaults = getDefaultsForSystem(system as 'postgresql' | 'mysql' | 'mariadb' | 'mongodb')
+  const defaults = getDefaultsForSystem(
+    system as 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+  )
 
   // 4a. MongoDB: handle separately and return early
   if (system === 'mongodb') {

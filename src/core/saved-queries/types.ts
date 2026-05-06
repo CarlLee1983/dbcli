@@ -5,7 +5,7 @@
 
 export type ParamType = 'int' | 'string' | 'float' | 'bool' | 'date' | 'datetime'
 
-export type EngineTag = 'postgres' | 'mysql'
+export type EngineTag = 'postgres' | 'mysql' | 'elasticsearch' | 'redis'
 
 export interface ParamSpec {
   name: string

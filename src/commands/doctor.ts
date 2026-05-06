@@ -508,6 +508,71 @@ export async function collectMongoDoctorResults(config: {
   return results
 }
 
+export async function collectElasticsearchDoctorResults(config: {
+  connection: ConnectionConfig
+  metadata?: { schemaLastUpdated?: string }
+  blacklistedColumns?: Map<string, Set<string>>
+}): Promise<DoctorResult[]> {
+  const results: DoctorResult[] = []
+  const esAdapter = AdapterFactory.createElasticsearchAdapter(
+    config.connection as ConnectionOptions
+  )
+
+  try {
+    await esAdapter.connect()
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'pass',
+      message: `Connected to Elasticsearch ${config.connection.host}:${config.connection.port}`,
+    })
+
+    try {
+      const version = await esAdapter.getServerVersion()
+      const versionResult = checkDbVersion(version, 'elasticsearch')
+      results.push(runDoctorChecks.checkDatabaseVersion(versionResult))
+    } catch {
+      // Ignore
+    }
+
+    const tables = await esAdapter.listTables()
+    const tableColumns = new Map<string, string[]>()
+    for (const t of tables) {
+      try {
+        const schema = await esAdapter.getTableSchema(t.name)
+        tableColumns.set(
+          t.name,
+          schema.columns.map((c) => c.name)
+        )
+      } catch {
+        // Ignore
+      }
+    }
+
+    if (config.blacklistedColumns) {
+      results.push(
+        runDoctorChecks.checkBlacklistCompleteness(tableColumns, config.blacklistedColumns)
+      )
+    }
+
+    results.push(runDoctorChecks.checkLargeTables(tables))
+
+    const lastUpdated = config.metadata?.schemaLastUpdated ?? null
+    results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
+  } catch (error) {
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'error',
+      message: `Connection failed: ${(error as Error).message}`,
+    })
+  } finally {
+    await esAdapter.disconnect()
+  }
+
+  return results
+}
+
 export const doctorCommand = new Command('doctor')
   .description('Run diagnostic checks on dbcli configuration, environment, and connection')
   .option('--format <type>', 'Output format: text, json', 'text')
@@ -561,6 +626,13 @@ export const doctorCommand = new Command('doctor')
           if (config.connection.system === 'mongodb') {
             results.push(
               ...(await collectMongoDoctorResults({
+                ...config,
+                blacklistedColumns,
+              }))
+            )
+          } else if (config.connection.system === 'elasticsearch') {
+            results.push(
+              ...(await collectElasticsearchDoctorResults({
                 ...config,
                 blacklistedColumns,
               }))

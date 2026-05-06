@@ -189,7 +189,7 @@ dbcli init [OPTIONS]
 ```
 
 **選項 (基本)：**
-- `--system <type>` — 資料庫系統：`postgresql`、`mysql`、`mariadb`、`mongodb`
+- `--system <type>` — 資料庫系統：`postgresql`、`mysql`、`mariadb`、`mongodb`、`redis`、`elasticsearch`
 - `--host <host>` — 主機
 - `--port <port>` — 埠號
 - `--user <user>` — 使用者

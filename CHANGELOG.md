@@ -5,6 +5,24 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-05-06
+
+### Added
+
+- **Redis 與 Elasticsearch 支援**：`init`、`list`、`schema`、`query`、`status`、`use`、`doctor`、`upgrade`、`completion` 在兩個系統皆真實可用。
+  - Redis：`list` 透過 SCAN 取 keys；`schema <key>` 顯示 type/TTL/size/sample；`query` 執行白名單 Redis 指令並走原本權限與黑名單檢查。
+  - Elasticsearch：`list` 顯示 indices 與文件數；`schema [index]` 攤平 mapping、揭露 `.fields` multi-fields；`query` 接受 DSL JSON 或 Lucene 字串。
+- 文件：`assets/SKILL.md` 與 `assets/reference.md` 同步加入 Redis / Elasticsearch 章節。
+
+### Fixed
+
+- **`insert` / `update` / `delete` / `export` / `diff` 對 Redis / Elasticsearch 的早期錯誤訊息**：先前會落入 SQL DataExecutor 出現「Column ... not found in table」之類誤導訊息，現在直接回傳明確的「不支援」JSON，並指引正確替代路徑（Redis 改用 `query`、Elasticsearch 改用外部工具或 `query --index`）。
+- **TypeScript 嚴格度**：`bun run typecheck` 從 43 個錯誤降為 0。
+  - `ConnectionConfig` union 加入 `ElasticsearchConnectionConfig`。
+  - `ResolvedConnection.connection.system`、`ReplContext.system` 涵蓋 `'elasticsearch'`。
+  - `ExecutionResult` 補上 optional `rowCount` / `columnNames`。
+  - `getDefaultsForSystem` 涵蓋 redis (6379) / elasticsearch (9200) 預設值。
+
 ## [1.7.0] - 2026-05-04
 
 ### Added

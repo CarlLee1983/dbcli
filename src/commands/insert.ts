@@ -103,6 +103,32 @@ export async function insertCommand(
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
+    if (config.connection.system === 'redis') {
+      const output = {
+        status: 'error',
+        operation: 'insert',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Redis 不支援 insert 指令；請改用 query "<COMMAND>"（例如 SET / HSET），寫入會通過相同的權限與黑名單檢查',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
+    if (config.connection.system === 'elasticsearch') {
+      const output = {
+        status: 'error',
+        operation: 'insert',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Elasticsearch 不支援 insert 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件寫入',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
     if (config.connection.system === 'mongodb') {
       enforcePermission('INSERT INTO dummy', config.permission)
 

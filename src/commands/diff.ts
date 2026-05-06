@@ -182,6 +182,18 @@ async function diffAction(options: {
       process.exit(1)
     }
 
+    if (config.connection?.system === 'redis') {
+      console.error('Redis 不支援 diff 指令（key/value 並無固定 schema 概念）')
+      process.exit(1)
+    }
+
+    if (config.connection?.system === 'elasticsearch') {
+      console.error(
+        'Elasticsearch 不支援 diff 指令；如需追蹤 mapping 變化，請改用 schema 並自行版本化 mapping JSON'
+      )
+      process.exit(1)
+    }
+
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 

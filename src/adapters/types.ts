@@ -130,6 +130,10 @@ export interface ExecutionResult<T> {
   affectedRows: number
   /** Last inserted ID if applicable (for INSERT operations) */
   lastInsertId?: number | string
+  /** Convenience row count — used by formatters; mirrors rows.length on read paths */
+  rowCount?: number
+  /** Column ordering for the rows, used by formatters that render tabular output */
+  columnNames?: string[]
 }
 
 /**

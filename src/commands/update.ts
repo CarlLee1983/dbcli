@@ -129,6 +129,32 @@ export async function updateCommand(
       )
     }
 
+    if (config.connection?.system === 'redis') {
+      const output = {
+        status: 'error',
+        operation: 'update',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Redis 不支援 update 指令；請改用 query "<COMMAND>"（例如 HSET / EXPIRE / SET），寫入會通過相同的權限與黑名單檢查',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
+    if (config.connection?.system === 'elasticsearch') {
+      const output = {
+        status: 'error',
+        operation: 'update',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Elasticsearch 不支援 update 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件更新',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
     if (config.connection?.system === 'mongodb') {
       enforcePermission('UPDATE dummy', config.permission)
 

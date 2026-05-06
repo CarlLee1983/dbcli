@@ -39,6 +39,11 @@ export async function runDDL(
     process.exit(1)
   }
 
+  if (config.connection?.system === 'elasticsearch') {
+    console.error('此命令目前不支援 Elasticsearch；如需建立索引或調整 mapping，請改用外部工具')
+    process.exit(1)
+  }
+
   const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
 
   // Skip connection for dry-run if we don't need to refresh schema

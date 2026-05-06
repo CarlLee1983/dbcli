@@ -57,6 +57,18 @@ export async function exportCommand(
       throw new Error('Run "dbcli init" first')
     }
 
+    if (config.connection.system === 'redis') {
+      throw new Error(
+        'Redis 不支援 export 指令；請改用 query "<COMMAND>" 並自行重新導向輸出（例如 dbcli query "GET <key>" --format json > out.json）'
+      )
+    }
+
+    if (config.connection.system === 'elasticsearch') {
+      throw new Error(
+        'Elasticsearch 不支援 export 指令；目前請改用 query --index <index> 並重新導向輸出，或使用外部工具（如 elasticdump）'
+      )
+    }
+
     if (config.connection.system === 'mongodb') {
       await mongoExportBranch(sql, options, config as DbcliConfig)
       return

@@ -285,7 +285,10 @@ export const initCommand = new Command('init')
   .option('--user <user>', 'Database user')
   .option('--password <password>', 'Database password')
   .option('--name <name>', 'Database name')
-  .option('--system <system>', 'Database system (postgresql, mysql, mariadb, mongodb, redis, elasticsearch)')
+  .option(
+    '--system <system>',
+    'Database system (postgresql, mysql, mariadb, mongodb, redis, elasticsearch)'
+  )
   .option('--cloud-id <id>', 'Elasticsearch Cloud ID')
   .option('--api-key <key>', 'Elasticsearch API Key')
   .option(
@@ -404,9 +407,7 @@ async function initCommandHandler(
   }
 
   // Validate system value
-  if (
-    !['postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch'].includes(system)
-  ) {
+  if (!['postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch'].includes(system)) {
     throw new Error(t_vars('errors.invalid_system', { system }))
   }
 
@@ -613,7 +614,8 @@ async function initCommandHandler(
   }
 
   const newConfig = configModule.merge(existingConfig, {
-    connection: configForWrite,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    connection: configForWrite as any,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
 

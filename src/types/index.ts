@@ -58,9 +58,31 @@ export interface RedisConnectionConfig {
 }
 
 /**
- * Connection configuration (stored in .dbcli file) — union of SQL, MongoDB, Redis
+ * Elasticsearch Connection configuration (stored in .dbcli file)
  */
-export type ConnectionConfig = SqlConnectionConfig | MongoDBConnectionConfig | RedisConnectionConfig
+export interface ElasticsearchConnectionConfig {
+  system: 'elasticsearch'
+  protocol?: 'http' | 'https'
+  host: string | { $env: string }
+  port: number | { $env: string }
+  user: string | { $env: string }
+  password: string | { $env: string }
+  database: string | { $env: string }
+  nodes?: string[]
+  cloudId?: string | { $env: string }
+  apiKey?: string | { $env: string }
+  caPath?: string
+  rejectUnauthorized?: boolean
+}
+
+/**
+ * Connection configuration (stored in .dbcli file) — union of SQL, MongoDB, Redis, Elasticsearch
+ */
+export type ConnectionConfig =
+  | SqlConnectionConfig
+  | MongoDBConnectionConfig
+  | RedisConnectionConfig
+  | ElasticsearchConnectionConfig
 
 /**
  * Permission level (coarse-grained access control)

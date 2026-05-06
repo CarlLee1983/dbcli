@@ -19,7 +19,7 @@ export interface ReplState {
 export interface ReplContext {
   readonly configPath: string
   readonly permission: import('../../types').Permission
-  readonly system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
+  readonly system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
   readonly tableNames: readonly string[]
   readonly columnsByTable: Readonly<Record<string, readonly string[]>>
 }

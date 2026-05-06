@@ -29,18 +29,24 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
 
 /**
  * Resolved connection result — what commands receive
- * Supports SQL, MongoDB, and Redis connections
+ * Supports SQL, MongoDB, Redis, and Elasticsearch connections
  */
 export interface ResolvedConnection {
   name: string
   connection: {
-    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
+    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
     host: string | { $env: string }
     port: number | { $env: string }
     user: string | { $env: string }
     password: string | { $env: string }
     database: string | { $env: string }
     uri?: string | { $env: string }
+    protocol?: 'http' | 'https'
+    nodes?: string[]
+    cloudId?: string | { $env: string }
+    apiKey?: string | { $env: string }
+    caPath?: string
+    rejectUnauthorized?: boolean
   }
   permission: 'query-only' | 'read-write' | 'data-admin' | 'admin'
   envFile?: string

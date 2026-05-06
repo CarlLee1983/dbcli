@@ -22,11 +22,11 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       await this.request('GET', '/')
     } catch (error) {
       if (error instanceof ConnectionError) throw error
-      throw new ConnectionError('UNKNOWN', `Could not connect to Elasticsearch: ${(error as Error).message}`, [
-        'Check if Elasticsearch is running',
-        'Verify host and port',
-        'Check network connectivity',
-      ])
+      throw new ConnectionError(
+        'UNKNOWN',
+        `Could not connect to Elasticsearch: ${(error as Error).message}`,
+        ['Check if Elasticsearch is running', 'Verify host and port', 'Check network connectivity']
+      )
     }
   }
 
@@ -110,7 +110,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     }))
   }
 
-  async getTableSchema(tableName: string, _options?: { sampleSize?: number }): Promise<TableSchema> {
+  async getTableSchema(
+    tableName: string,
+    _options?: { sampleSize?: number }
+  ): Promise<TableSchema> {
     const mapping = await this.request<any>('GET', `/${tableName}/_mapping`)
     const indexMapping = mapping[tableName] || Object.values(mapping)[0]
 
@@ -168,7 +171,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     return info.version?.number ?? 'unknown'
   }
 
-  async insert(collection: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
+  async insert(
+    collection: string,
+    data: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>> {
     const id = (data._id || data.id) as string
     const body = { ...data }
     delete body._id
@@ -201,7 +207,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     }
   }
 
-  async delete(collection: string, filter: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
+  async delete(
+    collection: string,
+    filter: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>> {
     const id = (filter._id || filter.id) as string
     if (!id) {
       throw new Error('Elasticsearch delete requires _id or id in filter')
@@ -223,9 +232,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       return this.decodeCloudId(this.options.cloudId)
     }
 
-    if (this.options.nodes && this.options.nodes.length > 0) {
+    const nodes = this.options.nodes
+    if (nodes && nodes.length > 0) {
       // Use the first node for now; round-robin can be added later if needed
-      return this.options.nodes[0].replace(/\/$/, '')
+      return (nodes[0] ?? '').replace(/\/$/, '')
     }
 
     const protocol = this.options.protocol ?? 'https'
@@ -238,14 +248,14 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     try {
       const parts = cloudId.split(':')
       if (parts.length !== 2) throw new Error('Invalid format')
-      const base64 = parts[1]
+      const base64 = parts[1] ?? ''
       const decoded = atob(base64)
-      const [hostAndPort, ...rest] = decoded.split('$')
+      const [hostAndPort = '', ...rest] = decoded.split('$')
       // Format: host:port$elasticUuid$kibanaUuid
       // Or: host$elasticUuid$kibanaUuid (implies port 443)
       if (hostAndPort.includes('.')) {
-         const [host, port] = hostAndPort.split(':')
-         return `https://${rest[0]}.${host}:${port || 443}`
+        const [host = '', port] = hostAndPort.split(':')
+        return `https://${rest[0]}.${host}:${port || 443}`
       }
       return `https://${rest[0]}.${hostAndPort}:443`
     } catch (error) {
@@ -310,7 +320,7 @@ export class ElasticsearchAdapter implements QueryableAdapter {
         ])
       }
       if (error instanceof ConnectionError) throw error
-      
+
       // Map common fetch errors
       const msg = error.message.toLowerCase()
       if (msg.includes('connection refused') || msg.includes('econnrefused')) {
@@ -335,7 +345,9 @@ export class ElasticsearchAdapter implements QueryableAdapter {
   private async handleErrorResponse(response: Response): Promise<never> {
     let message = ''
     try {
-      const errorBody = await response.json()
+      const errorBody = (await response.json()) as
+        | { error?: { reason?: string }; message?: string }
+        | undefined
       message = errorBody?.error?.reason || errorBody?.message || response.statusText
     } catch {
       try {

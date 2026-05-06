@@ -13,7 +13,7 @@ import type { ConnectionConfig } from '@/types'
  * // returns { port: 5432, host: 'localhost' }
  */
 export function getDefaultsForSystem(
-  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
 ): Partial<ConnectionConfig> {
   switch (system) {
     case 'postgresql':
@@ -30,6 +30,16 @@ export function getDefaultsForSystem(
     case 'mongodb':
       return {
         port: 27017,
+        host: 'localhost',
+      }
+    case 'redis':
+      return {
+        port: 6379,
+        host: 'localhost',
+      }
+    case 'elasticsearch':
+      return {
+        port: 9200,
         host: 'localhost',
       }
     default:

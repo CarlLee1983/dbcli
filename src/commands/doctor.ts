@@ -535,11 +535,12 @@ export async function collectElasticsearchDoctorResults(config: {
       // Ignore
     }
 
-    const tables = await esAdapter.listTables()
+    const tables = (await esAdapter.listTables?.()) ?? []
     const tableColumns = new Map<string, string[]>()
     for (const t of tables) {
       try {
-        const schema = await esAdapter.getTableSchema(t.name)
+        const schema = await esAdapter.getTableSchema?.(t.name)
+        if (!schema) continue
         tableColumns.set(
           t.name,
           schema.columns.map((c) => c.name)

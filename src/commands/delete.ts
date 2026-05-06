@@ -119,6 +119,32 @@ export async function deleteCommand(
       )
     }
 
+    if (config.connection?.system === 'redis') {
+      const output = {
+        status: 'error',
+        operation: 'delete',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Redis 不支援 delete 指令；請改用 query "DEL <key>" 或 query "HDEL <key> <field>"，寫入會通過相同的權限與黑名單檢查',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
+    if (config.connection?.system === 'elasticsearch') {
+      const output = {
+        status: 'error',
+        operation: 'delete',
+        rows_affected: 0,
+        timestamp: new Date().toISOString(),
+        error:
+          'Elasticsearch 不支援 delete 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件刪除',
+      }
+      console.log(JSON.stringify(output, null, 2))
+      process.exit(1)
+    }
+
     if (config.connection?.system === 'mongodb') {
       // Apply blacklist before opening any connection
       const blacklistManager = new BlacklistManager(config)

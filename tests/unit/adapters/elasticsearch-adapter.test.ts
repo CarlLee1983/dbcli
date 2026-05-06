@@ -20,13 +20,16 @@ describe('ElasticsearchAdapter', () => {
   test('resolves cloudId to https URL', () => {
     const adapter = new ElasticsearchAdapter({
       system: 'elasticsearch',
-      cloudId: 'deployment:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQ0YTY1ZDE3ZTIxYTM0YmRjOGZlYmY2MTU5Y2FmNGM5ZCQyYmY4ZTY3YmRjYmE0YmFlYmFmYmJlYmFmYmJlYmFmYg==',
+      cloudId:
+        'deployment:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQ0YTY1ZDE3ZTIxYTM0YmRjOGZlYmY2MTU5Y2FmNGM5ZCQyYmY4ZTY3YmRjYmE0YmFlYmFmYmJlYmFmYmJlYmFmYg==',
       user: '',
       password: '',
       database: '',
     } as any)
     // @ts-ignore
-    expect(adapter.getBaseUrl()).toBe('https://4a65d17e21a34bdc8febf6159caf4c9d.us-east-1.aws.found.io:443')
+    expect(adapter.getBaseUrl()).toBe(
+      'https://4a65d17e21a34bdc8febf6159caf4c9d.us-east-1.aws.found.io:443'
+    )
   })
 
   test('builds API key auth header', async () => {
@@ -67,10 +70,12 @@ describe('ElasticsearchAdapter', () => {
       password: '',
       database: '',
     })
-    
+
     // Mock fetch
-    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(new Response('Unauthorized', { status: 401 }))
-    
+    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Unauthorized', { status: 401 })
+    )
+
     try {
       await adapter.connect()
       expect.unreachable('Should have thrown')
@@ -95,66 +100,84 @@ describe('ElasticsearchAdapter list/schema', () => {
   })
 
   test('listCollections returns indices and doc counts', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     const mockIndices = {
-      'users': { settings: { index: { creation_date: '...' } } },
+      users: { settings: { index: { creation_date: '...' } } },
       '.security': { settings: { index: { creation_date: '...' } } },
     }
-    
+
     const mockStats = {
       indices: {
-        'users': { total: { docs: { count: 100 } } },
+        users: { total: { docs: { count: 100 } } },
         '.security': { total: { docs: { count: 5 } } },
-      }
+      },
     }
-    
+
     // @ts-ignore
-    globalThis.fetch = Response.json ? async (url: string) => {
-        if (url.includes('_settings')) return Response.json(mockIndices)
-        if (url.includes('_stats')) return Response.json(mockStats)
-        return Response.json({})
-    } : async (url: string) => {
-        if (url.includes('_settings')) return new Response(JSON.stringify(mockIndices))
-        if (url.includes('_stats')) return new Response(JSON.stringify(mockStats))
-        return new Response('{}')
-    }
-      
+    globalThis.fetch = Response.json
+      ? async (url: string) => {
+          if (url.includes('_settings')) return Response.json(mockIndices)
+          if (url.includes('_stats')) return Response.json(mockStats)
+          return Response.json({})
+        }
+      : async (url: string) => {
+          if (url.includes('_settings')) return new Response(JSON.stringify(mockIndices))
+          if (url.includes('_stats')) return new Response(JSON.stringify(mockStats))
+          return new Response('{}')
+        }
+
     const collections = await adapter.listCollections()
     expect(collections).toHaveLength(1)
-    expect(collections[0].name).toBe('users')
-    expect(collections[0].documentCount).toBe(100)
-    
+    expect(collections[0]!.name).toBe('users')
+    expect(collections[0]!.documentCount).toBe(100)
+
     const allCollections = await adapter.listCollections({ includeSystem: true })
     expect(allCollections).toHaveLength(2)
   })
 
   test('getTableSchema flattens mappings', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     const mockMapping = {
-      'users': {
+      users: {
         mappings: {
           properties: {
-            'id': { type: 'keyword' },
-            'name': { type: 'text', fields: { 'keyword': { type: 'keyword' } } },
-            'profile': {
+            id: { type: 'keyword' },
+            name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
+            profile: {
               properties: {
-                'email': { type: 'keyword' },
-                'age': { type: 'integer' }
-              }
-            }
-          }
-        }
-      }
+                email: { type: 'keyword' },
+                age: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
     }
-    
+
     // @ts-ignore
     globalThis.fetch = async () => new Response(JSON.stringify(mockMapping))
-    
+
     const schema = await adapter.getTableSchema('users')
     expect(schema.name).toBe('users')
-    const columnNames = schema.columns.map(c => c.name)
+    const columnNames = schema.columns.map((c) => c.name)
     expect(columnNames).toContain('id')
     expect(columnNames).toContain('name')
     expect(columnNames).toContain('name.keyword')
@@ -175,24 +198,30 @@ describe('ElasticsearchAdapter execute', () => {
   })
 
   test('execute handles URI query', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     const mockResponse = {
       hits: {
         total: { value: 1, relation: 'eq' },
-        hits: [
-          { _id: '1', _source: { name: 'Alice', profile: { email: 'a@example.com' } } }
-        ]
-      }
+        hits: [{ _id: '1', _source: { name: 'Alice', profile: { email: 'a@example.com' } } }],
+      },
     }
-    
+
     let capturedUrl = ''
     // @ts-ignore
     globalThis.fetch = async (url: string) => {
       capturedUrl = url
       return new Response(JSON.stringify(mockResponse))
     }
-    
+
     const result = await adapter.execute('name:Alice', ['users'], { limit: 10 })
     expect(capturedUrl).toContain('/users/_search?q=name%3AAlice&size=10')
     expect(result.rows).toHaveLength(1)
@@ -200,8 +229,16 @@ describe('ElasticsearchAdapter execute', () => {
   })
 
   test('execute handles DSL query', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     const dsl = '{"query":{"match_all":{}}}'
     let capturedBody = ''
     // @ts-ignore
@@ -209,7 +246,7 @@ describe('ElasticsearchAdapter execute', () => {
       capturedBody = init.body
       return new Response(JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }))
     }
-    
+
     await adapter.execute(dsl, ['users'])
     const parsed = JSON.parse(capturedBody)
     expect(parsed.query).toEqual({ match_all: {} })
@@ -229,8 +266,16 @@ describe('ElasticsearchAdapter write operations', () => {
   })
 
   test('insert sends PUT to _doc', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     let capturedMethod = ''
     let capturedUrl = ''
     // @ts-ignore
@@ -239,15 +284,23 @@ describe('ElasticsearchAdapter write operations', () => {
       capturedMethod = init.method
       return new Response(JSON.stringify({ _id: '1', result: 'created' }))
     }
-    
+
     await adapter.insert('users', { _id: '1', name: 'Alice' })
     expect(capturedMethod).toBe('PUT')
     expect(capturedUrl).toContain('/users/_doc/1')
   })
 
   test('update sends POST to _update', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     let capturedMethod = ''
     let capturedUrl = ''
     // @ts-ignore
@@ -256,15 +309,23 @@ describe('ElasticsearchAdapter write operations', () => {
       capturedMethod = init.method
       return new Response(JSON.stringify({ _id: '1', result: 'updated' }))
     }
-    
+
     await adapter.update('users', { _id: '1' }, { name: 'Bob' })
     expect(capturedMethod).toBe('POST')
     expect(capturedUrl).toContain('/users/_update/1')
   })
 
   test('delete sends DELETE to _doc', async () => {
-    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
-    
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+
     let capturedMethod = ''
     let capturedUrl = ''
     // @ts-ignore
@@ -273,7 +334,7 @@ describe('ElasticsearchAdapter write operations', () => {
       capturedMethod = init.method
       return new Response(JSON.stringify({ _id: '1', result: 'deleted' }))
     }
-    
+
     await adapter.delete('users', { _id: '1' })
     expect(capturedMethod).toBe('DELETE')
     expect(capturedUrl).toContain('/users/_doc/1')

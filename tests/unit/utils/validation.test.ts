@@ -142,7 +142,7 @@ describe('validation', () => {
         caPath: './certs/ca.crt',
       })
 
-      expect(result.system).toBe('elasticsearch')
+      if (result.system !== 'elasticsearch') throw new Error('expected elasticsearch')
       expect(result.protocol).toBe('https')
       expect(result.host).toBe('es.internal')
       expect(result.port).toBe(9200)
@@ -159,7 +159,7 @@ describe('validation', () => {
         apiKey: '${ES_API_KEY}',
       })
 
-      expect(result.system).toBe('elasticsearch')
+      if (result.system !== 'elasticsearch') throw new Error('expected elasticsearch')
       expect(result.cloudId).toBe('${ES_CLOUD_ID}')
       expect(result.apiKey).toBe('${ES_API_KEY}')
       expect(result.protocol).toBe('https')
@@ -174,7 +174,7 @@ describe('validation', () => {
         password: '${ES_PASSWORD}',
       })
 
-      expect(result.system).toBe('elasticsearch')
+      if (result.system !== 'elasticsearch') throw new Error('expected elasticsearch')
       expect(result.nodes).toEqual(['https://es1:9200', 'https://es2:9200'])
       expect(result.user).toBe('${ES_USER}')
       expect(result.password).toBe('${ES_PASSWORD}')
@@ -406,8 +406,8 @@ describe('validation', () => {
           },
         })
 
-        expect(result.connections.search.system).toBe('elasticsearch')
-        expect(result.connections.search.permission).toBe('query-only')
+        expect(result.connections.search!.system).toBe('elasticsearch')
+        expect(result.connections.search!.permission).toBe('query-only')
       })
     })
   })

@@ -7,9 +7,15 @@ import { schemaCommand } from '@/commands/schema'
 class MockElasticsearchSchemaAdapter implements QueryableAdapter {
   async connect() {}
   async disconnect() {}
-  async execute<T>() { return { rows: [] as T[], affectedRows: 0 } }
-  async listCollections() { return [] }
-  async listTables() { return [{ name: 'users', columns: [], tableType: 'table' }] }
+  async execute<T>() {
+    return { rows: [] as T[], affectedRows: 0 }
+  }
+  async listCollections() {
+    return []
+  }
+  async listTables(): Promise<TableSchema[]> {
+    return [{ name: 'users', columns: [], tableType: 'table' as const }]
+  }
   async getTableSchema(name: string): Promise<TableSchema> {
     return {
       name,
@@ -20,15 +26,33 @@ class MockElasticsearchSchemaAdapter implements QueryableAdapter {
       tableType: 'table',
     }
   }
-  async testConnection() { return true }
-  async getServerVersion() { return '8.13.0' }
-  async insert() { return { rows: [], affectedRows: 1 } }
-  async update() { return { rows: [], affectedRows: 1 } }
-  async delete() { return { rows: [], affectedRows: 1 } }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return '8.13.0'
+  }
+  async insert() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async update() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async delete() {
+    return { rows: [], affectedRows: 1 }
+  }
 }
 
 const esConfig = {
-  connection: { system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' },
+  connection: {
+    system: 'elasticsearch',
+    protocol: 'http',
+    host: 'localhost',
+    port: 9200,
+    user: '',
+    password: '',
+    database: '',
+  },
   permission: 'query-only',
   schema: {},
   metadata: { version: '1.0' },

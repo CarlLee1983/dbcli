@@ -226,3 +226,52 @@ describe('parseRedisCommand', () => {
     expect(parseRedisCommand('   ')).toEqual([])
   })
 })
+
+describe('RedisAdapter — discovery & schema', () => {
+  test('listCollections() walks SCAN cursor until 0', async () => {
+    const { adapter, client } = makeAdapter()
+    client.scanResponses = [
+      ['1', ['user:1', 'user:2']],
+      ['2', ['session:abc']],
+      ['0', ['cache:x']],
+    ]
+    await adapter.connect()
+    const result = await adapter.listCollections()
+    const names = result.map((r) => r.name).sort()
+    expect(names).toEqual(['cache:x', 'session:abc', 'user:1', 'user:2'])
+  })
+
+  test('getTableSchema() reports type/ttl/size for a string key', async () => {
+    const { adapter, client } = makeAdapter()
+    client.types.set('greeting', 'string')
+    client.storage.set('greeting', 'hello')
+    client.ttls.set('greeting', 60)
+    await adapter.connect()
+    const schema = await adapter.getTableSchema('greeting')
+    expect(schema.name).toBe('greeting')
+    expect(schema.estimatedRowCount).toBe(5)
+    const cols = Object.fromEntries(schema.columns.map((c) => [c.name, c.type]))
+    expect(cols.type).toBe('string')
+    expect(cols.ttl).toBe('60s')
+    expect(cols.size).toBe('5')
+  })
+
+  test('getTableSchema() reports a hash sample for hash keys', async () => {
+    const { adapter, client } = makeAdapter()
+    client.types.set('user:1', 'hash')
+    client.storage.set('user:1', { name: 'Alice', email: 'alice@example.com' })
+    await adapter.connect()
+    const schema = await adapter.getTableSchema('user:1')
+    expect(schema.estimatedRowCount).toBe(2)
+    const cols = Object.fromEntries(schema.columns.map((c) => [c.name, c.type]))
+    expect(cols.sample).toContain('name')
+  })
+
+  test('getTableSchema() returns empty columns when key is missing', async () => {
+    const { adapter } = makeAdapter()
+    await adapter.connect()
+    const schema = await adapter.getTableSchema('does-not-exist')
+    expect(schema.columns).toEqual([])
+  })
+})
+

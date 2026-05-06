@@ -5,6 +5,22 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-05-06
+
+### Added
+
+- **Agent Task Packs（plan-only 第一版）**：`dbcli skill tasks list/show/plan` 讓 AI agent 可探索團隊定義的資料庫任務範本並產生安全可審查的執行計畫。
+  - 三層儲存：`assets/tasks/`（內建）< `.dbcli-shared/tasks/`（團隊共享）< `.dbcli/tasks/`（個人覆蓋）。
+  - Task 檔為 `.md`：YAML frontmatter（name/description/tags/engines/params/safety/steps）＋ markdown agent notes。
+  - 嚴格 schema：`safety.mode` 僅接受 `plan-only`、`step.type` 僅接受 `command`，未知欄位直接 fail 解析而非靜默忽略。
+  - `plan` 輸出包含原始 `command`、`resolvedCommand`、`argv`（shell-aware 切分），方便 agent 直接消費。
+  - 內建第一版 `diagnose-slow-query` 任務作為範例。
+- 文件：`assets/SKILL.md` 與 `assets/reference.md` 同步加入 Agent Task Packs 章節；`docs/feature-matrix.md` 補充 `skill tasks` 子命令說明。
+
+### Changed
+
+- `src/core/saved-queries/yaml-mini.ts`：擴充支援 YAML block list 語法（`- scalar`、`- key: value` 起始的 sub-map），以承載 Agent Task Packs 的 frontmatter；既有 saved-queries 解析行為不變、66 個既有測試全綠。
+
 ## [1.8.0] - 2026-05-06
 
 ### Added

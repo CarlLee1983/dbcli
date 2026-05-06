@@ -114,7 +114,45 @@ dbcli query '{"status":"active"}' --collection users --use atlas
 
 For MongoDB, `list` and `query` operate on the database configured for the connection, and `query` requires `--collection <name>`.
 
-For a command-by-command support matrix across PostgreSQL, MySQL, MariaDB, and MongoDB, see [docs/feature-matrix.md](./docs/feature-matrix.md).
+For a command-by-command support matrix across PostgreSQL, MySQL, MariaDB, MongoDB, Redis, and Elasticsearch, see [docs/feature-matrix.md](./docs/feature-matrix.md).
+
+### Redis & Elasticsearch Support
+
+dbcli extends its unified interface to Redis and Elasticsearch, providing consistent discovery and querying.
+
+#### Redis
+
+```bash
+# Connect to Redis
+dbcli init --system redis --host localhost --port 6379
+
+# List keys (uses SCAN)
+dbcli list
+
+# Inspect a key (type, TTL, size, sample)
+dbcli schema my-key
+
+# Run Redis commands (whitelisted)
+dbcli query "GET my-key"
+dbcli query "HGETALL user:1"
+```
+
+#### Elasticsearch
+
+```bash
+# Connect to Elasticsearch
+dbcli init --system elasticsearch --host localhost --port 9200
+
+# List indices and document counts
+dbcli list
+
+# Show mapping/structure of an index
+dbcli schema my-index
+
+# Query using Lucene or DSL JSON
+dbcli query "status:active" --index my-index
+dbcli query '{"query": {"match_all": {}}}' --index my-index
+```
 
 ---
 

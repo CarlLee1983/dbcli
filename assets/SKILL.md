@@ -11,13 +11,32 @@ Database CLI for AI agents with permission-based access control.
 
 1. `dbcli status` — permission level and system summary (no credentials).
 2. `dbcli blacklist list` — sensitive data boundaries.
-3. `dbcli schema <table> --format json` — real column names. **Never guess.**
+3. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 4. Run `query` / `insert` / `update` / `delete` / `export` within permission.
-5. All writes: `--dry-run` → run → `query` read-back to confirm.
+5. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
 
 Prefer `--format json` for agent-friendly output.
 
-Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB walkthroughs are in [reference.md](reference.md) (installed next to this file).
+## Agent Task Packs
+
+When the user asks for a database workflow (e.g. "diagnose this slow query", "audit
+permissions", "review long-running operations"), prefer published task templates
+over inventing steps from memory.
+
+```bash
+dbcli skill tasks list --format json                              # discover
+dbcli skill tasks show <task>                                     # inspect
+dbcli skill tasks plan <task> --param key=value --format json     # generate plan
+```
+
+The plan output is an ordered list of dbcli commands with rationale and risk
+labels. Execute them one at a time — task plans do **not** override blacklist,
+schema, dry-run, or confirmation requirements.
+
+Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
+`.dbcli/tasks/` (local override).
+
+Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 
 ## Quick start
 
@@ -34,8 +53,8 @@ dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
 | `init` | n/a | Create `.dbcli` (v1 single or v2 multi via `--conn-name` / `--env-file`). **Usually run by the human** — do NOT re-run to strip `{"$env"}` references; that format is intentional. |
 | `use` | n/a | Show/switch default named connection (v2 only). |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
-| `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/` (use `--use` for the right cache). MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). |
-| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`/`--index`). |
+| `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). |
+| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. |
 | `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. |
 | `export` | query-only+ | SQL or MongoDB only. Query → CSV/JSON(L) file or stdout. |
@@ -43,11 +62,11 @@ dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
-| `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age; ES has a dedicated path. |
+| `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
-| `shell` | (same as query+) | Interactive REPL. SQL engines + MongoDB shell only; Redis/ES not currently exposed in REPL. |
-| `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`; DROP also needs `--force`. Mongo/Redis exit with error. |
+| `shell` | (same as query+) | Interactive REPL. SQL engines + MongoDB shell only. |
+| `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 `--use <name>` on any subcommand targets a v2 connection without changing the default.
 
@@ -71,29 +90,27 @@ dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
 - JSON filter object (`find`) or JSON array (`aggregate`); SQL is rejected. `--collection <name>` is required on `query`.
 - **Supported:** `init`, `list`, `schema` (sampled), `query`, `insert`, `update`, `delete`, `export`, `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`.
 - **Not supported:** `q` (saved queries), `diff`, `migrate`, `check`.
-- Schema is **sampled** (default 50 docs, `--sample-size`); types are JS `typeof` strings — no PK/FK/index info.
-- `--limit` applies on `find`/aggregate; query-only mode caps at 1000 unless `--no-limit`.
+- Schema is **sampled** (default 50 docs); types are JS `typeof` strings.
 - See reference.md MongoDB section for full syntax and examples.
 
 ## Redis
 
 - Command-style execution; `query` runs a whitelisted Redis command (e.g. `GET`, `HSET`, `DEL`).
 - **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample), `query`, `status`, `use`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `schema` full scan / `--refresh` / `--reset`, `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
+- **Not supported:** `schema` full scan, `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
   Use `query "DEL <key>"` etc. for writes — they go through the same permission gate.
-- Permission tiers map to commands: read commands → `query-only`; mutators (`SET`, `HSET`, `EXPIRE`, …) → `read-write`; `DEL` / `HDEL` / `UNLINK` → `data-admin`; `KEYS`, `FLUSHDB`, `CONFIG`, `INFO`, … → `admin`. Unlisted commands are denied.
+- Permission tiers map to commands: read commands → `query-only`; mutators (`SET`, `HSET`, ...) → `read-write`; `DEL` / `UNLINK` → `data-admin`.
 - `database` field is the logical DB index (default `0`); `list` returns ≤ 100 000 keys via SCAN.
 - See reference.md Redis section.
 
 ## Elasticsearch
 
-- DSL (JSON body) or Lucene query string; `--collection <index>` (or `--index <index>`) is required on `query`.
+- DSL (JSON body) or Lucene query string; `--collection <index>` is required on `query`.
 - **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping), `query`, `status`, `use`, `doctor`, `upgrade`, `completion`.
 - **Not supported:** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
-  Writes are not exposed via dedicated subcommands yet — use external tooling for indexing.
-- Auth: API key (`apiKey`), Basic (`user`/`password`), or Cloud ID (`cloudId`); supports HTTPS, custom CA (`caPath`), and multi-node arrays (`nodes`).
-- Query-only mode caps at 1000 hits; `--no-limit` is bounded at 10 000 (use saved searches with `search_after` beyond that).
-- Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields (e.g. `text.keyword`).
+  Writes are not exposed via dedicated subcommands yet — use `query` if the cluster allows or external tools.
+- Query-only mode caps at 1000 hits; `--no-limit` is bounded at 10 000.
+- Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields.
 - See reference.md Elasticsearch section.
 
 ## Saved queries

@@ -1,52 +1,126 @@
 /**
  * 內建 YAML 子集 parser
  *
- * 支援：scalars（string/number/bool）、巢狀 map、行內 list `[a, b]`
- * 不支援：anchors、references、multi-line scalars、複雜 tags
+ * 支援：
+ *  - scalars（string/number/bool/null）
+ *  - 巢狀 map（block form, 2-space 縮排）
+ *  - 行內 list `[a, b, c]`
+ *  - block list（`- scalar`、`- key: value` 起始的 sub-map，可再含縮排子鍵）
  *
- * 用 2-space 縮排；tab 直接拒絕。回傳純物件。
+ * 不支援：anchors/references、multi-line scalars、複雜 tags、tab 縮排、行內 map（如 `{a: 1}`，僅允許 `{}`）。
  */
 
 type YamlValue = string | number | boolean | null | YamlValue[] | { [k: string]: YamlValue }
 
-export function parseYamlMini(text: string): Record<string, YamlValue> {
-  const lines = text.split('\n').filter((l) => !/^\s*(#.*)?$/.test(l))
-  const root: Record<string, YamlValue> = {}
-  // stack of [indent, container]
-  const stack: Array<{ indent: number; node: Record<string, unknown> | unknown[] }> = [{ indent: -1, node: root }]
+interface Token {
+  indent: number
+  content: string
+  isDash: boolean
+  raw: string
+}
 
-  for (const raw of lines) {
+export function parseYamlMini(text: string): Record<string, YamlValue> {
+  const tokens: Token[] = []
+  for (const raw of text.split('\n')) {
+    if (/^\s*(#.*)?$/.test(raw)) continue
     if (raw.includes('\t')) {
       throw new Error(`YAML mini: tab indentation not supported: "${raw}"`)
     }
     const indent = raw.match(/^( *)/)![1]!.length
-    const line = raw.slice(indent)
+    const lineBody = raw.slice(indent)
+    const isDash = lineBody === '-' || lineBody.startsWith('- ')
+    const content = isDash ? lineBody.slice(2).trim() : lineBody
+    tokens.push({ indent, content, isDash, raw })
+  }
 
-    while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) {
-      stack.pop()
+  let i = 0
+
+  function parseMapBlock(baseIndent: number): Record<string, YamlValue> {
+    const map: Record<string, YamlValue> = {}
+    while (i < tokens.length && tokens[i]!.indent > baseIndent && !tokens[i]!.isDash) {
+      const tok = tokens[i]!
+      consumeKeyValueInto(map, tok)
     }
-    const parent = stack[stack.length - 1]!.node as Record<string, YamlValue>
+    return map
+  }
 
-    const colon = line.indexOf(':')
+  function parseListBlock(baseIndent: number): YamlValue[] {
+    const list: YamlValue[] = []
+    while (i < tokens.length && tokens[i]!.indent > baseIndent && tokens[i]!.isDash) {
+      const tok = tokens[i]!
+      const itemIndent = tok.indent
+      if (tok.content === '') {
+        // bare `- ` line → child block on next deeper lines
+        i++
+        if (i < tokens.length && tokens[i]!.indent > itemIndent) {
+          list.push(
+            tokens[i]!.isDash
+              ? (parseListBlock(itemIndent) as YamlValue)
+              : (parseMapBlock(itemIndent) as YamlValue)
+          )
+        } else {
+          list.push(null)
+        }
+        continue
+      }
+      const colonAt = colonOutsideBrackets(tok.content)
+      if (colonAt === -1) {
+        // pure scalar list item
+        list.push(parseScalar(tok.content))
+        i++
+        continue
+      }
+      // `- key: value` starts a sub-map; subsequent indented lines belong to it
+      const itemMap: Record<string, YamlValue> = {}
+      consumeKeyValueInto(itemMap, tok)
+      // continuation keys at deeper indent (must be > itemIndent and not dash)
+      while (i < tokens.length && tokens[i]!.indent > itemIndent && !tokens[i]!.isDash) {
+        consumeKeyValueInto(itemMap, tokens[i]!)
+      }
+      list.push(itemMap)
+    }
+    return list
+  }
+
+  function consumeKeyValueInto(target: Record<string, YamlValue>, tok: Token): void {
+    const colon = colonOutsideBrackets(tok.content)
     if (colon === -1) {
-      throw new Error(`YAML mini: expected "key:" at "${raw}"`)
+      throw new Error(`YAML mini: expected "key:" at "${tok.raw}"`)
     }
-    const key = line.slice(0, colon).trim()
-    const rest = line.slice(colon + 1).trim()
+    const key = tok.content.slice(0, colon).trim()
+    const rest = tok.content.slice(colon + 1).trim()
     if (/^[&*]\w/.test(rest)) {
-      throw new Error(`YAML mini: anchor/reference unsupported: "${raw}"`)
+      throw new Error(`YAML mini: anchor/reference unsupported: "${tok.raw}"`)
     }
-
+    i++
     if (rest === '') {
-      const child: Record<string, YamlValue> = {}
-      parent[key] = child
-      stack.push({ indent, node: child })
+      // children: list or map?
+      if (i < tokens.length && tokens[i]!.indent > tok.indent) {
+        if (tokens[i]!.isDash) {
+          target[key] = parseListBlock(tok.indent) as YamlValue
+        } else {
+          target[key] = parseMapBlock(tok.indent) as YamlValue
+        }
+      } else {
+        target[key] = {}
+      }
     } else {
-      parent[key] = parseScalarOrInlineList(rest)
+      target[key] = parseScalarOrInlineList(rest)
     }
   }
 
-  return root
+  return parseMapBlock(-1)
+}
+
+function colonOutsideBrackets(s: string): number {
+  let depth = 0
+  for (let k = 0; k < s.length; k++) {
+    const c = s[k]
+    if (c === '[' || c === '{') depth++
+    else if (c === ']' || c === '}') depth--
+    else if (c === ':' && depth === 0) return k
+  }
+  return -1
 }
 
 function parseScalarOrInlineList(s: string): YamlValue {

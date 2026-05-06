@@ -498,6 +498,33 @@ dbcli migrate drop-enum status --execute --force
 
 **AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
 
+### skill tasks (Agent Task Packs)
+
+```bash
+dbcli skill tasks list                                            # human table
+dbcli skill tasks list --format json --tag diagnostics
+dbcli skill tasks list --engine postgres --source builtin
+dbcli skill tasks show diagnose-slow-query
+dbcli skill tasks show diagnose-slow-query --format json
+dbcli skill tasks plan diagnose-slow-query --param query="SELECT 1"
+dbcli skill tasks plan diagnose-slow-query --param query="..." --format json
+```
+
+- **list filters:** `--tag <tag>`, `--engine <postgres|mysql|mongodb|redis|elasticsearch>`, `--source <builtin|shared|local>`, `--format <table|json>`.
+- **show:** prints the full task definition (frontmatter + Agent Notes). Use `--format json` for an agent-friendly contract.
+- **plan:** resolves `{{param}}` placeholders, validates required parameters, and emits a stable plan. Plans are **plan-only** in this version — dbcli will never execute the resulting commands automatically.
+
+Task storage layers:
+
+| Source | Path | Notes |
+| --- | --- | --- |
+| builtin | `assets/tasks/` | shipped with dbcli |
+| shared | `.dbcli-shared/tasks/` | team-managed, version-controlled |
+| local | `.dbcli/tasks/` | personal, gitignored |
+
+Higher tiers override lower tiers by task name. Task name is derived from the
+file path under the tier root (e.g. `diag/inspect.md` → `diag/inspect`).
+
 ## MongoDB Support
 
 MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB support as a narrower document-database path, not as a full SQL feature equivalent.

@@ -1,9 +1,12 @@
-import { test, expect } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import {
   classifyStatement,
   checkPermission,
   enforcePermission,
   PermissionError,
+  classifyRedisCommand,
+  enforceRedisPermission,
+  permissionAtLeast,
 } from '@/core/permission-guard'
 
 // ============================================================================
@@ -687,4 +690,125 @@ test('integration: Mixed comments, strings, and parameterized queries', () => {
   const result = classifyStatement(sql)
   expect(result.type).toBe('INSERT')
   expect(result.isDangerous).toBe(false)
+})
+
+// ============================================================================
+// Suite: Redis Command Classification & Enforcement
+// ============================================================================
+
+describe('classifyRedisCommand', () => {
+  test('classifies GET as query-only/SELECT', () => {
+    const c = classifyRedisCommand('GET foo')
+    expect(c.command).toBe('GET')
+    expect(c.requiredPermission).toBe('query-only')
+    expect(c.type).toBe('SELECT')
+    expect(c.isDangerous).toBe(false)
+  })
+
+  test('classifies SET as read-write/UPDATE', () => {
+    const c = classifyRedisCommand('SET k v')
+    expect(c.requiredPermission).toBe('read-write')
+    expect(c.type).toBe('UPDATE')
+  })
+
+  test('classifies DEL as data-admin/DELETE and dangerous', () => {
+    const c = classifyRedisCommand('DEL key1 key2')
+    expect(c.requiredPermission).toBe('data-admin')
+    expect(c.type).toBe('DELETE')
+    expect(c.isDangerous).toBe(true)
+  })
+
+  test('classifies FLUSHDB as admin/DROP and dangerous', () => {
+    const c = classifyRedisCommand('FLUSHDB')
+    expect(c.requiredPermission).toBe('admin')
+    expect(c.type).toBe('DROP')
+    expect(c.isDangerous).toBe(true)
+  })
+
+  test('classifies KEYS as admin (forces SCAN for non-admins)', () => {
+    const c = classifyRedisCommand('KEYS *')
+    expect(c.requiredPermission).toBe('admin')
+  })
+
+  test('returns unknown for non-whitelisted commands', () => {
+    const c = classifyRedisCommand('NOTACOMMAND foo')
+    expect(c.requiredPermission).toBe('unknown')
+    expect(c.type).toBe('UNKNOWN')
+  })
+
+  test('is case-insensitive', () => {
+    expect(classifyRedisCommand('get foo').command).toBe('GET')
+    expect(classifyRedisCommand('Set k v').requiredPermission).toBe('read-write')
+  })
+})
+
+describe('permissionAtLeast', () => {
+  test('admin satisfies any tier', () => {
+    expect(permissionAtLeast('admin', 'query-only')).toBe(true)
+    expect(permissionAtLeast('admin', 'read-write')).toBe(true)
+    expect(permissionAtLeast('admin', 'data-admin')).toBe(true)
+    expect(permissionAtLeast('admin', 'admin')).toBe(true)
+  })
+
+  test('query-only does not satisfy higher tiers', () => {
+    expect(permissionAtLeast('query-only', 'read-write')).toBe(false)
+    expect(permissionAtLeast('query-only', 'data-admin')).toBe(false)
+    expect(permissionAtLeast('query-only', 'admin')).toBe(false)
+  })
+
+  test('read-write satisfies query-only and itself', () => {
+    expect(permissionAtLeast('read-write', 'query-only')).toBe(true)
+    expect(permissionAtLeast('read-write', 'read-write')).toBe(true)
+    expect(permissionAtLeast('read-write', 'data-admin')).toBe(false)
+  })
+})
+
+describe('enforceRedisPermission', () => {
+  test('allows GET under query-only', () => {
+    expect(() => enforceRedisPermission('GET foo', 'query-only')).not.toThrow()
+  })
+
+  test('rejects SET under query-only', () => {
+    let caught: unknown
+    try {
+      enforceRedisPermission('SET k v', 'query-only')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).requiredPermission).toBe('read-write')
+  })
+
+  test('rejects DEL under read-write (needs data-admin)', () => {
+    let caught: unknown
+    try {
+      enforceRedisPermission('DEL key', 'read-write')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).requiredPermission).toBe('data-admin')
+  })
+
+  test('rejects FLUSHDB under data-admin (needs admin)', () => {
+    let caught: unknown
+    try {
+      enforceRedisPermission('FLUSHDB', 'data-admin')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).requiredPermission).toBe('admin')
+  })
+
+  test('rejects unknown commands even under admin', () => {
+    let caught: unknown
+    try {
+      enforceRedisPermission('SOMERANDOMCMD foo', 'admin')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).message).toContain('not whitelisted')
+  })
 })

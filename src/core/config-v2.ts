@@ -29,12 +29,12 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
 
 /**
  * Resolved connection result — what commands receive
- * Supports both SQL and MongoDB connections
+ * Supports SQL, MongoDB, and Redis connections
  */
 export interface ResolvedConnection {
   name: string
   connection: {
-    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
+    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
     host: string | { $env: string }
     port: number | { $env: string }
     user: string | { $env: string }

@@ -34,6 +34,11 @@ export async function runDDL(
     process.exit(1)
   }
 
+  if (config.connection?.system === 'redis') {
+    console.error('此命令目前不支援 Redis')
+    process.exit(1)
+  }
+
   const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
 
   // Skip connection for dry-run if we don't need to refresh schema

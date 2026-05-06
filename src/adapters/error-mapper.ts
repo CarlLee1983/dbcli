@@ -15,7 +15,7 @@ import { ConnectionError, type ConnectionOptions } from './types'
  */
 export function mapError(
   error: unknown,
-  system: 'postgresql' | 'mysql' | 'mariadb',
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'redis',
   options: ConnectionOptions
 ): ConnectionError {
   const err = error as Record<string, unknown>
@@ -29,9 +29,19 @@ export function mapError(
       `Cannot connect to ${options.host}:${options.port} — server is not running or not listening on this port`,
       [
         `Check that the ${system} service is running: ${
-          system === 'postgresql' ? 'systemctl status postgresql' : 'systemctl status mysql'
+          system === 'postgresql'
+            ? 'systemctl status postgresql'
+            : system === 'redis'
+              ? 'redis-cli ping'
+              : 'systemctl status mysql'
         }`,
-        `Verify the port is correct: ${system === 'postgresql' ? 'default 5432' : 'default 3306'}`,
+        `Verify the port is correct: ${
+          system === 'postgresql'
+            ? 'default 5432'
+            : system === 'redis'
+              ? 'default 6379'
+              : 'default 3306'
+        }`,
         `Check that ${options.host} is reachable: ping ${options.host} or telnet ${options.host} ${options.port}`,
       ]
     )

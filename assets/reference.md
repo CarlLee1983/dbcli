@@ -21,6 +21,14 @@ dbcli init --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSourc
 dbcli init --system mongodb --host localhost --port 27017 --user admin --password secret --name mydb
 dbcli init --system mongodb --host localhost --port 27017 --name mydb  # No auth
 
+# Redis (database = logical DB index)
+dbcli init --system redis --host localhost --port 6379
+dbcli init --system redis --host localhost --port 6379 --password secret --name 0
+
+# Elasticsearch
+dbcli init --system elasticsearch --host localhost --port 9200 --user elastic --password changeme
+dbcli init --system elasticsearch --cloud-id "myCluster:dXMtZWFzdC0xLmF3..." --api-key "<base64>"
+
 # Multi-connection (v2 format)
 dbcli init --conn-name staging --env-file .env.staging   # Named connection with custom env file
 dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-test
@@ -31,6 +39,10 @@ dbcli init --rename staging:production                   # Rename a connection
 **Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
 
 **MongoDB-specific options:** `--uri <uri>` (full connection URI), `--auth-source <db>` (auth database, default: `admin` when user/password set)
+
+**Elasticsearch-specific options:** `--cloud-id <id>` (Elastic Cloud), `--api-key <key>` (ApiKey auth). Other ES fields (`nodes[]`, `protocol`, `caPath`, `rejectUnauthorized`) can be edited directly in `.dbcli`.
+
+**Redis note:** the `database` (or `--name`) field is the logical DB index (`"0"` … `"15"`), not a database name.
 
 **Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
 
@@ -57,16 +69,19 @@ dbcli list --use prod
 
 ### list
 
-List all tables (SQL) or collections (MongoDB).
+List all tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch).
 
 ```bash
 dbcli list
 dbcli list --format json
+dbcli list --include-system        # Elasticsearch: include `.system` indices
 ```
 
 **Permission:** query-only+
 
-> **MongoDB:** Lists collections with estimated document count instead of tables.
+> **MongoDB:** Lists collections with estimated document count.
+> **Redis:** Returns up to 100 000 keys via `SCAN MATCH * COUNT 1000`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
+> **Elasticsearch:** Returns indices with `documentCount` from `/_stats/docs`; aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
 
 ### schema
 
@@ -90,6 +105,9 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 
 **Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
+> **Redis:** `schema <key>` is required (no full scan). The output exposes `type`, `ttl`, `size`, and a small `sample` (e.g. first 5 hash keys). `--reset` / `--refresh` are rejected — Redis caches no schema.
+> **Elasticsearch:** `schema [index]` flattens the `_mapping` properties (nested `a.b.c`) and emits each `.fields` multi-field as a separate column (e.g. `text` + `text.keyword`). Full scan iterates all non-system indices and stores per-connection caches alongside SQL engines.
+
 ### query
 
 Execute SQL query (MySQL/PostgreSQL/MariaDB) or JSON filter/pipeline (MongoDB).
@@ -106,15 +124,37 @@ dbcli query '{"age": {"$gt": 18}}' --collection users --format json
 
 # MongoDB: aggregation pipeline
 dbcli query '[{"$match": {"status": "active"}}, {"$group": {"_id": "$role", "count": {"$sum": 1}}}]' --collection users
+
+# Redis: any whitelisted command (permission-gated by command)
+dbcli query "GET session:abc"
+dbcli query "HGETALL user:42" --format json
+dbcli query "SCAN 0 MATCH user:* COUNT 100"
+dbcli query "SET feature:flag enabled"          # requires read-write+
+dbcli query "DEL stale:key"                      # requires data-admin+
+
+# Elasticsearch: DSL body or Lucene q-string
+dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
+dbcli query 'status:active AND amount:>100' --index orders --limit 50
 ```
 
-**Options:** `--format <table|json|csv>`, `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB only)
-**Permission:** query-only+
+**Options:** `--format <table|json|csv>`, `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`)
+**Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
 
 > **MongoDB notes:**
 > - SQL syntax is rejected — use JSON object (filter) or JSON array (pipeline)
 > - `--collection <name>` is required
 > - Auto-limit does not apply; use `$limit` in your pipeline if needed
+
+> **Redis notes:**
+> - The first token must be an allow-listed command (`GET`/`SET`/`HGET`/`HSET`/`DEL`/...). Unknown commands are refused.
+> - Permission tier is derived from the command (read → `query-only`, write → `read-write`, delete → `data-admin`, `KEYS`/`FLUSHDB`/`CONFIG`/... → `admin`).
+> - Output is always shaped into rows: scalar replies become `{value: ...}`; arrays become indexed rows; `HGETALL` is folded into a single object.
+
+> **Elasticsearch notes:**
+> - `--collection` (or `--index`) is required.
+> - A body that begins with `{` is sent as DSL via `POST /<index>/_search`; otherwise the value is URL-encoded into `?q=...` (Lucene query string) via `GET`.
+> - Hits are flattened: each result row contains `_id` plus dotted-path fields from `_source`. Pass `--format json` to keep nested structures readable.
+> - Query-only mode caps at 1000 hits; `--no-limit` is internally capped at 10 000 (use saved searches / `search_after` for deeper pagination).
 
 ### q
 
@@ -508,3 +548,144 @@ dbcli delete orders --where '{"status":"cancelled"}' --force
 | Field filter | `'{"field": "value"}'` |
 | Comparison | `'{"age": {"$gt": 18}}'` |
 | Aggregation | `'[{"$match": {...}}, {"$group": {...}}]'` |
+
+## Redis Support
+
+Redis connections speak Redis commands rather than SQL. The adapter uses the `ioredis` driver and exposes a narrow, permission-gated surface.
+
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
+
+**Not supported (exit with error or unsupported error):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q` (saved queries), `shell`. For writes, run the equivalent Redis command via `query` — the same permission gate applies.
+
+### Connection and configuration
+
+- Required fields: `system: redis`, `host`, `port`. `password` and `database` are optional.
+- `database` is the **logical DB index** (`"0"` … `"15"`), kept as a string to play nicely with env-ref bindings. `list` and the connection metadata both label it as the active DB.
+- `connection.timeout` (ms, default 5000) maps to ioredis's `connectTimeout`.
+
+### Permission classification
+
+Permission is derived from the command's first token (case-insensitive). Unknown commands are denied even at `admin` tier — they must be added to the allow-list.
+
+| Tier | Commands |
+|------|----------|
+| `query-only` | `GET`, `MGET`, `STRLEN`, `EXISTS`, `TTL`, `PTTL`, `TYPE`, `SCAN`, `HGET`, `HGETALL`, `HKEYS`, `HVALS`, `HLEN`, `HEXISTS`, `HMGET`, `LRANGE`, `LLEN`, `LINDEX`, `SMEMBERS`, `SCARD`, `SISMEMBER`, `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZCARD`, `ZSCORE`, `PING`, `ECHO` |
+| `read-write` | `SET`, `SETEX`, `SETNX`, `PSETEX`, `MSET`, `MSETNX`, `APPEND`, `INCR`/`INCRBY`, `DECR`/`DECRBY`, `HSET`/`HSETNX`/`HMSET`/`HINCRBY`, `LPUSH`/`RPUSH`/`LPOP`/`RPOP`/`LSET`, `SADD`/`SREM`, `ZADD`/`ZREM`, `EXPIRE`/`EXPIREAT`/`PEXPIRE`/`PERSIST`, `RENAME` |
+| `data-admin` | `DEL`, `UNLINK`, `HDEL` |
+| `admin` | `FLUSHDB`, `FLUSHALL`, `CONFIG`, `INFO`, `CLIENT`, `DEBUG`, `SHUTDOWN`, `KEYS`, `MONITOR`, `SAVE`, `BGSAVE`, `BGREWRITEAOF`, `REPLICAOF`, `SLAVEOF`, `ACL` |
+
+### Schema inspection
+
+`schema <key>` returns one synthetic row per key with these columns:
+
+| column | meaning |
+|--------|---------|
+| `type` | Redis type (`string` / `hash` / `list` / `set` / `zset` / `stream` / `none`) |
+| `ttl` | `<n>s`, `no expiry`, or `missing` |
+| `size` | `STRLEN` / `HLEN` / `LLEN` / `SCARD` / `ZCARD` / `XLEN` depending on type |
+| `sample` | First 5 hash field names (hash only) |
+
+`schema` (no key) and `--refresh` / `--reset` are rejected — there is no full-database schema cache for Redis.
+
+### Recommended `query` patterns
+
+```bash
+# Read
+dbcli query "GET feature:flag"
+dbcli query "HGETALL user:42" --format json
+dbcli query "LRANGE queue:jobs 0 9"
+
+# Iterate keys (paginated; never use KEYS — admin-only)
+dbcli query "SCAN 0 MATCH session:* COUNT 200"
+
+# Write (requires read-write+)
+dbcli query "SET counter 1"
+dbcli query "EXPIRE session:abc 3600"
+dbcli query "HSET user:42 name Alice"
+
+# Delete (requires data-admin+)
+dbcli query "DEL temp:lock"
+dbcli query "HDEL user:42 lastLogin"
+```
+
+### Limitations
+
+- No `--dry-run` for writes — Redis commands execute immediately. Pair writes with a confirming read (`GET`, `HGETALL`, `EXISTS`).
+- No transaction wrapping (`MULTI`/`EXEC`). Submit one command at a time.
+- `KEYS` requires `admin`. Prefer `SCAN` for routine work.
+- Blacklist rules are not enforced for Redis (there is no concept of "column" / "table" the validator can map). Be careful with sensitive key prefixes.
+
+## Elasticsearch Support
+
+Elasticsearch connections speak the REST API. The adapter is fetch-based (no SDK) and supports HTTPS, custom CA, API key, basic auth, and Cloud ID.
+
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
+
+**Not supported (use external tooling):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`, `shell`. The permission classifier already understands `_doc` / `_update` / `_bulk` so future write surfaces can be wired in without changing tiers.
+
+### Connection and configuration
+
+- Either `host` + `port` (default `https://localhost:9200`) or `nodes: [...]` (first node is used) or `cloudId`.
+- Auth precedence: `apiKey` → `user`/`password` (HTTP Basic). Leave both unset for an open cluster.
+- `protocol` defaults to `https`. For TLS quirks: `caPath` (path to a PEM bundle) and `rejectUnauthorized: false` (last resort).
+- `connection.timeout` (ms, default 5000) is wired to `AbortController` on every request.
+
+### Permission classification
+
+Each REST request is mapped to a SQL-shaped tier based on method + path:
+
+| ES surface | Mapped to | Permission |
+|------------|-----------|------------|
+| `GET _search` / `_count` / `_mapping` / `_settings` / `_alias` / `GET _doc` / `_source` | `SELECT` | `query-only` |
+| `POST _update` / `POST _doc` | `UPDATE` | `read-write` |
+| `PUT _doc` / `_create` | `INSERT` | `read-write` |
+| `DELETE` (any) | `DELETE` | `data-admin` |
+| `_bulk` | highest tier among the NDJSON actions (`delete` ⇒ `data-admin`) | derived |
+| Anything else | `DROP` | `admin` (deny by default) |
+
+### Schema inspection
+
+`schema [index]` calls `GET /<index>/_mapping` and flattens nested properties into dotted-path columns. Multi-fields under `.fields` (e.g. `text` → `text.keyword`) are emitted as separate columns. All fields are reported as nullable. There is no PK / FK / index info.
+
+`schema` (no argument) iterates all non-system indices through the standard full-scan code path and writes per-connection caches under `.dbcli/schemas/<connection>/`.
+
+### Query semantics
+
+- `--collection <index>` (or `--index <index>`) is required.
+- Body that starts with `{` → sent as JSON DSL via `POST /<index>/_search`. Body otherwise → URL-encoded into `?q=...` (Lucene query string) on `GET`.
+- Hits are flattened: each row carries `_id` plus dotted-path fields lifted from `_source`. Use `--format json` to inspect raw nested structure.
+- Query-only mode caps `size` at 1000. `--no-limit` is internally capped at 10 000; for deeper pagination use the API directly with `search_after` or PIT.
+
+### Recommended `query` patterns
+
+```bash
+# DSL match
+dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders --format json
+
+# DSL with sort + size
+dbcli query '{"query":{"range":{"created_at":{"gte":"2026-01-01"}}},"sort":[{"created_at":"desc"}],"size":50}' \
+  --collection orders
+
+# Aggregation
+dbcli query '{"size":0,"aggs":{"by_status":{"terms":{"field":"status.keyword"}}}}' \
+  --collection orders --format json
+
+# Lucene query string
+dbcli query 'status:active AND amount:>100' --index orders --limit 100
+```
+
+### Doctor and diagnostics
+
+`dbcli doctor` runs a dedicated Elasticsearch path:
+
+- Verifies REST connectivity to `GET /`.
+- Reads `version.number` and runs the standard version freshness check.
+- Walks every index via `listTables()` + `getTableSchema()` to feed the blacklist completeness check and the large-table heuristic (using `documentCount`).
+- Standard schema-cache freshness using `schemaLastUpdated`.
+
+### Limitations
+
+- Writes (`insert`/`update`/`delete`/`export`) are not exposed yet — the adapter implements them, but the CLI currently only routes them for SQL and MongoDB.
+- No `_search/scroll` or PIT pagination at the CLI layer; large pulls need a saved external script.
+- `check`, `diff`, `migrate`, and `q` are SQL-only and exit with errors (or fall through to a generic "unsupported" path).
+- Blacklist column rules are applied to flattened hit rows on `query`; table-level blacklist rejects an index up front.

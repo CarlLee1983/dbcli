@@ -80,8 +80,8 @@ async function listAction(options: { format: string; config: string }, command: 
       }
 
       // Summary
-      const tableCount = tables.filter((t) => (t.tableType) !== 'view').length
-      const viewCount = tables.filter((t) => (t.tableType) === 'view').length
+      const tableCount = tables.filter((t) => t.tableType !== 'view').length
+      const viewCount = tables.filter((t) => t.tableType === 'view').length
       const viewSuffix = viewCount > 0 ? ` (${viewCount} views)` : ''
       console.log(`\n\u2713 Found ${tableCount} tables${viewSuffix}`)
     } finally {
@@ -98,7 +98,10 @@ async function listAction(options: { format: string; config: string }, command: 
   }
 }
 
-async function mongoListBranch(config: import("@/utils/validation").DbcliConfig, format: string): Promise<void> {
+async function mongoListBranch(
+  config: import('@/utils/validation').DbcliConfig,
+  format: string
+): Promise<void> {
   const connName = (config.connection.database as string) || 'mongodb'
 
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
@@ -134,9 +137,7 @@ async function redisListBranch(
   format: string
 ): Promise<void> {
   const connName = (config.connection.database as string) || '0'
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
   await redisAdapter.connect()
 
   try {

@@ -182,12 +182,9 @@ describe('RedisAdapter — connection lifecycle', () => {
   test('rejects out-of-range port at construction', () => {
     expect(
       () =>
-        new RedisAdapter(
-          { ...baseOptions, port: 70_000 },
-          (function () {
-            return new MockRedisClient()
-          } as unknown as new (opts: unknown) => never)
-        )
+        new RedisAdapter({ ...baseOptions, port: 70_000 }, function () {
+          return new MockRedisClient()
+        } as unknown as new (opts: unknown) => never)
     ).toThrow(/Invalid port/)
   })
 })
@@ -211,11 +208,7 @@ describe('parseRedisCommand', () => {
   })
 
   test('handles backslash escape inside quotes', () => {
-    expect(parseRedisCommand('SET k "she said \\"hi\\""')).toEqual([
-      'SET',
-      'k',
-      'she said "hi"',
-    ])
+    expect(parseRedisCommand('SET k "she said \\"hi\\""')).toEqual(['SET', 'k', 'she said "hi"'])
   })
 
   test('rejects unterminated quotes', () => {

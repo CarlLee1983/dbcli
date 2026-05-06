@@ -274,9 +274,7 @@ async function redisQueryBranch(
     throw error
   }
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
   await redisAdapter.connect()
   try {
     const result = await redisAdapter.execute<Record<string, unknown>>(command)

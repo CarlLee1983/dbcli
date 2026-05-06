@@ -60,10 +60,7 @@ export interface RedisConnectionConfig {
 /**
  * Connection configuration (stored in .dbcli file) — union of SQL, MongoDB, Redis
  */
-export type ConnectionConfig =
-  | SqlConnectionConfig
-  | MongoDBConnectionConfig
-  | RedisConnectionConfig
+export type ConnectionConfig = SqlConnectionConfig | MongoDBConnectionConfig | RedisConnectionConfig
 
 /**
  * Permission level (coarse-grained access control)

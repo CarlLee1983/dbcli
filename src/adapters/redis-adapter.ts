@@ -7,12 +7,7 @@
 
 import type { Redis as RedisClientType } from 'ioredis'
 import { ConnectionError } from './types'
-import type {
-  ConnectionOptions,
-  ExecutionResult,
-  QueryableAdapter,
-  TableSchema,
-} from './types'
+import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
 type RedisCtor = new (opts: {
   host?: string
@@ -45,9 +40,7 @@ export class RedisAdapter implements QueryableAdapter {
 
   private requireClient(): RedisClientType {
     if (!this.client) {
-      throw new ConnectionError('UNKNOWN', '尚未連線，請先呼叫 connect()', [
-        '請先呼叫 connect()',
-      ])
+      throw new ConnectionError('UNKNOWN', '尚未連線，請先呼叫 connect()', ['請先呼叫 connect()'])
     }
     return this.client
   }
@@ -183,17 +176,16 @@ export class RedisAdapter implements QueryableAdapter {
       throw new Error('Redis 指令不可為空')
     }
     const [head, ...rest] = tokens
-    const reply = await (client as unknown as {
-      call(cmd: string, ...args: unknown[]): Promise<unknown>
-    }).call(head!, ...rest)
+    const reply = await (
+      client as unknown as {
+        call(cmd: string, ...args: unknown[]): Promise<unknown>
+      }
+    ).call(head!, ...rest)
     const rows = wrapReply<T>(head!, reply)
     return { rows, affectedRows: rows.length }
   }
 
-  async insert(
-    keyName: string,
-    data: Record<string, unknown>
-  ): Promise<ExecutionResult<unknown>> {
+  async insert(keyName: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
     const client = this.requireClient()
     const type = data.__type ?? 'string'
     if (type === 'string') {
@@ -209,8 +201,10 @@ export class RedisAdapter implements QueryableAdapter {
       if (!fields) throw new Error('hash insert 需要 fields 物件')
       const flat: string[] = []
       for (const [k, v] of Object.entries(fields)) flat.push(k, String(v))
-      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> })
-        .hset(keyName, ...flat)
+      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> }).hset(
+        keyName,
+        ...flat
+      )
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
     throw new Error(`不支援的 insert 類型: ${String(type)}`)
@@ -226,8 +220,10 @@ export class RedisAdapter implements QueryableAdapter {
     if (fields) {
       const flat: string[] = []
       for (const [k, v] of Object.entries(fields)) flat.push(k, String(v))
-      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> })
-        .hset(keyName, ...flat)
+      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> }).hset(
+        keyName,
+        ...flat
+      )
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
     if ('value' in update) {

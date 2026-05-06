@@ -42,6 +42,11 @@ async function listAction(options: { format: string; config: string }, command: 
       return mongoListBranch(config, options.format)
     }
 
+    // Redis: keys instead of tables, scoped through the QueryableAdapter
+    if (config.connection.system === 'redis') {
+      return redisListBranch(config, options.format)
+    }
+
     // Create adapter from configuration
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
 
@@ -121,5 +126,37 @@ async function mongoListBranch(config: import("@/utils/validation").DbcliConfig,
     }
   } finally {
     await mongoAdapter.disconnect()
+  }
+}
+
+async function redisListBranch(
+  config: import('@/utils/validation').DbcliConfig,
+  format: string
+): Promise<void> {
+  const connName = (config.connection.database as string) || '0'
+  const redisAdapter = AdapterFactory.createRedisAdapter(
+    config.connection as ConnectionOptions
+  )
+  await redisAdapter.connect()
+
+  try {
+    const keys = await redisAdapter.listCollections()
+
+    if (keys.length === 0) {
+      console.log('No keys found in this Redis database.')
+      return
+    }
+
+    if (format === 'json') {
+      console.log(JSON.stringify(keys, null, 2))
+    } else {
+      console.log(`Keys in db ${connName} (redis):`)
+      for (const k of keys) {
+        console.log(`  ${k.name}`)
+      }
+      console.log(`\n✓ Found ${keys.length} keys`)
+    }
+  } finally {
+    await redisAdapter.disconnect()
   }
 }

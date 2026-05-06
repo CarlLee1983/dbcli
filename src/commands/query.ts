@@ -57,6 +57,11 @@ export async function queryCommand(
       return mongoQueryBranch(sql, options, config)
     }
 
+    // 2d. Redis: route to QueryableAdapter path
+    if (config.connection.system === 'redis') {
+      return redisQueryBranch(sql, options, config)
+    }
+
     // 2b. Size guard: block full-table SELECT on huge tables
     const mainTable = extractMainTable(sql)
     if (mainTable && config.schema && !options.noLimit) {
@@ -242,5 +247,50 @@ async function mongoQueryBranch(
     }
   } finally {
     await mongoAdapter.disconnect()
+  }
+}
+
+async function redisQueryBranch(
+  command: string,
+  options: {
+    format?: 'table' | 'json' | 'csv'
+    limit?: number
+    noLimit?: boolean
+  },
+  config: DbcliConfig
+): Promise<void> {
+  const format = options.format ?? 'table'
+
+  const { enforceRedisPermission } = await import('@/core/permission-guard')
+  try {
+    enforceRedisPermission(command, config.permission)
+  } catch (error) {
+    if (error instanceof PermissionError) {
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
+      console.error(`   Operation: ${error.classification.type}`)
+      console.error(`   Message: ${error.message}`)
+      process.exit(1)
+    }
+    throw error
+  }
+
+  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  await redisAdapter.connect()
+  try {
+    const result = await redisAdapter.execute<Record<string, unknown>>(command)
+
+    const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : ['value']
+    const queryResult = {
+      rows: result.rows,
+      rowCount: result.rows.length,
+      columnNames,
+    }
+    const formatter = new QueryResultFormatter()
+    const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
+      format,
+    })
+    console.log(output)
+  } finally {
+    await redisAdapter.disconnect()
   }
 }

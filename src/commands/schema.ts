@@ -80,6 +80,38 @@ async function schemaAction(
       }
     }
 
+    // Redis: full-database scans aren't meaningful; only allow inspecting a single key.
+    if (config.connection.system === 'redis') {
+      if (options.reset || options.refresh) {
+        console.error('schema --reset/--refresh is not supported for Redis connections.')
+        process.exit(1)
+      }
+      if (!table) {
+        console.error('Redis schema inspection requires a key name: dbcli schema <key>')
+        process.exit(1)
+      }
+      const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+      await redisAdapter.connect()
+      try {
+        if (!redisAdapter.getTableSchema) {
+          throw new Error('Redis adapter does not implement getTableSchema')
+        }
+        const schema = await redisAdapter.getTableSchema(table)
+        if (options.format === 'json') {
+          const formatter = new TableSchemaJSONFormatter()
+          console.log(formatter.format(schema))
+        } else {
+          console.log(`\nKey: ${schema.name}`)
+          for (const col of schema.columns) {
+            console.log(`  ${col.name}: ${col.type}`)
+          }
+        }
+      } finally {
+        await redisAdapter.disconnect()
+      }
+      return
+    }
+
     // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
     const connectionName = await getSchemaIsolationConnectionName(options.config)
 

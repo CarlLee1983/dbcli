@@ -29,12 +29,12 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
 
 /**
  * Resolved connection result — what commands receive
- * Supports both SQL and MongoDB connections
+ * Supports SQL, MongoDB, and Redis connections
  */
 export interface ResolvedConnection {
   name: string
   connection: {
-    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
+    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
     host: string | { $env: string }
     port: number | { $env: string }
     user: string | { $env: string }
@@ -154,13 +154,18 @@ export function listConnections(config: DbcliConfigV2): Array<{
   isDefault: boolean
 }> {
   return Object.entries(config.connections).map(([name, conn]) => {
-    const c = conn as { host?: string | { $env: string }; port?: number | { $env: string }; database?: string | { $env: string }; uri?: string | { $env: string } }
+    const c = conn as {
+      host?: string | { $env: string }
+      port?: number | { $env: string }
+      database?: string | { $env: string }
+      uri?: string | { $env: string }
+    }
     return {
       name,
       system: conn.system,
-      host: c.host ?? "",
+      host: c.host ?? '',
       port: c.port ?? 27017,
-      database: c.database ?? "",
+      database: c.database ?? '',
       ...(c.uri !== undefined && { uri: c.uri }),
       isDefault: name === config.default,
     }

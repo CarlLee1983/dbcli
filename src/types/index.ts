@@ -41,9 +41,26 @@ export interface MongoDBConnectionConfig {
 }
 
 /**
- * Connection configuration (stored in .dbcli file) — union of SQL and MongoDB
+ * Redis Connection configuration (stored in .dbcli file)
+ *
+ * `user`/`password` are always present (matching the MongoDB pattern); pass
+ * an empty string when Redis has no auth so the merge/write/round-trip
+ * pipeline keeps a consistent shape across all connection variants.
  */
-export type ConnectionConfig = SqlConnectionConfig | MongoDBConnectionConfig
+export interface RedisConnectionConfig {
+  system: 'redis'
+  host: string | { $env: string }
+  port: number | { $env: string }
+  user: string | { $env: string }
+  password: string | { $env: string }
+  /** Redis logical DB index, kept as string for env-binding parity */
+  database: string | { $env: string }
+}
+
+/**
+ * Connection configuration (stored in .dbcli file) — union of SQL, MongoDB, Redis
+ */
+export type ConnectionConfig = SqlConnectionConfig | MongoDBConnectionConfig | RedisConnectionConfig
 
 /**
  * Permission level (coarse-grained access control)

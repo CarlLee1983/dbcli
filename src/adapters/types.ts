@@ -8,7 +8,7 @@
  */
 export interface ConnectionOptions {
   /** Database system type */
-  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb'
+  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis'
   /** Database host address or hostname */
   host: string
   /** Database port number */

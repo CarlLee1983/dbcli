@@ -60,11 +60,25 @@ const SqlConnectionConfigSchema = z.object({
 })
 
 /**
- * Connection configuration schema (union of SQL and MongoDB)
+ * Redis connection schema — host/port required, user/password optional,
+ * database is the logical DB index (kept as string for env-binding parity).
+ */
+export const RedisConnectionConfigSchema = z.object({
+  system: z.literal('redis'),
+  host: StringOrEnvRef,
+  port: NumberOrEnvRef,
+  user: OptStringOrEnvRef,
+  password: z.union([z.string(), EnvRefSchema]).optional().default(''),
+  database: OptStringOrEnvRef,
+})
+
+/**
+ * Connection configuration schema (union of SQL, MongoDB, Redis)
  */
 export const ConnectionConfigSchema = z.union([
   SqlConnectionConfigSchema,
   MongoDBConnectionConfigSchema,
+  RedisConnectionConfigSchema,
 ])
 
 /**
@@ -130,9 +144,15 @@ const MongoDBNamedConnectionSchema = MongoDBConnectionConfigSchema.extend({
   envFile: z.string().optional(),
 })
 
+const RedisNamedConnectionSchema = RedisConnectionConfigSchema.extend({
+  permission: PermissionSchema,
+  envFile: z.string().optional(),
+})
+
 export const NamedConnectionSchema = z.union([
   SqlNamedConnectionSchema,
   MongoDBNamedConnectionSchema,
+  RedisNamedConnectionSchema,
 ])
 
 /**

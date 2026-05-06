@@ -7,6 +7,7 @@ import type { ConnectionOptions, DatabaseAdapter, QueryableAdapter } from './typ
 import { PostgreSQLAdapter } from './postgresql-adapter'
 import { MySQLAdapter } from './mysql-adapter'
 import { MongoDBAdapter } from './mongodb-adapter'
+import { RedisAdapter } from './redis-adapter'
 
 /**
  * Factory for creating database adapters
@@ -32,6 +33,8 @@ export class AdapterFactory {
         return new MySQLAdapter(options)
       case 'mongodb':
         return new MongoDBAdapter(options) as unknown as DatabaseAdapter
+      case 'redis':
+        return new RedisAdapter(options) as unknown as DatabaseAdapter
       default:
         throw new Error(`Unsupported database system: ${options.system}`)
     }
@@ -51,7 +54,23 @@ export class AdapterFactory {
     }
     return new MongoDBAdapter(options)
   }
+
+  /**
+   * Create a Redis adapter instance for queryable Redis operations.
+   * Redis adapters share the QueryableAdapter contract with MongoDB so
+   * commands like list/schema/query can route to a single CLI surface.
+   *
+   * @param options Connection configuration (system must be 'redis')
+   * @returns QueryableAdapter instance for Redis
+   * @throws {Error} If system type is not 'redis'
+   */
+  static createRedisAdapter(options: ConnectionOptions): QueryableAdapter {
+    if (options.system !== 'redis') {
+      throw new Error('createRedisAdapter requires system: redis')
+    }
+    return new RedisAdapter(options)
+  }
 }
 
 // Export adapter classes for testing
-export { PostgreSQLAdapter, MySQLAdapter, MongoDBAdapter }
+export { PostgreSQLAdapter, MySQLAdapter, MongoDBAdapter, RedisAdapter }

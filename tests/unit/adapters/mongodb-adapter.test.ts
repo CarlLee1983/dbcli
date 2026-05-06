@@ -9,10 +9,20 @@ const mockDocs = [
 ]
 const mockCollectionDefs = [{ name: 'users' }, { name: 'orders' }]
 
+interface FindCall {
+  filter: object
+  limit: number
+}
+interface AggregateCall {
+  pipeline: object[]
+}
+
 class MockMongoClient {
   connected = false
   closed = false
   lastDbName: string | undefined
+  findCalls: FindCall[] = []
+  aggregateCalls: AggregateCall[] = []
   constructor(public uri: string) {}
   async connect() {
     this.connected = true
@@ -22,10 +32,24 @@ class MockMongoClient {
   }
   db(name?: string) {
     this.lastDbName = name
+    const self = this
     return {
       collection: (_name: string) => ({
-        find: (_filter: object) => ({ toArray: async () => mockDocs }),
-        aggregate: (_pipeline: object[]) => ({ toArray: async () => [{ _id: 'NYC', count: 5 }] }),
+        find: (filter: object) => {
+          const call: FindCall = { filter, limit: 0 }
+          self.findCalls.push(call)
+          return {
+            limit(n: number) {
+              call.limit = n
+              return this
+            },
+            toArray: async () => mockDocs,
+          }
+        },
+        aggregate: (pipeline: object[]) => {
+          self.aggregateCalls.push({ pipeline })
+          return { toArray: async () => [{ _id: 'NYC', count: 5 }] }
+        },
         estimatedDocumentCount: async () => 100,
       }),
       listCollections: () => ({ toArray: async () => mockCollectionDefs }),
@@ -192,6 +216,40 @@ describe('MongoDBAdapter', () => {
     test('throws ConnectionError when not connected', async () => {
       const a = new MongoDBAdapter(uriOptions, MockMongoClient as any)
       await expect(a.execute('{}', ['users'])).rejects.toBeInstanceOf(ConnectionError)
+    })
+
+    test('applies options.limit to find filter', async () => {
+      await adapter.execute('{"age": {"$gt": 18}}', ['users'], { limit: 7 })
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.findCalls).toHaveLength(1)
+      expect(client.findCalls[0]!.limit).toBe(7)
+    })
+
+    test('passes limit 0 (no limit) when options.limit is omitted', async () => {
+      await adapter.execute('{}', ['users'])
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.findCalls).toHaveLength(1)
+      expect(client.findCalls[0]!.limit).toBe(0)
+    })
+
+    test('appends $limit stage to aggregate pipeline when options.limit is set', async () => {
+      const pipeline = '[{"$match":{"status":"active"}}]'
+      await adapter.execute(pipeline, ['orders'], { limit: 25 })
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.aggregateCalls).toHaveLength(1)
+      const stages = client.aggregateCalls[0]!.pipeline
+      expect(stages.length).toBe(2)
+      expect(stages[1]).toEqual({ $limit: 25 })
+    })
+
+    test('does not append $limit when pipeline already ends with $limit', async () => {
+      const pipeline = '[{"$match":{"status":"active"}},{"$limit":3}]'
+      await adapter.execute(pipeline, ['orders'], { limit: 100 })
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.aggregateCalls).toHaveLength(1)
+      const stages = client.aggregateCalls[0]!.pipeline
+      expect(stages.length).toBe(2)
+      expect(stages[1]).toEqual({ $limit: 3 })
     })
   })
 

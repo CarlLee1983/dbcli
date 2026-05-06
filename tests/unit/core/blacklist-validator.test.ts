@@ -2,7 +2,7 @@
  * BlacklistValidator unit tests
  */
 
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, spyOn } from 'bun:test'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
@@ -83,6 +83,68 @@ describe('BlacklistValidator', () => {
       const validator = makeValidator({ tables: ['audit_logs'], columns: {} }, 'true')
       // Should not throw
       expect(() => validator.checkTableBlacklist('SELECT', 'audit_logs', [])).not.toThrow()
+    })
+  })
+
+  describe('checkColumnBlacklistOnWrite()', () => {
+    it('does not throw when no fields intersect blacklist', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+      expect(() =>
+        validator.checkColumnBlacklistOnWrite('users', ['name', 'email'], 'INSERT')
+      ).not.toThrow()
+    })
+
+    it('throws BlacklistError when fields intersect blacklist', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['password', 'api_key'] } })
+      try {
+        validator.checkColumnBlacklistOnWrite('users', ['name', 'password'], 'INSERT')
+        expect(true).toBe(false)
+      } catch (e) {
+        expect(e).toBeInstanceOf(BlacklistError)
+        const err = e as BlacklistError
+        expect(err.message).toContain('users')
+        expect(err.message).toContain('INSERT')
+        expect(err.message).toContain('password')
+        expect(err.tableName).toBe('users')
+        expect(err.operation).toBe('INSERT')
+      }
+    })
+
+    it('lists all conflicting columns in the error message', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['password', 'api_key'] } })
+      try {
+        validator.checkColumnBlacklistOnWrite('users', ['name', 'password', 'api_key'], 'UPDATE')
+        expect(true).toBe(false)
+      } catch (e) {
+        const err = e as BlacklistError
+        expect(err.message).toContain('password')
+        expect(err.message).toContain('api_key')
+      }
+    })
+
+    it('does not throw when override is enabled (warning path)', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } }, 'true')
+      const errSpy = spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        expect(() =>
+          validator.checkColumnBlacklistOnWrite('users', ['password'], 'INSERT')
+        ).not.toThrow()
+        expect(errSpy).toHaveBeenCalled()
+      } finally {
+        errSpy.mockRestore()
+      }
+    })
+
+    it('returns silently when table has no column blacklist', () => {
+      const validator = makeValidator({ tables: [], columns: {} })
+      expect(() =>
+        validator.checkColumnBlacklistOnWrite('users', ['password'], 'INSERT')
+      ).not.toThrow()
+    })
+
+    it('returns silently when fields list is empty', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+      expect(() => validator.checkColumnBlacklistOnWrite('users', [], 'INSERT')).not.toThrow()
     })
   })
 

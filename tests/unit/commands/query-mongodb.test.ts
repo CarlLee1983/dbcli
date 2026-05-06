@@ -6,9 +6,15 @@ import { QueryResultFormatter } from '@/formatters'
 import { queryCommand } from '@/commands/query'
 
 class MockMongoAdapter implements QueryableAdapter {
+  lastExecuteOptions: { limit?: number } | undefined
   async connect() {}
   async disconnect() {}
-  async execute<T>(): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    _query: string,
+    _params?: unknown[],
+    options?: { limit?: number }
+  ): Promise<ExecutionResult<T>> {
+    this.lastExecuteOptions = options
     const data = [{ _id: '1', name: 'Alice', city: 'Taipei' }] as T[]
     return { rows: data, affectedRows: data.length }
   }
@@ -21,9 +27,15 @@ class MockMongoAdapter implements QueryableAdapter {
   async getServerVersion() {
     return '6.0.1'
   }
-  async insert() { return { rows: [], affectedRows: 1 } }
-  async update() { return { rows: [], affectedRows: 1 } }
-  async delete() { return { rows: [], affectedRows: 1 } }
+  async insert() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async update() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async delete() {
+    return { rows: [], affectedRows: 1 }
+  }
 }
 
 const mongoConfig = {
@@ -44,12 +56,14 @@ const mongoConfig = {
 let configReadSpy: any
 let createMongoAdapterSpy: any
 let formatterSpy: any
+let mockAdapter: MockMongoAdapter
 
 describe('Query Command - MongoDB', () => {
   beforeEach(() => {
     configReadSpy = spyOn(configModule, 'read').mockResolvedValue(mongoConfig as any)
+    mockAdapter = new MockMongoAdapter()
     createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      new MockMongoAdapter()
+      mockAdapter
     )
     formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation(
       () => '[{"_id":"1","name":"Alice"}]'
@@ -124,5 +138,32 @@ describe('Query Command - MongoDB', () => {
     expect(createMongoAdapterSpy).toHaveBeenCalled()
     expect(logSpy).toHaveBeenCalled()
     logSpy.mockRestore()
+  })
+
+  test('passes explicit --limit through to mongo adapter execute()', async () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = spyOn(console, 'error').mockImplementation(() => {})
+    await queryCommand('{}', { collection: 'users', format: 'json', limit: 5 })
+    expect(mockAdapter.lastExecuteOptions).toEqual({ limit: 5 })
+    logSpy.mockRestore()
+    errSpy.mockRestore()
+  })
+
+  test('applies query-only auto-limit when no --limit/--no-limit given', async () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = spyOn(console, 'error').mockImplementation(() => {})
+    await queryCommand('{}', { collection: 'users', format: 'json' })
+    expect(mockAdapter.lastExecuteOptions?.limit).toBe(1000)
+    logSpy.mockRestore()
+    errSpy.mockRestore()
+  })
+
+  test('--no-limit disables both explicit and auto-limit', async () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = spyOn(console, 'error').mockImplementation(() => {})
+    await queryCommand('{}', { collection: 'users', format: 'json', noLimit: true })
+    expect(mockAdapter.lastExecuteOptions).toBeUndefined()
+    logSpy.mockRestore()
+    errSpy.mockRestore()
   })
 })

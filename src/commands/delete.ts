@@ -119,6 +119,11 @@ export async function deleteCommand(
     }
 
     if (config.connection?.system === 'mongodb') {
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('DELETE', table, [])
+
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {

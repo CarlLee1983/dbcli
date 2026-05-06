@@ -193,7 +193,11 @@ export class MongoDBAdapter implements QueryableAdapter {
     }
   }
 
-  async execute<T>(query: string, params?: unknown[]): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    query: string,
+    params?: unknown[],
+    options?: { limit?: number }
+  ): Promise<ExecutionResult<T>> {
     const db = this.getDatabase()
     const collectionName = params?.[0] as string
     const collection = db.collection(collectionName)
@@ -205,11 +209,24 @@ export class MongoDBAdapter implements QueryableAdapter {
       throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
     }
 
+    const limit = options?.limit
     let docs: T[]
     if (Array.isArray(parsed)) {
-      docs = (await collection.aggregate(parsed as object[]).toArray()) as T[]
+      const stages = parsed as Record<string, unknown>[]
+      const lastStage = stages[stages.length - 1]
+      const alreadyHasLimit = !!lastStage && typeof lastStage === 'object' && '$limit' in lastStage
+      const finalStages =
+        typeof limit === 'number' && limit > 0 && !alreadyHasLimit
+          ? [...stages, { $limit: limit }]
+          : stages
+      docs = (await collection.aggregate(finalStages).toArray()) as T[]
     } else {
-      docs = (await collection.find(parsed as object).toArray()) as T[]
+      // mongo driver treats limit(0) as "no limit"
+      const cap = typeof limit === 'number' && limit > 0 ? limit : 0
+      docs = (await collection
+        .find(parsed as object)
+        .limit(cap)
+        .toArray()) as T[]
     }
 
     return { rows: docs, affectedRows: docs.length }
@@ -282,7 +299,10 @@ export class MongoDBAdapter implements QueryableAdapter {
     return info.version ?? 'unknown'
   }
 
-  async insert(collection: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
+  async insert(
+    collection: string,
+    data: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     const result = await db.collection(collection).insertOne(data)
     return {
@@ -305,7 +325,10 @@ export class MongoDBAdapter implements QueryableAdapter {
     }
   }
 
-  async delete(collection: string, filter: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
+  async delete(
+    collection: string,
+    filter: Record<string, unknown>
+  ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     const result = await db.collection(collection).deleteMany(filter)
     return {

@@ -98,6 +98,7 @@
     "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
     "invalid_json": "無效的 JSON：{message}",
     "table_blacklisted": "錯誤: 表格 '{table}' 的 {operation} 操作已被黑名單",
+    "column_blacklisted_write": "錯誤: 表格 '{table}' 的 {operation} 操作包含黑名單欄位: {columns}",
     "table_already_blacklisted": "錯誤: 表格 '{table}' 已在黑名單中",
     "table_not_in_blacklist": "錯誤: 表格 '{table}' 不在黑名單中",
     "column_already_blacklisted": "錯誤: 欄位 '{table}.{column}' 已在黑名單中",

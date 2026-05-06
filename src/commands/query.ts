@@ -15,6 +15,7 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat, type DbcliConfig } from '@/utils/validation'
+import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 
@@ -193,10 +194,26 @@ async function mongoQueryBranch(
     }
   }
 
+  // Resolve effective result-cardinality cap.
+  // Priority: explicit --no-limit > explicit --limit > query-only auto-limit > none
+  let effectiveLimit: number | undefined
+  if (options.noLimit) {
+    effectiveLimit = undefined
+  } else if (typeof options.limit === 'number') {
+    effectiveLimit = options.limit
+  } else if (config.permission === 'query-only') {
+    effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
+    console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
+  }
+
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await mongoAdapter.connect()
   try {
-    const result = await mongoAdapter.execute<Record<string, unknown>>(queryStr, [collection])
+    const result = await mongoAdapter.execute<Record<string, unknown>>(
+      queryStr,
+      [collection],
+      effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
+    )
 
     // Redact blacklisted columns using validator
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []

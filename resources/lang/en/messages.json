@@ -98,6 +98,7 @@
     "unsupported_lang": "Language '{lang}' not supported, using English",
     "invalid_json": "Invalid JSON: {message}",
     "table_blacklisted": "Error: Table '{table}' is blacklisted for {operation} operations",
+    "column_blacklisted_write": "Error: {operation} on table '{table}' touches blacklisted columns: {columns}",
     "table_already_blacklisted": "Error: Table '{table}' is already blacklisted",
     "table_not_in_blacklist": "Error: Table '{table}' is not in the blacklist",
     "column_already_blacklisted": "Error: Column '{table}.{column}' is already blacklisted",

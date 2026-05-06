@@ -54,6 +54,48 @@ export class BlacklistValidator {
   }
 
   /**
+   * Reject a write that touches blacklisted columns.
+   * Computes the intersection of `fields` with the table's column blacklist
+   * and throws BlacklistError when non-empty. When override is enabled,
+   * emits a console warning and returns without throwing.
+   *
+   * @param tableName Table or collection name
+   * @param fields Top-level field/column names being written
+   * @param operation SQL operation type (defaults to 'WRITE')
+   * @throws BlacklistError when any field is blacklisted and override is off
+   */
+  checkColumnBlacklistOnWrite(
+    tableName: string,
+    fields: string[],
+    operation: string = 'WRITE'
+  ): void {
+    const blacklisted = this.manager.getBlacklistedColumns(tableName)
+    if (blacklisted.length === 0 || fields.length === 0) {
+      return
+    }
+    const conflicts = fields.filter((f) => blacklisted.includes(f))
+    if (conflicts.length === 0) {
+      return
+    }
+
+    if (this.manager.canOverrideBlacklist()) {
+      const warning = t_vars('warnings.blacklist_override_used', {
+        operation,
+        table: tableName,
+      })
+      console.error(`${warning} (columns: ${conflicts.join(', ')})`)
+      return
+    }
+
+    const message = t_vars('errors.column_blacklisted_write', {
+      table: tableName,
+      operation,
+      columns: conflicts.join(', '),
+    })
+    throw new BlacklistError(message, tableName, operation)
+  }
+
+  /**
    * Filter blacklisted columns from query result rows.
    * Returns new row objects without blacklisted columns (immutable).
    *

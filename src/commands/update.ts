@@ -130,6 +130,36 @@ export async function updateCommand(
 
     if (config.connection?.system === 'mongodb') {
       enforcePermission('UPDATE dummy', config.permission)
+
+      // Compute the update doc up-front so blacklist sees the real fields being written
+      const hasOperator = Object.keys(setData).some((key) => key.startsWith('$'))
+      const updateDoc = hasOperator ? setData : { $set: setData }
+
+      // Collect top-level field names actually being written.
+      // For operator docs we look inside $set / $unset (those write fields).
+      const writtenFields = new Set<string>()
+      if (hasOperator) {
+        const operators = updateDoc as Record<string, unknown>
+        for (const [op, payload] of Object.entries(operators)) {
+          if (
+            (op === '$set' || op === '$unset') &&
+            payload &&
+            typeof payload === 'object' &&
+            !Array.isArray(payload)
+          ) {
+            for (const k of Object.keys(payload as Record<string, unknown>)) writtenFields.add(k)
+          }
+        }
+      } else {
+        for (const k of Object.keys(setData)) writtenFields.add(k)
+      }
+
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('UPDATE', table, [])
+      blacklistValidator.checkColumnBlacklistOnWrite(table, Array.from(writtenFields), 'UPDATE')
+
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
@@ -140,11 +170,6 @@ export async function updateCommand(
           // If not JSON, try parsing as simple key=value pairs for convenience
           filter = parseWhereClause(options.where)
         }
-
-        // If setData doesn't start with $, wrap it in $set
-        const updateDoc = Object.keys(setData).some((key) => key.startsWith('$'))
-          ? setData
-          : { $set: setData }
 
         const result = await adapter.update(table, filter, updateDoc)
         const output = {

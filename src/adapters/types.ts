@@ -209,10 +209,15 @@ export interface QueryableAdapter {
    * Accepts JSON query strings for MongoDB operations
    * @param query Query string (JSON format for MongoDB)
    * @param params Array of parameter values in order
+   * @param options Optional execution controls (e.g. result-cardinality limit)
    * @returns Execution result containing rows and metadata
    * @throws {ConnectionError} If query execution fails
    */
-  execute<T>(query: string, params?: unknown[]): Promise<ExecutionResult<T>>
+  execute<T>(
+    query: string,
+    params?: unknown[],
+    options?: { limit?: number }
+  ): Promise<ExecutionResult<T>>
 
   /**
    * List all collections in the connected database

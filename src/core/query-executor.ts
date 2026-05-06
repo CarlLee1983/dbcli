@@ -11,6 +11,7 @@ import type { QueryResult } from '@/types/query'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
+import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 
 /**
  * QueryExecutor class for executing SQL queries with permission checks
@@ -55,7 +56,7 @@ export class QueryExecutor {
         !executeSql.match(/LIMIT\s+\d+/i) &&
         options?.autoLimit !== false
       ) {
-        const limitValue = options?.limitValue || 1000
+        const limitValue = options?.limitValue || DEFAULT_QUERY_ONLY_LIMIT
         executeSql = `${executeSql} LIMIT ${limitValue}`
         console.error(`Query-only mode: auto-limiting to ${limitValue} rows`)
       }
@@ -111,7 +112,7 @@ export class QueryExecutor {
         columnTypes,
         executionTimeMs,
         metadata: {
-          statement: classification.type as import("@/types/query").SqlStatementType,
+          statement: classification.type as import('@/types/query').SqlStatementType,
           affectedRows: affectedRows,
           ...(securityNotification ? { securityNotification } : {}),
         },

@@ -104,6 +104,13 @@ export async function insertCommand(
 
     if (config.connection.system === 'mongodb') {
       enforcePermission('INSERT INTO dummy', config.permission)
+
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('INSERT', table, [])
+      blacklistValidator.checkColumnBlacklistOnWrite(table, Object.keys(data), 'INSERT')
+
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {

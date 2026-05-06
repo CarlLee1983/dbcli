@@ -6,8 +6,8 @@
 import { $ } from 'bun'
 import * as path from 'node:path'
 import { homedir } from 'node:os'
-import { t_vars } from '@/i18n/message-loader'
-import type { Command } from 'commander'
+import { t, t_vars } from '@/i18n/message-loader'
+import { Command } from 'commander'
 
 /**
  * Finds the package root (the directory containing package.json)
@@ -200,4 +200,27 @@ async function ensureDir(dirPath: string): Promise<void> {
       throw new Error(`Cannot create directory: ${dirPath}`)
     }
   }
+}
+
+/**
+ * Register the `skill` command (and return it) so callers can chain
+ * additional sub-commands like `skill tasks list/show/plan` from cli.ts.
+ */
+export function registerSkillCommand(program: Command): Command {
+  return program
+    .command('skill')
+    .description(t('skill.description'))
+    .option(
+      '--install <platform>',
+      'Install to platform directory (claude, gemini, copilot, cursor)'
+    )
+    .option('--output <path>', 'Write skill to file instead of stdout')
+    .action(async (options: Record<string, unknown>) => {
+      try {
+        await skillCommand(program, options)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
 }

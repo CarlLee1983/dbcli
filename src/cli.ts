@@ -13,7 +13,8 @@ import { insertCommand } from './commands/insert'
 import { updateCommand } from './commands/update'
 import { deleteCommand } from './commands/delete'
 import { exportCommand } from './commands/export'
-import { skillCommand } from './commands/skill'
+import { registerSkillCommand } from './commands/skill'
+import { registerSkillTasksCommand } from './commands/skill-tasks'
 import { blacklistCommand } from './commands/blacklist'
 import { checkCommand } from './commands/check'
 import { diffCommand } from './commands/diff'
@@ -242,20 +243,9 @@ program
     }
   })
 
-// Register skill command
-program
-  .command('skill')
-  .description(t('skill.description'))
-  .option('--install <platform>', 'Install to platform directory (claude, gemini, copilot, cursor)')
-  .option('--output <path>', 'Write skill to file instead of stdout')
-  .action(async (options: Record<string, unknown>) => {
-    try {
-      await skillCommand(program, options)
-    } catch (error) {
-      console.error((error as Error).message)
-      process.exit(1)
-    }
-  })
+// Register skill command + skill tasks sub-tree
+const skillCmd = registerSkillCommand(program)
+registerSkillTasksCommand(skillCmd)
 
 // Register blacklist command
 program.addCommand(blacklistCommand)

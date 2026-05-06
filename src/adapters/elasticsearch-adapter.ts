@@ -42,16 +42,72 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     throw new Error('Method not implemented.')
   }
 
-  async listCollections(options?: { includeSystem?: boolean }): Promise<{ name: string; documentCount?: number }[]> {
-    throw new Error('Method not implemented.')
+  async listCollections(options?: {
+    includeSystem?: boolean
+  }): Promise<{ name: string; documentCount?: number }[]> {
+    const indices = await this.request<Record<string, any>>('GET', '/_settings')
+    const stats = await this.request<any>('GET', '/_stats/docs')
+
+    return Object.keys(indices)
+      .filter((name) => options?.includeSystem || !name.startsWith('.'))
+      .map((name) => ({
+        name,
+        documentCount: stats.indices?.[name]?.total?.docs?.count ?? 0,
+      }))
   }
 
   async listTables(options?: { includeSystem?: boolean }): Promise<TableSchema[]> {
-    throw new Error('Method not implemented.')
+    const collections = await this.listCollections(options)
+    return collections.map((c) => ({
+      name: c.name,
+      columns: [],
+      estimatedRowCount: c.documentCount,
+      tableType: 'table',
+    }))
   }
 
-  async getTableSchema(tableName: string, options?: { sampleSize?: number }): Promise<TableSchema> {
-    throw new Error('Method not implemented.')
+  async getTableSchema(tableName: string, _options?: { sampleSize?: number }): Promise<TableSchema> {
+    const mapping = await this.request<any>('GET', `/${tableName}/_mapping`)
+    const indexMapping = mapping[tableName] || Object.values(mapping)[0]
+
+    if (!indexMapping) {
+      throw new Error(`Index not found: ${tableName}`)
+    }
+
+    const columns: any[] = []
+    this.flattenProperties('', indexMapping.mappings?.properties || {}, columns)
+
+    return {
+      name: tableName,
+      columns,
+      tableType: 'table',
+    }
+  }
+
+  private flattenProperties(prefix: string, properties: any, columns: any[]) {
+    for (const [name, config] of Object.entries<any>(properties)) {
+      const fullName = prefix ? `${prefix}.${name}` : name
+
+      if (config.properties) {
+        this.flattenProperties(fullName, config.properties, columns)
+      } else {
+        columns.push({
+          name: fullName,
+          type: config.type || 'object',
+          nullable: true,
+        })
+
+        if (config.fields) {
+          for (const [fieldName, fieldConfig] of Object.entries<any>(config.fields)) {
+            columns.push({
+              name: `${fullName}.${fieldName}`,
+              type: fieldConfig.type,
+              nullable: true,
+            })
+          }
+        }
+      }
+    }
   }
 
   async testConnection(): Promise<boolean> {

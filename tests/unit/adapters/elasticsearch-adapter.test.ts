@@ -82,3 +82,83 @@ describe('ElasticsearchAdapter', () => {
     }
   })
 })
+
+describe('ElasticsearchAdapter list/schema', () => {
+  let originalFetch: typeof fetch
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test('listCollections returns indices and doc counts', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    const mockIndices = {
+      'users': { settings: { index: { creation_date: '...' } } },
+      '.security': { settings: { index: { creation_date: '...' } } },
+    }
+    
+    const mockStats = {
+      indices: {
+        'users': { total: { docs: { count: 100 } } },
+        '.security': { total: { docs: { count: 5 } } },
+      }
+    }
+    
+    // @ts-ignore
+    globalThis.fetch = Response.json ? async (url: string) => {
+        if (url.includes('_settings')) return Response.json(mockIndices)
+        if (url.includes('_stats')) return Response.json(mockStats)
+        return Response.json({})
+    } : async (url: string) => {
+        if (url.includes('_settings')) return new Response(JSON.stringify(mockIndices))
+        if (url.includes('_stats')) return new Response(JSON.stringify(mockStats))
+        return new Response('{}')
+    }
+      
+    const collections = await adapter.listCollections()
+    expect(collections).toHaveLength(1)
+    expect(collections[0].name).toBe('users')
+    expect(collections[0].documentCount).toBe(100)
+    
+    const allCollections = await adapter.listCollections({ includeSystem: true })
+    expect(allCollections).toHaveLength(2)
+  })
+
+  test('getTableSchema flattens mappings', async () => {
+    const adapter = new ElasticsearchAdapter({ system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' })
+    
+    const mockMapping = {
+      'users': {
+        mappings: {
+          properties: {
+            'id': { type: 'keyword' },
+            'name': { type: 'text', fields: { 'keyword': { type: 'keyword' } } },
+            'profile': {
+              properties: {
+                'email': { type: 'keyword' },
+                'age': { type: 'integer' }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // @ts-ignore
+    globalThis.fetch = async () => new Response(JSON.stringify(mockMapping))
+    
+    const schema = await adapter.getTableSchema('users')
+    expect(schema.name).toBe('users')
+    const columnNames = schema.columns.map(c => c.name)
+    expect(columnNames).toContain('id')
+    expect(columnNames).toContain('name')
+    expect(columnNames).toContain('name.keyword')
+    expect(columnNames).toContain('profile.email')
+    expect(columnNames).toContain('profile.age')
+  })
+})

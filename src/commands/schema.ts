@@ -112,6 +112,39 @@ async function schemaAction(
       return
     }
 
+    // Elasticsearch branch
+    if (config.connection.system === 'elasticsearch') {
+      const esAdapter = AdapterFactory.createElasticsearchAdapter(
+        config.connection as ConnectionOptions
+      )
+      await esAdapter.connect()
+      try {
+        if (table) {
+          if (!esAdapter.getTableSchema)
+            throw new Error('Elasticsearch adapter does not implement getTableSchema')
+          await handleSingleTableSchema(
+            esAdapter as unknown as DatabaseAdapter,
+            table,
+            options.format,
+            inferenceOptions
+          )
+          return
+        }
+        await handleFullDatabaseScan(
+          esAdapter as unknown as DatabaseAdapter,
+          config,
+          options,
+          connectionName,
+          existingSchemaCount,
+          storagePath,
+          inferenceOptions
+        )
+        return
+      } finally {
+        await esAdapter.disconnect()
+      }
+    }
+
     // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
     const connectionName = await getSchemaIsolationConnectionName(options.config)
 

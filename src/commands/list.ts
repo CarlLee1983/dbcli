@@ -19,13 +19,21 @@ export const listCommand = new Command()
   .description('List all tables in the database with metadata')
   .option('--format <format>', 'Output format: table (default) or json', 'table')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .option(
+    '--include-system',
+    'Elasticsearch only: include system indices whose names start with dot',
+    false
+  )
   .action(listAction)
 
 /**
  * List command action handler
  * Connects to the database, retrieves the table list, and formats output
  */
-async function listAction(options: { format: string; config: string }, command: Command) {
+async function listAction(
+  options: { format: string; config: string; includeSystem?: boolean },
+  command: Command
+) {
   try {
     validateFormat(options.format, ALLOWED_FORMATS, 'list')
 
@@ -45,6 +53,11 @@ async function listAction(options: { format: string; config: string }, command: 
     // Redis: keys instead of tables, scoped through the QueryableAdapter
     if (config.connection.system === 'redis') {
       return redisListBranch(config, options.format)
+    }
+
+    // Elasticsearch branch
+    if (config.connection.system === 'elasticsearch') {
+      return elasticsearchListBranch(config, options.format, options.includeSystem === true)
     }
 
     // Create adapter from configuration
@@ -159,5 +172,47 @@ async function redisListBranch(
     }
   } finally {
     await redisAdapter.disconnect()
+  }
+}
+
+async function elasticsearchListBranch(
+  config: import('@/utils/validation').DbcliConfig,
+  format: string,
+  includeSystem: boolean
+): Promise<void> {
+  const esAdapter = AdapterFactory.createElasticsearchAdapter(
+    config.connection as ConnectionOptions
+  )
+  await esAdapter.connect()
+
+  try {
+    if (!esAdapter.listTables)
+      throw new Error('Elasticsearch adapter does not implement listTables')
+    const tables = await esAdapter.listTables({ includeSystem })
+
+    if (tables.length === 0) {
+      console.log('No indices found in this Elasticsearch cluster.')
+      return
+    }
+
+    if (format === 'json') {
+      console.log(JSON.stringify(tables, null, 2))
+    } else {
+      console.log('Indices in elasticsearch:')
+      for (const table of tables) {
+        const type = table.tableType === 'view' ? 'alias' : 'index'
+        const count =
+          table.estimatedRowCount != null
+            ? ` (${table.estimatedRowCount.toLocaleString()} docs)`
+            : ''
+        console.log(`  ${table.name.padEnd(24)} ${type}${count}`)
+      }
+      const indexCount = tables.filter((table) => table.tableType !== 'view').length
+      const aliasCount = tables.filter((table) => table.tableType === 'view').length
+      const aliasSuffix = aliasCount > 0 ? ` (${aliasCount} aliases)` : ''
+      console.log(`\n✓ Found ${indexCount} indices${aliasSuffix}`)
+    }
+  } finally {
+    await esAdapter.disconnect()
   }
 }

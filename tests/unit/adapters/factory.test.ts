@@ -82,3 +82,25 @@ test('createMongoDBAdapter throws for non-mongodb system', () => {
     AdapterFactory.createMongoDBAdapter({ ...validOptions, system: 'postgresql' })
   }).toThrow('createMongoDBAdapter requires system: mongodb')
 })
+
+const esOptions: ConnectionOptions = {
+  system: 'elasticsearch',
+  protocol: 'http',
+  host: 'localhost',
+  port: 9200,
+  user: '',
+  password: '',
+  database: '',
+}
+
+test('createElasticsearchAdapter returns ElasticsearchAdapter for elasticsearch system', async () => {
+  const { ElasticsearchAdapter } = await import('src/adapters/elasticsearch-adapter')
+  const adapter = AdapterFactory.createElasticsearchAdapter(esOptions)
+  expect(adapter).toBeInstanceOf(ElasticsearchAdapter)
+})
+
+test('createAdapter routes to elasticsearch', async () => {
+  const { ElasticsearchAdapter } = await import('src/adapters/elasticsearch-adapter')
+  const adapter = AdapterFactory.createAdapter(esOptions)
+  expect(adapter).toBeInstanceOf(ElasticsearchAdapter)
+})

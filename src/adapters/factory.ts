@@ -8,6 +8,7 @@ import { PostgreSQLAdapter } from './postgresql-adapter'
 import { MySQLAdapter } from './mysql-adapter'
 import { MongoDBAdapter } from './mongodb-adapter'
 import { RedisAdapter } from './redis-adapter'
+import { ElasticsearchAdapter } from './elasticsearch-adapter'
 
 /**
  * Factory for creating database adapters
@@ -35,6 +36,8 @@ export class AdapterFactory {
         return new MongoDBAdapter(options) as unknown as DatabaseAdapter
       case 'redis':
         return new RedisAdapter(options) as unknown as DatabaseAdapter
+      case 'elasticsearch':
+        return new ElasticsearchAdapter(options) as unknown as DatabaseAdapter
       default:
         throw new Error(`Unsupported database system: ${options.system}`)
     }
@@ -70,7 +73,22 @@ export class AdapterFactory {
     }
     return new RedisAdapter(options)
   }
+
+  /**
+   * Create an Elasticsearch adapter instance for queryable Elasticsearch operations.
+   * Elasticsearch adapters share the QueryableAdapter contract with MongoDB/Redis.
+   *
+   * @param options Connection configuration (system must be 'elasticsearch')
+   * @returns QueryableAdapter instance for Elasticsearch
+   * @throws {Error} If system type is not 'elasticsearch'
+   */
+  static createElasticsearchAdapter(options: ConnectionOptions): QueryableAdapter {
+    if (options.system !== 'elasticsearch') {
+      throw new Error('createElasticsearchAdapter requires system: elasticsearch')
+    }
+    return new ElasticsearchAdapter(options)
+  }
 }
 
 // Export adapter classes for testing
-export { PostgreSQLAdapter, MySQLAdapter, MongoDBAdapter, RedisAdapter }
+export { PostgreSQLAdapter, MySQLAdapter, MongoDBAdapter, RedisAdapter, ElasticsearchAdapter }

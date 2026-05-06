@@ -275,3 +275,78 @@ describe('RedisAdapter — discovery & schema', () => {
   })
 })
 
+describe('RedisAdapter — command execution & DML', () => {
+  test('execute() routes through client.call with parsed tokens', async () => {
+    const { adapter, client } = makeAdapter()
+    client.customHandlers.GET = (_key) => 'world'
+    await adapter.connect()
+    const result = await adapter.execute('GET hello')
+    expect(client.callLog).toEqual([{ cmd: 'GET', args: ['hello'] }])
+    expect(result.rows).toEqual([{ value: 'world' }])
+  })
+
+  test('execute() flattens HGETALL replies into a single object row', async () => {
+    const { adapter, client } = makeAdapter()
+    client.customHandlers.HGETALL = () => ['name', 'Alice', 'age', '30']
+    await adapter.connect()
+    const result = await adapter.execute<Record<string, unknown>>('HGETALL user:1')
+    expect(result.rows).toEqual([{ name: 'Alice', age: '30' }])
+  })
+
+  test('execute() rejects empty commands', async () => {
+    const { adapter } = makeAdapter()
+    await adapter.connect()
+    let caught: unknown
+    try {
+      await adapter.execute('')
+    } catch (err) {
+      caught = err
+    }
+    expect((caught as Error).message).toContain('不可為空')
+  })
+
+  test('insert() with __type=string sets the key and applies TTL', async () => {
+    const { adapter, client } = makeAdapter()
+    await adapter.connect()
+    const result = await adapter.insert('greeting', { value: 'hi', ttl: 30 })
+    expect(result.affectedRows).toBe(1)
+    expect(client.storage.get('greeting')).toBe('hi')
+    expect(client.ttls.get('greeting')).toBe(30)
+  })
+
+  test('insert() with __type=hash writes all fields', async () => {
+    const { adapter, client } = makeAdapter()
+    await adapter.connect()
+    await adapter.insert('user:1', {
+      __type: 'hash',
+      fields: { name: 'Alice', email: 'a@example.com' },
+    })
+    expect(client.storage.get('user:1')).toEqual({ name: 'Alice', email: 'a@example.com' })
+  })
+
+  test('update() can patch hash fields', async () => {
+    const { adapter, client } = makeAdapter()
+    client.storage.set('user:1', { name: 'Alice' })
+    await adapter.connect()
+    await adapter.update('user:1', {}, { fields: { name: 'Bob' } })
+    expect(client.storage.get('user:1')).toEqual({ name: 'Bob' })
+  })
+
+  test('delete() removes the entire key when no field filter is given', async () => {
+    const { adapter, client } = makeAdapter()
+    client.storage.set('greeting', 'hi')
+    await adapter.connect()
+    const result = await adapter.delete('greeting', {})
+    expect(result.affectedRows).toBe(1)
+    expect(client.storage.has('greeting')).toBe(false)
+  })
+
+  test('delete() removes a specific hash field when filter.field is given', async () => {
+    const { adapter, client } = makeAdapter()
+    client.storage.set('user:1', { name: 'Alice', email: 'a@example.com' })
+    await adapter.connect()
+    const result = await adapter.delete('user:1', { field: 'email' })
+    expect(result.affectedRows).toBe(1)
+    expect(client.storage.get('user:1')).toEqual({ name: 'Alice' })
+  })
+})

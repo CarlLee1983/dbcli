@@ -17,6 +17,8 @@ import type { TableSchema, DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
 
+import { resolveConfigPath } from '@/utils/config-path'
+
 const ALLOWED_FORMATS = ['table', 'json'] as const
 
 export const schemaCommand = new Command()
@@ -50,15 +52,17 @@ async function schemaAction(
     reset: boolean
     force: boolean
     sampleSize?: string
-  }
+  },
+  command: Command
 ) {
   try {
     validateFormat(options.format, ALLOWED_FORMATS, 'schema')
 
-    const storagePath = await resolveConfigStoragePath(options.config)
+    const configPath = resolveConfigPath(command, options)
+    const storagePath = await resolveConfigStoragePath(configPath)
 
     // Load configuration from .dbcli
-    const config = await configModule.read(options.config)
+    const config = await configModule.read(configPath)
 
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')
@@ -78,6 +82,22 @@ async function schemaAction(
       } else {
         console.error('--sample-size is MongoDB-only and is being ignored for this connection.')
       }
+    }
+
+    // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
+    const connectionName = await getSchemaIsolationConnectionName(configPath)
+
+    // Determine how many tables exist in this connection's dedicated schema slot.
+    let existingSchemaCount: number
+    if (connectionName !== undefined) {
+      try {
+        const v2Raw = await readV2Config(storagePath)
+        existingSchemaCount = Object.keys(v2Raw.schemas?.[connectionName] ?? {}).length
+      } catch {
+        existingSchemaCount = 0
+      }
+    } else {
+      existingSchemaCount = Object.keys(config.schema ?? {}).length
     }
 
     // Redis: full-database scans aren't meaningful; only allow inspecting a single key.
@@ -143,25 +163,6 @@ async function schemaAction(
       } finally {
         await esAdapter.disconnect()
       }
-    }
-
-    // Resolve connection name for per-connection schema isolation (V2 only; undefined for V1)
-    const connectionName = await getSchemaIsolationConnectionName(options.config)
-
-    // Determine how many tables exist in this connection's dedicated schema slot.
-    // V2: read the connection-specific slot only — the fallback shared `schema` must not
-    //     mislead the "schema already exists" guard on a first-time per-connection scan.
-    // V1: simply count config.schema tables.
-    let existingSchemaCount: number
-    if (connectionName !== undefined) {
-      try {
-        const v2Raw = await readV2Config(storagePath)
-        existingSchemaCount = Object.keys(v2Raw.schemas?.[connectionName] ?? {}).length
-      } catch {
-        existingSchemaCount = 0
-      }
-    } else {
-      existingSchemaCount = Object.keys(config.schema ?? {}).length
     }
 
     // Create adapter from configuration

@@ -112,6 +112,179 @@ describe('dbcli schema command', () => {
     expect((refreshOption as any).description).toContain('Refresh')
   })
 
+  test('schema command supports --sample-size option', () => {
+    const cmd = schemaCommand
+    const options = cmd.options
+    const sampleSizeOption = options.find((opt: any) => opt.name() === 'sample-size')
+    expect(sampleSizeOption).toBeDefined()
+    expect((sampleSizeOption as any).description).toMatch(/MongoDB|mongo|sample/i)
+  })
+
+  test('schema --sample-size flows to mongo adapter.getTableSchema', async () => {
+    await Bun.write(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          connection: {
+            system: 'mongodb',
+            host: 'localhost',
+            port: 27017,
+            user: '',
+            password: '',
+            database: 'testdb',
+            uri: 'mongodb://localhost:27017/testdb',
+          },
+          permission: 'read-write',
+          schema: {},
+          metadata: { version: '1.0' },
+        },
+        null,
+        2
+      )
+    )
+
+    const calls: { name: string; options: unknown }[] = []
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      listTables: async () => [{ name: 'users', columns: [] }],
+      getTableSchema: async (name: string, options?: unknown) => {
+        calls.push({ name, options })
+        return {
+          name,
+          columns: [{ name: '_id', type: 'string', nullable: true }],
+          tableType: 'table',
+          estimatedRowCount: 0,
+        }
+      },
+    }
+    const adapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(adapter as any)
+
+    await schemaCommand.parseAsync([
+      'node',
+      'schema',
+      '--config',
+      TEST_CONFIG_DIR,
+      '--sample-size',
+      '200',
+    ])
+
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[0]!.options).toEqual({ sampleSize: 200 })
+
+    adapterSpy.mockRestore()
+  })
+
+  test('schema full scan against mongo connection writes schemaLastUpdated', async () => {
+    await Bun.write(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          connection: {
+            system: 'mongodb',
+            host: 'localhost',
+            port: 27017,
+            user: '',
+            password: '',
+            database: 'testdb',
+            uri: 'mongodb://localhost:27017/testdb',
+          },
+          permission: 'read-write',
+          schema: {},
+          metadata: { version: '1.0' },
+        },
+        null,
+        2
+      )
+    )
+
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      listTables: async () => [{ name: 'users', columns: [] }],
+      getTableSchema: async (name: string) => ({
+        name,
+        columns: [{ name: '_id', type: 'string', nullable: true }],
+        tableType: 'table',
+        estimatedRowCount: 1,
+      }),
+    }
+    const adapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(adapter as any)
+
+    await schemaCommand.parseAsync(['node', 'schema', '--config', TEST_CONFIG_DIR, '--force'])
+
+    const written = JSON.parse(await Bun.file(TEST_CONFIG_PATH).text())
+    expect(written.metadata.schemaLastUpdated).toBeDefined()
+    expect(typeof written.metadata.schemaLastUpdated).toBe('string')
+    // ISO-8601 format check
+    expect(written.metadata.schemaLastUpdated).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(written.metadata.schemaTableCount).toBe(1)
+
+    adapterSpy.mockRestore()
+  })
+
+  test('schema --sample-size on SQL connection prints hint and ignores value', async () => {
+    await Bun.write(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          connection: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'u',
+            password: 'p',
+            database: 'd',
+          },
+          permission: 'query-only',
+          schema: {},
+          metadata: { version: '1.0' },
+        },
+        null,
+        2
+      )
+    )
+
+    const calls: unknown[] = []
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      listTables: async () => [{ name: 't', columns: [] }],
+      getTableSchema: async (name: string, options?: unknown) => {
+        calls.push(options)
+        return {
+          name,
+          columns: [],
+          primaryKey: [],
+          foreignKeys: [],
+          indexes: [],
+          estimatedRowCount: 0,
+          tableType: 'table',
+        }
+      },
+    }
+    const adapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(adapter as any)
+    const errSpy = spyOn(console, 'error').mockImplementation(() => {})
+
+    await schemaCommand.parseAsync([
+      'node',
+      'schema',
+      '--config',
+      TEST_CONFIG_DIR,
+      '--sample-size',
+      '99',
+    ])
+
+    const stderrCalls = errSpy.mock.calls.map((c) => c.join(' ')).join('\n')
+    expect(stderrCalls).toMatch(/sample-size|MongoDB|mongo/i)
+    expect(calls.every((opt) => opt === undefined || (opt as any)?.sampleSize === undefined)).toBe(
+      true
+    )
+
+    adapterSpy.mockRestore()
+    errSpy.mockRestore()
+  })
+
   test('schema --refresh updates refresh metadata even when no changes are detected', async () => {
     await Bun.write(
       TEST_CONFIG_PATH,

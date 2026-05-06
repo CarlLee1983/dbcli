@@ -257,12 +257,18 @@ export class MongoDBAdapter implements QueryableAdapter {
     }))
   }
 
-  async getTableSchema(collectionName: string): Promise<TableSchema> {
+  async getTableSchema(
+    collectionName: string,
+    options?: { sampleSize?: number }
+  ): Promise<TableSchema> {
     const db = this.getDatabase()
     const collection = db.collection(collectionName)
 
     const estimatedRowCount = await collection.estimatedDocumentCount()
-    const samples = await collection.find().limit(5).toArray()
+    const requested = options?.sampleSize
+    const desired = typeof requested === 'number' && requested >= 1 ? requested : 50
+    const sampleSize = Math.min(desired, 1000)
+    const samples = await collection.find().limit(sampleSize).toArray()
 
     const columnMap = new Map<string, Set<string>>()
     for (const doc of samples) {

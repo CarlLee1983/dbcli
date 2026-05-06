@@ -164,10 +164,11 @@ export interface DatabaseAdapter {
    * Fetch complete schema for a single table
    * Includes all columns with types and constraints
    * @param tableName Name of table to inspect
+   * @param options Optional adapter-specific knobs (e.g. mongo `sampleSize`); SQL adapters ignore them.
    * @returns Complete table schema including all column details
    * @throws {ConnectionError} If query fails
    */
-  getTableSchema(tableName: string): Promise<TableSchema>
+  getTableSchema(tableName: string, options?: { sampleSize?: number }): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query
@@ -234,8 +235,10 @@ export interface QueryableAdapter {
 
   /**
    * SQL-compatible schema lookup for shared command surfaces.
+   * @param tableName Name of collection/table to inspect
+   * @param options Optional adapter-specific knobs (e.g. mongo `sampleSize`).
    */
-  getTableSchema?(tableName: string): Promise<TableSchema>
+  getTableSchema?(tableName: string, options?: { sampleSize?: number }): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query

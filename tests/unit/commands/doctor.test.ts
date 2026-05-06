@@ -98,7 +98,9 @@ describe('doctor checks', () => {
     const result = await runDoctorChecks.checkMongoSrvConnectivity(
       'mongodb+srv://user:pass@cluster.example.mongodb.net/mydb',
       {
-        resolveSrvFn: (async () => [{ name: "a.example.com", port: 27017, priority: 0, weight: 0 }]) as typeof import("dns/promises").resolveSrv,
+        resolveSrvFn: (async () => [
+          { name: 'a.example.com', port: 27017, priority: 0, weight: 0 },
+        ]) as typeof import('dns/promises').resolveSrv,
       }
     )
 
@@ -138,7 +140,7 @@ describe('doctor checks', () => {
           throw error
         },
         fetchFn: (async () => {
-          throw new Error("Unable to connect. Is the computer able to access the url?")
+          throw new Error('Unable to connect. Is the computer able to access the url?')
         }) as unknown as typeof fetch,
       }
     )
@@ -221,6 +223,83 @@ describe('doctor checks', () => {
     expect(
       results.some((result) => result.label === 'Collections' && result.status === 'pass')
     ).toBe(true)
+    spy.mockRestore()
+    srvSpy.mockRestore()
+  })
+
+  test('collectMongoDoctorResults reports schema cache freshness using standard rules when schemaLastUpdated is present', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listTables: async () => [{ name: 'users', columns: [], estimatedRowCount: 1 }],
+      getTableSchema: async () => ({ name: 'users', columns: [], tableType: 'table' as const }),
+      listCollections: async () => [{ name: 'users', documentCount: 1 }],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+
+    const fresh = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const results = await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        uri: 'mongodb://localhost:27017/testdb',
+        host: 'localhost',
+        port: 27017,
+        user: '',
+        password: '',
+        database: 'testdb',
+      },
+      metadata: { schemaLastUpdated: fresh },
+    })
+
+    const cache = results.find((r) => r.label === 'Schema cache')
+    expect(cache).toBeDefined()
+    expect(cache!.status).toBe('pass')
+    expect(cache!.message).not.toMatch(/not tracked/i)
+
+    spy.mockRestore()
+    srvSpy.mockRestore()
+  })
+
+  test('collectMongoDoctorResults emits standard empty-cache message (not "not tracked") when metadata lacks schemaLastUpdated', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listTables: async () => [{ name: 'users', columns: [], estimatedRowCount: 0 }],
+      getTableSchema: async () => ({ name: 'users', columns: [], tableType: 'table' as const }),
+      listCollections: async () => [{ name: 'users', documentCount: 0 }],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+
+    const results = await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        uri: 'mongodb://localhost:27017/testdb',
+        host: 'localhost',
+        port: 27017,
+        user: '',
+        password: '',
+        database: 'testdb',
+      },
+      metadata: {},
+    })
+
+    const cache = results.find((r) => r.label === 'Schema cache')
+    expect(cache).toBeDefined()
+    expect(cache!.message).not.toMatch(/not tracked/i)
+    expect(cache!.message).toMatch(/No schema cache|schema --refresh/i)
+
     spy.mockRestore()
     srvSpy.mockRestore()
   })

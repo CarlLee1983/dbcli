@@ -70,6 +70,8 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     return {
       rows: rows as T[],
       affectedRows: rows.length,
+      rowCount: rows.length,
+      columnNames: rows[0] ? Object.keys(rows[0]) : [],
     }
   }
 

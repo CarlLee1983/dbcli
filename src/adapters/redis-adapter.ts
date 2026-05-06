@@ -182,7 +182,13 @@ export class RedisAdapter implements QueryableAdapter {
       }
     ).call(head!, ...rest)
     const rows = wrapReply<T>(head!, reply)
-    return { rows, affectedRows: rows.length }
+    const columnNames = rows[0] ? Object.keys(rows[0]) : ['value']
+    return {
+      rows,
+      affectedRows: rows.length,
+      rowCount: rows.length,
+      columnNames,
+    }
   }
 
   async insert(keyName: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
@@ -394,7 +400,13 @@ async function readSizeInfo(
 
 function wrapReply<T>(command: string, reply: unknown): T[] {
   const upper = command.toUpperCase()
-  if (reply == null) return [] as T[]
+  if (reply === null || reply === undefined) return [] as T[]
+
+  // Handle Strings, Numbers, and Buffers (scalars)
+  if (typeof reply === 'string' || typeof reply === 'number' || Buffer.isBuffer(reply)) {
+    return [{ value: reply.toString() } as unknown as T]
+  }
+
   if (Array.isArray(reply)) {
     if (upper === 'HGETALL') {
       const obj: Record<string, unknown> = {}
@@ -403,10 +415,13 @@ function wrapReply<T>(command: string, reply: unknown): T[] {
       }
       return [obj as T]
     }
-    return reply.map((value, idx) => ({ index: idx, value }) as unknown as T)
+    // Generic list response
+    return reply.map((value, idx) => ({ index: idx, value: String(value) }) as unknown as T)
   }
+
   if (typeof reply === 'object') {
     return [reply as T]
   }
-  return [{ value: reply } as unknown as T]
+
+  return [{ value: String(reply) } as unknown as T]
 }

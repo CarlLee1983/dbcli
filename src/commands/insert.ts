@@ -12,6 +12,7 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
+import { previewInsert } from '@/core/mongo/dry-run-formatter'
 
 /**
  * Asynchronously reads JSON data from stdin
@@ -110,6 +111,18 @@ export async function insertCommand(
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       blacklistValidator.checkTableBlacklist('INSERT', table, [])
       blacklistValidator.checkColumnBlacklistOnWrite(table, Object.keys(data), 'INSERT')
+
+      if (options.dryRun) {
+        const output = {
+          status: 'success',
+          operation: 'insert',
+          rows_affected: 0,
+          sql: previewInsert(table, data),
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      }
 
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()

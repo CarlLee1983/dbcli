@@ -12,6 +12,7 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
+import { previewDelete } from '@/core/mongo/dry-run-formatter'
 
 /**
  * Parses a WHERE clause string into a conditions object
@@ -124,17 +125,29 @@ export async function deleteCommand(
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       blacklistValidator.checkTableBlacklist('DELETE', table, [])
 
+      let filter: Record<string, unknown>
+      try {
+        filter = JSON.parse(options.where)
+      } catch {
+        // If not JSON, try parsing as simple key=value pairs for convenience
+        filter = parseWhereClause(options.where)
+      }
+
+      if (options.dryRun) {
+        const output = {
+          status: 'success',
+          operation: 'delete',
+          rows_affected: 0,
+          sql: previewDelete(table, filter),
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      }
+
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
-        let filter: Record<string, unknown>
-        try {
-          filter = JSON.parse(options.where)
-        } catch {
-          // If not JSON, try parsing as simple key=value pairs for convenience
-          filter = parseWhereClause(options.where)
-        }
-
         const result = await adapter.delete(table, filter)
         const output = {
           status: 'success',

@@ -221,13 +221,18 @@ program
 program
   .command('export <sql>')
   .description(t('export.description'))
-  .option('--format <format>', 'Output format: json or csv (required)', 'json')
+  .option('--format <format>', 'Output format: json, jsonl, or csv', 'json')
   .option('--output <path>', 'Output file path (if omitted, write to stdout)', undefined)
   .option('--force', 'Skip overwrite confirmation', false)
+  .option('--collection <name>', 'MongoDB collection name (required for MongoDB connections)')
+  .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) =>
+    parseInt(val, 10)
+  )
+  .option('--no-limit', 'Disable auto-limit in query-only mode')
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       const { validateFormat } = await import('./utils/validation')
-      validateFormat(options.format as string, ['json', 'csv'], 'export')
+      validateFormat(options.format as string, ['json', 'jsonl', 'csv'], 'export')
       return exportCommand(sql, options as never, command)
     } catch (error) {
       console.error((error as Error).message)

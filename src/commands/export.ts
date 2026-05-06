@@ -1,6 +1,7 @@
 /**
  * dbcli export command
- * Executes a SQL query and exports the results, supporting JSON/CSV formats and file output
+ * Executes a SQL query and exports the results, supporting JSON/CSV formats and file output.
+ * For MongoDB connections, exports a collection scan or aggregation pipeline.
  */
 
 import { t_vars } from '@/i18n/message-loader'
@@ -11,63 +12,72 @@ import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
 import { promptUser } from '@/utils/prompts'
 import { resolveConfigPath } from '@/utils/config-path'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { BlacklistValidator } from '@/core/blacklist-validator'
+import { BlacklistError } from '@/types/blacklist'
+import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import type { DbcliConfig } from '@/utils/validation'
+
+const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
+
+export type ExportFormat = 'json' | 'jsonl' | 'csv'
+
+interface ExportOptions {
+  format: ExportFormat
+  output?: string
+  force?: boolean
+  config?: string
+  collection?: string
+  limit?: number
+  noLimit?: boolean
+}
 
 /**
  * Export command action handler
- * Accepts a SQL query, executes it, formats the result, and outputs to stdout or a file
+ * Accepts a SQL query (or JSON filter / aggregation pipeline for MongoDB),
+ * executes it, formats the result, and outputs to stdout or a file.
  */
 export async function exportCommand(
   sql: string,
-  options: {
-    format: 'json' | 'csv'
-    output?: string
-    force?: boolean
-    config?: string
-  },
+  options: ExportOptions,
   command?: import('commander').Command
 ): Promise<void> {
   try {
-    // 1. Argument validation
     if (!sql || sql.trim() === '') {
-      throw new Error('SQL query required')
+      throw new Error('Query required')
     }
-    if (!options.format || !['json', 'csv'].includes(options.format)) {
-      throw new Error('--format must be json or csv')
+    if (!options.format || !['json', 'jsonl', 'csv'].includes(options.format)) {
+      throw new Error('--format must be json, jsonl, or csv')
     }
     sql = sql.trim()
 
-    // 2. Load configuration
     const configPath = resolveConfigPath(command, options)
     const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }
 
-    if (config.connection?.system === 'mongodb') {
-      console.error('此命令目前不支援 MongoDB')
-      process.exit(1)
+    if (config.connection.system === 'mongodb') {
+      await mongoExportBranch(sql, options, config as DbcliConfig)
+      return
     }
 
-    // 3. Create database adapter
+    if (options.format === 'jsonl') {
+      throw new Error('--format jsonl is only supported on MongoDB connections')
+    }
+
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
 
     try {
-      // 4. Create QueryExecutor (enforces permission checks and auto-limit)
       const executor = new QueryExecutor(adapter, config.permission)
+      const result = await executor.execute(sql, { autoLimit: true })
 
-      // 5. Execute query with auto-limit enabled
-      const result = await executor.execute(sql, {
-        autoLimit: true,
-      })
-
-      // 6. Format output
       const formatter = new QueryResultFormatter()
       const formatted = formatter.format(result, {
-        format: options.format,
+        format: options.format as 'json' | 'csv',
       })
 
-      // 7. Output to file or stdout
       if (options.output) {
         const file = Bun.file(options.output)
         const exists = await file.exists()
@@ -103,8 +113,163 @@ export async function exportCommand(
       process.exit(1)
     }
 
-    // Other errors
+    if (error instanceof BlacklistError) {
+      console.error(error.message)
+      process.exit(1)
+    }
+
     console.error(t_vars('errors.message', { message: (error as Error).message }))
     process.exit(1)
   }
+}
+
+async function mongoExportBranch(
+  query: string,
+  options: ExportOptions,
+  config: DbcliConfig
+): Promise<void> {
+  if (SQL_PATTERN.test(query)) {
+    console.error('這是 MongoDB 連線，請使用 JSON filter 或 aggregation pipeline。')
+    console.error(`範例：dbcli export '{"status":"open"}' --collection orders --format jsonl`)
+    process.exit(1)
+  }
+
+  if (!options.collection) {
+    console.error('MongoDB export 需要指定 --collection <name>')
+    process.exit(1)
+  }
+
+  try {
+    JSON.parse(query)
+  } catch {
+    console.error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
+    process.exit(1)
+  }
+
+  const collection = options.collection
+
+  const blacklistManager = new BlacklistManager(config)
+  const blacklistValidator = new BlacklistValidator(blacklistManager)
+  blacklistValidator.checkTableBlacklist('SELECT', collection, [])
+
+  let effectiveLimit: number | undefined
+  if (options.noLimit) {
+    effectiveLimit = undefined
+  } else if (typeof options.limit === 'number') {
+    effectiveLimit = options.limit
+  } else if (config.permission === 'query-only') {
+    effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
+    console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
+  }
+
+  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  await adapter.connect()
+  try {
+    const result = await adapter.execute<Record<string, unknown>>(
+      query,
+      [collection],
+      effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
+    )
+
+    const columnNames = collectColumnUnion(result.rows)
+    const filterResult = blacklistValidator.filterColumns(collection, result.rows, columnNames)
+    const visibleColumns = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
+
+    const formatted = formatMongoRows(filterResult.filteredRows, visibleColumns, options.format)
+
+    if (options.output) {
+      const file = Bun.file(options.output)
+      const exists = await file.exists()
+
+      if (exists && !options.force) {
+        const confirmed = await promptUser.confirm(
+          t_vars('export.overwrite_confirmation', { file: options.output })
+        )
+        if (!confirmed) {
+          console.error('Operation cancelled by user')
+          return
+        }
+      }
+
+      await file.write(formatted)
+      console.error(
+        t_vars('export.exported', {
+          count: filterResult.filteredRows.length,
+          file: options.output,
+        })
+      )
+    } else {
+      console.log(formatted)
+    }
+
+    const securityNote = blacklistValidator.buildSecurityNotification(
+      collection,
+      filterResult.omittedColumns
+    )
+    if (securityNote) {
+      console.error(`ℹ ${securityNote}`)
+    }
+  } finally {
+    await adapter.disconnect()
+  }
+}
+
+function collectColumnUnion(rows: Record<string, unknown>[]): string[] {
+  const seen = new Set<string>()
+  const order: string[] = []
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      if (!seen.has(key)) {
+        seen.add(key)
+        order.push(key)
+      }
+    }
+  }
+  return order
+}
+
+function formatMongoRows(
+  rows: Record<string, unknown>[],
+  columns: string[],
+  format: ExportFormat
+): string {
+  if (format === 'jsonl') {
+    return rows.map((row) => JSON.stringify(row)).join('\n')
+  }
+
+  if (format === 'json') {
+    return JSON.stringify(rows, null, 2)
+  }
+
+  let nestedSeen = false
+  const headerLine = columns.map(escapeCsvField).join(',')
+  const dataLines = rows.map((row) => {
+    return columns
+      .map((col) => {
+        const value = row[col]
+        if (value !== null && typeof value === 'object') {
+          nestedSeen = true
+          return escapeCsvField(JSON.stringify(value))
+        }
+        return escapeCsvField(value)
+      })
+      .join(',')
+  })
+
+  if (nestedSeen) {
+    console.error(
+      'Warning: nested object/array fields were JSON-stringified for CSV. Use --format jsonl to preserve structure.'
+    )
+  }
+
+  return [headerLine, ...dataLines].join('\n')
+}
+
+function escapeCsvField(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  const str = String(value)
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`
+  }
+  return str
 }

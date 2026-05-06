@@ -17,6 +17,25 @@ Database CLI for AI agents with permission-based access control.
 
 Prefer `--format json` for agent-friendly output.
 
+## Agent Task Packs
+
+When the user asks for a database workflow (e.g. "diagnose this slow query", "audit
+permissions", "review long-running operations"), prefer published task templates
+over inventing steps from memory.
+
+```bash
+dbcli skill tasks list --format json                              # discover
+dbcli skill tasks show <task>                                     # inspect
+dbcli skill tasks plan <task> --param key=value --format json     # generate plan
+```
+
+The plan output is an ordered list of dbcli commands with rationale and risk
+labels. Execute them one at a time — task plans do **not** override blacklist,
+schema, dry-run, or confirmation requirements.
+
+Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
+`.dbcli/tasks/` (local override).
+
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 
 ## Quick start

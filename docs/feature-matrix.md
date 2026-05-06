@@ -34,7 +34,7 @@ Legend:
 | `doctor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Engine-specific diagnostics. |
 | `completion` | N/A | N/A | N/A | N/A | N/A | N/A | Shell completion is engine-independent. |
 | `upgrade` | N/A | N/A | N/A | N/A | N/A | N/A | Update checks are engine-independent. |
-| `skill` | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. |
+| `skill` | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. New: `skill tasks list/show/plan` exposes plan-only Agent Task Packs (built-in + `.dbcli-shared/tasks/` + `.dbcli/tasks/`); plans never execute commands. |
 
 ## Required CI validation
 

@@ -154,9 +154,9 @@ describe('parseAgentTask — failures', () => {
   })
 
   test('rejects empty steps', () => {
-    expect(() =>
-      must(['name: t', 'safety:', '  mode: plan-only', 'steps: []'].join('\n'))
-    ).toThrow(/step/i)
+    expect(() => must(['name: t', 'safety:', '  mode: plan-only', 'steps: []'].join('\n'))).toThrow(
+      /step/i
+    )
   })
 
   test('rejects unknown engine', () => {

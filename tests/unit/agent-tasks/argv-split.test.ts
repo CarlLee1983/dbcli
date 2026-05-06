@@ -7,14 +7,11 @@ describe('splitArgv', () => {
   })
 
   test('keeps double-quoted strings together', () => {
-    expect(splitArgv('plan "SELECT * FROM users"')).toEqual([
-      'plan',
-      'SELECT * FROM users',
-    ])
+    expect(splitArgv('plan "SELECT * FROM users"')).toEqual(['plan', 'SELECT * FROM users'])
   })
 
   test('keeps single-quoted strings together', () => {
-    expect(splitArgv("update t --set '{\"name\":\"Bob\"}'")).toEqual([
+    expect(splitArgv('update t --set \'{"name":"Bob"}\'')).toEqual([
       'update',
       't',
       '--set',
@@ -27,12 +24,7 @@ describe('splitArgv', () => {
   })
 
   test('collapses repeated whitespace', () => {
-    expect(splitArgv('  q   @dau   --format   json  ')).toEqual([
-      'q',
-      '@dau',
-      '--format',
-      'json',
-    ])
+    expect(splitArgv('  q   @dau   --format   json  ')).toEqual(['q', '@dau', '--format', 'json'])
   })
 
   test('throws on unterminated double quote', () => {

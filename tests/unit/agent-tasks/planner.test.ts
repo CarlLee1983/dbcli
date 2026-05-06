@@ -79,9 +79,7 @@ describe('planAgentTask', () => {
 
   test('rejects param value not in enum', () => {
     const task = buildTask({
-      params: [
-        { name: 'mode', type: 'string', required: true, enum: ['safe', 'risky'] },
-      ],
+      params: [{ name: 'mode', type: 'string', required: true, enum: ['safe', 'risky'] }],
       steps: [{ type: 'command', command: 'plan "{{mode}}"' }],
     })
     expect(() => planAgentTask({ task, params: { mode: 'wild' } })).toThrow(/enum/i)

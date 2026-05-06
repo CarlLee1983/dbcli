@@ -20,10 +20,7 @@ export interface LoadedTask {
 
 export type LoadResult = Map<string, LoadedTask> & { errors: AgentTaskError[] }
 
-export async function loadAgentTasks(
-  opts: LoadOptions,
-  flags?: LoadFlags
-): Promise<LoadResult> {
+export async function loadAgentTasks(opts: LoadOptions, flags?: LoadFlags): Promise<LoadResult> {
   const errors: AgentTaskError[] = []
   const builtin = await walkAndParse(opts.builtinDir, 'builtin', errors)
   const shared = await walkAndParse(opts.sharedDir, 'shared', errors)

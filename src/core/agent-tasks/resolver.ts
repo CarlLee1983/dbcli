@@ -8,10 +8,7 @@ export interface FilterOptions {
   source?: AgentTaskSource
 }
 
-export function filterTasks(
-  map: Map<string, LoadedTask>,
-  opts: FilterOptions
-): LoadedTask[] {
+export function filterTasks(map: Map<string, LoadedTask>, opts: FilterOptions): LoadedTask[] {
   return [...map.values()].filter((entry) => {
     const t = entry.task
     if (opts.tag && !t.tags.includes(opts.tag)) return false
@@ -24,10 +21,7 @@ export function filterTasks(
   })
 }
 
-export function resolveTaskByName(
-  map: Map<string, LoadedTask>,
-  name: string
-): LoadedTask {
+export function resolveTaskByName(map: Map<string, LoadedTask>, name: string): LoadedTask {
   const direct = map.get(name)
   if (direct) return direct
   const suggestions = suggestSimilar([...map.keys()], name)

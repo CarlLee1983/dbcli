@@ -10,13 +10,7 @@ import {
   type AgentTaskStep,
 } from './types'
 
-const VALID_ENGINES: AgentTaskEngine[] = [
-  'postgres',
-  'mysql',
-  'mongodb',
-  'redis',
-  'elasticsearch',
-]
+const VALID_ENGINES: AgentTaskEngine[] = ['postgres', 'mysql', 'mongodb', 'redis', 'elasticsearch']
 const VALID_PARAM_TYPES: AgentTaskParamType[] = ['string', 'number', 'boolean']
 const VALID_RISKS: AgentTaskRisk[] = ['readonly', 'dry-run', 'write', 'unknown']
 
@@ -31,11 +25,7 @@ export interface ParseInput {
 export function parseAgentTask(input: ParseInput): AgentTask {
   const { frontmatter, body } = splitFrontmatter(input.text, input.file)
   if (!frontmatter.trim()) {
-    throw new AgentTaskError(
-      `Task '${input.name}' has no frontmatter`,
-      'PARSE_ERROR',
-      input.file
-    )
+    throw new AgentTaskError(`Task '${input.name}' has no frontmatter`, 'PARSE_ERROR', input.file)
   }
   let raw: Record<string, unknown>
   try {
@@ -137,8 +127,7 @@ function parseParams(value: unknown, input: ParseInput): AgentTaskParam[] {
         )
       }
       const hasDefault = spec && Object.prototype.hasOwnProperty.call(spec, 'default')
-      const required =
-        spec?.required === true ? true : !hasDefault && spec?.required !== false
+      const required = spec?.required === true ? true : !hasDefault && spec?.required !== false
       const out: AgentTaskParam = { name, type, required }
       if (typeof spec?.description === 'string') out.description = spec.description
       if (hasDefault) out.default = spec!.default as AgentTaskParam['default']

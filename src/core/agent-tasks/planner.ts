@@ -60,10 +60,7 @@ function resolveParams(
         continue
       }
       if (p.required) {
-        throw new AgentTaskError(
-          `Missing required parameter '${p.name}'`,
-          'PARAM_MISSING'
-        )
+        throw new AgentTaskError(`Missing required parameter '${p.name}'`, 'PARAM_MISSING')
       }
       continue
     }
@@ -110,11 +107,7 @@ function coerce(p: AgentTaskParam, raw: string | number | boolean): string | num
   return value
 }
 
-function applyTemplate(
-  command: string,
-  values: AgentTaskParamValues,
-  task: AgentTask
-): string {
+function applyTemplate(command: string, values: AgentTaskParamValues, task: AgentTask): string {
   return command.replace(TEMPLATE_RE, (_match, key: string) => {
     if (!(key in values)) {
       throw new AgentTaskError(

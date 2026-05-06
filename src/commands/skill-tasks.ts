@@ -27,9 +27,7 @@ interface PlanOptions {
 }
 
 export function registerSkillTasksCommand(parent: Command): Command {
-  const tasks = parent
-    .command('tasks')
-    .description('Discover and plan AI-agent task templates')
+  const tasks = parent.command('tasks').description('Discover and plan AI-agent task templates')
 
   tasks
     .command('list')
@@ -126,11 +124,8 @@ async function runList(options: ListOptions): Promise<void> {
     entry.task.tags.join(',') || '-',
     entry.task.description ?? '',
   ])
-  const widths = header.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length))
-  )
-  const fmt = (line: string[]) =>
-    line.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
+  const fmt = (line: string[]) => line.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
   console.log(fmt(header))
   for (const r of rows) console.log(fmt(r))
 }

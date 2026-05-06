@@ -37,11 +37,7 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
 
   function parseMapBlock(baseIndent: number): Record<string, YamlValue> {
     const map: Record<string, YamlValue> = {}
-    while (
-      i < tokens.length &&
-      tokens[i]!.indent > baseIndent &&
-      !tokens[i]!.isDash
-    ) {
+    while (i < tokens.length && tokens[i]!.indent > baseIndent && !tokens[i]!.isDash) {
       const tok = tokens[i]!
       consumeKeyValueInto(map, tok)
     }
@@ -50,20 +46,13 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
 
   function parseListBlock(baseIndent: number): YamlValue[] {
     const list: YamlValue[] = []
-    while (
-      i < tokens.length &&
-      tokens[i]!.indent > baseIndent &&
-      tokens[i]!.isDash
-    ) {
+    while (i < tokens.length && tokens[i]!.indent > baseIndent && tokens[i]!.isDash) {
       const tok = tokens[i]!
       const itemIndent = tok.indent
       if (tok.content === '') {
         // bare `- ` line → child block on next deeper lines
         i++
-        if (
-          i < tokens.length &&
-          tokens[i]!.indent > itemIndent
-        ) {
+        if (i < tokens.length && tokens[i]!.indent > itemIndent) {
           list.push(
             tokens[i]!.isDash
               ? (parseListBlock(itemIndent) as YamlValue)
@@ -85,11 +74,7 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
       const itemMap: Record<string, YamlValue> = {}
       consumeKeyValueInto(itemMap, tok)
       // continuation keys at deeper indent (must be > itemIndent and not dash)
-      while (
-        i < tokens.length &&
-        tokens[i]!.indent > itemIndent &&
-        !tokens[i]!.isDash
-      ) {
+      while (i < tokens.length && tokens[i]!.indent > itemIndent && !tokens[i]!.isDash) {
         consumeKeyValueInto(itemMap, tokens[i]!)
       }
       list.push(itemMap)
@@ -97,10 +82,7 @@ export function parseYamlMini(text: string): Record<string, YamlValue> {
     return list
   }
 
-  function consumeKeyValueInto(
-    target: Record<string, YamlValue>,
-    tok: Token
-  ): void {
+  function consumeKeyValueInto(target: Record<string, YamlValue>, tok: Token): void {
     const colon = colonOutsideBrackets(tok.content)
     if (colon === -1) {
       throw new Error(`YAML mini: expected "key:" at "${tok.raw}"`)

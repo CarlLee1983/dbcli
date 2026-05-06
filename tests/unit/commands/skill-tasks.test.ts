@@ -33,20 +33,18 @@ describe('skill tasks (CLI integration with built-in tasks)', () => {
 
   test('list --format json returns at least one builtin task', async () => {
     const program = makeRoot()
-    await program.parseAsync(
-      ['node', 'dbcli', 'skill', 'tasks', 'list', '--format', 'json'],
-      { from: 'node' }
-    )
+    await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'list', '--format', 'json'], {
+      from: 'node',
+    })
     expect(exitCode).toBeUndefined()
     expect(logOut).toContain('"name": "diagnose-slow-query"')
   })
 
   test('show prints markdown for known task', async () => {
     const program = makeRoot()
-    await program.parseAsync(
-      ['node', 'dbcli', 'skill', 'tasks', 'show', 'diagnose-slow-query'],
-      { from: 'node' }
-    )
+    await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'show', 'diagnose-slow-query'], {
+      from: 'node',
+    })
     expect(logOut).toContain('# diagnose-slow-query (builtin)')
     expect(logOut).toContain('blacklist list')
   })
@@ -74,20 +72,18 @@ describe('skill tasks (CLI integration with built-in tasks)', () => {
 
   test('plan fails when required parameter is missing', async () => {
     const program = makeRoot()
-    await program.parseAsync(
-      ['node', 'dbcli', 'skill', 'tasks', 'plan', 'diagnose-slow-query'],
-      { from: 'node' }
-    )
+    await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'plan', 'diagnose-slow-query'], {
+      from: 'node',
+    })
     expect(exitCode).toBe(1)
     expect(errOut).toMatch(/required parameter/i)
   })
 
   test('show on unknown task prints suggestion and exits 1', async () => {
     const program = makeRoot()
-    await program.parseAsync(
-      ['node', 'dbcli', 'skill', 'tasks', 'show', 'diagnose-slow-quer'],
-      { from: 'node' }
-    )
+    await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'show', 'diagnose-slow-quer'], {
+      from: 'node',
+    })
     expect(exitCode).toBe(1)
     expect(errOut).toMatch(/Did you mean/)
   })

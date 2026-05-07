@@ -13,7 +13,7 @@ describe('ElasticsearchAdapter', () => {
       password: '',
       database: '',
     })
-    // @ts-ignore - accessing private for test
+    // @ts-expect-error - accessing private getBaseUrl() for test
     expect(adapter.getBaseUrl()).toBe('http://localhost:9200')
   })
 
@@ -26,7 +26,7 @@ describe('ElasticsearchAdapter', () => {
       password: '',
       database: '',
     } as any)
-    // @ts-ignore
+    // @ts-expect-error - accessing private getBaseUrl() for test
     expect(adapter.getBaseUrl()).toBe(
       'https://4a65d17e21a34bdc8febf6159caf4c9d.us-east-1.aws.found.io:443'
     )
@@ -42,7 +42,7 @@ describe('ElasticsearchAdapter', () => {
       password: '',
       database: '',
     })
-    // @ts-ignore
+    // @ts-expect-error - accessing private getHeaders() for test
     const headers = await adapter.getHeaders()
     expect(headers.Authorization).toBe('ApiKey my-key')
   })
@@ -56,7 +56,7 @@ describe('ElasticsearchAdapter', () => {
       port: 9200,
       database: '',
     })
-    // @ts-ignore
+    // @ts-expect-error - accessing private getHeaders() for test
     const headers = await adapter.getHeaders()
     expect(headers.Authorization).toBe('Basic ' + btoa('elastic:password'))
   })
@@ -122,7 +122,7 @@ describe('ElasticsearchAdapter list/schema', () => {
       },
     }
 
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = Response.json
       ? async (url: string) => {
           if (url.includes('_settings')) return Response.json(mockIndices)
@@ -172,7 +172,7 @@ describe('ElasticsearchAdapter list/schema', () => {
       },
     }
 
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async () => new Response(JSON.stringify(mockMapping))
 
     const schema = await adapter.getTableSchema('users')
@@ -216,7 +216,7 @@ describe('ElasticsearchAdapter execute', () => {
     }
 
     let capturedUrl = ''
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async (url: string) => {
       capturedUrl = url
       return new Response(JSON.stringify(mockResponse))
@@ -241,7 +241,7 @@ describe('ElasticsearchAdapter execute', () => {
 
     const dsl = '{"query":{"match_all":{}}}'
     let capturedBody = ''
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async (url: string, init: any) => {
       capturedBody = init.body
       return new Response(JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }))
@@ -278,7 +278,7 @@ describe('ElasticsearchAdapter write operations', () => {
 
     let capturedMethod = ''
     let capturedUrl = ''
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async (url: string, init: any) => {
       capturedUrl = url
       capturedMethod = init.method
@@ -303,7 +303,7 @@ describe('ElasticsearchAdapter write operations', () => {
 
     let capturedMethod = ''
     let capturedUrl = ''
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async (url: string, init: any) => {
       capturedUrl = url
       capturedMethod = init.method
@@ -328,7 +328,7 @@ describe('ElasticsearchAdapter write operations', () => {
 
     let capturedMethod = ''
     let capturedUrl = ''
-    // @ts-ignore
+    // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
     globalThis.fetch = async (url: string, init: any) => {
       capturedUrl = url
       capturedMethod = init.method

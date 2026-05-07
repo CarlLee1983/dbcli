@@ -159,18 +159,18 @@ function extractTargetTables(sql: string, operation: QueryRiskOperation): string
   }
 
   if (operation === 'UPDATE') {
-    add(sql.match(/\bUPDATE\s+([`"\[]?[\w.]+[`"\]]?)/i)?.[1])
+    add(sql.match(/\bUPDATE\s+([`"[]?[\w.]+[`"\]]?)/i)?.[1])
   }
 
   if (operation === 'DELETE') {
-    add(sql.match(/\bDELETE\s+FROM\s+([`"\[]?[\w.]+[`"\]]?)/i)?.[1])
+    add(sql.match(/\bDELETE\s+FROM\s+([`"[]?[\w.]+[`"\]]?)/i)?.[1])
   }
 
   if (operation === 'INSERT') {
-    add(sql.match(/\bINSERT\s+INTO\s+([`"\[]?[\w.]+[`"\]]?)/i)?.[1])
+    add(sql.match(/\bINSERT\s+INTO\s+([`"[]?[\w.]+[`"\]]?)/i)?.[1])
   }
 
-  const fromJoinPattern = /\b(?:FROM|JOIN)\s+([`"\[]?[\w.]+[`"\]]?)/gi
+  const fromJoinPattern = /\b(?:FROM|JOIN)\s+([`"[]?[\w.]+[`"\]]?)/gi
   for (const match of sql.matchAll(fromJoinPattern)) {
     add(match[1])
   }
@@ -190,7 +190,7 @@ function extractCteAliases(sql: string): Set<string> {
   if (!withMatch || withMatch.index === undefined) return aliases
 
   const tail = sql.slice(withMatch.index + withMatch[0].length)
-  const aliasPattern = /([`"\[]?[\w]+[`"\]]?)\s+AS\s*\(/gi
+  const aliasPattern = /([`"[]?[\w]+[`"\]]?)\s+AS\s*\(/gi
   for (const match of tail.matchAll(aliasPattern)) {
     const cleaned = cleanIdentifier(match[1])
     if (cleaned) aliases.add(cleaned.toLowerCase())
@@ -200,7 +200,7 @@ function extractCteAliases(sql: string): Set<string> {
 
 function cleanIdentifier(value: string | undefined): string | null {
   if (!value) return null
-  const trimmed = value.trim().replace(/^[`"\[]|[`"\]]$/g, '')
+  const trimmed = value.trim().replace(/^[`"[]|[`"\]]$/g, '')
   const withoutSchema = trimmed.includes('.') ? trimmed.split('.').slice(-1)[0] : trimmed
   if (!withoutSchema) return null
   if (/^(SELECT|WHERE|JOIN|ON|SET|VALUES)$/i.test(withoutSchema)) return null
@@ -218,9 +218,9 @@ function extractReferencedColumns(sql: string, operation: QueryRiskOperation): s
     const selectList = sql.match(/^\s*SELECT\s+(?:DISTINCT\s+)?(.+?)\s+FROM\s+/i)?.[1]
     if (selectList && selectList.trim() !== '*') {
       for (const part of selectList.split(',')) {
-        const expression = part.trim().replace(/\s+AS\s+[`"\[]?[\w]+[`"\]]?$/i, '')
+        const expression = part.trim().replace(/\s+AS\s+[`"[]?[\w]+[`"\]]?$/i, '')
         const simpleColumn = expression.match(
-          /^(?:[`"\[]?[\w]+[`"\]]?\.)?([`"\[]?[\w]+[`"\]]?)$/
+          /^(?:[`"[]?[\w]+[`"\]]?\.)?([`"[]?[\w]+[`"\]]?)$/
         )?.[1]
         add(simpleColumn)
       }
@@ -231,13 +231,13 @@ function extractReferencedColumns(sql: string, operation: QueryRiskOperation): s
     const setList = sql.match(/\bSET\s+(.+?)(?:\s+WHERE\s+|$)/i)?.[1]
     if (setList) {
       for (const part of setList.split(',')) {
-        add(part.match(/^\s*([`"\[]?[\w]+[`"\]]?)\s*=/)?.[1])
+        add(part.match(/^\s*([`"[]?[\w]+[`"\]]?)\s*=/)?.[1])
       }
     }
   }
 
   if (operation === 'INSERT') {
-    const insertColumns = sql.match(/\bINSERT\s+INTO\s+[`"\[]?[\w.]+[`"\]]?\s*\(([^)]+)\)/i)?.[1]
+    const insertColumns = sql.match(/\bINSERT\s+INTO\s+[`"[]?[\w.]+[`"\]]?\s*\(([^)]+)\)/i)?.[1]
     if (insertColumns) {
       for (const part of insertColumns.split(',')) add(part.trim())
     }

@@ -7,6 +7,8 @@ import {
   classifyRedisCommand,
   enforceRedisPermission,
   permissionAtLeast,
+  classifyElasticsearchRequest,
+  enforceElasticsearchPermission,
 } from '@/core/permission-guard'
 
 // ============================================================================
@@ -145,7 +147,7 @@ test('classifyStatement: SELECT with DELETE in string literal', () => {
 })
 
 test('classifyStatement: string with escaped quote', () => {
-  const sql = `INSERT INTO messages (text) VALUES ('It\'s a test')`
+  const sql = `INSERT INTO messages (text) VALUES ('It''s a test')`
   const result = classifyStatement(sql)
   expect(result.type).toBe('INSERT')
 })
@@ -818,10 +820,12 @@ describe('enforceRedisPermission', () => {
 // ============================================================================
 
 describe('Elasticsearch Permission Guard', () => {
-  const { classifyElasticsearchRequest, enforceElasticsearchPermission } = require('@/core/permission-guard')
-
   test('classify: _search is SELECT', () => {
-    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/users/_search', body: '{}' })
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/users/_search',
+      body: '{}',
+    })
     expect(result.type).toBe('SELECT')
     expect(result.isDangerous).toBe(false)
   })
@@ -832,12 +836,20 @@ describe('Elasticsearch Permission Guard', () => {
   })
 
   test('classify: PUT _doc is INSERT', () => {
-    const result = classifyElasticsearchRequest({ method: 'PUT', apiPath: '/users/_doc/1', body: '{}' })
+    const result = classifyElasticsearchRequest({
+      method: 'PUT',
+      apiPath: '/users/_doc/1',
+      body: '{}',
+    })
     expect(result.type).toBe('INSERT')
   })
 
   test('classify: POST _update is UPDATE', () => {
-    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/users/_update/1', body: '{}' })
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/users/_update/1',
+      body: '{}',
+    })
     expect(result.type).toBe('UPDATE')
   })
 
@@ -852,20 +864,32 @@ describe('Elasticsearch Permission Guard', () => {
       '{ "index": { "_index": "test", "_id": "1" } }',
       '{ "field": "value" }',
       '{ "delete": { "_index": "test", "_id": "2" } }',
-      ''
+      '',
     ].join('\n')
-    const result = classifyElasticsearchRequest({ method: 'POST', apiPath: '/_bulk', body: bulkBody })
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_bulk',
+      body: bulkBody,
+    })
     expect(result.type).toBe('DELETE') // delete is higher than index
   })
 
   test('enforce: query-only blocks bulk delete', () => {
     const bulkBody = '{ "delete": { "_index": "test", "_id": "2" } }\n'
-    expect(() => enforceElasticsearchPermission({ method: 'POST', apiPath: '/_bulk', body: bulkBody }, 'query-only'))
-      .toThrow(PermissionError)
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'POST', apiPath: '/_bulk', body: bulkBody },
+        'query-only'
+      )
+    ).toThrow(PermissionError)
   })
 
   test('enforce: admin allows everything', () => {
-    expect(() => enforceElasticsearchPermission({ method: 'POST', apiPath: '/_all/_settings', body: '{}' }, 'admin'))
-      .not.toThrow()
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'POST', apiPath: '/_all/_settings', body: '{}' },
+        'admin'
+      )
+    ).not.toThrow()
   })
 })

@@ -11,19 +11,35 @@ class MockElasticsearchAdapter implements QueryableAdapter {
   lastOptions: { limit?: number } | undefined
   async connect() {}
   async disconnect() {}
-  async execute<T>(query: string, params?: unknown[], options?: { limit?: number }): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    query: string,
+    params?: unknown[],
+    options?: { limit?: number }
+  ): Promise<ExecutionResult<T>> {
     this.lastQuery = query
     this.lastParams = params
     this.lastOptions = options
     const rows = [{ _id: '1', name: 'Alice', 'user.email': 'a@example.com' }] as T[]
     return { rows, affectedRows: rows.length }
   }
-  async listCollections() { return [] }
-  async testConnection() { return true }
-  async getServerVersion() { return '8.13.0' }
-  async insert() { return { rows: [], affectedRows: 1 } }
-  async update() { return { rows: [], affectedRows: 1 } }
-  async delete() { return { rows: [], affectedRows: 1 } }
+  async listCollections() {
+    return []
+  }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return '8.13.0'
+  }
+  async insert() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async update() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async delete() {
+    return { rows: [], affectedRows: 1 }
+  }
 }
 
 const esConfig = {
@@ -51,8 +67,12 @@ describe('Query Command - Elasticsearch', () => {
   beforeEach(() => {
     configReadSpy = spyOn(configModule, 'read').mockResolvedValue(esConfig as any)
     mockAdapter = new MockElasticsearchAdapter()
-    createAdapterSpy = spyOn(AdapterFactory, 'createElasticsearchAdapter').mockReturnValue(mockAdapter)
-    formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation((result: any) => JSON.stringify(result.rows))
+    createAdapterSpy = spyOn(AdapterFactory, 'createElasticsearchAdapter').mockReturnValue(
+      mockAdapter
+    )
+    formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation(
+      (result: any) => JSON.stringify(result.rows)
+    )
   })
 
   afterEach(() => {
@@ -63,10 +83,14 @@ describe('Query Command - Elasticsearch', () => {
 
   test('requires --collection or --index for Elasticsearch', async () => {
     const errSpy = spyOn(console, 'error').mockImplementation(() => {})
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
     try {
       await queryCommand('status:active', { format: 'json' } as any)
-    } catch {}
+    } catch {
+      /* expected: process.exit mock throws */
+    }
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('--collection'))
     errSpy.mockRestore()
     exitSpy.mockRestore()
@@ -91,7 +115,11 @@ describe('Query Command - Elasticsearch', () => {
   test('no-limit passes 10000 and prints Elasticsearch warning', async () => {
     const logSpy = spyOn(console, 'log').mockImplementation(() => {})
     const warnSpy = spyOn(console, 'error').mockImplementation(() => {})
-    await queryCommand('status:active', { collection: 'users', format: 'json', noLimit: true } as any)
+    await queryCommand('status:active', {
+      collection: 'users',
+      format: 'json',
+      noLimit: true,
+    } as any)
     expect(mockAdapter.lastOptions).toEqual({ limit: 10000 })
     expect(warnSpy.mock.calls.flat().join(' ')).toContain('10000')
     logSpy.mockRestore()

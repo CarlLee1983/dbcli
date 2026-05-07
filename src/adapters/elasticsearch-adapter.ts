@@ -1,10 +1,4 @@
-import type {
-  ConnectionOptions,
-  DatabaseAdapter,
-  ExecutionResult,
-  QueryableAdapter,
-  TableSchema,
-} from './types'
+import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
 
 export class ElasticsearchAdapter implements QueryableAdapter {
@@ -295,7 +289,6 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
     try {
-      // @ts-ignore - Bun global fetch options
       const response = await fetch(url, {
         method,
         headers,

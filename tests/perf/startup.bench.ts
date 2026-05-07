@@ -8,27 +8,19 @@ describe('Performance: CLI Startup', () => {
   bench('CLI --help (startup time)', () => {
     // Measures: parse CLI, register commands, output help text
     // Target: < 200ms on macOS/Linux, < 300ms on Windows
-    try {
-      execSync(`${cliPath} --help`, {
-        stdio: 'pipe',
-        timeout: 5000,
-      })
-    } catch (error) {
-      // Timeout or error - will be caught by benchmark framework
-      throw error
-    }
+    // Timeout/errors propagate to and are reported by the benchmark framework
+    execSync(`${cliPath} --help`, {
+      stdio: 'pipe',
+      timeout: 5000,
+    })
   })
 
   bench('CLI --version (minimal startup)', () => {
     // Measures: parse CLI, output version (fastest path)
     // Target: < 100ms
-    try {
-      execSync(`${cliPath} --version`, {
-        stdio: 'pipe',
-        timeout: 5000,
-      })
-    } catch (error) {
-      throw error
-    }
+    execSync(`${cliPath} --version`, {
+      stdio: 'pipe',
+      timeout: 5000,
+    })
   })
 })

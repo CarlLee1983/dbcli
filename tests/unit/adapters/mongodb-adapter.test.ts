@@ -32,12 +32,11 @@ class MockMongoClient {
   }
   db(name?: string) {
     this.lastDbName = name
-    const self = this
     return {
       collection: (_name: string) => ({
         find: (filter: object) => {
           const call: FindCall = { filter, limit: 0 }
-          self.findCalls.push(call)
+          this.findCalls.push(call)
           return {
             limit(n: number) {
               call.limit = n
@@ -47,7 +46,7 @@ class MockMongoClient {
           }
         },
         aggregate: (pipeline: object[]) => {
-          self.aggregateCalls.push({ pipeline })
+          this.aggregateCalls.push({ pipeline })
           return { toArray: async () => [{ _id: 'NYC', count: 5 }] }
         },
         estimatedDocumentCount: async () => 100,

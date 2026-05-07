@@ -84,13 +84,17 @@ function parseJSON(text: string): any {
 function cleanupFile(path: string) {
   try {
     unlinkSync(path)
-  } catch {}
+  } catch {
+    /* ignore — cleanup failures shouldn't fail the test */
+  }
 }
 
 function cleanupDir(path: string) {
   try {
     rmSync(path, { recursive: true, force: true })
-  } catch {}
+  } catch {
+    /* ignore — cleanup failures shouldn't fail the test */
+  }
 }
 
 beforeAll(async () => {

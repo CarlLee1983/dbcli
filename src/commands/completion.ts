@@ -79,12 +79,12 @@ ${cmdLines}
     '1:command:->cmd' \\
     '*::arg:->args'
 
-  case "\$state" in
+  case "$state" in
   cmd)
     _describe 'command' commands
     ;;
   args)
-    case "\$words[1]" in
+    case "$words[1]" in
 ${subcmdCases}
     esac
     ;;

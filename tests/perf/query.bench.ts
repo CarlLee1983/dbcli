@@ -24,28 +24,20 @@ describe('Performance: Query Execution', { skip: !process.env.TEST_DATABASE_URL 
     // Measures: connect, execute simple query, format output
     // Target: < 50ms
     // Includes: connection overhead, parsing, execution, formatting
-    try {
-      execSync(`${cliPath} query "SELECT 1" --format json`, {
-        stdio: 'pipe',
-        timeout: 5000,
-        env: { ...process.env },
-      })
-    } catch (error) {
-      throw error
-    }
+    execSync(`${cliPath} query "SELECT 1" --format json`, {
+      stdio: 'pipe',
+      timeout: 5000,
+      env: { ...process.env },
+    })
   })
 
   bench('Query "SELECT 1" table format (connection + format)', () => {
     // Measures: connect, execute, format as ASCII table
     // Target: < 50ms
-    try {
-      execSync(`${cliPath} query "SELECT 1"`, {
-        stdio: 'pipe',
-        timeout: 5000,
-        env: { ...process.env },
-      })
-    } catch (error) {
-      throw error
-    }
+    execSync(`${cliPath} query "SELECT 1"`, {
+      stdio: 'pipe',
+      timeout: 5000,
+      env: { ...process.env },
+    })
   })
 })

@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to query, inspect schemas, insert/update/delete, export results, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when working with databases, running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, exploring table/collection/key/index structures, switching database environments, or protecting sensitive data from AI access. For exhaustive flags and examples, read the sibling `reference.md`.
+description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, exploring table/collection/key/index structures, switching database environments, or protecting sensitive data from AI access. For exhaustive flags and examples, read the sibling `reference.md`.
 ---
 
 # dbcli
@@ -45,6 +45,107 @@ dbcli init                          # Create .dbcli config (parses .env automati
 dbcli schema                        # Scan all tables → .dbcli/schemas/
 dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
 ```
+
+If `.dbcli` does not yet exist, route through **Connection setup** below before
+touching `schema` / `query`.
+
+## Connection setup (helping the user wire up a database)
+
+When the user asks "how do I connect to X?", "set up dbcli for our staging DB",
+or `doctor` / `status` reports a missing or invalid config, follow this flow.
+
+> **Default to guiding, not running.** `init` writes credentials to disk. Only
+> execute it for the user with explicit permission and confirmed values.
+> If a `.dbcli` already contains `{"$env": "..."}` references, **do not** rerun
+> `init` to "fill them in" — the env-ref form is intentional for CI/multi-env.
+
+### Decision tree (ask before writing)
+
+1. **One DB or many environments?** One → v1 (single connection). Multiple
+   environments / tenants / replicas → v2 (`--conn-name <name>`, optionally
+   `--env-file <path>` per connection).
+2. **Where do credentials live?**
+   - Already in a `.env` (`DATABASE_URL` or `DB_HOST` / `DB_PORT` / `DB_USER` /
+     `DB_PASSWORD` / `DB_NAME` | `DB_DATABASE`) → `init` parses it automatically.
+   - Need to keep secrets out of `.dbcli` (CI/CD, multi-env) → `--use-env-refs`
+     plus `--env-host` / `--env-port` / `--env-user` / `--env-password` / `--env-database`.
+   - Plain values are acceptable → pass `--host` / `--port` / `--user` /
+     `--password` / `--name` (and `--system`).
+3. **What permission tier?** Default to the **lowest** that satisfies the task:
+   `query-only` → `read-write` → `data-admin` → `admin`. Set with `--permission`.
+4. **Verify, never assume.** After init: `dbcli status` (system + permission +
+   blacklist summary, no creds) and `dbcli doctor --format json` (env, config
+   shape, connectivity, schema-cache age, Mongo SRV path).
+
+### Per-engine essentials
+
+```bash
+# PostgreSQL / MySQL / MariaDB (v1, plain values)
+dbcli init --system postgresql --host localhost --port 5432 \
+  --user app --password '<secret>' --name appdb --permission query-only
+
+# Reuse an existing .env (DATABASE_URL=postgresql://user:pw@host:5432/db)
+dbcli init                                                # parses .env in cwd
+
+# MongoDB — full URI (Atlas / replica sets / authSource)
+dbcli init --system mongodb \
+  --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
+# MongoDB — discrete params (no auth = omit --user/--password)
+dbcli init --system mongodb --host localhost --port 27017 --name mydb
+
+# Redis — `--name` is the LOGICAL DB INDEX ("0".."15"), not a database name
+dbcli init --system redis --host localhost --port 6379 --password '<secret>' --name 0
+
+# Elasticsearch — basic auth, Cloud ID, or API key
+dbcli init --system elasticsearch --host localhost --port 9200 \
+  --user elastic --password '<secret>'
+dbcli init --system elasticsearch \
+  --cloud-id "myCluster:dXMtZWFzdC0xLmF3..." --api-key "<base64>"
+# Multi-node / custom CA / self-signed: edit `.dbcli` directly to add
+# `nodes: [...]`, `protocol: https`, `caPath`, `rejectUnauthorized: false`.
+```
+
+### Multi-connection (v2)
+
+```bash
+dbcli init --conn-name staging --env-file .env.staging --permission query-only
+dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
+dbcli use --list                          # show all, * marks default
+dbcli use prod                            # switch default
+dbcli query --use staging "SELECT 1"      # one-shot override
+dbcli init --rename staging:stg           # rename
+dbcli init --remove stg                   # remove
+```
+
+Per-connection schema cache lives at `.dbcli/schemas/<connection>/`. Run
+`dbcli schema --use <name>` once per connection before `schema <table>` —
+otherwise the cache may serve another connection's columns.
+
+### env-refs (keep secrets out of `.dbcli`)
+
+```bash
+dbcli init --use-env-refs \
+  --env-host DB_HOST --env-port DB_PORT \
+  --env-user DB_USER --env-password DB_PASSWORD --env-database DB_NAME
+```
+
+Stored as `{ "$env": "DB_HOST" }` etc. and resolved at runtime. Pair with
+`--env-file <path>` (v2) when each connection has its own env file.
+
+### Common gotchas
+
+- **MongoDB `mongodb+srv://`** — `dbcli doctor` reports whether SRV resolves
+  natively or via the DoH fallback; useful when the runtime restricts DNS.
+- **MySQL/Postgres password with `@` `:` `/`** — when using `DATABASE_URL`,
+  percent-encode (`@` → `%40`); discrete `--password` flags do not need encoding.
+- **Redis `--name`** — accepts only the logical DB index string; non-numeric
+  values are rejected.
+- **Elasticsearch TLS** — `caPath` and `rejectUnauthorized` are not exposed as
+  flags; edit `.dbcli` after `init` to add them.
+- **Re-running `init`** — refuses to overwrite without `--force`; never use
+  `--force` to "fix" a config full of `{ "$env": "..." }` refs.
+
+Full flags and edge cases: see [reference.md](reference.md) `init` section.
 
 ## Command overview
 

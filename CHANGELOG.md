@@ -5,6 +5,18 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-05-07
+
+### Changed
+
+- **Skill 連線設定指引**：`assets/SKILL.md` 加入「Connection setup」章節，補齊 AI agent 協助使用者建立資料庫連線時所需的決策樹與各 engine essentials。
+  - 決策樹：v1 vs v2、credentials 來源（`.env` / env-refs / 明文）、權限 tier、`status` + `doctor` 驗證。
+  - Per-engine essentials：PostgreSQL / MySQL / MariaDB / MongoDB（含 `mongodb+srv://`）/ Redis（`--name` 為 logical DB index）/ Elasticsearch（basic / Cloud ID / API key）。
+  - v2 multi-connection 範例（`--conn-name`、`--env-file`、`use --list`、`--rename`、`--remove`）與 per-connection schema cache 注意事項。
+  - env-refs（`{ "$env": "..." }`）說明，以及「不要用 `--force` 把 env-refs 蓋成明文」的 guard。
+  - 常見陷阱：SRV DNS、URL 中特殊字元編碼、Redis `--name` 限制、Elasticsearch TLS 設定需手動編輯 `.dbcli`。
+  - 同步擴充 frontmatter `description`，加入 `init` / `.dbcli` / auth modes 觸發詞，提升 skill 觸發精準度。
+
 ## [1.9.0] - 2026-05-06
 
 ### Added

@@ -1,5 +1,5 @@
 /**
- * Redis adapter integration tests — drives a real ioredis client against
+ * Redis adapter integration tests — drives a real Bun.RedisClient against
  * the docker-compose.test.yml redis service.
  *
  * Connection via env vars (fallback to docker-compose.test.yml defaults):

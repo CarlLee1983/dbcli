@@ -7,73 +7,25 @@ type Handler = (...args: unknown[]) => unknown
 
 class MockRedisClient {
   connected = false
-  quit_called = false
-  disconnected = false
+  closed = false
   storage = new Map<string, unknown>()
   ttls = new Map<string, number>()
   types = new Map<string, string>()
-  callLog: Array<{ cmd: string; args: unknown[] }> = []
+  sendLog: Array<{ cmd: string; args: unknown[] }> = []
   scanResponses: Array<[string, string[]]> = [['0', []]]
   customHandlers: Record<string, Handler> = {}
   serverInfoText = '# Server\r\nredis_version:7.4.0\r\n'
+  onclose?: (err?: unknown) => void
 
   async connect() {
     this.connected = true
   }
-  async quit() {
-    this.quit_called = true
-  }
-  disconnect() {
-    this.disconnected = true
+  close() {
+    this.closed = true
   }
 
-  async ping() {
-    return 'PONG'
-  }
-  async info(_section?: string) {
-    return this.serverInfoText
-  }
-  async type(key: string): Promise<string> {
-    return this.types.get(key) ?? 'none'
-  }
   async ttl(key: string): Promise<number> {
     return this.ttls.has(key) ? this.ttls.get(key)! : -1
-  }
-  async strlen(key: string): Promise<number> {
-    return String(this.storage.get(key) ?? '').length
-  }
-  async hlen(key: string): Promise<number> {
-    const v = this.storage.get(key)
-    return v && typeof v === 'object' ? Object.keys(v as object).length : 0
-  }
-  async hkeys(key: string): Promise<string[]> {
-    const v = this.storage.get(key)
-    return v && typeof v === 'object' ? Object.keys(v as object) : []
-  }
-  async llen(key: string): Promise<number> {
-    const v = this.storage.get(key)
-    return Array.isArray(v) ? v.length : 0
-  }
-  async scard(key: string): Promise<number> {
-    return this.llen(key)
-  }
-  async zcard(key: string): Promise<number> {
-    return this.llen(key)
-  }
-  async xlen(key: string): Promise<number> {
-    return this.llen(key)
-  }
-  async scan(
-    cursor: string,
-    _matchTok: string,
-    _pattern: string,
-    _countTok: string,
-    _count: number
-  ): Promise<[string, string[]]> {
-    const idx = Number(cursor) || 0
-    const next = this.scanResponses[idx + 1] ? String(idx + 1) : '0'
-    const [, keys] = this.scanResponses[idx] ?? ['0', []]
-    return [next, keys]
   }
   async set(key: string, value: unknown) {
     this.storage.set(key, value)
@@ -83,39 +35,76 @@ class MockRedisClient {
     this.ttls.set(key, sec)
     return 1
   }
-  async hset(key: string, ...rest: string[]) {
+  async hmset(key: string, args: string[]) {
     const obj = (this.storage.get(key) as Record<string, string>) ?? {}
-    for (let i = 0; i < rest.length; i += 2) {
-      obj[rest[i]!] = rest[i + 1]!
+    for (let i = 0; i < args.length; i += 2) {
+      obj[args[i]!] = args[i + 1]!
     }
     this.storage.set(key, obj)
-    return rest.length / 2
-  }
-  async hdel(key: string, field: string) {
-    const obj = this.storage.get(key) as Record<string, string> | undefined
-    if (!obj || !(field in obj)) return 0
-    delete obj[field]
-    return 1
+    return 'OK'
   }
   async del(key: string) {
     return this.storage.delete(key) ? 1 : 0
   }
-  async call(cmd: string, ...args: unknown[]) {
-    this.callLog.push({ cmd, args })
+
+  async send(cmd: string, args: unknown[] = []) {
+    this.sendLog.push({ cmd, args })
     if (this.customHandlers[cmd]) return this.customHandlers[cmd]!(...args)
-    return 'OK'
+
+    const upper = cmd.toUpperCase()
+    switch (upper) {
+      case 'PING':
+        return 'PONG'
+      case 'INFO':
+        return this.serverInfoText
+      case 'TYPE':
+        return this.types.get(String(args[0])) ?? 'none'
+      case 'STRLEN':
+        return String(this.storage.get(String(args[0])) ?? '').length
+      case 'HLEN': {
+        const v = this.storage.get(String(args[0]))
+        return v && typeof v === 'object' ? Object.keys(v as object).length : 0
+      }
+      case 'HKEYS': {
+        const v = this.storage.get(String(args[0]))
+        return v && typeof v === 'object' ? Object.keys(v as object) : []
+      }
+      case 'LLEN':
+      case 'SCARD':
+      case 'ZCARD':
+      case 'XLEN': {
+        const v = this.storage.get(String(args[0]))
+        return Array.isArray(v) ? v.length : 0
+      }
+      case 'HDEL': {
+        const obj = this.storage.get(String(args[0])) as Record<string, string> | undefined
+        const field = String(args[1])
+        if (!obj || !(field in obj)) return 0
+        delete obj[field]
+        return 1
+      }
+      case 'SCAN': {
+        const cursor = String(args[0])
+        const idx = Number(cursor) || 0
+        const next = this.scanResponses[idx + 1] ? String(idx + 1) : '0'
+        const [, keys] = this.scanResponses[idx] ?? ['0', []]
+        return [next, keys]
+      }
+      default:
+        return 'OK'
+    }
   }
 }
 
 class FailingRedisClient {
+  onclose?: (err?: unknown) => void
   async connect() {
     const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:6379'), {
       code: 'ECONNREFUSED',
     })
     throw err
   }
-  async quit() {}
-  disconnect() {}
+  close() {}
 }
 
 const baseOptions: ConnectionOptions = {
@@ -163,7 +152,7 @@ describe('RedisAdapter — connection lifecycle', () => {
     await adapter.connect()
     await adapter.disconnect()
     await adapter.disconnect()
-    expect(client.quit_called).toBe(true)
+    expect(client.closed).toBe(true)
   })
 
   test('testConnection() returns true when ping returns PONG', async () => {
@@ -269,12 +258,13 @@ describe('RedisAdapter — discovery & schema', () => {
 })
 
 describe('RedisAdapter — command execution & DML', () => {
-  test('execute() routes through client.call with parsed tokens', async () => {
+  test('execute() routes through client.send with parsed tokens', async () => {
     const { adapter, client } = makeAdapter()
     client.customHandlers.GET = (_key) => 'world'
     await adapter.connect()
     const result = await adapter.execute('GET hello')
-    expect(client.callLog).toEqual([{ cmd: 'GET', args: ['hello'] }])
+    const getEntry = client.sendLog.find((e) => e.cmd === 'GET')
+    expect(getEntry).toEqual({ cmd: 'GET', args: ['hello'] })
     expect(result.rows).toEqual([{ value: 'world' }])
   })
 

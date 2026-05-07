@@ -1,27 +1,28 @@
 /**
- * Redis adapter using ioredis driver
+ * Redis adapter using Bun's native Redis client (Bun.RedisClient).
  * Implements the QueryableAdapter interface so Redis shares the
  * MongoDB-style command surface (query/list/schema) rather than the
  * SQL DatabaseAdapter contract.
  */
 
-import type { Redis as RedisClientType } from 'ioredis'
+import type { RedisClient } from 'bun'
 import { ConnectionError } from './types'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
-type RedisCtor = new (opts: {
-  host?: string
-  port?: number
-  password?: string
-  db?: number
-  connectTimeout?: number
-  lazyConnect?: boolean
-  maxRetriesPerRequest?: number | null
-  enableReadyCheck?: boolean
-}) => RedisClientType
+type RedisClientOptions = {
+  connectionTimeout?: number
+  idleTimeout?: number
+  autoReconnect?: boolean
+  maxRetries?: number
+  enableOfflineQueue?: boolean
+  enableAutoPipelining?: boolean
+  tls?: boolean
+}
+
+type RedisCtor = new (url?: string, options?: RedisClientOptions) => RedisClient
 
 export class RedisAdapter implements QueryableAdapter {
-  private client: RedisClientType | null = null
+  private client: RedisClient | null = null
 
   constructor(
     private options: ConnectionOptions,
@@ -34,11 +35,11 @@ export class RedisAdapter implements QueryableAdapter {
 
   private async resolveClientClass(): Promise<RedisCtor> {
     if (this.ClientClass) return this.ClientClass
-    const mod = await import('ioredis')
-    return (mod.default ?? (mod as unknown as RedisCtor)) as RedisCtor
+    const mod = (await import('bun')) as unknown as { RedisClient: RedisCtor }
+    return mod.RedisClient
   }
 
-  private requireClient(): RedisClientType {
+  private requireClient(): RedisClient {
     if (!this.client) {
       throw new ConnectionError('UNKNOWN', '尚未連線，請先呼叫 connect()', ['請先呼叫 connect()'])
     }
@@ -47,35 +48,28 @@ export class RedisAdapter implements QueryableAdapter {
 
   async connect(): Promise<void> {
     const ClientClass = await this.resolveClientClass()
+    const url = buildRedisUrl(this.options)
     try {
-      this.client = new ClientClass({
-        host: this.options.host,
-        port: this.options.port,
-        password: this.options.password || undefined,
-        db: this.options.database ? Number(this.options.database) : 0,
-        connectTimeout: this.options.timeout ?? 5000,
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-        enableReadyCheck: true,
+      this.client = new ClientClass(url, {
+        connectionTimeout: this.options.timeout ?? 5000,
+        autoReconnect: false,
+        maxRetries: 0,
+        enableOfflineQueue: false,
       })
-      // Suppress ioredis's unhandled "error" event during the connect handshake
-      // — we surface the failure through the rejected connect() Promise. The
-      // mock client used in unit tests doesn't implement on/off, so guard.
-      const emitter = this.client as unknown as {
-        on?: (event: string, fn: () => void) => void
-        off?: (event: string, fn: () => void) => void
-      }
-      const errorSink = () => {}
-      emitter.on?.('error', errorSink)
+      // Silence the close handler so a failed handshake doesn't surface
+      // as an unhandled error event — we report failures via the rejected
+      // connect() Promise instead. Mock clients in unit tests don't expose
+      // onclose, so guard the assignment.
       try {
-        await (this.client as unknown as { connect(): Promise<void> }).connect()
-      } finally {
-        emitter.off?.('error', errorSink)
+        ;(this.client as unknown as { onclose?: (err?: unknown) => void }).onclose = () => {}
+      } catch {
+        // ignore — mocks may freeze the property
       }
+      await this.client.connect()
     } catch (err) {
       // Ensure background reconnect loops stop after a failed handshake.
       try {
-        ;(this.client as unknown as { disconnect(): void } | null)?.disconnect()
+        ;(this.client as unknown as { close?: () => void } | null)?.close?.()
       } catch {
         // ignore
       }
@@ -94,13 +88,9 @@ export class RedisAdapter implements QueryableAdapter {
   async disconnect(): Promise<void> {
     if (!this.client) return
     try {
-      await this.client.quit()
+      this.client.close()
     } catch {
-      try {
-        this.client.disconnect()
-      } catch {
-        // ignore — disconnect must never throw
-      }
+      // ignore — disconnect must never throw
     } finally {
       this.client = null
     }
@@ -108,13 +98,13 @@ export class RedisAdapter implements QueryableAdapter {
 
   async testConnection(): Promise<boolean> {
     const client = this.requireClient()
-    const reply = await client.ping()
+    const reply = await client.send('PING', [])
     return reply === 'PONG'
   }
 
   async getServerVersion(): Promise<string> {
     const client = this.requireClient()
-    const info = await client.info('server')
+    const info = (await client.send('INFO', ['server'])) as string
     const match = info.match(/^redis_version:(.+)$/m)
     return match?.[1]?.trim() ?? 'unknown'
   }
@@ -134,7 +124,7 @@ export class RedisAdapter implements QueryableAdapter {
 
   async getTableSchema(keyName: string): Promise<TableSchema> {
     const client = this.requireClient()
-    const type = (await client.type(keyName)) as RedisType
+    const type = (await client.send('TYPE', [keyName])) as string as RedisType
     if (type === 'none') {
       return { name: keyName, columns: [], tableType: 'table' }
     }
@@ -176,11 +166,10 @@ export class RedisAdapter implements QueryableAdapter {
       throw new Error('Redis 指令不可為空')
     }
     const [head, ...rest] = tokens
-    const reply = await (
-      client as unknown as {
-        call(cmd: string, ...args: unknown[]): Promise<unknown>
-      }
-    ).call(head!, ...rest)
+    const reply = await client.send(
+      head!,
+      rest.map((arg) => String(arg))
+    )
     const rows = wrapReply<T>(head!, reply)
     const columnNames = rows[0] ? Object.keys(rows[0]) : ['value']
     return {
@@ -207,10 +196,7 @@ export class RedisAdapter implements QueryableAdapter {
       if (!fields) throw new Error('hash insert 需要 fields 物件')
       const flat: string[] = []
       for (const [k, v] of Object.entries(fields)) flat.push(k, String(v))
-      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> }).hset(
-        keyName,
-        ...flat
-      )
+      await client.hmset(keyName, flat)
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
     throw new Error(`不支援的 insert 類型: ${String(type)}`)
@@ -226,10 +212,7 @@ export class RedisAdapter implements QueryableAdapter {
     if (fields) {
       const flat: string[] = []
       for (const [k, v] of Object.entries(fields)) flat.push(k, String(v))
-      await (client as unknown as { hset(k: string, ...args: string[]): Promise<number> }).hset(
-        keyName,
-        ...flat
-      )
+      await client.hmset(keyName, flat)
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
     if ('value' in update) {
@@ -246,7 +229,7 @@ export class RedisAdapter implements QueryableAdapter {
     const client = this.requireClient()
     const field = filter.field as string | undefined
     if (field) {
-      const removed = await client.hdel(keyName, field)
+      const removed = (await client.send('HDEL', [keyName, field])) as number
       return { rows: [], affectedRows: removed }
     }
     const removed = await client.del(keyName)
@@ -260,11 +243,28 @@ export class RedisAdapter implements QueryableAdapter {
 
 type RedisType = 'string' | 'list' | 'hash' | 'set' | 'zset' | 'stream' | 'none'
 
+/**
+ * Build a redis:// URL from ConnectionOptions. Bun's RedisClient takes a URL
+ * rather than discrete host/port/password fields.
+ */
+export function buildRedisUrl(opts: ConnectionOptions): string {
+  let auth = ''
+  if (opts.user || opts.password) {
+    const u = encodeURIComponent(opts.user || '')
+    const p = encodeURIComponent(opts.password || '')
+    auth = `${u}:${p}@`
+  }
+  const dbPart = opts.database ? `/${opts.database}` : ''
+  return `redis://${auth}${opts.host}:${opts.port}${dbPart}`
+}
+
 function inferConnectionCode(
   message: string,
   driverCode?: string
 ): 'ECONNREFUSED' | 'ETIMEDOUT' | 'AUTH_FAILED' | 'ENOTFOUND' | 'UNKNOWN' {
   const m = message.toLowerCase()
+  if (driverCode === 'ERR_REDIS_AUTHENTICATION_FAILED') return 'AUTH_FAILED'
+  if (driverCode === 'ERR_REDIS_CONNECTION_CLOSED') return 'ECONNREFUSED'
   if (driverCode === 'ECONNREFUSED' || m.includes('econnrefused') || m.includes('refused')) {
     return 'ECONNREFUSED'
   }
@@ -343,18 +343,18 @@ export function parseRedisCommand(input: string): string[] {
   return tokens
 }
 
-async function scanAllKeys(
-  client: RedisClientType,
-  pattern: string,
-  count: number
-): Promise<string[]> {
+async function scanAllKeys(client: RedisClient, pattern: string, count: number): Promise<string[]> {
   const seen = new Set<string>()
   let cursor = '0'
   do {
-    const [next, batch] = (await client.scan(cursor, 'MATCH', pattern, 'COUNT', count)) as [
-      string,
-      string[],
-    ]
+    const reply = (await client.send('SCAN', [
+      cursor,
+      'MATCH',
+      pattern,
+      'COUNT',
+      String(count),
+    ])) as [string, string[]]
+    const [next, batch] = reply
     for (const k of batch) seen.add(k)
     cursor = next
     if (seen.size >= 100_000) break
@@ -363,34 +363,34 @@ async function scanAllKeys(
 }
 
 async function readSizeInfo(
-  client: RedisClientType,
+  client: RedisClient,
   key: string,
   type: RedisType
 ): Promise<{ size: number; sample?: string }> {
   switch (type) {
     case 'string': {
-      const len = await client.strlen(key)
+      const len = (await client.send('STRLEN', [key])) as number
       return { size: len }
     }
     case 'hash': {
-      const len = await client.hlen(key)
-      const fields = await (client as unknown as { hkeys(k: string): Promise<string[]> }).hkeys(key)
+      const len = (await client.send('HLEN', [key])) as number
+      const fields = (await client.send('HKEYS', [key])) as string[]
       return { size: len, sample: fields.slice(0, 5).join(', ') }
     }
     case 'list': {
-      const len = await client.llen(key)
+      const len = (await client.send('LLEN', [key])) as number
       return { size: len }
     }
     case 'set': {
-      const len = await client.scard(key)
+      const len = (await client.send('SCARD', [key])) as number
       return { size: len }
     }
     case 'zset': {
-      const len = await client.zcard(key)
+      const len = (await client.send('ZCARD', [key])) as number
       return { size: len }
     }
     case 'stream': {
-      const len = await (client as unknown as { xlen(k: string): Promise<number> }).xlen(key)
+      const len = (await client.send('XLEN', [key])) as number
       return { size: len }
     }
     default:
@@ -402,13 +402,19 @@ function wrapReply<T>(command: string, reply: unknown): T[] {
   const upper = command.toUpperCase()
   if (reply === null || reply === undefined) return [] as T[]
 
-  // Handle Strings, Numbers, and Buffers (scalars)
-  if (typeof reply === 'string' || typeof reply === 'number' || Buffer.isBuffer(reply)) {
+  // Handle Strings, Numbers, Booleans, and Buffers (scalars)
+  if (
+    typeof reply === 'string' ||
+    typeof reply === 'number' ||
+    typeof reply === 'boolean' ||
+    Buffer.isBuffer(reply)
+  ) {
     return [{ value: reply.toString() } as unknown as T]
   }
 
   if (Array.isArray(reply)) {
     if (upper === 'HGETALL') {
+      // RESP2 returns flat [k1, v1, k2, v2, ...]
       const obj: Record<string, unknown> = {}
       for (let i = 0; i < reply.length; i += 2) {
         obj[String(reply[i])] = reply[i + 1]
@@ -420,6 +426,7 @@ function wrapReply<T>(command: string, reply: unknown): T[] {
   }
 
   if (typeof reply === 'object') {
+    // RESP3 Map response (e.g. HGETALL) — already an object
     return [reply as T]
   }
 

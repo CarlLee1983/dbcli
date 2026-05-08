@@ -9,7 +9,7 @@ Database CLI for AI agents with permission-based access control.
 
 ## AI agent workflow (follow in order)
 
-1. `dbcli status` — permission level and system summary (no credentials).
+1. `dbcli inspect --for-agent` — bounded snapshot: connection, permission, blacklist, objects, snippets, suggested next commands.
 2. `dbcli blacklist list` — sensitive data boundaries.
 3. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 4. Run `query` / `insert` / `update` / `delete` / `export` within permission.

@@ -15,7 +15,34 @@ import {
   resolveSnippetDirs,
   SavedQueryError,
 } from '@/core/saved-queries'
-import { engineFamily } from '@/core/saved-queries/strategies'
+import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
+
+export interface DryRunInput {
+  family: EngineFamily
+  driverSql: string
+  values: Array<string | number | boolean | null>
+  execHints: { index?: string } | undefined
+}
+
+export function formatDryRun(input: DryRunInput): string {
+  const lines: string[] = ['Dry-run preview (no execution):']
+  if (input.family === 'es') {
+    if (input.execHints?.index) lines.push(`Index: ${input.execHints.index}`)
+    try {
+      lines.push(JSON.stringify(JSON.parse(input.driverSql), null, 2))
+    } catch {
+      lines.push(input.driverSql)
+    }
+    return lines.join('\n')
+  }
+  if (input.family === 'redis') {
+    lines.push(input.driverSql)
+    return lines.join('\n')
+  }
+  lines.push(input.driverSql)
+  lines.push('Bind values: ' + JSON.stringify(input.values))
+  return lines.join('\n')
+}
 
 export interface QCommandOptions {
   format?: 'table' | 'json' | 'csv'
@@ -62,9 +89,14 @@ export async function qCommand(
     for (const w of prepared.warnings) console.error(`⚠ ${w}`)
 
     if (options.dryRun) {
-      console.log('Dry-run preview (no execution):')
-      console.log(prepared.driver.sql)
-      console.log('Bind values: ' + JSON.stringify(prepared.driver.values))
+      console.log(
+        formatDryRun({
+          family: engineFamily(engine),
+          driverSql: prepared.driver.sql,
+          values: prepared.driver.values,
+          execHints: prepared.execHints,
+        })
+      )
       return
     }
 

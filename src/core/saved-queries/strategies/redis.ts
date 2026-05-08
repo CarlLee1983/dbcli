@@ -33,6 +33,48 @@ export function substituteRedisParams(
   return { command, warnings }
 }
 
+const REDIS_RANGE_CAP = 1000
+const RANGE_VERBS = new Set(['LRANGE', 'ZRANGE', 'ZRANGEBYSCORE', 'ZRANGEBYLEX'])
+const SCAN_VERBS = new Set(['SCAN', 'HSCAN', 'SSCAN', 'ZSCAN'])
+
+export function applyRedisSizeGuard(
+  command: string,
+  noLimit: boolean
+): { command: string; warnings: string[] } {
+  if (noLimit) return { command, warnings: [] }
+  const warnings: string[] = []
+  const tokens = command.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return { command, warnings }
+  const verb = tokens[0]!.toUpperCase()
+
+  if (RANGE_VERBS.has(verb) && tokens.length >= 4) {
+    const stop = parseInt(tokens[3]!, 10)
+    if (Number.isFinite(stop) && (stop < 0 || stop > REDIS_RANGE_CAP)) {
+      warnings.push(`${verb} stop=${tokens[3]} exceeds cap ${REDIS_RANGE_CAP}; overriding`)
+      tokens[3] = String(REDIS_RANGE_CAP)
+      return { command: tokens.join(' '), warnings }
+    }
+    return { command, warnings }
+  }
+
+  if (SCAN_VERBS.has(verb)) {
+    const idx = tokens.findIndex((t) => t.toUpperCase() === 'COUNT')
+    if (idx === -1) {
+      tokens.push('COUNT', String(REDIS_RANGE_CAP))
+      return { command: tokens.join(' '), warnings }
+    }
+    const cur = parseInt(tokens[idx + 1] ?? '', 10)
+    if (Number.isFinite(cur) && cur > REDIS_RANGE_CAP) {
+      warnings.push(`${verb} COUNT=${cur} exceeds cap ${REDIS_RANGE_CAP}; overriding`)
+      tokens[idx + 1] = String(REDIS_RANGE_CAP)
+      return { command: tokens.join(' '), warnings }
+    }
+    return { command, warnings }
+  }
+
+  return { command, warnings }
+}
+
 const REDIS_READONLY_VERBS = new Set([
   'GET', 'MGET',
   'HGET', 'HGETALL', 'HMGET', 'HKEYS', 'HVALS', 'HLEN', 'HEXISTS',

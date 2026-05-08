@@ -86,3 +86,46 @@ describe('substituteRedisParams', () => {
     expect(warnings).toEqual([])
   })
 })
+
+import { applyRedisSizeGuard } from '@/core/saved-queries/strategies/redis'
+
+describe('applyRedisSizeGuard', () => {
+  test('LRANGE stop > 1000 -> override + warn', () => {
+    const { command, warnings } = applyRedisSizeGuard('LRANGE k 0 5000', false)
+    expect(command).toBe('LRANGE k 0 1000')
+    expect(warnings.join(' ')).toMatch(/size|cap|exceed/i)
+  })
+
+  test('LRANGE stop = -1 -> override to 1000 + warn', () => {
+    const { command, warnings } = applyRedisSizeGuard('LRANGE k 0 -1', false)
+    expect(command).toBe('LRANGE k 0 1000')
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  test('SCAN injects COUNT 1000 when missing', () => {
+    const { command } = applyRedisSizeGuard('SCAN 0', false)
+    expect(command).toBe('SCAN 0 COUNT 1000')
+  })
+
+  test('SCAN with explicit COUNT respected (within cap)', () => {
+    const { command } = applyRedisSizeGuard('SCAN 0 COUNT 50', false)
+    expect(command).toBe('SCAN 0 COUNT 50')
+  })
+
+  test('SCAN with COUNT > 1000 capped', () => {
+    const { command, warnings } = applyRedisSizeGuard('SCAN 0 COUNT 5000', false)
+    expect(command).toBe('SCAN 0 COUNT 1000')
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  test('--no-limit skips guard', () => {
+    const { command, warnings } = applyRedisSizeGuard('LRANGE k 0 -1', true)
+    expect(command).toBe('LRANGE k 0 -1')
+    expect(warnings).toEqual([])
+  })
+
+  test('GET unaffected', () => {
+    const { command } = applyRedisSizeGuard('GET key', false)
+    expect(command).toBe('GET key')
+  })
+})

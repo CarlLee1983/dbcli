@@ -57,23 +57,33 @@ export async function collectInspect(opts: InspectOptions): Promise<InspectSnaps
   let version: string | null = null
 
   if (!opts.noConnect && config?.connection && system) {
+    const probeTimeout = opts.probeTimeoutMs ?? DEFAULT_PROBE_MS
+    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    let probeError: unknown = null
+    const probe = (async () => {
+      await adapter.connect()
+      version = await collectVersion(adapter, probeTimeout)
+      const result = await collectObjects({ system, adapter, brief: opts.brief })
+      objects = result
+      warnings.push(...result.warnings)
+      return 'ok' as const
+    })().catch((err) => {
+      probeError = err
+      return 'error' as const
+    })
+    const timer = new Promise<'timeout'>((resolve) =>
+      setTimeout(() => resolve('timeout'), probeTimeout)
+    )
+    const outcome = await Promise.race([probe, timer])
+    if (outcome === 'timeout') {
+      warnings.push(`probe: timed out after ${probeTimeout}ms`)
+    } else if (outcome === 'error') {
+      warnings.push(`connect: ${(probeError as Error).message}`)
+    }
     try {
-      const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
-      try {
-        await adapter.connect()
-        const probeTimeout = opts.probeTimeoutMs ?? DEFAULT_PROBE_MS
-        version = await collectVersion(adapter, probeTimeout)
-        objects = await collectObjects({ system, adapter, brief: opts.brief })
-        warnings.push(...objects.warnings)
-      } finally {
-        try {
-          await adapter.disconnect()
-        } catch {
-          /* ignore */
-        }
-      }
-    } catch (err) {
-      warnings.push(`connect: ${(err as Error).message}`)
+      await adapter.disconnect()
+    } catch {
+      /* ignore */
     }
   } else if (opts.noConnect) {
     objects = {

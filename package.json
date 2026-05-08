@@ -56,25 +56,23 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
-    "cli-table3": "^0.6.3",
+    "cli-table3": "^0.6.5",
     "commander": "13.0.0",
     "mongodb": "^7.2.0",
-    "mysql2": "^3.20.0",
+    "mysql2": "^3.22.3",
     "pg": "^8.20.0",
     "picocolors": "^1.1.1",
-    "zod": "^3.22.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "@inquirer/prompts": "^5.0.0",
+    "@eslint/js": "^9.39.4",
+    "@inquirer/prompts": "^5.5.0",
     "@types/bun": "latest",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "eslint": "^9.0.0",
-    "happy-dom": "^12.0.0",
-    "jsdom": "^23.0.0",
-    "prettier": "^3.0.0",
-    "typescript": "^5.3.3",
-    "typescript-eslint": "^8.57.2"
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^9.39.4",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.2"
   }
 }

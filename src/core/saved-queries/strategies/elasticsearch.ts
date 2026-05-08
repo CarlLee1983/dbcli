@@ -119,8 +119,38 @@ export const esStrategy: EngineStrategy = {
     }
   },
 
-  prepare(_snippet: SavedQuery, _params: ParamMap, _opts: RunOptions): PreparedExecution {
-    // Implemented in Task 10
-    throw new Error('esStrategy.prepare: not yet implemented')
+  prepare(snippet, params, opts): PreparedExecution {
+    if (!snippet.meta.index) {
+      throw new SavedQueryError(
+        `Snippet '${snippet.meta.key}' missing index field`,
+        'ES_INDEX_MISSING',
+        snippet.file
+      )
+    }
+    const warnings: string[] = []
+    const substituted = substituteEsParams(snippet.sqlBody, params, snippet.meta.params)
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(substituted)
+    } catch (e) {
+      throw new SavedQueryError(
+        `Snippet '${snippet.meta.key}' produced invalid JSON after substitution: ${(e as Error).message}`,
+        'ES_INVALID_JSON',
+        snippet.file
+      )
+    }
+
+    const guarded = applyEsSizeGuard(parsed, opts.noLimit)
+    warnings.push(...guarded.warnings)
+    const finalBody = JSON.stringify(guarded.body)
+    const index = substituteEsIndex(snippet.meta.index, params)
+
+    return {
+      driver: { sql: finalBody, values: [] },
+      rewrittenBody: substituted,
+      warnings,
+      execHints: { index },
+    }
   },
 }

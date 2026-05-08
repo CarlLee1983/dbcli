@@ -140,3 +140,63 @@ describe('applyEsSizeGuard', () => {
     expect(warnings.join(' ')).toMatch(/search_after|max_result_window/i)
   })
 })
+
+import type { SavedQuery } from '@/core/saved-queries/types'
+
+const esSnippet = (body: string, index: string | undefined = 'events-*'): SavedQuery => ({
+  meta: {
+    name: 't',
+    key: '@t',
+    engine: ['elasticsearch'],
+    index,
+    params: [{ name: 'id', type: 'int', required: true }],
+    tags: [],
+  },
+  sqlBody: body,
+  file: '/tmp/t.sql',
+  source: 'shared',
+})
+
+describe('esStrategy.prepare', () => {
+  test('substitutes params, applies size guard, surfaces index in execHints', () => {
+    const snippet = esSnippet('{ "query": { "term": { "id": :id } } }')
+    const prepared = esStrategy.prepare(
+      snippet,
+      { id: 42 },
+      { engine: 'elasticsearch', noLimit: false }
+    )
+    expect(prepared.execHints?.index).toBe('events-*')
+    const parsed = JSON.parse(prepared.driver.sql)
+    expect(parsed.size).toBe(1000)
+    expect(parsed.query.term.id).toBe(42)
+    expect(prepared.driver.values).toEqual([])
+  })
+
+  test('substitutes :param into index field', () => {
+    const snippet = esSnippet('{ "query": { "match_all": {} } }', 'events-:date')
+    snippet.meta.params = [{ name: 'date', type: 'date', required: true }]
+    const prepared = esStrategy.prepare(
+      snippet,
+      { date: '2026-05-08' },
+      { engine: 'elasticsearch', noLimit: false }
+    )
+    expect(prepared.execHints?.index).toBe('events-2026-05-08')
+  })
+
+  test('aggs body gets size: 0 by default', () => {
+    const body = '{ "aggs": { "x": { "terms": { "field": "k" } } } }'
+    const snippet = esSnippet(body)
+    snippet.meta.params = []
+    const prepared = esStrategy.prepare(snippet, {}, { engine: 'elasticsearch', noLimit: false })
+    expect(JSON.parse(prepared.driver.sql).size).toBe(0)
+  })
+
+  test('throws when index field missing', () => {
+    const snippet = esSnippet('{ "query": { "match_all": {} } }')
+    snippet.meta.index = undefined
+    snippet.meta.params = []
+    expect(() =>
+      esStrategy.prepare(snippet, {}, { engine: 'elasticsearch', noLimit: false })
+    ).toThrow(/index/i)
+  })
+})

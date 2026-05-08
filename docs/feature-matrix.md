@@ -38,14 +38,21 @@ Legend:
 
 ## Required CI validation
 
-The required CI validation gate runs both commands below without `continue-on-error`:
+The release gate is four commands. CI runs them without `continue-on-error`, and they must also pass locally before tagging a release:
 
 ```bash
 bun run typecheck
 bun test
+bun run lint
+bun run build
 ```
 
-Additional CI steps may run lint, build, executable smoke checks, and benchmarks. Lint and benchmark steps are advisory when marked `continue-on-error`; typecheck and test are the hard pass/fail gate.
+- `bun run lint` enforces `--max-warnings=0` — any new ESLint warning blocks release.
+- `bun run build` is followed by `dist/cli.mjs --help` / `--version` executable smoke checks (also release-blocking).
+- `tests/integration/dist-smoke.test.ts` is part of `bun test` and guards the packaged `assets/` path used by `dbcli skill --install`.
+- Benchmark (`bun run test:perf`) remains advisory and is allowed to fail (`continue-on-error: true`).
+
+See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
 
 ## MongoDB limitations summary
 

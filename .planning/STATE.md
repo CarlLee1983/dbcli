@@ -78,8 +78,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-08)
 
 ## Release Gate
 
-來源：[`docs/feature-matrix.md`](../docs/feature-matrix.md#required-ci-validation)。
-兩道指令都必須綠燈、不得 `continue-on-error`，才視為可發版：
+單一事實來源：[`docs/feature-matrix.md`](../docs/feature-matrix.md#required-ci-validation)。
+打 release tag 前的完整流程：[`CONTRIBUTING.md → Release Process`](../CONTRIBUTING.md#release-process)。
+以下四道指令都必須綠燈、不得 `continue-on-error`，才視為可發版：
 
 | Gate | Command | Status (2026-05-08 14:30 +08:00) |
 |------|---------|----------------------------------|
@@ -88,7 +89,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08)
 | Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` 已設為 release-blocking |
 | Build | `bun run build` | ✅ Pass — dist smoke tests 守護 packaged assets path |
 
-Benchmark 為 advisory。建議每次要打 release tag 前都跑完上述四道指令，確認都綠燈。
+Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIBUTING.md 的 Pre-Release Checklist。
 
 ---
 

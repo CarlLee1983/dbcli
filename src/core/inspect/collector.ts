@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { configModule } from '@/core/config'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import type { DbcliConfig } from '@/types'
@@ -21,12 +22,15 @@ const DEFAULT_PROBE_MS = 1500
 export async function collectInspect(opts: InspectOptions): Promise<InspectSnapshot> {
   const warnings: string[] = []
 
-  // 1. Config — never throws
+  // 1. Config — never throws. Treat "no config file present" as no-config rather
+  //    than letting the read fall back to a default postgres shape.
   let config: DbcliConfig | null = null
-  try {
-    config = await configModule.read(opts.configPath)
-  } catch (err) {
-    warnings.push(`config: ${(err as Error).message}`)
+  if (await hasConfig(opts.configPath)) {
+    try {
+      config = await configModule.read(opts.configPath)
+    } catch (err) {
+      warnings.push(`config: ${(err as Error).message}`)
+    }
   }
 
   const conn = collectConnection(config)
@@ -96,6 +100,17 @@ export async function collectInspect(opts: InspectOptions): Promise<InspectSnaps
   const suggestedCommands = suggestCommands(snapWithoutSuggestions, { brief: opts.brief })
 
   return { ...snapWithoutSuggestions, suggestedCommands, warnings }
+}
+
+async function hasConfig(configPath: string): Promise<boolean> {
+  // Directory mode: <configPath>/config.json
+  // File mode: <configPath> itself is the legacy single-file config
+  if (await Bun.file(join(configPath, 'config.json')).exists()) return true
+  if (await Bun.file(configPath).exists()) {
+    const stat = await Bun.file(configPath).stat().catch(() => null)
+    return stat?.isFile() === true
+  }
+  return false
 }
 
 function defaultObjectsForSystem(system: SnapshotSystem | null) {

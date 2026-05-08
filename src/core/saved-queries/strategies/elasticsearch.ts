@@ -46,6 +46,41 @@ export function substituteEsIndex(index: string, params: ParamMap): string {
   })
 }
 
+const ES_SIZE_CAP = 1000
+const ES_MAX_RESULT_WINDOW = 10000
+
+export function applyEsSizeGuard(
+  parsed: unknown,
+  noLimit: boolean
+): { body: unknown; warnings: string[] } {
+  const warnings: string[] = []
+  if (noLimit) return { body: parsed, warnings }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { body: parsed, warnings }
+  }
+  const obj = { ...(parsed as Record<string, unknown>) }
+  const hasAggs = 'aggs' in obj || 'aggregations' in obj
+  const hasSize = typeof obj.size === 'number'
+
+  if (!hasSize) {
+    obj.size = hasAggs ? 0 : ES_SIZE_CAP
+  } else if ((obj.size as number) > ES_SIZE_CAP) {
+    warnings.push(
+      `size ${obj.size} exceeds cap ${ES_SIZE_CAP}; overriding (use --no-limit to bypass)`
+    )
+    obj.size = ES_SIZE_CAP
+  }
+
+  const from = typeof obj.from === 'number' ? (obj.from as number) : 0
+  const sizeNum = obj.size as number
+  if (from + sizeNum >= ES_MAX_RESULT_WINDOW) {
+    warnings.push(
+      `from + size = ${from + sizeNum} reaches index.max_result_window (${ES_MAX_RESULT_WINDOW}); use search_after for deeper pagination`
+    )
+  }
+  return { body: obj, warnings }
+}
+
 function deepHasScript(value: unknown): boolean {
   if (value === null || typeof value !== 'object') return false
   if (Array.isArray(value)) return value.some(deepHasScript)

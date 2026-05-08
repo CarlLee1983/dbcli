@@ -101,3 +101,42 @@ describe('substituteEsIndex', () => {
     )
   })
 })
+
+import { applyEsSizeGuard } from '@/core/saved-queries/strategies/elasticsearch'
+
+describe('applyEsSizeGuard', () => {
+  test('injects size: 1000 when missing', () => {
+    const { body, warnings } = applyEsSizeGuard({ query: { match_all: {} } }, false)
+    expect((body as { size: number }).size).toBe(1000)
+    expect(warnings).toEqual([])
+  })
+
+  test('keeps size when within cap', () => {
+    const { body, warnings } = applyEsSizeGuard({ query: { match_all: {} }, size: 50 }, false)
+    expect((body as { size: number }).size).toBe(50)
+    expect(warnings).toEqual([])
+  })
+
+  test('caps size at 1000 with warning', () => {
+    const { body, warnings } = applyEsSizeGuard({ query: { match_all: {} }, size: 5000 }, false)
+    expect((body as { size: number }).size).toBe(1000)
+    expect(warnings.join(' ')).toMatch(/size/i)
+  })
+
+  test('aggs without size -> size: 0', () => {
+    const { body } = applyEsSizeGuard({ aggs: { x: { terms: { field: 'k' } } } }, false)
+    expect((body as { size: number }).size).toBe(0)
+  })
+
+  test('noLimit skips mutation', () => {
+    const original = { query: { match_all: {} }, size: 5000 }
+    const { body, warnings } = applyEsSizeGuard(original, true)
+    expect((body as { size: number }).size).toBe(5000)
+    expect(warnings).toEqual([])
+  })
+
+  test('from + size >= 10000 emits search_after hint', () => {
+    const { warnings } = applyEsSizeGuard({ query: { match_all: {} }, from: 9500, size: 500 }, false)
+    expect(warnings.join(' ')).toMatch(/search_after|max_result_window/i)
+  })
+})

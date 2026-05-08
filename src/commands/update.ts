@@ -130,16 +130,43 @@ export async function updateCommand(
     }
 
     if (config.connection?.system === 'redis') {
-      const output = {
-        status: 'error',
-        operation: 'update',
-        rows_affected: 0,
-        timestamp: new Date().toISOString(),
-        error:
-          'Redis 不支援 update 指令；請改用 query "<COMMAND>"（例如 HSET / EXPIRE / SET），寫入會通過相同的權限與黑名單檢查',
+      enforcePermission('UPDATE dummy', config.permission)
+
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('UPDATE', table, [])
+
+      // Redis update expects the key as 'table' and fields in 'setData'
+      // We ignore 'where' for Redis since it's key-value based, or we could
+      // treat 'table' as the key.
+      if (options.dryRun) {
+        const output = {
+          status: 'success',
+          operation: 'update',
+          rows_affected: 0,
+          sql: `HSET ${table} ... (Redis Update)`,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
       }
-      console.log(JSON.stringify(output, null, 2))
-      process.exit(1)
+
+      const adapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+      await adapter.connect()
+      try {
+        const result = await adapter.update(table, {}, setData)
+        const output = {
+          status: 'success',
+          operation: 'update',
+          rows_affected: result.affectedRows,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      } finally {
+        await adapter.disconnect()
+      }
     }
 
     if (config.connection?.system === 'elasticsearch') {

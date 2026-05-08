@@ -83,6 +83,64 @@ class MockRedisClient {
         delete obj[field]
         return 1
       }
+      case 'RPUSH': {
+        const key = String(args[0])
+        const values = args.slice(1)
+        const current = (this.storage.get(key) as unknown[]) ?? []
+        this.storage.set(key, [...current, ...values])
+        return values.length
+      }
+      case 'SADD': {
+        const key = String(args[0])
+        const values = args.slice(1)
+        const current = new Set((this.storage.get(key) as unknown[]) ?? [])
+        let added = 0
+        for (const v of values) {
+          if (!current.has(v)) {
+            current.add(v)
+            added++
+          }
+        }
+        this.storage.set(key, Array.from(current))
+        return added
+      }
+      case 'ZADD': {
+        const key = String(args[0])
+        const argsList = args.slice(1)
+        const current = (this.storage.get(key) as string[]) ?? []
+        const currentSet = new Set(current)
+        let added = 0
+        for (let i = 0; i < argsList.length; i += 2) {
+          const member = String(argsList[i + 1])
+          if (!currentSet.has(member)) {
+            currentSet.add(member)
+            added++
+          }
+        }
+        this.storage.set(key, Array.from(currentSet))
+        return added
+      }
+      case 'LREM': {
+        const key = String(args[0])
+        const value = String(args[2])
+        const current = (this.storage.get(key) as unknown[]) ?? []
+        const idx = current.indexOf(value)
+        if (idx === -1) return 0
+        current.splice(idx, 1)
+        this.storage.set(key, current)
+        return 1
+      }
+      case 'SREM':
+      case 'ZREM': {
+        const key = String(args[0])
+        const value = String(args[1])
+        const current = (this.storage.get(key) as unknown[]) ?? []
+        const idx = current.indexOf(value)
+        if (idx === -1) return 0
+        current.splice(idx, 1)
+        this.storage.set(key, current)
+        return 1
+      }
       case 'SCAN': {
         const cursor = String(args[0])
         const idx = Number(cursor) || 0
@@ -307,12 +365,45 @@ describe('RedisAdapter — command execution & DML', () => {
     expect(client.storage.get('user:1')).toEqual({ name: 'Alice', email: 'a@example.com' })
   })
 
-  test('update() can patch hash fields', async () => {
+  test('insert() with __type=list pushes values', async () => {
     const { adapter, client } = makeAdapter()
-    client.storage.set('user:1', { name: 'Alice' })
     await adapter.connect()
-    await adapter.update('user:1', {}, { fields: { name: 'Bob' } })
-    expect(client.storage.get('user:1')).toEqual({ name: 'Bob' })
+    await adapter.insert('mylists', { __type: 'list', values: ['a', 'b'] })
+    expect(client.storage.get('mylists')).toEqual(['a', 'b'])
+  })
+
+  test('insert() with __type=set adds members', async () => {
+    const { adapter, client } = makeAdapter()
+    await adapter.connect()
+    await adapter.insert('myset', { __type: 'set', values: ['m1', 'm2'] })
+    expect(client.storage.get('myset')).toEqual(['m1', 'm2'])
+  })
+
+  test('insert() with __type=zset adds members with scores', async () => {
+    const { adapter, client } = makeAdapter()
+    await adapter.connect()
+    await adapter.insert('myzset', { __type: 'zset', members: { m1: 10, m2: 20 } })
+    expect(client.storage.get('myzset')).toEqual(['m1', 'm2'])
+    const zaddCall = client.sendLog.find((l) => l.cmd === 'ZADD')
+    expect(zaddCall?.args).toEqual(['myzset', '10', 'm1', '20', 'm2'])
+  })
+
+  test('update() can append to lists/sets', async () => {
+    const { adapter, client } = makeAdapter()
+    client.storage.set('mylists', ['a'])
+    await adapter.connect()
+    await adapter.update('mylists', {}, { __type: 'list', values: ['b'] })
+    expect(client.storage.get('mylists')).toEqual(['a', 'b'])
+  })
+
+  test('delete() can remove list/set/zset members', async () => {
+    const { adapter, client } = makeAdapter()
+    client.storage.set('myset', ['m1', 'm2'])
+    client.types.set('myset', 'set')
+    await adapter.connect()
+    const result = await adapter.delete('myset', { value: 'm1' })
+    expect(result.affectedRows).toBe(1)
+    expect(client.storage.get('myset')).toEqual(['m2'])
   })
 
   test('delete() removes the entire key when no field filter is given', async () => {

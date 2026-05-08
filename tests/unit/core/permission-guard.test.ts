@@ -893,3 +893,260 @@ describe('Elasticsearch Permission Guard', () => {
     ).not.toThrow()
   })
 })
+
+// ============================================================================
+// Suite: Redis Hardening (success-path returns, danger commands, edges)
+// ============================================================================
+
+describe('classifyRedisCommand hardening', () => {
+  test('high-risk admin commands map to admin/DROP and isDangerous=true', () => {
+    for (const cmd of ['SHUTDOWN', 'CONFIG SET maxmemory 0', 'ACL WHOAMI', 'DEBUG SLEEP 5']) {
+      const c = classifyRedisCommand(cmd)
+      expect(c.requiredPermission).toBe('admin')
+      expect(c.type).toBe('DROP')
+      expect(c.isDangerous).toBe(true)
+    }
+  })
+
+  test('data-admin commands include DEL/UNLINK/HDEL and are dangerous', () => {
+    for (const cmd of ['DEL k', 'UNLINK k1 k2', 'HDEL h f']) {
+      const c = classifyRedisCommand(cmd)
+      expect(c.requiredPermission).toBe('data-admin')
+      expect(c.isDangerous).toBe(true)
+    }
+  })
+
+  test('unknown command yields requiredPermission=unknown and not dangerous', () => {
+    const c = classifyRedisCommand('TOTALLYNOTACMD x y z')
+    expect(c.requiredPermission).toBe('unknown')
+    expect(c.type).toBe('UNKNOWN')
+    expect(c.isDangerous).toBe(false)
+  })
+
+  test('handles leading/trailing whitespace and multiple spaces', () => {
+    const c = classifyRedisCommand('   GET    foo   ')
+    expect(c.command).toBe('GET')
+    expect(c.requiredPermission).toBe('query-only')
+  })
+
+  test('empty and whitespace-only inputs classify as unknown', () => {
+    expect(classifyRedisCommand('').requiredPermission).toBe('unknown')
+    expect(classifyRedisCommand('   ').requiredPermission).toBe('unknown')
+    expect(classifyRedisCommand('\t\n').requiredPermission).toBe('unknown')
+  })
+})
+
+describe('permissionAtLeast full matrix', () => {
+  test('data-admin satisfies query-only/read-write/data-admin but not admin', () => {
+    expect(permissionAtLeast('data-admin', 'query-only')).toBe(true)
+    expect(permissionAtLeast('data-admin', 'read-write')).toBe(true)
+    expect(permissionAtLeast('data-admin', 'data-admin')).toBe(true)
+    expect(permissionAtLeast('data-admin', 'admin')).toBe(false)
+  })
+
+  test('read-write does not satisfy data-admin or admin', () => {
+    expect(permissionAtLeast('read-write', 'data-admin')).toBe(false)
+    expect(permissionAtLeast('read-write', 'admin')).toBe(false)
+  })
+})
+
+describe('enforceRedisPermission success paths', () => {
+  test('returns classification when same-tier permission grants access', () => {
+    const result = enforceRedisPermission('SET k v', 'read-write')
+    expect(result.command).toBe('SET')
+    expect(result.requiredPermission).toBe('read-write')
+    expect(result.type).toBe('UPDATE')
+  })
+
+  test('admin can run KEYS / FLUSHDB / SHUTDOWN', () => {
+    expect(() => enforceRedisPermission('KEYS *', 'admin')).not.toThrow()
+    expect(() => enforceRedisPermission('FLUSHDB', 'admin')).not.toThrow()
+    expect(() => enforceRedisPermission('SHUTDOWN', 'admin')).not.toThrow()
+  })
+
+  test('higher tier may run lower-tier commands', () => {
+    expect(() => enforceRedisPermission('GET k', 'admin')).not.toThrow()
+    expect(() => enforceRedisPermission('DEL k', 'admin')).not.toThrow()
+    expect(() => enforceRedisPermission('SET k v', 'data-admin')).not.toThrow()
+  })
+
+  test('PermissionError on unknown carries admin as the required tier', () => {
+    let caught: unknown
+    try {
+      enforceRedisPermission('NOPECMD', 'query-only')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).requiredPermission).toBe('admin')
+  })
+})
+
+// ============================================================================
+// Suite: Elasticsearch Hardening (bulk variants, default-admin paths, tiers)
+// ============================================================================
+
+describe('Elasticsearch classify hardening', () => {
+  test('_count, _mapping, _settings, _alias all classify as SELECT', () => {
+    for (const apiPath of ['/users/_count', '/users/_mapping', '/users/_settings', '/_alias']) {
+      const result = classifyElasticsearchRequest({ method: 'GET', apiPath })
+      expect(result.type).toBe('SELECT')
+      expect(result.isDangerous).toBe(false)
+    }
+  })
+
+  test('PUT _create classifies as INSERT', () => {
+    const result = classifyElasticsearchRequest({
+      method: 'PUT',
+      apiPath: '/users/_create/1',
+      body: '{}',
+    })
+    expect(result.type).toBe('INSERT')
+  })
+
+  test('_bulk with only index/create operations classifies as INSERT', () => {
+    const body = [
+      '{ "index": { "_index": "test", "_id": "1" } }',
+      '{ "field": "value" }',
+      '{ "create": { "_index": "test", "_id": "2" } }',
+      '{ "field": "value2" }',
+      '',
+    ].join('\n')
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_bulk',
+      body,
+    })
+    expect(result.type).toBe('INSERT')
+    expect(result.isComposite).toBe(true)
+  })
+
+  test('_bulk with index + update (no delete) classifies as UPDATE', () => {
+    const body = [
+      '{ "index": { "_index": "test", "_id": "1" } }',
+      '{ "field": "value" }',
+      '{ "update": { "_index": "test", "_id": "2" } }',
+      '{ "doc": { "field": "v2" } }',
+      '',
+    ].join('\n')
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_bulk',
+      body,
+    })
+    expect(result.type).toBe('UPDATE')
+  })
+
+  test('_bulk with empty / invalid body falls back to SELECT (non-dangerous)', () => {
+    const empty = classifyElasticsearchRequest({ method: 'POST', apiPath: '/_bulk', body: '' })
+    expect(empty.type).toBe('SELECT')
+    expect(empty.isDangerous).toBe(false)
+
+    const garbage = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_bulk',
+      body: 'not json\nnot json either\n',
+    })
+    expect(garbage.type).toBe('SELECT')
+  })
+
+  test('_bulk delete short-circuits to DELETE even if other ops follow', () => {
+    const body = [
+      '{ "delete": { "_index": "test", "_id": "1" } }',
+      '{ "index": { "_index": "test", "_id": "2" } }',
+      '{ "field": "value" }',
+      '',
+    ].join('\n')
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_bulk',
+      body,
+    })
+    expect(result.type).toBe('DELETE')
+    expect(result.isDangerous).toBe(true)
+  })
+
+  test('unrecognised cluster/schema operation defaults to DROP/admin/dangerous', () => {
+    const result = classifyElasticsearchRequest({
+      method: 'POST',
+      apiPath: '/_cluster/reroute',
+      body: '{}',
+    })
+    expect(result.type).toBe('DROP')
+    expect(result.isDangerous).toBe(true)
+    expect(result.confidence).toBe('LOW')
+  })
+})
+
+describe('enforceElasticsearchPermission tiers', () => {
+  test('query-only allows _search and _count', () => {
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'POST', apiPath: '/users/_search', body: '{}' },
+        'query-only'
+      )
+    ).not.toThrow()
+    expect(() =>
+      enforceElasticsearchPermission({ method: 'GET', apiPath: '/users/_count' }, 'query-only')
+    ).not.toThrow()
+  })
+
+  test('query-only blocks PUT _doc (INSERT)', () => {
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'PUT', apiPath: '/users/_doc/1', body: '{}' },
+        'query-only'
+      )
+    ).toThrow(PermissionError)
+  })
+
+  test('read-write allows INSERT/UPDATE but blocks DELETE', () => {
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'PUT', apiPath: '/users/_doc/1', body: '{}' },
+        'read-write'
+      )
+    ).not.toThrow()
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'POST', apiPath: '/users/_update/1', body: '{}' },
+        'read-write'
+      )
+    ).not.toThrow()
+    expect(() =>
+      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'read-write')
+    ).toThrow(PermissionError)
+  })
+
+  test('data-admin allows DELETE but blocks cluster ops (DROP)', () => {
+    expect(() =>
+      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'data-admin')
+    ).not.toThrow()
+    expect(() =>
+      enforceElasticsearchPermission(
+        { method: 'POST', apiPath: '/_cluster/reroute', body: '{}' },
+        'data-admin'
+      )
+    ).toThrow(PermissionError)
+  })
+
+  test('returns classification on success', () => {
+    const result = enforceElasticsearchPermission(
+      { method: 'POST', apiPath: '/users/_search', body: '{}' },
+      'query-only'
+    )
+    expect(result.type).toBe('SELECT')
+    expect(result.isDangerous).toBe(false)
+  })
+
+  test('PermissionError carries DELETE classification on a blocked DELETE', () => {
+    let caught: unknown
+    try {
+      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'read-write')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(PermissionError)
+    expect((caught as PermissionError).classification.type).toBe('DELETE')
+  })
+})

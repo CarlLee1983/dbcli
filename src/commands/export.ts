@@ -58,9 +58,8 @@ export async function exportCommand(
     }
 
     if (config.connection.system === 'redis') {
-      throw new Error(
-        'Redis 不支援 export 指令；請改用 query "<COMMAND>" 並自行重新導向輸出（例如 dbcli query "GET <key>" --format json > out.json）'
-      )
+      await redisExportBranch(sql, options, config as DbcliConfig)
+      return
     }
 
     if (config.connection.system === 'elasticsearch') {
@@ -132,6 +131,65 @@ export async function exportCommand(
 
     console.error(t_vars('errors.message', { message: (error as Error).message }))
     process.exit(1)
+  }
+}
+
+async function redisExportBranch(
+  command: string,
+  options: ExportOptions,
+  config: DbcliConfig
+): Promise<void> {
+  const { enforceRedisPermission } = await import('@/core/permission-guard')
+  try {
+    enforceRedisPermission(command, config.permission)
+  } catch (error) {
+    if (error instanceof PermissionError) {
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
+      console.error(`   Operation: ${error.classification.type}`)
+      console.error(`   Message: ${error.message}`)
+      process.exit(1)
+    }
+    throw error
+  }
+
+  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  await redisAdapter.connect()
+  try {
+    const result = await redisAdapter.execute<Record<string, unknown>>(command)
+
+    const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : ['value']
+    const queryResult = {
+      rows: result.rows,
+      rowCount: result.rows.length,
+      columnNames,
+    }
+
+    const formatter = new QueryResultFormatter()
+    const formatted = formatter.format(queryResult as any, {
+      format: options.format as 'json' | 'csv',
+    })
+
+    if (options.output) {
+      const file = Bun.file(options.output)
+      const exists = await file.exists()
+
+      if (exists && !options.force) {
+        const confirmed = await promptUser.confirm(
+          t_vars('export.overwrite_confirmation', { file: options.output })
+        )
+        if (!confirmed) {
+          console.error('Operation cancelled by user')
+          return
+        }
+      }
+
+      await file.write(formatted)
+      console.error(t_vars('export.exported', { count: result.rowCount, file: options.output }))
+    } else {
+      console.log(formatted)
+    }
+  } finally {
+    await redisAdapter.disconnect()
   }
 }
 

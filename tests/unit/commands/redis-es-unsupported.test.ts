@@ -66,53 +66,6 @@ describe('Redis/Elasticsearch unsupported write commands surface clear errors', 
       configSpy = spyOn(configModule, 'read').mockResolvedValue(redisConfig as any)
     })
 
-    test('insert reports Redis is unsupported and points to query', async () => {
-      try {
-        await insertCommand('mykey', { data: '{"foo":"bar"}', force: true })
-      } catch {
-        // process.exit may throw via stub
-      }
-      const out = combinedOutput()
-      expect(out).toContain('Redis')
-      expect(out).toContain('不支援')
-      expect(out).toContain('query')
-    })
-
-    test('update reports Redis is unsupported', async () => {
-      try {
-        await updateCommand('mykey', { where: 'id=1', set: '{"foo":"bar"}', force: true })
-      } catch {
-        /* ignore */
-      }
-      const out = combinedOutput()
-      expect(out).toContain('Redis')
-      expect(out).toContain('不支援')
-      expect(out).toContain('query')
-    })
-
-    test('delete reports Redis is unsupported', async () => {
-      try {
-        await deleteCommand('mykey', { where: 'id=1', force: true })
-      } catch {
-        /* ignore */
-      }
-      const out = combinedOutput()
-      expect(out).toContain('Redis')
-      expect(out).toContain('不支援')
-      expect(out).toContain('query')
-    })
-
-    test('export reports Redis is unsupported', async () => {
-      try {
-        await exportCommand('GET mykey', { format: 'json' } as any)
-      } catch {
-        /* ignore */
-      }
-      const out = combinedOutput()
-      expect(out).toContain('Redis')
-      expect(out).toContain('不支援')
-    })
-
     test('diff reports Redis is unsupported', async () => {
       try {
         await diffCommand.parseAsync(['node', 'dbcli', '--snapshot', '/tmp/dbcli-diff-redis.json'])

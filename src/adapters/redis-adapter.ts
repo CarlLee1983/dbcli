@@ -117,6 +117,12 @@ export class RedisAdapter implements QueryableAdapter {
     return keys.map((name) => ({ name }))
   }
 
+  async getDbSize(): Promise<number> {
+    const client = this.requireClient()
+    const reply = (await client.send('DBSIZE', [])) as number
+    return reply
+  }
+
   async listTables(): Promise<TableSchema[]> {
     const collections = await this.listCollections()
     return collections.map((c) => ({ name: c.name, columns: [] }))
@@ -199,6 +205,26 @@ export class RedisAdapter implements QueryableAdapter {
       await client.hmset(keyName, flat)
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
+    if (type === 'list') {
+      const values = data.values as string[] | undefined
+      if (!values || !Array.isArray(values)) throw new Error('list insert 需要 values 陣列')
+      await client.send('RPUSH', [keyName, ...values.map(String)])
+      return { rows: [], affectedRows: values.length }
+    }
+    if (type === 'set') {
+      const values = data.values as string[] | undefined
+      if (!values || !Array.isArray(values)) throw new Error('set insert 需要 values 陣列')
+      await client.send('SADD', [keyName, ...values.map(String)])
+      return { rows: [], affectedRows: values.length }
+    }
+    if (type === 'zset') {
+      const members = data.members as Record<string, number> | undefined
+      if (!members) throw new Error('zset insert 需要 members 物件 (member -> score)')
+      const flat: string[] = []
+      for (const [m, s] of Object.entries(members)) flat.push(String(s), m)
+      await client.send('ZADD', [keyName, ...flat])
+      return { rows: [], affectedRows: Object.keys(members).length }
+    }
     throw new Error(`不支援的 insert 類型: ${String(type)}`)
   }
 
@@ -215,11 +241,29 @@ export class RedisAdapter implements QueryableAdapter {
       await client.hmset(keyName, flat)
       return { rows: [], affectedRows: Object.keys(fields).length }
     }
+    const type = update.__type
+    if (type === 'list') {
+      const values = update.values as string[]
+      await client.send('RPUSH', [keyName, ...values.map(String)])
+      return { rows: [], affectedRows: values.length }
+    }
+    if (type === 'set') {
+      const values = update.values as string[]
+      await client.send('SADD', [keyName, ...values.map(String)])
+      return { rows: [], affectedRows: values.length }
+    }
+    if (type === 'zset') {
+      const members = update.members as Record<string, number>
+      const flat: string[] = []
+      for (const [m, s] of Object.entries(members)) flat.push(String(s), m)
+      await client.send('ZADD', [keyName, ...flat])
+      return { rows: [], affectedRows: Object.keys(members).length }
+    }
     if ('value' in update) {
       await client.set(keyName, String(update.value))
       return { rows: [], affectedRows: 1 }
     }
-    throw new Error('update 需要 fields 或 value')
+    throw new Error('update 需要 fields, values, members 或 value')
   }
 
   async delete(
@@ -230,6 +274,19 @@ export class RedisAdapter implements QueryableAdapter {
     const field = filter.field as string | undefined
     if (field) {
       const removed = (await client.send('HDEL', [keyName, field])) as number
+      return { rows: [], affectedRows: removed }
+    }
+    const value = filter.value as string | undefined
+    if (value) {
+      const type = (await client.send('TYPE', [keyName])) as string
+      let removed = 0
+      if (type === 'list') {
+        removed = (await client.send('LREM', [keyName, '0', value])) as number
+      } else if (type === 'set') {
+        removed = (await client.send('SREM', [keyName, value])) as number
+      } else if (type === 'zset') {
+        removed = (await client.send('ZREM', [keyName, value])) as number
+      }
       return { rows: [], affectedRows: removed }
     }
     const removed = await client.del(keyName)

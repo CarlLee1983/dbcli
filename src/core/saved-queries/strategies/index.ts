@@ -1,5 +1,6 @@
 import { sqlStrategy } from './sql'
 import { esStrategy } from './elasticsearch'
+import { redisStrategy } from './redis'
 import type { EngineTag } from '../types'
 import type { EngineFamily, EngineStrategy } from './types'
 
@@ -18,6 +19,8 @@ export function getStrategy(family: EngineFamily): EngineStrategy {
       return sqlStrategy
     case 'es':
       return esStrategy
+    case 'redis':
+      return redisStrategy
     default:
       throw new Error(`No strategy registered for family: ${family}`)
   }

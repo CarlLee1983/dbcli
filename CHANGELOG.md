@@ -5,6 +5,17 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-05-09
+
+### Added
+
+- `dbcli report` — Markdown / JSON diagnostic report built on top of v1.12.0 inspect collectors. Reuses connection / permission / blacklist / snippet inventory context; runs curated read-only built-in `@diag/*` snippets grouped into `health` / `capacity` / `perf` sections; per-snippet timeout (default 3000 ms) and per-evidence row cap (default 50). Supports `--format json|markdown`, `--section <list>`, `--brief`, `--for-agent`, `--no-connect`.
+
+### Notes
+
+- MongoDB connections emit a context-only report (no built-in mongo snippets in v1.13.0).
+- No new built-in snippets in this release; report uses the v1.11 `@diag/*` inventory.
+
 ## [1.12.0] - 2026-05-08
 
 ### Added

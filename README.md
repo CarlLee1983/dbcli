@@ -108,6 +108,17 @@ connection, permission level, blacklist size, schema cache freshness, available
 saved-query intents, and the safest next commands to run. No host, no port, no
 credentials — safe to log or pipe to an LLM.
 
+### Diagnostic report
+
+```bash
+dbcli report --format json
+```
+
+Builds on `inspect` to also run curated read-only built-in `@diag/*` snippets
+grouped into `health` / `capacity` / `perf` sections. Bounded by per-snippet
+timeout and per-evidence row cap. Use `--format markdown` for human reading,
+`--section health,capacity` to scope, or `--for-agent` for compact JSON.
+
 ### MongoDB Atlas / SRV Connections
 
 MongoDB connections are supported via both standard `mongodb://` URIs and Atlas-style `mongodb+srv://` URIs.

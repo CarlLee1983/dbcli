@@ -38,6 +38,11 @@
     "description": "Read-only snapshot of connection, permission, blacklist, objects, snippets, and suggested next commands.",
     "no_config": "No dbcli configuration found. Run `dbcli init` to start."
   },
+  "report": {
+    "description": "Diagnostic report (health/capacity/perf) built from built-in snippets. Read-only, bounded.",
+    "no_config": "No dbcli configuration found. Run `dbcli init` to start.",
+    "section_invalid": "Unknown report section '{name}'. Allowed: health, capacity, perf"
+  },
   "use": {
     "description": "Switch or display the default database connection",
     "switched": "Switched default connection to {name}",

@@ -38,6 +38,14 @@ export function substituteEsParams(
   })
 }
 
+export function substituteEsIndex(index: string, params: ParamMap): string {
+  return index.replace(NAME_RE, (match, name: string) => {
+    if (!Object.prototype.hasOwnProperty.call(params, name)) return match
+    const v = params[name]
+    return v === null || v === undefined ? '' : String(v)
+  })
+}
+
 function deepHasScript(value: unknown): boolean {
   if (value === null || typeof value !== 'object') return false
   if (Array.isArray(value)) return value.some(deepHasScript)

@@ -83,3 +83,21 @@ describe('substituteEsParams', () => {
     expect(out).toBe('{ "x": null }')
   })
 })
+
+import { substituteEsIndex } from '@/core/saved-queries/strategies/elasticsearch'
+
+describe('substituteEsIndex', () => {
+  test('replaces :param with raw value', () => {
+    expect(substituteEsIndex('events-:date', { date: '2026-05-08' })).toBe('events-2026-05-08')
+  })
+
+  test('handles literal index', () => {
+    expect(substituteEsIndex('events-*', {})).toBe('events-*')
+  })
+
+  test('multiple params', () => {
+    expect(substituteEsIndex(':env-events-:date', { env: 'prod', date: '2026-05-08' })).toBe(
+      'prod-events-2026-05-08'
+    )
+  })
+})

@@ -56,7 +56,10 @@ describe('runDiagnostic', () => {
   })
 
   test('returns no-data when adapter returns zero rows', async () => {
-    const adapter = adapterReturning({ rows: [] as Array<Record<string, unknown>>, affectedRows: 0 })
+    const adapter = adapterReturning({
+      rows: [] as Array<Record<string, unknown>>,
+      affectedRows: 0,
+    })
     const ev = await runDiagnostic({
       snippet: snippet(),
       adapter,

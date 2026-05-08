@@ -461,6 +461,36 @@ Output schema is locked at `schemaVersion: 1`. Sections: `connection`, `permissi
 
 **Permission:** query-only+
 
+### report
+
+Diagnostic report built on top of `inspect`. Reuses inspect context (connection,
+permission, blacklist, snippet inventory) and additionally runs curated built-in
+`@diag/*` snippets grouped into sections.
+
+Flags:
+- `--format json|markdown` (default: json)
+- `--section health,capacity,perf` (default: all three)
+- `--brief` — drop evidence rows; keep counts and statuses
+- `--for-agent` — shortcut for `--format json --brief`
+- `--no-connect` — context-only snapshot (skip diagnostics + inspect probe)
+- `--per-snippet-timeout <ms>` (default 3000)
+- `--max-rows-per-evidence <n>` (default 50)
+- `--probe-timeout <ms>` (default 1500, inherited from inspect)
+
+Examples:
+
+    dbcli report --format json
+    dbcli report --format markdown --section health,capacity
+    dbcli report --for-agent
+    dbcli report --no-connect
+
+Boundaries:
+- Read-only. Skips snippets whose required params have no default value.
+- Never connects in `--no-connect` mode.
+- MongoDB and no-config workspaces emit a context-only snapshot with a warning.
+
+**Permission:** query-only+
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

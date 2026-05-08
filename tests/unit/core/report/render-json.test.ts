@@ -29,7 +29,10 @@ const SNAP: ReportSnapshot = {
           intent: 'capacity.size',
           description: 'Database size',
           rowCount: 2,
-          rows: [{ database: 'app', size: '100 MB' }, { database: 'log', size: '20 MB' }],
+          rows: [
+            { database: 'app', size: '100 MB' },
+            { database: 'log', size: '20 MB' },
+          ],
           status: 'ok',
           durationMs: 12,
         },

@@ -86,10 +86,7 @@ describe('dbcli report (CLI)', () => {
 
   test('no-config workspace exits 0 with degraded snapshot', async () => {
     const empty = resolve(import.meta.dir, '../fixtures/inspect/no-config')
-    const { stdout, code } = await run(
-      ['report', '--format', 'json', '--no-connect'],
-      empty
-    )
+    const { stdout, code } = await run(['report', '--format', 'json', '--no-connect'], empty)
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.context.system).toBeNull()

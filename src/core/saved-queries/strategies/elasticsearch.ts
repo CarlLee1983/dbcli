@@ -1,6 +1,5 @@
 import type { ParamMap } from '../binder'
-import type { RunOptions } from '../runner'
-import { SavedQueryError, type ParamSpec, type SavedQuery } from '../types'
+import { SavedQueryError, type ParamSpec } from '../types'
 import type { EngineStrategy, PreparedExecution } from './types'
 
 const NAME_RE = /:([a-zA-Z_][a-zA-Z0-9_]*)/g

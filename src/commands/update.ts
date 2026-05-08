@@ -49,25 +49,20 @@ function parseWhereClause(whereClause: string): Record<string, unknown> {
         `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
       )
     }
-    let value: any = valueStr.trim()
+    const trimmed = valueStr.trim()
+    const stripped =
+      (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+      (trimmed.startsWith('"') && trimmed.endsWith('"'))
+        ? trimmed.slice(1, -1)
+        : trimmed
 
-    // Strip quotes
-    if (
-      (value.startsWith("'") && value.endsWith("'")) ||
-      (value.startsWith('"') && value.endsWith('"'))
-    ) {
-      value = value.slice(1, -1)
+    let value: string | number | boolean | null = stripped
+    if (stripped !== '' && !isNaN(Number(stripped))) {
+      value = Number(stripped)
     }
-
-    // Attempt numeric conversion
-    if (!isNaN(value) && value !== '') {
-      value = Number(value)
-    }
-
-    // Handle true/false/null literals
-    if (value === 'true') value = true
-    if (value === 'false') value = false
-    if (value === 'null') value = null
+    if (stripped === 'true') value = true
+    else if (stripped === 'false') value = false
+    else if (stripped === 'null') value = null
 
     conditions[column] = value
   }

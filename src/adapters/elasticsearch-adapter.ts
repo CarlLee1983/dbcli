@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any --
+ * The project deliberately avoids the heavy `@elastic/elasticsearch` SDK
+ * and talks to ES via raw HTTP. The shapes returned by `_search`, `_mapping`,
+ * `_stats`, etc. are dynamic and we narrow them at the use site. Typing
+ * every ES response would create more drag than safety here; revisit when
+ * we adopt the official client.
+ */
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
 

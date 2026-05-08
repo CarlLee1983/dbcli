@@ -155,7 +155,9 @@ async function redisListBranch(
 
   try {
     const keys = await redisAdapter.listCollections()
-    const totalKeys = await (redisAdapter as any).getDbSize()
+    const totalKeys = await (
+      redisAdapter as unknown as { getDbSize: () => Promise<number> }
+    ).getDbSize()
 
     if (keys.length === 0) {
       console.log('No keys found in this Redis database.')

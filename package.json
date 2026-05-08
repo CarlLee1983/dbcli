@@ -51,8 +51,8 @@
     "test:docker": "docker compose -f docker-compose.test.yml up -d --wait && bun test tests/integration/adapters; docker compose -f docker-compose.test.yml down",
     "typecheck": "tsc --noEmit --pretty false",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
-    "lint": "eslint src tests --ext .ts",
-    "lint:fix": "eslint src tests --ext .ts --fix",
+    "lint": "eslint src tests --ext .ts --max-warnings=0",
+    "lint:fix": "eslint src tests --ext .ts --fix --max-warnings=0",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {

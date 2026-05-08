@@ -239,7 +239,10 @@ async function writeV2InitConfig(
     }
   }
 
-  // Build connection entry
+  // Build connection entry. Typed loosely because the v2 connections map
+  // is a union of per-engine shapes; spreading partial state then narrowing
+  // at the call site keeps both branches compilable.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const connEntry: any = {
     ...connection,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
@@ -440,22 +443,30 @@ async function initCommandHandler(
   // Otherwise ask for actual connection values
   if (options.useEnvRefs && shouldPrompt) {
     // Env-ref mode: only ask for environment variable names, not actual values
-    const envHost = options.envHost || (await promptUser.text(t('init.prompt_host'), 'DB_HOST'))
-    const envPort = options.envPort || (await promptUser.text(t('init.prompt_port'), 'DB_PORT'))
-    const envUser = options.envUser || (await promptUser.text(t('init.prompt_user'), 'DB_USER'))
+    const envHost =
+      (options.envHost as string | undefined) ||
+      (await promptUser.text(t('init.prompt_host'), 'DB_HOST'))
+    const envPort =
+      (options.envPort as string | undefined) ||
+      (await promptUser.text(t('init.prompt_port'), 'DB_PORT'))
+    const envUser =
+      (options.envUser as string | undefined) ||
+      (await promptUser.text(t('init.prompt_user'), 'DB_USER'))
     const envPassword =
-      options.envPassword || (await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD'))
+      (options.envPassword as string | undefined) ||
+      (await promptUser.text(t('init.prompt_password'), 'DB_PASSWORD'))
     const envDatabase =
-      options.envDatabase || (await promptUser.text(t('init.prompt_name'), 'DB_DATABASE'))
+      (options.envDatabase as string | undefined) ||
+      (await promptUser.text(t('init.prompt_name'), 'DB_DATABASE'))
 
     // Directly convert to env-ref config
     configForWrite = {
       system: connection.system as 'postgresql' | 'mysql' | 'mariadb',
-      host: { $env: envHost } as any,
-      port: { $env: envPort } as any,
-      user: { $env: envUser } as any,
-      password: { $env: envPassword } as any,
-      database: { $env: envDatabase } as any,
+      host: { $env: envHost },
+      port: { $env: envPort },
+      user: { $env: envUser },
+      password: { $env: envPassword },
+      database: { $env: envDatabase },
     }
 
     // Skip subsequent connection parameter collection, go directly to permission selection
@@ -593,11 +604,11 @@ async function initCommandHandler(
 
   if (options.useEnvRefs) {
     // Non-interactive mode requires env variable names to be provided
-    const envHost = options.envHost
-    const envPort = options.envPort
-    const envUser = options.envUser
-    const envPassword = options.envPassword
-    const envDatabase = options.envDatabase
+    const envHost = options.envHost as string | undefined
+    const envPort = options.envPort as string | undefined
+    const envUser = options.envUser as string | undefined
+    const envPassword = options.envPassword as string | undefined
+    const envDatabase = options.envDatabase as string | undefined
 
     if (!envHost || !envPort || !envUser || !envPassword || !envDatabase) {
       throw new Error(t('errors.env_refs_missing_options'))
@@ -605,11 +616,11 @@ async function initCommandHandler(
 
     configForWrite = {
       system: connection.system as 'postgresql' | 'mysql' | 'mariadb',
-      host: { $env: envHost } as any,
-      port: { $env: envPort } as any,
-      user: { $env: envUser } as any,
-      password: { $env: envPassword } as any,
-      database: { $env: envDatabase } as any,
+      host: { $env: envHost },
+      port: { $env: envPort },
+      user: { $env: envUser },
+      password: { $env: envPassword },
+      database: { $env: envDatabase },
     }
   }
 
@@ -630,16 +641,16 @@ async function initCommandHandler(
 
     // Resolve actual connection parameters (handles env-var references)
     // Actual env var values are needed during connection testing, not empty strings
-    const resolveValue = (value: any, _fieldName: string): string | number => {
+    const resolveValue = (value: unknown, _fieldName: string): string | number => {
       if (typeof value === 'object' && value !== null && '$env' in value) {
-        const envKey = value.$env
+        const envKey = (value as { $env: string }).$env
         const envValue = process.env[envKey]
         if (!envValue) {
           throw new Error(t_vars('errors.env_var_not_defined', { envKey }))
         }
         return envValue
       }
-      return value
+      return value as string | number
     }
 
     const testConnection: ConnectionOptions = {
@@ -701,6 +712,9 @@ async function handleMongoDBInit(ctx: {
   configPath: string
   connectionName: string
   isV2Init: boolean
+  // The existing v1 config blob. Strict DbcliConfig narrows away the
+  // partial shapes used during init bootstrap; intentionally loose.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   existingConfig: any
   shouldPrompt: boolean
 }): Promise<void> {
@@ -759,7 +773,7 @@ async function handleMongoDBInit(ctx: {
       'admin',
     ])
   }
-  if (!VALID_PERMISSIONS.includes(permission as any)) {
+  if (!(VALID_PERMISSIONS as readonly string[]).includes(permission)) {
     throw new Error(t_vars('errors.invalid_permission', { permission }))
   }
 
@@ -770,7 +784,7 @@ async function handleMongoDBInit(ctx: {
   // Connection test
   if (!options.skipTest) {
     console.log(t('init.connection_testing'))
-    const mongoAdapter = AdapterFactory.createMongoDBAdapter(mongoConfig as any)
+    const mongoAdapter = AdapterFactory.createMongoDBAdapter(mongoConfig as ConnectionOptions)
     try {
       await mongoAdapter.connect()
       await mongoAdapter.testConnection()
@@ -795,16 +809,19 @@ async function handleMongoDBInit(ctx: {
     await writeV2InitConfig(
       configPath,
       connectionName,
-      mongoConfig as any,
+      mongoConfig as ConnectionConfig,
       permission,
       options.envFile as string | undefined
     )
     return
   }
 
+  // Bridge between the hand-written ConnectionConfig in src/types and the
+  // zod-derived shape in @/utils/validation that configModule.merge expects.
   const newConfig = configModule.merge(existingConfig, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     connection: mongoConfig as any,
-    permission: permission as any,
+    permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
   const storagePath = getProjectStoragePath(configPath)
   await Bun.$`mkdir -p ${storagePath}`

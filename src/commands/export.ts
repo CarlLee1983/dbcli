@@ -165,9 +165,10 @@ async function redisExportBranch(
     }
 
     const formatter = new QueryResultFormatter()
-    const formatted = formatter.format(queryResult as any, {
-      format: options.format as 'json' | 'csv',
-    })
+    const formatted = formatter.format(
+      queryResult as unknown as import('@/types/query').QueryResult<Record<string, unknown>>,
+      { format: options.format as 'json' | 'csv' }
+    )
 
     if (options.output) {
       const file = Bun.file(options.output)

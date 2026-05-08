@@ -16,7 +16,7 @@ export interface LoadOptions {
   localDir: string
 }
 
-const ENGINE_SUFFIXES: ReadonlyArray<EngineTag> = ['postgres', 'mysql']
+const ENGINE_SUFFIXES: ReadonlyArray<EngineTag> = ['postgres', 'mysql', 'elasticsearch', 'redis']
 
 /**
  * 回傳 Map<key, ResolvedSnippet[]> — 多個變體可能共用同一個 key

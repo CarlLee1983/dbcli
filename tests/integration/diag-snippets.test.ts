@@ -140,4 +140,16 @@ describe('builtin diag snippets', () => {
       })
     }
   }
+
+  test('@diag/es-cluster-health is loadable', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    const es = resolveByName(map, '@diag/es-cluster-health', 'elasticsearch')
+    expect(es.query.meta.engine).toEqual(['elasticsearch'])
+    expect(es.query.meta.index).toBeDefined()
+  })
 })

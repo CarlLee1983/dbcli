@@ -16,19 +16,31 @@ describe('sqlStrategy', () => {
 
   test('validateBody accepts SELECT', () => {
     expect(() =>
-      sqlStrategy.validateBody('SELECT 1', { name: 't', key: '@t', params: [], tags: [] }, '/tmp/t.sql')
+      sqlStrategy.validateBody(
+        'SELECT 1',
+        { name: 't', key: '@t', params: [], tags: [] },
+        '/tmp/t.sql'
+      )
     ).not.toThrow()
   })
 
   test('validateBody rejects INSERT', () => {
     expect(() =>
-      sqlStrategy.validateBody('INSERT INTO t VALUES (1)', { name: 't', key: '@t', params: [], tags: [] }, '/tmp/t.sql')
+      sqlStrategy.validateBody(
+        'INSERT INTO t VALUES (1)',
+        { name: 't', key: '@t', params: [], tags: [] },
+        '/tmp/t.sql'
+      )
     ).toThrow(SavedQueryError)
   })
 
   test('prepare wraps with size guard and rewrites :name (postgres)', () => {
     const snippet = buildSnippet('SELECT * FROM t WHERE id = :id')
-    const prepared = sqlStrategy.prepare(snippet, { id: 42 }, { engine: 'postgres', noLimit: false })
+    const prepared = sqlStrategy.prepare(
+      snippet,
+      { id: 42 },
+      { engine: 'postgres', noLimit: false }
+    )
     expect(prepared.driver.sql).toContain('LIMIT 1000')
     expect(prepared.driver.sql).toContain('$1')
     expect(prepared.driver.values).toEqual([42])
@@ -61,8 +73,8 @@ describe('runner.prepareExecution dispatches to sql strategy', () => {
   })
 
   test('mongodb connection throws clear error', () => {
-    expect(() =>
-      prepareExecution(resolved, { engine: 'mongodb', noLimit: false }, {}, {})
-    ).toThrow(/MongoDB|mongodb/i)
+    expect(() => prepareExecution(resolved, { engine: 'mongodb', noLimit: false }, {}, {})).toThrow(
+      /MongoDB|mongodb/i
+    )
   })
 })

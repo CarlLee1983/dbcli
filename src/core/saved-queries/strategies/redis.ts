@@ -20,8 +20,7 @@ export function substituteRedisParams(
     const before = body[offset - 1]
     const after = body[offset + match.length]
     const adjacentNonWs =
-      (before !== undefined && /\S/.test(before)) ||
-      (after !== undefined && /\S/.test(after))
+      (before !== undefined && /\S/.test(before)) || (after !== undefined && /\S/.test(after))
     if (spec?.type === 'string' && adjacentNonWs) {
       warnings.push(
         `Param ':${name}' is adjacent to other characters; wrap in quotes if value may contain whitespace`
@@ -76,18 +75,49 @@ export function applyRedisSizeGuard(
 }
 
 const REDIS_READONLY_VERBS = new Set([
-  'GET', 'MGET',
-  'HGET', 'HGETALL', 'HMGET', 'HKEYS', 'HVALS', 'HLEN', 'HEXISTS',
-  'LRANGE', 'LLEN', 'LINDEX',
-  'SMEMBERS', 'SISMEMBER', 'SCARD',
-  'ZRANGE', 'ZRANGEBYSCORE', 'ZRANGEBYLEX', 'ZSCORE', 'ZCARD', 'ZCOUNT', 'ZRANK',
-  'TYPE', 'EXISTS', 'TTL', 'PTTL', 'STRLEN', 'OBJECT',
-  'SCAN', 'HSCAN', 'SSCAN', 'ZSCAN',
+  'GET',
+  'MGET',
+  'HGET',
+  'HGETALL',
+  'HMGET',
+  'HKEYS',
+  'HVALS',
+  'HLEN',
+  'HEXISTS',
+  'LRANGE',
+  'LLEN',
+  'LINDEX',
+  'SMEMBERS',
+  'SISMEMBER',
+  'SCARD',
+  'ZRANGE',
+  'ZRANGEBYSCORE',
+  'ZRANGEBYLEX',
+  'ZSCORE',
+  'ZCARD',
+  'ZCOUNT',
+  'ZRANK',
+  'TYPE',
+  'EXISTS',
+  'TTL',
+  'PTTL',
+  'STRLEN',
+  'OBJECT',
+  'SCAN',
+  'HSCAN',
+  'SSCAN',
+  'ZSCAN',
 ])
 
 const REDIS_HARD_REJECT = new Set([
-  'FLUSHDB', 'FLUSHALL', 'CONFIG', 'DEBUG', 'SHUTDOWN',
-  'EVAL', 'EVALSHA', 'SCRIPT',
+  'FLUSHDB',
+  'FLUSHALL',
+  'CONFIG',
+  'DEBUG',
+  'SHUTDOWN',
+  'EVAL',
+  'EVALSHA',
+  'SCRIPT',
   'KEYS',
 ])
 
@@ -97,13 +127,12 @@ export const redisStrategy: EngineStrategy = {
   validateBody(body, meta, file) {
     const trimmed = body.replace(/\r\n/g, '\n').trim()
     if (!trimmed) {
-      throw new SavedQueryError(
-        `Snippet '${meta.key}' has empty body`,
-        'REDIS_EMPTY_BODY',
-        file
-      )
+      throw new SavedQueryError(`Snippet '${meta.key}' has empty body`, 'REDIS_EMPTY_BODY', file)
     }
-    const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean)
+    const lines = trimmed
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
     if (lines.length > 1) {
       throw new SavedQueryError(
         `Snippet '${meta.key}' has multiple lines; only single command is allowed`,

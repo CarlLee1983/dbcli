@@ -5,11 +5,7 @@ import type { EngineStrategy, PreparedExecution } from './types'
 
 const NAME_RE = /:([a-zA-Z_][a-zA-Z0-9_]*)/g
 
-export function substituteEsParams(
-  body: string,
-  params: ParamMap,
-  specs: ParamSpec[]
-): string {
+export function substituteEsParams(body: string, params: ParamMap, specs: ParamSpec[]): string {
   const inString = new Uint8Array(body.length)
   let isIn = false
   for (let i = 0; i < body.length; i++) {

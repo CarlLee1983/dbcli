@@ -22,9 +22,7 @@ describe('redisStrategy.validateBody', () => {
   })
 
   test('accepts SCAN', () => {
-    expect(() =>
-      redisStrategy.validateBody('SCAN 0 MATCH user:*', meta(), '/tmp/t')
-    ).not.toThrow()
+    expect(() => redisStrategy.validateBody('SCAN 0 MATCH user:*', meta(), '/tmp/t')).not.toThrow()
   })
 
   test('rejects KEYS *', () => {
@@ -36,9 +34,9 @@ describe('redisStrategy.validateBody', () => {
   })
 
   test('rejects EVAL', () => {
-    expect(() =>
-      redisStrategy.validateBody('EVAL "return 1" 0', meta(), '/tmp/t')
-    ).toThrow(SavedQueryError)
+    expect(() => redisStrategy.validateBody('EVAL "return 1" 0', meta(), '/tmp/t')).toThrow(
+      SavedQueryError
+    )
   })
 
   test('rejects SET (write command)', () => {
@@ -46,9 +44,7 @@ describe('redisStrategy.validateBody', () => {
   })
 
   test('rejects multi-line body', () => {
-    expect(() =>
-      redisStrategy.validateBody('GET a\nGET b', meta(), '/tmp/t')
-    ).toThrow(/multi/i)
+    expect(() => redisStrategy.validateBody('GET a\nGET b', meta(), '/tmp/t')).toThrow(/multi/i)
   })
 
   test('rejects empty body', () => {
@@ -60,31 +56,25 @@ import { substituteRedisParams } from '@/core/saved-queries/strategies/redis'
 
 describe('substituteRedisParams', () => {
   test('replaces :int into key pattern', () => {
-    const { command, warnings } = substituteRedisParams(
-      'HGETALL user::id',
-      { id: 42 },
-      [{ name: 'id', type: 'int', required: true }]
-    )
+    const { command, warnings } = substituteRedisParams('HGETALL user::id', { id: 42 }, [
+      { name: 'id', type: 'int', required: true },
+    ])
     expect(command).toBe('HGETALL user:42')
     expect(warnings).toEqual([])
   })
 
   test('replaces :string with foot-gun warning when adjacent to non-whitespace', () => {
-    const { command, warnings } = substituteRedisParams(
-      'HGETALL user::name',
-      { name: 'alice' },
-      [{ name: 'name', type: 'string', required: true }]
-    )
+    const { command, warnings } = substituteRedisParams('HGETALL user::name', { name: 'alice' }, [
+      { name: 'name', type: 'string', required: true },
+    ])
     expect(command).toBe('HGETALL user:alice')
     expect(warnings.join(' ')).toMatch(/whitespace|quote/i)
   })
 
   test('no warning when :string is whitespace-isolated', () => {
-    const { warnings } = substituteRedisParams(
-      'GET :key',
-      { key: 'foo' },
-      [{ name: 'key', type: 'string', required: true }]
-    )
+    const { warnings } = substituteRedisParams('GET :key', { key: 'foo' }, [
+      { name: 'key', type: 'string', required: true },
+    ])
     expect(warnings).toEqual([])
   })
 })
@@ -144,11 +134,7 @@ const redisSnippet = (body: string, params: ParamSpec[] = []): SavedQuery => ({
 describe('redisStrategy.prepare', () => {
   test('substitutes params, no size guard for HGETALL', () => {
     const snippet = redisSnippet('HGETALL user::id', [{ name: 'id', type: 'int', required: true }])
-    const prepared = redisStrategy.prepare(
-      snippet,
-      { id: 42 },
-      { engine: 'redis', noLimit: false }
-    )
+    const prepared = redisStrategy.prepare(snippet, { id: 42 }, { engine: 'redis', noLimit: false })
     expect(prepared.driver.sql).toBe('HGETALL user:42')
     expect(prepared.driver.values).toEqual([])
   })

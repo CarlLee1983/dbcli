@@ -136,7 +136,10 @@ describe('applyEsSizeGuard', () => {
   })
 
   test('from + size >= 10000 emits search_after hint', () => {
-    const { warnings } = applyEsSizeGuard({ query: { match_all: {} }, from: 9500, size: 500 }, false)
+    const { warnings } = applyEsSizeGuard(
+      { query: { match_all: {} }, from: 9500, size: 500 },
+      false
+    )
     expect(warnings.join(' ')).toMatch(/search_after|max_result_window/i)
   })
 })

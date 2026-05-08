@@ -1,5 +1,9 @@
 import { describe, test, expect } from 'bun:test'
-import type { EngineFamily, EngineStrategy, PreparedExecution } from '@/core/saved-queries/strategies/types'
+import type {
+  EngineFamily,
+  EngineStrategy,
+  PreparedExecution,
+} from '@/core/saved-queries/strategies/types'
 import { engineFamily } from '@/core/saved-queries/strategies'
 
 describe('strategies/types', () => {

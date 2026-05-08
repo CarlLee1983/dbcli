@@ -181,25 +181,27 @@ function normaliseParams(value: unknown, input: ParseInput): ParamSpec[] {
   if (typeof value !== 'object' || Array.isArray(value)) {
     throw new SavedQueryError(`'params' must be a map`, 'PARSE_ERROR', input.file)
   }
-  return Object.entries(value as Record<string, Record<string, unknown> | undefined>).map(([name, spec]) => {
-    const type = String(spec?.type ?? 'string') as ParamType
-    if (!VALID_TYPES.includes(type)) {
-      throw new SavedQueryError(
-        `Param '${name}': invalid type '${type}'`,
-        'PARSE_ERROR',
-        input.file
-      )
+  return Object.entries(value as Record<string, Record<string, unknown> | undefined>).map(
+    ([name, spec]) => {
+      const type = String(spec?.type ?? 'string') as ParamType
+      if (!VALID_TYPES.includes(type)) {
+        throw new SavedQueryError(
+          `Param '${name}': invalid type '${type}'`,
+          'PARSE_ERROR',
+          input.file
+        )
+      }
+      const hasDefault = spec && Object.prototype.hasOwnProperty.call(spec, 'default')
+      return {
+        name,
+        type,
+        required: spec?.required === true ? true : !hasDefault,
+        default: hasDefault ? (spec.default as ParamSpec['default']) : undefined,
+        description: typeof spec?.description === 'string' ? spec.description : undefined,
+        enum: Array.isArray(spec?.enum) ? spec.enum : undefined,
+      }
     }
-    const hasDefault = spec && Object.prototype.hasOwnProperty.call(spec, 'default')
-    return {
-      name,
-      type,
-      required: spec?.required === true ? true : !hasDefault,
-      default: hasDefault ? (spec.default as ParamSpec['default']) : undefined,
-      description: typeof spec?.description === 'string' ? spec.description : undefined,
-      enum: Array.isArray(spec?.enum) ? spec.enum : undefined,
-    }
-  })
+  )
 }
 
 export function validateBody(body: string, input: ParseInput): void {

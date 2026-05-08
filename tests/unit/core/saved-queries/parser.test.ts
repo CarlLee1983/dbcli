@@ -138,15 +138,15 @@ describe('parseSavedQuery — multi-engine extensions', () => {
 
   test('rejects mixed-family engine list', () => {
     const text = wrap('SELECT 1', '-- engine: [postgres, elasticsearch]')
-    expect(() =>
-      parseSavedQuery({ key: '@bad', file: 'bad.sql', source: 'shared', text })
-    ).toThrow(/families/i)
+    expect(() => parseSavedQuery({ key: '@bad', file: 'bad.sql', source: 'shared', text })).toThrow(
+      /families/i
+    )
   })
 
   test('rejects elasticsearch snippet without index', () => {
     const text = wrap('{ "query": { "match_all": {} } }', '-- engine: elasticsearch')
-    expect(() =>
-      parseSavedQuery({ key: '@es', file: 'es.sql', source: 'shared', text })
-    ).toThrow(/index/i)
+    expect(() => parseSavedQuery({ key: '@es', file: 'es.sql', source: 'shared', text })).toThrow(
+      /index/i
+    )
   })
 })

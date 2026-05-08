@@ -10,6 +10,7 @@
  * frontmatter 為選填；SQL body 必為單一 SELECT 或 WITH 語句。
  */
 
+import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
 import {
   SavedQueryError,
@@ -58,9 +59,22 @@ export function parseSavedQuery(input: ParseInput): ParseOutput {
   meta.key = input.key
   if (!meta.name) meta.name = input.key
 
-  const isNonSqlBody =
-    meta.engine && meta.engine.length > 0 && meta.engine.every((e) => e === 'elasticsearch' || e === 'redis')
-  if (!isNonSqlBody) {
+  if (meta.engine && meta.engine.length > 0) {
+    const family = engineFamily(meta.engine[0]!)
+    if (family === 'sql') {
+      validateBody(body, input)
+    } else {
+      try {
+        getStrategy(family).validateBody(body, meta, input.file)
+      } catch (e) {
+        // Re-throw SavedQueryError; tolerate "No strategy registered" until
+        // every family's strategy is wired in (transitional during plan rollout).
+        if (e instanceof SavedQueryError) throw e
+        const msg = (e as Error)?.message ?? ''
+        if (!msg.startsWith('No strategy registered')) throw e
+      }
+    }
+  } else {
     validateBody(body, input)
   }
 

@@ -1,4 +1,5 @@
 import { sqlStrategy } from './sql'
+import { esStrategy } from './elasticsearch'
 import type { EngineTag } from '../types'
 import type { EngineFamily, EngineStrategy } from './types'
 
@@ -15,6 +16,8 @@ export function getStrategy(family: EngineFamily): EngineStrategy {
   switch (family) {
     case 'sql':
       return sqlStrategy
+    case 'es':
+      return esStrategy
     default:
       throw new Error(`No strategy registered for family: ${family}`)
   }

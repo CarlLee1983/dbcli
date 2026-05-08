@@ -184,7 +184,12 @@ async function redisExportBranch(
       }
 
       await file.write(formatted)
-      console.error(t_vars('export.exported', { count: result.rowCount, file: options.output }))
+      console.error(
+        t_vars('export.exported', {
+          count: result.rowCount ?? result.rows.length ?? 0,
+          file: options.output,
+        })
+      )
     } else {
       console.log(formatted)
     }

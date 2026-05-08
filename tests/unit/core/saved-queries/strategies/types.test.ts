@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import type { EngineFamily, EngineStrategy, PreparedExecution } from '@/core/saved-queries/strategies/types'
+import { engineFamily } from '@/core/saved-queries/strategies'
 
 describe('strategies/types', () => {
   test('EngineFamily union covers sql/es/redis', () => {
@@ -23,5 +24,20 @@ describe('strategies/types', () => {
       prepare: () => ({ driver: { sql: '', values: [] }, rewrittenBody: '', warnings: [] }),
     }
     expect(stub.family).toBe('sql')
+  })
+})
+
+describe('engineFamily', () => {
+  test('maps postgres/mysql to sql', () => {
+    expect(engineFamily('postgres')).toBe('sql')
+    expect(engineFamily('mysql')).toBe('sql')
+  })
+
+  test('maps elasticsearch to es', () => {
+    expect(engineFamily('elasticsearch')).toBe('es')
+  })
+
+  test('maps redis to redis', () => {
+    expect(engineFamily('redis')).toBe('redis')
   })
 })

@@ -24,6 +24,8 @@ export interface SavedQueryMeta {
   description?: string
   /** 未宣告 = undefined，警告等級 */
   engine?: EngineTag[]
+  /** Elasticsearch only — target index pattern (may contain :param) */
+  index?: string
   params: ParamSpec[]
   tags: string[]
 }
@@ -65,7 +67,15 @@ export class SavedQueryError extends Error {
       | 'NOT_SELECT'
       | 'MULTI_STATEMENT'
       | 'FILE_TOO_LARGE'
-      | 'IO_ERROR',
+      | 'IO_ERROR'
+      | 'ENGINE_MIXED_FAMILIES'
+      | 'ES_INVALID_JSON'
+      | 'ES_INDEX_MISSING'
+      | 'ES_SCRIPT_REJECTED'
+      | 'REDIS_COMMAND_NOT_ALLOWED'
+      | 'REDIS_EMPTY_BODY'
+      | 'REDIS_MULTI_LINE'
+      | 'KEY_FAMILY_CONFLICT',
     public readonly file?: string
   ) {
     super(message)

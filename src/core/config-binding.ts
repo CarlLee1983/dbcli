@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { mkdir, unlink } from 'node:fs/promises'
 import { homedir } from 'os'
 import { basename, join, resolve } from 'path'
 
@@ -95,11 +96,11 @@ export async function migrateLegacyProjectEnvLocal(
   if (!(await projectEnvFile.exists())) return
 
   const storageEnvPath = join(storagePath, '.env.local')
-  await Bun.$`mkdir -p ${storagePath}`
+  await mkdir(storagePath, { recursive: true })
 
   if (!(await Bun.file(storageEnvPath).exists())) {
     await Bun.file(storageEnvPath).write(await projectEnvFile.text())
   }
 
-  await Bun.$`rm -f ${projectEnvPath}`
+  await unlink(projectEnvPath)
 }

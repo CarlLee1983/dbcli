@@ -87,7 +87,15 @@
     "first_run_hint": "提示：將 .dbcli-shared/ commit 進版控可與團隊共享片段。",
     "no_snippets": "尚無任何片段。執行 dbcli queries new @<name> 建立。",
     "check_ok": "✓ 成功解析 {count} 個片段",
-    "check_failed": "✗ 有 {count} 個片段解析失敗"
+    "check_failed": "✗ 有 {count} 個片段解析失敗",
+    "search_description": "依關鍵字搜尋 snippet（fuzzy 排序）",
+    "suggest_description": "依 intent prefix 推薦 snippet",
+    "search_no_keywords": "至少提供一個關鍵字，或試試 'queries list' / 'queries suggest'。",
+    "search_no_results": "沒有命中的 snippet。試試 'queries list' 或 'queries suggest <intent>'。",
+    "suggest_missing_intent": "請提供 intent（或 prefix）。可用：{available}",
+    "suggest_invalid_intent": "Intent '{value}' 格式錯誤，必須符合 ^[a-z][a-z0-9.-]*$",
+    "suggest_no_results": "沒有 intent prefix 為 '{intent}' 的 snippet。可用：{available}",
+    "no_active_connection_hint": "尚未設定 connection；列出所有引擎的 snippet。"
   },
   "errors": {
     "message": "錯誤：{message}",

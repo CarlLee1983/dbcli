@@ -1,0 +1,12 @@
+-- ---
+-- name: slowlog.redis
+-- description: Recent Redis slow log entries
+-- engine: redis
+-- intent: perf.slow-query
+-- tags: [diag, redis, perf]
+-- params:
+--   count:
+--     type: int
+--     default: 50
+-- ---
+SLOWLOG GET :count

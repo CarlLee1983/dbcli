@@ -2,6 +2,7 @@
 -- name: Lock waits (postgres)
 -- description: Sessions blocked by other sessions with both queries shown.
 -- engine: postgres
+-- intent: safety.locks
 -- ---
 SELECT blocked.pid       AS blocked_pid,
        blocked.usename   AS blocked_user,

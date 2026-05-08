@@ -2,6 +2,7 @@
 -- name: Index usage (mysql)
 -- description: Index I/O wait counts ordered by total uses.
 -- engine: mysql
+-- intent: perf.index-usage
 -- ---
 SELECT object_schema  AS `schema`,
        object_name    AS `table`,

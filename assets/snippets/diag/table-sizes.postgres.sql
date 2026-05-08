@@ -2,6 +2,7 @@
 -- name: Table sizes (postgres)
 -- description: Total / table / index size with estimated row count.
 -- engine: postgres
+-- intent: capacity.size
 -- ---
 SELECT schemaname                                                           AS schema,
        tablename                                                            AS table,

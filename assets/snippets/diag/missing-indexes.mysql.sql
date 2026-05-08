@@ -2,6 +2,7 @@
 -- name: Missing indexes (mysql)
 -- description: Tables with significant full-scan I/O and no index used.
 -- engine: mysql
+-- intent: perf.index-usage
 -- ---
 SELECT object_schema  AS `schema`,
        object_name    AS `table`,

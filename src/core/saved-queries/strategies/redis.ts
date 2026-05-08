@@ -106,6 +106,10 @@ const REDIS_READONLY_VERBS = new Set([
   'HSCAN',
   'SSCAN',
   'ZSCAN',
+  'CLIENT',
+  'INFO',
+  'CLUSTER',
+  'SLOWLOG',
 ])
 
 const REDIS_HARD_REJECT = new Set([

@@ -2,6 +2,7 @@
 -- name: InnoDB buffer pool hit ratio (mysql)
 -- description: Reads from disk vs. read requests from the buffer pool.
 -- engine: mysql
+-- intent: perf.cache-hit
 -- ---
 SELECT
   (SELECT VARIABLE_VALUE FROM performance_schema.global_status

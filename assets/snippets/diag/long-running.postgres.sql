@@ -2,6 +2,7 @@
 -- name: Long-running queries (postgres)
 -- description: Queries running longer than min_seconds.
 -- engine: postgres
+-- intent: perf.slow-query
 -- params:
 --   min_seconds:
 --     type: int

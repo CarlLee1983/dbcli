@@ -150,3 +150,38 @@ describe('parseSavedQuery — multi-engine extensions', () => {
     )
   })
 })
+
+describe('parseSavedQuery — intent', () => {
+  test('parses legal intent value', () => {
+    const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: perf.slow-query')
+    const out = parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
+    expect(out.query.meta.intent).toBe('perf.slow-query')
+  })
+
+  test('missing intent → undefined (backward compat)', () => {
+    const text = wrap('SELECT 1;', 'name: x\nengine: postgres')
+    const out = parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
+    expect(out.query.meta.intent).toBeUndefined()
+  })
+
+  test('rejects intent with uppercase', () => {
+    const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: Perf.Slow')
+    expect(() =>
+      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
+    ).toThrow(SavedQueryError)
+  })
+
+  test('rejects intent with whitespace', () => {
+    const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: "perf slow"')
+    expect(() =>
+      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
+    ).toThrow(/invalid intent/)
+  })
+
+  test('rejects empty intent string', () => {
+    const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: ""')
+    expect(() =>
+      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
+    ).toThrow(/invalid intent/)
+  })
+})

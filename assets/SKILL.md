@@ -224,6 +224,14 @@ Run reusable parameterised SELECT snippets stored in your repo.
 | 2. Inspect | `dbcli queries show @<name>` |
 | 3. Run     | `dbcli q @<name> --param k=v` |
 
+### When you don't know which query to run
+
+1. `dbcli queries search <keywords>` — natural keywords, fuzzy ranked
+2. `dbcli queries suggest <intent>` — browse a category
+   Common intents: perf.slow-query, perf.cache-hit, capacity.size,
+                   safety.connections, monitor.cluster-health
+3. Once you find one: `dbcli q @<name>` (blacklist always enforced)
+
 Snippets resolve from three layers, **local > shared > builtin** (local wins):
 - `builtin` — bundled with dbcli (e.g. `@diag/*`); read-only at runtime
 - `.dbcli-shared/queries/` — committed, team-shared

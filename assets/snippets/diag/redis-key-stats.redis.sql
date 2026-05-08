@@ -2,6 +2,7 @@
 -- name: redis-key-stats
 -- description: Sample keyspace via SCAN with explicit COUNT bound
 -- engine: redis
+-- intent: capacity.size
 -- params:
 --   match:
 --     type: string

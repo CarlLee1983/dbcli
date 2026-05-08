@@ -2,6 +2,7 @@
 -- name: Cache hit ratio (postgres)
 -- description: Heap and index buffer cache hit ratios across user tables.
 -- engine: postgres
+-- intent: perf.cache-hit
 -- ---
 SELECT SUM(heap_blks_read)                                                       AS heap_read,
        SUM(heap_blks_hit)                                                        AS heap_hit,

@@ -2,6 +2,7 @@
 -- name: Missing indexes (postgres)
 -- description: User tables where seq scans dominate over index scans (>1k rows).
 -- engine: postgres
+-- intent: perf.index-usage
 -- ---
 SELECT schemaname     AS schema,
        relname        AS table,

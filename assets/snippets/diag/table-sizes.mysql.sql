@@ -2,6 +2,7 @@
 -- name: Table sizes (mysql)
 -- description: Data + index size in MB with estimated row count.
 -- engine: mysql
+-- intent: capacity.size
 -- ---
 SELECT table_schema                                              AS `schema`,
        table_name                                                AS `table`,

@@ -87,7 +87,15 @@
     "first_run_hint": "Tip: commit .dbcli-shared/ to share snippets with your team.",
     "no_snippets": "No snippets found. Create one with: dbcli queries new @<name>",
     "check_ok": "✓ {count} snippets parsed successfully",
-    "check_failed": "✗ {count} snippet(s) have errors"
+    "check_failed": "✗ {count} snippet(s) have errors",
+    "search_description": "Search snippets by keywords (fuzzy ranking)",
+    "suggest_description": "Suggest snippets by intent prefix",
+    "search_no_keywords": "Provide at least one keyword, or try 'queries list' / 'queries suggest'.",
+    "search_no_results": "No snippets matched. Try 'queries list' or 'queries suggest <intent>'.",
+    "suggest_missing_intent": "Provide an intent (or prefix). Available: {available}",
+    "suggest_invalid_intent": "Invalid intent '{value}'. Must match ^[a-z][a-z0-9.-]*$",
+    "suggest_no_results": "No snippets with intent prefix '{intent}'. Available: {available}",
+    "no_active_connection_hint": "No active connection; showing snippets across all engines."
   },
   "errors": {
     "message": "Error: {message}",

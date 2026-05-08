@@ -28,6 +28,8 @@ export interface SavedQueryMeta {
   index?: string
   params: ParamSpec[]
   tags: string[]
+  /** Optional taxonomy slot, format: ^[a-z][a-z0-9.-]*$. See discovery spec. */
+  intent?: string
 }
 
 export interface SavedQuery {
@@ -75,7 +77,8 @@ export class SavedQueryError extends Error {
       | 'REDIS_COMMAND_NOT_ALLOWED'
       | 'REDIS_EMPTY_BODY'
       | 'REDIS_MULTI_LINE'
-      | 'KEY_FAMILY_CONFLICT',
+      | 'KEY_FAMILY_CONFLICT'
+      | 'INVALID_INTENT',
     public readonly file?: string
   ) {
     super(message)

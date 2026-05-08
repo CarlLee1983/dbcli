@@ -1,9 +1,10 @@
 # Future Development Roadmap — Agent Database Workbench Design
 
 **Date:** 2026-05-08
+**Last updated:** 2026-05-09
 **Milestone range:** v1.12.0 → v1.15.0
-**Status:** Draft → awaiting user review
-**Current baseline:** v1.11.0, release gates clean, saved-query discovery shipped
+**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 next
+**Current baseline:** v1.13.0, release gates clean, `dbcli inspect` and `dbcli report` shipped on top of v1.11 saved-query discovery
 
 ## Goal
 
@@ -21,12 +22,12 @@ Prioritize **Route A: Agent Database Workbench** first, then layer in **Route B:
 
 Recommended sequence:
 
-| Version | Theme | Primary outcome |
-| --- | --- | --- |
-| v1.12.0 | Inspect | Agent-friendly database context snapshot |
-| v1.13.0 | Report | Markdown/JSON diagnostic report built from reusable collectors |
-| v1.14.0 | Guide | Deterministic next-command planner for common database goals |
-| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands |
+| Version | Theme | Primary outcome | Status |
+| --- | --- | --- | --- |
+| v1.12.0 | Inspect | Agent-friendly database context snapshot | ✅ shipped (2026-05-08) |
+| v1.13.0 | Report | Markdown/JSON diagnostic report built from reusable collectors | ✅ shipped (2026-05-09) |
+| v1.14.0 | Guide | Deterministic next-command planner for common database goals | 🟡 next |
+| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | ⬜ planned |
 
 ## Route A — Agent Database Workbench
 
@@ -34,9 +35,11 @@ Recommended sequence:
 
 Create a first-class entry point that gives an AI agent enough context to work safely without ad-hoc probing.
 
-### v1.12.0 Candidate: `dbcli inspect`
+### v1.12.0: `dbcli inspect` — ✅ shipped 2026-05-08
 
-Add a read-only command:
+> **Status:** Released. Implemented at `src/core/inspect/` + `src/commands/inspect.ts`. Output schema is locked at `schemaVersion: 1`. The remainder of this section is preserved as the original design contract for reference.
+
+Read-only command:
 
 ```bash
 dbcli inspect --format json
@@ -111,9 +114,11 @@ Collectors should reuse existing modules where possible:
 
 Build on the v1.11 snippet taxonomy to produce practical diagnostic evidence for humans and agents.
 
-### v1.13.0 Candidate: `dbcli report`
+### v1.13.0: `dbcli report` — ✅ shipped 2026-05-09
 
-Add:
+> **Status:** Released. Implemented at `src/core/report/` + `src/commands/report.ts`. Reuses `collectInspect()` for context and runs curated `@diag/*` snippets grouped into `health` / `capacity` / `perf`. Output schema locked at `schemaVersion: 1`. The remainder of this section is preserved as the original design contract for reference.
+
+Command:
 
 ```bash
 dbcli report --format markdown
@@ -236,32 +241,57 @@ For each milestone:
 | Reports become slow | Poor UX | Keep `inspect` fast; make `report` explicitly deeper |
 | Error recovery hints become stale | Bad guidance | Test suggested commands and keep them deterministic |
 
-## Proposed First Milestone Scope: v1.12.0 `dbcli inspect`
+## Shipped Milestones — Retrospective
 
-### In scope
+### v1.12.0 `dbcli inspect` — shipped 2026-05-08
 
-- Add `inspect` command.
-- Add `src/core/inspect` types and collector orchestration.
-- Support JSON and Markdown output.
-- Include safe summaries for config, permission, blacklist, objects, schema cache, saved queries, and suggested commands.
-- Add unit and integration tests.
-- Update README and generated skill documentation if the command becomes part of the agent workflow.
+Delivered:
+- `inspect` command with `--format json|markdown`, `--brief`, `--for-agent`, `--no-connect`, `--probe-timeout`.
+- `src/core/inspect/` collector layer (connection, permission, blacklist, objects, schema cache, snippets, version, suggested commands).
+- `release:check` script (audit / format / typecheck / lint / test / build / dist smoke).
+- Skill docs and README updated; `schemaVersion: 1` locked.
 
-### Out of scope
+Resolved open decisions:
+- Command name: `inspect` ✓
+- Markdown output included ✓
+- Cheap version probe with timeout + graceful degradation ✓
+- `release:check` bundled into v1.12.0 ✓
 
-- Deep diagnostic execution.
-- Natural language goal planning.
-- New built-in snippets.
-- MongoDB saved queries.
-- Adapter replacement or dependency migration.
+### v1.13.0 `dbcli report` — shipped 2026-05-09
 
-## Open Decisions for User Review
+Delivered:
+- `report` command with `--format json|markdown`, `--section health,capacity,perf`, `--brief`, `--for-agent`, `--no-connect`, `--per-snippet-timeout`, `--max-rows-per-evidence`, `--probe-timeout`.
+- `src/core/report/` module (`section-map`, `select-snippets`, `run-diagnostic`, `collector`, JSON + Markdown renderers) reusing `collectInspect()` so context is gathered once.
+- Curated read-only `@diag/*` snippet selection (skips snippets with required-without-default params); per-snippet timeout (default 3000 ms) and per-evidence row cap (default 50).
+- 6 CLI integration tests covering shape, redaction, `--for-agent`, `--section` validation, Markdown headings, and degraded no-config workspace.
+- MongoDB and no-config workspaces emit context-only snapshots with warnings (no built-in mongo snippets in this release).
 
-1. Should the first milestone command be named `inspect`, `context`, or `overview`? Recommendation: `inspect`.
-2. Should Markdown output be included in v1.12.0 or deferred to `report`? Recommendation: include lightweight Markdown for humans.
-3. Should `inspect` attempt a cheap connection/version check by default? Recommendation: yes, with timeout and graceful degradation.
-4. Should `release:check` be bundled into v1.12.0? Recommendation: yes if it stays script-only and does not distract from `inspect`.
+## Next Milestone Focus: v1.14.0 `dbcli guide`
+
+The next implementation cycle targets **Route A continuation: deterministic next-command planner**.
+
+### Proposed scope (to be refined in a dedicated plan)
+
+- New `dbcli guide <goal>` command that reads the same `inspect` context and emits an ordered, deterministic command sequence for common goals (e.g. "diagnose slow query", "audit permissions", "shrink large table").
+- Goal taxonomy mapped to existing `@diag/*` and saved-query intents from v1.11.
+- JSON contract suitable for AI agents (`schemaVersion: 1`, ordered steps with rationale, dry-run flags, expected outputs).
+- Markdown variant for humans.
+- No new database snippets; reuse existing inventory.
+
+### Out of scope for v1.14.0
+
+- Embedded LLM or natural-language parsing.
+- Automatic execution of the plan (guide outputs commands; user/agent runs them).
+- New adapters, new built-in snippets, MongoDB saved queries.
+- Anything from v1.15.0 (recovery / structured errors).
+
+### Open decisions to resolve before planning
+
+1. Goal vocabulary: free-form intent strings vs. fixed enumerated list (`slow-query`, `capacity`, `permissions`, ...). Recommendation: fixed list mapped to v1.11 intents to keep determinism.
+2. Should `guide` connect to the database or run purely from cached `inspect` context? Recommendation: cache-first, with optional `--probe` to refresh.
+3. Should each step include a confidence/risk tag? Recommendation: yes — agents need that signal to decide whether to confirm with humans.
+4. Output single-shot vs. step-by-step (`guide run`)? Recommendation: single-shot for v1.14, defer `run` to v1.15+.
 
 ## Recommended Next Step
 
-After this roadmap is approved, write a focused implementation plan for **v1.12.0 `dbcli inspect`**. The plan should define exact files, JSON schema, collector behavior, tests, and documentation updates before implementation starts.
+Write a focused implementation plan for **v1.14.0 `dbcli guide`**, mirroring the structure of the v1.12.0 / v1.13.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).

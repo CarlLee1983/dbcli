@@ -10,7 +10,9 @@ function createMockAdapter(): DatabaseAdapter {
   return {
     connect: mock(() => Promise.resolve()),
     disconnect: mock(() => Promise.resolve()),
-    execute: mock(() => Promise.resolve({ rows: [], affectedRows: 0 })) as unknown as import('@/adapters/types').DatabaseAdapter['execute'],
+    execute: mock(() =>
+      Promise.resolve({ rows: [], affectedRows: 0 })
+    ) as unknown as import('@/adapters/types').DatabaseAdapter['execute'],
     listTables: mock(() => Promise.resolve([])),
     getTableSchema: mock(() =>
       Promise.resolve({

@@ -8,8 +8,12 @@ class MockElasticsearchListAdapter implements QueryableAdapter {
   lastOptions: { includeSystem?: boolean } | undefined
   async connect() {}
   async disconnect() {}
-  async execute<T>() { return { rows: [] as T[], affectedRows: 0 } }
-  async listCollections() { return [] }
+  async execute<T>() {
+    return { rows: [] as T[], affectedRows: 0 }
+  }
+  async listCollections() {
+    return []
+  }
   async listTables(options?: { includeSystem?: boolean }): Promise<TableSchema[]> {
     this.lastOptions = options
     return [
@@ -17,15 +21,33 @@ class MockElasticsearchListAdapter implements QueryableAdapter {
       { name: 'active_users', columns: [], tableType: 'view' },
     ]
   }
-  async testConnection() { return true }
-  async getServerVersion() { return '8.13.0' }
-  async insert() { return { rows: [], affectedRows: 1 } }
-  async update() { return { rows: [], affectedRows: 1 } }
-  async delete() { return { rows: [], affectedRows: 1 } }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return '8.13.0'
+  }
+  async insert() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async update() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async delete() {
+    return { rows: [], affectedRows: 1 }
+  }
 }
 
 const esConfig = {
-  connection: { system: 'elasticsearch', protocol: 'http', host: 'localhost', port: 9200, user: '', password: '', database: '' },
+  connection: {
+    system: 'elasticsearch',
+    protocol: 'http',
+    host: 'localhost',
+    port: 9200,
+    user: '',
+    password: '',
+    database: '',
+  },
   permission: 'query-only',
   schema: {},
   metadata: { version: '1.0' },

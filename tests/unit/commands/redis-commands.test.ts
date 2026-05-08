@@ -23,10 +23,18 @@ const redisConfig = {
 class MockRedisAdapter {
   async connect() {}
   async disconnect() {}
-  async insert() { return { affectedRows: 1, rows: [] } }
-  async update() { return { affectedRows: 1, rows: [] } }
-  async delete() { return { affectedRows: 1, rows: [] } }
-  async execute() { return { rows: [{ value: 'ok' }], affectedRows: 1 } }
+  async insert() {
+    return { affectedRows: 1, rows: [] }
+  }
+  async update() {
+    return { affectedRows: 1, rows: [] }
+  }
+  async delete() {
+    return { affectedRows: 1, rows: [] }
+  }
+  async execute() {
+    return { rows: [{ value: 'ok' }], affectedRows: 1 }
+  }
 }
 
 describe('Redis CLI commands', () => {
@@ -66,7 +74,9 @@ describe('Redis CLI commands', () => {
     const insertSpy = spyOn(mockAdapter, 'insert')
     try {
       await insertCommand('mykey', { data: '{"value":"hi"}' })
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const out = combinedOutput()
     try {
       expect(insertSpy).toHaveBeenCalled()
@@ -81,7 +91,9 @@ describe('Redis CLI commands', () => {
     const updateSpy = spyOn(mockAdapter, 'update')
     try {
       await updateCommand('mykey', { where: 'ignore', set: '{"value":"new"}' })
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const out = combinedOutput()
     try {
       expect(updateSpy).toHaveBeenCalled()
@@ -96,7 +108,9 @@ describe('Redis CLI commands', () => {
     const deleteSpy = spyOn(mockAdapter, 'delete')
     try {
       await deleteCommand('mykey', { where: 'field=val' })
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const out = combinedOutput()
     try {
       expect(deleteSpy).toHaveBeenCalled()
@@ -111,7 +125,9 @@ describe('Redis CLI commands', () => {
     const executeSpy = spyOn(mockAdapter, 'execute')
     try {
       await exportCommand('GET mykey', { format: 'json' })
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const out = combinedOutput()
     try {
       expect(executeSpy).toHaveBeenCalledWith('GET mykey')
@@ -126,7 +142,9 @@ describe('Redis CLI commands', () => {
     const { queryCommand } = await import('@/commands/query')
     try {
       await queryCommand('KEYS *', {})
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     const out = combinedOutput()
     expect(out).toContain('Warning: "KEYS" command is dangerous')
   })

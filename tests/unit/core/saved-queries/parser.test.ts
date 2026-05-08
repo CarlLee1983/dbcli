@@ -166,22 +166,22 @@ describe('parseSavedQuery — intent', () => {
 
   test('rejects intent with uppercase', () => {
     const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: Perf.Slow')
-    expect(() =>
-      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
-    ).toThrow(SavedQueryError)
+    expect(() => parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })).toThrow(
+      SavedQueryError
+    )
   })
 
   test('rejects intent with whitespace', () => {
     const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: "perf slow"')
-    expect(() =>
-      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
-    ).toThrow(/invalid intent/)
+    expect(() => parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })).toThrow(
+      /invalid intent/
+    )
   })
 
   test('rejects empty intent string', () => {
     const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: ""')
-    expect(() =>
-      parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })
-    ).toThrow(/invalid intent/)
+    expect(() => parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })).toThrow(
+      /invalid intent/
+    )
   })
 })

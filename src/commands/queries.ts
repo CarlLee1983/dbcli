@@ -19,11 +19,7 @@ import {
 } from '@/core/saved-queries'
 import { foldVariants, type FoldedRow } from '@/core/saved-queries/fold'
 import { searchSnippets, type SearchInput, type SearchHit } from '@/core/saved-queries/search'
-import {
-  suggestSnippets,
-  type SuggestInput,
-  type SuggestHit,
-} from '@/core/saved-queries/suggest'
+import { suggestSnippets, type SuggestInput, type SuggestHit } from '@/core/saved-queries/suggest'
 
 async function deriveEngine(): Promise<EngineTag> {
   try {

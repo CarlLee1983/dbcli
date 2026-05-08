@@ -116,7 +116,7 @@ describe('config-v2', () => {
           },
         },
         schema: {},
-      schemas: {},
+        schemas: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
       }

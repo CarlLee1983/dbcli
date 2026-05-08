@@ -12,7 +12,10 @@ export class MongoShellAdapter implements DatabaseAdapter {
     await this.adapter.disconnect()
   }
 
-  async execute<T>(_sql: string, _params?: (string | number | boolean | null)[]): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    _sql: string,
+    _params?: (string | number | boolean | null)[]
+  ): Promise<ExecutionResult<T>> {
     throw new Error(
       'MongoDB shell does not support raw SQL. Use `query <json>` with `--collection`.'
     )

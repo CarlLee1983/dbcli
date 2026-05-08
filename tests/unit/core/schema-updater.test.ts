@@ -16,7 +16,7 @@ class MockDatabaseAdapter implements DatabaseAdapter {
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
-  async execute<T>(): Promise<import("@/adapters/types").ExecutionResult<T>> {
+  async execute<T>(): Promise<import('@/adapters/types').ExecutionResult<T>> {
     return { rows: [], affectedRows: 0 }
   }
   async listTables(): Promise<TableSchema[]> {
@@ -25,8 +25,12 @@ class MockDatabaseAdapter implements DatabaseAdapter {
   async getTableSchema(tableName: string): Promise<TableSchema> {
     return this.tables.get(tableName) ?? { name: tableName, columns: [] }
   }
-  async testConnection(): Promise<boolean> { return true }
-  async getServerVersion(): Promise<string> { return "test" }
+  async testConnection(): Promise<boolean> {
+    return true
+  }
+  async getServerVersion(): Promise<string> {
+    return 'test'
+  }
 
   setTable(name: string, schema: TableSchema) {
     this.tables.set(name, schema)

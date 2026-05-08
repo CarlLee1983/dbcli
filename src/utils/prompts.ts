@@ -6,7 +6,6 @@
  * console-based prompts using Bun's built-in stdin.
  */
 
-
 /**
  * Read a line from stdin using Node.js compatible API.
  * This is a fallback for when @inquirer/prompts is unavailable.

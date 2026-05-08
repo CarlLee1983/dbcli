@@ -57,7 +57,7 @@ export class SchemaIndexBuilder {
    * @returns Complete SchemaIndex object
    */
   static async buildIndex(
-    config: Pick<DbcliConfig, "schema">,
+    config: Pick<DbcliConfig, 'schema'>,
     options?: { hotTableThreshold?: number }
   ): Promise<SchemaIndex> {
     const hotTableThreshold = options?.hotTableThreshold || 20

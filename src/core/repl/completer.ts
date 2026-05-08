@@ -92,9 +92,7 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 
 function completeMetaCommands(line: string): [string[], string] {
   const first = line.split(/\s+/)[0] ?? ''
-  const hits = META_COMMANDS.filter((m) => m.startsWith(first.toLowerCase())).map(
-    (m) => m + ' '
-  )
+  const hits = META_COMMANDS.filter((m) => m.startsWith(first.toLowerCase())).map((m) => m + ' ')
   return [hits, first]
 }
 
@@ -125,10 +123,11 @@ function extractTableFromLine(line: string, tableNames: readonly string[]): stri
   const upper = line.toUpperCase()
   const fromIdx = upper.lastIndexOf('FROM ')
   if (fromIdx >= 0) {
-    const afterFrom = line
-      .slice(fromIdx + 5)
-      .trim()
-      .split(/\s+/)[0] ?? ''
+    const afterFrom =
+      line
+        .slice(fromIdx + 5)
+        .trim()
+        .split(/\s+/)[0] ?? ''
     const candidate = afterFrom.replace(/[;,]/g, '').toLowerCase()
     return tableNames.find((t) => t.toLowerCase() === candidate)
   }

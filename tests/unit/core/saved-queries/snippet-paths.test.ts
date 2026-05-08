@@ -16,9 +16,7 @@ describe('snippet-paths', () => {
     expect(snippetKeyToFile(ROOT, '@analytics/revenue', 'shared')).toBe(
       join(ROOT, '.dbcli-shared', 'queries', 'analytics', 'revenue.sql')
     )
-    expect(snippetKeyToFile(ROOT, '@dau', 'local')).toBe(
-      join(ROOT, '.dbcli', 'queries', 'dau.sql')
-    )
+    expect(snippetKeyToFile(ROOT, '@dau', 'local')).toBe(join(ROOT, '.dbcli', 'queries', 'dau.sql'))
   })
 
   test('resolveSnippetDirs returns builtinDir from packaged assets', () => {

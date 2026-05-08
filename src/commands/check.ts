@@ -159,7 +159,9 @@ function outputReport(report: CheckReport, format: string): void {
 }
 
 function getBlacklistedColumnSet(manager: BlacklistManager): Set<string> {
-  const state = (manager as unknown as { state: { columns: Map<string, Set<string>>; tables: Set<string> } }).state
+  const state = (
+    manager as unknown as { state: { columns: Map<string, Set<string>>; tables: Set<string> } }
+  ).state
   const result = new Set<string>()
   if (state?.columns) {
     for (const [table, cols] of state.columns.entries()) {
@@ -172,6 +174,8 @@ function getBlacklistedColumnSet(manager: BlacklistManager): Set<string> {
 }
 
 function getBlacklistedTableSet(manager: BlacklistManager): Set<string> {
-  const state = (manager as unknown as { state: { columns: Map<string, Set<string>>; tables: Set<string> } }).state
+  const state = (
+    manager as unknown as { state: { columns: Map<string, Set<string>>; tables: Set<string> } }
+  ).state
   return state?.tables || new Set<string>()
 }

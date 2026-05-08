@@ -256,11 +256,11 @@ export class ReplEngine {
 
   private isConnectionError(error: unknown): boolean {
     const e = error as { message?: string; code?: string }
-    const msg = (e.message ?? "").toLowerCase()
+    const msg = (e.message ?? '').toLowerCase()
     return (
-      e.code === "ECONNREFUSED" ||
-      e.code === "ECONNRESET" ||
-      e.code === "ETIMEDOUT" ||
+      e.code === 'ECONNREFUSED' ||
+      e.code === 'ECONNRESET' ||
+      e.code === 'ETIMEDOUT' ||
       msg.includes('connection') ||
       msg.includes('terminated') ||
       msg.includes('socket')

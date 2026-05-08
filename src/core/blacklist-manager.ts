@@ -36,7 +36,9 @@ export class BlacklistManager {
     const tables = new Set<string>()
     const columns = new Map<string, Set<string>>()
 
-    const blacklistConfig = (this.config as { blacklist?: BlacklistConfig }).blacklist as BlacklistConfig | undefined
+    const blacklistConfig = (this.config as { blacklist?: BlacklistConfig }).blacklist as
+      | BlacklistConfig
+      | undefined
 
     if (!blacklistConfig) {
       return { tables, columns }

@@ -47,7 +47,9 @@ export function parseColumnIdentifier(
 /**
  * Get or initialize blacklist config from DbcliConfig
  */
-export function getOrInitBlacklist(config: { blacklist?: { tables?: string[]; columns?: Record<string, string[]> } }): BlacklistConfig {
+export function getOrInitBlacklist(config: {
+  blacklist?: { tables?: string[]; columns?: Record<string, string[]> }
+}): BlacklistConfig {
   if (!config.blacklist) {
     return { tables: [], columns: {} }
   }

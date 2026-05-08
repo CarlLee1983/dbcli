@@ -9,7 +9,9 @@ function createMockAdapter(executeImpl: (sql: string) => unknown[]): DatabaseAda
     testConnection: mock(() => Promise.resolve(true)),
     listTables: mock(() => Promise.resolve([])),
     getTableSchema: mock(() => Promise.resolve({ name: 'test', columns: [] })),
-    execute: mock((sql: string) => Promise.resolve({ rows: executeImpl(sql), affectedRows: 0 })) as DatabaseAdapter["execute"],
+    execute: mock((sql: string) =>
+      Promise.resolve({ rows: executeImpl(sql), affectedRows: 0 })
+    ) as DatabaseAdapter['execute'],
     getServerVersion: mock(() => Promise.resolve('test-version')),
   }
 }

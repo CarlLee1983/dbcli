@@ -22,9 +22,15 @@ class MockQueryableAdapter implements QueryableAdapter {
   async getServerVersion() {
     return '7.0.0'
   }
-  async insert() { return { rows: [], affectedRows: 1 } }
-  async update() { return { rows: [], affectedRows: 1 } }
-  async delete() { return { rows: [], affectedRows: 1 } }
+  async insert() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async update() {
+    return { rows: [], affectedRows: 1 }
+  }
+  async delete() {
+    return { rows: [], affectedRows: 1 }
+  }
 }
 
 describe('MongoShellAdapter', () => {

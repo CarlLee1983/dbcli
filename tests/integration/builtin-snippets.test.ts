@@ -37,9 +37,10 @@ describe('built-in diagnostic snippets', () => {
         KNOWN_INTENTS.has(out.query.meta.intent!),
         `${file} intent ${out.query.meta.intent} must be in v1 taxonomy`
       ).toBe(true)
-      expect(seen.has(out.query.meta.name), `${file} name '${out.query.meta.name}' duplicated`).toBe(
-        false
-      )
+      expect(
+        seen.has(out.query.meta.name),
+        `${file} name '${out.query.meta.name}' duplicated`
+      ).toBe(false)
       seen.add(out.query.meta.name)
     }
   })

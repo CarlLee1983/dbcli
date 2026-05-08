@@ -271,7 +271,9 @@ async function redisQueryBranch(
   try {
     const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
     if (head === 'KEYS') {
-      console.error('\u26A0 Warning: "KEYS" command is dangerous on production servers as it blocks the main thread.')
+      console.error(
+        '\u26A0 Warning: "KEYS" command is dangerous on production servers as it blocks the main thread.'
+      )
       console.error('  Please use "SCAN" instead for better performance and safety.')
       console.error('  For more info: https://redis.io/commands/keys/')
     }
@@ -403,4 +405,3 @@ async function elasticsearchQueryBranch(
     await esAdapter.disconnect()
   }
 }
-

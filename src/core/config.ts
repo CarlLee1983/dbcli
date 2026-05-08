@@ -293,7 +293,9 @@ export const configModule = {
 
           // Use non-strict mode when reading config, preserving missing env var references
           // This prevents errors even when env vars are not defined
-          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false) as { connection: { password?: string } }
+          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false) as {
+            connection: { password?: string }
+          }
 
           // Try reading sensitive info from .env.local (legacy approach, for backward compatibility)
           const envPath = join(storagePath, '.env.local')
@@ -426,7 +428,9 @@ export const configModule = {
         await Bun.$`mkdir -p ${storagePath}`
 
         // Check if using env var references (password is a { "$env": "..." } object)
-        const hasEnvReferences = isEnvReference((config.connection as { password?: unknown }).password)
+        const hasEnvReferences = isEnvReference(
+          (config.connection as { password?: unknown }).password
+        )
 
         if (hasEnvReferences) {
           // New approach: using env var references, write directly to config.json

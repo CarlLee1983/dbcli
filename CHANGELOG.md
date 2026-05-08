@@ -5,6 +5,22 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-05-08
+
+### Fixed
+
+- **Packaged `dist/cli.mjs` 找不到 assets**：1.10.0 bundle 在 `task-paths.ts` / `snippet-paths.ts` 用 `import.meta.dir + ../../../` 解析 builtin 目錄，bundle 後三層往上會跳出 package root，npm 全域安裝的使用者執行 `dbcli queries list` / `dbcli skill tasks list` 讀不到資源。抽出 `src/utils/package-root.ts` 以 `package.json` 走訪定位 root，dev 與 bundle 都正確；`skill.ts` 內既有的 `findPackageRoot` 也收斂到同一處。
+- **`dbcli q` 略過 blacklist 檢查（安全）**：`q.ts` 把空字串當作 `tableName` 傳給 `BlacklistValidator.filterColumns`，column-level redaction 永遠不命中；同時也沒呼叫 `checkTableBlacklist`，使用者可以透過 saved snippet 直接 SELECT 黑名單表/欄位繞開保護。改為從 `prepared.rewrittenSql` 抽出主表（SQL）或 `prepared.execHints.index`（ES），執行前先 `checkTableBlacklist('SELECT', target)`，並把真正的 `tableName` 餵給 `filterColumns`；Redis 維持原樣。
+
+### Added
+
+- **dist/ 整合 smoke 測試**：`tests/integration/dist-smoke.test.ts` 從 OS tmpdir 執行 `dist/cli.mjs`，覆蓋 `--version`、`skill --output`、`queries list`、`skill tasks list`，守住 packaged assets path 不再回退。
+- **`q` blacklist 迴歸測試**：`tests/unit/commands/q-blacklist.test.ts` 覆蓋黑名單表阻擋、欄位 redact、未受影響 snippet 三種情境。
+
+### Changed
+
+- **Lint release-blocking**：`bun run lint` / `lint:fix` 加上 `--max-warnings=0`；同時清掉 45 個 `@typescript-eslint/no-explicit-any` warnings（以正型替代為主，`elasticsearch-adapter.ts` 因刻意不引入 `@elastic/elasticsearch` SDK 而以檔案層 `eslint-disable` 標註理由）。任何新 warning 從此會擋住 release。
+
 ## [1.10.0] - 2026-05-08
 
 ### Added

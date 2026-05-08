@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.9.1
-milestone_name: Skill Connection Guidance
+milestone: v1.10.1
+milestone_name: Packaging & Security Hotfix
 status: milestone_complete
-last_updated: "2026-05-08T12:30:00.000Z"
+last_updated: "2026-05-08T14:30:00.000Z"
 progress:
   total_phases: 18
   completed_phases: 18
@@ -19,13 +19,19 @@ See: `.planning/PROJECT.md` (updated 2026-05-08)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** v1.9.1 released; in-progress feature branch `feat/es-redis-snippets` extends saved queries to Elasticsearch and Redis (merged to `main`, awaiting next release tag).
+**Current Focus:** v1.10.1 released — packaged assets path hotfix + `dbcli q` blacklist enforcement + dist smoke tests + lint warnings 清零並設為 release-blocking。
 
 ---
 
 ## Milestone Status
 
-**In progress (post-1.9.1, on `main`):** ES / Redis Saved Queries
+**v1.10.1 — Packaging & Security Hotfix:** COMPLETE (2026-05-08)
+- 修 npm 1.10.0 安裝後 packaged assets path 找不到（`src/utils/package-root.ts`）
+- 修 `dbcli q` 略過 blacklist 檢查的安全漏洞
+- 新增 `tests/integration/dist-smoke.test.ts` 守護 packaged assets path
+- 清掉 45 個 lint warnings 並把 `--max-warnings=0` 設為 release-blocking
+
+**v1.10.0 — ES / Redis Saved Queries:** COMPLETE (2026-05-08)
 - Engine strategy refactor (SQL / Elasticsearch / Redis 各自獨立 strategy)
 - ES JSON-aware 參數注入、size guard、body validation、index 欄位
 - Redis 命令白名單、raw 參數注入（含警告）、range / SCAN size guard
@@ -75,13 +81,14 @@ See: `.planning/PROJECT.md` (updated 2026-05-08)
 來源：[`docs/feature-matrix.md`](../docs/feature-matrix.md#required-ci-validation)。
 兩道指令都必須綠燈、不得 `continue-on-error`，才視為可發版：
 
-| Gate | Command | Status (2026-05-08 12:35 +08:00) |
+| Gate | Command | Status (2026-05-08 14:30 +08:00) |
 |------|---------|----------------------------------|
-| Typecheck | `bun run typecheck` | ✅ Pass — `tsc --noEmit` 無錯誤（先前 `src/commands/export.ts:187` 的 `result.rowCount` 可能 undefined 已修，fallback 到 `result.rows.length ?? 0`） |
-| Tests | `bun test` | ✅ Pass — 1630 pass / 3 skip（PostgreSQL、MySQL live integration 因本機無 Docker 服務跳過）/ 0 fail，3.01s |
+| Typecheck | `bun run typecheck` | ✅ Pass — `tsc --noEmit` 無錯誤 |
+| Tests | `bun test` | ✅ Pass — 1.10.1 release 前綠燈 |
+| Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` 已設為 release-blocking |
+| Build | `bun run build` | ✅ Pass — dist smoke tests 守護 packaged assets path |
 
-Lint、build、benchmark 為 advisory，發版時可參考但不阻擋。
-建議：每次要打 release tag（例如下個 `1.10.0`）前再跑一次以上兩道指令，確認都綠燈。
+Benchmark 為 advisory。建議每次要打 release tag 前都跑完上述四道指令，確認都綠燈。
 
 ---
 

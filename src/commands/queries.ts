@@ -18,6 +18,7 @@ import {
   type SnippetSource,
 } from '@/core/saved-queries'
 import { foldVariants, type FoldedRow } from '@/core/saved-queries/fold'
+import { searchSnippets, type SearchInput, type SearchHit } from '@/core/saved-queries/search'
 
 async function deriveEngine(): Promise<EngineTag> {
   try {
@@ -222,6 +223,106 @@ export async function queriesCheck(options: CheckOptions): Promise<void> {
   }
 }
 
+export interface SearchOptions {
+  format?: 'table' | 'json'
+  engine?: string
+  source?: 'local' | 'shared' | 'builtin' | 'all'
+  limit?: string
+  includeInternal?: boolean
+}
+
+export async function queriesSearch(keywords: string[], options: SearchOptions): Promise<void> {
+  const query = keywords.join(' ').trim()
+  if (!query) {
+    console.error(t('queries.search_no_keywords'))
+    process.exit(2)
+    return
+  }
+  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'all'] as const
+  if (options.engine && !allowed.includes(options.engine as (typeof allowed)[number])) {
+    console.error(`Unknown engine '${options.engine}'. Allowed: ${allowed.join(', ')}.`)
+    process.exit(2)
+    return
+  }
+  const limit = options.limit !== undefined ? Number(options.limit) : 10
+  if (!Number.isInteger(limit) || limit <= 0) {
+    console.error(`--limit must be a positive integer (got '${options.limit}')`)
+    process.exit(2)
+    return
+  }
+
+  const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
+  const folded = [...map.entries()].map(([key, variants]) => foldVariants(key, variants))
+
+  let engineFilter: EngineTag | undefined
+  if (options.engine && options.engine !== 'all') {
+    engineFilter = options.engine as EngineTag
+  } else if (!options.engine) {
+    const inferred = await deriveEngineOrNull()
+    if (inferred) engineFilter = inferred
+    else console.error(t('queries.no_active_connection_hint'))
+  }
+
+  const input: SearchInput = {
+    query,
+    engineFilter,
+    source: options.source,
+    limit,
+  }
+  const hits = searchSnippets(folded, input)
+
+  if (options.format === 'json') {
+    console.log(JSON.stringify(hits.map(toSearchJson), null, 2))
+    return
+  }
+  if (hits.length === 0) {
+    console.log(t('queries.search_no_results'))
+    return
+  }
+  renderSearchTable(hits, options.includeInternal === true)
+}
+
+async function deriveEngineOrNull(): Promise<EngineTag | null> {
+  try {
+    const cfg = await configModule.read(resolveConfigPath(undefined, {}))
+    if (cfg.connection) {
+      const e = mapSystemToEngine(cfg.connection.system)
+      if (e !== 'mongodb') return e
+    }
+  } catch {
+    // ignored
+  }
+  return null
+}
+
+function toSearchJson(h: SearchHit): Record<string, unknown> {
+  return {
+    name: h.name,
+    engine: h.engine,
+    source: h.source,
+    intent: h.intent ?? null,
+    description: h.description,
+    tags: h.tags,
+    score: h.score,
+  }
+}
+
+function renderSearchTable(hits: SearchHit[], includeScore: boolean): void {
+  const header = includeScore
+    ? ['NAME', 'ENGINE', 'SOURCE', 'INTENT', 'SCORE', 'DESCRIPTION']
+    : ['NAME', 'ENGINE', 'SOURCE', 'INTENT', 'DESCRIPTION']
+  const rows = hits.map((h) => {
+    const base = [h.name, h.engine ?? '-', h.source, h.intent ?? '-']
+    if (includeScore) base.push(h.score.toFixed(3))
+    base.push(h.description)
+    return base
+  })
+  const widths = header.map((c, i) => Math.max(c.length, ...rows.map((r) => (r[i] ?? '').length)))
+  const fmt = (line: string[]) => line.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
+  console.log(fmt(header))
+  for (const r of rows) console.log(fmt(r))
+}
+
 function scaffold(name: string): string {
   return [
     '-- ---',
@@ -363,4 +464,16 @@ queriesCommand
       console.error((e as Error).message)
       process.exit(1)
     }
+  })
+
+queriesCommand
+  .command('search [keywords...]')
+  .description(t('queries.search_description'))
+  .option('--format <type>', 'Output format: table, json', 'table')
+  .option('--engine <engine>', 'Filter: postgres | mysql | redis | elasticsearch | all')
+  .option('--source <source>', 'Filter: local | shared | builtin | all')
+  .option('--limit <n>', 'Max results (default 10)')
+  .option('--include-internal', 'Show ranking score')
+  .action(async (keywords: string[], options: SearchOptions) => {
+    await queriesSearch(keywords, options)
   })

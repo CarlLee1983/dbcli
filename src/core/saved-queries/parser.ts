@@ -25,6 +25,7 @@ import {
 const MAX_BYTES = 64 * 1024
 const VALID_TYPES: ParamType[] = ['int', 'string', 'float', 'bool', 'date', 'datetime']
 const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql', 'elasticsearch', 'redis']
+const INTENT_RE = /^[a-z][a-z0-9.-]*$/
 
 function familyOf(engine: EngineTag): 'sql' | 'es' | 'redis' {
   if (engine === 'postgres' || engine === 'mysql') return 'sql'
@@ -126,6 +127,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   const params = normaliseParams(raw.params, input)
   const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : []
   const index = typeof raw.index === 'string' ? raw.index : undefined
+  const intent = normaliseIntent(raw.intent, input)
 
   return {
     meta: {
@@ -136,9 +138,22 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       index,
       params,
       tags,
+      intent,
     },
     warnings,
   }
+}
+
+function normaliseIntent(value: unknown, input: ParseInput): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'string' || value.length === 0 || !INTENT_RE.test(value)) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has invalid intent: '${String(value)}' (must match ${INTENT_RE.source})`,
+      'INVALID_INTENT',
+      input.file
+    )
+  }
+  return value
 }
 
 function normaliseEngine(

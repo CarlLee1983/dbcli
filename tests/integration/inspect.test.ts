@@ -1,10 +1,13 @@
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { resolve } from 'node:path'
-import { writeFile, readFile } from 'node:fs/promises'
+import { resolve, join } from 'node:path'
+import { writeFile, readFile, mkdtemp, cp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 
-const FIXTURE = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
+const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+let FIXTURE = FIXTURE_SRC
 
 function run(
   args: string[],
@@ -21,10 +24,15 @@ function run(
 }
 
 beforeAll(async () => {
-  const idxPath = resolve(FIXTURE, '.dbcli/schemas/index.json')
+  // Copy fixture to a tmp dir so the cache-freshness mutation does not dirty
+  // the committed fixture between test runs.
+  const work = await mkdtemp(join(tmpdir(), 'dbcli-inspect-'))
+  await cp(FIXTURE_SRC, work, { recursive: true })
+  const idxPath = resolve(work, '.dbcli/schemas/index.json')
   const raw = JSON.parse(await readFile(idxPath, 'utf8'))
   raw.metadata.lastRefreshed = new Date().toISOString()
   await writeFile(idxPath, JSON.stringify(raw, null, 2))
+  FIXTURE = work
 })
 
 describe('dbcli inspect (CLI)', () => {

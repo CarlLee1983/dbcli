@@ -5,6 +5,36 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-05-08
+
+### Added
+
+- **Saved Queries 擴展至 Elasticsearch 與 Redis**：`dbcli q @<name>` 與 `queries` 子命令現在能依 frontmatter `engine` 自動切換到對應引擎，並走各引擎專屬的安全管線。
+  - **Engine strategy 重構**：runner 透過 `EngineStrategy` 介面分派到 SQL / Elasticsearch / Redis 三個獨立 strategy；既有 SQL 行為以 strategy 形式保留，無行為變更。
+  - **Elasticsearch strategy**：
+    - Frontmatter 接受 `engine: elasticsearch` 與 `index` 欄位；body 必須是合法 JSON，含 `script` 欄位的 query 直接拒絕。
+    - JSON-aware 參數注入：`:name` 僅在 JSON 字串脈絡裡替換，避免破壞語法。
+    - Size guard：自動補 `size` 上限；`aggs` 模式下放行但加註警告，分頁 (`from + size`) 過大時提示。
+  - **Redis strategy**：
+    - 命令白名單（read-only 為主）+ body validation；直接拒絕 unsupported 或寫入命令。
+    - Raw 參數注入：`:name` 直接代入字面量並打印 foot-gun 警告，提醒使用者 saved query 內不可放使用者輸入。
+    - Size guard：對 range / SCAN 命令的 `COUNT` / `LIMIT` 加上保險上限。
+  - **`q` 命令分派**：根據 prepared execution 的 engine family 呼叫對應 adapter，`--dry-run` 依 engine 用對應格式輸出（SQL 維持 SQL、ES 印 JSON body、Redis 印 argv）。
+  - **內建診斷 snippet**：
+    - `assets/snippets/diag/es-cluster-health.elasticsearch.sql` — ES 叢集健康度摘要。
+    - `assets/snippets/diag/redis-key-stats.redis.sql` — Redis key 數量 / type 分佈快照。
+- **整合測試**：新增 ES / Redis end-to-end saved query 測試（依本機是否有 Docker 而 skip，與既有 PG / MySQL 測試一致）。
+
+### Changed
+
+- **Redis 驅動**：改用 Bun 內建 `RedisClient`，移除外部 `ioredis` 依賴。
+- **Elasticsearch adapter**：refactor 並收斂錯誤訊息與 ExecutionResult 形狀，與 SQL / Mongo / Redis 對齊。
+- **文件**：`assets/SKILL.md` 與 `assets/reference.md` 補上 ES / Redis snippet 工作流；`docs/feature-matrix.md` 更新 saved-queries 欄位。
+
+### Fixed
+
+- **`dbcli export`（Redis 分支）**：`result.rowCount` 在 Redis 上可能 undefined 時導致 `tsc --noEmit` 報 TS2322；改為 `result.rowCount ?? result.rows.length ?? 0`，release gate 中的 typecheck 回到 0 錯誤。
+
 ## [1.9.1] - 2026-05-07
 
 ### Changed

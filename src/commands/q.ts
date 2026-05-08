@@ -6,6 +6,7 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { PermissionError } from '@/core/permission-guard'
+import { extractTableName } from '@/core/query-executor'
 import { QueryResultFormatter } from '@/formatters'
 import {
   loadSnippets,
@@ -100,12 +101,23 @@ export async function qCommand(
       return
     }
 
+    const blacklistManager = new BlacklistManager(config)
+    const blacklistValidator = new BlacklistValidator(blacklistManager)
+    const family = engineFamily(engine)
+    const targetName: string =
+      family === 'sql'
+        ? (extractTableName(prepared.rewrittenSql) ?? '')
+        : family === 'es'
+          ? (prepared.execHints?.index ?? '')
+          : ''
+
+    if (family !== 'redis' && targetName) {
+      blacklistValidator.checkTableBlacklist('SELECT', targetName)
+    }
+
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
     try {
-      const blacklistManager = new BlacklistManager(config)
-      const blacklistValidator = new BlacklistValidator(blacklistManager)
-      const family = engineFamily(engine)
       const indexParams =
         family === 'es' && prepared.execHints?.index ? [prepared.execHints.index] : []
       const start = performance.now()
@@ -118,7 +130,7 @@ export async function qCommand(
       const filtered =
         family === 'redis'
           ? { filteredRows: result.rows, omittedColumns: [] as string[] }
-          : blacklistValidator.filterColumns('', result.rows, columnNames)
+          : blacklistValidator.filterColumns(targetName, result.rows, columnNames)
 
       const formatter = new QueryResultFormatter()
       const out = formatter.format(
@@ -134,7 +146,7 @@ export async function qCommand(
             ...(filtered.omittedColumns.length > 0
               ? {
                   securityNotification: blacklistValidator.buildSecurityNotification(
-                    '',
+                    targetName,
                     filtered.omittedColumns
                   ),
                 }

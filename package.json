@@ -45,6 +45,7 @@
     "dev": "bun run src/cli.ts",
     "build": "bun run scripts/build.ts",
     "prepublishOnly": "bun run build",
+    "release:check": "bash scripts/release-check.sh",
     "test": "bun test",
     "test:unit": "bun test tests/unit tests/core",
     "test:integration": "bun test tests/integration",

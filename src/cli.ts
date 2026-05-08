@@ -20,6 +20,7 @@ import { checkCommand } from './commands/check'
 import { diffCommand } from './commands/diff'
 import { statusCommand } from './commands/status'
 import { inspectCommand } from './commands/inspect'
+import { reportCommand } from './commands/report'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
@@ -260,6 +261,7 @@ program.addCommand(diffCommand)
 // Register status command
 program.addCommand(statusCommand)
 program.addCommand(inspectCommand)
+program.addCommand(reportCommand)
 program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)

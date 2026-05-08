@@ -14,13 +14,10 @@ export interface ObjectsCollectResult {
   warnings: string[]
 }
 
-export async function collectObjects(
-  opts: CollectObjectsOptions
-): Promise<ObjectsCollectResult> {
+export async function collectObjects(opts: CollectObjectsOptions): Promise<ObjectsCollectResult> {
   const warnings: string[] = []
   const kind = pickKind(opts.system)
-  const isSql =
-    opts.system === 'postgresql' || opts.system === 'mysql' || opts.system === 'mariadb'
+  const isSql = opts.system === 'postgresql' || opts.system === 'mysql' || opts.system === 'mariadb'
   if (!isSql) {
     return {
       section: {

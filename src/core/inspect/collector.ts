@@ -107,15 +107,16 @@ async function hasConfig(configPath: string): Promise<boolean> {
   // File mode: <configPath> itself is the legacy single-file config
   if (await Bun.file(join(configPath, 'config.json')).exists()) return true
   if (await Bun.file(configPath).exists()) {
-    const stat = await Bun.file(configPath).stat().catch(() => null)
+    const stat = await Bun.file(configPath)
+      .stat()
+      .catch(() => null)
     return stat?.isFile() === true
   }
   return false
 }
 
 function defaultObjectsForSystem(system: SnapshotSystem | null) {
-  if (!system)
-    return { kind: 'tables' as const, unavailable: true as const, reason: 'no system' }
+  if (!system) return { kind: 'tables' as const, unavailable: true as const, reason: 'no system' }
   switch (system) {
     case 'mongodb':
       return { kind: 'collections' as const, unavailable: true as const, reason: 'not connected' }

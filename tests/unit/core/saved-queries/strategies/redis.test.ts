@@ -2,10 +2,12 @@ import { describe, test, expect } from 'bun:test'
 import { redisStrategy } from '@/core/saved-queries/strategies/redis'
 import { SavedQueryError } from '@/core/saved-queries/types'
 
-const meta = () => ({
+import type { EngineTag, SavedQueryMeta } from '@/core/saved-queries/types'
+
+const meta = (): SavedQueryMeta => ({
   name: 't',
   key: '@t',
-  engine: ['redis'] as const,
+  engine: ['redis'] as EngineTag[],
   params: [],
   tags: [],
 })

@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'bun:test'
 import { esStrategy } from '@/core/saved-queries/strategies/elasticsearch'
-import { SavedQueryError } from '@/core/saved-queries/types'
+import { SavedQueryError, type EngineTag, type SavedQueryMeta } from '@/core/saved-queries/types'
 
-const meta = (extra: Record<string, unknown> = {}) => ({
+const meta = (extra: Record<string, unknown> = {}): SavedQueryMeta => ({
   name: 't',
   key: '@t',
-  engine: ['elasticsearch'] as const,
+  engine: ['elasticsearch'] as EngineTag[],
   index: 'events-*',
   params: [],
   tags: [],

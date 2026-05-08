@@ -15,6 +15,7 @@ import {
   resolveSnippetDirs,
   SavedQueryError,
 } from '@/core/saved-queries'
+import { engineFamily } from '@/core/saved-queries/strategies'
 
 export interface QCommandOptions {
   format?: 'table' | 'json' | 'csv'
@@ -40,7 +41,10 @@ export async function qCommand(
 
     const engine = mapSystemToEngine(config.connection.system)
     if (engine === 'mongodb') {
-      throw new Error('Saved queries do not support MongoDB connections')
+      throw new SavedQueryError(
+        `Saved queries do not support MongoDB connections`,
+        'ENGINE_MISMATCH'
+      )
     }
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
@@ -69,14 +73,20 @@ export async function qCommand(
     try {
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
+      const family = engineFamily(engine)
+      const indexParams =
+        family === 'es' && prepared.execHints?.index ? [prepared.execHints.index] : []
       const start = performance.now()
       const result = await adapter.execute<Record<string, unknown>>(
         prepared.driver.sql,
-        prepared.driver.values
+        family === 'sql' ? prepared.driver.values : indexParams
       )
       const executionTimeMs = Math.round(performance.now() - start)
       const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
-      const filtered = blacklistValidator.filterColumns('', result.rows, columnNames)
+      const filtered =
+        family === 'redis'
+          ? { filteredRows: result.rows, omittedColumns: [] as string[] }
+          : blacklistValidator.filterColumns('', result.rows, columnNames)
 
       const formatter = new QueryResultFormatter()
       const out = formatter.format(

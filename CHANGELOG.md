@@ -5,6 +5,24 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-05-08
+
+### Added
+
+- `dbcli inspect` — read-only context snapshot for AI agents (`--format json|markdown`, `--brief`, `--for-agent`, `--no-connect`, `--probe-timeout`).
+- `src/core/inspect/` collector layer (connection, permission, blacklist, objects, schema-cache, snippets, version, suggested commands) reused via the orchestrator.
+- `release:check` script — sequences `bun audit`, format check, typecheck, lint, tests, build, and dist smoke.
+
+### Changed
+
+- `assets/SKILL.md` agent workflow now starts with `dbcli inspect --for-agent`.
+- `README.md` quick-start documents the agent first-look command.
+
+### Notes
+
+- Snapshot output is locked at `schemaVersion: 1`. Non-SQL engines emit `objects` and `schemaCache` as `unavailable: true` until later milestones.
+- No new runtime dependencies.
+
 ## [1.11.0] - 2026-05-08
 
 ### Added

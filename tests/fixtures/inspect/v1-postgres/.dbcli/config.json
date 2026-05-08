@@ -1,0 +1,15 @@
+{
+  "connection": {
+    "system": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "user": "u",
+    "password": "p",
+    "database": "fixture_app"
+  },
+  "permission": "query-only",
+  "blacklist": {
+    "tables": ["secrets"],
+    "columns": { "users": ["email", "phone"] }
+  }
+}

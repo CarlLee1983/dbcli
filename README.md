@@ -97,6 +97,17 @@ dbcli migrate create posts --column "id:serial:pk" --column "title:varchar(200):
 dbcli skill --install claude
 ```
 
+### Agent first-look
+
+```bash
+dbcli inspect --for-agent
+```
+
+A single read-only command that returns a bounded JSON snapshot of the current
+connection, permission level, blacklist size, schema cache freshness, available
+saved-query intents, and the safest next commands to run. No host, no port, no
+credentials — safe to log or pipe to an LLM.
+
 ### MongoDB Atlas / SRV Connections
 
 MongoDB connections are supported via both standard `mongodb://` URIs and Atlas-style `mongodb+srv://` URIs.

@@ -439,6 +439,28 @@ dbcli status --format text      # Human-readable text output
 **Output:** `permission`, `system`, `blacklist` summary, `version`
 **Permission:** query-only+
 
+### inspect
+
+Read-only snapshot for AI agents. Never emits credentials or blacklisted values.
+
+| Flag | Purpose |
+|------|---------|
+| `--format <json\|markdown>` | Output format (default `json`) |
+| `--brief` | Drop sample arrays and trim suggested commands to ≤3 |
+| `--for-agent` | Shortcut for `--format json --brief` |
+| `--no-connect` | Skip the cheap version/object probe (no DB traffic) |
+| `--probe-timeout <ms>` | Hard timeout for the version/object probe (default 1500) |
+
+Example:
+
+```bash
+dbcli inspect --for-agent
+```
+
+Output schema is locked at `schemaVersion: 1`. Sections: `connection`, `permission`, `blacklist`, `objects`, `schemaCache`, `snippets`, `suggestedCommands`, `warnings`.
+
+**Permission:** query-only+
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

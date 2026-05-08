@@ -1,4 +1,5 @@
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { packageAssetPath } from '@/utils/package-root'
 import type { AgentTaskSource } from './types'
 
 export interface AgentTaskDirs {
@@ -8,8 +9,7 @@ export interface AgentTaskDirs {
 }
 
 function resolveBuiltinDir(): string {
-  // src/core/agent-tasks/task-paths.ts → ../../../assets/tasks
-  return resolve(import.meta.dir, '..', '..', '..', 'assets', 'tasks')
+  return packageAssetPath('tasks')
 }
 
 export function resolveAgentTaskDirs(workspaceRoot: string): AgentTaskDirs {

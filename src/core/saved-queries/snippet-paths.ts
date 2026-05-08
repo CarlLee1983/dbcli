@@ -1,4 +1,5 @@
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { packageAssetPath } from '@/utils/package-root'
 import type { SnippetSource } from './types'
 
 export interface SnippetDirs {
@@ -9,12 +10,11 @@ export interface SnippetDirs {
 
 /**
  * Builtin snippets ship under `assets/snippets/`, packaged via `files` in
- * package.json. Resolved relative to this module so dev (`bun run src/cli.ts`)
- * and bundled `dist/` both work.
+ * package.json. Resolved via the shared package-root walker so both dev mode
+ * (`bun run src/cli.ts`) and bundled `dist/cli.mjs` find the right directory.
  */
 function resolveBuiltinDir(): string {
-  // src/core/saved-queries/snippet-paths.ts → ../../../assets/snippets
-  return resolve(import.meta.dir, '..', '..', '..', 'assets', 'snippets')
+  return packageAssetPath('snippets')
 }
 
 export function resolveSnippetDirs(workspaceRoot: string): SnippetDirs {

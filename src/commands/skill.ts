@@ -7,29 +7,14 @@ import { $ } from 'bun'
 import * as path from 'node:path'
 import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
+import { packageAssetPath } from '@/utils/package-root'
 import { Command } from 'commander'
 
-/**
- * Finds the package root (the directory containing package.json)
- * Supports dev mode (src/commands/) and bundle mode (dist/)
- */
-function findPackageRoot(): string {
-  let dir = import.meta.dir
-  for (let i = 0; i < 5; i++) {
-    if (Bun.file(path.join(dir, 'package.json')).size > 0) {
-      return dir
-    }
-    dir = path.dirname(dir)
-  }
-  // fallback: go two levels up from import.meta.dir (dev mode: src/commands/ → root)
-  return path.resolve(import.meta.dir, '../..')
-}
-
 /** Absolute path to the static SKILL.md (relative to package root) */
-const SKILL_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'SKILL.md')
+const SKILL_SOURCE_PATH = packageAssetPath('SKILL.md')
 
 /** Long-form command reference (sibling to SKILL in assets/ and in install dir) */
-const REFERENCE_SOURCE_PATH = path.join(findPackageRoot(), 'assets', 'reference.md')
+const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
 
 export interface SkillOptions {
   install?: string // platform: claude, gemini, copilot, cursor

@@ -48,10 +48,5 @@ jobs:
           & $exePath --version
 
       - name: Run performance benchmarks
-        run: bun run test:bench
+        run: bun run test:perf
         continue-on-error: true
-        # Bench files 使用 vitest bench API，可能在部分環境不支援
-
-      - name: Check startup time regression
-        run: |
-          cat benchmarks/results.json || echo "First run - baseline established"

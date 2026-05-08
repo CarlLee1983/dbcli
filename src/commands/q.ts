@@ -15,6 +15,34 @@ import {
   resolveSnippetDirs,
   SavedQueryError,
 } from '@/core/saved-queries'
+import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
+
+export interface DryRunInput {
+  family: EngineFamily
+  driverSql: string
+  values: Array<string | number | boolean | null>
+  execHints: { index?: string } | undefined
+}
+
+export function formatDryRun(input: DryRunInput): string {
+  const lines: string[] = ['Dry-run preview (no execution):']
+  if (input.family === 'es') {
+    if (input.execHints?.index) lines.push(`Index: ${input.execHints.index}`)
+    try {
+      lines.push(JSON.stringify(JSON.parse(input.driverSql), null, 2))
+    } catch {
+      lines.push(input.driverSql)
+    }
+    return lines.join('\n')
+  }
+  if (input.family === 'redis') {
+    lines.push(input.driverSql)
+    return lines.join('\n')
+  }
+  lines.push(input.driverSql)
+  lines.push('Bind values: ' + JSON.stringify(input.values))
+  return lines.join('\n')
+}
 
 export interface QCommandOptions {
   format?: 'table' | 'json' | 'csv'
@@ -40,7 +68,10 @@ export async function qCommand(
 
     const engine = mapSystemToEngine(config.connection.system)
     if (engine === 'mongodb') {
-      throw new Error('Saved queries do not support MongoDB connections')
+      throw new SavedQueryError(
+        `Saved queries do not support MongoDB connections`,
+        'ENGINE_MISMATCH'
+      )
     }
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
@@ -58,9 +89,14 @@ export async function qCommand(
     for (const w of prepared.warnings) console.error(`⚠ ${w}`)
 
     if (options.dryRun) {
-      console.log('Dry-run preview (no execution):')
-      console.log(prepared.driver.sql)
-      console.log('Bind values: ' + JSON.stringify(prepared.driver.values))
+      console.log(
+        formatDryRun({
+          family: engineFamily(engine),
+          driverSql: prepared.driver.sql,
+          values: prepared.driver.values,
+          execHints: prepared.execHints,
+        })
+      )
       return
     }
 
@@ -69,14 +105,20 @@ export async function qCommand(
     try {
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
+      const family = engineFamily(engine)
+      const indexParams =
+        family === 'es' && prepared.execHints?.index ? [prepared.execHints.index] : []
       const start = performance.now()
       const result = await adapter.execute<Record<string, unknown>>(
         prepared.driver.sql,
-        prepared.driver.values
+        family === 'sql' ? prepared.driver.values : indexParams
       )
       const executionTimeMs = Math.round(performance.now() - start)
       const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
-      const filtered = blacklistValidator.filterColumns('', result.rows, columnNames)
+      const filtered =
+        family === 'redis'
+          ? { filteredRows: result.rows, omittedColumns: [] as string[] }
+          : blacklistValidator.filterColumns('', result.rows, columnNames)
 
       const formatter = new QueryResultFormatter()
       const out = formatter.format(

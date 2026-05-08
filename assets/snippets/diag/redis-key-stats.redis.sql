@@ -1,0 +1,11 @@
+-- ---
+-- name: redis-key-stats
+-- description: Sample keyspace via SCAN with explicit COUNT bound
+-- engine: redis
+-- params:
+--   match:
+--     type: string
+--     default: '*'
+-- tags: [diag, redis]
+-- ---
+SCAN 0 MATCH :match COUNT 100

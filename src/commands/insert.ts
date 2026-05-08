@@ -104,16 +104,41 @@ export async function insertCommand(
     }
 
     if (config.connection.system === 'redis') {
-      const output = {
-        status: 'error',
-        operation: 'insert',
-        rows_affected: 0,
-        timestamp: new Date().toISOString(),
-        error:
-          'Redis 不支援 insert 指令；請改用 query "<COMMAND>"（例如 SET / HSET），寫入會通過相同的權限與黑名單檢查',
+      enforcePermission('INSERT INTO dummy', config.permission)
+
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('INSERT', table, [])
+      blacklistValidator.checkColumnBlacklistOnWrite(table, Object.keys(data), 'INSERT')
+
+      if (options.dryRun) {
+        const output = {
+          status: 'success',
+          operation: 'insert',
+          rows_affected: 0,
+          sql: `SET ${table} ... (Redis Insert)`,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
       }
-      console.log(JSON.stringify(output, null, 2))
-      process.exit(1)
+
+      const adapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+      await adapter.connect()
+      try {
+        const result = await adapter.insert(table, data)
+        const output = {
+          status: 'success',
+          operation: 'insert',
+          rows_affected: result.affectedRows,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      } finally {
+        await adapter.disconnect()
+      }
     }
 
     if (config.connection.system === 'elasticsearch') {

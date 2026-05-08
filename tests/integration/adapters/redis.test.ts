@@ -182,4 +182,89 @@ describe('Redis Adapter Integration Tests', () => {
       await adapter.disconnect()
     }
   })
+
+  test('insert/update/delete round-trip on a list', async () => {
+    if (SKIP_TESTS) return
+    const adapter = new RedisAdapter(validOptions)
+    await adapter.connect()
+    try {
+      // Insert elements into a list
+      await adapter.insert('integration:list', {
+        __type: 'list',
+        values: ['item1', 'item2'],
+      })
+      const before = await adapter.execute<{ value: string }>('LRANGE integration:list 0 -1')
+      expect(before.rows.map((r) => r.value)).toEqual(['item1', 'item2'])
+
+      // Update (append) to the list
+      await adapter.update('integration:list', {}, { __type: 'list', values: ['item3'] })
+      const after = await adapter.execute<{ value: string }>('LRANGE integration:list 0 -1')
+      expect(after.rows.map((r) => r.value)).toEqual(['item1', 'item2', 'item3'])
+
+      // Delete an element from the list
+      const deleted = await adapter.delete('integration:list', { value: 'item2' })
+      expect(deleted.affectedRows).toBe(1)
+      const final = await adapter.execute<{ value: string }>('LRANGE integration:list 0 -1')
+      expect(final.rows.map((r) => r.value)).toEqual(['item1', 'item3'])
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test('insert/update/delete round-trip on a set', async () => {
+    if (SKIP_TESTS) return
+    const adapter = new RedisAdapter(validOptions)
+    await adapter.connect()
+    try {
+      // Insert into a set
+      await adapter.insert('integration:set', {
+        __type: 'set',
+        values: ['member1', 'member2'],
+      })
+      const before = await adapter.execute<{ value: string }>('SMEMBERS integration:set')
+      const beforeValues = before.rows.map((r) => r.value).sort()
+      expect(beforeValues).toEqual(['member1', 'member2'])
+
+      // Update (add) to the set
+      await adapter.update('integration:set', {}, { __type: 'set', values: ['member3'] })
+      const after = await adapter.execute<{ value: string }>('SMEMBERS integration:set')
+      expect(after.rows.map((r) => r.value)).toContain('member3')
+
+      // Delete from the set
+      const deleted = await adapter.delete('integration:set', { value: 'member1' })
+      expect(deleted.affectedRows).toBe(1)
+      const final = await adapter.execute<{ value: string }>('SMEMBERS integration:set')
+      expect(final.rows.map((r) => r.value)).not.toContain('member1')
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test('insert/update/delete round-trip on a zset', async () => {
+    if (SKIP_TESTS) return
+    const adapter = new RedisAdapter(validOptions)
+    await adapter.connect()
+    try {
+      // Insert into a sorted set
+      await adapter.insert('integration:zset', {
+        __type: 'zset',
+        members: { m1: 10, m2: 20 },
+      })
+      const before = await adapter.execute<{ value: string }>('ZRANGE integration:zset 0 -1')
+      expect(before.rows.map((r) => r.value)).toEqual(['m1', 'm2'])
+
+      // Update (add/change score)
+      await adapter.update('integration:zset', {}, { __type: 'zset', members: { m1: 30 } })
+      const after = await adapter.execute<{ value: string }>('ZRANGE integration:zset 0 -1')
+      expect(after.rows.map((r) => r.value)).toEqual(['m2', 'm1']) // m1 now has higher score
+
+      // Delete from zset
+      const deleted = await adapter.delete('integration:zset', { value: 'm2' })
+      expect(deleted.affectedRows).toBe(1)
+      const final = await adapter.execute<{ value: string }>('ZRANGE integration:zset 0 -1')
+      expect(final.rows.map((r) => r.value)).toEqual(['m1'])
+    } finally {
+      await adapter.disconnect()
+    }
+  })
 })

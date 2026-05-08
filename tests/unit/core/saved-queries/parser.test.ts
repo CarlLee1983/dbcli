@@ -118,3 +118,35 @@ describe('parseSavedQuery — SQL body invariants', () => {
     expect(out.query.sqlBody.trim().startsWith('WITH')).toBe(true)
   })
 })
+
+describe('parseSavedQuery — multi-engine extensions', () => {
+  test('accepts engine: elasticsearch with index field', () => {
+    const text = wrap(
+      '{ "query": { "match_all": {} } }',
+      ['-- engine: elasticsearch', "-- index: 'events-*'"].join('\n')
+    )
+    const out = parseSavedQuery({ key: '@es', file: 'es.sql', source: 'shared', text })
+    expect(out.query.meta.engine).toEqual(['elasticsearch'])
+    expect(out.query.meta.index).toBe('events-*')
+  })
+
+  test('accepts engine: redis without index field', () => {
+    const text = wrap('GET key', '-- engine: redis')
+    const out = parseSavedQuery({ key: '@r', file: 'r.sql', source: 'shared', text })
+    expect(out.query.meta.engine).toEqual(['redis'])
+  })
+
+  test('rejects mixed-family engine list', () => {
+    const text = wrap('SELECT 1', '-- engine: [postgres, elasticsearch]')
+    expect(() =>
+      parseSavedQuery({ key: '@bad', file: 'bad.sql', source: 'shared', text })
+    ).toThrow(/families/i)
+  })
+
+  test('rejects elasticsearch snippet without index', () => {
+    const text = wrap('{ "query": { "match_all": {} } }', '-- engine: elasticsearch')
+    expect(() =>
+      parseSavedQuery({ key: '@es', file: 'es.sql', source: 'shared', text })
+    ).toThrow(/index/i)
+  })
+})

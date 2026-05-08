@@ -50,9 +50,7 @@
     "test:integration": "bun test tests/integration",
     "test:docker": "docker compose -f docker-compose.test.yml up -d --wait && bun test tests/integration/adapters; docker compose -f docker-compose.test.yml down",
     "typecheck": "tsc --noEmit --pretty false",
-    "test:run": "vitest --run",
-    "test:bench": "vitest bench --run",
-    "bench": "bun run test:bench",
+    "test:perf": "bun test ./tests/perf/*.bench.ts",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
@@ -77,7 +75,6 @@
     "jsdom": "^23.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.3.3",
-    "typescript-eslint": "^8.57.2",
-    "vitest": "^1.2.0"
+    "typescript-eslint": "^8.57.2"
   }
 }

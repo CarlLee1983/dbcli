@@ -120,16 +120,46 @@ export async function deleteCommand(
     }
 
     if (config.connection?.system === 'redis') {
-      const output = {
-        status: 'error',
-        operation: 'delete',
-        rows_affected: 0,
-        timestamp: new Date().toISOString(),
-        error:
-          'Redis 不支援 delete 指令；請改用 query "DEL <key>" 或 query "HDEL <key> <field>"，寫入會通過相同的權限與黑名單檢查',
+      // Apply blacklist before opening any connection
+      const blacklistManager = new BlacklistManager(config)
+      const blacklistValidator = new BlacklistValidator(blacklistManager)
+      blacklistValidator.checkTableBlacklist('DELETE', table, [])
+
+      let filter: Record<string, unknown>
+      try {
+        filter = JSON.parse(options.where)
+      } catch {
+        // If not JSON, try parsing as simple key=value pairs for convenience
+        filter = parseWhereClause(options.where)
       }
-      console.log(JSON.stringify(output, null, 2))
-      process.exit(1)
+
+      if (options.dryRun) {
+        const output = {
+          status: 'success',
+          operation: 'delete',
+          rows_affected: 0,
+          sql: `DEL ${table} (Redis Delete)`,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      }
+
+      const adapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+      await adapter.connect()
+      try {
+        const result = await adapter.delete(table, filter)
+        const output = {
+          status: 'success',
+          operation: 'delete',
+          rows_affected: result.affectedRows,
+          timestamp: new Date().toISOString(),
+        }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      } finally {
+        await adapter.disconnect()
+      }
     }
 
     if (config.connection?.system === 'elasticsearch') {

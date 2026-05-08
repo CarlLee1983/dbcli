@@ -10,6 +10,7 @@
  * frontmatter 為選填；SQL body 必為單一 SELECT 或 WITH 語句。
  */
 
+import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
 import {
   SavedQueryError,
@@ -23,7 +24,13 @@ import {
 
 const MAX_BYTES = 64 * 1024
 const VALID_TYPES: ParamType[] = ['int', 'string', 'float', 'bool', 'date', 'datetime']
-const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql']
+const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql', 'elasticsearch', 'redis']
+
+function familyOf(engine: EngineTag): 'sql' | 'es' | 'redis' {
+  if (engine === 'postgres' || engine === 'mysql') return 'sql'
+  if (engine === 'elasticsearch') return 'es'
+  return 'redis'
+}
 
 export interface ParseInput {
   key: string
@@ -48,11 +55,36 @@ export function parseSavedQuery(input: ParseInput): ParseOutput {
 
   const { frontmatter, body } = splitFrontmatter(input.text)
   const fm = parseFrontmatter(frontmatter, input)
-  validateBody(body, input)
-
   const meta = fm.meta
   meta.key = input.key
   if (!meta.name) meta.name = input.key
+
+  if (meta.engine && meta.engine.length > 0) {
+    const family = engineFamily(meta.engine[0]!)
+    if (family === 'sql') {
+      validateBody(body, input)
+    } else {
+      try {
+        getStrategy(family).validateBody(body, meta, input.file)
+      } catch (e) {
+        // Re-throw SavedQueryError; tolerate "No strategy registered" until
+        // every family's strategy is wired in (transitional during plan rollout).
+        if (e instanceof SavedQueryError) throw e
+        const msg = (e as Error)?.message ?? ''
+        if (!msg.startsWith('No strategy registered')) throw e
+      }
+    }
+  } else {
+    validateBody(body, input)
+  }
+
+  if (meta.engine?.includes('elasticsearch') && !meta.index) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' requires an 'index' field for engine: elasticsearch`,
+      'ES_INDEX_MISSING',
+      input.file
+    )
+  }
 
   return {
     query: { meta, sqlBody: body, file: input.file, source: input.source },
@@ -90,9 +122,10 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
 
   const warnings: string[] = []
   const raw = (rawParsed ?? {}) as Record<string, unknown>
-  const engine = normaliseEngine(raw.engine, warnings)
+  const engine = normaliseEngine(raw.engine, warnings, input)
   const params = normaliseParams(raw.params, input)
   const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : []
+  const index = typeof raw.index === 'string' ? raw.index : undefined
 
   return {
     meta: {
@@ -100,6 +133,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       key: input.key,
       description: typeof raw.description === 'string' ? raw.description : undefined,
       engine,
+      index,
       params,
       tags,
     },
@@ -107,7 +141,11 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   }
 }
 
-function normaliseEngine(value: unknown, warnings: string[]): EngineTag[] | undefined {
+function normaliseEngine(
+  value: unknown,
+  warnings: string[],
+  input: ParseInput
+): EngineTag[] | undefined {
   if (value === undefined || value === null || value === '') {
     warnings.push('Snippet has no engine declaration; assuming any engine')
     return undefined
@@ -117,9 +155,23 @@ function normaliseEngine(value: unknown, warnings: string[]): EngineTag[] | unde
   for (const v of list) {
     const s = String(v).toLowerCase()
     if (!VALID_ENGINES.includes(s as EngineTag)) {
-      throw new SavedQueryError(`Unknown engine '${s}' (allowed: postgres, mysql)`, 'PARSE_ERROR')
+      throw new SavedQueryError(
+        `Unknown engine '${s}' (allowed: ${VALID_ENGINES.join(', ')})`,
+        'PARSE_ERROR',
+        input.file
+      )
     }
     cleaned.push(s as EngineTag)
+  }
+  if (cleaned.length > 1) {
+    const families = new Set(cleaned.map(familyOf))
+    if (families.size > 1) {
+      throw new SavedQueryError(
+        `Snippet '${input.key}' mixes engine families: ${cleaned.join(', ')}`,
+        'ENGINE_MIXED_FAMILIES',
+        input.file
+      )
+    }
   }
   return cleaned
 }

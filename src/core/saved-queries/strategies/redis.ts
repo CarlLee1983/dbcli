@@ -1,7 +1,37 @@
 import type { ParamMap } from '../binder'
 import type { RunOptions } from '../runner'
-import { SavedQueryError, type SavedQuery } from '../types'
+import { SavedQueryError, type ParamSpec, type SavedQuery } from '../types'
 import type { EngineStrategy, PreparedExecution } from './types'
+
+const REDIS_NAME_RE = /:([a-zA-Z_][a-zA-Z0-9_]*)/g
+
+export function substituteRedisParams(
+  body: string,
+  params: ParamMap,
+  specs: ParamSpec[]
+): { command: string; warnings: string[] } {
+  const warnings: string[] = []
+  const specByName = new Map(specs.map((s) => [s.name, s]))
+
+  const command = body.replace(REDIS_NAME_RE, (match, name: string, offset: number) => {
+    if (!Object.prototype.hasOwnProperty.call(params, name)) return match
+    const value = params[name]
+    const spec = specByName.get(name)
+    const before = body[offset - 1]
+    const after = body[offset + match.length]
+    const adjacentNonWs =
+      (before !== undefined && /\S/.test(before)) ||
+      (after !== undefined && /\S/.test(after))
+    if (spec?.type === 'string' && adjacentNonWs) {
+      warnings.push(
+        `Param ':${name}' is adjacent to other characters; wrap in quotes if value may contain whitespace`
+      )
+    }
+    return value === null || value === undefined ? '' : String(value)
+  })
+
+  return { command, warnings }
+}
 
 const REDIS_READONLY_VERBS = new Set([
   'GET', 'MGET',

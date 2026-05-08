@@ -65,9 +65,39 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] Automated reminders for outdated AI agent skills
 - [x] Background check for skill updates across platforms
 
+**Saved Queries (snippets)** — v1.7
+- [x] YAML mini parser + frontmatter / SQL body 安全分析
+- [x] 雙層 loader（builtin + project）、`@name` resolver、fuzzy match
+- [x] 參數綁定與 `:name` 改寫器、子查詢式 size guard
+- [x] CLI：`dbcli q @<name>`、`dbcli queries list / show / new / edit / check`
+- [x] Live PostgreSQL 整合測試、模組覆蓋率 ≥ 80%
+
+**Multi-Engine Support** — v1.8
+- [x] Elasticsearch adapter：execute / list / schema / write
+- [x] ES Docker 整合測試與 `doctor` / `init` / saved-queries 註冊
+- [x] Blacklist case-insensitive + dotted path 查找
+- [x] Redis / ES `ExecutionResult` 形狀統一
+- [x] 早期 unsupported 指令防呆 + 型別 union 補齊
+
+**Agent Task Packs (plan-only)** — v1.9
+- [x] 三層目錄 loader、shell-aware argv splitter、frontmatter parser
+- [x] Resolver（過濾 / 查找 / 模糊提示）、planner（參數 + 模板渲染）
+- [x] 內建任務 `diagnose-slow-query`
+- [x] CLI：`dbcli skill tasks list / show / plan`
+
+**Skill 連線設定指引** — v1.9.1
+- [x] Skill 文件補上連線設定章節，引導 agent 正確初始化
+
 ### Active
 
-(No active requirements — milestone complete. Define next milestone with `/gsd:new-milestone`.)
+**ES / Redis Saved Queries** — post-1.9.1（feature branch 已 merge 到 `main`，待下個 release）
+- [x] Engine strategy refactor（SQL / ES / Redis 拆成獨立 strategy）
+- [x] ES JSON-aware 參數注入、size guard、body validation、index 欄位
+- [x] Redis 命令白名單、raw 參數注入（含警告）、range / SCAN size guard
+- [x] 內建診斷 snippet：`es-cluster-health`、`redis-key-stats`
+- [x] `q @<name>` 與 `q --dry-run` 依 engine family 分派與格式化
+- [x] ES / Redis end-to-end saved query 整合測試
+- [ ] 決定下個 release tag（候選：1.10.0）並更新 MILESTONES.md
 
 ### Out of Scope (V1)
 
@@ -118,19 +148,41 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.6.0 — Phase 20+ Complete)
+## Current State (v1.9.1 — Multi-Engine + Agent Task Packs Shipped)
 
-**Latest Release:** v1.6.0 (2026-04-23)
-- ✅ Full MongoDB Support (v1.6.0) — extended query, insert, update, delete, schema, list
-- ✅ MongoDB Safeguards (v1.6.0) — integrated blacklist and size guard protection
-- ✅ Improved Skill Installation (v1.6.0) — deploy SKILL.md + reference.md to all platforms
-- ✅ Enhanced Security Model (v1.6.0) — secure connection storage in ~/.config/dbcli/
-- ✅ MongoDB SRV Diagnostics (v1.5.2) — added environment reporting to `doctor`
-- ✅ MongoDB SRV Expansion (v1.5.1) — fixed SRV connection and database consistency
-- ✅ Layered Schema Cache (v1.5.0) — integrated file-based persistence for schemas
-- ✅ Per-connection isolation implemented
-- ✅ SKILL.md documentation updated for connection-aware AI usage
-- ✅ 380+ tests passing
+**Latest Release:** v1.9.1 (2026-05-07)
+- ✅ Skill 連線設定指引 (v1.9.1) — Skill 文件補上連線設定章節
+- ✅ Agent Task Packs plan-only (v1.9.0) — 三層目錄 loader、planner、`diagnose-slow-query`
+- ✅ Redis & Elasticsearch 完整支援 (v1.8.0) — adapter、blacklist、ExecutionResult 統一
+- ✅ Saved Queries / snippets (v1.7.0) — `q @<name>`、`queries` 子命令、size guard、覆蓋率 ≥ 80%
+- ✅ Full MongoDB Support (v1.6.0) — query / insert / update / delete + safeguards
+- ✅ MongoDB SRV (v1.5.1 / v1.5.2) — `mongodb+srv://` 與 `doctor` 診斷
+- ✅ Layered Schema Cache (v1.5.0) — file-based persistence + per-connection isolation
+
+**In Progress (post-1.9.1, on `main`):** ES / Redis saved query strategies、engine-family dispatch、內建診斷 snippet（`es-cluster-health` / `redis-key-stats`）、ES / Redis end-to-end 整合測試。等待下個 release tag。
+
+**What's Shipped (v1.9.1):**
+1. **Skill 連線設定指引** — Agent 第一次使用 dbcli 時能依 Skill 指引完成連線設定
+
+**What's Shipped (v1.9.0):**
+1. **Agent Task Packs (plan-only)** — 內建 / 全域 / 專案三層 loader、shell-aware argv splitter、frontmatter parser
+2. **Resolver + Planner** — 過濾 / 查找 / 模糊提示、參數綁定 + 模板渲染
+3. **內建任務** — `diagnose-slow-query`
+4. **CLI** — `dbcli skill tasks list / show / plan`
+
+**What's Shipped (v1.8.0):**
+1. **Elasticsearch adapter** — execute / list / schema / write 全部完備，含 Docker 整合測試
+2. **註冊 ES** — `doctor` / `init` / saved-queries 全面支援
+3. **Blacklist 強化** — case-insensitive + dotted path lookup
+4. **ExecutionResult 統一** — Redis / ES 共用相同形狀
+5. **早期防呆** — unsupported 指令回報 + 型別 union 補齊
+
+**What's Shipped (v1.7.0):**
+1. **YAML mini parser** — frontmatter + SQL body 安全分析
+2. **雙層 loader** — builtin + project，含 `@name` resolver 與 fuzzy match
+3. **參數系統** — 綁定 + `:name` 改寫器 + 子查詢式 size guard
+4. **CLI** — `dbcli q @<name>`、`dbcli queries list / show / new / edit / check`
+5. **品質** — Live PostgreSQL 整合測試、模組覆蓋率 ≥ 80%
 
 **What's Shipped (v1.6.0):**
 1. **Full MongoDB Support** — Extended all core operations to support MongoDB collections
@@ -204,4 +256,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-04-23 after v1.6.0 release*
+*Last updated: 2026-05-08 — v1.9.1 released; ES/Redis saved-query work merged on `main`, awaiting next release tag*

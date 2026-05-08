@@ -2,6 +2,7 @@
 -- name: Active connections (mysql)
 -- description: Non-sleep processes ordered by elapsed time.
 -- engine: mysql
+-- intent: safety.connections
 -- ---
 SELECT id,
        user,

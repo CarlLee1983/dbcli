@@ -2,6 +2,7 @@
 -- name: Active connections (postgres)
 -- description: Active sessions excluding idle, ordered by query start.
 -- engine: postgres
+-- intent: safety.connections
 -- ---
 SELECT pid,
        usename                              AS user,

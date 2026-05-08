@@ -2,6 +2,7 @@
 -- name: Database size (postgres)
 -- description: Each database with pretty-printed total size.
 -- engine: postgres
+-- intent: capacity.size
 -- ---
 SELECT datname                                AS database,
        pg_size_pretty(pg_database_size(datname)) AS size

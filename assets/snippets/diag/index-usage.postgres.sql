@@ -2,6 +2,7 @@
 -- name: Index usage (postgres)
 -- description: Indexes ordered by scan count (low scans = candidates to drop).
 -- engine: postgres
+-- intent: perf.index-usage
 -- ---
 SELECT schemaname                              AS schema,
        relname                                 AS table,

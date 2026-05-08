@@ -2,6 +2,7 @@
 -- name: Long-running queries (mysql)
 -- description: Non-sleep processes whose elapsed time exceeds min_seconds.
 -- engine: mysql
+-- intent: perf.slow-query
 -- params:
 --   min_seconds:
 --     type: int

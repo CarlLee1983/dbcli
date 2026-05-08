@@ -2,6 +2,7 @@
 -- name: Lock waits (mysql)
 -- description: InnoDB lock waits with waiting and blocking transactions.
 -- engine: mysql
+-- intent: safety.locks
 -- ---
 SELECT waiting.trx_mysql_thread_id  AS waiting_thread,
        waiting.trx_query            AS waiting_query,

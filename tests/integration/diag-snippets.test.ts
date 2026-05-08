@@ -152,4 +152,16 @@ describe('builtin diag snippets', () => {
     expect(es.query.meta.engine).toEqual(['elasticsearch'])
     expect(es.query.meta.index).toBeDefined()
   })
+
+  test('@diag/redis-key-stats is loadable', async () => {
+    const dirs = resolveSnippetDirs(process.cwd())
+    const map = await loadSnippets({
+      builtinDir: dirs.builtinDir,
+      sharedDir: '/__none__',
+      localDir: '/__none__',
+    })
+    const r = resolveByName(map, '@diag/redis-key-stats', 'redis')
+    expect(r.query.meta.engine).toEqual(['redis'])
+    expect(r.query.sqlBody).toMatch(/SCAN/i)
+  })
 })

@@ -37,3 +37,49 @@ describe('esStrategy.validateBody', () => {
     expect(() => esStrategy.validateBody(body, meta(), '/tmp/t.sql')).toThrow(/script/i)
   })
 })
+
+import { substituteEsParams } from '@/core/saved-queries/strategies/elasticsearch'
+
+describe('substituteEsParams', () => {
+  test('int outside string -> bare number', () => {
+    const out = substituteEsParams('{ "term": { "id": :id } }', { id: 42 }, [
+      { name: 'id', type: 'int', required: true },
+    ])
+    expect(out).toBe('{ "term": { "id": 42 } }')
+  })
+
+  test('string outside string -> JSON-quoted', () => {
+    const out = substituteEsParams('{ "term": { "name": :name } }', { name: 'Alice' }, [
+      { name: 'name', type: 'string', required: true },
+    ])
+    expect(out).toBe('{ "term": { "name": "Alice" } }')
+  })
+
+  test('string inside string literal -> escaped inner', () => {
+    const out = substituteEsParams('{ "term": { "key": "user-:id" } }', { id: 42 }, [
+      { name: 'id', type: 'int', required: true },
+    ])
+    expect(out).toBe('{ "term": { "key": "user-42" } }')
+  })
+
+  test('string with quote inside string literal -> JSON-escaped', () => {
+    const out = substituteEsParams('{ "k": "hello :name" }', { name: 'A"B' }, [
+      { name: 'name', type: 'string', required: true },
+    ])
+    expect(out).toBe('{ "k": "hello A\\"B" }')
+  })
+
+  test('bool -> bare', () => {
+    const out = substituteEsParams('{ "active": :on }', { on: true }, [
+      { name: 'on', type: 'bool', required: true },
+    ])
+    expect(out).toBe('{ "active": true }')
+  })
+
+  test('null value -> bare null', () => {
+    const out = substituteEsParams('{ "x": :y }', { y: null }, [
+      { name: 'y', type: 'string', required: false },
+    ])
+    expect(out).toBe('{ "x": null }')
+  })
+})

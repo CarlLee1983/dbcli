@@ -38,6 +38,11 @@
     "description": "唯讀檢視：連線、權限、黑名單、物件、片段與建議下一步指令。",
     "no_config": "找不到 dbcli 設定檔。請先執行 `dbcli init`。"
   },
+  "report": {
+    "description": "診斷報告（health/capacity/perf）：以內建片段產生唯讀、有界的診斷快照。",
+    "no_config": "找不到 dbcli 設定檔。請先執行 `dbcli init`。",
+    "section_invalid": "未知的 report section '{name}'。允許值：health、capacity、perf"
+  },
   "use": {
     "description": "切換或顯示預設資料庫連線",
     "switched": "已切換預設連線為 {name}",

@@ -5,6 +5,22 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-05-08
+
+### Added
+
+- `dbcli queries search <keywords>` — fuzzy keyword search across saved queries.
+- `dbcli queries suggest <intent>` — intent-prefix suggestion.
+- Optional `intent` frontmatter field on snippets.
+- 9 new diagnostic snippets: ES x4 (hot-threads, index-stats, unassigned-shards, pending-tasks); Redis x4 (slowlog, client-list, memory-usage, cluster-info); SQL x1 (blocking-queries.postgres).
+- "When you don't know which query to run" section in SKILL.md.
+
+### Changed
+
+- All 18 existing built-in diagnostic snippets backfilled with `intent`.
+- `foldVariants` extracted from `src/commands/queries.ts` to `src/core/saved-queries/fold.ts`.
+- Redis read-only allowlist gained `CLIENT`, `INFO`, `CLUSTER`, `SLOWLOG` for diagnostic snippets.
+
 ## [1.10.1] - 2026-05-08
 
 ### Fixed

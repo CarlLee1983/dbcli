@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.11.0 — Saved Queries Discovery (Shipped: 2026-05-08)
+
+**Scope:** Make snippets discoverable for AI agents — keyword search, intent-prefix suggest, 9 new diagnostic snippets, expanded SKILL.md.
+
+**Key accomplishments:**
+- New `dbcli queries search <keywords>` — token-based fuzzy ranking (deterministic, no external dep).
+- New `dbcli queries suggest <intent>` — intent prefix matching.
+- New optional `intent` frontmatter field, validated against `^[a-z][a-z0-9.-]*$`.
+- 9 v1 built-in intent namespaces (`perf.*`, `capacity.*`, `safety.*`, `monitor.*`).
+- 9 new diagnostic snippets: ES x4 (hot-threads, index-stats, unassigned-shards, pending-tasks); Redis x4 (slowlog, client-list, memory-usage, cluster-info); SQL x1 (blocking-queries.postgres).
+- Backfilled `intent` on 18 existing built-in snippets.
+- SKILL.md gained "When you don't know which query to run" section.
+- MongoDB saved-query support remains out of scope (runner.ts:26-29 rejection still in place).
+
+---
+
 ## v1.6.0 — Full MongoDB Support & Improved Skill Installation (Shipped: 2026-04-23)
 
 **Scope:** Phase 20 (Full MongoDB DML, diagnostics, documentation refactor)

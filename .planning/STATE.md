@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10.1
-milestone_name: Packaging & Security Hotfix
+milestone: v1.11.0
+milestone_name: Saved Queries Discovery
 status: milestone_complete
-last_updated: "2026-05-08T14:30:00.000Z"
+last_updated: "2026-05-08T20:45:00.000Z"
 progress:
   total_phases: 18
   completed_phases: 18
@@ -24,6 +24,12 @@ See: `.planning/PROJECT.md` (updated 2026-05-08)
 ---
 
 ## Milestone Status
+
+**v1.11.0 — Saved Queries Discovery:** COMPLETE (2026-05-08)
+- `queries search` / `queries suggest` 指令上線
+- frontmatter 加 optional `intent`，9 個 v1 namespace
+- 9 個新內建診斷 snippet (ES x4 / Redis x4 / SQL x1)
+- SKILL.md 補上 discovery 流程指引
 
 **v1.10.1 — Packaging & Security Hotfix:** COMPLETE (2026-05-08)
 - 修 npm 1.10.0 安裝後 packaged assets path 找不到（`src/utils/package-root.ts`）

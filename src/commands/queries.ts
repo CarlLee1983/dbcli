@@ -17,6 +17,7 @@ import {
   type ResolvedSnippet,
   type SnippetSource,
 } from '@/core/saved-queries'
+import { foldVariants, type FoldedRow } from '@/core/saved-queries/fold'
 
 async function deriveEngine(): Promise<EngineTag> {
   try {
@@ -64,40 +65,6 @@ export async function queriesList(options: ListOptions): Promise<void> {
   const fmt = (line: string[]) => line.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
   console.log(fmt(header))
   for (const c of cells) console.log(fmt(c))
-}
-
-interface FoldedRow {
-  name: string
-  sources: string[]
-  engines: string[]
-  params: string[]
-  description: string
-  tags: string[]
-  hasLocalOverride: boolean
-}
-
-const FOLD_SOURCE_RANK = { builtin: 0, shared: 1, local: 2 } as const
-
-function foldVariants(key: string, variants: ResolvedSnippet[]): FoldedRow {
-  const sources = unique(variants.map((v) => v.query.source)).sort()
-  const engines = unique(variants.flatMap((v) => v.query.meta.engine ?? [])).sort()
-  const tags = unique(variants.flatMap((v) => v.query.meta.tags ?? []))
-  const top = variants
-    .slice()
-    .sort((a, b) => FOLD_SOURCE_RANK[b.query.source] - FOLD_SOURCE_RANK[a.query.source])[0]!
-  return {
-    name: key,
-    sources,
-    engines,
-    params: top.query.meta.params.map((p) => p.name),
-    description: top.query.meta.description ?? '',
-    tags,
-    hasLocalOverride: variants.some((v) => v.hasLocalOverride),
-  }
-}
-
-function unique<T>(xs: T[]): T[] {
-  return [...new Set(xs)]
 }
 
 function snippetToJson(s: ResolvedSnippet): Record<string, unknown> {

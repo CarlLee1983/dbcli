@@ -34,6 +34,10 @@
     "connection_already_exists": "Connection '{name}' already exists",
     "rename_invalid_format": "Usage: --rename <old-name>:<new-name>"
   },
+  "inspect": {
+    "description": "Read-only snapshot of connection, permission, blacklist, objects, snippets, and suggested next commands.",
+    "no_config": "No dbcli configuration found. Run `dbcli init` to start."
+  },
   "use": {
     "description": "Switch or display the default database connection",
     "switched": "Switched default connection to {name}",

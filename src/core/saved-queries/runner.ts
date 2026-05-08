@@ -1,9 +1,9 @@
-import { coerceParams, mergeParamSources, rewriteToBind, type RawParamMap } from './binder'
-import { applySnippetGuard } from './size-guard'
+import { coerceParams, mergeParamSources, type RawParamMap } from './binder'
+import { engineFamily, getStrategy } from './strategies'
 import { SavedQueryError, type EngineTag, type ResolvedSnippet } from './types'
 
 export interface RunOptions {
-  /** 'postgres' | 'mysql' | 'mongodb' (mongo always errors out for SQL snippets in MVP) */
+  /** 'postgres' | 'mysql' | 'elasticsearch' | 'redis' | 'mongodb' (mongo always errors out) */
   engine: EngineTag | 'mongodb'
   noLimit: boolean
 }
@@ -13,6 +13,8 @@ export interface PreparedExecution {
   warnings: string[]
   /** original SQL body after `:name` rewrite but BEFORE guard wrapping (for --dry-run display) */
   rewrittenSql: string
+  /** Per-family execution hints (e.g. ES index pattern) */
+  execHints?: { index?: string }
 }
 
 export function prepareExecution(
@@ -21,39 +23,38 @@ export function prepareExecution(
   cliParams: RawParamMap,
   fileParams: RawParamMap
 ): PreparedExecution {
-  const warnings: string[] = []
-
   if (opts.engine === 'mongodb') {
     throw new SavedQueryError(
-      `Snippet '${snippet.query.meta.key}' targets SQL but current connection is MongoDB`,
+      `Saved queries do not support MongoDB connections`,
       'ENGINE_MISMATCH',
       snippet.query.file
     )
   }
 
   const declared = snippet.query.meta.engine
-  if (!declared) {
-    warnings.push(`Snippet '${snippet.query.meta.key}' has no engine declaration`)
-  } else if (!declared.includes(opts.engine as EngineTag)) {
-    throw new SavedQueryError(
-      `Engine mismatch for snippet '${snippet.query.meta.key}'\n` +
-        `  Snippet requires: ${declared.join(', ')}\n` +
-        `  Connection is: ${opts.engine}`,
-      'ENGINE_MISMATCH',
-      snippet.query.file
-    )
+  if (declared && declared.length > 0) {
+    const declaredFamily = engineFamily(declared[0]!)
+    const connFamily = engineFamily(opts.engine as EngineTag)
+    if (declaredFamily !== connFamily) {
+      throw new SavedQueryError(
+        `Engine mismatch for snippet '${snippet.query.meta.key}'\n` +
+          `  Snippet requires: ${declared.join(', ')}\n` +
+          `  Connection is: ${opts.engine}`,
+        'ENGINE_MISMATCH',
+        snippet.query.file
+      )
+    }
   }
 
   const merged = mergeParamSources(cliParams, fileParams)
   const typed = coerceParams(snippet.query.meta.params, merged)
-  const rewritten = rewriteToBind(snippet.query.sqlBody, typed, opts.engine as EngineTag)
-  if (rewritten.undeclared.length > 0) {
-    warnings.push(`SQL references undeclared params: ${rewritten.undeclared.join(', ')}`)
-  }
-  const wrapped = applySnippetGuard(rewritten.sql, { noLimit: opts.noLimit })
+  const strategy = getStrategy(engineFamily(opts.engine as EngineTag))
+  const prepared = strategy.prepare(snippet.query, typed, opts)
+
   return {
-    driver: { sql: wrapped, values: rewritten.values },
-    rewrittenSql: rewritten.sql,
-    warnings,
+    driver: prepared.driver,
+    warnings: prepared.warnings,
+    rewrittenSql: prepared.rewrittenBody,
+    execHints: prepared.execHints,
   }
 }

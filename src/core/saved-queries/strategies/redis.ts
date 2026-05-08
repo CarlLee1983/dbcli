@@ -128,8 +128,17 @@ export const redisStrategy: EngineStrategy = {
     }
   },
 
-  prepare(_snippet: SavedQuery, _params: ParamMap, _opts: RunOptions): PreparedExecution {
-    // Implemented in Tasks 12–14
-    throw new Error('redisStrategy.prepare: not yet implemented')
+  prepare(snippet, params, opts): PreparedExecution {
+    const { command: substituted, warnings: subWarnings } = substituteRedisParams(
+      snippet.sqlBody.trim(),
+      params,
+      snippet.meta.params
+    )
+    const guarded = applyRedisSizeGuard(substituted, opts.noLimit)
+    return {
+      driver: { sql: guarded.command, values: [] },
+      rewrittenBody: substituted,
+      warnings: [...subWarnings, ...guarded.warnings],
+    }
   },
 }

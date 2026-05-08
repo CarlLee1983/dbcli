@@ -129,3 +129,50 @@ describe('applyRedisSizeGuard', () => {
     expect(command).toBe('GET key')
   })
 })
+
+import type { ParamSpec, SavedQuery } from '@/core/saved-queries/types'
+
+const redisSnippet = (body: string, params: ParamSpec[] = []): SavedQuery => ({
+  meta: { name: 't', key: '@t', engine: ['redis'], params, tags: [] },
+  sqlBody: body,
+  file: '/tmp/t.sql',
+  source: 'shared',
+})
+
+describe('redisStrategy.prepare', () => {
+  test('substitutes params, no size guard for HGETALL', () => {
+    const snippet = redisSnippet('HGETALL user::id', [{ name: 'id', type: 'int', required: true }])
+    const prepared = redisStrategy.prepare(
+      snippet,
+      { id: 42 },
+      { engine: 'redis', noLimit: false }
+    )
+    expect(prepared.driver.sql).toBe('HGETALL user:42')
+    expect(prepared.driver.values).toEqual([])
+  })
+
+  test('LRANGE 0 -1 capped to 1000', () => {
+    const snippet = redisSnippet('LRANGE :key 0 -1', [
+      { name: 'key', type: 'string', required: true },
+    ])
+    const prepared = redisStrategy.prepare(
+      snippet,
+      { key: 'mylist' },
+      { engine: 'redis', noLimit: false }
+    )
+    expect(prepared.driver.sql).toBe('LRANGE mylist 0 1000')
+    expect(prepared.warnings.length).toBeGreaterThan(0)
+  })
+
+  test('--no-limit preserves command', () => {
+    const snippet = redisSnippet('LRANGE :key 0 -1', [
+      { name: 'key', type: 'string', required: true },
+    ])
+    const prepared = redisStrategy.prepare(
+      snippet,
+      { key: 'mylist' },
+      { engine: 'redis', noLimit: true }
+    )
+    expect(prepared.driver.sql).toBe('LRANGE mylist 0 -1')
+  })
+})

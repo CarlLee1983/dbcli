@@ -1,3 +1,4 @@
+import { sqlStrategy } from './sql'
 import type { EngineTag } from '../types'
 import type { EngineFamily, EngineStrategy } from './types'
 
@@ -10,7 +11,11 @@ export function engineFamily(engine: EngineTag): EngineFamily {
   throw new Error(`Unknown engine: ${engine}`)
 }
 
-// Strategies registered in later tasks via getStrategy(family).
-export function getStrategy(_family: EngineFamily): EngineStrategy {
-  throw new Error('getStrategy: no strategies registered yet')
+export function getStrategy(family: EngineFamily): EngineStrategy {
+  switch (family) {
+    case 'sql':
+      return sqlStrategy
+    default:
+      throw new Error(`No strategy registered for family: ${family}`)
+  }
 }

@@ -230,6 +230,62 @@ Param placeholders use `:name`. They are rewritten to `$1, $2, …` (Postgres) o
 - Files exceeding 64 KiB are rejected.
 - `--no-limit` is honoured only at the outermost level; nested subqueries are still wrapped by the size guard.
 
+##### Elasticsearch snippets
+
+Body is a JSON DSL `_search` request body. Frontmatter requires an `index:` field (may contain `:param`).
+
+Example:
+
+    -- ---
+    -- name: events-by-day
+    -- engine: elasticsearch
+    -- index: 'events-:date'
+    -- params:
+    --   date:    { type: date,   required: true }
+    --   user_id: { type: int,    required: true }
+    -- ---
+    {
+      "query": {
+        "bool": {
+          "filter": [
+            { "term": { "user_id": :user_id } }
+          ]
+        }
+      },
+      "size": 100
+    }
+
+Substitution rules (type-aware JSON injection):
+
+- `int` / `float` / `bool` outside string literals → bare value (`42`, `1.5`, `true`)
+- `string` / `date` / `datetime` outside string literals → JSON-quoted (`"Alice"`, `"2026-05-08"`)
+- Any param inside a JSON string literal → escaped inner form (`"prefix-:name"` works)
+
+`script` and `script_fields` are rejected anywhere in the body.
+
+Size guard: if `size` is missing, `1000` is injected (or `0` when `aggs` is present); explicit `size > 1000` is overridden with a warning unless `--no-limit`.
+
+##### Redis snippets
+
+Body is a single Redis command on one line. Only read-only commands are allowed:
+`GET MGET HGET HGETALL HMGET HKEYS HVALS HLEN HEXISTS LRANGE LLEN LINDEX SMEMBERS SISMEMBER SCARD ZRANGE ZRANGEBYSCORE ZRANGEBYLEX ZSCORE ZCARD ZCOUNT ZRANK TYPE EXISTS TTL PTTL STRLEN OBJECT SCAN HSCAN SSCAN ZSCAN`.
+
+`KEYS`, `EVAL`, `FLUSHDB`, `FLUSHALL`, `CONFIG`, `DEBUG`, `SHUTDOWN`, `SCRIPT` and any write command are rejected.
+
+Example:
+
+    -- ---
+    -- name: cache-user
+    -- engine: redis
+    -- params:
+    --   id: { type: int, required: true }
+    -- ---
+    HGETALL user::id
+
+Substitution rules: pure raw text — `:name` becomes the value's `String()` form. **Quoting is the snippet author's responsibility**: wrap `:name` in double quotes if the value may contain whitespace. The parser warns when a `string`-typed `:name` is adjacent to non-whitespace and unquoted.
+
+Size guard: `LRANGE` / `ZRANGE` stop overridden when `< 0` or `> 1000`; `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` get `COUNT 1000` injected if absent. `--no-limit` disables.
+
 ### queries
 
 Manage saved snippets — discover, inspect, scaffold, and edit local copies. Mutating
@@ -582,7 +638,9 @@ Redis connections speak Redis commands rather than SQL. The adapter uses the `io
 
 **Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
 
-**Not supported (exit with error or unsupported error):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q` (saved queries), `shell`. For writes, run the equivalent Redis command via `query` — the same permission gate applies.
+**Saved queries:** `q` is supported for read-only Redis commands (see "Redis snippets" below).
+
+**Not supported (exit with error or unsupported error):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `shell`. For writes, run the equivalent Redis command via `query` — the same permission gate applies.
 
 ### Connection and configuration
 
@@ -648,7 +706,9 @@ Elasticsearch connections speak the REST API. The adapter is fetch-based (no SDK
 
 **Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
 
-**Not supported (use external tooling):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`, `shell`. The permission classifier already understands `_doc` / `_update` / `_bulk` so future write surfaces can be wired in without changing tiers.
+**Saved queries:** `q` is supported for ES JSON DSL bodies (see "Elasticsearch snippets" below).
+
+**Not supported (use external tooling):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `shell`. The permission classifier already understands `_doc` / `_update` / `_bulk` so future write surfaces can be wired in without changing tiers.
 
 ### Connection and configuration
 

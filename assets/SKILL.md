@@ -237,6 +237,18 @@ Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
 (name, description, engine, params, tags). See `dbcli queries show @<name> --format json`
 for the machine-readable contract.
 
+### Engine-specific bodies
+
+Each snippet's body format is determined by the `engine` frontmatter field:
+
+| Engine            | Body format            | Notes |
+|-------------------|------------------------|-------|
+| postgres / mysql  | Single SELECT or WITH  | `:name` → driver bind (`$1` / `?`) |
+| elasticsearch     | JSON DSL               | `:name` → JSON-aware substitution; `index:` field required |
+| redis             | Single Redis command   | `:name` → raw text; only read commands allowed |
+
+Mixed-family `engine` arrays (e.g. `[postgres, elasticsearch]`) are rejected at parse time.
+
 ### Built-in diagnostic snippets
 
 dbcli ships ready-made diagnostic queries. Run with `dbcli q @diag/<topic>`:
@@ -251,6 +263,8 @@ dbcli ships ready-made diagnostic queries. Run with `dbcli q @diag/<topic>`:
 | `@diag/locks`           | lock-wait chains                         |
 | `@diag/db-size`         | database size summary                    |
 | `@diag/cache-hit`       | buffer cache hit ratios                  |
+| `@diag/es-cluster-health` | document counts per index (ES connections) |
+| `@diag/redis-key-stats`   | sample SCAN over keyspace (Redis connections) |
 
 Engine variants are picked automatically based on the active connection.
 Override any of them by placing a same-named file under `.dbcli-shared/queries/`

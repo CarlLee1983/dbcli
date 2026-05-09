@@ -4,7 +4,7 @@ import { ConnectionError } from '@/adapters/types'
 import { PermissionError, type StatementClassification } from '@/core/permission-guard'
 import { BlacklistError } from '@/types/blacklist'
 import { SavedQueryError } from '@/core/saved-queries/types'
-import { SchemaCacheMissingError } from '@/core/recovery/types'
+import { RECOVERY_CODE_METADATA, SchemaCacheMissingError } from '@/core/recovery/types'
 
 const stmt: StatementClassification = {
   type: 'INSERT',
@@ -114,16 +114,36 @@ describe('classifyError', () => {
     expect(env.error.code).toBe('CONFIG_MISSING')
   })
 
-  test('unrecognized Error → UNKNOWN with original message', () => {
-    const err = new Error('something else broke')
+  test('unrecognized Error → UNKNOWN uses safe static description', () => {
+    const err = new Error('connect ECONNREFUSED 10.0.0.5:5432 (password=secret)')
     const env = classifyError(err, { operation: 'query' })
     expect(env.error.code).toBe('UNKNOWN')
-    expect(env.error.message).toBe('something else broke')
+    expect(env.error.message).toBe(RECOVERY_CODE_METADATA.UNKNOWN.description)
+    // Must not leak host, port, password, or other driver internals.
+    expect(env.error.message).not.toContain('10.0.0.5')
+    expect(env.error.message).not.toContain('5432')
+    expect(env.error.message).not.toContain('password')
+    expect(env.error.message).not.toContain('ECONNREFUSED')
   })
 
-  test('non-Error thrown value → UNKNOWN with stringified message', () => {
-    const env = classifyError('plain string failure', { operation: 'query' })
+  test('non-Error thrown value → UNKNOWN uses safe static description', () => {
+    const env = classifyError('plain string failure with secret=hunter2', { operation: 'query' })
     expect(env.error.code).toBe('UNKNOWN')
-    expect(env.error.message).toContain('plain string failure')
+    expect(env.error.message).toBe(RECOVERY_CODE_METADATA.UNKNOWN.description)
+    expect(env.error.message).not.toContain('hunter2')
+    expect(env.error.message).not.toContain('plain string failure')
+  })
+
+  test('SavedQueryError unmapped code → UNKNOWN uses safe static description', () => {
+    const err = new SavedQueryError(
+      'Snippet engine mismatch on db=prod password=hunter2',
+      'ENGINE_MISMATCH'
+    )
+    const env = classifyError(err, { operation: 'q', snippet: '@diag/foo' })
+    expect(env.error.code).toBe('UNKNOWN')
+    expect(env.error.message).toBe(RECOVERY_CODE_METADATA.UNKNOWN.description)
+    expect(env.error.message).not.toContain('hunter2')
+    expect(env.error.message).not.toContain('prod')
+    expect(env.error.details?.snippet).toBe('@diag/foo')
   })
 })

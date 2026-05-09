@@ -49,17 +49,10 @@ function errorToRecoveryError(error: unknown, ctx: RecoveryContext): RecoveryErr
     if (/Run "dbcli init" first/.test(error.message)) {
       return baseError('CONFIG_MISSING')
     }
-    return {
-      code: 'UNKNOWN',
-      category: RECOVERY_CODE_METADATA.UNKNOWN.category,
-      message: error.message || RECOVERY_CODE_METADATA.UNKNOWN.description,
-    }
   }
-  return {
-    code: 'UNKNOWN',
-    category: RECOVERY_CODE_METADATA.UNKNOWN.category,
-    message: `Non-Error value thrown: ${String(error)}`,
-  }
+  // Fallback: never echo raw error text — it can carry host, port, SQL,
+  // credentials, or driver internals. Use the static safe description only.
+  return baseError('UNKNOWN')
 }
 
 function classifyConnection(err: ConnectionError): RecoveryError {
@@ -101,13 +94,9 @@ function classifySavedQuery(err: SavedQueryError, ctx: RecoveryContext): Recover
       paramName: match?.[1],
     })
   }
-  // Other SavedQueryError codes fall back to UNKNOWN with the original message.
-  return {
-    code: 'UNKNOWN',
-    category: 'unknown',
-    message: err.message,
-    details: ctx.snippet ? { snippet: ctx.snippet } : undefined,
-  }
+  // Other SavedQueryError codes fall back to UNKNOWN with the static safe
+  // description; raw err.message can include user data.
+  return baseError('UNKNOWN', ctx.snippet ? { snippet: ctx.snippet } : undefined)
 }
 
 function baseError(code: RecoveryCode, details?: RecoveryError['details']): RecoveryError {

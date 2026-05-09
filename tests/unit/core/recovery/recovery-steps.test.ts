@@ -72,7 +72,15 @@ describe('stepsForCode', () => {
     expect(steps.map((s) => s.command)).toContain('dbcli queries search long-running')
   })
 
-  test('SNIPPET_NOT_FOUND without hint preserves placeholder', () => {
+  test('SNIPPET_NOT_FOUND falls back to snippet name when hint missing', () => {
+    const steps = stepsForCode('SNIPPET_NOT_FOUND', {
+      operation: 'q',
+      snippet: '@diag/missing-thing',
+    })
+    expect(steps.map((s) => s.command)).toContain('dbcli queries search @diag/missing-thing')
+  })
+
+  test('SNIPPET_NOT_FOUND without hint or snippet preserves placeholder', () => {
     const steps = stepsForCode('SNIPPET_NOT_FOUND', { operation: 'q' })
     expect(steps.map((s) => s.command)).toContain('dbcli queries search <hint>')
   })
@@ -93,5 +101,57 @@ describe('stepsForCode', () => {
     const steps = stepsForCode('SCHEMA_CACHE_MISSING', { operation: 'query' })
     expect(steps[0]!.command).toBe('dbcli schema --refresh')
     expect(steps[0]!.risk).toBe('readonly')
+  })
+
+  describe('shell-quoting interpolated values', () => {
+    test('table name with whitespace is single-quoted', () => {
+      const steps = stepsForCode('BLACKLIST_TABLE', {
+        operation: 'query',
+        table: 'evil table; rm -rf /',
+      })
+      const cmds = steps.map((s) => s.command)
+      expect(cmds).toContain("dbcli blacklist remove 'evil table; rm -rf /'")
+    })
+
+    test('table name with embedded single quote escapes safely', () => {
+      const steps = stepsForCode('BLACKLIST_COLUMN_WRITE', {
+        operation: 'insert',
+        table: "O'Brien",
+      })
+      const cmds = steps.map((s) => s.command)
+      expect(cmds).toContain("dbcli schema 'O'\\''Brien' --format json")
+    })
+
+    test('snippet with shell metacharacters is quoted in dry-run step', () => {
+      const steps = stepsForCode('SNIPPET_AMBIGUOUS', {
+        operation: 'q',
+        snippet: '@diag/foo; echo pwned',
+      })
+      const cmds = steps.map((s) => s.command)
+      expect(cmds).toContain("dbcli q '@diag/foo; echo pwned' --dry-run")
+    })
+
+    test('hint with metacharacters is quoted in queries search', () => {
+      const steps = stepsForCode('SNIPPET_NOT_FOUND', {
+        operation: 'q',
+        hint: 'long running; rm -rf /',
+      })
+      const cmds = steps.map((s) => s.command)
+      expect(cmds).toContain("dbcli queries search 'long running; rm -rf /'")
+    })
+
+    test('connectionName with whitespace is quoted in dbcli use step', () => {
+      const steps = stepsForCode('CONN_REFUSED', {
+        operation: 'query',
+        connectionName: 'my staging',
+      })
+      const cmds = steps.map((s) => s.command)
+      expect(cmds).toContain("dbcli use 'my staging'")
+    })
+
+    test('safe identifiers are emitted unquoted (backwards compatible)', () => {
+      const steps = stepsForCode('BLACKLIST_TABLE', { operation: 'query', table: 'users' })
+      expect(steps.map((s) => s.command)).toContain('dbcli blacklist remove users')
+    })
   })
 })

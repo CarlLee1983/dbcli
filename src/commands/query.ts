@@ -55,18 +55,21 @@ export async function queryCommand(
     }
 
     // 2c. MongoDB: route to QueryableAdapter path
+    // NOTE: `return await` is intentional — bare `return promise` would resolve
+    // the wrapper before the inner promise settles, so any rejection would
+    // bypass this try/catch and skip the recovery envelope handler below.
     if (config.connection.system === 'mongodb') {
-      return mongoQueryBranch(sql, options, config)
+      return await mongoQueryBranch(sql, options, config)
     }
 
     // 2d. Redis: route to QueryableAdapter path
     if (config.connection.system === 'redis') {
-      return redisQueryBranch(sql, options, config)
+      return await redisQueryBranch(sql, options, config)
     }
 
     // 2e. Elasticsearch: route to QueryableAdapter path
     if (config.connection.system === 'elasticsearch') {
-      return elasticsearchQueryBranch(sql, options, config)
+      return await elasticsearchQueryBranch(sql, options, config)
     }
 
     // 2b. Size guard: block full-table SELECT on huge tables
@@ -77,8 +80,10 @@ export async function queryCommand(
         const { shouldBlockQuery } = await import('./query-size-guard')
         const guard = shouldBlockQuery(sql, tableSchema as { estimatedRowCount: number })
         if (guard.blocked) {
-          console.error(`\u26A0 ${guard.reason}`)
-          process.exit(1)
+          // Throw so the outer catch can route this through --recovery /
+          // human stderr / formatter consistently. Do not call process.exit
+          // directly \u2014 it bypasses the recovery envelope.
+          throw new Error(`\u26A0 ${guard.reason}`)
         }
       }
     }
@@ -166,36 +171,26 @@ async function mongoQueryBranch(
   const format = options.format ?? 'table'
 
   if (SQL_PATTERN.test(queryStr)) {
-    console.error('這是 MongoDB 連線，請使用 JSON filter 語法。')
-    console.error(`範例：dbcli query '{"field": "value"}' --collection <name>`)
-    process.exit(1)
+    throw new Error(
+      `這是 MongoDB 連線，請使用 JSON filter 語法。\n範例：dbcli query '{"field": "value"}' --collection <name>`
+    )
   }
 
   if (!collection) {
-    console.error('MongoDB 查詢需要指定 --collection <name>')
-    process.exit(1)
+    throw new Error('MongoDB 查詢需要指定 --collection <name>')
   }
 
   try {
     JSON.parse(queryStr)
   } catch {
-    console.error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
-    process.exit(1)
+    throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
   }
 
-  // Blacklist validation
+  // Blacklist validation — propagate so the outer catch (recovery / human
+  // stderr) handles it once, instead of double-handling here.
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
-
-  try {
-    blacklistValidator.checkTableBlacklist('SELECT', collection, [])
-  } catch (error) {
-    if (error instanceof BlacklistError) {
-      console.error(error.message)
-      process.exit(1)
-    }
-    throw error
-  }
+  blacklistValidator.checkTableBlacklist('SELECT', collection, [])
 
   // Size guard: block unfiltered queries on huge collections
   if (config.schema && !options.noLimit) {
@@ -208,8 +203,7 @@ async function mongoQueryBranch(
 
       const guard = shouldBlockQuery(dummySql, tableSchema as { estimatedRowCount: number })
       if (guard.blocked) {
-        console.error(`\u26A0 ${guard.reason}`)
-        process.exit(1)
+        throw new Error(`\u26A0 ${guard.reason}`)
       }
     }
   }
@@ -271,31 +265,27 @@ async function redisQueryBranch(
     format?: 'table' | 'json' | 'csv'
     limit?: number
     noLimit?: boolean
+    recovery?: boolean
   },
   config: DbcliConfig
 ): Promise<void> {
   const format = options.format ?? 'table'
 
   const { enforceRedisPermission } = await import('@/core/permission-guard')
-  try {
-    const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
-    if (head === 'KEYS') {
-      console.error(
-        '\u26A0 Warning: "KEYS" command is dangerous on production servers as it blocks the main thread.'
-      )
-      console.error('  Please use "SCAN" instead for better performance and safety.')
-      console.error('  For more info: https://redis.io/commands/keys/')
-    }
-    enforceRedisPermission(command, config.permission)
-  } catch (error) {
-    if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
-      console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Message: ${error.message}`)
-      process.exit(1)
-    }
-    throw error
+  const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
+  // Skip the human KEYS warning under --recovery so the recovery envelope
+  // remains the sole source of truth on stdout and stderr stays clean for
+  // agent consumption.
+  if (head === 'KEYS' && options.recovery !== true) {
+    console.error(
+      '\u26A0 Warning: "KEYS" command is dangerous on production servers as it blocks the main thread.'
+    )
+    console.error('  Please use "SCAN" instead for better performance and safety.')
+    console.error('  For more info: https://redis.io/commands/keys/')
   }
+  // Let PermissionError propagate to the outer catch so --recovery and the
+  // human stderr formatter both see it.
+  enforceRedisPermission(command, config.permission)
 
   const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
   await redisAdapter.connect()
@@ -333,29 +323,19 @@ async function elasticsearchQueryBranch(
   const format = options.format ?? 'table'
 
   if (!indexName) {
-    console.error('Elasticsearch 查詢需要指定 --collection <index> 或 --index <index>')
-    process.exit(1)
+    throw new Error('Elasticsearch 查詢需要指定 --collection <index> 或 --index <index>')
   }
 
   const { enforceElasticsearchPermission } = await import('@/core/permission-guard')
-  try {
-    enforceElasticsearchPermission(
-      {
-        method: 'POST',
-        apiPath: `/${indexName}/_search`,
-        body: queryStr.trim().startsWith('{') ? queryStr : undefined,
-      },
-      config.permission
-    )
-  } catch (error) {
-    if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
-      console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Message: ${error.message}`)
-      process.exit(1)
-    }
-    throw error
-  }
+  // Propagate PermissionError to outer catch for unified --recovery / stderr handling.
+  enforceElasticsearchPermission(
+    {
+      method: 'POST',
+      apiPath: `/${indexName}/_search`,
+      body: queryStr.trim().startsWith('{') ? queryStr : undefined,
+    },
+    config.permission
+  )
 
   let effectiveLimit: number
   if (options.noLimit) {
@@ -374,15 +354,8 @@ async function elasticsearchQueryBranch(
 
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
-  try {
-    blacklistValidator.checkTableBlacklist('SELECT', indexName, [])
-  } catch (error) {
-    if (error instanceof BlacklistError) {
-      console.error(error.message)
-      process.exit(1)
-    }
-    throw error
-  }
+  // Propagate BlacklistError to outer catch.
+  blacklistValidator.checkTableBlacklist('SELECT', indexName, [])
 
   const esAdapter = AdapterFactory.createElasticsearchAdapter(
     config.connection as ConnectionOptions

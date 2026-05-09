@@ -6,6 +6,21 @@ export const MAX_RECOVERY_STEPS = 6
 
 type StepDraft = Omit<GuideStep, 'order'>
 
+/**
+ * POSIX shell-quote a value before splicing it into an agent-runnable command.
+ *
+ * Identifiers built from a safe character set are returned untouched so simple
+ * cases like `dbcli use staging` stay readable. Anything else is wrapped in
+ * single quotes (with embedded single quotes escaped via the standard
+ * `'\''` dance) so a hostile table / snippet / hint name cannot break out and
+ * inject a follow-on shell command.
+ */
+function shellQuote(value: string): string {
+  if (value.length === 0) return "''"
+  if (/^[A-Za-z0-9_./@:+,=-]+$/.test(value)) return value
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
 export function stepsForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep[] {
   const drafts = draftsForCode(code, ctx)
   return drafts.slice(0, MAX_RECOVERY_STEPS).map((d, i) => ({ ...d, order: i + 1 }))
@@ -49,7 +64,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       ]
       if (ctx.connectionName) {
         out.push({
-          command: `dbcli use ${ctx.connectionName}`,
+          command: `dbcli use ${shellQuote(ctx.connectionName)}`,
           rationale:
             'Re-select the failing named connection so subsequent commands target it explicitly.',
           risk: 'readonly',
@@ -101,7 +116,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       ]
 
     case 'BLACKLIST_TABLE': {
-      const table = ctx.table ?? '<table>'
+      const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       return [
         {
           command: 'dbcli blacklist list --format json',
@@ -125,7 +140,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     }
 
     case 'BLACKLIST_COLUMN_WRITE': {
-      const table = ctx.table ?? '<table>'
+      const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       return [
         {
           command: 'dbcli blacklist list --format json',
@@ -144,7 +159,11 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     }
 
     case 'SNIPPET_NOT_FOUND': {
-      const hint = ctx.hint ?? '<hint>'
+      // Prefer an explicit free-form hint, but fall back to the failed snippet
+      // name so `dbcli q @missing --recovery` actually points the agent at a
+      // useful search query instead of the literal placeholder.
+      const rawHint = ctx.hint ?? ctx.snippet
+      const hint = rawHint ? shellQuote(rawHint) : '<hint>'
       return [
         {
           command: 'dbcli queries list --format json',
@@ -168,7 +187,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     }
 
     case 'SNIPPET_AMBIGUOUS': {
-      const snippet = ctx.snippet ?? '<snippet>'
+      const snippet = ctx.snippet ? shellQuote(ctx.snippet) : '<snippet>'
       return [
         {
           command: 'dbcli queries list --format json',
@@ -187,8 +206,8 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     }
 
     case 'SNIPPET_PARAM_MISSING': {
-      const snippet = ctx.snippet ?? '<snippet>'
-      const param = ctx.hint ?? '<name>'
+      const snippet = ctx.snippet ? shellQuote(ctx.snippet) : '<snippet>'
+      const param = ctx.hint ? shellQuote(ctx.hint) : '<name>'
       return [
         {
           command: `dbcli q ${snippet} --dry-run --param ${param}=<value>`,

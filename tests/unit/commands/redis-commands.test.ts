@@ -148,4 +148,18 @@ describe('Redis CLI commands', () => {
     const out = combinedOutput()
     expect(out).toContain('Warning: "KEYS" command is dangerous')
   })
+
+  test('query --recovery suppresses the human KEYS warning on stderr', async () => {
+    // Regression: --recovery means stderr should stay clean for the agent;
+    // the recovery envelope (on stdout) is the sole authoritative output.
+    const { queryCommand } = await import('@/commands/query')
+    try {
+      await queryCommand('KEYS *', { recovery: true })
+    } catch {
+      /* ignore */
+    }
+    const stderrOnly = errSpy.mock.calls.flat().join('\n')
+    expect(stderrOnly).not.toContain('Warning: "KEYS" command is dangerous')
+    expect(stderrOnly).not.toContain('Please use "SCAN"')
+  })
 })

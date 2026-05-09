@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, cp } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, mkdir, cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -197,6 +197,53 @@ describe('dbcli query --recovery (integration)', () => {
     expect(code).not.toBe(0)
     expect(stdout.trim()).toBe('')
     expect(stderr.length).toBeGreaterThan(0)
+  })
+})
+
+describe('dbcli query --recovery (size-guard branch)', () => {
+  // Regression: the size-guard branch used to call console.error + process.exit(1)
+  // directly, bypassing the recovery envelope entirely. The block must throw so
+  // the outer catch routes it through --recovery and emits valid JSON on stdout.
+  let GUARDED = ''
+
+  beforeAll(async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-guard-'))
+    const dbcliDir = resolve(work, '.dbcli')
+    await mkdir(dbcliDir, { recursive: true })
+    const config = {
+      version: 1,
+      connection: {
+        system: 'postgresql',
+        host: '127.0.0.1',
+        port: 5432,
+        database: 'sizeguard_test',
+        user: 'sizeguard',
+        password: 'sizeguard',
+      },
+      permission: 'query-only',
+      schema: {
+        // Force size-guard to trip on any unfiltered SELECT.
+        logs: { estimatedRowCount: 10_000_000 },
+      },
+    }
+    await writeFile(resolve(dbcliDir, 'config.json'), JSON.stringify(config, null, 2))
+    GUARDED = work
+  })
+
+  test('size-guard block + --recovery emits envelope on stdout (not raw stderr exit)', async () => {
+    const { stdout, stderr, code } = await run(
+      ['query', 'SELECT * FROM logs', '--recovery', '--format', 'json'],
+      GUARDED
+    )
+    expect(code).not.toBe(0)
+    expect(stdout.length).toBeGreaterThan(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(j.ok).toBe(false)
+    expect(typeof j.error.code).toBe('string')
+    expect(Array.isArray(j.recovery)).toBe(true)
+    // Size-guard reason text must not leak ahead of the envelope on stderr.
+    expect(stderr).not.toContain('huge')
   })
 })
 

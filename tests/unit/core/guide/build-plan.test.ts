@@ -119,8 +119,8 @@ describe('buildPlan', () => {
     ])
     expect(plan.every((s) => s.risk === 'readonly')).toBe(true)
     expect(plan.map((s) => s.order)).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(plan[1].snippet).toBe('@diag/long-running')
-    expect(plan[1].intent).toBe('perf.slow-query')
+    expect(plan[1]!.snippet).toBe('@diag/long-running')
+    expect(plan[1]!.intent).toBe('perf.slow-query')
   })
 
   test('skips snippets with required-without-default params', () => {
@@ -168,7 +168,7 @@ describe('buildPlan', () => {
       engine: 'mongodb',
       goal: 'health',
     })
-    expect(plan[0].command).toBe('dbcli inspect --for-agent')
+    expect(plan[0]!.command).toBe('dbcli inspect --for-agent')
     expect(plan.map((s) => s.command)).toContain('dbcli queries suggest safety --format json')
     expect(plan.map((s) => s.command)).toContain('dbcli doctor --format json')
   })

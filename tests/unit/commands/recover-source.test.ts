@@ -107,3 +107,147 @@ describe('resolveApplySource', () => {
     })
   })
 })
+
+describe('resolveApplySource — strict envelope validation', () => {
+  test('--from envelope missing recovery field exits 2', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: false,
+        error: { code: 'CONFIG_MISSING', category: 'config', message: 'x' },
+        // recovery: missing
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('--from envelope missing error.code exits 2', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: false,
+        error: { category: 'config', message: 'x' }, // missing code
+        recovery: [],
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('--from envelope with unknown error.code exits 2', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: false,
+        error: { code: 'NOT_A_REAL_CODE', category: 'config', message: 'x' },
+        recovery: [],
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('--from envelope with malformed step (missing risk) exits 2', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: false,
+        error: { code: 'CONFIG_MISSING', category: 'config', message: 'x' },
+        recovery: [{ order: 1, command: 'dbcli inspect', rationale: '', expects: '' }], // missing risk
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('--from envelope with wrong schemaVersion exits 2', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 99,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: false,
+        error: { code: 'CONFIG_MISSING', category: 'config', message: 'x' },
+        recovery: [],
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('--from envelope with `ok: true` exits 2 (only failures emit envelopes)', async () => {
+    const path = join(workspace, 'env.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-05-10T00:00:00.000Z',
+        ok: true,
+        error: { code: 'CONFIG_MISSING', category: 'config', message: 'x' },
+        recovery: [],
+      })
+    )
+    await expect(resolveApplySource({ from: path, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('auto-saved .dbcli/last-recovery.json with malformed shape exits 2', async () => {
+    await mkdir(join(workspace, '.dbcli'), { recursive: true })
+    await writeFile(
+      join(workspace, '.dbcli/last-recovery.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        // missing savedAt, command, cwd
+        envelope: RAW_ENV,
+      })
+    )
+    await expect(resolveApplySource({ from: undefined, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('auto-saved with cwd that does not exist exits 2', async () => {
+    await mkdir(join(workspace, '.dbcli'), { recursive: true })
+    await writeFile(
+      join(workspace, '.dbcli/last-recovery.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        savedAt: '2026-05-10T00:00:00.000Z',
+        command: 'dbcli query <sql>',
+        cwd: '/this/path/does/not/exist',
+        envelope: RAW_ENV,
+      })
+    )
+    await expect(resolveApplySource({ from: undefined, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+
+  test('auto-saved with malformed JSON content exits 2', async () => {
+    await mkdir(join(workspace, '.dbcli'), { recursive: true })
+    await writeFile(join(workspace, '.dbcli/last-recovery.json'), '{not valid json')
+    await expect(resolveApplySource({ from: undefined, cwd: workspace })).rejects.toMatchObject({
+      exitCode: 2,
+    })
+  })
+})

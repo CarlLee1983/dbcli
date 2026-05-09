@@ -98,3 +98,31 @@ export async function readLastEnvelope(cwd: string): Promise<SavedRecoveryEnvelo
     return null
   }
 }
+
+/**
+ * Read `.dbcli/last-recovery.json` as `unknown` for downstream schema validation.
+ * Returns `null` only when the file is missing or unreadable. Malformed JSON also
+ * yields `null` (so callers can surface a stable "no envelope" message); strict
+ * shape validation belongs in the caller (`parseSavedRecoveryEnvelope`).
+ */
+export async function readLastEnvelopeRaw(cwd: string): Promise<unknown | null> {
+  const target = join(cwd, LAST_ENVELOPE_PATH)
+  try {
+    await stat(target)
+  } catch {
+    return null
+  }
+  let raw: string
+  try {
+    raw = await readFile(target, 'utf8')
+  } catch {
+    return null
+  }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    // Malformed JSON: surface as a structured "malformed" via the schema parser
+    // rather than collapsing to "missing". Caller decides how to message.
+    return { __malformedJson: true, raw }
+  }
+}

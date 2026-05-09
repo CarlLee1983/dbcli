@@ -3,17 +3,20 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   EXIT_CODE,
-  readLastEnvelope,
   renderJson,
   renderMarkdown,
   runApply,
   type AllowWrite,
   type RecoveryEnvelope,
-  type SavedRecoveryEnvelope,
 } from '@/core/recovery'
 import { renderApplyJson } from '@/core/recovery/apply-render-json'
 import { renderApplyMarkdown } from '@/core/recovery/apply-render-markdown'
-import { LAST_ENVELOPE_PATH } from '@/core/recovery/last-envelope'
+import { LAST_ENVELOPE_PATH, readLastEnvelopeRaw } from '@/core/recovery/last-envelope'
+import {
+  looksLikeSavedEnvelope,
+  parseRecoveryEnvelope,
+  parseSavedRecoveryEnvelope,
+} from '@/core/recovery/envelope-schema'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
@@ -56,8 +59,15 @@ export async function resolveApplySource(opts: {
     } catch {
       throw new RecoverCliError(`--from ${opts.from}: not valid JSON.`, EXIT_CODE.malformed)
     }
-    if (looksSaved(parsed)) {
-      const saved = parsed as SavedRecoveryEnvelope
+    if (looksLikeSavedEnvelope(parsed)) {
+      const r = parseSavedRecoveryEnvelope(parsed)
+      if (!r.ok) {
+        throw new RecoverCliError(
+          `--from ${opts.from}: malformed SavedRecoveryEnvelope (${r.reason}).`,
+          EXIT_CODE.malformed
+        )
+      }
+      const saved = r.value!
       try {
         await stat(saved.cwd)
       } catch {
@@ -74,25 +84,42 @@ export async function resolveApplySource(opts: {
         command: saved.command,
       }
     }
-    if (looksEnvelope(parsed)) {
-      return {
-        kind: 'from',
-        path,
-        cwd: process.cwd(),
-        envelope: parsed as RecoveryEnvelope,
-        command: `external --from ${opts.from}`,
-      }
+    const r = parseRecoveryEnvelope(parsed)
+    if (!r.ok) {
+      throw new RecoverCliError(
+        `--from ${opts.from}: not a valid RecoveryEnvelope or SavedRecoveryEnvelope (${r.reason}).`,
+        EXIT_CODE.malformed
+      )
     }
+    return {
+      kind: 'from',
+      path,
+      cwd: process.cwd(),
+      envelope: r.value!,
+      command: `external --from ${opts.from}`,
+    }
+  }
+
+  const rawSaved = await readLastEnvelopeRaw(opts.cwd)
+  if (rawSaved === null) {
     throw new RecoverCliError(
-      `--from ${opts.from}: not a RecoveryEnvelope or SavedRecoveryEnvelope.`,
+      `No recovery plan available. Run a command with --recovery to generate one, or pass --from <file>.`,
       EXIT_CODE.malformed
     )
   }
-
-  const saved = await readLastEnvelope(opts.cwd)
-  if (!saved) {
+  const r = parseSavedRecoveryEnvelope(rawSaved)
+  if (!r.ok) {
     throw new RecoverCliError(
-      `No recovery plan available. Run a command with --recovery to generate one, or pass --from <file>.`,
+      `Auto-saved ${LAST_ENVELOPE_PATH} is malformed (${r.reason}). Delete the file and re-run with --recovery.`,
+      EXIT_CODE.malformed
+    )
+  }
+  const saved = r.value!
+  try {
+    await stat(saved.cwd)
+  } catch {
+    throw new RecoverCliError(
+      `Auto-saved ${LAST_ENVELOPE_PATH} references cwd '${saved.cwd}' that no longer exists.`,
       EXIT_CODE.malformed
     )
   }
@@ -103,25 +130,6 @@ export async function resolveApplySource(opts: {
     envelope: saved.envelope,
     command: saved.command,
   }
-}
-
-function looksSaved(x: unknown): boolean {
-  return (
-    typeof x === 'object' &&
-    x !== null &&
-    'envelope' in (x as Record<string, unknown>) &&
-    'cwd' in (x as Record<string, unknown>)
-  )
-}
-
-function looksEnvelope(x: unknown): boolean {
-  return (
-    typeof x === 'object' &&
-    x !== null &&
-    (x as Record<string, unknown>).ok === false &&
-    typeof (x as Record<string, unknown>).schemaVersion === 'number' &&
-    'error' in (x as Record<string, unknown>)
-  )
 }
 
 function exitCodeFor(finalStatus: 'ok' | 'failed' | 'skipped-only'): number {

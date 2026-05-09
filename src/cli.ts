@@ -195,10 +195,19 @@ program
   .option('--data <json>', 'JSON object to insert')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
       await insertCommand(table, options, command)
     } catch (error) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('./core/recovery')
+        emitRecoveryEnvelope(error, { operation: 'insert', table, writeOperation: 'INSERT' })
+      }
       console.error((error as Error).message)
       process.exit(1)
     }
@@ -212,10 +221,19 @@ program
   .option('--set <json>', 'JSON with fields to update (required, e.g. \'{"name":"Bob"}\')')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
       await updateCommand(table, options as never, command)
     } catch (error) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('./core/recovery')
+        emitRecoveryEnvelope(error, { operation: 'update', table, writeOperation: 'UPDATE' })
+      }
       console.error((error as Error).message)
       process.exit(1)
     }
@@ -228,10 +246,19 @@ program
   .option('--where <condition>', 'WHERE clause (required, e.g. "id=1")')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (table: string, options: Record<string, unknown>, command) => {
     try {
       await deleteCommand(table, options as never, command)
     } catch (error) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('./core/recovery')
+        emitRecoveryEnvelope(error, { operation: 'delete', table, writeOperation: 'DELETE' })
+      }
       console.error((error as Error).message)
       process.exit(1)
     }
@@ -250,12 +277,22 @@ program
     parseInt(val, 10)
   )
   .option('--no-limit', 'Disable auto-limit in query-only mode')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       const { validateFormat } = await import('./utils/validation')
       validateFormat(options.format as string, ['json', 'jsonl', 'csv'], 'export')
-      return exportCommand(sql, options as never, command)
+      return await exportCommand(sql, options as never, command)
     } catch (error) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('./core/recovery')
+        const m = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
+        emitRecoveryEnvelope(error, { operation: 'export', table: m?.[1] })
+      }
       console.error((error as Error).message)
       process.exit(1)
     }

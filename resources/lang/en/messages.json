@@ -43,6 +43,12 @@
     "no_config": "No dbcli configuration found. Run `dbcli init` to start.",
     "section_invalid": "Unknown report section '{name}'. Allowed: health, capacity, perf"
   },
+  "guide": {
+    "description": "Deterministic next-command planner for a fixed set of database goals.",
+    "no_config": "No dbcli configuration found. Run `dbcli init` to start.",
+    "missing_goal": "Missing goal. Try `dbcli guide --list` to see available goals.",
+    "goal_invalid": "Unknown guide goal '{name}'. Run `dbcli guide --list` for valid IDs."
+  },
   "use": {
     "description": "Switch or display the default database connection",
     "switched": "Switched default connection to {name}",

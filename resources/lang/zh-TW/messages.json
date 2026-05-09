@@ -43,6 +43,12 @@
     "no_config": "找不到 dbcli 設定檔。請先執行 `dbcli init`。",
     "section_invalid": "未知的 report section '{name}'。允許值：health、capacity、perf"
   },
+  "guide": {
+    "description": "針對固定資料庫目標清單，輸出可預測的下一步指令計畫。",
+    "no_config": "找不到 dbcli 設定檔。請先執行 `dbcli init`。",
+    "missing_goal": "缺少 goal 參數。請執行 `dbcli guide --list` 查看可用目標。",
+    "goal_invalid": "未知的 guide goal '{name}'。請執行 `dbcli guide --list` 取得有效目標 ID。"
+  },
   "use": {
     "description": "切換或顯示預設資料庫連線",
     "switched": "已切換預設連線為 {name}",

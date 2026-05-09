@@ -139,15 +139,28 @@ underlying inspect context. Use `--list` to see all goals,
 dbcli recovery --code CONN_REFUSED --format json
 dbcli recovery --list
 dbcli query "SELECT 1" --recovery
+dbcli q @diag/missing --recovery
+dbcli insert users --data '{"name":"a"}' --recovery
+dbcli update users --where "id=1" --set '{"name":"b"}' --recovery
+dbcli delete users --where "id=1" --recovery
+dbcli export "SELECT * FROM users" --format json --recovery
+dbcli schema users --recovery
+dbcli inspect --require-schema-cache --recovery
 ```
 
-Machine-readable error envelope with deterministic recovery commands. Use
-`dbcli recovery --code <CODE>` to look up a known failure mode, `--list` to
-enumerate all codes, or pass `--recovery` to `dbcli query` / `dbcli q` to
-have the failing command emit the envelope on stdout (the human stderr
-message is suppressed when this flag is set). Recovery steps share the
-v1.14.0 `GuideStep` shape and may carry `risk: 'readonly' | 'dry-run' |
-'write'`.
+Machine-readable error envelope with deterministic recovery commands. As of
+v1.16.0 every first-party command that can fail (`query`, `q`, `insert`,
+`update`, `delete`, `export`, `schema`, `inspect`) accepts the opt-in
+`--recovery` flag. The standalone `dbcli recovery --code <CODE>` lookup is
+unchanged.
+
+`dbcli inspect --require-schema-cache` throws `SCHEMA_CACHE_MISSING` when the
+active SQL connection has no usable schema cache; combine with `--recovery`
+to receive the structured envelope.
+
+For write commands (`insert` / `update` / `delete`), `BLACKLIST_COLUMN_WRITE`
+and `PERMISSION_DENIED` envelopes now lead with a `risk: 'dry-run'` step
+that suggests previewing the SQL with `--dry-run` before re-attempting.
 
 ### MongoDB Atlas / SRV Connections
 

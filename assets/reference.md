@@ -569,7 +569,9 @@ Examples:
 
 Boundaries:
 - Recovery only **suggests** commands; agents (or humans) execute them. No automatic remediation in v1.15.0.
-- `--recovery` is currently honored on `query` and `q` only. Other commands keep their existing error behavior.
+- As of v1.16.0, `--recovery` is honored on `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`. Other commands (`report`, `guide`, `doctor`, `migrate`, `init`, `use`, `status`, `list`, `check`, `diff`, `plan`, `shell`, `blacklist`, `completion`, `upgrade`, `skill`) keep their existing error behavior.
+- `dbcli inspect --require-schema-cache` throws `SCHEMA_CACHE_MISSING` when the active SQL connection has no usable schema cache. Combine with `--recovery` for the structured envelope.
+- `BLACKLIST_COLUMN_WRITE` and `PERMISSION_DENIED` envelopes prepend a `risk: 'dry-run'` step (e.g. `dbcli insert <table> --dry-run`) when the failing operation was an INSERT / UPDATE / DELETE.
 - Recovery steps reuse the v1.14.0 `GuideStep` shape, including the full `risk` enum (`readonly` / `dry-run` / `write` / `unknown`).
 
 **Permission:** n/a

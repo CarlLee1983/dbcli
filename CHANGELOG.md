@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-05-09
+
+### Added
+
+- `dbcli insert --recovery`, `dbcli update --recovery`, `dbcli delete --recovery`, `dbcli export --recovery`, `dbcli schema --recovery`, `dbcli inspect --recovery` — same opt-in envelope behavior as v1.15.0's `query --recovery` / `q --recovery`. On failure, a `RecoveryEnvelope` JSON is written to stdout, the human stderr message is suppressed, and the process exits non-zero. Without `--recovery`, the existing per-command error behavior is preserved byte-for-byte.
+- `dbcli inspect --require-schema-cache` — flag that throws `SCHEMA_CACHE_MISSING` (recovery code) when the active SQL connection has no usable schema cache. Combine with `--recovery` to get a structured envelope. Together with the v1.15.0 `recovery` module this gives the `SCHEMA_CACHE_MISSING` classifier path end-to-end coverage from a real CLI surface.
+- New `dry-run` recovery steps prepended to `BLACKLIST_COLUMN_WRITE` and `PERMISSION_DENIED` envelopes when the failing operation was a write (`INSERT` / `UPDATE` / `DELETE`). Agents now get a `dbcli <verb> <table> --dry-run` suggestion as the first step before the existing inventory / inspect / init steps.
+
+### Notes
+
+- `RecoveryEnvelope` shape, `RECOVERY_SCHEMA_VERSION`, and the 14 recovery codes are unchanged from v1.15.0. The new `RecoveryContext.writeOperation` field is optional and additive.
+- Other commands (`q` was already covered in v1.15.0; `report`, `guide`, `recovery`, `doctor`, `migrate`, `init`, `use`, etc.) keep their existing error behavior.
+- No new runtime dependencies. The classifier and step library remain pure functions.
+
 ## [1.15.0] - 2026-05-09
 
 ### Added

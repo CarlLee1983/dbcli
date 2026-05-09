@@ -32,6 +32,7 @@ export async function queryCommand(
     collection?: string
     index?: string
     config?: string
+    recovery?: boolean
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -113,6 +114,14 @@ export async function queryCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, {
+        operation: 'query',
+        table: extractMainTable(sql) ?? undefined,
+      })
+    }
+
     if (error instanceof BlacklistError) {
       console.error(error.message)
       process.exit(1)

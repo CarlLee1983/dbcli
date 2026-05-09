@@ -529,6 +529,51 @@ Boundaries:
 
 **Permission:** query-only+
 
+### recovery
+
+Machine-readable error envelope. Two surfaces share one `RecoveryEnvelope`
+shape (`schemaVersion: 1`):
+
+1. **Standalone lookup**: `dbcli recovery --code <CODE>` synthesizes an
+   envelope for any known recovery code without needing a real failure.
+2. **Failing-command opt-in**: pass `--recovery` to `dbcli query` or
+   `dbcli q`. On failure, the envelope is written to stdout as JSON, the
+   human stderr message is suppressed, and the process exits non-zero.
+
+Recovery codes (fixed in v1.15.0):
+- `CONFIG_MISSING` — no `.dbcli` config; run `dbcli init`.
+- `CONN_REFUSED` / `CONN_AUTH_FAILED` / `CONN_TIMEOUT` / `CONN_HOST_NOT_FOUND` / `CONN_UNKNOWN` — connection failure variants.
+- `PERMISSION_DENIED` — active permission level forbids the operation.
+- `BLACKLIST_TABLE` / `BLACKLIST_COLUMN_WRITE` — blacklist violations.
+- `SNIPPET_NOT_FOUND` / `SNIPPET_AMBIGUOUS` / `SNIPPET_PARAM_MISSING` — saved-query failures.
+- `SCHEMA_CACHE_MISSING` — local schema cache missing or stale.
+- `UNKNOWN` — fallback for unclassified errors.
+
+Flags (lookup mode):
+- `--code <CODE>` — required unless `--list` is set.
+- `--list` — list all codes and exit.
+- `--format json|markdown` (default: json).
+- `--brief` — drop `rationale` + `expects` from steps.
+- `--for-agent` — shortcut for `--format json --brief`.
+- `--hint <text>` — bind into placeholder steps.
+- `--snippet <name>` — bind snippet placeholder.
+- `--table <name>` — bind table placeholder.
+
+Examples:
+
+    dbcli recovery --code CONN_REFUSED
+    dbcli recovery --code BLACKLIST_TABLE --table users --format markdown
+    dbcli recovery --list --for-agent
+    dbcli query "SELECT * FROM users" --recovery
+    dbcli q @diag/missing --recovery
+
+Boundaries:
+- Recovery only **suggests** commands; agents (or humans) execute them. No automatic remediation in v1.15.0.
+- `--recovery` is currently honored on `query` and `q` only. Other commands keep their existing error behavior.
+- Recovery steps reuse the v1.14.0 `GuideStep` shape, including the full `risk` enum (`readonly` / `dry-run` / `write` / `unknown`).
+
+**Permission:** n/a
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

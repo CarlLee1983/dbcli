@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-05-09
+
+### Added
+
+- `dbcli recovery` — machine-readable error envelope with deterministic recovery commands. Standalone lookup mode: `dbcli recovery --code <CODE>` synthesizes an envelope for any of 14 recovery codes (`CONFIG_MISSING`, `CONN_REFUSED`, `CONN_AUTH_FAILED`, `CONN_TIMEOUT`, `CONN_HOST_NOT_FOUND`, `CONN_UNKNOWN`, `PERMISSION_DENIED`, `BLACKLIST_TABLE`, `BLACKLIST_COLUMN_WRITE`, `SNIPPET_NOT_FOUND`, `SNIPPET_AMBIGUOUS`, `SNIPPET_PARAM_MISSING`, `SCHEMA_CACHE_MISSING`, `UNKNOWN`). Supports `--format json|markdown`, `--list`, `--brief`, `--for-agent`, plus placeholder bindings (`--hint`, `--snippet`, `--table`).
+- `dbcli query --recovery` and `dbcli q --recovery` — opt-in flag that, on failure, emits a `RecoveryEnvelope` JSON to stdout (suppressing the usual human stderr message) and exits non-zero. Existing behavior without the flag is unchanged.
+- `RecoveryEnvelope` schema (`schemaVersion: 1`) reuses the v1.14.0 `GuideStep` shape and is the first surface to emit `risk: 'dry-run'` and `risk: 'write'` recovery steps.
+
+### Notes
+
+- v1.15.0 wires `--recovery` into `query` and `q` only. Other commands (`insert`, `update`, `delete`, `export`) preserve their current error behavior; broader integration is planned for v1.16+.
+- Recovery is reactive (responds to a thrown error) while `dbcli guide` is proactive (chooses next steps before any failure). They share the `GuideStep` contract via `src/core/guide/types.ts`.
+- No new runtime dependencies. Classifier and step library are pure functions.
+
 ## [1.14.0] - 2026-05-09
 
 ### Added

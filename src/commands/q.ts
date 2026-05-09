@@ -52,6 +52,7 @@ export interface QCommandOptions {
   param?: string[]
   paramFile?: string
   config?: string
+  recovery?: boolean
 }
 
 export async function qCommand(
@@ -160,7 +161,7 @@ export async function qCommand(
       await adapter.disconnect()
     }
   } catch (error) {
-    handleQError(error)
+    await handleQError(error, name, options.recovery === true)
   }
 }
 
@@ -184,7 +185,19 @@ async function readParamFile(path: string | undefined): Promise<Record<string, u
   return parsed
 }
 
-function handleQError(error: unknown): void {
+async function handleQError(
+  error: unknown,
+  snippetName: string,
+  useRecovery: boolean
+): Promise<void> {
+  if (useRecovery) {
+    const { emitRecoveryEnvelope } = await import('@/core/recovery')
+    emitRecoveryEnvelope(error, {
+      operation: 'q',
+      snippet: snippetName,
+    })
+  }
+
   if (error instanceof SavedQueryError) {
     console.error(error.message)
     process.exit(1)

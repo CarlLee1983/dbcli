@@ -49,6 +49,12 @@
     "missing_goal": "Missing goal. Try `dbcli guide --list` to see available goals.",
     "goal_invalid": "Unknown guide goal '{name}'. Run `dbcli guide --list` for valid IDs."
   },
+  "recovery": {
+    "description": "Look up the structured recovery envelope for a known dbcli error code, or list all codes.",
+    "missing_code": "Missing --code. Try `dbcli recovery --list` to see available codes.",
+    "code_invalid": "Unknown recovery code '{name}'. Run `dbcli recovery --list` for valid codes.",
+    "no_config": "No dbcli configuration found. Run `dbcli init` to start."
+  },
   "use": {
     "description": "Switch or display the default database connection",
     "switched": "Switched default connection to {name}",

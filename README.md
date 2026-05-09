@@ -133,6 +133,22 @@ The planner is cache-first (no network); add `--probe` to refresh the
 underlying inspect context. Use `--list` to see all goals,
 `--format markdown` for human reading, or `--for-agent` for compact JSON.
 
+### Recovery
+
+```bash
+dbcli recovery --code CONN_REFUSED --format json
+dbcli recovery --list
+dbcli query "SELECT 1" --recovery
+```
+
+Machine-readable error envelope with deterministic recovery commands. Use
+`dbcli recovery --code <CODE>` to look up a known failure mode, `--list` to
+enumerate all codes, or pass `--recovery` to `dbcli query` / `dbcli q` to
+have the failing command emit the envelope on stdout (the human stderr
+message is suppressed when this flag is set). Recovery steps share the
+v1.14.0 `GuideStep` shape and may carry `risk: 'readonly' | 'dry-run' |
+'write'`.
+
 ### MongoDB Atlas / SRV Connections
 
 MongoDB connections are supported via both standard `mongodb://` URIs and Atlas-style `mongodb+srv://` URIs.

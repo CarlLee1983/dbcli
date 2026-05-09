@@ -2,9 +2,9 @@
 
 **Date:** 2026-05-08
 **Last updated:** 2026-05-09
-**Milestone range:** v1.12.0 → v1.15.0
+**Milestone range:** v1.12.0 → v1.16.0
 **Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 ✅ shipped · v1.16.0 ✅ shipped
-**Current baseline:** v1.15.0, release gates clean, `dbcli inspect`, `dbcli report`, `dbcli guide`, and `dbcli recovery` shipped on top of v1.11 saved-query discovery
+**Current baseline:** v1.16.0, release gates clean, `dbcli inspect`, `dbcli report`, `dbcli guide`, and `dbcli recovery` (broadened to insert/update/delete/export/schema/inspect) shipped on top of v1.11 saved-query discovery
 
 ## Goal
 
@@ -157,6 +157,8 @@ Avoid separate duplicated logic between `inspect` and `report`. The distinction 
 Make release and support work boring and repeatable.
 
 ### Candidate: `release:check`
+
+> **Status:** ✅ delivered in v1.12.0; retained here as the original production-hardening candidate for historical context. The script is the live release gate used by every milestone since.
 
 Add a single local script:
 

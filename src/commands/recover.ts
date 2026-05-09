@@ -144,10 +144,14 @@ export const recoverCommand = new Command()
     '--allow-write <tier>',
     `Open the risk gate one tier; values: ${ALLOWED_TIERS.join(' | ')}`
   )
-  .option('--format <format>', 'Output format: markdown (default) or json', 'markdown')
+  .option(
+    '--format <format>',
+    'Output format: markdown | json (default: markdown for inspect, json for --apply)'
+  )
   .action(async (options: Record<string, unknown>) => {
     try {
-      const format = String(options.format ?? 'markdown')
+      const explicitFormat = options.format as string | undefined
+      const format = explicitFormat ?? (options.apply === true ? 'json' : 'markdown')
       validateFormat(format, ALLOWED_FORMATS, 'recover')
 
       const allowWriteRaw = options.allowWrite as string | undefined

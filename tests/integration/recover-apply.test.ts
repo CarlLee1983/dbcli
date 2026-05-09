@@ -185,6 +185,54 @@ describe('dbcli recover --apply happy path', () => {
     const j = JSON.parse(stdout)
     expect(j.source.kind).toBe('from')
   })
+
+  test('--apply default format is JSON (no --format flag)', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+      ],
+    })
+    const { stdout, code } = await run(['recover', '--apply'], FIXTURE)
+    expect(code).toBe(0)
+    // Must be JSON.parse-able by default (not Markdown).
+    const j = JSON.parse(stdout)
+    expect(j.finalStatus).toBe('ok')
+    expect(j.schemaVersion).toBe(1)
+  })
+
+  test('--apply --format markdown emits Markdown', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+      ],
+    })
+    const { stdout, code } = await run(
+      ['recover', '--apply', '--format', 'markdown'],
+      FIXTURE
+    )
+    expect(code).toBe(0)
+    expect(stdout).toContain('# dbcli recover --apply')
+  })
 })
 
 describe('dbcli recover --apply security boundary', () => {

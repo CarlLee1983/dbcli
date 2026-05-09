@@ -23,6 +23,7 @@ import { inspectCommand } from './commands/inspect'
 import { reportCommand } from './commands/report'
 import { guideCommand } from './commands/guide'
 import { recoveryCommand } from './commands/recovery'
+import { recoverCommand } from './commands/recover'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
@@ -317,6 +318,7 @@ program.addCommand(inspectCommand)
 program.addCommand(reportCommand)
 program.addCommand(guideCommand)
 program.addCommand(recoveryCommand)
+program.addCommand(recoverCommand)
 program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)

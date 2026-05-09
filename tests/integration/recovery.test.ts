@@ -480,3 +480,20 @@ describe('auto-saved .dbcli/last-recovery.json', () => {
     expect(raw).not.toContain('SELECT * FROM users')
   })
 })
+
+describe('dbcli recover (registered)', () => {
+  test('--help advertises --apply / --from / --allow-write / --format', async () => {
+    const { stdout, code } = await run(['recover', '--help'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('--apply')
+    expect(stdout).toContain('--from')
+    expect(stdout).toContain('--allow-write')
+    expect(stdout).toContain('--format')
+  })
+
+  test('exits 2 with helpful message when no envelope is available', async () => {
+    const { stderr, code } = await run(['recover', '--apply'], NO_CONFIG)
+    expect(code).toBe(2)
+    expect(stderr).toContain('No recovery plan available')
+  })
+})

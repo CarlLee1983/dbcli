@@ -3,7 +3,7 @@
 **Date:** 2026-05-08
 **Last updated:** 2026-05-09
 **Milestone range:** v1.12.0 → v1.15.0
-**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 ✅ shipped
+**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 ✅ shipped · v1.16.0 ✅ shipped
 **Current baseline:** v1.15.0, release gates clean, `dbcli inspect`, `dbcli report`, `dbcli guide`, and `dbcli recovery` shipped on top of v1.11 saved-query discovery
 
 ## Goal
@@ -28,6 +28,7 @@ Recommended sequence:
 | v1.13.0 | Report | Markdown/JSON diagnostic report built from reusable collectors | ✅ shipped (2026-05-09) |
 | v1.14.0 | Guide | Deterministic next-command planner for common database goals | ✅ shipped (2026-05-09) |
 | v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | ✅ shipped (2026-05-09) |
+| v1.16.0 | Recovery (broadened) | `--recovery` extended to insert/update/delete/export/schema/inspect; SCHEMA_CACHE_MISSING throw site; dry-run step coverage for writes | ✅ shipped (2026-05-09) |
 
 ## Route A — Agent Database Workbench
 
@@ -297,22 +298,38 @@ Resolved open decisions:
 - v1.15.0 wires only `query` + `q` ✓
 - Standalone `dbcli recovery` lookup with `--list` ✓
 
-## Next Milestone Focus: v1.16.0
+### v1.16.0 broaden `--recovery` integration — shipped 2026-05-09
+
+Delivered:
+- `--recovery` flag wired into `insert`, `update`, `delete`, `export`, `schema`, `inspect`. Output channel + exit-code semantics identical to v1.15.0's `query` / `q`: envelope to stdout, human stderr suppressed, non-zero exit.
+- `dbcli inspect --require-schema-cache` — first real CLI surface that throws `SchemaCacheMissingError`, giving `SCHEMA_CACHE_MISSING` classifier coverage end-to-end without touching the size-guard or DataExecutor schema-fetch behavior.
+- `RecoveryContext.writeOperation` (additive, optional) plus new `risk: 'dry-run'` step branches in `BLACKLIST_COLUMN_WRITE` and `PERMISSION_DENIED`. When the failing operation was an INSERT / UPDATE / DELETE, the envelope leads with a `dbcli <verb> <table> --dry-run` suggestion before the readonly inventory steps. Step count stays under `MAX_RECOVERY_STEPS` (6).
+- New `requireSchemaCacheOrThrow` helper in `src/core/inspect/`, with 6 unit tests.
+- 10 new unit tests for the dry-run step branches; ~12 new integration tests in `tests/integration/recovery.test.ts` covering all six newly-wired commands plus the `--require-schema-cache` throw site.
+- `RecoveryEnvelope` shape unchanged; `RECOVERY_SCHEMA_VERSION` unchanged at 1; the 14 recovery codes unchanged.
+
+Resolved open decisions:
+- Throw site for `SchemaCacheMissingError`: `inspect --require-schema-cache` (not size-guard, not DataExecutor) ✓
+- Dry-run step granularity: keyed on `RecoveryContext.writeOperation` (`INSERT|UPDATE|DELETE`) ✓
+- No envelope on success runs (`ok: false` only) ✓
+- No new i18n strings; `--recovery` and `--require-schema-cache` help text are constants in `src/cli.ts` and `src/commands/{schema,inspect}.ts` ✓
+
+## Next Milestone Focus: v1.17.0
 
 Two candidate tracks; pick during the next planning cycle:
 
-### Candidate A: broaden `--recovery` integration
-
-- Wire `--recovery` into `insert`, `update`, `delete`, `export`, `schema --refresh`, `inspect`.
-- Throw `SchemaCacheMissingError` from real query paths so the classifier covers it end-to-end.
-- Add `dry-run` step coverage for write commands.
-
-### Candidate B: Route D — multi-source consistency (deferred)
+### Candidate A: Route D — multi-source consistency
 
 - Normalize `query` / `schema` / `export` semantics across SQL, Redis, Elasticsearch, MongoDB.
 - Define a common `QueryableAdapter` result contract.
 - Add MongoDB saved-query support after a Mongo command safety model lands.
 
+### Candidate B: Recovery v2 — automated remediation prompt-pack
+
+- Generate `dbcli skill tasks` plans directly from `RecoveryEnvelope` recovery steps so an agent can promote a failure into a guided fix loop.
+- Introduce a `dbcli recovery run --code <CODE>` mode that walks readonly steps locally and surfaces dry-run / write steps as confirmation prompts.
+- Decide whether to introduce success-shape envelopes (`ok: true` symmetry).
+
 ## Recommended Next Step
 
-Pick a v1.16.0 candidate (A vs B) and write a focused implementation plan, mirroring the structure of the v1.12.0–v1.15.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).
+Pick a v1.17.0 candidate (A vs B) and write a focused implementation plan, mirroring the structure of the v1.12.0–v1.16.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).

@@ -36,6 +36,11 @@ export const schemaCommand = new Command()
     '--sample-size <n>',
     'MongoDB only: number of documents to sample for schema inference (default 50, max 1000). Ignored on SQL connections.'
   )
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(schemaAction)
 
 /**
@@ -52,6 +57,7 @@ async function schemaAction(
     reset: boolean
     force: boolean
     sampleSize?: string
+    recovery?: boolean
   },
   command: Command
 ) {
@@ -210,6 +216,11 @@ async function schemaAction(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, { operation: 'schema', table })
+    }
+
     if (error instanceof Error) {
       console.error(t_vars('errors.message', { message: error.message }))
       if (error instanceof ConnectionError) {

@@ -91,6 +91,13 @@ export interface RecoveryContext {
   table?: string
   /** Free-form hint surfaced to the agent — bound into placeholder steps when present. */
   hint?: string
+  /**
+   * Set by `insert` / `update` / `delete` so the step library can suggest a
+   * `--dry-run` re-run on BLACKLIST_COLUMN_WRITE / PERMISSION_DENIED. Other
+   * commands omit this field; classifier preserves it via spread without
+   * inspecting it.
+   */
+  writeOperation?: 'INSERT' | 'UPDATE' | 'DELETE'
 }
 
 /**

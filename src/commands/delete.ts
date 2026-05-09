@@ -76,6 +76,7 @@ export async function deleteCommand(
     dryRun?: boolean
     force?: boolean
     config?: string
+    recovery?: boolean
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -261,6 +262,15 @@ export async function deleteCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, {
+        operation: 'delete',
+        table,
+        writeOperation: 'DELETE',
+      })
+    }
+
     // Blacklist error
     if (error instanceof BlacklistError) {
       const output = {

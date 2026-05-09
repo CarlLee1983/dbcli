@@ -4,7 +4,7 @@
 **Last updated:** 2026-05-09
 **Milestone range:** v1.12.0 → v1.15.0
 **Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 next
-**Current baseline:** v1.13.0, release gates clean, `dbcli inspect` and `dbcli report` shipped on top of v1.11 saved-query discovery
+**Current baseline:** v1.14.0, release gates clean, `dbcli inspect`, `dbcli report`, and `dbcli guide` shipped on top of v1.11 saved-query discovery
 
 ## Goal
 
@@ -273,7 +273,7 @@ Delivered:
 - `src/core/guide/` module (`types`, `goal-map`, `build-plan`, `collector`, JSON + Markdown renderers) reusing `collectInspect()` for context and `loadSnippets()` for the inventory.
 - Six goals locked at `schemaVersion: 1`: `slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`.
 - 9 CLI integration tests covering plan shape, redaction, `--for-agent` brief mode, `--list`, missing/unknown goal exits, Markdown headings, and degraded no-config workspace.
-- Risk vocabulary aligned with `dbcli skill tasks plan` (`readonly | dry-run | write | unknown`); v1.14.0 always emits `readonly`.
+- Risk vocabulary aligned with `dbcli skill tasks plan` (`readonly | dry-run | write | unknown`); v1.14.0 always emits `readonly`. Here `readonly` means "does not mutate the **remote database**" — local cache writes (e.g. `dbcli schema --refresh` updating `.dbcli/schemas/index.json`) are still classified as `readonly`.
 
 Resolved open decisions:
 - Goal vocabulary: fixed enumerated list ✓

@@ -17,9 +17,12 @@ export type GuideGoalId = (typeof ALLOWED_GOALS)[number]
 /**
  * Risk vocabulary aligned with `src/core/agent-tasks/types.ts` so AI agents
  * see the same labels across both planners.
- * - `readonly`  — command does not mutate state (all v1.14.0 steps).
+ * - `readonly`  — command does not mutate the remote database. Local cache writes
+ *                 (e.g. `dbcli schema --refresh` updating `.dbcli/schemas/index.json`)
+ *                 still count as readonly. All v1.14.0 steps fall in this bucket.
  * - `dry-run`   — write command that should be invoked with `--dry-run` first.
- * - `write`     — mutating command; user/agent confirmation expected.
+ * - `write`     — mutating command against the remote database; user/agent
+ *                 confirmation expected.
  * - `unknown`   — risk could not be inferred; treat as write.
  */
 export type GuideRisk = 'readonly' | 'dry-run' | 'write' | 'unknown'

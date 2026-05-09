@@ -30,6 +30,7 @@ interface ExportOptions {
   collection?: string
   limit?: number
   noLimit?: boolean
+  recovery?: boolean
 }
 
 /**
@@ -112,6 +113,15 @@ export async function exportCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      const m = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
+      emitRecoveryEnvelope(error, {
+        operation: 'export',
+        table: m?.[1],
+      })
+    }
+
     if (error instanceof PermissionError) {
       console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)

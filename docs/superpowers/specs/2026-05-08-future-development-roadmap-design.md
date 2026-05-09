@@ -3,8 +3,8 @@
 **Date:** 2026-05-08
 **Last updated:** 2026-05-09
 **Milestone range:** v1.12.0 → v1.15.0
-**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 next
-**Current baseline:** v1.14.0, release gates clean, `dbcli inspect`, `dbcli report`, and `dbcli guide` shipped on top of v1.11 saved-query discovery
+**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 ✅ shipped
+**Current baseline:** v1.15.0, release gates clean, `dbcli inspect`, `dbcli report`, `dbcli guide`, and `dbcli recovery` shipped on top of v1.11 saved-query discovery
 
 ## Goal
 
@@ -27,7 +27,7 @@ Recommended sequence:
 | v1.12.0 | Inspect | Agent-friendly database context snapshot | ✅ shipped (2026-05-08) |
 | v1.13.0 | Report | Markdown/JSON diagnostic report built from reusable collectors | ✅ shipped (2026-05-09) |
 | v1.14.0 | Guide | Deterministic next-command planner for common database goals | ✅ shipped (2026-05-09) |
-| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | 🟡 next |
+| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | ✅ shipped (2026-05-09) |
 
 ## Route A — Agent Database Workbench
 
@@ -281,22 +281,38 @@ Resolved open decisions:
 - Per-step risk tag ✓
 - Single-shot output (no `guide run` yet) ✓
 
-## Next Milestone Focus: v1.15.0 `dbcli recovery`
+### v1.15.0 `dbcli recovery` — shipped 2026-05-09
 
-The next implementation cycle targets **machine-readable errors with suggested recovery commands** (spec line 30).
+Delivered:
+- `recovery` standalone lookup command with `--code <CODE>`, `--list`, `--format json|markdown`, `--brief`, `--for-agent`, plus placeholder bindings (`--hint`, `--snippet`, `--table`).
+- `src/core/recovery/` module (`types`, `recovery-steps`, `classify`, `emit`, JSON + Markdown renderers).
+- 14 recovery codes locked at `schemaVersion: 1`: `CONFIG_MISSING`, `CONN_REFUSED`, `CONN_AUTH_FAILED`, `CONN_TIMEOUT`, `CONN_HOST_NOT_FOUND`, `CONN_UNKNOWN`, `PERMISSION_DENIED`, `BLACKLIST_TABLE`, `BLACKLIST_COLUMN_WRITE`, `SNIPPET_NOT_FOUND`, `SNIPPET_AMBIGUOUS`, `SNIPPET_PARAM_MISSING`, `SCHEMA_CACHE_MISSING`, `UNKNOWN`.
+- `--recovery` flag wired into `dbcli query` and `dbcli q`. On failure, the envelope is emitted to stdout as JSON, the human stderr message is suppressed, and the process exits non-zero. Other commands preserve their existing error behavior; broader integration is planned for v1.16+.
+- 46 tests covering recovery-steps, classifier, JSON + Markdown renderers, the standalone command, and `--recovery` integration on both `query` and `q` (including the empty-workspace + unknown-snippet paths).
+- First surface to emit non-`readonly` `GuideStep` risks (`dry-run` / `write`); the `GuideStep` contract from v1.14.0 is reused unchanged.
 
-### Proposed scope (to be refined in a dedicated plan)
+Resolved open decisions:
+- Opt-in via `--recovery` flag (not always-on) ✓
+- Envelope to stdout, suppress stderr message ✓
+- v1.15.0 wires only `query` + `q` ✓
+- Standalone `dbcli recovery` lookup with `--list` ✓
 
-- Structured error envelope on failed commands: `{ schemaVersion, code, message, recovery: GuideStep[] }`.
-- Recovery steps reuse the v1.14.0 `GuideStep` shape (with `risk: 'dry-run' | 'write'` available for the first time).
-- Initial coverage: connection refused, permission denied, schema cache missing, blacklist violation, snippet not found.
+## Next Milestone Focus: v1.16.0
 
-### Out of scope for v1.15.0
+Two candidate tracks; pick during the next planning cycle:
 
-- Automatic execution of recovery steps.
-- LLM-generated explanations.
-- Cross-engine result normalization (Route D).
+### Candidate A: broaden `--recovery` integration
+
+- Wire `--recovery` into `insert`, `update`, `delete`, `export`, `schema --refresh`, `inspect`.
+- Throw `SchemaCacheMissingError` from real query paths so the classifier covers it end-to-end.
+- Add `dry-run` step coverage for write commands.
+
+### Candidate B: Route D — multi-source consistency (deferred)
+
+- Normalize `query` / `schema` / `export` semantics across SQL, Redis, Elasticsearch, MongoDB.
+- Define a common `QueryableAdapter` result contract.
+- Add MongoDB saved-query support after a Mongo command safety model lands.
 
 ## Recommended Next Step
 
-Write a focused implementation plan for **v1.15.0 `dbcli recovery`**, mirroring the structure of the v1.12.0 / v1.13.0 / v1.14.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).
+Pick a v1.16.0 candidate (A vs B) and write a focused implementation plan, mirroring the structure of the v1.12.0–v1.15.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).

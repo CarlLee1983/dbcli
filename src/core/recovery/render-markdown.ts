@@ -6,10 +6,7 @@ import {
   type RecoveryRenderOptions,
 } from './types'
 
-export function renderMarkdown(
-  env: RecoveryEnvelope,
-  options: RecoveryRenderOptions = {}
-): string {
+export function renderMarkdown(env: RecoveryEnvelope, options: RecoveryRenderOptions = {}): string {
   const brief = options.brief === true
   const lines: string[] = []
 

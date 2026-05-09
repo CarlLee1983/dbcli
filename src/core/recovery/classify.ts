@@ -110,10 +110,7 @@ function classifySavedQuery(err: SavedQueryError, ctx: RecoveryContext): Recover
   }
 }
 
-function baseError(
-  code: RecoveryCode,
-  details?: RecoveryError['details']
-): RecoveryError {
+function baseError(code: RecoveryCode, details?: RecoveryError['details']): RecoveryError {
   const trimmed = details ? pickDefined(details) : undefined
   return {
     code,
@@ -135,10 +132,7 @@ function pickDefined(
   return out
 }
 
-function applyDetailsToContext(
-  ctx: RecoveryContext,
-  err: RecoveryError
-): RecoveryContext {
+function applyDetailsToContext(ctx: RecoveryContext, err: RecoveryError): RecoveryContext {
   // Promote details into the context so step rendering can substitute placeholders.
   return {
     ...ctx,

@@ -95,10 +95,7 @@ describe('classifyError', () => {
   })
 
   test('SavedQueryError PARAM_MISSING → SNIPPET_PARAM_MISSING captures paramName', () => {
-    const err = new SavedQueryError(
-      'Missing required parameters: min_seconds',
-      'PARAM_MISSING'
-    )
+    const err = new SavedQueryError('Missing required parameters: min_seconds', 'PARAM_MISSING')
     const env = classifyError(err, { operation: 'q', snippet: '@diag/long-running' })
     expect(env.error.code).toBe('SNIPPET_PARAM_MISSING')
     expect(env.error.details?.paramName).toBe('min_seconds')

@@ -101,13 +101,7 @@ describe('dbcli recovery (CLI lookup)', () => {
   })
 
   test('--code CONN_REFUSED produces a stable envelope', async () => {
-    const { stdout, code } = await run([
-      'recovery',
-      '--code',
-      'CONN_REFUSED',
-      '--format',
-      'json',
-    ])
+    const { stdout, code } = await run(['recovery', '--code', 'CONN_REFUSED', '--format', 'json'])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.schemaVersion).toBe(1)
@@ -141,12 +135,7 @@ describe('dbcli recovery (CLI lookup)', () => {
   })
 
   test('--for-agent collapses to brief json', async () => {
-    const { stdout, code } = await run([
-      'recovery',
-      '--code',
-      'PERMISSION_DENIED',
-      '--for-agent',
-    ])
+    const { stdout, code } = await run(['recovery', '--code', 'PERMISSION_DENIED', '--for-agent'])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     for (const step of j.recovery as Array<Record<string, unknown>>) {
@@ -204,10 +193,7 @@ describe('dbcli query --recovery (integration)', () => {
   })
 
   test('empty workspace WITHOUT --recovery preserves human stderr behavior', async () => {
-    const { stdout, stderr, code } = await run(
-      ['query', 'SELECT 1', '--format', 'json'],
-      NO_CONFIG
-    )
+    const { stdout, stderr, code } = await run(['query', 'SELECT 1', '--format', 'json'], NO_CONFIG)
     expect(code).not.toBe(0)
     expect(stdout.trim()).toBe('')
     expect(stderr.length).toBeGreaterThan(0)

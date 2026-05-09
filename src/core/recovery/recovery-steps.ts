@@ -25,8 +25,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           command: 'dbcli inspect --no-connect --format json',
           rationale: 'After init, confirm the workspace shape before connecting.',
           risk: 'readonly',
-          expects:
-            'JSON snapshot with system + permission + blacklist + snippets sections.',
+          expects: 'JSON snapshot with system + permission + blacklist + snippets sections.',
         },
       ]
 
@@ -36,11 +35,9 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       const out: StepDraft[] = [
         {
           command: 'dbcli doctor --format json',
-          rationale:
-            'Run the doctor health check to identify config / network / driver issues.',
+          rationale: 'Run the doctor health check to identify config / network / driver issues.',
           risk: 'readonly',
-          expects:
-            'JSON report listing config validation, env presence, connection reachability.',
+          expects: 'JSON report listing config validation, env presence, connection reachability.',
         },
         {
           command: 'dbcli inspect --no-connect --format json',
@@ -132,8 +129,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       return [
         {
           command: 'dbcli blacklist list --format json',
-          rationale:
-            'Inventory column-level blacklist rules so the write can be reshaped.',
+          rationale: 'Inventory column-level blacklist rules so the write can be reshaped.',
           risk: 'readonly',
           expects: 'JSON listing blacklisted columns per table.',
         },
@@ -158,8 +154,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
         },
         {
           command: `dbcli queries search ${hint}`,
-          rationale:
-            'Fuzzy keyword search; uses the failed name (or operation hint) as the query.',
+          rationale: 'Fuzzy keyword search; uses the failed name (or operation hint) as the query.',
           risk: 'readonly',
           expects: 'Ranked list of snippet keys with scores.',
         },
@@ -180,13 +175,11 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale:
             'List all variants of the ambiguous key so the agent can pick the engine-specific one.',
           risk: 'readonly',
-          expects:
-            'JSON list — look for duplicates of the snippet key under different engines.',
+          expects: 'JSON list — look for duplicates of the snippet key under different engines.',
         },
         {
           command: `dbcli q ${snippet} --dry-run`,
-          rationale:
-            'Dry-run the snippet to inspect the bound SQL before committing to a variant.',
+          rationale: 'Dry-run the snippet to inspect the bound SQL before committing to a variant.',
           risk: 'dry-run',
           expects: 'Final SQL + bind values; no execution.',
         },
@@ -220,13 +213,11 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale:
             'Local schema cache is missing or stale; refresh it before relying on cached column metadata.',
           risk: 'readonly',
-          expects:
-            'Updated `.dbcli/schemas/index.json` with current table → column mapping.',
+          expects: 'Updated `.dbcli/schemas/index.json` with current table → column mapping.',
         },
         {
           command: 'dbcli list --format json',
-          rationale:
-            'Confirm the database actually contains the expected tables/collections.',
+          rationale: 'Confirm the database actually contains the expected tables/collections.',
           risk: 'readonly',
           expects: 'JSON object list keyed by engine kind.',
         },

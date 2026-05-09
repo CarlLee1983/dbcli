@@ -12,10 +12,11 @@ Database CLI for AI agents with permission-based access control.
 1. `dbcli inspect --for-agent` — bounded snapshot: connection, permission, blacklist, objects, snippets, suggested next commands.
 2. `dbcli report --format json` — diagnostic report (health/capacity/perf) using built-in snippets.
 3. `dbcli guide <goal> --format json` — deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). Use `dbcli guide --list` to see goals.
-4. `dbcli blacklist list` — sensitive data boundaries.
-5. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
-6. Run `query` / `insert` / `update` / `delete` / `export` within permission.
-7. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
+4. `dbcli recovery --code <CODE>` — look up structured recovery commands for a known error code (e.g. `CONN_REFUSED`, `PERMISSION_DENIED`, `SNIPPET_NOT_FOUND`). Pass `--recovery` to `dbcli query` / `dbcli q` to have failures emit a `RecoveryEnvelope` directly.
+5. `dbcli blacklist list` — sensitive data boundaries.
+6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
+7. Run `query` / `insert` / `update` / `delete` / `export` within permission.
+8. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
 
 Prefer `--format json` for agent-friendly output.
 

@@ -82,6 +82,7 @@ export async function updateCommand(
     dryRun?: boolean
     force?: boolean
     config?: string
+    recovery?: boolean
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -295,6 +296,15 @@ export async function updateCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, {
+        operation: 'update',
+        table,
+        writeOperation: 'UPDATE',
+      })
+    }
+
     // Blacklist error
     if (error instanceof BlacklistError) {
       const output = {

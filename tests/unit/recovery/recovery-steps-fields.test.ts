@@ -15,7 +15,10 @@ describe('recovery-steps populates v1.17 fields', () => {
   })
 
   test('PERMISSION_DENIED marks `dbcli init --force` interactive', () => {
-    const steps = stepsForCode('PERMISSION_DENIED', { operation: 'update', writeOperation: 'UPDATE' })
+    const steps = stepsForCode('PERMISSION_DENIED', {
+      operation: 'update',
+      writeOperation: 'UPDATE',
+    })
     const force = steps.find((s) => s.command === 'dbcli init --force')
     expect(force?.interactive).toBe(true)
   })

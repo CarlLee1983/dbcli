@@ -81,7 +81,14 @@ describe('runApply', () => {
       call++
       return call === 1
         ? fakeOk()
-        : { exitCode: 1, stdout: '', stderr: 'boom', durationMs: 5, truncated: false, timedOut: false }
+        : {
+            exitCode: 1,
+            stdout: '',
+            stderr: 'boom',
+            durationMs: 5,
+            truncated: false,
+            timedOut: false,
+          }
     })
     const env = envelope([
       { command: 'dbcli inspect --for-agent', risk: 'readonly' },

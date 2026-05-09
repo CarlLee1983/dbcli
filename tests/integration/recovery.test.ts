@@ -439,10 +439,7 @@ describe('dbcli schema --recovery (integration)', () => {
 
 describe('auto-saved .dbcli/last-recovery.json', () => {
   test('query --recovery writes .dbcli/last-recovery.json on failure', async () => {
-    const { code } = await run(
-      ['query', 'SELECT 1', '--recovery', '--format', 'json'],
-      NO_CONFIG
-    )
+    const { code } = await run(['query', 'SELECT 1', '--recovery', '--format', 'json'], NO_CONFIG)
     expect(code).not.toBe(0)
     const raw = await readFile(join(NO_CONFIG, '.dbcli/last-recovery.json'), 'utf8')
     const saved = JSON.parse(raw)
@@ -454,10 +451,7 @@ describe('auto-saved .dbcli/last-recovery.json', () => {
   })
 
   test('q --recovery writes .dbcli/last-recovery.json on failure', async () => {
-    const { code } = await run(
-      ['q', '@nonexistent', '--recovery', '--format', 'json'],
-      FIXTURE
-    )
+    const { code } = await run(['q', '@nonexistent', '--recovery', '--format', 'json'], FIXTURE)
     expect(code).not.toBe(0)
     const raw = await readFile(join(FIXTURE, '.dbcli/last-recovery.json'), 'utf8')
     const saved = JSON.parse(raw)

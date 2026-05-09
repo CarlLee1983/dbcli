@@ -38,11 +38,7 @@ function buildArgvFromProcess(): string[] {
   return ['dbcli', ...userArgs]
 }
 
-function writeLastEnvelopeSync(
-  cwd: string,
-  envelope: RecoveryEnvelope,
-  argv: string[]
-): void {
+function writeLastEnvelopeSync(cwd: string, envelope: RecoveryEnvelope, argv: string[]): void {
   const target = join(cwd, LAST_ENVELOPE_PATH)
   const tmp = `${target}.tmp`
   const payload: SavedRecoveryEnvelope = {

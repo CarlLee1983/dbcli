@@ -122,11 +122,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       const usedTablePlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       const out: StepDraft[] = []
-      const dryRun = dryRunStepForWrite(
-        ctx,
-        table,
-        usedTablePlaceholder ? ['<table>'] : undefined
-      )
+      const dryRun = dryRunStepForWrite(ctx, table, usedTablePlaceholder ? ['<table>'] : undefined)
       if (dryRun) out.push(dryRun)
       out.push(
         {
@@ -184,11 +180,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       const usedTablePlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       const out: StepDraft[] = []
-      const dryRun = dryRunStepForWrite(
-        ctx,
-        table,
-        usedTablePlaceholder ? ['<table>'] : undefined
-      )
+      const dryRun = dryRunStepForWrite(ctx, table, usedTablePlaceholder ? ['<table>'] : undefined)
       if (dryRun) out.push(dryRun)
       out.push(
         {

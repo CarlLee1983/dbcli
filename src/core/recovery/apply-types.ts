@@ -8,10 +8,7 @@ export type AllowWrite = 'none' | 'readonly-cmd' | 'write-cmd'
 /** Reason for a non-executed step. Matches the `status` discriminator suffix. */
 export type SkipReason = 'risk' | 'interactive' | 'placeholder' | 'unsafe-command'
 
-export type StepStatus =
-  | 'ok'
-  | 'failed'
-  | `skipped:${SkipReason}`
+export type StepStatus = 'ok' | 'failed' | `skipped:${SkipReason}`
 
 export interface StepResult {
   order: number

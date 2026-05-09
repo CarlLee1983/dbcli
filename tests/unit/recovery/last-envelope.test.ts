@@ -74,15 +74,7 @@ describe('sanitizeCommandSummary', () => {
 
   test('replaces --where / --set / --data values with <redacted>', () => {
     expect(
-      sanitizeCommandSummary([
-        'dbcli',
-        'update',
-        'orders',
-        '--where',
-        'id=1',
-        '--set',
-        '{"a":"b"}',
-      ])
+      sanitizeCommandSummary(['dbcli', 'update', 'orders', '--where', 'id=1', '--set', '{"a":"b"}'])
     ).toBe('dbcli update orders --where <redacted> --set <redacted>')
   })
 
@@ -94,14 +86,7 @@ describe('sanitizeCommandSummary', () => {
 
   test('keeps benign flags (--format, --dry-run, --recovery, --for-agent)', () => {
     expect(
-      sanitizeCommandSummary([
-        'dbcli',
-        'query',
-        'SELECT 1',
-        '--format',
-        'json',
-        '--recovery',
-      ])
+      sanitizeCommandSummary(['dbcli', 'query', 'SELECT 1', '--format', 'json', '--recovery'])
     ).toBe('dbcli query <sql> --format json --recovery')
   })
 

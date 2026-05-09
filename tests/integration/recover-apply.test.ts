@@ -49,10 +49,7 @@ beforeAll(async () => {
   NO_CONFIG = await realpath(noCfg)
 })
 
-async function seedSavedEnvelope(
-  cwd: string,
-  envelope: Record<string, unknown>
-): Promise<void> {
+async function seedSavedEnvelope(cwd: string, envelope: Record<string, unknown>): Promise<void> {
   await mkdir(join(cwd, '.dbcli'), { recursive: true })
   await writeFile(
     join(cwd, '.dbcli/last-recovery.json'),
@@ -75,11 +72,34 @@ describe('dbcli recover --apply happy path', () => {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       ok: false,
-      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x', details: { table: 'orders' } },
+      error: {
+        code: 'BLACKLIST_TABLE',
+        category: 'blacklist',
+        message: 'x',
+        details: { table: 'orders' },
+      },
       recovery: [
-        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
-        { order: 2, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
-        { order: 3, command: 'dbcli blacklist remove orders', rationale: '', risk: 'write', expects: '' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+        {
+          order: 2,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+        {
+          order: 3,
+          command: 'dbcli blacklist remove orders',
+          rationale: '',
+          risk: 'write',
+          expects: '',
+        },
       ],
     })
     const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], FIXTURE)
@@ -119,7 +139,13 @@ describe('dbcli recover --apply happy path', () => {
       ok: false,
       error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
       recovery: [
-        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
       ],
     })
     const { stdout, code } = await run(
@@ -141,7 +167,13 @@ describe('dbcli recover --apply happy path', () => {
         ok: false,
         error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
         recovery: [
-          { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+          {
+            order: 1,
+            command: 'dbcli inspect --for-agent',
+            rationale: '',
+            risk: 'readonly',
+            expects: '',
+          },
         ],
       })
     )
@@ -163,7 +195,13 @@ describe('dbcli recover --apply security boundary', () => {
       ok: false,
       error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
       recovery: [
-        { order: 1, command: 'dbcli inspect --for-agent; rm -rf /tmp/owned', rationale: '', risk: 'readonly', expects: '' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent; rm -rf /tmp/owned',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
       ],
     })
     const { stdout, code } = await run(

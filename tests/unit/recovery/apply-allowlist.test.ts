@@ -31,9 +31,9 @@ describe('isAllowedForCode', () => {
   })
 
   test('PERMISSION_DENIED allows dry-run insert/update/delete + inspect + guide + init --force', () => {
-    expect(
-      isAllowedForCode(['dbcli', 'update', 'orders', '--dry-run'], 'PERMISSION_DENIED')
-    ).toBe(true)
+    expect(isAllowedForCode(['dbcli', 'update', 'orders', '--dry-run'], 'PERMISSION_DENIED')).toBe(
+      true
+    )
     expect(isAllowedForCode(['dbcli', 'inspect', '--for-agent'], 'PERMISSION_DENIED')).toBe(true)
     expect(
       isAllowedForCode(['dbcli', 'guide', 'permissions', '--for-agent'], 'PERMISSION_DENIED')
@@ -45,16 +45,16 @@ describe('isAllowedForCode', () => {
     expect(
       isAllowedForCode(['dbcli', 'blacklist', 'list', '--format', 'json'], 'BLACKLIST_TABLE')
     ).toBe(true)
-    expect(
-      isAllowedForCode(['dbcli', 'blacklist', 'remove', 'orders'], 'BLACKLIST_TABLE')
-    ).toBe(true)
+    expect(isAllowedForCode(['dbcli', 'blacklist', 'remove', 'orders'], 'BLACKLIST_TABLE')).toBe(
+      true
+    )
     expect(isAllowedForCode(['dbcli', 'inspect', '--for-agent'], 'BLACKLIST_TABLE')).toBe(true)
   })
 
   test('BLACKLIST_TABLE rejects blacklist add (not in plan)', () => {
-    expect(
-      isAllowedForCode(['dbcli', 'blacklist', 'add', 'secrets'], 'BLACKLIST_TABLE')
-    ).toBe(false)
+    expect(isAllowedForCode(['dbcli', 'blacklist', 'add', 'secrets'], 'BLACKLIST_TABLE')).toBe(
+      false
+    )
   })
 
   test('SNIPPET_NOT_FOUND allows queries list/search/suggest', () => {
@@ -63,18 +63,21 @@ describe('isAllowedForCode', () => {
     ).toBe(true)
     expect(isAllowedForCode(['dbcli', 'queries', 'search', 'slow'], 'SNIPPET_NOT_FOUND')).toBe(true)
     expect(
-      isAllowedForCode(['dbcli', 'queries', 'suggest', 'perf', '--format', 'json'], 'SNIPPET_NOT_FOUND')
+      isAllowedForCode(
+        ['dbcli', 'queries', 'suggest', 'perf', '--format', 'json'],
+        'SNIPPET_NOT_FOUND'
+      )
     ).toBe(true)
   })
 
   test('SCHEMA_CACHE_MISSING allows schema --refresh, list, inspect', () => {
     expect(isAllowedForCode(['dbcli', 'schema', '--refresh'], 'SCHEMA_CACHE_MISSING')).toBe(true)
-    expect(
-      isAllowedForCode(['dbcli', 'list', '--format', 'json'], 'SCHEMA_CACHE_MISSING')
-    ).toBe(true)
-    expect(
-      isAllowedForCode(['dbcli', 'inspect', '--format', 'json'], 'SCHEMA_CACHE_MISSING')
-    ).toBe(true)
+    expect(isAllowedForCode(['dbcli', 'list', '--format', 'json'], 'SCHEMA_CACHE_MISSING')).toBe(
+      true
+    )
+    expect(isAllowedForCode(['dbcli', 'inspect', '--format', 'json'], 'SCHEMA_CACHE_MISSING')).toBe(
+      true
+    )
   })
 
   test('UNKNOWN allows doctor + inspect only', () => {

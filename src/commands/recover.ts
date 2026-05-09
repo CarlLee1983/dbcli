@@ -48,19 +48,13 @@ export async function resolveApplySource(opts: {
     try {
       raw = await Bun.file(path).text()
     } catch {
-      throw new RecoverCliError(
-        `--from ${opts.from}: file not readable.`,
-        EXIT_CODE.malformed
-      )
+      throw new RecoverCliError(`--from ${opts.from}: file not readable.`, EXIT_CODE.malformed)
     }
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
     } catch {
-      throw new RecoverCliError(
-        `--from ${opts.from}: not valid JSON.`,
-        EXIT_CODE.malformed
-      )
+      throw new RecoverCliError(`--from ${opts.from}: not valid JSON.`, EXIT_CODE.malformed)
     }
     if (looksSaved(parsed)) {
       const saved = parsed as SavedRecoveryEnvelope
@@ -175,9 +169,7 @@ export const recoverCommand = new Command()
 
       if (options.apply !== true) {
         const out =
-          format === 'markdown'
-            ? renderMarkdown(source.envelope)
-            : renderJson(source.envelope)
+          format === 'markdown' ? renderMarkdown(source.envelope) : renderJson(source.envelope)
         console.log(out)
         return
       }
@@ -191,8 +183,7 @@ export const recoverCommand = new Command()
         { allowWrite }
       )
 
-      const out =
-        format === 'markdown' ? renderApplyMarkdown(result) : renderApplyJson(result)
+      const out = format === 'markdown' ? renderApplyMarkdown(result) : renderApplyJson(result)
       console.log(out)
       process.exit(exitCodeFor(result.finalStatus))
     } catch (err) {

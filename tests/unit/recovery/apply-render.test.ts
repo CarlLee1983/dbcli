@@ -59,3 +59,38 @@ describe('renderApplyJson', () => {
     expect(out).toContain('"stoppedAt": null')
   })
 })
+
+import { renderApplyMarkdown } from '@/core/recovery/apply-render-markdown'
+
+describe('renderApplyMarkdown', () => {
+  test('contains a per-step section and final summary', () => {
+    const md = renderApplyMarkdown(RESULT)
+    expect(md).toContain('# dbcli recover --apply')
+    expect(md).toContain('finalStatus: `ok`')
+    expect(md).toContain('1. `dbcli inspect --for-agent` — `ok`')
+    expect(md).toContain('2. `dbcli init --force` — `skipped:interactive`')
+    expect(md).toContain('Step requires interactive TTY')
+  })
+
+  test('flags fail-fast in summary', () => {
+    const failed: typeof RESULT = {
+      ...RESULT,
+      finalStatus: 'failed',
+      stoppedAt: 1,
+      results: [{ ...RESULT.results[0]!, status: 'failed', exitCode: 1, stderr: 'boom' }],
+    }
+    const md = renderApplyMarkdown(failed)
+    expect(md).toContain('finalStatus: `failed`')
+    expect(md).toContain('stoppedAt: `1`')
+  })
+
+  test('flags skipped-only', () => {
+    const skip: typeof RESULT = {
+      ...RESULT,
+      finalStatus: 'skipped-only',
+      results: [{ ...RESULT.results[1]! }],
+    }
+    const md = renderApplyMarkdown(skip)
+    expect(md).toContain('finalStatus: `skipped-only`')
+  })
+})

@@ -119,6 +119,20 @@ grouped into `health` / `capacity` / `perf` sections. Bounded by per-snippet
 timeout and per-evidence row cap. Use `--format markdown` for human reading,
 `--section health,capacity` to scope, or `--for-agent` for compact JSON.
 
+### Guide
+
+```bash
+dbcli guide slow-query --format json
+```
+
+Deterministic next-command planner. Pick a goal (`slow-query`, `capacity`,
+`health`, `index-usage`, `permissions`, `schema-overview`) and `dbcli guide`
+emits an ordered plan that combines `dbcli inspect`, engine-appropriate
+`@diag/*` snippets, and `dbcli queries suggest` / `dbcli doctor` follow-ups.
+The planner is cache-first (no network); add `--probe` to refresh the
+underlying inspect context. Use `--list` to see all goals,
+`--format markdown` for human reading, or `--for-agent` for compact JSON.
+
 ### MongoDB Atlas / SRV Connections
 
 MongoDB connections are supported via both standard `mongodb://` URIs and Atlas-style `mongodb+srv://` URIs.

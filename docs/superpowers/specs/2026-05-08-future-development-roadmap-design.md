@@ -3,7 +3,7 @@
 **Date:** 2026-05-08
 **Last updated:** 2026-05-09
 **Milestone range:** v1.12.0 → v1.15.0
-**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 next
+**Status:** v1.12.0 ✅ shipped · v1.13.0 ✅ shipped · v1.14.0 ✅ shipped · v1.15.0 next
 **Current baseline:** v1.13.0, release gates clean, `dbcli inspect` and `dbcli report` shipped on top of v1.11 saved-query discovery
 
 ## Goal
@@ -26,8 +26,8 @@ Recommended sequence:
 | --- | --- | --- | --- |
 | v1.12.0 | Inspect | Agent-friendly database context snapshot | ✅ shipped (2026-05-08) |
 | v1.13.0 | Report | Markdown/JSON diagnostic report built from reusable collectors | ✅ shipped (2026-05-09) |
-| v1.14.0 | Guide | Deterministic next-command planner for common database goals | 🟡 next |
-| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | ⬜ planned |
+| v1.14.0 | Guide | Deterministic next-command planner for common database goals | ✅ shipped (2026-05-09) |
+| v1.15.0 | Recovery | Machine-readable errors with suggested recovery commands | 🟡 next |
 
 ## Route A — Agent Database Workbench
 
@@ -266,32 +266,37 @@ Delivered:
 - 6 CLI integration tests covering shape, redaction, `--for-agent`, `--section` validation, Markdown headings, and degraded no-config workspace.
 - MongoDB and no-config workspaces emit context-only snapshots with warnings (no built-in mongo snippets in this release).
 
-## Next Milestone Focus: v1.14.0 `dbcli guide`
+### v1.14.0 `dbcli guide` — shipped 2026-05-09
 
-The next implementation cycle targets **Route A continuation: deterministic next-command planner**.
+Delivered:
+- `guide` command with `<goal>` argument plus `--format json|markdown`, `--brief`, `--for-agent`, `--list`, `--probe`, `--probe-timeout`.
+- `src/core/guide/` module (`types`, `goal-map`, `build-plan`, `collector`, JSON + Markdown renderers) reusing `collectInspect()` for context and `loadSnippets()` for the inventory.
+- Six goals locked at `schemaVersion: 1`: `slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`.
+- 9 CLI integration tests covering plan shape, redaction, `--for-agent` brief mode, `--list`, missing/unknown goal exits, Markdown headings, and degraded no-config workspace.
+- Risk vocabulary aligned with `dbcli skill tasks plan` (`readonly | dry-run | write | unknown`); v1.14.0 always emits `readonly`.
+
+Resolved open decisions:
+- Goal vocabulary: fixed enumerated list ✓
+- Cache-first with optional `--probe` ✓
+- Per-step risk tag ✓
+- Single-shot output (no `guide run` yet) ✓
+
+## Next Milestone Focus: v1.15.0 `dbcli recovery`
+
+The next implementation cycle targets **machine-readable errors with suggested recovery commands** (spec line 30).
 
 ### Proposed scope (to be refined in a dedicated plan)
 
-- New `dbcli guide <goal>` command that reads the same `inspect` context and emits an ordered, deterministic command sequence for common goals (e.g. "diagnose slow query", "audit permissions", "shrink large table").
-- Goal taxonomy mapped to existing `@diag/*` and saved-query intents from v1.11.
-- JSON contract suitable for AI agents (`schemaVersion: 1`, ordered steps with rationale, dry-run flags, expected outputs).
-- Markdown variant for humans.
-- No new database snippets; reuse existing inventory.
+- Structured error envelope on failed commands: `{ schemaVersion, code, message, recovery: GuideStep[] }`.
+- Recovery steps reuse the v1.14.0 `GuideStep` shape (with `risk: 'dry-run' | 'write'` available for the first time).
+- Initial coverage: connection refused, permission denied, schema cache missing, blacklist violation, snippet not found.
 
-### Out of scope for v1.14.0
+### Out of scope for v1.15.0
 
-- Embedded LLM or natural-language parsing.
-- Automatic execution of the plan (guide outputs commands; user/agent runs them).
-- New adapters, new built-in snippets, MongoDB saved queries.
-- Anything from v1.15.0 (recovery / structured errors).
-
-### Open decisions to resolve before planning
-
-1. Goal vocabulary: free-form intent strings vs. fixed enumerated list (`slow-query`, `capacity`, `permissions`, ...). Recommendation: fixed list mapped to v1.11 intents to keep determinism.
-2. Should `guide` connect to the database or run purely from cached `inspect` context? Recommendation: cache-first, with optional `--probe` to refresh.
-3. Should each step include a confidence/risk tag? Recommendation: yes — agents need that signal to decide whether to confirm with humans.
-4. Output single-shot vs. step-by-step (`guide run`)? Recommendation: single-shot for v1.14, defer `run` to v1.15+.
+- Automatic execution of recovery steps.
+- LLM-generated explanations.
+- Cross-engine result normalization (Route D).
 
 ## Recommended Next Step
 
-Write a focused implementation plan for **v1.14.0 `dbcli guide`**, mirroring the structure of the v1.12.0 / v1.13.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).
+Write a focused implementation plan for **v1.15.0 `dbcli recovery`**, mirroring the structure of the v1.12.0 / v1.13.0 / v1.14.0 plans (file layout, exact JSON schema, collector reuse, per-task TDD steps, release gates).

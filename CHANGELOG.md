@@ -5,6 +5,19 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-05-09
+
+### Added
+
+- `dbcli guide <goal>` — deterministic next-command planner for a fixed list of database goals (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). Reuses `dbcli inspect` context cache-first; pass `--probe` to refresh via a live probe. Each step carries `risk: 'readonly'` (forward-compatible with v1.15.0 recovery) plus `rationale` and `expects` (trimmed by `--brief` / `--for-agent`). Supports `--format json|markdown`, `--list`.
+- Goal-list view: `dbcli guide --list` returns all available goals with one-line descriptions.
+
+### Notes
+
+- Guide does not execute any commands; it only plans them. All v1.14.0 plans are read-only by construction.
+- MongoDB connections still produce a useful plan (anchor + `queries suggest` + `doctor`) even though no built-in mongo diagnostic snippets exist yet.
+- Coexists with `dbcli skill tasks plan` (template-driven). Guide is taxonomy-driven from the static goal map.
+
 ## [1.13.0] - 2026-05-09
 
 ### Added

@@ -491,6 +491,44 @@ Boundaries:
 
 **Permission:** query-only+
 
+### guide
+
+Deterministic next-command planner for a fixed set of database goals. Reuses
+`inspect` context (cache-first) and the workspace's saved-query inventory to
+emit an ordered, read-only plan that an AI agent can follow step-by-step.
+
+Goals (fixed list):
+- `slow-query` — diagnose slow queries (long-running, locks, cache, indexes).
+- `capacity` — audit storage and memory.
+- `health` — connections, locks, cluster status.
+- `index-usage` — index effectiveness audit.
+- `permissions` — review permission level, blacklist, snippet inventory.
+- `schema-overview` — orient in an unfamiliar database.
+
+Flags:
+- `--format json|markdown` (default: json)
+- `--brief` — drop rationale + expects fields
+- `--for-agent` — shortcut for `--format json --brief`
+- `--list` — list available goals and exit
+- `--probe` — refresh inspect context via live probe (default: cache-first)
+- `--probe-timeout <ms>` (default 1500, inherited from inspect)
+
+Examples:
+
+    dbcli guide slow-query
+    dbcli guide capacity --format markdown
+    dbcli guide --list
+    dbcli guide health --for-agent
+    dbcli guide schema-overview --probe
+
+Boundaries:
+- Read-only. Guide plans commands; it does not execute them.
+- Goal vocabulary is fixed in v1.14.0; user-supplied goals are rejected.
+- Each step carries `risk: 'readonly'` in v1.14.0 (forward-compatible with v1.15.0 recovery).
+- Coexists with `dbcli skill tasks plan` (template-driven). Use guide for ad-hoc goals; use task packs for repeatable workflows.
+
+**Permission:** query-only+
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

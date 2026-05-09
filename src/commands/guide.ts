@@ -1,0 +1,84 @@
+import { Command } from 'commander'
+import { t } from '@/i18n/message-loader'
+import { resolveConfigPath } from '@/utils/config-path'
+import { validateFormat } from '@/utils/validation'
+import {
+  ALLOWED_GOALS,
+  collectGuide,
+  describeGoal,
+  listGoals,
+  renderGoalList,
+  renderJson,
+  renderMarkdown,
+  type GuideGoalId,
+} from '@/core/guide'
+
+const ALLOWED_FORMATS = ['json', 'markdown'] as const
+
+function parseGoal(value: string): GuideGoalId {
+  const normalized = value.trim() as GuideGoalId
+  if (!ALLOWED_GOALS.includes(normalized)) {
+    throw new Error(`Unknown guide goal '${value}'. Allowed: ${ALLOWED_GOALS.join(', ')}`)
+  }
+  return normalized
+}
+
+export const guideCommand = new Command()
+  .name('guide')
+  .description(t('guide.description'))
+  .argument('[goal]', `Guide goal ID; one of [${ALLOWED_GOALS.join(', ')}]`)
+  .option('--format <format>', 'Output format: json (default) or markdown', 'json')
+  .option('--brief', 'Trim rationale/expects for compact output', false)
+  .option('--for-agent', 'Shortcut for --format json --brief', false)
+  .option('--list', 'List available guide goals and exit', false)
+  .option('--probe', 'Refresh inspect context via live probe (default: cache-first)', false)
+  .option(
+    '--probe-timeout <ms>',
+    'Inspect probe timeout for cheap version/object check (default 1500)',
+    (v) => parseInt(v, 10),
+    1500
+  )
+  .action(async (goal: string | undefined, options: Record<string, unknown>, command: Command) => {
+    try {
+      const forAgent = options.forAgent === true
+      const format = forAgent ? 'json' : (options.format as string)
+      const brief = forAgent || options.brief === true
+      validateFormat(format, ALLOWED_FORMATS, 'guide')
+
+      if (options.list === true) {
+        if (format === 'markdown') {
+          console.log(renderGoalList())
+        } else {
+          const payload = {
+            schemaVersion: 1,
+            goals: listGoals().map((id) => ({ id, description: describeGoal(id) })),
+          }
+          console.log(JSON.stringify(payload, null, 2))
+        }
+        return
+      }
+
+      if (!goal) {
+        console.error('Missing goal. Try `dbcli guide --list` to see available goals.')
+        process.exit(1)
+      }
+      const validated = parseGoal(goal as string)
+
+      const configPath = resolveConfigPath(command, options as { config?: string })
+      const snap = await collectGuide({
+        workspace: process.cwd(),
+        configPath,
+        goal: validated,
+        probe: options.probe === true,
+        brief,
+        probeTimeoutMs: options.probeTimeout as number,
+      })
+
+      const out =
+        format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
+      console.log(out)
+    } catch (err) {
+      console.error((err as Error).message)
+      process.exit(1)
+    }
+  })

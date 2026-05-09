@@ -21,6 +21,7 @@ import { diffCommand } from './commands/diff'
 import { statusCommand } from './commands/status'
 import { inspectCommand } from './commands/inspect'
 import { reportCommand } from './commands/report'
+import { guideCommand } from './commands/guide'
 import { doctorCommand } from './commands/doctor'
 import { completionCommand } from './commands/completion'
 import { upgradeCommand, formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
@@ -262,6 +263,7 @@ program.addCommand(diffCommand)
 program.addCommand(statusCommand)
 program.addCommand(inspectCommand)
 program.addCommand(reportCommand)
+program.addCommand(guideCommand)
 program.addCommand(doctorCommand)
 program.addCommand(completionCommand)
 program.addCommand(upgradeCommand)

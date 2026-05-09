@@ -73,7 +73,8 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
     if (!input.context.schemaCache.available || input.context.schemaCache.stale === true) {
       raw.push({
         command: 'dbcli schema --refresh',
-        rationale: 'Schema cache missing or stale; refresh before relying on cached column metadata.',
+        rationale:
+          'Schema cache missing or stale; refresh before relying on cached column metadata.',
         risk: 'readonly',
         expects: 'Updated `.dbcli/schemas/index.json` with current table → column mapping.',
       })

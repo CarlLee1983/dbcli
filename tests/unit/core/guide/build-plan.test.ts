@@ -140,9 +140,7 @@ describe('buildPlan', () => {
       engine: 'postgres',
       goal: 'slow-query',
     })
-    expect(plan.map((s) => s.command)).not.toContain(
-      'dbcli q @diag/long-running --format json'
-    )
+    expect(plan.map((s) => s.command)).not.toContain('dbcli q @diag/long-running --format json')
     expect(plan.map((s) => s.command)).toContain('dbcli q @diag/locks --format json')
   })
 
@@ -236,8 +234,6 @@ describe('buildPlan', () => {
     })
     expect(plan.length).toBeLessThanOrEqual(8)
     expect(plan.length).toBeGreaterThan(0)
-    expect(plan.map((s) => s.order)).toEqual(
-      Array.from({ length: plan.length }, (_, i) => i + 1)
-    )
+    expect(plan.map((s) => s.order)).toEqual(Array.from({ length: plan.length }, (_, i) => i + 1))
   })
 })

@@ -576,6 +576,56 @@ Boundaries:
 
 **Permission:** n/a
 
+### recover
+
+(v1.17.0+) Inspect or apply the last recovery plan saved by `--recovery`.
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--apply` | Execute the saved plan under risk gating. | off (inspect only) |
+| `--from <path>` | Read the envelope from this file instead of `.dbcli/last-recovery.json`. Accepts raw `RecoveryEnvelope` or `SavedRecoveryEnvelope`. | — |
+| `--allow-write <tier>` | Open the risk gate. Values: `readonly-cmd` (local-side writes) \| `write-cmd` (database writes). | `none` |
+| `--format <format>` | `markdown` (default for inspect) \| `json` (aggregated). | `markdown` |
+
+#### Plan source resolution
+
+1. `--from <path>` if provided. The file must be either a raw `RecoveryEnvelope` or a `SavedRecoveryEnvelope` wrapper. When the file is a `SavedRecoveryEnvelope`, its `cwd` is reused for child-process execution.
+2. Otherwise, `.dbcli/last-recovery.json` (auto-saved on every recovery emission).
+3. Otherwise, exits 2 with `No recovery plan available. Run a command with --recovery to generate one, or pass --from <file>.`
+
+#### Risk gate matrix
+
+| Step trait | Default | `--allow-write=readonly-cmd` | `--allow-write=write-cmd` |
+|---|---|---|---|
+| `risk=readonly` | run | run | run |
+| `risk=dry-run` | run | run | run |
+| `risk=write`, `dbWrite=false` (or absent) | `skipped:risk` | run | run |
+| `risk=write`, `dbWrite=true` | `skipped:risk` | `skipped:risk` | run |
+| `interactive=true` (any risk) | `skipped:interactive` | `skipped:interactive` | `skipped:interactive` |
+| unresolved placeholder in `command` | `skipped:placeholder` | `skipped:placeholder` | `skipped:placeholder` |
+| command fails parse / allowlist | `skipped:unsafe-command` | `skipped:unsafe-command` | `skipped:unsafe-command` |
+
+Precedence: `interactive` > `placeholder` > `unsafe-command` > `risk`.
+
+#### Exit codes
+
+| Code | Condition |
+|---|---|
+| 0 | At least one step ran successfully and no step failed. |
+| 1 | A step exited non-zero (fail-fast); see `stoppedAt`. |
+| 2 | Envelope missing or malformed. |
+| 3 | Every step was skipped — open `--allow-write` or fill placeholders. |
+
+#### Auto-saved envelope
+
+Every command that emits a `RecoveryEnvelope` (`query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, `inspect` — all with `--recovery`) atomically writes the envelope to `.dbcli/last-recovery.json`. The wrapper carries `schemaVersion`, `savedAt`, a sanitized `command` summary, the workspace `cwd`, and the envelope itself. SQL text and `--where` / `--set` / `--data` / `--param` values are redacted as `<sql>` or `<redacted>`. `.dbcli/` is gitignored.
+
+#### Trust boundary
+
+`--apply` re-derives executability from a code-owned argv allowlist and a restricted shell-word parser. Step `risk` labels in the envelope are hints, not authorisation. A hand-edited envelope cannot escalate beyond the steps dbcli already knows how to run for that `error.code`.
+
+**Permission:** n/a (always-allowed lookup; child processes inherit the active permission level).
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

@@ -492,7 +492,9 @@ describe('dbcli recover (registered)', () => {
   })
 
   test('exits 2 with helpful message when no envelope is available', async () => {
-    const { stderr, code } = await run(['recover', '--apply'], NO_CONFIG)
+    // Use a fresh empty dir to avoid pollution from earlier auto-save tests.
+    const empty = await mkdtemp(join(tmpdir(), 'dbcli-recover-empty-2-'))
+    const { stderr, code } = await run(['recover', '--apply'], empty)
     expect(code).toBe(2)
     expect(stderr).toContain('No recovery plan available')
   })

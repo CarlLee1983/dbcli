@@ -276,3 +276,163 @@ describe('dbcli q --recovery (integration)', () => {
     expect(stderr.toLowerCase()).toContain('snippet')
   })
 })
+
+describe('dbcli inspect --recovery (integration)', () => {
+  test('--require-schema-cache + --recovery on a workspace with no schema cache emits SCHEMA_CACHE_MISSING envelope', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    await cp(FIXTURE, work, { recursive: true })
+    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+
+    const { stdout, code } = await run(
+      ['inspect', '--no-connect', '--require-schema-cache', '--recovery', '--format', 'json'],
+      work
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(j.error.code).toBe('SCHEMA_CACHE_MISSING')
+    expect(Array.isArray(j.recovery)).toBe(true)
+    expect(j.recovery[0].command).toContain('dbcli schema --refresh')
+  })
+
+  test('--require-schema-cache without --recovery prints stderr and exits non-zero', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    await cp(FIXTURE, work, { recursive: true })
+    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+
+    const { stdout, stderr, code } = await run(
+      ['inspect', '--no-connect', '--require-schema-cache'],
+      work
+    )
+    expect(code).not.toBe(0)
+    expect(stdout.trim()).toBe('')
+    expect(stderr.toLowerCase()).toContain('schema cache')
+  })
+
+  test('inspect without --require-schema-cache returns the snapshot (no throw)', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    await cp(FIXTURE, work, { recursive: true })
+    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+
+    const { stdout, code } = await run(['inspect', '--no-connect', '--format', 'json'], work)
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaCache.available).toBe(false)
+  })
+})
+
+describe('dbcli insert --recovery (integration)', () => {
+  test('insert against empty workspace + --recovery emits a CONFIG_MISSING / CONN_* / UNKNOWN envelope', async () => {
+    const { stdout, code } = await run(
+      ['insert', 'users', '--data', '{"name":"a"}', '--recovery'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(typeof j.error.code).toBe('string')
+    expect([
+      'CONFIG_MISSING',
+      'UNKNOWN',
+      'CONN_REFUSED',
+      'CONN_AUTH_FAILED',
+      'CONN_TIMEOUT',
+      'CONN_HOST_NOT_FOUND',
+      'CONN_UNKNOWN',
+    ]).toContain(j.error.code)
+    expect(Array.isArray(j.recovery)).toBe(true)
+  })
+
+  test('insert against empty workspace WITHOUT --recovery preserves human error output', async () => {
+    const { stderr, stdout, code } = await run(
+      ['insert', 'users', '--data', '{"name":"a"}'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    expect(stderr + stdout).not.toContain('"schemaVersion"')
+  })
+})
+
+describe('dbcli update --recovery (integration)', () => {
+  test('update against empty workspace + --recovery emits an envelope on stdout', async () => {
+    const { stdout, code } = await run(
+      ['update', 'users', '--where', 'id=1', '--set', '{"name":"a"}', '--recovery'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(Array.isArray(j.recovery)).toBe(true)
+  })
+
+  test('update WITHOUT --recovery preserves existing error output', async () => {
+    const { stdout, code } = await run(
+      ['update', 'users', '--where', 'id=1', '--set', '{"name":"a"}'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    expect(stdout).not.toContain('"schemaVersion"')
+  })
+})
+
+describe('dbcli delete --recovery (integration)', () => {
+  test('delete against empty workspace + --recovery emits an envelope on stdout', async () => {
+    const { stdout, code } = await run(
+      ['delete', 'users', '--where', 'id=1', '--recovery'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(Array.isArray(j.recovery)).toBe(true)
+  })
+
+  test('delete WITHOUT --recovery preserves existing error output', async () => {
+    const { stdout, code } = await run(['delete', 'users', '--where', 'id=1'], NO_CONFIG)
+    expect(code).not.toBe(0)
+    expect(stdout).not.toContain('"schemaVersion"')
+  })
+})
+
+describe('dbcli export --recovery (integration)', () => {
+  test('export against empty workspace + --recovery emits an envelope on stdout', async () => {
+    const { stdout, code } = await run(
+      ['export', 'SELECT * FROM users', '--format', 'json', '--recovery'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(Array.isArray(j.recovery)).toBe(true)
+  })
+
+  test('export WITHOUT --recovery preserves human stderr', async () => {
+    const { stderr, code } = await run(
+      ['export', 'SELECT * FROM users', '--format', 'json'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    expect(stderr.length).toBeGreaterThan(0)
+    expect(stderr).not.toContain('"schemaVersion"')
+  })
+})
+
+describe('dbcli schema --recovery (integration)', () => {
+  test('schema against empty workspace + --recovery emits an envelope on stdout', async () => {
+    const { stdout, code } = await run(
+      ['schema', 'users', '--format', 'json', '--recovery'],
+      NO_CONFIG
+    )
+    expect(code).not.toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.schemaVersion).toBe(1)
+    expect(Array.isArray(j.recovery)).toBe(true)
+  })
+
+  test('schema WITHOUT --recovery preserves human stderr', async () => {
+    const { stderr, code } = await run(['schema', 'users', '--format', 'json'], NO_CONFIG)
+    expect(code).not.toBe(0)
+    expect(stderr.length).toBeGreaterThan(0)
+    expect(stderr).not.toContain('"schemaVersion"')
+  })
+})

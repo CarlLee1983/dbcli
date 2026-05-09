@@ -21,6 +21,25 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+/**
+ * Build the dry-run preview step that gets prepended to BLACKLIST_COLUMN_WRITE
+ * and PERMISSION_DENIED branches when ctx.writeOperation indicates a write.
+ *
+ * Returns null when the operation was not a write, so the readonly-only step
+ * shape from v1.15.0 is preserved on read paths.
+ */
+function dryRunStepForWrite(ctx: RecoveryContext, quotedTable: string): StepDraft | null {
+  if (!ctx.writeOperation) return null
+  const verb = ctx.writeOperation.toLowerCase()
+  return {
+    command: `dbcli ${verb} ${quotedTable} --dry-run`,
+    rationale:
+      'Preview the SQL that would be executed before changing permission, blacklist, or data; --dry-run never mutates the database.',
+    risk: 'dry-run',
+    expects: 'Generated SQL output; no rows affected.',
+  }
+}
+
 export function stepsForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep[] {
   const drafts = draftsForCode(code, ctx)
   return drafts.slice(0, MAX_RECOVERY_STEPS).map((d, i) => ({ ...d, order: i + 1 }))
@@ -91,8 +110,12 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
         },
       ]
 
-    case 'PERMISSION_DENIED':
-      return [
+    case 'PERMISSION_DENIED': {
+      const table = ctx.table ? shellQuote(ctx.table) : '<table>'
+      const out: StepDraft[] = []
+      const dryRun = dryRunStepForWrite(ctx, table)
+      if (dryRun) out.push(dryRun)
+      out.push(
         {
           command: 'dbcli inspect --for-agent',
           rationale: 'Confirm the active permission level and capability flags.',
@@ -112,8 +135,10 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
             'If the operation legitimately requires more access, re-run init to set a higher permission level.',
           risk: 'write',
           expects: 'Init wizard rewrites the permission field in the active config.',
-        },
-      ]
+        }
+      )
+      return out
+    }
 
     case 'BLACKLIST_TABLE': {
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
@@ -141,7 +166,10 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
 
     case 'BLACKLIST_COLUMN_WRITE': {
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
-      return [
+      const out: StepDraft[] = []
+      const dryRun = dryRunStepForWrite(ctx, table)
+      if (dryRun) out.push(dryRun)
+      out.push(
         {
           command: 'dbcli blacklist list --format json',
           rationale: 'Inventory column-level blacklist rules so the write can be reshaped.',
@@ -154,8 +182,9 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
             'Inspect the target schema and pick a write that does not touch blacklisted columns.',
           risk: 'readonly',
           expects: 'Schema JSON for the table.',
-        },
-      ]
+        }
+      )
+      return out
     }
 
     case 'SNIPPET_NOT_FOUND': {

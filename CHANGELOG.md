@@ -5,6 +5,28 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-05-10
+
+### Added
+
+- `dbcli recover` top-level command. Without `--apply`, prints the auto-saved last envelope (Markdown by default, JSON with `--format json`); with `--apply`, executes the recovery plan under risk gating.
+- `--apply` runs `risk=readonly` and `risk=dry-run` steps by default. Open the gate one tier with `--allow-write=readonly-cmd` (local-side writes) or `--allow-write=write-cmd` (database writes).
+- `--from <path>` overrides the auto-saved envelope and accepts either a raw `RecoveryEnvelope` or a `SavedRecoveryEnvelope` wrapper.
+- Auto-write `.dbcli/last-recovery.json` on every `--recovery` failure across `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`. Atomic write; SQL text and sensitive flag values are redacted in the saved `command` summary.
+- New optional `GuideStep` fields: `interactive`, `dbWrite`, `placeholders` (additive — no `schemaVersion` bump).
+- Per-`error.code` argv allowlist enforced before any child-process execution; hand-authored envelopes cannot escalate beyond the steps dbcli already knows how to run.
+- Exit-code matrix for `dbcli recover --apply`: `0` ok, `1` failed, `2` envelope missing/malformed, `3` skipped-only.
+
+### Changed
+
+- `dbcli init` and `dbcli init --force` recovery steps are now marked `interactive: true`; `--apply` skips them with `skipped:interactive`.
+- Recovery steps that fall back to placeholder tokens (`<table>`, `<hint>`, `<snippet>`, `<name>`, `<value>`) now declare those tokens in `placeholders`; `--apply` skips them with `skipped:placeholder`.
+
+### Internal
+
+- New modules under `src/core/recovery/`: `apply-types`, `apply-shell`, `apply-allowlist`, `apply-gate`, `apply-exec`, `apply`, `apply-render-json`, `apply-render-markdown`, `last-envelope`.
+- Test seam `__setExecutorForTests` allows unit tests to swap the child-process executor without spawning real processes.
+
 ## [1.16.0] - 2026-05-09
 
 ### Added

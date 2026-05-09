@@ -28,16 +28,22 @@ function shellQuote(value: string): string {
  * Returns null when the operation was not a write, so the readonly-only step
  * shape from v1.15.0 is preserved on read paths.
  */
-function dryRunStepForWrite(ctx: RecoveryContext, quotedTable: string): StepDraft | null {
+function dryRunStepForWrite(
+  ctx: RecoveryContext,
+  quotedTable: string,
+  placeholders?: string[]
+): StepDraft | null {
   if (!ctx.writeOperation) return null
   const verb = ctx.writeOperation.toLowerCase()
-  return {
+  const draft: StepDraft = {
     command: `dbcli ${verb} ${quotedTable} --dry-run`,
     rationale:
       'Preview the SQL that would be executed before changing permission, blacklist, or data; --dry-run never mutates the database.',
     risk: 'dry-run',
     expects: 'Generated SQL output; no rows affected.',
   }
+  if (placeholders && placeholders.length > 0) draft.placeholders = placeholders
+  return draft
 }
 
 export function stepsForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep[] {
@@ -54,6 +60,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale: 'No dbcli configuration detected; run the init wizard to create it.',
           risk: 'write',
           expects: 'Init wizard prompts for system, connection name, and credentials.',
+          interactive: true,
         },
         {
           command: 'dbcli inspect --no-connect --format json',
@@ -107,13 +114,15 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale: 'Re-run the init wizard to overwrite stale credentials or hostname.',
           risk: 'write',
           expects: 'Init wizard accepts new values and rewrites the active config file.',
+          interactive: true,
         },
       ]
 
     case 'PERMISSION_DENIED': {
+      const usedTablePlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       const out: StepDraft[] = []
-      const dryRun = dryRunStepForWrite(ctx, table)
+      const dryRun = dryRunStepForWrite(ctx, table, usedTablePlaceholder ? ['<table>'] : undefined)
       if (dryRun) out.push(dryRun)
       out.push(
         {
@@ -135,12 +144,14 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
             'If the operation legitimately requires more access, re-run init to set a higher permission level.',
           risk: 'write',
           expects: 'Init wizard rewrites the permission field in the active config.',
+          interactive: true,
         }
       )
       return out
     }
 
     case 'BLACKLIST_TABLE': {
+      const usedPlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       return [
         {
@@ -160,14 +171,16 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale: 'Remove the table from the blacklist if access is justified.',
           risk: 'write',
           expects: 'Confirmation that the table was removed from the blacklist file.',
+          ...(usedPlaceholder ? { placeholders: ['<table>'] } : {}),
         },
       ]
     }
 
     case 'BLACKLIST_COLUMN_WRITE': {
+      const usedTablePlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       const out: StepDraft[] = []
-      const dryRun = dryRunStepForWrite(ctx, table)
+      const dryRun = dryRunStepForWrite(ctx, table, usedTablePlaceholder ? ['<table>'] : undefined)
       if (dryRun) out.push(dryRun)
       out.push(
         {
@@ -182,16 +195,15 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
             'Inspect the target schema and pick a write that does not touch blacklisted columns.',
           risk: 'readonly',
           expects: 'Schema JSON for the table.',
+          ...(usedTablePlaceholder ? { placeholders: ['<table>'] } : {}),
         }
       )
       return out
     }
 
     case 'SNIPPET_NOT_FOUND': {
-      // Prefer an explicit free-form hint, but fall back to the failed snippet
-      // name so `dbcli q @missing --recovery` actually points the agent at a
-      // useful search query instead of the literal placeholder.
       const rawHint = ctx.hint ?? ctx.snippet
+      const usedHintPlaceholder = !rawHint
       const hint = rawHint ? shellQuote(rawHint) : '<hint>'
       return [
         {
@@ -205,6 +217,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale: 'Fuzzy keyword search; uses the failed name (or operation hint) as the query.',
           risk: 'readonly',
           expects: 'Ranked list of snippet keys with scores.',
+          ...(usedHintPlaceholder ? { placeholders: ['<hint>'] } : {}),
         },
         {
           command: 'dbcli queries suggest perf --format json',
@@ -216,6 +229,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     }
 
     case 'SNIPPET_AMBIGUOUS': {
+      const usedSnippetPlaceholder = !ctx.snippet
       const snippet = ctx.snippet ? shellQuote(ctx.snippet) : '<snippet>'
       return [
         {
@@ -230,13 +244,18 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           rationale: 'Dry-run the snippet to inspect the bound SQL before committing to a variant.',
           risk: 'dry-run',
           expects: 'Final SQL + bind values; no execution.',
+          ...(usedSnippetPlaceholder ? { placeholders: ['<snippet>'] } : {}),
         },
       ]
     }
 
     case 'SNIPPET_PARAM_MISSING': {
+      const usedSnippetPlaceholder = !ctx.snippet
       const snippet = ctx.snippet ? shellQuote(ctx.snippet) : '<snippet>'
       const param = ctx.hint ? shellQuote(ctx.hint) : '<name>'
+      const placeholders: string[] = []
+      if (usedSnippetPlaceholder) placeholders.push('<snippet>')
+      placeholders.push('<name>', '<value>')
       return [
         {
           command: `dbcli q ${snippet} --dry-run --param ${param}=<value>`,
@@ -244,6 +263,7 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
             'Re-invoke the snippet with the required parameter set; --dry-run previews the SQL safely.',
           risk: 'dry-run',
           expects: 'Final SQL with the param bound; no execution.',
+          placeholders,
         },
         {
           command: 'dbcli queries list --format json',

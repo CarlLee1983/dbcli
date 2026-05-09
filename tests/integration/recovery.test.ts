@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, mkdir, cp } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, mkdir, cp, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -434,5 +434,62 @@ describe('dbcli schema --recovery (integration)', () => {
     expect(code).not.toBe(0)
     expect(stderr.length).toBeGreaterThan(0)
     expect(stderr).not.toContain('"schemaVersion"')
+  })
+})
+
+describe('auto-saved .dbcli/last-recovery.json', () => {
+  test('query --recovery writes .dbcli/last-recovery.json on failure', async () => {
+    const { code } = await run(['query', 'SELECT 1', '--recovery', '--format', 'json'], NO_CONFIG)
+    expect(code).not.toBe(0)
+    const raw = await readFile(join(NO_CONFIG, '.dbcli/last-recovery.json'), 'utf8')
+    const saved = JSON.parse(raw)
+    expect(saved.schemaVersion).toBe(1)
+    expect(saved.command.startsWith('dbcli query')).toBe(true)
+    expect(saved.command).toContain('<sql>')
+    expect(saved.cwd).toBe(await realpath(NO_CONFIG))
+    expect(saved.envelope.error.code).toBeDefined()
+  })
+
+  test('q --recovery writes .dbcli/last-recovery.json on failure', async () => {
+    const { code } = await run(['q', '@nonexistent', '--recovery', '--format', 'json'], FIXTURE)
+    expect(code).not.toBe(0)
+    const raw = await readFile(join(FIXTURE, '.dbcli/last-recovery.json'), 'utf8')
+    const saved = JSON.parse(raw)
+    expect(saved.envelope.error.code).toBeDefined()
+  })
+
+  test('saved file does not include raw SQL or credential strings', async () => {
+    await run(
+      [
+        'query',
+        "SELECT * FROM users WHERE password='supersecret'",
+        '--recovery',
+        '--format',
+        'json',
+      ],
+      NO_CONFIG
+    )
+    const raw = await readFile(join(NO_CONFIG, '.dbcli/last-recovery.json'), 'utf8')
+    expect(raw).not.toContain('supersecret')
+    expect(raw).not.toContain('SELECT * FROM users')
+  })
+})
+
+describe('dbcli recover (registered)', () => {
+  test('--help advertises --apply / --from / --allow-write / --format', async () => {
+    const { stdout, code } = await run(['recover', '--help'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('--apply')
+    expect(stdout).toContain('--from')
+    expect(stdout).toContain('--allow-write')
+    expect(stdout).toContain('--format')
+  })
+
+  test('exits 2 with helpful message when no envelope is available', async () => {
+    // Use a fresh empty dir to avoid pollution from earlier auto-save tests.
+    const empty = await mkdtemp(join(tmpdir(), 'dbcli-recover-empty-2-'))
+    const { stderr, code } = await run(['recover', '--apply'], empty)
+    expect(code).toBe(2)
+    expect(stderr).toContain('No recovery plan available')
   })
 })

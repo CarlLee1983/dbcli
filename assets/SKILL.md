@@ -13,6 +13,13 @@ Database CLI for AI agents with permission-based access control.
 2. `dbcli report --format json` — diagnostic report (health/capacity/perf) using built-in snippets.
 3. `dbcli guide <goal> --format json` — deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). Use `dbcli guide --list` to see goals.
 4. `dbcli recovery --code <CODE>` — look up structured recovery commands for a known error code (e.g. `CONN_REFUSED`, `PERMISSION_DENIED`, `SNIPPET_NOT_FOUND`). Pass `--recovery` to `dbcli query` / `dbcli q` to have failures emit a `RecoveryEnvelope` directly. In v1.16.0 the `--recovery` flag is also accepted by `dbcli insert`, `dbcli update`, `dbcli delete`, `dbcli export`, `dbcli schema`, and `dbcli inspect` (which also gained `--require-schema-cache` for the `SCHEMA_CACHE_MISSING` path).
+   - **v1.17.0** `dbcli recover` reads the auto-saved envelope (`.dbcli/last-recovery.json`) written by any prior `--recovery` failure. Inspect it (Markdown by default) or pass `--apply` to execute the saved plan under risk gating.
+   - **v1.17.0** `dbcli recover --apply` runs `risk=readonly` and `risk=dry-run` steps by default. Open the gate one tier with `--allow-write=readonly-cmd` (run local-side writes such as `blacklist remove`) or `--allow-write=write-cmd` (also run steps that mutate the connected database). Pass `--from <file>` to read an explicit envelope instead of the auto-saved one. Use `--format json` for an aggregated machine-readable result.
+   - Exit codes: `0` ok, `1` step failed, `2` envelope missing/malformed, `3` every step skipped (open `--allow-write` or fix interactive/placeholder).
+   - GuideStep optional fields agents should respect:
+     - `interactive: true` — step requires a TTY (`dbcli init` family). `dbcli recover --apply` skips with `skipped:interactive`.
+     - `dbWrite: true` — step mutates the connected database. Gates the highest risk tier; reserved for future write-side recovery steps.
+     - `placeholders: ['<token>', ...]` — agent must replace these tokens before `--apply` will execute. Skipped with `skipped:placeholder`.
 5. `dbcli blacklist list` — sensitive data boundaries.
 6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 7. Run `query` / `insert` / `update` / `delete` / `export` within permission.

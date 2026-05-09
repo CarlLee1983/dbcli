@@ -42,6 +42,12 @@ export interface GuideStep {
   snippet?: string
   /** Snippet `intent` taxonomy slot when applicable. */
   intent?: string
+  /** v1.17.0+: step requires interactive TTY (e.g. `dbcli init`). `dbcli recover --apply` skips these. */
+  interactive?: boolean
+  /** v1.17.0+: true when the step mutates the connected database. Gates `--apply --allow-write=write-cmd`. */
+  dbWrite?: boolean
+  /** v1.17.0+: placeholder tokens that must be resolved before `--apply` can execute this step (e.g. `['<table>']`). */
+  placeholders?: string[]
 }
 
 export interface GuideWarning {

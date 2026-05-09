@@ -138,10 +138,19 @@ program
   .option('--no-limit', 'Disable auto-limit in query-only mode')
   .option('--collection <name>', 'MongoDB collection name; Elasticsearch index name')
   .option('--index <name>', 'Elasticsearch index name (alias for --collection)')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       await queryCommand(sql, options, command)
     } catch (error) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('./core/recovery')
+        emitRecoveryEnvelope(error, { operation: 'query' })
+      }
       console.error((error as Error).message)
       process.exit(1)
     }
@@ -170,6 +179,11 @@ program
     [] as string[]
   )
   .option('--param-file <path>', 'JSON file containing param values')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(async (name: string, options: Record<string, unknown>, command) => {
     await qCommand(name, options, command)
   })

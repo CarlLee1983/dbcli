@@ -91,9 +91,7 @@ export function parseRecoveryEnvelope(input: unknown): ParseResult<RecoveryEnvel
   return { ok: false, reason: summarizeZodError(r.error) }
 }
 
-export function parseSavedRecoveryEnvelope(
-  input: unknown
-): ParseResult<SavedRecoveryEnvelope> {
+export function parseSavedRecoveryEnvelope(input: unknown): ParseResult<SavedRecoveryEnvelope> {
   const r = savedRecoveryEnvelopeSchema.safeParse(input)
   if (r.success) return { ok: true, value: r.data as SavedRecoveryEnvelope }
   return { ok: false, reason: summarizeZodError(r.error) }

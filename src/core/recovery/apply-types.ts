@@ -16,12 +16,7 @@ export type AllowWrite = 'none' | 'readonly-cmd' | 'write-cmd'
  * - `db-write`     — mutates the connected database; needs `write-cmd`.
  * - `interactive`  — requires a TTY (`dbcli init` family); never runs under `--apply`.
  */
-export type ApplyTier =
-  | 'readonly'
-  | 'dry-run'
-  | 'local-write'
-  | 'db-write'
-  | 'interactive'
+export type ApplyTier = 'readonly' | 'dry-run' | 'local-write' | 'db-write' | 'interactive'
 
 /** Result of classifying a parsed argv against the per-`error.code` allowlist. */
 export type ArgvClassification =

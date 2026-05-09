@@ -132,30 +132,28 @@ describe('classifyArgvForCode tier mapping', () => {
   })
 
   test('dbcli schema --refresh is tier=local-write; without --refresh it is readonly', () => {
+    expect(classifyArgvForCode(['dbcli', 'schema', '--refresh'], 'SCHEMA_CACHE_MISSING')).toEqual({
+      kind: 'allowed',
+      tier: 'local-write',
+    })
     expect(
-      classifyArgvForCode(['dbcli', 'schema', '--refresh'], 'SCHEMA_CACHE_MISSING')
-    ).toEqual({ kind: 'allowed', tier: 'local-write' })
-    expect(
-      classifyArgvForCode(['dbcli', 'schema', 'users', '--format', 'json'], 'BLACKLIST_COLUMN_WRITE')
+      classifyArgvForCode(
+        ['dbcli', 'schema', 'users', '--format', 'json'],
+        'BLACKLIST_COLUMN_WRITE'
+      )
     ).toEqual({ kind: 'allowed', tier: 'readonly' })
   })
 
   test('insert/update/delete WITH --dry-run are tier=dry-run', () => {
     for (const sub of ['insert', 'update', 'delete'] as const) {
-      const cls = classifyArgvForCode(
-        ['dbcli', sub, 'orders', '--dry-run'],
-        'PERMISSION_DENIED'
-      )
+      const cls = classifyArgvForCode(['dbcli', sub, 'orders', '--dry-run'], 'PERMISSION_DENIED')
       expect(cls).toEqual({ kind: 'allowed', tier: 'dry-run' })
     }
   })
 
   test('insert/update/delete WITHOUT --dry-run are tier=db-write', () => {
     expect(
-      classifyArgvForCode(
-        ['dbcli', 'delete', 'users', '--where', 'id=1'],
-        'PERMISSION_DENIED'
-      )
+      classifyArgvForCode(['dbcli', 'delete', 'users', '--where', 'id=1'], 'PERMISSION_DENIED')
     ).toEqual({ kind: 'allowed', tier: 'db-write' })
     expect(
       classifyArgvForCode(
@@ -169,9 +167,10 @@ describe('classifyArgvForCode tier mapping', () => {
   })
 
   test('dbcli q with --dry-run is tier=dry-run; without is tier=db-write', () => {
-    expect(
-      classifyArgvForCode(['dbcli', 'q', '@foo', '--dry-run'], 'SNIPPET_AMBIGUOUS')
-    ).toEqual({ kind: 'allowed', tier: 'dry-run' })
+    expect(classifyArgvForCode(['dbcli', 'q', '@foo', '--dry-run'], 'SNIPPET_AMBIGUOUS')).toEqual({
+      kind: 'allowed',
+      tier: 'dry-run',
+    })
     expect(classifyArgvForCode(['dbcli', 'q', '@foo'], 'SNIPPET_AMBIGUOUS')).toEqual({
       kind: 'allowed',
       tier: 'db-write',

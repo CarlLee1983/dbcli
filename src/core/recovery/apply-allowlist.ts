@@ -29,13 +29,11 @@ interface ArgvShape {
 
 const FORBIDDEN_TOKEN = /[;&|<>$`(){}*?]/
 
-const dryRunOrDbWrite =
-  (argv: string[]): ApplyTier =>
-    argv.includes('--dry-run') ? 'dry-run' : 'db-write'
+const dryRunOrDbWrite = (argv: string[]): ApplyTier =>
+  argv.includes('--dry-run') ? 'dry-run' : 'db-write'
 
-const refreshOrReadonly =
-  (argv: string[]): ApplyTier =>
-    argv.includes('--refresh') ? 'local-write' : 'readonly'
+const refreshOrReadonly = (argv: string[]): ApplyTier =>
+  argv.includes('--refresh') ? 'local-write' : 'readonly'
 
 function connectionShapes(): ArgvShape[] {
   return [

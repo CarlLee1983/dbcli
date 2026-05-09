@@ -40,6 +40,16 @@ describe('stepsForCode', () => {
     expect(steps.map((s) => s.command)).toContain('dbcli use staging')
   })
 
+  test('CONN_REFUSED `dbcli use <name>` is risk:write (writes config) with dbWrite:false', () => {
+    const steps = stepsForCode('CONN_REFUSED', {
+      operation: 'query',
+      connectionName: 'staging',
+    })
+    const useStep = steps.find((s) => s.command === 'dbcli use staging')
+    expect(useStep?.risk).toBe('write')
+    expect(useStep?.dbWrite).toBe(false)
+  })
+
   test('CONN_REFUSED without connectionName omits the use step', () => {
     const steps = stepsForCode('CONN_REFUSED', { operation: 'query' })
     expect(steps.map((s) => s.command).some((c) => c.startsWith('dbcli use '))).toBe(false)

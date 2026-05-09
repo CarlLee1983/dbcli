@@ -93,7 +93,10 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
           command: `dbcli use ${shellQuote(ctx.connectionName)}`,
           rationale:
             'Re-select the failing named connection so subsequent commands target it explicitly.',
-          risk: 'readonly',
+          // `dbcli use <name>` rewrites the active-connection field in config — local write,
+          // not readonly. Marked dbWrite:false because it does not touch the database.
+          risk: 'write',
+          dbWrite: false,
           expects: 'Confirmation that the active connection switched to the requested name.',
         })
       }

@@ -226,10 +226,7 @@ describe('dbcli recover --apply happy path', () => {
         },
       ],
     })
-    const { stdout, code } = await run(
-      ['recover', '--apply', '--format', 'markdown'],
-      FIXTURE
-    )
+    const { stdout, code } = await run(['recover', '--apply', '--format', 'markdown'], FIXTURE)
     expect(code).toBe(0)
     expect(stdout).toContain('# dbcli recover --apply')
   })

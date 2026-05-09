@@ -109,3 +109,95 @@ describe('classifyStep', () => {
     expect(classifyStep(s, 'none', 'CONFIG_MISSING').kind).toBe('skipped:interactive')
   })
 })
+
+describe('classifyStep — trust boundary (falsified envelope)', () => {
+  test('falsified risk:readonly on `dbcli blacklist remove` is gated by tier=local-write', () => {
+    // Attacker-crafted envelope claims a write step is "readonly".
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli blacklist remove orders',
+      rationale: '',
+      risk: 'readonly', // FALSIFIED
+      expects: '',
+    }
+    // Default tier rejects local-write; readonly-cmd allows it.
+    expect(classifyStep(s, 'none', 'BLACKLIST_TABLE').kind).toBe('skipped:risk')
+    expect(classifyStep(s, 'readonly-cmd', 'BLACKLIST_TABLE').kind).toBe('run')
+  })
+
+  test('falsified risk:readonly on `dbcli delete users --where id=1` is gated by tier=db-write', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli delete users --where id=1',
+      rationale: '',
+      risk: 'readonly', // FALSIFIED
+      expects: '',
+    }
+    // Even with --allow-write=readonly-cmd this must NOT run; tier is db-write.
+    expect(classifyStep(s, 'none', 'PERMISSION_DENIED').kind).toBe('skipped:risk')
+    expect(classifyStep(s, 'readonly-cmd', 'PERMISSION_DENIED').kind).toBe('skipped:risk')
+    expect(classifyStep(s, 'write-cmd', 'PERMISSION_DENIED').kind).toBe('run')
+  })
+
+  test('falsified risk:dry-run without `--dry-run` flag is still tier=db-write', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli update orders --where id=1 --set name=foo',
+      rationale: '',
+      risk: 'dry-run', // FALSIFIED
+      expects: '',
+    }
+    expect(classifyStep(s, 'none', 'PERMISSION_DENIED').kind).toBe('skipped:risk')
+    expect(classifyStep(s, 'readonly-cmd', 'PERMISSION_DENIED').kind).toBe('skipped:risk')
+    expect(classifyStep(s, 'write-cmd', 'PERMISSION_DENIED').kind).toBe('run')
+  })
+
+  test('falsified interactive=false on `dbcli init --force` is still skipped (allowlist tier)', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli init --force',
+      rationale: '',
+      risk: 'readonly', // FALSIFIED
+      expects: '',
+      interactive: false, // FALSIFIED
+    }
+    expect(classifyStep(s, 'write-cmd', 'PERMISSION_DENIED').kind).toBe('skipped:interactive')
+  })
+
+  test('falsified dbWrite=false on `dbcli delete users --where id=1` is still tier=db-write', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli delete users --where id=1',
+      rationale: '',
+      risk: 'write',
+      dbWrite: false, // FALSIFIED — pretending to be local-only
+      expects: '',
+    }
+    // Allowlist tier-derivation ignores envelope; still requires write-cmd.
+    expect(classifyStep(s, 'readonly-cmd', 'PERMISSION_DENIED').kind).toBe('skipped:risk')
+  })
+
+  test('non-allowlisted command for code (e.g. `dbcli query` under CONFIG_MISSING) is unsafe regardless of risk hint', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli query SELECT 1',
+      rationale: '',
+      risk: 'readonly', // even with this hint
+      expects: '',
+    }
+    expect(classifyStep(s, 'write-cmd', 'CONFIG_MISSING').kind).toBe('skipped:unsafe-command')
+  })
+
+  test('decision exposes code-owned tier on run', () => {
+    const s: GuideStep = {
+      order: 1,
+      command: 'dbcli inspect --for-agent',
+      rationale: '',
+      risk: 'readonly',
+      expects: '',
+    }
+    const d = classifyStep(s, 'none', 'UNKNOWN')
+    expect(d.kind).toBe('run')
+    expect(d.tier).toBe('readonly')
+  })
+})

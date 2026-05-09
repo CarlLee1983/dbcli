@@ -5,6 +5,24 @@ export const APPLY_SCHEMA_VERSION = 1 as const
 /** Tier opened by `--allow-write`. `none` is the safe default. */
 export type AllowWrite = 'none' | 'readonly-cmd' | 'write-cmd'
 
+/**
+ * Code-owned tier classification of a parsed argv. Authoritative for
+ * `dbcli recover --apply` gating; envelope `risk` / `dbWrite` hints are
+ * **not** trusted.
+ *
+ * - `readonly`     — pure local read; safe under any allow-write tier.
+ * - `dry-run`      — write subcommand invoked with `--dry-run`; safe under any tier.
+ * - `local-write`  — writes only local config / cache / blacklist; needs `readonly-cmd`.
+ * - `db-write`     — mutates the connected database; needs `write-cmd`.
+ * - `interactive`  — requires a TTY (`dbcli init` family); never runs under `--apply`.
+ */
+export type ApplyTier = 'readonly' | 'dry-run' | 'local-write' | 'db-write' | 'interactive'
+
+/** Result of classifying a parsed argv against the per-`error.code` allowlist. */
+export type ArgvClassification =
+  | { kind: 'allowed'; tier: ApplyTier }
+  | { kind: 'unsafe'; reason: string }
+
 /** Reason for a non-executed step. Matches the `status` discriminator suffix. */
 export type SkipReason = 'risk' | 'interactive' | 'placeholder' | 'unsafe-command'
 

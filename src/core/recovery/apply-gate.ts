@@ -1,8 +1,8 @@
 import type { GuideStep } from '@/core/guide/types'
 import type { RecoveryCode } from './types'
-import type { AllowWrite, SkipReason } from './apply-types'
+import type { AllowWrite, ApplyTier, SkipReason } from './apply-types'
 import { parseArgv, ShellParseError } from './apply-shell'
-import { isAllowedForCode } from './apply-allowlist'
+import { classifyArgvForCode } from './apply-allowlist'
 
 export type GateKind = 'run' | `skipped:${SkipReason}`
 
@@ -11,16 +11,24 @@ export interface GateDecision {
   reason?: string
   /** Populated when kind === 'run'; the parsed argv, ready for spawn. */
   argv?: string[]
+  /** Populated when kind === 'run'; the code-owned tier from the allowlist. */
+  tier?: ApplyTier
 }
 
 const PLACEHOLDER_LITERAL_RE = /<[a-zA-Z][a-zA-Z0-9_-]*>/
 
 /**
- * Classify a step according to the v1.17 precedence:
- *   1. interactive
+ * Classify a step. Precedence (display order — all skips are safe):
+ *   1. envelope `interactive: true` hint (early exit; widening only)
  *   2. placeholder (declared OR literal `<token>` scan)
- *   3. unsafe-command (parse / allowlist failure)
- *   4. risk + allow-write tier
+ *   3. unsafe-command (parse failure)
+ *   4. unsafe-command (allowlist miss for this error.code)
+ *   5. allowlist tier === 'interactive' (defense for falsified envelope)
+ *   6. risk + allow-write tier — driven by the **code-owned** allowlist tier.
+ *
+ * Trust boundary: envelope hints (`risk`, `dbWrite`, `interactive`) only
+ * widen safety (skip more steps). They cannot escalate execution. The
+ * authoritative tier comes from {@link classifyArgvForCode}.
  */
 export function classifyStep(
   step: GuideStep,
@@ -55,36 +63,37 @@ export function classifyStep(
     }
   }
 
-  if (!isAllowedForCode(argv, code)) {
+  const cls = classifyArgvForCode(argv, code)
+  if (cls.kind === 'unsafe') {
+    return { kind: 'skipped:unsafe-command', reason: cls.reason }
+  }
+
+  if (cls.tier === 'interactive') {
     return {
-      kind: 'skipped:unsafe-command',
-      reason: `Command is not in the allowlist for error.code=${code}.`,
+      kind: 'skipped:interactive',
+      reason: 'Step requires interactive TTY; rerun manually.',
     }
   }
 
-  switch (step.risk) {
+  switch (cls.tier) {
     case 'readonly':
     case 'dry-run':
-      return { kind: 'run', argv }
-    case 'write':
-    case 'unknown':
-      if (step.dbWrite === true && allowWrite !== 'write-cmd') {
+      return { kind: 'run', argv, tier: cls.tier }
+    case 'local-write':
+      if (allowWrite === 'none') {
         return {
           kind: 'skipped:risk',
-          reason: `Step writes to the database; pass --allow-write=write-cmd to run it.`,
+          reason: 'Step writes local config/cache; pass --allow-write=readonly-cmd to run it.',
         }
       }
-      if (step.dbWrite !== true && allowWrite === 'none') {
+      return { kind: 'run', argv, tier: cls.tier }
+    case 'db-write':
+      if (allowWrite !== 'write-cmd') {
         return {
           kind: 'skipped:risk',
-          reason: `Step is risk=write; pass --allow-write=readonly-cmd to run it.`,
+          reason: 'Step writes to the database; pass --allow-write=write-cmd to run it.',
         }
       }
-      return { kind: 'run', argv }
-    default:
-      return {
-        kind: 'skipped:risk',
-        reason: `Unrecognised risk='${step.risk}'; refusing to execute.`,
-      }
+      return { kind: 'run', argv, tier: cls.tier }
   }
 }

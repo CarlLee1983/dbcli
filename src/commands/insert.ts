@@ -58,6 +58,7 @@ export async function insertCommand(
     dryRun?: boolean
     force?: boolean
     config?: string
+    recovery?: boolean
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -234,6 +235,15 @@ export async function insertCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, {
+        operation: 'insert',
+        table,
+        writeOperation: 'INSERT',
+      })
+    }
+
     // Blacklist error
     if (error instanceof BlacklistError) {
       const output = {

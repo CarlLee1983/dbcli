@@ -10,21 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `dbcli recover` top-level command. Without `--apply`, prints the auto-saved last envelope (Markdown by default, JSON with `--format json`); with `--apply`, executes the recovery plan under risk gating.
-- `--apply` runs `risk=readonly` and `risk=dry-run` steps by default. Open the gate one tier with `--allow-write=readonly-cmd` (local-side writes) or `--allow-write=write-cmd` (database writes).
+- `--apply` runs `tier=readonly` and `tier=dry-run` steps by default (tier is determined by the code-owned allowlist, not the envelope). Open the gate one tier with `--allow-write=readonly-cmd` (local-side writes) or `--allow-write=write-cmd` (database writes).
 - `--from <path>` overrides the auto-saved envelope and accepts either a raw `RecoveryEnvelope` or a `SavedRecoveryEnvelope` wrapper.
 - Auto-write `.dbcli/last-recovery.json` on every `--recovery` failure across `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`. Atomic write; SQL text and sensitive flag values are redacted in the saved `command` summary.
 - New optional `GuideStep` fields: `interactive`, `dbWrite`, `placeholders` (additive — no `schemaVersion` bump).
 - Per-`error.code` argv allowlist enforced before any child-process execution; hand-authored envelopes cannot escalate beyond the steps dbcli already knows how to run.
+- Strict zod-based schema validation for envelopes from `--from <file>` and `.dbcli/last-recovery.json`. Missing `recovery`, missing `error.code`, malformed step shape, or wrong `schemaVersion` all surface as exit code 2 with a structured reason instead of crashing.
 - Exit-code matrix for `dbcli recover --apply`: `0` ok, `1` failed, `2` envelope missing/malformed, `3` skipped-only.
 
 ### Changed
 
+- `dbcli recover --apply` defaults to `--format json` for machine-readability; `dbcli recover` (no `--apply`) keeps `--format markdown` as the default. Either default can be overridden explicitly.
 - `dbcli init` and `dbcli init --force` recovery steps are now marked `interactive: true`; `--apply` skips them with `skipped:interactive`.
 - Recovery steps that fall back to placeholder tokens (`<table>`, `<hint>`, `<snippet>`, `<name>`, `<value>`) now declare those tokens in `placeholders`; `--apply` skips them with `skipped:placeholder`.
+- `dbcli use <connection>` recovery step is now `risk: 'write'` with `dbWrite: false` — selecting a connection rewrites the active-connection field in config.
+
+### Security
+
+- **Trust boundary on `--apply`**: envelope `risk`, `dbWrite`, and `interactive` fields are no longer authoritative for execution decisions. The gate derives the canonical execution tier (`readonly` / `dry-run` / `local-write` / `db-write` / `interactive`) from the per-`error.code` allowlist. A hand-crafted envelope claiming `risk: 'readonly'` for `dbcli delete users --where id=1` is still classified as `db-write` and skipped under the default tier. Falsified `interactive: false` on `dbcli init` is still skipped because the allowlist marks it `interactive`.
+- `insert` / `update` / `delete` / `q` are tier `dry-run` only when argv contains `--dry-run`; otherwise they are tier `db-write`.
+- Auto-saved envelope source now also rejects (exit 2) when `saved.cwd` no longer exists on disk, matching the existing `--from` saved-envelope behavior.
 
 ### Internal
 
-- New modules under `src/core/recovery/`: `apply-types`, `apply-shell`, `apply-allowlist`, `apply-gate`, `apply-exec`, `apply`, `apply-render-json`, `apply-render-markdown`, `last-envelope`.
+- New modules under `src/core/recovery/`: `apply-types`, `apply-shell`, `apply-allowlist`, `apply-gate`, `apply-exec`, `apply`, `apply-render-json`, `apply-render-markdown`, `last-envelope`, `envelope-schema`.
+- `apply-allowlist` exposes `classifyArgvForCode(argv, code)` returning `{ kind, tier }` so the gate can decide tier without trusting envelope hints. `isAllowedForCode` is preserved as a boolean wrapper.
 - Test seam `__setExecutorForTests` allows unit tests to swap the child-process executor without spawning real processes.
 
 ## [1.16.0] - 2026-05-09

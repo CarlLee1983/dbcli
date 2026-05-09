@@ -585,27 +585,41 @@ Boundaries:
 | `--apply` | Execute the saved plan under risk gating. | off (inspect only) |
 | `--from <path>` | Read the envelope from this file instead of `.dbcli/last-recovery.json`. Accepts raw `RecoveryEnvelope` or `SavedRecoveryEnvelope`. | — |
 | `--allow-write <tier>` | Open the risk gate. Values: `readonly-cmd` (local-side writes) \| `write-cmd` (database writes). | `none` |
-| `--format <format>` | `markdown` (default for inspect) \| `json` (aggregated). | `markdown` |
+| `--format <format>` | `markdown` \| `json`. | `markdown` for inspect, `json` for `--apply` |
 
 #### Plan source resolution
 
-1. `--from <path>` if provided. The file must be either a raw `RecoveryEnvelope` or a `SavedRecoveryEnvelope` wrapper. When the file is a `SavedRecoveryEnvelope`, its `cwd` is reused for child-process execution.
-2. Otherwise, `.dbcli/last-recovery.json` (auto-saved on every recovery emission).
+1. `--from <path>` if provided. The file must be either a raw `RecoveryEnvelope` or a `SavedRecoveryEnvelope` wrapper. When the file is a `SavedRecoveryEnvelope`, its `cwd` is reused for child-process execution. Strict zod validation; malformed → exit 2 with structured reason.
+2. Otherwise, `.dbcli/last-recovery.json` (auto-saved on every recovery emission). Validated with the same schema; missing fields, unknown `error.code`, or `cwd` that no longer exists → exit 2.
 3. Otherwise, exits 2 with `No recovery plan available. Run a command with --recovery to generate one, or pass --from <file>.`
+
+#### Code-owned tier (trust boundary)
+
+`--apply` derives the canonical execution tier from the per-`error.code` allowlist after parsing argv, **not** from the envelope's `risk` / `dbWrite` / `interactive` fields. Envelope hints can only widen safety (skip more steps); they cannot escalate execution.
+
+| Allowlist tier | Meaning | Example commands |
+|---|---|---|
+| `readonly` | local read-only | `dbcli inspect`, `dbcli doctor`, `dbcli blacklist list`, `dbcli schema <table>` |
+| `dry-run` | write subcommand invoked with `--dry-run` | `dbcli update orders --where id=1 --dry-run`, `dbcli q @x --dry-run` |
+| `local-write` | writes local config / cache / blacklist | `dbcli blacklist remove <table>`, `dbcli use <name>`, `dbcli schema --refresh` |
+| `db-write` | mutates the connected database | `dbcli update orders --where id=1 --set …` (no `--dry-run`), `dbcli q @x` (no `--dry-run`) |
+| `interactive` | requires TTY | `dbcli init`, `dbcli init --force` |
+
+`insert` / `update` / `delete` / `q` are tier `dry-run` only when argv contains `--dry-run`; otherwise they are tier `db-write` regardless of envelope `risk` claim.
 
 #### Risk gate matrix
 
-| Step trait | Default | `--allow-write=readonly-cmd` | `--allow-write=write-cmd` |
+| Allowlist tier | Default | `--allow-write=readonly-cmd` | `--allow-write=write-cmd` |
 |---|---|---|---|
-| `risk=readonly` | run | run | run |
-| `risk=dry-run` | run | run | run |
-| `risk=write`, `dbWrite=false` (or absent) | `skipped:risk` | run | run |
-| `risk=write`, `dbWrite=true` | `skipped:risk` | `skipped:risk` | run |
-| `interactive=true` (any risk) | `skipped:interactive` | `skipped:interactive` | `skipped:interactive` |
+| `readonly` | run | run | run |
+| `dry-run` | run | run | run |
+| `local-write` | `skipped:risk` | run | run |
+| `db-write` | `skipped:risk` | `skipped:risk` | run |
+| `interactive` | `skipped:interactive` | `skipped:interactive` | `skipped:interactive` |
 | unresolved placeholder in `command` | `skipped:placeholder` | `skipped:placeholder` | `skipped:placeholder` |
 | command fails parse / allowlist | `skipped:unsafe-command` | `skipped:unsafe-command` | `skipped:unsafe-command` |
 
-Precedence: `interactive` > `placeholder` > `unsafe-command` > `risk`.
+Precedence: envelope `interactive: true` > `placeholder` > `unsafe-command` > allowlist `interactive` > tier-based gating.
 
 #### Exit codes
 
@@ -613,16 +627,12 @@ Precedence: `interactive` > `placeholder` > `unsafe-command` > `risk`.
 |---|---|
 | 0 | At least one step ran successfully and no step failed. |
 | 1 | A step exited non-zero (fail-fast); see `stoppedAt`. |
-| 2 | Envelope missing or malformed. |
+| 2 | Envelope missing or malformed (failed schema validation, or saved `cwd` missing). |
 | 3 | Every step was skipped — open `--allow-write` or fill placeholders. |
 
 #### Auto-saved envelope
 
 Every command that emits a `RecoveryEnvelope` (`query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, `inspect` — all with `--recovery`) atomically writes the envelope to `.dbcli/last-recovery.json`. The wrapper carries `schemaVersion`, `savedAt`, a sanitized `command` summary, the workspace `cwd`, and the envelope itself. SQL text and `--where` / `--set` / `--data` / `--param` values are redacted as `<sql>` or `<redacted>`. `.dbcli/` is gitignored.
-
-#### Trust boundary
-
-`--apply` re-derives executability from a code-owned argv allowlist and a restricted shell-word parser. Step `risk` labels in the envelope are hints, not authorisation. A hand-edited envelope cannot escalate beyond the steps dbcli already knows how to run for that `error.code`.
 
 **Permission:** n/a (always-allowed lookup; child processes inherit the active permission level).
 

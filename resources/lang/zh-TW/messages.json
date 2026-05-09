@@ -49,6 +49,12 @@
     "missing_goal": "缺少 goal 參數。請執行 `dbcli guide --list` 查看可用目標。",
     "goal_invalid": "未知的 guide goal '{name}'。請執行 `dbcli guide --list` 取得有效目標 ID。"
   },
+  "recovery": {
+    "description": "查詢已知 dbcli 錯誤碼對應的結構化恢復方案，或列出所有支援的錯誤碼。",
+    "missing_code": "缺少 --code 參數。請執行 `dbcli recovery --list` 查看可用代碼。",
+    "code_invalid": "未知的 recovery code '{name}'。請執行 `dbcli recovery --list` 取得有效代碼。",
+    "no_config": "找不到 dbcli 設定檔。請先執行 `dbcli init`。"
+  },
   "use": {
     "description": "切換或顯示預設資料庫連線",
     "switched": "已切換預設連線為 {name}",

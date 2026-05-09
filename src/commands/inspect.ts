@@ -19,6 +19,16 @@ export const inspectCommand = new Command()
     (v) => parseInt(v, 10),
     1500
   )
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
+  .option(
+    '--require-schema-cache',
+    'Throw SCHEMA_CACHE_MISSING (recovery code) when the active SQL connection has no usable schema cache',
+    false
+  )
   .action(async (options: Record<string, unknown>, command: Command) => {
     try {
       const forAgent = options.forAgent === true
@@ -35,10 +45,19 @@ export const inspectCommand = new Command()
         probeTimeoutMs: options.probeTimeout as number,
       })
 
+      if (options.requireSchemaCache === true) {
+        const { requireSchemaCacheOrThrow } = await import('@/core/inspect')
+        requireSchemaCacheOrThrow(snap.schemaCache, snap.system ?? null)
+      }
+
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)
     } catch (err) {
+      if (options.recovery === true) {
+        const { emitRecoveryEnvelope } = await import('@/core/recovery')
+        emitRecoveryEnvelope(err, { operation: 'inspect' })
+      }
       console.error((err as Error).message)
       process.exit(1)
     }

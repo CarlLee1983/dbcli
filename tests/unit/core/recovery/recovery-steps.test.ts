@@ -21,15 +21,15 @@ describe('stepsForCode', () => {
 
   test('CONFIG_MISSING leads with `dbcli init` (write)', () => {
     const steps = stepsForCode('CONFIG_MISSING', { operation: 'query' })
-    expect(steps[0].command).toBe('dbcli init')
-    expect(steps[0].risk).toBe('write')
+    expect(steps[0]!.command).toBe('dbcli init')
+    expect(steps[0]!.risk).toBe('write')
   })
 
   test('CONN_REFUSED leads with doctor (readonly) then inspect', () => {
     const steps = stepsForCode('CONN_REFUSED', { operation: 'query' })
-    expect(steps[0].command).toBe('dbcli doctor --format json')
-    expect(steps[0].risk).toBe('readonly')
-    expect(steps[1].command).toBe('dbcli inspect --no-connect --format json')
+    expect(steps[0]!.command).toBe('dbcli doctor --format json')
+    expect(steps[0]!.risk).toBe('readonly')
+    expect(steps[1]!.command).toBe('dbcli inspect --no-connect --format json')
   })
 
   test('CONN_REFUSED with connectionName surfaces `dbcli use <name>`', () => {
@@ -49,7 +49,7 @@ describe('stepsForCode', () => {
     const steps = stepsForCode('PERMISSION_DENIED', { operation: 'query' })
     const writes = steps.filter((s) => s.risk === 'write')
     expect(writes.length).toBeGreaterThan(0)
-    expect(writes[0].command).toBe('dbcli init --force')
+    expect(writes[0]!.command).toBe('dbcli init --force')
   })
 
   test('BLACKLIST_TABLE binds the table into the remove step', () => {
@@ -85,13 +85,13 @@ describe('stepsForCode', () => {
     })
     const drySteps = steps.filter((s) => s.risk === 'dry-run')
     expect(drySteps.length).toBeGreaterThan(0)
-    expect(drySteps[0].command).toContain('@diag/long-running')
-    expect(drySteps[0].command).toContain('min_seconds=<value>')
+    expect(drySteps[0]!.command).toContain('@diag/long-running')
+    expect(drySteps[0]!.command).toContain('min_seconds=<value>')
   })
 
   test('SCHEMA_CACHE_MISSING leads with schema --refresh', () => {
     const steps = stepsForCode('SCHEMA_CACHE_MISSING', { operation: 'query' })
-    expect(steps[0].command).toBe('dbcli schema --refresh')
-    expect(steps[0].risk).toBe('readonly')
+    expect(steps[0]!.command).toBe('dbcli schema --refresh')
+    expect(steps[0]!.risk).toBe('readonly')
   })
 })

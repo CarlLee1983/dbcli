@@ -57,10 +57,10 @@ describe('classifyError', () => {
   })
 
   test('PermissionError → PERMISSION_DENIED preserves requiredPermission', () => {
-    const err = new PermissionError('INSERT not allowed', stmt, 'write')
+    const err = new PermissionError('INSERT not allowed', stmt, 'read-write')
     const env = classifyError(err, { operation: 'insert' })
     expect(env.error.code).toBe('PERMISSION_DENIED')
-    expect(env.error.details?.requiredPermission).toBe('write')
+    expect(env.error.details?.requiredPermission).toBe('read-write')
   })
 
   test('BlacklistError on read → BLACKLIST_TABLE preserves table', () => {

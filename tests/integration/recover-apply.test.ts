@@ -12,16 +12,24 @@ let NO_CONFIG = ''
 
 function sanitizeEnv(): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
+  let originalPath = ''
   for (const [k, v] of Object.entries(process.env)) {
     if (/^DBCLI_/i.test(k)) continue
     if (k === 'DATABASE_URL') continue
+    if (k.toUpperCase() === 'PATH') {
+      originalPath = v || ''
+      continue
+    }
     out[k] = v
   }
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
-  // Ensure FIXTURE is on PATH so recovery steps find our local shim
+  
+  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
   if (FIXTURE) {
-    out.PATH = `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${out.PATH || ''}`
+    out[pathKey] = `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${originalPath}`
+  } else {
+    out[pathKey] = originalPath
   }
   return out
 }
@@ -37,6 +45,10 @@ function run(
     child.stdout.on('data', (b) => (stdout += b.toString()))
     child.stderr.on('data', (b) => (stderr += b.toString()))
     child.on('close', (code) => res({ stdout, stderr, code: code ?? 0 }))
+    child.on('error', (err) => {
+      console.error('SPAWN ERROR:', err)
+      res({ stdout, stderr, code: 1 })
+    })
   })
 }
 

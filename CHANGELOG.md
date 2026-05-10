@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dbcli recover --apply` now runs the verifier after the main plan when `finalStatus === 'ok'`. Output gains `verifyResult` and `verifyStatus` (`passed | failed | indeterminate`). `--no-verify` opts out.
 - `--no-verify` flag on `dbcli recover --apply`.
 - `BLACKLIST_COLUMN_WRITE` allowlist now permits `dbcli inspect --for-agent` (used as the verifier).
+- `dbcli recover --next --after-step <n> --result <json|@file>` — multi-turn protocol that returns one deterministic step at a time, given the result of the previous step. Output is a `NextResult` envelope with `kind: 'step' | 'done'`, `cursor`, `totalSteps`, and (when stepping) the next `GuideStep`.
+- `--next` is mutually exclusive with `--apply`; `--result` accepts inline JSON or `@<path>` (file ≤ 64 KB; `stdoutSummary`/`stderrSummary` ≤ 4 KB each).
+- New `nextStepFromEnvelope` pure function and `StepResultSummary` / `NextResult` types in `src/core/recovery/next-step.ts` + `next-types.ts`. v1 walks the plan linearly; the function signature reserves `prevResult` for future per-code branching without breaking callers.
 
 ### Changed
 

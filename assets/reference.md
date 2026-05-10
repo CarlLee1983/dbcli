@@ -665,6 +665,74 @@ Exit codes are unchanged — `verifyStatus` is signal, not gate.
 **Schema additions.** `RecoveryEnvelope.verify?: GuideStep` is additive (no
 `schemaVersion` bump). v1.16 consumers ignore the field.
 
+#### Multi-turn `--next` (P2)
+
+`dbcli recover --next` returns the single next step in a saved recovery plan,
+given which step the agent just executed and the result of that step. v1 walks
+the plan linearly; future codes may branch on `prevResult.stdoutSummary`
+deterministically.
+
+| Flag | Required | Description |
+|---|---|---|
+| `--next` | yes | Activate the multi-turn lookup. |
+| `--after-step <n>` | yes | 1-based order of the step the agent just executed. Range: `[1, envelope.recovery.length]`. |
+| `--result <value>` | yes | JSON `StepResultSummary` (inline) or `@<path>` to read from a file. |
+| `--from <path>` | no | Override the auto-saved envelope. |
+| `--format <fmt>` | no | `json` (default) or `markdown`. |
+
+`--next` and `--apply` cannot be combined. `--allow-write` and `--no-verify`
+are silently ignored under `--next` (no execution, no verification).
+
+**`StepResultSummary` shape**
+
+```ts
+interface StepResultSummary {
+  status: 'ok' | 'failed' | 'skipped'
+  exitCode?: number
+  stdoutSummary?: string  // last 4 KB; longer rejected
+  stderrSummary?: string  // last 4 KB; longer rejected
+}
+```
+
+`@<path>` resolves relative to the dbcli invocation cwd. File whole-size cap is
+64 KB; per-field 4 KB cap still applies.
+
+**`NextResult` shape (output)**
+
+```ts
+interface NextResult {
+  schemaVersion: 1
+  kind: 'step' | 'done'
+  source: { kind: 'auto' | 'from'; path: string }
+  errorCode: RecoveryCode
+  cursor: number       // step.order when kind='step'; totalSteps when 'done'
+  totalSteps: number
+  step?: GuideStep     // present iff kind='step'
+}
+```
+
+**Exit codes**
+
+| Exit | Condition |
+|---|---|
+| 0 | Returned a step or `done`. |
+| 2 | Envelope missing/malformed; `--after-step` missing/out-of-range; `--result` missing/malformed; `--next` combined with `--apply`. |
+
+**Examples**
+
+```bash
+# Walk a 3-step plan to completion
+dbcli recover --next --after-step 1 --result '{"status":"ok"}'   # → step 2
+dbcli recover --next --after-step 2 --result '{"status":"ok"}'   # → step 3
+dbcli recover --next --after-step 3 --result '{"status":"ok"}'   # → done
+
+# Result read from file (when stdout is large)
+dbcli recover --next --after-step 1 --result @/tmp/r1.json
+
+# Markdown for human inspection
+dbcli recover --next --after-step 1 --result '{"status":"ok"}' --format markdown
+```
+
 **Permission:** n/a (always-allowed lookup; child processes inherit the active permission level).
 
 ### doctor

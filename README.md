@@ -133,33 +133,43 @@ The planner is cache-first (no network); add `--probe` to refresh the
 underlying inspect context. Use `--list` to see all goals,
 `--format markdown` for human reading, or `--for-agent` for compact JSON.
 
-### Recovery
+### Recovery & Guided Remediation
 
 ```bash
+# Lookup recovery commands for a code
 dbcli recovery --code CONN_REFUSED --format json
-dbcli recovery --list
+
+# Execute a failing command with recovery opt-in
 dbcli query "SELECT 1" --recovery
-dbcli q @diag/missing --recovery
-dbcli insert users --data '{"name":"a"}' --recovery
-dbcli update users --where "id=1" --set '{"name":"b"}' --recovery
-dbcli delete users --where "id=1" --recovery
-dbcli export "SELECT * FROM users" --format json --recovery
-dbcli schema users --recovery
-dbcli inspect --require-schema-cache --recovery
+
+# (v1.17.0+) Inspect or apply the last saved recovery plan
+dbcli recover                       # View last plan (Markdown)
+dbcli recover --apply               # Execute safe steps (readonly/dry-run)
+dbcli recover --apply --allow-write=readonly-cmd  # Allow local writes
+dbcli recover --apply --allow-write=write-cmd     # Allow database writes
+
+# (v1.17.0+) Multi-turn recovery (for AI agents)
+dbcli recover --next --after-step 1 --result '{"status":"ok"}'
 ```
 
-Machine-readable error envelope with deterministic recovery commands. As of
-v1.16.0 every first-party command that can fail (`query`, `q`, `insert`,
-`update`, `delete`, `export`, `schema`, `inspect`) accepts the opt-in
-`--recovery` flag. The standalone `dbcli recovery --code <CODE>` lookup is
-unchanged.
+Machine-readable error envelope with guided remediation. As of v1.16.0 every
+first-party command accepts the `--recovery` flag. In v1.17.0, the `recover`
+command was added to automate the execution of these plans.
+
+- **Risk Gating:** `--apply` is safe-by-default, running only `readonly` and
+  `dry-run` steps. Elevated tiers require `--allow-write`.
+- **Verification:** After a successful `--apply`, dbcli automatically runs a
+  verification step to confirm the fix actually worked.
+- **Multi-turn Protocol:** The `--next` flag allows agents to advance recovery
+  one step at a time, providing the result of the previous step to enable
+  deterministic branching.
 
 `dbcli inspect --require-schema-cache` throws `SCHEMA_CACHE_MISSING` when the
 active SQL connection has no usable schema cache; combine with `--recovery`
 to receive the structured envelope.
 
 For write commands (`insert` / `update` / `delete`), `BLACKLIST_COLUMN_WRITE`
-and `PERMISSION_DENIED` envelopes now lead with a `risk: 'dry-run'` step
+and `PERMISSION_DENIED` envelopes lead with a `risk: 'dry-run'` step
 that suggests previewing the SQL with `--dry-run` before re-attempting.
 
 ### MongoDB Atlas / SRV Connections

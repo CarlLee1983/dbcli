@@ -122,6 +122,10 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 1. `bun run src/cli.ts blacklist list` — 確認敏感資料已受保護
 2. `bun run src/cli.ts schema <table> --format json` — 確認目標表的真實欄位名稱
 3. 再執行 `query` / `insert` / `update` / `export` 等操作
+4. **發生錯誤時**：
+   - 帶有 `--recovery` 旗標的指令失敗時，會自動更新 `.dbcli/last-recovery.json`
+   - 使用 `bun run src/cli.ts recover` 檢視復原計畫
+   - 使用 `bun run src/cli.ts recover --apply` 自動執行安全修復步驟
 
 **嚴禁猜測欄位名。** 務必先用 `schema` 確認。
 

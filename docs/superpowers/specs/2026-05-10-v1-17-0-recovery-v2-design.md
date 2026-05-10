@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-10
 **Milestone:** v1.17.0
-**Status:** design — not yet planned
+**Status:** implemented (P2, P3, P4)
 **Baseline:** v1.16.0 shipped (`--recovery` covers query / q / insert / update / delete / export / schema / inspect; `writeOperation` adds dry-run step branches; 14 recovery codes; 6-step cap).
 
 ## Goal

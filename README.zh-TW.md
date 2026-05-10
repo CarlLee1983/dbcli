@@ -72,30 +72,34 @@ bun run src/cli.ts -- --help
 
 若 `dbcli` 未在 `PATH` 中，請使用 `bun run src/cli.ts <子指令> ...`（與 `bun run dev -- <子指令> ...` 相同）。
 
-### 第一步
+### 復原與引導式修復 (Recovery & Guided Remediation)
 
 ```bash
-# 以資料庫連線初始化專案
-dbcli init
+# 查詢特定代碼的復原指令
+dbcli recovery --code CONN_REFUSED --format json
 
-# 具備自動補全功能的互動式 Shell
-dbcli shell
+# 執行指令並在失敗時啟用復原信封
+dbcli query "SELECT 1" --recovery
 
-# 列出可用資料表
-dbcli list
+# (v1.17.0+) 檢視或執行最後一次儲存的復原計畫
+dbcli recover                       # 檢視最後一個計畫 (Markdown)
+dbcli recover --apply               # 執行安全步驟 (readonly/dry-run)
+dbcli recover --apply --allow-write=readonly-cmd  # 允許本機端寫入
+dbcli recover --apply --allow-write=write-cmd     # 允許資料庫端寫入
 
-# 檢視資料表結構
-dbcli schema users
-
-# 查詢資料
-dbcli query "SELECT * FROM users"
-
-# 預覽結構變更（DDL，預設 dry-run；實際套用請加 --execute）
-dbcli migrate create posts --column "id:serial:pk" --column "title:varchar(200):not-null"
-
-# 產生 AI 代理 skill
-dbcli skill --install claude
+# (v1.17.0+) 多輪對話復原協定 (供 AI 代理使用)
+dbcli recover --next --after-step 1 --result '{"status":"ok"}'
 ```
+
+具備引導修復能力的機器可讀錯誤信封。自 v1.16.0 起，所有核心指令皆支援 `--recovery` 旗標。在 v1.17.0 中，新增了 `recover` 指令來自動化執行這些計畫。
+
+- **風險門控 (Risk Gating)：** `--apply` 預設為安全優先，僅執行 `readonly` 與 `dry-run` 步驟。較高風險的操作需透過 `--allow-write` 授權。
+- **自動驗證：** 當 `--apply` 執行成功後，dbcli 會自動執行一個驗證步驟 (verify) 以確認修復是否生效。
+- **多輪對話協定：** `--next` 旗標允許 Agent 逐步執行復原，並提供上一步的執行結果，以實現決定性的分支邏輯。
+
+`dbcli inspect --require-schema-cache` 會在 SQL 連線缺少可用快取時拋出 `SCHEMA_CACHE_MISSING`；配合 `--recovery` 可取得結構化信封。
+
+針對寫入指令 (`insert` / `update` / `delete`)，`BLACKLIST_COLUMN_WRITE` 與 `PERMISSION_DENIED` 信封會優先提供 `risk: 'dry-run'` 步驟，建議在重試前先以 `--dry-run` 預覽 SQL。
 
 ### MongoDB Atlas / SRV 連線
 

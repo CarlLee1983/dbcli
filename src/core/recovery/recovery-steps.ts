@@ -27,6 +27,11 @@ function shellQuote(value: string): string {
  *
  * Returns null when the operation was not a write, so the readonly-only step
  * shape from v1.15.0 is preserved on read paths.
+ *
+ * Each verb requires args (`--data` / `--set` / `--where`) that the agent must
+ * supply. We embed them as `<...>` placeholders so the apply gate marks the
+ * step `skipped:placeholder` instead of running an arg-less command that would
+ * exit non-zero and fail-fast the recovery loop.
  */
 function dryRunStepForWrite(
   ctx: RecoveryContext,
@@ -35,14 +40,20 @@ function dryRunStepForWrite(
 ): StepDraft | null {
   if (!ctx.writeOperation) return null
   const verb = ctx.writeOperation.toLowerCase()
+  const argSpec =
+    verb === 'insert'
+      ? { fragment: '--data <data>', tokens: ['<data>'] }
+      : verb === 'update'
+        ? { fragment: '--set <set> --where <where>', tokens: ['<set>', '<where>'] }
+        : { fragment: '--where <where>', tokens: ['<where>'] }
   const draft: StepDraft = {
-    command: `dbcli ${verb} ${quotedTable} --dry-run`,
+    command: `dbcli ${verb} ${quotedTable} ${argSpec.fragment} --dry-run`,
     rationale:
       'Preview the SQL that would be executed before changing permission, blacklist, or data; --dry-run never mutates the database.',
     risk: 'dry-run',
     expects: 'Generated SQL output; no rows affected.',
+    placeholders: [...(placeholders ?? []), ...argSpec.tokens],
   }
-  if (placeholders && placeholders.length > 0) draft.placeholders = placeholders
   return draft
 }
 

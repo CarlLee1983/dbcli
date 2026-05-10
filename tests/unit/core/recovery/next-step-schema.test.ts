@@ -2,10 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  loadStepResultSummary,
-  parseStepResultSummary,
-} from '@/core/recovery/next-step-schema'
+import { loadStepResultSummary, parseStepResultSummary } from '@/core/recovery/next-step-schema'
 
 describe('parseStepResultSummary', () => {
   test('parses a minimal ok result', () => {

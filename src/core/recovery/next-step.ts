@@ -28,9 +28,7 @@ export function nextStepFromEnvelope(
     throw new RangeError(`afterStep must be >= 1 (got ${afterStep})`)
   }
   if (afterStep > envelope.recovery.length) {
-    throw new RangeError(
-      `afterStep ${afterStep} exceeds plan length ${envelope.recovery.length}`
-    )
+    throw new RangeError(`afterStep ${afterStep} exceeds plan length ${envelope.recovery.length}`)
   }
   if (afterStep === envelope.recovery.length) return { kind: 'done' }
   return { kind: 'step', step: envelope.recovery[afterStep]! }

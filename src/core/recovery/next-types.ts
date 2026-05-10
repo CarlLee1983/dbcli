@@ -23,9 +23,7 @@ export interface StepResultSummary {
 export const STEP_RESULT_SUMMARY_FIELD_CAP = 4096
 
 /** Output of `nextStepFromEnvelope`. */
-export type NextStepOutput =
-  | { kind: 'step'; step: GuideStep }
-  | { kind: 'done' }
+export type NextStepOutput = { kind: 'step'; step: GuideStep } | { kind: 'done' }
 
 /** Top-level shape rendered to stdout by `dbcli recover --next`. */
 export interface NextResult {

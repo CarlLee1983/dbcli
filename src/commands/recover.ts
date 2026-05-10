@@ -17,6 +17,11 @@ import {
   parseRecoveryEnvelope,
   parseSavedRecoveryEnvelope,
 } from '@/core/recovery/envelope-schema'
+import { nextStepFromEnvelope } from '@/core/recovery/next-step'
+import { loadStepResultSummary } from '@/core/recovery/next-step-schema'
+import { renderNextJson } from '@/core/recovery/next-render-json'
+import { renderNextMarkdown } from '@/core/recovery/next-render-markdown'
+import { NEXT_SCHEMA_VERSION, type NextResult } from '@/core/recovery/next-types'
 import { validateFormat } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
@@ -143,6 +148,61 @@ function exitCodeFor(finalStatus: 'ok' | 'failed' | 'skipped-only'): number {
   }
 }
 
+async function runNext(
+  options: Record<string, unknown>,
+  source: ResolvedSource
+): Promise<NextResult> {
+  const afterStepRaw = options.afterStep
+  if (afterStepRaw === undefined) {
+    throw new RecoverCliError('--next requires --after-step <n>.', EXIT_CODE.malformed)
+  }
+  const afterStep = Number(afterStepRaw)
+  if (!Number.isInteger(afterStep)) {
+    throw new RecoverCliError(
+      `--after-step must be an integer (got '${afterStepRaw}').`,
+      EXIT_CODE.malformed
+    )
+  }
+
+  const resultArg = options.result as string | undefined
+  if (resultArg === undefined) {
+    throw new RecoverCliError('--next requires --result <json|@file>.', EXIT_CODE.malformed)
+  }
+  const parsed = await loadStepResultSummary(resultArg, process.cwd())
+  if (!parsed.ok) {
+    throw new RecoverCliError(parsed.reason ?? '--result invalid.', EXIT_CODE.malformed)
+  }
+
+  const env = source.envelope
+  let outcome
+  try {
+    outcome = nextStepFromEnvelope(env, afterStep, parsed.value!)
+  } catch (e) {
+    throw new RecoverCliError((e as Error).message, EXIT_CODE.malformed)
+  }
+
+  const totalSteps = env.recovery.length
+  if (outcome.kind === 'done') {
+    return {
+      schemaVersion: NEXT_SCHEMA_VERSION,
+      kind: 'done',
+      source: { kind: source.kind, path: source.path },
+      errorCode: env.error.code,
+      cursor: totalSteps,
+      totalSteps,
+    }
+  }
+  return {
+    schemaVersion: NEXT_SCHEMA_VERSION,
+    kind: 'step',
+    source: { kind: source.kind, path: source.path },
+    errorCode: env.error.code,
+    cursor: outcome.step.order,
+    totalSteps,
+    step: outcome.step,
+  }
+}
+
 export const recoverCommand = new Command()
   .name('recover')
   .description('Inspect or apply the last recovery plan')
@@ -153,14 +213,22 @@ export const recoverCommand = new Command()
     `Open the risk gate one tier; values: ${ALLOWED_TIERS.join(' | ')}`
   )
   .option('--no-verify', 'Skip the verify step appended after a successful --apply')
+  .option('--next', 'Look up the single next step in the multi-turn protocol', false)
+  .option('--after-step <n>', 'For --next: 1-based order of the step the agent just executed')
+  .option(
+    '--result <value>',
+    'For --next: JSON StepResultSummary (or @<path> to read from a file)'
+  )
   .option(
     '--format <format>',
-    'Output format: markdown | json (default: markdown for inspect, json for --apply)'
+    'Output format: markdown | json (default: markdown for inspect, json for --apply / --next)'
   )
   .action(async (options: Record<string, unknown>) => {
     try {
       const explicitFormat = options.format as string | undefined
-      const format = explicitFormat ?? (options.apply === true ? 'json' : 'markdown')
+      const format =
+        explicitFormat ??
+        (options.apply === true || options.next === true ? 'json' : 'markdown')
       validateFormat(format, ALLOWED_FORMATS, 'recover')
 
       const allowWriteRaw = options.allowWrite as string | undefined
@@ -179,6 +247,20 @@ export const recoverCommand = new Command()
         from: options.from as string | undefined,
         cwd: process.cwd(),
       })
+
+      if (options.next === true) {
+        if (options.apply === true) {
+          throw new RecoverCliError(
+            '--next and --apply cannot be combined.',
+            EXIT_CODE.malformed
+          )
+        }
+        const result = await runNext(options, source)
+        const out =
+          format === 'markdown' ? renderNextMarkdown(result) : renderNextJson(result)
+        console.log(out)
+        return
+      }
 
       if (options.apply !== true) {
         const out =

@@ -21,7 +21,6 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
     }
     if (/^DBCLI_/i.test(k)) continue
     if (k === 'DATABASE_URL') continue
-    // Don't copy PATH yet, we'll set it at the end
     if (uk === 'PATH') continue
     
     out[k] = v
@@ -30,8 +29,6 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
   
-  // On Windows, PATH is case-insensitive but Node/Bun might be picky about which key we use.
-  // We'll set all variations to be safe.
   const finalPath = FIXTURE 
     ? `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${originalPath}`
     : originalPath
@@ -50,11 +47,11 @@ function run(
   cwd: string
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
-    // On Windows, 'bun' might need to be resolved via shell or full path.
-    const child = spawn('bun', ['run', CLI, ...args], { 
+    // Using process.execPath (bun) directly is more reliable than 'bun' string on some Windows setups.
+    // Avoid shell: true to prevent argument quoting/splitting issues.
+    const child = spawn(process.execPath, ['run', CLI, ...args], { 
       cwd, 
-      env: sanitizeEnv(),
-      shell: process.platform === 'win32'
+      env: sanitizeEnv()
     })
     let stdout = ''
     let stderr = ''
@@ -76,8 +73,6 @@ beforeAll(async () => {
   // Create a local dbcli shim so recovery steps find it on PATH
   const shimName = process.platform === 'win32' ? 'dbcli.cmd' : 'dbcli'
   const shimPath = join(FIXTURE, shimName)
-  // On Windows, the shim needs to be a batch file that calls bun run.
-  // Using full path to CLI to avoid any resolution issues.
   const shimContent = process.platform === 'win32'
     ? `@bun run "${CLI}" %*`
     : `#!/bin/sh\nbun run "${CLI}" "$@"`

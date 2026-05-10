@@ -19,6 +19,9 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   }
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
+  // Ensure local bin is on path for recovery steps
+  const localBin = resolve(import.meta.dir, '../../node_modules/.bin')
+  out.PATH = `${localBin}${process.platform === 'win32' ? ';' : ':'}${out.PATH || ''}`
   return out
 }
 

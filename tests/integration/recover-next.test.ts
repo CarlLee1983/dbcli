@@ -156,15 +156,7 @@ describe('dbcli recover --next error paths', () => {
   test('--next + --apply exits 2', async () => {
     await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
     const r = await run(
-      [
-        'recover',
-        '--next',
-        '--apply',
-        '--after-step',
-        '1',
-        '--result',
-        '{"status":"ok"}',
-      ],
+      ['recover', '--next', '--apply', '--after-step', '1', '--result', '{"status":"ok"}'],
       FIXTURE
     )
     expect(r.code).toBe(2)
@@ -193,10 +185,7 @@ describe('dbcli recover --next error paths', () => {
 
   test('--result malformed JSON exits 2', async () => {
     await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
-    const r = await run(
-      ['recover', '--next', '--after-step', '1', '--result', 'not json'],
-      FIXTURE
-    )
+    const r = await run(['recover', '--next', '--after-step', '1', '--result', 'not json'], FIXTURE)
     expect(r.code).toBe(2)
     expect(r.stderr).toContain('JSON')
   })
@@ -219,10 +208,7 @@ describe('dbcli recover --next --result @file', () => {
       join(FIXTURE, 'r.json'),
       JSON.stringify({ status: 'ok', exitCode: 0, stdoutSummary: 'snapshot' })
     )
-    const r = await run(
-      ['recover', '--next', '--after-step', '1', '--result', '@r.json'],
-      FIXTURE
-    )
+    const r = await run(['recover', '--next', '--after-step', '1', '--result', '@r.json'], FIXTURE)
     expect(r.code).toBe(0)
     const j = JSON.parse(r.stdout)
     expect(j.kind).toBe('step')
@@ -305,5 +291,49 @@ describe('dbcli recover --next --from <file>', () => {
     expect(j.kind).toBe('step')
     expect(j.cursor).toBe(3)
     expect(j.source.kind).toBe('from')
+  })
+})
+
+describe('dbcli recover --next flag precedence', () => {
+  test('--next + --apply is rejected before envelope resolution', async () => {
+    // Use a fresh empty cwd with no .dbcli/last-recovery.json — the mutual
+    // exclusion check must fire before we try to read the missing envelope.
+    const emptyCwd = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recover-next-empty-')))
+    const r = await run(
+      [
+        'recover',
+        '--next',
+        '--apply',
+        '--after-step',
+        '1',
+        '--result',
+        '{"status":"ok"}',
+      ],
+      emptyCwd
+    )
+    expect(r.code).toBe(2)
+    expect(r.stderr).toContain('cannot be combined')
+    expect(r.stderr).not.toContain('No recovery plan available')
+  })
+
+  test('--next ignores --allow-write (any value, including invalid)', async () => {
+    await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
+    const r = await run(
+      [
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--result',
+        '{"status":"ok"}',
+        '--allow-write',
+        'bad',
+      ],
+      FIXTURE
+    )
+    expect(r.code).toBe(0)
+    const j = JSON.parse(r.stdout)
+    expect(j.kind).toBe('step')
+    expect(j.cursor).toBe(2)
   })
 })

@@ -215,32 +215,41 @@ export const recoverCommand = new Command()
   .option('--no-verify', 'Skip the verify step appended after a successful --apply')
   .option('--next', 'Look up the single next step in the multi-turn protocol', false)
   .option('--after-step <n>', 'For --next: 1-based order of the step the agent just executed')
-  .option(
-    '--result <value>',
-    'For --next: JSON StepResultSummary (or @<path> to read from a file)'
-  )
+  .option('--result <value>', 'For --next: JSON StepResultSummary (or @<path> to read from a file)')
   .option(
     '--format <format>',
     'Output format: markdown | json (default: markdown for inspect, json for --apply / --next)'
   )
   .action(async (options: Record<string, unknown>) => {
     try {
+      // Mutual exclusion check runs before any I/O so the contract holds even
+      // when no recovery file exists.
+      if (options.next === true && options.apply === true) {
+        throw new RecoverCliError(
+          '--next and --apply cannot be combined.',
+          EXIT_CODE.malformed
+        )
+      }
+
       const explicitFormat = options.format as string | undefined
       const format =
-        explicitFormat ??
-        (options.apply === true || options.next === true ? 'json' : 'markdown')
+        explicitFormat ?? (options.apply === true || options.next === true ? 'json' : 'markdown')
       validateFormat(format, ALLOWED_FORMATS, 'recover')
 
-      const allowWriteRaw = options.allowWrite as string | undefined
+      // --next is a pure lookup: --allow-write / --no-verify are orthogonal and
+      // silently ignored, so we only validate --allow-write outside --next mode.
       let allowWrite: AllowWrite = 'none'
-      if (allowWriteRaw !== undefined) {
-        if (!ALLOWED_TIERS.includes(allowWriteRaw as AllowWrite)) {
-          throw new RecoverCliError(
-            `Invalid --allow-write value '${allowWriteRaw}'. Allowed: ${ALLOWED_TIERS.join(', ')}`,
-            EXIT_CODE.malformed
-          )
+      if (options.next !== true) {
+        const allowWriteRaw = options.allowWrite as string | undefined
+        if (allowWriteRaw !== undefined) {
+          if (!ALLOWED_TIERS.includes(allowWriteRaw as AllowWrite)) {
+            throw new RecoverCliError(
+              `Invalid --allow-write value '${allowWriteRaw}'. Allowed: ${ALLOWED_TIERS.join(', ')}`,
+              EXIT_CODE.malformed
+            )
+          }
+          allowWrite = allowWriteRaw as AllowWrite
         }
-        allowWrite = allowWriteRaw as AllowWrite
       }
 
       const source = await resolveApplySource({
@@ -249,15 +258,8 @@ export const recoverCommand = new Command()
       })
 
       if (options.next === true) {
-        if (options.apply === true) {
-          throw new RecoverCliError(
-            '--next and --apply cannot be combined.',
-            EXIT_CODE.malformed
-          )
-        }
         const result = await runNext(options, source)
-        const out =
-          format === 'markdown' ? renderNextMarkdown(result) : renderNextJson(result)
+        const out = format === 'markdown' ? renderNextMarkdown(result) : renderNextJson(result)
         console.log(out)
         return
       }

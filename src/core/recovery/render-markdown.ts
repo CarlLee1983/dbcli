@@ -40,6 +40,12 @@ export function renderMarkdown(env: RecoveryEnvelope, options: RecoveryRenderOpt
   }
   lines.push('')
 
+  if (env.verify) {
+    lines.push('## Verification')
+    lines.push(...renderStep(env.verify, brief))
+    lines.push('')
+  }
+
   return lines.join('\n')
 }
 

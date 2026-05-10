@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-`error.code` argv allowlist enforced before any child-process execution; hand-authored envelopes cannot escalate beyond the steps dbcli already knows how to run.
 - Strict zod-based schema validation for envelopes from `--from <file>` and `.dbcli/last-recovery.json`. Missing `recovery`, missing `error.code`, malformed step shape, or wrong `schemaVersion` all surface as exit code 2 with a structured reason instead of crashing.
 - Exit-code matrix for `dbcli recover --apply`: `0` ok, `1` failed, `2` envelope missing/malformed, `3` skipped-only.
+- `RecoveryEnvelope.verify?: GuideStep` — optional read-only verifier appended by `classifyError()` per recovery code (additive, no `schemaVersion` bump).
+- `dbcli recover --apply` now runs the verifier after the main plan when `finalStatus === 'ok'`. Output gains `verifyResult` and `verifyStatus` (`passed | failed | indeterminate`). `--no-verify` opts out.
+- `--no-verify` flag on `dbcli recover --apply`.
+- `BLACKLIST_COLUMN_WRITE` allowlist now permits `dbcli inspect --for-agent` (used as the verifier).
 
 ### Changed
 

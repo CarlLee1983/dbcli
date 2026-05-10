@@ -129,6 +129,12 @@ const SHAPES: Record<RecoveryCode, ArgvShape[]> = {
       tier: 'readonly',
     },
     {
+      subcommand: 'inspect',
+      flagWhitelist: ['--for-agent', '--format'],
+      allowPositional: true,
+      tier: 'readonly',
+    },
+    {
       subcommand: 'schema',
       flagWhitelist: ['--format', '--refresh'],
       allowPositional: true,

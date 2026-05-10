@@ -585,6 +585,7 @@ Boundaries:
 | `--apply` | Execute the saved plan under risk gating. | off (inspect only) |
 | `--from <path>` | Read the envelope from this file instead of `.dbcli/last-recovery.json`. Accepts raw `RecoveryEnvelope` or `SavedRecoveryEnvelope`. | — |
 | `--allow-write <tier>` | Open the risk gate. Values: `readonly-cmd` (local-side writes) \| `write-cmd` (database writes). | `none` |
+| `--no-verify` | Skip the verify step appended after a successful `--apply`. | off (verify runs by default) |
 | `--format <format>` | `markdown` \| `json`. | `markdown` for inspect, `json` for `--apply` |
 
 #### Plan source resolution
@@ -633,6 +634,36 @@ Precedence: envelope `interactive: true` > `placeholder` > `unsafe-command` > al
 #### Auto-saved envelope
 
 Every command that emits a `RecoveryEnvelope` (`query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, `inspect` — all with `--recovery`) atomically writes the envelope to `.dbcli/last-recovery.json`. The wrapper carries `schemaVersion`, `savedAt`, a sanitized `command` summary, the workspace `cwd`, and the envelope itself. SQL text and `--where` / `--set` / `--data` / `--param` values are redacted as `<sql>` or `<redacted>`. `.dbcli/` is gitignored.
+
+#### Verification (P4)
+
+Each `RecoveryEnvelope` now carries an optional `verify: GuideStep` (always
+`risk: 'readonly'`, never carries placeholders). `dbcli recover --apply` runs
+the verify step after the main plan, only when `finalStatus === 'ok'` and
+`--no-verify` is not set.
+
+| Recovery code | Verify command | Heuristic |
+|---|---|---|
+| CONFIG_MISSING | `dbcli inspect --no-connect --format json` | `connection.name` truthy → passed |
+| CONN_REFUSED / CONN_TIMEOUT / CONN_UNKNOWN / CONN_AUTH_FAILED / CONN_HOST_NOT_FOUND | `dbcli doctor --format json` | exit 0 → passed |
+| PERMISSION_DENIED | `dbcli inspect --for-agent` | exit 0 → passed |
+| BLACKLIST_TABLE | `dbcli inspect --for-agent` | exit 0 → passed |
+| BLACKLIST_COLUMN_WRITE | `dbcli inspect --for-agent` | exit 0 → passed |
+| SNIPPET_NOT_FOUND / SNIPPET_AMBIGUOUS / SNIPPET_PARAM_MISSING | `dbcli queries list --format json` | exit 0 → passed |
+| SCHEMA_CACHE_MISSING | `dbcli inspect --format json` | `schemaCache.available === true` → passed |
+| UNKNOWN | `dbcli doctor --format json` | exit 0 → passed |
+
+`verifyStatus` values:
+
+- `passed` — heuristic confirmed.
+- `failed` — verifier exited non-zero or timed out.
+- `indeterminate` — verifier exited 0 but expected shape not present, or the
+  step was gated (placeholder / unsafe-command); agents should re-check.
+
+Exit codes are unchanged — `verifyStatus` is signal, not gate.
+
+**Schema additions.** `RecoveryEnvelope.verify?: GuideStep` is additive (no
+`schemaVersion` bump). v1.16 consumers ignore the field.
 
 **Permission:** n/a (always-allowed lookup; child processes inherit the active permission level).
 

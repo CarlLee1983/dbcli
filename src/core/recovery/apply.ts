@@ -1,5 +1,6 @@
 import { classifyStep } from './apply-gate'
 import { executeStep, type ExecOutcome, type ExecOptions } from './apply-exec'
+import { runVerifyStep } from './apply-verify'
 import {
   APPLY_SCHEMA_VERSION,
   type ApplyInput,
@@ -7,6 +8,7 @@ import {
   type ApplyResult,
   type FinalStatus,
   type StepResult,
+  type VerifyStatus,
 } from './apply-types'
 
 type Executor = (argv: string[], opts: ExecOptions) => Promise<ExecOutcome>
@@ -71,6 +73,25 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
     finalStatus = 'ok'
   }
 
+  let verifyResult: StepResult | undefined
+  let verifyStatus: VerifyStatus | undefined
+  if (
+    finalStatus === 'ok' &&
+    opts.noVerify !== true &&
+    input.envelope.verify !== undefined
+  ) {
+    const v = await runVerifyStep(input.envelope.verify, {
+      code: input.envelope.error.code,
+      cwd: input.cwd,
+      env: process.env,
+      timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      stdoutCap: opts.stdoutCap,
+      stderrCap: opts.stderrCap,
+    })
+    verifyResult = v.result
+    verifyStatus = v.status
+  }
+
   return {
     schemaVersion: APPLY_SCHEMA_VERSION,
     startedAt,
@@ -80,5 +101,7 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
     results,
     finalStatus,
     stoppedAt,
+    ...(verifyResult ? { verifyResult } : {}),
+    ...(verifyStatus ? { verifyStatus } : {}),
   }
 }

@@ -318,3 +318,131 @@ describe('dbcli recover (no --apply)', () => {
     expect(j.error.code).toBe('BLACKLIST_TABLE')
   })
 })
+
+describe('dbcli recover --apply verify (P4)', () => {
+  test('runs verify after success on BLACKLIST_TABLE and reports verifyStatus passed', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+      ],
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --for-agent',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
+    })
+    const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], FIXTURE)
+    expect(code).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.finalStatus).toBe('ok')
+    expect(payload.verifyStatus).toBe('passed')
+    expect(payload.verifyResult).toBeDefined()
+    expect(payload.verifyResult.command).toBe('dbcli inspect --for-agent')
+    expect(payload.verifyResult.status).toBe('ok')
+  })
+
+  test('no-verify flag suppresses the verify step', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+      ],
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --for-agent',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
+    })
+    const { stdout, code } = await run(
+      ['recover', '--apply', '--no-verify', '--format', 'json'],
+      FIXTURE
+    )
+    expect(code).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.finalStatus).toBe('ok')
+    expect(payload.verifyStatus).toBeUndefined()
+    expect(payload.verifyResult).toBeUndefined()
+  })
+
+  test('skipped-only main loop suppresses verify', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli blacklist remove orders',
+          rationale: '',
+          risk: 'write',
+          expects: '',
+        },
+      ],
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --for-agent',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
+    })
+    const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], FIXTURE)
+    expect(code).toBe(3)
+    const payload = JSON.parse(stdout)
+    expect(payload.finalStatus).toBe('skipped-only')
+    expect(payload.verifyStatus).toBeUndefined()
+  })
+
+  test('SCHEMA_CACHE_MISSING verify uses inspect --format json and reports passed when cache available', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'SCHEMA_CACHE_MISSING', category: 'schema-cache', message: 'x' },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
+      ],
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --format json',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
+    })
+    const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], FIXTURE)
+    expect(code).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.verifyStatus).toBe('passed')
+  })
+})

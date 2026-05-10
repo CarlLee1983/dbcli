@@ -152,6 +152,7 @@ export const recoverCommand = new Command()
     '--allow-write <tier>',
     `Open the risk gate one tier; values: ${ALLOWED_TIERS.join(' | ')}`
   )
+  .option('--no-verify', 'Skip the verify step appended after a successful --apply')
   .option(
     '--format <format>',
     'Output format: markdown | json (default: markdown for inspect, json for --apply)'
@@ -186,13 +187,14 @@ export const recoverCommand = new Command()
         return
       }
 
+      const noVerify = options.verify === false
       const result = await runApply(
         {
           envelope: source.envelope,
           cwd: source.cwd,
           source: { kind: source.kind, path: source.path },
         },
-        { allowWrite }
+        { allowWrite, noVerify }
       )
 
       const out = format === 'markdown' ? renderApplyMarkdown(result) : renderApplyJson(result)

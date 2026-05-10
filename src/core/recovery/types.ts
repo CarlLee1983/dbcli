@@ -72,6 +72,8 @@ export interface RecoveryEnvelope {
   error: RecoveryError
   /** Ordered, deterministic recovery plan. Capped by `MAX_RECOVERY_STEPS` (6). */
   recovery: GuideStep[]
+  /** v1.17.0 P4: optional read-only probe appended by classifyError; runs only after `--apply` succeeds. */
+  verify?: GuideStep
 }
 
 /**

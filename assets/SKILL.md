@@ -20,6 +20,11 @@ Database CLI for AI agents with permission-based access control.
      - `interactive: true` — step requires a TTY (`dbcli init` family). `dbcli recover --apply` skips with `skipped:interactive`.
      - `dbWrite: true` — step mutates the connected database. Gates the highest risk tier; reserved for future write-side recovery steps.
      - `placeholders: ['<token>', ...]` — agent must replace these tokens before `--apply` will execute. Skipped with `skipped:placeholder`.
+   - **v1.17.0 P4 Verification.** After `--apply` finishes the main plan, dbcli runs **one extra read-only step** (`envelope.verify`) to probe whether the original failure is gone. The output gains `verifyResult` (the executed step) and `verifyStatus`:
+     - `passed` — verifier exited 0 and (where applicable) the expected JSON shape was found.
+     - `failed` — verifier exited non-zero or timed out.
+     - `indeterminate` — verifier exited 0 but the heuristic could not confirm the fix (JSON parse failure, missing field, gate skip).
+     Verify is **only run when** `finalStatus === 'ok'`. Pass `--no-verify` to skip it. Heuristic is intentionally cheap; agents should still re-run their own check against the original failing operation when correctness matters.
 5. `dbcli blacklist list` — sensitive data boundaries.
 6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 7. Run `query` / `insert` / `update` / `delete` / `export` within permission.

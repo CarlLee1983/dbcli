@@ -3,6 +3,7 @@ import { PermissionError } from '@/core/permission-guard'
 import { BlacklistError } from '@/types/blacklist'
 import { SavedQueryError } from '@/core/saved-queries/types'
 import { stepsForCode } from './recovery-steps'
+import { verifyForCode } from './verify-steps'
 import {
   RECOVERY_CODE_METADATA,
   RECOVERY_SCHEMA_VERSION,
@@ -15,13 +16,16 @@ import {
 
 export function classifyError(error: unknown, ctx: RecoveryContext): RecoveryEnvelope {
   const recoveryError = errorToRecoveryError(error, ctx)
-  const recovery = stepsForCode(recoveryError.code, applyDetailsToContext(ctx, recoveryError))
+  const ctxWithDetails = applyDetailsToContext(ctx, recoveryError)
+  const recovery = stepsForCode(recoveryError.code, ctxWithDetails)
+  const verify = verifyForCode(recoveryError.code, ctxWithDetails)
   return {
     schemaVersion: RECOVERY_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     ok: false,
     error: recoveryError,
     recovery,
+    ...(verify !== null ? { verify } : {}),
   }
 }
 

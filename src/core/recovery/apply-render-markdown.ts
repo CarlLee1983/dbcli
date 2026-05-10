@@ -20,6 +20,14 @@ export function renderApplyMarkdown(result: ApplyResult): string {
     lines.push(`- stoppedAt: \`${result.stoppedAt}\``)
   }
   lines.push('')
+  if (result.verifyResult) {
+    lines.push('## Verification')
+    lines.push(...renderStep(result.verifyResult))
+    if (result.verifyStatus) {
+      lines.push(`- verifyStatus: \`${result.verifyStatus}\``)
+    }
+    lines.push('')
+  }
   return lines.join('\n')
 }
 

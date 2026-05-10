@@ -147,3 +147,36 @@ describe('classifyError', () => {
     expect(env.error.details?.snippet).toBe('@diag/foo')
   })
 })
+
+describe('classifyError populates envelope.verify', () => {
+  test('CONN_REFUSED envelope carries doctor verify', () => {
+    const env = classifyError(new ConnectionError('ECONNREFUSED', 'refused', []), {
+      operation: 'query',
+    })
+    expect(env.error.code).toBe('CONN_REFUSED')
+    expect(env.verify).toBeDefined()
+    expect(env.verify!.risk).toBe('readonly')
+    expect(env.verify!.command).toBe('dbcli doctor --format json')
+  })
+
+  test('BLACKLIST_TABLE envelope carries inspect --for-agent verify', () => {
+    const env = classifyError(new BlacklistError('blocked', 'users', 'SELECT'), {
+      operation: 'query',
+      table: 'users',
+    })
+    expect(env.error.code).toBe('BLACKLIST_TABLE')
+    expect(env.verify!.command).toBe('dbcli inspect --for-agent')
+  })
+
+  test('CONFIG_MISSING envelope carries inspect --no-connect verify', () => {
+    const env = classifyError(new Error('Run "dbcli init" first'), { operation: 'query' })
+    expect(env.error.code).toBe('CONFIG_MISSING')
+    expect(env.verify!.command).toBe('dbcli inspect --no-connect --format json')
+  })
+
+  test('UNKNOWN fallback envelope still has a verify step', () => {
+    const env = classifyError(new Error('boom'), { operation: 'query' })
+    expect(env.error.code).toBe('UNKNOWN')
+    expect(env.verify).toBeDefined()
+  })
+})

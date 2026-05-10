@@ -48,6 +48,9 @@ export interface StepResult {
 
 export type FinalStatus = 'ok' | 'failed' | 'skipped-only'
 
+/** Heuristic verdict for the verify step (P4). See `verify-heuristic.ts`. */
+export type VerifyStatus = 'passed' | 'failed' | 'indeterminate'
+
 export interface ApplySource {
   kind: 'auto' | 'from'
   path: string
@@ -69,6 +72,8 @@ export interface ApplyOptions {
   stderrCap?: number
   /** Override clock for testing. */
   now?: () => number
+  /** P4: skip the verify step even when finalStatus is 'ok'. Default false. */
+  noVerify?: boolean
 }
 
 export interface ApplyResult {
@@ -81,6 +86,9 @@ export interface ApplyResult {
   finalStatus: FinalStatus
   /** 1-based `order` of the step that caused fail-fast; null otherwise. */
   stoppedAt: number | null
+  /** P4: present iff verify ran (i.e. finalStatus === 'ok' && !noVerify && envelope.verify). */
+  verifyResult?: StepResult
+  verifyStatus?: VerifyStatus
 }
 
 export interface SavedRecoveryEnvelope {

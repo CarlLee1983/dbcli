@@ -45,7 +45,7 @@ function run(
 }
 
 beforeAll(async () => {
-  const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-'))
+  const work = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recovery-')))
   await cp(FIXTURE_SRC, work, { recursive: true })
   const idxPath = resolve(work, '.dbcli/schemas/index.json')
   const raw = JSON.parse(await readFile(idxPath, 'utf8'))
@@ -54,7 +54,7 @@ beforeAll(async () => {
   FIXTURE = work
 
   // Truly empty workspace under tmpdir — no inherited .env, no schema cache.
-  NO_CONFIG = await mkdtemp(join(tmpdir(), 'dbcli-recovery-empty-'))
+  NO_CONFIG = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recovery-empty-')))
 })
 
 describe('dbcli recovery (CLI lookup)', () => {
@@ -446,7 +446,7 @@ describe('auto-saved .dbcli/last-recovery.json', () => {
     expect(saved.schemaVersion).toBe(1)
     expect(saved.command.startsWith('dbcli query')).toBe(true)
     expect(saved.command).toContain('<sql>')
-    expect(saved.cwd).toBe(await realpath(NO_CONFIG))
+    expect(await realpath(saved.cwd)).toBe(await realpath(NO_CONFIG))
     expect(saved.envelope.error.code).toBeDefined()
   })
 

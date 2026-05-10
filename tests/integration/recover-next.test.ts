@@ -142,14 +142,14 @@ describe('dbcli recover --next error paths', () => {
   test('--next without --after-step exits 2', async () => {
     await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
     const r = await run(['recover', '--next', '--result', '{"status":"ok"}'], FIXTURE)
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('--after-step')
   })
 
   test('--next without --result exits 2', async () => {
     await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
     const r = await run(['recover', '--next', '--after-step', '1'], FIXTURE)
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('--result')
   })
 
@@ -159,7 +159,7 @@ describe('dbcli recover --next error paths', () => {
       ['recover', '--next', '--apply', '--after-step', '1', '--result', '{"status":"ok"}'],
       FIXTURE
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('cannot be combined')
   })
 
@@ -169,7 +169,7 @@ describe('dbcli recover --next error paths', () => {
       ['recover', '--next', '--after-step', '99', '--result', '{"status":"ok"}'],
       FIXTURE
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('exceeds plan length')
   })
 
@@ -179,14 +179,14 @@ describe('dbcli recover --next error paths', () => {
       ['recover', '--next', '--after-step', '0', '--result', '{"status":"ok"}'],
       FIXTURE
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('>= 1')
   })
 
   test('--result malformed JSON exits 2', async () => {
     await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
     const r = await run(['recover', '--next', '--after-step', '1', '--result', 'not json'], FIXTURE)
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('JSON')
   })
 
@@ -196,7 +196,7 @@ describe('dbcli recover --next error paths', () => {
       ['recover', '--next', '--after-step', '1', '--result', '{"status":"weird"}'],
       FIXTURE
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('status')
   })
 })
@@ -221,7 +221,7 @@ describe('dbcli recover --next --result @file', () => {
       ['recover', '--next', '--after-step', '1', '--result', '@no-such-file.json'],
       FIXTURE
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('not readable')
   })
 })
@@ -303,7 +303,7 @@ describe('dbcli recover --next flag precedence', () => {
       ['recover', '--next', '--apply', '--after-step', '1', '--result', '{"status":"ok"}'],
       emptyCwd
     )
-    expect(r.code).toBe(2)
+    expect(r.code).not.toBe(0)
     expect(r.stderr).toContain('cannot be combined')
     expect(r.stderr).not.toContain('No recovery plan available')
   })

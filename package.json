@@ -59,6 +59,7 @@
   "dependencies": {
     "cli-table3": "^0.6.5",
     "commander": "13.0.0",
+    "lru-cache": "^11.3.6",
     "mongodb": "^7.2.0",
     "mysql2": "^3.22.3",
     "pg": "^8.20.0",

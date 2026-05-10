@@ -187,22 +187,32 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `init` | n/a | Create `.dbcli` (v1 single or v2 multi via `--conn-name` / `--env-file`). **Usually run by the human** — do NOT re-run to strip `{"$env"}` references; that format is intentional. |
 | `use` | n/a | Show/switch default named connection (v2 only). |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
-| `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). |
-| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). |
-| `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. |
-| `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. |
-| `export` | query-only+ | SQL or MongoDB only. Query → CSV/JSON(L) file or stdout. |
+| `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
+| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). Supports `--recovery`. |
+| `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
+| `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. SQL / Elasticsearch DSL / read-only Redis bodies; blacklist enforced. Supports `--recovery`. |
+| `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
+| `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
+| `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. Supports `--recovery`. |
+| `export` | query-only+ | SQL or MongoDB only. Query → CSV/JSON(L) file or stdout. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
+| `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, suggested commands). `--for-agent` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
+| `report` | query-only+ | Diagnostic report (health / capacity / perf) built from `@diag/*` snippets. `--section`, `--brief`, `--for-agent`, `--no-connect`. |
+| `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. |
+| `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
+| `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
 | `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines + MongoDB shell only. |
+| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 `--use <name>` on any subcommand targets a v2 connection without changing the default.
+`--recovery` is honoured by `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`; on failure these emit a `RecoveryEnvelope` JSON to stdout, suppress the human stderr message, and atomically save the envelope to `.dbcli/last-recovery.json` for `dbcli recover` to consume.
 
 ## Permission levels
 

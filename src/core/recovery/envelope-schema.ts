@@ -57,6 +57,7 @@ export const recoveryEnvelopeSchema = z
       })
       .strict(),
     recovery: z.array(guideStepSchema),
+    verify: guideStepSchema.optional(),
   })
   .strict()
 

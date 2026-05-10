@@ -300,15 +300,7 @@ describe('dbcli recover --next flag precedence', () => {
     // exclusion check must fire before we try to read the missing envelope.
     const emptyCwd = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recover-next-empty-')))
     const r = await run(
-      [
-        'recover',
-        '--next',
-        '--apply',
-        '--after-step',
-        '1',
-        '--result',
-        '{"status":"ok"}',
-      ],
+      ['recover', '--next', '--apply', '--after-step', '1', '--result', '{"status":"ok"}'],
       emptyCwd
     )
     expect(r.code).toBe(2)

@@ -1,11 +1,12 @@
 # Milestones
 
-## v1.17.0 — Guided Remediation & Verification (Shipped: 2026-05-10)
+## v1.17.0 — Guided Remediation & Multi-turn Recovery (Shipped: 2026-05-10)
 
-**Scope:** P3 (recover --apply) and P4 (Verification step).
+**Scope:** P3 (recover --apply), P4 (Verification step), and P2 (Multi-turn protocol).
 
 **Key accomplishments:**
 - New `dbcli recover --apply` command to execute saved recovery plans under risk gating.
+- **P2 Multi-turn Protocol**: New `dbcli recover --next` command to advance recovery one step at a time with result payloads, allowing deterministic branching.
 - Auto-save of `RecoveryEnvelope` to `.dbcli/last-recovery.json` on any `--recovery` failure.
 - Robust risk gating with authoritative code-owned allowlist (trust boundary).
 - Support for `--allow-write=readonly-cmd` and `--allow-write=write-cmd` tiers.

@@ -225,10 +225,7 @@ export const recoverCommand = new Command()
       // Mutual exclusion check runs before any I/O so the contract holds even
       // when no recovery file exists.
       if (options.next === true && options.apply === true) {
-        throw new RecoverCliError(
-          '--next and --apply cannot be combined.',
-          EXIT_CODE.malformed
-        )
+        throw new RecoverCliError('--next and --apply cannot be combined.', EXIT_CODE.malformed)
       }
 
       const explicitFormat = options.format as string | undefined

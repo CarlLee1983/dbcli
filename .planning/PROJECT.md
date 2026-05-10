@@ -88,26 +88,22 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 **Skill 連線設定指引** — v1.9.1
 - [x] Skill 文件補上連線設定章節，引導 agent 正確初始化
 
-**Guided Remediation & Verification** — v1.17.0 (Phases P3-P4)
+**Guided Remediation & Multi-turn Recovery** — v1.17.0 (Phases P2-P4)
 - [x] `dbcli recover --apply` — 執行自動化復原計畫，具備風險門控 (Risk Gating)
+- [x] `dbcli recover --next` — 多輪對話協定 (P2)，支援遞增執行與結果回饋
 - [x] 自動存檔機制 — 失敗時自動將 `RecoveryEnvelope` 寫入 `.dbcli/last-recovery.json`
 - [x] 驗證步驟 (P4) — 計畫執行後自動執行 `verify` 指令確認問題是否解決
 - [x] 信任邊界 — 使用程式碼擁有的白名單 grammar 校驗指令安全，而非信任 Envelope 標籤
 
 ### Active
 
-**Recovery v2 Next Steps** — post-v1.17.0
-- [ ] 多輪對話協定 (P2) — 實作 `--next` 與 `RecoveryStepper` 決定性狀態機
-- [ ] 支援跨引擎的驗證啟發式 (Heuristics) 強化
-
-**ES / Redis Saved Queries** — post-1.9.1（feature branch 已 merge 到 `main`，待下個 release）
+**ES / Redis Saved Queries** — v1.10.0+ (Shipped)
 - [x] Engine strategy refactor（SQL / ES / Redis 拆成獨立 strategy）
 - [x] ES JSON-aware 參數注入、size guard、body validation、index 欄位
 - [x] Redis 命令白名單、raw 參數注入（含警告）、range / SCAN size guard
 - [x] 內建診斷 snippet：`es-cluster-health`、`redis-key-stats`
 - [x] `q @<name>` 與 `q --dry-run` 依 engine family 分派與格式化
 - [x] ES / Redis end-to-end saved query 整合測試
-- [ ] 決定下個 release tag（候選：1.10.0）並更新 MILESTONES.md
 
 ### Out of Scope (V1)
 

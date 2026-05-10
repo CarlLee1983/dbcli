@@ -75,11 +75,7 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
 
   let verifyResult: StepResult | undefined
   let verifyStatus: VerifyStatus | undefined
-  if (
-    finalStatus === 'ok' &&
-    opts.noVerify !== true &&
-    input.envelope.verify !== undefined
-  ) {
+  if (finalStatus === 'ok' && opts.noVerify !== true && input.envelope.verify !== undefined) {
     const v = await runVerifyStep(input.envelope.verify, {
       code: input.envelope.error.code,
       cwd: input.cwd,

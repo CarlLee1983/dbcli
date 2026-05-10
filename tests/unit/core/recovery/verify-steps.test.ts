@@ -65,14 +65,22 @@ describe('verifyForCode', () => {
   })
 
   test('blacklist + permission codes use inspect --for-agent', () => {
-    for (const code of ['BLACKLIST_TABLE', 'BLACKLIST_COLUMN_WRITE', 'PERMISSION_DENIED'] as const) {
+    for (const code of [
+      'BLACKLIST_TABLE',
+      'BLACKLIST_COLUMN_WRITE',
+      'PERMISSION_DENIED',
+    ] as const) {
       const step = verifyForCode(code, { operation: 'query' })!
       expect(step.command).toBe('dbcli inspect --for-agent')
     }
   })
 
   test('snippet codes use queries list --format json', () => {
-    for (const code of ['SNIPPET_NOT_FOUND', 'SNIPPET_AMBIGUOUS', 'SNIPPET_PARAM_MISSING'] as const) {
+    for (const code of [
+      'SNIPPET_NOT_FOUND',
+      'SNIPPET_AMBIGUOUS',
+      'SNIPPET_PARAM_MISSING',
+    ] as const) {
       const step = verifyForCode(code, { operation: 'q' })!
       expect(step.command).toBe('dbcli queries list --format json')
     }

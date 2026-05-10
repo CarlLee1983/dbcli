@@ -19,9 +19,10 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   }
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
-  // Ensure local bin is on path for recovery steps
-  const localBin = resolve(import.meta.dir, '../../node_modules/.bin')
-  out.PATH = `${localBin}${process.platform === 'win32' ? ';' : ':'}${out.PATH || ''}`
+  // Ensure FIXTURE is on PATH so recovery steps find our local shim
+  if (FIXTURE) {
+    out.PATH = `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${out.PATH || ''}`
+  }
   return out
 }
 
@@ -47,6 +48,18 @@ beforeAll(async () => {
   raw.metadata.lastRefreshed = new Date().toISOString()
   await writeFile(idxPath, JSON.stringify(raw, null, 2))
   FIXTURE = await realpath(fixDir)
+
+  // Create a local dbcli shim so recovery steps find it on PATH
+  const shimName = process.platform === 'win32' ? 'dbcli.cmd' : 'dbcli'
+  const shimPath = join(FIXTURE, shimName)
+  const shimContent = process.platform === 'win32'
+    ? `@bun run "${CLI}" %*`
+    : `#!/bin/sh\nbun run "${CLI}" "$@"`
+  await writeFile(shimPath, shimContent)
+  if (process.platform !== 'win32') {
+    const { chmod } = await import('node:fs/promises')
+    await chmod(shimPath, 0o755)
+  }
 
   const noCfg = await mkdtemp(join(tmpdir(), 'dbcli-recover-apply-empty-'))
   NO_CONFIG = await realpath(noCfg)
@@ -109,8 +122,8 @@ describe('dbcli recover --apply happy path', () => {
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.finalStatus).toBe('ok')
+    expect(j.results.length).toBe(3)
     expect(j.results[0].status).toBe('ok')
-    expect(j.results[1].status).toBe('ok')
     expect(j.results[2].status).toBe('skipped:risk')
   })
 

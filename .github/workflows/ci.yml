@@ -17,17 +17,8 @@ jobs:
       - run: bun install
 
       - name: Required validation (bun run typecheck && bun test)
-        shell: bash
         run: |
           bun run build
-          mkdir -p node_modules/.bin
-          ln -sf ../../dist/cli.mjs node_modules/.bin/dbcli
-          if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-            echo "bun \"$(pwd)/dist/cli.mjs\" \"\$@\"" > node_modules/.bin/dbcli
-            echo "@bun \"%~dp0\..\..\dist\cli.mjs\" %*" > node_modules/.bin/dbcli.cmd
-          fi
-          chmod +x node_modules/.bin/dbcli || true
-          ./dist/cli.mjs --version
           bun run typecheck
           bun test
         env:

@@ -18,6 +18,9 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   }
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
+  if (FIXTURE) {
+    out.PATH = `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${out.PATH || ''}`
+  }
   return out
 }
 
@@ -39,6 +42,18 @@ beforeAll(async () => {
   const fixDir = await mkdtemp(join(tmpdir(), 'dbcli-recover-next-'))
   await cp(FIXTURE_SRC, fixDir, { recursive: true })
   FIXTURE = await realpath(fixDir)
+
+  // Create a local dbcli shim so recovery steps find it on PATH
+  const shimName = process.platform === 'win32' ? 'dbcli.cmd' : 'dbcli'
+  const shimPath = join(FIXTURE, shimName)
+  const shimContent = process.platform === 'win32'
+    ? `@bun run "${CLI}" %*`
+    : `#!/bin/sh\nbun run "${CLI}" "$@"`
+  await writeFile(shimPath, shimContent)
+  if (process.platform !== 'win32') {
+    const { chmod } = await import('node:fs/promises')
+    await chmod(shimPath, 0o755)
+  }
 })
 
 async function seedSavedEnvelope(cwd: string, envelope: Record<string, unknown>): Promise<void> {

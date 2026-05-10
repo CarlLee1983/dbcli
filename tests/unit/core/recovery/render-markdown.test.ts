@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test'
 import { renderMarkdown, renderCodeList } from '@/core/recovery/render-markdown'
+import { renderApplyMarkdown } from '@/core/recovery/apply-render-markdown'
 import type { RecoveryEnvelope } from '@/core/recovery/types'
+import type { ApplyResult } from '@/core/recovery/apply-types'
 
 const ENV: RecoveryEnvelope = {
   schemaVersion: 1,
@@ -66,5 +68,93 @@ describe('renderCodeList', () => {
     expect(md).toContain('`SNIPPET_NOT_FOUND`')
     expect(md).toContain('`SCHEMA_CACHE_MISSING`')
     expect(md).toContain('`UNKNOWN`')
+  })
+})
+
+const envelopeWithVerify: RecoveryEnvelope = {
+  schemaVersion: 1,
+  generatedAt: '2026-05-10T11:30:00.000Z',
+  ok: false,
+  error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+  recovery: [
+    {
+      order: 1,
+      command: 'dbcli inspect --for-agent',
+      rationale: 'r',
+      risk: 'readonly',
+      expects: 'e',
+    },
+  ],
+  verify: {
+    order: 0,
+    command: 'dbcli inspect --for-agent',
+    rationale: 'verify',
+    risk: 'readonly',
+    expects: 'snapshot',
+  },
+}
+
+describe('renderMarkdown — verify section', () => {
+  test('renders ## Verification when env.verify is set', () => {
+    const md = renderMarkdown(envelopeWithVerify)
+    expect(md).toContain('## Verification')
+    expect(md).toContain('`dbcli inspect --for-agent`')
+  })
+
+  test('omits Verification heading when env.verify is undefined', () => {
+    const env: RecoveryEnvelope = { ...envelopeWithVerify }
+    delete (env as Partial<RecoveryEnvelope>).verify
+    const md = renderMarkdown(env)
+    expect(md).not.toContain('## Verification')
+  })
+})
+
+describe('renderApplyMarkdown — verification block', () => {
+  const applyResult: ApplyResult = {
+    schemaVersion: 1,
+    startedAt: 'a',
+    finishedAt: 'b',
+    source: { kind: 'auto', path: '.dbcli/last-recovery.json' },
+    envelope: envelopeWithVerify,
+    results: [
+      {
+        order: 1,
+        command: 'dbcli inspect --for-agent',
+        status: 'ok',
+        exitCode: 0,
+        durationMs: 5,
+        stdout: '',
+        stderr: '',
+        truncated: false,
+      },
+    ],
+    finalStatus: 'ok',
+    stoppedAt: null,
+    verifyResult: {
+      order: 0,
+      command: 'dbcli inspect --for-agent',
+      status: 'ok',
+      exitCode: 0,
+      durationMs: 4,
+      stdout: '{}',
+      stderr: '',
+      truncated: false,
+    },
+    verifyStatus: 'passed',
+  }
+
+  test('renders Verification heading + verifyStatus + command', () => {
+    const md = renderApplyMarkdown(applyResult)
+    expect(md).toContain('## Verification')
+    expect(md).toContain('verifyStatus: `passed`')
+    expect(md).toContain('`dbcli inspect --for-agent`')
+  })
+
+  test('omits Verification block when verifyResult is absent', () => {
+    const r: ApplyResult = { ...applyResult }
+    delete r.verifyResult
+    delete r.verifyStatus
+    const md = renderApplyMarkdown(r)
+    expect(md).not.toContain('## Verification')
   })
 })

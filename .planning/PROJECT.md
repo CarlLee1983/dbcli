@@ -88,7 +88,17 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 **Skill 連線設定指引** — v1.9.1
 - [x] Skill 文件補上連線設定章節，引導 agent 正確初始化
 
+**Guided Remediation & Verification** — v1.17.0 (Phases P3-P4)
+- [x] `dbcli recover --apply` — 執行自動化復原計畫，具備風險門控 (Risk Gating)
+- [x] 自動存檔機制 — 失敗時自動將 `RecoveryEnvelope` 寫入 `.dbcli/last-recovery.json`
+- [x] 驗證步驟 (P4) — 計畫執行後自動執行 `verify` 指令確認問題是否解決
+- [x] 信任邊界 — 使用程式碼擁有的白名單 grammar 校驗指令安全，而非信任 Envelope 標籤
+
 ### Active
+
+**Recovery v2 Next Steps** — post-v1.17.0
+- [ ] 多輪對話協定 (P2) — 實作 `--next` 與 `RecoveryStepper` 決定性狀態機
+- [ ] 支援跨引擎的驗證啟發式 (Heuristics) 強化
 
 **ES / Redis Saved Queries** — post-1.9.1（feature branch 已 merge 到 `main`，待下個 release）
 - [x] Engine strategy refactor（SQL / ES / Redis 拆成獨立 strategy）

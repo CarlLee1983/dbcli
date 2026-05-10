@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.17.0 — Guided Remediation & Verification (Shipped: 2026-05-10)
+
+**Scope:** P3 (recover --apply) and P4 (Verification step).
+
+**Key accomplishments:**
+- New `dbcli recover --apply` command to execute saved recovery plans under risk gating.
+- Auto-save of `RecoveryEnvelope` to `.dbcli/last-recovery.json` on any `--recovery` failure.
+- Robust risk gating with authoritative code-owned allowlist (trust boundary).
+- Support for `--allow-write=readonly-cmd` and `--allow-write=write-cmd` tiers.
+- Automatic verification step (`verify`) run after successful plan execution to confirm fix.
+- New `GuideStep` fields: `interactive`, `dbWrite`, `placeholders`.
+- Full aggregated JSON and Markdown output for recovery execution results.
+- Comprehensive documentation in `SKILL.md` and `reference.md`.
+
+---
+
 ## v1.11.0 — Saved Queries Discovery (Shipped: 2026-05-08)
 
 **Scope:** Make snippets discoverable for AI agents — keyword search, intent-prefix suggest, 9 new diagnostic snippets, expanded SKILL.md.

@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import type { StepResultSummary } from './next-types'
@@ -46,6 +47,12 @@ export async function loadStepResultSummary(
   let raw: string
   if (arg.startsWith('@')) {
     const path = resolve(cwd, arg.slice(1))
+    try {
+      await stat(path)
+    } catch {
+      return { ok: false, reason: `--result @<file>: ${path} not readable.` }
+    }
+
     let buf: Uint8Array
     try {
       buf = new Uint8Array(await Bun.file(path).arrayBuffer())

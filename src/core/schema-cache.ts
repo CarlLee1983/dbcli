@@ -49,7 +49,7 @@ export class SchemaCacheManager {
     this.cache = new LRUCache<string, TableSchema>({
       max: this.maxItems,
       maxSize: this.maxSize,
-      sizeCalculation: (schema) => JSON.stringify(schema).length,
+      sizeCalculation: (schema: TableSchema) => JSON.stringify(schema).length,
       allowStale: false,
       updateAgeOnGet: true,
       updateAgeOnHas: false,

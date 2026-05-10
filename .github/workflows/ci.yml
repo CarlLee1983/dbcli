@@ -18,13 +18,13 @@ jobs:
 
       - name: Required validation (bun run typecheck && bun test)
         run: |
+          bun run build
           bun run typecheck
           bun test
         env:
           SKIP_INTEGRATION_TESTS: 'true'
 
       - run: bun run lint
-      - run: bun run build
       - run: bun run dev -- --help
       - run: bun run dev -- --version
 

@@ -25,6 +25,24 @@ Database CLI for AI agents with permission-based access control.
      - `failed` — verifier exited non-zero or timed out.
      - `indeterminate` — verifier exited 0 but the heuristic could not confirm the fix (JSON parse failure, missing field, gate skip).
      Verify is **only run when** `finalStatus === 'ok'`. Pass `--no-verify` to skip it. Heuristic is intentionally cheap; agents should still re-run their own check against the original failing operation when correctness matters.
+   - **v1.17.0 P2 Multi-turn `--next`.** When `--apply` is too coarse — interactive blocks it, the plan needs per-step inspection, or the agent wants to drive recovery with its own tools — execute steps one at a time and ask dbcli for the next:
+
+     ```bash
+     # The agent reads step 1 from the envelope, runs it, then asks dbcli for step 2:
+     dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
+     # Returns a NextResult envelope:
+     # {
+     #   "schemaVersion": 1,
+     #   "kind": "step",
+     #   "errorCode": "BLACKLIST_TABLE",
+     #   "cursor": 2,
+     #   "totalSteps": 3,
+     #   "step": { "order": 2, "command": "dbcli inspect --for-agent", ... }
+     # }
+     # After the last step, dbcli returns kind: "done".
+     ```
+
+     `--result` accepts inline JSON `StepResultSummary` or `@<path>` to read from a file. `stdoutSummary` and `stderrSummary` are capped at 4 KB each — pre-truncate to the **last** 4 KB before passing. `--next` is mutually exclusive with `--apply`. Each call is independent (no persisted cursor) — the agent tracks `--after-step` itself.
 5. `dbcli blacklist list` — sensitive data boundaries.
 6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 7. Run `query` / `insert` / `update` / `delete` / `export` within permission.

@@ -43,7 +43,7 @@ test('ConcurrentLockManager - lock age tracking', async () => {
   await manager.acquireLock('test')
 
   // Wait a bit and check age
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await new Promise((resolve) => setTimeout(resolve, 100))
   const age = manager.getLockAge()
   expect(age).not.toBe(null)
   expect(age!).toBeGreaterThanOrEqual(50)

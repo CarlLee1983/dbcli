@@ -17,9 +17,12 @@ jobs:
       - run: bun install
 
       - name: Required validation (bun run typecheck && bun test)
+        shell: bash
         run: |
           bun run build
-          ls -l node_modules/.bin/dbcli || echo "dbcli not in node_modules/.bin"
+          mkdir -p node_modules/.bin
+          ln -sf ../../dist/cli.mjs node_modules/.bin/dbcli
+          chmod +x node_modules/.bin/dbcli || true
           ./dist/cli.mjs --version
           bun run typecheck
           bun test

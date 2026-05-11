@@ -30,7 +30,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    */
   format(
     result: QueryResult<Record<string, unknown>>,
-    options?: { compact?: boolean; format?: 'table' | 'json' | 'csv' }
+    options?: { compact?: boolean; format?: 'table' | 'json' | 'csv' | 'html' }
   ): string {
     const format = options?.format || 'table'
 

@@ -30,15 +30,15 @@ SELECT * FROM revenue`
   expect(visual).toBeDefined();
   expect(visual?.title).toBe("Monthly Revenue");
   expect(visual?.kpis).toHaveLength(1);
-  expect(visual?.kpis?.[0].label).toBe("Total");
-  expect(visual?.kpis?.[0].value_column).toBe("revenue");
-  expect(visual?.kpis?.[0].format).toBe("currency");
+  expect(visual?.kpis?.[0]?.label).toBe("Total");
+  expect(visual?.kpis?.[0]?.value_column).toBe("revenue");
+  expect(visual?.kpis?.[0]?.format).toBe("currency");
   
   expect(visual?.charts).toHaveLength(1);
-  expect(visual?.charts?.[0].type).toBe("line");
-  expect(visual?.charts?.[0].title).toBe("Revenue Over Time");
-  expect(visual?.charts?.[0].x).toBe("month");
-  expect(visual?.charts?.[0].y).toEqual(["revenue"]);
+  expect(visual?.charts?.[0]?.type).toBe("line");
+  expect(visual?.charts?.[0]?.title).toBe("Revenue Over Time");
+  expect(visual?.charts?.[0]?.x).toBe("month");
+  expect(visual?.charts?.[0]?.y).toEqual(["revenue"]);
 });
 
 test("parseSavedQuery handles missing visual metadata gracefully", () => {

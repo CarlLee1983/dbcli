@@ -102,7 +102,7 @@ export default function App() {
         {/* KPIs */}
         {visual.kpis && visual.kpis.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {visual.kpis.map((kpi, idx) => (
+            {visual.kpis.map((kpi: any, idx: number) => (
               <div key={idx} className="card p-6 border-l-4 border-l-primary-500 hover:shadow-md">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">{kpi.label}</p>
                 <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -120,7 +120,7 @@ export default function App() {
         {/* Charts */}
         {visual.charts && visual.charts.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {visual.charts.map((chart, idx) => (
+            {visual.charts.map((chart: any, idx: number) => (
               <div key={idx} className="card p-6 flex flex-col h-[450px]">
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function App() {
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} />
                         <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 2 }} />
                         <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }} />
-                        {chart.y.map((y, i) => (
+                        {chart.y.map((y: string, i: number) => (
                           <Line key={y} type="monotone" dataKey={y} stroke={COLORS[i % COLORS.length]} strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={1000} />
                         ))}
                       </LineChart>
@@ -153,14 +153,14 @@ export default function App() {
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                         <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }} />
-                        {chart.y.map((y, i) => (
+                        {chart.y.map((y: string, i: number) => (
                           <Bar key={y} dataKey={y} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} barSize={32} />
                         ))}
                       </BarChart>
                     ) : chart.type === 'area' ? (
                       <AreaChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                         <defs>
-                          {chart.y.map((y, i) => (
+                          {chart.y.map((y: string, i: number) => (
                             <linearGradient key={`grad-${y}`} id={`color-${y}`} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.3}/>
                               <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0}/>
@@ -172,7 +172,7 @@ export default function App() {
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} />
                         <Tooltip content={<CustomTooltip />} />
                         <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }} />
-                        {chart.y.map((y, i) => (
+                        {chart.y.map((y: string, i: number) => (
                           <Area key={y} type="monotone" dataKey={y} stroke={COLORS[i % COLORS.length]} strokeWidth={3} fillOpacity={1} fill={`url(#color-${y})`} />
                         ))}
                       </AreaChart>
@@ -189,7 +189,7 @@ export default function App() {
                           nameKey={chart.x}
                           stroke="none"
                         >
-                          {rows.map((_, index) => (
+                          {rows.map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -223,7 +223,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((row, i) => (
+                {rows.map((row: any, i: number) => (
                   <tr key={i} className="hover:bg-primary-50/30 transition-colors group">
                     {Object.values(row).map((val, j) => (
                       <td key={j} className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium group-hover:text-primary-700 transition-colors">

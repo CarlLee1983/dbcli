@@ -187,7 +187,7 @@ const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DES
 async function mongoQueryBranch(
   queryStr: string,
   options: {
-    format?: 'table' | 'json' | 'csv'
+    format?: 'table' | 'json' | 'csv' | 'html'
     limit?: number
     noLimit?: boolean
     collection?: string
@@ -268,7 +268,7 @@ async function mongoQueryBranch(
 
     const formatter = new QueryResultFormatter()
     const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
-      format: format as 'table' | 'json' | 'csv',
+      format,
     })
 
     // Add security notification if columns were omitted
@@ -289,7 +289,7 @@ async function mongoQueryBranch(
 async function redisQueryBranch(
   command: string,
   options: {
-    format?: 'table' | 'json' | 'csv'
+    format?: 'table' | 'json' | 'csv' | 'html'
     limit?: number
     noLimit?: boolean
     recovery?: boolean
@@ -338,7 +338,7 @@ async function redisQueryBranch(
 async function elasticsearchQueryBranch(
   queryStr: string,
   options: {
-    format?: 'table' | 'json' | 'csv'
+    format?: 'table' | 'json' | 'csv' | 'html'
     limit?: number
     noLimit?: boolean
     collection?: string
@@ -401,7 +401,7 @@ async function elasticsearchQueryBranch(
     }
     const formatter = new QueryResultFormatter()
     const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
-      format: format as 'table' | 'json' | 'csv',
+      format,
     })
     const securityNote = blacklistValidator.buildSecurityNotification(
       indexName,

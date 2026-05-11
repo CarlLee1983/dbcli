@@ -135,9 +135,13 @@ dbcli query "DEL stale:key"                      # requires data-admin+
 # Elasticsearch: DSL body or Lucene q-string
 dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
 dbcli query 'status:active AND amount:>100' --index orders --limit 50
+
+# Interactive HTML dashboard (see "Interactive HTML dashboard" below)
+dbcli query "SELECT day, dau FROM dau_daily" --ui                # open in browser
+dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdout
 ```
 
-**Options:** `--format <table|json|csv>`, `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`)
+**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
 
 > **MongoDB notes:**
@@ -197,15 +201,19 @@ dbcli q @dau --param days=30 --format json    # override a param
 dbcli q @analytics/revenue --param-file params.json
 dbcli q @dau --dry-run                        # show final SQL + bind values
 dbcli q @dau --no-limit                       # disable size guard wrap
+dbcli q @analytics/revenue --param days=30 --ui                       # open dashboard
+dbcli q @analytics/revenue --param days=30 --format html > report.html
 ```
 
 **Options:**
-- `--format <table|json|csv>` — output format (default: `table`)
+- `--format <table|json|csv|html>` — output format (default: `table`)
+- `--ui` — open the rendered HTML dashboard in the system browser (implies `--format html`; writes to a temp file then invokes `open` / `xdg-open` / `start`)
 - `--param <key=value>` — pass a parameter (repeatable)
 - `--param-file <path>` — JSON object whose keys are param names
 - `--no-limit` — skip the `SELECT * FROM (…) AS _dbcli_guard LIMIT 1000` wrap
 - `--dry-run` — print the bound SQL + values without executing
 - `--use <name>` — pick a v2 named connection
+- `--recovery` — emit a `RecoveryEnvelope` on failure (see `recover`)
 
 **Permission:** query-only+
 
@@ -227,6 +235,12 @@ Each `.sql` file is plain SQL with optional YAML frontmatter inside a leading `-
 --     enum: [7, 30, 90]
 -- tags: [analytics]
 -- intent: perf.slow-query   # optional; consumed by `queries suggest`
+-- visual:                   # optional; consumed by `--ui` / `--format html`
+--   title: Daily Active Users
+--   kpis:
+--     - { label: DAU, value_column: dau, format: number }
+--   charts:
+--     - { type: line, title: DAU trend, x: day, y: [dau] }
 -- ---
 SELECT COUNT(DISTINCT user_id) AS dau
 FROM events
@@ -234,6 +248,8 @@ WHERE created_at > NOW() - (:days || ' days')::interval;
 ```
 
 Param placeholders use `:name`. They are rewritten to `$1, $2, …` (Postgres) or `?, ?, …` (MySQL) at execution time and passed as bind values — string interpolation is never used.
+
+The `visual:` block is documented in detail under [Interactive HTML dashboard](#interactive-html-dashboard) below. Unknown / malformed fields are silently dropped at parse time; the snippet still runs and the dashboard falls back to a sortable table.
 
 #### Param type coercion
 
@@ -410,10 +426,14 @@ Export query results to file or stdout.
 dbcli export "SELECT * FROM users" --format csv --output users.csv
 dbcli export "SELECT * FROM users" --format csv --output users.csv --force  # Skip overwrite confirmation
 dbcli export "SELECT * FROM users" --format json | jq '.[]'
+dbcli export "SELECT * FROM users" --format jsonl --output users.ndjson
+dbcli export "SELECT * FROM orders" --format html --output orders.html      # standalone dashboard
 ```
 
-**Options:** `--format <json|csv>` (required), `--output <path>`, `--force`
+**Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`
 **Permission:** query-only+
+
+The `html` format emits the same self-contained dashboard as `query --ui` (see [Interactive HTML dashboard](#interactive-html-dashboard)). Because `export` runs raw SQL (no snippet metadata), the HTML report is always rendered as a sortable / filterable table — no KPIs or charts. Use `dbcli q @<name> --format html` (or `--ui`) for the charted view.
 
 ### blacklist
 
@@ -934,6 +954,108 @@ Task storage layers:
 
 Higher tiers override lower tiers by task name. Task name is derived from the
 file path under the tier root (e.g. `diag/inspect.md` → `diag/inspect`).
+
+## Interactive HTML dashboard
+
+`query`, `q`, and `export` can render results as a single, fully self-contained
+HTML file backed by a bundled React + Recharts template. The template lives at
+`assets/ui-template.html` and is installed alongside the binary; no external
+network, CDN, or runtime is required to view the report.
+
+### Entry points
+
+| Command form | Behaviour |
+|--------------|-----------|
+| `dbcli query "<sql>" --ui` | Render to a temp file under `$TMPDIR/dbcli-query-<ts>.html` and open with `open` / `xdg-open` / `start`. |
+| `dbcli q @<name> --ui` | Same, with snippet metadata (`name`, `description`, `visual:` block). |
+| `dbcli query "<sql>" --format html` | Print HTML to stdout (pipe, redirect, attach). |
+| `dbcli q @<name> --format html` | Same, snippet-aware. |
+| `dbcli export "<sql>" --format html --output report.html` | Write HTML to an explicit path; respects `--force` / overwrite confirmation. |
+
+`--ui` is a convenience flag — it implies `--format html` and then opens the
+file. `--ui` and `--format` are mutually compatible; passing both is allowed and
+behaves as `--ui`.
+
+### Data injection contract
+
+The template ships with a single placeholder, `/*DBCLI_PAYLOAD*/`, which dbcli
+replaces with:
+
+```js
+window.__DBCLI_PAYLOAD__ = { "meta": {...}, "rows": [...] };
+```
+
+Hardening rules applied before injection:
+
+- Payload is `JSON.stringify(...)`-encoded.
+- Every `<` is replaced with `<` so a malicious row containing `</script>`
+  cannot terminate the inline script tag.
+- Blacklist redaction (`dbcli blacklist`) runs **before** the formatter — masked
+  columns never reach the dashboard.
+- The replacement uses a function callback (`html.replace(..., () => injection)`)
+  so `$&`-style backreferences in the payload are not interpreted.
+
+### `meta` shape
+
+`meta` is the `SavedQueryMeta` object (see `dbcli queries show @<name> --format json`):
+
+```jsonc
+{
+  "name": "Revenue Trend",        // display title
+  "key":  "@analytics/revenue",   // snippet key, or "raw-sql" / "export"
+  "description": "...",           // free text (SQL preview for raw query)
+  "params": [...],                // ParamSpec[]
+  "tags":   ["analytics"],
+  "intent": "perf.slow-query",
+  "visual": { ... }               // optional, see below
+}
+```
+
+For raw `query` / `export` invocations, `meta.params` is `[]` and
+`meta.visual` is absent — the dashboard renders a sortable / filterable table.
+
+### `visual:` block (snippet frontmatter)
+
+```yaml
+visual:
+  title: Revenue (last :days days)   # optional override of meta.name
+  kpis:
+    - label: Total Revenue
+      value_column: total_revenue    # must exist in result rows
+      format: currency               # currency | number | percent (optional)
+    - label: Orders
+      value_column: order_count
+      format: number
+  charts:
+    - type: line                     # line | bar | area | pie | scatter
+      title: Daily Revenue
+      x: day                         # column for X axis
+      y: [revenue]                   # 1..N columns for series
+    - type: bar
+      title: By Channel
+      x: channel
+      y: [revenue, refunds]
+```
+
+Parser behaviour (`src/core/saved-queries/parser.ts::normaliseVisual`):
+
+- The block is **optional**. Missing → table-only render.
+- Items missing required fields (`kpi.label` + `kpi.value_column`, or
+  `chart.type` + `chart.x` + `chart.y[]`) are silently dropped.
+- Unknown `format` / `type` values are forwarded as strings; the dashboard
+  decides how to render them (unknown chart types fall back gracefully).
+- The snippet still executes as a normal SQL/DSL query — `visual:` only affects
+  the HTML renderer.
+
+### Limitations
+
+- The dashboard is read-only; there is no in-page editor or re-run button.
+- Raw `query` / `export` HTML output never shows KPIs or charts (no snippet
+  metadata is available). Use `dbcli q @<name>` for the charted view.
+- Engine support follows the underlying command: SQL, MongoDB (`--collection`),
+  Redis, and Elasticsearch (`--collection`) all render through the same template.
+- Very wide / very long result sets render as a single client-side table; for
+  >10k rows prefer `--format csv` / `--format jsonl` and a downstream tool.
 
 ## MongoDB Support
 

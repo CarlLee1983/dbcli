@@ -188,13 +188,13 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `use` | n/a | Show/switch default named connection (v2 only). |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
-| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). Supports `--recovery`. |
+| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. Supports `--recovery`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
-| `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. SQL / Elasticsearch DSL / read-only Redis bodies; blacklist enforced. Supports `--recovery`. |
+| `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. SQL / Elasticsearch DSL / read-only Redis bodies; blacklist enforced. `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard. Supports `--recovery`. |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
 | `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. Supports `--recovery`. |
-| `export` | query-only+ | SQL or MongoDB only. Query → CSV/JSON(L) file or stdout. Supports `--recovery`. |
+| `export` | query-only+ | SQL or MongoDB only. Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
@@ -285,8 +285,9 @@ Manage local snippets with `queries new | edit | delete | rename | copy | import
 local layer for editing.
 
 Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
-(name, description, engine, params, tags). See `dbcli queries show @<name> --format json`
-for the machine-readable contract.
+(name, description, engine, params, tags, optional `intent`, optional `visual`).
+The `visual:` block drives the interactive dashboard (see "Interactive HTML dashboard"
+below). See `dbcli queries show @<name> --format json` for the machine-readable contract.
 
 ### Engine-specific bodies
 
@@ -320,6 +321,58 @@ dbcli ships ready-made diagnostic queries. Run with `dbcli q @diag/<topic>`:
 Engine variants are picked automatically based on the active connection.
 Override any of them by placing a same-named file under `.dbcli-shared/queries/`
 or `.dbcli/queries/`.
+
+## Interactive HTML dashboard
+
+`query`, `q`, and `export` can render results as a standalone, self-contained HTML
+report powered by a bundled React + Recharts template (`assets/ui-template.html`,
+injected via a hardened `window.__DBCLI_PAYLOAD__ = {...}` block — `<` is escaped
+to neutralise `</script>` payloads).
+
+```bash
+# Open in browser (writes to a temp file, then `open`/`xdg-open`/`start`)
+dbcli query "SELECT day, dau FROM dau_daily" --ui
+dbcli q @analytics/revenue --param days=30 --ui
+
+# Pipe HTML to stdout (CI artifacts, email, static hosting)
+dbcli query "SELECT * FROM orders" --format html > orders.html
+
+# Export to a file (interchangeable with json/jsonl/csv)
+dbcli export "SELECT * FROM orders" --format html --output orders.html
+```
+
+`--ui` implies `--format html` and opens the file; `--format html` alone prints to
+stdout. Blacklist redaction is applied **before** rendering — the dashboard never
+sees masked columns.
+
+### Snippet `visual:` block
+
+To get KPIs and charts (rather than just a sortable table), add a `visual:` block
+to the snippet's frontmatter. Column names must exist in the result row.
+
+```sql
+-- ---
+-- name: Revenue Trend
+-- engine: postgres
+-- params:
+--   days: { type: int, default: 30 }
+-- visual:
+--   title: Revenue (last :days days)
+--   kpis:
+--     - { label: Total Revenue,  value_column: total_revenue, format: currency }
+--     - { label: Orders,         value_column: order_count,   format: number   }
+--     - { label: Conversion,     value_column: conv_rate,     format: percent  }
+--   charts:
+--     - { type: line, title: Daily Revenue, x: day, y: [revenue] }
+--     - { type: bar,  title: By Channel,    x: channel, y: [revenue, refunds] }
+-- ---
+SELECT ...
+```
+
+- `kpis[].format`: `currency` / `number` / `percent` (omit for raw value).
+- `charts[].type`: `line` / `bar` / `area` / `pie` / `scatter`.
+- Raw `query` invocations (no snippet) render a sortable/filterable table only —
+  there is no `visual:` to attach.
 
 ## Common workflows
 

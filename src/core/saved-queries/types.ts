@@ -30,6 +30,27 @@ export interface SavedQueryMeta {
   tags: string[]
   /** Optional taxonomy slot, format: ^[a-z][a-z0-9.-]*$. See discovery spec. */
   intent?: string
+  /** UI visualization configuration for interactive dashboards */
+  visual?: VisualConfig
+}
+
+export interface VisualKPI {
+  label: string
+  value_column: string
+  format?: 'currency' | 'number' | 'percent'
+}
+
+export interface VisualChart {
+  type: 'line' | 'bar' | 'area' | 'pie' | 'scatter'
+  title?: string
+  x: string
+  y: string[]
+}
+
+export interface VisualConfig {
+  title?: string
+  kpis?: VisualKPI[]
+  charts?: VisualChart[]
 }
 
 export interface SavedQuery {

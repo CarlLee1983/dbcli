@@ -128,6 +128,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : []
   const index = typeof raw.index === 'string' ? raw.index : undefined
   const intent = normaliseIntent(raw.intent, input)
+  const visual = normaliseVisual(raw.visual)
 
   return {
     meta: {
@@ -139,8 +140,55 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       params,
       tags,
       intent,
+      visual,
     },
     warnings,
+  }
+}
+
+function normaliseVisual(value: unknown): any {
+  if (value === undefined || value === null || typeof value !== 'object') return undefined
+  const raw = value as Record<string, unknown>
+
+  const title = typeof raw.title === 'string' ? raw.title : undefined
+
+  const kpis: any[] = []
+  if (Array.isArray(raw.kpis)) {
+    for (const item of raw.kpis) {
+      if (typeof item === 'object' && item !== null) {
+        const k = item as Record<string, unknown>
+        if (typeof k.label === 'string' && typeof k.value_column === 'string') {
+          kpis.push({
+            label: k.label,
+            value_column: k.value_column,
+            format: typeof k.format === 'string' ? k.format : undefined,
+          })
+        }
+      }
+    }
+  }
+
+  const charts: any[] = []
+  if (Array.isArray(raw.charts)) {
+    for (const item of raw.charts) {
+      if (typeof item === 'object' && item !== null) {
+        const c = item as Record<string, unknown>
+        if (typeof c.type === 'string' && typeof c.x === 'string' && Array.isArray(c.y)) {
+          charts.push({
+            type: c.type,
+            title: typeof c.title === 'string' ? c.title : undefined,
+            x: c.x,
+            y: c.y.map(String),
+          })
+        }
+      }
+    }
+  }
+
+  return {
+    title,
+    kpis: kpis.length > 0 ? kpis : undefined,
+    charts: charts.length > 0 ? charts : undefined,
   }
 }
 

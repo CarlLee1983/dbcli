@@ -104,9 +104,9 @@ bun --hot ./index.ts
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
-## dbcli 開發模式
+## dbcli Development Mode
 
-本專案開發時 `dbcli` 尚未安裝到 PATH，使用 `bun run src/cli.ts` 替代 `dbcli`：
+During development, `dbcli` is not yet installed in the PATH. Use `bun run src/cli.ts` as a replacement for `dbcli`:
 
 ```bash
 bun run src/cli.ts list
@@ -114,23 +114,23 @@ bun run src/cli.ts schema users --format json
 bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 ```
 
-## dbcli 使用規範
+## dbcli Usage Guidelines
 
-操作資料庫前，必須依序執行：
+Before operating on the database, you must perform the following steps in order:
 
-0. （若需要片段）`bun run src/cli.ts queries list` — 找出可用片段，再以 `q @<name>` 執行
-1. `bun run src/cli.ts blacklist list` — 確認敏感資料已受保護
-2. `bun run src/cli.ts schema <table> --format json` — 確認目標表的真實欄位名稱
-3. 再執行 `query` / `insert` / `update` / `export` 等操作
-4. **發生錯誤時**：
-   - 帶有 `--recovery` 旗標的指令失敗時，會自動更新 `.dbcli/last-recovery.json`
-   - 使用 `bun run src/cli.ts recover` 檢視復原計畫
-   - 使用 `bun run src/cli.ts recover --apply` 自動執行安全修復步驟
+0. (If snippets are needed) `bun run src/cli.ts queries list` — Find available snippets, then execute with `q @<name>`.
+1. `bun run src/cli.ts blacklist list` — Verify that sensitive data is protected.
+2. `bun run src/cli.ts schema <table> --format json` — Confirm the actual column names of the target table.
+3. Then proceed with operations such as `query` / `insert` / `update` / `export`.
+4. **In Case of Errors**:
+   - When a command with the `--recovery` flag fails, `.dbcli/last-recovery.json` is automatically updated.
+   - Use `bun run src/cli.ts recover` to view the recovery plan.
+   - Use `bun run src/cli.ts recover --apply` to automatically execute safe remediation steps.
 
-**嚴禁猜測欄位名。** 務必先用 `schema` 確認。
+**Guessing column names is strictly prohibited.** Always use `schema` to confirm first.
 
-注意事項：
-- 優先使用 `--format json`
-- 寫入前用 `--dry-run` 預覽 SQL
-- query-only 模式會自動加 `LIMIT 1000`，查 `information_schema` 時加 `--no-limit`
-- 技能來源：`assets/SKILL.md`（精簡工作流與表格式總覽）與 `assets/reference.md`（完整子命令、旗標與範例），`dbcli skill --install <platform>` 會兩者一併寫入對應目錄
+Notes:
+- Prioritize using `--format json`.
+- Use `--dry-run` to preview SQL before writing.
+- Query-only mode automatically adds `LIMIT 1000`. Use `--no-limit` when querying `information_schema`.
+- Skill sources: `assets/SKILL.md` (compact workflow and tabular overview) and `assets/reference.md` (complete subcommands, flags, and examples). `dbcli skill --install <platform>` will write both to the corresponding directory.

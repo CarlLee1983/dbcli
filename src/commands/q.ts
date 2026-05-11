@@ -140,7 +140,7 @@ export async function qCommand(
 
       if (options.ui || options.format === 'html') {
         const html = await generateHtmlReport({
-          meta: snippet.meta,
+          meta: snippet.query.meta,
           rows: filtered.filteredRows as Record<string, unknown>[],
         })
 

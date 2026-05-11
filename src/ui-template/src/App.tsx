@@ -38,7 +38,8 @@ export default function App() {
     rows: []
   };
 
-  const { meta, rows } = payload;
+  const meta = payload.meta || { name: 'Report', key: 'default' };
+  const rows = payload.rows || [];
   const visual = meta.visual || {};
 
   return (

@@ -24,7 +24,7 @@ export interface SkillOptions {
 /**
  * Supported platforms for skill installation
  */
-export const SUPPORTED_PLATFORMS = ['claude', 'gemini', 'copilot', 'cursor'] as const
+export const SUPPORTED_PLATFORMS = ['claude', 'gemini', 'copilot', 'cursor', 'codex', 'windsurf'] as const
 export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
 
 /**
@@ -127,12 +127,19 @@ export function getInstallPath(platform: string): string {
     case 'gemini':
       return path.join(home, '.gemini', 'skills', 'dbcli', 'SKILL.md')
 
+    case 'codex':
+      return path.join(home, '.codex', 'skills', 'dbcli', 'SKILL.md')
+
     case 'copilot':
       return path.join(process.cwd(), '.github', 'skills', 'dbcli', 'SKILL.md')
 
     case 'cursor':
       // Prefer the modern .cursor/rules/*.mdc format
       return path.join(process.cwd(), '.cursor', 'rules', 'dbcli.mdc')
+
+    case 'windsurf':
+      // Windsurf prefers .windsurfrules in project root
+      return path.join(process.cwd(), '.windsurfrules')
 
     default:
       throw new Error(
@@ -143,7 +150,7 @@ export function getInstallPath(platform: string): string {
 
 /**
  * Writes the primary skill file and companion reference.md for progressive disclosure.
- * For Cursor, the primary file is `.cursor/rules/dbcli.mdc` and reference is under `.cursor/skills/dbcli/`.
+ * For Cursor/Windsurf, the primary file is a rule file and reference is under a dedicated skills directory.
  */
 async function writeSkillInstall(
   platform: string,
@@ -155,8 +162,10 @@ async function writeSkillInstall(
   await ensureDir(path.dirname(installPath))
   await Bun.file(installPath).write(skillMarkdown)
 
-  if (platformLower === 'cursor') {
-    const refPath = path.join(process.cwd(), '.cursor', 'skills', 'dbcli', 'reference.md')
+  // Platforms that use a rule file in root + companion reference in a hidden dir
+  if (platformLower === 'cursor' || platformLower === 'windsurf') {
+    const hiddenDir = platformLower === 'cursor' ? '.cursor' : '.windsurf'
+    const refPath = path.join(process.cwd(), hiddenDir, 'skills', 'dbcli', 'reference.md')
     await ensureDir(path.dirname(refPath))
     await Bun.file(refPath).write(referenceMarkdown)
     return { referencePath: refPath }
@@ -197,7 +206,7 @@ export function registerSkillCommand(program: Command): Command {
     .description(t('skill.description'))
     .option(
       '--install <platform>',
-      'Install to platform directory (claude, gemini, copilot, cursor)'
+      'Install to platform directory (claude, gemini, copilot, cursor, codex, windsurf)'
     )
     .option('--output <path>', 'Write skill to file instead of stdout')
     .action(async (options: Record<string, unknown>) => {

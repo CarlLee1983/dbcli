@@ -63,7 +63,7 @@ echo "✅ PASS: Permission filtering working"
 # Test platform installation paths
 echo "Checking platform installation paths..."
 
-for platform in "claude" "gemini" "copilot" "cursor"; do
+for platform in "claude" "gemini" "copilot" "cursor" "codex" "windsurf"; do
   echo "  Testing --install $platform..."
   # Don't actually install (would clutter user config)
   # Just verify the install command syntax works
@@ -83,3 +83,5 @@ echo "  1. Claude Code: dbcli skill --install claude, then test in IDE"
 echo "  2. Gemini CLI:  dbcli skill --install gemini, then test in CLI"
 echo "  3. Copilot CLI: dbcli skill --install copilot, then test in CLI"
 echo "  4. Cursor IDE:  dbcli skill --install cursor, then test in IDE"
+echo "  5. Codex (OMX): dbcli skill --install codex, then test in session"
+echo "  6. Windsurf:    dbcli skill --install windsurf, then test in IDE"

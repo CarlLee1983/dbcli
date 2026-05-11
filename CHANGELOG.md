@@ -5,6 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-05-11
+
+### Added
+
+- **Expanded Antigravity Protocol**: Added Phase 0 (Scout) for research and Phase 3 (Auditor) for validation to the core agentic workflow.
+- **Enhanced Agent Support**: `dbcli skill --install` now supports **Codex (OMX)** and **Windsurf**.
+- **Cursor Rules Update**: `dbcli skill --install cursor` now uses the modern `.cursor/rules/*.mdc` project-local format.
+- New `GEMINI.md` project-level instruction file with full Antigravity lifecycle guidance.
+
 ## [1.18.0] - 2026-05-11
 
 ### Added

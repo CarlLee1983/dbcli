@@ -5,6 +5,17 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2026-05-11
+
+### Added
+
+- **Interactive HTML Dashboards**: `query`, `q`, and `export` can now render results as fully interactive, standalone HTML reports.
+- New `--ui` flag to open dashboards directly in the system browser.
+- New `html` format for `stdout` and file-based report generation.
+- Snippet `visual:` block in frontmatter for KPI and chart configuration (Line, Bar, Area, Pie, Scatter).
+- Secure payload injection with automatic HTML escaping and blacklist redaction.
+- Bundled React + Recharts + Tailwind UI template for zero-dependency portability.
+
 ## [1.17.0] - 2026-05-10
 
 ### Added

@@ -1,29 +1,41 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11.0
-milestone_name: Saved Queries Discovery
+milestone: v1.18.0
+milestone_name: Interactive HTML Dashboards
 status: milestone_complete
-last_updated: "2026-05-08T20:45:00.000Z"
+last_updated: "2026-05-11T10:30:00.000Z"
 progress:
-  total_phases: 18
-  completed_phases: 18
-  total_plans: 45
-  completed_plans: 45
+  total_phases: 19
+  completed_phases: 19
+  total_plans: 46
+  completed_plans: 46
 ---
 
 # STATE.md — Current Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-08)
+See: `.planning/PROJECT.md` (updated 2026-05-11)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** v1.10.1 released — packaged assets path hotfix + `dbcli q` blacklist enforcement + dist smoke tests + lint warnings 清零並設為 release-blocking。
+**Current Focus:** v1.18.0 released — Interactive HTML Dashboards for visual data exploration + React/Recharts bundling + secure data injection.
 
 ---
 
 ## Milestone Status
+
+**v1.18.0 — Interactive HTML Dashboards:** COMPLETE (2026-05-11)
+- React + Recharts + Tailwind 儀表板模板開發
+- Bun-native 資源打包與 inlining 邏輯
+- `--ui` 與 `--format html` 指令支援
+- Saved-query `visual:` frontmatter 擴展
+- 安全性：HTML escaping 與 Blacklist 強制過濾
+
+**v1.17.0 — Guided Remediation & Multi-turn Recovery:** COMPLETE (2026-05-10)
+- `dbcli recover --apply` 與 `--next` 指令上線
+- 具備風險門控與驗證步驟 (P4) 的自動化復原流程
+- 信任邊界強化與 RecoveryEnvelope 標準化
 
 **v1.11.0 — Saved Queries Discovery:** COMPLETE (2026-05-08)
 - `queries search` / `queries suggest` 指令上線

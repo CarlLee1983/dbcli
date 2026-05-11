@@ -1,5 +1,19 @@
 # Milestones
 
+## v1.18.0 — Interactive HTML Dashboards (Shipped: 2026-05-11)
+
+**Scope:** React-based standalone HTML reports, `--ui` flag, `visual:` frontmatter block, and secure data injection.
+
+**Key accomplishments:**
+- Developed a standalone React + Recharts + Tailwind dashboard template.
+- Built-in Bun-native bundling and inlining logic for zero-dependency HTML output.
+- New `--ui` flag across `query`, `q`, and `export` for instant browser visualization.
+- Extended saved-query parser to support `visual:` metadata (KPIs and Charts).
+- Hardened data injection contract with HTML escaping and mandatory blacklist redaction.
+- Automatic browser opening with `DBCLI_NO_OPEN` safety guard.
+
+---
+
 ## v1.17.0 — Guided Remediation & Multi-turn Recovery (Shipped: 2026-05-10)
 
 **Scope:** P3 (recover --apply), P4 (Verification step), and P2 (Multi-turn protocol).

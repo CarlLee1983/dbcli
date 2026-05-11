@@ -95,15 +95,18 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] 驗證步驟 (P4) — 計畫執行後自動執行 `verify` 指令確認問題是否解決
 - [x] 信任邊界 — 使用程式碼擁有的白名單 grammar 校驗指令安全，而非信任 Envelope 標籤
 
+**Interactive HTML Dashboards** — v1.18.0
+- [x] Standalone React + Recharts + Tailwind dashboard template
+- [x] Bun-native bundling and inlining for zero-dependency HTML
+- [x] `--ui` flag for instant browser visualization
+- [x] `visual:` frontmatter block for KPI and chart configuration
+- [x] Secure data injection with HTML escaping and blacklist redaction
+
 ### Active
 
-**ES / Redis Saved Queries** — v1.10.0+ (Shipped)
-- [x] Engine strategy refactor（SQL / ES / Redis 拆成獨立 strategy）
-- [x] ES JSON-aware 參數注入、size guard、body validation、index 欄位
-- [x] Redis 命令白名單、raw 參數注入（含警告）、range / SCAN size guard
-- [x] 內建診斷 snippet：`es-cluster-health`、`redis-key-stats`
-- [x] `q @<name>` 與 `q --dry-run` 依 engine family 分派與格式化
-- [x] ES / Redis end-to-end saved query 整合測試
+**Post-v1.18.0 Stabilisation**
+- [ ] Monitor feedback on UI performance and browser compatibility
+- [ ] Refine chart types and KPI formatting options based on usage
 
 ### Out of Scope (V1)
 

@@ -133,6 +133,25 @@ The planner is cache-first (no network); add `--probe` to refresh the
 underlying inspect context. Use `--list` to see all goals,
 `--format markdown` for human reading, or `--for-agent` for compact JSON.
 
+### Interactive HTML Dashboards
+
+```bash
+# Open results in browser
+dbcli query "SELECT * FROM orders" --ui
+
+# Run a saved snippet with visualization metadata
+dbcli q @analytics/revenue --ui
+
+# Export query results as a standalone HTML file
+dbcli export "SELECT * FROM users" --format html --output report.html
+```
+
+`dbcli` can render query results as fully interactive, standalone HTML dashboards. These reports are powered by React + Recharts and are zero-dependency — the entire application and data are inlined into a single HTML file.
+
+- **`--ui` flag**: Automatically generates a temporary report and opens it in your default browser.
+- **`visual:` block**: Snippet frontmatter can define KPIs and charts (Line, Bar, Area, Pie, Scatter) to drive the dashboard.
+- **Security**: Result sets are redacted by the blacklist before injection, and data is safely escaped for HTML.
+
 ### Recovery & Guided Remediation
 
 ```bash

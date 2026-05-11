@@ -118,6 +118,25 @@ dbcli query '{"status":"active"}' --collection users --use atlas
 
 對 MongoDB 而言，`list` 與 `query` 會使用該連線設定中的資料庫；`query` 也必須指定 `--collection <名稱>`。
 
+### 互動式 HTML 儀表板 (Interactive HTML Dashboards)
+
+```bash
+# 在瀏覽器中開啟查詢結果
+dbcli query "SELECT * FROM orders" --ui
+
+# 執行具備視覺化中繼資料的片段
+dbcli q @analytics/revenue --ui
+
+# 將結果匯出為獨立的 HTML 檔案
+dbcli export "SELECT * FROM users" --format html --output report.html
+```
+
+`dbcli` 可將查詢結果算繪為完全互動、獨立的 HTML 儀表板。這些報表由 React + Recharts 驅動且具備「零依賴」特性 — 整個應用程式與資料皆被內嵌於單一 HTML 檔案中。
+
+- **`--ui` 旗標**：自動產生暫時性報表並在預設瀏覽器中開啟。
+- **`visual:` 區塊**：可在查詢片段的 frontmatter 中定義 KPI 與圖表 (Line, Bar, Area, Pie, Scatter)。
+- **安全性**：資料在注入前會先經過黑名單過濾，且針對 HTML 進行了安全跳脫處理。
+
 ---
 
 ## 多重連線支援 (v2)

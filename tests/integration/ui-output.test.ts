@@ -1,10 +1,8 @@
 import { test, expect } from "bun:test";
 import { $ } from "bun";
-import { join } from "path";
-import { tmpdir } from "os";
 
 test("dbcli query supports --ui flag", async () => {
-  const { stdout, stderr } = await $`bun run dev query --help`.quiet();
+  const { stdout } = await $`bun run dev query --help`.quiet();
   expect(stdout.toString()).toContain('--ui');
 });
 

@@ -242,7 +242,7 @@ async function writeV2InitConfig(
   // Build connection entry. Typed loosely because the v2 connections map
   // is a union of per-engine shapes; spreading partial state then narrowing
   // at the call site keeps both branches compilable.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const connEntry: any = {
     ...connection,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
@@ -625,7 +625,7 @@ async function initCommandHandler(
   }
 
   const newConfig = configModule.merge(existingConfig, {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     connection: configForWrite as any,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
@@ -714,7 +714,7 @@ async function handleMongoDBInit(ctx: {
   isV2Init: boolean
   // The existing v1 config blob. Strict DbcliConfig narrows away the
   // partial shapes used during init bootstrap; intentionally loose.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   existingConfig: any
   shouldPrompt: boolean
 }): Promise<void> {
@@ -819,7 +819,7 @@ async function handleMongoDBInit(ctx: {
   // Bridge between the hand-written ConnectionConfig in src/types and the
   // zod-derived shape in @/utils/validation that configModule.merge expects.
   const newConfig = configModule.merge(existingConfig, {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     connection: mongoConfig as any,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })

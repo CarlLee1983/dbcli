@@ -3,7 +3,20 @@ import {
   LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { Database, Table, BarChart3, Info, Download, Clock, Rows } from 'lucide-react';
+import { Database, Table, Info, Download, Clock, Rows } from 'lucide-react';
+
+interface KPI {
+  label: string;
+  value_column: string;
+  format?: string;
+}
+
+interface Chart {
+  type: string;
+  title?: string;
+  x: string;
+  y: string[];
+}
 
 declare global {
   interface Window {
@@ -13,26 +26,26 @@ declare global {
         description?: string;
         visual?: {
           title?: string;
-          kpis?: Array<{ label: string; value_column: string; format?: string }>;
-          charts?: Array<{ type: string; title?: string; x: string; y: string[] }>;
+          kpis?: KPI[];
+          charts?: Chart[];
         };
       };
-      rows: Array<Record<string, any>>;
+      rows: Array<Record<string, unknown>>;
     };
   }
 }
 
 const COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
 
-const formatValue = (val: any, format?: string) => {
-  if (typeof val !== 'number') return val;
+const formatValue = (val: unknown, format?: string) => {
+  if (typeof val !== 'number') return val as string;
   if (format === 'currency') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  if (format === 'percent') return new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1 }).format(val / 100);
-  if (format === 'number') return new Intl.NumberFormat('en-US').format(val);
+  if (format === 'percent') return new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1 }).format((val as number) / 100);
+  if (format === 'number') return new Intl.NumberFormat('en-US').format(val as number);
   return val;
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-slate-200 shadow-lg rounded-lg p-3 text-sm">
@@ -102,11 +115,11 @@ export default function App() {
         {/* KPIs */}
         {visual.kpis && visual.kpis.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {visual.kpis.map((kpi: any, idx: number) => (
+            {visual.kpis.map((kpi: KPI, idx: number) => (
               <div key={idx} className="card p-6 border-l-4 border-l-primary-500 hover:shadow-md">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">{kpi.label}</p>
                 <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {formatValue(rows[0]?.[kpi.value_column], kpi.format)}
+                  {formatValue((rows[0] as Record<string, unknown>)?.[kpi.value_column], kpi.format)}
                 </p>
                 <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit">
                   <Clock className="w-3 h-3" />
@@ -120,7 +133,7 @@ export default function App() {
         {/* Charts */}
         {visual.charts && visual.charts.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {visual.charts.map((chart: any, idx: number) => (
+            {visual.charts.map((chart: Chart, idx: number) => (
               <div key={idx} className="card p-6 flex flex-col h-[450px]">
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -189,7 +202,7 @@ export default function App() {
                           nameKey={chart.x}
                           stroke="none"
                         >
-                          {rows.map((_: any, index: number) => (
+                          {rows.map((_: unknown, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -223,9 +236,9 @@ export default function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((row: any, i: number) => (
+                {rows.map((row: unknown, i: number) => (
                   <tr key={i} className="hover:bg-primary-50/30 transition-colors group">
-                    {Object.values(row).map((val, j) => (
+                    {Object.values(row as Record<string, unknown>).map((val, j) => (
                       <td key={j} className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium group-hover:text-primary-700 transition-colors">
                         {val === null ? <span className="text-slate-300 italic">null</span> : String(val)}
                       </td>

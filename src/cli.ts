@@ -288,7 +288,7 @@ program
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
       const { validateFormat } = await import('./utils/validation')
-      validateFormat(options.format as string, ['json', 'jsonl', 'csv'], 'export')
+      validateFormat(options.format as string, ['json', 'jsonl', 'csv', 'html'], 'export')
       return await exportCommand(sql, options as never, command)
     } catch (error) {
       if (options.recovery === true) {

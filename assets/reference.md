@@ -156,6 +156,31 @@ dbcli query 'status:active AND amount:>100' --index orders --limit 50
 > - Hits are flattened: each result row contains `_id` plus dotted-path fields from `_source`. Pass `--format json` to keep nested structures readable.
 > - Query-only mode caps at 1000 hits; `--no-limit` is internally capped at 10 000 (use saved searches / `search_after` for deeper pagination).
 
+### plan
+
+Static SQL risk analyzer. Classifies a statement into the same permission tiers
+used by `query` (`query-only` / `read-write` / `data-admin` / `admin`) and lists
+the underlying signals (DML / DDL / multi-statement / unsafe constructs) without
+ever connecting to the database.
+
+```bash
+dbcli plan "SELECT * FROM users"
+dbcli plan "UPDATE users SET name='x'"           # human-readable text classification
+dbcli plan "DROP TABLE users" --format json      # machine-readable risk report
+```
+
+**Options:** `--format <text|json>` (default `text`).
+**Permission:** n/a (offline analyzer; no connection opened).
+
+Use cases:
+- Agents that want to decide whether to call `query` vs `insert` / `update` /
+  `delete` before sending SQL.
+- Pre-flight safety check before binding parameters into a saved snippet.
+- Lint hook for code review pipelines that store SQL in source.
+
+`plan` does not enforce blacklist or auto-`LIMIT`; those still apply when the
+SQL is actually executed via `query` / `q`.
+
 ### q
 
 Run a saved query snippet by `@name`. Snippets are parameterised SELECT/WITH statements resolved from three layers, with **local > shared > builtin** precedence (a local file always shadows shared and builtin variants of the same key):
@@ -201,6 +226,7 @@ Each `.sql` file is plain SQL with optional YAML frontmatter inside a leading `-
 --     description: lookback window in days
 --     enum: [7, 30, 90]
 -- tags: [analytics]
+-- intent: perf.slow-query   # optional; consumed by `queries suggest`
 -- ---
 SELECT COUNT(DISTINCT user_id) AS dau
 FROM events
@@ -299,6 +325,10 @@ dbcli queries list --tag analytics --engine postgres --format json
 dbcli queries list --source local       # only personal overrides
 dbcli queries show @dau                 # frontmatter + SQL
 dbcli queries show @dau --format json   # MCP-shaped contract
+dbcli queries search slow query         # fuzzy-ranked keyword search across snippets
+dbcli queries search cache --engine postgres --source builtin --limit 5
+dbcli queries suggest perf              # browse snippets by intent prefix (v1.11+)
+dbcli queries suggest perf.cache-hit --format json
 
 # Authoring
 dbcli queries new @new/sample           # scaffold under .dbcli-shared/queries/
@@ -319,8 +349,10 @@ dbcli queries export @dau --output dau.sql          # write snippet body to a fi
 dbcli queries export @diag/connections --engine postgres  # pick a variant when multiple engines exist
 ```
 
-**`list` options:** `--format <table|json|csv>`, `--tag <tag>`, `--engine <postgres|mysql>`, `--source <local|shared>`
+**`list` options:** `--format <table|json|csv>`, `--tag <tag>`, `--engine <postgres|mysql|redis|elasticsearch|all>`, `--source <local|shared|builtin|all>`
 **`show` options:** `--format <table|json|csv>`
+**`search` options:** `--format <table|json>`, `--engine <postgres|mysql|redis|elasticsearch|all>`, `--source <local|shared|builtin|all>`, `--limit <n>` (default 10), `--include-internal` (show fuzzy ranking score). Keyword(s) are fuzzy-matched against name, description, tags, intent.
+**`suggest` options:** `--format <table|json>`, `--engine <postgres|mysql|redis|elasticsearch|all>`, `--source <local|shared|builtin|all>`. Intent prefix-matched against the snippet's `intent` frontmatter field. Common intents: `perf.slow-query`, `perf.cache-hit`, `capacity.size`, `safety.connections`, `monitor.cluster-health`.
 **`new` options:** `--local`, `--edit`
 **`edit` options:** `--shared`
 **`check` options:** `--strict`, `--format <table|json|csv>`
@@ -849,6 +881,32 @@ dbcli migrate drop-enum status --execute --force
 **Permission:** admin
 
 **AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
+
+### skill
+
+Emit `SKILL.md` (and the companion `reference.md`) to stdout, a file, or one of
+four AI-agent platform directories. The skill is the source of truth that lets
+Claude Code / Gemini / Copilot / Cursor know how to drive dbcli safely.
+
+```bash
+dbcli skill                                  # print SKILL.md to stdout
+dbcli skill --output ./SKILL.md              # write to a file (no platform install)
+dbcli skill --install claude                 # install to ~/.claude/skills/dbcli/
+dbcli skill --install gemini                 # install to ~/.gemini/skills/dbcli/
+dbcli skill --install copilot                # install to .github/skills/dbcli/ (repo-local)
+dbcli skill --install cursor                 # install to .cursor/skills/dbcli/ (repo-local)
+```
+
+**Options:**
+- `--install <platform>` — `claude` | `gemini` | `copilot` | `cursor`. Writes `SKILL.md` plus `reference.md` next to it so the agent gets progressive disclosure.
+- `--output <path>` — write `SKILL.md` to a file instead of stdout. Does not install `reference.md`.
+
+**Notes:**
+- Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.
+- `claude` / `gemini` install paths are user-global; `copilot` / `cursor` are repo-local under `.github/` / `.cursor/`.
+- Re-running `--install` overwrites the existing skill atomically; no prompt.
+
+**Permission:** n/a.
 
 ### skill tasks (Agent Task Packs)
 

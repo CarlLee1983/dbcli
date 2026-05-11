@@ -28,7 +28,7 @@ export async function generateHtmlReport(payload: HtmlPayload): Promise<string> 
   const injection = `window.__DBCLI_PAYLOAD__ = ${jsonPayload};`;
   
   // Ensure we replace the specific placeholder defined in Task 2's index.html
-  html = html.replace('// PAYLOAD_GO_HERE', injection);
+  html = html.replace('// PAYLOAD_GO_HERE', () => injection);
 
   return html;
 }

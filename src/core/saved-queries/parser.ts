@@ -210,7 +210,7 @@ function normaliseEngine(
   input: ParseInput
 ): EngineTag[] | undefined {
   if (value === undefined || value === null || value === '') {
-    warnings.push('Snippet has no engine declaration; assuming any engine')
+    warnings.push(`Snippet '${input.key}' has no engine declaration; assuming compatible with any engine`)
     return undefined
   }
   const list = Array.isArray(value) ? value : [value]

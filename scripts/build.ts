@@ -7,7 +7,7 @@ import { $ } from 'bun'
 const outfile = 'dist/cli.mjs'
 
 // 1. Bundle
-await $`bun build ./src/cli.ts --outfile ${outfile} --target bun`
+await $`bun build ./src/cli.ts --outfile ${outfile} --target bun --external pg --external mysql2 --external mongodb --external open`
 
 // 2. Prepend shebang (cross-platform, no subshell)
 const content = await Bun.file(outfile).text()

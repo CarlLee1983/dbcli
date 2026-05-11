@@ -1,4 +1,4 @@
-import { t_vars } from '@/i18n/message-loader'
+import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -94,6 +94,7 @@ export async function qCommand(
       fileParams
     )
     for (const w of prepared.warnings) console.error(`⚠ ${w}`)
+    if (prepared.warnings.length > 0) console.error('')
 
     if (options.dryRun) {
       console.log(
@@ -124,6 +125,9 @@ export async function qCommand(
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
     await adapter.connect()
     try {
+      if (!options.ui && options.format !== 'html') {
+        console.error(t('query.executing'))
+      }
       const indexParams =
         family === 'es' && prepared.execHints?.index ? [prepared.execHints.index] : []
       const start = performance.now()

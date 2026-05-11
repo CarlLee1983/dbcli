@@ -18,8 +18,10 @@ const HERE = import.meta.dir
 export function findPackageRoot(): string {
   if (cached) return cached
   let dir = HERE
+  // Search up to 6 levels for package.json
   for (let i = 0; i < 6; i++) {
-    if (Bun.file(path.join(dir, 'package.json')).size > 0) {
+    const pkgPath = path.join(dir, 'package.json')
+    if (Bun.file(pkgPath).size > 0) {
       cached = dir
       return dir
     }
@@ -27,7 +29,15 @@ export function findPackageRoot(): string {
     if (parent === dir) break
     dir = parent
   }
-  cached = path.resolve(HERE, '..', '..')
+  
+  // Robust fallback: 
+  // If we are in 'dist/cli.mjs', root is '..'
+  // If we are in 'src/utils/package-root.ts', root is '../../'
+  if (HERE.endsWith('dist')) {
+    cached = path.resolve(HERE, '..')
+  } else {
+    cached = path.resolve(HERE, '..', '..')
+  }
   return cached
 }
 

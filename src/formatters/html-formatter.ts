@@ -24,11 +24,11 @@ export async function generateHtmlReport(payload: HtmlPayload): Promise<string> 
   // Escape '<' to prevent script injection if user data contains '</script>'
   const jsonPayload = JSON.stringify(payload).replace(/</g, '\\u003c');
   
-  // Replace the placeholder comment in index.html
+  // Replace the placeholder in index.html
   const injection = `window.__DBCLI_PAYLOAD__ = ${jsonPayload};`;
   
   // Ensure we replace the specific placeholder defined in Task 2's index.html
-  html = html.replace('// PAYLOAD_GO_HERE', () => injection);
+  html = html.replace('/*DBCLI_PAYLOAD*/', () => injection);
 
   return html;
 }

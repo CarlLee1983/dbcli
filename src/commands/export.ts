@@ -7,6 +7,7 @@
 import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
+import { generateHtmlReport } from '@/formatters/html-formatter'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
@@ -20,7 +21,7 @@ import type { DbcliConfig } from '@/utils/validation'
 
 const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
 
-export type ExportFormat = 'json' | 'jsonl' | 'csv'
+export type ExportFormat = 'json' | 'jsonl' | 'csv' | 'html'
 
 interface ExportOptions {
   format: ExportFormat
@@ -47,8 +48,8 @@ export async function exportCommand(
     if (!sql || sql.trim() === '') {
       throw new Error('Query required')
     }
-    if (!options.format || !['json', 'jsonl', 'csv'].includes(options.format)) {
-      throw new Error('--format must be json, jsonl, or csv')
+    if (!options.format || !['json', 'jsonl', 'csv', 'html'].includes(options.format)) {
+      throw new Error('--format must be json, jsonl, csv, or html')
     }
     sql = sql.trim()
 
@@ -85,10 +86,24 @@ export async function exportCommand(
       const executor = new QueryExecutor(adapter, config.permission)
       const result = await executor.execute(sql, { autoLimit: true })
 
-      const formatter = new QueryResultFormatter()
-      const formatted = formatter.format(result, {
-        format: options.format as 'json' | 'csv',
-      })
+      let formatted: string
+      if (options.format === 'html') {
+        formatted = await generateHtmlReport({
+          meta: {
+            name: 'Exported Report',
+            key: 'export',
+            params: [],
+            tags: [],
+            description: sql,
+          },
+          rows: result.rows as Record<string, unknown>[],
+        })
+      } else {
+        const formatter = new QueryResultFormatter()
+        formatted = formatter.format(result, {
+          format: options.format as 'json' | 'csv',
+        })
+      }
 
       if (options.output) {
         const file = Bun.file(options.output)

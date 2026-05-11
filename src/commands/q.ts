@@ -8,6 +8,10 @@ import { BlacklistError } from '@/types/blacklist'
 import { PermissionError } from '@/core/permission-guard'
 import { extractTableName } from '@/core/query-executor'
 import { QueryResultFormatter } from '@/formatters'
+import { generateHtmlReport } from '@/formatters/html-formatter'
+import { openInBrowser } from '@/utils/opener'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   loadSnippets,
   mapSystemToEngine,
@@ -46,7 +50,8 @@ export function formatDryRun(input: DryRunInput): string {
 }
 
 export interface QCommandOptions {
-  format?: 'table' | 'json' | 'csv'
+  format?: 'table' | 'json' | 'csv' | 'html'
+  ui?: boolean
   noLimit?: boolean
   dryRun?: boolean
   param?: string[]
@@ -133,6 +138,22 @@ export async function qCommand(
           ? { filteredRows: result.rows, omittedColumns: [] as string[] }
           : blacklistValidator.filterColumns(targetName, result.rows, columnNames)
 
+      if (options.ui || options.format === 'html') {
+        const html = await generateHtmlReport({
+          meta: snippet.meta,
+          rows: filtered.filteredRows as Record<string, unknown>[],
+        })
+
+        if (options.ui) {
+          const tempPath = join(tmpdir(), `dbcli-report-${Date.now()}.html`)
+          await Bun.write(tempPath, html)
+          await openInBrowser(tempPath)
+        } else {
+          console.log(html)
+        }
+        return
+      }
+
       const formatter = new QueryResultFormatter()
       const out = formatter.format(
         {
@@ -154,7 +175,7 @@ export async function qCommand(
               : {}),
           },
         },
-        { format: options.format ?? 'table' }
+        { format: (options.format as any) ?? 'table' }
       )
       console.log(out)
     } finally {

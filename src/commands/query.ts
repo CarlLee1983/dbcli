@@ -6,6 +6,10 @@
 import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
+import { generateHtmlReport } from '@/formatters/html-formatter'
+import { openInBrowser } from '@/utils/opener'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { QueryResult } from '@/types/query'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
@@ -26,7 +30,8 @@ const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 export async function queryCommand(
   sql: string,
   options: {
-    format?: 'table' | 'json' | 'csv'
+    format?: 'table' | 'json' | 'csv' | 'html'
+    ui?: boolean
     limit?: number
     noLimit?: boolean
     collection?: string
@@ -43,7 +48,7 @@ export async function queryCommand(
     }
 
     if (options.format) {
-      validateFormat(options.format, ALLOWED_FORMATS, 'query')
+      validateFormat(options.format, [...ALLOWED_FORMATS, 'html'] as any, 'query')
     }
     sql = sql.trim()
 
@@ -108,9 +113,31 @@ export async function queryCommand(
       })
 
       // 6. Format output
+      if (options.ui || options.format === 'html') {
+        const html = await generateHtmlReport({
+          meta: {
+            name: 'Query Results',
+            key: 'raw-sql',
+            params: [],
+            tags: [],
+            description: sql.length > 100 ? sql.slice(0, 97) + '...' : sql,
+          },
+          rows: result.rows as Record<string, unknown>[],
+        })
+
+        if (options.ui) {
+          const tempPath = join(tmpdir(), `dbcli-query-${Date.now()}.html`)
+          await Bun.write(tempPath, html)
+          await openInBrowser(tempPath)
+        } else {
+          console.log(html)
+        }
+        return
+      }
+
       const formatter = new QueryResultFormatter()
       const output = formatter.format(result, {
-        format: options.format || 'table',
+        format: (options.format as any) || 'table',
       })
 
       // 7. Print results

@@ -132,7 +132,8 @@ program.addCommand(schemaCommand)
 program
   .command('query <sql>')
   .description(t('query.description'))
-  .option('--format <type>', 'Output format: table, json, csv', 'table')
+  .option('--format <type>', 'Output format: table, json, csv, html', 'table')
+  .option('--ui', 'Show interactive dashboard in browser', false)
   .option('--limit <number>', 'Limit result rows (overrides auto-limit)', (val) =>
     parseInt(val, 10)
   )
@@ -146,7 +147,7 @@ program
   )
   .action(async (sql: string, options: Record<string, unknown>, command) => {
     try {
-      await queryCommand(sql, options, command)
+      await queryCommand(sql, options as any, command)
     } catch (error) {
       if (options.recovery === true) {
         const { emitRecoveryEnvelope } = await import('./core/recovery')
@@ -170,7 +171,8 @@ program
 program
   .command('q <name>')
   .description(t('q.description'))
-  .option('--format <type>', 'Output format: table, json, csv', 'table')
+  .option('--format <type>', 'Output format: table, json, csv, html', 'table')
+  .option('--ui', 'Show interactive dashboard in browser', false)
   .option('--no-limit', 'Disable size guard wrap (LIMIT 1000)')
   .option('--dry-run', 'Show final SQL + bind values; do not execute')
   .option(
@@ -186,7 +188,7 @@ program
     false
   )
   .action(async (name: string, options: Record<string, unknown>, command) => {
-    await qCommand(name, options, command)
+    await qCommand(name, options as any, command)
   })
 
 // Register insert command
@@ -269,7 +271,7 @@ program
 program
   .command('export <sql>')
   .description(t('export.description'))
-  .option('--format <format>', 'Output format: json, jsonl, or csv', 'json')
+  .option('--format <format>', 'Output format: json, jsonl, csv, html', 'json')
   .option('--output <path>', 'Output file path (if omitted, write to stdout)', undefined)
   .option('--force', 'Skip overwrite confirmation', false)
   .option('--collection <name>', 'MongoDB collection name; Elasticsearch index name')

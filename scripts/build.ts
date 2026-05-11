@@ -18,3 +18,36 @@ if (process.platform !== 'win32') {
   const { chmodSync } = await import('node:fs')
   chmodSync(outfile, 0o755)
 }
+
+// 4. UI Template Build & Inlining
+console.log('Building UI template...')
+
+// Ensure dist exists for temporary CSS
+import { mkdir } from 'node:fs/promises'
+await mkdir('dist', { recursive: true })
+
+// a. Bundle JS
+const uiJs = await Bun.build({
+  entrypoints: ['./src/ui-template/src/main.tsx'],
+  minify: true,
+  target: 'browser',
+})
+if (!uiJs.success) {
+  console.error('UI Build failed:', uiJs.logs)
+  process.exit(1)
+}
+const jsCode = await uiJs.outputs[0]?.text() ?? ''
+
+// b. Build CSS with Tailwind
+await $`bunx tailwindcss -c ./src/ui-template/tailwind.config.js -i ./src/ui-template/src/index.css -o ./dist/ui-style.css --minify`
+const cssCode = await Bun.file('./dist/ui-style.css').text()
+
+// c. Inline into HTML
+let html = await Bun.file('./src/ui-template/index.html').text()
+html = html.replace('/* STYLES_GO_HERE */', cssCode)
+html = html.replace('/* SCRIPT_GO_HERE */', jsCode)
+
+// d. Save to assets/ui-template.html
+await Bun.write('assets/ui-template.html', html)
+
+console.log('UI template built successfully: assets/ui-template.html')

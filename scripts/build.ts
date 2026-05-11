@@ -44,8 +44,8 @@ const cssCode = await Bun.file('./dist/ui-style.css').text()
 
 // c. Inline into HTML
 let html = await Bun.file('./src/ui-template/index.html').text()
-html = html.replace('/* STYLES_GO_HERE */', () => cssCode)
-html = html.replace('/* SCRIPT_GO_HERE */', () => jsCode)
+html = html.replace('/*DBCLI_CSS*/', () => cssCode)
+html = html.replace('/*DBCLI_JS*/', () => jsCode.replace(/<\/script>/gi, '<\\/script>'))
 
 // d. Save to assets/ui-template.html
 await Bun.write('assets/ui-template.html', html)

@@ -26,11 +26,16 @@ console.log('Building UI template...')
 import { mkdir } from 'node:fs/promises'
 await mkdir('dist', { recursive: true })
 
-// a. Bundle JS
+// a. Bundle JS — pin process.env.NODE_ENV at build time so the artifact is
+// independent of caller env (e.g. `bun test` sets NODE_ENV=test, which used
+// to flip Redux/RTK dev branches and break artifact determinism). See issue #2.
 const uiJs = await Bun.build({
   entrypoints: ['./src/ui-template/src/main.tsx'],
   minify: true,
   target: 'browser',
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
 })
 if (!uiJs.success) {
   console.error('UI Build failed:', uiJs.logs)

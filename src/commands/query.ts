@@ -4,7 +4,12 @@
  */
 
 import { t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { openInBrowser } from '@/utils/opener'
@@ -20,6 +25,13 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 
@@ -94,7 +106,9 @@ export async function queryCommand(
     }
 
     // 3. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createSqlAdapter(
+      requireSqlConnection(config.connection as ConnectionOptions)
+    )
     await adapter.connect()
 
     try {

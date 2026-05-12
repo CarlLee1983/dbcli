@@ -80,7 +80,7 @@ let formatterSpy: any
 describe('Query Command', () => {
   beforeEach(() => {
     mockAdapter = new MockAdapter()
-    createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+    createAdapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(mockAdapter as any)
     configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => mockConfig)
     formatterSpy = spyOn(QueryResultFormatter.prototype, 'format').mockImplementation(
       (result: any, options?: any) => {

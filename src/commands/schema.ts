@@ -6,7 +6,12 @@
 
 import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter } from '@/formatters'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
 import { patchConnectionSchema, readV2Config } from '@/core/config-v2'
@@ -18,6 +23,13 @@ import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
 
 import { resolveConfigPath } from '@/utils/config-path'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
 
@@ -171,8 +183,11 @@ async function schemaAction(
       }
     }
 
-    // Create adapter from configuration
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    // Create adapter from configuration. MongoDB falls through here intentionally —
+    // schema scan uses the DatabaseAdapter surface that both SQL and MongoDB adapters implement.
+    const adapter = AdapterFactory.createAdapter(
+      config.connection as ConnectionOptions
+    ) as DatabaseAdapter
     await adapter.connect()
 
     try {

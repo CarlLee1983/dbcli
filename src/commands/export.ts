@@ -5,7 +5,12 @@
  */
 
 import { t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { QueryExecutor } from '@/core/query-executor'
@@ -18,6 +23,13 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import type { DbcliConfig } from '@/utils/validation'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
 
@@ -79,7 +91,9 @@ export async function exportCommand(
       throw new Error('--format jsonl is only supported on MongoDB connections')
     }
 
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createSqlAdapter(
+      requireSqlConnection(config.connection as ConnectionOptions)
+    )
     await adapter.connect()
 
     try {

@@ -4,7 +4,12 @@
  */
 
 import { t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { configModule } from '@/core/config'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
@@ -13,6 +18,13 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { previewInsert } from '@/core/mongo/dry-run-formatter'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 /**
  * Asynchronously reads JSON data from stdin
@@ -195,7 +207,9 @@ export async function insertCommand(
     }
 
     // 5. Create database adapter
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createSqlAdapter(
+      requireSqlConnection(config.connection as ConnectionOptions)
+    )
     await adapter.connect()
 
     try {

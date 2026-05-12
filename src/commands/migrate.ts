@@ -9,13 +9,25 @@
 import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
 import { configModule } from '@/core/config'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { DDLGeneratorFactory, parseColumnSpec } from '@/adapters/ddl'
 import { DDLExecutor } from '@/core/ddl-executor'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import type { DDLOperation, DDLExecutionOptions } from '@/types/ddl'
 import type { ConstraintType } from '@/adapters/ddl/types'
 import { resolveConfigPath } from '@/utils/config-path'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
@@ -44,7 +56,9 @@ export async function runDDL(
     process.exit(1)
   }
 
-  const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+  const adapter = AdapterFactory.createSqlAdapter(
+    requireSqlConnection(config.connection as ConnectionOptions)
+  )
 
   // Skip connection for dry-run if we don't need to refresh schema
   const isDryRun = !opts.execute

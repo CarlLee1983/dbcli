@@ -11,8 +11,29 @@ export type {
   DatabaseAdapter,
   QueryableAdapter,
   ExecutionResult,
+  DatabaseSystem,
+  SqlDatabaseSystem,
+  QueryableDatabaseSystem,
+  SqlConnectionOptions,
+  QueryableConnectionOptions,
 } from './types'
 export { ConnectionError } from './types'
+
+// Re-export capability registry from capabilities.ts
+export type {
+  CapabilityStatus,
+  CommandCapability,
+  CommandCapabilityKey,
+  EngineCapabilities,
+  SideEffectTier,
+} from './capabilities'
+export {
+  COMMAND_CAPABILITY_KEYS,
+  ENGINE_CAPABILITIES,
+  getEngineCapabilities,
+  getEngineCapability,
+  supportsCapability,
+} from './capabilities'
 
 // Re-export factory from factory.ts
 export { AdapterFactory } from './factory'

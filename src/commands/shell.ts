@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { configModule } from '../core/config'
-import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import { ReplEngine } from '../core/repl/repl-engine'
 import { createCompleter } from '../core/repl/completer'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -14,6 +14,13 @@ import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
 import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
 import type { QueryableAdapter } from '@/adapters/types'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 const HISTORY_PATH = join(homedir(), '.dbcli_history')
 
@@ -69,7 +76,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
   const adapter = isMongoDB
     ? new MongoShellAdapter(mongoInner!)
-    : AdapterFactory.createAdapter(connectionOpts)
+    : AdapterFactory.createSqlAdapter(requireSqlConnection(connectionOpts))
   try {
     await adapter.connect()
   } catch (error) {

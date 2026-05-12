@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { configModule } from '@/core/config'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import type { DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/types'
 import { collectConnection } from './collect-connection'
 import { collectPermission } from './collect-permission'
@@ -58,7 +59,9 @@ export async function collectInspect(opts: InspectOptions): Promise<InspectSnaps
 
   if (!opts.noConnect && config?.connection && system) {
     const probeTimeout = opts.probeTimeoutMs ?? DEFAULT_PROBE_MS
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createAdapter(
+      config.connection as ConnectionOptions
+    ) as DatabaseAdapter
     let probeError: unknown = null
     const probe = (async () => {
       await adapter.connect()

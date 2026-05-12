@@ -3,7 +3,13 @@
  * Routes to correct adapter implementation based on database system type
  */
 
-import type { ConnectionOptions, DatabaseAdapter, QueryableAdapter } from './types'
+import type {
+  ConnectionOptions,
+  DatabaseAdapter,
+  QueryableAdapter,
+  QueryableConnectionOptions,
+  SqlConnectionOptions,
+} from './types'
 import { PostgreSQLAdapter } from './postgresql-adapter'
 import { MySQLAdapter } from './mysql-adapter'
 import { MongoDBAdapter } from './mongodb-adapter'
@@ -16,77 +22,72 @@ import { ElasticsearchAdapter } from './elasticsearch-adapter'
  * Enables system-aware instantiation without coupling CLI commands to specific drivers
  */
 export class AdapterFactory {
-  /**
-   * Create a database adapter instance based on connection options
-   * Routes to PostgreSQL or MySQL adapter depending on system type
-   * MySQL adapter handles both MySQL and MariaDB (compatible drivers)
-   *
-   * @param options Connection configuration including system type
-   * @returns DatabaseAdapter instance for the specified system
-   * @throws {Error} If database system type is unsupported
-   */
-  static createAdapter(options: ConnectionOptions): DatabaseAdapter {
+  static createSqlAdapter(options: SqlConnectionOptions): DatabaseAdapter {
     switch (options.system) {
       case 'postgresql':
         return new PostgreSQLAdapter(options)
       case 'mysql':
       case 'mariadb':
         return new MySQLAdapter(options)
-      case 'mongodb':
-        return new MongoDBAdapter(options) as unknown as DatabaseAdapter
-      case 'redis':
-        return new RedisAdapter(options) as unknown as DatabaseAdapter
-      case 'elasticsearch':
-        return new ElasticsearchAdapter(options) as unknown as DatabaseAdapter
       default:
-        throw new Error(`Unsupported database system: ${options.system}`)
+        throw new Error(
+          `createSqlAdapter requires a SQL system, got: ${(options as { system?: string }).system}`
+        )
     }
   }
 
-  /**
-   * Create a MongoDB adapter instance for queryable MongoDB operations
-   * MongoDB adapters support read-focused operations via QueryableAdapter interface
-   *
-   * @param options Connection configuration (system must be 'mongodb')
-   * @returns QueryableAdapter instance for MongoDB
-   * @throws {Error} If system type is not 'mongodb'
-   */
+  static createQueryableAdapter(options: QueryableConnectionOptions): QueryableAdapter {
+    switch (options.system) {
+      case 'mongodb':
+        return new MongoDBAdapter(options)
+      case 'redis':
+        return new RedisAdapter(options)
+      case 'elasticsearch':
+        return new ElasticsearchAdapter(options)
+      default:
+        throw new Error(
+          `createQueryableAdapter requires a non-SQL queryable system, got: ${(options as { system?: string }).system}`
+        )
+    }
+  }
+
+  static createAdapter(options: SqlConnectionOptions): DatabaseAdapter
+  static createAdapter(options: QueryableConnectionOptions): QueryableAdapter
+  static createAdapter(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter
+  static createAdapter(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter {
+    switch (options.system) {
+      case 'postgresql':
+      case 'mysql':
+      case 'mariadb':
+        return AdapterFactory.createSqlAdapter(options as SqlConnectionOptions)
+      case 'mongodb':
+      case 'redis':
+      case 'elasticsearch':
+        return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+      default:
+        throw new Error(`Unsupported database system: ${(options as { system?: string }).system}`)
+    }
+  }
+
   static createMongoDBAdapter(options: ConnectionOptions): QueryableAdapter {
     if (options.system !== 'mongodb') {
       throw new Error('createMongoDBAdapter requires system: mongodb')
     }
-    return new MongoDBAdapter(options)
+    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
   }
 
-  /**
-   * Create a Redis adapter instance for queryable Redis operations.
-   * Redis adapters share the QueryableAdapter contract with MongoDB so
-   * commands like list/schema/query can route to a single CLI surface.
-   *
-   * @param options Connection configuration (system must be 'redis')
-   * @returns QueryableAdapter instance for Redis
-   * @throws {Error} If system type is not 'redis'
-   */
   static createRedisAdapter(options: ConnectionOptions): QueryableAdapter {
     if (options.system !== 'redis') {
       throw new Error('createRedisAdapter requires system: redis')
     }
-    return new RedisAdapter(options)
+    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
   }
 
-  /**
-   * Create an Elasticsearch adapter instance for queryable Elasticsearch operations.
-   * Elasticsearch adapters share the QueryableAdapter contract with MongoDB/Redis.
-   *
-   * @param options Connection configuration (system must be 'elasticsearch')
-   * @returns QueryableAdapter instance for Elasticsearch
-   * @throws {Error} If system type is not 'elasticsearch'
-   */
   static createElasticsearchAdapter(options: ConnectionOptions): QueryableAdapter {
     if (options.system !== 'elasticsearch') {
       throw new Error('createElasticsearchAdapter requires system: elasticsearch')
     }
-    return new ElasticsearchAdapter(options)
+    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
   }
 }
 

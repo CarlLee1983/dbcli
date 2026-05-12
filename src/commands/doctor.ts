@@ -1,8 +1,15 @@
 import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { configModule } from '@/core/config'
-import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import type { ConnectionConfig } from '@/types'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
@@ -639,7 +646,9 @@ export const doctorCommand = new Command('doctor')
               }))
             )
           } else {
-            const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+            const adapter = AdapterFactory.createSqlAdapter(
+              requireSqlConnection(config.connection as ConnectionOptions)
+            )
             await adapter.connect()
 
             results.push({

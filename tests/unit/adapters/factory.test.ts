@@ -7,7 +7,13 @@ import { test, expect } from 'bun:test'
 import { AdapterFactory } from 'src/adapters/factory'
 import { PostgreSQLAdapter, MySQLAdapter } from 'src/adapters/factory'
 import { MongoDBAdapter } from 'src/adapters/mongodb-adapter'
-import type { ConnectionOptions, QueryableAdapter } from 'src/adapters/types'
+import { RedisAdapter } from 'src/adapters/redis-adapter'
+import { ElasticsearchAdapter } from 'src/adapters/elasticsearch-adapter'
+import type {
+  ConnectionOptions,
+  QueryableAdapter,
+  QueryableConnectionOptions,
+} from 'src/adapters/types'
 
 const validOptions: ConnectionOptions = {
   system: 'postgresql',
@@ -100,7 +106,52 @@ test('createElasticsearchAdapter returns ElasticsearchAdapter for elasticsearch 
 })
 
 test('createAdapter routes to elasticsearch', async () => {
-  const { ElasticsearchAdapter } = await import('src/adapters/elasticsearch-adapter')
   const adapter = AdapterFactory.createAdapter(esOptions)
   expect(adapter).toBeInstanceOf(ElasticsearchAdapter)
+})
+
+test('createSqlAdapter returns SQL adapters only', () => {
+  expect(AdapterFactory.createSqlAdapter({ ...validOptions, system: 'postgresql' })).toBeInstanceOf(
+    PostgreSQLAdapter
+  )
+  expect(AdapterFactory.createSqlAdapter({ ...validOptions, system: 'mysql' })).toBeInstanceOf(
+    MySQLAdapter
+  )
+  expect(AdapterFactory.createSqlAdapter({ ...validOptions, system: 'mariadb' })).toBeInstanceOf(
+    MySQLAdapter
+  )
+})
+
+test('createSqlAdapter rejects queryable non-SQL systems', () => {
+  expect(() => AdapterFactory.createSqlAdapter(mongoOptions as never)).toThrow(
+    'createSqlAdapter requires a SQL system'
+  )
+  expect(() => AdapterFactory.createSqlAdapter(esOptions as never)).toThrow(
+    'createSqlAdapter requires a SQL system'
+  )
+})
+
+test('createQueryableAdapter routes all non-SQL queryable systems', () => {
+  expect(
+    AdapterFactory.createQueryableAdapter(mongoOptions as QueryableConnectionOptions)
+  ).toBeInstanceOf(MongoDBAdapter)
+  expect(
+    AdapterFactory.createQueryableAdapter({
+      system: 'redis',
+      host: 'localhost',
+      port: 6379,
+      user: '',
+      password: '',
+      database: '0',
+    })
+  ).toBeInstanceOf(RedisAdapter)
+  expect(
+    AdapterFactory.createQueryableAdapter(esOptions as QueryableConnectionOptions)
+  ).toBeInstanceOf(ElasticsearchAdapter)
+})
+
+test('createQueryableAdapter rejects SQL systems', () => {
+  expect(() => AdapterFactory.createQueryableAdapter(validOptions as never)).toThrow(
+    'createQueryableAdapter requires a non-SQL queryable system'
+  )
 })

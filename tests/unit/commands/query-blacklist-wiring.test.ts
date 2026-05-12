@@ -67,8 +67,8 @@ describe('queryCommand blacklist wiring', () => {
       throw new Error(`process.exit(${code})`)
     }) as any
 
-    // spyOn AdapterFactory.createAdapter to return mock adapter (no global leakage)
-    createAdapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mockAdapter as any)
+    // spyOn AdapterFactory.createSqlAdapter to return mock adapter (no global leakage)
+    createAdapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(mockAdapter as any)
 
     // spyOn configModule.read to return test config (no global leakage)
     configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => capturedConfig)

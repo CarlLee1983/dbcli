@@ -1,8 +1,20 @@
 import { Command } from 'commander'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { configModule } from '@/core/config'
 import type { ColumnSchema } from '@/adapters/types'
 import { validateFormat } from '@/utils/validation'
+
+function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
+  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
+    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
+  }
+  return connection as SqlConnectionOptions
+}
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 
@@ -194,7 +206,9 @@ async function diffAction(options: {
       process.exit(1)
     }
 
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createSqlAdapter(
+      requireSqlConnection(config.connection as ConnectionOptions)
+    )
     await adapter.connect()
 
     try {

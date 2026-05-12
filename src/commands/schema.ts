@@ -171,8 +171,11 @@ async function schemaAction(
       }
     }
 
-    // Create adapter from configuration
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    // Create adapter from configuration. MongoDB falls through here intentionally —
+    // schema scan uses the DatabaseAdapter surface that both SQL and MongoDB adapters implement.
+    const adapter = AdapterFactory.createAdapter(
+      config.connection as ConnectionOptions
+    ) as DatabaseAdapter
     await adapter.connect()
 
     try {

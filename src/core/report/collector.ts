@@ -1,5 +1,6 @@
 import { collectInspect } from '@/core/inspect/collector'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import type { DatabaseAdapter } from '@/adapters/types'
 import { configModule } from '@/core/config'
 import {
   loadSnippets,
@@ -79,7 +80,9 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
     warnings.push({ severity: 'warn', message: 'connection config missing after probe' })
     return finalize({ context, sections: [], warnings, generatedAt })
   }
-  const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+  const adapter = AdapterFactory.createAdapter(
+    config.connection as ConnectionOptions
+  ) as DatabaseAdapter
 
   const sectionEvidence = new Map<ReportSectionId, EvidenceItem[]>()
   for (const id of sections) sectionEvidence.set(id, [])

@@ -156,6 +156,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'readonly',
         'Applies result limits and collection size guard.'
       ),
+      queries: cap(
+        'limited',
+        'local-write',
+        'Snippet management works, but saved-query execution is not supported for MongoDB.'
+      ),
       q: cap('unsupported', 'none', 'MongoDB saved-query execution is not supported.'),
       insert: cap(
         'limited',
@@ -202,6 +207,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'readonly',
         'Saved Redis snippets use a read-only allowlist and range guards.'
       ),
+      queries: cap(
+        'limited',
+        'local-write',
+        'Snippet management works with Redis-specific saved-query limitations.'
+      ),
       insert: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       update: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       delete: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
@@ -226,6 +236,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'limited',
         'readonly',
         'Saved ES snippets require index frontmatter and reject scripts.'
+      ),
+      queries: cap(
+        'limited',
+        'local-write',
+        'Snippet management works with Elasticsearch-specific saved-query limitations.'
       ),
       insert: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       update: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),

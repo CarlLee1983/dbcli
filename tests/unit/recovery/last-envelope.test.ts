@@ -63,6 +63,25 @@ describe('writeLastEnvelope / readLastEnvelope', () => {
     const bad = '/proc/this/path/should/not/exist/dbcli'
     await expect(writeLastEnvelope(bad, ENV, ['dbcli'])).resolves.toBeUndefined()
   })
+
+  test('saved envelope command omits raw SQL and parameter secrets', async () => {
+    await writeLastEnvelope(workspace, ENV, [
+      'dbcli',
+      'query',
+      "SELECT * FROM users WHERE api_key = 'sk-test-secret'",
+      '--param',
+      'token=secret',
+      '--format',
+      'json',
+      '--recovery',
+    ])
+    const raw = await readFile(join(workspace, LAST_ENVELOPE_PATH), 'utf8')
+    expect(raw).not.toContain('sk-test-secret')
+    expect(raw).not.toContain('token=secret')
+    expect(JSON.parse(raw).command).toBe(
+      'dbcli query <sql> --param <redacted> --format json --recovery'
+    )
+  })
 })
 
 describe('sanitizeCommandSummary', () => {
@@ -88,6 +107,31 @@ describe('sanitizeCommandSummary', () => {
     expect(
       sanitizeCommandSummary(['dbcli', 'query', 'SELECT 1', '--format', 'json', '--recovery'])
     ).toBe('dbcli query <sql> --format json --recovery')
+  })
+
+  test('redacts inline --config and --param values', () => {
+    expect(
+      sanitizeCommandSummary([
+        'dbcli',
+        'q',
+        '@diag/secret',
+        '--config=/tmp/project/.dbcli/config.json',
+        '--param=apiKey=secret',
+      ])
+    ).toBe('dbcli q @diag/secret --config <redacted> --param <redacted>')
+  })
+
+  test('redacts SQL export body while preserving benign output format', () => {
+    expect(
+      sanitizeCommandSummary([
+        'dbcli',
+        'export',
+        "SELECT * FROM users WHERE token = 'secret'",
+        '--format',
+        'csv',
+        '--recovery',
+      ])
+    ).toBe('dbcli export <sql> --format csv --recovery')
   })
 
   test('returns "<unknown>" for empty argv', () => {

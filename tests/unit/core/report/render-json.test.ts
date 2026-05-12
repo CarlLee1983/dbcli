@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { renderJson } from '@/core/report/render-json'
 import type { ReportSnapshot } from '@/core/report/types'
 import type { InspectSnapshot } from '@/core/inspect/types'
+import { expectNoCredentialFieldNames, expectNoSensitiveFragments } from '../../../helpers/sensitive-output'
 
 const CONTEXT: InspectSnapshot = {
   schemaVersion: 1,
@@ -59,10 +60,31 @@ describe('renderJson (report)', () => {
     expect(j.sections[0].evidence[0].status).toBe('ok')
   })
 
+  test('full mode keeps required top-level and evidence keys stable', () => {
+    const parsed = JSON.parse(renderJson(SNAP, { brief: false }))
+    expect(Object.keys(parsed).sort()).toEqual([
+      'context',
+      'generatedAt',
+      'schemaVersion',
+      'sections',
+      'suggestedCommands',
+      'warnings',
+    ])
+    expect(Object.keys(parsed.sections[0]).sort()).toEqual(['evidence', 'id'])
+    expect(Object.keys(parsed.sections[0].evidence[0]).sort()).toEqual([
+      'description',
+      'durationMs',
+      'intent',
+      'rowCount',
+      'rows',
+      'snippet',
+      'status',
+    ])
+  })
+
   test('never contains host/password fields from context', () => {
     const out = renderJson(SNAP, { brief: false })
-    expect(out).not.toContain('"host"')
-    expect(out).not.toContain('"password"')
-    expect(out).not.toContain('"port"')
+    expectNoCredentialFieldNames(out)
+    expectNoSensitiveFragments(out)
   })
 })

@@ -39,6 +39,19 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `recover` | N/A | N/A | N/A | N/A | N/A | N/A | Automated remediation and multi-turn protocol; engine-independent logic operating on saved envelopes. |
 | `skill` | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. New: `skill tasks list/show/plan` exposes plan-only Agent Task Packs (built-in + `.dbcli-shared/tasks/` + `.dbcli/tasks/`); plans never execute commands. |
 
+## Side-effect tiers
+
+These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are used by maintainers and AI agents to choose safe command paths.
+
+| Tier | Meaning | Examples |
+| --- | --- | --- |
+| `readonly` | Reads remote or local state without mutating the connected database. Local schema-cache refreshes are still treated as readonly when the command contract says so. | `list`, `schema`, `query`, `inspect`, `report`, `guide` |
+| `dry-run` | Produces or applies a gated plan only when an explicit dry-run or allow flag is present. | `recover`, write commands with `--dry-run` |
+| `local-write` | Writes local project or user configuration/artifacts, but does not mutate the connected database. | `use`, `queries`, `blacklist`, `skill`, `upgrade` |
+| `db-write` | Mutates the connected database or datastore. Requires permission checks and command-specific safeguards. | `insert`, `update`, `delete`, `migrate` |
+| `interactive` | Requires prompt/TTY interaction and may write local configuration after user input. | `init`, `shell` |
+| `none` | Command is unsupported or not applicable for the engine. | Unsupported engine/command combinations |
+
 ## Required CI validation
 
 The release gate is four commands. CI runs them without `continue-on-error`, and they must also pass locally before tagging a release:

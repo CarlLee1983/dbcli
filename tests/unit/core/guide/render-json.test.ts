@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { renderJson } from '@/core/guide/render-json'
 import type { GuideSnapshot } from '@/core/guide/types'
 import type { InspectSnapshot } from '@/core/inspect/types'
+import { expectNoCredentialFieldNames, expectNoSensitiveFragments } from '../../../helpers/sensitive-output'
 
 const CONTEXT: InspectSnapshot = {
   schemaVersion: 1,
@@ -43,6 +44,27 @@ const SNAP: GuideSnapshot = {
 }
 
 describe('renderJson (guide)', () => {
+  test('full mode keeps required guide and step keys stable', () => {
+    const parsed = JSON.parse(renderJson(SNAP, { brief: false }))
+    expect(Object.keys(parsed).sort()).toEqual([
+      'context',
+      'generatedAt',
+      'goal',
+      'schemaVersion',
+      'steps',
+      'warnings',
+    ])
+    expect(Object.keys(parsed.steps[1]).sort()).toEqual([
+      'command',
+      'expects',
+      'intent',
+      'order',
+      'rationale',
+      'risk',
+      'snippet',
+    ])
+  })
+
   test('full mode emits stable shape with rationale and expects', () => {
     const j = JSON.parse(renderJson(SNAP, { brief: false }))
     expect(j.schemaVersion).toBe(1)
@@ -55,6 +77,7 @@ describe('renderJson (guide)', () => {
 
   test('brief drops rationale and expects but keeps command/risk/order/snippet', () => {
     const j = JSON.parse(renderJson(SNAP, { brief: true }))
+    expect(Object.keys(j.steps[1]).sort()).toEqual(['command', 'intent', 'order', 'risk', 'snippet'])
     expect(j.steps[0].rationale).toBeUndefined()
     expect(j.steps[0].expects).toBeUndefined()
     expect(j.steps[0].command).toBe('dbcli inspect --for-agent')
@@ -66,8 +89,7 @@ describe('renderJson (guide)', () => {
 
   test('never contains host/password fields from context', () => {
     const out = renderJson(SNAP, { brief: false })
-    expect(out).not.toContain('"host"')
-    expect(out).not.toContain('"password"')
-    expect(out).not.toContain('"port"')
+    expectNoCredentialFieldNames(out)
+    expectNoSensitiveFragments(out)
   })
 })

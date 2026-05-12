@@ -46,4 +46,48 @@ describe('recoveryEnvelopeSchema verify field', () => {
     expect(r.ok).toBe(false)
     expect(r.reason).toContain('verify')
   })
+
+  test('parses full strict envelope with stable top-level keys', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      error: {
+        code: 'CONFIG_MISSING',
+        category: 'config',
+        message: 'No config file found.',
+        details: { table: 'users' },
+      },
+      recovery: [
+        {
+          order: 1,
+          command: 'dbcli init',
+          rationale: 'Create a local configuration file.',
+          risk: 'unknown',
+          expects: 'Interactive setup completes.',
+          interactive: true,
+        },
+      ],
+    })
+    expect(r.ok).toBe(true)
+    expect(Object.keys(r.value!).sort()).toEqual([
+      'error',
+      'generatedAt',
+      'ok',
+      'recovery',
+      'schemaVersion',
+    ])
+  })
+
+  test('rejects unsupported secret-like detail fields', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      error: {
+        code: 'CONFIG_MISSING',
+        category: 'config',
+        message: 'x',
+        details: { password: 'secret' },
+      },
+    })
+    expect(r.ok).toBe(false)
+    expect(r.reason).toContain('password')
+  })
 })

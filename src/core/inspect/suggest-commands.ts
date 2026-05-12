@@ -28,6 +28,6 @@ export function suggestCommands(
   out.push('dbcli queries list --format json')
   out.push('dbcli doctor --format json')
 
-  const cap = options.brief ? 3 : 5
+  const cap = options.brief ? 1 : 5
   return out.slice(0, cap)
 }

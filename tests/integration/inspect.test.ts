@@ -59,7 +59,7 @@ describe('dbcli inspect (CLI)', () => {
     const j = JSON.parse(stdout)
     expect(j.objects.sample).toBeUndefined()
     expect(j.snippets.intents).toEqual([])
-    expect(j.suggestedCommands.length).toBeLessThanOrEqual(3)
+    expect(j.suggestedCommands).toHaveLength(1)
   })
 
   test('markdown mode renders required sections', async () => {

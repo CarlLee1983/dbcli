@@ -42,7 +42,7 @@ describe('suggestCommands', () => {
     expect(cmds).toContain('dbcli queries suggest perf --format json')
   })
 
-  test('brief mode trims to ≤3', () => {
+  test('brief mode returns exactly one safest next command', () => {
     const cmds = suggestCommands(
       {
         ...baseSnap,
@@ -55,6 +55,6 @@ describe('suggestCommands', () => {
       },
       { brief: true }
     )
-    expect(cmds.length).toBeLessThanOrEqual(3)
+    expect(cmds).toEqual(['dbcli schema --refresh'])
   })
 })

@@ -9,6 +9,8 @@ Legend:
 - ❌ Not supported / exits with an error
 - N/A Not database-engine-specific
 
+Maintenance note: command support statuses in this table are mirrored by `src/adapters/capabilities.ts` and guarded by `tests/unit/adapters/capabilities.test.ts`. Update both together when support changes.
+
 | Command / area | PostgreSQL | MySQL | MariaDB | MongoDB | Redis | Elasticsearch | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB accepts URI or host/port. Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |

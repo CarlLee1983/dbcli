@@ -57,4 +57,10 @@ describe('engine capability registry', () => {
   test('registry root export is defined', () => {
     expect(ENGINE_CAPABILITIES).toBeDefined()
   })
+
+  test('feature matrix points maintainers to the capability registry', async () => {
+    const text = await Bun.file('docs/feature-matrix.md').text()
+    expect(text).toContain('src/adapters/capabilities.ts')
+    expect(text).toContain('tests/unit/adapters/capabilities.test.ts')
+  })
 })

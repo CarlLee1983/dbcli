@@ -3,12 +3,18 @@
  * Defines the contract that all database adapters must implement
  */
 
+export type DatabaseSystem = 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+
+export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
+
+export type QueryableDatabaseSystem = Exclude<DatabaseSystem, SqlDatabaseSystem>
+
 /**
  * Connection configuration for database adapters
  */
 export interface ConnectionOptions {
   /** Database system type */
-  system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+  system: DatabaseSystem
   /** Database host address or hostname */
   host: string
   /** Database port number */
@@ -38,6 +44,10 @@ export interface ConnectionOptions {
   /** Whether to reject unauthorized TLS connections (default: true) */
   rejectUnauthorized?: boolean
 }
+
+export type SqlConnectionOptions = ConnectionOptions & { system: SqlDatabaseSystem }
+
+export type QueryableConnectionOptions = ConnectionOptions & { system: QueryableDatabaseSystem }
 
 /**
  * Schema information for a single column

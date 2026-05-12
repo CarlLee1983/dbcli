@@ -1,3 +1,4 @@
+import { getEngineCapability, type CommandCapabilityKey } from '@/adapters/capabilities'
 import type { InspectSnapshot } from '@/core/inspect/types'
 import type { EngineTag, ResolvedSnippet } from '@/core/saved-queries'
 import { intentsForGoal } from './goal-map'
@@ -47,18 +48,22 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
   raw.push(ANCHOR_STEP)
 
   if (input.goal === 'permissions') {
-    raw.push({
-      command: 'dbcli blacklist list --format json',
-      rationale: 'Confirm which tables and columns are off-limits before deeper inspection.',
-      risk: 'readonly',
-      expects: 'Blacklist entries grouped by table and column.',
-    })
-    raw.push({
-      command: 'dbcli queries list --format json',
-      rationale: 'Inventory the snippets the current permission level is allowed to invoke.',
-      risk: 'readonly',
-      expects: 'Snippet inventory with engine, source, and intent metadata.',
-    })
+    if (canRun(input.context, 'blacklist')) {
+      raw.push({
+        command: 'dbcli blacklist list --format json',
+        rationale: 'Confirm which tables and columns are off-limits before deeper inspection.',
+        risk: 'readonly',
+        expects: 'Blacklist entries grouped by table and column.',
+      })
+    }
+    if (canRun(input.context, 'queries')) {
+      raw.push({
+        command: 'dbcli queries list --format json',
+        rationale: 'Inventory the snippets the current permission level is allowed to invoke.',
+        risk: 'readonly',
+        expects: 'Snippet inventory with engine, source, and intent metadata.',
+      })
+    }
     raw.push(DOCTOR_STEP)
     return cap(raw)
   }
@@ -70,7 +75,10 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
       risk: 'readonly',
       expects: 'Object list keyed by engine kind (tables, collections, indices, keys).',
     })
-    if (!input.context.schemaCache.available || input.context.schemaCache.stale === true) {
+    if (
+      canRun(input.context, 'schemaFullScan') &&
+      (!input.context.schemaCache.available || input.context.schemaCache.stale === true)
+    ) {
       raw.push({
         command: 'dbcli schema --refresh',
         rationale:
@@ -79,32 +87,36 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
         expects: 'Updated `.dbcli/schemas/index.json` with current table → column mapping.',
       })
     }
-    raw.push({
-      command: 'dbcli queries suggest capacity --format json',
-      rationale: 'Surface size-related snippets to estimate footprint of the new database.',
-      risk: 'readonly',
-      expects: 'Snippets with intent prefix `capacity.*`.',
-    })
+    if (canRun(input.context, 'queries')) {
+      raw.push({
+        command: 'dbcli queries suggest capacity --format json',
+        rationale: 'Surface size-related snippets to estimate footprint of the new database.',
+        risk: 'readonly',
+        expects: 'Snippets with intent prefix `capacity.*`.',
+      })
+    }
     return cap(raw)
   }
 
   // Intent-driven goals.
   const wantIntents = intentsForGoal(input.goal)
-  for (const intent of wantIntents) {
-    const picked = pickSnippetForIntent(input.snippets, input.engine, intent)
-    if (!picked) continue
-    raw.push({
-      command: `dbcli q ${picked.query.meta.key} --format json`,
-      rationale: snippetRationale(picked, intent),
-      risk: 'readonly',
-      expects: 'JSON rows from the saved query; empty array if the condition is not present.',
-      snippet: picked.query.meta.key,
-      intent,
-    })
+  if (canRun(input.context, 'q')) {
+    for (const intent of wantIntents) {
+      const picked = pickSnippetForIntent(input.snippets, input.engine, intent)
+      if (!picked) continue
+      raw.push({
+        command: `dbcli q ${picked.query.meta.key} --format json`,
+        rationale: snippetRationale(picked, intent),
+        risk: 'readonly',
+        expects: 'JSON rows from the saved query; empty array if the condition is not present.',
+        snippet: picked.query.meta.key,
+        intent,
+      })
+    }
   }
 
   const broadenPrefix = primaryPrefix(input.goal)
-  if (broadenPrefix) {
+  if (broadenPrefix && canRun(input.context, 'queries')) {
     raw.push({
       command: `dbcli queries suggest ${broadenPrefix} --format json`,
       rationale: `Broaden the search beyond curated diagnostics for the \`${broadenPrefix}.*\` intent prefix.`,
@@ -115,6 +127,12 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
 
   raw.push(DOCTOR_STEP)
   return cap(raw)
+}
+
+function canRun(context: InspectSnapshot, key: CommandCapabilityKey): boolean {
+  if (!context.system) return false
+  const status = getEngineCapability(context.system, key).status
+  return status === 'supported' || status === 'limited'
 }
 
 function pickSnippetForIntent(

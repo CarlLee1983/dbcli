@@ -215,6 +215,44 @@ describe('buildPlan', () => {
     ])
   })
 
+  test('redis schema-overview omits unsupported schema refresh', () => {
+    const redisCtx: InspectSnapshot = {
+      ...STALE_CACHE_CONTEXT,
+      system: 'redis',
+      objects: { kind: 'keys', count: 0, sample: [] },
+    }
+    const plan = buildPlan({
+      context: redisCtx,
+      snippets: new Map(),
+      engine: 'redis',
+      goal: 'schema-overview',
+    })
+    expect(plan.map((s) => s.command)).toEqual([
+      'dbcli inspect --for-agent',
+      'dbcli list --format json',
+      'dbcli queries suggest capacity --format json',
+    ])
+  })
+
+  test('redis permissions omits unsupported blacklist command', () => {
+    const redisCtx: InspectSnapshot = {
+      ...PG_CONTEXT,
+      system: 'redis',
+      objects: { kind: 'keys', count: 0, sample: [] },
+    }
+    const plan = buildPlan({
+      context: redisCtx,
+      snippets: new Map(),
+      engine: 'redis',
+      goal: 'permissions',
+    })
+    expect(plan.map((s) => s.command)).toEqual([
+      'dbcli inspect --for-agent',
+      'dbcli queries list --format json',
+      'dbcli doctor --format json',
+    ])
+  })
+
   test('plan length stays within MAX_STEPS (8) and orders are 1-based contiguous', () => {
     // Even with 20 candidate snippets, the algorithm picks at most one per intent.
     const map = asMap(

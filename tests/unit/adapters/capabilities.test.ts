@@ -9,7 +9,14 @@ import {
 } from 'src/adapters/capabilities'
 import type { DatabaseSystem } from 'src/adapters/types'
 
-const ENGINES: DatabaseSystem[] = ['postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch']
+const ENGINES: DatabaseSystem[] = [
+  'postgresql',
+  'mysql',
+  'mariadb',
+  'mongodb',
+  'redis',
+  'elasticsearch',
+]
 
 describe('engine capability registry', () => {
   test('defines every command capability for every engine', () => {
@@ -17,7 +24,9 @@ describe('engine capability registry', () => {
       const caps = getEngineCapabilities(engine)
       for (const key of COMMAND_CAPABILITY_KEYS) {
         expect(caps[key]).toBeDefined()
-        expect(['supported', 'limited', 'unsupported', 'not-applicable']).toContain(caps[key].status)
+        expect(['supported', 'limited', 'unsupported', 'not-applicable']).toContain(
+          caps[key].status
+        )
       }
     }
   })

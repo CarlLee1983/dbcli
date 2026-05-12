@@ -1,11 +1,7 @@
 import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { configModule } from '@/core/config'
-import {
-  AdapterFactory,
-  type ConnectionOptions,
-  type SqlConnectionOptions,
-} from '@/adapters'
+import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import type { ConnectionConfig } from '@/types'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {

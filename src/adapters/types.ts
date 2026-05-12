@@ -3,7 +3,13 @@
  * Defines the contract that all database adapters must implement
  */
 
-export type DatabaseSystem = 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+export type DatabaseSystem =
+  | 'postgresql'
+  | 'mysql'
+  | 'mariadb'
+  | 'mongodb'
+  | 'redis'
+  | 'elasticsearch'
 
 export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
 

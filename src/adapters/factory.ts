@@ -30,7 +30,9 @@ export class AdapterFactory {
       case 'mariadb':
         return new MySQLAdapter(options)
       default:
-        throw new Error(`createSqlAdapter requires a SQL system, got: ${(options as { system?: string }).system}`)
+        throw new Error(
+          `createSqlAdapter requires a SQL system, got: ${(options as { system?: string }).system}`
+        )
     }
   }
 

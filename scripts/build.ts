@@ -41,7 +41,7 @@ if (!uiJs.success) {
   console.error('UI Build failed:', uiJs.logs)
   process.exit(1)
 }
-const jsCode = await uiJs.outputs[0]?.text() ?? ''
+const jsCode = (await uiJs.outputs[0]?.text()) ?? ''
 
 // b. Build CSS with Tailwind
 await $`bunx tailwindcss -c ./src/ui-template/tailwind.config.js -i ./src/ui-template/src/index.css -o ./dist/ui-style.css --minify`

@@ -1,4 +1,3 @@
- 
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
 

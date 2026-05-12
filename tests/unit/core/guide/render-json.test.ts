@@ -2,7 +2,10 @@ import { describe, test, expect } from 'bun:test'
 import { renderJson } from '@/core/guide/render-json'
 import type { GuideSnapshot } from '@/core/guide/types'
 import type { InspectSnapshot } from '@/core/inspect/types'
-import { expectNoCredentialFieldNames, expectNoSensitiveFragments } from '../../../helpers/sensitive-output'
+import {
+  expectNoCredentialFieldNames,
+  expectNoSensitiveFragments,
+} from '../../../helpers/sensitive-output'
 
 const CONTEXT: InspectSnapshot = {
   schemaVersion: 1,
@@ -77,7 +80,13 @@ describe('renderJson (guide)', () => {
 
   test('brief drops rationale and expects but keeps command/risk/order/snippet', () => {
     const j = JSON.parse(renderJson(SNAP, { brief: true }))
-    expect(Object.keys(j.steps[1]).sort()).toEqual(['command', 'intent', 'order', 'risk', 'snippet'])
+    expect(Object.keys(j.steps[1]).sort()).toEqual([
+      'command',
+      'intent',
+      'order',
+      'risk',
+      'snippet',
+    ])
     expect(j.steps[0].rationale).toBeUndefined()
     expect(j.steps[0].expects).toBeUndefined()
     expect(j.steps[0].command).toBe('dbcli inspect --for-agent')

@@ -1,7 +1,10 @@
 import { describe, test, expect } from 'bun:test'
 import { renderJson } from '@/core/inspect/render-json'
 import type { InspectSnapshot } from '@/core/inspect/types'
-import { expectNoCredentialFieldNames, expectNoSensitiveFragments } from '../../../helpers/sensitive-output'
+import {
+  expectNoCredentialFieldNames,
+  expectNoSensitiveFragments,
+} from '../../../helpers/sensitive-output'
 
 const SNAP: InspectSnapshot = {
   schemaVersion: 1,

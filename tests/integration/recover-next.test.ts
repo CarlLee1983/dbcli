@@ -12,7 +12,7 @@ let FIXTURE = ''
 function sanitizeEnv(): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
   let originalPath = ''
-  
+
   // Find the existing PATH/Path/path
   for (const [k, v] of Object.entries(process.env)) {
     const uk = k.toUpperCase()
@@ -22,23 +22,23 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
     if (/^DBCLI_/i.test(k)) continue
     if (k === 'DATABASE_URL') continue
     if (uk === 'PATH') continue
-    
+
     out[k] = v
   }
-  
+
   out.NODE_ENV = 'test'
   out.DBCLI_NO_UPDATE_CHECK = '1'
-  
-  const finalPath = FIXTURE 
+
+  const finalPath = FIXTURE
     ? `${FIXTURE}${process.platform === 'win32' ? ';' : ':'}${originalPath}`
     : originalPath
-    
+
   out.PATH = finalPath
   if (process.platform === 'win32') {
     out.Path = finalPath
     out.path = finalPath
   }
-  
+
   return out
 }
 
@@ -49,9 +49,9 @@ function run(
   return new Promise((res) => {
     // Using process.execPath (bun) directly is more reliable than 'bun' string on some Windows setups.
     // Avoid shell: true to prevent argument quoting/splitting issues.
-    const child = spawn(process.execPath, ['run', CLI, ...args], { 
-      cwd, 
-      env: sanitizeEnv()
+    const child = spawn(process.execPath, ['run', CLI, ...args], {
+      cwd,
+      env: sanitizeEnv(),
     })
     let stdout = ''
     let stderr = ''
@@ -73,9 +73,8 @@ beforeAll(async () => {
   // Create a local dbcli shim so recovery steps find it on PATH
   const shimName = process.platform === 'win32' ? 'dbcli.cmd' : 'dbcli'
   const shimPath = join(FIXTURE, shimName)
-  const shimContent = process.platform === 'win32'
-    ? `@bun run "${CLI}" %*`
-    : `#!/bin/sh\nbun run "${CLI}" "$@"`
+  const shimContent =
+    process.platform === 'win32' ? `@bun run "${CLI}" %*` : `#!/bin/sh\nbun run "${CLI}" "$@"`
   await writeFile(shimPath, shimContent)
   if (process.platform !== 'win32') {
     const { chmod } = await import('node:fs/promises')

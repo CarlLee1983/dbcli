@@ -24,7 +24,14 @@ export interface SkillOptions {
 /**
  * Supported platforms for skill installation
  */
-export const SUPPORTED_PLATFORMS = ['claude', 'gemini', 'copilot', 'cursor', 'codex', 'windsurf'] as const
+export const SUPPORTED_PLATFORMS = [
+  'claude',
+  'gemini',
+  'copilot',
+  'cursor',
+  'codex',
+  'windsurf',
+] as const
 export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
 
 /**

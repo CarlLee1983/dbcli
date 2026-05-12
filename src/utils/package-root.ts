@@ -29,8 +29,8 @@ export function findPackageRoot(): string {
     if (parent === dir) break
     dir = parent
   }
-  
-  // Robust fallback: 
+
+  // Robust fallback:
   // If we are in 'dist/cli.mjs', root is '..'
   // If we are in 'src/utils/package-root.ts', root is '../../'
   if (HERE.endsWith('dist')) {

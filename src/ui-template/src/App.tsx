@@ -4,11 +4,14 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { Database, Table, Info, Download, Clock, Rows } from 'lucide-react';
+import { formatValue, type ValueFormat } from './lib/format-value';
+import { resolveKpi } from './lib/resolve-kpi';
+import { deriveColumns } from './lib/derive-columns';
 
 interface KPI {
   label: string;
   value_column: string;
-  format?: string;
+  format?: ValueFormat;
 }
 
 interface Chart {
@@ -36,14 +39,6 @@ declare global {
 }
 
 const COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-
-const formatValue = (val: unknown, format?: string) => {
-  if (typeof val !== 'number') return val as string;
-  if (format === 'currency') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  if (format === 'percent') return new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1 }).format((val as number) / 100);
-  if (format === 'number') return new Intl.NumberFormat('en-US').format(val as number);
-  return val;
-};
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
@@ -119,7 +114,7 @@ export default function App() {
               <div key={idx} className="card p-6 border-l-4 border-l-primary-500 hover:shadow-md">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">{kpi.label}</p>
                 <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {formatValue((rows[0] as Record<string, unknown>)?.[kpi.value_column], kpi.format)}
+                  {resolveKpi(rows, kpi)}
                 </p>
                 <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit">
                   <Clock className="w-3 h-3" />
@@ -230,7 +225,7 @@ export default function App() {
             <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {Object.keys(rows[0] || {}).map(col => (
+                  {deriveColumns(rows).map((col) => (
                     <th key={col} className="px-6 py-4 font-bold text-slate-500 text-[11px] uppercase tracking-widest bg-slate-50/30">{col}</th>
                   ))}
                 </tr>

@@ -3,3 +3,6 @@ registry = "https://registry.npmjs.org/"
 
 [dev]
 reload = true
+
+[test]
+preload = ["./tests/helpers/setup-happy-dom.ts"]

@@ -22,7 +22,7 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.ts'],
+    files: ['tests/**/*.{ts,tsx}'],
     rules: {
       'no-console': 'off',
       'no-empty': 'warn',

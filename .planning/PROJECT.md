@@ -102,11 +102,22 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] `visual:` frontmatter block for KPI and chart configuration
 - [x] Secure data injection with HTML escaping and blacklist redaction
 
+**Expanded Antigravity Protocol & Agent Support** — v1.19.0
+- [x] Antigravity workflow 加入 Phase 0 (Scout) 與 Phase 3 (Auditor)
+- [x] `dbcli skill --install` 支援 Codex (OMX) 與 Windsurf
+- [x] `dbcli skill --install cursor` 改用 `.cursor/rules/*.mdc` 專案本地格式
+- [x] 新增專案層級 `GEMINI.md` 完整 Antigravity 生命週期指引
+
 ### Active
 
-**Post-v1.18.0 Stabilisation**
-- [ ] Monitor feedback on UI performance and browser compatibility
-- [ ] Refine chart types and KPI formatting options based on usage
+**Post-v1.19.0 Contract Stabilization (on `main`, awaiting next release tag)**
+- [x] 型別化能力註冊 `src/adapters/capabilities.ts`（engine × command × side-effect tier）
+- [x] 鎖定 agent-facing JSON 合約鍵集合（inspect / report / guide / recovery）
+- [x] 共用 `tests/helpers/sensitive-output.ts` 攔截 credential / 秘密片段
+- [x] 擴充 saved recovery 指令 redaction 覆蓋率（含 `--config` / `--param` / SQL body）
+- [x] `docs/feature-matrix.md` 補 side-effect tier 對照表
+- [x] UI bundle determinism 修補（pin `NODE_ENV=production`）
+- [ ] 將 main 上累積的 stabilization 變更打下一個 release tag
 
 ### Out of Scope (V1)
 
@@ -157,18 +168,22 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.9.1 — Multi-Engine + Agent Task Packs Shipped)
+## Current State (v1.19.0 — Expanded Antigravity Protocol & Agent Support Shipped)
 
-**Latest Release:** v1.9.1 (2026-05-07)
-- ✅ Skill 連線設定指引 (v1.9.1) — Skill 文件補上連線設定章節
-- ✅ Agent Task Packs plan-only (v1.9.0) — 三層目錄 loader、planner、`diagnose-slow-query`
-- ✅ Redis & Elasticsearch 完整支援 (v1.8.0) — adapter、blacklist、ExecutionResult 統一
-- ✅ Saved Queries / snippets (v1.7.0) — `q @<name>`、`queries` 子命令、size guard、覆蓋率 ≥ 80%
-- ✅ Full MongoDB Support (v1.6.0) — query / insert / update / delete + safeguards
-- ✅ MongoDB SRV (v1.5.1 / v1.5.2) — `mongodb+srv://` 與 `doctor` 診斷
-- ✅ Layered Schema Cache (v1.5.0) — file-based persistence + per-connection isolation
+**Latest Release:** v1.19.0 (2026-05-11)
+- ✅ Expanded Antigravity Protocol (v1.19.0) — Phase 0 Scout + Phase 3 Auditor、Codex (OMX) / Windsurf 安裝器、Cursor `.cursor/rules/*.mdc` 遷移、新增 `GEMINI.md`
+- ✅ Interactive HTML Dashboards (v1.18.0) — React + Recharts + Tailwind 模板、`--ui` flag、`visual:` frontmatter、安全資料注入
+- ✅ Guided Remediation & Multi-turn Recovery (v1.17.0) — `recover --apply` / `--next`、信任邊界、自動驗證 `verify`
+- ✅ Broaden Recovery 覆蓋 (v1.16.0) — `insert/update/delete/export/schema/inspect --recovery`、dry-run 步驟
+- ✅ Recovery Envelopes (v1.15.0) — `dbcli recovery`、`query/q --recovery`、14 個 recovery code
+- ✅ Agent Guide / Report / Inspect (v1.12.0 – v1.14.0) — context snapshot、診斷 report、deterministic guide planner
+- ✅ Saved Queries Discovery (v1.11.0) — `queries search` / `suggest`、9 個新診斷 snippet、`intent` frontmatter
+- ✅ Packaging & Security Hotfix (v1.10.1) — packaged assets path 修補、`q` blacklist 漏洞修補、lint release-blocking
+- ✅ ES / Redis Saved Queries (v1.10.0) — engine strategy refactor、engine-family dispatch
+- ✅ Multi-Engine 完整支援 (v1.8.0) — ES adapter 完備、Redis / ES ExecutionResult 統一
+- ✅ Saved Queries / snippets (v1.7.0)、Full MongoDB Support (v1.6.0)、Layered Schema Cache (v1.5.0)
 
-**In Progress (post-1.9.1, on `main`):** ES / Redis saved query strategies、engine-family dispatch、內建診斷 snippet（`es-cluster-health` / `redis-key-stats`）、ES / Redis end-to-end 整合測試。等待下個 release tag。
+**In Progress (post-v1.19.0, on `main`):** 合約穩定化 — `src/adapters/capabilities.ts` 型別能力註冊、agent-facing JSON 合約必要鍵鎖定（inspect/report/guide/recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`) 修補。等待下個 release tag。
 
 **What's Shipped (v1.9.1):**
 1. **Skill 連線設定指引** — Agent 第一次使用 dbcli 時能依 Skill 指引完成連線設定
@@ -265,4 +280,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-08 — v1.9.1 released; ES/Redis saved-query work merged on `main`, awaiting next release tag*
+*Last updated: 2026-05-13 — v1.19.0 released; post-release contract-stabilization work merged on `main` (typed capability registry, locked agent-facing JSON contracts, redaction guards, side-effect tier docs), awaiting next release tag*

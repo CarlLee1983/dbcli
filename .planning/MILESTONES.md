@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.19.0 — Expanded Antigravity Protocol & Agent Support (Shipped: 2026-05-11)
+
+**Scope:** Antigravity 工作流擴充（Scout / Auditor 階段）與新增 agent 平台支援。
+
+**Key accomplishments:**
+- 在核心 agentic workflow 中加入 **Phase 0 (Scout)** 研究階段與 **Phase 3 (Auditor)** 驗證階段。
+- `dbcli skill --install` 擴充支援 **Codex (OMX)** 與 **Windsurf**。
+- `dbcli skill --install cursor` 改用現代 `.cursor/rules/*.mdc` 專案本地格式。
+- 新增 `GEMINI.md` 專案層級指令檔，提供完整 Antigravity 生命週期指引。
+
+**Post-release stabilization (on `main`, awaiting next tag):**
+- 引入 `src/adapters/capabilities.ts` 型別化能力註冊（engine 支援 × command × side-effect tier）。
+- 鎖定 agent-facing JSON 合約：`inspect` / `report` / `guide` / `recovery` 必要鍵集合與 schema。
+- 共用 `tests/helpers/sensitive-output.ts` 攔截 credential 與秘密片段；擴充 saved recovery 指令的 redaction 覆蓋率。
+- `docs/feature-matrix.md` 補上 side-effect tier 對照表（`readonly` / `dry-run` / `local-write` / `db-write` / `interactive` / `none`）。
+- Build 決定性修補：UI bundle 固定 `NODE_ENV=production`、release formatting gate 保持綠燈。
+
+---
+
 ## v1.18.0 — Interactive HTML Dashboards (Shipped: 2026-05-11)
 
 **Scope:** React-based standalone HTML reports, `--ui` flag, `visual:` frontmatter block, and secure data injection.

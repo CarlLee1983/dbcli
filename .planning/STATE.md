@@ -1,29 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.18.0
-milestone_name: Interactive HTML Dashboards
+milestone: v1.19.0
+milestone_name: Expanded Antigravity Protocol & Agent Support
 status: milestone_complete
-last_updated: "2026-05-11T10:30:00.000Z"
+last_updated: "2026-05-13T07:30:00.000Z"
 progress:
-  total_phases: 19
-  completed_phases: 19
-  total_plans: 46
-  completed_plans: 46
+  total_phases: 20
+  completed_phases: 20
+  total_plans: 47
+  completed_plans: 47
+post_release:
+  branch: main
+  note: "Contract stabilization (capability registry + JSON contract / redaction guards) landed on main after v1.19.0 tag; awaiting next release."
 ---
 
 # STATE.md — Current Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-11)
+See: `.planning/PROJECT.md` (updated 2026-05-13)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** v1.18.0 released — Interactive HTML Dashboards for visual data exploration + React/Recharts bundling + secure data injection.
+**Current Focus:** v1.19.0 released — Expanded Antigravity Protocol (Phase 0 Scout + Phase 3 Auditor), Codex (OMX) + Windsurf agent installers, Cursor `.cursor/rules/*.mdc` migration, project-level `GEMINI.md`. Post-release contract stabilization on `main` (commits `aba0a25..9c9aafb`): typed capability registry, locked agent-facing JSON contracts (inspect / report / guide / recovery), expanded redaction guards, documented side-effect tiers — awaiting next release tag.
 
 ---
 
 ## Milestone Status
+
+**v1.19.0 — Expanded Antigravity Protocol & Agent Support:** COMPLETE (2026-05-11)
+- Antigravity workflow 加入 Phase 0 (Scout) 研究階段與 Phase 3 (Auditor) 驗證階段
+- `dbcli skill --install` 擴充支援 Codex (OMX) 與 Windsurf 平台
+- `dbcli skill --install cursor` 改用 `.cursor/rules/*.mdc` 專案本地格式
+- 新增專案層級 `GEMINI.md`，提供完整 Antigravity 生命週期指引
 
 **v1.18.0 — Interactive HTML Dashboards:** COMPLETE (2026-05-11)
 - React + Recharts + Tailwind 儀表板模板開發
@@ -100,12 +109,12 @@ See: `.planning/PROJECT.md` (updated 2026-05-11)
 打 release tag 前的完整流程：[`CONTRIBUTING.md → Release Process`](../CONTRIBUTING.md#release-process)。
 以下四道指令都必須綠燈、不得 `continue-on-error`，才視為可發版：
 
-| Gate | Command | Status (2026-05-08 14:30 +08:00) |
-|------|---------|----------------------------------|
-| Typecheck | `bun run typecheck` | ✅ Pass — `tsc --noEmit` 無錯誤 |
-| Tests | `bun test` | ✅ Pass — 1.10.1 release 前綠燈 |
-| Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` 已設為 release-blocking |
-| Build | `bun run build` | ✅ Pass — dist smoke tests 守護 packaged assets path |
+| Gate | Command | Status (2026-05-13 +08:00) |
+|------|---------|----------------------------|
+| Typecheck | `bun run typecheck` | ✅ Pass — `tsc --noEmit` 無錯誤（v1.19.0 + 後續 main 皆綠） |
+| Tests | `bun test` | ✅ Pass — v1.19.0 + 合約穩定化測試（inspect / report / guide / recovery / capabilities）皆綠 |
+| Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` release-blocking |
+| Build | `bun run build` | ✅ Pass — `dist/cli.mjs` 由 dist smoke + UI bundle 決定性 (`NODE_ENV=production`) 守護 |
 
 Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIBUTING.md 的 Pre-Release Checklist。
 
@@ -131,4 +140,4 @@ Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIB
 
 ---
 
-*Last updated: 2026-03-26 after v0.2.0-beta milestone completion*
+*Last updated: 2026-05-13 — synced to v1.19.0; post-release contract stabilization shipped on `main` awaiting next release tag.*

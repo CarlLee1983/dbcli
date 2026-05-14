@@ -19,6 +19,8 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { parseWhereClause } from '@/utils/where-parser'
 import { previewDelete } from '@/core/mongo/dry-run-formatter'
+import { buildDeletePlanSql } from '@/core/dml-plan-sql'
+import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -40,6 +42,8 @@ export async function deleteCommand(
     force?: boolean
     config?: string
     recovery?: boolean
+    plan?: boolean
+    format?: 'text' | 'json'
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -60,6 +64,28 @@ export async function deleteCommand(
     const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" to configure database connection')
+    }
+
+    // --plan branch: SQL-only preflight, no adapter, no DB connection.
+    // Must come BEFORE the admin permission check so the analyzer can return
+    // BLOCK on permission_denied for read-only / read-write users (preflight
+    // signal, not a write attempt). Errors here mirror `dbcli plan`:
+    // console.error + process.exit(1), not the JSON envelope used by the
+    // real DML execution path.
+    if (options.plan) {
+      if (options.dryRun) {
+        console.error('--plan cannot be used with --dry-run')
+        process.exit(1)
+        return
+      }
+      const whereForPlan = parseWhereClause(options.where)
+      const planSql = buildDeletePlanSql(table, whereForPlan)
+      await runDmlPlanAnalysis(
+        planSql,
+        { format: options.format, config: options.config },
+        command
+      )
+      return
     }
 
     // 4. Validate permission (DELETE requires data-admin or admin)

@@ -1,5 +1,6 @@
 # dbcli 完整說明文件
 
+<!-- doc-key: overview -->
 `dbcli` 是一款專為人類開發者與 AI 代理（AI Agents）設計的高效能、安全優先的資料庫 CLI 工具。它為 SQL（PostgreSQL、MySQL）、NoSQL（MongoDB）、Key-Value（Redis）及 Search（Elasticsearch）資料庫提供統一的操作介面，具備權限存取控制、敏感資料黑名單及自動化診斷工作流等核心功能。
 
 ---
@@ -18,9 +19,11 @@
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
 6.  [資料庫引擎支援矩陣](#資料庫引擎支援矩陣)
 7.  [AI 代理整合與 Antigravity 協議](#ai-代理整合)
+8.  [文件維護與覆蓋範圍](#文件維護與覆蓋範圍)
 
 ---
 
+<!-- doc-key: core-philosophy -->
 ## 核心理念與安全性
 
 `dbcli` 的設計初衷是「安全第一」，特別專注於防止 AI 代理在操作過程中意外洩漏或損壞敏感資料。
@@ -32,6 +35,7 @@
 
 ---
 
+<!-- doc-key: getting-started -->
 ## 快速入門
 
 ### 安裝方式
@@ -52,6 +56,7 @@ dbcli init
 
 ---
 
+<!-- doc-key: connection-management -->
 ## 連線管理
 
 `dbcli` 支援多連線配置 (v2)，讓你能在開發 (Local)、測試 (Staging) 與正式 (Production) 環境間切換自如。
@@ -65,8 +70,10 @@ dbcli init
 
 ---
 
+<!-- doc-key: command-reference -->
 ## 指令詳解
 
+<!-- doc-key: discovery-exploration -->
 ### 探索與發現
 
 | 指令 | 說明 |
@@ -76,6 +83,7 @@ dbcli init
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
 
+<!-- doc-key: query-data-operations -->
 ### 查詢與資料操作
 
 | 指令 | 說明 |
@@ -89,6 +97,7 @@ dbcli init
 | `blacklist` | 管理敏感資料屏蔽規則。 |
 | `plan "<sql>"` | **靜態分析器**：對 SQL 進行風險分級並給出優化建議。 |
 
+<!-- doc-key: snippet-management -->
 ### Snippet 管理
 
 儲存的查詢 (Snippets) 讓你能在 Repo 中維護複雜的 SQL。解析優先序為：**Local > Shared > Builtin**。
@@ -98,6 +107,7 @@ dbcli init
 *   **意圖建議**：`dbcli queries suggest perf`
 *   **建立本地 Snippet**：`dbcli queries new @my/query --local`
 
+<!-- doc-key: diagnostics-recovery -->
 ### 健康度、診斷與修復
 
 | 指令 | 說明 |
@@ -109,6 +119,7 @@ dbcli init
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 
+<!-- doc-key: advanced-tools -->
 ### 進階工具
 
 | 指令 | 說明 |
@@ -121,6 +132,7 @@ dbcli init
 
 ---
 
+<!-- doc-key: html-dashboards -->
 ## 互動式 HTML 儀表板
 
 在查詢時加上 `--ui` 旗標，即可在瀏覽器中開啟精美的互動式 React 報表。
@@ -133,6 +145,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
+<!-- doc-key: engine-support -->
 ## 資料庫引擎支援矩陣
 
 | 功能 | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
@@ -146,6 +159,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
+<!-- doc-key: ai-agent-integration -->
 ## AI 代理整合
 
 `dbcli` 從底層就是為了成為 AI 代理的「資料庫驅動程式」而設計的。
@@ -154,6 +168,54 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 2.  **修復封包 (Recovery Envelopes)**：當指令失敗時，使用 `--recovery` 獲得機器可讀的 JSON 錯誤及修復建議。
 3.  **風險控制**：AI 代理會主動使用 `dbcli plan` 與 `--dry-run` 來驗證其行為。
 4.  **上下文效率**：`inspect --for-agent` 提供精簡的元資料，防止 AI 上下文視窗過載。
+
+---
+
+<!-- doc-key: documentation-maintenance -->
+## 文件維護與覆蓋範圍
+
+Markdown (`index.md`) 與精緻版 HTML (`index.html`) 是同一份使用者指南的兩種呈現形式。維護時請把它們視為同一份文件契約。
+
+### 對標規則
+
+1.  **同一次變更必須更新兩種格式**：任何新指令、旗標、工作流程、警告、範例或支援矩陣項目，都必須同時出現在 `docs/user/zh-TW/index.md` 與 `docs/user/zh-TW/index.html`。
+2.  **主題順序必須一致**：每個共用主題都以 `<!-- doc-key: ... -->` 標記。不要只在其中一種格式新增主題。
+3.  **語意一致，不要求樣式相同**：HTML 可使用卡片、網格、圖示或較短標籤，但必須傳達與 Markdown 相同的必要用法、安全注意事項、範例與限制。
+4.  **同步所有支援語言**：英文文件更新時，也要同步更新 `docs/user/zh-TW/index.md` 與 `docs/user/zh-TW/index.html`。
+5.  **合併前必須驗證**：執行 `bun run docs:check`，確認每個支援語言的 Markdown/HTML 主題對標。
+
+### 覆蓋範圍檢查表
+
+每次功能或指令行為變更時，請使用此檢查表：
+
+| 範圍 | 必要文件內容 |
+| :--- | :--- |
+| 安裝與設定 | 套件安裝指令、首次初始化、環境變數建議與機密資訊安全處理。 |
+| 連線 | 多連線結構、列出、切換、單次 `--use` 覆蓋與不同環境範例。 |
+| 探索 | `list`、`schema`、`inspect`、`status`、輸出格式，以及 AI 代理查詢前應先檢查的時機。 |
+| 讀取與寫入 | `query`、`q`、`export`、`insert`、`update`、`delete`、`--dry-run`、寫入保護與安全限制範例。 |
+| Snippets | `queries list/search/suggest/new`、解析順序、參數與視覺化 frontmatter。 |
+| 診斷與修復 | `doctor`、`check`、`diff`、`report`、`guide`、`recover`、`--recovery` 與安全修復邊界。 |
+| 進階工具 | `shell`、`migrate`、`skill --install`、`skill tasks`、`completion` 與支援的權限層級。 |
+| 引擎 | PostgreSQL/MySQL/MariaDB、MongoDB、Redis、Elasticsearch 的支援差異與已知限制。 |
+| AI 使用 | 必要流程順序：黑名單檢查、schema 確認、dry-run/風險規劃，最後才執行。 |
+| HTML 儀表板 | `--ui`、匯出行為、圖表/KPI 設定，以及瀏覽器/報表預期。 |
+
+### 維護流程
+
+```bash
+# 1. 編輯每個支援語言的 Markdown 與 HTML。
+$EDITOR docs/user/en/index.md docs/user/en/index.html
+$EDITOR docs/user/zh-TW/index.md docs/user/zh-TW/index.html
+
+# 2. 驗證主題對標。
+bun run docs:check
+
+# 3. 若修改指令行為，請一併執行相關 CLI 測試。
+bun test
+```
+
+若某個主題刻意只存在於單一格式，不要直接略過檢查。請新增對應的 `doc-key` 區塊並放入等價內容，或記錄為何該主題不是使用者文件內容。
 
 ---
 

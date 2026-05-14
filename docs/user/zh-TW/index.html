@@ -96,6 +96,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
+                    <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
                 </ul>
             </section>
         </div>
@@ -103,6 +104,7 @@
 
     <!-- Main Content -->
     <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto">
+        <!-- doc-key: overview -->
         <section id="overview" class="py-12">
             <h1 class="fade-in duration-700">dbcli 完整說明文件</h1>
             <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
@@ -114,6 +116,7 @@
             </div>
         </section>
 
+        <!-- doc-key: core-philosophy -->
         <section id="philosophy" class="mt-16">
             <h2>核心理念與安全性</h2>
             <p><code>dbcli</code> 以「安全第一」為核心，透過多層保護機制防止資料意外洩漏或損壞：</p>
@@ -149,6 +152,7 @@
             </div>
         </section>
 
+        <!-- doc-key: getting-started -->
         <section id="getting-started">
             <h2>快速入門</h2>
             <p>使用您偏好的套件管理器進行全域安裝：</p>
@@ -161,6 +165,7 @@ bun install -g @gravito/dbcli</code></pre>
             <pre><code>dbcli init</code></pre>
         </section>
 
+        <!-- doc-key: connection-management -->
         <section id="connections">
             <h2>連線管理</h2>
             <p>輕鬆在正式 (Prod)、測試 (Staging) 及本地 (Local) 環境間切換：</p>
@@ -169,9 +174,11 @@ dbcli use staging        # 切換預設連線
 dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code></pre>
         </section>
 
+        <!-- doc-key: command-reference -->
         <section id="commands">
             <h2>指令詳解</h2>
             
+            <!-- doc-key: discovery-exploration -->
             <h3 id="discovery">探索與發現</h3>
             <table>
                 <thead>
@@ -185,6 +192,7 @@ dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code><
                 </tbody>
             </table>
 
+            <!-- doc-key: query-data-operations -->
             <h3 id="query">查詢與資料操作</h3>
             <pre><code># 原生查詢
 dbcli query "SELECT * FROM users LIMIT 10"
@@ -198,6 +206,7 @@ dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 # 安全寫入
 dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
 
+            <!-- doc-key: snippet-management -->
             <h3 id="snippets">儲存查詢管理</h3>
             <p>在版本控制中維護複雜的查詢片段，支援參數化與視覺化元資料。</p>
             <ul>
@@ -206,6 +215,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                 <li><code>dbcli queries suggest</code>：根據操作意圖獲取建議。</li>
             </ul>
 
+            <!-- doc-key: diagnostics-recovery -->
             <h3 id="diagnostics">健康度與診斷</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
@@ -221,8 +231,24 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                     <span class="text-text-muted font-medium">針對常見失敗模式執行自動化修復計畫。</span>
                 </div>
             </div>
+
+            <!-- doc-key: advanced-tools -->
+            <h3 id="advanced-tools">進階工具</h3>
+            <table>
+                <thead>
+                    <tr><th>指令</th><th>用途</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>shell</code></td><td>啟動互動式 REPL，支援補全與 SQL 高亮。</td></tr>
+                    <tr><td><code>migrate &lt;action&gt;</code></td><td>執行 SQL 資料表與索引的建立、修改或刪除等 DDL 工作流。</td></tr>
+                    <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
+                    <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
+                    <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
+                </tbody>
+            </table>
         </section>
 
+        <!-- doc-key: html-dashboards -->
         <section id="ui">
             <h2>📊 互動式 HTML 儀表板</h2>
             <p>在指令後加上 <code>--ui</code> 旗標，即可產生獨立的 React 報表並自動開啟。</p>
@@ -230,6 +256,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             <p>豐富的視覺化組件（圖表、KPI）可透過 Snippet frontmatter 中的 <code>visual:</code> 區塊進行設定。</p>
         </section>
 
+        <!-- doc-key: engine-support -->
         <section id="engines" class="mt-20">
             <h2>引擎支援矩陣</h2>
             <div class="overflow-hidden border border-border bg-surface rounded-lg">
@@ -277,6 +304,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             </div>
         </section>
 
+        <!-- doc-key: ai-agent-integration -->
         <section id="ai">
             <h2>🤖 AI 代理整合</h2>
             <p>Dbcli 是專為現代 AI 代理設計的標準「資料庫驅動程式」：</p>
@@ -285,6 +313,47 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                 <li><strong>內容優化</strong>：<code>--for-agent</code> 旗標大幅減少 Token 消耗。</li>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
             </ul>
+        </section>
+
+        <!-- doc-key: documentation-maintenance -->
+        <section id="documentation-maintenance" class="mt-20">
+            <h2>文件維護與覆蓋範圍</h2>
+            <p>Markdown (<code>index.md</code>) 與精緻版 HTML (<code>index.html</code>) 是同一份使用者指南的兩種呈現形式。維護時請把它們視為同一份文件契約。</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="p-6 paper-card">
+                    <h3 class="mt-0 mb-3 text-lg font-bold">對標規則</h3>
+                    <ul class="m-0 space-y-3">
+                        <li>每次新增或修改指令、旗標、警告、範例或支援矩陣時，同步更新 Markdown 與 HTML。</li>
+                        <li>使用相同順序的 <code>doc-key</code> 標記維持主題對標。</li>
+                        <li>HTML 可使用卡片、圖示或短標籤，但語意必須與 Markdown 一致。</li>
+                        <li>英文文件變更時，同步更新繁體中文 Markdown 與 HTML。</li>
+                        <li>合併前執行 <code>bun run docs:check</code>。</li>
+                    </ul>
+                </div>
+                <div class="p-6 paper-card">
+                    <h3 class="mt-0 mb-3 text-lg font-bold">必要覆蓋範圍</h3>
+                    <p class="text-sm mb-4">每個使用者可見功能都應說明設定、連線行為、探索指令、讀寫操作、Snippets、診斷、進階工具、引擎限制、AI 工作流安全與 HTML 儀表板行為。</p>
+                    <pre class="mb-0"><code># 驗證使用者文件對標
+bun run docs:check
+
+# 指令行為變更時執行 CLI 測試
+bun test</code></pre>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr><th>範圍</th><th>必要文件內容</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>安裝與設定</td><td>安裝指令、初始化、環境變數與機密資訊安全處理。</td></tr>
+                    <tr><td>連線</td><td>多連線結構、列出、切換、單次 <code>--use</code> 與環境範例。</td></tr>
+                    <tr><td>讀取與寫入</td><td><code>query</code>、<code>q</code>、<code>export</code>、<code>insert</code>、<code>update</code>、<code>delete</code>、<code>--dry-run</code> 與寫入保護。</td></tr>
+                    <tr><td>診斷與修復</td><td><code>doctor</code>、<code>check</code>、<code>diff</code>、<code>report</code>、<code>guide</code>、<code>recover</code> 與 <code>--recovery</code>。</td></tr>
+                    <tr><td>AI 使用</td><td>黑名單檢查、schema 確認、dry-run/風險規劃，最後才執行。</td></tr>
+                </tbody>
+            </table>
         </section>
 
         <footer class="mt-32 pb-20 text-center">

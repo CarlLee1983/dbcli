@@ -96,6 +96,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
+                    <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
                 </ul>
             </section>
         </div>
@@ -103,6 +104,7 @@
 
     <!-- Main Content -->
     <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto">
+        <!-- doc-key: overview -->
         <section id="overview" class="py-12">
             <h1 class="fade-in duration-700">dbcli Documentation</h1>
             <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
@@ -114,6 +116,7 @@
             </div>
         </section>
 
+        <!-- doc-key: core-philosophy -->
         <section id="philosophy" class="mt-16">
             <h2>Core Philosophy & Security</h2>
             <p>Built with a "Security-First" mindset, <code>dbcli</code> prevents accidental data leaks or corruption through multiple layers of protection:</p>
@@ -149,6 +152,7 @@
             </div>
         </section>
 
+        <!-- doc-key: getting-started -->
         <section id="getting-started">
             <h2>Getting Started</h2>
             <p>Install globally using your preferred package manager:</p>
@@ -161,6 +165,7 @@ bun install -g @gravito/dbcli</code></pre>
             <pre><code>dbcli init</code></pre>
         </section>
 
+        <!-- doc-key: connection-management -->
         <section id="connections">
             <h2>Connection Management</h2>
             <p>Switch between Production, Staging, and Local environments with ease:</p>
@@ -169,9 +174,11 @@ dbcli use staging        # Switch your default connection
 dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code></pre>
         </section>
 
+        <!-- doc-key: command-reference -->
         <section id="commands">
             <h2>Command Reference</h2>
             
+            <!-- doc-key: discovery-exploration -->
             <h3 id="discovery">Discovery & Exploration</h3>
             <table>
                 <thead>
@@ -185,6 +192,7 @@ dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code><
                 </tbody>
             </table>
 
+            <!-- doc-key: query-data-operations -->
             <h3 id="query">Querying & Data Operations</h3>
             <pre><code># Raw Query
 dbcli query "SELECT * FROM users LIMIT 10"
@@ -198,6 +206,7 @@ dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 # Safe Write
 dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
 
+            <!-- doc-key: snippet-management -->
             <h3 id="snippets">Snippet Management</h3>
             <p>Maintain complex queries as version-controlled snippets in your repository with visualization metadata.</p>
             <ul>
@@ -206,6 +215,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                 <li><code>dbcli queries suggest</code>: Get suggestions based on operational intent.</li>
             </ul>
 
+            <!-- doc-key: diagnostics-recovery -->
             <h3 id="diagnostics">Health & Diagnostics</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
@@ -221,8 +231,24 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                     <span class="text-text-muted font-medium">Executes automated remediation plans for common failure modes.</span>
                 </div>
             </div>
+
+            <!-- doc-key: advanced-tools -->
+            <h3 id="advanced-tools">Advanced Tools</h3>
+            <table>
+                <thead>
+                    <tr><th>Command</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>shell</code></td><td>Launch an interactive REPL with completion and SQL highlighting.</td></tr>
+                    <tr><td><code>migrate &lt;action&gt;</code></td><td>Run DDL workflows for creating, altering, or dropping SQL tables and indexes.</td></tr>
+                    <tr><td><code>skill --install</code></td><td>Install compact AI-agent instructions for Claude, Gemini, Codex, and similar tools.</td></tr>
+                    <tr><td><code>skill tasks</code></td><td>Manage repeatable expert task packs for diagnostics, audits, and database workflows.</td></tr>
+                    <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
+                </tbody>
+            </table>
         </section>
 
+        <!-- doc-key: html-dashboards -->
         <section id="ui">
             <h2>📊 Interactive HTML Dashboards</h2>
             <p>Generate standalone React-powered reports by appending the <code>--ui</code> flag.</p>
@@ -230,6 +256,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter.</p>
         </section>
 
+        <!-- doc-key: engine-support -->
         <section id="engines" class="mt-20">
             <h2>Engine Support Matrix</h2>
             <div class="overflow-hidden border border-border bg-surface rounded-lg">
@@ -277,6 +304,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             </div>
         </section>
 
+        <!-- doc-key: ai-agent-integration -->
         <section id="ai">
             <h2>🤖 AI Agent Integration</h2>
             <p>Dbcli is engineered to be the standard "Database Driver" for modern AI agents:</p>
@@ -285,6 +313,47 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
                 <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
             </ul>
+        </section>
+
+        <!-- doc-key: documentation-maintenance -->
+        <section id="documentation-maintenance" class="mt-20">
+            <h2>Documentation Maintenance & Coverage</h2>
+            <p>The Markdown (<code>index.md</code>) and polished HTML (<code>index.html</code>) files are two presentations of the same user guide. Maintain them as one documentation contract.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="p-6 paper-card">
+                    <h3 class="mt-0 mb-3 text-lg font-bold">Parity Rules</h3>
+                    <ul class="m-0 space-y-3">
+                        <li>Update Markdown and HTML in the same change for every command, flag, warning, example, or support-matrix update.</li>
+                        <li>Keep shared topics in the same order with matching <code>doc-key</code> markers.</li>
+                        <li>Match semantics even when the HTML uses cards, icons, or shorter labels.</li>
+                        <li>Mirror English changes into the Traditional Chinese Markdown and HTML files.</li>
+                        <li>Run <code>bun run docs:check</code> before merging documentation changes.</li>
+                    </ul>
+                </div>
+                <div class="p-6 paper-card">
+                    <h3 class="mt-0 mb-3 text-lg font-bold">Required Coverage</h3>
+                    <p class="text-sm mb-4">Every user-facing feature should document setup, connection behavior, discovery commands, read/write operations, snippets, diagnostics, advanced tools, engine limits, AI workflow safety, and HTML dashboard behavior.</p>
+                    <pre class="mb-0"><code># Verify user-doc parity
+bun run docs:check
+
+# Run CLI tests for behavior changes
+bun test</code></pre>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr><th>Area</th><th>Required documentation</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Installation & setup</td><td>Install commands, initialization, environment variables, and safe secret handling.</td></tr>
+                    <tr><td>Connections</td><td>Multi-connection layout, listing, switching, one-shot <code>--use</code>, and environment examples.</td></tr>
+                    <tr><td>Reads & writes</td><td><code>query</code>, <code>q</code>, <code>export</code>, <code>insert</code>, <code>update</code>, <code>delete</code>, <code>--dry-run</code>, and write guards.</td></tr>
+                    <tr><td>Diagnostics & recovery</td><td><code>doctor</code>, <code>check</code>, <code>diff</code>, <code>report</code>, <code>guide</code>, <code>recover</code>, and <code>--recovery</code>.</td></tr>
+                    <tr><td>AI usage</td><td>Blacklist check, schema confirmation, dry-run/risk planning, then execution.</td></tr>
+                </tbody>
+            </table>
         </section>
 
         <footer class="mt-32 pb-20 text-center">

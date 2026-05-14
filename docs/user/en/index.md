@@ -1,5 +1,6 @@
 # dbcli Comprehensive Documentation
 
+<!-- doc-key: overview -->
 `dbcli` is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL (PostgreSQL, MySQL), NoSQL (MongoDB), Key-Value (Redis), and Search (Elasticsearch) databases, featuring permission-based access control, sensitive data blacklisting, and automated diagnostic workflows.
 
 ---
@@ -18,9 +19,11 @@
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
 6.  [Database Engine Support Matrix](#database-engine-support-matrix)
 7.  [AI Agent Integration & Antigravity Protocol](#ai-agent-integration)
+8.  [Documentation Maintenance & Coverage](#documentation-maintenance--coverage)
 
 ---
 
+<!-- doc-key: core-philosophy -->
 ## Core Philosophy & Security
 
 `dbcli` is built with a "Security-First" mindset, particularly focused on preventing AI agents from accidentally leaking or corrupting sensitive data.
@@ -32,6 +35,7 @@
 
 ---
 
+<!-- doc-key: getting-started -->
 ## Getting Started
 
 ### Installation
@@ -52,6 +56,7 @@ dbcli init
 
 ---
 
+<!-- doc-key: connection-management -->
 ## Connection Management
 
 `dbcli` supports multi-connection configurations (v2), allowing you to switch between environments (Staging, Production, Local) seamlessly.
@@ -65,8 +70,10 @@ dbcli init
 
 ---
 
+<!-- doc-key: command-reference -->
 ## Command Reference
 
+<!-- doc-key: discovery-exploration -->
 ### Discovery & Exploration
 
 | Command | Description |
@@ -76,6 +83,7 @@ dbcli init
 | `inspect` | Provides a read-only snapshot for AI agents (objects, permissions, suggestions). |
 | `status` | Shows a safe summary of the current configuration (no credentials). |
 
+<!-- doc-key: query-data-operations -->
 ### Querying & Data Operations
 
 | Command | Description |
@@ -89,6 +97,7 @@ dbcli init
 | `blacklist` | Manages the sensitive data redirection rules. |
 | `plan "<sql>"` | **Static analyzer**: Classifies SQL risk and gives recommendations. |
 
+<!-- doc-key: snippet-management -->
 ### Snippet Management
 
 Saved queries (Snippets) allow you to store complex SQL in your repository. They resolve from three layers: **Local > Shared > Builtin**.
@@ -98,6 +107,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 *   **Suggest by intent**: `dbcli queries suggest perf`
 *   **Create new local snippet**: `dbcli queries new @my/query --local`
 
+<!-- doc-key: diagnostics-recovery -->
 ### Health, Diagnostics & Recovery
 
 | Command | Description |
@@ -109,6 +119,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 
+<!-- doc-key: advanced-tools -->
 ### Advanced Tools
 
 | Command | Description |
@@ -121,6 +132,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 
 ---
 
+<!-- doc-key: html-dashboards -->
 ## Interactive HTML Dashboards
 
 Use the `--ui` flag to open query results in a beautiful, interactive React-based dashboard in your browser.
@@ -133,6 +145,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
+<!-- doc-key: engine-support -->
 ## Database Engine Support Matrix
 
 | Feature | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
@@ -146,6 +159,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
+<!-- doc-key: ai-agent-integration -->
 ## AI Agent Integration
 
 `dbcli` is designed to be the "DB driver" for AI agents.
@@ -154,6 +168,54 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 2.  **Recovery Envelopes**: When a command fails, use `--recovery` to get a machine-readable JSON error with a suggested fix.
 3.  **Risk Gating**: Agents use `dbcli plan` and `--dry-run` to verify their actions before committing changes.
 4.  **Context Efficiency**: `inspect --for-agent` provides exactly the metadata the agent needs to orient itself without bloating its context window.
+
+---
+
+<!-- doc-key: documentation-maintenance -->
+## Documentation Maintenance & Coverage
+
+The Markdown (`index.md`) and polished HTML (`index.html`) versions are two presentations of the same user guide. Treat them as a single documentation contract.
+
+### Parity Rules
+
+1.  **Update both files in the same change**: Any new command, flag, workflow, warning, example, or support-matrix entry must appear in both `docs/user/en/index.md` and `docs/user/en/index.html`.
+2.  **Keep topic order aligned**: Each shared topic is marked with `<!-- doc-key: ... -->`. Do not add a topic to only one format.
+3.  **Match semantics, not styling**: The HTML version may use cards, grids, icons, or short labels, but it must communicate the same required usage, safety notes, examples, and limitations as the Markdown version.
+4.  **Mirror supported languages**: When English user docs change, apply the same update to `docs/user/zh-TW/index.md` and `docs/user/zh-TW/index.html`.
+5.  **Verify before merging**: Run `bun run docs:check` to confirm Markdown/HTML topic parity for every supported language.
+
+### Coverage Checklist
+
+Use this checklist whenever a feature or command behavior changes:
+
+| Area | Required documentation |
+| :--- | :--- |
+| Installation & setup | Package install commands, first-run initialization, environment-variable guidance, and safe secret handling. |
+| Connections | Multi-connection layout, listing, switching, one-shot `--use`, and environment-specific examples. |
+| Discovery | `list`, `schema`, `inspect`, `status`, output formats, and when AI agents should inspect before querying. |
+| Reads & writes | `query`, `q`, `export`, `insert`, `update`, `delete`, `--dry-run`, write guards, and examples with expected safety constraints. |
+| Snippets | `queries list/search/suggest/new`, resolution order, parameters, and visualization frontmatter. |
+| Diagnostics & recovery | `doctor`, `check`, `diff`, `report`, `guide`, `recover`, `--recovery`, and safe remediation boundaries. |
+| Advanced tooling | `shell`, `migrate`, `skill --install`, `skill tasks`, `completion`, and supported permission levels. |
+| Engines | PostgreSQL/MySQL/MariaDB, MongoDB, Redis, Elasticsearch support differences and known limitations. |
+| AI usage | Required workflow order: blacklist check, schema confirmation, dry-run/risk planning, then execution. |
+| HTML dashboards | `--ui`, export behavior, chart/KPI configuration, and browser/report expectations. |
+
+### Maintenance Workflow
+
+```bash
+# 1. Edit both Markdown and HTML for each supported language.
+$EDITOR docs/user/en/index.md docs/user/en/index.html
+$EDITOR docs/user/zh-TW/index.md docs/user/zh-TW/index.html
+
+# 2. Verify topic parity.
+bun run docs:check
+
+# 3. For command behavior changes, run the relevant CLI tests too.
+bun test
+```
+
+If a topic intentionally exists in only one format, do not bypass the check silently. Either add the matching `doc-key` block with equivalent content or document why the topic is not user-facing.
 
 ---
 

@@ -4,87 +4,147 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>dbcli | 完整說明文件</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
     <style type="text/tailwindcss">
         @theme {
-            --color-primary: #2563eb;
-            --color-primary-hover: #1d4ed8;
+            --color-primary: #D97757;
+            --color-secondary: #635C55;
+            --color-background: #F9F5F1;
+            --color-surface: #FFFFFF;
+            --color-border: #E5E0DA;
+            --color-text-main: #2D2621;
+            --color-text-muted: #8C847D;
+            --font-sans: 'Inter', 'Outfit', sans-serif;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
         }
         @layer base {
             html {
                 scroll-behavior: smooth;
             }
             body {
-                @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased;
-                font-family: "PingFang TC", "Heiti TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                @apply bg-background text-text-main antialiased selection:bg-primary/10;
+                font-family: var(--font-sans);
             }
-            h1 { @apply text-4xl font-extrabold tracking-tight mt-12 mb-6 border-b-2 border-primary pb-2 dark:border-blue-500; }
-            h2 { @apply text-3xl font-bold tracking-tight mt-10 mb-4 border-b border-slate-200 dark:border-slate-800 pb-2; }
-            h3 { @apply text-xl font-semibold mt-8 mb-3 text-slate-800 dark:text-slate-200; }
-            p { @apply mb-5 leading-relaxed text-slate-600 dark:text-slate-400; }
-            ul { @apply list-disc list-inside mb-6 space-y-2 text-slate-600 dark:text-slate-400; }
-            code { @apply bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded text-sm font-mono text-pink-600 dark:text-pink-400; }
-            pre { @apply bg-slate-900 dark:bg-black rounded-xl p-5 mb-6 overflow-x-auto border border-slate-800 shadow-lg; }
-            pre code { @apply bg-transparent p-0 text-slate-300 dark:text-slate-300 text-sm leading-relaxed; }
-            table { @apply w-full border-collapse mb-8 text-sm text-left shadow-sm rounded-lg overflow-hidden; }
-            th { @apply bg-slate-50 dark:bg-slate-900 px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800; }
-            td { @apply px-4 py-3 border-b border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-400; }
+            h1, h2, h3 { font-family: var(--font-display); }
+            h1 { @apply text-5xl font-black tracking-tight mt-16 mb-8 text-text-main; }
+            h2 { @apply text-3xl font-bold tracking-tight mt-16 mb-8 flex items-center gap-3 text-text-main; }
+            h2::after { content: ""; @apply h-px flex-1 bg-border ml-4; }
+            h3 { @apply text-xl font-bold mt-12 mb-6 text-text-main; }
+            p { @apply mb-6 leading-relaxed text-text-muted text-[1.05rem]; }
+            ul { @apply list-none mb-8 space-y-3; }
+            li { @apply flex items-start gap-3 text-text-muted; }
+            li:not(.nav-item)::before { content: "→"; @apply text-primary font-bold mt-0.5; }
+            code { @apply bg-white px-1.5 py-0.5 rounded text-[0.85rem] font-mono text-primary border border-border; }
+            pre { @apply relative bg-[#332F2E] rounded-lg p-6 mb-8 overflow-x-auto border border-secondary/20 shadow-sm; }
+            pre code { @apply bg-transparent p-0 text-[#EDE8E4] text-[0.9rem] leading-relaxed border-none; }
+            table { @apply w-full border-collapse mb-10 text-sm text-left rounded-lg overflow-hidden border border-border bg-surface shadow-sm; }
+            th { @apply bg-background/50 px-6 py-4 font-bold text-text-main border-b border-border; }
+            td { @apply px-6 py-4 border-b border-border text-text-muted; }
+            tr:last-child td { @apply border-none; }
+            tr:hover td { @apply bg-background/30 transition-colors; }
+        }
+        .paper-card {
+            @apply bg-surface border border-border rounded-lg shadow-sm hover:shadow-md transition-all duration-300;
+        }
+        .nav-link {
+            @apply block py-2 px-4 rounded-md text-text-muted hover:text-primary transition-colors font-medium;
+        }
+        .nav-link.active {
+            @apply text-primary font-bold border-l-2 border-primary bg-primary/5 rounded-none;
         }
     </style>
 </head>
 <body class="flex min-h-screen">
+    
     <!-- Sidebar -->
-    <nav class="hidden lg:block w-72 h-screen sticky top-0 bg-slate-50 dark:bg-slate-900/50 border-right border-slate-200 dark:border-slate-800 p-8 overflow-y-auto shrink-0 transition-colors">
-        <div class="flex items-center gap-3 mb-10">
-            <h1 class="text-2xl font-black m-0 border-none pb-0 text-primary dark:text-blue-500">dbcli</h1>
+    <nav class="hidden lg:block w-80 h-screen sticky top-0 self-start bg-surface border-r border-border p-8 overflow-y-auto shrink-0 transition-all z-50">
+        <div class="flex items-center gap-3 mb-12">
+            <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+                <span class="text-white font-black text-xl">D</span>
+            </div>
+            <span class="text-2xl font-black tracking-tight text-text-main">dbcli</span>
         </div>
-        <ul class="list-none space-y-1 p-0 m-0">
-            <li><a href="#overview" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">總覽</a></li>
-            <li><a href="#philosophy" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">核心理念</a></li>
-            <li><a href="#getting-started" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">快速入門</a></li>
-            <li><a href="#connections" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">連線管理</a></li>
-            <li>
-                <span class="block px-3 mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">指令詳解</span>
+        
+        <div class="space-y-8">
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">基礎</h4>
                 <ul class="list-none space-y-1 p-0 m-0">
-                    <li><a href="#discovery" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">探索發現</a></li>
-                    <li><a href="#query" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">查詢與資料</a></li>
-                    <li><a href="#snippets" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">儲存查詢</a></li>
-                    <li><a href="#diagnostics" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">診斷修復</a></li>
-                    <li><a href="#advanced" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">進階工具</a></li>
+                    <li class="nav-item"><a href="#overview" class="nav-link">總覽</a></li>
+                    <li class="nav-item"><a href="#philosophy" class="nav-link">核心理念</a></li>
+                    <li class="nav-item"><a href="#getting-started" class="nav-link">快速入門</a></li>
                 </ul>
-            </li>
-            <li><a href="#ui" class="block py-2 px-3 mt-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">HTML 儀表板</a></li>
-            <li><a href="#engines" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">引擎支援</a></li>
-            <li><a href="#ai" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">AI 代理整合</a></li>
-        </ul>
+            </section>
+
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">連線與操作</h4>
+                <ul class="list-none space-y-1 p-0 m-0">
+                    <li class="nav-item"><a href="#connections" class="nav-link">連線管理</a></li>
+                    <li class="nav-item"><a href="#discovery" class="nav-link">探索與發現</a></li>
+                    <li class="nav-item"><a href="#query" class="nav-link">查詢與資料</a></li>
+                </ul>
+            </section>
+
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">進階功能</h4>
+                <ul class="list-none space-y-1 p-0 m-0">
+                    <li class="nav-item"><a href="#snippets" class="nav-link">查詢片段</a></li>
+                    <li class="nav-item"><a href="#diagnostics" class="nav-link">診斷修復</a></li>
+                    <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
+                    <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
+                    <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
+                </ul>
+            </section>
+        </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto overflow-hidden">
-        <section id="overview">
-            <h1>dbcli 完整說明文件</h1>
-            <p class="text-lg"><strong>dbcli</strong> 是一款專為人類開發者與 AI 代理設計的高效能、安全優先的資料庫 CLI 工具。它為 SQL、NoSQL、Key-Value 及 Search 資料庫提供統一的操作介面。</p>
+    <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto">
+        <section id="overview" class="py-12">
+            <h1 class="fade-in duration-700">dbcli 完整說明文件</h1>
+            <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
+                專為人類開發者與 AI 代理量身打造。高效、安全、統一的跨平台資料庫管理終端。
+            </p>
+            <div class="flex gap-4 mt-8 fade-in duration-700 delay-300">
+                <a href="#getting-started" class="px-6 py-3 bg-primary hover:opacity-90 text-white rounded-md font-bold shadow-sm transition-all hover:-translate-y-0.5">立即開始</a>
+                <a href="https://github.com/CarlLee1983/dbcli" class="px-6 py-3 bg-surface border border-border rounded-md font-bold text-text-main hover:bg-background transition-all">GitHub 專案</a>
+            </div>
         </section>
 
-        <section id="philosophy">
+        <section id="philosophy" class="mt-16">
             <h2>核心理念與安全性</h2>
             <p><code>dbcli</code> 以「安全第一」為核心，透過多層保護機制防止資料意外洩漏或損壞：</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">權限守衛 (Permission Guard)</strong>
-                    四層存取控制（從 <code>query-only</code> 到 <code>admin</code>），嚴格把關。
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">權限守衛 (Permission Guard)</h3>
+                    <p class="text-sm m-0">四層存取控制（從 <code>query-only</code> 到 <code>admin</code>），嚴格把關每一項操作。</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">黑名單管理器 (Blacklist Manager)</strong>
-                    從所有查詢結果中自動屏蔽敏感資料表與欄位。
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">黑名單管理器 (Blacklist Manager)</h3>
+                    <p class="text-sm m-0">從所有查詢結果中自動屏蔽敏感資料表與欄位，確保隱私安全。</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">計畫模式 (Plan Mode)</strong>
-                    在不連線資料庫的情況下進行靜態 SQL 風險分析。
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">計畫模式 (Plan Mode)</h3>
+                    <p class="text-sm m-0">在不連線資料庫的情況下進行靜態 SQL 風險分析，防患於未然。</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">Antigravity 協議</strong>
-                    嚴謹的架構師-建設者-稽核員工作流，確保高可靠度。
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Antigravity 協議</h3>
+                    <p class="text-sm m-0">嚴謹的架構師-建設者-稽核員工作流，確保高可靠度與開發品質。</p>
                 </div>
             </div>
         </section>
@@ -147,18 +207,18 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             </ul>
 
             <h3 id="diagnostics">健康度與診斷</h3>
-            <div class="space-y-4 mb-8">
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold whitespace-nowrap">doctor</span>
-                    <span>驗證執行環境、連線能力及配置完整性。</span>
+            <div class="grid grid-cols-1 gap-4 mb-12">
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
+                    <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
+                    <span class="text-text-muted font-medium">驗證執行環境、連線能力及配置完整性。</span>
                 </div>
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold whitespace-nowrap">report</span>
-                    <span>產生涵蓋健康度、效能及容量的全面報告。</span>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
+                    <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>
+                    <span class="text-text-muted font-medium">產生涵蓋健康度、效能及容量的全面報告。</span>
                 </div>
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold whitespace-nowrap">recover</span>
-                    <span>針對常見失敗模式執行自動化修復計畫。</span>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
+                    <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">recover</div>
+                    <span class="text-text-muted font-medium">針對常見失敗模式執行自動化修復計畫。</span>
                 </div>
             </div>
         </section>
@@ -170,20 +230,51 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             <p>豐富的視覺化組件（圖表、KPI）可透過 Snippet frontmatter 中的 <code>visual:</code> 區塊進行設定。</p>
         </section>
 
-        <section id="engines">
+        <section id="engines" class="mt-20">
             <h2>引擎支援矩陣</h2>
-            <table>
-                <thead>
-                    <tr><th>功能</th><th class="text-center">SQL</th><th class="text-center">MongoDB</th><th class="text-center">Redis</th><th class="text-center">ES</th></tr>
-                </thead>
-                <tbody class="text-center">
-                    <tr><td class="text-left font-medium">查詢能力</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="text-left font-medium">結構快取</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
-                    <tr><td class="text-left font-medium">資料寫入</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                    <tr><td class="text-left font-medium">DDL 支援</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
-                    <tr><td class="text-left font-medium">AI 工作流</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                </tbody>
-            </table>
+            <div class="overflow-hidden border border-border bg-surface rounded-lg">
+                <table class="m-0 border-none">
+                    <thead>
+                        <tr class="bg-background/50">
+                            <th class="py-5">功能</th>
+                            <th class="text-center py-5">SQL</th>
+                            <th class="text-center py-5">MongoDB</th>
+                            <th class="text-center py-5">Redis</th>
+                            <th class="text-center py-5">ES</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-center">
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">查詢能力</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">結構快取</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">資料寫入</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">AI 工作流</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section id="ai">
@@ -196,9 +287,37 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             </ul>
         </section>
 
-        <footer class="mt-20 pt-10 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 text-sm">
-            <p>由 dbcli 文件引擎產生 &bull; 2026</p>
+        <footer class="mt-32 pb-20 text-center">
+            <div class="h-px w-24 bg-border mx-auto mb-8"></div>
+            <p class="text-text-muted text-sm font-medium">由 dbcli 文件引擎精心驅動 &bull; 2026 Gravito Labs</p>
         </footer>
     </main>
+
+    <script>
+        // Intersection Observer for Scroll Highlighting
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.5
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.nav-item a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section[id]').forEach((section) => {
+            observer.observe(section);
+        });
+    </script>
 </body>
-</html>ml>
+</html>

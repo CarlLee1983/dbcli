@@ -4,86 +4,147 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>dbcli | Comprehensive Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
     <style type="text/tailwindcss">
         @theme {
-            --color-primary: #2563eb;
-            --color-primary-hover: #1d4ed8;
+            --color-primary: #D97757;
+            --color-secondary: #635C55;
+            --color-background: #F9F5F1;
+            --color-surface: #FFFFFF;
+            --color-border: #E5E0DA;
+            --color-text-main: #2D2621;
+            --color-text-muted: #8C847D;
+            --font-sans: 'Inter', 'Outfit', sans-serif;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
         }
         @layer base {
             html {
                 scroll-behavior: smooth;
             }
             body {
-                @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased;
+                @apply bg-background text-text-main antialiased selection:bg-primary/10;
+                font-family: var(--font-sans);
             }
-            h1 { @apply text-4xl font-extrabold tracking-tight mt-12 mb-6 border-b-2 border-primary pb-2 dark:border-blue-500; }
-            h2 { @apply text-3xl font-bold tracking-tight mt-10 mb-4 border-b border-slate-200 dark:border-slate-800 pb-2; }
-            h3 { @apply text-xl font-semibold mt-8 mb-3 text-slate-800 dark:text-slate-200; }
-            p { @apply mb-5 leading-relaxed text-slate-600 dark:text-slate-400; }
-            ul { @apply list-disc list-inside mb-6 space-y-2 text-slate-600 dark:text-slate-400; }
-            code { @apply bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded text-sm font-mono text-pink-600 dark:text-pink-400; }
-            pre { @apply bg-slate-900 dark:bg-black rounded-xl p-5 mb-6 overflow-x-auto border border-slate-800 shadow-lg; }
-            pre code { @apply bg-transparent p-0 text-slate-300 dark:text-slate-300 text-sm leading-relaxed; }
-            table { @apply w-full border-collapse mb-8 text-sm text-left shadow-sm rounded-lg overflow-hidden; }
-            th { @apply bg-slate-50 dark:bg-slate-900 px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800; }
-            td { @apply px-4 py-3 border-b border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-400; }
+            h1, h2, h3 { font-family: var(--font-display); }
+            h1 { @apply text-5xl font-black tracking-tight mt-16 mb-8 text-text-main; }
+            h2 { @apply text-3xl font-bold tracking-tight mt-16 mb-8 flex items-center gap-3 text-text-main; }
+            h2::after { content: ""; @apply h-px flex-1 bg-border ml-4; }
+            h3 { @apply text-xl font-bold mt-12 mb-6 text-text-main; }
+            p { @apply mb-6 leading-relaxed text-text-muted text-[1.05rem]; }
+            ul { @apply list-none mb-8 space-y-3; }
+            li { @apply flex items-start gap-3 text-text-muted; }
+            li:not(.nav-item)::before { content: "→"; @apply text-primary font-bold mt-0.5; }
+            code { @apply bg-white px-1.5 py-0.5 rounded text-[0.85rem] font-mono text-primary border border-border; }
+            pre { @apply relative bg-[#332F2E] rounded-lg p-6 mb-8 overflow-x-auto border border-secondary/20 shadow-sm; }
+            pre code { @apply bg-transparent p-0 text-[#EDE8E4] text-[0.9rem] leading-relaxed border-none; }
+            table { @apply w-full border-collapse mb-10 text-sm text-left rounded-lg overflow-hidden border border-border bg-surface shadow-sm; }
+            th { @apply bg-background/50 px-6 py-4 font-bold text-text-main border-b border-border; }
+            td { @apply px-6 py-4 border-b border-border text-text-muted; }
+            tr:last-child td { @apply border-none; }
+            tr:hover td { @apply bg-background/30 transition-colors; }
+        }
+        .paper-card {
+            @apply bg-surface border border-border rounded-lg shadow-sm hover:shadow-md transition-all duration-300;
+        }
+        .nav-link {
+            @apply block py-2 px-4 rounded-md text-text-muted hover:text-primary transition-colors font-medium;
+        }
+        .nav-link.active {
+            @apply text-primary font-bold border-l-2 border-primary bg-primary/5 rounded-none;
         }
     </style>
 </head>
 <body class="flex min-h-screen">
+    
     <!-- Sidebar -->
-    <nav class="hidden lg:block w-72 h-screen sticky top-0 bg-slate-50 dark:bg-slate-900/50 border-right border-slate-200 dark:border-slate-800 p-8 overflow-y-auto shrink-0 transition-colors">
-        <div class="flex items-center gap-3 mb-10">
-            <h1 class="text-2xl font-black m-0 border-none pb-0 text-primary dark:text-blue-500">dbcli</h1>
+    <nav class="hidden lg:block w-80 h-screen sticky top-0 self-start bg-surface border-r border-border p-8 overflow-y-auto shrink-0 transition-all z-50">
+        <div class="flex items-center gap-3 mb-12">
+            <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+                <span class="text-white font-black text-xl">D</span>
+            </div>
+            <span class="text-2xl font-black tracking-tight text-text-main">dbcli</span>
         </div>
-        <ul class="list-none space-y-1 p-0 m-0">
-            <li><a href="#overview" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Overview</a></li>
-            <li><a href="#philosophy" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Core Philosophy</a></li>
-            <li><a href="#getting-started" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Getting Started</a></li>
-            <li><a href="#connections" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Connections</a></li>
-            <li>
-                <span class="block px-3 mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Commands</span>
+        
+        <div class="space-y-8">
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">Basics</h4>
                 <ul class="list-none space-y-1 p-0 m-0">
-                    <li><a href="#discovery" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Discovery</a></li>
-                    <li><a href="#query" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Query & Data</a></li>
-                    <li><a href="#snippets" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Snippets</a></li>
-                    <li><a href="#diagnostics" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Diagnostics</a></li>
-                    <li><a href="#advanced" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Advanced Tools</a></li>
+                    <li class="nav-item"><a href="#overview" class="nav-link">Overview</a></li>
+                    <li class="nav-item"><a href="#philosophy" class="nav-link">Core Philosophy</a></li>
+                    <li class="nav-item"><a href="#getting-started" class="nav-link">Getting Started</a></li>
                 </ul>
-            </li>
-            <li><a href="#ui" class="block py-2 px-3 mt-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">HTML Dashboards</a></li>
-            <li><a href="#engines" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Engine Support</a></li>
-            <li><a href="#ai" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">AI Integration</a></li>
-        </ul>
+            </section>
+
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">Operations</h4>
+                <ul class="list-none space-y-1 p-0 m-0">
+                    <li class="nav-item"><a href="#connections" class="nav-link">Connections</a></li>
+                    <li class="nav-item"><a href="#discovery" class="nav-link">Discovery</a></li>
+                    <li class="nav-item"><a href="#query" class="nav-link">Query & Data</a></li>
+                </ul>
+            </section>
+
+            <section>
+                <h4 class="px-4 mb-3 text-[0.7rem] font-black uppercase tracking-[0.2em] text-text-muted">Advanced</h4>
+                <ul class="list-none space-y-1 p-0 m-0">
+                    <li class="nav-item"><a href="#snippets" class="nav-link">Snippets</a></li>
+                    <li class="nav-item"><a href="#diagnostics" class="nav-link">Diagnostics</a></li>
+                    <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
+                    <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
+                    <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
+                </ul>
+            </section>
+        </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto overflow-hidden">
-        <section id="overview">
-            <h1>dbcli Documentation</h1>
-            <p class="text-lg"><strong>dbcli</strong> is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL, NoSQL, Key-Value, and Search databases.</p>
+    <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto">
+        <section id="overview" class="py-12">
+            <h1 class="fade-in duration-700">dbcli Documentation</h1>
+            <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
+                Engineered for human developers and AI agents. A high-performance, secure, and unified database management CLI.
+            </p>
+            <div class="flex gap-4 mt-8 fade-in duration-700 delay-300">
+                <a href="#getting-started" class="px-6 py-3 bg-primary hover:opacity-90 text-white rounded-md font-bold shadow-sm transition-all hover:-translate-y-0.5">Get Started</a>
+                <a href="https://github.com/CarlLee1983/dbcli" class="px-6 py-3 bg-surface border border-border rounded-md font-bold text-text-main hover:bg-background transition-all">GitHub Project</a>
+            </div>
         </section>
 
-        <section id="philosophy">
+        <section id="philosophy" class="mt-16">
             <h2>Core Philosophy & Security</h2>
             <p>Built with a "Security-First" mindset, <code>dbcli</code> prevents accidental data leaks or corruption through multiple layers of protection:</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">Permission Guard</strong>
-                    Four tiers (<code>query-only</code> to <code>admin</code>) of strict access control.
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Permission Guard</h3>
+                    <p class="text-sm m-0">Four tiers (<code>query-only</code> to <code>admin</code>) of strict access control for every operation.</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">Blacklist Manager</strong>
-                    Automatic redaction of sensitive columns and tables from all outputs.
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Blacklist Manager</h3>
+                    <p class="text-sm m-0">Automatic redaction of sensitive columns and tables from all outputs to ensure privacy.</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">Plan Mode</strong>
-                    Static SQL analysis to identify risks before connecting to any DB.
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Plan Mode</h3>
+                    <p class="text-sm m-0">Static SQL analysis to identify risks before connecting to any live database.</p>
                 </div>
-                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-                    <strong class="text-primary dark:text-blue-400 block mb-1">Antigravity Protocol</strong>
-                    Strict Architect-Builder-Auditor workflow for reliability.
+                <div class="group p-6 paper-card">
+                    <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Antigravity Protocol</h3>
+                    <p class="text-sm m-0">A rigorous Architect-Builder-Auditor workflow ensuring high reliability and quality.</p>
                 </div>
             </div>
         </section>
@@ -138,55 +199,86 @@ dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
 
             <h3 id="snippets">Snippet Management</h3>
-            <p>Maintain complex queries as version-controlled snippets in your repository.</p>
+            <p>Maintain complex queries as version-controlled snippets in your repository with visualization metadata.</p>
             <ul>
-                <li><code>dbcli queries list</code>: View the full inventory of snippets.</li>
+                <li><code>dbcli queries list</code>: View the full inventory of available snippets.</li>
                 <li><code>dbcli queries search</code>: Search snippets using fuzzy keywords.</li>
                 <li><code>dbcli queries suggest</code>: Get suggestions based on operational intent.</li>
             </ul>
 
             <h3 id="diagnostics">Health & Diagnostics</h3>
-            <div class="space-y-4 mb-8">
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">doctor</span>
-                    <span>Validates environment, connectivity, and configuration integrity.</span>
+            <div class="grid grid-cols-1 gap-4 mb-12">
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
+                    <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
+                    <span class="text-text-muted font-medium">Validates environment, connectivity, and configuration integrity.</span>
                 </div>
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">report</span>
-                    <span>Produces a comprehensive health, performance, and capacity report.</span>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
+                    <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>
+                    <span class="text-text-muted font-medium">Produces a comprehensive health, performance, and capacity report.</span>
                 </div>
-                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
-                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">recover</span>
-                    <span>Executes automated remediation plans for common failure modes.</span>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
+                    <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">recover</div>
+                    <span class="text-text-muted font-medium">Executes automated remediation plans for common failure modes.</span>
                 </div>
             </div>
         </section>
 
         <section id="ui">
-            <h2>Interactive HTML Dashboards</h2>
+            <h2>📊 Interactive HTML Dashboards</h2>
             <p>Generate standalone React-powered reports by appending the <code>--ui</code> flag.</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
             <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter.</p>
         </section>
 
-        <section id="engines">
+        <section id="engines" class="mt-20">
             <h2>Engine Support Matrix</h2>
-            <table>
-                <thead>
-                    <tr><th>Feature</th><th class="text-center">SQL</th><th class="text-center">MongoDB</th><th class="text-center">Redis</th><th class="text-center">ES</th></tr>
-                </thead>
-                <tbody class="text-center">
-                    <tr><td class="text-left font-medium">Querying</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="text-left font-medium">Schema Caching</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
-                    <tr><td class="text-left font-medium">Data Writes</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                    <tr><td class="text-left font-medium">DDL Support</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
-                    <tr><td class="text-left font-medium">AI Workflows</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                </tbody>
-            </table>
+            <div class="overflow-hidden border border-border bg-surface rounded-lg">
+                <table class="m-0 border-none">
+                    <thead>
+                        <tr class="bg-background/50">
+                            <th class="py-5">Feature</th>
+                            <th class="text-center py-5">SQL</th>
+                            <th class="text-center py-5">MongoDB</th>
+                            <th class="text-center py-5">Redis</th>
+                            <th class="text-center py-5">ES</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-center">
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Querying</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Schema Caching</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Data Writes</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">AI Workflows</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section id="ai">
-            <h2>AI Agent Integration</h2>
+            <h2>🤖 AI Agent Integration</h2>
             <p>Dbcli is engineered to be the standard "Database Driver" for modern AI agents:</p>
             <ul>
                 <li><strong>Machine-Readable Errors</strong>: JSON-formatted <code>--recovery</code> envelopes.</li>
@@ -195,9 +287,37 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             </ul>
         </section>
 
-        <footer class="mt-20 pt-10 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 text-sm">
-            <p>Generated by dbcli Documentation Engine &bull; 2026</p>
+        <footer class="mt-32 pb-20 text-center">
+            <div class="h-px w-24 bg-border mx-auto mb-8"></div>
+            <p class="text-text-muted text-sm font-medium">Powered by dbcli Documentation Engine &bull; 2026 Gravito Labs</p>
         </footer>
     </main>
+
+    <script>
+        // Intersection Observer for Scroll Highlighting
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.5
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.nav-item a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section[id]').forEach((section) => {
+            observer.observe(section);
+        });
+    </script>
 </body>
 </html>

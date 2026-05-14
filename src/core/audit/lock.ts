@@ -19,6 +19,7 @@
 
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
+import { mkdir, open, rm } from 'node:fs/promises'
 
 export const LOCK_RETRY_BUDGET_MS = 200
 export const LOCK_BACKOFF_START_MS = 5
@@ -95,10 +96,7 @@ export class AuditLockManager {
   async releaseLock(): Promise<boolean> {
     if (!this.lockAcquiredAt) return false
     try {
-      const lockFile = Bun.file(this.lockPath)
-      if (await lockFile.exists()) {
-        await Bun.spawn(['rm', '-f', this.lockPath]).exited
-      }
+      await rm(this.lockPath, { force: true })
       this.lockAcquiredAt = null
       return true
     } catch {
@@ -142,7 +140,7 @@ export class AuditLockManager {
   private async tryAcquireLock(operationName: string): Promise<boolean> {
     try {
       // Ensure parent dir exists (audit dir may not have been created yet).
-      await Bun.spawn(['mkdir', '-p', dirname(this.lockPath)]).exited
+      await mkdir(dirname(this.lockPath), { recursive: true })
 
       const lockFile = Bun.file(this.lockPath)
       if (await lockFile.exists()) {
@@ -150,7 +148,7 @@ export class AuditLockManager {
         const lockAge = Date.now() - lockContent.timestamp
         const staleLockThresholdMs = LOCK_RETRY_BUDGET_MS * STALE_LOCK_MULTIPLIER
         if (lockAge > staleLockThresholdMs) {
-          await Bun.spawn(['rm', '-f', this.lockPath]).exited
+          await rm(this.lockPath, { force: true })
         } else {
           return false
         }
@@ -162,12 +160,13 @@ export class AuditLockManager {
         timestamp: Date.now(),
         hostname: hostname(),
       }
-      // Suffix tmp path with pid+timestamp so concurrent writers do not
-      // collide on the same tmp file (T-21-13 race mitigation).
-      const tempPath = `${this.lockPath}.${process.pid}.${Date.now()}.tmp`
-      await Bun.write(tempPath, JSON.stringify(lockData))
-      const moveResult = await Bun.spawn(['mv', tempPath, this.lockPath]).exited
-      return moveResult === 0
+      const handle = await open(this.lockPath, 'wx')
+      try {
+        await handle.writeFile(JSON.stringify(lockData), 'utf8')
+      } finally {
+        await handle.close()
+      }
+      return true
     } catch {
       return false
     }

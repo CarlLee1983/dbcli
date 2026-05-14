@@ -81,6 +81,7 @@ export class AuditLogger {
   private cachedSessionId: string | null = null
   private lastRotatedAt: string | undefined
   private lastRotatedPrevious: string | undefined
+  private writeChain: Promise<void> = Promise.resolve()
 
   constructor(opts: AuditLoggerOptions) {
     this.enabled = opts.enabled
@@ -94,6 +95,15 @@ export class AuditLogger {
   }
 
   async write(entry: Record<string, unknown>): Promise<AuditWriteResult> {
+    const writeOp = this.writeChain.then(() => this.writeInternal(entry))
+    this.writeChain = writeOp.then(
+      () => undefined,
+      () => undefined
+    )
+    return writeOp
+  }
+
+  private async writeInternal(entry: Record<string, unknown>): Promise<AuditWriteResult> {
     // D-01 / CONFIG-02 short-circuit; never touches disk.
     if (!this.enabled) {
       return { skipped: 'disabled' }

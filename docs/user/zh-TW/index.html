@@ -204,7 +204,13 @@ dbcli q @snippet --param id=1
 dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 
 # 安全寫入
-dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
+dbcli insert users --data '{"name":"Alice"}' --dry-run
+
+# DML --plan 預檢 (不連線資料庫；僅 SQL)
+dbcli insert users --data '{"name":"Alice"}' --plan --format json
+dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
+dbcli delete users --where 'id=1' --plan --format json</code></pre>
+            <p><code>insert</code>、<code>update</code>、<code>delete</code> 支援 <code>--plan</code>，可以在不連線資料庫的情況下執行靜態風險分析。值會被替換成 <code>?</code> 占位符；分析會套用該連線設定的 permission、blacklist 與 schema 快取。<code>--format text</code>（預設）輸出人類可讀判定，<code>--format json</code> 輸出完整 <code>QueryRiskResult</code>。分析器判定為 <code>BLOCK</code> 時仍以 exit <code>0</code> 結束；設定、引擎或 format 錯誤才會 exit <code>1</code>。<code>--plan</code> 與 <code>--dry-run</code> 互斥，僅支援 SQL（PostgreSQL / MySQL / MariaDB）。</p>
 
             <!-- doc-key: snippet-management -->
             <h3 id="snippets">儲存查詢管理</h3>
@@ -311,6 +317,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             <ul>
                 <li><strong>機器可讀錯誤</strong>：JSON 格式的 <code>--recovery</code> 故障修復封包。</li>
                 <li><strong>內容優化</strong>：<code>--for-agent</code> 旗標大幅減少 Token 消耗。</li>
+                <li><strong>風險控制</strong>：<code>dbcli plan</code> 處理原生 SQL，<code>insert</code> / <code>update</code> / <code>delete</code> 的 <code>--plan</code> 旗標則在不連線資料庫的情況下對 DML 進行預檢。</li>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
             </ul>
         </section>

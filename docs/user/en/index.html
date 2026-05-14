@@ -204,7 +204,13 @@ dbcli q @snippet --param id=1
 dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 
 # Safe Write
-dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
+dbcli insert users --data '{"name":"Alice"}' --dry-run
+
+# DML --plan preflight (no DB connection; SQL only)
+dbcli insert users --data '{"name":"Alice"}' --plan --format json
+dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
+dbcli delete users --where 'id=1' --plan --format json</code></pre>
+            <p><code>insert</code>, <code>update</code>, and <code>delete</code> accept <code>--plan</code> to run the static risk analyzer without connecting to the database. Values are replaced with <code>?</code> placeholders; the connection's permission, blacklist, and schema cache are honored. <code>--format text</code> (default) prints a human verdict, <code>--format json</code> prints the full <code>QueryRiskResult</code>. Analyzer <code>BLOCK</code> decisions exit <code>0</code>; config / engine / format errors exit <code>1</code>. <code>--plan</code> is mutually exclusive with <code>--dry-run</code> and is SQL-only (PostgreSQL / MySQL / MariaDB).</p>
 
             <!-- doc-key: snippet-management -->
             <h3 id="snippets">Snippet Management</h3>
@@ -311,6 +317,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
             <ul>
                 <li><strong>Machine-Readable Errors</strong>: JSON-formatted <code>--recovery</code> envelopes.</li>
                 <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>
+                <li><strong>Risk Gating</strong>: <code>dbcli plan</code> for raw SQL plus per-command <code>--plan</code> on <code>insert</code> / <code>update</code> / <code>delete</code> for DML preflight without connecting to the database.</li>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
             </ul>
         </section>

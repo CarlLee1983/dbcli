@@ -91,11 +91,30 @@ dbcli init
 | `query "<cmd>"` | 執行原生 SQL、MongoDB JSON、Redis 指令或 ES DSL。 |
 | `q @snippet` | 執行帶有參數的儲存查詢片段。 |
 | `export` | 將結果匯出為 JSON, CSV, JSONL 或互動式 HTML。 |
-| `insert` | 從 JSON 插入資料 (支援 SQL & MongoDB)。 |
-| `update` | 更新資料，強制要求 `--where` 子句。 |
-| `delete` | 刪除資料，強制要求 `--where` 子句。 |
+| `insert` | 從 JSON 插入資料 (支援 SQL & MongoDB)。支援 `--plan` 風險預檢（僅 SQL）。 |
+| `update` | 更新資料，強制要求 `--where` 子句。支援 `--plan` 風險預檢（僅 SQL）。 |
+| `delete` | 刪除資料，強制要求 `--where` 子句。支援 `--plan` 風險預檢（僅 SQL）。 |
 | `blacklist` | 管理敏感資料屏蔽規則。 |
 | `plan "<sql>"` | **靜態分析器**：對 SQL 進行風險分級並給出優化建議。 |
+
+#### DML `--plan` 預檢
+
+`insert`、`update`、`delete` 都支援 `--plan`，可以在**不連線資料庫**的情況下，對即將執行的寫入操作執行與 `dbcli plan` 相同的靜態風險分析。
+
+*   從驗證後的 `<table>` 與 `--data` / `--set` / `--where` 輸入建構 planner SQL（值都會被替換成 `?` 占位符，絕不會嵌入實際資料）。
+*   套用該連線設定中的 `permission`、`blacklist` 與 `schema` 快取。
+*   `--format text`（預設）輸出人類可讀的判定；`--format json` 輸出完整 `QueryRiskResult`。
+*   分析器判定為 `BLOCK` 時仍以 exit `0` 結束 — agent 讀的是判定本身，不是 exit code。設定、引擎或 format 錯誤才會 exit `1`。
+*   `--plan` 與 `--dry-run` 互斥。
+*   目前僅支援 SQL（`postgresql`、`mysql`、`mariadb`）。MongoDB / Redis / Elasticsearch 會以清楚的錯誤訊息拒絕。
+
+範例：
+
+```bash
+dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format json
+dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
+dbcli delete users --where 'id=1' --plan --format json
+```
 
 <!-- doc-key: snippet-management -->
 ### Snippet 管理
@@ -166,7 +185,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 1.  **SKILL.md**：透過 `dbcli skill` 提供 AI 指引，讓代理知道安全的指令路徑。
 2.  **修復封包 (Recovery Envelopes)**：當指令失敗時，使用 `--recovery` 獲得機器可讀的 JSON 錯誤及修復建議。
-3.  **風險控制**：AI 代理會主動使用 `dbcli plan` 與 `--dry-run` 來驗證其行為。
+3.  **風險控制**：AI 代理會主動使用 `dbcli plan`、`insert`/`update`/`delete` 的 `--plan` 預檢與 `--dry-run` 來驗證其行為。
 4.  **上下文效率**：`inspect --for-agent` 提供精簡的元資料，防止 AI 上下文視窗過載。
 
 ---

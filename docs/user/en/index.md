@@ -91,11 +91,30 @@ dbcli init
 | `query "<cmd>"` | Executes raw SQL, MongoDB JSON, Redis commands, or ES DSL. |
 | `q @snippet` | Runs a parameterised saved query. |
 | `export` | Exports results to JSON, CSV, JSONL, or Interactive HTML. |
-| `insert` | Inserts data from JSON (SQL & MongoDB). |
-| `update` | Updates rows/documents with mandatory `--where` clause. |
-| `delete` | Deletes data with mandatory `--where` clause. |
+| `insert` | Inserts data from JSON (SQL & MongoDB). Accepts `--plan` for risk preflight (SQL only). |
+| `update` | Updates rows/documents with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL only). |
+| `delete` | Deletes data with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL only). |
 | `blacklist` | Manages the sensitive data redirection rules. |
 | `plan "<sql>"` | **Static analyzer**: Classifies SQL risk and gives recommendations. |
+
+#### DML `--plan` preflight
+
+`insert`, `update`, and `delete` accept `--plan` to run the same static risk analyzer as `dbcli plan` against the planned write, **without connecting to the database**.
+
+*   Build the planner SQL from the validated `<table>` + `--data` / `--set` / `--where` inputs (values are replaced with `?` placeholders — never embedded).
+*   Honor the connection's `permission`, `blacklist`, and `schema` cache.
+*   `--format text` (default) prints a human-readable verdict; `--format json` prints the full `QueryRiskResult`.
+*   Analyzer `BLOCK` decisions still exit `0` — the verdict is what the agent reads, not the exit code. Configuration / engine / format errors exit `1`.
+*   `--plan` is mutually exclusive with `--dry-run`.
+*   Currently SQL only (`postgresql`, `mysql`, `mariadb`). MongoDB / Redis / Elasticsearch are rejected with a clear message.
+
+Examples:
+
+```bash
+dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format json
+dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
+dbcli delete users --where 'id=1' --plan --format json
+```
 
 <!-- doc-key: snippet-management -->
 ### Snippet Management
@@ -166,7 +185,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 1.  **SKILL.md**: Provide the agent with the `SKILL.md` (via `dbcli skill`) so it knows the safe command paths.
 2.  **Recovery Envelopes**: When a command fails, use `--recovery` to get a machine-readable JSON error with a suggested fix.
-3.  **Risk Gating**: Agents use `dbcli plan` and `--dry-run` to verify their actions before committing changes.
+3.  **Risk Gating**: Agents use `dbcli plan`, the per-command `--plan` preflight on `insert`/`update`/`delete`, and `--dry-run` to verify their actions before committing changes.
 4.  **Context Efficiency**: `inspect --for-agent` provides exactly the metadata the agent needs to orient itself without bloating its context window.
 
 ---

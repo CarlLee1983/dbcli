@@ -116,9 +116,11 @@ function decide(factors: QueryRiskFactor[]): QueryRiskResult['decision'] {
   return 'ALLOW'
 }
 
-function extractMongoWrittenFields(
-  setDoc: Record<string, unknown>
-): { fields: string[]; operators: string[]; hasUnsupportedOperator: boolean } {
+function extractMongoWrittenFields(setDoc: Record<string, unknown>): {
+  fields: string[]
+  operators: string[]
+  hasUnsupportedOperator: boolean
+} {
   const fields = new Set<string>()
   const operators: string[] = []
   let hasUnsupportedOperator = false
@@ -266,9 +268,7 @@ function buildRecommendations(factors: QueryRiskFactor[]): string[] {
     out.add('Restrict the update document to $set / $unset for planner-safe writes.')
   }
   if (codes.has('permission_denied')) {
-    out.add(
-      'Switch to a connection with sufficient permission only if the operation is intended.'
-    )
+    out.add('Switch to a connection with sufficient permission only if the operation is intended.')
   }
   if (codes.has('table_blacklisted') || codes.has('blacklisted_column')) {
     out.add('Review blacklist rules before accessing sensitive data.')
@@ -280,10 +280,7 @@ function buildRecommendations(factors: QueryRiskFactor[]): string[] {
   return Array.from(out)
 }
 
-function buildSuggestedCommands(
-  target: string,
-  factors: QueryRiskFactor[]
-): string[] {
+function buildSuggestedCommands(target: string, factors: QueryRiskFactor[]): string[] {
   const codes = new Set(factors.map((f) => f.code))
   if (codes.has('schema_cache_missing') || codes.has('schema_table_unknown')) {
     return [`dbcli schema ${target} --format json`]

@@ -79,7 +79,9 @@ function ctx(overrides: Partial<NonSqlAnalyzerContext> = {}): NonSqlAnalyzerCont
   return {
     permission: 'admin',
     blacklist: { tables: [], columns: {} },
-    schema: { users: { name: 'users', columns: [{ name: '_id', type: 'string', nullable: false }] } },
+    schema: {
+      users: { name: 'users', columns: [{ name: '_id', type: 'string', nullable: false }] },
+    },
     ...overrides,
   }
 }

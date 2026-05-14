@@ -9,8 +9,8 @@ progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # STATE.md — Current Project State
@@ -27,9 +27,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 21 — Audit Writer Foundation (executing, Wave 1 complete)
-- **Plan:** Wave 2 / 21-04 logger + rotation (next)
-- **Status:** Wave 1 merged into `main` (3/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager. Awaiting Wave 2.
+- **Phase:** 21 — Audit Writer Foundation (executing, Wave 2 complete)
+- **Plan:** Wave 3 / 21-05 integration tests (next)
+- **Status:** Waves 1-2 merged into `main` (4/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation. Awaiting Wave 3 integration tests.
 - **Last activity:** 2026-05-14
 
 ---

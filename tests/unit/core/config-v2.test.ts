@@ -6,6 +6,7 @@ import {
   resolveConnection,
   patchConnectionSchema,
 } from '@/core/config-v2'
+import { DbcliConfigV2Schema } from '@/utils/validation'
 import { join } from 'path'
 
 const TMP_DIR = '/tmp/dbcli-config-v2-test'
@@ -215,6 +216,72 @@ describe('config-v2', () => {
 
       const updated = await readV2Config(configPath)
       expect(updated.schemas?.staging).toEqual({ orders: { name: 'orders' } })
+    })
+  })
+
+  describe('audit config schema (CONFIG-01 / CONFIG-03)', () => {
+    const BASE_V2 = {
+      version: 2 as const,
+      default: 'local',
+      connections: {
+        local: {
+          system: 'postgresql' as const,
+          host: 'localhost',
+          port: 5432,
+          user: 'dev',
+          password: 'secret',
+          database: 'myapp',
+          permission: 'query-only' as const,
+        },
+      },
+    }
+
+    test('Test 1: upgraded .dbcli with NO audit key gets audit.enabled=true and rotation defaults', () => {
+      const parsed = DbcliConfigV2Schema.parse({ ...BASE_V2 })
+      expect(parsed.audit.enabled).toBe(true)
+      expect(parsed.audit.rotation.max_bytes).toBe(10485760)
+      expect(parsed.audit.rotation.max_entries).toBe(1000)
+    })
+
+    test('Test 2: audit.enabled=false is preserved verbatim; rotation still uses defaults', () => {
+      const parsed = DbcliConfigV2Schema.parse({
+        ...BASE_V2,
+        audit: { enabled: false },
+      })
+      expect(parsed.audit.enabled).toBe(false)
+      expect(parsed.audit.rotation.max_bytes).toBe(10485760)
+      expect(parsed.audit.rotation.max_entries).toBe(1000)
+    })
+
+    test('Test 3: custom audit values are preserved end-to-end', () => {
+      const parsed = DbcliConfigV2Schema.parse({
+        ...BASE_V2,
+        audit: {
+          enabled: true,
+          rotation: { max_bytes: 5_242_880, max_entries: 500 },
+        },
+      })
+      expect(parsed.audit.enabled).toBe(true)
+      expect(parsed.audit.rotation.max_bytes).toBe(5_242_880)
+      expect(parsed.audit.rotation.max_entries).toBe(500)
+    })
+
+    test('Test 4: rotation.max_bytes=0 fails validation (must be positive int)', () => {
+      expect(() =>
+        DbcliConfigV2Schema.parse({
+          ...BASE_V2,
+          audit: { enabled: true, rotation: { max_bytes: 0, max_entries: 1000 } },
+        })
+      ).toThrow()
+    })
+
+    test('Test 5: rotation.max_bytes=-1 fails validation (must be positive int)', () => {
+      expect(() =>
+        DbcliConfigV2Schema.parse({
+          ...BASE_V2,
+          audit: { enabled: true, rotation: { max_bytes: -1, max_entries: 1000 } },
+        })
+      ).toThrow()
     })
   })
 })

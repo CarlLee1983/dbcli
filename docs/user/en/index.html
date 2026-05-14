@@ -4,222 +4,109 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>dbcli | Comprehensive Documentation</title>
-    <style>
-        :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg: #ffffff;
-            --text: #1f2937;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --sidebar-bg: #f9fafb;
-            --code-bg: #f3f4f6;
-            --code-text: #1f2937;
-            --accent: #f59e0b;
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-primary: #2563eb;
+            --color-primary-hover: #1d4ed8;
         }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #111827;
-                --text: #f3f4f6;
-                --text-muted: #9ca3af;
-                --border: #374151;
-                --sidebar-bg: #1f2937;
-                --code-bg: #2d3748;
-                --code-text: #e2e8f0;
+        @layer base {
+            html {
+                scroll-behavior: smooth;
             }
-        }
-
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: var(--text);
-            background-color: var(--bg);
-            margin: 0;
-            display: flex;
-        }
-
-        /* Sidebar */
-        nav {
-            width: 280px;
-            height: 100vh;
-            position: sticky;
-            top: 0;
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid var(--border);
-            padding: 2rem 1.5rem;
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-
-        nav h1 {
-            font-size: 1.5rem;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--primary);
-        }
-
-        nav ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        nav li { margin-bottom: 0.5rem; }
-        nav a {
-            text-decoration: none;
-            color: var(--text);
-            font-size: 0.95rem;
-            display: block;
-            padding: 0.5rem;
-            border-radius: 6px;
-            transition: all 0.2s;
-        }
-
-        nav a:hover {
-            background-color: var(--border);
-            color: var(--primary);
-        }
-
-        nav .sub {
-            padding-left: 1.5rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        /* Main Content */
-        main {
-            flex-grow: 1;
-            padding: 3rem 5rem;
-            max-width: 900px;
-        }
-
-        h1, h2, h3 { margin-top: 2.5rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-        h1 { font-size: 2.5rem; border-bottom: 2px solid var(--primary); }
-        
-        p, ul, ol { margin-bottom: 1.25rem; color: var(--text); }
-        li { margin-bottom: 0.5rem; }
-
-        code {
-            background-color: var(--code-bg);
-            color: var(--code-text);
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-            font-size: 0.9rem;
-        }
-
-        pre {
-            background-color: var(--code-bg);
-            padding: 1.5rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin-bottom: 1.5rem;
-            border: 1px solid var(--border);
-        }
-
-        pre code { padding: 0; background: none; font-size: 0.95rem; }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 2rem;
-            font-size: 0.95rem;
-        }
-
-        th, td {
-            text-align: left;
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        th { background-color: var(--sidebar-bg); font-weight: 600; }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            background-color: var(--primary);
-            color: white;
-        }
-
-        .badge.warn { background-color: var(--accent); }
-        .badge.error { background-color: #ef4444; }
-
-        @media (max-width: 1024px) {
-            nav { display: none; }
-            main { padding: 2rem; }
-        }
-
-        .footer {
-            margin-top: 5rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.875rem;
+            body {
+                @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased;
+            }
+            h1 { @apply text-4xl font-extrabold tracking-tight mt-12 mb-6 border-b-2 border-primary pb-2 dark:border-blue-500; }
+            h2 { @apply text-3xl font-bold tracking-tight mt-10 mb-4 border-b border-slate-200 dark:border-slate-800 pb-2; }
+            h3 { @apply text-xl font-semibold mt-8 mb-3 text-slate-800 dark:text-slate-200; }
+            p { @apply mb-5 leading-relaxed text-slate-600 dark:text-slate-400; }
+            ul { @apply list-disc list-inside mb-6 space-y-2 text-slate-600 dark:text-slate-400; }
+            code { @apply bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded text-sm font-mono text-pink-600 dark:text-pink-400; }
+            pre { @apply bg-slate-900 dark:bg-black rounded-xl p-5 mb-6 overflow-x-auto border border-slate-800 shadow-lg; }
+            pre code { @apply bg-transparent p-0 text-slate-300 dark:text-slate-300 text-sm leading-relaxed; }
+            table { @apply w-full border-collapse mb-8 text-sm text-left shadow-sm rounded-lg overflow-hidden; }
+            th { @apply bg-slate-50 dark:bg-slate-900 px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800; }
+            td { @apply px-4 py-3 border-b border-slate-100 dark:border-slate-900 text-slate-600 dark:text-slate-400; }
         }
     </style>
 </head>
-<body>
-    <nav>
-        <h1><span>📦</span> dbcli</h1>
-        <ul>
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#philosophy">Core Philosophy</a></li>
-            <li><a href="#getting-started">Getting Started</a></li>
-            <li><a href="#connections">Connections</a></li>
-            <li><a href="#commands">Command Reference</a></li>
-            <li><ul class="sub">
-                <li><a href="#discovery">Discovery</a></li>
-                <li><a href="#query">Query & Data</a></li>
-                <li><a href="#snippets">Snippets</a></li>
-                <li><a href="#diagnostics">Diagnostics</a></li>
-                <li><a href="#advanced">Advanced Tools</a></li>
-            </ul></li>
-            <li><a href="#ui">HTML Dashboards</a></li>
-            <li><a href="#engines">Engine Support</a></li>
-            <li><a href="#ai">AI Integration</a></li>
+<body class="flex min-h-screen">
+    <!-- Sidebar -->
+    <nav class="hidden lg:block w-72 h-screen sticky top-0 bg-slate-50 dark:bg-slate-900/50 border-right border-slate-200 dark:border-slate-800 p-8 overflow-y-auto shrink-0 transition-colors">
+        <div class="flex items-center gap-3 mb-10">
+            <span class="text-3xl">📦</span>
+            <h1 class="text-2xl font-black m-0 border-none pb-0 text-primary dark:text-blue-500">dbcli</h1>
+        </div>
+        <ul class="list-none space-y-1 p-0 m-0">
+            <li><a href="#overview" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Overview</a></li>
+            <li><a href="#philosophy" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Core Philosophy</a></li>
+            <li><a href="#getting-started" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Getting Started</a></li>
+            <li><a href="#connections" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Connections</a></li>
+            <li>
+                <span class="block px-3 mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Commands</span>
+                <ul class="list-none space-y-1 p-0 m-0">
+                    <li><a href="#discovery" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Discovery</a></li>
+                    <li><a href="#query" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Query & Data</a></li>
+                    <li><a href="#snippets" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Snippets</a></li>
+                    <li><a href="#diagnostics" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Diagnostics</a></li>
+                    <li><a href="#advanced" class="block py-1.5 px-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-sm text-slate-500 dark:text-slate-400 transition-all">Advanced Tools</a></li>
+                </ul>
+            </li>
+            <li><a href="#ui" class="block py-2 px-3 mt-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">HTML Dashboards</a></li>
+            <li><a href="#engines" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">Engine Support</a></li>
+            <li><a href="#ai" class="block py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all font-medium">AI Integration</a></li>
         </ul>
     </nav>
-    <main>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 lg:p-16 max-w-5xl mx-auto overflow-hidden">
         <section id="overview">
             <h1>dbcli Documentation</h1>
-            <p><strong>dbcli</strong> is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL, NoSQL, Key-Value, and Search databases.</p>
+            <p class="text-lg"><strong>dbcli</strong> is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL, NoSQL, Key-Value, and Search databases.</p>
         </section>
 
         <section id="philosophy">
             <h2>🛡️ Core Philosophy & Security</h2>
             <p>Built with a "Security-First" mindset, <code>dbcli</code> prevents accidental data leaks or corruption through multiple layers of protection:</p>
-            <ul>
-                <li><strong>Permission Guard</strong>: Four tiers (<code>query-only</code> to <code>admin</code>).</li>
-                <li><strong>Blacklist Manager</strong>: Automatic redaction of sensitive columns.</li>
-                <li><strong>Plan Mode</strong>: Static SQL analysis before execution.</li>
-                <li><strong>Antigravity Protocol</strong>: Architect-Builder-Auditor workflow.</li>
-            </ul>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
+                    <strong class="text-primary dark:text-blue-400 block mb-1">Permission Guard</strong>
+                    Four tiers (<code>query-only</code> to <code>admin</code>) of strict access control.
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
+                    <strong class="text-primary dark:text-blue-400 block mb-1">Blacklist Manager</strong>
+                    Automatic redaction of sensitive columns and tables from all outputs.
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
+                    <strong class="text-primary dark:text-blue-400 block mb-1">Plan Mode</strong>
+                    Static SQL analysis to identify risks before connecting to any DB.
+                </div>
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
+                    <strong class="text-primary dark:text-blue-400 block mb-1">Antigravity Protocol</strong>
+                    Strict Architect-Builder-Auditor workflow for reliability.
+                </div>
+            </div>
         </section>
 
         <section id="getting-started">
             <h2>🚀 Getting Started</h2>
-            <p>Install globally via npm or bun:</p>
-            <pre><code>npm install -g @gravito/dbcli
-# or
+            <p>Install globally using your preferred package manager:</p>
+            <pre><code># Using npm
+npm install -g @gravito/dbcli
+
+# Using Bun (Recommended)
 bun install -g @gravito/dbcli</code></pre>
-            <p>Initialize your first connection:</p>
+            <p>Initialize your first connection with the interactive wizard:</p>
             <pre><code>dbcli init</code></pre>
         </section>
 
         <section id="connections">
             <h2>🔌 Connection Management</h2>
-            <p>Manage multiple environments (Production, Staging, Local) easily:</p>
-            <pre><code>dbcli use --list         # List connections
-dbcli use staging        # Switch default
-dbcli query --use prod "..." # One-shot override</code></pre>
+            <p>Switch between Production, Staging, and Local environments with ease:</p>
+            <pre><code>dbcli use --list         # List all connection names
+dbcli use staging        # Switch your default connection
+dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code></pre>
         </section>
 
         <section id="commands">
@@ -231,85 +118,87 @@ dbcli query --use prod "..." # One-shot override</code></pre>
                     <tr><th>Command</th><th>Purpose</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><code>list</code></td><td>Lists tables, collections, keys, or indices.</td></tr>
-                    <tr><td><code>schema</code></td><td>Displays structure and caches metadata.</td></tr>
-                    <tr><td><code>inspect</code></td><td>Context snapshot for AI agents (objects, permissions).</td></tr>
-                    <tr><td><code>status</code></td><td>Configuration health summary.</td></tr>
+                    <tr><td><code>list</code></td><td>Enumerate tables, collections, keys, or indices.</td></tr>
+                    <tr><td><code>schema</code></td><td>Inspect structure and refresh local metadata cache.</td></tr>
+                    <tr><td><code>inspect</code></td><td>Full context snapshot (objects, perms, suggested actions).</td></tr>
+                    <tr><td><code>status</code></td><td>Config and connectivity health summary.</td></tr>
                 </tbody>
             </table>
 
             <h3 id="query">Querying & Data Operations</h3>
-            <pre><code>dbcli query "SELECT * FROM users LIMIT 10"
+            <pre><code># Raw Query
+dbcli query "SELECT * FROM users LIMIT 10"
+
+# Run Snippet
 dbcli q @snippet --param id=1
+
+# Export Data
 dbcli export "SELECT * FROM logs" --format csv --output logs.csv
-dbcli insert users --data '{"name":"Alice"}' --dry-run
-dbcli plan "DELETE FROM users" # Analyzes risk</code></pre>
+
+# Safe Write
+dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
 
             <h3 id="snippets">Snippet Management</h3>
-            <p>Reusable SQL snippets with parameters and visualization metadata.</p>
+            <p>Maintain complex queries as version-controlled snippets in your repository.</p>
             <ul>
-                <li><code>dbcli queries list</code>: See all available snippets.</li>
-                <li><code>dbcli queries search</code>: Fuzzy keyword search.</li>
-                <li><code>dbcli queries suggest</code>: Context-aware suggestions.</li>
+                <li><code>dbcli queries list</code>: View the full inventory of snippets.</li>
+                <li><code>dbcli queries search</code>: Search snippets using fuzzy keywords.</li>
+                <li><code>dbcli queries suggest</code>: Get suggestions based on operational intent.</li>
             </ul>
 
             <h3 id="diagnostics">Health & Diagnostics</h3>
-            <table>
-                <thead>
-                    <tr><th>Command</th><th>Purpose</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>doctor</code></td><td>Connectivity and env health checks.</td></tr>
-                    <tr><td><code>report</code></td><td>Full health, capacity, and performance report.</td></tr>
-                    <tr><td><code>guide</code></td><td>Strategic plans for goals like "slow-query".</td></tr>
-                    <tr><td><code>recover</code></td><td>Automated remediation of common errors.</td></tr>
-                </tbody>
-            </table>
-
-            <h3 id="advanced">Advanced Tools</h3>
-            <ul>
-                <li><strong>Shell</strong>: <code>dbcli shell</code> - Interactive REPL with Tab-completion.</li>
-                <li><strong>Migrate</strong>: <code>dbcli migrate create/drop/alter</code> - DDL engine.</li>
-                <li><strong>Skills</strong>: <code>dbcli skill --install</code> - AI instructions.</li>
-            </ul>
+            <div class="space-y-4 mb-8">
+                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
+                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">doctor</span>
+                    <span>Validates environment, connectivity, and configuration integrity.</span>
+                </div>
+                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
+                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">report</span>
+                    <span>Produces a comprehensive health, performance, and capacity report.</span>
+                </div>
+                <div class="flex items-start gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
+                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">recover</span>
+                    <span>Executes automated remediation plans for common failure modes.</span>
+                </div>
+            </div>
         </section>
 
         <section id="ui">
             <h2>📊 Interactive HTML Dashboards</h2>
-            <p>Pass the <code>--ui</code> flag to any query to generate and open a rich React-based interactive report.</p>
+            <p>Generate standalone React-powered reports by appending the <code>--ui</code> flag.</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
-            <p>Visualizations are defined in the snippet frontmatter via the <code>visual:</code> block.</p>
+            <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter.</p>
         </section>
 
         <section id="engines">
             <h2>🗺️ Engine Support Matrix</h2>
             <table>
                 <thead>
-                    <tr><th>Feature</th><th>SQL</th><th>MongoDB</th><th>Redis</th><th>ES</th></tr>
+                    <tr><th>Feature</th><th class="text-center">SQL</th><th class="text-center">MongoDB</th><th class="text-center">Redis</th><th class="text-center">ES</th></tr>
                 </thead>
-                <tbody>
-                    <tr><td>Querying</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td>Schema</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
-                    <tr><td>Writes</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                    <tr><td>DDL</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
-                    <tr><td>AI Flow</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                <tbody class="text-center">
+                    <tr><td class="text-left font-medium">Querying</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td class="text-left font-medium">Schema Caching</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
+                    <tr><td class="text-left font-medium">Data Writes</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
+                    <tr><td class="text-left font-medium">DDL Support</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+                    <tr><td class="text-left font-medium">AI Workflows</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
                 </tbody>
             </table>
         </section>
 
         <section id="ai">
             <h2>🤖 AI Agent Integration</h2>
-            <p>Dbcli is built from the ground up to be "Agentic":</p>
+            <p>Dbcli is engineered to be the standard "Database Driver" for modern AI agents:</p>
             <ul>
-                <li><strong>--recovery</strong>: Machine-readable failure envelopes.</li>
-                <li><strong>--for-agent</strong>: Compact JSON outputs to save tokens.</li>
-                <li><strong>Task Packs</strong>: Pre-defined expert workflows for AI agents.</li>
+                <li><strong>Machine-Readable Errors</strong>: JSON-formatted <code>--recovery</code> envelopes.</li>
+                <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>
+                <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
             </ul>
         </section>
 
-        <div class="footer">
+        <footer class="mt-20 pt-10 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 text-sm">
             <p>Generated by dbcli Documentation Engine &bull; 2026</p>
-        </div>
+        </footer>
     </main>
 </body>
 </html>

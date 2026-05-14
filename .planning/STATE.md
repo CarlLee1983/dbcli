@@ -1,32 +1,49 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.19.1
-milestone_name: Post-release Contract Stabilization Patch
-status: milestone_complete
+milestone: v1.20.0
+milestone_name: Agent-Facing Audit Log
+status: defining_requirements
 last_updated: "2026-05-14T00:00:00.000Z"
 progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+previous_milestone:
+  version: v1.19.1
+  name: Post-release Contract Stabilization Patch
+  completed_at: "2026-05-14"
   total_phases: 20
-  completed_phases: 20
   total_plans: 47
-  completed_plans: 47
-post_release:
-  branch: main
-  note: "v1.19.1 patch release prepared from post-v1.19.0 contract stabilization on main."
 ---
 
 # STATE.md — Current Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-13)
+See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** v1.19.1 patch release — packages the post-v1.19.0 contract stabilization on `main`: typed capability registry, locked agent-facing JSON contracts (inspect / report / guide / recovery), expanded redaction guards, documented side-effect tiers, deterministic UI bundle output, and UI helper test coverage.
+**Current Focus:** v1.20.0 — Agent-Facing Audit Log。讓 AI agent 跨 session / 跨 invocation 能讀回 dbcli 在這個 DB 上做過什麼，補上 inspect / recovery envelope / report 共同缺失的「歷史活動」維度。Seed 已 locked decisions D1–D6（2026-05-14），requirements 與 roadmap 由 `$gsd-new-milestone` 接續產出。
+
+---
+
+## Current Position
+
+- **Phase:** Not started (defining requirements)
+- **Plan:** —
+- **Status:** Defining requirements
+- **Last activity:** 2026-05-14 — Milestone v1.20.0 started（seed promoted to milestone）
 
 ---
 
 ## Milestone Status
+
+**v1.20.0 — Agent-Facing Audit Log:** ACTIVE (started 2026-05-14)
+- 規劃中：Audit log writer、JSON 合約、CLI、recovery envelope 雙向連結、強制 redaction
+- Locked decisions：D1 預設 on、D2 session_id env 優先、D3 不含 cell preview、D4 每連線一檔 + `--all` merge、D5 純時序反序、D6 寫入失敗只警告
+- 暫緩 seeds：`conflict-avoidance-resource-index`、`self-verification-correlation`
 
 **v1.19.1 — Post-release Contract Stabilization Patch:** COMPLETE (2026-05-14)
 - Typed engine capability registry and command capability boundaries
@@ -126,6 +143,16 @@ Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIB
 
 ---
 
+## Accumulated Context (carried from previous milestones)
+
+- **Capability registry**（`src/adapters/capabilities.ts`）— v1.19.1 已建立 engine × command × side-effect tier 對應；v1.20.0 audit entry `side_effect_tier` 欄位需直接重用。
+- **Agent-facing JSON contract test 模式** — v1.19.1 已鎖定 inspect / report / guide / recovery；v1.20.0 audit entry schema 必須沿用同一風格加 contract test。
+- **Sensitive-output redaction helper**（`tests/helpers/sensitive-output.ts`）— v1.19.1 擴充覆蓋 `--config` / `--param` / SQL body；v1.20.0 必須以此為唯一過濾來源。
+- **Recovery envelope**（`.dbcli/last-recovery.json`、`dbcli recover --apply` / `--next`）— v1.17.0 起既有，v1.20.0 需新增 `recovery_ref` ⇄ `audit_ref` 雙向欄位。
+- **Engine family dispatch**（SQL / Mongo / Redis / ES）— audit writer 必須一視同仁，所有引擎使用相同 entry shape。
+
+---
+
 ## Key Decisions Made
 
 | Decision | Rationale | Status |
@@ -135,6 +162,9 @@ Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIB
 | Coarse-grained permissions + blacklist | Coarse roles + table/column blacklisting covers security needs | Locked |
 | Hybrid init (read .env first) | Minimizes manual input for developers with existing configs | Locked |
 | Blacklist over fine-grained ACL | Simpler, covers 90% of sensitive data protection needs | Locked |
+| v1.20.0 audit log 預設 on | observability 必須 zero-config 有效；opt-out 由 `.dbcli` `audit.enabled = false` 控制 | Locked (D1) |
+| v1.20.0 不含 result preview | Entry 為 metadata-only，避免 PII；forensics 需要時 agent 重跑 query 或讀 recovery envelope | Locked (D3) |
+| v1.20.0 寫入失敗只警告 | audit log 為 observability 而非 safety gate；不可阻擋主指令 | Locked (D6) |
 
 ---
 
@@ -143,7 +173,9 @@ Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIB
 - **Project repo**: `/Users/carl/Dev/CMG/Dbcli`
 - **Planning docs**: `.planning/`
 - **Reference**: GSD methodology — https://github.com/gsd-build/get-shit-done
+- **Active seed**: `.planning/seeds/v1.20.0-audit-log-milestone.md`
+- **Deferred seeds**: `.planning/seeds/conflict-avoidance-resource-index.md`、`.planning/seeds/self-verification-correlation.md`
 
 ---
 
-*Last updated: 2026-05-14 — v1.19.1 patch release prepared; release gate passed locally via `bun run release:check`.*
+*Last updated: 2026-05-14 — Milestone v1.20.0 (Agent-Facing Audit Log) defining requirements; v1.19.1 release gate 通過已歸檔。*

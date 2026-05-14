@@ -10,6 +10,37 @@ dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Ge
 
 Everything else (multi-connection, audit logging, advanced features) can be deferred. This core must work flawlessly.
 
+## Current Milestone: v1.20.0 Agent-Facing Audit Log
+
+**Goal:** 讓 AI agent 跨 session / 跨 invocation 能讀回 dbcli 在這個 DB 上做過什麼，補上 inspect / recovery envelope / report 共同缺失的「歷史活動」維度。
+
+**Target features:**
+- Session handoff — 時間序列、操作摘要、影響範圍（tables / keys / index）、成敗
+- Forensics（success path）— dry-run、實際輸入摘要、輸出 row count
+- Append-only JSONL audit store（`.dbcli/audit/<connection>.jsonl`）+ size / entry cap rotation
+- `dbcli audit tail | show | clear | health` CLI
+- Agent-facing JSON 合約 + contract test（比照 v1.19.1）
+- 強制 redaction（reuse `tests/helpers/sensitive-output.ts`）
+- Recovery envelope 雙向連結（`recovery_ref` / `audit_ref`）
+- Config：`.dbcli` 加 `audit.enabled`（預設 on）/ `audit.rotation`
+
+**Locked decisions (2026-05-14):**
+
+| # | 決策 | 結論 |
+|---|------|------|
+| D1 | 預設啟用策略 | 預設 on（opt-out），`audit.enabled = true` |
+| D2 | session_id 來源 | `DBCLI_SESSION_ID` env 優先，缺則 `<pid>-<unix-ts>-<random>` |
+| D3 | Result preview | 不含 cell 值；僅 `target` / `rows_affected` / `success` / `redacted_sql` |
+| D4 | Multi-connection 範圍 | 每連線一檔；`audit tail --all` 跨連線 merge view |
+| D5 | Tail layout | 純時序、最新在下（reverse-chronological） |
+| D6 | 寫入失敗行為 | stderr 警告 + 主指令照跑；`dbcli audit health` 主動檢查 |
+
+**Explicit Out of Scope（暫緩 seeds）:**
+- Tamper-evident / 加密 / 簽章（合規路線）— 未來再評估
+- 多年保留策略 — 不做時間保留
+- 並發 conflict avoidance 資源索引 — 見 `.planning/seeds/conflict-avoidance-resource-index.md`
+- audit 自動驗證對照 — 見 `.planning/seeds/self-verification-correlation.md`
+
 ## Requirements
 
 ### Validated
@@ -120,7 +151,7 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 
 ### Active
 
-_目前無進行中的工作。下個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。_
+**v1.20.0 — Agent-Facing Audit Log**（規劃中，requirements 與 phase 切分見 `.planning/REQUIREMENTS.md` / `.planning/ROADMAP.md`）
 
 ### Out of Scope (V1)
 
@@ -171,7 +202,9 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.19.1 — Post-release Contract Stabilization Patch Shipped)
+## Current State (v1.20.0 — Agent-Facing Audit Log: Defining requirements)
+
+**Active milestone:** v1.20.0 — see `## Current Milestone` 區塊與 `.planning/REQUIREMENTS.md` / `.planning/ROADMAP.md`（建立後）。
 
 **Latest Release:** v1.19.1 (2026-05-14)
 - ✅ Post-release Contract Stabilization Patch (v1.19.1) — 型別化能力註冊、agent-facing JSON 合約鎖定（inspect / report / guide / recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`)、UI helper 抽離 + render smoke 測試
@@ -292,4 +325,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-14 — v1.19.1 patch release shipped; packages post-v1.19.0 contract stabilization on `main` (typed capability registry, locked agent-facing JSON contracts, redaction guards, side-effect tier docs, deterministic UI bundle, UI helper test coverage)*
+*Last updated: 2026-05-14 — v1.20.0 milestone 啟動：Agent-Facing Audit Log（Session handoff + Forensics + Recovery envelope 雙向連結）。Locked decisions D1–D6 已寫入；requirements / roadmap 由 `$gsd-new-milestone` 接續產出。*

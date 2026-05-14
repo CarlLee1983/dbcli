@@ -27,9 +27,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 21 — Audit Writer Foundation (ready for verification)
-- **Plan:** Phase 21 verification (next)
-- **Status:** Waves 1-3 merged into `main` (5/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation, 21-05 concurrent + readonly integration tests. Awaiting Phase 21 verification.
+- **Phase:** 21 — Audit Writer Foundation (verified; security gate next)
+- **Plan:** Phase 21 security gate / Phase 22 discussion (next)
+- **Status:** Waves 1-3 merged into `main` (5/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation, 21-05 concurrent + readonly integration tests. Phase 21 verification passed via release gate; awaiting security gate before Phase 22.
 - **Last activity:** 2026-05-15
 
 ---

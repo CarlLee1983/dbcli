@@ -128,7 +128,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Audit Writer Foundation | 5/5 | Ready for verification | — |
+| 21. Audit Writer Foundation | 5/5 | Verified; security gate next | — |
 | 22. Entry Schema & Redaction Contract | 0/0 | Not started | — |
 | 23. Engine Integration & Rejection Paths | 0/0 | Not started | — |
 | 24. `dbcli audit` CLI | 0/0 | Not started | — |

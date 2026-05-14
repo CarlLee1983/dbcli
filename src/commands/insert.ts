@@ -18,6 +18,8 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { previewInsert } from '@/core/mongo/dry-run-formatter'
+import { buildInsertPlanSql } from '@/core/dml-plan-sql'
+import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -71,6 +73,8 @@ export async function insertCommand(
     force?: boolean
     config?: string
     recovery?: boolean
+    plan?: boolean
+    format?: 'text' | 'json'
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -107,6 +111,20 @@ export async function insertCommand(
     // Validate data is an object, not an array or primitive
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       throw new Error('JSON must be an object (e.g. {"name":"Alice","email":"a@b.com"})')
+    }
+
+    // --plan branch: SQL-only preflight, no adapter, no DB connection.
+    // Errors here mirror `dbcli plan`: console.error + process.exit(1),
+    // not the JSON envelope used by the real DML execution path.
+    if (options.plan) {
+      if (options.dryRun) {
+        console.error('--plan cannot be used with --dry-run')
+        process.exit(1)
+        return
+      }
+      const planSql = buildInsertPlanSql(table, data)
+      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
+      return
     }
 
     // 4. Load configuration

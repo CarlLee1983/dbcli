@@ -17,63 +17,16 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
+import { parseWhereClause } from '@/utils/where-parser'
 import { previewDelete } from '@/core/mongo/dry-run-formatter'
+import { buildDeletePlanSql } from '@/core/dml-plan-sql'
+import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
     throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
   }
   return connection as SqlConnectionOptions
-}
-
-/**
- * Parses a WHERE clause string into a conditions object
- * e.g. "id=1" → { id: "1" }
- * e.g. "id=1 AND status='active'" → { id: "1", status: "active" }
- *
- * @param whereClause WHERE condition string
- * @returns Conditions object {column: value, ...}
- * @throws Error if the WHERE clause cannot be parsed
- */
-function parseWhereClause(whereClause: string): Record<string, unknown> {
-  if (!whereClause || whereClause.trim() === '') {
-    throw new Error('DELETE requires --where clause (e.g. --where "id=1")')
-  }
-
-  const conditions: Record<string, unknown> = {}
-
-  // Split AND conditions
-  const andParts = whereClause.split(/\s+AND\s+/i)
-
-  for (const part of andParts) {
-    // Match "column=value" pattern
-    const match = part.match(/^(\w+)\s*=\s*(.+)$/)
-    if (!match || !match[1] || !match[2]) {
-      throw new Error(
-        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
-      )
-    }
-
-    const column: string = match[1]
-    const trimmed = match[2].trim()
-    const stripped =
-      (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-      (trimmed.startsWith('"') && trimmed.endsWith('"'))
-        ? trimmed.slice(1, -1)
-        : trimmed
-
-    let value: string | number | boolean | null = stripped
-    if (stripped !== '' && !isNaN(Number(stripped))) {
-      value = Number(stripped)
-    }
-    if (stripped === 'true') value = true
-    else if (stripped === 'false') value = false
-    else if (stripped === 'null') value = null
-
-    conditions[column] = value
-  }
-
-  return conditions
 }
 
 /**
@@ -89,6 +42,8 @@ export async function deleteCommand(
     force?: boolean
     config?: string
     recovery?: boolean
+    plan?: boolean
+    format?: 'text' | 'json'
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -109,6 +64,24 @@ export async function deleteCommand(
     const config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" to configure database connection')
+    }
+
+    // --plan branch: SQL-only preflight, no adapter, no DB connection.
+    // Must come BEFORE the admin permission check so the analyzer can return
+    // BLOCK on permission_denied for read-only / read-write users (preflight
+    // signal, not a write attempt). Errors here mirror `dbcli plan`:
+    // console.error + process.exit(1), not the JSON envelope used by the
+    // real DML execution path.
+    if (options.plan) {
+      if (options.dryRun) {
+        console.error('--plan cannot be used with --dry-run')
+        process.exit(1)
+        return
+      }
+      const whereForPlan = parseWhereClause(options.where)
+      const planSql = buildDeletePlanSql(table, whereForPlan)
+      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
+      return
     }
 
     // 4. Validate permission (DELETE requires data-admin or admin)

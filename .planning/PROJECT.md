@@ -108,16 +108,19 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] `dbcli skill --install cursor` 改用 `.cursor/rules/*.mdc` 專案本地格式
 - [x] 新增專案層級 `GEMINI.md` 完整 Antigravity 生命週期指引
 
-### Active
-
-**Post-v1.19.0 Contract Stabilization (on `main`, awaiting next release tag)**
+**Post-release Contract Stabilization Patch** — v1.19.1
 - [x] 型別化能力註冊 `src/adapters/capabilities.ts`（engine × command × side-effect tier）
 - [x] 鎖定 agent-facing JSON 合約鍵集合（inspect / report / guide / recovery）
 - [x] 共用 `tests/helpers/sensitive-output.ts` 攔截 credential / 秘密片段
 - [x] 擴充 saved recovery 指令 redaction 覆蓋率（含 `--config` / `--param` / SQL body）
 - [x] `docs/feature-matrix.md` 補 side-effect tier 對照表
 - [x] UI bundle determinism 修補（pin `NODE_ENV=production`）
-- [ ] 將 main 上累積的 stabilization 變更打下一個 release tag
+- [x] UI helper 抽離（`format-value` / `resolve-kpi` / `derive-columns`）與 React render smoke 測試覆蓋
+- [x] v1.19.1 patch release tag 發佈（2026-05-14）
+
+### Active
+
+_目前無進行中的工作。下個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。_
 
 ### Out of Scope (V1)
 
@@ -168,9 +171,10 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.19.0 — Expanded Antigravity Protocol & Agent Support Shipped)
+## Current State (v1.19.1 — Post-release Contract Stabilization Patch Shipped)
 
-**Latest Release:** v1.19.0 (2026-05-11)
+**Latest Release:** v1.19.1 (2026-05-14)
+- ✅ Post-release Contract Stabilization Patch (v1.19.1) — 型別化能力註冊、agent-facing JSON 合約鎖定（inspect / report / guide / recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`)、UI helper 抽離 + render smoke 測試
 - ✅ Expanded Antigravity Protocol (v1.19.0) — Phase 0 Scout + Phase 3 Auditor、Codex (OMX) / Windsurf 安裝器、Cursor `.cursor/rules/*.mdc` 遷移、新增 `GEMINI.md`
 - ✅ Interactive HTML Dashboards (v1.18.0) — React + Recharts + Tailwind 模板、`--ui` flag、`visual:` frontmatter、安全資料注入
 - ✅ Guided Remediation & Multi-turn Recovery (v1.17.0) — `recover --apply` / `--next`、信任邊界、自動驗證 `verify`
@@ -183,7 +187,15 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 - ✅ Multi-Engine 完整支援 (v1.8.0) — ES adapter 完備、Redis / ES ExecutionResult 統一
 - ✅ Saved Queries / snippets (v1.7.0)、Full MongoDB Support (v1.6.0)、Layered Schema Cache (v1.5.0)
 
-**In Progress (post-v1.19.0, on `main`):** 合約穩定化 — `src/adapters/capabilities.ts` 型別能力註冊、agent-facing JSON 合約必要鍵鎖定（inspect/report/guide/recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`) 修補。等待下個 release tag。
+**In Progress:** 無 — v1.19.1 已於 2026-05-14 發佈。下一個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。
+
+**What's Shipped (v1.19.1):**
+1. **型別化能力註冊** — `src/adapters/capabilities.ts` 明確標註 engine × command × side-effect tier
+2. **Agent-facing JSON 合約鎖定** — `inspect` / `report` / `guide` / `recovery` 必要鍵集合與 schema 加上 contract tests
+3. **Redaction 守則擴充** — 共用 `tests/helpers/sensitive-output.ts` 攔截 credential / SQL body / `--param` / `--config` 等敏感片段
+4. **Side-effect tier 文件** — `docs/feature-matrix.md` 補上 `readonly` / `dry-run` / `local-write` / `db-write` / `interactive` / `none` 對照表
+5. **UI bundle determinism** — UI template 建置固定 `NODE_ENV=production`，release formatting gate 維持綠燈
+6. **UI helper 抽離 + 測試** — `format-value` / `resolve-kpi` / `derive-columns` 從 `App.tsx` 抽離，新增單元測試與 React render smoke 覆蓋
 
 **What's Shipped (v1.9.1):**
 1. **Skill 連線設定指引** — Agent 第一次使用 dbcli 時能依 Skill 指引完成連線設定
@@ -280,4 +292,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-13 — v1.19.0 released; post-release contract-stabilization work merged on `main` (typed capability registry, locked agent-facing JSON contracts, redaction guards, side-effect tier docs), awaiting next release tag*
+*Last updated: 2026-05-14 — v1.19.1 patch release shipped; packages post-v1.19.0 contract stabilization on `main` (typed capability registry, locked agent-facing JSON contracts, redaction guards, side-effect tier docs, deterministic UI bundle, UI helper test coverage)*

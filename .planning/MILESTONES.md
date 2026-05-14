@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.19.1 — Post-release Contract Stabilization Patch (Shipped: 2026-05-14)
+
+**Scope:** 將 v1.19.0 後在 `main` 累積的合約穩定化工作打包成 patch release。無新使用者可見功能，聚焦於 agent-facing 合約強化、安全守則擴充與建置決定性。
+
+**Key accomplishments:**
+- 引入 `src/adapters/capabilities.ts` 型別化能力註冊（engine × command × side-effect tier），對齊 `docs/feature-matrix.md`。
+- 鎖定 agent-facing JSON 合約：`inspect` / `report` / `guide` / `recovery` 必要鍵集合與 schema，並補上 contract tests。
+- 共用 `tests/helpers/sensitive-output.ts` 攔截 credential 與秘密片段；擴充 saved recovery 指令的 redaction 覆蓋率（含 `--config` / `--param` / SQL body）。
+- `docs/feature-matrix.md` 補上 side-effect tier 對照表（`readonly` / `dry-run` / `local-write` / `db-write` / `interactive` / `none`）。
+- UI bundle 固定 `NODE_ENV=production` 保證 build 決定性；release formatting gate 維持綠燈。
+- UI 模板抽離純函式 helper（`format-value` / `resolve-kpi` / `derive-columns`）並補上單元測試與 React render smoke 覆蓋。
+
+**Release gate:** `bun run release:check` 全綠（typecheck / `bun test` 2151 pass / lint `--max-warnings=0` / build）。
+
+---
+
 ## v1.19.0 — Expanded Antigravity Protocol & Agent Support (Shipped: 2026-05-11)
 
 **Scope:** Antigravity 工作流擴充（Scout / Auditor 階段）與新增 agent 平台支援。
@@ -10,12 +26,7 @@
 - `dbcli skill --install cursor` 改用現代 `.cursor/rules/*.mdc` 專案本地格式。
 - 新增 `GEMINI.md` 專案層級指令檔，提供完整 Antigravity 生命週期指引。
 
-**Post-release stabilization (on `main`, awaiting next tag):**
-- 引入 `src/adapters/capabilities.ts` 型別化能力註冊（engine 支援 × command × side-effect tier）。
-- 鎖定 agent-facing JSON 合約：`inspect` / `report` / `guide` / `recovery` 必要鍵集合與 schema。
-- 共用 `tests/helpers/sensitive-output.ts` 攔截 credential 與秘密片段；擴充 saved recovery 指令的 redaction 覆蓋率。
-- `docs/feature-matrix.md` 補上 side-effect tier 對照表（`readonly` / `dry-run` / `local-write` / `db-write` / `interactive` / `none`）。
-- Build 決定性修補：UI bundle 固定 `NODE_ENV=production`、release formatting gate 保持綠燈。
+**Post-release stabilization:** 上述穩定化工作已於 2026-05-14 隨 **v1.19.1** patch release 發佈，詳見上方 v1.19.1 條目。
 
 ---
 

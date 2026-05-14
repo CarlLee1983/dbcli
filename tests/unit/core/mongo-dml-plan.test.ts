@@ -71,3 +71,172 @@ describe('buildMongoDmlPlan', () => {
     ).toThrow(/collection/i)
   })
 })
+
+import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
+import type { NonSqlAnalyzerContext } from '@/core/dml-plan'
+
+function ctx(overrides: Partial<NonSqlAnalyzerContext> = {}): NonSqlAnalyzerContext {
+  return {
+    permission: 'admin',
+    blacklist: { tables: [], columns: {} },
+    schema: { users: { name: 'users', columns: [{ name: '_id', type: 'string', nullable: false }] } },
+    ...overrides,
+  }
+}
+
+describe('analyzeMongoDmlRisk', () => {
+  test('ALLOW for insert with non-blacklisted fields', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'insert', target: 'users', data: { name: 'Alice' } },
+      ctx()
+    )
+    expect(result.decision).toBe('ALLOW')
+    expect(result.operation).toBe('INSERT')
+    expect(result.targetTables).toEqual(['users'])
+    expect(result.riskFactors).toEqual([])
+  })
+
+  test('BLOCK when permission insufficient (query-only on insert)', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'insert', target: 'users', data: { name: 'Alice' } },
+      ctx({ permission: 'query-only' })
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('permission_denied')
+  })
+
+  test('BLOCK when collection blacklisted', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'insert', target: 'users', data: { name: 'Alice' } },
+      ctx({ blacklist: { tables: ['users'], columns: {} } })
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('table_blacklisted')
+  })
+
+  test('BLOCK when insert writes blacklisted field', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'insert', target: 'users', data: { ssn: '123' } },
+      ctx({ blacklist: { tables: [], columns: { users: ['ssn'] } } })
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('blacklisted_column')
+  })
+
+  test('BLOCK when update filter is empty object', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { status: 'inactive' },
+        where: {},
+        rawWhere: '{}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_filter_empty')
+  })
+
+  test('BLOCK when delete filter is empty object', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'delete', target: 'users', where: {}, rawWhere: '{}' },
+      ctx()
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_filter_empty')
+  })
+
+  test('BLOCK when update uses $where operator', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { $where: 'function() { return true }' },
+        where: { _id: 'abc' },
+        rawWhere: '{"_id":"abc"}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_unsupported_operator')
+  })
+
+  test('BLOCK when update uses operator outside allowlist', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { $rename: { old: 'new' } },
+        where: { _id: 'abc' },
+        rawWhere: '{"_id":"abc"}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('BLOCK')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_unsupported_operator')
+  })
+
+  test('ALLOW update by _id with $set', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { $set: { status: 'inactive' } },
+        where: { _id: 'abc' },
+        rawWhere: '{"_id":"abc"}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('ALLOW')
+    expect(result.operation).toBe('UPDATE')
+  })
+
+  test('ALLOW delete by _id', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'delete', target: 'users', where: { _id: 'abc' }, rawWhere: '{"_id":"abc"}' },
+      ctx()
+    )
+    expect(result.decision).toBe('ALLOW')
+    expect(result.operation).toBe('DELETE')
+  })
+
+  test('WARN on $regex filter even with equality field', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { $set: { status: 'x' } },
+        where: { name: { $regex: '^A' } },
+        rawWhere: '{"name":{"$regex":"^A"}}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('WARN')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_filter_broad')
+  })
+
+  test('WARN on update with equality filter that is not _id', () => {
+    const result = analyzeMongoDmlRisk(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { $set: { status: 'x' } },
+        where: { email: 'a@b.com' },
+        rawWhere: '{"email":"a@b.com"}',
+      },
+      ctx()
+    )
+    expect(result.decision).toBe('WARN')
+    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_missing_id')
+  })
+
+  test('WARN when schema cache missing for target', () => {
+    const result = analyzeMongoDmlRisk(
+      { operation: 'delete', target: 'orders', where: { _id: 'abc' }, rawWhere: '{"_id":"abc"}' },
+      ctx({ schema: {} })
+    )
+    expect(result.decision).toBe('WARN')
+    expect(result.riskFactors.map((f) => f.code)).toContain('schema_cache_missing')
+  })
+})

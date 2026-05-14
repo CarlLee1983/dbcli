@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dbcli | 完整說明文件</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #ffffff;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --sidebar-bg: #f9fafb;
+            --code-bg: #f3f4f6;
+            --code-text: #1f2937;
+            --accent: #f59e0b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #111827;
+                --text: #f3f4f6;
+                --text-muted: #9ca3af;
+                --border: #374151;
+                --sidebar-bg: #1f2937;
+                --code-bg: #2d3748;
+                --code-text: #e2e8f0;
+            }
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            font-family: "PingFang TC", "Heiti TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+        }
+
+        /* Sidebar */
+        nav {
+            width: 280px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        nav h1 {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        nav li { margin-bottom: 0.5rem; }
+        nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 0.95rem;
+            display: block;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        nav a:hover {
+            background-color: var(--border);
+            color: var(--primary);
+        }
+
+        nav .sub {
+            padding-left: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Main Content */
+        main {
+            flex-grow: 1;
+            padding: 3rem 5rem;
+            max-width: 900px;
+        }
+
+        h1, h2, h3 { margin-top: 2.5rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        h1 { font-size: 2.5rem; border-bottom: 2px solid var(--primary); }
+        
+        p, ul, ol { margin-bottom: 1.25rem; color: var(--text); }
+        li { margin-bottom: 0.5rem; }
+
+        code {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.9rem;
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        pre code { padding: 0; background: none; font-size: 0.95rem; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th { background-color: var(--sidebar-bg); font-weight: 600; }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background-color: var(--primary);
+            color: white;
+        }
+
+        @media (max-width: 1024px) {
+            nav { display: none; }
+            main { padding: 2rem; }
+        }
+
+        .footer {
+            margin-top: 5rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1><span>📦</span> dbcli</h1>
+        <ul>
+            <li><a href="#overview">總覽</a></li>
+            <li><a href="#philosophy">核心理念</a></li>
+            <li><a href="#getting-started">快速入門</a></li>
+            <li><a href="#connections">連線管理</a></li>
+            <li><a href="#commands">指令詳解</a></li>
+            <li><ul class="sub">
+                <li><a href="#discovery">探索發現</a></li>
+                <li><a href="#query">查詢與資料</a></li>
+                <li><a href="#snippets">儲存查詢</a></li>
+                <li><a href="#diagnostics">診斷修復</a></li>
+                <li><a href="#advanced">進階工具</a></li>
+            </ul></li>
+            <li><a href="#ui">HTML 儀表板</a></li>
+            <li><a href="#engines">引擎支援</a></li>
+            <li><a href="#ai">AI 代理整合</a></li>
+        </ul>
+    </nav>
+    <main>
+        <section id="overview">
+            <h1>dbcli 完整說明文件</h1>
+            <p><strong>dbcli</strong> 是一款專為人類開發者與 AI 代理設計的高效能、安全優先的資料庫 CLI 工具。它為 SQL、NoSQL、Key-Value 及 Search 資料庫提供統一的操作介面。</p>
+        </section>
+
+        <section id="philosophy">
+            <h2>🛡️ 核心理念與安全性</h2>
+            <p><code>dbcli</code> 以「安全第一」為核心，透過多層保護機制防止資料意外洩漏或損壞：</p>
+            <ul>
+                <li><strong>權限守衛 (Permission Guard)</strong>：四層存取控制（從 <code>query-only</code> 到 <code>admin</code>）。</li>
+                <li><strong>黑名單管理器 (Blacklist Manager)</strong>：自動屏蔽敏感欄位。</li>
+                <li><strong>計畫模式 (Plan Mode)</strong>：執行前的靜態分析。</li>
+                <li><strong>Antigravity 協議</strong>：架構師-建設者-稽核員的工作流。</li>
+            </ul>
+        </section>
+
+        <section id="getting-started">
+            <h2>🚀 快速入門</h2>
+            <p>透過 npm 或 bun 進行全域安裝：</p>
+            <pre><code>npm install -g @gravito/dbcli
+# 或
+bun install -g @gravito/dbcli</code></pre>
+            <p>初始化您的第一個連線：</p>
+            <pre><code>dbcli init</code></pre>
+        </section>
+
+        <section id="connections">
+            <h2>🔌 連線管理</h2>
+            <p>輕鬆管理多個環境（正式、測試、開發）：</p>
+            <pre><code>dbcli use --list         # 列出所有連線
+dbcli use staging        # 切換預設連線
+dbcli query --use prod "..." # 單次覆蓋執行</code></pre>
+        </section>
+
+        <section id="commands">
+            <h2>🛠️ 指令詳解</h2>
+            
+            <h3 id="discovery">探索與發現</h3>
+            <table>
+                <thead>
+                    <tr><th>指令</th><th>用途</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>list</code></td><td>列出資料表、集合、鍵或索引。</td></tr>
+                    <tr><td><code>schema</code></td><td>顯示結構並快取元資料。</td></tr>
+                    <tr><td><code>inspect</code></td><td>為 AI 提供上下文快照。</td></tr>
+                    <tr><td><code>status</code></td><td>配置健康度摘要。</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="query">查詢與資料操作</h3>
+            <pre><code>dbcli query "SELECT * FROM users LIMIT 10"
+dbcli q @snippet --param id=1
+dbcli export "SELECT * FROM logs" --format csv --output logs.csv
+dbcli insert users --data '{"name":"Alice"}' --dry-run
+dbcli plan "DELETE FROM users" # 風險分析</code></pre>
+
+            <h3 id="snippets">儲存查詢管理</h3>
+            <p>具備參數化與視覺化元資料的可重複使用 SQL 片段。</p>
+            <ul>
+                <li><code>dbcli queries list</code>：檢視所有可用片段。</li>
+                <li><code>dbcli queries search</code>：模糊關鍵字搜尋。</li>
+                <li><code>dbcli queries suggest</code>：意圖導向建議。</li>
+            </ul>
+
+            <h3 id="diagnostics">健康度與診斷</h3>
+            <table>
+                <thead>
+                    <tr><th>指令</th><th>用途</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>doctor</code></td><td>環境與連線健康檢查。</td></tr>
+                    <tr><td><code>report</code></td><td>完整的健康、容量與效能報告。</td></tr>
+                    <tr><td><code>guide</code></td><td>針對特定目標（如慢查詢）的引導。</td></tr>
+                    <tr><td><code>recover</code></td><td>常見錯誤的自動化修復。</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="advanced">進階工具</h3>
+            <ul>
+                <li><strong>Shell</strong>：<code>dbcli shell</code> - 互動式 REPL。</li>
+                <li><strong>Migrate</strong>：<code>dbcli migrate</code> - DDL 結構變更引擎。</li>
+                <li><strong>Skills</strong>：<code>dbcli skill --install</code> - AI 專用指引。</li>
+            </ul>
+        </section>
+
+        <section id="ui">
+            <h2>📊 互動式 HTML 儀表板</h2>
+            <p>在查詢時加上 <code>--ui</code> 旗標，即可產生並開啟豐富的 React 互動式報表。</p>
+            <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
+            <p>視覺化設定定義在 Snippet 的 <code>visual:</code> 區塊中。</p>
+        </section>
+
+        <section id="engines">
+            <h2>🗺️ 引擎支援矩陣</h2>
+            <table>
+                <thead>
+                    <tr><th>功能</th><th>SQL</th><th>MongoDB</th><th>Redis</th><th>ES</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>基礎查詢</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Schema</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
+                    <tr><td>寫入操作</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
+                    <tr><td>DDL</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+                    <tr><td>AI 流程</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="ai">
+            <h2>🤖 AI 代理整合</h2>
+            <p>Dbcli 從設計之初就是「代理導向」的：</p>
+            <ul>
+                <li><strong>--recovery</strong>：機器可讀的失敗封包。</li>
+                <li><strong>--for-agent</strong>：精簡的 JSON 輸出以節省 Token。</li>
+                <li><strong>Task Packs</strong>：預定義的專家工作流。</li>
+            </ul>
+        </section>
+
+        <div class="footer">
+            <p>由 dbcli 文件引擎產生 &bull; 2026</p>
+        </div>
+    </main>
+</body>
+</html>

@@ -19,7 +19,6 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { parseWhereClause } from '@/utils/where-parser'
 import { previewUpdate } from '@/core/mongo/dry-run-formatter'
-import { buildUpdatePlanSql } from '@/core/dml-plan-sql'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -86,18 +85,44 @@ export async function updateCommand(
       )
     }
 
-    // --plan branch: SQL-only preflight, no adapter, no DB connection.
-    // Errors here mirror `dbcli plan`: console.error + process.exit(1),
-    // not the JSON envelope used by the real DML execution path.
+    // --plan branch: planner-only preflight, no adapter, no DB connection.
+    // Engine-aware: SQL builds an analyzer SQL string internally; non-SQL engines
+    // hit their own pure analyzers. Errors here mirror `dbcli plan`:
+    // console.error + process.exit(1), not the JSON envelope used by the real
+    // DML execution path.
     if (options.plan) {
       if (options.dryRun) {
         console.error('--plan cannot be used with --dry-run')
         process.exit(1)
         return
       }
-      const whereForPlan = parseWhereClause(options.where)
-      const planSql = buildUpdatePlanSql(table, setData, whereForPlan)
-      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
+      let whereForPlan: Record<string, unknown> | null = null
+      try {
+        const parsed = JSON.parse(options.where) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          whereForPlan = parsed as Record<string, unknown>
+        }
+      } catch {
+        whereForPlan = null
+      }
+      if (whereForPlan === null) {
+        try {
+          whereForPlan = parseWhereClause(options.where)
+        } catch {
+          whereForPlan = {}
+        }
+      }
+      await runDmlPlanAnalysis(
+        {
+          operation: 'update',
+          target: table,
+          set: setData,
+          where: whereForPlan,
+          rawWhere: options.where,
+        },
+        { format: options.format, config: options.config },
+        command
+      )
       return
     }
 

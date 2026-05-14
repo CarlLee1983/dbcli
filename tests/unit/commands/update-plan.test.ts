@@ -124,30 +124,47 @@ describe('updateCommand --plan', () => {
     exitSpy.mockRestore()
   })
 
-  test('--plan against MongoDB connection rejected', async () => {
+  test('plans against MongoDB update without adapter', async () => {
+    const mongoSpy = spyOn(AdapterFactory, 'createMongoDBAdapter')
+    mockConfig = makeConfig({
+      connection: { system: 'mongodb', uri: 'mongodb://localhost', database: 'test' } as any,
+      schema: { users: { name: 'users', columns: [] } },
+    })
+    configReadSpy.mockImplementation(async () => mockConfig)
+
+    await updateCommand('users', {
+      where: '{"_id":"abc"}',
+      set: '{"status":"inactive"}',
+      plan: true,
+      format: 'json',
+    } as any)
+
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.operation).toBe('UPDATE')
+    expect(parsed.targetTables).toEqual(['users'])
+    expect(['ALLOW', 'WARN']).toContain(parsed.decision)
+    expect(mongoSpy).not.toHaveBeenCalled()
+    mongoSpy.mockRestore()
+  })
+
+  test('BLOCKs MongoDB update with empty filter and exits 0', async () => {
     mockConfig = makeConfig({
       connection: { system: 'mongodb', uri: 'mongodb://localhost', database: 'test' } as any,
     })
     configReadSpy.mockImplementation(async () => mockConfig)
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('exit')
-    })
+    const exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
-    try {
-      await updateCommand('users', {
-        where: 'id=1',
-        set: '{"status":"inactive"}',
-        plan: true,
-        format: 'json',
-      } as any)
-    } catch {
-      // process.exit is mocked to throw
-    }
+    await updateCommand('users', {
+      where: '{}',
+      set: '{"status":"inactive"}',
+      plan: true,
+      format: 'json',
+    } as any)
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan for insert/update/delete currently supports SQL connections only'
-    )
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.decision).toBe('BLOCK')
+    expect(parsed.riskFactors.map((f: { code: string }) => f.code)).toContain('nonsql_filter_empty')
+    expect(exitSpy).not.toHaveBeenCalled()
     exitSpy.mockRestore()
   })
 

@@ -198,6 +198,8 @@ program
   .option('--data <json>', 'JSON object to insert')
   .option('--dry-run', 'Show generated SQL without executing')
   .option('--force', 'Skip confirmation prompt')
+  .option('--plan', 'Analyze risk without connecting or executing')
+  .option('--format <type>', 'Output format for --plan: text or json', 'text')
   .option(
     '--recovery',
     'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',

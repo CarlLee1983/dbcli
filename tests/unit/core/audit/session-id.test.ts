@@ -32,10 +32,7 @@ async function makeWorkdir(): Promise<string> {
   return dir
 }
 
-async function writePersistedFile(
-  storagePath: string,
-  payload: PersistedSessionId
-): Promise<void> {
+async function writePersistedFile(storagePath: string, payload: PersistedSessionId): Promise<void> {
   const fullPath = join(storagePath, LAST_SESSION_ID_RELATIVE)
   await mkdir(join(storagePath, '.dbcli'), { recursive: true })
   await writeFile(fullPath, JSON.stringify(payload, null, 2), 'utf8')

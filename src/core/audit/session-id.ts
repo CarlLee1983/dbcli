@@ -49,9 +49,7 @@ export function generateSessionId(pid: number, nowMs: number): string {
  *
  * Analog: src/core/recovery/last-envelope.ts:readLastEnvelope.
  */
-export async function readSessionIdFile(
-  storagePath: string
-): Promise<PersistedSessionId | null> {
+export async function readSessionIdFile(storagePath: string): Promise<PersistedSessionId | null> {
   const target = join(storagePath, LAST_SESSION_ID_RELATIVE)
   try {
     await stat(target)

@@ -61,7 +61,9 @@ describe('AuditLogger concurrent integration (STORE-03)', () => {
       ...entriesB.map((entry) => loggerB.write(entry)),
     ])
 
-    const successCount = results.filter((result) => 'success' in result && result.success === true).length
+    const successCount = results.filter(
+      (result) => 'success' in result && result.success === true
+    ).length
     const content = await readFile(join(workDir, '.dbcli', 'audit', 'default.jsonl'), 'utf8')
     const lines = content.split('\n').filter(Boolean)
     const parsed = lines.map((line) => JSON.parse(line) as Record<string, unknown>)

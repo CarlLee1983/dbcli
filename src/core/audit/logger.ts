@@ -130,28 +130,34 @@ export class AuditLogger {
       const lineBytes = Buffer.byteLength(line, 'utf8')
 
       // D-05/06/07: critical section — rotation check + append under lock.
-      const lockResult = await this.lockManager.withLock(async (): Promise<{ rotated: boolean }> => {
-        let rotated = false
-        if (
-          shouldRotate(
-            { currentSizeBytes: this.currentSizeBytes, currentEntryCount: this.currentEntryCount },
-            { maxBytes: this.maxBytes, maxEntries: this.maxEntries },
-            lineBytes
-          )
-        ) {
-          await rotate(this.auditFilePath, this.previousFilePath)
-          this.lastRotatedAt = new Date().toISOString()
-          this.lastRotatedPrevious = this.previousFilePath
-          this.currentSizeBytes = 0
-          this.currentEntryCount = 0
-          rotated = true
-        }
-        // D-08: O_APPEND, no flush-to-disk syscall, single line + \n.
-        await appendFile(this.auditFilePath, line, { encoding: 'utf8' })
-        this.currentSizeBytes += lineBytes
-        this.currentEntryCount += 1
-        return { rotated }
-      }, 'audit-write')
+      const lockResult = await this.lockManager.withLock(
+        async (): Promise<{ rotated: boolean }> => {
+          let rotated = false
+          if (
+            shouldRotate(
+              {
+                currentSizeBytes: this.currentSizeBytes,
+                currentEntryCount: this.currentEntryCount,
+              },
+              { maxBytes: this.maxBytes, maxEntries: this.maxEntries },
+              lineBytes
+            )
+          ) {
+            await rotate(this.auditFilePath, this.previousFilePath)
+            this.lastRotatedAt = new Date().toISOString()
+            this.lastRotatedPrevious = this.previousFilePath
+            this.currentSizeBytes = 0
+            this.currentEntryCount = 0
+            rotated = true
+          }
+          // D-08: O_APPEND, no flush-to-disk syscall, single line + \n.
+          await appendFile(this.auditFilePath, line, { encoding: 'utf8' })
+          this.currentSizeBytes += lineBytes
+          this.currentEntryCount += 1
+          return { rotated }
+        },
+        'audit-write'
+      )
 
       if (lockResult !== null && typeof lockResult === 'object' && 'skipped' in lockResult) {
         // Lock budget exhausted — D-07 fail-soft.

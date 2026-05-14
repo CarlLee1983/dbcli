@@ -43,10 +43,7 @@ async function readLockfile(path: string): Promise<LockfileContent> {
   return JSON.parse(raw) as LockfileContent
 }
 
-async function writeLockfileFixture(
-  path: string,
-  content: LockfileContent
-): Promise<void> {
+async function writeLockfileFixture(path: string, content: LockfileContent): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, JSON.stringify(content), 'utf8')
 }

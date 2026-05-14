@@ -16,15 +16,7 @@
  * - Test 12: D-14 default.jsonl
  * - Test 13: lock-budget-exhausted fall-through
  */
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-  type Mock,
-} from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -380,9 +372,7 @@ describe('Test 13: lock-budget-exhausted fall-through (STORE-03 / D-07 fail-soft
   test('stub lockManager returns skipped marker -> logger surfaces it and warns once', async () => {
     // Minimal stub: only the surface AuditLogger uses (withLock, isLockHeld).
     const stub: Pick<AuditLockManager, 'withLock' | 'isLockHeld'> = {
-      async withLock<T>(
-        _op: () => Promise<T>
-      ): Promise<WithLockResult<T>> {
+      async withLock<T>(_op: () => Promise<T>): Promise<WithLockResult<T>> {
         return { skipped: 'lock-budget-exhausted' }
       },
       isLockHeld(): boolean {

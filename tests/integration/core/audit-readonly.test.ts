@@ -35,7 +35,9 @@ async function makeReadonlyAuditDir(): Promise<void> {
 
 function auditWarningCalls(): unknown[][] {
   if (!stderrSpy) return []
-  return stderrSpy.mock.calls.filter((call) => typeof call[0] === 'string' && call[0].includes('[dbcli audit]'))
+  return stderrSpy.mock.calls.filter(
+    (call) => typeof call[0] === 'string' && call[0].includes('[dbcli audit]')
+  )
 }
 
 beforeEach(async () => {
@@ -92,7 +94,7 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
     expect(health.lastWrite?.success).toBe(false)
   })
 
-  test('STORE-04 / criterion 4: write failure does not affect the awaiting caller\'s downstream code', async () => {
+  test("STORE-04 / criterion 4: write failure does not affect the awaiting caller's downstream code", async () => {
     await makeReadonlyAuditDir()
     stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true)
     const logger = makeLogger()

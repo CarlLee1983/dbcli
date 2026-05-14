@@ -17,6 +17,7 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
+import { parseWhereClause } from '@/utils/where-parser'
 import { previewUpdate } from '@/core/mongo/dry-run-formatter'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -24,62 +25,6 @@ function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptio
     throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
   }
   return connection as SqlConnectionOptions
-}
-
-/**
- * Parses a WHERE clause string into a conditions object
- * e.g. "id=1" → { id: "1" }
- * e.g. "id=1 AND status='active'" → { id: "1", status: "active" }
- *
- * @param whereClause WHERE condition string
- * @returns Conditions object {column: value, ...}
- * @throws Error if the WHERE clause cannot be parsed
- */
-function parseWhereClause(whereClause: string): Record<string, unknown> {
-  if (!whereClause || whereClause.trim() === '') {
-    throw new Error('WHERE clause cannot be empty')
-  }
-
-  const conditions: Record<string, unknown> = {}
-
-  // Split AND conditions
-  const andParts = whereClause.split(/\s+AND\s+/i)
-
-  for (const part of andParts) {
-    // Match "column=value" pattern
-    const match = part.match(/^(\w+)\s*=\s*(.+)$/)
-    if (!match) {
-      throw new Error(
-        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
-      )
-    }
-
-    const column = match[1]
-    const valueStr = match[2]
-    if (valueStr === undefined || column === undefined) {
-      throw new Error(
-        `Cannot parse WHERE clause: "${part}". Use format "column=value" or "col1=val1 AND col2=val2"`
-      )
-    }
-    const trimmed = valueStr.trim()
-    const stripped =
-      (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-      (trimmed.startsWith('"') && trimmed.endsWith('"'))
-        ? trimmed.slice(1, -1)
-        : trimmed
-
-    let value: string | number | boolean | null = stripped
-    if (stripped !== '' && !isNaN(Number(stripped))) {
-      value = Number(stripped)
-    }
-    if (stripped === 'true') value = true
-    else if (stripped === 'false') value = false
-    else if (stripped === 'null') value = null
-
-    conditions[column] = value
-  }
-
-  return conditions
 }
 
 /**

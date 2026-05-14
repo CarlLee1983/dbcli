@@ -131,25 +131,59 @@ describe('deleteCommand --plan', () => {
     exitSpy.mockRestore()
   })
 
-  test('--plan against Redis connection rejected with SQL-only message', async () => {
+  test('plans against Elasticsearch delete without adapter', async () => {
+    const esSpy = spyOn(AdapterFactory, 'createElasticsearchAdapter')
     mockConfig = makeConfig({
-      connection: { system: 'redis', host: 'localhost', port: 6379 } as any,
+      connection: {
+        system: 'elasticsearch',
+        host: 'localhost',
+        port: 9200,
+        user: 'u',
+        password: 'p',
+        database: 'idx',
+      } as any,
+      schema: { products: { name: 'products', columns: [] } },
     })
     configReadSpy.mockImplementation(async () => mockConfig)
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('exit')
+
+    await deleteCommand('products', {
+      where: '{"_id":"abc"}',
+      plan: true,
+      format: 'json',
+    } as any)
+
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.operation).toBe('DELETE')
+    expect(parsed.targetTables).toEqual(['products'])
+    expect(['ALLOW', 'WARN']).toContain(parsed.decision)
+    expect(esSpy).not.toHaveBeenCalled()
+    esSpy.mockRestore()
+  })
+
+  test('BLOCKs Elasticsearch delete without _id and exits 0', async () => {
+    mockConfig = makeConfig({
+      connection: {
+        system: 'elasticsearch',
+        host: 'localhost',
+        port: 9200,
+        user: 'u',
+        password: 'p',
+        database: 'idx',
+      } as any,
     })
+    configReadSpy.mockImplementation(async () => mockConfig)
+    const exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
-    try {
-      await deleteCommand('users', { where: 'id=1', plan: true, format: 'json' } as any)
-    } catch {
-      // process.exit is mocked to throw
-    }
+    await deleteCommand('products', {
+      where: '{"name":"Widget"}',
+      plan: true,
+      format: 'json',
+    } as any)
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan for insert/update/delete currently supports SQL connections only'
-    )
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.decision).toBe('BLOCK')
+    expect(parsed.riskFactors.map((f: { code: string }) => f.code)).toContain('nonsql_missing_id')
+    expect(exitSpy).not.toHaveBeenCalled()
     exitSpy.mockRestore()
   })
 

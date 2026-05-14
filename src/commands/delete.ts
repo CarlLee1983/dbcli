@@ -19,7 +19,6 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { parseWhereClause } from '@/utils/where-parser'
 import { previewDelete } from '@/core/mongo/dry-run-formatter'
-import { buildDeletePlanSql } from '@/core/dml-plan-sql'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -66,21 +65,41 @@ export async function deleteCommand(
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
-    // --plan branch: SQL-only preflight, no adapter, no DB connection.
-    // Must come BEFORE the admin permission check so the analyzer can return
-    // BLOCK on permission_denied for read-only / read-write users (preflight
-    // signal, not a write attempt). Errors here mirror `dbcli plan`:
-    // console.error + process.exit(1), not the JSON envelope used by the
-    // real DML execution path.
+    // --plan branch: planner-only preflight, no adapter, no DB connection.
+    // Engine-aware. Must come BEFORE the admin permission check so the analyzer
+    // can return BLOCK on permission_denied for read-only / read-write users.
     if (options.plan) {
       if (options.dryRun) {
         console.error('--plan cannot be used with --dry-run')
         process.exit(1)
         return
       }
-      const whereForPlan = parseWhereClause(options.where)
-      const planSql = buildDeletePlanSql(table, whereForPlan)
-      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
+      let whereForPlan: Record<string, unknown> | null = null
+      try {
+        const parsed = JSON.parse(options.where) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          whereForPlan = parsed as Record<string, unknown>
+        }
+      } catch {
+        whereForPlan = null
+      }
+      if (whereForPlan === null) {
+        try {
+          whereForPlan = parseWhereClause(options.where)
+        } catch {
+          whereForPlan = {}
+        }
+      }
+      await runDmlPlanAnalysis(
+        {
+          operation: 'delete',
+          target: table,
+          where: whereForPlan,
+          rawWhere: options.where,
+        },
+        { format: options.format, config: options.config },
+        command
+      )
       return
     }
 

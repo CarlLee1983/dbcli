@@ -31,6 +31,14 @@ export type QueryRiskFactorCode =
   | 'schema_table_unknown'
   | 'blacklisted_column'
   | 'partial_schema_coverage'
+  | 'nonsql_filter_empty'
+  | 'nonsql_filter_broad'
+  | 'nonsql_missing_id'
+  | 'nonsql_unsupported_operator'
+  | 'nonsql_unsupported_bulk'
+  | 'nonsql_key_pattern_broad'
+  | 'nonsql_dynamic_schema_unknown'
+  | 'nonsql_overwrite_unknown'
 
 export interface QueryRiskFactor {
   code: QueryRiskFactorCode

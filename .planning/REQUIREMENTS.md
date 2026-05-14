@@ -1,0 +1,154 @@
+# Requirements: dbcli — Milestone v1.20.0 Agent-Facing Audit Log
+
+**Defined:** 2026-05-14
+**Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
+
+**Milestone goal:** 讓 AI agent 跨 session / 跨 invocation 能讀回 dbcli 在這個 DB 上做過什麼，補上 inspect / recovery envelope / report 共同缺失的「歷史活動」維度。
+
+**Locked decisions (2026-05-14, from `.planning/seeds/v1.20.0-audit-log-milestone.md`):**
+
+| # | 決策 | 結論 |
+|---|------|------|
+| D1 | 預設啟用策略 | 預設 on（opt-out），`audit.enabled = true` |
+| D2 | session_id 來源 | `DBCLI_SESSION_ID` env 優先，缺則 `<pid>-<unix-ts>-<random>` |
+| D3 | Result preview | 不含 cell 值；僅 metadata（target / rows_affected / success / redacted_sql） |
+| D4 | Multi-connection 範圍 | 每連線一檔；`audit tail --all` 跨連線 merge view |
+| D5 | Tail layout | 純時序、最新在下（reverse-chronological） |
+| D6 | 寫入失敗行為 | stderr 警告 + 主指令照跑；`dbcli audit health` 主動檢查 |
+
+---
+
+## v1.20.0 Requirements
+
+Requirements for milestone v1.20.0. Each maps to one roadmap phase.
+
+### AUDIT — Core write path
+
+- [ ] **AUDIT-01**: 任何接觸 DB 的 command 在執行後寫入一筆 audit entry（成功或失敗都寫）
+- [ ] **AUDIT-02**: 每筆 entry 帶 session_id；env `DBCLI_SESSION_ID` 優先，缺則自動生成 `<pid>-<unix-ts>-<random>`（D2）
+- [ ] **AUDIT-03**: 自動生成的 session_id 在當次進程內透過 `.dbcli/last-session-id` 共用，後續呼叫不再重生
+
+### STORE — Storage & rotation
+
+- [ ] **STORE-01**: Entry 以 append-only JSONL 形式寫入 `.dbcli/audit/<connection>.jsonl`（一連線一檔）
+- [ ] **STORE-02**: 達到 size cap (~10 MB) 或 entry cap (~1000) 任一條件即執行 rotation；保留前一段
+- [ ] **STORE-03**: 多進程並發寫入透過 file lock 序列化，避免破壞 JSONL 格式
+- [ ] **STORE-04**: 寫入失敗只將警告寫入 stderr，主指令照樣回傳原本結果 / exit code（D6）
+
+### SCHEMA — Entry contract & redaction
+
+- [ ] **SCHEMA-01**: Audit entry JSON 含必要鍵：`ts` / `session_id` / `engine` / `command` / `side_effect_tier` / `target` / `success` / `recovery_ref` / `redacted_sql`
+- [ ] **SCHEMA-02**: Contract test 鎖定 entry schema（比照 v1.19.1 inspect / report / guide / recovery）並列為 release gate
+- [ ] **SCHEMA-03**: Entry 絕不包含原始 SQL body、原始 params、result cell 值；由 `tests/helpers/sensitive-output.ts` 統一過濾並有 redaction 測試（D3）
+- [ ] **SCHEMA-04**: `side_effect_tier` 直接從 `src/adapters/capabilities.ts` 取值，不另外定義字典
+
+### CLI — `dbcli audit` 子指令
+
+- [ ] **CLI-01**: `dbcli audit tail [--n <N>]` 印出當前連線最近 N 筆，時序由舊到新（latest 在下，D5）
+- [ ] **CLI-02**: `dbcli audit tail --all` 跨連線合併時序輸出（D4）
+- [ ] **CLI-03**: `dbcli audit show <id>` 印出單筆完整 entry（forensics）
+- [ ] **CLI-04**: `dbcli audit clear` 清空當前連線 audit log（需 `--yes` 或互動確認）
+- [ ] **CLI-05**: `dbcli audit health` 回報 writer 狀態、lock 狀態、rotation cap 使用率（D6）
+- [ ] **CLI-06**: `audit tail` / `show` 支援 `--format table|json`；JSON 為扁平陣列，供 agent 直接消費
+
+### INTEGRATE — Engine & recovery
+
+- [ ] **INTEGRATE-01**: SQL（PostgreSQL / MySQL / MariaDB）、MongoDB、Redis、Elasticsearch 全部以同一 entry shape 寫入
+- [ ] **INTEGRATE-02**: Command 失敗時，audit entry 的 `recovery_ref` 指向 `.dbcli/last-recovery.json`
+- [ ] **INTEGRATE-03**: Recovery envelope 增加 `audit_ref` 欄位，反向指向觸發它的 audit entry id
+- [ ] **INTEGRATE-04**: Blacklist 拒絕、permission 拒絕、parser error 等 short-circuit 拒絕路徑也寫入 audit entry（`success: false` + reason）
+
+### CONFIG — `.dbcli` 設定
+
+- [ ] **CONFIG-01**: `.dbcli` 加 `audit.enabled`（預設 `true`，opt-out，D1）與 `audit.rotation`（`max_bytes` / `max_entries`）兩段
+- [ ] **CONFIG-02**: `audit.enabled = false` 時 writer 短路、不建立目錄；`audit health` 主動回報 disabled
+- [ ] **CONFIG-03**: 既有 connection 升級到 v1.20.0 時，缺欄位以預設值補齊；不破壞舊 `.dbcli`
+
+### DOCS — Agent 整合與文件
+
+- [ ] **DOCS-01**: SKILL.md 新增「Audit Log usage」章節（中英雙語），說明 handoff / forensics 兩種使用情境
+- [ ] **DOCS-02**: `dbcli inspect` / `recover` 流程在 agent guide 自動引用 recent audit（last N 筆摘要）
+- [ ] **DOCS-03**: `docs/feature-matrix.md` 加 audit row（含 side-effect tier 對照）並列入 release gate 文件
+- [ ] **DOCS-04**: README（en + zh-TW）與 CHANGELOG 補上 v1.20.0 audit log 說明，特別點出「預設 on」對既有用戶的影響（D1）
+
+---
+
+## Future Requirements
+
+Deferred to future milestones. Not in current roadmap.
+
+### CONCURRENCY (deferred — see `.planning/seeds/conflict-avoidance-resource-index.md`)
+
+- **CONCUR-01**: 二級資源索引（`.dbcli/audit/index/<resource>.jsonl`）支援「最近誰碰過 `users` 表」查詢
+- **CONCUR-02**: `dbcli audit resource <table>` 列出特定資源最近活動
+
+### VERIFY (deferred — see `.planning/seeds/self-verification-correlation.md`)
+
+- **VERIFY-01**: Audit entry `verification` 欄位紀錄對照 query + 期望結果 + 實際結果
+- **VERIFY-02**: `dbcli audit verify <id>` 重跑 entry 的驗證
+
+### COMPLIANCE (deferred — 合規路線)
+
+- **COMP-01**: Tamper-evident audit log（hash chain / signed entries）
+- **COMP-02**: 長期保留策略（多年）
+- **COMP-03**: 加密 audit store
+
+---
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Tamper-evident / 加密 / 簽章 audit log | 合規路線；當前主讀者為 AI agent 而非審計者，先做輕量結構化檔案 |
+| 多年保留策略 / 時間維度的 retention | rotation 已由 size / entry cap 控制；不再加時間維度避免複雜化 |
+| 並發 conflict avoidance 二級資源索引 | 未觀察到多 agent 同表並發痛點；seed `conflict-avoidance-resource-index` 等觸發 |
+| Audit log 自動驗證對照 query | 屬於進階自動化，與「忠實紀錄」職責分離；seed `self-verification-correlation` 等觸發 |
+| Result preview / cell 值快照 | D3 鎖定 — PII 與 storage cost 雙重考量；forensics 由 agent 重跑 query 或讀 recovery envelope |
+| 阻擋主指令的 audit safety gate | D6 鎖定 — audit log 為 observability，不可影響 DB 操作 success/failure |
+
+---
+
+## Traceability
+
+Empty initially, populated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| AUDIT-01 | TBD | Pending |
+| AUDIT-02 | TBD | Pending |
+| AUDIT-03 | TBD | Pending |
+| STORE-01 | TBD | Pending |
+| STORE-02 | TBD | Pending |
+| STORE-03 | TBD | Pending |
+| STORE-04 | TBD | Pending |
+| SCHEMA-01 | TBD | Pending |
+| SCHEMA-02 | TBD | Pending |
+| SCHEMA-03 | TBD | Pending |
+| SCHEMA-04 | TBD | Pending |
+| CLI-01 | TBD | Pending |
+| CLI-02 | TBD | Pending |
+| CLI-03 | TBD | Pending |
+| CLI-04 | TBD | Pending |
+| CLI-05 | TBD | Pending |
+| CLI-06 | TBD | Pending |
+| INTEGRATE-01 | TBD | Pending |
+| INTEGRATE-02 | TBD | Pending |
+| INTEGRATE-03 | TBD | Pending |
+| INTEGRATE-04 | TBD | Pending |
+| CONFIG-01 | TBD | Pending |
+| CONFIG-02 | TBD | Pending |
+| CONFIG-03 | TBD | Pending |
+| DOCS-01 | TBD | Pending |
+| DOCS-02 | TBD | Pending |
+| DOCS-03 | TBD | Pending |
+| DOCS-04 | TBD | Pending |
+
+**Coverage:**
+- v1.20.0 requirements: 28 total
+- Mapped to phases: 0
+- Unmapped: 28 ⚠️ (filled in by ROADMAP creation)
+
+---
+
+*Requirements defined: 2026-05-14*
+*Last updated: 2026-05-14 after milestone v1.20.0 initial definition*

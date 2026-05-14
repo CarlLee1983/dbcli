@@ -4,7 +4,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 1.  [Core Philosophy & Security](#core-philosophy--security)
 2.  [Getting Started](#getting-started)
@@ -21,7 +21,7 @@
 
 ---
 
-## 🛡️ Core Philosophy & Security
+## Core Philosophy & Security
 
 `dbcli` is built with a "Security-First" mindset, particularly focused on preventing AI agents from accidentally leaking or corrupting sensitive data.
 
@@ -32,7 +32,7 @@
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Installation
 ```bash
@@ -52,7 +52,7 @@ dbcli init
 
 ---
 
-## 🔌 Connection Management
+## Connection Management
 
 `dbcli` supports multi-connection configurations (v2), allowing you to switch between environments (Staging, Production, Local) seamlessly.
 
@@ -65,7 +65,7 @@ dbcli init
 
 ---
 
-## 🛠️ Command Reference
+## Command Reference
 
 ### Discovery & Exploration
 
@@ -121,7 +121,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 
 ---
 
-## 📊 Interactive HTML Dashboards
+## Interactive HTML Dashboards
 
 Use the `--ui` flag to open query results in a beautiful, interactive React-based dashboard in your browser.
 
@@ -133,7 +133,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
-## 🗺️ Database Engine Support Matrix
+## Database Engine Support Matrix
 
 | Feature | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
 | :--- | :---: | :---: | :---: | :---: |
@@ -146,7 +146,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ---
 
-## 🤖 AI Agent Integration
+## AI Agent Integration
 
 `dbcli` is designed to be the "DB driver" for AI agents.
 

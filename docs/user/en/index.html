@@ -35,7 +35,6 @@
     <!-- Sidebar -->
     <nav class="hidden lg:block w-72 h-screen sticky top-0 bg-slate-50 dark:bg-slate-900/50 border-right border-slate-200 dark:border-slate-800 p-8 overflow-y-auto shrink-0 transition-colors">
         <div class="flex items-center gap-3 mb-10">
-            <span class="text-3xl">📦</span>
             <h1 class="text-2xl font-black m-0 border-none pb-0 text-primary dark:text-blue-500">dbcli</h1>
         </div>
         <ul class="list-none space-y-1 p-0 m-0">
@@ -67,7 +66,7 @@
         </section>
 
         <section id="philosophy">
-            <h2>🛡️ Core Philosophy & Security</h2>
+            <h2>Core Philosophy & Security</h2>
             <p>Built with a "Security-First" mindset, <code>dbcli</code> prevents accidental data leaks or corruption through multiple layers of protection:</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
@@ -90,7 +89,7 @@
         </section>
 
         <section id="getting-started">
-            <h2>🚀 Getting Started</h2>
+            <h2>Getting Started</h2>
             <p>Install globally using your preferred package manager:</p>
             <pre><code># Using npm
 npm install -g @gravito/dbcli
@@ -102,7 +101,7 @@ bun install -g @gravito/dbcli</code></pre>
         </section>
 
         <section id="connections">
-            <h2>🔌 Connection Management</h2>
+            <h2>Connection Management</h2>
             <p>Switch between Production, Staging, and Local environments with ease:</p>
             <pre><code>dbcli use --list         # List all connection names
 dbcli use staging        # Switch your default connection
@@ -110,7 +109,7 @@ dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code><
         </section>
 
         <section id="commands">
-            <h2>🛠️ Command Reference</h2>
+            <h2>Command Reference</h2>
             
             <h3 id="discovery">Discovery & Exploration</h3>
             <table>
@@ -164,14 +163,14 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
         </section>
 
         <section id="ui">
-            <h2>📊 Interactive HTML Dashboards</h2>
+            <h2>Interactive HTML Dashboards</h2>
             <p>Generate standalone React-powered reports by appending the <code>--ui</code> flag.</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
             <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter.</p>
         </section>
 
         <section id="engines">
-            <h2>🗺️ Engine Support Matrix</h2>
+            <h2>Engine Support Matrix</h2>
             <table>
                 <thead>
                     <tr><th>Feature</th><th class="text-center">SQL</th><th class="text-center">MongoDB</th><th class="text-center">Redis</th><th class="text-center">ES</th></tr>
@@ -187,7 +186,7 @@ dbcli insert users --data '{"name":"Alice"}' --dry-run</code></pre>
         </section>
 
         <section id="ai">
-            <h2>🤖 AI Agent Integration</h2>
+            <h2>AI Agent Integration</h2>
             <p>Dbcli is engineered to be the standard "Database Driver" for modern AI agents:</p>
             <ul>
                 <li><strong>Machine-Readable Errors</strong>: JSON-formatted <code>--recovery</code> envelopes.</li>

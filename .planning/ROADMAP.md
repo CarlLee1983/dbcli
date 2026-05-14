@@ -33,7 +33,14 @@
   4. 手動將 audit 目錄改為唯讀後執行 db command，stderr 出現警告但主指令仍回原本的結果與 exit code（D6）
   5. 第一次呼叫無 `DBCLI_SESSION_ID` env 時自動生成 `<pid>-<unix-ts>-<random>` 並寫入 `.dbcli/last-session-id`；同進程後續呼叫讀回同一 id（D2）
   6. 既有 v1.19.x 的 `.dbcli` 升級到 v1.20.0 後仍可正常運作，缺少的 `audit.*` 欄位以預設值補齊
-**Plans:** TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 21-01-config-schema-PLAN.md — Extend zod schemas with `audit.*` block (CONFIG-01/02/03)
+- [ ] 21-02-session-id-service-PLAN.md — SessionIdService with env-first resolution + PID-stamped persistence (AUDIT-02/03)
+- [ ] 21-03-lock-manager-PLAN.md — AuditLockManager with 200ms retry budget + fail-soft on exhaustion (STORE-03 primitive)
+- [ ] 21-04-logger-rotation-PLAN.md — AuditLogger writer + rotation.ts + getHealth() introspection (STORE-01/02/04)
+- [ ] 21-05-integration-tests-PLAN.md — Two-instance concurrent + readonly-dir integration tests (STORE-03/04 closure)
 
 ### Phase 22: Entry Schema & Redaction Contract
 **Goal:** 鎖定 audit entry 的 agent-facing JSON 合約，並把「不得洩漏原始 SQL / params / cell 值」變成 release gate。所有後續 phase 都以此 entry shape 寫入。
@@ -121,7 +128,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Audit Writer Foundation | 0/0 | Not started | — |
+| 21. Audit Writer Foundation | 0/5 | Planned | — |
 | 22. Entry Schema & Redaction Contract | 0/0 | Not started | — |
 | 23. Engine Integration & Rejection Paths | 0/0 | Not started | — |
 | 24. `dbcli audit` CLI | 0/0 | Not started | — |

@@ -91,29 +91,40 @@ dbcli init
 | `query "<cmd>"` | Executes raw SQL, MongoDB JSON, Redis commands, or ES DSL. |
 | `q @snippet` | Runs a parameterised saved query. |
 | `export` | Exports results to JSON, CSV, JSONL, or Interactive HTML. |
-| `insert` | Inserts data from JSON (SQL & MongoDB). Accepts `--plan` for risk preflight (SQL only). |
-| `update` | Updates rows/documents with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL only). |
-| `delete` | Deletes data with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL only). |
+| `insert` | Inserts data from JSON (SQL & MongoDB). Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
+| `update` | Updates rows/documents with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
+| `delete` | Deletes data with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
 | `blacklist` | Manages the sensitive data redirection rules. |
 | `plan "<sql>"` | **Static analyzer**: Classifies SQL risk and gives recommendations. |
 
 #### DML `--plan` preflight
 
-`insert`, `update`, and `delete` accept `--plan` to run the same static risk analyzer as `dbcli plan` against the planned write, **without connecting to the database**.
+`insert`, `update`, and `delete` accept `--plan` to run a static risk analyzer against the planned write, **without connecting to the database**. The planner now supports SQL (`postgresql`, `mysql`, `mariadb`), MongoDB, Redis, and Elasticsearch.
 
-*   Build the planner SQL from the validated `<table>` + `--data` / `--set` / `--where` inputs (values are replaced with `?` placeholders — never embedded).
-*   Honor the connection's `permission`, `blacklist`, and `schema` cache.
+*   The planner is static and planner-only: it never instantiates an adapter, never connects, and never refreshes schema.
+*   It honors the connection's `permission`, `blacklist` rules, and the cached `schema` for the selected engine.
 *   `--format text` (default) prints a human-readable verdict; `--format json` prints the full `QueryRiskResult`.
-*   Analyzer `BLOCK` decisions still exit `0` — the verdict is what the agent reads, not the exit code. Configuration / engine / format errors exit `1`.
+*   Analyzer `BLOCK` decisions still exit `0` — the verdict is what the agent reads, not the exit code. Configuration / engine / invalid-DSL errors exit `1`.
 *   `--plan` is mutually exclusive with `--dry-run`.
-*   Currently SQL only (`postgresql`, `mysql`, `mariadb`). MongoDB / Redis / Elasticsearch are rejected with a clear message.
+
+Conservative MVP restrictions per engine:
+
+| Engine | BLOCK examples | WARN examples |
+| :--- | :--- | :--- |
+| SQL | UPDATE/DELETE without WHERE, DDL, blacklisted table | Schema cache missing, blacklisted column referenced |
+| MongoDB | Empty filter `{}`, update operator outside `$set`/`$unset`, `$where` | Filter without `_id`, broad `$in`/`$regex`/`$gte`, missing schema |
+| Redis | Wildcard `*` target, blacklisted key/field | Pattern target (e.g. `user:*`), missing field info on update |
+| Elasticsearch | update/delete without `_id`, blacklisted index/field | Insert without `_id`, missing schema |
+
+`BLOCK` means the planner found an unsafe intent. Still run `--dry-run` on the real command before executing the write.
 
 Examples:
 
 ```bash
 dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format json
-dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
-dbcli delete users --where 'id=1' --plan --format json
+dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
+dbcli delete products --where '{"_id":"abc"}' --plan --format json
+dbcli delete 'user:42' --where '' --plan --format json
 ```
 
 <!-- doc-key: snippet-management -->

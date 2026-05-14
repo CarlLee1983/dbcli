@@ -132,30 +132,27 @@ describe('insertCommand --plan', () => {
     exitSpy.mockRestore()
   })
 
-  test('--plan against MongoDB connection is rejected with SQL-only message', async () => {
+  test('plans against MongoDB connection without creating any adapter', async () => {
+    const mongoSpy = spyOn(AdapterFactory, 'createMongoDBAdapter')
     mockConfig = makeConfig({
       connection: { system: 'mongodb', uri: 'mongodb://localhost', database: 'test' } as any,
+      schema: { users: { name: 'users', columns: [] } },
     })
     configReadSpy.mockImplementation(async () => mockConfig)
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('exit')
-    })
 
-    try {
-      await insertCommand('users', {
-        data: '{"name":"Alice"}',
-        plan: true,
-        format: 'json',
-      } as any)
-    } catch {
-      // process.exit is mocked to throw
-    }
+    await insertCommand('users', {
+      data: '{"name":"Alice","email":"a@b.com"}',
+      plan: true,
+      format: 'json',
+    } as any)
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan for insert/update/delete currently supports SQL connections only'
-    )
-    expect(exitSpy).toHaveBeenCalledWith(1)
-    exitSpy.mockRestore()
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.decision).toBe('ALLOW')
+    expect(parsed.operation).toBe('INSERT')
+    expect(parsed.targetTables).toEqual(['users'])
+    expect(createSqlAdapterSpy).not.toHaveBeenCalled()
+    expect(mongoSpy).not.toHaveBeenCalled()
+    mongoSpy.mockRestore()
   })
 
   test('still requires JSON data when --plan is set', async () => {

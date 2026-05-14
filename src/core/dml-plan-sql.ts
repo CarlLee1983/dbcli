@@ -74,3 +74,10 @@ export function buildUpdatePlanSql(
   const whereClause = whereCols.map((col) => `${col} = ?`).join(' AND ')
   return `UPDATE ${t} SET ${setClause} WHERE ${whereClause}`
 }
+
+export function buildDeletePlanSql(table: string, where: Record<string, unknown>): string {
+  const t = normalizeTable(table)
+  const whereCols = normalizeWhere(where)
+  const whereClause = whereCols.map((col) => `${col} = ?`).join(' AND ')
+  return `DELETE FROM ${t} WHERE ${whereClause}`
+}

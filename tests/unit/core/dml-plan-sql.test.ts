@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildInsertPlanSql, buildUpdatePlanSql } from '@/core/dml-plan-sql'
+import { buildDeletePlanSql, buildInsertPlanSql, buildUpdatePlanSql } from '@/core/dml-plan-sql'
 
 describe('buildInsertPlanSql', () => {
   test('produces INSERT SQL with placeholders for each provided column', () => {
@@ -83,5 +83,33 @@ describe('buildUpdatePlanSql', () => {
     expect(() => buildUpdatePlanSql('users', { name: 'x' }, { 'bad col': 1 })).toThrow(
       /identifier/i
     )
+  })
+})
+
+describe('buildDeletePlanSql', () => {
+  test('produces DELETE SQL with WHERE placeholders', () => {
+    expect(buildDeletePlanSql('users', { id: 1 })).toBe('DELETE FROM users WHERE id = ?')
+  })
+
+  test('joins multi-column WHERE with AND', () => {
+    expect(buildDeletePlanSql('users', { id: 1, tenant: 'acme' })).toBe(
+      'DELETE FROM users WHERE id = ? AND tenant = ?'
+    )
+  })
+
+  test('does not embed user values', () => {
+    const sql = buildDeletePlanSql('users', { id: '1 OR 1=1', email: "x'; DROP" })
+    expect(sql).toBe('DELETE FROM users WHERE id = ? AND email = ?')
+    expect(sql).not.toContain('OR 1=1')
+    expect(sql).not.toContain('DROP')
+  })
+
+  test('rejects empty table and empty WHERE', () => {
+    expect(() => buildDeletePlanSql('', { id: 1 })).toThrow(/table name/i)
+    expect(() => buildDeletePlanSql('users', {})).toThrow(/WHERE/i)
+  })
+
+  test('rejects invalid identifiers in WHERE', () => {
+    expect(() => buildDeletePlanSql('users', { 'bad col': 1 })).toThrow(/identifier/i)
   })
 })

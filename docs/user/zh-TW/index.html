@@ -206,11 +206,23 @@ dbcli export "SELECT * FROM logs" --format csv --output logs.csv
 # 安全寫入
 dbcli insert users --data '{"name":"Alice"}' --dry-run
 
-# DML --plan 預檢 (不連線資料庫；僅 SQL)
-dbcli insert users --data '{"name":"Alice"}' --plan --format json
-dbcli update users --where 'id=1' --set '{"status":"inactive"}' --plan
-dbcli delete users --where 'id=1' --plan --format json</code></pre>
-            <p><code>insert</code>、<code>update</code>、<code>delete</code> 支援 <code>--plan</code>，可以在不連線資料庫的情況下執行靜態風險分析。值會被替換成 <code>?</code> 占位符；分析會套用該連線設定的 permission、blacklist 與 schema 快取。<code>--format text</code>（預設）輸出人類可讀判定，<code>--format json</code> 輸出完整 <code>QueryRiskResult</code>。分析器判定為 <code>BLOCK</code> 時仍以 exit <code>0</code> 結束；設定、引擎或 format 錯誤才會 exit <code>1</code>。<code>--plan</code> 與 <code>--dry-run</code> 互斥，僅支援 SQL（PostgreSQL / MySQL / MariaDB）。</p>
+# DML --plan 預檢 (不連線資料庫；SQL、MongoDB、Redis、Elasticsearch)
+dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format json
+dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
+dbcli delete products --where '{"_id":"abc"}' --plan --format json
+dbcli delete 'user:42' --where '' --plan --format json</code></pre>
+            <p><code>insert</code>、<code>update</code>、<code>delete</code> 支援 <code>--plan</code>，可在不連線資料庫的情況下對即將執行的寫入操作執行靜態風險分析。此預檢現已支援 SQL（<code>postgresql</code>、<code>mysql</code>、<code>mariadb</code>）、MongoDB、Redis 與 Elasticsearch。預檢會套用該連線的 <code>permission</code>、<code>blacklist</code> 與該引擎的 <code>schema</code> 快取。<code>--format text</code>（預設）輸出人類可讀結論，<code>--format json</code> 輸出完整 <code>QueryRiskResult</code>。分析器回傳 <code>BLOCK</code> 時 exit code 仍為 <code>0</code>；設定 / 連線系統 / 無效 DSL 等錯誤才會 exit <code>1</code>。<code>--plan</code> 與 <code>--dry-run</code> 互斥。</p>
+            <p>各引擎在 MVP 中的保守限制：</p>
+            <table>
+                <thead><tr><th>引擎</th><th>BLOCK 範例</th><th>WARN 範例</th></tr></thead>
+                <tbody>
+                    <tr><td>SQL</td><td>UPDATE/DELETE 缺 WHERE、DDL、表黑名單</td><td>Schema 快取缺失、引用黑名單欄位</td></tr>
+                    <tr><td>MongoDB</td><td>空 filter <code>{}</code>、<code>$set</code>/<code>$unset</code> 以外的更新運算子、<code>$where</code></td><td>filter 沒有 <code>_id</code>、廣泛的 <code>$in</code>/<code>$regex</code>/<code>$gte</code>、schema 缺失</td></tr>
+                    <tr><td>Redis</td><td>通配符 <code>*</code> 目標、黑名單 key/欄位</td><td>Pattern 目標（例如 <code>user:*</code>）、update 缺欄位資訊</td></tr>
+                    <tr><td>Elasticsearch</td><td>update/delete 沒有 <code>_id</code>、黑名單 index/欄位</td><td>Insert 沒有 <code>_id</code>、schema 缺失</td></tr>
+                </tbody>
+            </table>
+            <p><code>BLOCK</code> 表示預檢偵測到不安全的意圖。實際執行寫入前仍建議使用 <code>--dry-run</code> 再次確認。</p>
 
             <!-- doc-key: snippet-management -->
             <h3 id="snippets">儲存查詢管理</h3>

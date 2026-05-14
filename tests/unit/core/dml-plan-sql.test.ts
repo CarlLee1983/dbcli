@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildInsertPlanSql } from '@/core/dml-plan-sql'
+import { buildInsertPlanSql, buildUpdatePlanSql } from '@/core/dml-plan-sql'
 
 describe('buildInsertPlanSql', () => {
   test('produces INSERT SQL with placeholders for each provided column', () => {
@@ -41,5 +41,47 @@ describe('buildInsertPlanSql', () => {
   test('rejects invalid column identifier', () => {
     expect(() => buildInsertPlanSql('users', { 'bad name': 'x' })).toThrow(/identifier/i)
     expect(() => buildInsertPlanSql('users', { '': 'x' })).toThrow(/identifier/i)
+  })
+})
+
+describe('buildUpdatePlanSql', () => {
+  test('produces UPDATE SQL with SET and WHERE placeholders', () => {
+    expect(buildUpdatePlanSql('users', { status: 'inactive' }, { id: 1 })).toBe(
+      'UPDATE users SET status = ? WHERE id = ?'
+    )
+  })
+
+  test('joins multi-column SET and AND-joined WHERE', () => {
+    expect(
+      buildUpdatePlanSql(
+        'users',
+        { name: 'Bob', email: 'b@example.com' },
+        { id: 1, tenant: 'acme' }
+      )
+    ).toBe('UPDATE users SET name = ?, email = ? WHERE id = ? AND tenant = ?')
+  })
+
+  test('does not embed user values in SET or WHERE', () => {
+    const sql = buildUpdatePlanSql(
+      'users',
+      { bio: "evil'; DROP TABLE users; --" },
+      { id: '1 OR 1=1' }
+    )
+    expect(sql).toBe('UPDATE users SET bio = ? WHERE id = ?')
+    expect(sql).not.toContain('DROP')
+    expect(sql).not.toContain('OR 1=1')
+  })
+
+  test('rejects empty table, empty SET, empty WHERE', () => {
+    expect(() => buildUpdatePlanSql('', { x: 1 }, { id: 1 })).toThrow(/table name/i)
+    expect(() => buildUpdatePlanSql('users', {}, { id: 1 })).toThrow(/at least one column/i)
+    expect(() => buildUpdatePlanSql('users', { x: 1 }, {})).toThrow(/WHERE/i)
+  })
+
+  test('rejects invalid identifiers in SET or WHERE', () => {
+    expect(() => buildUpdatePlanSql('users', { 'bad col': 1 }, { id: 1 })).toThrow(/identifier/i)
+    expect(() => buildUpdatePlanSql('users', { name: 'x' }, { 'bad col': 1 })).toThrow(
+      /identifier/i
+    )
   })
 })

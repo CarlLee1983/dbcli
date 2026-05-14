@@ -44,9 +44,33 @@ function normalizeColumns(data: Record<string, unknown>, role: 'data' | 'set'): 
   return keys
 }
 
+function normalizeWhere(where: Record<string, unknown>): string[] {
+  const keys = Object.keys(where)
+  if (keys.length === 0) {
+    throw new Error('WHERE clause is required for plan SQL')
+  }
+  for (const key of keys) {
+    assertIdentifier(key, 'column')
+  }
+  return keys
+}
+
 export function buildInsertPlanSql(table: string, data: Record<string, unknown>): string {
   const t = normalizeTable(table)
   const columns = normalizeColumns(data, 'data')
   const placeholders = columns.map(() => '?').join(', ')
   return `INSERT INTO ${t} (${columns.join(', ')}) VALUES (${placeholders})`
+}
+
+export function buildUpdatePlanSql(
+  table: string,
+  set: Record<string, unknown>,
+  where: Record<string, unknown>
+): string {
+  const t = normalizeTable(table)
+  const setCols = normalizeColumns(set, 'set')
+  const whereCols = normalizeWhere(where)
+  const setClause = setCols.map((col) => `${col} = ?`).join(', ')
+  const whereClause = whereCols.map((col) => `${col} = ?`).join(' AND ')
+  return `UPDATE ${t} SET ${setClause} WHERE ${whereClause}`
 }

@@ -369,6 +369,87 @@ describe('configModule', () => {
       expect(result.connection.host).toBe('db.example.com')
       expect(result.permission).toBe('read-write')
     })
+
+    test('CONFIG-03: V2 .dbcli without audit key gets audit defaults (enabled=true, rotation)', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'myapp',
+            permission: 'read-write',
+          },
+        },
+        schema: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+
+      expect(result.audit.enabled).toBe(true)
+      expect(result.audit.rotation.max_bytes).toBe(10_485_760)
+      expect(result.audit.rotation.max_entries).toBe(1000)
+    })
+
+    test('CONFIG-02: V2 .dbcli with audit.enabled=false preserves false through V2->V1 mapping', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: 'secret',
+            database: 'myapp',
+            permission: 'read-write',
+          },
+        },
+        schema: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
+        audit: { enabled: false },
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+
+      expect(result.audit.enabled).toBe(false)
+    })
+
+    test('CONFIG-03: legacy V1 .dbcli without audit key gets audit defaults via zod', async () => {
+      const v1Config = {
+        connection: {
+          system: 'mysql',
+          host: 'db.example.com',
+          port: 3306,
+          user: 'admin',
+          password: 'secret',
+          database: 'production',
+        },
+        permission: 'read-write',
+        schema: {},
+        metadata: { version: '1.0' },
+      }
+
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v1Config, null, 2))
+
+      const result = await configModule.read(V2_CONFIG_PATH)
+
+      expect(result.audit.enabled).toBe(true)
+      expect(result.audit.rotation.max_bytes).toBe(10_485_760)
+      expect(result.audit.rotation.max_entries).toBe(1000)
+    })
   })
 
   describe('write', () => {

@@ -87,6 +87,7 @@ async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
         schemas: { default: v1Config.schema || {} },
         metadata: v1Config.metadata || { version: '1.0' },
         blacklist: v1Config.blacklist || { tables: [], columns: {} },
+        audit: v1Config.audit,
       } as DbcliConfigV2
     }
 

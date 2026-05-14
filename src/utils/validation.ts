@@ -133,6 +133,35 @@ export const BlacklistConfigSchema = z
   .default({ tables: [], columns: {} })
 
 /**
+ * Audit rotation thresholds schema (D-11)
+ * Both thresholds default to the locked values; either trigger triggers rotation (OR relationship).
+ */
+export const AuditRotationConfigSchema = z
+  .object({
+    max_bytes: z.number().int().positive().default(10_485_760), // 10 MiB (D-11)
+    max_entries: z.number().int().positive().default(1000), // D-11
+  })
+  .optional()
+  .default({ max_bytes: 10_485_760, max_entries: 1000 })
+
+/**
+ * Audit configuration schema (CONFIG-01)
+ * D-01: default enabled (opt-out).
+ * D-11: rotation thresholds default to 10 MiB / 1000 entries.
+ * Missing `audit` key in an upgraded .dbcli (CONFIG-03) is auto-filled by the zod default.
+ */
+export const AuditConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true), // D-01: opt-out default ON
+    rotation: AuditRotationConfigSchema,
+  })
+  .optional()
+  .default({
+    enabled: true,
+    rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+  })
+
+/**
  * DbcliConfig complete schema
  */
 export const DbcliConfigSchema = z.object({
@@ -141,6 +170,7 @@ export const DbcliConfigSchema = z.object({
   schema: z.record(z.any()).optional().default({}),
   metadata: MetadataSchema,
   blacklist: BlacklistConfigSchema,
+  audit: AuditConfigSchema,
 })
 
 /**
@@ -194,6 +224,7 @@ export const DbcliConfigV2Schema = z
     schemas: z.record(z.record(z.any())).optional().default({}),
     metadata: MetadataSchema,
     blacklist: BlacklistConfigSchema,
+    audit: AuditConfigSchema,
   })
   .refine((config) => config.default in config.connections, {
     message: 'Default connection must exist in connections',

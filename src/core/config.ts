@@ -82,6 +82,10 @@ const DEFAULT_CONFIG: DbcliConfig = {
     version: '1.0',
   },
   blacklist: { tables: [], columns: {} },
+  audit: {
+    enabled: true,
+    rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+  },
 }
 
 /**
@@ -288,6 +292,7 @@ export const configModule = {
               schema,
               metadata: v2Config.metadata,
               blacklist: v2Config.blacklist,
+              audit: v2Config.audit,
             })
           }
 

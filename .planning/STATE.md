@@ -7,7 +7,7 @@ last_updated: "2026-05-15T00:45:00.000+08:00"
 last_activity: 2026-05-15
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
   completed_plans: 5
   percent: 100
@@ -27,9 +27,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 21 — Audit Writer Foundation (verified; security gate next)
-- **Plan:** Phase 21 security gate / Phase 22 discussion (next)
-- **Status:** Waves 1-3 merged into `main` (5/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation, 21-05 concurrent + readonly integration tests. Phase 21 verification passed via release gate; awaiting security gate before Phase 22.
+- **Phase:** 22 — Entry Schema & Redaction Contract (ready to discuss/plan)
+- **Plan:** Phase 22 discussion / planning (next)
+- **Status:** Waves 1-3 merged into `main` (5/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation, 21-05 concurrent + readonly integration tests. Phase 21 complete: all 5 plans, verification, release gate, and security gate passed. Next: Phase 22 entry schema and redaction contract discussion/planning.
 - **Last activity:** 2026-05-15
 
 ---

@@ -76,8 +76,8 @@ Notes:
 
 ## Security Gate
 
-No open threats were found in the executed Phase 21 artifacts, and Phase 21 changes remain local filesystem/test-scope only. A dedicated `21-SECURITY.md` can still be generated before advancing if the GSD security-enforcement setting is applied strictly.
+`21-SECURITY.md` generated with `threats_open: 0`; all 25 Phase 21 threat-register entries are closed via mitigation evidence or accepted-risk documentation.
 
 ## Result
 
-Phase 21 is verified and ready for the next lifecycle gate before Phase 22 planning.
+Phase 21 is verified, security-cleared, and ready for Phase 22 discussion/planning.

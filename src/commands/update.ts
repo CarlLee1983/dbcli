@@ -19,6 +19,8 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { parseWhereClause } from '@/utils/where-parser'
 import { previewUpdate } from '@/core/mongo/dry-run-formatter'
+import { buildUpdatePlanSql } from '@/core/dml-plan-sql'
+import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -40,6 +42,8 @@ export async function updateCommand(
     force?: boolean
     config?: string
     recovery?: boolean
+    plan?: boolean
+    format?: 'text' | 'json'
   },
   command?: import('commander').Command
 ): Promise<void> {
@@ -80,6 +84,25 @@ export async function updateCommand(
       throw new Error(
         'JSON in --set must be an object (e.g. {"name":"Bob","email":"b@example.com"})'
       )
+    }
+
+    // --plan branch: SQL-only preflight, no adapter, no DB connection.
+    // Errors here mirror `dbcli plan`: console.error + process.exit(1),
+    // not the JSON envelope used by the real DML execution path.
+    if (options.plan) {
+      if (options.dryRun) {
+        console.error('--plan cannot be used with --dry-run')
+        process.exit(1)
+        return
+      }
+      const whereForPlan = parseWhereClause(options.where)
+      const planSql = buildUpdatePlanSql(table, setData, whereForPlan)
+      await runDmlPlanAnalysis(
+        planSql,
+        { format: options.format, config: options.config },
+        command
+      )
+      return
     }
 
     if (config.connection?.system === 'redis') {

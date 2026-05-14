@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.19.0
-milestone_name: Expanded Antigravity Protocol & Agent Support
+milestone: v1.19.1
+milestone_name: Post-release Contract Stabilization Patch
 status: milestone_complete
-last_updated: "2026-05-13T07:30:00.000Z"
+last_updated: "2026-05-14T00:00:00.000Z"
 progress:
   total_phases: 20
   completed_phases: 20
@@ -11,7 +11,7 @@ progress:
   completed_plans: 47
 post_release:
   branch: main
-  note: "Contract stabilization (capability registry + JSON contract / redaction guards) landed on main after v1.19.0 tag; awaiting next release."
+  note: "v1.19.1 patch release prepared from post-v1.19.0 contract stabilization on main."
 ---
 
 # STATE.md — Current Project State
@@ -22,11 +22,17 @@ See: `.planning/PROJECT.md` (updated 2026-05-13)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** v1.19.0 released — Expanded Antigravity Protocol (Phase 0 Scout + Phase 3 Auditor), Codex (OMX) + Windsurf agent installers, Cursor `.cursor/rules/*.mdc` migration, project-level `GEMINI.md`. Post-release contract stabilization on `main` (commits `aba0a25..9c9aafb`): typed capability registry, locked agent-facing JSON contracts (inspect / report / guide / recovery), expanded redaction guards, documented side-effect tiers — awaiting next release tag.
+**Current Focus:** v1.19.1 patch release — packages the post-v1.19.0 contract stabilization on `main`: typed capability registry, locked agent-facing JSON contracts (inspect / report / guide / recovery), expanded redaction guards, documented side-effect tiers, deterministic UI bundle output, and UI helper test coverage.
 
 ---
 
 ## Milestone Status
+
+**v1.19.1 — Post-release Contract Stabilization Patch:** COMPLETE (2026-05-14)
+- Typed engine capability registry and command capability boundaries
+- Locked inspect / report / guide / recovery JSON contracts for agent-facing flows
+- Expanded redaction guards for saved recovery artifacts and sensitive output fragments
+- Deterministic production-mode UI bundle plus UI helper / render smoke coverage
 
 **v1.19.0 — Expanded Antigravity Protocol & Agent Support:** COMPLETE (2026-05-11)
 - Antigravity workflow 加入 Phase 0 (Scout) 研究階段與 Phase 3 (Auditor) 驗證階段
@@ -109,12 +115,12 @@ See: `.planning/PROJECT.md` (updated 2026-05-13)
 打 release tag 前的完整流程：[`CONTRIBUTING.md → Release Process`](../CONTRIBUTING.md#release-process)。
 以下四道指令都必須綠燈、不得 `continue-on-error`，才視為可發版：
 
-| Gate | Command | Status (2026-05-13 +08:00) |
+| Gate | Command | Status (2026-05-14 +08:00) |
 |------|---------|----------------------------|
-| Typecheck | `bun run typecheck` | ✅ Pass — `tsc --noEmit` 無錯誤（v1.19.0 + 後續 main 皆綠） |
-| Tests | `bun test` | ✅ Pass — v1.19.0 + 合約穩定化測試（inspect / report / guide / recovery / capabilities）皆綠 |
-| Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` release-blocking |
-| Build | `bun run build` | ✅ Pass — `dist/cli.mjs` 由 dist smoke + UI bundle 決定性 (`NODE_ENV=production`) 守護 |
+| Typecheck | `bun run typecheck` | ✅ Pass — included in `bun run release:check` on 2026-05-14 |
+| Tests | `bun test` | ✅ Pass — `2151 pass / 3 skip / 0 fail` in `bun run release:check` on 2026-05-14 |
+| Lint | `bun run lint` | ✅ Pass — `--max-warnings=0` release-blocking in `bun run release:check` |
+| Build | `bun run build` | ✅ Pass — `dist/cli.mjs` and deterministic UI template rebuilt in `bun run release:check` |
 
 Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIBUTING.md 的 Pre-Release Checklist。
 
@@ -140,4 +146,4 @@ Benchmark（`bun run test:perf`）為 advisory，不擋 release。詳見 CONTRIB
 
 ---
 
-*Last updated: 2026-05-13 — synced to v1.19.0; post-release contract stabilization shipped on `main` awaiting next release tag.*
+*Last updated: 2026-05-14 — v1.19.1 patch release prepared; release gate passed locally via `bun run release:check`.*

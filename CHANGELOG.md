@@ -5,6 +5,26 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.19.1] - 2026-05-14
+
+### Changed
+
+- Stabilized agent-facing command contracts after v1.19.0 with typed engine capability boundaries and safer guide/inspect/report/recovery JSON shapes.
+- Kept generated UI assets deterministic by pinning the UI bundle build to production mode and preserving release formatting gates.
+- Refactored the HTML dashboard React template to extract pure formatting, KPI, and table-column helpers for easier unit coverage.
+
+### Fixed
+
+- Aligned adapter creation and command capability checks with the documented feature matrix to avoid unsupported engine paths leaking into agent guidance.
+- Tightened saved recovery command redaction and strict envelope validation so recovery artifacts do not expose raw SQL or sensitive flag values.
+- Ensured UI report output and browser-opening paths remain covered by smoke tests without shipping stale bundled assets.
+
+### Tests
+
+- Added contract tests for inspect, report, guide, recovery envelopes, engine capabilities, and sensitive-output redaction.
+- Added UI helper unit tests and React render smoke coverage for dashboard payload rendering.
+
 ## [1.19.0] - 2026-05-11
 
 ### Added

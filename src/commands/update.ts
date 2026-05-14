@@ -53,8 +53,9 @@ export async function updateCommand(
     }
     table = table.trim()
 
-    // 2. Validate --where flag
-    if (!options.where || options.where.trim() === '') {
+    // 2. Validate --where flag (relaxed under --plan; non-SQL engines may have
+    // no meaningful WHERE clause and the planner handles empty filters itself).
+    if (!options.plan && (!options.where || options.where.trim() === '')) {
       throw new Error('UPDATE requires --where clause (e.g. --where "id=1")')
     }
 
@@ -96,20 +97,23 @@ export async function updateCommand(
         process.exit(1)
         return
       }
+      const rawWhere = options.where ?? ''
       let whereForPlan: Record<string, unknown> | null = null
-      try {
-        const parsed = JSON.parse(options.where) as unknown
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          whereForPlan = parsed as Record<string, unknown>
-        }
-      } catch {
-        whereForPlan = null
-      }
-      if (whereForPlan === null) {
+      if (rawWhere.trim() !== '') {
         try {
-          whereForPlan = parseWhereClause(options.where)
+          const parsed = JSON.parse(rawWhere) as unknown
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            whereForPlan = parsed as Record<string, unknown>
+          }
         } catch {
-          whereForPlan = {}
+          whereForPlan = null
+        }
+        if (whereForPlan === null) {
+          try {
+            whereForPlan = parseWhereClause(rawWhere)
+          } catch {
+            whereForPlan = {}
+          }
         }
       }
       await runDmlPlanAnalysis(
@@ -118,7 +122,7 @@ export async function updateCommand(
           target: table,
           set: setData,
           where: whereForPlan,
-          rawWhere: options.where,
+          rawWhere,
         },
         { format: options.format, config: options.config },
         command

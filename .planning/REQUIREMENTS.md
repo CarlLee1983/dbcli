@@ -110,45 +110,45 @@ Deferred to future milestones. Not in current roadmap.
 
 ## Traceability
 
-Empty initially, populated during roadmap creation.
+Populated by `.planning/ROADMAP.md` (Phase 21–26).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUDIT-01 | TBD | Pending |
-| AUDIT-02 | TBD | Pending |
-| AUDIT-03 | TBD | Pending |
-| STORE-01 | TBD | Pending |
-| STORE-02 | TBD | Pending |
-| STORE-03 | TBD | Pending |
-| STORE-04 | TBD | Pending |
-| SCHEMA-01 | TBD | Pending |
-| SCHEMA-02 | TBD | Pending |
-| SCHEMA-03 | TBD | Pending |
-| SCHEMA-04 | TBD | Pending |
-| CLI-01 | TBD | Pending |
-| CLI-02 | TBD | Pending |
-| CLI-03 | TBD | Pending |
-| CLI-04 | TBD | Pending |
-| CLI-05 | TBD | Pending |
-| CLI-06 | TBD | Pending |
-| INTEGRATE-01 | TBD | Pending |
-| INTEGRATE-02 | TBD | Pending |
-| INTEGRATE-03 | TBD | Pending |
-| INTEGRATE-04 | TBD | Pending |
-| CONFIG-01 | TBD | Pending |
-| CONFIG-02 | TBD | Pending |
-| CONFIG-03 | TBD | Pending |
-| DOCS-01 | TBD | Pending |
-| DOCS-02 | TBD | Pending |
-| DOCS-03 | TBD | Pending |
-| DOCS-04 | TBD | Pending |
+| AUDIT-01 | Phase 22 | Pending |
+| AUDIT-02 | Phase 21 | Pending |
+| AUDIT-03 | Phase 21 | Pending |
+| STORE-01 | Phase 21 | Pending |
+| STORE-02 | Phase 21 | Pending |
+| STORE-03 | Phase 21 | Pending |
+| STORE-04 | Phase 21 | Pending |
+| SCHEMA-01 | Phase 22 | Pending |
+| SCHEMA-02 | Phase 22 | Pending |
+| SCHEMA-03 | Phase 22 | Pending |
+| SCHEMA-04 | Phase 22 | Pending |
+| CLI-01 | Phase 24 | Pending |
+| CLI-02 | Phase 24 | Pending |
+| CLI-03 | Phase 24 | Pending |
+| CLI-04 | Phase 24 | Pending |
+| CLI-05 | Phase 24 | Pending |
+| CLI-06 | Phase 24 | Pending |
+| INTEGRATE-01 | Phase 23 | Pending |
+| INTEGRATE-02 | Phase 25 | Pending |
+| INTEGRATE-03 | Phase 25 | Pending |
+| INTEGRATE-04 | Phase 23 | Pending |
+| CONFIG-01 | Phase 21 | Pending |
+| CONFIG-02 | Phase 21 | Pending |
+| CONFIG-03 | Phase 21 | Pending |
+| DOCS-01 | Phase 26 | Pending |
+| DOCS-02 | Phase 25 | Pending |
+| DOCS-03 | Phase 26 | Pending |
+| DOCS-04 | Phase 26 | Pending |
 
 **Coverage:**
 - v1.20.0 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️ (filled in by ROADMAP creation)
+- Mapped to phases: 28
+- Unmapped: 0 ✓ (100% coverage)
 
 ---
 
 *Requirements defined: 2026-05-14*
-*Last updated: 2026-05-14 after milestone v1.20.0 initial definition*
+*Last updated: 2026-05-14 — Traceability populated by ROADMAP.md（Phase 21–26）；28/28 mapped。*

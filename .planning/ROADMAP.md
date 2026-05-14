@@ -36,9 +36,9 @@
 **Plans:** 5 plans
 
 Plans:
-- [ ] 21-01-config-schema-PLAN.md — Extend zod schemas with `audit.*` block (CONFIG-01/02/03)
-- [ ] 21-02-session-id-service-PLAN.md — SessionIdService with env-first resolution + PID-stamped persistence (AUDIT-02/03)
-- [ ] 21-03-lock-manager-PLAN.md — AuditLockManager with 200ms retry budget + fail-soft on exhaustion (STORE-03 primitive)
+- [x] 21-01-config-schema-PLAN.md — Extend zod schemas with `audit.*` block (CONFIG-01/02/03)
+- [x] 21-02-session-id-service-PLAN.md — SessionIdService with env-first resolution + PID-stamped persistence (AUDIT-02/03)
+- [x] 21-03-lock-manager-PLAN.md — AuditLockManager with 200ms retry budget + fail-soft on exhaustion (STORE-03 primitive)
 - [ ] 21-04-logger-rotation-PLAN.md — AuditLogger writer + rotation.ts + getHealth() introspection (STORE-01/02/04)
 - [ ] 21-05-integration-tests-PLAN.md — Two-instance concurrent + readonly-dir integration tests (STORE-03/04 closure)
 
@@ -128,7 +128,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Audit Writer Foundation | 0/5 | Planned | — |
+| 21. Audit Writer Foundation | 3/5 | Executing (Wave 1 done) | — |
 | 22. Entry Schema & Redaction Contract | 0/0 | Not started | — |
 | 23. Engine Integration & Rejection Paths | 0/0 | Not started | — |
 | 24. `dbcli audit` CLI | 0/0 | Not started | — |

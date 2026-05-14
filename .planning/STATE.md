@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T13:07:54.789Z"
+last_updated: "2026-05-14T13:30:00.000Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 3
+  percent: 60
 ---
 
 # STATE.md — Current Project State
@@ -27,9 +27,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 21 — Audit Writer Foundation (not started)
-- **Plan:** —
-- **Status:** Ready to execute
+- **Phase:** 21 — Audit Writer Foundation (executing, Wave 1 complete)
+- **Plan:** Wave 2 / 21-04 logger + rotation (next)
+- **Status:** Wave 1 merged into `main` (3/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager. Awaiting Wave 2.
 - **Last activity:** 2026-05-14
 
 ---

@@ -61,7 +61,16 @@ describe('runDmlPlanAnalysis', () => {
   })
 
   test('prints JSON QueryRiskResult for ALLOW path', async () => {
-    await runDmlPlanAnalysis('UPDATE users SET status = ? WHERE id = ?', { format: 'json' })
+    await runDmlPlanAnalysis(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { status: 'inactive' },
+        where: { id: 1 },
+        rawWhere: 'id=1',
+      },
+      { format: 'json' }
+    )
 
     const parsed = JSON.parse(lastLog())
     expect(parsed.decision).toBe('ALLOW')
@@ -71,7 +80,10 @@ describe('runDmlPlanAnalysis', () => {
   })
 
   test('prints concise text by default and omits suggestedCommands', async () => {
-    await runDmlPlanAnalysis('DELETE FROM users WHERE id = ?', {})
+    await runDmlPlanAnalysis(
+      { operation: 'delete', target: 'users', where: { id: 1 }, rawWhere: 'id=1' },
+      {}
+    )
 
     const out = lastLog()
     expect(out).toContain('Decision: ALLOW')
@@ -85,7 +97,10 @@ describe('runDmlPlanAnalysis', () => {
     configReadSpy.mockImplementation(async () => mockConfig)
     const exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
-    await runDmlPlanAnalysis('DELETE FROM users WHERE id = ?', { format: 'json' })
+    await runDmlPlanAnalysis(
+      { operation: 'delete', target: 'users', where: { id: 1 }, rawWhere: 'id=1' },
+      { format: 'json' }
+    )
 
     const parsed = JSON.parse(lastLog())
     expect(parsed.decision).toBe('BLOCK')
@@ -97,7 +112,16 @@ describe('runDmlPlanAnalysis', () => {
     mockConfig = makeConfig({ schema: {} })
     configReadSpy.mockImplementation(async () => mockConfig)
 
-    await runDmlPlanAnalysis('UPDATE users SET status = ? WHERE id = ?', { format: 'json' })
+    await runDmlPlanAnalysis(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { status: 'inactive' },
+        where: { id: 1 },
+        rawWhere: 'id=1',
+      },
+      { format: 'json' }
+    )
 
     const parsed = JSON.parse(lastLog())
     expect(parsed.decision).toBe('WARN')
@@ -106,30 +130,43 @@ describe('runDmlPlanAnalysis', () => {
     )
   })
 
-  test('rejects non-SQL engine with non-zero exit and clear message', async () => {
+  test('dispatches to MongoDB analyzer for mongodb connections', async () => {
     mockConfig = makeConfig({
       connection: { system: 'mongodb', uri: 'mongodb://localhost', database: 'test' } as any,
+      schema: {},
     })
     configReadSpy.mockImplementation(async () => mockConfig)
-    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('exit')
-    })
+    const exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
-    try {
-      await runDmlPlanAnalysis('DELETE FROM users WHERE id = ?', { format: 'json' })
-    } catch {
-      // process.exit is mocked to throw
-    }
-
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan for insert/update/delete currently supports SQL connections only'
+    await runDmlPlanAnalysis(
+      {
+        operation: 'delete',
+        target: 'users',
+        where: { _id: 'abc' },
+        rawWhere: '{"_id":"abc"}',
+      },
+      { format: 'json' }
     )
-    expect(exitSpy).toHaveBeenCalledWith(1)
+
+    const parsed = JSON.parse(lastLog())
+    expect(parsed.operation).toBe('DELETE')
+    expect(parsed.targetTables).toEqual(['users'])
+    expect(['ALLOW', 'WARN']).toContain(parsed.decision)
+    expect(exitSpy).not.toHaveBeenCalled()
     exitSpy.mockRestore()
   })
 
   test('does not create any adapter or open a connection', async () => {
-    await runDmlPlanAnalysis('UPDATE users SET status = ? WHERE id = ?', { format: 'json' })
+    await runDmlPlanAnalysis(
+      {
+        operation: 'update',
+        target: 'users',
+        set: { status: 'inactive' },
+        where: { id: 1 },
+        rawWhere: 'id=1',
+      },
+      { format: 'json' }
+    )
 
     expect(createSqlAdapterSpy).not.toHaveBeenCalled()
     expect(createMongoAdapterSpy).not.toHaveBeenCalled()
@@ -144,7 +181,16 @@ describe('runDmlPlanAnalysis', () => {
     })
 
     try {
-      await runDmlPlanAnalysis('UPDATE users SET status = ? WHERE id = ?', { format: 'json' })
+      await runDmlPlanAnalysis(
+        {
+          operation: 'update',
+          target: 'users',
+          set: { status: 'inactive' },
+          where: { id: 1 },
+          rawWhere: 'id=1',
+        },
+        { format: 'json' }
+      )
     } catch {
       // process.exit is mocked to throw
     }
@@ -160,9 +206,18 @@ describe('runDmlPlanAnalysis', () => {
     })
 
     try {
-      await runDmlPlanAnalysis('UPDATE users SET status = ? WHERE id = ?', {
-        format: 'yaml' as never,
-      })
+      await runDmlPlanAnalysis(
+        {
+          operation: 'update',
+          target: 'users',
+          set: { status: 'inactive' },
+          where: { id: 1 },
+          rawWhere: 'id=1',
+        },
+        {
+          format: 'yaml' as never,
+        }
+      )
     } catch {
       // process.exit is mocked to throw
     }

@@ -3,26 +3,48 @@ import { configModule } from '@/core/config'
 import { formatPlanResult } from '@/commands/plan'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
+import type {
+  DmlPlanFormat,
+  DmlPlanIntent,
+  NonSqlAnalyzerContext,
+} from '@/core/dml-plan'
+import {
+  buildDeletePlanSql,
+  buildInsertPlanSql,
+  buildUpdatePlanSql,
+} from '@/core/dml-plan-sql'
+import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
+import { analyzeRedisDmlRisk } from '@/core/redis/dml-plan'
+import { analyzeElasticsearchDmlRisk } from '@/core/elasticsearch/dml-plan'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 const SQL_SYSTEMS = new Set(['postgresql', 'mysql', 'mariadb'])
 
-export type DmlPlanFormat = 'text' | 'json'
+export type { DmlPlanFormat } from '@/core/dml-plan'
 
 export interface DmlPlanOptions {
   format?: DmlPlanFormat
   config?: string
 }
 
-/**
- * Analyzes a planner-only DML SQL string against the configured connection's
- * permission, blacklist, and schema cache, then prints the result via
- * `formatPlanResult()`. Never connects to a database. Returns normally for
- * any analyzer decision (including BLOCK). Calls `process.exit(1)` on
- * configuration / engine / format errors.
- */
+function buildPlanSqlForIntent(intent: DmlPlanIntent): string {
+  if (intent.operation === 'insert') {
+    return buildInsertPlanSql(intent.target, intent.data)
+  }
+  if (intent.operation === 'update') {
+    if (!intent.where || Object.keys(intent.where).length === 0) {
+      throw new Error('WHERE clause is required for SQL update plan')
+    }
+    return buildUpdatePlanSql(intent.target, intent.set, intent.where)
+  }
+  if (!intent.where || Object.keys(intent.where).length === 0) {
+    throw new Error('WHERE clause is required for SQL delete plan')
+  }
+  return buildDeletePlanSql(intent.target, intent.where)
+}
+
 export async function runDmlPlanAnalysis(
-  planSql: string,
+  intent: DmlPlanIntent,
   options: DmlPlanOptions,
   command?: import('commander').Command
 ): Promise<void> {
@@ -36,23 +58,46 @@ export async function runDmlPlanAnalysis(
       throw new Error('Run "dbcli init" to configure database connection')
     }
 
-    if (!SQL_SYSTEMS.has(config.connection.system)) {
-      throw new Error('--plan for insert/update/delete currently supports SQL connections only')
+    const system = config.connection.system
+    const schema = (config.schema ?? {}) as Record<string, unknown>
+    const blacklist = config.blacklist ?? { tables: [], columns: {} }
+
+    if (SQL_SYSTEMS.has(system)) {
+      const planSql = buildPlanSqlForIntent(intent)
+      const schemaTableCount = Object.keys(schema).length
+      const result = analyzeQueryRisk({
+        sql: planSql,
+        permission: config.permission,
+        blacklist,
+        schemaLookup: {
+          tables: schema as never,
+          cacheAvailable: schemaTableCount > 0,
+        },
+      })
+      console.log(formatPlanResult(result, format))
+      return
     }
 
-    const schema = config.schema ?? {}
-    const schemaTableCount = Object.keys(schema).length
-    const result = analyzeQueryRisk({
-      sql: planSql,
+    const context: NonSqlAnalyzerContext = {
       permission: config.permission,
-      blacklist: config.blacklist ?? { tables: [], columns: {} },
-      schemaLookup: {
-        tables: schema as never,
-        cacheAvailable: schemaTableCount > 0,
-      },
-    })
+      blacklist,
+      schema,
+    }
 
-    console.log(formatPlanResult(result, format))
+    if (system === 'mongodb') {
+      console.log(formatPlanResult(analyzeMongoDmlRisk(intent, context), format))
+      return
+    }
+    if (system === 'redis') {
+      console.log(formatPlanResult(analyzeRedisDmlRisk(intent, context), format))
+      return
+    }
+    if (system === 'elasticsearch') {
+      console.log(formatPlanResult(analyzeElasticsearchDmlRisk(intent, context), format))
+      return
+    }
+
+    throw new Error(`--plan does not support connection system "${system}" yet`)
   } catch (error) {
     console.error((error as Error).message)
     process.exit(1)

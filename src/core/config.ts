@@ -292,6 +292,7 @@ export const configModule = {
               schema,
               metadata: v2Config.metadata,
               blacklist: v2Config.blacklist,
+              audit: v2Config.audit,
             })
           }
 

@@ -32,9 +32,7 @@ function parseEsFilter(rawWhere: string): Record<string, unknown> | null {
     try {
       return parseWhereClause(trimmed)
     } catch {
-      throw new Error(
-        'Elasticsearch --where must be a JSON object or simple key=value expression'
-      )
+      throw new Error('Elasticsearch --where must be a JSON object or simple key=value expression')
     }
   }
 }
@@ -202,9 +200,7 @@ function buildRecommendations(factors: QueryRiskFactor[]): string[] {
     out.add('Use a document-level write instead of a bulk or by-query operation.')
   }
   if (codes.has('permission_denied')) {
-    out.add(
-      'Switch to a connection with sufficient permission only if the operation is intended.'
-    )
+    out.add('Switch to a connection with sufficient permission only if the operation is intended.')
   }
   if (codes.has('table_blacklisted') || codes.has('blacklisted_column')) {
     out.add('Review blacklist rules before accessing sensitive data.')

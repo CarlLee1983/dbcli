@@ -23,9 +23,7 @@ function baseSchema() {
   return { users: { name: 'users', columns: [] } }
 }
 
-function configFor(
-  system: 'mongodb' | 'redis' | 'elasticsearch'
-): DbcliConfig {
+function configFor(system: 'mongodb' | 'redis' | 'elasticsearch'): DbcliConfig {
   if (system === 'mongodb') {
     return {
       connection: { system: 'mongodb', uri: 'mongodb://localhost', database: 'test' } as any,

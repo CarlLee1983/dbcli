@@ -3,16 +3,8 @@ import { configModule } from '@/core/config'
 import { formatPlanResult } from '@/commands/plan'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
-import type {
-  DmlPlanFormat,
-  DmlPlanIntent,
-  NonSqlAnalyzerContext,
-} from '@/core/dml-plan'
-import {
-  buildDeletePlanSql,
-  buildInsertPlanSql,
-  buildUpdatePlanSql,
-} from '@/core/dml-plan-sql'
+import type { DmlPlanFormat, DmlPlanIntent, NonSqlAnalyzerContext } from '@/core/dml-plan'
+import { buildDeletePlanSql, buildInsertPlanSql, buildUpdatePlanSql } from '@/core/dml-plan-sql'
 import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
 import { analyzeRedisDmlRisk } from '@/core/redis/dml-plan'
 import { analyzeElasticsearchDmlRisk } from '@/core/elasticsearch/dml-plan'

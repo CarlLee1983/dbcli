@@ -43,6 +43,7 @@ docs/superpowers/
 
 # worktrees
 .worktrees/
+.claude/worktrees/
 
 # omx
 .omx/

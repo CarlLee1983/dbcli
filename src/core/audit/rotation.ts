@@ -2,7 +2,7 @@
  * Audit log rotation primitives.
  *
  * Decisions (see .planning/phases/21-audit-writer-foundation/21-CONTEXT.md):
- * - D-08: Single OS-level rename; no fsync, no tmp+rename for the .jsonl itself.
+ * - D-08: Single OS-level rename; no flush-to-disk syscall, no tmp+rename for the .jsonl itself.
  * - D-09: Rename current -> .1, overwriting any existing .1.
  * - D-10: Keep exactly one rolling segment.
  * - D-11: Thresholds passed in; defaults live in zod (Plan 21-01).

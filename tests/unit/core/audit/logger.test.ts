@@ -92,10 +92,13 @@ afterEach(async () => {
     process.env.DBCLI_SESSION_ID = originalEnv
   }
   // Restore writable permissions for cleanup if readonly was set.
-  try {
-    await chmod(auditDir, 0o755)
-  } catch {
-    /* ignore — dir may not exist */
+  // Both `.dbcli` and `.dbcli/audit` may have been chmodded by individual tests.
+  for (const p of [auditDir, join(workDir, '.dbcli')]) {
+    try {
+      await chmod(p, 0o755)
+    } catch {
+      /* ignore — dir may not exist */
+    }
   }
   await rm(workDir, { recursive: true, force: true })
 })
@@ -152,14 +155,16 @@ describe('Test 3: append O_APPEND single-line per call (STORE-01 / D-08)', () =>
 
 describe('Test 4: rotation on max_bytes (STORE-02, success criterion 2)', () => {
   test('triggers when bytes cap met; .1 holds pre-rotation content; .jsonl holds new line', async () => {
-    // Small byte cap to force rotation. Choose payload bytes so 3 lines stay
-    // below 200 bytes; the 4th line crosses the cap.
-    const logger = makeLogger({ maxBytes: 200, maxEntries: 10_000 })
-    const padding = 'x'.repeat(30)
-    await logger.write({ i: 1, padding })
-    await logger.write({ i: 2, padding })
-    await logger.write({ i: 3, padding })
-    const result = await logger.write({ i: 4, padding })
+    // Pin session_id to a short literal so per-line bytes are deterministic.
+    // Each line is `{"i":N,"padding":"abc","session_id":"S"}\n` = 41 bytes.
+    // With maxBytes=160: writes 1-3 stay below cap; write 4 crosses (123+41=164 >= 160).
+    process.env.DBCLI_SESSION_ID = 'S'
+
+    const logger = makeLogger({ maxBytes: 160, maxEntries: 10_000 })
+    await logger.write({ i: 1, padding: 'abc' })
+    await logger.write({ i: 2, padding: 'abc' })
+    await logger.write({ i: 3, padding: 'abc' })
+    const result = await logger.write({ i: 4, padding: 'abc' })
 
     if (!('success' in result)) {
       throw new Error('expected success, got: ' + JSON.stringify(result))
@@ -224,8 +229,13 @@ describe('Test 6: rotation overwrites existing .1 (D-10 single rolling segment)'
 
 describe('Test 7: fail-soft on readonly dir (STORE-04, success criterion 4)', () => {
   test('returns skipped:write-failed; getHealth.lastError populated; one stderr warning', async () => {
-    await mkdir(auditDir, { recursive: true })
-    await chmod(auditDir, 0o555)
+    // Make `.dbcli/` readonly so the lazy `mkdir(auditDir, {recursive:true})`
+    // inside write() fails with EACCES. (Chmodding auditDir itself causes the
+    // lock manager — whose lockfile lives inside auditDir — to fail-soft with
+    // `lock-budget-exhausted` before write() ever reaches the append step.)
+    const dbcliDir = join(workDir, '.dbcli')
+    await mkdir(dbcliDir, { recursive: true })
+    await chmod(dbcliDir, 0o555)
 
     stderrSpy = spyOn(process.stderr, 'write')
 
@@ -251,8 +261,10 @@ describe('Test 7: fail-soft on readonly dir (STORE-04, success criterion 4)', ()
 
 describe('Test 8: once-per-process warning cadence (D-16)', () => {
   test('three more failed writes after the first -> total stderr warnings remains 1; lastError updates', async () => {
-    await mkdir(auditDir, { recursive: true })
-    await chmod(auditDir, 0o555)
+    // Same readonly-`.dbcli` setup as Test 7 — mkdir fails inside write().
+    const dbcliDir = join(workDir, '.dbcli')
+    await mkdir(dbcliDir, { recursive: true })
+    await chmod(dbcliDir, 0o555)
 
     stderrSpy = spyOn(process.stderr, 'write')
 

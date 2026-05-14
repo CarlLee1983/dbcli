@@ -40,7 +40,7 @@ Plans:
 - [x] 21-02-session-id-service-PLAN.md — SessionIdService with env-first resolution + PID-stamped persistence (AUDIT-02/03)
 - [x] 21-03-lock-manager-PLAN.md — AuditLockManager with 200ms retry budget + fail-soft on exhaustion (STORE-03 primitive)
 - [x] 21-04-logger-rotation-PLAN.md — AuditLogger writer + rotation.ts + getHealth() introspection (STORE-01/02/04)
-- [ ] 21-05-integration-tests-PLAN.md — Two-instance concurrent + readonly-dir integration tests (STORE-03/04 closure)
+- [x] 21-05-integration-tests-PLAN.md — Two-instance concurrent + readonly-dir integration tests (STORE-03/04 closure)
 
 ### Phase 22: Entry Schema & Redaction Contract
 **Goal:** 鎖定 audit entry 的 agent-facing JSON 合約，並把「不得洩漏原始 SQL / params / cell 值」變成 release gate。所有後續 phase 都以此 entry shape 寫入。
@@ -128,7 +128,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 21. Audit Writer Foundation | 4/5 | Executing (Wave 2 done) | — |
+| 21. Audit Writer Foundation | 5/5 | Ready for verification | — |
 | 22. Entry Schema & Redaction Contract | 0/0 | Not started | — |
 | 23. Engine Integration & Rejection Paths | 0/0 | Not started | — |
 | 24. `dbcli audit` CLI | 0/0 | Not started | — |

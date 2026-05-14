@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dbcli | Comprehensive Documentation</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #ffffff;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --sidebar-bg: #f9fafb;
+            --code-bg: #f3f4f6;
+            --code-text: #1f2937;
+            --accent: #f59e0b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #111827;
+                --text: #f3f4f6;
+                --text-muted: #9ca3af;
+                --border: #374151;
+                --sidebar-bg: #1f2937;
+                --code-bg: #2d3748;
+                --code-text: #e2e8f0;
+            }
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+        }
+
+        /* Sidebar */
+        nav {
+            width: 280px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        nav h1 {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        nav li { margin-bottom: 0.5rem; }
+        nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 0.95rem;
+            display: block;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        nav a:hover {
+            background-color: var(--border);
+            color: var(--primary);
+        }
+
+        nav .sub {
+            padding-left: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Main Content */
+        main {
+            flex-grow: 1;
+            padding: 3rem 5rem;
+            max-width: 900px;
+        }
+
+        h1, h2, h3 { margin-top: 2.5rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        h1 { font-size: 2.5rem; border-bottom: 2px solid var(--primary); }
+        
+        p, ul, ol { margin-bottom: 1.25rem; color: var(--text); }
+        li { margin-bottom: 0.5rem; }
+
+        code {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.9rem;
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        pre code { padding: 0; background: none; font-size: 0.95rem; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th { background-color: var(--sidebar-bg); font-weight: 600; }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .badge.warn { background-color: var(--accent); }
+        .badge.error { background-color: #ef4444; }
+
+        @media (max-width: 1024px) {
+            nav { display: none; }
+            main { padding: 2rem; }
+        }
+
+        .footer {
+            margin-top: 5rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1><span>📦</span> dbcli</h1>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#philosophy">Core Philosophy</a></li>
+            <li><a href="#getting-started">Getting Started</a></li>
+            <li><a href="#connections">Connections</a></li>
+            <li><a href="#commands">Command Reference</a></li>
+            <li><ul class="sub">
+                <li><a href="#discovery">Discovery</a></li>
+                <li><a href="#query">Query & Data</a></li>
+                <li><a href="#snippets">Snippets</a></li>
+                <li><a href="#diagnostics">Diagnostics</a></li>
+                <li><a href="#advanced">Advanced Tools</a></li>
+            </ul></li>
+            <li><a href="#ui">HTML Dashboards</a></li>
+            <li><a href="#engines">Engine Support</a></li>
+            <li><a href="#ai">AI Integration</a></li>
+        </ul>
+    </nav>
+    <main>
+        <section id="overview">
+            <h1>dbcli Documentation</h1>
+            <p><strong>dbcli</strong> is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL, NoSQL, Key-Value, and Search databases.</p>
+        </section>
+
+        <section id="philosophy">
+            <h2>🛡️ Core Philosophy & Security</h2>
+            <p>Built with a "Security-First" mindset, <code>dbcli</code> prevents accidental data leaks or corruption through multiple layers of protection:</p>
+            <ul>
+                <li><strong>Permission Guard</strong>: Four tiers (<code>query-only</code> to <code>admin</code>).</li>
+                <li><strong>Blacklist Manager</strong>: Automatic redaction of sensitive columns.</li>
+                <li><strong>Plan Mode</strong>: Static SQL analysis before execution.</li>
+                <li><strong>Antigravity Protocol</strong>: Architect-Builder-Auditor workflow.</li>
+            </ul>
+        </section>
+
+        <section id="getting-started">
+            <h2>🚀 Getting Started</h2>
+            <p>Install globally via npm or bun:</p>
+            <pre><code>npm install -g @gravito/dbcli
+# or
+bun install -g @gravito/dbcli</code></pre>
+            <p>Initialize your first connection:</p>
+            <pre><code>dbcli init</code></pre>
+        </section>
+
+        <section id="connections">
+            <h2>🔌 Connection Management</h2>
+            <p>Manage multiple environments (Production, Staging, Local) easily:</p>
+            <pre><code>dbcli use --list         # List connections
+dbcli use staging        # Switch default
+dbcli query --use prod "..." # One-shot override</code></pre>
+        </section>
+
+        <section id="commands">
+            <h2>🛠️ Command Reference</h2>
+            
+            <h3 id="discovery">Discovery & Exploration</h3>
+            <table>
+                <thead>
+                    <tr><th>Command</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>list</code></td><td>Lists tables, collections, keys, or indices.</td></tr>
+                    <tr><td><code>schema</code></td><td>Displays structure and caches metadata.</td></tr>
+                    <tr><td><code>inspect</code></td><td>Context snapshot for AI agents (objects, permissions).</td></tr>
+                    <tr><td><code>status</code></td><td>Configuration health summary.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="query">Querying & Data Operations</h3>
+            <pre><code>dbcli query "SELECT * FROM users LIMIT 10"
+dbcli q @snippet --param id=1
+dbcli export "SELECT * FROM logs" --format csv --output logs.csv
+dbcli insert users --data '{"name":"Alice"}' --dry-run
+dbcli plan "DELETE FROM users" # Analyzes risk</code></pre>
+
+            <h3 id="snippets">Snippet Management</h3>
+            <p>Reusable SQL snippets with parameters and visualization metadata.</p>
+            <ul>
+                <li><code>dbcli queries list</code>: See all available snippets.</li>
+                <li><code>dbcli queries search</code>: Fuzzy keyword search.</li>
+                <li><code>dbcli queries suggest</code>: Context-aware suggestions.</li>
+            </ul>
+
+            <h3 id="diagnostics">Health & Diagnostics</h3>
+            <table>
+                <thead>
+                    <tr><th>Command</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>doctor</code></td><td>Connectivity and env health checks.</td></tr>
+                    <tr><td><code>report</code></td><td>Full health, capacity, and performance report.</td></tr>
+                    <tr><td><code>guide</code></td><td>Strategic plans for goals like "slow-query".</td></tr>
+                    <tr><td><code>recover</code></td><td>Automated remediation of common errors.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="advanced">Advanced Tools</h3>
+            <ul>
+                <li><strong>Shell</strong>: <code>dbcli shell</code> - Interactive REPL with Tab-completion.</li>
+                <li><strong>Migrate</strong>: <code>dbcli migrate create/drop/alter</code> - DDL engine.</li>
+                <li><strong>Skills</strong>: <code>dbcli skill --install</code> - AI instructions.</li>
+            </ul>
+        </section>
+
+        <section id="ui">
+            <h2>📊 Interactive HTML Dashboards</h2>
+            <p>Pass the <code>--ui</code> flag to any query to generate and open a rich React-based interactive report.</p>
+            <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
+            <p>Visualizations are defined in the snippet frontmatter via the <code>visual:</code> block.</p>
+        </section>
+
+        <section id="engines">
+            <h2>🗺️ Engine Support Matrix</h2>
+            <table>
+                <thead>
+                    <tr><th>Feature</th><th>SQL</th><th>MongoDB</th><th>Redis</th><th>ES</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Querying</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Schema</td><td>✅</td><td>⚠️</td><td>⚠️</td><td>✅</td></tr>
+                    <tr><td>Writes</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
+                    <tr><td>DDL</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+                    <tr><td>AI Flow</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="ai">
+            <h2>🤖 AI Agent Integration</h2>
+            <p>Dbcli is built from the ground up to be "Agentic":</p>
+            <ul>
+                <li><strong>--recovery</strong>: Machine-readable failure envelopes.</li>
+                <li><strong>--for-agent</strong>: Compact JSON outputs to save tokens.</li>
+                <li><strong>Task Packs</strong>: Pre-defined expert workflows for AI agents.</li>
+            </ul>
+        </section>
+
+        <div class="footer">
+            <p>Generated by dbcli Documentation Engine &bull; 2026</p>
+        </div>
+    </main>
+</body>
+</html>

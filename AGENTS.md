@@ -114,6 +114,12 @@ bun run src/cli.ts schema users --format json
 bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 ```
 
+## Development Lifecycle
+
+- **Documentation Mandate**: After developing a new feature, fixing a significant bug, or modifying command behavior, you MUST update the user documentation in `docs/user/`.
+- **Multi-language Parity**: Ensure updates are applied to all supported language directories (e.g., `docs/user/en/` and `docs/user/zh-TW/`).
+- **Format Parity**: Both `index.md` (Markdown) and `index.html` (Polished UI) must be kept in sync.
+
 ## dbcli Usage Guidelines
 
 Before operating on the database, you must perform the following steps in order:

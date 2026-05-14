@@ -175,6 +175,7 @@ async function writeV2InitConfig(
         schemas: { default: v1Config.schema || {} },
         metadata: v1Config.metadata || { version: '1.0' },
         blacklist: v1Config.blacklist || { tables: [], columns: {} },
+        audit: v1Config.audit,
       }
     }
   } else if (await projectConfigFile.exists()) {
@@ -194,6 +195,7 @@ async function writeV2InitConfig(
         schemas: { default: v1Config.schema || {} },
         metadata: v1Config.metadata || { version: '1.0' },
         blacklist: v1Config.blacklist || { tables: [], columns: {} },
+        audit: v1Config.audit,
       }
     } else {
       // V1 config in the project directory — import it as 'default' connection
@@ -211,6 +213,7 @@ async function writeV2InitConfig(
         schemas: { default: v1Config.schema || {} },
         metadata: v1Config.metadata || { version: '1.0' },
         blacklist: v1Config.blacklist || { tables: [], columns: {} },
+        audit: v1Config.audit,
       }
     }
   } else {
@@ -234,6 +237,7 @@ async function writeV2InitConfig(
           schemas: { default: v1Config.schema || {} },
           metadata: v1Config.metadata || { version: '1.0' },
           blacklist: v1Config.blacklist || { tables: [], columns: {} },
+          audit: v1Config.audit,
         }
       }
     }
@@ -270,6 +274,10 @@ async function writeV2InitConfig(
         schemas: {},
         metadata: { version: '1.0', createdAt: new Date().toISOString() },
         blacklist: { tables: [], columns: {} },
+        audit: {
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
   await writeV2Config(storagePath, v2Config)

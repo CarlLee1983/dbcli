@@ -123,11 +123,7 @@ export async function insertCommand(
         return
       }
       const planSql = buildInsertPlanSql(table, data)
-      await runDmlPlanAnalysis(
-        planSql,
-        { format: options.format, config: options.config },
-        command
-      )
+      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
       return
     }
 

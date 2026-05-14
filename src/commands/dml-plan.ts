@@ -37,9 +37,7 @@ export async function runDmlPlanAnalysis(
     }
 
     if (!SQL_SYSTEMS.has(config.connection.system)) {
-      throw new Error(
-        '--plan for insert/update/delete currently supports SQL connections only'
-      )
+      throw new Error('--plan for insert/update/delete currently supports SQL connections only')
     }
 
     const schema = config.schema ?? {}

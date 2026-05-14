@@ -80,11 +80,7 @@ export async function deleteCommand(
       }
       const whereForPlan = parseWhereClause(options.where)
       const planSql = buildDeletePlanSql(table, whereForPlan)
-      await runDmlPlanAnalysis(
-        planSql,
-        { format: options.format, config: options.config },
-        command
-      )
+      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
       return
     }
 

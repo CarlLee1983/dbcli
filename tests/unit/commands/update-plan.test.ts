@@ -119,9 +119,7 @@ describe('updateCommand --plan', () => {
       // process.exit is mocked to throw
     }
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan cannot be used with --dry-run'
-    )
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('--plan cannot be used with --dry-run')
     expect(exitSpy).toHaveBeenCalledWith(1)
     exitSpy.mockRestore()
   })

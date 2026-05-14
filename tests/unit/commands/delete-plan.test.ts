@@ -93,9 +93,7 @@ describe('deleteCommand --plan', () => {
 
     const parsed = JSON.parse(lastLog())
     expect(parsed.decision).toBe('BLOCK')
-    expect(parsed.riskFactors.map((f: { code: string }) => f.code)).toContain(
-      'permission_denied'
-    )
+    expect(parsed.riskFactors.map((f: { code: string }) => f.code)).toContain('permission_denied')
     expect(exitSpy).not.toHaveBeenCalled()
     exitSpy.mockRestore()
   })
@@ -128,9 +126,7 @@ describe('deleteCommand --plan', () => {
       // process.exit is mocked to throw
     }
 
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
-      '--plan cannot be used with --dry-run'
-    )
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('--plan cannot be used with --dry-run')
     expect(exitSpy).toHaveBeenCalledWith(1)
     exitSpy.mockRestore()
   })

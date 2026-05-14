@@ -97,11 +97,7 @@ export async function updateCommand(
       }
       const whereForPlan = parseWhereClause(options.where)
       const planSql = buildUpdatePlanSql(table, setData, whereForPlan)
-      await runDmlPlanAnalysis(
-        planSql,
-        { format: options.format, config: options.config },
-        command
-      )
+      await runDmlPlanAnalysis(planSql, { format: options.format, config: options.config }, command)
       return
     }
 

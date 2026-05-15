@@ -45,7 +45,7 @@ async function readSingle(path: string): Promise<AuditEntry[]> {
         continue
       }
       throw new Error(
-        `${WARN_PREFIX} corrupted line ${i + 1} in ${path}. Run \`dbcli audit clear\` to reset.`,
+        `${WARN_PREFIX} corrupted line ${i + 1} in ${path}. Run \`dbcli audit clear\` to reset.`
       )
     }
   }
@@ -54,7 +54,7 @@ async function readSingle(path: string): Promise<AuditEntry[]> {
 
 export async function readEntries(
   auditFilePath: string,
-  opts?: ReadOptions,
+  opts?: ReadOptions
 ): Promise<AuditEntry[]> {
   if (opts?.include_rotated === true) {
     const rotated = await readSingle(`${auditFilePath}.1`)
@@ -65,7 +65,7 @@ export async function readEntries(
 }
 
 export async function discoverConnections(
-  auditDir: string,
+  auditDir: string
 ): Promise<{ connection: string; files: string[] }[]> {
   let entries: Dirent[]
   try {
@@ -87,9 +87,7 @@ export async function discoverConnections(
   }
 
   for (const files of map.values()) {
-    files.sort(
-      (a, b) => Number(b.endsWith('.jsonl.1')) - Number(a.endsWith('.jsonl.1')),
-    )
+    files.sort((a, b) => Number(b.endsWith('.jsonl.1')) - Number(a.endsWith('.jsonl.1')))
   }
 
   return Array.from(map.entries())
@@ -106,7 +104,7 @@ export function tailEntries(entries: AuditEntry[], n: number): AuditEntry[] {
 }
 
 export function mergeByTimestamp(
-  byConn: Map<string, AuditEntry[]>,
+  byConn: Map<string, AuditEntry[]>
 ): Array<{ connection: string; entry: AuditEntry }> {
   const flat: Array<{ connection: string; entry: AuditEntry }> = []
   for (const [connection, entries] of byConn) {

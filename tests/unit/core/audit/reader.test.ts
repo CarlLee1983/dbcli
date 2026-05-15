@@ -9,15 +9,7 @@
  * - tailEntries: ascending slice, n<=0, n exceeds length
  * - mergeByTimestamp: cross-connection merge, tie-break by connection name
  */
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-  type Mock,
-} from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -35,9 +27,7 @@ let auditDir: string
 let auditFile: string
 let stderrSpy: Mock<typeof process.stderr.write> | null = null
 
-function makeEntry(
-  overrides: Partial<AuditEntry> & { ts: string; id: string },
-): AuditEntry {
+function makeEntry(overrides: Partial<AuditEntry> & { ts: string; id: string }): AuditEntry {
   return {
     id: overrides.id,
     ts: overrides.ts,

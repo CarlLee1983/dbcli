@@ -50,7 +50,7 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
 
 function run(
   args: string[],
-  workDir: string,
+  workDir: string
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   // Pass --config workDir so resolveConfigStoragePath returns the workspace root,
   // making auditDir resolve to <workDir>/.dbcli/audit (mirrors audit-engines.test.ts pattern).
@@ -79,9 +79,7 @@ async function seed(opts: SeedOpts = {}): Promise<string> {
   const auditDir = join(work, '.dbcli', 'audit')
   await mkdir(auditDir, { recursive: true })
 
-  const cfg = makeMinimalConfig(
-    opts.auditEnabled === false ? { audit: { enabled: false } } : {},
-  )
+  const cfg = makeMinimalConfig(opts.auditEnabled === false ? { audit: { enabled: false } } : {})
   await writeFile(join(work, 'config.json'), JSON.stringify(cfg, null, 2))
 
   if (opts.emptyAudit) {
@@ -113,9 +111,8 @@ async function seed(opts: SeedOpts = {}): Promise<string> {
     // Reuse default's mid-range timestamps (i+8) so 'default' and 'secondary'
     // collide on `ts`, exercising D-42 tie-break (default < secondary lex).
     const secondaryLines =
-      Array.from({ length: 5 }, (_, i) => JSON.stringify(mkEntry(i + 8, 'secondary'))).join(
-        '\n',
-      ) + '\n'
+      Array.from({ length: 5 }, (_, i) => JSON.stringify(mkEntry(i + 8, 'secondary'))).join('\n') +
+      '\n'
     await writeFile(join(auditDir, 'secondary.jsonl'), secondaryLines)
   }
   return work
@@ -168,18 +165,13 @@ describe('dbcli audit tail (CLI)', () => {
 
   test('tie-break by connection name (D-42): default < secondary at same ts', async () => {
     work = await seed({ secondaryConn: true })
-    const r = await run(
-      ['audit', 'tail', '--all', '--n', '50', '--format', 'json'],
-      work,
-    )
+    const r = await run(['audit', 'tail', '--all', '--n', '50', '--format', 'json'], work)
     const arr: Array<{ connection: string; entry: { ts: string } }> = JSON.parse(r.stdout)
     let foundCollision = false
     for (let i = 0; i < arr.length - 1; i++) {
       if (arr[i]!.entry.ts === arr[i + 1]!.entry.ts) {
         foundCollision = true
-        expect(arr[i]!.connection.localeCompare(arr[i + 1]!.connection)).toBeLessThanOrEqual(
-          0,
-        )
+        expect(arr[i]!.connection.localeCompare(arr[i + 1]!.connection)).toBeLessThanOrEqual(0)
       }
     }
     expect(foundCollision).toBe(true)

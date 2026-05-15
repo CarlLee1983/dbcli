@@ -17,9 +17,7 @@ import { join, resolve } from 'node:path'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
-function makeMinimalConfig(
-  overrides: Partial<{ audit: { enabled: boolean } }> = {},
-): unknown {
+function makeMinimalConfig(overrides: Partial<{ audit: { enabled: boolean } }> = {}): unknown {
   return {
     connection: {
       system: 'postgresql',
@@ -49,7 +47,7 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
 
 function run(
   args: string[],
-  workDir: string,
+  workDir: string
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     const child = spawn('bun', ['run', CLI, '--config', workDir, ...args], {
@@ -85,15 +83,13 @@ async function seed(opts: SeedOpts = {}): Promise<Seeded> {
   const auditDir = join(work, '.dbcli', 'audit')
   await mkdir(auditDir, { recursive: true })
 
-  const cfg = makeMinimalConfig(
-    opts.auditEnabled === false ? { audit: { enabled: false } } : {},
-  )
+  const cfg = makeMinimalConfig(opts.auditEnabled === false ? { audit: { enabled: false } } : {})
   await writeFile(join(work, 'config.json'), JSON.stringify(cfg, null, 2))
 
   const baseTs = Date.parse('2026-05-15T00:00:00.000Z')
   const mkEntry = (
     i: number,
-    overrides: { id?: string; recovery_ref?: string; conn?: string } = {},
+    overrides: { id?: string; recovery_ref?: string; conn?: string } = {}
   ) => {
     const conn = overrides.conn ?? 'default'
     const id = overrides.id ?? `${String(i).padStart(8, '0')}-uuid-${conn}`
@@ -112,9 +108,7 @@ async function seed(opts: SeedOpts = {}): Promise<Seeded> {
     return base
   }
 
-  const entries: ReturnType<typeof mkEntry>[] = [
-    mkEntry(1, { recovery_ref: KNOWN_RECOVERY_REF }),
-  ]
+  const entries: ReturnType<typeof mkEntry>[] = [mkEntry(1, { recovery_ref: KNOWN_RECOVERY_REF })]
   for (let i = 2; i <= 8; i++) entries.push(mkEntry(i))
 
   if (opts.withAmbiguousPrefix) {
@@ -126,9 +120,7 @@ async function seed(opts: SeedOpts = {}): Promise<Seeded> {
   await writeFile(join(auditDir, 'default.jsonl'), lines)
 
   if (opts.secondaryConn) {
-    const secondaryEntries = [
-      mkEntry(20, { id: 'bbbb1111-uuid-secondary', conn: 'secondary' }),
-    ]
+    const secondaryEntries = [mkEntry(20, { id: 'bbbb1111-uuid-secondary', conn: 'secondary' })]
     const secondaryLines = secondaryEntries.map((e) => JSON.stringify(e)).join('\n') + '\n'
     await writeFile(join(auditDir, 'secondary.jsonl'), secondaryLines)
   }
@@ -217,7 +209,7 @@ describe('dbcli audit show (CLI)', () => {
     work = s.work
     const r = await run(
       ['audit', 'show', s.knownPrefix, '--recovery-ref', s.knownRecoveryRef],
-      s.work,
+      s.work
     )
     expect(r.code).toBe(1)
     expect(r.stderr).toContain('either <id> argument or --recovery-ref')
@@ -226,10 +218,7 @@ describe('dbcli audit show (CLI)', () => {
   test('show <id> --all envelope (D-36)', async () => {
     const s = await seed({ secondaryConn: true })
     work = s.work
-    const r = await run(
-      ['audit', 'show', 'bbbb1111', '--all', '--format', 'json'],
-      s.work,
-    )
+    const r = await run(['audit', 'show', 'bbbb1111', '--all', '--format', 'json'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
     expect(obj).toHaveProperty('connection', 'secondary')
@@ -240,10 +229,7 @@ describe('dbcli audit show (CLI)', () => {
   test('show <prefix> --format json --brief omits metadata + redacted_query', async () => {
     const s = await seed()
     work = s.work
-    const r = await run(
-      ['audit', 'show', s.knownPrefix, '--format', 'json', '--brief'],
-      s.work,
-    )
+    const r = await run(['audit', 'show', s.knownPrefix, '--format', 'json', '--brief'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
     expect(obj).not.toHaveProperty('metadata')
@@ -317,9 +303,7 @@ describe('dbcli audit health (CLI)', () => {
     const r = await run(['audit', 'health', '--brief', '--format', 'json'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
-    expect(Object.keys(obj).sort()).toEqual(
-      ['enabled', 'lastWrite', 'rotationUsage'].sort(),
-    )
+    expect(Object.keys(obj).sort()).toEqual(['enabled', 'lastWrite', 'rotationUsage'].sort())
   })
 
   test('health --for-agent: equivalent to brief json', async () => {
@@ -328,9 +312,7 @@ describe('dbcli audit health (CLI)', () => {
     const r = await run(['audit', 'health', '--for-agent'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
-    expect(Object.keys(obj).sort()).toEqual(
-      ['enabled', 'lastWrite', 'rotationUsage'].sort(),
-    )
+    expect(Object.keys(obj).sort()).toEqual(['enabled', 'lastWrite', 'rotationUsage'].sort())
   })
 
   test('health --for-agent --no-brief: full json', async () => {

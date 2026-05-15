@@ -108,11 +108,7 @@ const ENGINE_INDEPENDENT = {
     'local-write',
     'Skill and task-pack generation are engine-independent.'
   ),
-  auditTail: cap(
-    'supported',
-    'readonly',
-    'Reads JSONL audit entries; never writes to engines.'
-  ),
+  auditTail: cap('supported', 'readonly', 'Reads JSONL audit entries; never writes to engines.'),
   auditShow: cap(
     'supported',
     'readonly',

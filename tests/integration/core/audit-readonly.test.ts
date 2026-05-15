@@ -126,6 +126,13 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
     const raw = await readFile(join(auditDir, 'default.jsonl'), 'utf8')
     const lines = raw.split('\n').filter(Boolean)
     expect(lines.length).toBe(1)
-    expect(JSON.parse(lines[0]!)).toEqual({ recovered: true, session_id: 'readonly-test-session' })
+    expect(JSON.parse(lines[0]!)).toEqual(
+      expect.objectContaining({
+        recovered: true,
+        session_id: 'readonly-test-session',
+        id: expect.any(String),
+        ts: expect.any(String),
+      })
+    )
   })
 })

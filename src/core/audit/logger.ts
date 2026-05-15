@@ -17,10 +17,12 @@
  */
 import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { AuditLockManager } from './lock'
 import type { SessionIdService } from './session-id'
 import { rotate, shouldRotate } from './rotation'
+import type { AuditEntry } from './types'
 
 export interface AuditLoggerOptions {
   /** Resolved storage root (NOT including .dbcli/). Audit dir is `<storagePath>/.dbcli/audit/`. */
@@ -41,7 +43,7 @@ export type AuditWriteResult =
   | { skipped: 'disabled' }
   | { skipped: 'lock-budget-exhausted' }
   | { skipped: 'write-failed'; error: string }
-  | { success: true; rotated: boolean }
+  | { success: true; rotated: boolean; id: string }
 
 export interface AuditHealthReport {
   enabled: boolean
@@ -94,7 +96,10 @@ export class AuditLogger {
     this.lockManager = opts.lockManager ?? new AuditLockManager(this.auditFilePath)
   }
 
-  async write(entry: Record<string, unknown>): Promise<AuditWriteResult> {
+  /**
+   * Write an audit entry. Metadata like 'id', 'ts', and 'session_id' are automatically injected.
+   */
+  async write(entry: Omit<AuditEntry, 'id' | 'ts' | 'session_id'>): Promise<AuditWriteResult> {
     const writeOp = this.writeChain.then(() => this.writeInternal(entry))
     this.writeChain = writeOp.then(
       () => undefined,
@@ -103,7 +108,9 @@ export class AuditLogger {
     return writeOp
   }
 
-  private async writeInternal(entry: Record<string, unknown>): Promise<AuditWriteResult> {
+  private async writeInternal(
+    entry: Omit<AuditEntry, 'id' | 'ts' | 'session_id'>
+  ): Promise<AuditWriteResult> {
     // D-01 / CONFIG-02 short-circuit; never touches disk.
     if (!this.enabled) {
       return { skipped: 'disabled' }
@@ -123,9 +130,18 @@ export class AuditLogger {
         this.writerInitialized = true
       }
 
+      // Generate stable metadata for the entry.
+      const id = randomUUID()
+      const ts = new Date().toISOString()
+
       // Place session_id AFTER the spread so a caller-supplied session_id can
       // never override the resolved id (T-21-16 tampering mitigation).
-      const enriched = { ...entry, session_id: sessionId }
+      const enriched: AuditEntry = {
+        ...entry,
+        id,
+        ts,
+        session_id: sessionId,
+      }
       const line = JSON.stringify(enriched) + '\n'
       const lineBytes = Buffer.byteLength(line, 'utf8')
 
@@ -165,9 +181,8 @@ export class AuditLogger {
         return { skipped: 'lock-budget-exhausted' }
       }
 
-      const ts = new Date().toISOString()
       this.lastWrite = { ts, success: true }
-      return { success: true, rotated: lockResult.rotated }
+      return { success: true, rotated: lockResult.rotated, id }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.handleFailure(message)

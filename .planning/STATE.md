@@ -27,9 +27,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 22 — Entry Schema & Redaction Contract (ready to discuss/plan)
-- **Plan:** Phase 22 discussion / planning (next)
-- **Status:** Waves 1-3 merged into `main` (5/5 plans done): 21-01 config schema, 21-02 SessionIdService, 21-03 AuditLockManager, 21-04 AuditLogger + rotation, 21-05 concurrent + readonly integration tests. Phase 21 complete: all 5 plans, verification, release gate, and security gate passed. Next: Phase 22 entry schema and redaction contract discussion/planning.
+- **Phase:** 23 — Engine Integration & Rejection Paths (PARTIAL) → 24 ready
+- **Plan:** Phase 23-04 audit-only deltas for deferred commands (recommended), OR proceed to Phase 24 on the covered surface
+- **Status:** Phase 22 complete (entry schema + redaction contract). Phase 23 partial: foundation, helper, `QueryExecutor`, and `query / plan / doctor / inspect / guide / report` integrated; `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred after 2026-05-15 surgical recovery rolled back destructive refactors unrelated to audit. See `.planning/phases/23-engine-integration-rejection-paths/23-VERIFICATION.md` for honest coverage report. `bun run release:check` PASS.
 - **Last activity:** 2026-05-15
 
 ---

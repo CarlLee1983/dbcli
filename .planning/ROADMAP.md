@@ -11,9 +11,9 @@
 
 ## Phases
 
-- [ ] **Phase 21: Audit Writer Foundation** — JSONL writer + file lock + rotation + session_id service + `.dbcli` `audit.*` config schema
-- [ ] **Phase 22: Entry Schema & Redaction Contract** — Agent-facing entry JSON 合約鎖定 + contract test + 統一 redaction（reuse `tests/helpers/sensitive-output.ts`）+ `side_effect_tier` reuse
-- [ ] **Phase 23: Engine Integration & Rejection Paths** — 在所有引擎 / 所有 command 注入 audit write（含 blacklist / permission / parser 短路拒絕路徑）
+- [x] **Phase 21: Audit Writer Foundation** — JSONL writer + file lock + rotation + session_id service + `.dbcli` `audit.*` config schema
+- [x] **Phase 22: Entry Schema & Redaction Contract** — Agent-facing entry JSON 合約鎖定 + contract test + 統一 redaction（reuse `tests/helpers/sensitive-output.ts`）+ `side_effect_tier` reuse
+- [~] **Phase 23: Engine Integration & Rejection Paths (PARTIAL)** — query / plan / doctor / inspect / guide / report 已整合；insert / update / delete / check / diff / migrate / schema / list / export / shell 延後到 Phase 23-04 audit-only deltas
 - [ ] **Phase 24: `dbcli audit` CLI** — `tail` / `tail --all` / `show` / `clear` / `health`、table / JSON 兩種輸出格式
 - [ ] **Phase 25: Recovery Envelope Bi-directional Linkage** — `recovery_ref` ⇄ `audit_ref` 雙向欄位、失敗路徑自動連結、`inspect` / `recover` flow 引用 recent audit
 - [ ] **Phase 26: Docs, Skill & Release Gate** — SKILL.md 中英雙語 audit 章節、`docs/feature-matrix.md` audit row、README / CHANGELOG 升級說明（強調 D1 預設 on）
@@ -129,8 +129,8 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 21. Audit Writer Foundation | 5/5 | Complete | 2026-05-15 |
-| 22. Entry Schema & Redaction Contract | 0/0 | Not started | — |
-| 23. Engine Integration & Rejection Paths | 0/0 | Not started | — |
+| 22. Entry Schema & Redaction Contract | 3/3 | Complete | 2026-05-15 |
+| 23. Engine Integration & Rejection Paths | 3/3 | Partial (query/diagnostic surface; DML/DDL deferred to 23-04) | 2026-05-15 |
 | 24. `dbcli audit` CLI | 0/0 | Not started | — |
 | 25. Recovery Envelope Bi-directional Linkage | 0/0 | Not started | — |
 | 26. Docs, Skill & Release Gate | 0/0 | Not started | — |

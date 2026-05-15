@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-15T00:45:00.000+08:00"
+last_updated: "2026-05-15T12:48:00.000+08:00"
 last_activity: 2026-05-15
 progress:
   total_phases: 6
@@ -27,10 +27,10 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 23 — Engine Integration & Rejection Paths (PARTIAL) → 24 ready
-- **Plan:** Phase 23-04 audit-only deltas for deferred commands (recommended), OR proceed to Phase 24 on the covered surface
-- **Status:** Phase 22 complete (entry schema + redaction contract). Phase 23 partial: foundation, helper, `QueryExecutor`, and `query / plan / doctor / inspect / guide / report` integrated; `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred after 2026-05-15 surgical recovery rolled back destructive refactors unrelated to audit. See `.planning/phases/23-engine-integration-rejection-paths/23-VERIFICATION.md` for honest coverage report. `bun run release:check` PASS.
-- **Last activity:** 2026-05-15
+- **Phase:** 24 — `dbcli audit` CLI (PLANNED, ready to execute)
+- **Plan:** 5 plans across 4 waves: 24-01 reader-module · 24-02 capabilities-i18n · 24-03 tail-commander · 24-04 show-health · 24-05 clear-and-envelope. REQ coverage CLI-01..CLI-06 complete.
+- **Status:** Phase 22 complete (entry schema + redaction contract). Phase 23 partial: foundation, helper, `QueryExecutor`, and `query / plan / doctor / inspect / guide / report` integrated; `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred. Phase 24 planning complete 2026-05-15: pattern-mapper produced PATTERNS.md, planner produced 5 PLAN.md files, plan-checker iteration 2 PASSED (W-02..W-05 resolved). `bun run release:check` last PASS at end of Phase 23.
+- **Last activity:** 2026-05-15 (Phase 24 planning)
 
 ---
 

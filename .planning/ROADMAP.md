@@ -74,7 +74,14 @@ Plans:
   3. `dbcli audit show <id>` 印出單筆完整 entry，仍走 redaction（不外洩 raw SQL）
   4. `dbcli audit clear` 沒有 `--yes` 時要求互動確認；有 `--yes` 時直接清空當前連線 audit log
   5. `dbcli audit health` 回報 writer 啟用狀態、最後一次寫入結果、file lock 狀態、rotation cap 使用率；當 `audit.enabled = false` 時明確標示 disabled（D6 / CONFIG-02）
-**Plans:** TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 24-01-reader-module-PLAN.md — Functional read-only reader (`src/core/audit/reader.ts`) + truncated-tolerant unit tests (foundation for CLI-01/02/03)
+- [ ] 24-02-capabilities-i18n-PLAN.md — 4 audit capability rows (auditTail/Show/Health=readonly, auditClear=local-write) + en/zh-TW `audit.*` i18n block (cross-cutting for CLI-01..06)
+- [ ] 24-03-tail-commander-PLAN.md — auditCommand container + `tail` (single + `--all` envelope) + cli.ts wiring + integration test (CLI-01, CLI-02, CLI-06)
+- [ ] 24-04-show-health-PLAN.md — `show` (UUID + ≥4 prefix + `--recovery-ref` + `--all` envelope) + `health` thin renderer + integration test (CLI-03, CLI-05, CLI-06)
+- [ ] 24-05-clear-and-envelope-PLAN.md — `clear` (interactive confirm + `--yes` + non-TTY rejection + scope) + `tail --all` envelope contract test (parallel to Phase 22 audit-contract.test.ts) (CLI-04, CLI-02, CLI-06)
 
 ### Phase 25: Recovery Envelope Bi-directional Linkage
 **Goal:** 讓 audit log 和既有 recovery envelope（v1.17.0 起）互為起點，agent 可以從任一端跳到另一端，補上 forensics 的完整路徑。
@@ -131,7 +138,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 | 21. Audit Writer Foundation | 5/5 | Complete | 2026-05-15 |
 | 22. Entry Schema & Redaction Contract | 3/3 | Complete | 2026-05-15 |
 | 23. Engine Integration & Rejection Paths | 3/3 | Partial (query/diagnostic surface; DML/DDL deferred to 23-04) | 2026-05-15 |
-| 24. `dbcli audit` CLI | 0/0 | Not started | — |
+| 24. `dbcli audit` CLI | 0/5 | Planned (5 plans drafted, ready for execute) | — |
 | 25. Recovery Envelope Bi-directional Linkage | 0/0 | Not started | — |
 | 26. Docs, Skill & Release Gate | 0/0 | Not started | — |
 
@@ -172,3 +179,4 @@ All 28 v1.20.0 requirements mapped to exactly one phase. No orphans, no duplicat
 ---
 
 *Roadmap created: 2026-05-14 from `.planning/REQUIREMENTS.md` (28 REQ-IDs) and `.planning/seeds/v1.20.0-audit-log-milestone.md`. Phase numbering continues from v1.19.1 (last phase = 20).*
+*Phase 24 plans drafted: 2026-05-15 — 5 plans (24-01..24-05) covering CLI-01..06.*

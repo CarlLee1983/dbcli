@@ -1,0 +1,63 @@
+import { describe, test, expect } from 'bun:test'
+import { redactArgv, redactSql, redactParams } from '../../../src/utils/redaction'
+
+describe('redaction utils', () => {
+  describe('redactArgv', () => {
+    test('redacts sensitive flags', () => {
+      const argv = ['node', 'query', 'SELECT 1', '--password', 'secret', '--token=abc']
+      expect(redactArgv(argv)).toBe('node query <sql> --password <redacted> --token <redacted>')
+    })
+
+    test('redacts SQL in subcommands', () => {
+      const argv = ['node', 'query', 'SELECT * FROM users', '--format', 'json']
+      expect(redactArgv(argv)).toBe('node query <sql> --format json')
+    })
+
+    test('redacts --config and --use', () => {
+      const argv = ['node', 'list', '--config', './my.env', '--use=prod']
+      expect(redactArgv(argv)).toBe('node list --config <redacted> --use <redacted>')
+    })
+
+    test('keeps safe flags', () => {
+      const argv = ['node', 'list', '--format=table', '--conn-name', 'my-db']
+      expect(redactArgv(argv)).toBe('node list --format=table --conn-name my-db')
+    })
+  })
+
+  describe('redactSql', () => {
+    test('redacts string literals', () => {
+      const sql = 'SELECT * FROM users WHERE email = \'test@example.com\' AND name = "John"'
+      expect(redactSql(sql)).toBe("SELECT * FROM users WHERE email = '?' AND name = '?'")
+    })
+
+    test('redacts numeric literals', () => {
+      const sql = 'SELECT * FROM orders WHERE id = 123 AND amount > 45.67'
+      expect(redactSql(sql)).toBe('SELECT * FROM orders WHERE id = 0 AND amount > 0')
+    })
+
+    test('preserves keywords', () => {
+      const sql = 'SELECT name, age FROM users ORDER BY age DESC LIMIT 10'
+      expect(redactSql(sql)).toBe('SELECT name, age FROM users ORDER BY age DESC LIMIT 0')
+    })
+  })
+
+  describe('redactParams', () => {
+    test('redacts simple objects', () => {
+      const params = { key: 'secret', id: 123 }
+      expect(redactParams(params)).toEqual({ key: '<redacted>', id: '<redacted>' })
+    })
+
+    test('redacts nested objects', () => {
+      const params = { user: { password: 'pw' }, tags: ['a', 'b'] }
+      expect(redactParams(params)).toEqual({
+        user: { password: '<redacted>' },
+        tags: ['<redacted>', '<redacted>'],
+      })
+    })
+
+    test('handles null and undefined', () => {
+      expect(redactParams(null)).toBeNull()
+      expect(redactParams(undefined)).toBeUndefined()
+    })
+  })
+})

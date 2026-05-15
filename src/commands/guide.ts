@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
+import { configModule } from '@/core/config'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 import {
   ALLOWED_GOALS,
   collectGuide,
@@ -39,6 +41,7 @@ export const guideCommand = new Command()
     1500
   )
   .action(async (goal: string | undefined, options: Record<string, unknown>, command: Command) => {
+    let config: any
     try {
       const forAgent = options.forAgent === true
       const format = forAgent ? 'json' : (options.format as string)
@@ -65,6 +68,8 @@ export const guideCommand = new Command()
       const validated = parseGoal(goal as string)
 
       const configPath = resolveConfigPath(command, options as { config?: string })
+      config = await configModule.read(configPath)
+
       const snap = await collectGuide({
         workspace: process.cwd(),
         configPath,
@@ -77,7 +82,21 @@ export const guideCommand = new Command()
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)
+
+      if (config) {
+        await writeAuditEntry(config, 'guide', options, {
+          success: true,
+          target: goal as string,
+        })
+      }
     } catch (err) {
+      if (config) {
+        await writeAuditEntry(config, 'guide', options, {
+          success: false,
+          target: (goal as string) || '*',
+          error: err,
+        })
+      }
       console.error((err as Error).message)
       process.exit(1)
     }

@@ -22,6 +22,7 @@ import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
 import { getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveSrv } from 'node:dns/promises'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -726,6 +727,21 @@ export const doctorCommand = new Command('doctor')
     }
 
     const hasError = results.some((r) => r.status === 'error')
+
+    try {
+      const config = await configModule.read(configPath)
+      await writeAuditEntry(config, 'doctor', options as any, {
+        success: !hasError,
+        target: '*',
+        metadata: {
+          error_count: results.filter((r) => r.status === 'error').length,
+          warn_count: results.filter((r) => r.status === 'warn').length,
+        },
+      })
+    } catch {
+      // Best effort audit for doctor
+    }
+
     if (options.format === 'json') {
       console.log(JSON.stringify({ results, hasError }, null, 2))
     } else {

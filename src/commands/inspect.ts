@@ -3,6 +3,8 @@ import { t } from '@/i18n/message-loader'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { collectInspect, renderJson, renderMarkdown } from '@/core/inspect'
+import { configModule } from '@/core/config'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
 
@@ -30,6 +32,7 @@ export const inspectCommand = new Command()
     false
   )
   .action(async (options: Record<string, unknown>, command: Command) => {
+    let config: any
     try {
       const forAgent = options.forAgent === true
       const format = forAgent ? 'json' : (options.format as string)
@@ -37,6 +40,8 @@ export const inspectCommand = new Command()
       validateFormat(format, ALLOWED_FORMATS, 'inspect')
 
       const configPath = resolveConfigPath(command, options as { config?: string })
+      config = await configModule.read(configPath)
+
       const snap = await collectInspect({
         workspace: process.cwd(),
         configPath,
@@ -53,7 +58,22 @@ export const inspectCommand = new Command()
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)
+
+      if (config) {
+        await writeAuditEntry(config, 'inspect', options, {
+          success: true,
+          target: '*',
+        })
+      }
     } catch (err) {
+      if (config) {
+        await writeAuditEntry(config, 'inspect', options, {
+          success: false,
+          target: '*',
+          error: err,
+        })
+      }
+
       if (options.recovery === true) {
         const { emitRecoveryEnvelope } = await import('@/core/recovery')
         emitRecoveryEnvelope(err, { operation: 'inspect' })

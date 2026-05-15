@@ -3,6 +3,8 @@ import { configModule } from '@/core/config'
 import type { QueryRiskResult } from '@/types/query-risk'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
+import type { DbcliConfig } from '@/utils/validation'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -16,6 +18,7 @@ export async function planCommand(
   options: PlanCommandOptions,
   command?: import('commander').Command
 ): Promise<void> {
+  let config: DbcliConfig | undefined
   try {
     if (!sql || sql.trim() === '') {
       throw new Error('SQL statement required')
@@ -25,7 +28,7 @@ export async function planCommand(
     validateFormat(format, ALLOWED_FORMATS, 'plan')
 
     const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
+    config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }
@@ -43,7 +46,36 @@ export async function planCommand(
     })
 
     console.log(formatPlanResult(result, format))
+
+    if (config) {
+      await writeAuditEntry(
+        config,
+        'plan',
+        { ...options, plan: true },
+        {
+          success: true,
+          sql,
+          target: result.targetTables[0] || '*',
+          metadata: {
+            decision: result.decision,
+            risk_factors: result.riskFactors.map((f) => f.code),
+          },
+        }
+      )
+    }
   } catch (error) {
+    if (config) {
+      await writeAuditEntry(
+        config,
+        'plan',
+        { ...options, plan: true },
+        {
+          success: false,
+          sql,
+          error,
+        }
+      )
+    }
     console.error((error as Error).message)
     process.exit(1)
   }

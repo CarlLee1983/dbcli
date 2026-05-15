@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
+import { configModule } from '@/core/config'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 import {
   ALLOWED_SECTIONS,
   collectReport,
@@ -56,6 +58,7 @@ export const reportCommand = new Command()
     1500
   )
   .action(async (options: Record<string, unknown>, command: Command) => {
+    let config: any
     try {
       const forAgent = options.forAgent === true
       const format = forAgent ? 'json' : (options.format as string)
@@ -63,6 +66,8 @@ export const reportCommand = new Command()
       validateFormat(format, ALLOWED_FORMATS, 'report')
 
       const configPath = resolveConfigPath(command, options as { config?: string })
+      config = await configModule.read(configPath)
+
       const snap = await collectReport({
         workspace: process.cwd(),
         configPath,
@@ -77,7 +82,24 @@ export const reportCommand = new Command()
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)
+
+      if (config) {
+        await writeAuditEntry(config, 'report', options, {
+          success: true,
+          target: '*',
+          metadata: {
+            sections: options.section || ALLOWED_SECTIONS,
+          },
+        })
+      }
     } catch (err) {
+      if (config) {
+        await writeAuditEntry(config, 'report', options, {
+          success: false,
+          target: '*',
+          error: err,
+        })
+      }
       console.error((err as Error).message)
       process.exit(1)
     }

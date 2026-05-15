@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-15T12:48:00.000+08:00"
+last_updated: "2026-05-15T16:30:00.000+08:00"
 last_activity: 2026-05-15
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 4
   total_plans: 5
   completed_plans: 5
   percent: 100
@@ -27,10 +27,11 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 24 — `dbcli audit` CLI (PLANNED, ready to execute)
-- **Plan:** 5 plans across 4 waves: 24-01 reader-module · 24-02 capabilities-i18n · 24-03 tail-commander · 24-04 show-health · 24-05 clear-and-envelope. REQ coverage CLI-01..CLI-06 complete.
-- **Status:** Phase 22 complete (entry schema + redaction contract). Phase 23 partial: foundation, helper, `QueryExecutor`, and `query / plan / doctor / inspect / guide / report` integrated; `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred. Phase 24 planning complete 2026-05-15: pattern-mapper produced PATTERNS.md, planner produced 5 PLAN.md files, plan-checker iteration 2 PASSED (W-02..W-05 resolved). `bun run release:check` last PASS at end of Phase 23.
-- **Last activity:** 2026-05-15 (Phase 24 planning)
+- **Phase:** 24 — `dbcli audit` CLI (COMPLETE, verification PASS)
+- **Plan:** All 5 plans shipped: 24-01 reader-module (16 unit tests) · 24-02 capabilities-i18n (4 keys + en/zh-TW parity) · 24-03 tail-commander (13 integration tests) · 24-04 show-health (18 integration tests) · 24-05 clear-and-envelope (7 + 5 tests). REQ coverage CLI-01..CLI-06 complete. F decision (zero `writeAuditEntry` in `src/commands/audit.ts`) integral end-to-end.
+- **Status:** Phases 21 / 22 / 24 complete. Phase 23 PARTIAL (audit-only deltas for `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred per 23-VERIFICATION conclusion). Phase 24 execution complete 2026-05-15: 59 new tests added (16 unit + 43 integration), full `bun run release:check` PASS (audit / prettier / typecheck / lint --max-warnings=0 / 2390 tests / build / dist smoke). 24-VERIFICATION.md status PASS.
+- **Last activity:** 2026-05-15 (Phase 24 execution + verification)
+- **Next phase:** 25 — Recovery Envelope ⇄ Audit Ref (`recovery_ref` query path landed in 24-04 `audit show --recovery-ref`; Phase 25 needs to populate the reverse `audit_ref` field on recovery envelope writes).
 
 ---
 

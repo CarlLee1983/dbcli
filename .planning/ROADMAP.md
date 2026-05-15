@@ -14,7 +14,7 @@
 - [x] **Phase 21: Audit Writer Foundation** — JSONL writer + file lock + rotation + session_id service + `.dbcli` `audit.*` config schema
 - [x] **Phase 22: Entry Schema & Redaction Contract** — Agent-facing entry JSON 合約鎖定 + contract test + 統一 redaction（reuse `tests/helpers/sensitive-output.ts`）+ `side_effect_tier` reuse
 - [~] **Phase 23: Engine Integration & Rejection Paths (PARTIAL)** — query / plan / doctor / inspect / guide / report 已整合；insert / update / delete / check / diff / migrate / schema / list / export / shell 延後到 Phase 23-04 audit-only deltas
-- [ ] **Phase 24: `dbcli audit` CLI** — `tail` / `tail --all` / `show` / `clear` / `health`、table / JSON 兩種輸出格式
+- [x] **Phase 24: `dbcli audit` CLI** — `tail` / `tail --all` / `show` / `clear` / `health`、table / JSON 兩種輸出格式 (2026-05-15)
 - [ ] **Phase 25: Recovery Envelope Bi-directional Linkage** — `recovery_ref` ⇄ `audit_ref` 雙向欄位、失敗路徑自動連結、`inspect` / `recover` flow 引用 recent audit
 - [ ] **Phase 26: Docs, Skill & Release Gate** — SKILL.md 中英雙語 audit 章節、`docs/feature-matrix.md` audit row、README / CHANGELOG 升級說明（強調 D1 預設 on）
 
@@ -77,11 +77,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 24-01-reader-module-PLAN.md — Functional read-only reader (`src/core/audit/reader.ts`) + truncated-tolerant unit tests (foundation for CLI-01/02/03)
-- [ ] 24-02-capabilities-i18n-PLAN.md — 4 audit capability rows (auditTail/Show/Health=readonly, auditClear=local-write) + en/zh-TW `audit.*` i18n block (cross-cutting for CLI-01..06)
-- [ ] 24-03-tail-commander-PLAN.md — auditCommand container + `tail` (single + `--all` envelope) + cli.ts wiring + integration test (CLI-01, CLI-02, CLI-06)
-- [ ] 24-04-show-health-PLAN.md — `show` (UUID + ≥4 prefix + `--recovery-ref` + `--all` envelope) + `health` thin renderer + integration test (CLI-03, CLI-05, CLI-06)
-- [ ] 24-05-clear-and-envelope-PLAN.md — `clear` (interactive confirm + `--yes` + non-TTY rejection + scope) + `tail --all` envelope contract test (parallel to Phase 22 audit-contract.test.ts) (CLI-04, CLI-02, CLI-06)
+- [x] 24-01-reader-module-PLAN.md — Functional read-only reader (`src/core/audit/reader.ts`) + truncated-tolerant unit tests (foundation for CLI-01/02/03)
+- [x] 24-02-capabilities-i18n-PLAN.md — 4 audit capability rows (auditTail/Show/Health=readonly, auditClear=local-write) + en/zh-TW `audit.*` i18n block (cross-cutting for CLI-01..06)
+- [x] 24-03-tail-commander-PLAN.md — auditCommand container + `tail` (single + `--all` envelope) + cli.ts wiring + integration test (CLI-01, CLI-02, CLI-06)
+- [x] 24-04-show-health-PLAN.md — `show` (UUID + ≥4 prefix + `--recovery-ref` + `--all` envelope) + `health` thin renderer + integration test (CLI-03, CLI-05, CLI-06)
+- [x] 24-05-clear-and-envelope-PLAN.md — `clear` (interactive confirm + `--yes` + non-TTY rejection + scope) + `tail --all` envelope contract test (parallel to Phase 22 audit-contract.test.ts) (CLI-04, CLI-02, CLI-06)
 
 ### Phase 25: Recovery Envelope Bi-directional Linkage
 **Goal:** 讓 audit log 和既有 recovery envelope（v1.17.0 起）互為起點，agent 可以從任一端跳到另一端，補上 forensics 的完整路徑。

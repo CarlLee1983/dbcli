@@ -24,6 +24,8 @@ import {
   readEntries,
   tailEntries,
 } from '@/core/audit/reader'
+import { getAuditLogger } from '@/core/audit/integration-helper'
+import type { AuditHealthReport } from '@/core/audit/logger'
 import type { AuditEntry } from '@/core/audit/types'
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
@@ -31,6 +33,7 @@ const DEFAULT_TAIL_N = 10
 const MAX_TAIL_N = 10000
 const SHORT_ID_LEN = 8
 const MISSING_PLACEHOLDER = '—'
+const PREFIX_MIN = 4
 
 type AuditConfigShape = {
   audit?: { enabled?: boolean }
@@ -154,6 +157,90 @@ function renderTailAllTable(
   return renderTable(rows, headers)
 }
 
+// ── show helpers ──────────────────────────────────────────────────────────
+type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'>
+
+function briefifyShow(entry: AuditEntry): ShowEntry {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { metadata, redacted_query, ...rest } = entry
+  return rest
+}
+
+// Accept Partial<AuditEntry> so brief mode (which strips metadata + redacted_query)
+// does not render literal "undefined" lines. Only emit a row when the field is present.
+function renderEntryTable(entry: Partial<AuditEntry>): string {
+  const lines: string[] = []
+  if (entry.id !== undefined) lines.push(`Id:                ${entry.id}`)
+  if (entry.ts !== undefined) lines.push(`Ts:                ${entry.ts}`)
+  if (entry.session_id !== undefined) lines.push(`Session id:        ${entry.session_id}`)
+  if (entry.engine !== undefined) lines.push(`Engine:            ${entry.engine}`)
+  if (entry.command !== undefined) lines.push(`Command:           ${entry.command}`)
+  if (entry.side_effect_tier !== undefined)
+    lines.push(`Side effect tier:  ${entry.side_effect_tier}`)
+  if (entry.target !== undefined) lines.push(`Target:            ${entry.target}`)
+  if (entry.success !== undefined) lines.push(`Success:           ${entry.success}`)
+  if (entry.recovery_ref !== undefined) lines.push(`Recovery ref:      ${entry.recovery_ref}`)
+  if (entry.redacted_query !== undefined)
+    lines.push(`Redacted query:    ${entry.redacted_query}`)
+  if (entry.redacted_sql !== undefined) lines.push(`Redacted SQL:      ${entry.redacted_sql}`)
+  if (entry.error !== undefined) lines.push(`Error:             ${entry.error}`)
+  if (entry.metadata !== undefined)
+    lines.push(`Metadata:          ${JSON.stringify(entry.metadata)}`)
+  return lines.join('\n')
+}
+
+function renderShowResult(
+  hit: { connection: string; entry: AuditEntry },
+  opts: { all: boolean; format: string; brief: boolean },
+): void {
+  if (opts.format === 'json') {
+    const entryView: ShowEntry | AuditEntry = opts.brief ? briefifyShow(hit.entry) : hit.entry
+    const payload = opts.all ? { connection: hit.connection, entry: entryView } : entryView
+    console.log(JSON.stringify(payload, null, 2))
+  } else {
+    if (opts.all) console.log(`Connection: ${hit.connection}`)
+    console.log(renderEntryTable(opts.brief ? briefifyShow(hit.entry) : hit.entry))
+  }
+}
+
+// ── health helpers ────────────────────────────────────────────────────────
+type BriefHealth = Pick<AuditHealthReport, 'enabled' | 'lastWrite' | 'rotationUsage'>
+
+function briefifyHealth(h: AuditHealthReport): BriefHealth {
+  return { enabled: h.enabled, lastWrite: h.lastWrite, rotationUsage: h.rotationUsage }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function renderHealthTable(h: AuditHealthReport): string {
+  const sizePct = Math.round(h.rotationUsage.bytes.pct)
+  const entriesPct = Math.round(h.rotationUsage.entries.pct)
+  const lastWrite = h.lastWrite
+    ? `${h.lastWrite.ts} (${h.lastWrite.success ? 'success' : 'failed'}${h.lastWrite.error ? `: ${h.lastWrite.error}` : ''})`
+    : MISSING_PLACEHOLDER
+  const lastError = h.lastError
+    ? `${h.lastError.ts} ${h.lastError.message}`
+    : MISSING_PLACEHOLDER
+  const lastRotation = h.rotation.lastRotatedAt
+    ? `${h.rotation.lastRotatedAt} (${h.rotation.previousFile ?? MISSING_PLACEHOLDER})`
+    : MISSING_PLACEHOLDER
+  return [
+    `Enabled:        ${h.enabled}`,
+    `File:           ${h.currentFile}`,
+    `Size:           ${formatBytes(h.currentSizeBytes)} / ${formatBytes(h.rotationUsage.bytes.max)} (${sizePct}%)`,
+    `Entries:        ${h.currentEntryCount} / ${h.rotationUsage.entries.max} (${entriesPct}%)`,
+    `Lock:           ${h.lock.state}${h.lock.heldByPid !== undefined ? ` (pid ${h.lock.heldByPid})` : ''}`,
+    `Last write:     ${lastWrite}`,
+    `Last error:     ${lastError}`,
+    `Session id:     ${h.sessionId ?? MISSING_PLACEHOLDER}`,
+    `Last rotation:  ${lastRotation}`,
+  ].join('\n')
+}
+
 export const auditCommand = new Command('audit').description(t('audit.description'))
 
 auditCommand
@@ -228,14 +315,125 @@ auditCommand
     }
   })
 
-// PLACEHOLDER: implementation lands in Wave 3 plan 24-04
 auditCommand
   .command('show [id]')
   .description(t('audit.show.description'))
-  .action(async () => {
-    console.error('audit show: not yet implemented (Wave 3)')
-    process.exit(1)
-  })
+  .option('--all', 'Search across all connections', false)
+  .option('--recovery-ref <ref>', 'Look up by entry.recovery_ref (exact match)')
+  .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')} (default: table)`, 'table')
+  .option('--brief', 'Trim metadata + redacted_query', false)
+  .option('--no-brief', 'Disable brief mode (override --for-agent default)')
+  .option('--for-agent', 'Shortcut for --format json --brief', false)
+  .action(
+    async (
+      id: string | undefined,
+      options: Record<string, unknown>,
+      command: Command,
+    ) => {
+      // (1) Mutex / required check (D-38)
+      if (id && options.recoveryRef) {
+        console.error(t('audit.show_mutex_violation'))
+        process.exit(1)
+      }
+      if (!id && !options.recoveryRef) {
+        console.error(t('audit.show_mutex_violation'))
+        process.exit(1)
+      }
+
+      // (2) Format / brief
+      const forAgent = options.forAgent === true
+      const format = forAgent ? 'json' : (options.format as string)
+      const briefSource = command.getOptionValueSource('brief')
+      const briefExplicit = briefSource !== undefined && briefSource !== 'default'
+      const brief = briefExplicit ? options.brief === true : forAgent
+      validateFormat(format, ALLOWED_FORMATS, 'audit show')
+
+      const configPath = resolveConfigPath(command, options as { config?: string })
+      const config = (await configModule.read(configPath)) as AuditConfigShape
+      if (isAuditDisabled(config)) emitDisabledAndExit0()
+
+      const { auditDir, auditFile, connectionName } = await resolveAuditPaths(
+        configPath,
+        config,
+      )
+      const all = options.all === true
+
+      // (3) Recovery-ref path (D-37)
+      if (options.recoveryRef) {
+        const ref = String(options.recoveryRef)
+        const matches: Array<{ connection: string; entry: AuditEntry }> = []
+        if (all) {
+          const conns = await discoverConnections(auditDir)
+          for (const c of conns) {
+            for (const f of c.files) {
+              for (const e of await readEntries(f)) {
+                if (e.recovery_ref === ref)
+                  matches.push({ connection: c.connection, entry: e })
+              }
+            }
+          }
+        } else {
+          for (const e of await readEntries(auditFile, { include_rotated: true })) {
+            if (e.recovery_ref === ref)
+              matches.push({ connection: connectionName, entry: e })
+          }
+        }
+        if (matches.length === 0) {
+          console.error(t_vars('audit.show_recovery_no_match', { ref }))
+          process.exit(1)
+        }
+        if (matches.length > 1) {
+          console.error(
+            t_vars('audit.show_recovery_ambiguous', {
+              ref,
+              count: String(matches.length),
+            }),
+          )
+          process.exit(1)
+        }
+        renderShowResult(matches[0]!, { all, format, brief })
+        return
+      }
+
+      // (4) <id> path: prefix length guard (D-35)
+      const lookup = String(id)
+      if (lookup.length < PREFIX_MIN) {
+        console.error(t('audit.show_prefix_too_short'))
+        process.exit(1)
+      }
+      const matches: Array<{ connection: string; entry: AuditEntry }> = []
+      if (all) {
+        const conns = await discoverConnections(auditDir)
+        for (const c of conns) {
+          for (const f of c.files) {
+            for (const e of await readEntries(f)) {
+              if (e.id === lookup || e.id.startsWith(lookup))
+                matches.push({ connection: c.connection, entry: e })
+            }
+          }
+        }
+      } else {
+        for (const e of await readEntries(auditFile, { include_rotated: true })) {
+          if (e.id === lookup || e.id.startsWith(lookup))
+            matches.push({ connection: connectionName, entry: e })
+        }
+      }
+      if (matches.length === 0) {
+        console.error(t_vars('audit.show_no_match', { prefix: lookup }))
+        process.exit(1)
+      }
+      if (matches.length > 1) {
+        console.error(
+          t_vars('audit.show_ambiguous', {
+            prefix: lookup,
+            count: String(matches.length),
+          }),
+        )
+        process.exit(1)
+      }
+      renderShowResult(matches[0]!, { all, format, brief })
+    },
+  )
 
 // PLACEHOLDER: implementation lands in Wave 3 plan 24-05
 auditCommand
@@ -246,11 +444,41 @@ auditCommand
     process.exit(1)
   })
 
-// PLACEHOLDER: implementation lands in Wave 3 plan 24-04
 auditCommand
   .command('health')
   .description(t('audit.health.description'))
-  .action(async () => {
-    console.error('audit health: not yet implemented (Wave 3)')
-    process.exit(1)
+  .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')} (default: table)`, 'table')
+  .option('--brief', 'Trim to enabled / lastWrite / rotationUsage', false)
+  .option('--no-brief', 'Disable brief mode (override --for-agent default)')
+  .option('--for-agent', 'Shortcut for --format json --brief', false)
+  .action(async (options: Record<string, unknown>, command: Command) => {
+    const forAgent = options.forAgent === true
+    const format = forAgent ? 'json' : (options.format as string)
+    const briefSource = command.getOptionValueSource('brief')
+    const briefExplicit = briefSource !== undefined && briefSource !== 'default'
+    const brief = briefExplicit ? options.brief === true : forAgent
+    validateFormat(format, ALLOWED_FORMATS, 'audit health')
+
+    const configPath = resolveConfigPath(command, options as { config?: string })
+    const config = (await configModule.read(configPath)) as AuditConfigShape
+    // E exception: health does NOT short-circuit on audit.enabled=false;
+    // health is exactly the tool to observe the enabled-state.
+
+    const logger = await getAuditLogger(config as never, configPath)
+    const health = logger.getHealth()
+    if (format === 'json') {
+      const payload: AuditHealthReport | BriefHealth = brief ? briefifyHealth(health) : health
+      console.log(JSON.stringify(payload, null, 2))
+    } else if (brief) {
+      const sizePct = Math.round(health.rotationUsage.bytes.pct)
+      const entriesPct = Math.round(health.rotationUsage.entries.pct)
+      const lastWriteLine = health.lastWrite
+        ? `${health.lastWrite.ts} (${health.lastWrite.success ? 'success' : 'failed'})`
+        : MISSING_PLACEHOLDER
+      console.log(`Enabled:        ${health.enabled}`)
+      console.log(`Last write:     ${lastWriteLine}`)
+      console.log(`Rotation usage: ${sizePct}% bytes, ${entriesPct}% entries`)
+    } else {
+      console.log(renderHealthTable(health))
+    }
   })

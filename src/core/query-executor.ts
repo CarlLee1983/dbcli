@@ -10,8 +10,11 @@ import type { Permission } from '@/types'
 import type { QueryResult } from '@/types/query'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
+import { extractTableName } from '@/utils/engine-hints'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import { writeAuditEntry } from './audit/integration-helper'
+import type { DbcliConfig } from '@/utils/validation'
 
 /**
  * QueryExecutor class for executing SQL queries with permission checks
@@ -20,7 +23,9 @@ export class QueryExecutor {
   constructor(
     private adapter: DatabaseAdapter,
     private permission: Permission,
-    private blacklistValidator?: BlacklistValidator
+    private blacklistValidator?: BlacklistValidator,
+    private config?: DbcliConfig,
+    private options: { config?: string } = {}
   ) {}
 
   /**
@@ -40,6 +45,7 @@ export class QueryExecutor {
       limitValue?: number
     }
   ): Promise<QueryResult<Record<string, unknown>>> {
+    const start = performance.now()
     try {
       // 1. Enforce permission before execution
       const classification = enforcePermission(sql, this.permission)
@@ -71,7 +77,6 @@ export class QueryExecutor {
       }
 
       // 4. Execute query and measure time
-      const start = performance.now()
       const resultData = await this.adapter.execute<Record<string, unknown>>(executeSql)
       const executionTimeMs = Math.round(performance.now() - start)
 
@@ -118,8 +123,32 @@ export class QueryExecutor {
         },
       }
 
+      // 8. Audit Success
+      if (this.config) {
+        await writeAuditEntry(this.config, 'query', this.options, {
+          success: true,
+          sql,
+          metadata: {
+            rows_affected: affectedRows,
+            execution_ms: executionTimeMs,
+          },
+        })
+      }
+
       return result
     } catch (error) {
+      // 8. Audit Failure
+      if (this.config) {
+        await writeAuditEntry(this.config, 'query', this.options, {
+          success: false,
+          sql,
+          error,
+          metadata: {
+            execution_ms: Math.round(performance.now() - start),
+          },
+        })
+      }
+
       // Permission errors pass through as-is
       if (error instanceof PermissionError) {
         throw error
@@ -152,41 +181,6 @@ export class QueryExecutor {
       throw error
     }
   }
-}
-
-/**
- * Extract the primary table name from a SQL query.
- * Uses regex to find the FROM clause table name.
- *
- * @param sql SQL query string
- * @returns Table name or null if not found
- */
-export function extractTableName(sql: string): string | null {
-  // Handle common SELECT ... FROM table patterns
-  const match = sql.match(/\bFROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
-  if (match) {
-    return match[1] ?? null
-  }
-
-  // Handle INSERT INTO table patterns
-  const insertMatch = sql.match(/\bINSERT\s+INTO\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
-  if (insertMatch) {
-    return insertMatch[1] ?? null
-  }
-
-  // Handle UPDATE table patterns
-  const updateMatch = sql.match(/\bUPDATE\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
-  if (updateMatch) {
-    return updateMatch[1] ?? null
-  }
-
-  // Handle DELETE FROM table patterns
-  const deleteMatch = sql.match(/\bDELETE\s+FROM\s+["'`]?([a-zA-Z_][a-zA-Z0-9_]*)["'`]?/i)
-  if (deleteMatch) {
-    return deleteMatch[1] ?? null
-  }
-
-  return null
 }
 
 /**

@@ -25,6 +25,7 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -53,6 +54,7 @@ export async function queryCommand(
   },
   command?: import('commander').Command
 ): Promise<void> {
+  let config: DbcliConfig | undefined
   try {
     // 1. Argument validation
     if (!sql || sql.trim() === '') {
@@ -66,15 +68,12 @@ export async function queryCommand(
 
     // 2. Load configuration
     const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
+    config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }
 
     // 2c. MongoDB: route to QueryableAdapter path
-    // NOTE: `return await` is intentional — bare `return promise` would resolve
-    // the wrapper before the inner promise settles, so any rejection would
-    // bypass this try/catch and skip the recovery envelope handler below.
     if (config.connection.system === 'mongodb') {
       return await mongoQueryBranch(sql, options, config)
     }
@@ -90,16 +89,14 @@ export async function queryCommand(
     }
 
     // 2b. Size guard: block full-table SELECT on huge tables
-    const mainTable = extractMainTable(sql)
+    const { extractTableName } = await import('@/utils/engine-hints')
+    const mainTable = extractTableName(sql)
     if (mainTable && config.schema && !options.noLimit) {
       const tableSchema = (config.schema as Record<string, unknown>)[mainTable]
       if (tableSchema) {
         const { shouldBlockQuery } = await import('./query-size-guard')
         const guard = shouldBlockQuery(sql, tableSchema as { estimatedRowCount: number })
         if (guard.blocked) {
-          // Throw so the outer catch can route this through --recovery /
-          // human stderr / formatter consistently. Do not call process.exit
-          // directly \u2014 it bypasses the recovery envelope.
           throw new Error(`\u26A0 ${guard.reason}`)
         }
       }
@@ -117,7 +114,13 @@ export async function queryCommand(
       const blacklistValidator = new BlacklistValidator(blacklistManager)
 
       // 4. Create QueryExecutor
-      const executor = new QueryExecutor(adapter, config.permission, blacklistValidator)
+      const executor = new QueryExecutor(
+        adapter,
+        config.permission,
+        blacklistValidator,
+        config,
+        options
+      )
 
       // 5. Execute query
       const autoLimit = !options.noLimit
@@ -160,11 +163,19 @@ export async function queryCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    if (config) {
+      await writeAuditEntry(config, 'query', options, {
+        success: false,
+        sql,
+        error,
+      })
+    }
+
     if (options.recovery === true) {
       const { emitRecoveryEnvelope } = await import('@/core/recovery')
       emitRecoveryEnvelope(error, {
         operation: 'query',
-        table: extractMainTable(sql) ?? undefined,
+        table: (await import('@/utils/engine-hints')).extractTableName(sql) ?? undefined,
       })
     }
 
@@ -191,13 +202,6 @@ export async function queryCommand(
   }
 }
 
-function extractMainTable(sql: string): string | null {
-  const match = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
-  return match?.[1] ?? null
-}
-
-const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
-
 async function mongoQueryBranch(
   queryStr: string,
   options: {
@@ -211,14 +215,15 @@ async function mongoQueryBranch(
   const collection = options.collection
   const format = options.format ?? 'table'
 
+  if (!collection) {
+    throw new Error('MongoDB 查詢需要指定 --collection <name>')
+  }
+
+  const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
   if (SQL_PATTERN.test(queryStr)) {
     throw new Error(
       `這是 MongoDB 連線，請使用 JSON filter 語法。\n範例：dbcli query '{"field": "value"}' --collection <name>`
     )
-  }
-
-  if (!collection) {
-    throw new Error('MongoDB 查詢需要指定 --collection <name>')
   }
 
   try {
@@ -227,13 +232,12 @@ async function mongoQueryBranch(
     throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
   }
 
-  // Blacklist validation — propagate so the outer catch (recovery / human
-  // stderr) handles it once, instead of double-handling here.
+  // Blacklist validation
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
   blacklistValidator.checkTableBlacklist('SELECT', collection, [])
 
-  // Size guard: block unfiltered queries on huge collections
+  // Size guard
   if (config.schema && !options.noLimit) {
     const tableSchema = (config.schema as Record<string, unknown>)[collection]
     if (tableSchema) {
@@ -249,8 +253,6 @@ async function mongoQueryBranch(
     }
   }
 
-  // Resolve effective result-cardinality cap.
-  // Priority: explicit --no-limit > explicit --limit > query-only auto-limit > none
   let effectiveLimit: number | undefined
   if (options.noLimit) {
     effectiveLimit = undefined
@@ -263,14 +265,25 @@ async function mongoQueryBranch(
 
   const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await mongoAdapter.connect()
+  const start = performance.now()
   try {
     const result = await mongoAdapter.execute<Record<string, unknown>>(
       queryStr,
       [collection],
       effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
     )
+    const executionTimeMs = Math.round(performance.now() - start)
 
-    // Redact blacklisted columns using validator
+    await writeAuditEntry(config, 'query', options, {
+      success: true,
+      target: collection,
+      metadata: {
+        rows_affected: result.rows.length,
+        execution_ms: executionTimeMs,
+      },
+    })
+
+    // Redact blacklisted columns
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
     const filterResult = blacklistValidator.filterColumns(collection, result.rows, columnNames)
 
@@ -285,13 +298,11 @@ async function mongoQueryBranch(
       format,
     })
 
-    // Add security notification if columns were omitted
+    console.log(output)
     const securityNote = blacklistValidator.buildSecurityNotification(
       collection,
       filterResult.omittedColumns
     )
-
-    console.log(output)
     if (securityNote) {
       console.log(`\n\u2139 ${securityNote}`)
     }
@@ -311,27 +322,30 @@ async function redisQueryBranch(
   config: DbcliConfig
 ): Promise<void> {
   const format = options.format ?? 'table'
-
   const { enforceRedisPermission } = await import('@/core/permission-guard')
   const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
-  // Skip the human KEYS warning under --recovery so the recovery envelope
-  // remains the sole source of truth on stdout and stderr stays clean for
-  // agent consumption.
+
   if (head === 'KEYS' && options.recovery !== true) {
-    console.error(
-      '\u26A0 Warning: "KEYS" command is dangerous on production servers as it blocks the main thread.'
-    )
-    console.error('  Please use "SCAN" instead for better performance and safety.')
-    console.error('  For more info: https://redis.io/commands/keys/')
+    console.error('\u26A0 Warning: "KEYS" command is dangerous on production servers.')
   }
-  // Let PermissionError propagate to the outer catch so --recovery and the
-  // human stderr formatter both see it.
   enforceRedisPermission(command, config.permission)
 
   const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
   await redisAdapter.connect()
+  const start = performance.now()
   try {
     const result = await redisAdapter.execute<Record<string, unknown>>(command)
+    const executionTimeMs = Math.round(performance.now() - start)
+
+    const target = command.trim().split(/\s+/)[1] || '<unknown-key>'
+    await writeAuditEntry(config, 'query', options, {
+      success: true,
+      target,
+      metadata: {
+        rows_affected: result.rows.length,
+        execution_ms: executionTimeMs,
+      },
+    })
 
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : ['value']
     const queryResult = {
@@ -368,7 +382,6 @@ async function elasticsearchQueryBranch(
   }
 
   const { enforceElasticsearchPermission } = await import('@/core/permission-guard')
-  // Propagate PermissionError to outer catch for unified --recovery / stderr handling.
   enforceElasticsearchPermission(
     {
       method: 'POST',
@@ -384,46 +397,56 @@ async function elasticsearchQueryBranch(
     console.error(
       'Elasticsearch --no-limit is capped at size 10000; for more rows use saved-query with search_after.'
     )
-  } else if (typeof options.limit === 'number') {
-    effectiveLimit = options.limit
   } else {
-    effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
-    if (config.permission === 'query-only') {
-      console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
-    }
+    effectiveLimit = options.limit || DEFAULT_QUERY_ONLY_LIMIT
   }
 
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
-  // Propagate BlacklistError to outer catch.
   blacklistValidator.checkTableBlacklist('SELECT', indexName, [])
 
   const esAdapter = AdapterFactory.createElasticsearchAdapter(
     config.connection as ConnectionOptions
   )
   await esAdapter.connect()
+  const start = performance.now()
   try {
     const result = await esAdapter.execute<Record<string, unknown>>(queryStr, [indexName], {
       limit: effectiveLimit,
     })
+    const executionTimeMs = Math.round(performance.now() - start)
+
+    await writeAuditEntry(config, 'query', options, {
+      success: true,
+      target: indexName,
+      metadata: {
+        rows_affected: result.rows.length,
+        execution_ms: executionTimeMs,
+      },
+    })
+
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
     const filterResult = blacklistValidator.filterColumns(indexName, result.rows, columnNames)
+
     const queryResult = {
       rows: filterResult.filteredRows,
       rowCount: filterResult.filteredRows.length,
       columnNames: columnNames.filter((col) => !filterResult.omittedColumns.includes(col)),
     }
+
     const formatter = new QueryResultFormatter()
     const output = formatter.format(queryResult as QueryResult<Record<string, unknown>>, {
       format,
     })
+
+    console.log(output)
     const securityNote = blacklistValidator.buildSecurityNotification(
       indexName,
       filterResult.omittedColumns
     )
-
-    console.log(output)
-    if (securityNote) console.log(`\nℹ ${securityNote}`)
+    if (securityNote) {
+      console.log(`\n\u2139 ${securityNote}`)
+    }
   } finally {
     await esAdapter.disconnect()
   }

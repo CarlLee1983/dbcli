@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-05-15T16:30:00.000+08:00"
-last_activity: 2026-05-15
+status: discussing
+last_updated: "2026-05-15T21:25:00.000+08:00"
+last_activity: 2026-05-15 (Phase 25 context gathered)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 16
+  completed_plans: 16
   percent: 100
 ---
 
@@ -27,11 +27,11 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 24 — `dbcli audit` CLI (COMPLETE, verification PASS)
-- **Plan:** All 5 plans shipped: 24-01 reader-module (16 unit tests) · 24-02 capabilities-i18n (4 keys + en/zh-TW parity) · 24-03 tail-commander (13 integration tests) · 24-04 show-health (18 integration tests) · 24-05 clear-and-envelope (7 + 5 tests). REQ coverage CLI-01..CLI-06 complete. F decision (zero `writeAuditEntry` in `src/commands/audit.ts`) integral end-to-end.
-- **Status:** Phases 21 / 22 / 24 complete. Phase 23 PARTIAL (audit-only deltas for `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred per 23-VERIFICATION conclusion). Phase 24 execution complete 2026-05-15: 59 new tests added (16 unit + 43 integration), full `bun run release:check` PASS (audit / prettier / typecheck / lint --max-warnings=0 / 2390 tests / build / dist smoke). 24-VERIFICATION.md status PASS.
-- **Last activity:** 2026-05-15 (Phase 24 execution + verification)
-- **Next phase:** 25 — Recovery Envelope ⇄ Audit Ref (`recovery_ref` query path landed in 24-04 `audit show --recovery-ref`; Phase 25 needs to populate the reverse `audit_ref` field on recovery envelope writes).
+- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (context gathered, ready for planning)
+- **Plan:** 0 plans yet. CONTEXT.md (`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-CONTEXT.md`) locks 12 decisions across two areas: (A) `SavedRecoveryEnvelope` wrapper 加 `id`/`audit_ref` optional + `emitRecoveryEnvelope` pre-generate UUID + `writeAuditEntry` 介面回傳 entry id (D-50..D-55, B1); (D) DOCS-02 inspect/guide/recover/recover --apply 在 `--for-agent`/`--format json` 路徑嵌入 `audit_recent: AuditEntryBrief[]` N=5、`{ts,command,target,success,id}` shape、disabled/empty 一律 `[]` (D-56..D-61). 七項 planner discretion (E–K + L/M)。
+- **Status:** Phases 21 / 22 / 24 complete; Phase 23 PARTIAL (audit-only deltas for `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred per 23-VERIFICATION conclusion). Phase 25 context gathered 2026-05-15 — discussion focused on雙向 ref 結構與 DOCS-02 嵌入策略；剩餘 area B/C 已被 area A 決策連鎖收斂，不需另開討論。
+- **Last activity:** 2026-05-15 (Phase 25 context gathered)
+- **Next phase:** 25 — 進入 `$gsd-plan-phase 25` 拆 plan；Phase 26 (Docs / Skill / Release Gate) 仍 blocked on Phase 25 feature-complete.
 
 ---
 

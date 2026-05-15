@@ -92,6 +92,38 @@
     "snippet_not_found": "Snippet not found: {name}",
     "dry_run_header": "Dry-run preview (no execution):"
   },
+  "audit": {
+    "description": "Inspect, look up, clear, or check the health of the audit log",
+    "tail": {
+      "description": "Show recent audit entries (default: last 10 from current connection)"
+    },
+    "show": {
+      "description": "Look up a single audit entry by id (UUID prefix >=4) or --recovery-ref"
+    },
+    "clear": {
+      "description": "Delete audit log files (.jsonl + .jsonl.1) for the current connection",
+      "prompt_header": "About to clear audit log for connection '{conn}':",
+      "prompt_file_line": "  {file}       — {entries} entries, {size}",
+      "prompt_continue": "Continue? [y/N] ",
+      "requires_tty_or_yes": "Cannot prompt for confirmation in non-interactive session. Use --yes to clear without prompt.",
+      "summary_cleared": "Cleared {count} entries from '{conn}'.",
+      "summary_nothing": "Nothing to clear.",
+      "summary_failed": "Failed to clear: {message}."
+    },
+    "health": {
+      "description": "Show AuditLogger health snapshot (size, entries, lock state, last write)"
+    },
+    "disabled_hint": "Audit is disabled (audit.enabled = false in .dbcli). Use 'dbcli audit health' for details.",
+    "no_entries": "No audit entries.",
+    "show_no_match": "No audit entry matches '{prefix}'.",
+    "show_ambiguous": "Ambiguous prefix '{prefix}': matches {count} entries. Please use a longer prefix.",
+    "show_prefix_too_short": "Prefix must be at least 4 characters.",
+    "show_recovery_no_match": "No audit entry has recovery_ref '{ref}'.",
+    "show_recovery_ambiguous": "Multiple entries reference recovery_ref '{ref}': matches {count}. This should be rare; inspect file directly.",
+    "show_mutex_violation": "Provide either <id> argument or --recovery-ref, not both.",
+    "n_capped_warning": "--n value {requested} exceeds max {max}; capped to {max}.",
+    "n_must_be_positive": "--n must be a positive integer."
+  },
   "queries": {
     "description": "Manage saved query snippets",
     "list_description": "List saved snippets",

@@ -92,6 +92,38 @@
     "snippet_not_found": "找不到片段：{name}",
     "dry_run_header": "Dry-run 預覽（不會執行）："
   },
+  "audit": {
+    "description": "檢視、查詢、清空或檢查 audit log 健康狀態",
+    "tail": {
+      "description": "顯示最近的 audit 紀錄（預設：當前連線最後 10 筆）"
+    },
+    "show": {
+      "description": "依 id（UUID 前綴 ≥4 碼）或 --recovery-ref 查詢單筆 audit 紀錄"
+    },
+    "clear": {
+      "description": "刪除當前連線的 audit log 檔案（.jsonl 與 .jsonl.1）",
+      "prompt_header": "即將清空連線 '{conn}' 的 audit log：",
+      "prompt_file_line": "  {file}       — {entries} 筆，{size}",
+      "prompt_continue": "確認執行？[y/N] ",
+      "requires_tty_or_yes": "非互動 session 無法顯示確認提示。請使用 --yes 直接清空。",
+      "summary_cleared": "已從 '{conn}' 清除 {count} 筆 audit 紀錄。",
+      "summary_nothing": "沒有可清除的內容。",
+      "summary_failed": "清除失敗：{message}。"
+    },
+    "health": {
+      "description": "顯示 AuditLogger 健康狀態（檔案大小、筆數、lock 狀態、最後寫入結果）"
+    },
+    "disabled_hint": "Audit 已停用（.dbcli 中 audit.enabled = false）。執行 `dbcli audit health` 查看詳情。",
+    "no_entries": "沒有 audit 紀錄。",
+    "show_no_match": "找不到符合 '{prefix}' 的 audit 紀錄。",
+    "show_ambiguous": "前綴 '{prefix}' 不夠精確：匹配到 {count} 筆紀錄，請改用更長的前綴。",
+    "show_prefix_too_short": "前綴至少需 4 個字元。",
+    "show_recovery_no_match": "沒有任何 audit 紀錄的 recovery_ref 為 '{ref}'。",
+    "show_recovery_ambiguous": "有 {count} 筆紀錄的 recovery_ref 為 '{ref}'，這應屬罕見情況；請直接檢視檔案。",
+    "show_mutex_violation": "請擇一提供 <id> 參數或 --recovery-ref，兩者不可同時使用。",
+    "n_capped_warning": "--n 值 {requested} 超過上限 {max}，已自動縮減為 {max}。",
+    "n_must_be_positive": "--n 必須為正整數。"
+  },
   "queries": {
     "description": "管理已保存的查詢片段",
     "list_description": "列出所有片段",

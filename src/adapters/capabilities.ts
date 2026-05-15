@@ -39,6 +39,10 @@ export type CommandCapabilityKey =
   | 'upgrade'
   | 'recover'
   | 'skill'
+  | 'auditTail'
+  | 'auditShow'
+  | 'auditClear'
+  | 'auditHealth'
 
 export interface CommandCapability {
   status: CapabilityStatus
@@ -77,6 +81,10 @@ export const COMMAND_CAPABILITY_KEYS = Object.freeze([
   'upgrade',
   'recover',
   'skill',
+  'auditTail',
+  'auditShow',
+  'auditClear',
+  'auditHealth',
 ] as const satisfies readonly CommandCapabilityKey[])
 
 function cap(
@@ -100,7 +108,33 @@ const ENGINE_INDEPENDENT = {
     'local-write',
     'Skill and task-pack generation are engine-independent.'
   ),
-} satisfies Pick<EngineCapabilities, 'completion' | 'upgrade' | 'recover' | 'skill'>
+  auditTail: cap(
+    'supported',
+    'readonly',
+    'Reads JSONL audit entries; never writes to engines.'
+  ),
+  auditShow: cap(
+    'supported',
+    'readonly',
+    'Looks up a single audit entry by id prefix or recovery_ref.'
+  ),
+  auditHealth: cap('supported', 'readonly', 'Renders AuditLogger.getHealth() snapshot.'),
+  auditClear: cap(
+    'supported',
+    'local-write',
+    'Removes <conn>.jsonl + .jsonl.1 from local disk; never touches DB.'
+  ),
+} satisfies Pick<
+  EngineCapabilities,
+  | 'completion'
+  | 'upgrade'
+  | 'recover'
+  | 'skill'
+  | 'auditTail'
+  | 'auditShow'
+  | 'auditHealth'
+  | 'auditClear'
+>
 
 const SQL_BASE = {
   init: cap('supported', 'interactive', 'SQL connection initialization is supported.'),

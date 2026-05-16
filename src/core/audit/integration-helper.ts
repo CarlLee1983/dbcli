@@ -56,18 +56,24 @@ export interface AuditOutcome {
   metadata?: Record<string, unknown>
   sql?: string
   target?: string
+  /** Phase 25 D-J: envelope id from the catch block, propagated onto the persisted audit entry as `recovery_ref`. */
+  recovery_ref?: string
 }
 
 /**
  * High-level helper to write an audit entry from a command handler.
  * Catch-all for D6 (non-blocking) and standardizing fields.
+ *
+ * Phase 25 D-K: returns the entry UUID on success, or null on disabled /
+ * skipped / failed paths. Existing callers that drop the return value
+ * continue to work unchanged (TS permits dropping a Promise<T>).
  */
 export async function writeAuditEntry(
   config: DbcliConfig,
   commandName: string,
   options: { config?: string; [key: string]: unknown },
   outcome: AuditOutcome
-): Promise<void> {
+): Promise<string | null> {
   try {
     const logger = await getAuditLogger(config, options.config || '.dbcli')
     const engine = (config.connection?.system as DatabaseSystem) || 'postgresql'
@@ -98,12 +104,17 @@ export async function writeAuditEntry(
       redacted_query: redactArgv(process.argv),
       ...(outcome.sql && { redacted_sql: redactSql(outcome.sql) }),
       ...(errorMessage && { error: errorMessage }),
+      ...(outcome.recovery_ref && { recovery_ref: outcome.recovery_ref }),
       metadata: outcome.metadata,
     }
 
-    await logger.write(entry)
+    const result = await logger.write(entry)
+    // Phase 25 D-K / L5: 'success' in result discriminator — only the success
+    // variant of AuditWriteResult exposes the entry id.
+    return 'success' in result ? result.id : null
   } catch {
     // D6: Never throw from audit integration.
     // Logger already prints to stderr once if write fails.
+    return null
   }
 }

@@ -3,6 +3,7 @@
  * Executes a SQL query and returns results, supporting multiple output formats
  */
 
+import crypto from 'node:crypto' // Phase 25 D-51
 import { t_vars } from '@/i18n/message-loader'
 import {
   AdapterFactory,
@@ -163,20 +164,33 @@ export async function queryCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    let auditId: string | null = null
+    let envelopeId: string | undefined
+    if (options.recovery === true) {
+      envelopeId = crypto.randomUUID() // Phase 25 D-51 / D-J
+    }
     if (config) {
-      await writeAuditEntry(config, 'query', options, {
+      auditId = await writeAuditEntry(config, 'query', options, {
         success: false,
         sql,
         error,
+        ...(envelopeId && { recovery_ref: envelopeId }), // Phase 25 D-J
       })
     }
 
-    if (options.recovery === true) {
+    if (envelopeId !== undefined) {
       const { emitRecoveryEnvelope } = await import('@/core/recovery')
-      emitRecoveryEnvelope(error, {
-        operation: 'query',
-        table: (await import('@/utils/engine-hints')).extractTableName(sql) ?? undefined,
-      })
+      emitRecoveryEnvelope(
+        error,
+        {
+          operation: 'query',
+          table: (await import('@/utils/engine-hints')).extractTableName(sql) ?? undefined,
+        },
+        {
+          envelopeId, // Phase 25 D-51
+          auditRef: auditId ?? undefined, // Phase 25 K1
+        }
+      )
     }
 
     if (error instanceof BlacklistError) {

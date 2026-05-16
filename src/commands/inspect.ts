@@ -1,4 +1,5 @@
 import { Command } from 'commander'
+import crypto from 'node:crypto' // Phase 25 D-51
 import { t } from '@/i18n/message-loader'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
@@ -66,17 +67,30 @@ export const inspectCommand = new Command()
         })
       }
     } catch (err) {
+      let auditId: string | null = null
+      let envelopeId: string | undefined
+      if (options.recovery === true) {
+        envelopeId = crypto.randomUUID() // Phase 25 D-51 / D-J
+      }
       if (config) {
-        await writeAuditEntry(config, 'inspect', options, {
+        auditId = await writeAuditEntry(config, 'inspect', options, {
           success: false,
           target: '*',
           error: err,
+          ...(envelopeId && { recovery_ref: envelopeId }), // Phase 25 D-J
         })
       }
 
-      if (options.recovery === true) {
+      if (envelopeId !== undefined) {
         const { emitRecoveryEnvelope } = await import('@/core/recovery')
-        emitRecoveryEnvelope(err, { operation: 'inspect' })
+        emitRecoveryEnvelope(
+          err,
+          { operation: 'inspect' },
+          {
+            envelopeId, // Phase 25 D-51
+            auditRef: auditId ?? undefined, // Phase 25 K1
+          }
+        )
       }
       console.error((err as Error).message)
       process.exit(1)

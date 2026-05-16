@@ -56,6 +56,14 @@ export const inspectCommand = new Command()
         requireSchemaCacheOrThrow(snap.schemaCache, snap.system ?? null)
       }
 
+      // Phase 25 DOCS-02: embed last N audit entries on agent JSON paths.
+      if (config) {
+        const { shouldEmbedRecent, loadRecentAudit } = await import('@/core/audit/recent')
+        if (shouldEmbedRecent({ forAgent, format })) {
+          snap.audit_recent = await loadRecentAudit(config, configPath)
+        }
+      }
+
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)

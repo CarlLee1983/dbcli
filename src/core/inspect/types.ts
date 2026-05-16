@@ -1,4 +1,5 @@
 import type { Permission } from '@/types'
+import type { AuditEntryBrief } from '@/core/audit/types'
 
 /** Stable contract version for the InspectSnapshot JSON. Bump on breaking shape change. */
 export const INSPECT_SCHEMA_VERSION = 1 as const
@@ -72,6 +73,8 @@ export interface InspectSnapshot {
   snippets: SnippetsSection
   suggestedCommands: string[]
   warnings: string[]
+  /** Phase 25 DOCS-02: last N audit entries (brief shape). Only populated on agent JSON paths (D-57). [] when audit disabled / missing (D-60). */
+  audit_recent?: AuditEntryBrief[]
 }
 
 export interface InspectOptions {

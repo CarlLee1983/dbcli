@@ -79,6 +79,15 @@ export const guideCommand = new Command()
         probeTimeoutMs: options.probeTimeout as number,
       })
 
+      // Phase 25 DOCS-02: embed last N audit entries on agent JSON paths.
+      // Top-level placement (NOT inside snap.context) so agents read top_level.audit_recent.
+      if (config) {
+        const { shouldEmbedRecent, loadRecentAudit } = await import('@/core/audit/recent')
+        if (shouldEmbedRecent({ forAgent, format })) {
+          snap.audit_recent = await loadRecentAudit(config, configPath)
+        }
+      }
+
       const out =
         format === 'markdown' ? renderMarkdown(snap, { brief }) : renderJson(snap, { brief })
       console.log(out)

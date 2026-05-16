@@ -1,4 +1,5 @@
 import type { InspectSnapshot } from '@/core/inspect/types'
+import type { AuditEntryBrief } from '@/core/audit/types'
 
 /** Stable contract version for GuideSnapshot JSON. Bump on breaking shape change. */
 export const GUIDE_SCHEMA_VERSION = 1 as const
@@ -68,6 +69,8 @@ export interface GuideSnapshot {
   /** Ordered list of next-command steps. Capped by `MAX_STEPS` in `build-plan.ts`. */
   steps: GuideStep[]
   warnings: GuideWarning[]
+  /** Phase 25 DOCS-02: last N audit entries (brief shape). Only populated on agent JSON paths (D-57). Top-level placement (NOT nested under context). */
+  audit_recent?: AuditEntryBrief[]
 }
 
 export interface GuideOptions {

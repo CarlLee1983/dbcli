@@ -3,13 +3,11 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   EXIT_CODE,
-  renderJson,
   renderMarkdown,
   runApply,
   type AllowWrite,
   type RecoveryEnvelope,
 } from '@/core/recovery'
-import { renderApplyJson } from '@/core/recovery/apply-render-json'
 import { renderApplyMarkdown } from '@/core/recovery/apply-render-markdown'
 import { LAST_ENVELOPE_PATH, readLastEnvelopeRaw } from '@/core/recovery/last-envelope'
 import {
@@ -254,6 +252,24 @@ export const recoverCommand = new Command()
         cwd: process.cwd(),
       })
 
+      // Phase 25 DOCS-02: load audit_recent ONCE for both no-apply + --apply branches.
+      // Only when output format is json (D-57; recover has no --for-agent flag per L6).
+      // --next branch is OUT OF SCOPE (L2) — do not inject there.
+      let audit_recent: import('@/core/audit/types').AuditEntryBrief[] = []
+      if (format === 'json' && options.next !== true) {
+        try {
+          const { configModule } = await import('@/core/config')
+          const configPath = `${process.cwd()}/.dbcli`
+          const config = await configModule.read(configPath)
+          if (config) {
+            const { loadRecentAudit } = await import('@/core/audit/recent')
+            audit_recent = await loadRecentAudit(config, configPath)
+          }
+        } catch {
+          audit_recent = [] // D-60: never block recover on audit lookup failures
+        }
+      }
+
       if (options.next === true) {
         const result = await runNext(options, source)
         const out = format === 'markdown' ? renderNextMarkdown(result) : renderNextJson(result)
@@ -262,9 +278,14 @@ export const recoverCommand = new Command()
       }
 
       if (options.apply !== true) {
-        const out =
-          format === 'markdown' ? renderMarkdown(source.envelope) : renderJson(source.envelope)
-        console.log(out)
+        if (format === 'markdown') {
+          console.log(renderMarkdown(source.envelope))
+        } else {
+          // Phase 25 DOCS-02: wrap envelope with audit_recent at the PRINT site.
+          // D-52 forbids embedding audit_recent in RecoveryEnvelope body, so build
+          // the composite object inline rather than passing it through renderJson.
+          console.log(JSON.stringify({ ...source.envelope, audit_recent }, null, 2))
+        }
         return
       }
 
@@ -278,8 +299,13 @@ export const recoverCommand = new Command()
         { allowWrite, noVerify }
       )
 
-      const out = format === 'markdown' ? renderApplyMarkdown(result) : renderApplyJson(result)
-      console.log(out)
+      if (format === 'markdown') {
+        console.log(renderApplyMarkdown(result))
+      } else {
+        // Phase 25 DOCS-02: same pattern as no-apply branch — wrap at print site
+        // so ApplyResult type stays clean (mirrors D-52 separation for symmetry).
+        console.log(JSON.stringify({ ...result, audit_recent }, null, 2))
+      }
       process.exit(exitCodeFor(result.finalStatus))
     } catch (err) {
       if (err instanceof RecoverCliError) {

@@ -76,7 +76,7 @@ interface Seeded {
   ambiguousPrefix: string
 }
 
-const KNOWN_RECOVERY_REF = 'r-1234-abcd-known'
+const KNOWN_RECOVERY_REF = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
 async function seed(opts: SeedOpts = {}): Promise<Seeded> {
   const work = await mkdtemp(join(tmpdir(), 'dbcli-audit-show-health-'))

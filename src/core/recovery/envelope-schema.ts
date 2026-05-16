@@ -64,6 +64,8 @@ export const recoveryEnvelopeSchema = z
 export const savedRecoveryEnvelopeSchema = z
   .object({
     schemaVersion: z.literal(1),
+    id: z.string().optional(), // Phase 25 D-50
+    audit_ref: z.string().optional(), // Phase 25 D-53
     savedAt: z.string().min(1),
     command: z.string(),
     cwd: z.string().min(1),

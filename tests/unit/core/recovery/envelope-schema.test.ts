@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'bun:test'
-import { parseRecoveryEnvelope } from '@/core/recovery/envelope-schema'
+import {
+  parseRecoveryEnvelope,
+  parseSavedRecoveryEnvelope,
+} from '@/core/recovery/envelope-schema'
 
 describe('recoveryEnvelopeSchema verify field', () => {
   const baseEnvelope = {
@@ -89,5 +92,71 @@ describe('recoveryEnvelopeSchema verify field', () => {
     })
     expect(r.ok).toBe(false)
     expect(r.reason).toContain('password')
+  })
+})
+
+describe('SavedRecoveryEnvelope id + audit_ref (Phase 25)', () => {
+  const validEnvelope = {
+    schemaVersion: 1 as const,
+    generatedAt: '2026-05-15T10:42:18.000Z',
+    ok: false as const,
+    error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'blocked' },
+    recovery: [],
+  }
+
+  test('accepts envelope with id + audit_ref (new shape)', () => {
+    const payload = {
+      schemaVersion: 1,
+      id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      audit_ref: '8b3c8f0c-1234-4abc-9def-0123456789ab',
+      savedAt: '2026-05-15T10:42:18Z',
+      command: 'dbcli query',
+      cwd: '/tmp/x',
+      envelope: validEnvelope,
+    }
+    const r = parseSavedRecoveryEnvelope(payload)
+    expect(r.ok).toBe(true)
+    expect(r.value?.id).toBe('f47ac10b-58cc-4372-a567-0e02b2c3d479')
+    expect(r.value?.audit_ref).toBe('8b3c8f0c-1234-4abc-9def-0123456789ab')
+  })
+
+  test('accepts legacy envelope WITHOUT id and audit_ref (D-54 backward compat)', () => {
+    const payload = {
+      schemaVersion: 1,
+      savedAt: '2026-05-15T10:42:18Z',
+      command: 'dbcli query',
+      cwd: '/tmp/x',
+      envelope: validEnvelope,
+    }
+    const r = parseSavedRecoveryEnvelope(payload)
+    expect(r.ok).toBe(true)
+    expect(r.value?.id).toBeUndefined()
+    expect(r.value?.audit_ref).toBeUndefined()
+  })
+
+  test('rejects payload with unknown extra key (.strict() preserved)', () => {
+    const payload = {
+      schemaVersion: 1,
+      savedAt: '2026-05-15T10:42:18Z',
+      command: 'dbcli query',
+      cwd: '/tmp/x',
+      envelope: validEnvelope,
+      unknownField: 'bad',
+    }
+    const r = parseSavedRecoveryEnvelope(payload)
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects payload where id is not a string', () => {
+    const payload = {
+      schemaVersion: 1,
+      id: 42,
+      savedAt: '2026-05-15T10:42:18Z',
+      command: 'dbcli query',
+      cwd: '/tmp/x',
+      envelope: validEnvelope,
+    }
+    const r = parseSavedRecoveryEnvelope(payload)
+    expect(r.ok).toBe(false)
   })
 })

@@ -15,7 +15,7 @@
 - [x] **Phase 22: Entry Schema & Redaction Contract** — Agent-facing entry JSON 合約鎖定 + contract test + 統一 redaction（reuse `tests/helpers/sensitive-output.ts`）+ `side_effect_tier` reuse
 - [~] **Phase 23: Engine Integration & Rejection Paths (PARTIAL)** — query / plan / doctor / inspect / guide / report 已整合；insert / update / delete / check / diff / migrate / schema / list / export / shell 延後到 Phase 23-04 audit-only deltas
 - [x] **Phase 24: `dbcli audit` CLI** — `tail` / `tail --all` / `show` / `clear` / `health`、table / JSON 兩種輸出格式 (2026-05-15)
-- [ ] **Phase 25: Recovery Envelope Bi-directional Linkage** — `recovery_ref` ⇄ `audit_ref` 雙向欄位、失敗路徑自動連結、`inspect` / `recover` flow 引用 recent audit
+- [x] **Phase 25: Recovery Envelope Bi-directional Linkage** — `recovery_ref` ⇄ `audit_ref` 雙向欄位、失敗路徑自動連結、`inspect` / `recover` flow 引用 recent audit (2026-05-16)
 - [ ] **Phase 26: Docs, Skill & Release Gate** — SKILL.md 中英雙語 audit 章節、`docs/feature-matrix.md` audit row、README / CHANGELOG 升級說明（強調 D1 預設 on）
 
 ---
@@ -150,7 +150,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 | 22. Entry Schema & Redaction Contract | 3/3 | Complete | 2026-05-15 |
 | 23. Engine Integration & Rejection Paths | 3/3 | Partial (query/diagnostic surface; DML/DDL deferred to 23-04) | 2026-05-15 |
 | 24. `dbcli audit` CLI | 0/5 | Planned (5 plans drafted, ready for execute) | — |
-| 25. Recovery Envelope Bi-directional Linkage | 0/9 | Planned (9 plans drafted; J1 scope lock, ready for execute) | — |
+| 25. Recovery Envelope Bi-directional Linkage | 9/9 | Complete (J1 scope lock; release gate green; 2 human-UAT items deferred to Phase 26 DX smoke) | 2026-05-16 |
 | 26. Docs, Skill & Release Gate | 0/0 | Not started | — |
 
 ---

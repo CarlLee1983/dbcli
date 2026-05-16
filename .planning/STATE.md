@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
-status: ready_to_execute
-last_updated: "2026-05-15T22:30:00.000+08:00"
-last_activity: 2026-05-15 (Phase 25 plans verified — ready to execute)
+status: phase_complete
+last_updated: "2026-05-16T15:00:00.000+08:00"
+last_activity: 2026-05-16 (Phase 25 shipped — release gate green, verification passed)
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 25
-  completed_plans: 16
-  percent: 64
+  completed_plans: 25
+  percent: 96
 ---
 
 # STATE.md — Current Project State

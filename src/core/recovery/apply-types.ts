@@ -93,6 +93,10 @@ export interface ApplyResult {
 
 export interface SavedRecoveryEnvelope {
   schemaVersion: 1
+  /** Phase 25 D-50/D-51: envelope-level UUID, pre-generated at emitRecoveryEnvelope() entry. Optional for backward compatibility with v1.17-v1.19 envelopes. */
+  id?: string
+  /** Phase 25 D-53: ID of the audit entry that recorded this failure. Omitted when audit is disabled or write failed (best-effort). */
+  audit_ref?: string
   savedAt: string
   /** Sanitized command summary. Never a verbatim argv dump. */
   command: string

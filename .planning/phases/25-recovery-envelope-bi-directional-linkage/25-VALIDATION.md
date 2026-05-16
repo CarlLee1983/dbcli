@@ -1,10 +1,11 @@
 ---
 phase: 25
 slug: recovery-envelope-bi-directional-linkage
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-15
+approved: 2026-05-16
 ---
 
 # Phase 25 — Validation Strategy
@@ -42,16 +43,16 @@ created: 2026-05-15
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 25-01-01 | 01 (envelope schema) | 1 | INTEGRATE-02/-03 | — | `SavedRecoveryEnvelope.id` / `audit_ref` accepted by `parseSavedRecoveryEnvelope`; legacy envelope (no id / audit_ref) still parses | unit | `bun test tests/unit/core/recovery/envelope-schema.test.ts` | ❌ W0 | ⬜ pending |
-| 25-02-01 | 02 (writeAuditEntry id return) | 1 | INTEGRATE-02 | — | `writeAuditEntry` returns entry UUID on success, `null` on disabled / failure (D6) | unit | `bun test tests/unit/core/audit/integration-helper.test.ts` | ❌ W0 | ⬜ pending |
-| 25-03-01 | 03 (emit envelope id) | 2 | INTEGRATE-02/-03 | — | `emitRecoveryEnvelope` accepts `EmitOptions.envelopeId` + `auditRef`; pre-generates UUID when omitted | unit | `bun test tests/unit/core/recovery/emit.test.ts` | ❌ W0 | ⬜ pending |
-| 25-04-01..N | 04 (wire catch blocks, J1 surface only) | 2 | INTEGRATE-02/-03 | — | wired commands (`query` / `inspect` / `guide` + remaining Phase 23 wired) emit envelope with `audit_ref` and audit entry with `recovery_ref` on failure | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ⬜ pending |
-| 25-05-01 | 05 (`audit_recent` helper) | 2 | DOCS-02 | — | `loadRecentAudit` returns latest 5 from current connection, returns `[]` when audit disabled / missing / empty | unit | `bun test tests/unit/core/audit/recent.test.ts` | ❌ W0 | ⬜ pending |
-| 25-06-01..04 | 06 (inject into 4 commands) | 3 | DOCS-02 | — | `inspect` / `guide` / `recover` / `recover --apply` `--for-agent` or `--format json` output contains `audit_recent` array | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ⬜ pending |
-| 25-07-01 | 07 (J1 asymmetry guard) | 3 | INTEGRATE-02/-03 | — | unwired commands (insert / update / delete / export / q / schema) emit envelope but `audit_ref` is `undefined` (never `null` / empty) | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ⬜ pending |
-| 25-08-01 | 08 (release gate) | 4 | INTEGRATE-02/-03 / DOCS-02 | — | `bun run release:check` exits 0 | full | `bun run release:check` | ✅ | ⬜ pending |
+| 25-01-01 | 01 (envelope schema) | 1 | INTEGRATE-02/-03 | — | `SavedRecoveryEnvelope.id` / `audit_ref` accepted by `parseSavedRecoveryEnvelope`; legacy envelope (no id / audit_ref) still parses | unit | `bun test tests/unit/core/recovery/envelope-schema.test.ts` | ❌ W0 | ✅ green |
+| 25-02-01 | 02 (writeAuditEntry id return) | 1 | INTEGRATE-02 | — | `writeAuditEntry` returns entry UUID on success, `null` on disabled / failure (D6) | unit | `bun test tests/unit/core/audit/integration-helper.test.ts` | ❌ W0 | ✅ green |
+| 25-03-01 | 03 (emit envelope id) | 2 | INTEGRATE-02/-03 | — | `emitRecoveryEnvelope` accepts `EmitOptions.envelopeId` + `auditRef`; pre-generates UUID when omitted | unit | `bun test tests/unit/core/recovery/emit.test.ts` | ❌ W0 | ✅ green |
+| 25-04-01..N | 04 (wire catch blocks, J1 surface only) | 2 | INTEGRATE-02/-03 | — | wired commands (`query` / `inspect` / `guide` + remaining Phase 23 wired) emit envelope with `audit_ref` and audit entry with `recovery_ref` on failure | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ✅ green |
+| 25-05-01 | 05 (`audit_recent` helper) | 2 | DOCS-02 | — | `loadRecentAudit` returns latest 5 from current connection, returns `[]` when audit disabled / missing / empty | unit | `bun test tests/unit/core/audit/recent.test.ts` | ❌ W0 | ✅ green |
+| 25-06-01..04 | 06 (inject into 4 commands) | 3 | DOCS-02 | — | `inspect` / `guide` / `recover` / `recover --apply` `--for-agent` or `--format json` output contains `audit_recent` array | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ✅ green |
+| 25-07-01 | 07 (J1 asymmetry guard) | 3 | INTEGRATE-02/-03 | — | unwired commands (insert / update / delete / export / q / schema) emit envelope but `audit_ref` is `undefined` (never `null` / empty) | integration | `bun test tests/integration/recovery-audit-link.test.ts` | ❌ W0 | ✅ green |
+| 25-08-01 | 08 (release gate) | 4 | INTEGRATE-02/-03 / DOCS-02 | — | `bun run release:check` exits 0 | full | `bun run release:check` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 *Note: planner refines exact task IDs / counts. The matrix above is a coverage skeleton — every cell maps a Phase 25 success criterion to one automated invocation.*
 
@@ -80,11 +81,19 @@ created: 2026-05-15
 
 ## Validation Sign-Off
 
-- [ ] All planned tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (5 test files above)
-- [ ] No watch-mode flags (CI-safe single-shot runs only)
-- [ ] Feedback latency < 15s for targeted runs, < 80s for full release-check
-- [ ] `nyquist_compliant: true` set in frontmatter (planner updates after wave 0 lands)
+- [x] All planned tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (5 test files above)
+- [x] No watch-mode flags (CI-safe single-shot runs only)
+- [x] Feedback latency < 15s for targeted runs, < 80s for full release-check
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending — planner to fill matrix from concrete plan task IDs, then flip `status: approved` and `nyquist_compliant: true`.
+## Wave 0 Status (post-execution)
+
+- [x] `tests/integration/recovery-audit-link.test.ts` — landed in Plan 08; 19/19 green
+- [x] `tests/unit/core/recovery/envelope-schema.test.ts` — extended in Plan 01; 9/9 green
+- [x] `tests/unit/core/recovery/emit.test.ts` — landed in Plan 04; 8/8 green
+- [x] `tests/unit/core/audit/integration-helper.test.ts` — landed in Plan 02; 5/5 green
+- [x] `tests/unit/core/audit/recent.test.ts` — landed in Plan 03; 12/12 green
+
+**Approval:** approved 2026-05-16 — all release-blocking tests green; Phase 23-04 follow-up logged in STATE.md and `25-J1-COVERAGE-MATRIX.md`.

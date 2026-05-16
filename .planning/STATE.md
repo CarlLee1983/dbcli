@@ -27,11 +27,11 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (plans verified, ready to execute)
-- **Plan:** 9 plans across 4 waves（25-01..25-09 PLAN.md）。Wave 1 = type plumbing（01 envelope wrapper schema, 02 writeAuditEntry id return, 03 audit_recent helper）；Wave 2 = call-site wiring（04 emit envelope id, 05 J1 catch blocks on `inspect.ts` + `query.ts` only）；Wave 3 = DOCS-02 injection + contract test（06 inspect/guide, 07 recover/recover --apply, 08 release-blocking `recovery-audit-link.test.ts` 含 J1 negative guard）；Wave 4 = release gate（09 J1 coverage matrix + VALIDATION sign-off + `bun run release:check` 人工 checkpoint）。Researcher + pattern-mapper + planner + checker 全部 PASS（J1 scope lock, Phase 22/24 fences, Phase 25 12 個 locked decision 都有 task 對應）。
-- **Status:** Phases 21 / 22 / 24 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 25 context 2026-05-15 gathered、research / patterns / plans 同日 2026-05-15 完成並通過 verification。
-- **Last activity:** 2026-05-15 (Phase 25 plans verified — ready to execute)
-- **Next phase:** 25 — 進入 `$gsd-execute-phase 25` 執行 9 plans；Phase 26 (Docs / Skill / Release Gate) 仍 blocked on Phase 25 feature-complete。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，由 Plan 09 task 在 ship 後寫進 ROADMAP backlog 區。
+- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (feature-complete, awaiting `$gsd-verify-work 25`)
+- **Plan:** 9 plans across 4 waves shipped 2026-05-16 (25-01..25-09)。Wave 1 = type plumbing（01 envelope wrapper schema, 02 writeAuditEntry id return, 03 audit_recent helper）；Wave 2 = call-site wiring（04 emit envelope id, 05 J1 catch blocks on `inspect.ts` + `query.ts` only）；Wave 3 = DOCS-02 injection + contract test（06 inspect/guide, 07 recover/recover --apply, 08 release-blocking `recovery-audit-link.test.ts` 含 J1 negative guard）；Wave 4 = release gate（09 J1 coverage matrix + VALIDATION sign-off + `bun run release:check` 人工 checkpoint）。
+- **Status:** Phases 21 / 22 / 24 / 25 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 25 shipped 2026-05-16 with J1 scope lock (`query` / `inspect` bi-directional ref; 6 unwired commands' envelopes carry no `audit_ref`; contract test `tests/integration/recovery-audit-link.test.ts` enforces the asymmetry).
+- **Last activity:** 2026-05-16 (Phase 25 plans 25-01..25-09 shipped; awaiting `$gsd-verify-work 25` + release:check human checkpoint)
+- **Next phase:** 26 (Docs / Skill / Release Gate)。Phase 26 must call out Phase 25's J1 asymmetry in CHANGELOG / README; SKILL.md describes the bi-directional ref behavior。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，記錄於 `25-J1-COVERAGE-MATRIX.md` + Accumulated Context 區。
 
 ---
 
@@ -165,6 +165,7 @@ v1.20.0 將在 Phase 22 contract test 與 Phase 26 docs/feature-matrix 更新後
 - **Recovery envelope**（`.dbcli/last-recovery.json`、`dbcli recover --apply` / `--next`）— v1.17.0 起既有，v1.20.0 在 Phase 25 新增 `recovery_ref` ⇄ `audit_ref` 雙向欄位（INTEGRATE-02 / -03）。
 - **Engine family dispatch**（SQL / Mongo / Redis / ES）— audit writer（Phase 23）必須一視同仁，所有引擎使用相同 entry shape；不允許 engine-specific 欄位漂移。
 - **`.dbcli` config migration pattern** — 既有 connection 升級時 `audit.*` 缺欄位以預設值補齊（CONFIG-03 / Phase 21），沿用前述 milestone 的 migration 慣例。
+- **Phase 25 J1 asymmetry (carried forward to Phase 26 / Phase 23-04)** — Bi-directional `recovery_ref` / `audit_ref` shipped only on `query` + `inspect`. 6 commands (`insert / update / delete / export / q / schema`) emit envelopes without `audit_ref` until Phase 23-04 wires `writeAuditEntry` into them. Contract test at `tests/integration/recovery-audit-link.test.ts` enforces this asymmetry; flipping the J1 lock requires a planner discussion. See `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`.
 
 ---
 

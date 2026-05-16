@@ -1,5 +1,6 @@
 import { writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto' // Phase 25 D-51
 import { classifyError } from './classify'
 import { renderJson } from './render-json'
 import { LAST_ENVELOPE_PATH, sanitizeCommandSummary } from './last-envelope'
@@ -13,6 +14,10 @@ export interface EmitOptions extends RecoveryRenderOptions {
   argv?: string[]
   /** Override cwd for the saved file; defaults to `process.cwd()`. */
   cwd?: string
+  /** Phase 25 D-51: pre-generated envelope id. Defaults to crypto.randomUUID() when omitted. */
+  envelopeId?: string
+  /** Phase 25 D-53: audit entry id captured by caller's writeAuditEntry. Undefined when audit disabled / failed. */
+  auditRef?: string
 }
 
 /**
@@ -27,7 +32,10 @@ export function emitRecoveryEnvelope(
   const envelope = classifyError(error, ctx)
   const cwd = options.cwd ?? process.cwd()
   const argv = options.argv ?? buildArgvFromProcess()
-  writeLastEnvelopeSync(cwd, envelope, argv)
+  // Phase 25 D-51 / I1: pre-generate envelope id at entry; caller may also supply one.
+  const envelopeId = options.envelopeId ?? randomUUID()
+  writeLastEnvelopeSync(cwd, envelope, argv, envelopeId, options.auditRef)
+  // D-52: stdout shape is RecoveryEnvelope body, NOT SavedRecoveryEnvelope wrapper. Unchanged.
   process.stdout.write(renderJson(envelope, { brief: options.brief === true }) + '\n')
   process.exit(options.exitCode ?? 1)
 }
@@ -38,11 +46,19 @@ function buildArgvFromProcess(): string[] {
   return ['dbcli', ...userArgs]
 }
 
-function writeLastEnvelopeSync(cwd: string, envelope: RecoveryEnvelope, argv: string[]): void {
+function writeLastEnvelopeSync(
+  cwd: string,
+  envelope: RecoveryEnvelope,
+  argv: string[],
+  id: string, // Phase 25 D-51
+  auditRef: string | undefined // Phase 25 D-53
+): void {
   const target = join(cwd, LAST_ENVELOPE_PATH)
   const tmp = `${target}.tmp`
   const payload: SavedRecoveryEnvelope = {
     schemaVersion: 1,
+    id,
+    ...(auditRef !== undefined && { audit_ref: auditRef }), // D-53: omit when undefined
     savedAt: new Date().toISOString(),
     command: sanitizeCommandSummary(argv),
     cwd,

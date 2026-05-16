@@ -1,5 +1,6 @@
 import { writeFile, readFile, rename, mkdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto' // Phase 25
 import type { RecoveryEnvelope } from './types'
 import type { SavedRecoveryEnvelope } from './apply-types'
 
@@ -64,12 +65,16 @@ export async function writeLastEnvelope(
   cwd: string,
   envelope: RecoveryEnvelope,
   argv: string[],
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  id: string = randomUUID(), // Phase 25 D-51: default so test callers don't have to pre-gen
+  auditRef?: string // Phase 25 D-53
 ): Promise<void> {
   const target = join(cwd, LAST_ENVELOPE_PATH)
   const tmp = `${target}.tmp`
   const payload: SavedRecoveryEnvelope = {
     schemaVersion: 1,
+    id,
+    ...(auditRef !== undefined && { audit_ref: auditRef }),
     savedAt: now().toISOString(),
     command: sanitizeCommandSummary(argv),
     cwd,

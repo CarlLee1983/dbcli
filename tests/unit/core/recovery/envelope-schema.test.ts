@@ -1,8 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import {
-  parseRecoveryEnvelope,
-  parseSavedRecoveryEnvelope,
-} from '@/core/recovery/envelope-schema'
+import { parseRecoveryEnvelope, parseSavedRecoveryEnvelope } from '@/core/recovery/envelope-schema'
 
 describe('recoveryEnvelopeSchema verify field', () => {
   const baseEnvelope = {

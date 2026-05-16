@@ -38,7 +38,4 @@ export interface AuditEntry {
  * PROHIBITED keys (must not be present in serialized output): redacted_query,
  * redacted_sql, metadata, session_id, engine, side_effect_tier (D-59).
  */
-export type AuditEntryBrief = Pick<
-  AuditEntry,
-  'id' | 'ts' | 'command' | 'target' | 'success'
->
+export type AuditEntryBrief = Pick<AuditEntry, 'id' | 'ts' | 'command' | 'target' | 'success'>

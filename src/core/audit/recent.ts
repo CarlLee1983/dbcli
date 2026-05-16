@@ -18,10 +18,7 @@ export const RECENT_AUDIT_DEFAULT_N = 5
  * --for-agent (= json + brief) OR explicit --format json.
  * Human markdown never gets audit_recent.
  */
-export function shouldEmbedRecent(opts: {
-  forAgent?: boolean
-  format: string
-}): boolean {
+export function shouldEmbedRecent(opts: { forAgent?: boolean; format: string }): boolean {
   return opts.forAgent === true || opts.format === 'json'
 }
 

@@ -6,11 +6,7 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  loadRecentAudit,
-  shouldEmbedRecent,
-  RECENT_AUDIT_DEFAULT_N,
-} from '@/core/audit/recent'
+import { loadRecentAudit, shouldEmbedRecent, RECENT_AUDIT_DEFAULT_N } from '@/core/audit/recent'
 import type { DbcliConfig } from '@/utils/validation'
 import type { AuditEntry } from '@/core/audit/types'
 
@@ -137,11 +133,7 @@ describe('loadRecentAudit (Phase 25 D-58 / D-60)', () => {
     const auditDir = join(workDir, '.dbcli', 'audit')
     await mkdir(auditDir, { recursive: true })
     const auditFile = join(auditDir, 'default.jsonl')
-    await writeFile(
-      auditFile,
-      JSON.stringify(makeEntry(1, '2026-05-15T10:00:00Z')) + '\n',
-      'utf8'
-    )
+    await writeFile(auditFile, JSON.stringify(makeEntry(1, '2026-05-15T10:00:00Z')) + '\n', 'utf8')
 
     const r = await loadRecentAudit(config, configPath)
     expect(r).toHaveLength(1)

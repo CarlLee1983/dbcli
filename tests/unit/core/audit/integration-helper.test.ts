@@ -99,12 +99,7 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     const config = makeConfig(true)
     // No `const id = await ...` — drop the result, matching the pattern at
     // src/commands/inspect.ts:63 and the other 16 pre-Phase-25 sites.
-    await writeAuditEntry(
-      config,
-      'query',
-      { config: workDir },
-      { success: true, target: 'users' }
-    )
+    await writeAuditEntry(config, 'query', { config: workDir }, { success: true, target: 'users' })
     expect(true).toBe(true)
   })
 })

@@ -135,14 +135,7 @@ describe('Bi-directional ref round-trip (wired surface) [INTEGRATE-02 / -03 rele
 
   test('inspect failure with --require-schema-cache --recovery: bi-directional UUIDs match (ROADMAP #1+#2+#4)', async () => {
     const r = await run(
-      [
-        '--config',
-        workDir,
-        'inspect',
-        '--require-schema-cache',
-        '--recovery',
-        '--no-connect',
-      ],
+      ['--config', workDir, 'inspect', '--require-schema-cache', '--recovery', '--no-connect'],
       workDir
     )
     expect(r.code).not.toBe(0)
@@ -186,7 +179,13 @@ describe('J1 asymmetry guard (unwired surface) [INTEGRATE-03 negative contract]'
           case 'delete':
             return ['delete', 'nonexistent_table', '--where', '1=1', '--recovery']
           case 'export':
-            return ['export', '--file', join(tmpdir(), 'phase25-export.csv'), 'select 1', '--recovery']
+            return [
+              'export',
+              '--file',
+              join(tmpdir(), 'phase25-export.csv'),
+              'select 1',
+              '--recovery',
+            ]
           case 'q':
             return ['q', '@nope/does-not-exist', '--recovery']
           case 'schema':
@@ -219,20 +218,14 @@ describe('DOCS-02 audit_recent embedding [4 agent surfaces]', () => {
   })
 
   test('inspect --for-agent JSON has audit_recent at top level', async () => {
-    const r = await run(
-      ['--config', workDir, 'inspect', '--for-agent', '--no-connect'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'inspect', '--for-agent', '--no-connect'], workDir)
     expect(r.code).toBe(0)
     const parsed = JSON.parse(r.stdout) as Record<string, unknown>
     expect(Array.isArray(parsed.audit_recent)).toBe(true)
   })
 
   test('guide health --for-agent JSON has audit_recent at top level (not inside context)', async () => {
-    const r = await run(
-      ['--config', workDir, 'guide', 'health', '--for-agent'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'guide', 'health', '--for-agent'], workDir)
     expect(r.code).toBe(0)
     const parsed = JSON.parse(r.stdout) as Record<string, unknown>
     expect(Array.isArray(parsed.audit_recent)).toBe(true)
@@ -264,10 +257,7 @@ describe('DOCS-02 audit_recent embedding [4 agent surfaces]', () => {
     }
     await writeFile(join(workDir, '.dbcli', 'last-recovery.json'), JSON.stringify(saved), 'utf8')
 
-    const r = await run(
-      ['--config', workDir, 'recover', '--format', 'json'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'recover', '--format', 'json'], workDir)
     const parsed = JSON.parse(r.stdout) as Record<string, unknown>
     expect(Array.isArray(parsed.audit_recent)).toBe(true)
     expect(parsed.ok).toBe(false)
@@ -316,10 +306,7 @@ describe('audit_recent shape contract [D-58 / D-59 / D-60]', () => {
 
   test('items have EXACTLY {id, ts, command, target, success} (D-59 forbidden keys absent)', async () => {
     await seedAuditEntries(workDir, 1)
-    const r = await run(
-      ['--config', workDir, 'inspect', '--for-agent', '--no-connect'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'inspect', '--for-agent', '--no-connect'], workDir)
     expect(r.code).toBe(0)
     const parsed = JSON.parse(r.stdout) as { audit_recent: Array<Record<string, unknown>> }
     expect(parsed.audit_recent.length).toBe(1)
@@ -339,33 +326,20 @@ describe('audit_recent shape contract [D-58 / D-59 / D-60]', () => {
 
   test('caps at N=5 when 10 entries exist (D-58)', async () => {
     await seedAuditEntries(workDir, 10)
-    const r = await run(
-      ['--config', workDir, 'inspect', '--for-agent', '--no-connect'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'inspect', '--for-agent', '--no-connect'], workDir)
     const parsed = JSON.parse(r.stdout) as { audit_recent: unknown[] }
     expect(parsed.audit_recent.length).toBe(5)
   })
 
   test('is [] when audit.enabled = false (D-60)', async () => {
-    await writeFile(
-      join(workDir, 'config.json'),
-      JSON.stringify(makeMinimalConfig(false)),
-      'utf8'
-    )
-    const r = await run(
-      ['--config', workDir, 'inspect', '--for-agent', '--no-connect'],
-      workDir
-    )
+    await writeFile(join(workDir, 'config.json'), JSON.stringify(makeMinimalConfig(false)), 'utf8')
+    const r = await run(['--config', workDir, 'inspect', '--for-agent', '--no-connect'], workDir)
     const parsed = JSON.parse(r.stdout) as { audit_recent: unknown[] }
     expect(parsed.audit_recent).toEqual([])
   })
 
   test('is [] when audit dir does not exist (D-60)', async () => {
-    const r = await run(
-      ['--config', workDir, 'inspect', '--for-agent', '--no-connect'],
-      workDir
-    )
+    const r = await run(['--config', workDir, 'inspect', '--for-agent', '--no-connect'], workDir)
     const parsed = JSON.parse(r.stdout) as { audit_recent: unknown[] }
     expect(parsed.audit_recent).toEqual([])
   })
@@ -373,14 +347,7 @@ describe('audit_recent shape contract [D-58 / D-59 / D-60]', () => {
   test('inspect --format markdown (no --for-agent) stdout does NOT contain audit_recent (D-57)', async () => {
     await seedAuditEntries(workDir, 1)
     const r = await run(
-      [
-        '--config',
-        workDir,
-        'inspect',
-        '--format',
-        'markdown',
-        '--no-connect',
-      ],
+      ['--config', workDir, 'inspect', '--format', 'markdown', '--no-connect'],
       workDir
     )
     expect(r.stdout.includes('audit_recent')).toBe(false)
@@ -417,15 +384,7 @@ describe('Legacy envelope backward compatibility [D-54]', () => {
 
   test('recover --from <legacy-fixture.json> parses without error (D-54)', async () => {
     const r = await run(
-      [
-        '--config',
-        workDir,
-        'recover',
-        '--from',
-        extFile,
-        '--format',
-        'json',
-      ],
+      ['--config', workDir, 'recover', '--from', extFile, '--format', 'json'],
       workDir
     )
     expect(r.code).not.toBe(2) // EXIT_CODE.malformed = 2
@@ -444,7 +403,8 @@ describe('Phase 22 / 24 meta-guard fences', () => {
   test('Phase 24 audit-envelope.test.ts is not gutted (sentinel string present)', async () => {
     const path = resolve(import.meta.dir, 'audit-envelope.test.ts')
     const raw = await readFile(path, 'utf8')
-    const hasSentinel = raw.includes('D-39') || raw.includes('D-40') || raw.includes("'audit tail --all'")
+    const hasSentinel =
+      raw.includes('D-39') || raw.includes('D-40') || raw.includes("'audit tail --all'")
     expect(hasSentinel).toBe(true)
   })
 })

@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
-status: phase_complete
-last_updated: "2026-05-16T15:00:00.000+08:00"
-last_activity: 2026-05-16 (Phase 25 shipped — release gate green, verification passed)
+status: discussing_phase
+last_updated: "2026-05-16T16:00:00.000+08:00"
+last_activity: "2026-05-16 (Phase 26 context gathered — DOCS-01/03/04 + release gate; 8 decisions locked D-71..D-78; 3 areas locked as Planner Discretion)"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -27,11 +27,11 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (feature-complete, awaiting `$gsd-verify-work 25`)
-- **Plan:** 9 plans across 4 waves shipped 2026-05-16 (25-01..25-09)。Wave 1 = type plumbing（01 envelope wrapper schema, 02 writeAuditEntry id return, 03 audit_recent helper）；Wave 2 = call-site wiring（04 emit envelope id, 05 J1 catch blocks on `inspect.ts` + `query.ts` only）；Wave 3 = DOCS-02 injection + contract test（06 inspect/guide, 07 recover/recover --apply, 08 release-blocking `recovery-audit-link.test.ts` 含 J1 negative guard）；Wave 4 = release gate（09 J1 coverage matrix + VALIDATION sign-off + `bun run release:check` 人工 checkpoint）。
-- **Status:** Phases 21 / 22 / 24 / 25 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 25 shipped 2026-05-16 with J1 scope lock (`query` / `inspect` bi-directional ref; 6 unwired commands' envelopes carry no `audit_ref`; contract test `tests/integration/recovery-audit-link.test.ts` enforces the asymmetry).
-- **Last activity:** 2026-05-16 (Phase 25 plans 25-01..25-09 shipped; awaiting `$gsd-verify-work 25` + release:check human checkpoint)
-- **Next phase:** 26 (Docs / Skill / Release Gate)。Phase 26 must call out Phase 25's J1 asymmetry in CHANGELOG / README; SKILL.md describes the bi-directional ref behavior。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，記錄於 `25-J1-COVERAGE-MATRIX.md` + Accumulated Context 區。
+- **Phase:** 26 — Docs, Skill & Release Gate (context gathered 2026-05-16; awaiting `$gsd-plan-phase 26`)
+- **Plan:** TBD — Phase 26 PLAN.md not yet drafted. Phase 25 wave structure (4 waves / 9 plans) shipped on 2026-05-16 with release gate green (2438 pass).
+- **Status:** Phases 21 / 22 / 24 / 25 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 26 CONTEXT.md locked 8 decisions: **D-71..D-74** SKILL.md 雙語（split-file + `--lang en|zh-TW`, default `en`; `SKILL.zh-TW.md` 全檔翻譯; `reference.md` 維持英文）、**D-75..D-78** feature-matrix audit row（單列 + N/A、tier readonly|local-write）+ `release-check.sh` doc-presence step（grep feature-matrix audit row + CHANGELOG version heading）。3 areas locked as Planner Discretion: Phase 23-04 partial disclosure, README D1 placement, `docs/user/*` parity scope.
+- **Last activity:** 2026-05-16 (Phase 26 context gathered + committed `4dab89d`; STATE updated to `discussing_phase`)
+- **Next step:** `$gsd-plan-phase 26` — draft PLAN.md from `26-CONTEXT.md`。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，記錄於 `25-J1-COVERAGE-MATRIX.md` + Accumulated Context 區 + Phase 26 CONTEXT.md 建議 E。
 
 ---
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
-status: discussing_phase
-last_updated: "2026-05-16T16:00:00.000+08:00"
-last_activity: "2026-05-16 (Phase 26 context gathered — DOCS-01/03/04 + release gate; 8 decisions locked D-71..D-78; 3 areas locked as Planner Discretion)"
+status: executing
+last_updated: "2026-05-16T17:50:56.152Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 25
+  total_plans: 29
   completed_plans: 25
-  percent: 96
+  percent: 86
 ---
 
 # STATE.md — Current Project State
@@ -29,8 +29,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 - **Phase:** 26 — Docs, Skill & Release Gate (context gathered 2026-05-16; awaiting `$gsd-plan-phase 26`)
 - **Plan:** TBD — Phase 26 PLAN.md not yet drafted. Phase 25 wave structure (4 waves / 9 plans) shipped on 2026-05-16 with release gate green (2438 pass).
-- **Status:** Phases 21 / 22 / 24 / 25 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 26 CONTEXT.md locked 8 decisions: **D-71..D-74** SKILL.md 雙語（split-file + `--lang en|zh-TW`, default `en`; `SKILL.zh-TW.md` 全檔翻譯; `reference.md` 維持英文）、**D-75..D-78** feature-matrix audit row（單列 + N/A、tier readonly|local-write）+ `release-check.sh` doc-presence step（grep feature-matrix audit row + CHANGELOG version heading）。3 areas locked as Planner Discretion: Phase 23-04 partial disclosure, README D1 placement, `docs/user/*` parity scope.
-- **Last activity:** 2026-05-16 (Phase 26 context gathered + committed `4dab89d`; STATE updated to `discussing_phase`)
+- **Status:** Ready to execute
+- **Last activity:** 2026-05-16
 - **Next step:** `$gsd-plan-phase 26` — draft PLAN.md from `26-CONTEXT.md`。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，記錄於 `25-J1-COVERAGE-MATRIX.md` + Accumulated Context 區 + Phase 26 CONTEXT.md 建議 E。
 
 ---

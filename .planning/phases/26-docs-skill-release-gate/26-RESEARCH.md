@@ -570,22 +570,22 @@ The ZH version (`README.zh-TW.md`) mirrors this structure with translated narrat
 
 **Verification action for planner:** Before Plan A starts, read `scripts/build.ts` and confirm assumption A3. If build.ts uses explicit enumeration (rather than directory glob), Plan A must also update build.ts.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `tests/integration/dist-smoke.test.ts` gain a `--lang zh-TW` smoke assertion?**
    - What we know: Existing smoke covers `--output` writing default (EN) SKILL.md (line 49-56). It does not exercise `--install` or `--lang`. A new assertion `dbcli skill --output /tmp/skill-zh.md --lang zh-TW` followed by `expect(text).toMatch(/Audit Log 使用|繁體中文/)` would lock in ZH-source shipping in the tarball.
    - What's unclear: This is a value judgment — does Phase 26 want to extend dist-smoke (out of strict scope), or rely on PR review for ZH presence?
-   - Recommendation: Plan A adds the assertion. Cost is ~5 lines; benefit is one-time investment in regression coverage. If planner wants to keep Phase 26 minimal, defer to follow-up.
+   - RESOLVED: Plan A Task A-4 adds the dist-smoke `--lang zh-TW` assertion. ~5-line cost; locks in ZH-source shipping in the tarball as a regression guard.
 
 2. **Should the `--lang` flag also flow into `--output` mode (not just `--install`)?**
    - What we know: skill.ts:59-63 handles `--output`; current logic writes `skillMarkdown` (whichever was read). With Phase 26's source-file branch, `--output` would automatically respect `--lang` if `skillMarkdown` is computed from the chosen source.
    - What's unclear: D-73 mentions `--install` explicitly; `--output` is a separate code path. Should `dbcli skill --output ./my.md --lang zh-TW` write the ZH SKILL? (Logical YES.)
-   - Recommendation: Yes — both flows read from `skillSourcePath` resolved by `resolveSkillSource(lang)`. Cleaner semantics: `--lang` is a SOURCE selector regardless of destination.
+   - RESOLVED: Yes — Plan A `resolveSkillSource(lang)` runs upstream of both `--install` and `--output`, so `--lang` is a SOURCE selector independent of destination.
 
 3. **Should v1.20.0 release date be put in CHANGELOG today or left as `<date>` placeholder?**
    - What we know: CONTRIBUTING.md:283 pre-release checklist treats version bump as the final pre-tag step. CHANGELOG conventions usually pin a date when the tag is cut.
    - What's unclear: Phase 26 release timing depends on when the user (Carl) cuts the tag.
-   - Recommendation: Plan D writes `2026-05-XX` (current date placeholder); Carl edits the day-of when tagging. Alternatively, leave as `<release-date>` and document the substitution.
+   - RESOLVED: Plan C pins `## [1.20.0] - 2026-05-17` (today). User can manually edit the date when tagging if release slips to a different day.
 
 ## Environment Availability
 

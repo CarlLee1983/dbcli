@@ -29,3 +29,16 @@ export interface AuditEntry {
   /** Additional non-sensitive metadata (e.g., rows_affected, execution_ms). */
   metadata?: Record<string, unknown>
 }
+
+/**
+ * Phase 25 D-59: brief audit entry for DOCS-02 `audit_recent` embeds.
+ * Reuses Phase 24 `tail --brief` shape PLUS `id` so agents can client-side
+ * join `entry.id === envelope.audit_ref`.
+ *
+ * PROHIBITED keys (must not be present in serialized output): redacted_query,
+ * redacted_sql, metadata, session_id, engine, side_effect_tier (D-59).
+ */
+export type AuditEntryBrief = Pick<
+  AuditEntry,
+  'id' | 'ts' | 'command' | 'target' | 'success'
+>

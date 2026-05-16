@@ -290,5 +290,26 @@ None — todo backlog 中沒有與 Phase 25 直接相關項目被 cross-referenc
 
 ---
 
+## Scope Addendum — L1 lock (2026-05-15, post-research)
+
+`25-RESEARCH.md` 揭示 13 個 `emitRecoveryEnvelope` 呼叫點裡有 **6 個**（`insert` / `update` / `delete` / `export` / `q` / `schema`）今天**沒有**配對的 `writeAuditEntry` 呼叫 — 此為 Phase 23 PARTIAL 已記錄的延後項目（見 `.planning/phases/23-engine-integration-rejection-paths/23-VERIFICATION.md`）。
+
+**選定 J1 — 只連已有 audit hook 的命令面，asymmetry 文件化：**
+
+- Phase 25 只在「Phase 23 已 wire `writeAuditEntry`」的 catch block 加 `recovery_ref` / `audit_ref` 雙向鏈接。
+- 對應的 wired surface（依 RESEARCH 的 13-site map 確認）：`query` + `inspect` + `guide` + 其餘 Phase 23 已 wire 的 audit-side command。
+- 6 個未 wire 的 command（`insert` / `update` / `delete` / `export` / `q` / `schema`）**不在 Phase 25 範圍**；它們的 `emitRecoveryEnvelope` 呼叫繼續存在但只產出單向 envelope（無 `audit_ref`）。
+- DOCS-02（`audit_recent` 嵌入 `inspect` / `guide` / `recover` / `recover --apply` 的 JSON output）**不受** J1 限制 — DOCS-02 是「列出最近 5 筆 audit」，與該指令本身是否寫 audit 無關，4 個指令全做。
+
+**Supersedes：** 本 CONTEXT.md `<canonical_refs>` 區 `Phase 25 強制讀取的 codebase 文件` 列表（line 138 附近）把 `delete.ts / export.ts / insert.ts / q.ts / query.ts / schema.ts / update.ts` 全列為「雙向 ref 注入點」。**Post-research 真實情況**：該列表 7 個檔案中只有 `query.ts` 為 J1 範圍；其餘 6 個 catch block 留待 Phase 23-04 follow-up，**Phase 25 plans 不應修改**。
+
+**Planner 必須交付的副產品（為 J1 兜底）：**
+
+1. **J1 coverage matrix** — 一張表列出「哪些 command 有完整雙向鏈、哪些只有單向 envelope、哪些都沒有」，作為 Phase 25 SUMMARY 的明確章節。
+2. **Contract test 二維覆蓋** — (a) wired surface 雙向鏈一定對得上；(b) 未 wire surface 不會 false-positive 出 `audit_ref`（envelope 寫入時 `audit_ref` 必為 `undefined`，不為 `null` 也不為空字串）。
+3. **Follow-up 記錄** — 在 `<deferred>` 區加 `Phase 23-04 — wire writeAuditEntry into insert/update/delete/export/q/schema` 條目（或 cross-reference ROADMAP backlog 既有 entry），明確 Phase 25 ship 後 6 個 command 的 envelope→audit 反向鏈仍缺。
+
+---
+
 *Phase: 25-recovery-envelope-bi-directional-linkage*
-*Context gathered: 2026-05-15*
+*Context gathered: 2026-05-15 (scope locked 2026-05-15 post-research)*

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.20.0
 milestone_name: milestone
-status: discussing
-last_updated: "2026-05-15T21:25:00.000+08:00"
-last_activity: 2026-05-15 (Phase 25 context gathered)
+status: ready_to_execute
+last_updated: "2026-05-15T22:30:00.000+08:00"
+last_activity: 2026-05-15 (Phase 25 plans verified — ready to execute)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 16
+  total_plans: 25
   completed_plans: 16
-  percent: 100
+  percent: 64
 ---
 
 # STATE.md — Current Project State
@@ -27,11 +27,11 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 ## Current Position
 
-- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (context gathered, ready for planning)
-- **Plan:** 0 plans yet. CONTEXT.md (`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-CONTEXT.md`) locks 12 decisions across two areas: (A) `SavedRecoveryEnvelope` wrapper 加 `id`/`audit_ref` optional + `emitRecoveryEnvelope` pre-generate UUID + `writeAuditEntry` 介面回傳 entry id (D-50..D-55, B1); (D) DOCS-02 inspect/guide/recover/recover --apply 在 `--for-agent`/`--format json` 路徑嵌入 `audit_recent: AuditEntryBrief[]` N=5、`{ts,command,target,success,id}` shape、disabled/empty 一律 `[]` (D-56..D-61). 七項 planner discretion (E–K + L/M)。
-- **Status:** Phases 21 / 22 / 24 complete; Phase 23 PARTIAL (audit-only deltas for `insert / update / delete / check / diff / migrate / schema / list / export / shell` deferred per 23-VERIFICATION conclusion). Phase 25 context gathered 2026-05-15 — discussion focused on雙向 ref 結構與 DOCS-02 嵌入策略；剩餘 area B/C 已被 area A 決策連鎖收斂，不需另開討論。
-- **Last activity:** 2026-05-15 (Phase 25 context gathered)
-- **Next phase:** 25 — 進入 `$gsd-plan-phase 25` 拆 plan；Phase 26 (Docs / Skill / Release Gate) 仍 blocked on Phase 25 feature-complete.
+- **Phase:** 25 — Recovery Envelope Bi-directional Linkage (plans verified, ready to execute)
+- **Plan:** 9 plans across 4 waves（25-01..25-09 PLAN.md）。Wave 1 = type plumbing（01 envelope wrapper schema, 02 writeAuditEntry id return, 03 audit_recent helper）；Wave 2 = call-site wiring（04 emit envelope id, 05 J1 catch blocks on `inspect.ts` + `query.ts` only）；Wave 3 = DOCS-02 injection + contract test（06 inspect/guide, 07 recover/recover --apply, 08 release-blocking `recovery-audit-link.test.ts` 含 J1 negative guard）；Wave 4 = release gate（09 J1 coverage matrix + VALIDATION sign-off + `bun run release:check` 人工 checkpoint）。Researcher + pattern-mapper + planner + checker 全部 PASS（J1 scope lock, Phase 22/24 fences, Phase 25 12 個 locked decision 都有 task 對應）。
+- **Status:** Phases 21 / 22 / 24 complete; Phase 23 PARTIAL（6 個 unwired catch block：`insert / update / delete / export / q / schema` — Phase 25 scope lock J1 不碰，留待 Phase 23-04 follow-up）。Phase 25 context 2026-05-15 gathered、research / patterns / plans 同日 2026-05-15 完成並通過 verification。
+- **Last activity:** 2026-05-15 (Phase 25 plans verified — ready to execute)
+- **Next phase:** 25 — 進入 `$gsd-execute-phase 25` 執行 9 plans；Phase 26 (Docs / Skill / Release Gate) 仍 blocked on Phase 25 feature-complete。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，由 Plan 09 task 在 ship 後寫進 ROADMAP backlog 區。
 
 ---
 

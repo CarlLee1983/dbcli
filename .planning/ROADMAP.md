@@ -92,7 +92,18 @@ Plans:
   2. 同一次失敗寫入的 recovery envelope 新增 `audit_ref` 欄位，反向指向觸發它的 audit entry id
   3. `dbcli inspect` 與 `dbcli recover` 在 agent guide 輸出中自動引用 recent audit（last N 筆摘要），讓 agent 看到歷史脈絡而非只看到當前狀態
   4. 雙向欄位在 `--format json` agent-facing 輸出皆存在且互相對得上（contract test 守住）
-**Plans:** TBD
+**Plans:** 9 plans
+
+Plans:
+- [ ] 25-01-envelope-wrapper-schema-PLAN.md — Extend SavedRecoveryEnvelope wrapper with optional id + audit_ref (D-50, D-52, D-54); zod parser + unit tests
+- [ ] 25-02-write-audit-entry-id-return-PLAN.md — writeAuditEntry returns entry UUID; AuditOutcome gains recovery_ref (D-J, D-K, L5)
+- [ ] 25-03-audit-recent-helper-PLAN.md — New src/core/audit/recent.ts with shouldEmbedRecent + loadRecentAudit; AuditEntryBrief type (D-56..D-60)
+- [ ] 25-04-emit-envelope-id-PLAN.md — emitRecoveryEnvelope pre-generates UUID; writeLastEnvelope* accept id + auditRef (D-51, I1, K1)
+- [ ] 25-05-wire-j1-catch-blocks-PLAN.md — Wire bi-directional ref in inspect.ts + query.ts catch blocks only (J1 scope lock)
+- [ ] 25-06-docs02-inspect-guide-PLAN.md — DOCS-02 audit_recent injection in inspect + guide snapshot
+- [ ] 25-07-docs02-recover-PLAN.md — DOCS-02 audit_recent injection at recover / recover --apply print sites (D-52 wrapper-at-print-site)
+- [ ] 25-08-contract-test-j1-guard-PLAN.md — Release-blocking contract test: round-trip + J1 asymmetry guard + DOCS-02 4 surfaces + D-54 back-compat
+- [ ] 25-09-release-gate-PLAN.md — J1 coverage matrix doc + STATE.md follow-up + VALIDATION.md approval + bun run release:check
 
 ### Phase 26: Docs, Skill & Release Gate
 **Goal:** v1.20.0 對外發佈所需的所有人 / 機可讀文件就緒，包含 agent 整合指引、feature matrix、CHANGELOG / README，並通過 release gate。
@@ -139,7 +150,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 | 22. Entry Schema & Redaction Contract | 3/3 | Complete | 2026-05-15 |
 | 23. Engine Integration & Rejection Paths | 3/3 | Partial (query/diagnostic surface; DML/DDL deferred to 23-04) | 2026-05-15 |
 | 24. `dbcli audit` CLI | 0/5 | Planned (5 plans drafted, ready for execute) | — |
-| 25. Recovery Envelope Bi-directional Linkage | 0/0 | Not started | — |
+| 25. Recovery Envelope Bi-directional Linkage | 0/9 | Planned (9 plans drafted; J1 scope lock, ready for execute) | — |
 | 26. Docs, Skill & Release Gate | 0/0 | Not started | — |
 
 ---

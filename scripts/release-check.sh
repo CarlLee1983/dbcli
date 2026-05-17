@@ -5,25 +5,38 @@ cd "$(dirname "$0")/.."
 
 step() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 
-step '1/7 bun audit'
+step '1/8 bun audit'
 bun audit
 
-step '2/7 prettier --check'
+step '2/8 prettier --check'
 bunx prettier --check "src/**/*.ts" "tests/**/*.ts"
 
-step '3/7 typecheck'
+step '3/8 typecheck'
 bun run typecheck
 
-step '4/7 lint'
+step '4/8 lint'
 bun run lint
 
-step '5/7 test'
+step '5/8 test'
 bun test
 
-step '6/7 build'
+step '6/8 build'
 bun run build
 
-step '7/7 dist smoke'
+step '7/8 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
+
+step '8/8 doc-presence'
+PKG_VERSION=$(node -p "require('./package.json').version")
+if ! grep -qE '^\| `audit` ' docs/feature-matrix.md; then
+  echo "  ✗ docs/feature-matrix.md missing 'audit' row" >&2
+  exit 1
+fi
+if ! grep -qF "## [${PKG_VERSION}]" CHANGELOG.md; then
+  echo "  ✗ CHANGELOG.md missing '## [${PKG_VERSION}]' heading" >&2
+  exit 1
+fi
+echo "  ✓ feature-matrix has audit row"
+echo "  ✓ CHANGELOG.md has ## [${PKG_VERSION}] heading"
 
 printf '\n\033[1;32m✓ release:check passed\033[0m\n'

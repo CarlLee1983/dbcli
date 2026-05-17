@@ -71,6 +71,45 @@ Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 
+## Audit Log usage
+
+Use the audit log when you need cross-session history or forensics on what dbcli
+has done on this database, rather than re-querying live DB state from scratch.
+
+**Scenario 1 — Session handoff (picking up where another agent left off):**
+
+```bash
+dbcli audit tail --for-agent --n 10           # last 10 entries as JSON envelope
+dbcli audit tail --all --for-agent --n 20     # cross-connection merged view (D4)
+```
+
+Returns an agent-facing JSON envelope with `session_id` / `engine` / `command` /
+`target` / `success` per entry. Metadata-only by design — never raw SQL bodies,
+`--param` values, or result cell contents (D3 lock).
+
+**Scenario 2 — Forensics (reconstructing a failure):**
+
+```bash
+dbcli recover --format json                   # inspect audit_recent embed + recovery_ref
+dbcli audit show <id-prefix>                  # full entry by id prefix (>=4 chars)
+dbcli audit show --recovery-ref <envelope-id> # find entry that emitted an envelope
+```
+
+The `inspect` / `guide` / `recover` / `recover --apply` agent JSON output embeds
+`audit_recent: AuditEntryBrief[]` (last 5 entries) — a fresh session has immediate
+history context. The envelope's `audit_ref` and the audit entry's `recovery_ref`
+point at each other; agents can pivot either direction.
+
+**Known limitation (v1.20.0):** Bi-directional linkage is wired for `query`,
+`inspect`, and diagnostic surfaces. The commands `insert / update / delete /
+export / q / schema` emit single-direction recovery envelopes (no `audit_ref`)
+in v1.20.0; full coverage is tracked as Phase 23-04 follow-up. Recovery envelope
+linkage from the envelope side is unaffected.
+
+Audit entries are written to `.dbcli/audit/<connection>.jsonl` with rotation at
+~10 MB or 1000 entries. `audit.enabled = false` in `.dbcli` opts out (default ON
+since v1.20.0). For flag reference see [`reference.md`](./reference.md) §audit.
+
 ## Quick start
 
 ```bash

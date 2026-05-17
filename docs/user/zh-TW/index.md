@@ -148,6 +148,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `report` | 產生完整的健康、容量與效能報告。 |
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
+| `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
 
 <!-- doc-key: advanced-tools -->
 ### 進階工具
@@ -198,6 +199,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 2.  **修復封包 (Recovery Envelopes)**：當指令失敗時，使用 `--recovery` 獲得機器可讀的 JSON 錯誤及修復建議。
 3.  **風險控制**：AI 代理會主動使用 `dbcli plan`、`insert`/`update`/`delete` 的 `--plan` 預檢與 `--dry-run` 來驗證其行為。
 4.  **上下文效率**：`inspect --for-agent` 提供精簡的元資料，防止 AI 上下文視窗過載。
+5.  **稽核日誌 (Audit Log)**：詳見 [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log)。
 
 ---
 

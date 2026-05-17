@@ -66,10 +66,10 @@ Requirements for milestone v1.20.0. Each maps to one roadmap phase.
 
 ### DOCS — Agent 整合與文件
 
-- [ ] **DOCS-01**: SKILL.md 新增「Audit Log usage」章節（中英雙語），說明 handoff / forensics 兩種使用情境
+- [x] **DOCS-01**: SKILL.md 新增「Audit Log usage」章節（中英雙語），說明 handoff / forensics 兩種使用情境
 - [ ] **DOCS-02**: `dbcli inspect` / `recover` 流程在 agent guide 自動引用 recent audit（last N 筆摘要）
-- [ ] **DOCS-03**: `docs/feature-matrix.md` 加 audit row（含 side-effect tier 對照）並列入 release gate 文件
-- [ ] **DOCS-04**: README（en + zh-TW）與 CHANGELOG 補上 v1.20.0 audit log 說明，特別點出「預設 on」對既有用戶的影響（D1）
+- [x] **DOCS-03**: `docs/feature-matrix.md` 加 audit row（含 side-effect tier 對照）並列入 release gate 文件
+- [x] **DOCS-04**: README（en + zh-TW）與 CHANGELOG 補上 v1.20.0 audit log 說明，特別點出「預設 on」對既有用戶的影響（D1）
 
 ---
 
@@ -138,10 +138,10 @@ Populated by `.planning/ROADMAP.md` (Phase 21–26).
 | CONFIG-01 | Phase 21 | Pending |
 | CONFIG-02 | Phase 21 | Pending |
 | CONFIG-03 | Phase 21 | Pending |
-| DOCS-01 | Phase 26 | Pending |
+| DOCS-01 | Phase 26 | Complete |
 | DOCS-02 | Phase 25 | Pending |
-| DOCS-03 | Phase 26 | Pending |
-| DOCS-04 | Phase 26 | Pending |
+| DOCS-03 | Phase 26 | Complete |
+| DOCS-04 | Phase 26 | Complete |
 
 **Coverage:**
 - v1.20.0 requirements: 28 total

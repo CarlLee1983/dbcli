@@ -16,7 +16,7 @@
 - [~] **Phase 23: Engine Integration & Rejection Paths (PARTIAL)** — query / plan / doctor / inspect / guide / report 已整合；insert / update / delete / check / diff / migrate / schema / list / export / shell 延後到 Phase 23-04 audit-only deltas
 - [x] **Phase 24: `dbcli audit` CLI** — `tail` / `tail --all` / `show` / `clear` / `health`、table / JSON 兩種輸出格式 (2026-05-15)
 - [x] **Phase 25: Recovery Envelope Bi-directional Linkage** — `recovery_ref` ⇄ `audit_ref` 雙向欄位、失敗路徑自動連結、`inspect` / `recover` flow 引用 recent audit (2026-05-16)
-- [ ] **Phase 26: Docs, Skill & Release Gate** — SKILL.md 中英雙語 audit 章節、`docs/feature-matrix.md` audit row、README / CHANGELOG 升級說明（強調 D1 預設 on）
+- [x] **Phase 26: Docs, Skill & Release Gate** — SKILL.md 中英雙語 audit 章節、`docs/feature-matrix.md` audit row、README / CHANGELOG 升級說明（強調 D1 預設 on） (completed 2026-05-17)
 
 ---
 
@@ -114,13 +114,13 @@ Plans:
   2. `docs/feature-matrix.md` 加 audit row（含 side-effect tier 對照）並被列入 release gate 文件清單
   3. README（en + zh-TW）與 CHANGELOG 補上 v1.20.0 audit log 說明，特別點出「預設 on」對既有用戶的影響（D1 升級警告）
   4. 完整 release gate（`bun run release:check`：typecheck / prettier / lint / `bun test` / build / dist-smoke / doc-presence — 8 步全綠）
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 26-A-skill-bilingual-lang-flag-PLAN.md — Bilingual SKILL.md (full ZH translation) + `dbcli skill --install --lang en|zh-TW` flag + new `## Audit Log usage` section (EN + ZH) (DOCS-01)
-- [ ] 26-B-feature-matrix-audit-row-PLAN.md — `docs/feature-matrix.md` audit row + Side-effect tiers examples + `assets/reference.md` `### audit` block (DOCS-03)
-- [ ] 26-C-release-gate-changelog-version-PLAN.md — package.json 1.19.1 -> 1.20.0 + CHANGELOG `## [1.20.0]` section + release-check.sh step 8/8 doc-presence + CONTRIBUTING / feature-matrix CI block sync (DOCS-03 + DOCS-04)
-- [ ] 26-D-readme-user-docs-sync-PLAN.md — README `## Audit Log` (EN + ZH) + docs/user/* table row + AI agent bullet (4-file parity, no new doc-key) (DOCS-04)
+- [x] 26-A-skill-bilingual-lang-flag-PLAN.md — Bilingual SKILL.md (full ZH translation) + `dbcli skill --install --lang en|zh-TW` flag + new `## Audit Log usage` section (EN + ZH) (DOCS-01)
+- [x] 26-B-feature-matrix-audit-row-PLAN.md — `docs/feature-matrix.md` audit row + Side-effect tiers examples + `assets/reference.md` `### audit` block (DOCS-03)
+- [x] 26-C-release-gate-changelog-version-PLAN.md — package.json 1.19.1 -> 1.20.0 + CHANGELOG `## [1.20.0]` section + release-check.sh step 8/8 doc-presence + CONTRIBUTING / feature-matrix CI block sync (DOCS-03 + DOCS-04)
+- [x] 26-D-readme-user-docs-sync-PLAN.md — README `## Audit Log` (EN + ZH) + docs/user/* table row + AI agent bullet (4-file parity, no new doc-key) (DOCS-04)
 
 ---
 
@@ -157,7 +157,7 @@ Phase 24 and Phase 25 are technically independent after Phase 23 lands and can b
 | 23. Engine Integration & Rejection Paths | 3/3 | Partial (query/diagnostic surface; DML/DDL deferred to 23-04) | 2026-05-15 |
 | 24. `dbcli audit` CLI | 0/5 | Planned (5 plans drafted, ready for execute) | — |
 | 25. Recovery Envelope Bi-directional Linkage | 9/9 | Complete (J1 scope lock; release gate green; 2 human-UAT items deferred to Phase 26 DX smoke) | 2026-05-16 |
-| 26. Docs, Skill & Release Gate | 0/4 | Planned (4 plans drafted, ready for execute) | — |
+| 26. Docs, Skill & Release Gate | 4/4 | Complete    | 2026-05-17 |
 
 ---
 

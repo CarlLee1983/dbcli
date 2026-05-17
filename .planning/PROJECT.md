@@ -202,11 +202,12 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | No audit logging in V1 | Adds storage, cleanup complexity. Can add if compliance needs emerge. | — Pending |
 | Blacklist over fine-grained ACL | Table/column blacklisting is simpler than full RBAC. Covers 90% of sensitive data protection needs. | ✓ Good — v0.2.0-beta shipped; consider RBAC if needed later |
 
-## Current State (v1.20.0 — Agent-Facing Audit Log: Defining requirements)
+## Current State (v1.20.0 — Agent-Facing Audit Log: Complete, awaiting tag)
 
-**Active milestone:** v1.20.0 — see `## Current Milestone` 區塊與 `.planning/REQUIREMENTS.md` / `.planning/ROADMAP.md`（建立後）。
+**Active milestone:** v1.20.0 — **all 6 phases complete (2026-05-17)**. Phase 26 verification passed 4/4 must-haves; `bun run release:check` exits 0 with new step 8/8 doc-presence; awaiting `npm version` + `git tag v1.20.0` from maintainer.
 
-**Latest Release:** v1.19.1 (2026-05-14)
+**Latest Release:** v1.19.1 (2026-05-14) — v1.20.0 ready to publish on demand.
+- ✅ Agent-Facing Audit Log (v1.20.0) — `dbcli audit tail|show|clear|health` CLI; `.dbcli/audit/<connection>.jsonl` writer with rotation; redaction; recovery envelope ↔ audit entry bi-directional linkage on `query`/`inspect`/diagnostic surfaces; `audit_recent` embedded in inspect/guide/recover JSON; bilingual SKILL.md + `--lang en|zh-TW` flag; feature-matrix audit row + release-check step 8/8 doc-presence. Known limitation: `insert/update/delete/export/q/schema` await Phase 23-04 follow-up for `writeAuditEntry` wiring.
 - ✅ Post-release Contract Stabilization Patch (v1.19.1) — 型別化能力註冊、agent-facing JSON 合約鎖定（inspect / report / guide / recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`)、UI helper 抽離 + render smoke 測試
 - ✅ Expanded Antigravity Protocol (v1.19.0) — Phase 0 Scout + Phase 3 Auditor、Codex (OMX) / Windsurf 安裝器、Cursor `.cursor/rules/*.mdc` 遷移、新增 `GEMINI.md`
 - ✅ Interactive HTML Dashboards (v1.18.0) — React + Recharts + Tailwind 模板、`--ui` flag、`visual:` frontmatter、安全資料注入
@@ -325,4 +326,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-14 — v1.20.0 milestone 啟動：Agent-Facing Audit Log（Session handoff + Forensics + Recovery envelope 雙向連結）。Locked decisions D1–D6 已寫入；requirements / roadmap 由 `$gsd-new-milestone` 接續產出。*
+*Last updated: 2026-05-17 — v1.20.0 milestone complete: Phases 21–26 all shipped; verification passed 4/4 must-haves; release gate green (8/8 doc-presence step live). Awaiting `npm version minor` + `git tag v1.20.0` from maintainer.*

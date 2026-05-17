@@ -1,51 +1,55 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.20.0
-milestone_name: milestone
-status: completed
-last_updated: "2026-05-17T14:37:36.863Z"
+milestone: null
+milestone_name: null
+status: between_milestones
+last_updated: "2026-05-17T15:00:00.000Z"
 last_activity: 2026-05-17
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 29
-  completed_plans: 29
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md — Current Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-14)
+See: `.planning/PROJECT.md` (updated 2026-05-17)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** Phase 26 — Docs, Skill & Release Gate
+**Current Focus:** None — v1.20.0 archived 2026-05-17。下一個 milestone 待 `$gsd-new-milestone` 啟動。
 
 ---
 
 ## Current Position
 
-Phase: 26 (Docs, Skill & Release Gate) — EXECUTING
-Plan: 1 of 4
+Between milestones. No active phase.
 
-- **Phase:** 26
-- **Plan:** Not started
-- **Status:** Milestone complete
+- **Phase:** None
+- **Plan:** None
+- **Status:** v1.20.0 archived 2026-05-17; awaiting next milestone definition
 - **Last activity:** 2026-05-17
-- **Next step:** `$gsd-plan-phase 26` — draft PLAN.md from `26-CONTEXT.md`。Phase 23-04（wire writeAuditEntry into 6 unwired catch blocks）為 known backlog follow-up，記錄於 `25-J1-COVERAGE-MATRIX.md` + Accumulated Context 區 + Phase 26 CONTEXT.md 建議 E。
+- **Next step:** `$gsd-new-milestone` — define next milestone (candidate directions in PROJECT.md → Next Milestone Goals)。
+
+**Carried-over backlog (must be slotted into next milestone if not deferred again):**
+- Phase 23-04 — wire `writeAuditEntry` into `insert/update/delete/export/q/schema` catch blocks (closes INTEGRATE-01 / INTEGRATE-04 partial from v1.20.0). Reference: `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`。
 
 ---
 
 ## Milestone Status
 
-**v1.20.0 — Agent-Facing Audit Log:** ACTIVE (started 2026-05-14)
+**v1.20.0 — Agent-Facing Audit Log:** COMPLETE (2026-05-17)
 
-- 規劃中：Audit log writer、JSON 合約、CLI、recovery envelope 雙向連結、強制 redaction
-- Roadmap：6 phases（Phase 21 Writer Foundation → Phase 22 Schema/Redaction → Phase 23 Engine Integration → Phase 24 CLI → Phase 25 Recovery Linkage → Phase 26 Docs/Release Gate）
-- Locked decisions：D1 預設 on、D2 session_id env 優先、D3 不含 cell preview、D4 每連線一檔 + `--all` merge、D5 純時序反序、D6 寫入失敗只警告
-- 暫緩 seeds：`conflict-avoidance-resource-index`、`self-verification-correlation`
+- Audit log writer + JSON 合約 + `dbcli audit` CLI + recovery envelope 雙向連結 + 強制 redaction 全部 shipped
+- 6 phases / 29 plans / 82 commits / 141 files / +22432 / -337
+- Release gate `bun run release:check` 8/8 全綠
+- Known follow-up：Phase 23-04（DML/DDL audit deltas）— 下個 milestone backlog 處理
+- Archive：`milestones/v1.20.0-ROADMAP.md` / `milestones/v1.20.0-REQUIREMENTS.md`
+- 暫緩 seeds（保留）：`conflict-avoidance-resource-index`、`self-verification-correlation`
 
 **v1.19.1 — Post-release Contract Stabilization Patch:** COMPLETE (2026-05-14)
 
@@ -203,4 +207,4 @@ v1.20.0 將在 Phase 22 contract test 與 Phase 26 docs/feature-matrix 更新後
 
 ---
 
-*Last updated: 2026-05-14 — Milestone v1.20.0 (Agent-Facing Audit Log) roadmap 完成；6 phases / Phase 21–26 / 28 requirements 全部 mapped；狀態切換 `defining_requirements → ready_to_plan`。*
+*Last updated: 2026-05-17 — Milestone v1.20.0 (Agent-Facing Audit Log) archived；6 phases / 29 plans shipped；狀態切換 `completed → between_milestones`。下一個 milestone 待 `$gsd-new-milestone` 啟動。*

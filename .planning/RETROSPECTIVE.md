@@ -2,6 +2,52 @@
 
 *A living document updated after each milestone. Lessons feed forward into future planning.*
 
+## Milestone: v1.20.0 — Agent-Facing Audit Log
+
+**Shipped:** 2026-05-17
+**Phases:** 6 (Phase 21–26) | **Plans:** 29 | **Timeline:** 2026-05-15 → 2026-05-17 (3 days)
+
+### What Was Built
+- `.dbcli/audit/<connection>.jsonl` append-only writer with file lock + size/entry rotation (Phase 21)
+- `SessionIdService` with env-first resolution (`DBCLI_SESSION_ID`) + PID-stamped persistence (Phase 21)
+- Agent-facing `AuditEntry` JSON contract + release-blocking contract test reusing `tests/helpers/sensitive-output.ts` (Phase 22)
+- Engine integration into `query`/`plan`/`doctor`/`inspect`/`report`/`guide` across SQL/Mongo/Redis/ES (Phase 23, partial — DML/DDL deferred to Phase 23-04)
+- `dbcli audit tail|show|clear|health` CLI with `--all` cross-connection envelope + `--format table|json` (Phase 24)
+- Bi-directional `recovery_ref` ⇄ `audit_ref` linkage; `audit_recent` injected at inspect/guide/recover/recover --apply (Phase 25)
+- Bilingual SKILL.md + `dbcli skill --install --lang en|zh-TW` flag + audit section in README/CHANGELOG/feature-matrix (Phase 26)
+- Release-check.sh step 8/8 doc-presence gate (Phase 26)
+
+### What Worked
+- **Schema-lock-before-fanout discipline.** Phase 22 release-blocking contract test landed before Phase 23 hooked all engines — zero schema-drift rework when each engine integrated.
+- **Single redaction source.** Forcing all redaction back to `tests/helpers/sensitive-output.ts` (no second helper) kept the audit safety contract auditable from one file.
+- **J1 scope lock for Phase 25.** Limiting bi-directional ref wiring to `query` + `inspect` catch blocks shipped the contract guard quickly; deferring the other 6 commands to Phase 23-04 was the right call rather than expanding scope mid-phase.
+- **Capability registry reuse for `side_effect_tier`.** Reading `src/adapters/capabilities.ts` directly meant new commands need only one update point — no parallel enum to drift.
+- **Decision lock (D1–D6) at roadmap time.** Locking "default-on" / "session_id env-first" / "metadata-only" / "fail-soft" before Phase 21 prevented late re-litigation.
+
+### What Was Inefficient
+- **Requirements traceability drift.** REQUIREMENTS.md `[ ]` boxes never got flipped to `[x]` as phases shipped — 25/28 still showed Pending at milestone close, forcing a sweep before archive. Should be a per-phase checkpoint, not an end-of-milestone task.
+- **Phase 23 scope discovery mid-flight.** The split between "diagnostic surface" (shipped) vs "DML/DDL" (deferred to 23-04) emerged during execution rather than during Phase 23 planning. A pre-execution audit of which catch blocks already had `writeAuditEntry` would have surfaced this earlier.
+- **Plan numbering inconsistency.** Phase 23 used `23-01 / 23-02-core-integration / 23-03-diagnostic-integration` while Phase 26 used `26-A / 26-B / 26-C / 26-D`. Mixed conventions across the same milestone make plan globbing harder.
+
+### Patterns Established
+- **Locked-decisions block in roadmap.** D1–D6 table at top of ROADMAP.md / REQUIREMENTS.md surfaces irreversible choices before they get re-litigated.
+- **Release-blocking contract test as a gate.** Every agent-facing JSON output now ships with a contract test that's wired into `bun run release:check`. Pattern continues from v1.19.1 inspect/report/guide/recovery.
+- **Backlog-carry annotation in milestone archive.** Explicitly marking INTEGRATE-01 / INTEGRATE-04 as Partial with the Phase 23-04 reference (rather than hiding the gap) is the right hand-off for the next milestone.
+- **Coverage matrix doc per partial closure.** `25-J1-COVERAGE-MATRIX.md` documents which 2 commands are wired and which 6 are not — useful template for future partial integrations.
+
+### Key Lessons
+1. **Flip `[ ]` → `[x]` in REQUIREMENTS.md per plan summary, not at milestone end.** Per-phase verification should sweep the traceability table as part of `phase complete` automation.
+2. **Audit the "no second helper" rule explicitly.** When the security contract says "one redaction source," tests must fail if a second one is introduced. Make this part of the contract test, not a code-review hope.
+3. **Mid-phase scope discoveries deserve a quick `--rescope` flag.** Phase 23's discovery that DML/DDL was much wider than expected should have triggered a 5-minute roadmap re-slice; instead we shipped Phase 23 partial and added Phase 23-04 as backlog — workable but messier than splitting Phase 23a / 23b at planning time would have been.
+4. **Default-on observability needs CHANGELOG warning.** D1 (`audit.enabled = true` by default) silently creates `.dbcli/audit/` for every upgrading user. Calling this out prominently in CHANGELOG + README upgrade notes was the right move; do the same for any future default-on feature.
+
+### Cost Observations
+- Model mix: ~5% opus (roadmap / decision locks), ~85% sonnet (planning + execution), ~10% haiku (parallel SUMMARY extraction)
+- Sessions: ~12 (mix of plan-phase, execute-phase, verify-work, complete-milestone)
+- Notable: single-day per phase was achievable for Phases 21–26 because schema lock + capability registry reuse cut rework. Worth maintaining the "lock the contract before fanning out" pattern.
+
+---
+
 ## Milestone: v0.2.0-beta — Data Access Control
 
 **Shipped:** 2026-03-26

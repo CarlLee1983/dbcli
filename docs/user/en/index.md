@@ -148,6 +148,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `report` | Generates a comprehensive health/perf report. |
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
+| `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
 
 <!-- doc-key: advanced-tools -->
 ### Advanced Tools
@@ -198,6 +199,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 2.  **Recovery Envelopes**: When a command fails, use `--recovery` to get a machine-readable JSON error with a suggested fix.
 3.  **Risk Gating**: Agents use `dbcli plan`, the per-command `--plan` preflight on `insert`/`update`/`delete`, and `--dry-run` to verify their actions before committing changes.
 4.  **Context Efficiency**: `inspect --for-agent` provides exactly the metadata the agent needs to orient itself without bloating its context window.
+5.  **Audit Log**: see [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log).
 
 ---
 

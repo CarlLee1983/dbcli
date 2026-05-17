@@ -248,6 +248,10 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">recover</div>
                     <span class="text-text-muted font-medium">Executes automated remediation plans for common failure modes.</span>
                 </div>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
+                    <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">audit</div>
+                    <span class="text-text-muted font-medium">Tails the per-connection audit log (<code>.dbcli/audit/&lt;conn&gt;.jsonl</code>); use <code>--for-agent</code> for handoff JSON.</span>
+                </div>
             </div>
 
             <!-- doc-key: advanced-tools -->
@@ -331,6 +335,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>
                 <li><strong>Risk Gating</strong>: <code>dbcli plan</code> for raw SQL plus per-command <code>--plan</code> on <code>insert</code> / <code>update</code> / <code>delete</code> for DML preflight without connecting to the database.</li>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
+                <li><strong>Audit Log</strong>: <code>audit tail --for-agent</code> for session handoff; bi-directional <code>recovery_ref</code> / <code>audit_ref</code> links.</li>
             </ul>
         </section>
 

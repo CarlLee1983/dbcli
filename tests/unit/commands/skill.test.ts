@@ -66,4 +66,23 @@ describe('skillCommand logic', () => {
     expect(exitCode).toBe(1)
     expect(errorOutput).toContain('Unknown platform')
   })
+
+  test('default --lang en prints EN SKILL to stdout', async () => {
+    await skillCommand({} as any, { lang: 'en' })
+    expect(logOutput).toContain('# dbcli')
+    expect(logOutput).toContain('Database CLI for AI agents')
+  })
+
+  test('writes ZH SKILL when --lang zh-TW with --output', async () => {
+    const testFile = join(process.cwd(), 'test-skill-zh.md')
+    if (existsSync(testFile)) unlinkSync(testFile)
+    try {
+      await skillCommand({} as any, { output: testFile, lang: 'zh-TW' })
+      expect(existsSync(testFile)).toBe(true)
+      const content = await Bun.file(testFile).text()
+      expect(content).toMatch(/Audit Log 使用|稽核日誌|繁體中文/)
+    } finally {
+      if (existsSync(testFile)) unlinkSync(testFile)
+    }
+  })
 })

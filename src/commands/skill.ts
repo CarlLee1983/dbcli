@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
 import { packageAssetPath } from '@/utils/package-root'
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 
 /** Absolute path to the static SKILL.md (relative to package root) */
 const SKILL_SOURCE_PATH = packageAssetPath('SKILL.md')
@@ -16,9 +16,20 @@ const SKILL_SOURCE_PATH = packageAssetPath('SKILL.md')
 /** Long-form command reference (sibling to SKILL in assets/ and in install dir) */
 const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
 
+/**
+ * Resolve the SKILL source markdown file path based on the requested language.
+ * `--lang` is a SOURCE-FILE SELECTOR, not a `DBCLI_LANG` integration (D-73).
+ * Target install/output filename stays `SKILL.md` regardless of source (D-74).
+ */
+function resolveSkillSource(lang: string): string {
+  if (lang === 'zh-TW') return packageAssetPath('SKILL.zh-TW.md')
+  return packageAssetPath('SKILL.md')
+}
+
 export interface SkillOptions {
   install?: string // platform: claude, gemini, copilot, cursor
   output?: string // custom output file path
+  lang?: 'en' | 'zh-TW' // source language for SKILL content (default 'en', D-73)
 }
 
 /**
@@ -43,10 +54,12 @@ export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
  */
 export async function skillCommand(_program: Command, options: SkillOptions): Promise<void> {
   try {
-    // 1. Read static SKILL.md (single source of truth)
-    const skillFile = Bun.file(SKILL_SOURCE_PATH)
+    // 1. Read static SKILL.<lang>.md (single source of truth; D-73 source selector)
+    const lang = options.lang ?? 'en' // defensive: commander supplies default, but unit tests bypass commander
+    const skillSourcePath = resolveSkillSource(lang)
+    const skillFile = Bun.file(skillSourcePath)
     if (!(await skillFile.exists())) {
-      throw new Error(`Skill source not found: ${SKILL_SOURCE_PATH}`)
+      throw new Error(`Skill source not found: ${skillSourcePath}`)
     }
     const refFile = Bun.file(REFERENCE_SOURCE_PATH)
     if (!(await refFile.exists())) {
@@ -216,6 +229,11 @@ export function registerSkillCommand(program: Command): Command {
       'Install to platform directory (claude, gemini, copilot, cursor, codex, windsurf)'
     )
     .option('--output <path>', 'Write skill to file instead of stdout')
+    .addOption(
+      new Option('--lang <lang>', 'Source language for SKILL content')
+        .choices(['en', 'zh-TW'])
+        .default('en')
+    )
     .action(async (options: Record<string, unknown>) => {
       try {
         await skillCommand(program, options)

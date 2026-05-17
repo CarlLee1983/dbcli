@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.20.0] - 2026-05-17
+
+### Added
+
+- **Agent-facing Audit Log**: every db-touching command writes a structured JSONL entry to `.dbcli/audit/<connection>.jsonl`. Entry shape locked as a contract test (`tests/integration/audit-contract.test.ts`) covering `ts` / `session_id` / `engine` / `command` / `side_effect_tier` / `target` / `success` / `recovery_ref` / `redacted_sql`. Redaction sourced from `tests/helpers/sensitive-output.ts` (single source of truth).
+- `dbcli audit tail` / `audit show` / `audit clear` / `audit health` subcommands with `--n`, `--all`, `--for-agent`, `--brief`, `--recovery-ref <id>`, `--format table|json`, `--yes` flags. JSON output is a flat array suitable for agent direct consumption (CLI-01..06).
+- `dbcli audit tail --all` cross-connection merged view; `audit show --recovery-ref <id>` bi-directional lookup; `audit health` reports writer state, lock state, rotation cap usage.
+- Recovery envelope bi-directional linkage: audit entry `recovery_ref` points at `.dbcli/last-recovery.json`; envelope's new `audit_ref` points back at the audit entry id.
+- `inspect` / `guide` / `recover` / `recover --apply` `--for-agent` JSON output embeds `audit_recent: AuditEntryBrief[]` (last 5 entries) for immediate cross-session context.
+- `dbcli skill --install <platform> --lang en|zh-TW` (default `en`) to install Traditional Chinese SKILL.md content on agent platforms; target filename remains `SKILL.md` regardless of source.
+- New `assets/SKILL.zh-TW.md` — full Traditional Chinese translation of `assets/SKILL.md`, including the new `## Audit Log 使用` section.
+- New `## Audit Log usage` section in `assets/SKILL.md` (session handoff + forensics scenarios).
+- New `### audit` subcommand block in `assets/reference.md` documenting all 4 subcommands with flag tables.
+- `docs/feature-matrix.md` gains an `audit` row (engine-independent, N/A across all 6 engines) and the Side-effect tiers table examples now include `audit tail` / `audit show` / `audit health` (`readonly`) and `audit clear` (`local-write`).
+- `scripts/release-check.sh` step `8/8 doc-presence` — release-blocking shell-grep check that the feature-matrix `audit` row and the matching `CHANGELOG.md ## [<version>]` heading both exist.
+
+### Changed
+
+- **Default-on, upgrade impact:** `audit.enabled = true` by default. Existing projects will begin creating `.dbcli/audit/<connection>.jsonl` on first command after upgrading. Set `audit.enabled = false` in `.dbcli` to opt out. The audit directory is gitignored by default; entries are metadata-only (D3) — never raw SQL bodies, `--param` values, or result cell contents. (D1)
+- `inspect` / `guide` / `recover` / `recover --apply` agent JSON output adds an `audit_recent` field (additive; shape stable; not a breaking change). v1.19.x consumers ignore the field.
+- _Known limitation (Phase 23-04 follow-up):_ Audit log captures `query`, `inspect`, and diagnostic-surface commands in v1.20.0; coverage for `insert / update / delete / export / q / schema` failure paths is tracked as Phase 23-04 follow-up (see `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`). Recovery envelope linkage from the envelope side is unaffected — those commands continue to emit `.dbcli/last-recovery.json` envelopes; only the `audit_ref` back-pointer is missing in v1.20.0.
+
+### Internal
+
+- New modules under `src/core/audit/`: `logger.ts`, `lock.ts`, `rotation.ts`, `reader.ts`, `recent.ts`, `session-id.ts`, `types.ts`, `integration-helper.ts`.
+- New contract / integration tests: `tests/integration/audit-contract.test.ts`, `tests/integration/audit-envelope.test.ts`, `tests/integration/recovery-audit-link.test.ts` (J1 asymmetry guard).
+- `scripts/release-check.sh` is now 8 steps (was 7); CONTRIBUTING.md §Release Process and `docs/feature-matrix.md` §Required CI validation block updated to match.
+- `src/commands/skill.ts` adds a `resolveSkillSource(lang)` selector and `--lang en|zh-TW` commander option via `new Option(...).choices(['en','zh-TW']).default('en')`. `getInstallPath()` is unchanged (target filename stays `SKILL.md`).
+
 ## [1.19.1] - 2026-05-14
 
 ### Changed

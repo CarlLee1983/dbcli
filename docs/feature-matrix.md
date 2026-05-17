@@ -55,18 +55,22 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The release gate is four commands. CI runs them without `continue-on-error`, and they must also pass locally before tagging a release:
+The release gate is 8 shell steps encoded in `scripts/release-check.sh`. CI runs them without `continue-on-error`, and they must also pass locally before tagging a release:
 
 ```bash
-bun run typecheck
-bun test
-bun run lint
-bun run build
+bun audit                                                              # 1/8
+bunx prettier --check "src/**/*.ts" "tests/**/*.ts"                   # 2/8
+bun run typecheck                                                      # 3/8
+bun run lint                                                           # 4/8
+bun test                                                               # 5/8
+bun run build                                                          # 6/8
+bun test tests/integration/dist-smoke.test.ts                          # 7/8
+bash scripts/release-check.sh   # 8/8 doc-presence (audit row + CHANGELOG version)
 ```
 
-- `bun run lint` enforces `--max-warnings=0` — any new ESLint warning blocks release.
-- `bun run build` is followed by `dist/cli.mjs --help` / `--version` executable smoke checks (also release-blocking).
-- `tests/integration/dist-smoke.test.ts` is part of `bun test` and guards the packaged `assets/` path used by `dbcli skill --install`.
+- Step 4/8 (`bun run lint`) enforces `--max-warnings=0` — any new ESLint warning blocks release.
+- Step 7/8 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install` (including `SKILL.zh-TW.md` since v1.20.0).
+- Step 8/8 (doc-presence) is a shell-grep gate: confirms `docs/feature-matrix.md` has the `audit` row and `CHANGELOG.md` has a `## [<package.json version>]` heading. Catches doc-vs-version drift before tagging.
 - Benchmark (`bun run test:perf`) remains advisory and is allowed to fail (`continue-on-error: true`).
 
 See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.

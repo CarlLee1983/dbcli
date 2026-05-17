@@ -278,7 +278,7 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). The same four commands run in CI and must pass locally before tagging.
+The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). All 8 steps (encoded in `scripts/release-check.sh`) run in CI and must pass locally before tagging.
 
 ### Pre-Release Checklist
 
@@ -289,6 +289,7 @@ Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 - [ ] `bun run lint` — `--max-warnings=0`，任何新 ESLint warning 都會擋下 release
 - [ ] `bun run build` — `dist/cli.mjs` 與 `dist/assets/` 產出成功
 - [ ] `./dist/cli.mjs --help` / `./dist/cli.mjs --version` 可執行（dist smoke）
+- [ ] `bash scripts/release-check.sh` 第 8/8 步 doc-presence — `docs/feature-matrix.md` 含 `audit` row、`CHANGELOG.md` 含 `## [<version>]` heading（D-78）
 - [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
 - [ ] `.planning/STATE.md` 的 milestone 段落、Release Gate 表格與 `last_updated` 已更新
 - [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major`）

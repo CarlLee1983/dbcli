@@ -1253,6 +1253,48 @@ If an installed primary skill file is older than the bundled `assets/SKILL.md`, 
 
 ---
 
+## Audit Log
+
+> **Default ON since v1.20.0.** Existing projects will begin creating
+> `.dbcli/audit/<connection>.jsonl` on first command after upgrading.
+> Set `audit.enabled = false` in `.dbcli` to opt out.
+
+Every command that touches a database writes a structured JSONL entry to
+`.dbcli/audit/<connection>.jsonl`. Inspect the recent history with:
+
+```bash
+dbcli audit tail --n 10                    # last 10 entries on current connection
+dbcli audit tail --all --for-agent         # cross-connection JSON envelope
+dbcli audit show <uuid-prefix>             # full entry by id prefix (>=4 chars)
+dbcli audit show --recovery-ref <uuid>     # find entry that emitted a recovery envelope
+dbcli audit health                         # writer state, rotation %, last write status
+dbcli audit clear                          # erase audit log for current connection (prompts y/N)
+```
+
+Entries are **metadata-only** — never raw SQL bodies, never `--param` values,
+never result cell contents. Redaction comes from the same source as v1.19.1's
+agent-facing JSON contracts (`tests/helpers/sensitive-output.ts`).
+
+**Recovery envelope linkage.** When a `--recovery` failure writes
+`.dbcli/last-recovery.json`, the audit entry's `recovery_ref` field and the
+envelope's `audit_ref` field reference each other. Agents can pivot between
+audit history and recovery envelopes from either direction. The
+`inspect` / `guide` / `recover` / `recover --apply` JSON output embeds
+`audit_recent: AuditEntryBrief[]` (last 5 entries) so a fresh session has
+immediate context.
+
+**Known limitation (v1.20.0):** Bi-directional linkage is wired for `query`,
+`inspect`, and diagnostic surfaces. The DML commands `insert / update / delete /
+export / q / schema` emit single-direction recovery envelopes (no `audit_ref`)
+in v1.20.0; full coverage is tracked as Phase 23-04 follow-up. See
+[`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md)
+for the full matrix.
+
+For deeper agent workflows (session handoff, forensics walk-through), see
+[`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage.
+
+---
+
 ## Troubleshooting
 
 ### Connection Issues

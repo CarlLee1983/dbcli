@@ -1149,6 +1149,46 @@ dbcli skill --install gemini
 
 ---
 
+## 稽核日誌 (Audit Log)
+
+> **自 v1.20.0 起預設啟用。** 既有專案在升級後第一次執行 dbcli 指令時，將會開始在
+> `.dbcli/audit/<connection>.jsonl` 寫入結構化稽核紀錄。
+> 如需停用，請在 `.dbcli` 設定 `audit.enabled = false`。
+
+每個接觸資料庫的指令都會寫入一筆結構化 JSONL 紀錄至
+`.dbcli/audit/<connection>.jsonl`。可用以下指令檢視歷史：
+
+```bash
+dbcli audit tail --n 10                    # 當前連線最近 10 筆
+dbcli audit tail --all --for-agent         # 跨連線合併（agent JSON envelope）
+dbcli audit show <uuid-prefix>             # 完整單筆 entry（>=4 字元 prefix）
+dbcli audit show --recovery-ref <uuid>     # 反向找出觸發 envelope 的 entry
+dbcli audit health                         # writer 狀態、rotation 用量、最近寫入結果
+dbcli audit clear                          # 清空當前連線的 audit log（互動確認）
+```
+
+Entries 為 **metadata-only** — 不含原始 SQL body、不含 `--param` 值、不含 result cell。
+Redaction 沿用 v1.19.1 agent-facing JSON 合約的同一來源
+（`tests/helpers/sensitive-output.ts`），不重複定義。
+
+**與 recovery envelope 的雙向連結。** 當 `--recovery` 路徑失敗寫入
+`.dbcli/last-recovery.json` 時，audit entry 的 `recovery_ref` 與 envelope 的
+`audit_ref` 互為指標。Agent 可從任一側跳到另一側。`inspect` / `guide` / `recover` /
+`recover --apply` 的 JSON 輸出會內嵌 `audit_recent: AuditEntryBrief[]`（最近 5 筆），
+讓新 session 立即擁有歷史脈絡。
+
+**已知限制（v1.20.0）：** Bi-directional 連結僅在 `query` / `inspect` / diagnostic
+表面寫入；DML 指令 `insert / update / delete / export / q / schema` 失敗時
+emit 的 envelope 暫未含 `audit_ref`，追蹤於 Phase 23-04 follow-up。完整對照表見
+[`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md)。
+Recovery envelope 自身的 linkage 不受影響。
+
+進階 agent 工作流程（session handoff、forensics walk-through）詳見
+[`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage（英文）或
+[`assets/SKILL.zh-TW.md`](./assets/SKILL.zh-TW.md) §Audit Log 使用。
+
+---
+
 ## 故障排除
 
 ### 連線問題

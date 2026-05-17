@@ -248,6 +248,10 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">recover</div>
                     <span class="text-text-muted font-medium">針對常見失敗模式執行自動化修復計畫。</span>
                 </div>
+                <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
+                    <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">audit</div>
+                    <span class="text-text-muted font-medium">讀取每連線的 audit log（<code>.dbcli/audit/&lt;conn&gt;.jsonl</code>）；使用 <code>--for-agent</code> 取得 handoff JSON。</span>
+                </div>
             </div>
 
             <!-- doc-key: advanced-tools -->
@@ -331,6 +335,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>內容優化</strong>：<code>--for-agent</code> 旗標大幅減少 Token 消耗。</li>
                 <li><strong>風險控制</strong>：<code>dbcli plan</code> 處理原生 SQL，<code>insert</code> / <code>update</code> / <code>delete</code> 的 <code>--plan</code> 旗標則在不連線資料庫的情況下對 DML 進行預檢。</li>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
+                <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；envelope 雙向連結 <code>recovery_ref</code> / <code>audit_ref</code>。</li>
             </ul>
         </section>
 

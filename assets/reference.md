@@ -787,6 +787,93 @@ dbcli recover --next --after-step 1 --result '{"status":"ok"}' --format markdown
 
 **Permission:** n/a (always-allowed lookup; child processes inherit the active permission level).
 
+### audit
+
+(v1.20.0+) Inspect, query, and manage the per-connection audit log written to `.dbcli/audit/<connection>.jsonl`.
+
+Audit entries are metadata-only by design — never raw SQL bodies, `--param` values, or result cell contents (D3 lock). Redaction is sourced from `tests/helpers/sensitive-output.ts` (same source as `inspect` / `guide` / `recover` agent contracts).
+
+#### Subcommands
+
+| Subcommand | Side-effect tier | Purpose |
+|---|---|---|
+| `audit tail` | `readonly` | List most recent entries on the current (or `--all`) connection. |
+| `audit show` | `readonly` | Print a single full entry by id prefix or `--recovery-ref`. |
+| `audit clear` | `local-write` | Delete `<conn>.jsonl` + rotated `.jsonl.1` from local disk. Requires `--yes` or interactive confirm. |
+| `audit health` | `readonly` | Render `AuditLogger.getHealth()` snapshot (writer state, lock state, rotation usage). |
+
+#### `audit tail`
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--n <N>` | Number of recent entries to print (latest at bottom — D5). | `10` |
+| `--all` | Merge entries across all connections; output is an envelope array `[{ connection, entry }, ...]` (D-39). | off (current connection only) |
+| `--for-agent` | Shortcut for `--format json --brief`. Single-connection JSON is a flat array; `--all` JSON is an envelope array. | off |
+| `--brief` | Drop large redaction fields from the entry; keep `ts / command / target / success` (D-33). | off |
+| `--format <fmt>` | `table` \| `json`. | `table` |
+
+Reader behavior (D-41): tail merges `<conn>.jsonl.1` (rotated segment, if present) and `<conn>.jsonl`, sorts by `ts` ascending, then takes the last `--n` entries — so `--n 1000` can span a fresh rotation boundary.
+
+Examples:
+
+    dbcli audit tail --n 10
+    dbcli audit tail --all --for-agent --n 20
+    dbcli audit tail --format json --brief
+
+#### `audit show`
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `<id-prefix>` | Positional. UUID or prefix ≥ 4 characters; ambiguous prefix exits 1 with disambiguation hint; prefix < 4 chars exits 1. | — |
+| `--recovery-ref <id>` | Find the audit entry whose `recovery_ref` field matches this id (exact, not prefix). Mutually exclusive with positional `<id-prefix>` (D-38). | — |
+| `--all` | Search across all connections. Output is an envelope `{ connection, entry }` (single-hit also envelope, for shape stability — D-36). | off |
+| `--format <fmt>` | `table` \| `json`. | `table` |
+
+Examples:
+
+    dbcli audit show 1a2b
+    dbcli audit show --recovery-ref 8f0e-1234-... --format json
+    dbcli audit show 1a2b --all
+
+#### `audit clear`
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--yes` | Skip interactive confirmation. Required in non-TTY contexts. | off (interactive confirm) |
+
+Behavior (D-45 / D-46 / D-47): deletes `<conn>.jsonl` + rotated `<conn>.jsonl.1` for the current connection. Does NOT touch other connections (`--all` is not supported — destructive op cross-connection blast-radius is too high; use `dbcli use` to switch and clear each). Does NOT reset `.dbcli/last-session-id` (D-48). In non-TTY contexts without `--yes`, exits 1 with `Cannot prompt for confirmation in non-interactive session. Use --yes to clear without prompt.`
+
+Examples:
+
+    dbcli audit clear           # interactive (TTY only)
+    dbcli audit clear --yes     # CI / scripted
+
+#### `audit health`
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--format <fmt>` | `table` \| `json`. | `table` |
+
+Output reports: writer enabled/disabled, last write result, file-lock state, rotation cap usage (`max_bytes` / `max_entries`). When `audit.enabled = false` (D1 opt-out), `tail` / `show` / `health` still exit 0 and print `Audit is disabled (audit.enabled = false in .dbcli). Use 'dbcli audit health' for details.` (E note).
+
+#### Boundaries
+
+- Entries are append-only JSONL; rotation triggers at `~10 MB` or `~1000` entries (whichever first). Previous segment is preserved as `.jsonl.1`.
+- Bi-directional `recovery_ref` / `audit_ref` linkage is wired on `query` / `inspect` / diagnostic surfaces (Phase 25 J1). The commands `insert / update / delete / export / q / schema` emit single-direction envelopes (no `audit_ref`) in v1.20.0 — tracked as Phase 23-04 follow-up.
+- Audit writer failures are non-fatal (D6): main command result and exit code are preserved; a stderr warning is emitted. `audit health` surfaces the failure reason.
+- Reader truncation tolerance: a crash-truncated last line is skipped with a stderr warn `[dbcli audit] skipping truncated last line in <file>`; a mid-file non-JSON line is treated as corruption, exits 1, and points at `dbcli audit clear`.
+
+#### Exit codes
+
+| Code | Condition |
+|---|---|
+| 0 | Read/list/clear/health succeeded; also `audit.enabled = false` opt-out path (E note). |
+| 1 | `audit show` — id prefix < 4 chars, ambiguous, or not found; `--recovery-ref` not found; `<id>` and `--recovery-ref` both supplied (D-35 / D-37 / D-38). |
+| 1 | `audit clear` — non-TTY without `--yes` (D-46). |
+| 1 | Reader corruption — mid-file non-JSON line in a `.jsonl` segment. |
+
+**Permission:** n/a
+
 ### doctor
 
 Run diagnostic checks on environment, configuration, connection, and data.

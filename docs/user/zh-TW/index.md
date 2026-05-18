@@ -19,7 +19,8 @@
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
 6.  [資料庫引擎支援矩陣](#資料庫引擎支援矩陣)
 7.  [AI 代理整合與 Antigravity 協議](#ai-代理整合)
-8.  [文件維護與覆蓋範圍](#文件維護與覆蓋範圍)
+8.  [Agent 修復工作流](#agent-修復工作流)
+9.  [文件維護與覆蓋範圍](#文件維護與覆蓋範圍)
 
 ---
 
@@ -201,6 +202,93 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 3.  **風險控制**：AI 代理會主動使用 `dbcli plan`、`insert`/`update`/`delete` 的 `--plan` 預檢與 `--dry-run` 來驗證其行為。
 4.  **上下文效率**：`inspect --for-agent` 提供精簡的元資料，防止 AI 上下文視窗過載。
 5.  **稽核日誌 (Audit Log)**：詳見 [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log)。
+
+---
+
+<!-- doc-key: agent-recovery-workflow -->
+## Agent 修復工作流
+
+> 此處只列出最常見的三個情境與通用流程，完整失敗代碼對照、Multi-turn `--next`、Risk gate 詳細語意、Audit ↔ Envelope 反查請見 [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs)。
+
+當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
+
+### 情境 1：連線失敗（`CONN_REFUSED`）
+
+```bash
+# 1. 失敗時 envelope 同步寫到 stdout 與 .dbcli/last-recovery.json
+dbcli query "SELECT 1" --recovery --format json
+# → error.code = CONN_REFUSED
+#   recovery: [doctor --format json, inspect --for-agent]
+#   verify:    doctor --format json
+
+# 2. 兩個步驟都是 readonly，預設 gate 直接通過
+dbcli recover --apply --format json
+# → finalStatus=ok、verifyStatus=passed → 連線已恢復
+```
+
+### 情境 2：黑名單阻擋（`BLACKLIST_TABLE`）
+
+```bash
+dbcli query "SELECT * FROM audit_logs" --recovery
+# → error.code = BLACKLIST_TABLE
+#   recovery: [blacklist list (readonly), blacklist table remove audit_logs (write)]
+
+# 預設 --apply 跑步驟 1，步驟 2 因「動到本地 blacklist」被 gate 擋下 → exit 3
+dbcli recover --apply
+
+# 確認真的要解除遮罩：打開 local-write tier（仍不會碰資料庫本體）
+dbcli recover --apply --allow-write=readonly-cmd
+```
+
+### 情境 3：Schema 快取缺失（`SCHEMA_CACHE_MISSING`）
+
+```bash
+# 全新環境或剛切換 v2 named connection 時最常見
+dbcli inspect --require-schema-cache --recovery --format json
+# → error.code = SCHEMA_CACHE_MISSING
+#   recovery: [schema --refresh --force]
+#   verify:    inspect --format json （檢查 schemaCache.available === true）
+
+dbcli recover --apply
+# v2 多連線時 envelope 會自動帶 --use <name>；每個 connection 各自快取在 .dbcli/schemas/<connection>/
+```
+
+### Multi-turn 模式：給有自己 runner 的 agent
+
+當 `--apply` 太粗（plan 含 `interactive` 步驟、或 agent 想逐步審視）：
+
+```bash
+# Agent 自己跑 step 1，回報結果換 step 2
+dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
+
+# stdout 過大時改用檔案（`StepResultSummary` JSON，stdout/stderr 各限末尾 4 KB）
+dbcli recover --next --after-step 2 --result @/tmp/r2.json
+
+# 跑完整個 plan 後：dbcli 回傳 kind: "done"
+# 注意：--next 不會自動執行 verify，需要時自己再跑一次原失敗指令確認
+```
+
+### Audit ↔ Envelope 反查
+
+每次 `--recovery` 失敗都會雙向寫入對應的 UUID：
+
+```bash
+# 從 envelope → audit entry（事後鑑識）
+dbcli audit show --recovery-ref "$(jq -r '.id' .dbcli/last-recovery.json)"
+
+# 從 audit entry → envelope（先有 audit hit，要結構化計畫）
+dbcli audit tail --for-agent --n 1   # 讀最近一筆，取 recovery_ref
+dbcli recover --from /path/to/archived.json   # 跨機器/歸檔重播
+```
+
+### `recover --apply` 退出碼速查
+
+| Exit | 意義 |
+| :--- | :--- |
+| `0` | 全部步驟成功（若有 verify，verify 也通過） |
+| `1` | 某一步執行失敗 |
+| `2` | envelope 缺失、不存在或格式錯誤 |
+| `3` | 所有步驟都被 gate 跳過（widen `--allow-write` 或填上 placeholder 再試） |
 
 ---
 

@@ -96,6 +96,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
+                    <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent 修復工作流</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
                 </ul>
             </section>
@@ -337,6 +338,67 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
                 <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；每個指令失敗時加上 <code>--recovery</code> 都會寫入互相對應的 <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUID，agent 可透過 <code>audit tail --recovery-ref &lt;id&gt;</code> 從 envelope 反查 audit entry。</li>
             </ul>
+        </section>
+
+        <!-- doc-key: agent-recovery-workflow -->
+        <section id="agent-recovery" class="mt-20">
+            <h2>🔁 Agent 修復工作流</h2>
+            <p>此處只列三個最常見情境與通用流程。完整失敗代碼對照、Multi-turn <code>--next</code>、Risk gate 詳細語意與 Audit ↔ Envelope 反查請見 <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>。</p>
+            <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
+
+            <h3 class="mt-10">三個典型情境</h3>
+            <div class="grid grid-cols-1 gap-4 mb-12">
+                <div class="paper-card p-6 border-l-4 border-l-primary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">CONN_REFUSED — 連線失敗</h4>
+                    <pre class="m-0"><code>dbcli query "SELECT 1" --recovery
+# envelope: recovery=[doctor, inspect] verify=doctor
+dbcli recover --apply
+# readonly 步驟全跑、verifyStatus=passed → 連線恢復</code></pre>
+                </div>
+                <div class="paper-card p-6 border-l-4 border-l-secondary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">BLACKLIST_TABLE — 黑名單阻擋</h4>
+                    <pre class="m-0"><code>dbcli query "SELECT * FROM audit_logs" --recovery
+# envelope: blacklist list (readonly) + blacklist table remove (write)
+dbcli recover --apply
+# 步驟 2 動到本地 blacklist，被 gate 擋下 → exit 3
+dbcli recover --apply --allow-write=readonly-cmd
+# 確認解除遮罩，打開 local-write tier（仍不會碰資料庫本體）</code></pre>
+                </div>
+                <div class="paper-card p-6 border-l-4 border-l-primary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">SCHEMA_CACHE_MISSING — 快取缺失</h4>
+                    <pre class="m-0"><code>dbcli inspect --require-schema-cache --recovery
+# envelope: schema --refresh --force
+dbcli recover --apply
+# v2 多連線時 envelope 會自動帶 --use &lt;name&gt;
+# 快取位置：.dbcli/schemas/&lt;connection&gt;/</code></pre>
+                </div>
+            </div>
+
+            <h3 class="mt-10">Multi-turn 模式：給有自己 runner 的 agent</h3>
+            <p>當 <code>--apply</code> 太粗（含 <code>interactive</code> 步驟、或想逐步審視）：</p>
+            <pre><code>dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
+# stdout 過大時改用檔案（StepResultSummary JSON，stdout/stderr 各限末尾 4 KB）
+dbcli recover --next --after-step 2 --result @/tmp/r2.json
+# 跑完整個 plan 後：dbcli 回傳 kind: "done"
+# 注意：--next 不會自動執行 verify，需自行再跑一次原失敗指令確認</code></pre>
+
+            <h3 class="mt-10">Audit ↔ Envelope 反查</h3>
+            <ul>
+                <li>從 envelope → audit entry：<code>dbcli audit show --recovery-ref "$(jq -r .id .dbcli/last-recovery.json)"</code></li>
+                <li>從 audit entry → envelope：<code>dbcli audit tail --for-agent --n 1</code>，取最近一筆讀 <code>recovery_ref</code></li>
+                <li>跨機器/歸檔重播：<code>dbcli recover --from /path/to/archived.json</code></li>
+            </ul>
+
+            <h3 class="mt-10"><code>recover --apply</code> 退出碼速查</h3>
+            <table>
+                <thead><tr><th>Exit</th><th>意義</th></tr></thead>
+                <tbody>
+                    <tr><td><code>0</code></td><td>全部步驟成功（若有 verify，verify 也通過）</td></tr>
+                    <tr><td><code>1</code></td><td>某一步執行失敗</td></tr>
+                    <tr><td><code>2</code></td><td>envelope 缺失、不存在或格式錯誤</td></tr>
+                    <tr><td><code>3</code></td><td>所有步驟都被 gate 跳過（widen <code>--allow-write</code> 或填上 placeholder 再試）</td></tr>
+                </tbody>
+            </table>
         </section>
 
         <!-- doc-key: documentation-maintenance -->

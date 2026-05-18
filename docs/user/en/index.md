@@ -19,7 +19,8 @@
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
 6.  [Database Engine Support Matrix](#database-engine-support-matrix)
 7.  [AI Agent Integration & Antigravity Protocol](#ai-agent-integration)
-8.  [Documentation Maintenance & Coverage](#documentation-maintenance--coverage)
+8.  [Agent Recovery Workflow](#agent-recovery-workflow)
+9.  [Documentation Maintenance & Coverage](#documentation-maintenance--coverage)
 
 ---
 
@@ -201,6 +202,95 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 3.  **Risk Gating**: Agents use `dbcli plan`, the per-command `--plan` preflight on `insert`/`update`/`delete`, and `--dry-run` to verify their actions before committing changes.
 4.  **Context Efficiency**: `inspect --for-agent` provides exactly the metadata the agent needs to orient itself without bloating its context window.
 5.  **Audit Log**: see [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log).
+
+---
+
+<!-- doc-key: agent-recovery-workflow -->
+## Agent Recovery Workflow
+
+> This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn `--next` semantics, risk-gate details, and the Audit ↔ Envelope pivot live in [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs).
+
+When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
+
+### Scenario 1 — Connection refused (`CONN_REFUSED`)
+
+```bash
+# 1. Failing call writes the envelope to stdout and .dbcli/last-recovery.json
+dbcli query "SELECT 1" --recovery --format json
+# → error.code = CONN_REFUSED
+#   recovery: [doctor --format json, inspect --for-agent]
+#   verify:    doctor --format json
+
+# 2. Both steps are readonly, so the default gate lets them through
+dbcli recover --apply --format json
+# → finalStatus=ok, verifyStatus=passed → connection restored
+```
+
+### Scenario 2 — Blacklist block (`BLACKLIST_TABLE`)
+
+```bash
+dbcli query "SELECT * FROM audit_logs" --recovery
+# → error.code = BLACKLIST_TABLE
+#   recovery: [blacklist list (readonly), blacklist table remove audit_logs (write)]
+
+# Default --apply runs step 1; step 2 mutates the local blacklist, so the gate skips it → exit 3
+dbcli recover --apply
+
+# Confirm the unmask is intentional, then open the local-write tier (still does NOT touch the database)
+dbcli recover --apply --allow-write=readonly-cmd
+```
+
+### Scenario 3 — Schema cache missing (`SCHEMA_CACHE_MISSING`)
+
+```bash
+# Most common on a fresh checkout or right after switching to a new v2 named connection
+dbcli inspect --require-schema-cache --recovery --format json
+# → error.code = SCHEMA_CACHE_MISSING
+#   recovery: [schema --refresh --force]
+#   verify:    inspect --format json (checks schemaCache.available === true)
+
+dbcli recover --apply
+# For v2 multi-connection setups the envelope already includes --use <name>;
+# each connection has its own cache at .dbcli/schemas/<connection>/.
+```
+
+### Multi-turn mode — for agents with their own runner
+
+Use `--next` instead of `--apply` when the plan contains an `interactive` step, or when the agent wants to inspect each step individually:
+
+```bash
+# Agent executes step 1 itself, reports the result, asks dbcli for step 2
+dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
+
+# For large outputs, pass a file (StepResultSummary JSON; stdout/stderr are each capped at the last 4 KB)
+dbcli recover --next --after-step 2 --result @/tmp/r2.json
+
+# When the plan completes, dbcli returns kind: "done".
+# Note: --next does NOT run verify automatically — re-issue the original failing
+# command once the plan is done to confirm recovery.
+```
+
+### Audit ↔ Envelope pivot
+
+Every `--recovery` failure writes a UUID link in both directions:
+
+```bash
+# Envelope → audit entry (forensic lookup on a saved failure)
+dbcli audit show --recovery-ref "$(jq -r '.id' .dbcli/last-recovery.json)"
+
+# Audit entry → envelope (you have an audit hit, want the structured plan)
+dbcli audit tail --for-agent --n 1   # read recovery_ref from the latest entry
+dbcli recover --from /path/to/archived.json   # cross-machine / archived replay
+```
+
+### `recover --apply` exit-code cheat sheet
+
+| Exit | Meaning |
+| :--- | :--- |
+| `0` | All steps succeeded (and verify, if present, passed) |
+| `1` | A step failed |
+| `2` | Envelope missing, unreadable, or malformed |
+| `3` | Every step was skipped by the gate — widen `--allow-write` or fill placeholders, then retry |
 
 ---
 

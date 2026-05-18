@@ -96,6 +96,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
+                    <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent Recovery</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
                 </ul>
             </section>
@@ -337,6 +338,67 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
                 <li><strong>Audit Log</strong>: <code>audit tail --for-agent</code> for session handoff; every command's failure with <code>--recovery</code> writes matching <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUIDs so agents can pivot from a recovery envelope to its audit entry via <code>audit tail --recovery-ref &lt;id&gt;</code>.</li>
             </ul>
+        </section>
+
+        <!-- doc-key: agent-recovery-workflow -->
+        <section id="agent-recovery" class="mt-20">
+            <h2>🔁 Agent Recovery Workflow</h2>
+            <p>This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn <code>--next</code> semantics, risk-gate details, and the Audit ↔ Envelope pivot live in <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>.</p>
+            <p>When any of <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> is invoked with <code>--recovery</code> and fails, a <code>RecoveryEnvelope</code> JSON is printed to stdout <strong>and atomically written</strong> to <code>.dbcli/last-recovery.json</code>. The agent then inspects it with <code>dbcli recover</code> or executes it with <code>dbcli recover --apply</code> (which by default only runs <code>readonly</code> + <code>dry-run</code> steps).</p>
+
+            <h3 class="mt-10">Three typical scenarios</h3>
+            <div class="grid grid-cols-1 gap-4 mb-12">
+                <div class="paper-card p-6 border-l-4 border-l-primary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">CONN_REFUSED — Connection refused</h4>
+                    <pre class="m-0"><code>dbcli query "SELECT 1" --recovery
+# envelope: recovery=[doctor, inspect] verify=doctor
+dbcli recover --apply
+# All readonly steps run, verifyStatus=passed → connection restored</code></pre>
+                </div>
+                <div class="paper-card p-6 border-l-4 border-l-secondary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">BLACKLIST_TABLE — Blacklist block</h4>
+                    <pre class="m-0"><code>dbcli query "SELECT * FROM audit_logs" --recovery
+# envelope: blacklist list (readonly) + blacklist table remove (write)
+dbcli recover --apply
+# Step 2 mutates the local blacklist, so the gate skips it → exit 3
+dbcli recover --apply --allow-write=readonly-cmd
+# Confirm the unmask is intentional; opens local-write tier (still NOT the DB)</code></pre>
+                </div>
+                <div class="paper-card p-6 border-l-4 border-l-primary">
+                    <h4 class="mt-0 mb-3 font-bold text-text-main">SCHEMA_CACHE_MISSING — Cache missing</h4>
+                    <pre class="m-0"><code>dbcli inspect --require-schema-cache --recovery
+# envelope: schema --refresh --force
+dbcli recover --apply
+# For v2 multi-connection setups the envelope includes --use &lt;name&gt;
+# Per-connection cache lives at .dbcli/schemas/&lt;connection&gt;/</code></pre>
+                </div>
+            </div>
+
+            <h3 class="mt-10">Multi-turn mode — for agents with their own runner</h3>
+            <p>Use <code>--next</code> when <code>--apply</code> is too coarse (the plan contains an <code>interactive</code> step, or the agent wants step-by-step inspection):</p>
+            <pre><code>dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
+# For large outputs, pass a file (StepResultSummary JSON; stdout/stderr capped at the last 4 KB)
+dbcli recover --next --after-step 2 --result @/tmp/r2.json
+# When the plan completes, dbcli returns kind: "done".
+# Note: --next does NOT run verify automatically — re-issue the original failing command to confirm recovery.</code></pre>
+
+            <h3 class="mt-10">Audit ↔ Envelope pivot</h3>
+            <ul>
+                <li>Envelope → audit entry: <code>dbcli audit show --recovery-ref "$(jq -r .id .dbcli/last-recovery.json)"</code></li>
+                <li>Audit entry → envelope: <code>dbcli audit tail --for-agent --n 1</code>, then read <code>recovery_ref</code> from the latest entry</li>
+                <li>Cross-machine / archived replay: <code>dbcli recover --from /path/to/archived.json</code></li>
+            </ul>
+
+            <h3 class="mt-10"><code>recover --apply</code> exit-code cheat sheet</h3>
+            <table>
+                <thead><tr><th>Exit</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>0</code></td><td>All steps succeeded (and verify, if present, passed)</td></tr>
+                    <tr><td><code>1</code></td><td>A step failed</td></tr>
+                    <tr><td><code>2</code></td><td>Envelope missing, unreadable, or malformed</td></tr>
+                    <tr><td><code>3</code></td><td>Every step was skipped by the gate — widen <code>--allow-write</code> or fill placeholders, then retry</td></tr>
+                </tbody>
+            </table>
         </section>
 
         <!-- doc-key: documentation-maintenance -->

@@ -63,6 +63,27 @@ export interface RecoveryError {
   }
 }
 
+/** Hard caps for envelope branching. Mirrors MAX_RECOVERY_STEPS. */
+export const MAX_BRANCH_STEPS = 6
+export const MAX_BRANCH_COUNT = 8
+
+/** Stable identifier for a branch. Must match `/^[a-z0-9-]+$/` length ≤ 64. */
+export type BranchId = string
+
+export interface BranchPlan {
+  /** Human-readable summary; agents can show this to the user. */
+  description: string
+  /** Steps inside the branch. `order` is 1-based WITHIN the branch. */
+  steps: GuideStep[]
+}
+
+export interface BranchFork {
+  /** 1-based step order in `recovery` after which a fork may happen. v1: always 1. */
+  after: number
+  /** Enumeration of possible branchIds; must equal Object.keys(branches). */
+  branchIds: BranchId[]
+}
+
 export interface RecoveryEnvelope {
   schemaVersion: typeof RECOVERY_SCHEMA_VERSION
   /** ISO-8601 UTC timestamp at envelope construction. */
@@ -74,6 +95,10 @@ export interface RecoveryEnvelope {
   recovery: GuideStep[]
   /** v1.17.0 P4: optional read-only probe appended by classifyError; runs only after `--apply` succeeds. */
   verify?: GuideStep
+  /** Optional branch plans keyed by BranchId. Present iff `branchFork` is present. */
+  branches?: Record<BranchId, BranchPlan>
+  /** Optional fork descriptor. Present iff `branches` is present. */
+  branchFork?: BranchFork
 }
 
 /**

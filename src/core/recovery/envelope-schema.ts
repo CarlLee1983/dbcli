@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RECOVERY_CODES } from './types'
+import { RECOVERY_CODES, MAX_BRANCH_STEPS, MAX_BRANCH_COUNT } from './types'
 import type { RecoveryEnvelope } from './types'
 import type { SavedRecoveryEnvelope } from './apply-types'
 
@@ -17,6 +17,12 @@ const recoveryCategorySchema = z.enum([
 
 const guideRiskSchema = z.enum(['readonly', 'dry-run', 'write', 'unknown'])
 
+const branchIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9-]+$/, 'branchId must match /^[a-z0-9-]+$/')
+
 const guideStepSchema = z
   .object({
     order: z.number().int(),
@@ -29,6 +35,41 @@ const guideStepSchema = z
     interactive: z.boolean().optional(),
     dbWrite: z.boolean().optional(),
     placeholders: z.array(z.string()).optional(),
+    branchId: branchIdSchema.optional(),
+  })
+  .strict()
+
+const branchPlanSchema = z
+  .object({
+    description: z.string().min(1),
+    steps: z.array(guideStepSchema).min(1).max(MAX_BRANCH_STEPS),
+  })
+  .strict()
+
+const branchesSchema = z.record(branchIdSchema, branchPlanSchema).superRefine((map, ctx) => {
+  const keys = Object.keys(map)
+  if (keys.length > MAX_BRANCH_COUNT) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `branches has ${keys.length} entries; cap is ${MAX_BRANCH_COUNT}`,
+    })
+  }
+  for (const [id, plan] of Object.entries(map)) {
+    for (const step of plan.steps) {
+      if (step.branchId !== undefined && step.branchId !== id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `step.branchId '${step.branchId}' does not match enclosing key '${id}'`,
+        })
+      }
+    }
+  }
+})
+
+const branchForkSchema = z
+  .object({
+    after: z.number().int().min(1),
+    branchIds: z.array(branchIdSchema).min(1),
   })
   .strict()
 
@@ -58,8 +99,31 @@ export const recoveryEnvelopeSchema = z
       .strict(),
     recovery: z.array(guideStepSchema),
     verify: guideStepSchema.optional(),
+    branches: branchesSchema.optional(),
+    branchFork: branchForkSchema.optional(),
   })
   .strict()
+  .superRefine((env, ctx) => {
+    const hasBranches = env.branches !== undefined
+    const hasFork = env.branchFork !== undefined
+    if (hasBranches !== hasFork) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'branches and branchFork must be set together (or both omitted)',
+      })
+      return
+    }
+    if (hasBranches && hasFork) {
+      const keys = Object.keys(env.branches!).sort()
+      const ids = [...env.branchFork!.branchIds].sort()
+      if (keys.length !== ids.length || keys.some((k, i) => k !== ids[i])) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'branchFork.branchIds must equal Object.keys(branches)',
+        })
+      }
+    }
+  })
 
 export const savedRecoveryEnvelopeSchema = z
   .object({

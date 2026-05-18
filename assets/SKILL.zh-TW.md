@@ -241,9 +241,12 @@ dbcli init --use-env-refs \
 ## MongoDB
 
 - 用 JSON filter 物件(`find`)或 JSON 陣列(`aggregate`);SQL 會被拒絕。`query` 必填 `--collection <name>`。
-- **支援:** `init`、`list`、`schema`(sampled)、`query`、`insert`、`update`、`delete`、`export`、`status`、`use`、`shell`、`doctor`、`upgrade`、`completion`。
-- **不支援:** `q`(saved queries)、`diff`、`migrate`、`check`。
-- Schema 是**取樣**(預設 50 份文件);型別是 JS `typeof` 字串。
+- **支援:** `init`、`list`、`schema`(sampled)、`query`、`insert`、`update`、`delete`、`export`、`q`(saved queries)、`status`、`use`、`shell`、`doctor`、`upgrade`、`completion`。
+- **不支援:** `diff`、`migrate`、`check`。
+- Schema 由 `$sample` **採樣**（預設 100 份文件，上限 1000）。可加 `--sample-method natural` 改用 `find().limit()`。欄位以 dot-path 呈現（如 `profile.tokens.access`），附帶 `presence`（0..1）與命中黑名單時的 `redacted: true`。
+- **寫入規劃器分層：** `$set`/`$unset` → `ALLOW`；`$rename` → `WARN`（資訊提示）；`$inc`/`$mul`/`$min`/`$max`/`$currentDate` → `WARN`；`$push`/`$pull`/`$pullAll`/`$pop`/`$addToSet` → `WARN`；`$bit` → `WARN`；`$where` 與未知運算子 → `BLOCK`。
+- **巢狀黑名單：** `blacklist.columns[<collection>]` 接受點分路徑（`profile.email`）與結尾萬用字元（`profile.tokens.*`）；中間萬用字元會在 `dbcli blacklist list` 警告並略過。讀取路徑會將命中值取代為字串字面值 `[REDACTED]`。
+- **儲存查詢：** snippet 檔名以 `.mongodb.sql` 結尾。Frontmatter 必填 `engine: mongodb` 與 `operation: find` 或 `operation: aggregate`。`target: <collection>` 為預設集合，可由 `--collection` 覆蓋。主體為 JSON（`find` 為物件、`aggregate` 為陣列）；`{{param}}` 佔位符會 JSON 編碼。
 - 完整語法與範例見 reference.md MongoDB 段落。
 
 ## Redis

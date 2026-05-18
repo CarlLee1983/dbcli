@@ -184,11 +184,59 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | Feature | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
 | :--- | :---: | :---: | :---: | :---: |
 | Basic Querying | ✅ | ✅ | ✅ | ✅ |
-| Schema Caching | ✅ | ⚠️ (Sampled) | ❌ | ✅ |
-| Saved Snippets | ✅ | ❌ | ✅ | ✅ |
+| Schema Caching | ✅ | ✅ | ❌ | ✅ |
+| Saved Snippets | ✅ | ✅ | ✅ | ✅ |
 | DML (Insert/Update) | ✅ | ✅ | ✅ (via query) | ❌ |
 | DDL (Migrate) | ✅ | ❌ | ❌ | ❌ |
 | Interactive UI | ✅ | ✅ | ✅ | ✅ |
+
+### MongoDB write planner (operator tiers)
+
+| Tier | Operators | Plan outcome |
+|---|---|---|
+| SAFE | `$set`, `$unset` | `ALLOW` |
+| RENAME | `$rename` | `WARN` (informational; rename does not exfiltrate data) |
+| ARITHMETIC | `$inc`, `$mul`, `$min`, `$max`, `$currentDate` | `WARN` |
+| ARRAY | `$push`, `$pull`, `$pullAll`, `$pop`, `$addToSet` | `WARN` |
+| BITWISE | `$bit` | `WARN` |
+| BLOCK | `$where`, unknown operator | `BLOCK` |
+
+Run `dbcli update --dry-run` to view the plan before executing.
+
+### MongoDB nested blacklist
+
+`.dbcli` `blacklist.columns[<collection>]` accepts dotted paths and one trailing wildcard:
+
+```json
+{
+  "blacklist": {
+    "columns": {
+      "users": ["password", "profile.email", "profile.tokens.*"]
+    }
+  }
+}
+```
+
+`profile.tokens.*` covers `profile.tokens` and every descendant. Wildcards anywhere other than the final segment are skipped with a warning at `dbcli blacklist list`. SQL connections ignore entries containing `.` or `*`.
+
+Note: streaming exports (`dbcli export`) buffer rows before masking. For very large exports, prefer narrower filters until streaming-aware masking is added.
+
+### MongoDB schema sampling
+
+`dbcli schema <collection> [--sample-size 100] [--sample-method random|natural]`
+
+- `random` (default) uses `$sample`; falls back to natural order on driver error.
+- Output columns include nested dot-paths with `presence` (0..1) and `redacted: true` for blacklist hits.
+
+### MongoDB saved queries
+
+Snippet locations: `assets/snippets/` (built-in), `.dbcli-shared/queries/` (shared), `.dbcli/queries/` (local). Mongo snippets:
+
+- File name ends in `.mongodb.sql`.
+- Frontmatter must declare `engine: mongodb` and `operation: find` or `operation: aggregate`. `target: <collection>` provides a default that CLI `--collection` can override.
+- Body is JSON: object for `find`, array for `aggregate`. Each `{{param}}` placeholder is JSON-encoded — strings are quoted and escaped, so injected operator-shaped strings cannot escape into operator position.
+
+Run with `dbcli q @<key>`.
 
 ---
 

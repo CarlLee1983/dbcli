@@ -184,11 +184,59 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | 功能 | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
 | :--- | :---: | :---: | :---: | :---: |
 | 基礎查詢 | ✅ | ✅ | ✅ | ✅ |
-| Schema 快取 | ✅ | ⚠️ (採樣) | ❌ | ✅ |
-| 儲存 Snippets | ✅ | ❌ | ✅ | ✅ |
+| Schema 快取 | ✅ | ✅ | ❌ | ✅ |
+| 儲存 Snippets | ✅ | ✅ | ✅ | ✅ |
 | 寫入操作 (DML) | ✅ | ✅ | ✅ (透過 query) | ❌ |
 | 結構變更 (DDL) | ✅ | ❌ | ❌ | ❌ |
 | 互動式 UI | ✅ | ✅ | ✅ | ✅ |
+
+### MongoDB 寫入規劃器（運算子分層）
+
+| 分層 | 運算子 | 計畫結果 |
+|---|---|---|
+| SAFE | `$set`、`$unset` | `ALLOW` |
+| RENAME | `$rename` | `WARN`（資訊提示；rename 不會外洩資料） |
+| ARITHMETIC | `$inc`、`$mul`、`$min`、`$max`、`$currentDate` | `WARN` |
+| ARRAY | `$push`、`$pull`、`$pullAll`、`$pop`、`$addToSet` | `WARN` |
+| BITWISE | `$bit` | `WARN` |
+| BLOCK | `$where`、未知運算子 | `BLOCK` |
+
+執行前使用 `dbcli update --dry-run` 預覽計畫。
+
+### MongoDB 巢狀黑名單
+
+`.dbcli` 內的 `blacklist.columns[<collection>]` 接受點分路徑與一個結尾萬用字元：
+
+```json
+{
+  "blacklist": {
+    "columns": {
+      "users": ["password", "profile.email", "profile.tokens.*"]
+    }
+  }
+}
+```
+
+`profile.tokens.*` 涵蓋 `profile.tokens` 與其所有後裔。萬用字元若不在最後一段會被略過，並在 `dbcli blacklist list` 時提出警告。SQL 連線會忽略含 `.` 或 `*` 的條目。
+
+備註：串流匯出（`dbcli export`）會先緩衝整批列才遮罩。超大匯出建議先以較窄的條件查詢，等待 streaming-aware 遮罩支援。
+
+### MongoDB schema 採樣
+
+`dbcli schema <collection> [--sample-size 100] [--sample-method random|natural]`
+
+- `random`（預設）使用 `$sample`；驅動錯誤時退回自然順序。
+- 輸出欄位包含巢狀 dot-path，附帶 `presence`（0..1）以及命中黑名單時的 `redacted: true`。
+
+### MongoDB 儲存查詢
+
+Snippet 位置：`assets/snippets/`（內建）、`.dbcli-shared/queries/`（共用）、`.dbcli/queries/`（本地）。Mongo snippet：
+
+- 檔名以 `.mongodb.sql` 結尾。
+- Frontmatter 必須宣告 `engine: mongodb` 與 `operation: find` 或 `operation: aggregate`。`target: <collection>` 提供預設集合，可由 CLI `--collection` 覆蓋。
+- 主體為 JSON：`find` 為物件，`aggregate` 為陣列。每個 `{{param}}` 佔位符會以 JSON 編碼——字串會被加引號並轉義，因此被注入成運算子形狀的字串無法逃逸至運算子位置。
+
+執行：`dbcli q @<key>`。
 
 ---
 

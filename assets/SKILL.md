@@ -275,9 +275,12 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 ## MongoDB
 
 - JSON filter object (`find`) or JSON array (`aggregate`); SQL is rejected. `--collection <name>` is required on `query`.
-- **Supported:** `init`, `list`, `schema` (sampled), `query`, `insert`, `update`, `delete`, `export`, `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `q` (saved queries), `diff`, `migrate`, `check`.
-- Schema is **sampled** (default 50 docs); types are JS `typeof` strings.
+- **Supported:** `init`, `list`, `schema` (sampled), `query`, `insert`, `update`, `delete`, `export`, `q` (saved queries), `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`.
+- **Not supported:** `diff`, `migrate`, `check`.
+- Schema is **sampled** by `$sample` (default 100 docs, max 1000). Pass `--sample-method natural` to use `find().limit()` instead. Columns surface as dot-paths (e.g. `profile.tokens.access`) with `presence` (0..1) and `redacted: true` flags for blacklist hits.
+- **Write planner tiers:** `$set`/`$unset` → `ALLOW`; `$rename` → `WARN` (informational); `$inc`/`$mul`/`$min`/`$max`/`$currentDate` → `WARN`; `$push`/`$pull`/`$pullAll`/`$pop`/`$addToSet` → `WARN`; `$bit` → `WARN`; `$where` and unknown operators → `BLOCK`.
+- **Nested blacklist:** `blacklist.columns[<collection>]` accepts dotted paths (`profile.email`) and trailing-wildcard prefixes (`profile.tokens.*`); middle wildcards are rejected with a warning at `dbcli blacklist list`. Read paths replace matched values with the literal string `[REDACTED]`.
+- **Saved queries:** snippet file ends in `.mongodb.sql`. Frontmatter requires `engine: mongodb` and `operation: find` or `operation: aggregate`. `target: <collection>` is the default collection (override with `--collection`). Body is JSON (object for `find`, array for `aggregate`); `{{param}}` placeholders are JSON-encoded.
 - See reference.md MongoDB section for full syntax and examples.
 
 ## Redis

@@ -304,7 +304,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">結構快取</td>
                             <td><span class="text-primary font-bold">✅</span></td>
-                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
@@ -325,6 +325,25 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     </tbody>
                 </table>
             </div>
+
+            <h3 class="mt-12">MongoDB 寫入規劃器（運算子分層）</h3>
+            <ul>
+                <li><strong>SAFE</strong>（<code>$set</code>、<code>$unset</code>）→ <code>ALLOW</code></li>
+                <li><strong>RENAME</strong>（<code>$rename</code>）→ <code>WARN</code>（資訊提示）</li>
+                <li><strong>ARITHMETIC</strong>（<code>$inc</code>、<code>$mul</code>、<code>$min</code>、<code>$max</code>、<code>$currentDate</code>）→ <code>WARN</code></li>
+                <li><strong>ARRAY</strong>（<code>$push</code>、<code>$pull</code>、<code>$pullAll</code>、<code>$pop</code>、<code>$addToSet</code>）→ <code>WARN</code></li>
+                <li><strong>BITWISE</strong>（<code>$bit</code>）→ <code>WARN</code></li>
+                <li><strong>BLOCK</strong>（<code>$where</code>、未知運算子）→ <code>BLOCK</code></li>
+            </ul>
+
+            <h3 class="mt-8">MongoDB 巢狀黑名單</h3>
+            <p><code>.dbcli</code> 的 <code>blacklist.columns[&lt;collection&gt;]</code> 接受點分路徑與一個結尾萬用字元，例如 <code>profile.tokens.*</code>。萬用字元若不在最後一段會被略過，並在 <code>dbcli blacklist list</code> 時提出警告。</p>
+
+            <h3 class="mt-8">MongoDB schema 採樣</h3>
+            <p><code>dbcli schema &lt;collection&gt; [--sample-size 100] [--sample-method random|natural]</code>。<code>random</code>（預設）使用 <code>$sample</code>，驅動錯誤時退回自然順序。輸出包含巢狀 dot-path，附帶 <code>presence</code>（0..1）與命中黑名單時的 <code>redacted: true</code>。</p>
+
+            <h3 class="mt-8">MongoDB 儲存查詢</h3>
+            <p>Mongo snippet 檔名以 <code>.mongodb.sql</code> 結尾，宣告 <code>engine: mongodb</code> 與 <code>operation: find</code> 或 <code>operation: aggregate</code>。以 <code>dbcli q @&lt;key&gt;</code> 執行；<code>{{param}}</code> 佔位符會以 JSON 編碼，被注入成運算子形狀的字串無法逃逸至運算子位置。</p>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

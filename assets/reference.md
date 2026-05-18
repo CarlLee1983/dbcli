@@ -100,13 +100,14 @@ dbcli schema --use staging          # Scan staging DB; saves to .dbcli/schemas/s
 dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod/
 ```
 
-**Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`
+**Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`, `--sample-size <n>` (mongo only), `--sample-method <random|natural>` (mongo only)
 **Permission:** query-only+
 
 **Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
 > **Redis:** `schema <key>` is required (no full scan). The output exposes `type`, `ttl`, `size`, and a small `sample` (e.g. first 5 hash keys). `--reset` / `--refresh` are rejected — Redis caches no schema.
 > **Elasticsearch:** `schema [index]` flattens the `_mapping` properties (nested `a.b.c`) and emits each `.fields` multi-field as a separate column (e.g. `text` + `text.keyword`). Full scan iterates all non-system indices and stores per-connection caches alongside SQL engines.
+> **MongoDB:** schema is sampled via `$sample` (default 100, max 1000). `--sample-method natural` switches to `find().limit()`; `random` (default) falls back to natural order on driver error. Output columns surface nested dot-paths with `presence` (0..1) and `redacted: true` flags for blacklist-matched paths. The persisted cache records `sampleMethod` and `sampleSize`; `dbcli doctor` reports them via a `sampled: method=…, size=…` line.
 
 ### query
 
@@ -327,6 +328,57 @@ Example:
 Substitution rules: pure raw text — `:name` becomes the value's `String()` form. **Quoting is the snippet author's responsibility**: wrap `:name` in double quotes if the value may contain whitespace. The parser warns when a `string`-typed `:name` is adjacent to non-whitespace and unquoted.
 
 Size guard: `LRANGE` / `ZRANGE` stop overridden when `< 0` or `> 1000`; `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` get `COUNT 1000` injected if absent. `--no-limit` disables.
+
+##### MongoDB snippets
+
+File extension: `.mongodb.sql`. Frontmatter must declare `engine: mongodb` and
+`operation: find` or `operation: aggregate`. `target: <collection>` provides a default
+collection that `dbcli q --collection <name>` can override. The body is JSON: an object
+for `find` and an array for `aggregate`. Each `{{param}}` placeholder is JSON-encoded
+at substitution time — strings are quoted and escaped, so an attacker-supplied string
+cannot escape into operator position.
+
+Find example (`active-users.mongodb.sql`):
+
+    -- ---
+    -- name: active-users
+    -- engine: mongodb
+    -- operation: find
+    -- target: users
+    -- description: Active users matching the given status
+    -- params:
+    --   status:
+    --     type: string
+    --     required: true
+    -- ---
+    {
+      "status": {{status}}
+    }
+
+Aggregate example (`top-orders-by-city.mongodb.sql`):
+
+    -- ---
+    -- name: top-orders-by-city
+    -- engine: mongodb
+    -- operation: aggregate
+    -- target: orders
+    -- description: Top order counts per city for a given status
+    -- params:
+    --   status:
+    --     type: string
+    --     required: true
+    --   limit:
+    --     type: int
+    --     default: 10
+    -- ---
+    [
+      { "$match": { "status": {{status}} } },
+      { "$group": { "_id": "$city", "n": { "$sum": 1 } } },
+      { "$sort": { "n": -1 } },
+      { "$limit": {{limit}} }
+    ]
+
+Run with `dbcli q @active-users -p status=active` or `dbcli q @top-orders-by-city -p status=open -p limit=5`. The `q` command applies the same nested-blacklist redaction to results that `query` and `export` do.
 
 ### queries
 

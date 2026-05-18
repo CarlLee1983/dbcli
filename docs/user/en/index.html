@@ -304,7 +304,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Schema Caching</td>
                             <td><span class="text-primary font-bold">✅</span></td>
-                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
@@ -325,6 +325,25 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     </tbody>
                 </table>
             </div>
+
+            <h3 class="mt-12">MongoDB write planner (operator tiers)</h3>
+            <ul>
+                <li><strong>SAFE</strong> (<code>$set</code>, <code>$unset</code>) → <code>ALLOW</code></li>
+                <li><strong>RENAME</strong> (<code>$rename</code>) → <code>WARN</code> (informational)</li>
+                <li><strong>ARITHMETIC</strong> (<code>$inc</code>, <code>$mul</code>, <code>$min</code>, <code>$max</code>, <code>$currentDate</code>) → <code>WARN</code></li>
+                <li><strong>ARRAY</strong> (<code>$push</code>, <code>$pull</code>, <code>$pullAll</code>, <code>$pop</code>, <code>$addToSet</code>) → <code>WARN</code></li>
+                <li><strong>BITWISE</strong> (<code>$bit</code>) → <code>WARN</code></li>
+                <li><strong>BLOCK</strong> (<code>$where</code>, unknown operator) → <code>BLOCK</code></li>
+            </ul>
+
+            <h3 class="mt-8">MongoDB nested blacklist</h3>
+            <p><code>.dbcli</code> <code>blacklist.columns[&lt;collection&gt;]</code> accepts dotted paths and one trailing wildcard, e.g. <code>profile.tokens.*</code>. Wildcards anywhere other than the final segment are skipped with a warning at <code>dbcli blacklist list</code>.</p>
+
+            <h3 class="mt-8">MongoDB schema sampling</h3>
+            <p><code>dbcli schema &lt;collection&gt; [--sample-size 100] [--sample-method random|natural]</code>. <code>random</code> (default) uses <code>$sample</code>; falls back to natural order on driver error. Columns include nested dot-paths with <code>presence</code> (0..1) and <code>redacted: true</code> for blacklist hits.</p>
+
+            <h3 class="mt-8">MongoDB saved queries</h3>
+            <p>Mongo snippets end in <code>.mongodb.sql</code> and declare <code>engine: mongodb</code> with <code>operation: find</code> or <code>operation: aggregate</code>. Run with <code>dbcli q @&lt;key&gt;</code>; <code>{{param}}</code> placeholders are JSON-encoded so injected operator-shaped strings cannot escape into operator position.</p>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

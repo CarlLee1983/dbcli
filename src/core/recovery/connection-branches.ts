@@ -29,6 +29,7 @@ const AUTH_KEYWORDS = [
   'credentials',
   'credential',
   'permission denied',
+  'access denied',
   'login',
 ] as const
 
@@ -37,6 +38,7 @@ const NETWORK_KEYWORDS = [
   'port',
   'refused',
   'timeout',
+  'timed out',
   'unreachable',
   'enotfound',
   'econnrefused',

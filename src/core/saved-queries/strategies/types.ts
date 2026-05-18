@@ -2,13 +2,13 @@ import type { ParamMap } from '../binder'
 import type { RunOptions } from '../runner'
 import type { SavedQuery, SavedQueryMeta } from '../types'
 
-export type EngineFamily = 'sql' | 'es' | 'redis'
+export type EngineFamily = 'sql' | 'es' | 'redis' | 'mongo'
 
 export interface PreparedExecution {
   driver: { sql: string; values: Array<string | number | boolean | null> }
   rewrittenBody: string
   warnings: string[]
-  execHints?: { index?: string }
+  execHints?: { index?: string; collection?: string; mongoOperation?: 'find' | 'aggregate' }
 }
 
 export interface EngineStrategy {

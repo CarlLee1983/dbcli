@@ -24,12 +24,13 @@ import {
 
 const MAX_BYTES = 64 * 1024
 const VALID_TYPES: ParamType[] = ['int', 'string', 'float', 'bool', 'date', 'datetime']
-const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql', 'elasticsearch', 'redis']
+const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql', 'elasticsearch', 'redis', 'mongodb']
 const INTENT_RE = /^[a-z][a-z0-9.-]*$/
 
-function familyOf(engine: EngineTag): 'sql' | 'es' | 'redis' {
+function familyOf(engine: EngineTag): 'sql' | 'es' | 'redis' | 'mongo' {
   if (engine === 'postgres' || engine === 'mysql') return 'sql'
   if (engine === 'elasticsearch') return 'es'
+  if (engine === 'mongodb') return 'mongo'
   return 'redis'
 }
 
@@ -129,6 +130,11 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   const index = typeof raw.index === 'string' ? raw.index : undefined
   const intent = normaliseIntent(raw.intent, input)
   const visual = normaliseVisual(raw.visual)
+  const target = typeof raw.target === 'string' ? raw.target : undefined
+  const operation =
+    raw.operation === 'find' || raw.operation === 'aggregate'
+      ? (raw.operation as 'find' | 'aggregate')
+      : undefined
 
   return {
     meta: {
@@ -141,6 +147,8 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       tags,
       intent,
       visual,
+      target,
+      operation,
     },
     warnings,
   }

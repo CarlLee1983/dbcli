@@ -1,13 +1,11 @@
 import type { EngineTag } from './types'
 
 /**
- * Map adapter `system` (postgresql / mysql / mariadb / mongodb) to the
- * snippet engine tag. mongodb is returned as-is so callers can detect it
- * and short-circuit (saved queries currently only support postgres / mysql).
+ * Map adapter `system` (postgresql / mysql / mariadb / mongodb / elasticsearch / redis)
+ * to the snippet engine tag. mongodb is now a first-class engine tag — callers no
+ * longer need to special-case it.
  */
-export function mapSystemToEngine(
-  system: string
-): EngineTag | 'mongodb' | 'elasticsearch' | 'redis' {
+export function mapSystemToEngine(system: string): EngineTag {
   if (system === 'postgresql') return 'postgres'
   if (system === 'mysql' || system === 'mariadb') return 'mysql'
   if (system === 'mongodb') return 'mongodb'

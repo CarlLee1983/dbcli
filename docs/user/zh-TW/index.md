@@ -149,6 +149,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
+| `--recovery`（所有指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
 
 <!-- doc-key: advanced-tools -->
 ### 進階工具

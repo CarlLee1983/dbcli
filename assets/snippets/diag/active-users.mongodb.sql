@@ -1,11 +1,11 @@
 -- ---
--- key: active-users
+-- name: active-users
 -- engine: mongodb
 -- operation: find
 -- target: users
 -- description: Active users matching the given status
 -- params:
---   - name: status
+--   status:
 --     type: string
 --     required: true
 -- ---

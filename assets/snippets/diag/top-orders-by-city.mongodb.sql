@@ -1,14 +1,14 @@
 -- ---
--- key: top-orders-by-city
+-- name: top-orders-by-city
 -- engine: mongodb
 -- operation: aggregate
 -- target: orders
 -- description: Top order counts per city for a given status
 -- params:
---   - name: status
+--   status:
 --     type: string
 --     required: true
---   - name: limit
+--   limit:
 --     type: int
 --     default: 10
 -- ---

@@ -270,6 +270,16 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
 # command once the plan is done to confirm recovery.
 ```
 
+#### Branching for connection errors
+
+For connection-class errors (`CONN_REFUSED`, `CONN_AUTH_FAILED`, `CONN_TIMEOUT`, `CONN_HOST_NOT_FOUND`, `CONN_UNKNOWN`), the envelope ships an additional `branches` map and a `branchFork` descriptor. After running step 1 (`dbcli doctor --format json`) the agent passes its output via `--result`; `dbcli recover --next` reads the doctor JSON, picks one of four labeled branches (`doctor-clean`, `doctor-config-missing`, `doctor-auth-error`, `doctor-network-error`), and returns the matching branch's first step. The response sets `branchId` and `branchDescription` so the agent can echo `--branch <id>` on subsequent `--next` calls.
+
+| Flag | Behavior |
+| :--- | :--- |
+| `--branch <id>` | Walk a specific branch by id. Required on all `--next` calls after the fork. |
+
+If the doctor JSON cannot be parsed or no keyword matches, `--next` falls back to the linear `recovery` plan — branching never causes `--next` to fail. `--apply` continues to walk `recovery` linearly and ignores `branches`.
+
 ### Audit ↔ Envelope pivot
 
 Every `--recovery` failure writes a UUID link in both directions:

@@ -382,6 +382,16 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
 # When the plan completes, dbcli returns kind: "done".
 # Note: --next does NOT run verify automatically — re-issue the original failing command to confirm recovery.</code></pre>
 
+            <h4 class="mt-8">Branching for connection errors</h4>
+            <p>For connection-class errors (<code>CONN_REFUSED</code>, <code>CONN_AUTH_FAILED</code>, <code>CONN_TIMEOUT</code>, <code>CONN_HOST_NOT_FOUND</code>, <code>CONN_UNKNOWN</code>), the envelope ships an additional <code>branches</code> map and a <code>branchFork</code> descriptor. After running step 1 (<code>dbcli doctor --format json</code>) the agent passes its output via <code>--result</code>; <code>dbcli recover --next</code> reads the doctor JSON, picks one of four labeled branches (<code>doctor-clean</code>, <code>doctor-config-missing</code>, <code>doctor-auth-error</code>, <code>doctor-network-error</code>), and returns the matching branch's first step. The response sets <code>branchId</code> and <code>branchDescription</code> so the agent can echo <code>--branch &lt;id&gt;</code> on subsequent <code>--next</code> calls.</p>
+            <table>
+                <thead><tr><th>Flag</th><th>Behavior</th></tr></thead>
+                <tbody>
+                    <tr><td><code>--branch &lt;id&gt;</code></td><td>Walk a specific branch by id. Required on all <code>--next</code> calls after the fork.</td></tr>
+                </tbody>
+            </table>
+            <p>If the doctor JSON cannot be parsed or no keyword matches, <code>--next</code> falls back to the linear <code>recovery</code> plan — branching never causes <code>--next</code> to fail. <code>--apply</code> continues to walk <code>recovery</code> linearly and ignores <code>branches</code>.</p>
+
             <h3 class="mt-10">Audit ↔ Envelope pivot</h3>
             <ul>
                 <li>Envelope → audit entry: <code>dbcli audit show --recovery-ref "$(jq -r .id .dbcli/last-recovery.json)"</code></li>

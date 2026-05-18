@@ -69,7 +69,26 @@ import type {
 } from '@/types/query-risk'
 import type { NonSqlAnalyzer, NonSqlAnalyzerContext } from '@/core/dml-plan'
 
-const MONGO_UPDATE_OPERATOR_ALLOWLIST = new Set(['$set', '$unset'])
+type OperatorTier = 'SAFE' | 'RENAME' | 'ARITHMETIC' | 'ARRAY' | 'BITWISE' | 'BLOCK'
+
+const MONGO_OPERATOR_TIER: Record<string, OperatorTier> = {
+  $set: 'SAFE',
+  $unset: 'SAFE',
+  $rename: 'RENAME',
+  $inc: 'ARITHMETIC',
+  $mul: 'ARITHMETIC',
+  $min: 'ARITHMETIC',
+  $max: 'ARITHMETIC',
+  $currentDate: 'ARITHMETIC',
+  $push: 'ARRAY',
+  $pull: 'ARRAY',
+  $pullAll: 'ARRAY',
+  $pop: 'ARRAY',
+  $addToSet: 'ARRAY',
+  $bit: 'BITWISE',
+  $where: 'BLOCK',
+}
+
 const MONGO_BROAD_FILTER_OPERATORS = new Set([
   '$regex',
   '$in',
@@ -116,33 +135,87 @@ function decide(factors: QueryRiskFactor[]): QueryRiskResult['decision'] {
   return 'ALLOW'
 }
 
-function extractMongoWrittenFields(setDoc: Record<string, unknown>): {
+interface MongoOperatorClassification {
   fields: string[]
-  operators: string[]
-  hasUnsupportedOperator: boolean
-} {
+  tierFactors: QueryRiskFactor[]
+  hasBlock: boolean
+}
+
+function classifyMongoUpdate(setDoc: Record<string, unknown>): MongoOperatorClassification {
   const fields = new Set<string>()
-  const operators: string[] = []
-  let hasUnsupportedOperator = false
+  const tierFactors: QueryRiskFactor[] = []
+  let hasBlock = false
   const hasAnyOperator = Object.keys(setDoc).some((k) => k.startsWith('$'))
 
   if (!hasAnyOperator) {
     for (const k of Object.keys(setDoc)) fields.add(k)
-    return { fields: Array.from(fields), operators: [], hasUnsupportedOperator: false }
+    return { fields: Array.from(fields), tierFactors, hasBlock }
   }
 
+  const seenTiers = new Map<OperatorTier, string[]>()
+
   for (const [op, payload] of Object.entries(setDoc)) {
-    operators.push(op)
-    if (!MONGO_UPDATE_OPERATOR_ALLOWLIST.has(op)) {
-      hasUnsupportedOperator = true
+    if (!op.startsWith('$')) {
+      fields.add(op)
       continue
     }
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
       for (const k of Object.keys(payload as Record<string, unknown>)) fields.add(k)
     }
+    const tier = MONGO_OPERATOR_TIER[op]
+    if (tier === undefined) {
+      hasBlock = true
+      tierFactors.push({
+        code: 'mongo_unknown_operator',
+        severity: 'block',
+        message: `Update uses unknown operator '${op}'. Reject by default; add to tier table if intentional.`,
+      })
+      continue
+    }
+    if (tier === 'BLOCK') {
+      hasBlock = true
+      tierFactors.push({
+        code: 'mongo_unknown_operator',
+        severity: 'block',
+        message: `Update uses '${op}' which executes server-side code. Operation rejected.`,
+      })
+      continue
+    }
+    if (tier === 'SAFE') continue
+    const bucket = seenTiers.get(tier) ?? []
+    bucket.push(op)
+    seenTiers.set(tier, bucket)
   }
 
-  return { fields: Array.from(fields), operators, hasUnsupportedOperator }
+  for (const [tier, ops] of seenTiers) {
+    if (tier === 'RENAME') {
+      tierFactors.push({
+        code: 'mongo_rename_operator',
+        severity: 'warn',
+        message: `Update uses ${ops.join(', ')}; field rename does not exfiltrate data but can break readers.`,
+      })
+    } else if (tier === 'ARITHMETIC') {
+      tierFactors.push({
+        code: 'mongo_arithmetic_operator',
+        severity: 'warn',
+        message: `Update uses ${ops.join(', ')}; numeric mutation may compound silently.`,
+      })
+    } else if (tier === 'ARRAY') {
+      tierFactors.push({
+        code: 'mongo_array_operator',
+        severity: 'warn',
+        message: `Update uses ${ops.join(', ')}; array mutation can grow unboundedly without a size guard.`,
+      })
+    } else if (tier === 'BITWISE') {
+      tierFactors.push({
+        code: 'mongo_bitwise_operator',
+        severity: 'warn',
+        message: `Update uses ${ops.join(', ')}; bitwise updates skip type promotion checks.`,
+      })
+    }
+  }
+
+  return { fields: Array.from(fields), tierFactors, hasBlock }
 }
 
 function hasIdEquality(where: Record<string, unknown>): boolean {
@@ -296,16 +369,9 @@ export const analyzeMongoDmlRisk: NonSqlAnalyzer = (intent, context) => {
   if (intent.operation === 'insert') {
     applyColumnBlacklist(intent.target, Object.keys(intent.data), context, factors)
   } else if (intent.operation === 'update') {
-    const { fields, hasUnsupportedOperator } = extractMongoWrittenFields(intent.set)
-    if (hasUnsupportedOperator) {
-      pushFactor(
-        factors,
-        'nonsql_unsupported_operator',
-        'block',
-        'MongoDB update uses an operator outside the MVP allowlist ($set, $unset).'
-      )
-    }
-    applyColumnBlacklist(intent.target, fields, context, factors)
+    const cls = classifyMongoUpdate(intent.set)
+    for (const f of cls.tierFactors) pushFactor(factors, f.code, f.severity, f.message)
+    applyColumnBlacklist(intent.target, cls.fields, context, factors)
     const where = intent.where ?? {}
     if (Object.keys(where).length === 0) {
       pushFactor(

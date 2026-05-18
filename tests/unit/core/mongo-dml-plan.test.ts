@@ -161,10 +161,10 @@ describe('analyzeMongoDmlRisk', () => {
       ctx()
     )
     expect(result.decision).toBe('BLOCK')
-    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_unsupported_operator')
+    expect(result.riskFactors.map((f) => f.code)).toContain('mongo_unknown_operator')
   })
 
-  test('BLOCK when update uses operator outside allowlist', () => {
+  test('WARN when update uses $rename (RENAME tier)', () => {
     const result = analyzeMongoDmlRisk(
       {
         operation: 'update',
@@ -175,8 +175,8 @@ describe('analyzeMongoDmlRisk', () => {
       },
       ctx()
     )
-    expect(result.decision).toBe('BLOCK')
-    expect(result.riskFactors.map((f) => f.code)).toContain('nonsql_unsupported_operator')
+    expect(result.decision).toBe('WARN')
+    expect(result.riskFactors.map((f) => f.code)).toContain('mongo_rename_operator')
   })
 
   test('ALLOW update by _id with $set', () => {

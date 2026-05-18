@@ -1,4 +1,12 @@
+import type { GuideStep } from '@/core/guide/types'
+import type {
+  RecoveryContext,
+  BranchPlan,
+  BranchFork,
+  BranchId,
+} from './types'
 import type { StepResultSummary } from './next-types'
+import { shellQuote } from './shell-quote'
 
 export const CONNECTION_BRANCH_IDS = [
   'doctor-clean',
@@ -150,3 +158,121 @@ export const CONNECTION_RESOLVER_KEYWORDS = {
   network: NETWORK_KEYWORDS,
   configLabels: [...CONFIG_LABELS],
 } as const
+
+type StepDraft = Omit<GuideStep, 'order' | 'branchId'>
+
+function renumber(branchId: ConnectionBranchId, drafts: StepDraft[]): GuideStep[] {
+  return drafts.map((d, i) => ({ ...d, order: i + 1, branchId }))
+}
+
+function planDoctorClean(): BranchPlan {
+  const drafts: StepDraft[] = [
+    {
+      command: 'dbcli inspect --for-agent',
+      rationale:
+        'Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.',
+      risk: 'readonly',
+      expects: 'JSON snapshot; check connection.online=true, schemaCache.available.',
+    },
+  ]
+  return {
+    description:
+      'Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.',
+    steps: renumber('doctor-clean', drafts),
+  }
+}
+
+function planDoctorConfigMissing(): BranchPlan {
+  const drafts: StepDraft[] = [
+    {
+      command: 'dbcli init',
+      rationale: 'No usable config; run init to create it.',
+      risk: 'write',
+      interactive: true,
+      expects: 'Init wizard prompts; new .dbcli written.',
+    },
+    {
+      command: 'dbcli inspect --no-connect --format json',
+      rationale: 'Verify config shape after init.',
+      risk: 'readonly',
+      expects: 'JSON snapshot with system/permission/blacklist sections populated.',
+    },
+  ]
+  return {
+    description:
+      'Doctor flagged a config-level failure. Rebuild config before reattempting connection.',
+    steps: renumber('doctor-config-missing', drafts),
+  }
+}
+
+function planDoctorAuthError(): BranchPlan {
+  const drafts: StepDraft[] = [
+    {
+      command: 'dbcli init --force',
+      rationale:
+        'Re-run init focused on credentials; --force overwrites the existing config in place.',
+      risk: 'write',
+      interactive: true,
+      expects: 'Init wizard accepts new user/password; config rewritten.',
+    },
+    {
+      command: 'dbcli inspect --no-connect --format json',
+      rationale: 'Confirm config now resolves credentials.',
+      risk: 'readonly',
+      expects: 'JSON snapshot reflecting updated credentials.',
+    },
+  ]
+  return {
+    description:
+      'Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.',
+    steps: renumber('doctor-auth-error', drafts),
+  }
+}
+
+function planDoctorNetworkError(ctx: RecoveryContext): BranchPlan {
+  const drafts: StepDraft[] = [
+    {
+      command: 'dbcli inspect --no-connect --format json',
+      rationale: 'Compare expected vs actual host/port without a live probe.',
+      risk: 'readonly',
+      expects: 'JSON snapshot with connection.name/host/port.',
+    },
+  ]
+  if (ctx.connectionName) {
+    drafts.push({
+      command: `dbcli use ${shellQuote(ctx.connectionName)}`,
+      rationale:
+        'Re-select the failing named connection so subsequent commands target it explicitly.',
+      risk: 'write',
+      dbWrite: false,
+      expects: 'Active connection switched.',
+    })
+  }
+  drafts.push({
+    command: 'dbcli init --force',
+    rationale: 'If addressing is wrong, rewrite host/port via init.',
+    risk: 'write',
+    interactive: true,
+    expects: 'Init wizard accepts new host/port; config rewritten.',
+  })
+  return {
+    description:
+      'Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.',
+    steps: renumber('doctor-network-error', drafts),
+  }
+}
+
+export function buildConnectionBranches(
+  ctx: RecoveryContext
+): { branches: Record<BranchId, BranchPlan>; branchFork: BranchFork } {
+  const branches: Record<BranchId, BranchPlan> = {
+    'doctor-clean': planDoctorClean(),
+    'doctor-config-missing': planDoctorConfigMissing(),
+    'doctor-auth-error': planDoctorAuthError(),
+    'doctor-network-error': planDoctorNetworkError(ctx),
+  }
+  return {
+    branches,
+    branchFork: { after: 1, branchIds: [...CONNECTION_BRANCH_IDS] },
+  }
+}

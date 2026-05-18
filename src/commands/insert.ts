@@ -3,6 +3,7 @@
  * Inserts data into a database table via JSON stdin or --data flag
  */
 
+import crypto from 'node:crypto'
 import { t_vars } from '@/i18n/message-loader'
 import {
   AdapterFactory,
@@ -19,6 +20,8 @@ import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { previewInsert } from '@/core/mongo/dry-run-formatter'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
+import type { DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -77,6 +80,7 @@ export async function insertCommand(
   },
   command?: import('commander').Command
 ): Promise<void> {
+  let config: DbcliConfig | undefined
   try {
     // 1. Validate table name
     if (!table || table.trim() === '') {
@@ -112,6 +116,13 @@ export async function insertCommand(
       throw new Error('JSON must be an object (e.g. {"name":"Alice","email":"a@b.com"})')
     }
 
+    // 4. Load configuration (hoisted above --plan so audit-on-failure has it).
+    const configPath = resolveConfigPath(command, options)
+    config = await configModule.read(configPath)
+    if (!config.connection) {
+      throw new Error('Run "dbcli init" to configure database connection')
+    }
+
     // --plan branch: planner-only preflight, no adapter, no DB connection.
     // Engine-aware: SQL builds an analyzer SQL string internally; MongoDB / Redis /
     // Elasticsearch hit their own pure analyzers. Errors here mirror `dbcli plan`:
@@ -128,14 +139,12 @@ export async function insertCommand(
         { format: options.format, config: options.config },
         command
       )
+      await writeAuditEntry(config, 'insert', options, {
+        success: true,
+        target: table,
+        metadata: { plan: true },
+      })
       return
-    }
-
-    // 4. Load configuration
-    const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
-    if (!config.connection) {
-      throw new Error('Run "dbcli init" to configure database connection')
     }
 
     if (config.connection.system === 'redis') {
@@ -156,6 +165,11 @@ export async function insertCommand(
           timestamp: new Date().toISOString(),
         }
         console.log(JSON.stringify(output, null, 2))
+        await writeAuditEntry(config, 'insert', options, {
+          success: true,
+          target: table,
+          metadata: { rows_affected: 0, dry_run: true },
+        })
         return
       }
 
@@ -170,6 +184,11 @@ export async function insertCommand(
           timestamp: new Date().toISOString(),
         }
         console.log(JSON.stringify(output, null, 2))
+        await writeAuditEntry(config, 'insert', options, {
+          success: true,
+          target: table,
+          metadata: { rows_affected: result.affectedRows },
+        })
         return
       } finally {
         await adapter.disconnect()
@@ -185,6 +204,11 @@ export async function insertCommand(
         error:
           'Elasticsearch 不支援 insert 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件寫入',
       }
+      await writeAuditEntry(config, 'insert', options, {
+        success: false,
+        target: table,
+        error: new Error('Elasticsearch does not support insert command'),
+      })
       console.log(JSON.stringify(output, null, 2))
       process.exit(1)
     }
@@ -207,6 +231,11 @@ export async function insertCommand(
           timestamp: new Date().toISOString(),
         }
         console.log(JSON.stringify(output, null, 2))
+        await writeAuditEntry(config, 'insert', options, {
+          success: true,
+          target: table,
+          metadata: { rows_affected: 0, dry_run: true },
+        })
         return
       }
 
@@ -222,6 +251,11 @@ export async function insertCommand(
           lastInsertId: result.lastInsertId,
         }
         console.log(JSON.stringify(output, null, 2))
+        await writeAuditEntry(config, 'insert', options, {
+          success: true,
+          target: table,
+          metadata: { rows_affected: result.affectedRows },
+        })
         return
       } finally {
         await adapter.disconnect()
@@ -263,6 +297,19 @@ export async function insertCommand(
 
       console.log(JSON.stringify(output, null, 2))
 
+      await writeAuditEntry(config, 'insert', options, {
+        success: result.status === 'success',
+        target: table,
+        ...(result.sql && { sql: result.sql }),
+        metadata: {
+          rows_affected: result.rows_affected,
+          ...(options.dryRun && { dry_run: true }),
+        },
+        ...(result.status === 'error' && {
+          error: new Error(result.error ?? 'insert failed'),
+        }),
+      })
+
       // Exit with code 1 if there is an error
       if (result.status === 'error') {
         process.exit(1)
@@ -271,13 +318,27 @@ export async function insertCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    let auditId: string | null = null
+    let envelopeId: string | undefined
     if (options.recovery === true) {
-      const { emitRecoveryEnvelope } = await import('@/core/recovery')
-      emitRecoveryEnvelope(error, {
-        operation: 'insert',
-        table,
-        writeOperation: 'INSERT',
+      envelopeId = crypto.randomUUID()
+    }
+    if (config) {
+      auditId = await writeAuditEntry(config, 'insert', options, {
+        success: false,
+        target: table,
+        error,
+        ...(envelopeId && { recovery_ref: envelopeId }),
       })
+    }
+
+    if (envelopeId !== undefined) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(
+        error,
+        { operation: 'insert', table, writeOperation: 'INSERT' },
+        { envelopeId, auditRef: auditId ?? undefined }
+      )
     }
 
     // Blacklist error

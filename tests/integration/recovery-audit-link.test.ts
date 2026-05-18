@@ -156,11 +156,11 @@ describe('Bi-directional ref round-trip (wired surface) [INTEGRATE-02 / -03 rele
   })
 })
 
-describe('J1 asymmetry guard (unwired surface) [INTEGRATE-03 negative contract]', () => {
+describe('6-command bi-directional ref round-trip (replaces former J1 negative guard) [INTEGRATE-03 positive contract]', () => {
   let workDir: string
 
   beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-j1-'))
+    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-bi-'))
     await seedConfig(workDir)
   })
 
@@ -168,39 +168,44 @@ describe('J1 asymmetry guard (unwired surface) [INTEGRATE-03 negative contract]'
     await rm(workDir, { recursive: true, force: true })
   })
 
-  for (const cmd of ['insert', 'update', 'delete', 'export', 'q', 'schema'] as const) {
-    test(`${cmd} --recovery failure: envelope audit_ref absent (J1 lock)`, async () => {
-      const args = (() => {
-        switch (cmd) {
-          case 'insert':
-            return ['insert', 'nonexistent_table', '--data', '{"a":1}', '--recovery']
-          case 'update':
-            return ['update', 'nonexistent_table', '--set', 'a=1', '--where', '1=1', '--recovery']
-          case 'delete':
-            return ['delete', 'nonexistent_table', '--where', '1=1', '--recovery']
-          case 'export':
-            return [
-              'export',
-              '--file',
-              join(tmpdir(), 'phase25-export.csv'),
-              'select 1',
-              '--recovery',
-            ]
-          case 'q':
-            return ['q', '@nope/does-not-exist', '--recovery']
-          case 'schema':
-            return ['schema', 'nonexistent_table', '--recovery']
-        }
-      })()
+  const cases: Array<{ cmd: string; args: string[] }> = [
+    { cmd: 'insert', args: ['insert', 'nonexistent_table', '--data', '{"a":1}', '--recovery'] },
+    {
+      cmd: 'update',
+      args: ['update', 'nonexistent_table', '--set', '{"a":1}', '--where', 'id=1', '--recovery'],
+    },
+    { cmd: 'delete', args: ['delete', 'nonexistent_table', '--where', 'id=1', '--recovery'] },
+    {
+      cmd: 'export',
+      args: [
+        'export',
+        'select 1',
+        '--output',
+        join(tmpdir(), 'phase25-export.csv'),
+        '--format',
+        'csv',
+        '--recovery',
+      ],
+    },
+    { cmd: 'q', args: ['q', '@nope/does-not-exist', '--recovery'] },
+    { cmd: 'schema', args: ['schema', 'nonexistent_table', '--recovery'] },
+  ]
+
+  for (const { cmd, args } of cases) {
+    test(`${cmd} --recovery failure: envelope.audit_ref === audit.id AND audit.recovery_ref === envelope.id`, async () => {
       await run(['--config', workDir, ...args], workDir)
 
+      const entries = await readAuditEntries(workDir)
+      expect(entries.length).toBeGreaterThan(0)
+      const lastEntry = entries[entries.length - 1]!
+      expect(lastEntry.success).toBe(false)
+      expect(typeof lastEntry.recovery_ref).toBe('string')
+      expect(lastEntry.recovery_ref as string).toMatch(/^[0-9a-f-]{36}$/)
+
       const envelope = await readEnvelope(workDir)
-      if (envelope === null) {
-        // Command failed before emitRecoveryEnvelope ran; J1 contract is vacuously satisfied.
-        return
-      }
-      // J1 lock: when envelope IS written by an unwired command, audit_ref MUST be absent.
-      expect('audit_ref' in envelope).toBe(false)
+      expect(envelope).not.toBeNull()
+      expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
+      expect(envelope!.audit_ref).toBe(lastEntry.id as string)
     })
   }
 })

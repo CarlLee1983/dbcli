@@ -335,7 +335,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>
                 <li><strong>Risk Gating</strong>: <code>dbcli plan</code> for raw SQL plus per-command <code>--plan</code> on <code>insert</code> / <code>update</code> / <code>delete</code> for DML preflight without connecting to the database.</li>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
-                <li><strong>Audit Log</strong>: <code>audit tail --for-agent</code> for session handoff; bi-directional <code>recovery_ref</code> / <code>audit_ref</code> links.</li>
+                <li><strong>Audit Log</strong>: <code>audit tail --for-agent</code> for session handoff; every command's failure with <code>--recovery</code> writes matching <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUIDs so agents can pivot from a recovery envelope to its audit entry via <code>audit tail --recovery-ref &lt;id&gt;</code>.</li>
             </ul>
         </section>
 

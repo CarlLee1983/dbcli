@@ -100,11 +100,10 @@ The `inspect` / `guide` / `recover` / `recover --apply` agent JSON output embeds
 history context. The envelope's `audit_ref` and the audit entry's `recovery_ref`
 point at each other; agents can pivot either direction.
 
-**Known limitation (v1.20.0):** Bi-directional linkage is wired for `query`,
-`inspect`, and diagnostic surfaces. The commands `insert / update / delete /
-export / q / schema` emit single-direction recovery envelopes (no `audit_ref`)
-in v1.20.0; full coverage is tracked as Phase 23-04 follow-up. Recovery envelope
-linkage from the envelope side is unaffected.
+Bi-directional `recovery_ref` / `audit_ref` linkage is wired on every command
+that accepts `--recovery`: `query`, `inspect`, `insert`, `update`, `delete`,
+`export`, `q`, and `schema`. Agents can pivot from an envelope to its audit
+entry via `audit tail --recovery-ref <id>`.
 
 Audit entries are written to `.dbcli/audit/<connection>.jsonl` with rotation at
 ~10 MB or 1000 entries. `audit.enabled = false` in `.dbcli` opts out (default ON

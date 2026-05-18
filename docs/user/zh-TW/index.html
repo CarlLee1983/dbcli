@@ -335,7 +335,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>內容優化</strong>：<code>--for-agent</code> 旗標大幅減少 Token 消耗。</li>
                 <li><strong>風險控制</strong>：<code>dbcli plan</code> 處理原生 SQL，<code>insert</code> / <code>update</code> / <code>delete</code> 的 <code>--plan</code> 旗標則在不連線資料庫的情況下對 DML 進行預檢。</li>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
-                <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；envelope 雙向連結 <code>recovery_ref</code> / <code>audit_ref</code>。</li>
+                <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；每個指令失敗時加上 <code>--recovery</code> 都會寫入互相對應的 <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUID，agent 可透過 <code>audit tail --recovery-ref &lt;id&gt;</code> 從 envelope 反查 audit entry。</li>
             </ul>
         </section>
 

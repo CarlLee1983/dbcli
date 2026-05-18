@@ -172,15 +172,7 @@ describe('6-command bi-directional ref round-trip (replaces former J1 negative g
     { cmd: 'insert', args: ['insert', 'nonexistent_table', '--data', '{"a":1}', '--recovery'] },
     {
       cmd: 'update',
-      args: [
-        'update',
-        'nonexistent_table',
-        '--set',
-        '{"a":1}',
-        '--where',
-        'id=1',
-        '--recovery',
-      ],
+      args: ['update', 'nonexistent_table', '--set', '{"a":1}', '--where', 'id=1', '--recovery'],
     },
     { cmd: 'delete', args: ['delete', 'nonexistent_table', '--where', 'id=1', '--recovery'] },
     {

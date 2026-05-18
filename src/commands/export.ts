@@ -47,6 +47,8 @@ interface ExportOptions {
   limit?: number
   noLimit?: boolean
   recovery?: boolean
+  // Open for audit-helper consumption (dryRun/plan/...).
+  [key: string]: unknown
 }
 
 /**

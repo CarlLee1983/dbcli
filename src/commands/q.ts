@@ -61,6 +61,8 @@ export interface QCommandOptions {
   paramFile?: string
   config?: string
   recovery?: boolean
+  // Open for audit-helper consumption.
+  [key: string]: unknown
 }
 
 export async function qCommand(

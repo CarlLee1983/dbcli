@@ -259,31 +259,42 @@ export class MongoDBAdapter implements QueryableAdapter {
 
   async getTableSchema(
     collectionName: string,
-    options?: { sampleSize?: number }
+    options?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
   ): Promise<TableSchema> {
     const db = this.getDatabase()
     const collection = db.collection(collectionName)
 
     const estimatedRowCount = await collection.estimatedDocumentCount()
     const requested = options?.sampleSize
-    const desired = typeof requested === 'number' && requested >= 1 ? requested : 50
+    const desired = typeof requested === 'number' && requested >= 1 ? requested : 100
     const sampleSize = Math.min(desired, 1000)
-    const samples = await collection.find().limit(sampleSize).toArray()
+    const method = options?.sampleMethod ?? 'random'
 
-    const columnMap = new Map<string, Set<string>>()
-    for (const doc of samples) {
-      for (const [key, value] of Object.entries(doc)) {
-        if (!columnMap.has(key)) {
-          columnMap.set(key, new Set())
-        }
-        columnMap.get(key)!.add(typeof value)
+    let samples: Record<string, unknown>[] = []
+    if (method === 'random') {
+      try {
+        samples = (await collection
+          .aggregate([{ $sample: { size: sampleSize } }])
+          .toArray()) as Record<string, unknown>[]
+      } catch (err) {
+        console.error(
+          `[mongo] $sample failed (${(err as Error).message}); falling back to natural order.`
+        )
+        samples = (await collection.find().limit(sampleSize).toArray()) as Record<string, unknown>[]
       }
+    } else {
+      samples = (await collection.find().limit(sampleSize).toArray()) as Record<string, unknown>[]
     }
 
-    const columns = Array.from(columnMap.entries()).map(([name, types]) => ({
+    const accumulator = new Map<string, { types: Set<string>; count: number }>()
+    for (const doc of samples) accumulateDocPaths(doc, '', accumulator)
+
+    const denom = Math.max(samples.length, 1)
+    const columns = Array.from(accumulator.entries()).map(([name, info]) => ({
       name,
-      type: Array.from(types).join(' | '),
-      nullable: true, // MongoDB fields are naturally nullable/optional
+      type: Array.from(info.types).sort().join(' | '),
+      nullable: info.types.has('null') || info.count < denom,
+      presence: info.count / denom,
     }))
 
     return {
@@ -340,6 +351,53 @@ export class MongoDBAdapter implements QueryableAdapter {
     return {
       rows: [],
       affectedRows: result.deletedCount,
+    }
+  }
+}
+
+type MongoTypeName =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'null'
+  | 'array'
+  | 'object'
+  | 'Date'
+  | 'ObjectId'
+  | 'Binary'
+  | 'Decimal128'
+
+function detectMongoType(v: unknown): MongoTypeName {
+  if (v === null || v === undefined) return 'null'
+  if (Array.isArray(v)) return 'array'
+  if (v instanceof Date) return 'Date'
+  if (typeof v === 'object') {
+    const ctor = (v as object).constructor?.name
+    if (ctor === 'ObjectId') return 'ObjectId'
+    if (ctor === 'Binary') return 'Binary'
+    if (ctor === 'Decimal128') return 'Decimal128'
+    return 'object'
+  }
+  if (typeof v === 'string') return 'string'
+  if (typeof v === 'number') return 'number'
+  if (typeof v === 'boolean') return 'boolean'
+  return 'string'
+}
+
+function accumulateDocPaths(
+  doc: Record<string, unknown>,
+  prefix: string,
+  acc: Map<string, { types: Set<string>; count: number }>
+): void {
+  for (const [k, v] of Object.entries(doc)) {
+    const path = prefix === '' ? k : `${prefix}.${k}`
+    const t = detectMongoType(v)
+    const slot = acc.get(path) ?? { types: new Set<string>(), count: 0 }
+    slot.types.add(t)
+    slot.count += 1
+    acc.set(path, slot)
+    if (t === 'object' && v && typeof v === 'object') {
+      accumulateDocPaths(v as Record<string, unknown>, path, acc)
     }
   }
 }

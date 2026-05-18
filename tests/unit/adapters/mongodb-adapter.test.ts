@@ -305,36 +305,43 @@ describe('MongoDBAdapter', () => {
       await adapter.connect()
     })
 
-    test('uses default sample size of 50 documents', async () => {
+    test('uses default $sample size of 100 documents', async () => {
       await adapter.getTableSchema('users')
       const client = (adapter as any).client as MockMongoClient
-      const lastFind = client.findCalls[client.findCalls.length - 1]!
-      expect(lastFind.limit).toBe(50)
+      const lastAgg = client.aggregateCalls[client.aggregateCalls.length - 1]!
+      expect(lastAgg.pipeline).toEqual([{ $sample: { size: 100 } }])
     })
 
     test('honors explicit options.sampleSize', async () => {
       await adapter.getTableSchema('users', { sampleSize: 200 })
       const client = (adapter as any).client as MockMongoClient
-      const lastFind = client.findCalls[client.findCalls.length - 1]!
-      expect(lastFind.limit).toBe(200)
+      const lastAgg = client.aggregateCalls[client.aggregateCalls.length - 1]!
+      expect(lastAgg.pipeline).toEqual([{ $sample: { size: 200 } }])
     })
 
     test('caps sampleSize at 1000', async () => {
       await adapter.getTableSchema('users', { sampleSize: 9999 })
       const client = (adapter as any).client as MockMongoClient
-      const lastFind = client.findCalls[client.findCalls.length - 1]!
-      expect(lastFind.limit).toBe(1000)
+      const lastAgg = client.aggregateCalls[client.aggregateCalls.length - 1]!
+      expect(lastAgg.pipeline).toEqual([{ $sample: { size: 1000 } }])
     })
 
     test('falls back to default when sampleSize is below 1', async () => {
       await adapter.getTableSchema('users', { sampleSize: 0 })
       const client = (adapter as any).client as MockMongoClient
-      const lastFind = client.findCalls[client.findCalls.length - 1]!
-      expect(lastFind.limit).toBe(50)
+      const lastAgg = client.aggregateCalls[client.aggregateCalls.length - 1]!
+      expect(lastAgg.pipeline).toEqual([{ $sample: { size: 100 } }])
     })
 
-    test('returns inferred columns as union of typeof per field', async () => {
-      const schema = await adapter.getTableSchema('users')
+    test('sampleMethod=natural switches to find().limit()', async () => {
+      await adapter.getTableSchema('users', { sampleMethod: 'natural', sampleSize: 25 })
+      const client = (adapter as any).client as MockMongoClient
+      const lastFind = client.findCalls[client.findCalls.length - 1]!
+      expect(lastFind.limit).toBe(25)
+    })
+
+    test('returns inferred columns flattened from sampled docs', async () => {
+      const schema = await adapter.getTableSchema('users', { sampleMethod: 'natural' })
       const names = schema.columns.map((c) => c.name).sort()
       expect(names).toEqual(['_id', 'age', 'name'])
     })

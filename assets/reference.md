@@ -1042,6 +1042,270 @@ Task storage layers:
 Higher tiers override lower tiers by task name. Task name is derived from the
 file path under the tier root (e.g. `diag/inspect.md` → `diag/inspect`).
 
+## Recovery Cookbook (agent walkthroughs)
+
+End-to-end recovery sessions for the most common failure codes. All examples
+assume the agent invoked a `--recovery`-capable command and received a
+`RecoveryEnvelope` (or hit the same envelope via `dbcli recovery --code <CODE>`
+lookup). See [§recovery](#recovery) for the envelope shape, [§recover](#recover)
+for `--apply` / `--next` / risk-gate semantics, and [§audit](#audit) for the
+bi-directional `audit_ref` ⇄ `recovery_ref` pivot.
+
+### Scenario index
+
+| Code | Trigger | Primary remediation | Risk tier |
+|------|---------|---------------------|-----------|
+| `CONN_REFUSED` | Database process down or wrong host/port. | `dbcli doctor` → fix host/port → retry. | `readonly` |
+| `CONN_AUTH_FAILED` | Credentials rejected. | Re-check `.dbcli`/env, rotate credentials, `dbcli init --force` only on explicit user nod. | `readonly` → `interactive` |
+| `PERMISSION_DENIED` | Active permission level forbids the verb. | `dbcli inspect` to confirm level → escalate via `dbcli init` (human) or run a `--dry-run` instead. | `readonly` + `dry-run` |
+| `BLACKLIST_TABLE` | Target table is blacklisted. | `dbcli blacklist list` → `blacklist table remove <name>` (local-write tier). | `readonly` + `local-write` |
+| `BLACKLIST_COLUMN_WRITE` | INSERT/UPDATE touches a blacklisted column. | Re-shape payload to drop the column, or `blacklist column remove`. Envelope prepends a `--dry-run` preview step. | `dry-run` + `local-write` |
+| `SCHEMA_CACHE_MISSING` | Fresh checkout / new v2 connection / cache wiped. | `dbcli schema --refresh --force` (or `--use <conn>` per-connection). | `readonly` |
+| `SNIPPET_NOT_FOUND` / `SNIPPET_AMBIGUOUS` | Typo or duplicate snippet name. | `dbcli queries list` → `queries search <kw>` → run correct `@name`. | `readonly` |
+| `SNIPPET_PARAM_MISSING` | `--param k=v` not supplied. | `dbcli queries show @name` lists required params → re-run with full set. | `readonly` |
+| `CONFIG_MISSING` | No `.dbcli` in cwd. | `dbcli init` (human-driven). | `interactive` |
+
+`risk` enum: `readonly` / `dry-run` / `write` / `unknown` (see §recovery boundaries).
+Allowlist tier: `readonly` / `dry-run` / `local-write` / `db-write` / `interactive` (see [§recover Risk gate matrix](#risk-gate-matrix)).
+
+### S1 — CONN_REFUSED end-to-end
+
+```bash
+# 1. Failing call writes envelope to stdout AND .dbcli/last-recovery.json
+$ dbcli query "SELECT 1" --recovery --format json
+{
+  "schemaVersion": 1,
+  "error": { "code": "CONN_REFUSED", "message": "..." },
+  "audit_ref": "1f8e...c4d2",
+  "recovery": [
+    { "order": 1, "command": "dbcli doctor --format json", "risk": "readonly", ... },
+    { "order": 2, "command": "dbcli inspect --for-agent",  "risk": "readonly", ... }
+  ],
+  "verify": { "command": "dbcli doctor --format json", "risk": "readonly", ... }
+}
+
+# 2. One-shot apply (only readonly + dry-run run by default)
+$ dbcli recover --apply --format json
+{ "finalStatus": "ok", "executed": [...], "verifyStatus": "passed" }
+# Exit 0 → root cause cleared (verify probe succeeded).
+
+# 3. If verify reported `failed` / `indeterminate`, drop into --next for control
+$ dbcli recover --next --after-step 1 --result '{"status":"failed","exitCode":1}'
+# → returns a refined step 2 or `kind:"done"` based on the prevResult
+```
+
+### S2 — PERMISSION_DENIED with implicit `--dry-run` preview
+
+```bash
+$ dbcli update orders --where "id=1" --set '{"status":"shipped"}' --recovery --format json
+{
+  "error": { "code": "PERMISSION_DENIED", ... },
+  "audit_ref": "9ab0...e711",
+  "recovery": [
+    { "order": 1, "command": "dbcli update orders --where 'id=1' --set '<redacted>' --dry-run", "risk": "dry-run" },
+    { "order": 2, "command": "dbcli inspect --for-agent", "risk": "readonly" }
+  ]
+}
+
+# Default apply runs both steps (dry-run is in-tier).
+$ dbcli recover --apply
+```
+
+When the failing operation is INSERT/UPDATE/DELETE, the envelope prepends a
+`risk: 'dry-run'` step (the same write subcommand with `--dry-run`). Run it
+before any escalation — it both teaches the agent what the SQL looks like and
+proves the change is well-formed before raising the permission tier.
+
+### S3 — BLACKLIST_TABLE (local-write remediation)
+
+```bash
+$ dbcli query "SELECT * FROM audit_logs" --recovery --format json
+# error.code: BLACKLIST_TABLE
+# recovery[0]: dbcli blacklist list                     (risk: readonly)
+# recovery[1]: dbcli blacklist table remove audit_logs  (risk: write — local-write tier)
+
+# Default --apply: step 1 runs, step 2 skipped:risk → exit 3.
+$ dbcli recover --apply
+# To proceed: open the gate to local-write tier ONLY (does not touch DB).
+$ dbcli recover --apply --allow-write=readonly-cmd
+{ "finalStatus": "ok", "executed": [step1, step2], "verifyStatus": "passed" }
+```
+
+### S4 — BLACKLIST_COLUMN_WRITE (preview-then-drop)
+
+```bash
+$ dbcli insert users --data '{"name":"a","ssn":"123"}' --recovery
+# recovery[0]: dbcli insert users --data '<redacted>' --dry-run  (risk: dry-run)
+# recovery[1]: dbcli blacklist list                              (risk: readonly)
+# recovery[2]: dbcli blacklist column remove users.ssn           (risk: write — local-write)
+
+# Preferred path: don't widen the blacklist — re-shape the agent's payload to drop ssn.
+# Apply only the diagnostic prefix (steps 1+2) to confirm what columns are masked:
+$ dbcli recover --apply
+# Then re-issue insert without `ssn`.
+```
+
+### S5 — SCHEMA_CACHE_MISSING (fresh / multi-conn)
+
+```bash
+$ dbcli inspect --require-schema-cache --recovery --format json
+# error.code: SCHEMA_CACHE_MISSING
+# recovery[0]: dbcli schema --refresh --force      (risk: readonly — populates .dbcli/schemas/)
+# verify:      dbcli inspect --format json         (schemaCache.available === true)
+
+$ dbcli recover --apply
+# Per-connection cache lives at .dbcli/schemas/<connection>/. If the failure was on
+# a v2 named connection, the envelope's command already carries `--use <name>`.
+```
+
+### S6 — SNIPPET_NOT_FOUND with disambiguation
+
+```bash
+$ dbcli q @anaytics/revenue --recovery
+# typo: anaytics → analytics
+# recovery[0]: dbcli queries list --format json
+# recovery[1]: dbcli queries search analytics  (or whatever --hint suggests)
+$ dbcli recover --apply
+# Agent reads stdoutSummary, identifies the correct @name, then re-issues:
+$ dbcli q @analytics/revenue --param days=30
+```
+
+### Multi-turn `--next` walkthrough (3-step plan)
+
+Use `--next` instead of `--apply` when:
+
+- `--apply` is too coarse-grained (the agent wants step-by-step inspection).
+- The plan contains an `interactive` step that `--apply` would skip.
+- The agent uses its own runner / sandbox and just wants dbcli to drive cursoring.
+
+`--next` returns one step at a time, given which step the agent **just executed**
+and a `StepResultSummary` of how it went. dbcli does not persist the cursor —
+the agent owns `--after-step`.
+
+```bash
+# Envelope already saved at .dbcli/last-recovery.json (3-step plan, CONN_REFUSED).
+
+# Round 1 — agent reads step 1 from the envelope, executes it itself, then asks
+# dbcli for the next step.
+$ dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}' --format json
+{
+  "schemaVersion": 1,
+  "kind": "step",
+  "errorCode": "CONN_REFUSED",
+  "cursor": 2,
+  "totalSteps": 3,
+  "step": { "order": 2, "command": "dbcli inspect --for-agent", "risk": "readonly", ... }
+}
+
+# Round 2 — bigger stdout, save to file and reference it.
+$ ./run-step.sh > /tmp/r2.json   # agent's own runner; result is StepResultSummary JSON
+$ dbcli recover --next --after-step 2 --result @/tmp/r2.json
+{ "kind": "step", "cursor": 3, "step": { "order": 3, ... } }
+
+# Round 3 — last step done.
+$ dbcli recover --next --after-step 3 --result '{"status":"ok"}'
+{ "kind": "done", "cursor": 3, "totalSteps": 3 }
+```
+
+`StepResultSummary` contract (recap of [§recover Multi-turn](#multi-turn---next-p2)):
+
+```ts
+interface StepResultSummary {
+  status: 'ok' | 'failed' | 'skipped'
+  exitCode?: number
+  stdoutSummary?: string  // last 4 KB
+  stderrSummary?: string  // last 4 KB
+}
+```
+
+Truncate to the **last** 4 KB before passing — the head of a huge stdout is
+usually not what disambiguates next steps.
+
+Verification is **not** automatic under `--next`. If the agent wants the same
+verify probe `--apply` runs, it must execute the envelope's `verify` step
+itself after the plan completes.
+
+### Bi-directional pivot (envelope ⇄ audit)
+
+Every `--recovery`-capable failure (`query`, `inspect`, `insert`, `update`,
+`delete`, `export`, `q`, `schema`) writes **both** sides of a UUID link:
+
+- `RecoveryEnvelope.audit_ref` → the `audit.id` for the same failure.
+- `AuditEntry.recovery_ref` → the envelope's id (also the auto-saved
+  `.dbcli/last-recovery.json` filename trace).
+
+```bash
+# From envelope → audit (forensics on a saved failure)
+$ ENV_ID=$(jq -r '.id' .dbcli/last-recovery.json)        # or read from stdout
+$ dbcli audit show --recovery-ref "$ENV_ID" --format json
+# Returns the matching audit entry (full, not brief).
+
+# From audit → envelope (you have an audit hit, want the structured plan)
+$ AUDIT_ID=$(dbcli audit tail --for-agent --n 1 | jq -r '.[0].id')
+$ dbcli audit show "$AUDIT_ID" --format json
+# Read `recovery_ref` from the entry, then either re-run --recovery against
+# the original command or load the saved envelope:
+$ jq '.recovery_ref' .dbcli/last-recovery.json | grep -q "$RECOVERY_REF" \
+  && dbcli recover --format markdown            # human inspect
+  || dbcli recover --from /path/to/archived.json --format markdown
+```
+
+Session handoff: a fresh agent that opens `dbcli inspect --for-agent`,
+`dbcli guide`, `dbcli recover`, or `dbcli recover --apply` gets an
+`audit_recent: AuditEntryBrief[]` field (last 5 entries) embedded in the JSON
+output — no extra round-trip to the audit CLI needed for immediate history
+context.
+
+### Risk gate cheat sheet
+
+Quick reference for what `--apply` runs at each `--allow-write` level. The
+canonical matrix lives at [§recover Risk gate matrix](#risk-gate-matrix); this
+table maps it onto common agent intents.
+
+| Agent intent | Recommended flag | What runs | What's skipped |
+|---|---|---|---|
+| Probe-only (read state, learn) | `--apply` (default) | `readonly` + `dry-run` steps | `local-write`, `db-write`, `interactive` |
+| Local config remediation (e.g. `blacklist remove`) | `--apply --allow-write=readonly-cmd` | + `local-write` | `db-write`, `interactive` |
+| Database write recovery (rare; trusted plan) | `--apply --allow-write=write-cmd` | + `db-write` | `interactive` |
+| Interactive step (e.g. `dbcli init`) | Drive manually OR use `--next` | n/a | All interactive steps always skip under `--apply` |
+| Walk plan step-by-step with own runner | `--next --after-step N --result …` | one step per call | n/a — agent owns cursor + execution |
+
+Three rules that always apply regardless of `--allow-write`:
+
+1. **Tier is code-owned, not envelope-claimed.** The risk gate reads the
+   per-error-code allowlist after parsing argv. An envelope cannot escalate
+   itself by setting `risk: 'readonly'` on a write subcommand — argv decides.
+2. **Placeholders block.** A step with unresolved `<token>` placeholders is
+   skipped as `skipped:placeholder` even at `--allow-write=write-cmd`. Bind
+   them at `recovery` lookup time with `--hint` / `--snippet` / `--table`, or
+   ask the user.
+3. **Verify is signal, not gate.** `verifyStatus` ∈ `{passed, failed,
+   indeterminate}` reports whether the original failure looks resolved.
+   `recover --apply` exit code is set by step execution, not verification.
+
+### Common pitfalls
+
+- **Stale `.dbcli/last-recovery.json`.** `recover` (no `--apply`) shows the
+  *saved* plan, which may be hours old. Re-run the original command with
+  `--recovery` to refresh it, or pass `--from <file>` to load an archived one.
+- **`.dbcli/` is gitignored.** Do not check `last-recovery.json` into a repo
+  for "reproducibility"; it contains sanitized command snapshots but the
+  workspace `cwd` only makes sense locally. Use `recover --from <archived.json>`
+  for cross-machine replay.
+- **`--apply` exit 3 means every step skipped.** Not a failure — it means the
+  default gate was too tight. Either widen with `--allow-write`, fill
+  placeholders, or fall back to `--next` and drive steps manually.
+- **`--next` does not run verify.** Re-run the original failing command with
+  `--recovery` once the plan is done; if it now succeeds (no envelope on
+  stdout), recovery is complete. Or invoke `envelope.verify.command` yourself.
+- **Audit writer failures are non-fatal.** If `audit health` reports
+  `lastWriteOk: false`, the main command still completed — but `recovery_ref`
+  ⇄ `audit_ref` linkage is broken for that one call. `audit health` surfaces
+  the underlying error (disk full, EACCES, etc.).
+- **Cross-connection forensics.** `audit tail --all --for-agent` merges all
+  connections; `audit show <id-prefix> --all` returns an envelope `{connection,
+  entry}` so a fresh agent can tell which DB the failure was against.
+
 ## Interactive HTML dashboard
 
 `query`, `q`, and `export` can render results as a single, fully self-contained

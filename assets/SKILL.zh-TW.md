@@ -91,7 +91,7 @@ dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 
 
 **完整雙向覆蓋(v1.20.1+):** `recovery_ref` / `audit_ref` 雙向連結已在所有支援 `--recovery` 的指令上佈線:`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`。Agent 可透過 `dbcli audit tail --recovery-ref <id>` 從 envelope 反查 audit entry(反方向用 `dbcli audit show --recovery-ref <id>`)。v1.20.0 中 6 個 DML/DDL 指令的部分覆蓋缺口已於 v1.20.1 關閉。
 
-詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。
+詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。完整 agent 復原 walkthrough(各錯誤碼 end-to-end 情境、`--next` 多輪逐步、envelope ⇄ audit pivot、risk gate cheat sheet)見 [`reference.md`](./reference.md) §Recovery Cookbook(英文)。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
 

@@ -108,6 +108,9 @@ entry via `audit tail --recovery-ref <id>`.
 Audit entries are written to `.dbcli/audit/<connection>.jsonl` with rotation at
 ~10 MB or 1000 entries. `audit.enabled = false` in `.dbcli` opts out (default ON
 since v1.20.0). For flag reference see [`reference.md`](./reference.md) §audit.
+For end-to-end recovery walkthroughs (per-code scenarios, `--next` multi-turn,
+envelope ⇄ audit pivot, risk-gate cheat sheet) see
+[`reference.md`](./reference.md) §Recovery Cookbook.
 
 ## Quick start
 

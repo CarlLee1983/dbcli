@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.20.1] - 2026-05-18
+
+### Changed
+
+- **Phase 23-04 follow-up closure — full DML/DDL audit coverage.** `insert / update / delete / export / q / schema` now invoke `writeAuditEntry` on every happy / failure / rejection branch (BlacklistError / PermissionError / ConnectionError / validation all flow through the wired catch block). This closes the v1.20.0 INTEGRATE-01 / INTEGRATE-04 partial gap noted in v1.20.0's Known limitation paragraph.
+- **Bi-directional `audit_ref` ⇄ `recovery_ref` linkage on every `--recovery`-capable command.** When any of the 6 newly-wired commands fails with `--recovery`, the audit entry's `recovery_ref` and the recovery envelope's `audit_ref` carry matching UUIDs — identical in shape to the Phase 25 `query` / `inspect` round-trip wiring. Agents can pivot from `.dbcli/last-recovery.json` to the audit entry via `dbcli audit tail --recovery-ref <id>`.
+- **AI-agent skill docs (`assets/SKILL.md`, `assets/SKILL.zh-TW.md`, `assets/reference.md`)** updated to advertise full 8-command bi-directional coverage; bilingual user docs (`docs/user/en/index.{md,html}`, `docs/user/zh-TW/index.{md,html}`) gained a `--recovery` row noting the cross-command linkage.
+
+### Tests
+
+- `tests/integration/recovery-audit-link.test.ts` — the legacy "J1 asymmetry guard" `describe` block (which asserted `'audit_ref' in envelope === false` for the 6 deferred commands) is replaced with a consolidated **6-command positive bi-directional round-trip** block. For each of `schema / q / export / insert / update / delete`, the test asserts `envelope.audit_ref === audit.id` AND `audit.recovery_ref === envelope.id`, with both refs matching `/^[0-9a-f-]{36}$/`.
+
+### Internal
+
+- `src/commands/{insert,update,delete,export,q,schema}.ts` — adopt the D-J catch-block template from Phase 25: pre-generate `envelopeId = crypto.randomUUID()` only when `options.recovery === true`, call `writeAuditEntry({ success: false, error, recovery_ref: envelopeId })` and capture the returned `auditId`, then call `emitRecoveryEnvelope(err, ctx, { envelopeId, auditRef: auditId ?? undefined })`. Success branches add `await writeAuditEntry(config, '<cmd>', options, { success: true, ... })`.
+- `src/commands/q.ts` — `handleQError` refactored to accept `config` so audit + envelope can be written together inside the same try/catch.
+- `src/adapters/capabilities.ts` — narrow `ExportOptions` / `QCommandOptions` shapes opened so the shared audit helper can read `--recovery` and `--config` without per-command type casts.
+- `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md` — coverage table refreshed; all 6 previously-deferred rows flipped to `YES (Phase 23-04 wired)`; Round-Trip Contract section replaces the old Asymmetry Guard section.
+
 ## [1.20.0] - 2026-05-17
 
 ### Added
@@ -26,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Default-on, upgrade impact:** `audit.enabled = true` by default. Existing projects will begin creating `.dbcli/audit/<connection>.jsonl` on first command after upgrading. Set `audit.enabled = false` in `.dbcli` to opt out. The audit directory is gitignored by default; entries are metadata-only (D3) — never raw SQL bodies, `--param` values, or result cell contents. (D1)
 - `inspect` / `guide` / `recover` / `recover --apply` agent JSON output adds an `audit_recent` field (additive; shape stable; not a breaking change). v1.19.x consumers ignore the field.
-- _Known limitation (Phase 23-04 follow-up):_ Audit log captures `query`, `inspect`, and diagnostic-surface commands in v1.20.0; coverage for `insert / update / delete / export / q / schema` failure paths is tracked as Phase 23-04 follow-up (see `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`). Recovery envelope linkage from the envelope side is unaffected — those commands continue to emit `.dbcli/last-recovery.json` envelopes; only the `audit_ref` back-pointer is missing in v1.20.0.
+- _Known limitation (Phase 23-04 follow-up):_ Audit log captures `query`, `inspect`, and diagnostic-surface commands in v1.20.0; coverage for `insert / update / delete / export / q / schema` failure paths is tracked as Phase 23-04 follow-up (see `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`). Recovery envelope linkage from the envelope side is unaffected — those commands continue to emit `.dbcli/last-recovery.json` envelopes; only the `audit_ref` back-pointer is missing in v1.20.0. (Closed in v1.20.1 — see entry above.)
 
 ### Internal
 

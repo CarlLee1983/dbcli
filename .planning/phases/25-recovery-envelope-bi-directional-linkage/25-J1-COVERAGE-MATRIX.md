@@ -1,6 +1,7 @@
 # Phase 25: J1 Coverage Matrix
 
 **Captured:** 2026-05-16 (end of Phase 25 execution)
+**Refreshed:** 2026-05-18 (Phase 23-04 closure — all 6 deferred commands now wired)
 **Decision reference:** CONTEXT.md Scope Addendum (option J1 selected over J2 / J3)
 **Source data:** RESEARCH.md section 4 (call-site map) + PATTERNS.md J1 Coverage Matrix section
 
@@ -30,38 +31,40 @@ The user picked **J1** in CONTEXT.md's Scope Addendum. The asymmetry is document
 | `report` | YES (commands/report.ts:87, 97) | NO | N/A | NO (not in DOCS-02 4-surface list) |
 | `doctor` | YES (commands/doctor.ts:733) | NO | N/A | NO |
 | `plan` | YES (commands/plan.ts:51, 68) | NO | N/A | NO |
-| `insert` | **NO (Phase 23 PARTIAL)** | YES (commands/insert.ts + cli.ts:214) | **NO (deferred to Phase 23-04)** | N/A |
-| `update` | **NO (Phase 23 PARTIAL)** | YES (commands/update.ts + cli.ts:242) | **NO (deferred to Phase 23-04)** | N/A |
-| `delete` | **NO (Phase 23 PARTIAL)** | YES (commands/delete.ts + cli.ts:269) | **NO (deferred to Phase 23-04)** | N/A |
-| `export` | **NO (Phase 23 PARTIAL)** | YES (commands/export.ts + cli.ts:302) | **NO (deferred to Phase 23-04)** | N/A |
-| `q` | **NO (Phase 23 PARTIAL)** | YES (commands/q.ts) | **NO (deferred to Phase 23-04)** | N/A |
-| `schema` | **NO (Phase 23 PARTIAL)** | YES (commands/schema.ts) | **NO (deferred to Phase 23-04)** | N/A |
+| `insert` | **YES (Phase 23-04 wired)** | YES (commands/insert.ts + cli.ts:214) | **YES (Phase 23-04 wired)** | N/A |
+| `update` | **YES (Phase 23-04 wired)** | YES (commands/update.ts + cli.ts:242) | **YES (Phase 23-04 wired)** | N/A |
+| `delete` | **YES (Phase 23-04 wired)** | YES (commands/delete.ts + cli.ts:269) | **YES (Phase 23-04 wired)** | N/A |
+| `export` | **YES (Phase 23-04 wired)** | YES (commands/export.ts + cli.ts:302) | **YES (Phase 23-04 wired)** | N/A |
+| `q` | **YES (Phase 23-04 wired)** | YES (commands/q.ts) | **YES (Phase 23-04 wired)** | N/A |
+| `schema` | **YES (Phase 23-04 wired)** | YES (commands/schema.ts) | **YES (Phase 23-04 wired)** | N/A |
 
-Source verification: `grep writeAuditEntry src/commands/` + `grep emitRecoveryEnvelope src/` (run during Phase 25 research, 2026-05-15).
-
----
-
-## Asymmetry Guard
-
-The contract test `tests/integration/recovery-audit-link.test.ts` (Plan 08) includes a parameterized describe block over the 6 unwired commands. For each, it asserts:
-
-1. When `<unwired-cmd> --recovery` fails and emits an envelope, `'audit_ref' in envelope === false` (the key MUST be absent, not just `null` or empty string).
-2. (Vacuous case) When a command fails before reaching the emit site (e.g., argv validation), no envelope is written and the guard is vacuously satisfied.
-
-If any future PR wires `writeAuditEntry` into one of these 6 commands WITHOUT also wiring the bi-directional ref, the J1 guard fails immediately, forcing a planner discussion before scope changes.
+Source verification: `grep writeAuditEntry src/commands/` + `grep emitRecoveryEnvelope src/` (re-run 2026-05-18 after Phase 23-04 closure; original baseline 2026-05-15).
 
 ---
 
-## Phase 23-04 Follow-Up
+## Round-Trip Contract (Phase 23-04 closure)
 
-The 6 unwired commands carry an INTEGRATE-01 / INTEGRATE-04 gap (Phase 23 PARTIAL). When Phase 23-04 ships:
+The contract test `tests/integration/recovery-audit-link.test.ts` now runs a **consolidated 6-command bi-directional round-trip** describe block (commit `4629e51`, 2026-05-18). For each of `schema / q / export / insert / update / delete` it asserts:
 
-1. Add `writeAuditEntry` calls to each of `insert / update / delete / export / q / schema` happy / failure / rejection paths.
-2. Apply the D-J catch-block template from PATTERNS.md (the same template Plan 05 applied to `query.ts` / `inspect.ts`) so the bi-directional ref ships at the same time.
-3. Update this matrix — flip all 6 rows from `NO (deferred to Phase 23-04)` to `YES (Phase 23-04 wired)`.
-4. Update the J1 asymmetry guard test in `recovery-audit-link.test.ts`: the negative assertions must flip to positive round-trip assertions (`audit_ref` MUST now match audit entry id).
+1. After `<cmd> --recovery` fails, `envelope.audit_ref === audit.id` (the envelope's back-pointer matches the audit entry id).
+2. `audit.recovery_ref === envelope.id` (the audit entry's forward-pointer matches the envelope id).
+3. Both refs are well-formed UUIDs (`/^[0-9a-f-]{36}$/`).
 
-This is a separate phase / plan family — not folded into Phase 25.
+The legacy "J1 asymmetry guard" (the negative `'audit_ref' in envelope === false` block) was deleted in the same commit — the asymmetry it guarded no longer exists.
+
+---
+
+## Phase 23-04 Closure (shipped 2026-05-18)
+
+The 6 commands carry no Phase 23 PARTIAL gap anymore. Shipped in merge commit `60eab9b` (`feat/audit-wire-6-commands`):
+
+1. ✅ `writeAuditEntry` wired into `insert / update / delete / export / q / schema` happy + failure + rejection paths.
+2. ✅ D-J catch-block template applied (same shape as Plan 05's `query.ts` / `inspect.ts`); bi-directional `audit_ref` ⇄ `recovery_ref` ships in the same try/catch.
+3. ✅ This matrix updated — all 6 rows flipped to `YES (Phase 23-04 wired)`.
+4. ✅ `recovery-audit-link.test.ts` flipped from negative J1 guard to positive 6-command round-trip (commit `4629e51`).
+5. ✅ Bilingual user docs (`docs/user/en` + `docs/user/zh-TW`, both `.md` and `.html`) and agent-facing `assets/SKILL.md` + `assets/reference.md` updated to advertise full coverage (commits `3b6a6d5`, `50a58ed`).
+
+INTEGRATE-01 / INTEGRATE-04 are now fully closed in v1.20.1 (patch release shipped 2026-05-18).
 
 ---
 
@@ -71,8 +74,9 @@ This is a separate phase / plan family — not folded into Phase 25.
 - `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-RESEARCH.md` section 4 (Call-Site Map) + section 13 (L1)
 - `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-PATTERNS.md` (J1 Coverage Matrix table)
 - `.planning/phases/23-engine-integration-rejection-paths/23-VERIFICATION.md` (Phase 23 PARTIAL provenance)
-- `tests/integration/recovery-audit-link.test.ts` (the J1 asymmetry contract test)
+- `tests/integration/recovery-audit-link.test.ts` (now: consolidated 6-command bi-directional round-trip contract)
+- `docs/superpowers/plans/2026-05-18-audit-wire-6-commands.md` (Phase 23-04 execution plan)
 
 ---
 
-*Coverage captured at end of Phase 25. Refresh during Phase 23-04 closure work.*
+*Coverage captured at end of Phase 25; refreshed 2026-05-18 at Phase 23-04 closure. All 14 db-touching commands either write audit entries with bi-directional recovery refs (8) or do not emit recovery envelopes (6) — no remaining asymmetry.*

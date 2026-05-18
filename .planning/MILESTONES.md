@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.20.1 — Phase 23-04 Closure Patch (Shipped: 2026-05-18)
+
+**Scope:** 補完 v1.20.0 已知限制 — DML/DDL 指令的 audit 寫入與雙向 `audit_ref` ⇄ `recovery_ref` linkage。Patch release，無新使用者可見功能；聚焦於把 v1.20.0 已知限制段落點名的 6 個 command (`insert / update / delete / export / q / schema`) 補進 audit 整合。
+
+**Key accomplishments:**
+- **6 commands wired** — `insert / update / delete / export / q / schema` 全部於 happy / failure / rejection 三條路徑 invoke `writeAuditEntry`；`--recovery` 失敗時，audit entry 的 `recovery_ref` 與 recovery envelope 的 `audit_ref` 互相對應（同 Phase 25 `query`/`inspect` 的 D-J catch-block 範式）。BlacklistError / PermissionError / ConnectionError / validation error 共享同一 catch block。
+- **Contract test flip** — `tests/integration/recovery-audit-link.test.ts` 從 J1 negative asymmetry guard 翻為 6-command positive bi-directional round-trip describe block；每個 command 都 assert `envelope.audit_ref === audit.id` 與 `audit.recovery_ref === envelope.id`。
+- **Docs 同步** — agent-facing `assets/SKILL.md` / `assets/SKILL.zh-TW.md` / `assets/reference.md`，以及雙語 user docs（`docs/user/en` + `docs/user/zh-TW`，md + html）全部更新為「8 commands 都支援 `--recovery` 雙向連結」。
+- **Coverage matrix refresh** — `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md` 6 列翻為 `YES (Phase 23-04 wired)`；Asymmetry Guard 段落換為 Round-Trip Contract 段落。
+
+**Release gate:** `bun run release:check` 8/8 全綠（typecheck / prettier / lint `--max-warnings=0` / `bun test` / build / dist-smoke / doc-presence `## [1.20.1]`）。
+
+**Branch / merge:** `feat/audit-wire-6-commands` → `main` via merge `60eab9b`（6 個 feat commits：`c39b5a2` q / `11dc38e` export / `6391f1f` insert / `82fb348` update / `4e31437` delete + schema、`4629e51` test flip、`3b6a6d5` + `50a58ed` docs、`0d4aad4` release-gate fixups）。
+
+---
+
 ## v1.20.0 — Agent-Facing Audit Log (Shipped: 2026-05-17)
 
 **Scope:** 為 AI agent 補上跨 session / 跨 invocation 的「歷史活動」維度。Append-only JSONL audit store、agent-facing JSON 合約 + redaction、`dbcli audit` 全套 CLI、recovery envelope 雙向連結，皆於 v1.20.0 一次到位。Phase 21–26 / 29 plans / 6 phases。
@@ -7,16 +23,16 @@
 **Key accomplishments:**
 - **Audit Writer Foundation (Phase 21)** — `.dbcli/audit/<connection>.jsonl` append-only writer + file lock + size/entry rotation cap；`SessionIdService` env-first（`DBCLI_SESSION_ID`）+ PID 戳記持久化；`audit.*` config schema 預設 on（D1），寫入失敗只 stderr 警告 + 主指令照跑（D6）。
 - **Entry Schema & Redaction Contract (Phase 22)** — agent-facing `AuditEntry` JSON 合約鎖定（release-blocking contract test），redaction 統一回 `tests/helpers/sensitive-output.ts`（不允許第二套），`side_effect_tier` 直接讀 `src/adapters/capabilities.ts`（不重複定義 enum）。
-- **Engine Integration (Phase 23, Partial)** — `query` / `plan` / `doctor` / `inspect` / `report` / `guide` 在 SQL / Mongo / Redis / Elasticsearch 全部寫入同一 entry shape（含 blacklist / permission / parser 拒絕路徑）；DML/DDL（`insert/update/delete/export/q/schema`）延後到 v1.21.x Phase 23-04 backlog。
+- **Engine Integration (Phase 23 + 23-04 follow-up)** — `query` / `plan` / `doctor` / `inspect` / `report` / `guide` 在 SQL / Mongo / Redis / Elasticsearch 全部寫入同一 entry shape（含 blacklist / permission / parser 拒絕路徑）於 2026-05-15 完成；DML/DDL（`insert/update/delete/export/q/schema`）的 audit + 雙向 `audit_ref` ⇄ `recovery_ref` linkage 於 2026-05-18 Phase 23-04 follow-up 補完（merge `60eab9b`），INTEGRATE-01 / -04 partial 全部結清。
 - **`dbcli audit` CLI (Phase 24)** — `tail`（單連線 + `--all` 跨連線 envelope, D5 反序）、`show <id>`（UUID + ≥4 prefix + `--recovery-ref`）、`clear`（互動確認 + `--yes` 非 TTY guard）、`health`（writer / lock / rotation 健康）；`--format table|json` 雙輸出，JSON 為扁平陣列供 agent 直接消費。
-- **Recovery Envelope Bi-directional Linkage (Phase 25)** — audit entry `recovery_ref` ⇄ `last-recovery.json` `audit_ref` 雙向連結；`audit_recent` 注入 4 個 agent guide surface（inspect / guide / recover / recover --apply），release-blocking contract test 守住 round-trip 與 J1 scope（query + inspect catch blocks）。
+- **Recovery Envelope Bi-directional Linkage (Phase 25 + 23-04 follow-up)** — audit entry `recovery_ref` ⇄ `last-recovery.json` `audit_ref` 雙向連結；`audit_recent` 注入 4 個 agent guide surface（inspect / guide / recover / recover --apply）。Phase 25 ship 時以 J1 lock 守住 query + inspect catch blocks；2026-05-18 Phase 23-04 follow-up 把 `insert/update/delete/export/q/schema` 全部接上，`recovery-audit-link.test.ts` 從 J1 negative guard 翻為 6-command positive round-trip。
 - **Docs, Skill & Release Gate (Phase 26)** — `SKILL.md` 中英雙語 + 新 `## Audit Log usage` 章節 + `dbcli skill --install --lang en|zh-TW` flag；`docs/feature-matrix.md` audit row + side-effect tier 對照；`package.json` 1.19.1 → 1.20.0 + CHANGELOG `## [1.20.0]`；`release-check.sh` step 8/8 doc-presence；README en/zh-TW + `docs/user/*` 4-file parity。
 
 **Release gate:** `bun run release:check` 8/8 全綠（typecheck / prettier / lint `--max-warnings=0` / `bun test` / build / dist-smoke / doc-presence）。
 
-**Known deferred items:** Phase 23-04（`insert/update/delete/export/q/schema` audit-only deltas）— 文件記錄於 `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`，下一個 milestone backlog 處理。
+**Known deferred items:** 無 — Phase 23-04（`insert/update/delete/export/q/schema` audit-only deltas）已於 2026-05-18 補完（`feat/audit-wire-6-commands` merge `60eab9b`，refreshed coverage 於 `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`）。
 
-**Stats:** 6 phases / 29 plans / 82 commits (3a2834d..6f30a62) / 141 files changed / +22,432 / -337 lines / 2026-05-15 → 2026-05-17 (3 days)
+**Stats:** 6 phases / 29 plans / 82 commits (3a2834d..6f30a62) / 141 files changed / +22,432 / -337 lines / 2026-05-15 → 2026-05-17（v1.20.0 milestone window）。Phase 23-04 follow-up：6 commits / 2026-05-18。
 
 ---
 

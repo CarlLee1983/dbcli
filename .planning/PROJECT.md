@@ -10,12 +10,11 @@ dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Ge
 
 Everything else (multi-connection, audit logging, advanced features) can be deferred. This core must work flawlessly.
 
-## Current Milestone: None — v1.20.0 shipped, next milestone TBD
+## Current Milestone: None — v1.20.1 patch shipped, next milestone TBD
 
-**Status (2026-05-17):** v1.20.0 Agent-Facing Audit Log archived. Awaiting `$gsd-new-milestone` to define the next direction. Candidate directions in [Next Milestone Goals](#next-milestone-goals).
+**Status (2026-05-18):** v1.20.0 Agent-Facing Audit Log archived 2026-05-17；Phase 23-04 follow-up backlog closed and released as **v1.20.1** patch 2026-05-18 (`feat/audit-wire-6-commands`, merge `60eab9b`；`package.json` 1.20.0 → 1.20.1)。Awaiting `$gsd-new-milestone` to define the next direction. Candidate directions in [Next Milestone Goals](#next-milestone-goals).
 
-**Carried-over backlog:**
-- Phase 23-04 — wire `writeAuditEntry` into `insert / update / delete / export / q / schema` catch blocks (closes INTEGRATE-01 / INTEGRATE-04 partial from v1.20.0).
+**Carried-over backlog:** 無 — Phase 23-04 (`writeAuditEntry` wiring + bi-directional `audit_ref` ⇄ `recovery_ref` on `insert / update / delete / export / q / schema`) shipped 2026-05-18 as v1.20.1，INTEGRATE-01 / INTEGRATE-04 partial 全部結清。
 
 ## Requirements
 
@@ -125,7 +124,7 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] UI helper 抽離（`format-value` / `resolve-kpi` / `derive-columns`）與 React render smoke 測試覆蓋
 - [x] v1.19.1 patch release tag 發佈（2026-05-14）
 
-**Agent-Facing Audit Log** — v1.20.0 (Phases 21–26)
+**Agent-Facing Audit Log** — v1.20.0 (Phases 21–26) + v1.20.1 closure patch
 - [x] `.dbcli/audit/<connection>.jsonl` append-only writer + file lock + size/entry rotation (D1, D6)
 - [x] `SessionIdService` env-first (`DBCLI_SESSION_ID`) + `<pid>-<unix-ts>-<random>` 自動生成 + `last-session-id` 持久化 (D2)
 - [x] Agent-facing `AuditEntry` JSON 合約鎖定 + release-blocking contract test (SCHEMA-*)
@@ -134,7 +133,7 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 - [x] Recovery envelope `recovery_ref` ⇄ `audit_ref` 雙向連結；`audit_recent` 注入 inspect / guide / recover 4 surfaces
 - [x] `dbcli skill --install --lang en|zh-TW`；中英雙語 SKILL.md `## Audit Log usage`
 - [x] `release-check.sh` 8/8（含 doc-presence）；`docs/feature-matrix.md` audit row + side-effect tier
-- [~] Engine 全面整合 — `query`/`plan`/`doctor`/`inspect`/`report`/`guide` 已寫入；`insert/update/delete/export/q/schema` 延後到 Phase 23-04 backlog (INTEGRATE-01 / -04 partial)
+- [x] Engine 全面整合 — `query`/`plan`/`doctor`/`inspect`/`report`/`guide` 在 v1.20.0 Phase 23 寫入；`insert/update/delete/export/q/schema` 於 2026-05-18 Phase 23-04 follow-up 補完（commits `c39b5a2`/`11dc38e`/`6391f1f`/`82fb348`/`4e31437` 各引擎、`60eab9b` 合併），INTEGRATE-01 / -04 全部結清
 
 ### Active
 
@@ -192,14 +191,15 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | Audit session_id env-first (v1.20.0 D2) | 跨 invocation correlation 需由 agent 安裝器注入；fallback PID 戳記避免空值 | ✓ Good — v1.20.0 shipped; `DBCLI_SESSION_ID` honored + `last-session-id` 持久化 |
 | Audit entry metadata-only (v1.20.0 D3) | PII / storage cost 雙重考量；forensics 由 agent 重跑 query 或讀 recovery envelope | ✓ Good — redaction 由 `tests/helpers/sensitive-output.ts` 統一守住 |
 | Audit 寫入失敗只警告 (v1.20.0 D6) | audit log 是 observability、不是 safety gate；不可阻擋 DB 操作 | ✓ Good — release gate 含 fail-soft 測試 |
-| Phase 23-04 audit-only deltas 延後 | DML/DDL 整合與本 milestone 範圍切割成本高；分離的 follow-up phase 更聚焦 | — Pending — 下個 milestone backlog 處理 |
+| Phase 23-04 audit-only deltas 拆為 follow-up | DML/DDL 整合與本 milestone 範圍切割成本高；分離的 follow-up phase 更聚焦 | ✓ Good — 於 2026-05-18 補完，6 個 command 全部 wired 並通過 release:check |
 
-## Current State (v1.20.0 — Agent-Facing Audit Log: Archived 2026-05-17)
+## Current State (v1.20.1 — Phase 23-04 Closure Patch: Released 2026-05-18)
 
-**Active milestone:** None — v1.20.0 archived 2026-05-17. Next milestone TBD; awaiting `$gsd-new-milestone`.
+**Active milestone:** None — v1.20.0 archived 2026-05-17；v1.20.1 patch released 2026-05-18 (Phase 23-04 closure)。Next milestone TBD; awaiting `$gsd-new-milestone`.
 
-**Latest Release:** v1.20.0 (tagged 2026-05-17) — Agent-Facing Audit Log shipped.
-- ✅ Agent-Facing Audit Log (v1.20.0) — `dbcli audit tail|show|clear|health` CLI; `.dbcli/audit/<connection>.jsonl` writer with rotation; redaction; recovery envelope ↔ audit entry bi-directional linkage on `query`/`inspect`/diagnostic surfaces; `audit_recent` embedded in inspect/guide/recover JSON; bilingual SKILL.md + `--lang en|zh-TW` flag; feature-matrix audit row + release-check step 8/8 doc-presence. Known limitation: `insert/update/delete/export/q/schema` await Phase 23-04 follow-up for `writeAuditEntry` wiring.
+**Latest Release:** v1.20.1 (2026-05-18) — Phase 23-04 closure patch.
+- ✅ Phase 23-04 Closure Patch (v1.20.1) — `insert/update/delete/export/q/schema` 補上 `writeAuditEntry` 並具備雙向 `audit_ref` ⇄ `recovery_ref`；`recovery-audit-link.test.ts` 從 J1 negative guard 翻為 6-command positive round-trip；agent-facing skill docs（`assets/SKILL.md` / `assets/SKILL.zh-TW.md` / `assets/reference.md`）與雙語 user docs（`docs/user/en` + `docs/user/zh-TW`，md + html）同步補上全 8 個 `--recovery`-capable command 的覆蓋說明。INTEGRATE-01 / -04 partial 結清。
+- ✅ Agent-Facing Audit Log (v1.20.0) — `dbcli audit tail|show|clear|health` CLI; `.dbcli/audit/<connection>.jsonl` writer with rotation; redaction; recovery envelope ↔ audit entry bi-directional linkage on `query`/`inspect`/diagnostic surfaces; `audit_recent` embedded in inspect/guide/recover JSON; bilingual SKILL.md + `--lang en|zh-TW` flag; feature-matrix audit row + release-check step 8/8 doc-presence. Known limitation 由 v1.20.1 補完。
 - ✅ Post-release Contract Stabilization Patch (v1.19.1) — 型別化能力註冊、agent-facing JSON 合約鎖定（inspect / report / guide / recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`)、UI helper 抽離 + render smoke 測試
 - ✅ Expanded Antigravity Protocol (v1.19.0) — Phase 0 Scout + Phase 3 Auditor、Codex (OMX) / Windsurf 安裝器、Cursor `.cursor/rules/*.mdc` 遷移、新增 `GEMINI.md`
 - ✅ Interactive HTML Dashboards (v1.18.0) — React + Recharts + Tailwind 模板、`--ui` flag、`visual:` frontmatter、安全資料注入
@@ -213,7 +213,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 - ✅ Multi-Engine 完整支援 (v1.8.0) — ES adapter 完備、Redis / ES ExecutionResult 統一
 - ✅ Saved Queries / snippets (v1.7.0)、Full MongoDB Support (v1.6.0)、Layered Schema Cache (v1.5.0)
 
-**In Progress:** 無 — v1.20.0 已於 2026-05-17 歸檔。下一個 milestone 主題待規劃（候選方向見 Next Milestone Goals）；唯一 carried-over backlog 為 Phase 23-04（DML/DDL audit-only deltas）。
+**In Progress:** 無 — v1.20.0 已於 2026-05-17 歸檔；唯一 carry-over backlog Phase 23-04 已於 2026-05-18 補完並以 **v1.20.1** patch release 出版（`package.json` 1.20.0 → 1.20.1，CHANGELOG `## [1.20.1]`）。下一個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。
 
 **What's Shipped (v1.20.0):**
 1. **`.dbcli/audit/<connection>.jsonl` writer** — append-only JSONL + file lock + size/entry rotation；`SessionIdService` env-first (`DBCLI_SESSION_ID`) + PID 戳記持久化
@@ -327,4 +327,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-17 — after v1.20.0 milestone (Agent-Facing Audit Log) archived. Next milestone TBD; awaiting `$gsd-new-milestone`.*
+*Last updated: 2026-05-18 — v1.20.1 patch released (Phase 23-04 closure: `insert/update/delete/export/q/schema` audit wiring + bi-directional ref；`package.json` 1.20.0 → 1.20.1；CHANGELOG `## [1.20.1]`). No outstanding backlog; next milestone TBD, awaiting `$gsd-new-milestone`.*

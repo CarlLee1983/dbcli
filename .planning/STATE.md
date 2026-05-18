@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: null
 milestone_name: null
 status: between_milestones
-last_updated: "2026-05-17T15:00:00.000Z"
-last_activity: 2026-05-17
+last_updated: "2026-05-18T03:00:00.000Z"
+last_activity: 2026-05-18
 progress:
   total_phases: 0
   completed_phases: 0
@@ -21,7 +21,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-17)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** None — v1.20.0 archived 2026-05-17。下一個 milestone 待 `$gsd-new-milestone` 啟動。
+**Current Focus:** None — v1.20.0 archived 2026-05-17；Phase 23-04 backlog 於 2026-05-18 補完並以 v1.20.1 patch release 出版。下一個 milestone 待 `$gsd-new-milestone` 啟動。
 
 ---
 
@@ -31,23 +31,28 @@ Between milestones. No active phase.
 
 - **Phase:** None
 - **Plan:** None
-- **Status:** v1.20.0 archived 2026-05-17; awaiting next milestone definition
-- **Last activity:** 2026-05-17
+- **Status:** v1.20.0 archived 2026-05-17; Phase 23-04 backlog closed and released as v1.20.1 patch 2026-05-18; awaiting next milestone definition
+- **Last activity:** 2026-05-18
 - **Next step:** `$gsd-new-milestone` — define next milestone (candidate directions in PROJECT.md → Next Milestone Goals)。
 
-**Carried-over backlog (must be slotted into next milestone if not deferred again):**
-- Phase 23-04 — wire `writeAuditEntry` into `insert/update/delete/export/q/schema` catch blocks (closes INTEGRATE-01 / INTEGRATE-04 partial from v1.20.0). Reference: `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`。
+**Carried-over backlog:** 無 — Phase 23-04 (`writeAuditEntry` wiring for `insert/update/delete/export/q/schema`) 於 2026-05-18 完成並 merge 進 `main`（merge commit `60eab9b`，feat 分支 `feat/audit-wire-6-commands`），以 **v1.20.1** patch release 出版（`package.json` 1.20.0 → 1.20.1，新增 CHANGELOG `## [1.20.1]`），INTEGRATE-01 / INTEGRATE-04 partial 全部結清。Reference: `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`（已更新為全 wired）、`docs/superpowers/plans/2026-05-18-audit-wire-6-commands.md`。
 
 ---
 
 ## Milestone Status
 
+**v1.20.1 — Phase 23-04 Closure Patch:** COMPLETE (2026-05-18)
+
+- DML/DDL audit coverage：`insert/update/delete/export/q/schema` 全部寫入 `writeAuditEntry` 並具備雙向 `audit_ref` ⇄ `recovery_ref` linkage；contract test `recovery-audit-link.test.ts` 從 J1 negative guard 翻為 6-command positive round-trip。
+- Agent-facing skill docs（`assets/SKILL.md` / `assets/SKILL.zh-TW.md` / `assets/reference.md`）與雙語 user docs（`docs/user/en` + `docs/user/zh-TW`，md + html）同步補上全 8 個 `--recovery`-capable command 的覆蓋說明。
+- INTEGRATE-01 / INTEGRATE-04 partial 全部結清；`package.json` 1.20.0 → 1.20.1；CHANGELOG 新增 `## [1.20.1]`。
+- Release gate `bun run release:check` 8/8 全綠（含 step 8/8 doc-presence 偵測 `## [1.20.1]` heading）。
+
 **v1.20.0 — Agent-Facing Audit Log:** COMPLETE (2026-05-17)
 
 - Audit log writer + JSON 合約 + `dbcli audit` CLI + recovery envelope 雙向連結 + 強制 redaction 全部 shipped
 - 6 phases / 29 plans / 82 commits / 141 files / +22432 / -337
-- Release gate `bun run release:check` 8/8 全綠
-- Known follow-up：Phase 23-04（DML/DDL audit deltas）— 下個 milestone backlog 處理
+- Known limitation：DML/DDL audit deltas → v1.20.1 patch release 補完
 - Archive：`milestones/v1.20.0-ROADMAP.md` / `milestones/v1.20.0-REQUIREMENTS.md`
 - 暫緩 seeds（保留）：`conflict-avoidance-resource-index`、`self-verification-correlation`
 
@@ -172,7 +177,7 @@ v1.20.0 將在 Phase 22 contract test 與 Phase 26 docs/feature-matrix 更新後
 - **Recovery envelope**（`.dbcli/last-recovery.json`、`dbcli recover --apply` / `--next`）— v1.17.0 起既有，v1.20.0 在 Phase 25 新增 `recovery_ref` ⇄ `audit_ref` 雙向欄位（INTEGRATE-02 / -03）。
 - **Engine family dispatch**（SQL / Mongo / Redis / ES）— audit writer（Phase 23）必須一視同仁，所有引擎使用相同 entry shape；不允許 engine-specific 欄位漂移。
 - **`.dbcli` config migration pattern** — 既有 connection 升級時 `audit.*` 缺欄位以預設值補齊（CONFIG-03 / Phase 21），沿用前述 milestone 的 migration 慣例。
-- **Phase 25 J1 asymmetry (carried forward to Phase 26 / Phase 23-04)** — Bi-directional `recovery_ref` / `audit_ref` shipped only on `query` + `inspect`. 6 commands (`insert / update / delete / export / q / schema`) emit envelopes without `audit_ref` until Phase 23-04 wires `writeAuditEntry` into them. Contract test at `tests/integration/recovery-audit-link.test.ts` enforces this asymmetry; flipping the J1 lock requires a planner discussion. See `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`.
+- **Phase 25 J1 asymmetry — RESOLVED 2026-05-18 (Phase 23-04 closure)** — Bi-directional `recovery_ref` / `audit_ref` shipped on `query` + `inspect` in Phase 25 (v1.20.0); the remaining 6 commands (`insert / update / delete / export / q / schema`) were wired on 2026-05-18 (`feat/audit-wire-6-commands`, merge `60eab9b`). Contract test `tests/integration/recovery-audit-link.test.ts` is now a consolidated 6-command **positive** round-trip (commit `4629e51`) — the legacy J1 negative guard was deleted in the same commit. See `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md` for the refreshed coverage table.
 
 ---
 
@@ -207,4 +212,4 @@ v1.20.0 將在 Phase 22 contract test 與 Phase 26 docs/feature-matrix 更新後
 
 ---
 
-*Last updated: 2026-05-17 — Milestone v1.20.0 (Agent-Facing Audit Log) archived；6 phases / 29 plans shipped；狀態切換 `completed → between_milestones`。下一個 milestone 待 `$gsd-new-milestone` 啟動。*
+*Last updated: 2026-05-18 — v1.20.1 patch release shipped (Phase 23-04 closure: `insert/update/delete/export/q/schema` audit + bi-directional ref wiring；`package.json` 1.20.0 → 1.20.1；CHANGELOG `## [1.20.1]`)。狀態維持 `between_milestones`，已無未結 backlog；下一個 milestone 待 `$gsd-new-milestone` 啟動。*

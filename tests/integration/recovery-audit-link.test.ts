@@ -156,6 +156,48 @@ describe('Bi-directional ref round-trip (wired surface) [INTEGRATE-02 / -03 rele
   })
 })
 
+describe('update bi-directional ref round-trip', () => {
+  let workDir: string
+
+  beforeEach(async () => {
+    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-update-'))
+    await seedConfig(workDir)
+  })
+
+  afterEach(async () => {
+    await rm(workDir, { recursive: true, force: true })
+  })
+
+  test('update nonexistent_table --recovery: bi-directional UUIDs match', async () => {
+    const r = await run(
+      [
+        '--config',
+        workDir,
+        'update',
+        'nonexistent_table',
+        '--set',
+        '{"a":1}',
+        '--where',
+        'id=1',
+        '--recovery',
+      ],
+      workDir
+    )
+    expect(r.code).not.toBe(0)
+
+    const entries = await readAuditEntries(workDir)
+    expect(entries.length).toBeGreaterThan(0)
+    const lastEntry = entries[entries.length - 1]!
+    expect(lastEntry.success).toBe(false)
+    expect(typeof lastEntry.recovery_ref).toBe('string')
+
+    const envelope = await readEnvelope(workDir)
+    expect(envelope).not.toBeNull()
+    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
+    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
+  })
+})
+
 describe('insert bi-directional ref round-trip', () => {
   let workDir: string
 
@@ -307,12 +349,10 @@ describe('J1 asymmetry guard (unwired surface) [INTEGRATE-03 negative contract]'
     await rm(workDir, { recursive: true, force: true })
   })
 
-  for (const cmd of ['update', 'delete'] as const) {
+  for (const cmd of ['delete'] as const) {
     test(`${cmd} --recovery failure: envelope audit_ref absent (J1 lock)`, async () => {
       const args = (() => {
         switch (cmd) {
-          case 'update':
-            return ['update', 'nonexistent_table', '--set', 'a=1', '--where', '1=1', '--recovery']
           case 'delete':
             return ['delete', 'nonexistent_table', '--where', '1=1', '--recovery']
         }

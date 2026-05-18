@@ -157,3 +157,141 @@ describe('SavedRecoveryEnvelope id + audit_ref (Phase 25)', () => {
     expect(r.ok).toBe(false)
   })
 })
+
+describe('recoveryEnvelopeSchema branches/branchFork', () => {
+  const baseEnvelope = {
+    schemaVersion: 1 as const,
+    generatedAt: '2026-05-18T00:00:00.000Z',
+    ok: false as const,
+    error: { code: 'CONN_REFUSED', category: 'connection', message: 'x' },
+    recovery: [
+      {
+        order: 1,
+        command: 'dbcli doctor --format json',
+        rationale: 'r',
+        risk: 'readonly',
+        expects: 'e',
+      },
+    ],
+  }
+  const validBranches = {
+    'doctor-clean': {
+      description: 'd',
+      steps: [
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: 'r',
+          risk: 'readonly',
+          expects: 'e',
+          branchId: 'doctor-clean',
+        },
+      ],
+    },
+  }
+
+  test('parses envelope without branches/branchFork (back-compat)', () => {
+    const r = parseRecoveryEnvelope(baseEnvelope)
+    expect(r.ok).toBe(true)
+    expect(r.value!.branches).toBeUndefined()
+    expect(r.value!.branchFork).toBeUndefined()
+  })
+
+  test('parses envelope with valid branches + branchFork', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: validBranches,
+      branchFork: { after: 1, branchIds: ['doctor-clean'] },
+    })
+    expect(r.ok).toBe(true)
+    expect(r.value!.branches!['doctor-clean']!.steps[0]!.branchId).toBe('doctor-clean')
+  })
+
+  test('rejects branch id with uppercase or special chars', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: { 'BadID!': validBranches['doctor-clean'] },
+      branchFork: { after: 1, branchIds: ['BadID!'] },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects branchIds not equal to Object.keys(branches)', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: validBranches,
+      branchFork: { after: 1, branchIds: ['doctor-clean', 'doctor-auth-error'] },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects branches map with > MAX_BRANCH_COUNT entries', () => {
+    const big: Record<string, (typeof validBranches)['doctor-clean']> = {}
+    for (let i = 0; i < 9; i++) big[`b-${i}`] = validBranches['doctor-clean']
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: big,
+      branchFork: { after: 1, branchIds: Object.keys(big) },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects a branch with > MAX_BRANCH_STEPS steps', () => {
+    const tooLong = Array.from({ length: 7 }, (_, i) => ({
+      order: i + 1,
+      command: `dbcli x${i}`,
+      rationale: 'r',
+      risk: 'readonly',
+      expects: 'e',
+      branchId: 'doctor-clean',
+    }))
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: { 'doctor-clean': { description: 'd', steps: tooLong } },
+      branchFork: { after: 1, branchIds: ['doctor-clean'] },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects empty branch.steps', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: { 'doctor-clean': { description: 'd', steps: [] } },
+      branchFork: { after: 1, branchIds: ['doctor-clean'] },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('rejects step branchId mismatching enclosing key', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: {
+        'doctor-clean': {
+          description: 'd',
+          steps: [
+            {
+              order: 1,
+              command: 'dbcli x',
+              rationale: 'r',
+              risk: 'readonly',
+              expects: 'e',
+              branchId: 'doctor-auth-error',
+            },
+          ],
+        },
+      },
+      branchFork: { after: 1, branchIds: ['doctor-clean'] },
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  test('schemaVersion stays at 1', () => {
+    const r = parseRecoveryEnvelope({
+      ...baseEnvelope,
+      branches: validBranches,
+      branchFork: { after: 1, branchIds: ['doctor-clean'] },
+    })
+    expect(r.ok).toBe(true)
+    expect(r.value!.schemaVersion).toBe(1)
+  })
+})

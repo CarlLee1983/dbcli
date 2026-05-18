@@ -370,3 +370,99 @@ describe('dbcli recover --next flag precedence', () => {
     expect(j.cursor).toBe(2)
   })
 })
+
+const connectionEnvelopeWithBranches = {
+  schemaVersion: 1,
+  generatedAt: '2026-05-18T00:00:00.000Z',
+  ok: false,
+  error: { code: 'CONN_REFUSED', category: 'connection', message: 'x' },
+  recovery: [
+    { order: 1, command: 'dbcli doctor --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+    { order: 2, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+  ],
+  branches: {
+    'doctor-clean': {
+      description: 'transient',
+      steps: [
+        { order: 1, command: 'dbcli inspect --for-agent', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-clean' },
+      ],
+    },
+    'doctor-config-missing': {
+      description: 'config',
+      steps: [
+        { order: 1, command: 'dbcli init', rationale: 'r', risk: 'write', interactive: true, expects: 'e', branchId: 'doctor-config-missing' },
+        { order: 2, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-config-missing' },
+      ],
+    },
+    'doctor-auth-error': {
+      description: 'auth',
+      steps: [
+        { order: 1, command: 'dbcli init --force', rationale: 'r', risk: 'write', interactive: true, expects: 'e', branchId: 'doctor-auth-error' },
+      ],
+    },
+    'doctor-network-error': {
+      description: 'net',
+      steps: [
+        { order: 1, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-network-error' },
+      ],
+    },
+  },
+  branchFork: {
+    after: 1,
+    branchIds: ['doctor-clean', 'doctor-config-missing', 'doctor-auth-error', 'doctor-network-error'],
+  },
+}
+
+describe('dbcli recover --next --branch', () => {
+  test('--branch <id> walks the branch (after-step 1 of doctor-config-missing → step 2)', async () => {
+    await seedSavedEnvelope(FIXTURE, connectionEnvelopeWithBranches)
+    const r = await run(
+      [
+        'recover',
+        '--next',
+        '--after-step', '1',
+        '--branch', 'doctor-config-missing',
+        '--result', '{"status":"ok"}',
+      ],
+      FIXTURE
+    )
+    expect(r.code).toBe(0)
+    const j = JSON.parse(r.stdout)
+    expect(j.kind).toBe('step')
+    expect(j.branchId).toBe('doctor-config-missing')
+    expect(j.cursor).toBe(2)
+    expect(j.totalSteps).toBe(2)
+    expect(j.step.command).toBe('dbcli inspect --no-connect --format json')
+  })
+
+  test('--branch <unknown> exits 2 with valid-id hint', async () => {
+    await seedSavedEnvelope(FIXTURE, connectionEnvelopeWithBranches)
+    const r = await run(
+      [
+        'recover',
+        '--next',
+        '--after-step', '1',
+        '--branch', 'totally-fake',
+        '--result', '{"status":"ok"}',
+      ],
+      FIXTURE
+    )
+    expect(r.code).toBe(2)
+    expect(r.stderr).toMatch(/doctor-clean/)
+  })
+
+  test('--branch on envelope without branches exits 2', async () => {
+    await seedSavedEnvelope(FIXTURE, threeStepEnvelope)
+    const r = await run(
+      [
+        'recover',
+        '--next',
+        '--after-step', '1',
+        '--branch', 'doctor-clean',
+        '--result', '{"status":"ok"}',
+      ],
+      FIXTURE
+    )
+    expect(r.code).toBe(2)
+  })
+})

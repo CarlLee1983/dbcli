@@ -43,6 +43,8 @@ Database CLI for AI agents with permission-based access control.
      ```
 
      `--result` accepts inline JSON `StepResultSummary` or `@<path>` to read from a file. `stdoutSummary` and `stderrSummary` are capped at 4 KB each — pre-truncate to the **last** 4 KB before passing. `--next` is mutually exclusive with `--apply`. Each call is independent (no persisted cursor) — the agent tracks `--after-step` itself.
+
+     **Connection branching.** For `CONN_*` codes, the envelope ships a `branches` map + `branchFork` descriptor. Step 1 (`dbcli doctor --format json`) is the fork point: pass the doctor JSON in `--result.stdoutSummary` and `--next` will pick one of four labeled branches (`doctor-clean` / `doctor-config-missing` / `doctor-auth-error` / `doctor-network-error`). NextResult then carries `branchId` and `branchDescription`; subsequent calls must echo `--branch <id>` to walk that branch. Parse failure / unmatched keywords fall back to linear `recovery`. `--apply` ignores branches entirely.
 5. `dbcli blacklist list` — sensitive data boundaries.
 6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 7. Run `query` / `insert` / `update` / `delete` / `export` within permission.

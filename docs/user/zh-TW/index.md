@@ -268,6 +268,16 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
 # 注意：--next 不會自動執行 verify，需要時自己再跑一次原失敗指令確認
 ```
 
+#### 連線錯誤的分支
+
+針對連線類別錯誤（`CONN_REFUSED`、`CONN_AUTH_FAILED`、`CONN_TIMEOUT`、`CONN_HOST_NOT_FOUND`、`CONN_UNKNOWN`），envelope 會額外帶上 `branches` 對應表與 `branchFork` 描述。Agent 執行步驟 1（`dbcli doctor --format json`）後，將其輸出透過 `--result` 傳入；`dbcli recover --next` 會解析 doctor JSON，從四個分支（`doctor-clean`、`doctor-config-missing`、`doctor-auth-error`、`doctor-network-error`）中選出一個，並回傳該分支的第一步。回應會帶 `branchId` 與 `branchDescription`，agent 在後續 `--next` 呼叫應以 `--branch <id>` 回應。
+
+| 旗標 | 行為 |
+| :--- | :--- |
+| `--branch <id>` | 走訪特定分支。分支發生後的所有 `--next` 呼叫皆需指定。 |
+
+若 doctor JSON 無法解析或沒有關鍵字匹配，`--next` 會回落為線性的 `recovery` 計畫 — 分支永遠不會造成 `--next` 失敗。`--apply` 維持線性走訪 `recovery`，不使用 `branches`。
+
 ### Audit ↔ Envelope 反查
 
 每次 `--recovery` 失敗都會雙向寫入對應的 UUID：

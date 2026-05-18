@@ -727,8 +727,9 @@ deterministically.
 | Flag | Required | Description |
 |---|---|---|
 | `--next` | yes | Activate the multi-turn lookup. |
-| `--after-step <n>` | yes | 1-based order of the step the agent just executed. Range: `[1, envelope.recovery.length]`. |
+| `--after-step <n>` | yes | 1-based order of the step the agent just executed. Range: `[1, envelope.recovery.length]` (or `[1, branches[id].steps.length]` when `--branch` is set). |
 | `--result <value>` | yes | JSON `StepResultSummary` (inline) or `@<path>` to read from a file. |
+| `--branch <id>` | no | Walk a specific branch by id (required on `--next` calls after a fork). See *Connection branching* below. |
 | `--from <path>` | no | Override the auto-saved envelope. |
 | `--format <fmt>` | no | `json` (default) or `markdown`. |
 
@@ -760,8 +761,23 @@ interface NextResult {
   cursor: number       // step.order when kind='step'; totalSteps when 'done'
   totalSteps: number
   step?: GuideStep     // present iff kind='step'
+  branchId?: string         // set iff agent is currently traversing a branch
+  branchDescription?: string // mirror of branches[branchId].description
 }
 ```
+
+**Connection branching**
+
+For `CONN_*` recovery codes, the envelope ships an additional `branches` map and a `branchFork` descriptor. Step 1 (`dbcli doctor --format json`) is the fork point: pass the doctor JSON in `--result.stdoutSummary` and `--next` will pick one of four labeled branches:
+
+| Branch id | When chosen |
+|---|---|
+| `doctor-clean` | Doctor reports no errors — likely transient; verify baseline state, then retry. |
+| `doctor-config-missing` | Doctor flagged a config-level failure (missing / invalid config). Re-init before reconnecting. |
+| `doctor-auth-error` | Doctor confirms credentials were rejected. Re-init with `--force` to overwrite credentials. |
+| `doctor-network-error` | Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect and re-init host/port. |
+
+NextResult sets `branchId` and `branchDescription` after the fork; subsequent `--next` calls must echo `--branch <id>` to walk that branch. If the doctor JSON cannot be parsed or no keyword matches, `--next` falls back to the linear `recovery` plan — branching never causes `--next` to fail. `--apply` ignores `branches` entirely (linear walk unchanged).
 
 **Exit codes**
 

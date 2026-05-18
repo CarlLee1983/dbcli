@@ -172,22 +172,30 @@ async function runNext(
   }
 
   const env = source.envelope
+  const branchIdRaw = options.branch as string | undefined
   let outcome
   try {
-    outcome = nextStepFromEnvelope(env, afterStep, parsed.value!)
+    outcome = nextStepFromEnvelope(env, afterStep, parsed.value!, {
+      branchId: branchIdRaw,
+    })
   } catch (e) {
     throw new RecoverCliError((e as Error).message, EXIT_CODE.malformed)
   }
 
-  const totalSteps = env.recovery.length
   if (outcome.kind === 'done') {
     return {
       schemaVersion: NEXT_SCHEMA_VERSION,
       kind: 'done',
       source: { kind: source.kind, path: source.path },
       errorCode: env.error.code,
-      cursor: totalSteps,
-      totalSteps,
+      cursor: outcome.cursor,
+      totalSteps: outcome.totalSteps,
+      ...(outcome.branchId !== undefined
+        ? {
+            branchId: outcome.branchId,
+            branchDescription: env.branches?.[outcome.branchId]?.description,
+          }
+        : {}),
     }
   }
   return {
@@ -195,9 +203,15 @@ async function runNext(
     kind: 'step',
     source: { kind: source.kind, path: source.path },
     errorCode: env.error.code,
-    cursor: outcome.step.order,
-    totalSteps,
+    cursor: outcome.cursor,
+    totalSteps: outcome.totalSteps,
     step: outcome.step,
+    ...(outcome.branchId !== undefined
+      ? {
+          branchId: outcome.branchId,
+          branchDescription: env.branches?.[outcome.branchId]?.description,
+        }
+      : {}),
   }
 }
 
@@ -214,6 +228,7 @@ export const recoverCommand = new Command()
   .option('--next', 'Look up the single next step in the multi-turn protocol', false)
   .option('--after-step <n>', 'For --next: 1-based order of the step the agent just executed')
   .option('--result <value>', 'For --next: JSON StepResultSummary (or @<path> to read from a file)')
+  .option('--branch <id>', 'For --next: walk a specific branch by id')
   .option(
     '--format <format>',
     'Output format: markdown | json (default: markdown for inspect, json for --apply / --next)'

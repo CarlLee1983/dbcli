@@ -23,7 +23,9 @@ export interface StepResultSummary {
 export const STEP_RESULT_SUMMARY_FIELD_CAP = 4096
 
 /** Output of `nextStepFromEnvelope`. */
-export type NextStepOutput = { kind: 'step'; step: GuideStep } | { kind: 'done' }
+export type NextStepOutput =
+  | { kind: 'step'; step: GuideStep; branchId?: string; cursor: number; totalSteps: number }
+  | { kind: 'done'; branchId?: string; cursor: number; totalSteps: number }
 
 /** Top-level shape rendered to stdout by `dbcli recover --next`. */
 export interface NextResult {
@@ -36,4 +38,8 @@ export interface NextResult {
   totalSteps: number
   /** Set iff kind === 'step'. */
   step?: GuideStep
+  /** Set iff agent is currently traversing a branch (fork has occurred). */
+  branchId?: string
+  /** Mirror of `branches[branchId].description`. Present iff branchId is set. */
+  branchDescription?: string
 }

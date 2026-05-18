@@ -1,0 +1,794 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`connection envelopes — snapshots CONN_REFUSED v1 (no connectionName) 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 2,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_REFUSED",
+    "details": {
+      "connectionCode": "ECONNREFUSED",
+    },
+    "message": "Database refused the connection (server down or wrong host/port).",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report listing config validation, env presence, connection reachability.",
+      "order": 1,
+      "rationale": "Run the doctor health check to identify config / network / driver issues.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli inspect --no-connect --format json",
+      "expects": "JSON snapshot with connection.name and connection.database (no creds).",
+      "order": 2,
+      "rationale": "Re-read the cached connection summary without a live probe to compare expected vs actual host/port.",
+      "risk": "readonly",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After re-config/reconnect, confirm the doctor health check passes.",
+    "risk": "readonly",
+  },
+}
+`;
+
+exports[`connection envelopes — snapshots CONN_REFUSED v2 (named connection) 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli use staging",
+          "dbWrite": false,
+          "expects": "Active connection switched.",
+          "order": 2,
+          "rationale": "Re-select the failing named connection so subsequent commands target it explicitly.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 3,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_REFUSED",
+    "details": {
+      "connectionCode": "ECONNREFUSED",
+    },
+    "message": "Database refused the connection (server down or wrong host/port).",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report listing config validation, env presence, connection reachability.",
+      "order": 1,
+      "rationale": "Run the doctor health check to identify config / network / driver issues.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli inspect --no-connect --format json",
+      "expects": "JSON snapshot with connection.name and connection.database (no creds).",
+      "order": 2,
+      "rationale": "Re-read the cached connection summary without a live probe to compare expected vs actual host/port.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli use staging",
+      "dbWrite": false,
+      "expects": "Confirmation that the active connection switched to the requested name.",
+      "order": 3,
+      "rationale": "Re-select the failing named connection so subsequent commands target it explicitly.",
+      "risk": "write",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After re-config/reconnect, confirm the doctor health check passes.",
+    "risk": "readonly",
+  },
+}
+`;
+
+exports[`connection envelopes — snapshots CONN_AUTH_FAILED 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 2,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_AUTH_FAILED",
+    "details": {
+      "connectionCode": "AUTH_FAILED",
+    },
+    "message": "Database rejected credentials (wrong user/password or role).",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report flagging missing env vars or unreachable host.",
+      "order": 1,
+      "rationale": "Verify config integrity (hostname, port, env-loaded credentials).",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli init --force",
+      "expects": "Init wizard accepts new values and rewrites the active config file.",
+      "interactive": true,
+      "order": 2,
+      "rationale": "Re-run the init wizard to overwrite stale credentials or hostname.",
+      "risk": "write",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After credential update, confirm doctor reports auth ok.",
+    "risk": "readonly",
+  },
+}
+`;
+
+exports[`connection envelopes — snapshots CONN_TIMEOUT 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 2,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_TIMEOUT",
+    "details": {
+      "connectionCode": "ETIMEDOUT",
+    },
+    "message": "Connection attempt timed out (network slow or blocked).",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report listing config validation, env presence, connection reachability.",
+      "order": 1,
+      "rationale": "Run the doctor health check to identify config / network / driver issues.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli inspect --no-connect --format json",
+      "expects": "JSON snapshot with connection.name and connection.database (no creds).",
+      "order": 2,
+      "rationale": "Re-read the cached connection summary without a live probe to compare expected vs actual host/port.",
+      "risk": "readonly",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After re-config/reconnect, confirm the doctor health check passes.",
+    "risk": "readonly",
+  },
+}
+`;
+
+exports[`connection envelopes — snapshots CONN_HOST_NOT_FOUND 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 2,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_HOST_NOT_FOUND",
+    "details": {
+      "connectionCode": "ENOTFOUND",
+    },
+    "message": "Hostname could not be resolved (typo or DNS unavailable).",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report flagging missing env vars or unreachable host.",
+      "order": 1,
+      "rationale": "Verify config integrity (hostname, port, env-loaded credentials).",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli init --force",
+      "expects": "Init wizard accepts new values and rewrites the active config file.",
+      "interactive": true,
+      "order": 2,
+      "rationale": "Re-run the init wizard to overwrite stale credentials or hostname.",
+      "risk": "write",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After hostname update, confirm doctor reports DNS ok.",
+    "risk": "readonly",
+  },
+}
+`;
+
+exports[`connection envelopes — snapshots CONN_UNKNOWN 1`] = `
+{
+  "branchFork": {
+    "after": 1,
+    "branchIds": [
+      "doctor-clean",
+      "doctor-config-missing",
+      "doctor-auth-error",
+      "doctor-network-error",
+    ],
+  },
+  "branches": {
+    "doctor-auth-error": {
+      "description": "Doctor confirms credentials were rejected. Re-init with --force to overwrite the credential fields.",
+      "steps": [
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new user/password; config rewritten.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "Re-run init focused on credentials; --force overwrites the existing config in place.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-auth-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot reflecting updated credentials.",
+          "order": 2,
+          "rationale": "Confirm config now resolves credentials.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-clean": {
+      "description": "Doctor reports no errors. Likely a transient failure — verify baseline state, then retry the original command.",
+      "steps": [
+        {
+          "branchId": "doctor-clean",
+          "command": "dbcli inspect --for-agent",
+          "expects": "JSON snapshot; check connection.online=true, schemaCache.available.",
+          "order": 1,
+          "rationale": "Re-anchor in the current context and confirm schemaCache.available; if stale, schema --refresh before retry.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-config-missing": {
+      "description": "Doctor flagged a config-level failure. Rebuild config before reattempting connection.",
+      "steps": [
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli init",
+          "expects": "Init wizard prompts; new .dbcli written.",
+          "interactive": true,
+          "order": 1,
+          "rationale": "No usable config; run init to create it.",
+          "risk": "write",
+        },
+        {
+          "branchId": "doctor-config-missing",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with system/permission/blacklist sections populated.",
+          "order": 2,
+          "rationale": "Verify config shape after init.",
+          "risk": "readonly",
+        },
+      ],
+    },
+    "doctor-network-error": {
+      "description": "Doctor confirms a network-level failure (host / port / DNS / timeout). Inspect expected vs actual addressing, optionally re-select named connection, then re-init host/port.",
+      "steps": [
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli inspect --no-connect --format json",
+          "expects": "JSON snapshot with connection.name/host/port.",
+          "order": 1,
+          "rationale": "Compare expected vs actual host/port without a live probe.",
+          "risk": "readonly",
+        },
+        {
+          "branchId": "doctor-network-error",
+          "command": "dbcli init --force",
+          "expects": "Init wizard accepts new host/port; config rewritten.",
+          "interactive": true,
+          "order": 2,
+          "rationale": "If addressing is wrong, rewrite host/port via init.",
+          "risk": "write",
+        },
+      ],
+    },
+  },
+  "error": {
+    "category": "connection",
+    "code": "CONN_UNKNOWN",
+    "details": {
+      "connectionCode": "UNKNOWN",
+    },
+    "message": "Generic connection failure with no specific category.",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli doctor --format json",
+      "expects": "JSON report listing config validation, env presence, connection reachability.",
+      "order": 1,
+      "rationale": "Run the doctor health check to identify config / network / driver issues.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli inspect --no-connect --format json",
+      "expects": "JSON snapshot with connection.name and connection.database (no creds).",
+      "order": 2,
+      "rationale": "Re-read the cached connection summary without a live probe to compare expected vs actual host/port.",
+      "risk": "readonly",
+    },
+  ],
+  "schemaVersion": 1,
+  "verify": {
+    "command": "dbcli doctor --format json",
+    "expects": "JSON doctor report with all critical checks passing.",
+    "order": 0,
+    "rationale": "After re-config/reconnect, confirm the doctor health check passes.",
+    "risk": "readonly",
+  },
+}
+`;

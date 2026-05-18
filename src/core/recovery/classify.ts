@@ -4,6 +4,7 @@ import { BlacklistError } from '@/types/blacklist'
 import { SavedQueryError } from '@/core/saved-queries/types'
 import { stepsForCode } from './recovery-steps'
 import { verifyForCode } from './verify-steps'
+import { buildConnectionBranches } from './connection-branches'
 import {
   RECOVERY_CODE_METADATA,
   RECOVERY_SCHEMA_VERSION,
@@ -19,6 +20,8 @@ export function classifyError(error: unknown, ctx: RecoveryContext): RecoveryEnv
   const ctxWithDetails = applyDetailsToContext(ctx, recoveryError)
   const recovery = stepsForCode(recoveryError.code, ctxWithDetails)
   const verify = verifyForCode(recoveryError.code, ctxWithDetails)
+  const branchExtras =
+    recoveryError.category === 'connection' ? buildConnectionBranches(ctxWithDetails) : null
   return {
     schemaVersion: RECOVERY_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -26,6 +29,9 @@ export function classifyError(error: unknown, ctx: RecoveryContext): RecoveryEnv
     error: recoveryError,
     recovery,
     ...(verify !== null ? { verify } : {}),
+    ...(branchExtras !== null
+      ? { branches: branchExtras.branches, branchFork: branchExtras.branchFork }
+      : {}),
   }
 }
 

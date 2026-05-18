@@ -62,3 +62,64 @@ describe('renderNextMarkdown', () => {
     expect(md).not.toContain('## Next step')
   })
 })
+
+describe('renderNextMarkdown — branch surface', () => {
+  test('renders Branch header + description when branchId is set', () => {
+    const md = renderNextMarkdown({
+      schemaVersion: 1,
+      kind: 'step',
+      source: { kind: 'auto', path: '.dbcli/last-recovery.json' },
+      errorCode: 'CONN_REFUSED',
+      cursor: 1,
+      totalSteps: 2,
+      branchId: 'doctor-auth-error',
+      branchDescription:
+        'Doctor confirms credentials were rejected. Re-init with --force.',
+      step: {
+        order: 1,
+        command: 'dbcli init --force',
+        rationale: 'r',
+        risk: 'write',
+        expects: 'e',
+        interactive: true,
+        branchId: 'doctor-auth-error',
+      },
+    })
+    expect(md).toContain('**Branch:** `doctor-auth-error`')
+    expect(md).toContain('**Branch description:** Doctor confirms credentials were rejected')
+  })
+
+  test('omits branch surface for non-branched output', () => {
+    const md = renderNextMarkdown({
+      schemaVersion: 1,
+      kind: 'step',
+      source: { kind: 'auto', path: '.dbcli/last-recovery.json' },
+      errorCode: 'BLACKLIST_TABLE',
+      cursor: 2,
+      totalSteps: 3,
+      step: {
+        order: 2,
+        command: 'dbcli inspect --for-agent',
+        rationale: 'r',
+        risk: 'readonly',
+        expects: 'e',
+      },
+    })
+    expect(md).not.toContain('**Branch:**')
+  })
+
+  test('done with branchId still includes branch surface', () => {
+    const md = renderNextMarkdown({
+      schemaVersion: 1,
+      kind: 'done',
+      source: { kind: 'auto', path: '.dbcli/last-recovery.json' },
+      errorCode: 'CONN_REFUSED',
+      cursor: 1,
+      totalSteps: 1,
+      branchId: 'doctor-clean',
+      branchDescription: 'No errors detected.',
+    })
+    expect(md).toContain('**Branch:** `doctor-clean`')
+    expect(md).toContain('Done')
+  })
+})

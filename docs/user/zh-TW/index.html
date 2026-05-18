@@ -382,6 +382,16 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
 # 跑完整個 plan 後：dbcli 回傳 kind: "done"
 # 注意：--next 不會自動執行 verify，需自行再跑一次原失敗指令確認</code></pre>
 
+            <h4 class="mt-8">連線錯誤的分支</h4>
+            <p>針對連線類別錯誤（<code>CONN_REFUSED</code>、<code>CONN_AUTH_FAILED</code>、<code>CONN_TIMEOUT</code>、<code>CONN_HOST_NOT_FOUND</code>、<code>CONN_UNKNOWN</code>），envelope 會額外帶上 <code>branches</code> 對應表與 <code>branchFork</code> 描述。Agent 執行步驟 1（<code>dbcli doctor --format json</code>）後，將其輸出透過 <code>--result</code> 傳入；<code>dbcli recover --next</code> 會解析 doctor JSON，從四個分支（<code>doctor-clean</code>、<code>doctor-config-missing</code>、<code>doctor-auth-error</code>、<code>doctor-network-error</code>）中選出一個，並回傳該分支的第一步。回應會帶 <code>branchId</code> 與 <code>branchDescription</code>，agent 在後續 <code>--next</code> 呼叫應以 <code>--branch &lt;id&gt;</code> 回應。</p>
+            <table>
+                <thead><tr><th>旗標</th><th>行為</th></tr></thead>
+                <tbody>
+                    <tr><td><code>--branch &lt;id&gt;</code></td><td>走訪特定分支。分支發生後的所有 <code>--next</code> 呼叫皆需指定。</td></tr>
+                </tbody>
+            </table>
+            <p>若 doctor JSON 無法解析或沒有關鍵字匹配，<code>--next</code> 會回落為線性的 <code>recovery</code> 計畫 — 分支永遠不會造成 <code>--next</code> 失敗。<code>--apply</code> 維持線性走訪 <code>recovery</code>，不使用 <code>branches</code>。</p>
+
             <h3 class="mt-10">Audit ↔ Envelope 反查</h3>
             <ul>
                 <li>從 envelope → audit entry：<code>dbcli audit show --recovery-ref "$(jq -r .id .dbcli/last-recovery.json)"</code></li>

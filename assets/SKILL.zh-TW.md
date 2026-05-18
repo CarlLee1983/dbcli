@@ -45,6 +45,8 @@ description: 為 AI 代理設計、具權限控管的資料庫 CLI。可用於�
      ```
 
      `--result` 接受 inline JSON `StepResultSummary`,或 `@<path>` 從檔案讀取。`stdoutSummary` 與 `stderrSummary` 各上限 4 KB — 請先把結果截到 **最後** 4 KB 再傳入。`--next` 與 `--apply` 互斥。每次呼叫獨立(不持久化 cursor)— 代理自行追蹤 `--after-step`。
+
+     **連線錯誤分支。** 針對 `CONN_*` 代碼，envelope 會額外帶 `branches` 與 `branchFork`。步驟 1（`dbcli doctor --format json`）即為分支點：把 doctor JSON 透過 `--result.stdoutSummary` 傳入，`--next` 會挑選四個分支之一（`doctor-clean` / `doctor-config-missing` / `doctor-auth-error` / `doctor-network-error`）。NextResult 會帶 `branchId` 與 `branchDescription`；後續呼叫必須以 `--branch <id>` 走訪該分支。解析失敗或關鍵字不匹配時回落為線性 `recovery`。`--apply` 不使用 `branches`。
 5. `dbcli blacklist list` — 敏感資料邊界。
 6. `dbcli schema <table> --format json` — 取得真實欄位名稱(SQL / Mongo / ES)或 `schema <key>`(Redis)。**禁止猜測。**
 7. 在允許的權限範圍內執行 `query` / `insert` / `update` / `delete` / `export`。

@@ -49,6 +49,8 @@ export interface GuideStep {
   dbWrite?: boolean
   /** v1.17.0+: placeholder tokens that must be resolved before `--apply` can execute this step (e.g. `['<table>']`). */
   placeholders?: string[]
+  /** Set only on steps inside `branches[id].steps`. Agents may ignore. */
+  branchId?: string
 }
 
 export interface GuideWarning {

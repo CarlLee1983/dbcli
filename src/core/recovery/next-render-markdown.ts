@@ -6,6 +6,12 @@ export function renderNextMarkdown(result: NextResult): string {
   lines.push('')
   lines.push(`*Source:* \`${result.source.kind}\` → \`${result.source.path}\``)
   lines.push(`errorCode: \`${result.errorCode}\``)
+  if (result.branchId !== undefined) {
+    lines.push(`**Branch:** \`${result.branchId}\``)
+    if (result.branchDescription !== undefined) {
+      lines.push(`**Branch description:** ${result.branchDescription}`)
+    }
+  }
   lines.push('')
 
   if (result.kind === 'step' && result.step) {

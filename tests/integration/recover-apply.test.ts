@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
 import { writeFile, readFile, mkdtemp, mkdir, cp, realpath } from 'node:fs/promises'
@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+// These integration cases spawn nested Bun CLI processes; full-suite load can exceed Bun's 5s default.
+setDefaultTimeout(15_000)
 
 let FIXTURE = ''
 let NO_CONFIG = ''

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from 'bun:test'
 import { join } from 'path'
 import { getProjectStoragePath, writeProjectBinding } from '@/core/config-binding'
 import { writeV2Config } from '@/core/config-v2'
@@ -7,6 +7,9 @@ const TMP_DIR = '/tmp/dbcli-multi-conn-integration'
 const CONFIG_DIR = join(TMP_DIR, '.dbcli')
 
 const CLI = join(import.meta.dir, '../../src/cli.ts')
+
+// CLI integration cases shell out through Bun; full-suite load can exceed Bun's 5s default.
+setDefaultTimeout(15_000)
 
 const v2ConfigBase = {
   version: 2 as const,

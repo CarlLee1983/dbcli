@@ -80,6 +80,10 @@ export interface ColumnSchema {
   comment?: string | null
   /** Enum values if column is ENUM type */
   enumValues?: string[]
+  /** MongoDB only: 0..1 fraction of sampled docs that contained this dot-path. Undefined for SQL. */
+  presence?: number
+  /** MongoDB only: true when this dot-path matches a blacklist pattern. Undefined for SQL. */
+  redacted?: boolean
 }
 
 /**
@@ -200,7 +204,10 @@ export interface DatabaseAdapter {
    * @returns Complete table schema including all column details
    * @throws {ConnectionError} If query fails
    */
-  getTableSchema(tableName: string, options?: { sampleSize?: number }): Promise<TableSchema>
+  getTableSchema(
+    tableName: string,
+    options?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
+  ): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query
@@ -274,7 +281,10 @@ export interface QueryableAdapter {
    * @param tableName Name of collection/table to inspect
    * @param options Optional adapter-specific knobs (e.g. mongo `sampleSize`).
    */
-  getTableSchema?(tableName: string, options?: { sampleSize?: number }): Promise<TableSchema>
+  getTableSchema?(
+    tableName: string,
+    options?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
+  ): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query

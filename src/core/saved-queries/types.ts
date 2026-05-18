@@ -5,7 +5,7 @@
 
 export type ParamType = 'int' | 'string' | 'float' | 'bool' | 'date' | 'datetime'
 
-export type EngineTag = 'postgres' | 'mysql' | 'elasticsearch' | 'redis'
+export type EngineTag = 'postgres' | 'mysql' | 'elasticsearch' | 'redis' | 'mongodb'
 
 export interface ParamSpec {
   name: string
@@ -32,6 +32,10 @@ export interface SavedQueryMeta {
   intent?: string
   /** UI visualization configuration for interactive dashboards */
   visual?: VisualConfig
+  /** Mongo only: default collection (CLI --collection overrides). */
+  target?: string
+  /** Mongo only: how to interpret the body. */
+  operation?: 'find' | 'aggregate'
 }
 
 export interface VisualKPI {
@@ -99,7 +103,9 @@ export class SavedQueryError extends Error {
       | 'REDIS_EMPTY_BODY'
       | 'REDIS_MULTI_LINE'
       | 'KEY_FAMILY_CONFLICT'
-      | 'INVALID_INTENT',
+      | 'INVALID_INTENT'
+      | 'MONGO_MISSING_COLLECTION'
+      | 'MONGO_INVALID_BODY',
     public readonly file?: string
   ) {
     super(message)

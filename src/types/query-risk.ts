@@ -39,6 +39,11 @@ export type QueryRiskFactorCode =
   | 'nonsql_key_pattern_broad'
   | 'nonsql_dynamic_schema_unknown'
   | 'nonsql_overwrite_unknown'
+  | 'mongo_rename_operator'
+  | 'mongo_arithmetic_operator'
+  | 'mongo_array_operator'
+  | 'mongo_bitwise_operator'
+  | 'mongo_unknown_operator'
 
 export interface QueryRiskFactor {
   code: QueryRiskFactorCode

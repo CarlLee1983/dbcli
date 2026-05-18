@@ -40,9 +40,9 @@
 
 ### Installation
 ```bash
-npm install -g @gravito/dbcli
+npm install -g @carllee1983/dbcli
 # or using Bun
-bun install -g @gravito/dbcli
+bun install -g @carllee1983/dbcli
 ```
 
 ### Initializing a Connection

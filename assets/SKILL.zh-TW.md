@@ -89,7 +89,7 @@ dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 
 
 `inspect` / `guide` / `recover` / `recover --apply` 的 agent JSON 內嵌 `audit_recent: AuditEntryBrief[]`(最近 5 筆),無須額外呼叫 audit CLI 即可看到歷史脈絡。Envelope 的 `audit_ref` 與 audit entry 的 `recovery_ref` 互為雙向指標。
 
-**已知限制(v1.20.0):** Bi-directional 連結僅在 `query` / `inspect` / diagnostic 表面寫入;`insert` / `update` / `delete` / `export` / `q` / `schema` 失敗路徑暫未含 `audit_ref`,追蹤於 Phase 23-04 follow-up(見 `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`)。Recovery envelope 既有 linkage 不受影響。
+**完整雙向覆蓋(v1.20.1+):** `recovery_ref` / `audit_ref` 雙向連結已在所有支援 `--recovery` 的指令上佈線:`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`。Agent 可透過 `dbcli audit tail --recovery-ref <id>` 從 envelope 反查 audit entry(反方向用 `dbcli audit show --recovery-ref <id>`)。v1.20.0 中 6 個 DML/DDL 指令的部分覆蓋缺口已於 v1.20.1 關閉。
 
 詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。
 

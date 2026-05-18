@@ -40,9 +40,9 @@
 
 ### 安裝方式
 ```bash
-npm install -g @gravito/dbcli
+npm install -g @carllee1983/dbcli
 # 或使用 Bun
-bun install -g @gravito/dbcli
+bun install -g @carllee1983/dbcli
 ```
 
 ### 初始化連線

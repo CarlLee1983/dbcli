@@ -1283,12 +1283,17 @@ audit history and recovery envelopes from either direction. The
 `audit_recent: AuditEntryBrief[]` (last 5 entries) so a fresh session has
 immediate context.
 
-**Known limitation (v1.20.0):** Bi-directional linkage is wired for `query`,
-`inspect`, and diagnostic surfaces. The DML commands `insert / update / delete /
-export / q / schema` emit single-direction recovery envelopes (no `audit_ref`)
-in v1.20.0; full coverage is tracked as Phase 23-04 follow-up. See
-[`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md)
-for the full matrix.
+**Full bi-directional coverage (v1.20.1+):** Recovery ↔ audit linkage is
+wired on every `--recovery`-capable command — `query`, `inspect`, `insert`,
+`update`, `delete`, `export`, `q`, and `schema`. The audit entry's
+`recovery_ref` and the envelope's `audit_ref` carry matching UUIDs on every
+failure path, so agents can pivot from a saved envelope
+(`.dbcli/last-recovery.json`) to its audit entry via
+`dbcli audit tail --recovery-ref <id>` (and back via
+`dbcli audit show --recovery-ref <id>`). The v1.20.0 partial-coverage gap
+on the 6 DML/DDL commands was closed in v1.20.1. The coverage matrix lives
+in
+[`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md).
 
 For deeper agent workflows (session handoff, forensics walk-through), see
 [`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage.

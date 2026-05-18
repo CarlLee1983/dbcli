@@ -30,6 +30,13 @@ export function nextStepFromEnvelope(
   if (afterStep > envelope.recovery.length) {
     throw new RangeError(`afterStep ${afterStep} exceeds plan length ${envelope.recovery.length}`)
   }
-  if (afterStep === envelope.recovery.length) return { kind: 'done' }
-  return { kind: 'step', step: envelope.recovery[afterStep]! }
+  if (afterStep === envelope.recovery.length) {
+    return { kind: 'done', cursor: afterStep, totalSteps: envelope.recovery.length }
+  }
+  return {
+    kind: 'step',
+    step: envelope.recovery[afterStep]!,
+    cursor: afterStep + 1,
+    totalSteps: envelope.recovery.length,
+  }
 }

@@ -179,15 +179,14 @@ async function runNext(
     throw new RecoverCliError((e as Error).message, EXIT_CODE.malformed)
   }
 
-  const totalSteps = env.recovery.length
   if (outcome.kind === 'done') {
     return {
       schemaVersion: NEXT_SCHEMA_VERSION,
       kind: 'done',
       source: { kind: source.kind, path: source.path },
       errorCode: env.error.code,
-      cursor: totalSteps,
-      totalSteps,
+      cursor: outcome.cursor,
+      totalSteps: outcome.totalSteps,
     }
   }
   return {
@@ -195,8 +194,8 @@ async function runNext(
     kind: 'step',
     source: { kind: source.kind, path: source.path },
     errorCode: env.error.code,
-    cursor: outcome.step.order,
-    totalSteps,
+    cursor: outcome.cursor,
+    totalSteps: outcome.totalSteps,
     step: outcome.step,
   }
 }

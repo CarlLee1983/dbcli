@@ -859,7 +859,7 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 #### Boundaries
 
 - Entries are append-only JSONL; rotation triggers at `~10 MB` or `~1000` entries (whichever first). Previous segment is preserved as `.jsonl.1`.
-- Bi-directional `recovery_ref` / `audit_ref` linkage is wired on `query` / `inspect` / diagnostic surfaces (Phase 25 J1). The commands `insert / update / delete / export / q / schema` emit single-direction envelopes (no `audit_ref`) in v1.20.0 — tracked as Phase 23-04 follow-up.
+- Bi-directional `recovery_ref` / `audit_ref` linkage is wired on every command that accepts `--recovery`: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, and `schema`. Use `audit tail --recovery-ref <id>` to find the audit entry an envelope was emitted alongside.
 - Audit writer failures are non-fatal (D6): main command result and exit code are preserved; a stderr warning is emitted. `audit health` surfaces the failure reason.
 - Reader truncation tolerance: a crash-truncated last line is skipped with a stderr warn `[dbcli audit] skipping truncated last line in <file>`; a mid-file non-JSON line is treated as corruption, exits 1, and points at `dbcli audit clear`.
 

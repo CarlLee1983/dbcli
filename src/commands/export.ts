@@ -4,6 +4,7 @@
  * For MongoDB connections, exports a collection scan or aggregation pipeline.
  */
 
+import crypto from 'node:crypto'
 import { t_vars } from '@/i18n/message-loader'
 import {
   AdapterFactory,
@@ -22,6 +23,8 @@ import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { extractTableName } from '@/utils/engine-hints'
 import type { DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -56,6 +59,7 @@ export async function exportCommand(
   options: ExportOptions,
   command?: import('commander').Command
 ): Promise<void> {
+  let config: DbcliConfig | undefined
   try {
     if (!sql || sql.trim() === '') {
       throw new Error('Query required')
@@ -66,7 +70,7 @@ export async function exportCommand(
     sql = sql.trim()
 
     const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
+    config = await configModule.read(configPath)
     if (!config.connection) {
       throw new Error('Run "dbcli init" first')
     }
@@ -138,17 +142,44 @@ export async function exportCommand(
       } else {
         console.log(formatted)
       }
+
+      await writeAuditEntry(config, 'export', options, {
+        success: true,
+        target: extractTableName(sql) ?? '*',
+        sql,
+        metadata: {
+          rows_affected: result.rowCount,
+          output_format: options.format,
+          ...(options.output && { output_file: options.output }),
+        },
+      })
     } finally {
       await adapter.disconnect()
     }
   } catch (error) {
+    let auditId: string | null = null
+    let envelopeId: string | undefined
     if (options.recovery === true) {
-      const { emitRecoveryEnvelope } = await import('@/core/recovery')
-      const m = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
-      emitRecoveryEnvelope(error, {
-        operation: 'export',
-        table: m?.[1],
+      envelopeId = crypto.randomUUID()
+    }
+    const m = sql.match(/\bFROM\s+[`"']?(\w+)[`"']?/i)
+    if (config) {
+      auditId = await writeAuditEntry(config, 'export', options, {
+        success: false,
+        target: m?.[1] ?? '*',
+        sql,
+        error,
+        ...(envelopeId && { recovery_ref: envelopeId }),
       })
+    }
+
+    if (envelopeId !== undefined) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(
+        error,
+        { operation: 'export', table: m?.[1] },
+        { envelopeId, auditRef: auditId ?? undefined }
+      )
     }
 
     if (error instanceof PermissionError) {
@@ -179,17 +210,7 @@ async function redisExportBranch(
   config: DbcliConfig
 ): Promise<void> {
   const { enforceRedisPermission } = await import('@/core/permission-guard')
-  try {
-    enforceRedisPermission(command, config.permission)
-  } catch (error) {
-    if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
-      console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Message: ${error.message}`)
-      process.exit(1)
-    }
-    throw error
-  }
+  enforceRedisPermission(command, config.permission)
 
   const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
   await redisAdapter.connect()
@@ -233,6 +254,17 @@ async function redisExportBranch(
     } else {
       console.log(formatted)
     }
+
+    const target = command.trim().split(/\s+/)[1] || '<unknown-key>'
+    await writeAuditEntry(config, 'export', options, {
+      success: true,
+      target,
+      metadata: {
+        rows_affected: result.rowCount ?? result.rows.length ?? 0,
+        output_format: options.format,
+        ...(options.output && { output_file: options.output }),
+      },
+    })
   } finally {
     await redisAdapter.disconnect()
   }
@@ -324,6 +356,16 @@ async function mongoExportBranch(
     if (securityNote) {
       console.error(`ℹ ${securityNote}`)
     }
+
+    await writeAuditEntry(config, 'export', options, {
+      success: true,
+      target: collection,
+      metadata: {
+        rows_affected: filterResult.filteredRows.length,
+        output_format: options.format,
+        ...(options.output && { output_file: options.output }),
+      },
+    })
   } finally {
     await adapter.disconnect()
   }

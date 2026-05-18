@@ -7,6 +7,20 @@ import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
 import { configModule } from '@/core/config'
 import type { BlacklistConfig } from '@/types/blacklist'
+import { compilePatterns } from '@/core/mongo/path-matcher'
+
+export interface BlacklistAudit {
+  warnings: Array<{ collection: string; raw: string; reason: string }>
+}
+
+export function auditBlacklistPatterns(cfg: BlacklistConfig): BlacklistAudit {
+  const warnings: BlacklistAudit['warnings'] = []
+  for (const [collection, raw] of Object.entries(cfg.columns ?? {})) {
+    const { rejected } = compilePatterns(raw)
+    for (const r of rejected) warnings.push({ collection, raw: r.raw, reason: r.reason })
+  }
+  return { warnings }
+}
 
 /** Default config path */
 const DEFAULT_CONFIG_PATH = '.dbcli'
@@ -87,6 +101,13 @@ export async function blacklistList(configPath: string): Promise<void> {
     console.log(`${t('blacklist.columns_label')}: ${formatted}`)
   } else {
     console.log(`${t('blacklist.columns_label')}: {}`)
+  }
+
+  const audit = auditBlacklistPatterns(blacklist)
+  for (const w of audit.warnings) {
+    console.error(
+      `⚠  blacklist.columns["${w.collection}"]: '${w.raw}' is ignored on mongo connections (${w.reason}).`
+    )
   }
 }
 

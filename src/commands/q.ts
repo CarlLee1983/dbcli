@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { configModule } from '@/core/config'
@@ -10,6 +11,8 @@ import { extractTableName } from '@/utils/engine-hints'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { openInBrowser } from '@/utils/opener'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
+import type { DbcliConfig } from '@/utils/validation'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -65,12 +68,14 @@ export async function qCommand(
   options: QCommandOptions,
   command?: import('commander').Command
 ): Promise<void> {
+  let config: DbcliConfig | undefined
+  let targetNameForAudit: string = name
   try {
     if (!name?.startsWith('@')) {
       throw new Error(`Snippet name must start with '@' (got '${name}')`)
     }
     const configPath = resolveConfigPath(command, options)
-    const config = await configModule.read(configPath)
+    config = await configModule.read(configPath)
     if (!config.connection) throw new Error('Run "dbcli init" first')
 
     const engine = mapSystemToEngine(config.connection.system)
@@ -105,6 +110,12 @@ export async function qCommand(
           execHints: prepared.execHints,
         })
       )
+      await writeAuditEntry(config, 'q', options, {
+        success: true,
+        target: name,
+        sql: prepared.driver.sql,
+        metadata: { dry_run: true },
+      })
       return
     }
 
@@ -117,6 +128,8 @@ export async function qCommand(
         : family === 'es'
           ? (prepared.execHints?.index ?? '')
           : ''
+
+    targetNameForAudit = targetName || name
 
     if (family !== 'redis' && targetName) {
       blacklistValidator.checkTableBlacklist('SELECT', targetName)
@@ -155,6 +168,15 @@ export async function qCommand(
         } else {
           console.log(html)
         }
+        await writeAuditEntry(config, 'q', options, {
+          success: true,
+          target: targetName || name,
+          sql: prepared.driver.sql,
+          metadata: {
+            rows_affected: filtered.filteredRows.length,
+            execution_ms: executionTimeMs,
+          },
+        })
         return
       }
 
@@ -182,11 +204,20 @@ export async function qCommand(
         { format: (options.format as any) ?? 'table' }
       )
       console.log(out)
+      await writeAuditEntry(config, 'q', options, {
+        success: true,
+        target: targetName || name,
+        sql: prepared.driver.sql,
+        metadata: {
+          rows_affected: filtered.filteredRows.length,
+          execution_ms: executionTimeMs,
+        },
+      })
     } finally {
       await adapter.disconnect()
     }
   } catch (error) {
-    await handleQError(error, name, options.recovery === true)
+    await handleQError(error, targetNameForAudit, options, config)
   }
 }
 
@@ -213,14 +244,31 @@ async function readParamFile(path: string | undefined): Promise<Record<string, u
 async function handleQError(
   error: unknown,
   snippetName: string,
-  useRecovery: boolean
+  options: QCommandOptions,
+  config: DbcliConfig | undefined
 ): Promise<void> {
-  if (useRecovery) {
-    const { emitRecoveryEnvelope } = await import('@/core/recovery')
-    emitRecoveryEnvelope(error, {
-      operation: 'q',
-      snippet: snippetName,
+  let auditId: string | null = null
+  let envelopeId: string | undefined
+  if (options.recovery === true) {
+    envelopeId = crypto.randomUUID()
+  }
+
+  if (config) {
+    auditId = await writeAuditEntry(config, 'q', options, {
+      success: false,
+      target: snippetName,
+      error,
+      ...(envelopeId && { recovery_ref: envelopeId }),
     })
+  }
+
+  if (envelopeId !== undefined) {
+    const { emitRecoveryEnvelope } = await import('@/core/recovery')
+    emitRecoveryEnvelope(
+      error,
+      { operation: 'q', snippet: snippetName },
+      { envelopeId, auditRef: auditId ?? undefined }
+    )
   }
 
   if (error instanceof SavedQueryError) {

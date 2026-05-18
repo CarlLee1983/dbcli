@@ -39,6 +39,11 @@ export const schemaCommand = new Command()
     'MongoDB only: number of documents to sample for schema inference (default 50, max 1000). Ignored on SQL connections.'
   )
   .option(
+    '--sample-method <method>',
+    'MongoDB only: "random" (default, uses $sample) or "natural" (uses find().limit()). Ignored on SQL connections.',
+    'random'
+  )
+  .option(
     '--recovery',
     'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
     false
@@ -59,6 +64,7 @@ async function schemaAction(
     reset: boolean
     force: boolean
     sampleSize?: string
+    sampleMethod?: string
     recovery?: boolean
   },
   command: Command
@@ -78,8 +84,9 @@ async function schemaAction(
       process.exit(1)
     }
 
-    // --sample-size is mongo-only; on SQL connections, surface a hint and discard the value.
-    let inferenceOptions: { sampleSize?: number } | undefined
+    let inferenceOptions:
+      | { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
+      | undefined
     if (options.sampleSize !== undefined) {
       const parsed = Number(options.sampleSize)
       if (!Number.isFinite(parsed) || parsed < 1) {
@@ -90,6 +97,19 @@ async function schemaAction(
         inferenceOptions = { sampleSize: Math.floor(parsed) }
       } else {
         console.error('--sample-size is MongoDB-only and is being ignored for this connection.')
+      }
+    }
+    if (options.sampleMethod && options.sampleMethod !== 'random') {
+      if (options.sampleMethod !== 'natural') {
+        console.error(
+          `--sample-method must be 'random' or 'natural' (received '${options.sampleMethod}')`
+        )
+        process.exit(1)
+      }
+      if (config.connection.system === 'mongodb') {
+        inferenceOptions = { ...(inferenceOptions ?? {}), sampleMethod: 'natural' }
+      } else {
+        console.error('--sample-method is MongoDB-only and is being ignored for this connection.')
       }
     }
 

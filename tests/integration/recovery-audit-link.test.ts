@@ -156,14 +156,11 @@ describe('Bi-directional ref round-trip (wired surface) [INTEGRATE-02 / -03 rele
   })
 })
 
-describe('delete bi-directional ref round-trip', () => {
+describe('6-command bi-directional ref round-trip (replaces former J1 negative guard) [INTEGRATE-03 positive contract]', () => {
   let workDir: string
 
   beforeEach(async () => {
-    // Note: minimal config uses permission 'query-only'; delete will throw
-    // PermissionError before reaching the adapter — that path still flows
-    // through the catch and produces a bi-directional audit+envelope pair.
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-delete-'))
+    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-bi-'))
     await seedConfig(workDir)
   })
 
@@ -171,51 +168,11 @@ describe('delete bi-directional ref round-trip', () => {
     await rm(workDir, { recursive: true, force: true })
   })
 
-  test('delete nonexistent_table --where id=1 --recovery: bi-directional UUIDs match', async () => {
-    const r = await run(
-      [
-        '--config',
-        workDir,
-        'delete',
-        'nonexistent_table',
-        '--where',
-        'id=1',
-        '--recovery',
-      ],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
-
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
-
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
-
-describe('update bi-directional ref round-trip', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-update-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  test('update nonexistent_table --recovery: bi-directional UUIDs match', async () => {
-    const r = await run(
-      [
-        '--config',
-        workDir,
+  const cases: Array<{ cmd: string; args: string[] }> = [
+    { cmd: 'insert', args: ['insert', 'nonexistent_table', '--data', '{"a":1}', '--recovery'] },
+    {
+      cmd: 'update',
+      args: [
         'update',
         'nonexistent_table',
         '--set',
@@ -224,176 +181,41 @@ describe('update bi-directional ref round-trip', () => {
         'id=1',
         '--recovery',
       ],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
-
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
-
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
-
-describe('insert bi-directional ref round-trip', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-insert-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  test('insert nonexistent_table --data ... --recovery: bi-directional UUIDs match', async () => {
-    const r = await run(
-      ['--config', workDir, 'insert', 'nonexistent_table', '--data', '{"a":1}', '--recovery'],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
-
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
-
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
-
-describe('export bi-directional ref round-trip', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-export-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  test('export <bad-sql> --recovery: bi-directional UUIDs match', async () => {
-    const outFile = join(workDir, 'export-out.csv')
-    const r = await run(
-      [
-        '--config',
-        workDir,
+    },
+    { cmd: 'delete', args: ['delete', 'nonexistent_table', '--where', 'id=1', '--recovery'] },
+    {
+      cmd: 'export',
+      args: [
         'export',
         'select 1',
         '--output',
-        outFile,
+        join(tmpdir(), 'phase25-export.csv'),
         '--format',
         'csv',
         '--recovery',
       ],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
+    },
+    { cmd: 'q', args: ['q', '@nope/does-not-exist', '--recovery'] },
+    { cmd: 'schema', args: ['schema', 'nonexistent_table', '--recovery'] },
+  ]
 
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
+  for (const { cmd, args } of cases) {
+    test(`${cmd} --recovery failure: envelope.audit_ref === audit.id AND audit.recovery_ref === envelope.id`, async () => {
+      await run(['--config', workDir, ...args], workDir)
 
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
+      const entries = await readAuditEntries(workDir)
+      expect(entries.length).toBeGreaterThan(0)
+      const lastEntry = entries[entries.length - 1]!
+      expect(lastEntry.success).toBe(false)
+      expect(typeof lastEntry.recovery_ref).toBe('string')
+      expect(lastEntry.recovery_ref as string).toMatch(/^[0-9a-f-]{36}$/)
 
-describe('q bi-directional ref round-trip', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-q-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  test('q @nonexistent --recovery: bi-directional UUIDs match', async () => {
-    const r = await run(
-      ['--config', workDir, 'q', '@nope/does-not-exist', '--recovery'],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
-
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
-
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
-
-describe('Schema bi-directional ref round-trip', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-schema-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  test('schema nonexistent_table --recovery: bi-directional UUIDs match', async () => {
-    const r = await run(
-      ['--config', workDir, 'schema', 'nonexistent_table', '--recovery'],
-      workDir
-    )
-    expect(r.code).not.toBe(0)
-
-    const entries = await readAuditEntries(workDir)
-    expect(entries.length).toBeGreaterThan(0)
-    const lastEntry = entries[entries.length - 1]!
-    expect(lastEntry.success).toBe(false)
-    expect(typeof lastEntry.recovery_ref).toBe('string')
-
-    const envelope = await readEnvelope(workDir)
-    expect(envelope).not.toBeNull()
-    expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
-    expect(envelope!.audit_ref).toBe(lastEntry.id as string)
-  })
-})
-
-describe('J1 asymmetry guard (unwired surface) [INTEGRATE-03 negative contract]', () => {
-  let workDir: string
-
-  beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-25-08-j1-'))
-    await seedConfig(workDir)
-  })
-
-  afterEach(async () => {
-    await rm(workDir, { recursive: true, force: true })
-  })
-
-  // J1 loop is now empty — all six commands are wired. Task 7 replaces this
-  // block with the consolidated positive 6-command round-trip.
+      const envelope = await readEnvelope(workDir)
+      expect(envelope).not.toBeNull()
+      expect(envelope!.id).toBe(lastEntry.recovery_ref as string)
+      expect(envelope!.audit_ref).toBe(lastEntry.id as string)
+    })
+  }
 })
 
 describe('DOCS-02 audit_recent embedding [4 agent surfaces]', () => {

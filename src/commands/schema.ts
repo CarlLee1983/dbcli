@@ -15,9 +15,41 @@ import { resolveConfigStoragePath } from '@/core/config-binding'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import { SchemaWriter } from '@/core'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
-import type { TableSchema, DatabaseAdapter } from '@/adapters/types'
+import type { TableSchema, DatabaseAdapter, ColumnSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
+import { compilePatterns, matchAny } from '@/core/mongo/path-matcher'
+import type { BlacklistConfig } from '@/types/blacklist'
+
+export function markRedactedColumns(
+  cols: ColumnSchema[],
+  collection: string,
+  blacklist: BlacklistConfig
+): ColumnSchema[] {
+  const raw = (blacklist.columns ?? {})[collection]
+  if (!raw || raw.length === 0) return cols
+  const { patterns } = compilePatterns(raw)
+  if (patterns.length === 0) return cols
+  return cols.map((c) => (matchAny(c.name, patterns) ? { ...c, redacted: true } : c))
+}
+
+export interface MongoDecorateMeta {
+  blacklist: BlacklistConfig
+  sampleMethod: 'random' | 'natural'
+  sampleSize: number
+}
+
+function decorateMongoSchema(schema: TableSchema, meta: MongoDecorateMeta): TableSchema {
+  const columns = markRedactedColumns(schema.columns, schema.name, meta.blacklist)
+  return {
+    ...schema,
+    columns,
+    ...({ sampleMethod: meta.sampleMethod, sampleSize: meta.sampleSize } as Record<
+      string,
+      unknown
+    >),
+  }
+}
 
 import { resolveConfigPath } from '@/utils/config-path'
 
@@ -213,6 +245,15 @@ async function schemaAction(
     ) as DatabaseAdapter
     await adapter.connect()
 
+    const mongoMeta: MongoDecorateMeta | undefined =
+      config.connection.system === 'mongodb'
+        ? {
+            blacklist: (config.blacklist ?? { tables: [], columns: {} }) as BlacklistConfig,
+            sampleMethod: inferenceOptions?.sampleMethod ?? 'random',
+            sampleSize: inferenceOptions?.sampleSize ?? 100,
+          }
+        : undefined
+
     try {
       if (options.reset) {
         // Clear all schema and re-fetch from database
@@ -223,7 +264,8 @@ async function schemaAction(
           connectionName,
           existingSchemaCount,
           storagePath,
-          inferenceOptions
+          inferenceOptions,
+          mongoMeta
         )
       } else if (options.refresh) {
         // Handle schema refresh (NEW)
@@ -233,11 +275,12 @@ async function schemaAction(
           options,
           connectionName,
           storagePath,
-          inferenceOptions
+          inferenceOptions,
+          mongoMeta
         )
       } else if (table) {
         // Single table schema inspection
-        await handleSingleTableSchema(adapter, table, options.format, inferenceOptions)
+        await handleSingleTableSchema(adapter, table, options.format, inferenceOptions, mongoMeta)
       } else {
         // Full database schema scan and config update
         await handleFullDatabaseScan(
@@ -247,7 +290,8 @@ async function schemaAction(
           connectionName,
           existingSchemaCount,
           storagePath,
-          inferenceOptions
+          inferenceOptions,
+          mongoMeta
         )
       }
 
@@ -299,9 +343,11 @@ async function handleSingleTableSchema(
   adapter: DatabaseAdapter,
   tableName: string,
   format: string,
-  inferenceOptions?: { sampleSize?: number }
+  inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
+  mongoMeta?: MongoDecorateMeta
 ): Promise<void> {
-  const schema = await adapter.getTableSchema(tableName, inferenceOptions)
+  let schema = await adapter.getTableSchema(tableName, inferenceOptions)
+  if (mongoMeta) schema = decorateMongoSchema(schema, mongoMeta)
 
   if (format === 'json') {
     const formatter = new TableSchemaJSONFormatter()
@@ -359,7 +405,8 @@ async function handleSchemaRefresh(
   options: { config: string; refresh: boolean; force: boolean },
   connectionName: string | undefined,
   storagePath: string,
-  inferenceOptions?: { sampleSize?: number }
+  inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
+  mongoMeta?: MongoDecorateMeta
 ): Promise<void> {
   const diffEngine = new SchemaDiffEngine(adapter, config)
   const report = await diffEngine.diff()
@@ -398,7 +445,8 @@ async function handleSchemaRefresh(
 
   // Add/update tables detected as added or modified
   for (const tableName of report.tablesAdded.concat(Object.keys(report.tablesModified))) {
-    const fullSchema = await adapter.getTableSchema(tableName, inferenceOptions)
+    let fullSchema = await adapter.getTableSchema(tableName, inferenceOptions)
+    if (mongoMeta) fullSchema = decorateMongoSchema(fullSchema, mongoMeta)
     newSchema[tableName] = fullSchema
   }
 
@@ -434,7 +482,8 @@ async function handleSchemaReset(
   connectionName: string | undefined,
   existingCount: number,
   storagePath: string,
-  inferenceOptions?: { sampleSize?: number }
+  inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
+  mongoMeta?: MongoDecorateMeta
 ): Promise<void> {
   if (existingCount > 0 && !options.force) {
     // Wave 1: check if layered cache actually exists
@@ -482,7 +531,8 @@ async function handleSchemaReset(
   let processed = 0
 
   for (const table of tables) {
-    const fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+    let fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+    if (mongoMeta) fullSchema = decorateMongoSchema(fullSchema, mongoMeta)
     schemaData[table.name] = {
       name: fullSchema.name,
       columns: fullSchema.columns,
@@ -493,6 +543,9 @@ async function handleSchemaReset(
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
       tableType: fullSchema.tableType || 'table',
+      ...(mongoMeta
+        ? { sampleMethod: mongoMeta.sampleMethod, sampleSize: mongoMeta.sampleSize }
+        : {}),
     }
 
     processed++
@@ -536,7 +589,8 @@ async function handleFullDatabaseScan(
   connectionName: string | undefined,
   existingSchemaCount: number,
   storagePath: string,
-  inferenceOptions?: { sampleSize?: number }
+  inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
+  mongoMeta?: MongoDecorateMeta
 ): Promise<void> {
   console.log(t('schema.scanning_database'))
 
@@ -549,7 +603,8 @@ async function handleFullDatabaseScan(
   let processed = 0
 
   for (const table of tables) {
-    const fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+    let fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+    if (mongoMeta) fullSchema = decorateMongoSchema(fullSchema, mongoMeta)
     schemaData[table.name] = {
       name: fullSchema.name,
       columns: fullSchema.columns,
@@ -560,6 +615,9 @@ async function handleFullDatabaseScan(
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
       tableType: fullSchema.tableType || 'table',
+      ...(mongoMeta
+        ? { sampleMethod: mongoMeta.sampleMethod, sampleSize: mongoMeta.sampleSize }
+        : {}),
     }
 
     processed++

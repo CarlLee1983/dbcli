@@ -26,6 +26,17 @@ import { writeAuditEntry } from '@/core/audit/integration-helper'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
+/**
+ * Mongo only: renders a one-line summary of how the cached schema was sampled.
+ * Returns '' for SQL/legacy caches that lack sampleMethod, so callers can guard with truthiness.
+ */
+export function renderMongoSamplingLine(
+  meta: { sampleMethod?: string; sampleSize?: number }
+): string {
+  if (!meta.sampleMethod) return ''
+  return `    sampled: method=${meta.sampleMethod}, size=${meta.sampleSize ?? '?'}`
+}
+
 export interface DoctorResult {
   group: string
   label: string

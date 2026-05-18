@@ -20,10 +20,12 @@ const KNOWN_INTENTS = new Set([
 describe('built-in diagnostic snippets', () => {
   test('every file parses, has intent, intent in v1 taxonomy, names unique', async () => {
     const files = (await readdir(DIAG_DIR)).filter((f) => f.endsWith('.sql'))
-    expect(files.length).toBe(27)
+    // mongo reference snippets ship alongside diag snippets but follow their own contract.
+    const diagFiles = files.filter((f) => !f.endsWith('.mongodb.sql'))
+    expect(diagFiles.length).toBe(27)
 
     const seen = new Set<string>()
-    for (const file of files) {
+    for (const file of diagFiles) {
       const full = resolve(DIAG_DIR, file)
       const text = await Bun.file(full).text()
       const out = parseSavedQuery({

@@ -1,5 +1,6 @@
 import { parseWhereClause } from '@/utils/where-parser'
 import type { DmlPlanIntent } from '@/core/dml-plan'
+import { compilePatterns, matchAny } from '@/core/mongo/path-matcher'
 
 export type MongoBuildInput =
   | { operation: 'insert'; target: string; data: Record<string, unknown> }
@@ -279,21 +280,23 @@ function applyColumnBlacklist(
 ): void {
   const columns = context.blacklist.columns ?? {}
   const lower = target.toLowerCase()
-  let blacklistedFields: string[] = []
+  let raw: string[] = []
   for (const [t, cols] of Object.entries(columns)) {
     if (t.toLowerCase() === lower) {
-      blacklistedFields = cols
+      raw = cols
       break
     }
   }
-  if (blacklistedFields.length === 0) return
+  if (raw.length === 0) return
+  const { patterns } = compilePatterns(raw)
+  if (patterns.length === 0) return
   for (const field of fields) {
-    if (blacklistedFields.includes(field)) {
+    if (matchAny(field, patterns)) {
       pushFactor(
         factors,
         'blacklisted_column',
         'block',
-        `MongoDB write would touch blacklisted field ${target}.${field}.`
+        `MongoDB write would touch blacklisted path ${target}.${field}.`
       )
     }
   }
@@ -361,13 +364,28 @@ function buildSuggestedCommands(target: string, factors: QueryRiskFactor[]): str
   return []
 }
 
+function flattenInsertPaths(data: Record<string, unknown>, prefix = ''): string[] {
+  const out: string[] = []
+  for (const [k, v] of Object.entries(data)) {
+    const path = prefix === '' ? k : `${prefix}.${k}`
+    out.push(path)
+    if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+      const ctor = (v as object).constructor?.name
+      if (ctor === 'Object') {
+        out.push(...flattenInsertPaths(v as Record<string, unknown>, path))
+      }
+    }
+  }
+  return out
+}
+
 export const analyzeMongoDmlRisk: NonSqlAnalyzer = (intent, context) => {
   const factors: QueryRiskFactor[] = []
   applyPermission(intent.operation, context, factors)
   applyTableBlacklist(intent.target, context, factors)
 
   if (intent.operation === 'insert') {
-    applyColumnBlacklist(intent.target, Object.keys(intent.data), context, factors)
+    applyColumnBlacklist(intent.target, flattenInsertPaths(intent.data), context, factors)
   } else if (intent.operation === 'update') {
     const cls = classifyMongoUpdate(intent.set)
     for (const f of cls.tierFactors) pushFactor(factors, f.code, f.severity, f.message)

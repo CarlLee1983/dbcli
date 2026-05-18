@@ -25,13 +25,28 @@ async function deriveEngine(): Promise<EngineTag> {
   try {
     const cfg = await configModule.read(resolveConfigPath(undefined, {}))
     if (cfg.connection) {
-      const engine = mapSystemToEngine(cfg.connection.system)
-      if (engine !== 'mongodb') return engine
+      return mapSystemToEngine(cfg.connection.system)
     }
   } catch {
     // best-effort: fall through to default
   }
   return 'postgres'
+}
+
+export function listSnippetsForEngine(
+  all: Map<string, ResolvedSnippet[]>,
+  engine: EngineTag
+): ResolvedSnippet[] {
+  const out: ResolvedSnippet[] = []
+  for (const variants of all.values()) {
+    for (const v of variants) {
+      const declared = v.query.meta.engine ?? []
+      if (declared.length === 0 || declared.includes(engine)) {
+        out.push(v)
+      }
+    }
+  }
+  return out
 }
 
 export interface ListOptions {
@@ -239,7 +254,7 @@ export async function queriesSearch(keywords: string[], options: SearchOptions):
     process.exit(2)
     return
   }
-  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'all'] as const
+  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'mongodb', 'all'] as const
   if (options.engine && !allowed.includes(options.engine as (typeof allowed)[number])) {
     console.error(`Unknown engine '${options.engine}'. Allowed: ${allowed.join(', ')}.`)
     process.exit(2)
@@ -287,8 +302,7 @@ async function deriveEngineOrNull(): Promise<EngineTag | null> {
   try {
     const cfg = await configModule.read(resolveConfigPath(undefined, {}))
     if (cfg.connection) {
-      const e = mapSystemToEngine(cfg.connection.system)
-      if (e !== 'mongodb') return e
+      return mapSystemToEngine(cfg.connection.system)
     }
   } catch {
     // ignored
@@ -354,7 +368,7 @@ export async function queriesSuggest(
     process.exit(2)
     return
   }
-  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'all'] as const
+  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'mongodb', 'all'] as const
   if (options.engine && !allowed.includes(options.engine as (typeof allowed)[number])) {
     console.error(`Unknown engine '${options.engine}'. Allowed: ${allowed.join(', ')}.`)
     process.exit(2)

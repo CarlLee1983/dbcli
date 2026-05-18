@@ -14,6 +14,7 @@ export type CommandCapabilityKey =
   | 'init'
   | 'use'
   | 'list'
+  | 'schema'
   | 'schemaSingle'
   | 'schemaFullScan'
   | 'query'
@@ -56,6 +57,7 @@ export const COMMAND_CAPABILITY_KEYS = Object.freeze([
   'init',
   'use',
   'list',
+  'schema',
   'schemaSingle',
   'schemaFullScan',
   'query',
@@ -136,6 +138,7 @@ const SQL_BASE = {
   init: cap('supported', 'interactive', 'SQL connection initialization is supported.'),
   use: cap('supported', 'local-write', 'V2 config supports named SQL connections.'),
   list: cap('supported', 'readonly', 'Lists relational tables.'),
+  schema: cap('supported', 'readonly', 'Unified schema command (single-table or full scan).'),
   schemaSingle: cap('supported', 'readonly', 'Reads a single table schema.'),
   schemaFullScan: cap('supported', 'readonly', 'Full scan, refresh, and reset are supported.'),
   query: cap('supported', 'readonly', 'Runs SQL through permission and blacklist guards.'),

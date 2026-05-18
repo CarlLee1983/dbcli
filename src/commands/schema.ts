@@ -4,6 +4,7 @@
  * Supports single-table inspection or full-database schema refresh
  */
 
+import crypto from 'node:crypto'
 import { Command } from 'commander'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
@@ -13,6 +14,7 @@ import { patchConnectionSchema, readV2Config } from '@/core/config-v2'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import { SchemaWriter } from '@/core'
+import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { TableSchema, DatabaseAdapter } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
@@ -61,6 +63,7 @@ async function schemaAction(
   },
   command: Command
 ) {
+  let config: DbcliConfig | undefined
   try {
     validateFormat(options.format, ALLOWED_FORMATS, 'schema')
 
@@ -68,7 +71,7 @@ async function schemaAction(
     const storagePath = await resolveConfigStoragePath(configPath)
 
     // Load configuration from .dbcli
-    const config = await configModule.read(configPath)
+    config = await configModule.read(configPath)
 
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')
@@ -132,6 +135,10 @@ async function schemaAction(
             console.log(`  ${col.name}: ${col.type}`)
           }
         }
+        await writeAuditEntry(config, 'schema', options, {
+          success: true,
+          target: table,
+        })
       } finally {
         await redisAdapter.disconnect()
       }
@@ -154,6 +161,10 @@ async function schemaAction(
             options.format,
             inferenceOptions
           )
+          await writeAuditEntry(config, 'schema', options, {
+            success: true,
+            target: table,
+          })
           return
         }
         await handleFullDatabaseScan(
@@ -165,6 +176,10 @@ async function schemaAction(
           storagePath,
           inferenceOptions
         )
+        await writeAuditEntry(config, 'schema', options, {
+          success: true,
+          target: '*',
+        })
         return
       } finally {
         await esAdapter.disconnect()
@@ -215,13 +230,36 @@ async function schemaAction(
           inferenceOptions
         )
       }
+
+      await writeAuditEntry(config, 'schema', options, {
+        success: true,
+        target: table ?? '*',
+      })
     } finally {
       await adapter.disconnect()
     }
   } catch (error) {
+    let auditId: string | null = null
+    let envelopeId: string | undefined
     if (options.recovery === true) {
+      envelopeId = crypto.randomUUID()
+    }
+    if (config) {
+      auditId = await writeAuditEntry(config, 'schema', options, {
+        success: false,
+        target: table ?? '*',
+        error,
+        ...(envelopeId && { recovery_ref: envelopeId }),
+      })
+    }
+
+    if (envelopeId !== undefined) {
       const { emitRecoveryEnvelope } = await import('@/core/recovery')
-      emitRecoveryEnvelope(error, { operation: 'schema', table })
+      emitRecoveryEnvelope(
+        error,
+        { operation: 'schema', table },
+        { envelopeId, auditRef: auditId ?? undefined }
+      )
     }
 
     if (error instanceof Error) {

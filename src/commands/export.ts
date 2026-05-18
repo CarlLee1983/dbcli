@@ -25,6 +25,7 @@ import { BlacklistError } from '@/types/blacklist'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { extractTableName } from '@/utils/engine-hints'
+import { maskMongoRows } from '@/core/mongo/field-masker'
 import type { DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -320,11 +321,13 @@ async function mongoExportBranch(
       effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
     )
 
-    const columnNames = collectColumnUnion(result.rows)
-    const filterResult = blacklistValidator.filterColumns(collection, result.rows, columnNames)
-    const visibleColumns = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
+    const blacklistCfg =
+      (config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } })
+        .blacklist ?? { tables: [], columns: {} }
+    const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
+    const visibleColumns = collectColumnUnion(maskedRows)
 
-    const formatted = formatMongoRows(filterResult.filteredRows, visibleColumns, options.format)
+    const formatted = formatMongoRows(maskedRows, visibleColumns, options.format)
 
     if (options.output) {
       const file = Bun.file(options.output)
@@ -343,7 +346,7 @@ async function mongoExportBranch(
       await file.write(formatted)
       console.error(
         t_vars('export.exported', {
-          count: filterResult.filteredRows.length,
+          count: maskedRows.length,
           file: options.output,
         })
       )
@@ -351,19 +354,15 @@ async function mongoExportBranch(
       console.log(formatted)
     }
 
-    const securityNote = blacklistValidator.buildSecurityNotification(
-      collection,
-      filterResult.omittedColumns
-    )
-    if (securityNote) {
-      console.error(`ℹ ${securityNote}`)
+    if ((blacklistCfg.columns[collection] ?? []).length > 0) {
+      console.error(`ℹ Some fields may have been redacted as [REDACTED] per .dbcli blacklist.`)
     }
 
     await writeAuditEntry(config, 'export', options, {
       success: true,
       target: collection,
       metadata: {
-        rows_affected: filterResult.filteredRows.length,
+        rows_affected: maskedRows.length,
         output_format: options.format,
         ...(options.output && { output_file: options.output }),
       },

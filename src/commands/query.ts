@@ -27,6 +27,7 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { maskMongoRows } from '@/core/mongo/field-masker'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -297,14 +298,16 @@ async function mongoQueryBranch(
       },
     })
 
-    // Redact blacklisted columns
-    const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
-    const filterResult = blacklistValidator.filterColumns(collection, result.rows, columnNames)
+    const blacklistCfg =
+      (config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } })
+        .blacklist ?? { tables: [], columns: {} }
+    const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
+    const columnNames = maskedRows[0] ? Object.keys(maskedRows[0]) : []
 
     const queryResult = {
-      rows: filterResult.filteredRows,
-      rowCount: filterResult.filteredRows.length,
-      columnNames: columnNames.filter((col) => !filterResult.omittedColumns.includes(col)),
+      rows: maskedRows,
+      rowCount: maskedRows.length,
+      columnNames,
     }
 
     const formatter = new QueryResultFormatter()
@@ -313,12 +316,8 @@ async function mongoQueryBranch(
     })
 
     console.log(output)
-    const securityNote = blacklistValidator.buildSecurityNotification(
-      collection,
-      filterResult.omittedColumns
-    )
-    if (securityNote) {
-      console.log(`\n\u2139 ${securityNote}`)
+    if ((blacklistCfg.columns[collection] ?? []).length > 0) {
+      console.log(`\n\u2139 Some fields may have been redacted as [REDACTED] per .dbcli blacklist.`)
     }
   } finally {
     await mongoAdapter.disconnect()

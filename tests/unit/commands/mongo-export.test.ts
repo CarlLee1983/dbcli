@@ -168,7 +168,7 @@ describe('MongoDB export', () => {
 
     const out = stdout.join('\n')
     expect(out).not.toContain('shouldNotAppear')
-    expect(out).not.toContain('password')
+    expect(out).toContain('[REDACTED]')
     expect(out).toContain('Alice')
   })
 

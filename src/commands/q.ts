@@ -81,12 +81,6 @@ export async function qCommand(
     if (!config.connection) throw new Error('Run "dbcli init" first')
 
     const engine = mapSystemToEngine(config.connection.system)
-    if (engine === 'mongodb') {
-      throw new SavedQueryError(
-        `Saved queries do not support MongoDB connections`,
-        'ENGINE_MISMATCH'
-      )
-    }
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
     const snippet = resolveByName(map, name, engine)
@@ -118,6 +112,12 @@ export async function qCommand(
         sql: prepared.driver.sql,
         metadata: { dry_run: true },
       })
+      return
+    }
+
+    if (engine === 'mongodb') {
+      const { qMongoBranch } = await import('@/commands/q-mongo')
+      await qMongoBranch(snippet, prepared, options, config)
       return
     }
 

@@ -1,25 +1,11 @@
 import type { GuideStep } from '@/core/guide/types'
 import type { RecoveryCode, RecoveryContext } from './types'
+import { shellQuote } from './shell-quote'
 
 /** Hard cap on emitted recovery steps; prevents drowning agents in suggestions. */
 export const MAX_RECOVERY_STEPS = 6
 
 type StepDraft = Omit<GuideStep, 'order'>
-
-/**
- * POSIX shell-quote a value before splicing it into an agent-runnable command.
- *
- * Identifiers built from a safe character set are returned untouched so simple
- * cases like `dbcli use staging` stay readable. Anything else is wrapped in
- * single quotes (with embedded single quotes escaped via the standard
- * `'\''` dance) so a hostile table / snippet / hint name cannot break out and
- * inject a follow-on shell command.
- */
-function shellQuote(value: string): string {
-  if (value.length === 0) return "''"
-  if (/^[A-Za-z0-9_./@:+,=-]+$/.test(value)) return value
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 /**
  * Build the dry-run preview step that gets prepended to BLACKLIST_COLUMN_WRITE

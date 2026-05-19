@@ -118,7 +118,13 @@ describe('buildConnectionBranches — schema parity', () => {
       ok: false,
       error: { code: 'CONN_REFUSED', category: 'connection', message: 'x' },
       recovery: [
-        { order: 1, command: 'dbcli doctor --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+        {
+          order: 1,
+          command: 'dbcli doctor --format json',
+          rationale: 'r',
+          risk: 'readonly',
+          expects: 'e',
+        },
       ],
       branches,
       branchFork,

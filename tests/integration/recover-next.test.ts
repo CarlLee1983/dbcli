@@ -377,39 +377,93 @@ const connectionEnvelopeWithBranches = {
   ok: false,
   error: { code: 'CONN_REFUSED', category: 'connection', message: 'x' },
   recovery: [
-    { order: 1, command: 'dbcli doctor --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
-    { order: 2, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+    {
+      order: 1,
+      command: 'dbcli doctor --format json',
+      rationale: 'r',
+      risk: 'readonly',
+      expects: 'e',
+    },
+    {
+      order: 2,
+      command: 'dbcli inspect --no-connect --format json',
+      rationale: 'r',
+      risk: 'readonly',
+      expects: 'e',
+    },
   ],
   branches: {
     'doctor-clean': {
       description: 'transient',
       steps: [
-        { order: 1, command: 'dbcli inspect --for-agent', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-clean' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: 'r',
+          risk: 'readonly',
+          expects: 'e',
+          branchId: 'doctor-clean',
+        },
       ],
     },
     'doctor-config-missing': {
       description: 'config',
       steps: [
-        { order: 1, command: 'dbcli init', rationale: 'r', risk: 'write', interactive: true, expects: 'e', branchId: 'doctor-config-missing' },
-        { order: 2, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-config-missing' },
+        {
+          order: 1,
+          command: 'dbcli init',
+          rationale: 'r',
+          risk: 'write',
+          interactive: true,
+          expects: 'e',
+          branchId: 'doctor-config-missing',
+        },
+        {
+          order: 2,
+          command: 'dbcli inspect --no-connect --format json',
+          rationale: 'r',
+          risk: 'readonly',
+          expects: 'e',
+          branchId: 'doctor-config-missing',
+        },
       ],
     },
     'doctor-auth-error': {
       description: 'auth',
       steps: [
-        { order: 1, command: 'dbcli init --force', rationale: 'r', risk: 'write', interactive: true, expects: 'e', branchId: 'doctor-auth-error' },
+        {
+          order: 1,
+          command: 'dbcli init --force',
+          rationale: 'r',
+          risk: 'write',
+          interactive: true,
+          expects: 'e',
+          branchId: 'doctor-auth-error',
+        },
       ],
     },
     'doctor-network-error': {
       description: 'net',
       steps: [
-        { order: 1, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e', branchId: 'doctor-network-error' },
+        {
+          order: 1,
+          command: 'dbcli inspect --no-connect --format json',
+          rationale: 'r',
+          risk: 'readonly',
+          expects: 'e',
+          branchId: 'doctor-network-error',
+        },
       ],
     },
   },
   branchFork: {
     after: 1,
-    branchIds: ['doctor-clean', 'doctor-config-missing', 'doctor-auth-error', 'doctor-network-error'],
+    branchIds: [
+      'doctor-clean',
+      'doctor-config-missing',
+      'doctor-auth-error',
+      'doctor-network-error',
+    ],
   },
 }
 
@@ -420,9 +474,12 @@ describe('dbcli recover --next --branch', () => {
       [
         'recover',
         '--next',
-        '--after-step', '1',
-        '--branch', 'doctor-config-missing',
-        '--result', '{"status":"ok"}',
+        '--after-step',
+        '1',
+        '--branch',
+        'doctor-config-missing',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )
@@ -441,9 +498,12 @@ describe('dbcli recover --next --branch', () => {
       [
         'recover',
         '--next',
-        '--after-step', '1',
-        '--branch', 'totally-fake',
-        '--result', '{"status":"ok"}',
+        '--after-step',
+        '1',
+        '--branch',
+        'totally-fake',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )
@@ -457,9 +517,12 @@ describe('dbcli recover --next --branch', () => {
       [
         'recover',
         '--next',
-        '--after-step', '1',
-        '--branch', 'doctor-clean',
-        '--result', '{"status":"ok"}',
+        '--after-step',
+        '1',
+        '--branch',
+        'doctor-clean',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )

@@ -73,8 +73,7 @@ describe('renderNextMarkdown — branch surface', () => {
       cursor: 1,
       totalSteps: 2,
       branchId: 'doctor-auth-error',
-      branchDescription:
-        'Doctor confirms credentials were rejected. Re-init with --force.',
+      branchDescription: 'Doctor confirms credentials were rejected. Re-init with --force.',
       step: {
         order: 1,
         command: 'dbcli init --force',

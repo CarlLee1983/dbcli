@@ -96,21 +96,59 @@ function envelopeWithBranches(): RecoveryEnvelope {
     ok: false,
     error: { code: 'CONN_REFUSED', category: 'connection', message: 'x' },
     recovery: [
-      { order: 1, command: 'dbcli doctor --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
-      { order: 2, command: 'dbcli inspect --no-connect --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+      {
+        order: 1,
+        command: 'dbcli doctor --format json',
+        rationale: 'r',
+        risk: 'readonly',
+        expects: 'e',
+      },
+      {
+        order: 2,
+        command: 'dbcli inspect --no-connect --format json',
+        rationale: 'r',
+        risk: 'readonly',
+        expects: 'e',
+      },
     ],
     branches,
     branchFork,
   }
 }
 
-function doctorResult(hint: 'clean' | 'config-missing' | 'auth' | 'network' | 'unmatched'): StepResultSummary {
+function doctorResult(
+  hint: 'clean' | 'config-missing' | 'auth' | 'network' | 'unmatched'
+): StepResultSummary {
   const msgByHint = {
-    clean: { hasError: false, results: [{ group: 'g', label: 'Connection', status: 'pass', message: 'ok' }] },
-    'config-missing': { hasError: true, results: [{ group: 'g', label: 'Config exists', status: 'error', message: 'no config' }] },
-    auth: { hasError: true, results: [{ group: 'g', label: 'Connection', status: 'error', message: 'password authentication failed' }] },
-    network: { hasError: true, results: [{ group: 'g', label: 'Connection', status: 'error', message: 'ECONNREFUSED 127.0.0.1' }] },
-    unmatched: { hasError: true, results: [{ group: 'g', label: 'Connection', status: 'error', message: 'something else' }] },
+    clean: {
+      hasError: false,
+      results: [{ group: 'g', label: 'Connection', status: 'pass', message: 'ok' }],
+    },
+    'config-missing': {
+      hasError: true,
+      results: [{ group: 'g', label: 'Config exists', status: 'error', message: 'no config' }],
+    },
+    auth: {
+      hasError: true,
+      results: [
+        {
+          group: 'g',
+          label: 'Connection',
+          status: 'error',
+          message: 'password authentication failed',
+        },
+      ],
+    },
+    network: {
+      hasError: true,
+      results: [
+        { group: 'g', label: 'Connection', status: 'error', message: 'ECONNREFUSED 127.0.0.1' },
+      ],
+    },
+    unmatched: {
+      hasError: true,
+      results: [{ group: 'g', label: 'Connection', status: 'error', message: 'something else' }],
+    },
   }
   return { status: 'ok', stdoutSummary: JSON.stringify(msgByHint[hint]) }
 }
@@ -152,7 +190,10 @@ describe('nextStepFromEnvelope — fork at branchFork.after', () => {
   })
 
   test('after step 1 with non-JSON result → falls through to recovery', () => {
-    const out = nextStepFromEnvelope(envelopeWithBranches(), 1, { status: 'failed', stdoutSummary: 'not json' })
+    const out = nextStepFromEnvelope(envelopeWithBranches(), 1, {
+      status: 'failed',
+      stdoutSummary: 'not json',
+    })
     if (out.kind !== 'step') throw new Error('expected step')
     expect(out.branchId).toBeUndefined()
     expect(out.cursor).toBe(2)
@@ -192,28 +233,30 @@ describe('nextStepFromEnvelope — walking inside a branch', () => {
 describe('nextStepFromEnvelope — branch error paths', () => {
   test('--branch on envelope with no branches throws RangeError', () => {
     const env = envelope(3) // no branches
-    expect(() => nextStepFromEnvelope(env, 1, okResult, { branchId: 'doctor-clean' })).toThrow(RangeError)
+    expect(() => nextStepFromEnvelope(env, 1, okResult, { branchId: 'doctor-clean' })).toThrow(
+      RangeError
+    )
   })
 
   test('unknown branchId throws RangeError', () => {
     const env = envelopeWithBranches()
-    expect(() =>
-      nextStepFromEnvelope(env, 1, okResult, { branchId: 'doctor-mystery' })
-    ).toThrow(RangeError)
+    expect(() => nextStepFromEnvelope(env, 1, okResult, { branchId: 'doctor-mystery' })).toThrow(
+      RangeError
+    )
   })
 
   test('--after-step beyond branch length throws RangeError', () => {
     const env = envelopeWithBranches()
-    expect(() =>
-      nextStepFromEnvelope(env, 2, okResult, { branchId: 'doctor-clean' })
-    ).toThrow(RangeError)
+    expect(() => nextStepFromEnvelope(env, 2, okResult, { branchId: 'doctor-clean' })).toThrow(
+      RangeError
+    )
   })
 
   test('--after-step < 1 inside branch throws RangeError', () => {
     const env = envelopeWithBranches()
-    expect(() =>
-      nextStepFromEnvelope(env, 0, okResult, { branchId: 'doctor-clean' })
-    ).toThrow(RangeError)
+    expect(() => nextStepFromEnvelope(env, 0, okResult, { branchId: 'doctor-clean' })).toThrow(
+      RangeError
+    )
   })
 })
 

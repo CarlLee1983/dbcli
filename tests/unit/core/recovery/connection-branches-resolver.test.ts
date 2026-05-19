@@ -1,8 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import {
-  CONNECTION_BRANCH_IDS,
-  matchConnectionBranch,
-} from '@/core/recovery/connection-branches'
+import { CONNECTION_BRANCH_IDS, matchConnectionBranch } from '@/core/recovery/connection-branches'
 import type { StepResultSummary } from '@/core/recovery/next-types'
 
 function withDoctor(doctor: object | string, status: 'ok' | 'failed' = 'ok'): StepResultSummary {
@@ -29,14 +26,24 @@ const configMissingDoctor = {
 
 const authDoctor = {
   results: [
-    { group: 'connection', label: 'Connection', status: 'error', message: 'password authentication failed for user' },
+    {
+      group: 'connection',
+      label: 'Connection',
+      status: 'error',
+      message: 'password authentication failed for user',
+    },
   ],
   hasError: true,
 }
 
 const networkDoctor = {
   results: [
-    { group: 'connection', label: 'Connection', status: 'error', message: 'ECONNREFUSED 127.0.0.1:5432' },
+    {
+      group: 'connection',
+      label: 'Connection',
+      status: 'error',
+      message: 'ECONNREFUSED 127.0.0.1:5432',
+    },
   ],
   hasError: true,
 }
@@ -75,7 +82,12 @@ describe('matchConnectionBranch — trigger order (locked, §3.1)', () => {
     const mixed = {
       results: [
         { group: 'config', label: 'Config exists', status: 'error', message: 'no config' },
-        { group: 'connection', label: 'Connection', status: 'error', message: 'auth failed; ECONNREFUSED' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'auth failed; ECONNREFUSED',
+        },
       ],
       hasError: true,
     }
@@ -85,7 +97,12 @@ describe('matchConnectionBranch — trigger order (locked, §3.1)', () => {
   test('auth wins over network when both keywords match (auth first)', () => {
     const both = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'auth failed: ECONNREFUSED 127.0.0.1' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'auth failed: ECONNREFUSED 127.0.0.1',
+        },
       ],
       hasError: true,
     }
@@ -95,7 +112,12 @@ describe('matchConnectionBranch — trigger order (locked, §3.1)', () => {
   test('Default connection error → doctor-config-missing', () => {
     const cfg = {
       results: [
-        { group: 'config', label: 'Default connection', status: 'error', message: 'no default connection' },
+        {
+          group: 'config',
+          label: 'Default connection',
+          status: 'error',
+          message: 'no default connection',
+        },
       ],
       hasError: true,
     }
@@ -105,7 +127,12 @@ describe('matchConnectionBranch — trigger order (locked, §3.1)', () => {
   test('V2 config validation error → doctor-config-missing', () => {
     const cfg = {
       results: [
-        { group: 'config', label: 'V2 config validation', status: 'error', message: 'invalid v2 config' },
+        {
+          group: 'config',
+          label: 'V2 config validation',
+          status: 'error',
+          message: 'invalid v2 config',
+        },
       ],
       hasError: true,
     }
@@ -139,7 +166,12 @@ describe('matchConnectionBranch — fallback to null', () => {
   test('Connection error without auth-or-network keyword → null', () => {
     const weird = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'something went wrong' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'something went wrong',
+        },
       ],
       hasError: true,
     }
@@ -148,9 +180,7 @@ describe('matchConnectionBranch — fallback to null', () => {
 
   test('error in a label we do not look at → null (no fallthrough to clean)', () => {
     const other = {
-      results: [
-        { group: 'env', label: 'Bun version', status: 'error', message: 'outdated' },
-      ],
+      results: [{ group: 'env', label: 'Bun version', status: 'error', message: 'outdated' }],
       hasError: true,
     }
     expect(matchConnectionBranch(withDoctor(other))).toBeNull()
@@ -170,7 +200,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test('case-insensitive match', () => {
     const upper = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'AUTHENTICATION FAILED' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'AUTHENTICATION FAILED',
+        },
       ],
       hasError: true,
     }
@@ -180,7 +215,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test("'authority' triggers auth (substring match is intentional)", () => {
     const authority = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'no authority returned' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'no authority returned',
+        },
       ],
       hasError: true,
     }
@@ -190,7 +230,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test('"DNS" message routes to network', () => {
     const dns = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'DNS resolution failed' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'DNS resolution failed',
+        },
       ],
       hasError: true,
     }
@@ -200,7 +245,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test('"timeout" message routes to network', () => {
     const t = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'Operation timeout after 5s' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'Operation timeout after 5s',
+        },
       ],
       hasError: true,
     }
@@ -210,7 +260,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test('"ENOTFOUND" message routes to network', () => {
     const n = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'getaddrinfo ENOTFOUND db.local' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'getaddrinfo ENOTFOUND db.local',
+        },
       ],
       hasError: true,
     }
@@ -220,7 +275,12 @@ describe('matchConnectionBranch — keyword boundaries', () => {
   test('"permission denied" routes to auth', () => {
     const p = {
       results: [
-        { group: 'connection', label: 'Connection', status: 'error', message: 'permission denied for role' },
+        {
+          group: 'connection',
+          label: 'Connection',
+          status: 'error',
+          message: 'permission denied for role',
+        },
       ],
       hasError: true,
     }

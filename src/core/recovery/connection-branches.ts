@@ -1,10 +1,5 @@
 import type { GuideStep } from '@/core/guide/types'
-import type {
-  RecoveryContext,
-  BranchPlan,
-  BranchFork,
-  BranchId,
-} from './types'
+import type { RecoveryContext, BranchPlan, BranchFork, BranchId } from './types'
 import type { StepResultSummary } from './next-types'
 import { shellQuote } from './shell-quote'
 
@@ -264,9 +259,10 @@ function planDoctorNetworkError(ctx: RecoveryContext): BranchPlan {
   }
 }
 
-export function buildConnectionBranches(
-  ctx: RecoveryContext
-): { branches: Record<BranchId, BranchPlan>; branchFork: BranchFork } {
+export function buildConnectionBranches(ctx: RecoveryContext): {
+  branches: Record<BranchId, BranchPlan>
+  branchFork: BranchFork
+} {
   const branches: Record<BranchId, BranchPlan> = {
     'doctor-clean': planDoctorClean(),
     'doctor-config-missing': planDoctorConfigMissing(),

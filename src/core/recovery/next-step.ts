@@ -13,7 +13,10 @@ export interface NextStepOptions {
 function resolverFor(
   code: RecoveryCode
 ):
-  | ((prev: StepResultSummary, opts?: { trace?: (line: ResolverTraceLine) => void }) => string | null)
+  | ((
+      prev: StepResultSummary,
+      opts?: { trace?: (line: ResolverTraceLine) => void }
+    ) => string | null)
   | null {
   switch (code) {
     case 'CONN_REFUSED':
@@ -59,9 +62,7 @@ export function nextStepFromEnvelope(
   if (options.branchId !== undefined) {
     if (!envelope.branches || !envelope.branches[options.branchId]) {
       const valid = envelope.branches ? Object.keys(envelope.branches).join(', ') : '<none>'
-      throw new RangeError(
-        `Branch '${options.branchId}' not found in envelope (valid: ${valid}).`
-      )
+      throw new RangeError(`Branch '${options.branchId}' not found in envelope (valid: ${valid}).`)
     }
     const plan = envelope.branches[options.branchId]!
     if (afterStep > plan.steps.length) {
@@ -87,9 +88,7 @@ export function nextStepFromEnvelope(
   }
 
   if (afterStep > envelope.recovery.length) {
-    throw new RangeError(
-      `afterStep ${afterStep} exceeds plan length ${envelope.recovery.length}`
-    )
+    throw new RangeError(`afterStep ${afterStep} exceeds plan length ${envelope.recovery.length}`)
   }
 
   if (envelope.branchFork?.after === afterStep && envelope.branches) {

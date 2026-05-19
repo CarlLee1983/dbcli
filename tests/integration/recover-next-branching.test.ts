@@ -74,10 +74,9 @@ async function seedConnectionEnvelope(cwd: string): Promise<void> {
   await mkdir(join(cwd, '.dbcli'), { recursive: true })
   const { classifyError } = await import('@/core/recovery/classify')
   const { ConnectionError } = await import('@/adapters/types')
-  const envelope = classifyError(
-    new ConnectionError('ECONNREFUSED', 'refused', []),
-    { operation: 'query' }
-  )
+  const envelope = classifyError(new ConnectionError('ECONNREFUSED', 'refused', []), {
+    operation: 'query',
+  })
   await writeFile(
     join(cwd, '.dbcli/last-recovery.json'),
     JSON.stringify({
@@ -92,20 +91,28 @@ async function seedConnectionEnvelope(cwd: string): Promise<void> {
 
 const DOCTOR_AUTH_JSON = JSON.stringify({
   results: [
-    { group: 'connection', label: 'Connection', status: 'error', message: 'password authentication failed' },
+    {
+      group: 'connection',
+      label: 'Connection',
+      status: 'error',
+      message: 'password authentication failed',
+    },
   ],
   hasError: true,
 })
 const DOCTOR_NETWORK_JSON = JSON.stringify({
   results: [
-    { group: 'connection', label: 'Connection', status: 'error', message: 'ECONNREFUSED 127.0.0.1:5432' },
+    {
+      group: 'connection',
+      label: 'Connection',
+      status: 'error',
+      message: 'ECONNREFUSED 127.0.0.1:5432',
+    },
   ],
   hasError: true,
 })
 const DOCTOR_CLEAN_JSON = JSON.stringify({
-  results: [
-    { group: 'connection', label: 'Connection', status: 'pass', message: 'ok' },
-  ],
+  results: [{ group: 'connection', label: 'Connection', status: 'pass', message: 'ok' }],
   hasError: false,
 })
 
@@ -114,9 +121,12 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--result', JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_AUTH_JSON }),
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--result',
+        JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_AUTH_JSON }),
       ],
       FIXTURE
     )
@@ -130,10 +140,14 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--branch', 'doctor-auth-error',
-        '--result', '{"status":"ok"}',
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--branch',
+        'doctor-auth-error',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )
@@ -148,10 +162,14 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '2',
-        '--branch', 'doctor-auth-error',
-        '--result', '{"status":"ok"}',
+        'recover',
+        '--next',
+        '--after-step',
+        '2',
+        '--branch',
+        'doctor-auth-error',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )
@@ -165,9 +183,12 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--result', JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_NETWORK_JSON }),
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--result',
+        JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_NETWORK_JSON }),
       ],
       FIXTURE
     )
@@ -180,9 +201,12 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--result', JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_CLEAN_JSON }),
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--result',
+        JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_CLEAN_JSON }),
       ],
       FIXTURE
     )
@@ -196,9 +220,12 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--result', JSON.stringify({ status: 'failed', stdoutSummary: 'totally not json' }),
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--result',
+        JSON.stringify({ status: 'failed', stdoutSummary: 'totally not json' }),
       ],
       FIXTURE
     )
@@ -223,17 +250,27 @@ describe('dbcli recover --next branching (E2E)', () => {
           ok: false,
           error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
           recovery: [
-            { order: 1, command: 'dbcli blacklist list --format json', rationale: 'r', risk: 'readonly', expects: 'e' },
+            {
+              order: 1,
+              command: 'dbcli blacklist list --format json',
+              rationale: 'r',
+              risk: 'readonly',
+              expects: 'e',
+            },
           ],
         },
       })
     )
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--branch', 'doctor-clean',
-        '--result', '{"status":"ok"}',
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--branch',
+        'doctor-clean',
+        '--result',
+        '{"status":"ok"}',
       ],
       FIXTURE
     )
@@ -262,10 +299,14 @@ describe('dbcli recover --next branching (E2E)', () => {
     await seedConnectionEnvelope(FIXTURE)
     const r = await run(
       [
-        'recover', '--next',
-        '--after-step', '1',
-        '--format', 'markdown',
-        '--result', JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_AUTH_JSON }),
+        'recover',
+        '--next',
+        '--after-step',
+        '1',
+        '--format',
+        'markdown',
+        '--result',
+        JSON.stringify({ status: 'ok', stdoutSummary: DOCTOR_AUTH_JSON }),
       ],
       FIXTURE
     )

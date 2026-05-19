@@ -298,9 +298,9 @@ async function mongoQueryBranch(
       },
     })
 
-    const blacklistCfg =
-      (config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } })
-        .blacklist ?? { tables: [], columns: {} }
+    const blacklistCfg = (
+      config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
+    ).blacklist ?? { tables: [], columns: {} }
     const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
     const columnNames = maskedRows[0] ? Object.keys(maskedRows[0]) : []
 

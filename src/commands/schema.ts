@@ -116,9 +116,7 @@ async function schemaAction(
       process.exit(1)
     }
 
-    let inferenceOptions:
-      | { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
-      | undefined
+    let inferenceOptions: { sampleSize?: number; sampleMethod?: 'random' | 'natural' } | undefined
     if (options.sampleSize !== undefined) {
       const parsed = Number(options.sampleSize)
       if (!Number.isFinite(parsed) || parsed < 1) {

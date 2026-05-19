@@ -321,9 +321,9 @@ async function mongoExportBranch(
       effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
     )
 
-    const blacklistCfg =
-      (config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } })
-        .blacklist ?? { tables: [], columns: {} }
+    const blacklistCfg = (
+      config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
+    ).blacklist ?? { tables: [], columns: {} }
     const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
     const visibleColumns = collectColumnUnion(maskedRows)
 

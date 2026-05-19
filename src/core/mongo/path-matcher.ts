@@ -33,9 +33,7 @@ export function compilePatterns(raw: ReadonlyArray<unknown>): CompileResult {
       rejected.push({ raw: entry, reason: 'empty path segment' })
       continue
     }
-    const wildcardIndices = segments
-      .map((s, i) => (s.includes('*') ? i : -1))
-      .filter((i) => i >= 0)
+    const wildcardIndices = segments.map((s, i) => (s.includes('*') ? i : -1)).filter((i) => i >= 0)
     if (wildcardIndices.length === 0) {
       patterns.push({ raw: entry, segments, wildcardTail: false })
       continue

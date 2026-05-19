@@ -23,10 +23,24 @@ describe('maskMongoRows', () => {
   })
 
   test('array of objects recurses', () => {
-    const rows = [{ _id: 'x', orders: [{ id: 1, card: '4111' }, { id: 2, card: '5500' }] }]
+    const rows = [
+      {
+        _id: 'x',
+        orders: [
+          { id: 1, card: '4111' },
+          { id: 2, card: '5500' },
+        ],
+      },
+    ]
     const out = maskMongoRows(rows, 'users', cfg({ users: ['orders.card'] }))
     expect(out).toEqual([
-      { _id: 'x', orders: [{ id: 1, card: '[REDACTED]' }, { id: 2, card: '[REDACTED]' }] },
+      {
+        _id: 'x',
+        orders: [
+          { id: 1, card: '[REDACTED]' },
+          { id: 2, card: '[REDACTED]' },
+        ],
+      },
     ])
   })
 

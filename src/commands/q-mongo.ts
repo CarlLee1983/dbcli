@@ -19,8 +19,7 @@ export async function qMongoBranch(
   options: QCommandOptions,
   config: DbcliConfig
 ): Promise<void> {
-  const collection =
-    (options.collection as string | undefined) ?? prepared.execHints?.collection
+  const collection = (options.collection as string | undefined) ?? prepared.execHints?.collection
   if (!collection) {
     throw new Error(
       `MongoDB snippet '${snippet.query.meta.key}' resolved without a target collection`
@@ -38,21 +37,16 @@ export async function qMongoBranch(
     return
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(
-    config.connection as ConnectionOptions
-  )
+  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await adapter.connect()
   try {
     const start = performance.now()
-    const result = await adapter.execute<Record<string, unknown>>(
-      prepared.driver.sql,
-      [collection]
-    )
+    const result = await adapter.execute<Record<string, unknown>>(prepared.driver.sql, [collection])
     const executionTimeMs = Math.round(performance.now() - start)
 
-    const blacklistCfg =
-      (config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } })
-        .blacklist ?? { tables: [], columns: {} }
+    const blacklistCfg = (
+      config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
+    ).blacklist ?? { tables: [], columns: {} }
     const masked = maskMongoRows(result.rows, collection, blacklistCfg)
 
     if (options.ui || options.format === 'html') {

@@ -52,10 +52,7 @@ describe('mongo snippet end-to-end (no driver)', () => {
       { status: 'open' },
       { engine: 'mongodb', noLimit: false }
     )
-    expect(JSON.parse(prep.driver.sql)).toEqual([
-      { $match: { status: 'open' } },
-      { $limit: 5 },
-    ])
+    expect(JSON.parse(prep.driver.sql)).toEqual([{ $match: { status: 'open' } }, { $limit: 5 }])
     expect(prep.execHints?.mongoOperation).toBe('aggregate')
   })
 })

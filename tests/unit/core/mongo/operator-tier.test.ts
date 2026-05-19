@@ -34,10 +34,7 @@ describe('mongo operator tier classification', () => {
   })
 
   test('RENAME tier emits factor', () => {
-    const r = analyzeMongoDmlRisk(
-      updateIntent({ $rename: { old: 'newer' } }),
-      baseContext()
-    )
+    const r = analyzeMongoDmlRisk(updateIntent({ $rename: { old: 'newer' } }), baseContext())
     expect(r.riskFactors.find((f) => f.code === 'mongo_rename_operator')).toBeDefined()
   })
 

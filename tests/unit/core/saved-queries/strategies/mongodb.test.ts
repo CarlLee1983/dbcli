@@ -120,10 +120,14 @@ describe('mongoStrategy.prepare', () => {
   test('throws when target and collection both missing', () => {
     const m = meta({ operation: 'find' })
     expect(() =>
-      mongoStrategy.prepare(snippet('{}', m), {}, {
-        engine: 'mongodb' as EngineTag,
-        noLimit: false,
-      })
+      mongoStrategy.prepare(
+        snippet('{}', m),
+        {},
+        {
+          engine: 'mongodb' as EngineTag,
+          noLimit: false,
+        }
+      )
     ).toThrow(/collection/i)
   })
 
@@ -134,10 +138,14 @@ describe('mongoStrategy.prepare', () => {
       params: [{ name: 'q', type: 'string', required: true }],
     })
     expect(() =>
-      mongoStrategy.prepare(snippet('{ "q": {{q}} }', m), {}, {
-        engine: 'mongodb' as EngineTag,
-        noLimit: false,
-      })
+      mongoStrategy.prepare(
+        snippet('{ "q": {{q}} }', m),
+        {},
+        {
+          engine: 'mongodb' as EngineTag,
+          noLimit: false,
+        }
+      )
     ).toThrow(SavedQueryError)
   })
 })

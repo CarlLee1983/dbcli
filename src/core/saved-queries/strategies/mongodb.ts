@@ -1,10 +1,6 @@
 import type { ParamMap } from '../binder'
 import type { RunOptions } from '../runner'
-import {
-  SavedQueryError,
-  type SavedQuery,
-  type SavedQueryMeta,
-} from '../types'
+import { SavedQueryError, type SavedQuery, type SavedQueryMeta } from '../types'
 import type { EngineStrategy, PreparedExecution } from './types'
 
 const TEMPLATE_RE = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g
@@ -58,8 +54,7 @@ export const mongoStrategy: EngineStrategy = {
         snippet.file
       )
     }
-    const collection =
-      (params.__collection as string | undefined) ?? snippet.meta.target
+    const collection = (params.__collection as string | undefined) ?? snippet.meta.target
     if (!collection || collection.trim() === '') {
       throw new SavedQueryError(
         `MongoDB snippet '${snippet.meta.key}' needs a target collection (frontmatter 'target' or CLI --collection).`,

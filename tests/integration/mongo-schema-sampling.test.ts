@@ -16,8 +16,7 @@ beforeAll(async () => {
     for (let i = 0; i < 30; i++) {
       await col.insertOne({
         email: `u${i}@b`,
-        profile:
-          i % 2 === 0 ? { name: `n${i}`, tokens: { access: `a${i}` } } : { name: `n${i}` },
+        profile: i % 2 === 0 ? { name: `n${i}`, tokens: { access: `a${i}` } } : { name: `n${i}` },
         tags: i < 10 ? ['t1'] : null,
       } as any)
     }

@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- ✅ **v1.20.2 MongoDB MVP + Recovery Connection Branching** — MongoDB `q` 升 limited supported、tiered operator safety、nested blacklist、`$sample` schema、field-masker；Recovery `--next` per-code branching for connection codes (`--branch` flag, `NextResult.branchId`)；pin `brace-expansion ^5.0.6` (GHSA-jxxr-4gwj-5jf2) (shipped 2026-05-19)
 - ✅ **v1.20.1 Phase 23-04 Closure Patch** — `insert/update/delete/export/q/schema` audit wiring + bi-directional ref (shipped 2026-05-18)
 - ✅ **v1.20.0 Agent-Facing Audit Log** — Phases 21–26 (shipped 2026-05-17) — [archive](milestones/v1.20.0-ROADMAP.md) · [requirements](milestones/v1.20.0-REQUIREMENTS.md)
 - ✅ **v1.19.1 Post-release Contract Stabilization Patch** — shipped 2026-05-14
@@ -56,4 +57,4 @@
 
 ---
 
-*Last updated: 2026-05-18 — v1.20.0 milestone archived 2026-05-17；Phase 23-04 follow-up (`feat/audit-wire-6-commands`, merge `60eab9b`) released as **v1.20.1** patch on 2026-05-18，所有 carry-over backlog 結清。Awaiting next milestone definition via `$gsd-new-milestone`.*
+*Last updated: 2026-05-19 — v1.20.0 milestone archived 2026-05-17；v1.20.1 Phase 23-04 closure 2026-05-18；**v1.20.2** patch released 2026-05-19（MongoDB MVP 全套支援 + Recovery `--next` per-code branching for connection codes + `brace-expansion ^5.0.6` 安全修補），所有 carry-over backlog 結清。Awaiting next milestone definition via `$gsd-new-milestone`.*

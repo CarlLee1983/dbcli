@@ -1177,11 +1177,14 @@ Redaction 沿用 v1.19.1 agent-facing JSON 合約的同一來源
 `recover --apply` 的 JSON 輸出會內嵌 `audit_recent: AuditEntryBrief[]`（最近 5 筆），
 讓新 session 立即擁有歷史脈絡。
 
-**已知限制（v1.20.0）：** Bi-directional 連結僅在 `query` / `inspect` / diagnostic
-表面寫入；DML 指令 `insert / update / delete / export / q / schema` 失敗時
-emit 的 envelope 暫未含 `audit_ref`，追蹤於 Phase 23-04 follow-up。完整對照表見
+**完整雙向覆蓋（v1.20.1+）：** Recovery ↔ audit linkage 已在每一個
+`--recovery`-capable 指令落地 — `query`、`inspect`、`insert`、`update`、`delete`、
+`export`、`q`、`schema` 皆 wired。失敗路徑上，audit entry 的 `recovery_ref` 與
+envelope 的 `audit_ref` 互帶相同 UUID；agent 可從 envelope（`.dbcli/last-recovery.json`）
+透過 `dbcli audit tail --recovery-ref <id>` 跳到對應的 audit entry，或反向以
+`dbcli audit show --recovery-ref <id>` 從 audit 找回 envelope。v1.20.0 在 6 個
+DML/DDL 指令上的部分覆蓋缺口已於 v1.20.1 結清，完整對照表見
 [`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md)。
-Recovery envelope 自身的 linkage 不受影響。
 
 進階 agent 工作流程（session handoff、forensics walk-through）詳見
 [`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage（英文）或

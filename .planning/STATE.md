@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: null
 milestone_name: null
 status: between_milestones
-last_updated: "2026-05-18T03:00:00.000Z"
-last_activity: 2026-05-18
+last_updated: "2026-05-19T08:30:00.000Z"
+last_activity: 2026-05-19
 progress:
   total_phases: 0
   completed_phases: 0
@@ -17,11 +17,11 @@ progress:
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-17)
+See: `.planning/PROJECT.md` (updated 2026-05-19)
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
-**Current Focus:** None — v1.20.0 archived 2026-05-17；Phase 23-04 backlog 於 2026-05-18 補完並以 v1.20.1 patch release 出版。下一個 milestone 待 `$gsd-new-milestone` 啟動。
+**Current Focus:** None — v1.20.0 archived 2026-05-17；v1.20.1 Phase 23-04 closure 2026-05-18；**v1.20.2** patch release 2026-05-19（MongoDB MVP 全套支援 + Recovery `--next` per-code branching for connection codes + `brace-expansion ^5.0.6` 安全修補）。下一個 milestone 待 `$gsd-new-milestone` 啟動。
 
 ---
 
@@ -31,15 +31,23 @@ Between milestones. No active phase.
 
 - **Phase:** None
 - **Plan:** None
-- **Status:** v1.20.0 archived 2026-05-17; Phase 23-04 backlog closed and released as v1.20.1 patch 2026-05-18; awaiting next milestone definition
-- **Last activity:** 2026-05-18
+- **Status:** v1.20.0 archived 2026-05-17; v1.20.1 Phase 23-04 closure patch released 2026-05-18; v1.20.2 patch released 2026-05-19 (MongoDB MVP + Recovery connection branching + brace-expansion security pin); awaiting next milestone definition
+- **Last activity:** 2026-05-19
 - **Next step:** `$gsd-new-milestone` — define next milestone (candidate directions in PROJECT.md → Next Milestone Goals)。
 
-**Carried-over backlog:** 無 — Phase 23-04 (`writeAuditEntry` wiring for `insert/update/delete/export/q/schema`) 於 2026-05-18 完成並 merge 進 `main`（merge commit `60eab9b`，feat 分支 `feat/audit-wire-6-commands`），以 **v1.20.1** patch release 出版（`package.json` 1.20.0 → 1.20.1，新增 CHANGELOG `## [1.20.1]`），INTEGRATE-01 / INTEGRATE-04 partial 全部結清。Reference: `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`（已更新為全 wired）、`docs/superpowers/plans/2026-05-18-audit-wire-6-commands.md`。
+**Carried-over backlog:** 無 — Phase 23-04 audit wiring 於 v1.20.1 結清；MongoDB MVP（v1.6.0 起累積）與 Recovery `--next` per-code branching for connection codes 於 v1.20.2 補完（`package.json` 1.20.1 → 1.20.2，新增 CHANGELOG `## [1.20.2]`）。INTEGRATE-01 / INTEGRATE-04 partial 全部結清。Reference: `.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`（已更新為全 wired）、`docs/superpowers/plans/2026-05-18-audit-wire-6-commands.md`。
 
 ---
 
 ## Milestone Status
+
+**v1.20.2 — MongoDB MVP + Recovery Connection Branching Patch:** COMPLETE (2026-05-19)
+
+- MongoDB MVP 全套支援：`q` 升 limited supported（`find` / `aggregate` snippet body）、tiered update-operator safety、nested-path blacklist、path-matcher（exact / dotted / suffix-wildcard）、`$sample` schema 採樣 + `--sample-method` 旗標、`maskMongoRows` 套用於 `query` / `export`、snippets 一級公民化（reference snippets、`queries list/search/suggest` 含 mongo）。
+- Recovery `--next` per-code branching for connection codes (MVP)：`buildConnectionBranches` factory + `matchConnectionBranch` resolver、`classify` emit `branches` / `branchFork`、`--branch <id>` 旗標、`NextResult.branchId`、`GuideStep` / `NextResult` / `NextStepOutput` 全鏈 `branchId`；contract test 鎖 doctor↔resolver keyword coupling、6 種 connection envelope snapshot、E2E branching fork / walk / fallback。
+- Security: pin `brace-expansion ^5.0.6` 修補 GHSA-jxxr-4gwj-5jf2 ReDoS。
+- 雙語 user docs 新增 Agent 修復工作流段落（精簡 walkthrough）與 Recovery Cookbook；`assets/SKILL.md` / `assets/reference.md` 補 `--branch` 旗標、`NextResult.branchId`、MongoDB tier 行為；統一 npm 套件名為 `@carllee1983/dbcli`。
+- `package.json` 1.20.1 → 1.20.2；CHANGELOG 新增 `## [1.20.2]`。
 
 **v1.20.1 — Phase 23-04 Closure Patch:** COMPLETE (2026-05-18)
 

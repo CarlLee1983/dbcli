@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.20.2] - 2026-05-19
+
+### Added
+
+- **MongoDB MVP 全套支援。** `q` 指令現以 limited-supported 等級納入 MongoDB（`find` / `aggregate` 兩種 snippet body），路由經過專屬分支與 field-masker；`schema` 採 `$sample` + 遞迴 path 偵測（含 BSON 型別），新增 `--sample-method` 旗標；`query` / `export` 套用 `maskMongoRows` 對巢狀結構遞迴遮罩。
+- **MongoDB blacklist 強化。** 新增 path-matcher（exact / dotted / suffix-wildcard）、field-masker 遞迴遮罩、insert / update 在寫入前強制套用 nested-path blacklist；`blacklist list` 對 collection 上的 middle-`*` pattern 發出警告。
+- **MongoDB 安全模型升級。** update operator 從硬性 allowlist 改為分級安全（tiered operator safety）；schema 對 blacklist 欄位直接 redact；`cache` / `doctor` 暴露 `sampleMethod`。
+- **MongoDB snippets 一級公民化。** 內建 reference snippets（find + aggregate）、`queries list/search/suggest` 將 MongoDB snippets 與 SQL 引擎並列；`mongoStrategy` 驗證 body 與 params 並支援 map 形式插值。
+- **Recovery — per-code branching for connection codes (MVP)。** `recover --next` 對 connection 類錯誤碼支援多 branch 派發：新增 `buildConnectionBranches` factory（4 個 connection branch）、`matchConnectionBranch` resolver、`classify` emit `branches` / `branchFork`，並提供 `--branch <id>` 旗標讓 agent 顯式選擇 branch。輸出 `NextResult.branchId` 與 markdown 中的 branchId/description 一併呈現。
+
+### Changed
+
+- **MongoDB `q` 文件升級。** `docs/feature-matrix.md` / 雙語 user docs 將 MongoDB `q` 從 unsupported 改為 limited supported（記載目前支援的 body 形式與限制）。
+- **Recovery schema 新增 `branches` / `branchFork`。** 行為向下相容（無 branch 時與舊版一致）；`GuideStep` / `NextResult` / `NextStepOutput` 全鏈打通 `branchId`；`shellQuote` 抽離為共用模組。
+
+### Security
+
+- **Pin `brace-expansion ^5.0.6`** 修補 GHSA-jxxr-4gwj-5jf2 ReDoS。
+
+### Tests
+
+- `tests/integration/` — MongoDB tier、blacklist、sampling、snippet 整合覆蓋。
+- 新增 mongo plan + schema envelope shape 的 contract test。
+- Recovery: doctor↔resolver keyword coupling contract test、connection envelope 6 變體 snapshot、`recover` E2E branching（fork / walk / fallback / `--apply` 不變）覆蓋。
+
+### Docs
+
+- 雙語 user docs 新增 Agent 修復工作流段落（精簡 walkthrough）與 Recovery Cookbook。
+- `assets/SKILL.md` / `assets/reference.md` 補 `--branch` 旗標與 `NextResult.branchId` 說明、MongoDB tier / operator / blacklist / sampling 行為。
+- 統一 npm 套件名為 `@carllee1983/dbcli`；關閉 v1.20.0 Phase 23-04 已知限制段落。
+- `.planning/PROJECT.md` 同步：`bun test`、已 ship 項目移出 OOS。
+
+### Internal
+
+- `style: [recovery] format with prettier (printWidth 100)` / `style: [mongo] format with prettier (printWidth 100)` — 全面套用 prettier `printWidth 100`。
+- `fix: [test] remove this alias in mongo sampling mock` — 修正 eslint `no-this-alias`。
+- `refactor: [snippets] register mongo as a first-class engine family` / `refactor: [recovery] extract shellQuote to a shared module`。
+
 ## [1.20.1] - 2026-05-18
 
 ### Changed

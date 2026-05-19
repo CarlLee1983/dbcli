@@ -10,11 +10,11 @@ dbcli is a **unified database CLI tool** that enables AI agents (Claude Code, Ge
 
 Everything else (multi-connection, audit logging, advanced features) can be deferred. This core must work flawlessly.
 
-## Current Milestone: None — v1.20.1 patch shipped, next milestone TBD
+## Current Milestone: None — v1.20.2 patch shipped, next milestone TBD
 
-**Status (2026-05-18):** v1.20.0 Agent-Facing Audit Log archived 2026-05-17；Phase 23-04 follow-up backlog closed and released as **v1.20.1** patch 2026-05-18 (`feat/audit-wire-6-commands`, merge `60eab9b`；`package.json` 1.20.0 → 1.20.1)。Awaiting `$gsd-new-milestone` to define the next direction. Candidate directions in [Next Milestone Goals](#next-milestone-goals).
+**Status (2026-05-19):** v1.20.0 Agent-Facing Audit Log archived 2026-05-17；v1.20.1 Phase 23-04 closure shipped 2026-05-18；**v1.20.2** patch shipped 2026-05-19 — MongoDB MVP 全套支援（`q` 升 limited supported、tiered operator safety、nested blacklist、`$sample` schema、field-masker、path-matcher）＋ Recovery `--next` per-code branching for connection codes（`--branch` 旗標、`NextResult.branchId`）＋ `brace-expansion ^5.0.6` 安全修補（GHSA-jxxr-4gwj-5jf2）。`package.json` 1.20.1 → 1.20.2。Awaiting `$gsd-new-milestone` to define the next direction. Candidate directions in [Next Milestone Goals](#next-milestone-goals).
 
-**Carried-over backlog:** 無 — Phase 23-04 (`writeAuditEntry` wiring + bi-directional `audit_ref` ⇄ `recovery_ref` on `insert / update / delete / export / q / schema`) shipped 2026-05-18 as v1.20.1，INTEGRATE-01 / INTEGRATE-04 partial 全部結清。
+**Carried-over backlog:** 無 — Phase 23-04 audit coverage 於 v1.20.1 結清；MongoDB MVP 與 Recovery connection branching 於 v1.20.2 補完；INTEGRATE-01 / INTEGRATE-04 partial 全部結清。
 
 ## Requirements
 
@@ -198,11 +198,14 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 | Audit 寫入失敗只警告 (v1.20.0 D6) | audit log 是 observability、不是 safety gate；不可阻擋 DB 操作 | ✓ Good — release gate 含 fail-soft 測試 |
 | Phase 23-04 audit-only deltas 拆為 follow-up | DML/DDL 整合與本 milestone 範圍切割成本高；分離的 follow-up phase 更聚焦 | ✓ Good — 於 2026-05-18 補完，6 個 command 全部 wired 並通過 release:check |
 
-## Current State (v1.20.1 — Phase 23-04 Closure Patch: Released 2026-05-18)
+## Current State (v1.20.2 — MongoDB MVP + Recovery Connection Branching: Released 2026-05-19)
 
-**Active milestone:** None — v1.20.0 archived 2026-05-17；v1.20.1 patch released 2026-05-18 (Phase 23-04 closure)。Next milestone TBD; awaiting `$gsd-new-milestone`.
+**Active milestone:** None — v1.20.0 archived 2026-05-17；v1.20.1 patch released 2026-05-18；v1.20.2 patch released 2026-05-19。Next milestone TBD; awaiting `$gsd-new-milestone`.
 
-**Latest Release:** v1.20.1 (2026-05-18) — Phase 23-04 closure patch.
+**Latest Release:** v1.20.2 (2026-05-19) — MongoDB MVP 全套支援 + Recovery connection branching + 安全修補。
+- ✅ MongoDB MVP completion (v1.20.2) — `q` 升 limited supported（`find` / `aggregate` snippet body）、tiered update-operator safety、nested-path blacklist + path-matcher（exact / dotted / suffix-wildcard）、`$sample` schema 採樣＋遞迴 path 偵測＋`--sample-method` 旗標、`maskMongoRows` 套用於 `query` / `export`、`blacklist list` 對 collection 上的 middle-`*` pattern 發出警告；snippets 一級公民化（reference find/aggregate snippets、`queries list/search/suggest` 含 mongo）。
+- ✅ Recovery `--next` per-code branching for connection codes (v1.20.2 MVP) — `buildConnectionBranches` factory + `matchConnectionBranch` resolver、`classify` emit `branches` / `branchFork`、`--branch <id>` 旗標、`NextResult.branchId`、`GuideStep` / `NextResult` / `NextStepOutput` 全鏈通 `branchId`；contract test 鎖 doctor↔resolver keyword coupling、6 種 connection envelope snapshot、E2E branching fork / walk / fallback / `--apply` 不變。
+- ✅ Security — pin `brace-expansion ^5.0.6` 修補 GHSA-jxxr-4gwj-5jf2 ReDoS。
 - ✅ Phase 23-04 Closure Patch (v1.20.1) — `insert/update/delete/export/q/schema` 補上 `writeAuditEntry` 並具備雙向 `audit_ref` ⇄ `recovery_ref`；`recovery-audit-link.test.ts` 從 J1 negative guard 翻為 6-command positive round-trip；agent-facing skill docs（`assets/SKILL.md` / `assets/SKILL.zh-TW.md` / `assets/reference.md`）與雙語 user docs（`docs/user/en` + `docs/user/zh-TW`，md + html）同步補上全 8 個 `--recovery`-capable command 的覆蓋說明。INTEGRATE-01 / -04 partial 結清。
 - ✅ Agent-Facing Audit Log (v1.20.0) — `dbcli audit tail|show|clear|health` CLI; `.dbcli/audit/<connection>.jsonl` writer with rotation; redaction; recovery envelope ↔ audit entry bi-directional linkage on `query`/`inspect`/diagnostic surfaces; `audit_recent` embedded in inspect/guide/recover JSON; bilingual SKILL.md + `--lang en|zh-TW` flag; feature-matrix audit row + release-check step 8/8 doc-presence. Known limitation 由 v1.20.1 補完。
 - ✅ Post-release Contract Stabilization Patch (v1.19.1) — 型別化能力註冊、agent-facing JSON 合約鎖定（inspect / report / guide / recovery）、redaction 守則擴充、`docs/feature-matrix.md` side-effect tier 表格、UI bundle determinism (`NODE_ENV=production`)、UI helper 抽離 + render smoke 測試
@@ -218,7 +221,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 - ✅ Multi-Engine 完整支援 (v1.8.0) — ES adapter 完備、Redis / ES ExecutionResult 統一
 - ✅ Saved Queries / snippets (v1.7.0)、Full MongoDB Support (v1.6.0)、Layered Schema Cache (v1.5.0)
 
-**In Progress:** 無 — v1.20.0 已於 2026-05-17 歸檔；唯一 carry-over backlog Phase 23-04 已於 2026-05-18 補完並以 **v1.20.1** patch release 出版（`package.json` 1.20.0 → 1.20.1，CHANGELOG `## [1.20.1]`）。下一個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。
+**In Progress:** 無 — v1.20.0 已於 2026-05-17 歸檔；v1.20.1 Phase 23-04 closure 於 2026-05-18 出版；v1.20.2 MongoDB MVP + Recovery connection branching + brace-expansion 安全修補於 2026-05-19 出版（`package.json` 1.20.1 → 1.20.2，CHANGELOG `## [1.20.2]`）。下一個 milestone 主題待規劃（候選方向見 Next Milestone Goals）。
 
 **What's Shipped (v1.20.0):**
 1. **`.dbcli/audit/<connection>.jsonl` writer** — append-only JSONL + file lock + size/entry rotation；`SessionIdService` env-first (`DBCLI_SESSION_ID`) + PID 戳記持久化
@@ -332,4 +335,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-18 — v1.20.1 patch released (Phase 23-04 closure: `insert/update/delete/export/q/schema` audit wiring + bi-directional ref；`package.json` 1.20.0 → 1.20.1；CHANGELOG `## [1.20.1]`). No outstanding backlog; next milestone TBD, awaiting `$gsd-new-milestone`.*
+*Last updated: 2026-05-19 — v1.20.2 patch released (MongoDB MVP 全套支援 + Recovery `--next` per-code branching for connection codes + `brace-expansion ^5.0.6` 安全修補；`package.json` 1.20.1 → 1.20.2；CHANGELOG `## [1.20.2]`). No outstanding backlog; next milestone TBD, awaiting `$gsd-new-milestone`.*

@@ -139,14 +139,19 @@ Everything else (multi-connection, audit logging, advanced features) can be defe
 
 無 — v1.20.0 已歸檔；候選方向見 [Next Milestone Goals](#next-milestone-goals)。
 
-### Out of Scope (V1)
+### Out of Scope
 
-- **Audit Logging** — Who did what, when, why. Deferred to V2 based on usage.
-- **Multi-Connection Management** — Support multiple databases per project. V1 focuses on single "default" connection.
-- **Interactive SQL Shell** — Similar to `psql` or `mysql` interactive mode. Can add if needed.
-- **Data Import/Bulk Operations** — Large-scale data loading. Out of scope for V1.
-- **ORM Generation** — Auto-generate ORM code from schema. Deferred to V2 (requires deeper AI integration).
-- **Migration Tools** — Schema versioning and migrations. Out of scope (use existing tools like Flyway, Liquibase).
+Still deferred:
+
+- **Data Import/Bulk Operations** — Large-scale data loading. Use database-native bulk loaders.
+- **ORM Generation** — Auto-generate ORM code from schema. Requires deeper AI integration; revisit if demand emerges.
+- **Migration Tools** — Schema versioning and migrations. Use existing tools (Flyway, Liquibase, Prisma Migrate).
+
+Originally deferred but later shipped:
+
+- ~~Audit Logging~~ → shipped in **v1.20.0 / v1.20.1** (Phases 21–26 + Phase 23-04 closure)
+- ~~Multi-Connection Management~~ → shipped in **v1.2** (Phase 14)
+- ~~Interactive SQL Shell~~ → shipped in **v1.2** (Phase 15, `dbcli shell`)
 
 ## Context
 
@@ -169,7 +174,7 @@ MPC requires Claude Code-specific integration. We want to support Claude Code, G
 ## Constraints
 
 - **Tech Stack**: Bun + TypeScript (locked)
-- **Testing**: Vitest for unit and integration tests (locked)
+- **Testing**: `bun test` for unit and integration tests (locked) — migrated off Vitest pre-v1.6
 - **Package Distribution**: npm (locked)
 - **Cross-Platform**: Must work on macOS, Linux, Windows
 - **Multi-DB Support**: PostgreSQL, MySQL, MariaDB in V1
@@ -292,9 +297,9 @@ Potential directions (prioritize based on usage and feedback):
    - Centralized schema registry
 
 2. **Compliance & Governance** (if regulatory requirements emerge)
-   - Audit logging (who, what, when)
    - Query approval workflows
    - Data classification and masking
+   - (Audit logging already shipped in v1.20.0 — extend if needed)
 
 3. **AI Enhancement** (if AI agent usage scales)
    - ORM code generation from schema
@@ -302,9 +307,9 @@ Potential directions (prioritize based on usage and feedback):
    - Natural language → SQL translation
 
 4. **Developer Experience** (if adoption metrics suggest)
-   - Interactive REPL shell (like psql)
-   - Tab completion
+   - Tab completion for `dbcli shell`
    - Schema diff visualization
+   - (REPL shell already shipped in v1.2 — extend if needed)
 
 ## Evolution
 

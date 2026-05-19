@@ -23,16 +23,15 @@ class MockMongoClient {
   async connect() {}
   async close() {}
   db() {
-    const self = this
     return {
       collection: () => ({
         estimatedDocumentCount: async () => 99,
         aggregate: (pipeline: object[]) => {
-          self.aggregateArgs.push(pipeline as unknown[])
+          this.aggregateArgs.push(pipeline as unknown[])
           return { toArray: async () => sampleDocs }
         },
         find: () => {
-          self.findCalls++
+          this.findCalls++
           return { limit: () => ({ toArray: async () => sampleDocs }) }
         },
       }),

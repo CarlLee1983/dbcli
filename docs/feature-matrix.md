@@ -21,7 +21,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `query` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SQL; Mongo: JSON; Redis: commands; ES: DSL/Lucene. |
 | Query output `table` / `json` / `csv` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter. |
 | Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo/ES apply limits. Redis has no limit-rewrite support. |
-| `q` saved query execution | ✅ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
+| `q` saved query execution | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Mongo: JSON `find` / `aggregate` body, requires `collection` frontmatter (CLI `--collection` overrides), parameter substitutions are JSON-encoded. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
 | `queries` snippet management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Management works regardless of active connection. |
 | `insert` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
 | `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |

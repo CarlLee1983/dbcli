@@ -1482,19 +1482,21 @@ MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB s
 
 Atlas-style `mongodb+srv://` URIs are supported. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
-**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `insert`, `update`, `delete`, `status`, `shell`, `doctor`, `upgrade`, `completion`
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `q`, `insert`, `update`, `delete`, `export`, `status`, `shell`, `doctor`, `upgrade`, `completion`
 
 **Limited support:**
 
 - `schema` samples collection documents to infer field names/types. It does not provide relational constraints, primary keys, foreign keys, or reliable index metadata.
 - `query` accepts only JSON object filters or aggregation pipeline arrays and always requires `--collection <name>`.
+- `q` saved-query execution accepts JSON `find` / `aggregate` bodies, requires a `collection` frontmatter field (CLI `--collection` overrides), JSON-encodes every `{{param}}` substitution, and enforces table-level blacklist plus document field masking before rendering.
 - `insert` inserts one JSON document into the named collection.
 - `update` accepts a JSON filter in `--where` or simple `key=value` conditions. If `--set` does not use MongoDB update operators such as `$set`, dbcli wraps it in `$set`.
 - `delete` deletes all documents matching the JSON/simple filter.
+- `export` accepts the same JSON filter / aggregation syntax as `query`.
 - MongoDB write paths do not currently provide the same SQL dry-run, relational schema validation, or column-level blacklist filtering guarantees as SQL writes.
 - `shell` blocks raw SQL for MongoDB; use `query <json> --collection <name>` inside the shell.
 
-**Not supported (exit with error):** `q` saved-query execution, `export`, `diff`, `migrate`
+**Not supported (exit with error):** `diff`, `migrate`
 
 **Not a supported MongoDB target:** `check` is designed for relational health checks and emits SQL-style checks.
 

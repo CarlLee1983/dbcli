@@ -38,7 +38,7 @@ describe('engine capability registry', () => {
     expect(getEngineCapability('mongodb', 'queries').status).toBe('limited')
     expect(getEngineCapability('redis', 'queries').status).toBe('limited')
     expect(getEngineCapability('elasticsearch', 'queries').status).toBe('limited')
-    expect(getEngineCapability('mongodb', 'q').status).toBe('unsupported')
+    expect(getEngineCapability('mongodb', 'q').status).toBe('limited')
     expect(getEngineCapability('redis', 'schemaFullScan').status).toBe('unsupported')
     expect(getEngineCapability('elasticsearch', 'query').status).toBe('limited')
     expect(getEngineCapability('redis', 'completion').status).toBe('not-applicable')

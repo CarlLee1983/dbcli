@@ -192,9 +192,13 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       queries: cap(
         'limited',
         'local-write',
-        'Snippet management works, but saved-query execution is not supported for MongoDB.'
+        'Snippet management works with MongoDB-specific saved-query limitations.'
       ),
-      q: cap('unsupported', 'none', 'MongoDB saved-query execution is not supported.'),
+      q: cap(
+        'limited',
+        'readonly',
+        'Saved MongoDB snippets require collection frontmatter, accept JSON find/aggregate bodies, and JSON-encode parameter substitutions.'
+      ),
       insert: cap(
         'limited',
         'db-write',

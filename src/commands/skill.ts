@@ -9,6 +9,9 @@ import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
 import { packageAssetPath } from '@/utils/package-root'
 import { Command, Option } from 'commander'
+import { gatherContext } from '@/core/context/context'
+import { serializeXml, serializeJson, serializeMarkdown } from '@/core/context/serializer'
+import { resolveConfigPath } from '@/utils/config-path'
 
 /** Absolute path to the static SKILL.md (relative to package root) */
 const SKILL_SOURCE_PATH = packageAssetPath('SKILL.md')
@@ -221,7 +224,7 @@ async function ensureDir(dirPath: string): Promise<void> {
  * additional sub-commands like `skill tasks list/show/plan` from cli.ts.
  */
 export function registerSkillCommand(program: Command): Command {
-  return program
+  const skill = program
     .command('skill')
     .description(t('skill.description'))
     .option(
@@ -242,4 +245,38 @@ export function registerSkillCommand(program: Command): Command {
         process.exit(1)
       }
     })
+
+  skill
+    .command('context')
+    .description(t('skill.context_description'))
+    .option('--format <type>', 'Output format: xml, json, markdown', 'xml')
+    .action(async (options: { format?: 'xml' | 'json' | 'markdown' }, cmd) => {
+      try {
+        const format = options.format ?? 'xml'
+        if (!['xml', 'json', 'markdown'].includes(format)) {
+          throw new Error(`Invalid format: ${format}. Supported formats: xml, json, markdown`)
+        }
+
+        const configPath = resolveConfigPath(cmd)
+        const workspaceRoot = process.cwd()
+        const payload = await gatherContext(workspaceRoot, configPath)
+
+        let output = ''
+        if (format === 'xml') {
+          output = serializeXml(payload)
+        } else if (format === 'json') {
+          output = serializeJson(payload)
+        } else if (format === 'markdown') {
+          output = serializeMarkdown(payload)
+        }
+
+        console.log(output)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(t_vars('errors.message', { message }))
+        process.exit(1)
+      }
+    })
+
+  return skill
 }

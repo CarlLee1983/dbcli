@@ -220,6 +220,7 @@
   },
   "skill": {
     "description": "生成 AI 技能文檔",
+    "context_description": "生成 AI 協作所需的資料庫架構與查詢片段上下文",
     "installed": "技能: {path}\n參考: {referencePath}",
     "update_available": "以下平台的技能需要更新：",
     "update_hint": "執行 \"dbcli skill --install <platform>\" 進行更新。"

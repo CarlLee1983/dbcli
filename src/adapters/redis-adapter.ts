@@ -141,6 +141,15 @@ export class RedisAdapter implements QueryableAdapter {
   }
 
   async getTableSchema(keyName: string): Promise<TableSchema> {
+    const blk = checkKeyArgs('GET', [keyName], this.blacklistRules)
+    if (!blk.ok) {
+      throw new BlacklistRejection(
+        `BlacklistRejection: schema lookup on key '${keyName}' rejected\n  matched blacklist pattern: ${blk.matchedPattern}`,
+        'SCHEMA',
+        keyName,
+        blk.matchedPattern!
+      )
+    }
     const client = this.requireClient()
     const type = (await client.send('TYPE', [keyName])) as string as RedisType
     if (type === 'none') {

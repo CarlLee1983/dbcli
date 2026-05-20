@@ -482,4 +482,14 @@ describe('RedisAdapter — middleware (blacklist + size guard)', () => {
     const cols = await adapter.listCollections()
     expect(cols.map((c) => c.name)).toEqual(['user:1', 'user:2'])
   })
+
+  test('getTableSchema rejects blacklisted key', async () => {
+    const adapter = new RedisAdapter(baseOptions)
+    ;(adapter as unknown as { client: unknown }).client = {
+      send: async () => null,
+      close: () => {},
+    }
+    adapter.setBlacklistRules(['secrets:*'])
+    await expect(adapter.getTableSchema('secrets:foo')).rejects.toBeInstanceOf(BlacklistRejection)
+  })
 })

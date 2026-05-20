@@ -1,5 +1,11 @@
 import { test, expect } from 'bun:test'
-import { globToRegex, patternsOverlap } from '@/adapters/redis/blacklist-enforcer'
+import {
+  globToRegex,
+  patternsOverlap,
+  checkKeyArgs,
+} from '@/adapters/redis/blacklist-enforcer'
+
+const RULES = ['user:*:password', 'secrets:*']
 
 test('* matches any chars', () => {
   expect(globToRegex('user:*').test('user:42')).toBe(true)
@@ -41,4 +47,51 @@ test('patternsOverlap: disjoint', () => {
 
 test('patternsOverlap: prefix match', () => {
   expect(patternsOverlap('user:42', 'user:*')).toBe(true)
+})
+
+test('GET on non-matching key allowed', () => {
+  const r = checkKeyArgs('GET', ['user:42:profile'], RULES)
+  expect(r.ok).toBe(true)
+})
+
+test('GET on matching key rejected', () => {
+  const r = checkKeyArgs('GET', ['user:42:password'], RULES)
+  expect(r.ok).toBe(false)
+  expect(r.matchedKey).toBe('user:42:password')
+  expect(r.matchedPattern).toBe('user:*:password')
+})
+
+test('MGET with any matching key rejected entirely', () => {
+  const r = checkKeyArgs('MGET', ['user:1:profile', 'secrets:foo', 'user:2:profile'], RULES)
+  expect(r.ok).toBe(false)
+  expect(r.matchedKey).toBe('secrets:foo')
+})
+
+test('DEL multi-variable with all-safe keys passes', () => {
+  const r = checkKeyArgs('DEL', ['a', 'b', 'c'], RULES)
+  expect(r.ok).toBe(true)
+})
+
+test('RENAME multi-fixed checks both args', () => {
+  const r = checkKeyArgs('RENAME', ['safe', 'secrets:foo'], RULES)
+  expect(r.ok).toBe(false)
+})
+
+test('KEYS pattern overlapping blacklist is rejected', () => {
+  const r = checkKeyArgs('KEYS', ['user:*:password'], RULES)
+  expect(r.ok).toBe(false)
+  expect(r.matchedPattern).toBe('user:*:password')
+})
+
+test('KEYS pattern non-overlapping is allowed', () => {
+  const r = checkKeyArgs('KEYS', ['order:*'], RULES)
+  expect(r.ok).toBe(true)
+})
+
+test('no-key commands always pass', () => {
+  expect(checkKeyArgs('PING', [], RULES).ok).toBe(true)
+})
+
+test('unknown command passes (treated as no-arity)', () => {
+  expect(checkKeyArgs('NONSENSE', [], RULES).ok).toBe(true)
 })

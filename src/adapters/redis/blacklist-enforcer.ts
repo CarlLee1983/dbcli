@@ -1,3 +1,6 @@
+import { getCommandSpec } from './command-metadata'
+import type { KeyArity } from './types'
+
 /** Convert Redis-native glob (* ? [abc] [a-z]) to a JS RegExp anchored on the whole string. */
 export function globToRegex(glob: string): RegExp {
   let out = '^'
@@ -49,4 +52,56 @@ function sampleFromGlob(glob: string): string | null {
     } else s += c
   }
   return s
+}
+
+export interface CheckResult {
+  ok: boolean
+  matchedKey?: string | null
+  matchedPattern?: string
+}
+
+export function checkKeyArgs(command: string, args: string[], rules: string[]): CheckResult {
+  if (rules.length === 0) return { ok: true }
+  const spec = getCommandSpec(command)
+  if (!spec) return { ok: true }
+
+  const keyIndexes = expandKeyArity(spec.keyArity, args.length)
+  for (const idx of keyIndexes) {
+    const key = args[idx]
+    if (key === undefined) continue
+    for (const pat of rules) {
+      if (globToRegex(pat).test(key)) {
+        return { ok: false, matchedKey: key, matchedPattern: pat }
+      }
+    }
+  }
+
+  if (spec.keyArity.kind === 'pattern') {
+    const userPat = args[spec.keyArity.argIndex]
+    if (userPat !== undefined) {
+      for (const pat of rules) {
+        if (patternsOverlap(userPat, pat)) {
+          return { ok: false, matchedKey: null, matchedPattern: pat }
+        }
+      }
+    }
+  }
+  return { ok: true }
+}
+
+function expandKeyArity(arity: KeyArity, argCount: number): number[] {
+  switch (arity.kind) {
+    case 'no-key':
+    case 'pattern':
+      return []
+    case 'single':
+      return [arity.argIndex]
+    case 'multi-fixed':
+      return arity.argIndices
+    case 'multi-variable': {
+      const indices: number[] = []
+      for (let i = arity.startIndex; i < argCount; i += arity.step) indices.push(i)
+      return indices
+    }
+  }
 }

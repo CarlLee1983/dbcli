@@ -161,23 +161,27 @@ export class RedisAdapter implements QueryableAdapter {
 
   // --- Command execution (Task 4) ----------------------------------------
 
+  private async dispatchCommand<T>(head: string, rest: string[]): Promise<T[]> {
+    const client = this.requireClient()
+    const reply = await client.send(head, rest)
+    return wrapReply<T>(head, reply)
+  }
+
   async execute<T>(
     command: string,
     _params?: unknown[],
-    _options?: { limit?: number }
+    _options?: { limit?: number; noLimit?: boolean }
   ): Promise<ExecutionResult<T>> {
-    const client = this.requireClient()
     const tokens = parseRedisCommand(command)
     if (tokens.length === 0) {
       throw new Error('Redis 指令不可為空')
     }
     const [head, ...rest] = tokens
-    const reply = await client.send(
+    const rows = await this.dispatchCommand<T>(
       head!,
       rest.map((arg) => String(arg))
     )
-    const rows = wrapReply<T>(head!, reply)
-    const columnNames = rows[0] ? Object.keys(rows[0]) : ['value']
+    const columnNames = rows[0] ? Object.keys(rows[0] as Record<string, unknown>) : ['value']
     return {
       rows,
       affectedRows: rows.length,

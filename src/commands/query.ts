@@ -28,6 +28,7 @@ import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { maskMongoRows } from '@/core/mongo/field-masker'
+import { BlacklistRejection } from '@/adapters/redis/types'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -373,6 +374,24 @@ async function redisQueryBranch(
       format,
     })
     console.log(output)
+  } catch (err) {
+    if (err instanceof BlacklistRejection) {
+      await writeAuditEntry(config, 'query', options, {
+        success: false,
+        error: err,
+        metadata: {
+          rejection_reason: 'blacklist',
+          matched_pattern: err.matchedPattern,
+          ...(err.matchedKey ? { matched_key: err.matchedKey } : {}),
+        },
+      })
+    } else {
+      await writeAuditEntry(config, 'query', options, {
+        success: false,
+        error: err as Error,
+      })
+    }
+    throw err
   } finally {
     await redisAdapter.disconnect()
   }

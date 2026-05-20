@@ -8,11 +8,12 @@
  * - tests/integration/audit-contract.test.ts (Phase 22 entry-shape lock; NOT modified here)
  * - tests/integration/audit-envelope.test.ts (Phase 24 envelope-wrapper lock; NOT modified here)
  */
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { isDbReachable } from './helpers'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
@@ -411,5 +412,53 @@ describe('Phase 22 / 24 meta-guard fences', () => {
     const hasSentinel =
       raw.includes('D-39') || raw.includes('D-40') || raw.includes("'audit tail --all'")
     expect(hasSentinel).toBe(true)
+  })
+})
+
+describe('Redis blacklist rejection writes audit entry [v1.21.0 parity pack]', () => {
+  let workDir: string
+  let skip = false
+
+  beforeAll(async () => {
+    skip = !(await isDbReachable(process.env.REDIS_HOST || 'localhost', Number(process.env.REDIS_PORT || 6379)))
+    if (skip) console.log('⏭ Redis not reachable — skipping blacklist-audit case')
+  })
+
+  beforeEach(async () => {
+    workDir = await mkdtemp(join(tmpdir(), 'dbcli-test-redis-blk-'))
+    const cfg = {
+      connection: {
+        system: 'redis',
+        host: process.env.REDIS_HOST || 'localhost',
+        port: Number(process.env.REDIS_PORT || 6379),
+        user: '',
+        password: process.env.REDIS_PASSWORD || '',
+        database: process.env.REDIS_DB || '0',
+      },
+      permission: 'read-write',
+      blacklist: { tables: ['secrets:*'] },
+      metadata: { createdAt: '2026-05-19T00:00:00.000Z', version: '1.0' },
+      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    }
+    await writeFile(join(workDir, 'config.json'), JSON.stringify(cfg), 'utf8')
+  })
+
+  afterEach(async () => {
+    await rm(workDir, { recursive: true, force: true })
+  })
+
+  test('query GET on blacklisted key records success:false + matched_pattern metadata', async () => {
+    if (skip) return
+    const r = await run(['--config', workDir, 'query', 'GET secrets:api_key'], workDir)
+    expect(r.code).not.toBe(0)
+
+    const entries = await readAuditEntries(workDir)
+    expect(entries.length).toBeGreaterThan(0)
+    const last = entries[entries.length - 1]!
+    expect(last.success).toBe(false)
+    expect(String(last.error)).toMatch(/BlacklistRejection/)
+    const meta = last.metadata as Record<string, unknown> | undefined
+    expect(meta?.rejection_reason).toBe('blacklist')
+    expect(meta?.matched_pattern).toBe('secrets:*')
   })
 })

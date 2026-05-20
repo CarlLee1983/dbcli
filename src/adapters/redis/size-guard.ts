@@ -82,3 +82,55 @@ function rewriteLimit(command: string, args: string[], original: string[]): Rewr
   }
   return { rewritten: args }
 }
+
+export interface TruncateResult<T = unknown> {
+  value: T
+  warning?: RedisWarning
+}
+
+export function truncateResult<T = unknown>(
+  command: string,
+  reply: T,
+  opts: SizeGuardOptions
+): TruncateResult<T> {
+  if (opts.noLimit) return { value: reply }
+  const spec = getCommandSpec(command)
+  if (!spec || spec.sizeGuard.kind !== 'truncate') return { value: reply }
+
+  if (Array.isArray(reply)) {
+    if (reply.length > REDIS_LIMIT_DEFAULT) {
+      const droppedAtLeast = reply.length - REDIS_LIMIT_DEFAULT
+      const value = reply.slice(0, REDIS_LIMIT_DEFAULT) as unknown as T
+      return {
+        value,
+        warning: {
+          code: 'REDIS_SIZE_TRUNCATE',
+          command,
+          kept: REDIS_LIMIT_DEFAULT,
+          droppedAtLeast,
+        },
+      }
+    }
+    return { value: reply }
+  }
+
+  if (reply && typeof reply === 'object') {
+    const obj = reply as Record<string, unknown>
+    const keys = Object.keys(obj)
+    if (keys.length > REDIS_LIMIT_DEFAULT) {
+      const dropped = keys.length - REDIS_LIMIT_DEFAULT
+      const truncated: Record<string, unknown> = {}
+      for (let i = 0; i < REDIS_LIMIT_DEFAULT; i++) truncated[keys[i]!] = obj[keys[i]!]
+      return {
+        value: truncated as unknown as T,
+        warning: {
+          code: 'REDIS_SIZE_TRUNCATE',
+          command,
+          kept: REDIS_LIMIT_DEFAULT,
+          droppedAtLeast: dropped,
+        },
+      }
+    }
+  }
+  return { value: reply }
+}

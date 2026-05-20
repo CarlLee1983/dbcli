@@ -188,6 +188,7 @@ program
     'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
     false
   )
+  .option('--verify', 'Run verification check after execution if defined', false)
   .action(async (name: string, options: Record<string, unknown>, command) => {
     await qCommand(name, options as any, command)
   })

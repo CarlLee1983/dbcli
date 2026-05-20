@@ -20,6 +20,7 @@ import {
   type ParsedFrontmatter,
   type SavedQuery,
   type SnippetSource,
+  type SavedQueryVerify,
 } from './types'
 
 const MAX_BYTES = 64 * 1024
@@ -135,6 +136,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
     raw.operation === 'find' || raw.operation === 'aggregate'
       ? (raw.operation as 'find' | 'aggregate')
       : undefined
+  const verify = normaliseVerify(raw.verify, input)
 
   return {
     meta: {
@@ -149,6 +151,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
       visual,
       target,
       operation,
+      verify,
     },
     warnings,
   }
@@ -197,6 +200,36 @@ function normaliseVisual(value: unknown): any {
     title,
     kpis: kpis.length > 0 ? kpis : undefined,
     charts: charts.length > 0 ? charts : undefined,
+  }
+}
+
+function normaliseVerify(value: unknown, input: ParseInput): SavedQueryVerify | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has invalid 'verify' configuration (must be a map/object)`,
+      'PARSE_ERROR',
+      input.file
+    )
+  }
+  const raw = value as Record<string, unknown>
+  if (typeof raw.query !== 'string' || !raw.query.trim()) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has invalid 'verify.query' (must be a non-empty string)`,
+      'PARSE_ERROR',
+      input.file
+    )
+  }
+  if (typeof raw.expects !== 'string' || !raw.expects.trim()) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has invalid 'verify.expects' (must be a non-empty string)`,
+      'PARSE_ERROR',
+      input.file
+    )
+  }
+  return {
+    query: raw.query.trim(),
+    expects: raw.expects.trim(),
   }
 }
 

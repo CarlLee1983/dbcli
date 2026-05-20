@@ -23,6 +23,7 @@ import {
   resolveSnippetDirs,
   SavedQueryError,
 } from '@/core/saved-queries'
+import { colors } from '@/utils/colors'
 import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
 
 export interface DryRunInput {
@@ -61,6 +62,7 @@ export interface QCommandOptions {
   paramFile?: string
   config?: string
   recovery?: boolean
+  verify?: boolean
   // Open for audit-helper consumption.
   [key: string]: unknown
 }
@@ -215,6 +217,32 @@ export async function qCommand(
           execution_ms: executionTimeMs,
         },
       })
+
+      if (options.verify) {
+        console.error('')
+        console.error(colors.info('🔍 Running query verification check...'))
+        const verifySpec = snippet.query.meta.verify
+        if (!verifySpec) {
+          console.error(colors.warn('⚠ Warning: No verification check defined in snippet frontmatter.'))
+        } else {
+          try {
+            console.error(colors.dim(`Executing verification query: ${verifySpec.query}`))
+            const verifyResult = await adapter.execute<Record<string, unknown>>(verifySpec.query)
+            const firstRow = verifyResult.rows[0]
+            const evalResult = evaluateExpectation(firstRow, verifySpec.expects)
+            
+            if (evalResult.success) {
+              console.log(colors.success(`✓ Verification passed: ${verifySpec.expects}`))
+            } else {
+              console.error(colors.error(`✗ Verification failed: ${evalResult.error}`))
+              process.exit(1)
+            }
+          } catch (e) {
+            console.error(colors.error(`✗ Verification query failed: ${(e as Error).message}`))
+            process.exit(1)
+          }
+        }
+      }
     } finally {
       await adapter.disconnect()
     }
@@ -291,4 +319,113 @@ async function handleQError(
   }
   console.error(t_vars('errors.message', { message: (error as Error).message }))
   process.exit(1)
+}
+
+export function evaluateExpectation(
+  row: Record<string, unknown> | undefined,
+  expects: string
+): { success: boolean; error?: string } {
+  if (!row) {
+    return { success: false, error: 'No rows returned in verification query' }
+  }
+
+  const match = expects.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(==?|!=|>=?|<=?)\s*(.+?)\s*$/)
+  if (!match) {
+    return { success: false, error: `Invalid expects format: '${expects}'` }
+  }
+
+  const lhs = match[1]
+  const op = match[2]
+  const rhsRaw = match[3]
+  if (lhs === undefined || op === undefined || rhsRaw === undefined) {
+    return { success: false, error: `Invalid expects format: '${expects}'` }
+  }
+
+  if (!(lhs in row)) {
+    return { success: false, error: `Column '${lhs}' not found in verification result` }
+  }
+
+  const valRaw = row[lhs]
+  
+  let rhs: string | number | boolean | null
+  const rhsTrimmed = rhsRaw.trim()
+  if (rhsTrimmed === 'null') {
+    rhs = null
+  } else if (rhsTrimmed === 'true') {
+    rhs = true
+  } else if (rhsTrimmed === 'false') {
+    rhs = false
+  } else if (/^-?\d+(\.\d+)?$/.test(rhsTrimmed)) {
+    rhs = Number(rhsTrimmed)
+  } else {
+    const quoteMatch = rhsTrimmed.match(/^['"](.*)['"]$/)
+    rhs = quoteMatch ? (quoteMatch[1] ?? '') : rhsTrimmed
+  }
+
+  if (rhs === null) {
+    const isNull = valRaw === null || valRaw === undefined
+    if (op === '=' || op === '==') {
+      return { success: isNull }
+    }
+    if (op === '!=') {
+      return { success: !isNull }
+    }
+    return { success: false, error: `Operator '${op}' is not supported for null comparisons` }
+  }
+
+  let val: unknown = valRaw
+  if (typeof rhs === 'number') {
+    val = Number(valRaw)
+  } else if (typeof rhs === 'boolean') {
+    val = valRaw === 'true' || valRaw === true || valRaw === 1 || valRaw === '1'
+  } else {
+    val = String(valRaw)
+  }
+
+  let success = false
+  switch (op) {
+    case '=':
+    case '==':
+      success = val === rhs
+      break
+    case '!=':
+      success = val !== rhs
+      break
+    case '>':
+      if (typeof val === 'number' && typeof rhs === 'number') {
+        success = val > rhs
+      } else {
+        success = String(val) > String(rhs)
+      }
+      break
+    case '>=':
+      if (typeof val === 'number' && typeof rhs === 'number') {
+        success = val >= rhs
+      } else {
+        success = String(val) >= String(rhs)
+      }
+      break
+    case '<':
+      if (typeof val === 'number' && typeof rhs === 'number') {
+        success = val < rhs
+      } else {
+        success = String(val) < String(rhs)
+      }
+      break
+    case '<=':
+      if (typeof val === 'number' && typeof rhs === 'number') {
+        success = val <= rhs
+      } else {
+        success = String(val) <= String(rhs)
+      }
+      break
+    default:
+      return { success: false, error: `Unsupported operator: ${op}` }
+  }
+
+  if (!success) {
+    return { success: false, error: `Expected '${lhs}' (${val}) ${op} '${rhs}', but it failed` }
+  }
+
+  return { success: true }
 }

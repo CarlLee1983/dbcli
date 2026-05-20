@@ -36,6 +36,13 @@ export interface SavedQueryMeta {
   target?: string
   /** Mongo only: how to interpret the body. */
   operation?: 'find' | 'aggregate'
+  /** Optional verification check query and assertion */
+  verify?: SavedQueryVerify
+}
+
+export interface SavedQueryVerify {
+  query: string
+  expects: string
 }
 
 export interface VisualKPI {

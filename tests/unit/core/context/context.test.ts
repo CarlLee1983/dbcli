@@ -58,7 +58,12 @@ describe('Context and Serializer', () => {
           name: 'orders',
           columns: [
             { name: 'id', type: 'integer', nullable: false, primaryKey: true },
-            { name: 'user_id', type: 'integer', nullable: false, foreignKey: { table: 'users', column: 'id' } },
+            {
+              name: 'user_id',
+              type: 'integer',
+              nullable: false,
+              foreignKey: { table: 'users', column: 'id' },
+            },
             { name: 'total', type: 'numeric', nullable: false, default: '0.00' },
           ],
           primaryKey: ['id'],
@@ -95,7 +100,9 @@ describe('Context and Serializer', () => {
 -- ---
 SELECT * FROM users WHERE id >= :min_id AND active = true`
 
-    await Bun.file(join(TEST_WORKSPACE, '.dbcli', 'queries', 'active-users.sql')).write(snippetContent)
+    await Bun.file(join(TEST_WORKSPACE, '.dbcli', 'queries', 'active-users.sql')).write(
+      snippetContent
+    )
 
     const payload = await gatherContext(TEST_WORKSPACE, TEST_CONFIG_PATH)
 
@@ -144,9 +151,7 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     const activeUsersSnippet = payload.snippets.find((s) => s.key === '@active-users')
     expect(activeUsersSnippet).toBeDefined()
     expect(activeUsersSnippet?.description).toBe('Get all active users')
-    expect(activeUsersSnippet?.params).toEqual([
-      { name: 'min_id', type: 'int', default: 1 },
-    ])
+    expect(activeUsersSnippet?.params).toEqual([{ name: 'min_id', type: 'int', default: 1 }])
   })
 
   test('JSON serializer outputs correctly', () => {
@@ -199,7 +204,9 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     expect(xml).toContain('<column table="users" name="pass&quot;word" />')
     expect(xml).toContain('<table name="users" rows="50" primary_key="id">')
     expect(xml).toContain('<column name="id" type="int" primary_key="true" nullable="false" />')
-    expect(xml).toContain('<column name="name" type="varchar" nullable="true" default="john &amp; doe" />')
+    expect(xml).toContain(
+      '<column name="name" type="varchar" nullable="true" default="john &amp; doe" />'
+    )
     expect(xml).toContain('<query name="@get-users">')
     expect(xml).toContain('<description>Get &lt;all&gt; users</description>')
     expect(xml).toContain('<param name="id" type="int" required="true" />')

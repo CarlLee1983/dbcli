@@ -122,12 +122,8 @@ export function serializeMarkdown(payload: ContextPayload): string {
         const pk = col.primaryKey ? '✅' : '-'
         const nulls = col.nullable ? 'Yes' : 'No'
         const def = col.default !== undefined ? `\`${col.default}\`` : '-'
-        const ref = col.foreignKey
-          ? `\`${col.foreignKey.table}.${col.foreignKey.column}\``
-          : '-'
-        parts.push(
-          `| \`${col.name}\` | \`${col.type}\` | ${nulls} | ${pk} | ${def} | ${ref} |`
-        )
+        const ref = col.foreignKey ? `\`${col.foreignKey.table}.${col.foreignKey.column}\`` : '-'
+        parts.push(`| \`${col.name}\` | \`${col.type}\` | ${nulls} | ${pk} | ${def} | ${ref} |`)
       }
       parts.push(``)
     }

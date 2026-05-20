@@ -420,7 +420,10 @@ describe('Redis blacklist rejection writes audit entry [v1.21.0 parity pack]', (
   let skip = false
 
   beforeAll(async () => {
-    skip = !(await isDbReachable(process.env.REDIS_HOST || 'localhost', Number(process.env.REDIS_PORT || 6379)))
+    skip = !(await isDbReachable(
+      process.env.REDIS_HOST || 'localhost',
+      Number(process.env.REDIS_PORT || 6379)
+    ))
     if (skip) console.log('⏭ Redis not reachable — skipping blacklist-audit case')
   })
 

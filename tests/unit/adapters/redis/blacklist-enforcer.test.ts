@@ -1,9 +1,5 @@
 import { test, expect } from 'bun:test'
-import {
-  globToRegex,
-  patternsOverlap,
-  checkKeyArgs,
-} from '@/adapters/redis/blacklist-enforcer'
+import { globToRegex, patternsOverlap, checkKeyArgs } from '@/adapters/redis/blacklist-enforcer'
 
 const RULES = ['user:*:password', 'secrets:*']
 

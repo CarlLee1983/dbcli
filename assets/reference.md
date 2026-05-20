@@ -1531,19 +1531,19 @@ dbcli delete orders --where '{"status":"cancelled"}' --force
 
 ## Redis Support
 
-Redis connections speak Redis commands rather than SQL. The adapter uses the `ioredis` driver and exposes a narrow, permission-gated surface.
+Redis connections speak Redis commands rather than SQL. The adapter uses Bun's native `Bun.RedisClient` and exposes a permission-gated surface with a query size guard and key-glob blacklist enforcement.
 
-**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `shell`, `status`, `doctor`, `upgrade`, `completion`
 
 **Saved queries:** `q` is supported for read-only Redis commands (see "Redis snippets" below).
 
-**Not supported (exit with error or unsupported error):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `shell`. For writes, run the equivalent Redis command via `query` — the same permission gate applies.
+**Not supported (exit with error or unsupported error):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`. For writes, run the equivalent Redis command via `query` — the same permission gate applies.
 
 ### Connection and configuration
 
 - Required fields: `system: redis`, `host`, `port`. `password` and `database` are optional.
 - `database` is the **logical DB index** (`"0"` … `"15"`), kept as a string to play nicely with env-ref bindings. `list` and the connection metadata both label it as the active DB.
-- `connection.timeout` (ms, default 5000) maps to ioredis's `connectTimeout`.
+- `connection.timeout` (ms, default 5000) maps to the client's `connectionTimeout`.
 
 ### Permission classification
 
@@ -1590,12 +1590,55 @@ dbcli query "DEL temp:lock"
 dbcli query "HDEL user:42 lastLogin"
 ```
 
+### Size guard (`query --no-limit` / shell `.no-limit`)
+
+The adapter rewrites unbounded reads before dispatch and truncates oversized replies after:
+
+| Strategy | Commands | Behavior |
+|----------|----------|----------|
+| inject/cap `COUNT` | `SCAN`, `HSCAN`, `SSCAN`, `ZSCAN` | adds `COUNT 1000` when absent; caps a larger `COUNT` to 1000 |
+| clamp `stop` | `LRANGE`, `ZRANGE`, `ZREVRANGE` | rewrites `stop` so the span ≤ 1000 (`-1` becomes `start+999`) |
+| inject/cap `LIMIT` | `ZRANGEBYSCORE` | appends `LIMIT 0 1000` when absent; caps a larger count |
+| client truncate | `HGETALL`, `HKEYS`, `HVALS`, `SMEMBERS`, `KEYS` | keeps the first 1000 entries |
+
+Rewrites emit a `REDIS_SIZE_REWRITE` warning; truncations emit `REDIS_SIZE_TRUNCATE`. Both surface in the result's `warnings[]`. Pass `--no-limit` (CLI) or toggle `.no-limit on` (shell) to disable all guards.
+
+### Blacklist enforcement
+
+Blacklist rules are enforced as **Redis-native key globs** (`*`, `?`, `[abc]`, `[a-z]`):
+
+```bash
+dbcli blacklist add 'secrets:*'          # register a key-glob rule
+dbcli query "GET secrets:api_key"        # → BlacklistRejection (exit non-zero)
+dbcli query "MGET safe:k secrets:api"    # → rejected (any matching key fails the whole command)
+dbcli query "KEYS secrets:*"             # → rejected (pattern overlaps a rule)
+dbcli query "KEYS *"                      # → returns only non-blacklisted keys
+```
+
+Rejections are written to the audit log with `success: false` and `metadata.rejection_reason: 'blacklist'` + `matched_pattern`. Value / hash-field masking is deferred.
+
+### Interactive shell
+
+`dbcli shell` on a Redis connection opens a single-line REPL:
+
+```text
+$ dbcli --use local-redis shell
+Redis shell: single-line commands; SCAN/LRANGE auto-capped at 1000. Type `.no-limit on` to bypass (unsafe).
+redis> SCAN 0                 # wire args become: SCAN 0 COUNT 1000  (REDIS_SIZE_REWRITE)
+redis> HGETALL bighash        # >1000 fields → kept 1000           (REDIS_SIZE_TRUNCATE)
+redis> .no-limit on           # bypass size guard for this session
+redis> GET secrets:api_key    # → REDIS_BLACKLIST / BlacklistRejection if blacklisted
+redis> .exit
+```
+
+Tab completion offers Redis command names and known key prefixes; history persists to `~/.dbcli_history`.
+
 ### Limitations
 
 - No `--dry-run` for writes — Redis commands execute immediately. Pair writes with a confirming read (`GET`, `HGETALL`, `EXISTS`).
 - No transaction wrapping (`MULTI`/`EXEC`). Submit one command at a time.
 - `KEYS` requires `admin`. Prefer `SCAN` for routine work.
-- Blacklist rules are not enforced for Redis (there is no concept of "column" / "table" the validator can map). Be careful with sensitive key prefixes.
+- Blacklist enforcement covers **keys** only (Redis-native globs); value and hash-field masking are not yet implemented.
 
 ## Elasticsearch Support
 

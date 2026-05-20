@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { RedisAdapter, parseRedisCommand } from 'src/adapters/redis-adapter'
 import type { ConnectionOptions } from 'src/adapters/types'
 import { ConnectionError } from 'src/adapters/types'
+import { BlacklistRejection } from 'src/adapters/redis/types'
 
 type Handler = (...args: unknown[]) => unknown
 
@@ -422,5 +423,73 @@ describe('RedisAdapter — command execution & DML', () => {
     const result = await adapter.delete('user:1', { field: 'email' })
     expect(result.affectedRows).toBe(1)
     expect(client.storage.get('user:1')).toEqual({ name: 'Alice' })
+  })
+})
+
+describe('RedisAdapter — middleware (blacklist + size guard)', () => {
+  function makeMiddlewareAdapter(blacklist: string[] = [], mockReply: unknown = []) {
+    const sent: { head: string; args: unknown[] }[] = []
+    const client = {
+      send: async (head: string, args: unknown[]) => {
+        sent.push({ head, args })
+        return mockReply
+      },
+      ttl: async () => -1,
+      del: async () => 1,
+      set: async () => 'OK',
+      hmset: async () => 'OK',
+      close: () => {},
+      onclose: undefined as unknown,
+    }
+    const adapter = new RedisAdapter(baseOptions)
+    ;(adapter as unknown as { client: unknown }).client = client
+    adapter.setBlacklistRules(blacklist)
+    return { adapter, client, sent }
+  }
+
+  test('execute rejects blacklisted key', async () => {
+    const { adapter } = makeMiddlewareAdapter(['secrets:*'])
+    await expect(adapter.execute('GET secrets:api_key')).rejects.toBeInstanceOf(BlacklistRejection)
+  })
+
+  test('execute on SCAN injects COUNT and emits warning', async () => {
+    const { adapter, sent } = makeMiddlewareAdapter([], ['0', ['k1', 'k2']])
+    const r = await adapter.execute('SCAN 0')
+    expect(sent[0]!.args).toEqual(['0', 'COUNT', '1000'])
+    expect(r.warnings?.[0]?.code).toBe('REDIS_SIZE_REWRITE')
+  })
+
+  test('execute on HGETALL truncates large reply', async () => {
+    const big: Record<string, string> = {}
+    for (let i = 0; i < 1500; i++) big[`f${i}`] = String(i)
+    const { adapter } = makeMiddlewareAdapter([], big)
+    const r = await adapter.execute('HGETALL h')
+    expect(r.warnings?.[0]?.code).toBe('REDIS_SIZE_TRUNCATE')
+  })
+
+  test('listCollections filters blacklisted keys', async () => {
+    const client = {
+      send: async (head: string) => {
+        if (head === 'SCAN') return ['0', ['user:1', 'secrets:k', 'user:2']]
+        return null
+      },
+      close: () => {},
+      onclose: undefined as unknown,
+    }
+    const adapter = new RedisAdapter(baseOptions)
+    ;(adapter as unknown as { client: unknown }).client = client
+    adapter.setBlacklistRules(['secrets:*'])
+    const cols = await adapter.listCollections()
+    expect(cols.map((c) => c.name)).toEqual(['user:1', 'user:2'])
+  })
+
+  test('getTableSchema rejects blacklisted key', async () => {
+    const adapter = new RedisAdapter(baseOptions)
+    ;(adapter as unknown as { client: unknown }).client = {
+      send: async () => null,
+      close: () => {},
+    }
+    adapter.setBlacklistRules(['secrets:*'])
+    await expect(adapter.getTableSchema('secrets:foo')).rejects.toBeInstanceOf(BlacklistRejection)
   })
 })

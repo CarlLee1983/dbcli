@@ -13,6 +13,8 @@ import type { DbcliConfig } from '../types'
 import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
 import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
+import { RedisShellAdapter } from '@/adapters/redis-shell-adapter'
+import type { RedisAdapter } from '@/adapters/redis-adapter'
 import type { QueryableAdapter } from '@/adapters/types'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -72,11 +74,20 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   }
 
   const isMongoDB = config.connection.system === 'mongodb'
+  const isRedis = config.connection.system === 'redis'
   const connectionOpts = config.connection as ConnectionOptions
   const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
+  const redisInner = isRedis
+    ? (AdapterFactory.createRedisAdapter(
+        connectionOpts,
+        config.blacklist?.tables ?? []
+      ) as unknown as RedisAdapter)
+    : null
   const adapter = isMongoDB
     ? new MongoShellAdapter(mongoInner!)
-    : AdapterFactory.createSqlAdapter(requireSqlConnection(connectionOpts))
+    : isRedis
+      ? new RedisShellAdapter(redisInner!)
+      : AdapterFactory.createSqlAdapter(requireSqlConnection(connectionOpts))
   try {
     await adapter.connect()
   } catch (error) {
@@ -89,7 +100,11 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // Build context from schema cache or MongoDB collections
   let tableNames: string[] = []
   let columnsByTable: Record<string, string[]> = {}
-  if (isMongoDB) {
+  if (isRedis) {
+    const keys = await adapter.listTables()
+    tableNames = keys.map((k) => k.name)
+    columnsByTable = {}
+  } else if (isMongoDB) {
     const collections = await adapter.listTables()
     tableNames = collections.map((collection) => collection.name)
     if (mongoInner) {
@@ -138,6 +153,14 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   console.error(pc.dim(t_vars('shell.welcome_permission', { permission: config.permission })))
   if (isMongoDB) {
     console.error(pc.dim('MongoDB shell: use `query <json>` with `--collection <name>` for reads.'))
+  }
+  if (isRedis) {
+    console.error(
+      pc.dim(
+        'Redis shell: single-line commands; SCAN/LRANGE auto-capped at 1000. ' +
+          'Type `.no-limit on` to bypass (unsafe).'
+      )
+    )
   }
 
   if (options.sql) {

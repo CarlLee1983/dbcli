@@ -32,7 +32,12 @@ export interface CompactTable {
 export interface CompactSnippet {
   key: string
   description?: string
-  params: Array<{ name: string; type: string; required?: boolean; default?: string | number | boolean | null }>
+  params: Array<{
+    name: string
+    type: string
+    required?: boolean
+    default?: string | number | boolean | null
+  }>
   engines?: string[]
 }
 
@@ -48,7 +53,10 @@ export interface ContextPayload {
   snippets: CompactSnippet[]
 }
 
-export async function gatherContext(workspaceRoot: string, configPath: string): Promise<ContextPayload> {
+export async function gatherContext(
+  workspaceRoot: string,
+  configPath: string
+): Promise<ContextPayload> {
   const config = await configModule.read(configPath)
   const blacklistManager = new BlacklistManager(config)
 
@@ -138,10 +146,11 @@ export async function gatherContext(workspaceRoot: string, configPath: string): 
   const compactSnippets: CompactSnippet[] = []
   for (const [key, variants] of snippetsMap.entries()) {
     // Get the first variant matching the current system engine if possible, otherwise use the first available
-    const matched = variants.find((v) => {
-      const engs = v.query.meta.engine ?? []
-      return engs.includes(system as any)
-    }) ?? variants[0]
+    const matched =
+      variants.find((v) => {
+        const engs = v.query.meta.engine ?? []
+        return engs.includes(system as any)
+      }) ?? variants[0]
 
     if (matched) {
       const q = matched.query

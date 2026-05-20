@@ -76,11 +76,16 @@ export class AdapterFactory {
     return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
   }
 
-  static createRedisAdapter(options: ConnectionOptions): QueryableAdapter {
+  static createRedisAdapter(
+    options: ConnectionOptions,
+    blacklistRules: string[] = []
+  ): QueryableAdapter {
     if (options.system !== 'redis') {
       throw new Error('createRedisAdapter requires system: redis')
     }
-    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+    const adapter = new RedisAdapter(options as QueryableConnectionOptions)
+    adapter.setBlacklistRules(blacklistRules)
+    return adapter
   }
 
   static createElasticsearchAdapter(options: ConnectionOptions): QueryableAdapter {

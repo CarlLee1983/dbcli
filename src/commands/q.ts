@@ -223,14 +223,16 @@ export async function qCommand(
         console.error(colors.info('🔍 Running query verification check...'))
         const verifySpec = snippet.query.meta.verify
         if (!verifySpec) {
-          console.error(colors.warn('⚠ Warning: No verification check defined in snippet frontmatter.'))
+          console.error(
+            colors.warn('⚠ Warning: No verification check defined in snippet frontmatter.')
+          )
         } else {
           try {
             console.error(colors.dim(`Executing verification query: ${verifySpec.query}`))
             const verifyResult = await adapter.execute<Record<string, unknown>>(verifySpec.query)
             const firstRow = verifyResult.rows[0]
             const evalResult = evaluateExpectation(firstRow, verifySpec.expects)
-            
+
             if (evalResult.success) {
               console.log(colors.success(`✓ Verification passed: ${verifySpec.expects}`))
             } else {
@@ -346,7 +348,7 @@ export function evaluateExpectation(
   }
 
   const valRaw = row[lhs]
-  
+
   let rhs: string | number | boolean | null
   const rhsTrimmed = rhsRaw.trim()
   if (rhsTrimmed === 'null') {

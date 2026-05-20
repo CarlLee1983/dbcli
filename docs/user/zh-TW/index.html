@@ -323,6 +323,27 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">查詢大小防護</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">黑名單強制</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">互動式 Shell</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -345,6 +366,11 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
 
             <h3 class="mt-8">MongoDB 儲存查詢</h3>
             <p>Mongo snippet 檔名以 <code>.mongodb.sql</code> 結尾，宣告 <code>engine: mongodb</code> 與 <code>operation: find</code> 或 <code>operation: aggregate</code>。以 <code>dbcli q @&lt;key&gt;</code> 執行；<code>{{param}}</code> 佔位符會以 JSON 編碼，被注入成運算子形狀的字串無法逃逸至運算子位置。</p>
+
+            <h3 class="mt-8">Redis：大小防護、黑名單與 shell（v1.21.0）</h3>
+            <p><strong>大小防護</strong> — 無上限的讀取會自動加上界線：<code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> 補上 <code>COUNT 1000</code>（較大值會被夾限）；<code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> 夾限 <code>stop</code> 至 1000 區間；<code>ZRANGEBYSCORE</code> 補上 <code>LIMIT 0 1000</code>；<code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> 在 1000 筆截斷。結果帶有 <code>warnings[]</code>（<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>）。以 <code>--no-limit</code>（CLI）或 <code>.no-limit on</code>（shell）略過。</p>
+            <p><strong>黑名單</strong> — 規則以 Redis 原生 key glob（<code>*</code>、<code>?</code>、<code>[abc]</code>、<code>[a-z]</code>）強制。<code>dbcli blacklist add 'secrets:*'</code> 後，命中的讀寫會被拒絕（<code>BlacklistRejection</code>，稽核記錄含 <code>matched_pattern</code>）；與規則重疊的 <code>KEYS</code>/<code>SCAN MATCH</code> 會被拒絕；<code>list</code> 會濾掉黑名單 keys。</p>
+            <p><strong>Shell</strong> — Redis 連線執行 <code>dbcli shell</code> 會開啟單行 REPL，具備歷史、tab 補全（指令 + key 前綴）與 <code>.no-limit on/off</code> 切換。</p>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

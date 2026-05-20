@@ -14,6 +14,8 @@ export interface ReplState {
   readonly format: OutputFormat
   readonly timing: boolean
   readonly connected: boolean
+  /** When true, Redis size-guard rewrites/truncations are bypassed (unsafe). */
+  readonly noLimit: boolean
 }
 
 export interface ReplContext {
@@ -27,7 +29,7 @@ export interface ReplContext {
 export interface MetaCommandResult {
   readonly action: 'continue' | 'quit' | 'clear'
   readonly output?: string
-  readonly stateUpdate?: Partial<Pick<ReplState, 'format' | 'timing'>>
+  readonly stateUpdate?: Partial<Pick<ReplState, 'format' | 'timing' | 'noLimit'>>
 }
 
 export const SQL_KEYWORDS_FOR_DETECTION: readonly string[] = [
@@ -149,4 +151,5 @@ export const META_COMMANDS: readonly string[] = [
   '.format',
   '.history',
   '.timing',
+  '.no-limit',
 ] as const

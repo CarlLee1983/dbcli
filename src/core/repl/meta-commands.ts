@@ -30,6 +30,9 @@ export function handleMetaCommand(
     case '.timing':
       return handleTiming(arg, state)
 
+    case '.no-limit':
+      return handleNoLimit(arg, state)
+
     case '.history':
       return handleHistory(history)
 
@@ -50,6 +53,7 @@ function helpText(): string {
     `  ${pc.cyan('.format')} <table|json|csv>  Set output format`,
     `  ${pc.cyan('.history')}             Show command history`,
     `  ${pc.cyan('.timing')} <on|off>     Toggle execution time display`,
+    `  ${pc.cyan('.no-limit')} <on|off>   Toggle Redis size-guard bypass (unsafe)`,
     '',
     pc.bold('Usage:'),
     `  SQL statements     Execute directly (end with ${pc.cyan(';')})`,
@@ -108,6 +112,36 @@ function handleTiming(arg: string | undefined, state: ReplState): MetaCommandRes
   return {
     action: 'continue',
     output: `Usage: .timing <on|off>`,
+  }
+}
+
+function handleNoLimit(arg: string | undefined, state: ReplState): MetaCommandResult {
+  if (arg === 'on') {
+    return {
+      action: 'continue',
+      output: `Size guard bypass ${pc.bold('on')} (Redis SCAN/LRANGE/HGETALL no longer auto-capped).`,
+      stateUpdate: { noLimit: true },
+    }
+  }
+
+  if (arg === 'off') {
+    return {
+      action: 'continue',
+      output: `Size guard bypass ${pc.bold('off')}.`,
+      stateUpdate: { noLimit: false },
+    }
+  }
+
+  if (!arg) {
+    return {
+      action: 'continue',
+      output: `.no-limit is ${pc.bold(state.noLimit ? 'on' : 'off')}`,
+    }
+  }
+
+  return {
+    action: 'continue',
+    output: `Usage: .no-limit <on|off>`,
   }
 }
 

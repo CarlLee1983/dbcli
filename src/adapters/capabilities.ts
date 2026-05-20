@@ -235,9 +235,9 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       schemaFullScan: cap('unsupported', 'none', 'Redis has no full schema cache scan.'),
       query: cap('limited', 'readonly', 'Runs allow-listed Redis commands.'),
       queryLimitGuard: cap(
-        'unsupported',
-        'none',
-        'Redis has command-specific guards, not generic LIMIT rewriting.'
+        'limited',
+        'readonly',
+        'SCAN/LRANGE/ZRANGE COUNT/stop rewrite; HGETALL/SMEMBERS/KEYS truncate at 1000; --no-limit bypasses.'
       ),
       q: cap(
         'limited',
@@ -254,14 +254,18 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       delete: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       export: cap('unsupported', 'none', 'Redis export is not supported.'),
       blacklist: cap(
-        'unsupported',
-        'none',
-        'Redis key/value blacklist enforcement is not supported.'
+        'limited',
+        'local-write',
+        'Key-glob enforcement (Redis-native pattern); value/hash-field masking deferred.'
       ),
       check: cap('unsupported', 'none', 'Data health check is SQL-only.'),
       diff: cap('unsupported', 'none', 'Schema snapshots are relational only.'),
       migrate: cap('unsupported', 'none', 'DDL migrations are SQL-only.'),
-      shell: cap('unsupported', 'none', 'Redis REPL is not supported.'),
+      shell: cap(
+        'limited',
+        'interactive',
+        'Single-line Redis REPL with auto-limit and key-glob blacklist; narrower than SQL shell.'
+      ),
     }),
     elasticsearch: Object.freeze({
       ...SQL_BASE,

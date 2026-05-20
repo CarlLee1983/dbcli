@@ -190,6 +190,9 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | 寫入操作 (DML) | ✅ | ✅ | ✅ (透過 query) | ❌ |
 | 結構變更 (DDL) | ✅ | ❌ | ❌ | ❌ |
 | 互動式 UI | ✅ | ✅ | ✅ | ✅ |
+| 查詢大小防護 | ✅ | ✅ | ⚠️（改寫 + 截斷） | ✅ |
+| 黑名單強制 | ✅ | ✅ | ⚠️（key glob） | ⚠️ |
+| 互動式 Shell（`shell`) | ✅ | ✅ | ✅（單行） | ❌ |
 
 ### MongoDB 寫入規劃器（運算子分層）
 
@@ -238,6 +241,32 @@ Snippet 位置：`assets/snippets/`（內建）、`.dbcli-shared/queries/`（共
 - 主體為 JSON：`find` 為物件，`aggregate` 為陣列。每個 `{{param}}` 佔位符會以 JSON 編碼——字串會被加引號並轉義，因此被注入成運算子形狀的字串無法逃逸至運算子位置。
 
 執行：`dbcli q @<key>`。
+
+### Redis:大小防護、黑名單與 shell(v1.21.0)
+
+**大小防護** — 無上限的讀取會自動加上界線:
+
+- `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` 自動補上 `COUNT 1000`(較大的 `COUNT` 會被夾限)。
+- `LRANGE` / `ZRANGE` / `ZREVRANGE` 夾限 `stop`,使區間 ≤ 1000;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`。
+- `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` 在 1000 筆截斷。
+
+結果帶有 `warnings[]`:引數被改寫時為 `REDIS_SIZE_REWRITE`,回覆被截斷時為 `REDIS_SIZE_TRUNCATE`。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
+
+```bash
+dbcli query "LRANGE jobs 0 -1"            # 夾限至 1000 → REDIS_SIZE_REWRITE
+dbcli query "HGETALL bighash" --no-limit  # 完整回覆,不截斷
+```
+
+**黑名單** — 規則以 Redis 原生 key glob(`*`、`?`、`[abc]`、`[a-z]`)強制:
+
+```bash
+dbcli blacklist add 'secrets:*'
+dbcli query "GET secrets:api_key"   # 拒絕(BlacklistRejection);稽核記錄含 matched_pattern
+dbcli query "KEYS secrets:*"        # 拒絕(pattern 與規則重疊)
+dbcli list                           # 黑名單 keys 被濾掉
+```
+
+**Shell** — Redis 連線執行 `dbcli shell` 會開啟單行 REPL,具備歷史、tab 補全(指令 + key 前綴)與 `.no-limit on/off` 切換。
 
 ---
 

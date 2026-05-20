@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.21.0] - 2026-05-20 - Redis-Parity Pack
+
+### Added
+
+- **Redis shell.** `dbcli shell` 現對 Redis 連線開啟互動式 REPL,具備歷史、readline、tab 補全(指令 + key 前綴)與 `.no-limit on/off` meta 指令。單行語意。
+- **Redis size guard.** `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` 在缺少時補上 `COUNT 1000`;`LRANGE` / `ZRANGE` / `ZREVRANGE` 夾限 `stop`;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`。`HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` 的無上限回覆在 client 端截斷至 1000 並帶 `REDIS_SIZE_TRUNCATE` 警告。`--no-limit` 略過所有防護。
+- **Redis blacklist 強制。** `dbcli blacklist add 'pattern'` 現會封鎖 key 命中的 Redis 讀寫。採 Redis 原生 glob(`*`、`?`、`[abc]`、`[a-z]`)。與黑名單重疊的 `KEYS` / `SCAN MATCH` 會被拒絕;未重疊的掃描則濾掉黑名單 keys 並帶 `REDIS_BLACKLIST_FILTERED` 警告。稽核記錄含 `metadata.rejection_reason: 'blacklist'` 與 `matched_pattern`。
+
+### Changed
+
+- `ExecutionResult.warnings` 現為公開型別的一部分(optional),目前僅由 Redis 發出。
+- `src/adapters/capabilities.ts` Redis row 更新:`shell` → `interactive`、`query auto-limit` → `limited`、`blacklist` → `limited`。
+
+### Out of scope
+
+- Elasticsearch shell、Redis/ES export、Redis value/hash-field 遮罩 — 延後至 v1.22 或之後。
+
+
 ## [1.20.2] - 2026-05-19
 
 ### Added

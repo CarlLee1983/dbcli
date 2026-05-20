@@ -28,6 +28,7 @@ import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { maskMongoRows } from '@/core/mongo/field-masker'
+import { BlacklistRejection } from '@/adapters/redis/types'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -343,11 +344,16 @@ async function redisQueryBranch(
   }
   enforceRedisPermission(command, config.permission)
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  const redisAdapter = AdapterFactory.createRedisAdapter(
+    config.connection as ConnectionOptions,
+    config.blacklist?.tables ?? []
+  )
   await redisAdapter.connect()
   const start = performance.now()
   try {
-    const result = await redisAdapter.execute<Record<string, unknown>>(command)
+    const result = await redisAdapter.execute<Record<string, unknown>>(command, undefined, {
+      noLimit: options.noLimit ?? false,
+    })
     const executionTimeMs = Math.round(performance.now() - start)
 
     const target = command.trim().split(/\s+/)[1] || '<unknown-key>'
@@ -371,6 +377,24 @@ async function redisQueryBranch(
       format,
     })
     console.log(output)
+  } catch (err) {
+    if (err instanceof BlacklistRejection) {
+      await writeAuditEntry(config, 'query', options, {
+        success: false,
+        error: err,
+        metadata: {
+          rejection_reason: 'blacklist',
+          matched_pattern: err.matchedPattern,
+          ...(err.matchedKey ? { matched_key: err.matchedKey } : {}),
+        },
+      })
+    } else {
+      await writeAuditEntry(config, 'query', options, {
+        success: false,
+        error: err as Error,
+      })
+    }
+    throw err
   } finally {
     await redisAdapter.disconnect()
   }

@@ -8,6 +8,10 @@
 import type { RedisClient } from 'bun'
 import { ConnectionError } from './types'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
+import { rewriteArgs, truncateResult } from './redis/size-guard'
+import { checkKeyArgs, globToRegex } from './redis/blacklist-enforcer'
+import { BlacklistRejection } from './redis/types'
+import { getCommandSpec } from './redis/command-metadata'
 
 type RedisClientOptions = {
   connectionTimeout?: number
@@ -23,6 +27,7 @@ type RedisCtor = new (url?: string, options?: RedisClientOptions) => RedisClient
 
 export class RedisAdapter implements QueryableAdapter {
   private client: RedisClient | null = null
+  private blacklistRules: string[] = []
 
   constructor(
     private options: ConnectionOptions,
@@ -31,6 +36,10 @@ export class RedisAdapter implements QueryableAdapter {
     if (options.port < 1 || options.port > 65535) {
       throw new Error(`Invalid port number: ${options.port}`)
     }
+  }
+
+  setBlacklistRules(rules: string[]): void {
+    this.blacklistRules = rules
   }
 
   private async resolveClientClass(): Promise<RedisCtor> {
@@ -114,7 +123,10 @@ export class RedisAdapter implements QueryableAdapter {
   async listCollections(): Promise<{ name: string; documentCount?: number }[]> {
     const client = this.requireClient()
     const keys = await scanAllKeys(client, '*', 1000)
-    return keys.map((name) => ({ name }))
+    const rules = this.blacklistRules
+    if (rules.length === 0) return keys.map((name) => ({ name }))
+    const regexes = rules.map((p) => globToRegex(p))
+    return keys.filter((k) => !regexes.some((r) => r.test(k))).map((name) => ({ name }))
   }
 
   async getDbSize(): Promise<number> {
@@ -129,6 +141,15 @@ export class RedisAdapter implements QueryableAdapter {
   }
 
   async getTableSchema(keyName: string): Promise<TableSchema> {
+    const blk = checkKeyArgs('GET', [keyName], this.blacklistRules)
+    if (!blk.ok) {
+      throw new BlacklistRejection(
+        `BlacklistRejection: schema lookup on key '${keyName}' rejected\n  matched blacklist pattern: ${blk.matchedPattern}`,
+        'SCHEMA',
+        keyName,
+        blk.matchedPattern!
+      )
+    }
     const client = this.requireClient()
     const type = (await client.send('TYPE', [keyName])) as string as RedisType
     if (type === 'none') {
@@ -161,29 +182,49 @@ export class RedisAdapter implements QueryableAdapter {
 
   // --- Command execution (Task 4) ----------------------------------------
 
+  private async dispatchCommand<T>(head: string, rest: string[]): Promise<T[]> {
+    const client = this.requireClient()
+    const reply = await client.send(head, rest)
+    return wrapReply<T>(head, reply)
+  }
+
   async execute<T>(
     command: string,
     _params?: unknown[],
-    _options?: { limit?: number }
+    options?: { limit?: number; noLimit?: boolean }
   ): Promise<ExecutionResult<T>> {
-    const client = this.requireClient()
     const tokens = parseRedisCommand(command)
     if (tokens.length === 0) {
       throw new Error('Redis 指令不可為空')
     }
-    const [head, ...rest] = tokens
-    const reply = await client.send(
-      head!,
-      rest.map((arg) => String(arg))
-    )
-    const rows = wrapReply<T>(head!, reply)
-    const columnNames = rows[0] ? Object.keys(rows[0]) : ['value']
-    return {
-      rows,
-      affectedRows: rows.length,
-      rowCount: rows.length,
-      columnNames,
+    const head = String(tokens[0]).toUpperCase()
+    const rest = tokens.slice(1).map(String)
+
+    const blk = checkKeyArgs(head, rest, this.blacklistRules)
+    if (!blk.ok) {
+      const msg = blk.matchedKey
+        ? `BlacklistRejection: command ${head} on key '${blk.matchedKey}' rejected\n  matched blacklist pattern: ${blk.matchedPattern}`
+        : `BlacklistRejection: ${head} pattern overlaps blacklist pattern: ${blk.matchedPattern}`
+      throw new BlacklistRejection(msg, head, blk.matchedKey ?? null, blk.matchedPattern!)
     }
+
+    const noLimit = options?.noLimit === true
+    const rw = rewriteArgs(head, rest, { noLimit })
+    const warnings: NonNullable<ExecutionResult<T>['warnings']> = []
+    if (rw.warning) warnings.push(rw.warning)
+
+    const spec = getCommandSpec(head)
+    if (spec?.sizeGuard.kind === 'truncate') {
+      const client = this.requireClient()
+      const rawReply = await client.send(head, rw.rewritten)
+      const tr = truncateResult(head, rawReply, { noLimit })
+      if (tr.warning) warnings.push(tr.warning)
+      const rows = wrapReply<T>(head, tr.value)
+      return finishResult<T>(rows, warnings)
+    }
+
+    const rows = await this.dispatchCommand<T>(head, rw.rewritten)
+    return finishResult<T>(rows, warnings)
   }
 
   async insert(keyName: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
@@ -297,6 +338,20 @@ export class RedisAdapter implements QueryableAdapter {
 // ============================================================================
 // Module-level helpers
 // ============================================================================
+
+function finishResult<T>(
+  rows: T[],
+  warnings: NonNullable<ExecutionResult<T>['warnings']>
+): ExecutionResult<T> {
+  const columnNames = rows[0] ? Object.keys(rows[0] as Record<string, unknown>) : ['value']
+  return {
+    rows,
+    affectedRows: rows.length,
+    rowCount: rows.length,
+    columnNames,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
+}
 
 type RedisType = 'string' | 'list' | 'hash' | 'set' | 'zset' | 'stream' | 'none'
 

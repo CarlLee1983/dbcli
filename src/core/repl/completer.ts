@@ -6,6 +6,9 @@ import {
   DBCLI_COMMANDS,
   META_COMMANDS,
 } from './types'
+import { REDIS_COMMAND_TABLE } from '@/adapters/redis/command-metadata'
+
+const REDIS_COMMANDS = Object.keys(REDIS_COMMAND_TABLE)
 
 type CompleterFn = (line: string) => [string[], string]
 
@@ -34,6 +37,13 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
 
     if (trimmed.startsWith('.')) {
       return completeMetaCommands(trimmed)
+    }
+
+    if (ctx.system === 'redis') {
+      const input = getLastWord(trimmed)
+      const cmdHits = REDIS_COMMANDS.filter((c) => c.startsWith(input.toUpperCase()))
+      const keyHits = allTableNames.filter((k) => k.startsWith(input))
+      return [[...cmdHits, ...keyHits], input]
     }
 
     const lastWord = getLastWord(trimmed)

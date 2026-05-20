@@ -20,18 +20,18 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `schema` full scan / `--refresh` / `--reset` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | Redis has no full scan/cache. ES iterates non-system indices. |
 | `query` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SQL; Mongo: JSON; Redis: commands; ES: DSL/Lucene. |
 | Query output `table` / `json` / `csv` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter. |
-| Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo/ES apply limits. Redis has no limit-rewrite support. |
+| Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL/Mongo/ES apply limits. Redis: SCAN/LRANGE/ZRANGE rewrite + HGETALL/SMEMBERS/KEYS truncate at 1000; `--no-limit` bypasses. |
 | `q` saved query execution | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Mongo: JSON `find` / `aggregate` body, requires `collection` frontmatter (CLI `--collection` overrides), parameter substitutions are JSON-encoded. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
 | `queries` snippet management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Management works regardless of active connection. |
 | `insert` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
 | `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
 | `delete` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
 | `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Currently SQL/Mongo only. |
-| `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. |
+| `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob enforcement (Redis-native pattern); value masking deferred. |
 | `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
 | `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
 | `migrate` DDL | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only (Postgres/MySQL/MariaDB). |
-| `shell` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | SQL + MongoDB only; Redis/ES not yet in REPL. |
+| `shell` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | SQL + MongoDB + Redis; ES not yet in REPL. Redis: single-line; SCAN/LRANGE auto-capped at 1000; `.no-limit` to bypass. |
 | `status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Safe non-credential config summary. |
 | `doctor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Engine-specific diagnostics. |
 | `completion` | N/A | N/A | N/A | N/A | N/A | N/A | Shell completion is engine-independent. |
@@ -94,7 +94,22 @@ Redis connections speak Redis commands. Support is focused on key discovery and 
 
 - `query` first token must be an allow-listed command. Permission tier is derived from the command.
 - `schema <key>` is synthetic and non-cached. No full database scan is available.
-- Blacklist rules are **not** enforced for Redis keys/values.
+
+### Size guard
+
+- `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` inject `COUNT 1000` when missing; `LRANGE` / `ZRANGE` / `ZREVRANGE` clamp the `stop` index; `ZRANGEBYSCORE` injects `LIMIT 0 1000`.
+- `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` are client-truncated at 1000 entries with a `REDIS_SIZE_TRUNCATE` warning.
+- `--no-limit` (CLI) or `.no-limit on` (shell) bypasses all size guards.
+
+### Blacklist enforcement
+
+- Blacklist rules are enforced as **Redis-native key globs** (`*`, `?`, `[abc]`, `[a-z]`). Reads and writes whose keys match a rule are rejected with a `BlacklistRejection`.
+- `KEYS` / `SCAN MATCH` patterns that overlap a blacklist pattern are rejected; non-overlapping listings filter out blacklisted keys.
+- Value and hash-field masking are **not** yet implemented (deferred).
+
+### Shell
+
+- `dbcli shell` opens an interactive single-line Redis REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle.
 
 ## Elasticsearch limitations summary
 

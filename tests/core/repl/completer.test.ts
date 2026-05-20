@@ -119,4 +119,30 @@ describe('createCompleter', () => {
       expect(hits).toEqual([])
     })
   })
+
+  describe('redis completion', () => {
+    const redisCtx: ReplContext = {
+      ...ctx,
+      system: 'redis',
+      tableNames: ['user:1', 'user:2'],
+      columnsByTable: {},
+    }
+    const completeRedis = createCompleter(redisCtx)
+
+    test('suggests GET when partial input is "GE"', () => {
+      const [hits] = completeRedis('GE')
+      expect(hits).toContain('GET')
+    })
+
+    test('suggests key prefixes for the second token', () => {
+      const [hits] = completeRedis('GET user:')
+      expect(hits).toContain('user:1')
+      expect(hits).toContain('user:2')
+    })
+
+    test('still completes meta commands in redis mode', () => {
+      const [hits] = completeRedis('.no')
+      expect(hits).toContain('.no-limit ')
+    })
+  })
 })

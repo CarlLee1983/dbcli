@@ -323,6 +323,27 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Query Size Guard</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Blacklist Enforcement</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Interactive Shell</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -345,6 +366,11 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
 
             <h3 class="mt-8">MongoDB saved queries</h3>
             <p>Mongo snippets end in <code>.mongodb.sql</code> and declare <code>engine: mongodb</code> with <code>operation: find</code> or <code>operation: aggregate</code>. Run with <code>dbcli q @&lt;key&gt;</code>; <code>{{param}}</code> placeholders are JSON-encoded so injected operator-shaped strings cannot escape into operator position.</p>
+
+            <h3 class="mt-8">Redis: size guard, blacklist, and shell (v1.21.0)</h3>
+            <p><strong>Size guard</strong> — unbounded reads are bounded automatically: <code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> get <code>COUNT 1000</code> injected (or a larger value capped); <code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> clamp <code>stop</code> to a span of 1000; <code>ZRANGEBYSCORE</code> gets <code>LIMIT 0 1000</code>; <code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> truncate at 1000. Results carry <code>warnings[]</code> (<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>). Use <code>--no-limit</code> (CLI) or <code>.no-limit on</code> (shell) to bypass.</p>
+            <p><strong>Blacklist</strong> — rules are enforced as Redis-native key globs (<code>*</code>, <code>?</code>, <code>[abc]</code>, <code>[a-z]</code>). <code>dbcli blacklist add 'secrets:*'</code> then reads/writes whose keys match are rejected (<code>BlacklistRejection</code>, audited with <code>matched_pattern</code>); <code>KEYS</code>/<code>SCAN MATCH</code> overlapping a rule are rejected; <code>list</code> filters blacklisted keys.</p>
+            <p><strong>Shell</strong> — <code>dbcli shell</code> on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a <code>.no-limit on/off</code> toggle.</p>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

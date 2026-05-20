@@ -9,7 +9,7 @@ import type { RedisClient } from 'bun'
 import { ConnectionError } from './types'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { rewriteArgs, truncateResult } from './redis/size-guard'
-import { checkKeyArgs } from './redis/blacklist-enforcer'
+import { checkKeyArgs, globToRegex } from './redis/blacklist-enforcer'
 import { BlacklistRejection } from './redis/types'
 import { getCommandSpec } from './redis/command-metadata'
 
@@ -123,7 +123,10 @@ export class RedisAdapter implements QueryableAdapter {
   async listCollections(): Promise<{ name: string; documentCount?: number }[]> {
     const client = this.requireClient()
     const keys = await scanAllKeys(client, '*', 1000)
-    return keys.map((name) => ({ name }))
+    const rules = this.blacklistRules
+    if (rules.length === 0) return keys.map((name) => ({ name }))
+    const regexes = rules.map((p) => globToRegex(p))
+    return keys.filter((k) => !regexes.some((r) => r.test(k))).map((name) => ({ name }))
   }
 
   async getDbSize(): Promise<number> {

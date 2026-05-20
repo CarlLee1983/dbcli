@@ -267,7 +267,7 @@ export interface QueryableAdapter {
   execute<T>(
     query: string,
     params?: unknown[],
-    options?: { limit?: number }
+    options?: { limit?: number; noLimit?: boolean }
   ): Promise<ExecutionResult<T>>
 
   /**

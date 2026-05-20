@@ -466,4 +466,20 @@ describe('RedisAdapter — middleware (blacklist + size guard)', () => {
     const r = await adapter.execute('HGETALL h')
     expect(r.warnings?.[0]?.code).toBe('REDIS_SIZE_TRUNCATE')
   })
+
+  test('listCollections filters blacklisted keys', async () => {
+    const client = {
+      send: async (head: string) => {
+        if (head === 'SCAN') return ['0', ['user:1', 'secrets:k', 'user:2']]
+        return null
+      },
+      close: () => {},
+      onclose: undefined as unknown,
+    }
+    const adapter = new RedisAdapter(baseOptions)
+    ;(adapter as unknown as { client: unknown }).client = client
+    adapter.setBlacklistRules(['secrets:*'])
+    const cols = await adapter.listCollections()
+    expect(cols.map((c) => c.name)).toEqual(['user:1', 'user:2'])
+  })
 })

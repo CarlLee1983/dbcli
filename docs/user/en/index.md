@@ -190,6 +190,9 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | DML (Insert/Update) | ✅ | ✅ | ✅ (via query) | ❌ |
 | DDL (Migrate) | ✅ | ❌ | ❌ | ❌ |
 | Interactive UI | ✅ | ✅ | ✅ | ✅ |
+| Query Size Guard | ✅ | ✅ | ⚠️ (rewrite + truncate) | ✅ |
+| Blacklist Enforcement | ✅ | ✅ | ⚠️ (key globs) | ⚠️ |
+| Interactive Shell (`shell`) | ✅ | ✅ | ✅ (single-line) | ❌ |
 
 ### MongoDB write planner (operator tiers)
 
@@ -238,6 +241,32 @@ Snippet locations: `assets/snippets/` (built-in), `.dbcli-shared/queries/` (shar
 - Body is JSON: object for `find`, array for `aggregate`. Each `{{param}}` placeholder is JSON-encoded — strings are quoted and escaped, so injected operator-shaped strings cannot escape into operator position.
 
 Run with `dbcli q @<key>`.
+
+### Redis: size guard, blacklist, and shell (v1.21.0)
+
+**Size guard** — unbounded reads are bounded automatically:
+
+- `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` get `COUNT 1000` injected (or a larger `COUNT` capped).
+- `LRANGE` / `ZRANGE` / `ZREVRANGE` clamp the `stop` index so the span is ≤ 1000; `ZRANGEBYSCORE` gets `LIMIT 0 1000`.
+- `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` are truncated to 1000 entries.
+
+Results carry a `warnings[]` array: `REDIS_SIZE_REWRITE` when arguments were rewritten, `REDIS_SIZE_TRUNCATE` when the reply was trimmed. Pass `--no-limit` (CLI) or run `.no-limit on` (shell) to bypass.
+
+```bash
+dbcli query "LRANGE jobs 0 -1"          # capped to 1000 → REDIS_SIZE_REWRITE
+dbcli query "HGETALL bighash" --no-limit  # full reply, no truncation
+```
+
+**Blacklist** — rules are enforced as Redis-native key globs (`*`, `?`, `[abc]`, `[a-z]`):
+
+```bash
+dbcli blacklist add 'secrets:*'
+dbcli query "GET secrets:api_key"   # rejected (BlacklistRejection); audited with matched_pattern
+dbcli query "KEYS secrets:*"        # rejected (pattern overlaps a rule)
+dbcli list                           # blacklisted keys filtered out
+```
+
+**Shell** — `dbcli shell` on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle.
 
 ---
 

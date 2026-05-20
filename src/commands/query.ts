@@ -347,7 +347,9 @@ async function redisQueryBranch(
   await redisAdapter.connect()
   const start = performance.now()
   try {
-    const result = await redisAdapter.execute<Record<string, unknown>>(command)
+    const result = await redisAdapter.execute<Record<string, unknown>>(command, undefined, {
+      noLimit: options.noLimit ?? false,
+    })
     const executionTimeMs = Math.round(performance.now() - start)
 
     const target = command.trim().split(/\s+/)[1] || '<unknown-key>'

@@ -196,7 +196,8 @@ export interface DatabaseAdapter {
    */
   execute<T>(
     sql: string,
-    params?: (string | number | boolean | null)[]
+    params?: (string | number | boolean | null)[],
+    options?: { noLimit?: boolean }
   ): Promise<ExecutionResult<T>>
 
   /**

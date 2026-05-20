@@ -3,7 +3,12 @@ import { describe, test, expect } from 'bun:test'
 import { handleMetaCommand } from '../../../src/core/repl/meta-commands'
 import type { ReplState } from '../../../src/core/repl/types'
 
-const defaultState: ReplState = { format: 'table', timing: false, connected: true }
+const defaultState: ReplState = {
+  format: 'table',
+  timing: false,
+  connected: true,
+  noLimit: false,
+}
 
 describe('handleMetaCommand', () => {
   test('.help returns help text', () => {
@@ -102,5 +107,25 @@ describe('handleMetaCommand', () => {
     const result = handleMetaCommand('.unknown', defaultState, [])
     expect(result.action).toBe('continue')
     expect(result.output).toContain('.help')
+  })
+
+  describe('.no-limit', () => {
+    test('.no-limit on sets state', () => {
+      const result = handleMetaCommand('.no-limit on', defaultState, [])
+      expect(result.stateUpdate?.noLimit).toBe(true)
+    })
+
+    test('.no-limit off unsets state', () => {
+      const onState: ReplState = { ...defaultState, noLimit: true }
+      const result = handleMetaCommand('.no-limit off', onState, [])
+      expect(result.stateUpdate?.noLimit).toBe(false)
+    })
+
+    test('.no-limit (no arg) shows current status', () => {
+      const onState: ReplState = { ...defaultState, noLimit: true }
+      const result = handleMetaCommand('.no-limit', onState, [])
+      expect(result.output).toContain('on')
+      expect(result.stateUpdate).toBeUndefined()
+    })
   })
 })

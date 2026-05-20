@@ -31,7 +31,7 @@ export class ReplEngine {
     historyPath: string,
     config: DbcliConfig | null = null
   ) {
-    this.state = { format: 'table', timing: false, connected: true }
+    this.state = { format: 'table', timing: false, connected: true, noLimit: false }
     this.buffer = new MultilineBuffer()
     this.history = new HistoryManager(historyPath)
     this.formatter = new QueryResultFormatter()
@@ -196,7 +196,9 @@ export class ReplEngine {
     const startTime = Date.now()
 
     try {
-      const result = await this.adapter.execute<Record<string, unknown>>(sql)
+      const result = await this.adapter.execute<Record<string, unknown>>(sql, undefined, {
+        noLimit: this.state.noLimit,
+      })
       const elapsed = Date.now() - startTime
       const rows = result.rows
 

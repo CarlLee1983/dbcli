@@ -44,6 +44,20 @@ describe('engine capability registry', () => {
     expect(getEngineCapability('redis', 'completion').status).toBe('not-applicable')
   })
 
+  test('Redis parity pack (v1.21.0): shell / auto-limit / blacklist capabilities', () => {
+    const shell = getEngineCapability('redis', 'shell')
+    expect(shell.status).toBe('limited')
+    expect(shell.tier).toBe('interactive')
+
+    const guard = getEngineCapability('redis', 'queryLimitGuard')
+    expect(guard.status).toBe('limited')
+    expect(guard.tier).toBe('readonly')
+
+    const blacklist = getEngineCapability('redis', 'blacklist')
+    expect(blacklist.status).toBe('limited')
+    expect(blacklist.tier).toBe('local-write')
+  })
+
   test('supportsCapability is false for limited and unsupported capabilities', () => {
     expect(supportsCapability('postgresql', 'query')).toBe(true)
     expect(supportsCapability('elasticsearch', 'query')).toBe(false)

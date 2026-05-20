@@ -234,7 +234,7 @@ describe('buildPlan', () => {
     ])
   })
 
-  test('redis permissions omits unsupported blacklist command', () => {
+  test('redis permissions includes blacklist command (key-glob enforcement, v1.21.0)', () => {
     const redisCtx: InspectSnapshot = {
       ...PG_CONTEXT,
       system: 'redis',
@@ -248,6 +248,7 @@ describe('buildPlan', () => {
     })
     expect(plan.map((s) => s.command)).toEqual([
       'dbcli inspect --for-agent',
+      'dbcli blacklist list --format json',
       'dbcli queries list --format json',
       'dbcli doctor --format json',
     ])

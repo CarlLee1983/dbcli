@@ -218,7 +218,7 @@ dbcli init --use-env-refs \
 | `doctor` | n/a | 環境、設定、連線、SRV 診斷(Mongo)、schema cache 年齡。 |
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新;每個指令都帶 24h 快取的版本提示。 |
-| `shell` | (與 query 同) | 互動式 REPL。僅支援 SQL 引擎與 MongoDB shell。 |
+| `shell` | (與 query 同) | 互動式 REPL。支援 SQL 引擎、MongoDB 與 Redis(單行;`.no-limit on/off`)。 |
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|copilot\|cursor>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
 | `migrate` | admin | 僅 SQL。**DDL;預設 dry-run** — 需 `--execute` 才會真的執行。 |
 
@@ -254,11 +254,14 @@ dbcli init --use-env-refs \
 ## Redis
 
 - 指令式執行;`query` 跑白名單內的 Redis 指令(例如 `GET`、`HSET`、`DEL`)。
-- **支援:** `init`、`list`(透過 SCAN 列 keys)、`schema <key>`(type / TTL / size / sample)、`query`、`status`、`use`、`doctor`、`upgrade`、`completion`。
+- **支援:** `init`、`list`(透過 SCAN 列 keys)、`schema <key>`(type / TTL / size / sample)、`query`、`shell`、`status`、`use`、`doctor`、`upgrade`、`completion`。
 - **不支援:** `schema` 全掃描、`insert`、`update`、`delete`、`export`、`check`、`diff`、`migrate`、`q`。
   寫入請走 `query "DEL <key>"` 等 — 同樣經過權限門檻。
 - 權限分層對應指令:讀取類 → `query-only`;mutator(`SET`、`HSET`、...)→ `read-write`;`DEL` / `UNLINK` → `data-admin`。
 - `database` 欄位是 logical DB index(預設 `0`);`list` 透過 SCAN 最多回傳 100 000 個 keys。
+- **大小防護(size guard):** `SCAN`/`HSCAN`/`SSCAN`/`ZSCAN` 自動補上 `COUNT 1000`;`LRANGE`/`ZRANGE` 夾限 `stop`;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`;`HGETALL`/`HKEYS`/`HVALS`/`SMEMBERS`/`KEYS` 在 1000 筆截斷。結果帶有 `warnings[]`(`REDIS_SIZE_REWRITE` / `REDIS_SIZE_TRUNCATE`)。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
+- **黑名單:** `dbcli blacklist add 'secrets:*'` 註冊 Redis 原生 key glob。命中規則的讀寫會被拒絕(`BlacklistRejection`,稽核記錄含 `metadata.matched_pattern`);與規則重疊的 `KEYS`/`SCAN MATCH` 會被拒絕;未重疊的列舉會濾掉黑名單 keys。
+- **Shell:** Redis 連線執行 `dbcli shell` 會開啟單行 REPL(歷史、指令與 key 前綴 tab 補全、`.no-limit on/off`)。
 - 詳見 reference.md Redis 段落。
 
 ## Elasticsearch

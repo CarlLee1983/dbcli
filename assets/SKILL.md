@@ -252,7 +252,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
-| `shell` | (same as query+) | Interactive REPL. SQL engines + MongoDB shell only. |
+| `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
@@ -288,11 +288,14 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 ## Redis
 
 - Command-style execution; `query` runs a whitelisted Redis command (e.g. `GET`, `HSET`, `DEL`).
-- **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample), `query`, `status`, `use`, `doctor`, `upgrade`, `completion`.
+- **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample), `query`, `shell`, `status`, `use`, `doctor`, `upgrade`, `completion`.
 - **Not supported:** `schema` full scan, `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
   Use `query "DEL <key>"` etc. for writes — they go through the same permission gate.
 - Permission tiers map to commands: read commands → `query-only`; mutators (`SET`, `HSET`, ...) → `read-write`; `DEL` / `UNLINK` → `data-admin`.
 - `database` field is the logical DB index (default `0`); `list` returns ≤ 100 000 keys via SCAN.
+- **Size guard:** `SCAN`/`HSCAN`/`SSCAN`/`ZSCAN` inject `COUNT 1000`; `LRANGE`/`ZRANGE` clamp `stop`; `ZRANGEBYSCORE` injects `LIMIT 0 1000`; `HGETALL`/`HKEYS`/`HVALS`/`SMEMBERS`/`KEYS` truncate at 1000. Results carry `warnings[]` (`REDIS_SIZE_REWRITE` / `REDIS_SIZE_TRUNCATE`). Pass `--no-limit` (CLI) or `.no-limit on` (shell) to bypass.
+- **Blacklist:** `dbcli blacklist add 'secrets:*'` registers a Redis-native key glob. Reads/writes whose keys match are rejected (`BlacklistRejection`, audited with `metadata.matched_pattern`); `KEYS`/`SCAN MATCH` overlapping a rule are rejected; non-overlapping listings filter blacklisted keys.
+- **Shell:** `dbcli shell` on a Redis connection opens a single-line REPL (history, tab completion of commands + key prefixes, `.no-limit on/off`).
 - See reference.md Redis section.
 
 ## Elasticsearch

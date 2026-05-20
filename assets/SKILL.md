@@ -9,6 +9,7 @@ Database CLI for AI agents with permission-based access control.
 
 ## AI agent workflow (follow in order)
 
+0. `dbcli skill context --format xml` — LLM prompt context payload: serializes connection metadata, schema caches, and saved queries into a compressed XML/JSON structure for prompt injection.
 1. `dbcli inspect --for-agent` — bounded snapshot: connection, permission, blacklist, objects, snippets, suggested next commands.
 2. `dbcli report --format json` — diagnostic report (health/capacity/perf) using built-in snippets.
 3. `dbcli guide <goal> --format json` — deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). Use `dbcli guide --list` to see goals.
@@ -49,6 +50,7 @@ Database CLI for AI agents with permission-based access control.
 6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
 7. Run `query` / `insert` / `update` / `delete` / `export` within permission.
 8. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
+   - **v1.21.0 Self-Verification Loops**: If a snippet defines a `verify` block in its frontmatter, run the snippet with `dbcli q @name --verify` to automatically run primary changes, execute the verification query, and validate assertions.
 
 Prefer `--format json` for agent-friendly output.
 
@@ -233,7 +235,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
 | `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. Supports `--recovery`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
-| `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. SQL / Elasticsearch DSL / read-only Redis bodies; blacklist enforced. `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard. Supports `--recovery`. |
+| `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. Supports `--verify` to run assertions. |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
 | `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. Supports `--recovery`. |
@@ -251,7 +253,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines + MongoDB shell only. |
-| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs. |
+| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 `--use <name>` on any subcommand targets a v2 connection without changing the default.

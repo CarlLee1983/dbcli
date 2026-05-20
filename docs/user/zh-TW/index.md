@@ -90,7 +90,7 @@ dbcli init
 | 指令 | 說明 |
 | :--- | :--- |
 | `query "<cmd>"` | 執行原生 SQL、MongoDB JSON、Redis 指令或 ES DSL。 |
-| `q @snippet` | 執行帶有參數的儲存查詢片段。 |
+| `q @snippet` | 執行帶有參數的儲存查詢片段。支援 `--verify` 以執行自動化斷言驗證。 |
 | `export` | 將結果匯出為 JSON, CSV, JSONL 或互動式 HTML。 |
 | `insert` | 從 JSON 插入資料 (支援 SQL & MongoDB)。支援 `--plan` 風險預檢（SQL、MongoDB、Redis、Elasticsearch）。 |
 | `update` | 更新資料，強制要求 `--where` 子句。支援 `--plan` 風險預檢（SQL、MongoDB、Redis、Elasticsearch）。 |
@@ -160,6 +160,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `shell` | 啟動互動式 REPL，支援 Tab 自動補全與 SQL 高亮。 |
 | `migrate <action>` | **DDL 引擎**：建立/修改/刪除資料表與索引。 |
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini 等）。 |
+| `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
@@ -250,6 +251,8 @@ Snippet 位置：`assets/snippets/`（內建）、`.dbcli-shared/queries/`（共
 3.  **風險控制**：AI 代理會主動使用 `dbcli plan`、`insert`/`update`/`delete` 的 `--plan` 預檢與 `--dry-run` 來驗證其行為。
 4.  **上下文效率**：`inspect --for-agent` 提供精簡的元資料，防止 AI 上下文視窗過載。
 5.  **稽核日誌 (Audit Log)**：詳見 [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log)。
+6.  **AI 協作提示注入**：`dbcli skill context` 將連線資訊、schema 快取和儲存查詢元資料序列化為高度壓縮、針對 token 優化的 XML、Markdown 或 JSON 結構，專門設計用於 AI 提示詞注入。
+7.  **自我驗證循環**：Snippet 可以定義 `verify` frontmatter 元資料（指定 `query` 與 LHS-運算子-RHS 的 `expects` 斷言）。使用 `dbcli q @name --verify` 執行查詢時，會自動執行主要指令、執行驗證查詢，並驗證傳回資料集的斷言。
 
 ---
 

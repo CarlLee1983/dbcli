@@ -265,6 +265,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>shell</code></td><td>Launch an interactive REPL with completion and SQL highlighting.</td></tr>
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>Run DDL workflows for creating, altering, or dropping SQL tables and indexes.</td></tr>
                     <tr><td><code>skill --install</code></td><td>Install compact AI-agent instructions for Claude, Gemini, Codex, and similar tools.</td></tr>
+                    <tr><td><code>skill context</code></td><td>Serialize cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown structures for AI prompt injection.</td></tr>
                     <tr><td><code>skill tasks</code></td><td>Manage repeatable expert task packs for diagnostics, audits, and database workflows.</td></tr>
                     <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
                 </tbody>
@@ -356,6 +357,8 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>Risk Gating</strong>: <code>dbcli plan</code> for raw SQL plus per-command <code>--plan</code> on <code>insert</code> / <code>update</code> / <code>delete</code> for DML preflight without connecting to the database.</li>
                 <li><strong>Expert Task Packs</strong>: Guided workflows for diagnosis and auditing.</li>
                 <li><strong>Audit Log</strong>: <code>audit tail --for-agent</code> for session handoff; every command's failure with <code>--recovery</code> writes matching <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUIDs so agents can pivot from a recovery envelope to its audit entry via <code>audit tail --recovery-ref &lt;id&gt;</code>.</li>
+                <li><strong>AI Collaboration Prompting</strong>: <code>dbcli skill context</code> serializes connection metadata, schema caches, and saved queries into highly-compressed XML/JSON/Markdown for AI prompt injection.</li>
+                <li><strong>Self-Verification Loops</strong>: Snippets can declare a <code>verify</code> block in frontmatter; run with <code>--verify</code> to auto-execute checks and assert results.</li>
             </ul>
         </section>
 

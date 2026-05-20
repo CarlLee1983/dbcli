@@ -90,7 +90,7 @@ dbcli init
 | Command | Description |
 | :--- | :--- |
 | `query "<cmd>"` | Executes raw SQL, MongoDB JSON, Redis commands, or ES DSL. |
-| `q @snippet` | Runs a parameterised saved query. |
+| `q @snippet` | Runs a parameterised saved query. Supports `--verify` for automated assertion loops. |
 | `export` | Exports results to JSON, CSV, JSONL, or Interactive HTML. |
 | `insert` | Inserts data from JSON (SQL & MongoDB). Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
 | `update` | Updates rows/documents with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
@@ -160,6 +160,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `shell` | Launches an interactive REPL with auto-completion and SQL highlighting. |
 | `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. |
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, etc.). |
+| `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
@@ -250,6 +251,8 @@ Run with `dbcli q @<key>`.
 3.  **Risk Gating**: Agents use `dbcli plan`, the per-command `--plan` preflight on `insert`/`update`/`delete`, and `--dry-run` to verify their actions before committing changes.
 4.  **Context Efficiency**: `inspect --for-agent` provides exactly the metadata the agent needs to orient itself without bloating its context window.
 5.  **Audit Log**: see [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log).
+6.  **AI Collaboration Prompting**: `dbcli skill context` serializes connection, schema cache, and saved query metadata into a highly-compressed, token-optimized XML, Markdown, or JSON structure designed specifically for AI prompt insertion.
+7.  **Self-Verification Loops**: Snippets can define `verify` frontmatter metadata (specifying a `query` and LHS-Operator-RHS `expects` assertions). Running a query with `dbcli q @name --verify` automatically executes the primary command, runs the verification query, and validates assertions against the returned dataset.
 
 ---
 

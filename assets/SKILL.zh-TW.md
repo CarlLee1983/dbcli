@@ -11,6 +11,7 @@ description: 為 AI 代理設計、具權限控管的資料庫 CLI。可用於�
 
 ## AI 代理工作流程(依序執行)
 
+0. `dbcli skill context --format xml` — LLM 提示詞脈絡載荷：將連線中介資料、Schema 快取和已儲存查詢序列化為高度壓縮的 XML/JSON 結構以進行 Prompt 注入。
 1. `dbcli inspect --for-agent` — 有界快照:連線、權限、blacklist、物件、snippets、建議的下一個指令。
 2. `dbcli report --format json` — 使用內建 snippets 產出診斷報告(health / capacity / perf)。
 3. `dbcli guide <goal> --format json` — 針對固定目標產出確定性的下一步指令計畫(`slow-query`、`capacity`、`health`、`index-usage`、`permissions`、`schema-overview`)。執行 `dbcli guide --list` 查看所有目標。
@@ -51,6 +52,7 @@ description: 為 AI 代理設計、具權限控管的資料庫 CLI。可用於�
 6. `dbcli schema <table> --format json` — 取得真實欄位名稱(SQL / Mongo / ES)或 `schema <key>`(Redis)。**禁止猜測。**
 7. 在允許的權限範圍內執行 `query` / `insert` / `update` / `delete` / `export`。
 8. 所有寫入:`--dry-run`(SQL / Mongo)→ 實際執行 → `query` 回讀確認。
+   - **v1.21.0 自我驗證循環（Self-Verification Loops）**：如果 snippet 在其 frontmatter 中定義了 `verify` 區塊，使用 `dbcli q @name --verify` 來執行該 snippet，即可自動跑完主要變更、執行驗證查詢並驗證斷言。
 
 代理友善的輸出請優先用 `--format json`。
 
@@ -199,7 +201,7 @@ dbcli init --use-env-refs \
 | `schema` | query-only+ | SQL:單表或全掃描存入 `.dbcli/schemas/`。MongoDB:sampled。ES:flattened mapping。Redis:僅單一 key(type / TTL / size)。支援 `--recovery`。 |
 | `query` | query-only+ | SQL、Mongo JSON(`--collection`)、Redis 指令、ES DSL / Lucene(`--collection`)。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。支援 `--recovery`。 |
 | `plan` | n/a | 靜態 SQL 風險分析器(`--format text\|json`);不連線即可分類語句。 |
-| `q` | query-only+ | 以 `@name` 執行已儲存 snippet,搭配 `--param k=v`。支援 SQL / Elasticsearch DSL / 唯讀 Redis 內容;blacklist 強制套用。`--format table\|json\|csv\|html`、`--ui` 開啟互動式 dashboard。支援 `--recovery`。 |
+| `q` | query-only+ | 以 `@name` 執行已儲存 snippet，搭配 `--param k=v`。支援 `--verify` 以執行斷言。 |
 | `queries` | n/a | 管理已儲存 snippet:`list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`。 |
 | `insert` / `update` | read-write+ | 僅 SQL 與 MongoDB。JSON `--data` / `--set`;`update` 必填 `--where`;先 `--dry-run`。Redis 寫入透過 `query`。支援 `--recovery`。 |
 | `delete` | data-admin+ | 僅 SQL 與 MongoDB。必填 `--where`;先 `--dry-run`。支援 `--recovery`。 |
@@ -217,7 +219,7 @@ dbcli init --use-env-refs \
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新;每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。僅支援 SQL 引擎與 MongoDB shell。 |
-| `skill` | n/a | 產出 / 安裝 AI skill 文件(`--install <claude\|gemini\|copilot\|cursor>`);`skill tasks list/show/plan` 提供 Agent Task Packs。 |
+| `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|copilot\|cursor>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
 | `migrate` | admin | 僅 SQL。**DDL;預設 dry-run** — 需 `--execute` 才會真的執行。 |
 
 任何子指令上的 `--use <name>` 都會把目標切到對應的 v2 連線,但不改變預設值。

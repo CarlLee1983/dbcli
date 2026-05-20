@@ -265,6 +265,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>shell</code></td><td>啟動互動式 REPL，支援補全與 SQL 高亮。</td></tr>
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>執行 SQL 資料表與索引的建立、修改或刪除等 DDL 工作流。</td></tr>
                     <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
+                    <tr><td><code>skill context</code></td><td>將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。</td></tr>
                     <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
@@ -356,6 +357,8 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><strong>風險控制</strong>：<code>dbcli plan</code> 處理原生 SQL，<code>insert</code> / <code>update</code> / <code>delete</code> 的 <code>--plan</code> 旗標則在不連線資料庫的情況下對 DML 進行預檢。</li>
                 <li><strong>專家任務包</strong>：針對診斷與稽核的引導式工作流。</li>
                 <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；每個指令失敗時加上 <code>--recovery</code> 都會寫入互相對應的 <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUID，agent 可透過 <code>audit tail --recovery-ref &lt;id&gt;</code> 從 envelope 反查 audit entry。</li>
+                <li><strong>AI 協作提示注入</strong>：<code>dbcli skill context</code> 將連線資訊、schema 快取和儲存查詢序列化為高度壓縮且專門設計用於 AI 提示詞注入的 XML/Markdown/JSON 格式。</li>
+                <li><strong>自我驗證循環</strong>：儲存的查詢片段支援定義 <code>verify</code> 斷言；在 <code>q</code> 執行時加上 <code>--verify</code> 即可自動化驗證。</li>
             </ul>
         </section>
 

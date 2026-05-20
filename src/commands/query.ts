@@ -344,7 +344,10 @@ async function redisQueryBranch(
   }
   enforceRedisPermission(command, config.permission)
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  const redisAdapter = AdapterFactory.createRedisAdapter(
+    config.connection as ConnectionOptions,
+    config.blacklist?.tables ?? []
+  )
   await redisAdapter.connect()
   const start = performance.now()
   try {

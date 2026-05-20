@@ -25,6 +25,14 @@ const validOptions: ConnectionOptions = {
   timeout: 5000,
 }
 
+test('factory injects blacklist rules into RedisAdapter', () => {
+  const adapter = AdapterFactory.createRedisAdapter(
+    { system: 'redis', host: 'h', port: 6379, user: '', password: '', database: '0' },
+    ['secrets:*']
+  )
+  expect((adapter as unknown as { blacklistRules: string[] }).blacklistRules).toEqual(['secrets:*'])
+})
+
 test('createAdapter returns PostgreSQLAdapter for postgresql system', () => {
   const adapter = AdapterFactory.createAdapter({ ...validOptions, system: 'postgresql' })
   expect(adapter).toBeInstanceOf(PostgreSQLAdapter)

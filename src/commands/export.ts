@@ -215,7 +215,10 @@ async function redisExportBranch(
   const { enforceRedisPermission } = await import('@/core/permission-guard')
   enforceRedisPermission(command, config.permission)
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  const redisAdapter = AdapterFactory.createRedisAdapter(
+    config.connection as ConnectionOptions,
+    config.blacklist?.tables ?? []
+  )
   await redisAdapter.connect()
   try {
     const result = await redisAdapter.execute<Record<string, unknown>>(command)

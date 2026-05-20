@@ -164,7 +164,10 @@ async function redisListBranch(
   format: string
 ): Promise<void> {
   const connName = (config.connection.database as string) || '0'
-  const redisAdapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+  const redisAdapter = AdapterFactory.createRedisAdapter(
+    config.connection as ConnectionOptions,
+    config.blacklist?.tables ?? []
+  )
   await redisAdapter.connect()
 
   try {

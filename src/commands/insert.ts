@@ -173,7 +173,10 @@ export async function insertCommand(
         return
       }
 
-      const adapter = AdapterFactory.createRedisAdapter(config.connection as ConnectionOptions)
+      const adapter = AdapterFactory.createRedisAdapter(
+        config.connection as ConnectionOptions,
+        config.blacklist?.tables ?? []
+      )
       await adapter.connect()
       try {
         const result = await adapter.insert(table, data)

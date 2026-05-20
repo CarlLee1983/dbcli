@@ -154,7 +154,18 @@ export interface ExecutionResult<T> {
   rowCount?: number
   /** Column ordering for the rows, used by formatters that render tabular output */
   columnNames?: string[]
+  /** Optional warnings — emitted today only by RedisAdapter (size guard / blacklist filter). */
+  warnings?: RedisWarning[]
 }
+
+/**
+ * Non-fatal warnings surfaced alongside a result. Currently Redis-only:
+ * size-guard rewrites/truncations and blacklist-filtered key listings.
+ */
+export type RedisWarning =
+  | { code: 'REDIS_SIZE_REWRITE'; command: string; original: string[]; rewritten: string[] }
+  | { code: 'REDIS_SIZE_TRUNCATE'; command: string; kept: number; droppedAtLeast: number }
+  | { code: 'REDIS_BLACKLIST_FILTERED'; count: number }
 
 /**
  * Database adapter interface - contract for all database implementations

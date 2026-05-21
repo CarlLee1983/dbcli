@@ -48,5 +48,25 @@ export function maskRedisRows(
     })
   }
 
+  if (head === 'HGET') {
+    const field = args[1]
+    const hit = plan.wholeValue || (field !== undefined && plan.fields.has(field))
+    return hit ? rows.map((r) => ({ ...r, value: REDACTED })) : rows
+  }
+
+  if (head === 'HMGET') {
+    return rows.map((row) => {
+      const idx = typeof row.index === 'number' ? row.index : Number(row.index)
+      const field = args[1 + idx]
+      const hit = plan.wholeValue || (field !== undefined && plan.fields.has(field))
+      return hit ? { ...row, value: REDACTED } : row
+    })
+  }
+
+  if (head === 'HVALS') {
+    if (!plan.wholeValue) return rows
+    return rows.map((r) => ({ ...r, value: REDACTED }))
+  }
+
   return rows
 }

@@ -35,3 +35,35 @@ test('HGETALL whole-value (no fields) redacts every field value', () => {
   const out = maskRedisRows('HGETALL', ['user:1'], rows, rules)
   expect(out).toEqual([{ name: REDACTED, password: REDACTED }])
 })
+
+test('HGET masks when requested field is listed', () => {
+  const rules: RedisMaskRule[] = [{ keyPattern: 'user:*', fields: ['password'] }]
+  const masked = maskRedisRows('HGET', ['user:1', 'password'], [{ value: 'hunter2' }], rules)
+  expect(masked).toEqual([{ value: REDACTED }])
+  const kept = maskRedisRows('HGET', ['user:1', 'name'], [{ value: 'alice' }], rules)
+  expect(kept).toEqual([{ value: 'alice' }])
+})
+
+test('HMGET masks per-field by position', () => {
+  const rules: RedisMaskRule[] = [{ keyPattern: 'user:*', fields: ['password'] }]
+  const rows = [
+    { index: 0, value: 'alice' },
+    { index: 1, value: 'hunter2' },
+  ]
+  const out = maskRedisRows('HMGET', ['user:1', 'name', 'password'], rows, rules)
+  expect(out).toEqual([
+    { index: 0, value: 'alice' },
+    { index: 1, value: REDACTED },
+  ])
+})
+
+test('HVALS only honors whole-value rules', () => {
+  const rows = [{ index: 0, value: 'a' }, { index: 1, value: 'b' }]
+  const fieldRule: RedisMaskRule[] = [{ keyPattern: 'user:*', fields: ['password'] }]
+  expect(maskRedisRows('HVALS', ['user:1'], rows, fieldRule)).toEqual(rows)
+  const wholeRule: RedisMaskRule[] = [{ keyPattern: 'user:*' }]
+  expect(maskRedisRows('HVALS', ['user:1'], rows, wholeRule)).toEqual([
+    { index: 0, value: REDACTED },
+    { index: 1, value: REDACTED },
+  ])
+})

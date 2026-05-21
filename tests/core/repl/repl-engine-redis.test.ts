@@ -37,7 +37,12 @@ test('Redis: bare single-line GET executes (no semicolon)', async () => {
 })
 
 test('Redis: SCAN 0 executes (no semicolon)', async () => {
-  const engine = new ReplEngine(stubAdapter([{ index: 0, value: 'k1' }]), redisContext, '/tmp/.hist', null)
+  const engine = new ReplEngine(
+    stubAdapter([{ index: 0, value: 'k1' }]),
+    redisContext,
+    '/tmp/.hist',
+    null
+  )
   const result = await engine.processInput('SCAN 0')
   expect(result.action).toBe('continue')
   expect(result.output).toContain('k1')
@@ -45,7 +50,12 @@ test('Redis: SCAN 0 executes (no semicolon)', async () => {
 
 test('SQL: a non-keyword line without ; does NOT execute (regression guard)', async () => {
   const sqlContext: ReplContext = { ...redisContext, system: 'postgresql' }
-  const engine = new ReplEngine(stubAdapter([{ value: 'should-not-run' }]), sqlContext, '/tmp/.hist', null)
+  const engine = new ReplEngine(
+    stubAdapter([{ value: 'should-not-run' }]),
+    sqlContext,
+    '/tmp/.hist',
+    null
+  )
   // "foo bar" is not a SQL keyword and has no ; → must be treated as unknown command, not executed.
   const result = await engine.processInput('foo bar')
   expect(result.output ?? '').not.toContain('should-not-run')

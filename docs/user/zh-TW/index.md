@@ -290,7 +290,7 @@ dbcli query "GET secret:api_key"   # → { "value": "[REDACTED]" }
 dbcli query "HGETALL user:1"        # → password/token 被遮罩,其他欄位保留
 ```
 
-**Shell** — Redis 連線執行 `dbcli shell` 會開啟單行 REPL,具備歷史、tab 補全(指令 + key 前綴)與 `.no-limit on/off` 切換。
+**Shell** — Redis 連線執行 `dbcli shell` 會開啟單行 REPL,具備歷史、tab 補全(指令 + key 前綴)與 `.no-limit on/off` 切換。指令直接輸入,毋須結尾分號(例如 `GET mykey`)。
 
 ---
 

@@ -15,6 +15,7 @@ import { MySQLAdapter } from './mysql-adapter'
 import { MongoDBAdapter } from './mongodb-adapter'
 import { RedisAdapter } from './redis-adapter'
 import { ElasticsearchAdapter } from './elasticsearch-adapter'
+import type { RedisMaskRule } from '@/types/blacklist'
 
 /**
  * Factory for creating database adapters
@@ -78,13 +79,15 @@ export class AdapterFactory {
 
   static createRedisAdapter(
     options: ConnectionOptions,
-    blacklistRules: string[] = []
+    blacklistRules: string[] = [],
+    maskRules: RedisMaskRule[] = []
   ): QueryableAdapter {
     if (options.system !== 'redis') {
       throw new Error('createRedisAdapter requires system: redis')
     }
     const adapter = new RedisAdapter(options as QueryableConnectionOptions)
     adapter.setBlacklistRules(blacklistRules)
+    adapter.setMaskRules(maskRules)
     return adapter
   }
 

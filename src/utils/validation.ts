@@ -133,6 +133,25 @@ export const BlacklistConfigSchema = z
   .default({ tables: [], columns: {} })
 
 /**
+ * Redis value/hash-field masking rule schema.
+ * Keys matching keyPattern have their value (or named hash fields) redacted on read.
+ */
+export const RedisMaskRuleSchema = z.object({
+  keyPattern: z.string().min(1),
+  fields: z.array(z.string()).optional(),
+})
+
+/**
+ * Redis-specific config block. Currently carries masking rules.
+ * Optional for backward compatibility with existing .dbcli files.
+ */
+export const RedisConfigSchema = z
+  .object({
+    mask: z.array(RedisMaskRuleSchema).default([]),
+  })
+  .optional()
+
+/**
  * Audit rotation thresholds schema (D-11)
  * Both thresholds default to the locked values; either trigger triggers rotation (OR relationship).
  */
@@ -171,6 +190,7 @@ export const DbcliConfigSchema = z.object({
   metadata: MetadataSchema,
   blacklist: BlacklistConfigSchema,
   audit: AuditConfigSchema,
+  redis: RedisConfigSchema,
 })
 
 /**
@@ -225,6 +245,7 @@ export const DbcliConfigV2Schema = z
     metadata: MetadataSchema,
     blacklist: BlacklistConfigSchema,
     audit: AuditConfigSchema,
+    redis: RedisConfigSchema,
   })
   .refine((config) => config.default in config.connections, {
     message: 'Default connection must exist in connections',

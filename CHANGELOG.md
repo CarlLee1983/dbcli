@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.22.0] - 2026-05-21 - Elasticsearch Shell/Export + Redis Masking
+
+### Added
+
+- **Elasticsearch interactive shell.** `dbcli shell` 對 ES 連線開啟 Kibana Dev Tools 風格 REPL:輸入請求行 `<METHOD> /<path>` 加上可選的多行 JSON body,以空白行送出整個區塊,回應以美化 JSON 呈現。以讀取為主 — index 層級黑名單於前端直接拒絕受保護 index;`_search` 若 body 未指定 `size` 自動上限 1000 筆。(P1)
+- **Elasticsearch export.** `dbcli export` 對 ES 連線支援兩種形式:傳入 search DSL 並以 `--index` 指定索引以匯出命中結果,或直接以 index 名稱當作查詢、透過 `match_all` + scroll 匯出整個索引。輸出 JSON / JSONL / CSV,預設上限 1000 筆(`--no-limit` 匯出全索引,以 scroll 分批串流)。匯出前套用索引層級黑名單檢查,並寫入稽核紀錄。(P2)
+- **Redis value / hash-field 遮罩。** 新增 `.dbcli` `redis.mask` 設定區塊:key 命中 `keyPattern` glob 者,其值(或指定的 hash `fields`)於讀取時(`GET`、`GETRANGE`、`HGETALL`、`HGET`、`HMGET`、`HVALS`)回傳 `[REDACTED]`。遮罩與既有 key-glob 拒絕黑名單並存,且**拒絕一律優先於遮罩**。(P3)
+
+### Fixed
+
+- **Redis shell 單行指令路由。** 在 `dbcli shell` 對 Redis 連線輸入不帶結尾 `;` 的單行指令(`GET mykey`、`SCAN 0`、`HGETALL h`)現可正確執行,修正先前被誤判為未知 dbcli 指令的路由瑕疵。SQL 的分號 / 多行語意不變。(P4)
+
+### Changed
+
+- `src/adapters/capabilities.ts`:ES `export` 由 unsupported 改為 limited(readonly);Redis `blacklist` note 補上 value/hash-field 遮罩;Redis `shell` 單行說明修正。
+
+### Docs
+
+- 雙語 user docs(`docs/user/en` / `docs/user/zh-TW`,md + html)新增 ES shell、ES export、Redis 遮罩段落;`docs/feature-matrix.md` 同步 ES export 與 Redis blacklist 儲存格。
+
+
 ## [1.21.0] - 2026-05-20 - Redis-Parity Pack
 
 ### Added

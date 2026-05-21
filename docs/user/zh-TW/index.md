@@ -310,6 +310,22 @@ es> POST /users/_search
 - **以讀取為主。** Index 層級黑名單會在前端直接拒絕受保護的 index;任何 `_search` 請求若 body 未指定 `size`,會自動上限為 **1000** 筆 hits。
 - **空白行**送出當前區塊;**Ctrl+C** 取消進行中的區塊;**Ctrl+D** 或輸入 `exit` / `quit` 離開 shell。
 
+### Elasticsearch:匯出（v1.22.0）
+
+Elasticsearch 連線執行 `dbcli export` 可將文件匯出為 JSON、JSONL 或 CSV,支援兩種形式:
+
+```bash
+# 1. 匯出 search DSL 的命中結果 — 需要 --index
+dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format json
+
+# 2. 透過 match_all + scroll 匯出整個 index — 直接把 index 名稱當作查詢傳入
+dbcli export orders --format jsonl --output orders.jsonl
+```
+
+- 預設**上限為 1000 筆**。加上 `--no-limit` 可匯出整個 index(整索引形式會以 scroll 分批串流)。
+- 在讀取任何文件前,目標 index 會先經過**索引層級黑名單**檢查。
+- 每次匯出都會寫入一筆**稽核紀錄**,記錄目標 index、筆數與輸出格式。
+
 ---
 
 <!-- doc-key: ai-agent-integration -->

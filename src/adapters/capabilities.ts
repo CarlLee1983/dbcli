@@ -286,7 +286,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       insert: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       update: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       delete: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
-      export: cap('unsupported', 'none', 'Elasticsearch export is not supported.'),
+      export: cap(
+        'limited',
+        'readonly',
+        'Exports DSL hits or a full index via scroll, capped at 1000 rows (use --no-limit).'
+      ),
       blacklist: cap(
         'limited',
         'local-write',

@@ -26,7 +26,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `insert` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
 | `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
 | `delete` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
-| `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Currently SQL/Mongo only. |
+| `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo plus ES. ES: exports DSL hits or a full index via scroll, capped at 1000 rows (`--no-limit` to bypass). Redis not supported. |
 | `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob rejection (Redis-native pattern) plus value/hash-field masking (`[REDACTED]`) via the `redis.mask` config block. |
 | `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
 | `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |

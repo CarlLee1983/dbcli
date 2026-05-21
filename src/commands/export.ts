@@ -26,6 +26,7 @@ import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { extractTableName } from '@/utils/engine-hints'
 import { maskMongoRows } from '@/core/mongo/field-masker'
+import { scrollAll } from '@/adapters/elasticsearch/scroll-reader'
 import type { DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -84,9 +85,8 @@ export async function exportCommand(
     }
 
     if (config.connection.system === 'elasticsearch') {
-      throw new Error(
-        'Elasticsearch 不支援 export 指令；目前請改用 query --index <index> 並重新導向輸出，或使用外部工具（如 elasticdump）'
-      )
+      await esExportBranch(sql, options, config as DbcliConfig)
+      return
     }
 
     if (config.connection.system === 'mongodb') {
@@ -274,6 +274,108 @@ async function redisExportBranch(
     })
   } finally {
     await redisAdapter.disconnect()
+  }
+}
+
+const ES_EXPORT_CAP = 1000
+
+interface EsExportAdapter {
+  connect(): Promise<void>
+  disconnect(): Promise<void>
+  request<T>(method: string, path: string, body?: unknown): Promise<T>
+  execute<T>(
+    query: string,
+    params?: unknown[],
+    options?: { limit?: number }
+  ): Promise<{ rows: T[]; rowCount: number; columnNames: string[] }>
+}
+
+/** Testable core: resolve rows + target index from a DSL query or a bare index name. */
+export async function buildEsExportRows(
+  query: string,
+  options: { index?: string; collection?: string; noLimit?: boolean; limit?: number },
+  adapter: EsExportAdapter
+): Promise<{ rows: Record<string, unknown>[]; target: string }> {
+  const cap = options.noLimit ? Number.POSITIVE_INFINITY : (options.limit ?? ES_EXPORT_CAP)
+  const isDsl = query.trim().startsWith('{')
+
+  if (isDsl) {
+    const index = options.index ?? options.collection
+    if (!index) {
+      throw new Error('Elasticsearch DSL export requires --index <name>')
+    }
+    const res = await adapter.execute<Record<string, unknown>>(query, [index], {
+      limit: cap === Number.POSITIVE_INFINITY ? 10000 : cap,
+    })
+    return { rows: res.rows, target: index }
+  }
+
+  const index = query.trim()
+  const rows = await scrollAll(
+    adapter as never,
+    index,
+    cap === Number.POSITIVE_INFINITY ? 1_000_000 : cap
+  )
+  return { rows, target: index }
+}
+
+async function esExportBranch(
+  query: string,
+  options: ExportOptions,
+  config: DbcliConfig
+): Promise<void> {
+  const blacklistManager = new BlacklistManager(config)
+  const blacklistValidator = new BlacklistValidator(blacklistManager)
+
+  const adapter = AdapterFactory.createElasticsearchAdapter(config.connection as ConnectionOptions)
+  await adapter.connect()
+  try {
+    const { rows, target } = await buildEsExportRows(
+      query,
+      options,
+      adapter as unknown as EsExportAdapter
+    )
+
+    blacklistValidator.checkTableBlacklist('SELECT', target, [])
+
+    if (!options.noLimit && rows.length >= ES_EXPORT_CAP) {
+      console.error(
+        `Warning: result capped at ${ES_EXPORT_CAP} rows. Use --no-limit to export the full index.`
+      )
+    }
+
+    const columns = collectColumnUnion(rows)
+    const formatted = formatMongoRows(rows, columns, options.format)
+
+    if (options.output) {
+      const file = Bun.file(options.output)
+      const exists = await file.exists()
+      if (exists && !options.force) {
+        const confirmed = await promptUser.confirm(
+          t_vars('export.overwrite_confirmation', { file: options.output })
+        )
+        if (!confirmed) {
+          console.error('Operation cancelled by user')
+          return
+        }
+      }
+      await file.write(formatted)
+      console.error(t_vars('export.exported', { count: rows.length, file: options.output }))
+    } else {
+      console.log(formatted)
+    }
+
+    await writeAuditEntry(config, 'export', options, {
+      success: true,
+      target,
+      metadata: {
+        rows_affected: rows.length,
+        output_format: options.format,
+        ...(options.output && { output_file: options.output }),
+      },
+    })
+  } finally {
+    await adapter.disconnect()
   }
 }
 

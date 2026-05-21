@@ -310,6 +310,22 @@ es> POST /users/_search
 - **Read-focused.** Index-level blacklist rejects protected indices up front, and any `_search` request whose body lacks an explicit `size` is auto-capped at **1000** hits.
 - A **blank line** submits the current block; **Ctrl+C** cancels the in-progress block; **Ctrl+D** or typing `exit` / `quit` leaves the shell.
 
+### Elasticsearch: export (v1.22.0)
+
+`dbcli export` on an Elasticsearch connection writes documents to JSON, JSONL, or CSV. It accepts two forms:
+
+```bash
+# 1. Export the hits of a search DSL — requires --index
+dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format json
+
+# 2. Export a whole index via match_all + scroll — pass the index name as the query
+dbcli export orders --format jsonl --output orders.jsonl
+```
+
+- **Capped at 1000 rows** by default. Pass `--no-limit` to export the full index (the full-index form streams in scroll batches).
+- The target index is checked against the **index-level blacklist** before any documents are read.
+- Each export writes an **audit entry** recording the target index, row count, and output format.
+
 ---
 
 <!-- doc-key: ai-agent-integration -->

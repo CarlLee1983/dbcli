@@ -21,3 +21,17 @@ test('non-matching key → unchanged', () => {
   const rows = [{ value: 'plain' }]
   expect(maskRedisRows('GET', ['public:x'], rows, rules)).toEqual([{ value: 'plain' }])
 })
+
+test('HGETALL field mask: only named fields redacted', () => {
+  const rules: RedisMaskRule[] = [{ keyPattern: 'user:*', fields: ['password', 'token'] }]
+  const rows = [{ name: 'alice', password: 'hunter2', token: 'abc', age: '30' }]
+  const out = maskRedisRows('HGETALL', ['user:1'], rows, rules)
+  expect(out).toEqual([{ name: 'alice', password: REDACTED, token: REDACTED, age: '30' }])
+})
+
+test('HGETALL whole-value (no fields) redacts every field value', () => {
+  const rules: RedisMaskRule[] = [{ keyPattern: 'user:*' }]
+  const rows = [{ name: 'alice', password: 'hunter2' }]
+  const out = maskRedisRows('HGETALL', ['user:1'], rows, rules)
+  expect(out).toEqual([{ name: REDACTED, password: REDACTED }])
+})

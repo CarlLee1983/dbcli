@@ -38,5 +38,15 @@ export function maskRedisRows(
     return rows.map((r) => ({ ...r, value: REDACTED }))
   }
 
+  if (head === 'HGETALL') {
+    return rows.map((row) => {
+      const out: Record<string, unknown> = {}
+      for (const [field, value] of Object.entries(row)) {
+        out[field] = plan.wholeValue || plan.fields.has(field) ? REDACTED : value
+      }
+      return out
+    })
+  }
+
   return rows
 }

@@ -80,7 +80,9 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const redisInner = isRedis
     ? (AdapterFactory.createRedisAdapter(
         connectionOpts,
-        config.blacklist?.tables ?? []
+        config.blacklist?.tables ?? [],
+        (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis
+          ?.mask ?? []
       ) as unknown as RedisAdapter)
     : null
   const adapter = isMongoDB

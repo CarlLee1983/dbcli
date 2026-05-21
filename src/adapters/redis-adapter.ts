@@ -12,6 +12,8 @@ import { rewriteArgs, truncateResult } from './redis/size-guard'
 import { checkKeyArgs, globToRegex } from './redis/blacklist-enforcer'
 import { BlacklistRejection } from './redis/types'
 import { getCommandSpec } from './redis/command-metadata'
+import { maskRedisRows } from './redis/value-masker'
+import type { RedisMaskRule } from '@/types/blacklist'
 
 type RedisClientOptions = {
   connectionTimeout?: number
@@ -40,6 +42,12 @@ export class RedisAdapter implements QueryableAdapter {
 
   setBlacklistRules(rules: string[]): void {
     this.blacklistRules = rules
+  }
+
+  private maskRules: RedisMaskRule[] = []
+
+  setMaskRules(rules: RedisMaskRule[]): void {
+    this.maskRules = rules
   }
 
   private async resolveClientClass(): Promise<RedisCtor> {
@@ -220,11 +228,13 @@ export class RedisAdapter implements QueryableAdapter {
       const tr = truncateResult(head, rawReply, { noLimit })
       if (tr.warning) warnings.push(tr.warning)
       const rows = wrapReply<T>(head, tr.value)
-      return finishResult<T>(rows, warnings)
+      const masked = maskRedisRows(head, rest, rows as Record<string, unknown>[], this.maskRules)
+      return finishResult<T>(masked as T[], warnings)
     }
 
     const rows = await this.dispatchCommand<T>(head, rw.rewritten)
-    return finishResult<T>(rows, warnings)
+    const masked = maskRedisRows(head, rest, rows as Record<string, unknown>[], this.maskRules)
+    return finishResult<T>(masked as T[], warnings)
   }
 
   async insert(keyName: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {

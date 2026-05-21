@@ -266,6 +266,30 @@ dbcli query "KEYS secrets:*"        # rejected (pattern overlaps a rule)
 dbcli list                           # blacklisted keys filtered out
 ```
 
+**Masking (v1.22)** — where the key-glob blacklist *rejects*, masking instead *redacts*: matched reads return `[REDACTED]` so an agent can still run the command without ever seeing the sensitive value. Add an optional `redis.mask` block to your `.dbcli` config:
+
+```json
+{
+  "redis": {
+    "mask": [
+      { "keyPattern": "user:*", "fields": ["password", "token"] },
+      { "keyPattern": "secret:*" }
+    ]
+  }
+}
+```
+
+- `keyPattern` is a Redis-native glob (`*`, `?`, `[abc]`). Each rule applies to keys it matches.
+- `fields` present → only those hash fields are redacted (`HGETALL`, `HGET`, `HMGET`).
+- `fields` absent → the whole value is redacted (`GET`, `GETRANGE`, and every field of a hash).
+- Masking covers `GET` / `GETRANGE` / `HGETALL` / `HGET` / `HMGET` / `HVALS`.
+- **Rejection wins over masking:** if a key matches both a `blacklist` rule and a `mask` rule, the command is rejected outright — it never reaches masking.
+
+```bash
+dbcli query "GET secret:api_key"   # → { "value": "[REDACTED]" }
+dbcli query "HGETALL user:1"        # → password/token redacted, other fields intact
+```
+
 **Shell** — `dbcli shell` on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle.
 
 ---

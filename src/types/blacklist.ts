@@ -16,6 +16,14 @@ export interface BlacklistConfig {
   columns: Record<string, string[]>
 }
 
+/** A single Redis masking rule: keys matching keyPattern have their value (or named hash fields) redacted. */
+export interface RedisMaskRule {
+  /** Redis-native glob (e.g. "user:*"). */
+  keyPattern: string
+  /** Hash field names to mask. Absent/empty → mask the whole value. */
+  fields?: string[]
+}
+
 /**
  * Column blacklist type alias for clarity
  * Maps table name to array of blacklisted column names

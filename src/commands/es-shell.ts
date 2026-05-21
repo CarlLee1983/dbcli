@@ -1,3 +1,9 @@
+import { createInterface } from 'node:readline'
+import pc from 'picocolors'
+import { configModule } from '../core/config'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import type { DbcliConfig } from '../types'
+
 export interface EsRequest {
   method: string
   path: string
@@ -63,4 +69,68 @@ export async function runEsRequest(
   }
 
   return adapter.request(req.method, req.path, body)
+}
+
+export async function runEsShell(configPath: string): Promise<void> {
+  const config: DbcliConfig = await configModule.read(configPath)
+  const adapter = AdapterFactory.createElasticsearchAdapter(config.connection as ConnectionOptions)
+  await adapter.connect()
+  const blacklistTables = config.blacklist?.tables ?? []
+
+  console.error(pc.bold('Elasticsearch shell — Kibana Dev Tools syntax'))
+  console.error(
+    pc.dim(
+      'Enter "<METHOD> /<path>" then an optional JSON body; submit with a blank line. Try: GET /_cat/indices'
+    )
+  )
+  console.error(pc.dim('Ctrl+C cancels the current block; Ctrl+D or "exit" quits.'))
+  console.error('')
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    prompt: pc.cyan('es> '),
+    terminal: process.stdin.isTTY ?? false,
+  })
+
+  let blockLines: string[] = []
+  const submit = async () => {
+    const block = blockLines.join('\n').trim()
+    blockLines = []
+    rl.setPrompt(pc.cyan('es> '))
+    if (block === '') return
+    if (block === 'exit' || block === 'quit') {
+      rl.close()
+      return
+    }
+    try {
+      const req = parseEsRequest(block)
+      const res = await runEsRequest(req, adapter as never, blacklistTables)
+      console.log(JSON.stringify(res, null, 2))
+    } catch (error) {
+      console.error(pc.red((error as Error).message))
+    }
+  }
+
+  rl.prompt()
+  rl.on('line', async (line: string) => {
+    if (line.trim() === '') {
+      await submit()
+    } else {
+      blockLines.push(line)
+      rl.setPrompt(pc.dim('...  '))
+    }
+    rl.prompt()
+  })
+  rl.on('SIGINT', () => {
+    blockLines = []
+    rl.setPrompt(pc.cyan('es> '))
+    console.error(pc.dim('(block cancelled)'))
+    rl.prompt()
+  })
+  rl.on('close', async () => {
+    await adapter.disconnect()
+    console.error(pc.dim('Goodbye'))
+    process.exit(0)
+  })
 }

@@ -33,3 +33,34 @@ export function extractIndexFromPath(path: string): string | undefined {
   if (seg === '' || seg.startsWith('_')) return undefined
   return seg.split('?')[0]
 }
+
+interface EsRequestCapable {
+  request<T>(method: string, path: string, body?: unknown): Promise<T>
+}
+
+const ES_SHELL_SIZE_CAP = 1000
+
+/** Apply index-level blacklist + search size cap, then issue the request. */
+export async function runEsRequest(
+  req: EsRequest,
+  adapter: EsRequestCapable,
+  blacklistTables: string[]
+): Promise<unknown> {
+  const index = extractIndexFromPath(req.path)
+  if (index && blacklistTables.some((t) => t.toLowerCase() === index.toLowerCase())) {
+    throw new Error(`BlacklistRejection: index '${index}' is blacklist-protected`)
+  }
+
+  let body = req.body
+  if (
+    req.path.includes('_search') &&
+    body !== null &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
+    (body as { size?: number }).size === undefined
+  ) {
+    body = { ...(body as Record<string, unknown>), size: ES_SHELL_SIZE_CAP }
+  }
+
+  return adapter.request(req.method, req.path, body)
+}

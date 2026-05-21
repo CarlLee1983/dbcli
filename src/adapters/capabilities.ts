@@ -295,7 +295,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       check: cap('unsupported', 'none', 'Data health check is SQL-only.'),
       diff: cap('unsupported', 'none', 'Schema snapshots are relational only.'),
       migrate: cap('unsupported', 'none', 'DDL migrations are SQL-only.'),
-      shell: cap('unsupported', 'none', 'Elasticsearch REPL is not supported.'),
+      shell: cap(
+        'limited',
+        'interactive',
+        'Dedicated Kibana Dev Tools-style REPL (method/path + JSON body, blank-line submit); read-focused.'
+      ),
     }),
   })
 

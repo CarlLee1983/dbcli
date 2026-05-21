@@ -14,6 +14,7 @@ import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
 import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
 import { RedisShellAdapter } from '@/adapters/redis-shell-adapter'
+import * as esShell from '@/commands/es-shell'
 import type { RedisAdapter } from '@/adapters/redis-adapter'
 import type { QueryableAdapter } from '@/adapters/types'
 
@@ -71,6 +72,11 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   } catch {
     console.error(pc.red(t('shell.error_no_config')))
     process.exit(1)
+  }
+
+  if (config.connection.system === 'elasticsearch') {
+    await esShell.runEsShell(configPath)
+    return
   }
 
   const isMongoDB = config.connection.system === 'mongodb'

@@ -276,7 +276,7 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     return this.baseUrl
   }
 
-  private async request<T>(
+  async request<T>(
     method: string,
     path: string,
     body?: unknown,

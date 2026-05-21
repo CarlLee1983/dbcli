@@ -192,7 +192,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | 互動式 UI | ✅ | ✅ | ✅ | ✅ |
 | 查詢大小防護 | ✅ | ✅ | ⚠️（改寫 + 截斷） | ✅ |
 | 黑名單強制 | ✅ | ✅ | ⚠️（key glob） | ⚠️ |
-| 互動式 Shell（`shell`) | ✅ | ✅ | ✅（單行） | ❌ |
+| 互動式 Shell（`shell`) | ✅ | ✅ | ✅（單行） | ⚠️（Kibana 風格） |
 
 ### MongoDB 寫入規劃器（運算子分層）
 
@@ -291,6 +291,24 @@ dbcli query "HGETALL user:1"        # → password/token 被遮罩,其他欄位�
 ```
 
 **Shell** — Redis 連線執行 `dbcli shell` 會開啟單行 REPL,具備歷史、tab 補全(指令 + key 前綴)與 `.no-limit on/off` 切換。指令直接輸入,毋須結尾分號(例如 `GET mykey`)。
+
+### Elasticsearch:互動式 shell（v1.22.0）
+
+Elasticsearch 連線執行 `dbcli shell` 會開啟專屬的 Kibana Dev Tools 風格 REPL。輸入請求行 `<METHOD> /<path>`,接著可選的多行 JSON body,再以**空白行**送出整個區塊。回應以美化後的 JSON 呈現。
+
+```text
+es> GET /_cat/indices
+        (空白行送出)
+
+es> POST /users/_search
+... {
+...   "query": { "match_all": {} }
+... }
+        (空白行送出)
+```
+
+- **以讀取為主。** Index 層級黑名單會在前端直接拒絕受保護的 index;任何 `_search` 請求若 body 未指定 `size`,會自動上限為 **1000** 筆 hits。
+- **空白行**送出當前區塊;**Ctrl+C** 取消進行中的區塊;**Ctrl+D** 或輸入 `exit` / `quit` 離開 shell。
 
 ---
 

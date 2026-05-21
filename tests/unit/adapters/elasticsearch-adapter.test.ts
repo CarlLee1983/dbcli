@@ -340,3 +340,13 @@ describe('ElasticsearchAdapter write operations', () => {
     expect(capturedUrl).toContain('/users/_doc/1')
   })
 })
+
+test('request() is callable from outside the adapter', () => {
+  const opts = {
+    system: 'elasticsearch',
+    host: 'localhost',
+    port: 9200,
+  } as unknown as import('@/adapters/types').ConnectionOptions
+  const adapter = new ElasticsearchAdapter(opts)
+  expect(typeof (adapter as unknown as { request: unknown }).request).toBe('function')
+})

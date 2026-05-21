@@ -7,7 +7,7 @@ import { MultilineBuffer } from './multiline-buffer'
 import { handleMetaCommand } from './meta-commands'
 import { parseCommandLine, isKnownCommand } from './command-dispatcher'
 import { HistoryManager } from './history-manager'
-import { checkPermission } from '../permission-guard'
+import { checkPermission, classifyRedisCommand, permissionAtLeast } from '../permission-guard'
 import { QueryResultFormatter } from '../../formatters/query-result-formatter'
 import type { QueryResult } from '../../types/query'
 import { t_vars, t } from '../../i18n/message-loader'
@@ -111,6 +111,13 @@ export class ReplEngine {
     const parsed = parseCommandLine(input)
 
     if (!isKnownCommand(parsed.command)) {
+      // Non-SQL engines (Redis) accept raw single-line commands that are not dbcli
+      // subcommands; execute them directly instead of rejecting. SQL engines keep
+      // the unknown-command behavior.
+      if (this.context.system === 'redis') {
+        this.history.add(input)
+        return this.executeSql(input)
+      }
       return {
         action: 'continue',
         output: t_vars('shell.unknown_command', { command: parsed.command }),
@@ -162,17 +169,23 @@ export class ReplEngine {
   }
 
   private async executeSql(sql: string): Promise<ProcessResult> {
-    // Permission check
-    const permResult = checkPermission(sql, this.context.permission)
-    if (!permResult.allowed) {
-      return {
-        action: 'continue',
-        output: pc.red(
-          t_vars('shell.error_permission', {
-            required: permResult.classification.type === 'UNKNOWN' ? 'admin' : 'read-write',
-            current: this.context.permission,
-          })
-        ),
+    // Permission check — Redis uses its own command classifier, since the SQL
+    // classifier marks every Redis verb as UNKNOWN and would deny all of them.
+    if (this.context.system === 'redis') {
+      const denied = this.checkRedisPermission(sql)
+      if (denied) return denied
+    } else {
+      const permResult = checkPermission(sql, this.context.permission)
+      if (!permResult.allowed) {
+        return {
+          action: 'continue',
+          output: pc.red(
+            t_vars('shell.error_permission', {
+              required: permResult.classification.type === 'UNKNOWN' ? 'admin' : 'read-write',
+              current: this.context.permission,
+            })
+          ),
+        }
       }
     }
 
@@ -248,6 +261,30 @@ export class ReplEngine {
         output: pc.red(t_vars('shell.error_sql_failed', { message: (error as Error).message })),
       }
     }
+  }
+
+  /**
+   * Permission gate for Redis commands. Returns a denial ProcessResult when the
+   * command is not whitelisted or exceeds the current permission tier, or null
+   * when execution is allowed.
+   */
+  private checkRedisPermission(command: string): ProcessResult | null {
+    const cls = classifyRedisCommand(command)
+    if (
+      cls.requiredPermission === 'unknown' ||
+      !permissionAtLeast(this.context.permission, cls.requiredPermission)
+    ) {
+      return {
+        action: 'continue',
+        output: pc.red(
+          t_vars('shell.error_permission', {
+            required: cls.requiredPermission === 'unknown' ? 'admin' : cls.requiredPermission,
+            current: this.context.permission,
+          })
+        ),
+      }
+    }
+    return null
   }
 
   // Issue 1 fix: Match FROM tablename, INTO tablename (INSERT INTO), UPDATE tablename

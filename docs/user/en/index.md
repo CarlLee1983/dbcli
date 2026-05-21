@@ -290,7 +290,7 @@ dbcli query "GET secret:api_key"   # → { "value": "[REDACTED]" }
 dbcli query "HGETALL user:1"        # → password/token redacted, other fields intact
 ```
 
-**Shell** — `dbcli shell` on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle.
+**Shell** — `dbcli shell` on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle. Type commands directly, no trailing semicolon (e.g. `GET mykey`).
 
 ---
 

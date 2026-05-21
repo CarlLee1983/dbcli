@@ -264,7 +264,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       shell: cap(
         'limited',
         'interactive',
-        'Single-line Redis REPL with auto-limit and key-glob blacklist; narrower than SQL shell.'
+        'Single-line Redis REPL (no trailing semicolon needed) with auto-limit and key-glob blacklist; narrower than SQL shell.'
       ),
     }),
     elasticsearch: Object.freeze({

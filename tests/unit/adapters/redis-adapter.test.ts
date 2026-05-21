@@ -493,3 +493,27 @@ describe('RedisAdapter — middleware (blacklist + size guard)', () => {
     await expect(adapter.getTableSchema('secrets:foo')).rejects.toBeInstanceOf(BlacklistRejection)
   })
 })
+
+function makeClientClass(reply: unknown) {
+  return function (this: unknown) {
+    return { connect: async () => {}, close: () => {}, send: async () => reply }
+  } as unknown as new () => unknown
+}
+
+test('RedisAdapter masks GET value per mask rules', async () => {
+  const opts = { system: 'redis', host: 'localhost', port: 6379 } as unknown as ConnectionOptions
+  const adapter = new RedisAdapter(opts, makeClientClass('hunter2'))
+  adapter.setMaskRules([{ keyPattern: 'secret:*' }])
+  await adapter.connect()
+  const res = await adapter.execute<{ value: string }>('GET secret:pw')
+  expect(res.rows[0]).toEqual({ value: '[REDACTED]' })
+})
+
+test('rejection wins over masking', async () => {
+  const opts = { system: 'redis', host: 'localhost', port: 6379 } as unknown as ConnectionOptions
+  const adapter = new RedisAdapter(opts, makeClientClass('hunter2'))
+  adapter.setBlacklistRules(['secret:*'])
+  adapter.setMaskRules([{ keyPattern: 'secret:*' }])
+  await adapter.connect()
+  await expect(adapter.execute('GET secret:pw')).rejects.toThrow('BlacklistRejection')
+})

@@ -31,7 +31,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
 | `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
 | `migrate` DDL | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only (Postgres/MySQL/MariaDB). |
-| `shell` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | SQL + MongoDB + Redis; ES not yet in REPL. Redis: single-line; SCAN/LRANGE auto-capped at 1000; `.no-limit` to bypass. |
+| `shell` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL + MongoDB + Redis + ES. ES: Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank-line submit), read-focused, `_search` auto-capped at 1000. Redis: single-line; SCAN/LRANGE auto-capped at 1000; `.no-limit` to bypass. |
 | `status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Safe non-credential config summary. |
 | `doctor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Engine-specific diagnostics. |
 | `completion` | N/A | N/A | N/A | N/A | N/A | N/A | Shell completion is engine-independent. |
@@ -127,3 +127,9 @@ Elasticsearch support uses the REST API. It is focused on index discovery and se
 - Hits are flattened into result rows.
 - `schema` flattens mappings and surfaces multi-fields. Supports full-scan caching.
 - Blacklist column rules apply to flattened rows. Index-level blacklist rejects an index up front.
+
+### Shell
+
+- `dbcli shell` opens a dedicated Kibana Dev Tools-style REPL: enter `<METHOD> /<path>` then an optional multi-line JSON body, and submit with a blank line. Responses render as pretty JSON.
+- Read-focused. Index-level blacklist rejects protected indices up front, and `_search` requests without an explicit `size` are auto-capped at 1000.
+- A blank line submits the current block; Ctrl+C cancels the in-progress block; Ctrl+D or `exit`/`quit` leaves the shell.

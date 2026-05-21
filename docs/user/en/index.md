@@ -192,7 +192,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | Interactive UI | ✅ | ✅ | ✅ | ✅ |
 | Query Size Guard | ✅ | ✅ | ⚠️ (rewrite + truncate) | ✅ |
 | Blacklist Enforcement | ✅ | ✅ | ⚠️ (key globs) | ⚠️ |
-| Interactive Shell (`shell`) | ✅ | ✅ | ✅ (single-line) | ❌ |
+| Interactive Shell (`shell`) | ✅ | ✅ | ✅ (single-line) | ⚠️ (Kibana-style) |
 
 ### MongoDB write planner (operator tiers)
 
@@ -291,6 +291,24 @@ dbcli query "HGETALL user:1"        # → password/token redacted, other fields 
 ```
 
 **Shell** — `dbcli shell` on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a `.no-limit on/off` toggle. Type commands directly, no trailing semicolon (e.g. `GET mykey`).
+
+### Elasticsearch: interactive shell (v1.22.0)
+
+`dbcli shell` on an Elasticsearch connection opens a dedicated Kibana Dev Tools-style REPL. Enter a request line `<METHOD> /<path>`, then an optional multi-line JSON body, and submit the whole block with a **blank line**. Responses render as pretty-printed JSON.
+
+```text
+es> GET /_cat/indices
+        (blank line submits)
+
+es> POST /users/_search
+... {
+...   "query": { "match_all": {} }
+... }
+        (blank line submits)
+```
+
+- **Read-focused.** Index-level blacklist rejects protected indices up front, and any `_search` request whose body lacks an explicit `size` is auto-capped at **1000** hits.
+- A **blank line** submits the current block; **Ctrl+C** cancels the in-progress block; **Ctrl+D** or typing `exit` / `quit` leaves the shell.
 
 ---
 

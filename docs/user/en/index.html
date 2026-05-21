@@ -342,7 +342,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
-                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
                         </tr>
                     </tbody>
                 </table>
@@ -372,6 +372,17 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
             <p><strong>Blacklist</strong> — rules are enforced as Redis-native key globs (<code>*</code>, <code>?</code>, <code>[abc]</code>, <code>[a-z]</code>). <code>dbcli blacklist add 'secrets:*'</code> then reads/writes whose keys match are rejected (<code>BlacklistRejection</code>, audited with <code>matched_pattern</code>); <code>KEYS</code>/<code>SCAN MATCH</code> overlapping a rule are rejected; <code>list</code> filters blacklisted keys.</p>
             <p><strong>Masking (v1.22)</strong> — where the key-glob blacklist <em>rejects</em>, masking <em>redacts</em>: matched reads return <code>[REDACTED]</code> so an agent can run the command without seeing the sensitive value. Add an optional <code>redis.mask</code> block to <code>.dbcli</code>, e.g. <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>. <code>fields</code> present → only those hash fields are redacted (<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>); <code>fields</code> absent → the whole value is redacted (<code>GET</code>/<code>GETRANGE</code> and every hash field). Masking covers <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>. <strong>Rejection wins over masking</strong> — a key matching both a <code>blacklist</code> and a <code>mask</code> rule is rejected outright and never reaches masking.</p>
             <p><strong>Shell</strong> — <code>dbcli shell</code> on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a <code>.no-limit on/off</code> toggle. Type commands directly, no trailing semicolon (e.g. <code>GET mykey</code>).</p>
+            <h3 class="mt-8">Elasticsearch: interactive shell (v1.22.0)</h3>
+            <p><code>dbcli shell</code> on an Elasticsearch connection opens a dedicated Kibana Dev Tools-style REPL. Enter a request line <code>&lt;METHOD&gt; /&lt;path&gt;</code>, then an optional multi-line JSON body, and submit the whole block with a <strong>blank line</strong>. Responses render as pretty-printed JSON.</p>
+            <pre><code>es&gt; GET /_cat/indices
+        (blank line submits)
+
+es&gt; POST /users/_search
+... {
+...   "query": { "match_all": {} }
+... }
+        (blank line submits)</code></pre>
+            <p><strong>Read-focused.</strong> Index-level blacklist rejects protected indices up front, and any <code>_search</code> request whose body lacks an explicit <code>size</code> is auto-capped at <strong>1000</strong> hits. A <strong>blank line</strong> submits the current block; <strong>Ctrl+C</strong> cancels the in-progress block; <strong>Ctrl+D</strong> or typing <code>exit</code> / <code>quit</code> leaves the shell.</p>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

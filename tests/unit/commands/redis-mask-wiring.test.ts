@@ -5,7 +5,11 @@ import { DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 
 test('createRedisAdapter accepts and forwards mask rules', () => {
   const opts = { system: 'redis', host: 'localhost', port: 6379 } as unknown as ConnectionOptions
-  const adapter = AdapterFactory.createRedisAdapter(opts, [], [{ keyPattern: 'user:*', fields: ['pw'] }])
+  const adapter = AdapterFactory.createRedisAdapter(
+    opts,
+    [],
+    [{ keyPattern: 'user:*', fields: ['pw'] }]
+  )
   expect(typeof (adapter as unknown as { setMaskRules: unknown }).setMaskRules).toBe('function')
 })
 

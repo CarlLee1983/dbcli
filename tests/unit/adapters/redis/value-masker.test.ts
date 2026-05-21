@@ -58,7 +58,10 @@ test('HMGET masks per-field by position', () => {
 })
 
 test('HVALS only honors whole-value rules', () => {
-  const rows = [{ index: 0, value: 'a' }, { index: 1, value: 'b' }]
+  const rows = [
+    { index: 0, value: 'a' },
+    { index: 1, value: 'b' },
+  ]
   const fieldRule: RedisMaskRule[] = [{ keyPattern: 'user:*', fields: ['password'] }]
   expect(maskRedisRows('HVALS', ['user:1'], rows, fieldRule)).toEqual(rows)
   const wholeRule: RedisMaskRule[] = [{ keyPattern: 'user:*' }]

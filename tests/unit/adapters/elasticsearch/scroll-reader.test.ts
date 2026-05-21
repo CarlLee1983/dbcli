@@ -3,7 +3,15 @@ import { scrollAll } from '@/adapters/elasticsearch/scroll-reader'
 
 function fakeAdapter() {
   const batches = [
-    { _scroll_id: 's1', hits: { hits: [{ _id: '1', _source: { a: 1 } }, { _id: '2', _source: { a: 2 } }] } },
+    {
+      _scroll_id: 's1',
+      hits: {
+        hits: [
+          { _id: '1', _source: { a: 1 } },
+          { _id: '2', _source: { a: 2 } },
+        ],
+      },
+    },
     { _scroll_id: 's2', hits: { hits: [{ _id: '3', _source: { a: 3 } }] } },
     { _scroll_id: 's3', hits: { hits: [] } },
   ]

@@ -27,7 +27,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
 | `delete` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
 | `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Currently SQL/Mongo only. |
-| `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob enforcement (Redis-native pattern); value masking deferred. |
+| `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob rejection (Redis-native pattern) plus value/hash-field masking (`[REDACTED]`) via the `redis.mask` config block. |
 | `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
 | `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
 | `migrate` DDL | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only (Postgres/MySQL/MariaDB). |
@@ -105,7 +105,7 @@ Redis connections speak Redis commands. Support is focused on key discovery and 
 
 - Blacklist rules are enforced as **Redis-native key globs** (`*`, `?`, `[abc]`, `[a-z]`). Reads and writes whose keys match a rule are rejected with a `BlacklistRejection`.
 - `KEYS` / `SCAN MATCH` patterns that overlap a blacklist pattern are rejected; non-overlapping listings filter out blacklisted keys.
-- Value and hash-field masking are **not** yet implemented (deferred).
+- Value and hash-field **masking** is available via the `redis.mask` config block: keys matching a `keyPattern` glob have their value (or named hash `fields`) returned as `[REDACTED]` on read (`GET`, `GETRANGE`, `HGETALL`, `HGET`, `HMGET`, `HVALS`). Key-glob **rejection** always takes precedence over masking.
 
 ### Shell
 

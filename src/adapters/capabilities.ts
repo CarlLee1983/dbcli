@@ -256,7 +256,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       blacklist: cap(
         'limited',
         'local-write',
-        'Key-glob enforcement (Redis-native pattern); value/hash-field masking deferred.'
+        'Key-glob rejection (Redis-native pattern) plus value/hash-field masking ([REDACTED]).'
       ),
       check: cap('unsupported', 'none', 'Data health check is SQL-only.'),
       diff: cap('unsupported', 'none', 'Schema snapshots are relational only.'),

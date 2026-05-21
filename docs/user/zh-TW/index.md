@@ -266,6 +266,30 @@ dbcli query "KEYS secrets:*"        # 拒絕(pattern 與規則重疊)
 dbcli list                           # 黑名單 keys 被濾掉
 ```
 
+**遮罩(Masking,v1.22)** — key glob 黑名單是「拒絕」,遮罩則是「屏蔽」:命中的讀取會回傳 `[REDACTED]`,讓 AI 代理仍能執行指令,但永遠看不到敏感值。在 `.dbcli` 設定中加入選用的 `redis.mask` 區塊:
+
+```json
+{
+  "redis": {
+    "mask": [
+      { "keyPattern": "user:*", "fields": ["password", "token"] },
+      { "keyPattern": "secret:*" }
+    ]
+  }
+}
+```
+
+- `keyPattern` 為 Redis 原生 glob(`*`、`?`、`[abc]`),每條規則套用到它所匹配的 key。
+- 有 `fields` → 只遮罩這些 hash 欄位(`HGETALL`、`HGET`、`HMGET`)。
+- 無 `fields` → 遮罩整個值(`GET`、`GETRANGE`,以及 hash 的所有欄位)。
+- 遮罩涵蓋 `GET` / `GETRANGE` / `HGETALL` / `HGET` / `HMGET` / `HVALS`。
+- **拒絕優先於遮罩:** 若某個 key 同時命中 `blacklist` 規則與 `mask` 規則,該指令會直接被拒絕,不會進入遮罩流程。
+
+```bash
+dbcli query "GET secret:api_key"   # → { "value": "[REDACTED]" }
+dbcli query "HGETALL user:1"        # → password/token 被遮罩,其他欄位保留
+```
+
 **Shell** — Redis 連線執行 `dbcli shell` 會開啟單行 REPL,具備歷史、tab 補全(指令 + key 前綴)與 `.no-limit on/off` 切換。
 
 ---

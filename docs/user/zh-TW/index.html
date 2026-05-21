@@ -383,6 +383,18 @@ es&gt; POST /users/_search
 ... }
         (空白行送出)</code></pre>
             <p><strong>以讀取為主。</strong> Index 層級黑名單會在前端直接拒絕受保護的 index；任何 <code>_search</code> 請求若 body 未指定 <code>size</code>，會自動上限為 <strong>1000</strong> 筆 hits。<strong>空白行</strong>送出當前區塊；<strong>Ctrl+C</strong> 取消進行中的區塊；<strong>Ctrl+D</strong> 或輸入 <code>exit</code> / <code>quit</code> 離開 shell。</p>
+            <h3 class="mt-8">Elasticsearch：匯出（v1.22.0）</h3>
+            <p>Elasticsearch 連線執行 <code>dbcli export</code> 可將文件匯出為 JSON、JSONL 或 CSV，支援兩種形式：</p>
+            <pre><code># 1. 匯出 search DSL 的命中結果 — 需要 --index
+dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format json
+
+# 2. 透過 match_all + scroll 匯出整個 index — 直接把 index 名稱當作查詢傳入
+dbcli export orders --format jsonl --output orders.jsonl</code></pre>
+            <ul>
+                <li>預設<strong>上限為 1000 筆</strong>。加上 <code>--no-limit</code> 可匯出整個 index（整索引形式會以 scroll 分批串流）。</li>
+                <li>在讀取任何文件前，目標 index 會先經過<strong>索引層級黑名單</strong>檢查。</li>
+                <li>每次匯出都會寫入一筆<strong>稽核紀錄</strong>，記錄目標 index、筆數與輸出格式。</li>
+            </ul>
         </section>
 
         <!-- doc-key: ai-agent-integration -->

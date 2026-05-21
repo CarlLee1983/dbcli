@@ -3,7 +3,6 @@ import { configModule } from '@/core/config'
 import { insertCommand } from '@/commands/insert'
 import { updateCommand } from '@/commands/update'
 import { deleteCommand } from '@/commands/delete'
-import { exportCommand } from '@/commands/export'
 import { diffCommand } from '@/commands/diff'
 
 const redisConfig = {
@@ -108,17 +107,6 @@ describe('Redis/Elasticsearch unsupported write commands surface clear errors', 
     test('delete reports Elasticsearch is unsupported', async () => {
       try {
         await deleteCommand('idx', { where: 'id=1', force: true })
-      } catch {
-        /* ignore */
-      }
-      const out = combinedOutput()
-      expect(out).toContain('Elasticsearch')
-      expect(out).toContain('不支援')
-    })
-
-    test('export reports Elasticsearch is unsupported', async () => {
-      try {
-        await exportCommand('{}', { format: 'json' } as any)
       } catch {
         /* ignore */
       }

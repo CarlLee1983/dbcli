@@ -18,6 +18,7 @@ import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { TableSchema, DatabaseAdapter, ColumnSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
+import { suggestTableName } from '@/utils/error-suggester'
 import { compilePatterns, matchAny } from '@/core/mongo/path-matcher'
 import type { BlacklistConfig } from '@/types/blacklist'
 
@@ -52,6 +53,30 @@ function decorateMongoSchema(schema: TableSchema, meta: MongoDecorateMeta): Tabl
 }
 
 import { resolveConfigPath } from '@/utils/config-path'
+
+/**
+ * Enrich a TABLE_NOT_FOUND ConnectionError with fuzzy-match suggestions.
+ * Pure pass-through for any other error code. Safe to call on every catch path.
+ */
+export async function attachTableSuggestions(
+  err: ConnectionError,
+  adapter: DatabaseAdapter,
+  attemptedName: string
+): Promise<ConnectionError> {
+  if (err.code !== 'TABLE_NOT_FOUND') return err
+  try {
+    const { suggestions } = await suggestTableName(
+      `Table '${attemptedName}' doesn't exist`,
+      adapter
+    )
+    if (suggestions.length === 0) return err
+    const suggestionLine = `Did you mean: ${suggestions.join(', ')}?`
+    return new ConnectionError(err.code, err.message, [...err.hints, suggestionLine])
+  } catch {
+    // If listing tables itself fails (e.g. permission), don't mask the original error.
+    return err
+  }
+}
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
 
@@ -347,7 +372,15 @@ async function handleSingleTableSchema(
   inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
   mongoMeta?: MongoDecorateMeta
 ): Promise<void> {
-  let schema = await adapter.getTableSchema(tableName, inferenceOptions)
+  let schema: TableSchema
+  try {
+    schema = await adapter.getTableSchema(tableName, inferenceOptions)
+  } catch (error) {
+    if (error instanceof ConnectionError) {
+      throw await attachTableSuggestions(error, adapter, tableName)
+    }
+    throw error
+  }
   if (mongoMeta) schema = decorateMongoSchema(schema, mongoMeta)
 
   if (format === 'json') {

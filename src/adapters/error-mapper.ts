@@ -95,6 +95,25 @@ export function mapError(
     ])
   }
 
+  // SQL_SYNTAX_ERROR: driver returned a parse error from execute() (not connect()).
+  // MySQL/MariaDB: code='ER_PARSE_ERROR' / errno=1064
+  // PostgreSQL: code='42601' (SQLSTATE syntax_error)
+  if (
+    errCode === 'ER_PARSE_ERROR' ||
+    err?.errno === 1064 ||
+    errCode === '42601'
+  ) {
+    return new ConnectionError(
+      'SQL_SYNTAX_ERROR',
+      `SQL syntax error: ${errMsg}`,
+      [
+        'Check your SQL syntax near the position reported above',
+        'In query-only mode, dbcli auto-appends LIMIT 1000; use --no-limit to disable',
+        'For SHOW/DESCRIBE/EXPLAIN statements, LIMIT is not allowed — these are not auto-limited',
+      ]
+    )
+  }
+
   // UNKNOWN: Fallback for unrecognized errors
   return new ConnectionError('UNKNOWN', `Connection failed: ${errMsg}`, [
     `Check connection parameters: host=${options.host}, port=${options.port}, user=${options.user}`,

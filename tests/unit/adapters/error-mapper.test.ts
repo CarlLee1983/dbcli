@@ -103,3 +103,34 @@ test('ConnectionError accepts COLUMN_NOT_FOUND code', () => {
   const err = new ConnectionError('COLUMN_NOT_FOUND', 'msg', ['hint'])
   expect(err.code).toBe('COLUMN_NOT_FOUND')
 })
+
+test('mapError: MySQL ER_PARSE_ERROR (1064) → SQL_SYNTAX_ERROR', () => {
+  const error = {
+    code: 'ER_PARSE_ERROR',
+    errno: 1064,
+    message:
+      "You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'LIMIT 1000' at line 1",
+  }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
+  expect(result.code).toBe('SQL_SYNTAX_ERROR')
+  expect(result.message.toLowerCase()).toContain('sql syntax')
+  expect(result.hints.join(' ')).toContain('--no-limit')
+})
+
+test('mapError: PostgreSQL syntax_error (42601) → SQL_SYNTAX_ERROR', () => {
+  const error = {
+    code: '42601',
+    message: 'syntax error at or near "FROOM"',
+  }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).toBe('SQL_SYNTAX_ERROR')
+  expect(result.message.toLowerCase()).toContain('sql syntax')
+})
+
+test('mapError: SQL_SYNTAX_ERROR does NOT include connection-troubleshooting hints', () => {
+  const error = { code: 'ER_PARSE_ERROR', errno: 1064, message: 'bad syntax' }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
+  const hints = result.hints.join(' ')
+  expect(hints).not.toContain('mysql.log')
+  expect(hints).not.toContain('host=')
+})

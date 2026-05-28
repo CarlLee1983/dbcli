@@ -134,3 +134,33 @@ test('mapError: SQL_SYNTAX_ERROR does NOT include connection-troubleshooting hin
   expect(hints).not.toContain('mysql.log')
   expect(hints).not.toContain('host=')
 })
+
+test('mapError: MySQL ER_NO_SUCH_TABLE (1146) → TABLE_NOT_FOUND', () => {
+  const error = {
+    code: 'ER_NO_SUCH_TABLE',
+    errno: 1146,
+    message: "Table 'station_local.bets' doesn't exist",
+  }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb', database: 'station_local' })
+  expect(result.code).toBe('TABLE_NOT_FOUND')
+  expect(result.message).toContain('bets')
+  expect(result.message).toContain('station_local')
+  expect(result.hints.join(' ')).toContain('dbcli list')
+})
+
+test('mapError: PostgreSQL undefined_table (42P01) → TABLE_NOT_FOUND', () => {
+  const error = {
+    code: '42P01',
+    message: 'relation "bets" does not exist',
+  }
+  const result = mapError(error, 'postgresql', { ...mockOptions, database: 'testdb' })
+  expect(result.code).toBe('TABLE_NOT_FOUND')
+  expect(result.message).toContain('bets')
+  expect(result.hints.join(' ')).toContain('dbcli list')
+})
+
+test('mapError: TABLE_NOT_FOUND does NOT include connection-troubleshooting hints', () => {
+  const error = { code: 'ER_NO_SUCH_TABLE', errno: 1146, message: "Table 'x.y' doesn't exist" }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
+  expect(result.hints.join(' ')).not.toContain('mysql.log')
+})

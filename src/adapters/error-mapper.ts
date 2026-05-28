@@ -60,6 +60,30 @@ export function mapError(
     )
   }
 
+  // TABLE_NOT_FOUND: server rejected query because referenced table doesn't exist.
+  // MySQL/MariaDB: code='ER_NO_SUCH_TABLE' / errno=1146
+  // PostgreSQL: code='42P01' (SQLSTATE undefined_table)
+  if (
+    errCode === 'ER_NO_SUCH_TABLE' ||
+    err?.errno === 1146 ||
+    errCode === '42P01'
+  ) {
+    // Extract table name from message:
+    //  - MySQL: Table 'db.tablename' doesn't exist
+    //  - PG:    relation "tablename" does not exist
+    const mysqlMatch = errMsg.match(/Table\s+'(?:[^.']+\.)?([^']+)'/i)
+    const pgMatch = errMsg.match(/relation\s+"([^"]+)"/i)
+    const tableName = mysqlMatch?.[1] || pgMatch?.[1] || 'unknown'
+    return new ConnectionError(
+      'TABLE_NOT_FOUND',
+      `Table '${tableName}' not found in database '${options.database || 'unknown'}'`,
+      [
+        'Run `dbcli list` to see available tables',
+        'Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)',
+      ]
+    )
+  }
+
   // AUTH_FAILED: Authentication (credentials) error
   if (
     errMsg.includes('authentication') ||

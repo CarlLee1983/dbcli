@@ -344,6 +344,20 @@ export function classifyStatement(sql: string): StatementClassification {
   const stripped = stripCommentsAndStrings(normalized)
   const upper = stripped.toUpperCase()
 
+  // MariaDB/MySQL: 'ANALYZE SELECT ...' is a read-only EXPLAIN variant.
+  // PostgreSQL uses 'EXPLAIN (ANALYZE ...) SELECT ...' which is handled by
+  // the regular EXPLAIN keyword classifier; this branch only handles the
+  // MariaDB form where ANALYZE is the leading keyword.
+  if (/^\s*ANALYZE\s+SELECT\b/i.test(stripped)) {
+    return {
+      type: 'EXPLAIN',
+      isDangerous: false,
+      keywords: extractAllKeywords(stripped),
+      isComposite: false,
+      confidence: 'HIGH',
+    }
+  }
+
   const composite = detectCompositePatterns(upper)
   const firstKeyword = extractFirstKeyword(stripped)
 

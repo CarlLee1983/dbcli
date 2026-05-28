@@ -98,6 +98,32 @@ test('classifyStatement: EXPLAIN SELECT', () => {
   expect(result.confidence).toBe('HIGH')
 })
 
+test('classifyStatement: MariaDB ANALYZE SELECT is treated as EXPLAIN', () => {
+  const result = classifyStatement(
+    "ANALYZE SELECT COUNT(*) FROM betting_logs WHERE settled_at >= '2026-03-01'"
+  )
+  expect(result.type).toBe('EXPLAIN')
+  expect(result.isDangerous).toBe(false)
+  expect(result.confidence).toBe('HIGH')
+})
+
+test('classifyStatement: PostgreSQL EXPLAIN (ANALYZE, BUFFERS) SELECT', () => {
+  const result = classifyStatement(
+    'EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM users WHERE id = 1'
+  )
+  expect(result.type).toBe('EXPLAIN')
+  expect(result.isDangerous).toBe(false)
+})
+
+test('checkPermission: ANALYZE SELECT allowed in query-only', () => {
+  const result = checkPermission(
+    'ANALYZE SELECT * FROM users',
+    'query-only'
+  )
+  expect(result.allowed).toBe(true)
+  expect(result.classification.type).toBe('EXPLAIN')
+})
+
 test('classifyStatement: empty string returns UNKNOWN', () => {
   const result = classifyStatement('')
   expect(result.type).toBe('UNKNOWN')

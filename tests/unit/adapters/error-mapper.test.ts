@@ -164,3 +164,25 @@ test('mapError: TABLE_NOT_FOUND does NOT include connection-troubleshooting hint
   const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
   expect(result.hints.join(' ')).not.toContain('mysql.log')
 })
+
+test("mapError: MySQL ER_BAD_FIELD_ERROR (1054) → COLUMN_NOT_FOUND", () => {
+  const error = {
+    code: 'ER_BAD_FIELD_ERROR',
+    errno: 1054,
+    message: "Unknown column 'usr_id' in 'where clause'",
+  }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
+  expect(result.code).toBe('COLUMN_NOT_FOUND')
+  expect(result.message).toContain('usr_id')
+  expect(result.hints.join(' ')).toContain('dbcli schema')
+})
+
+test("mapError: PostgreSQL undefined_column (42703) → COLUMN_NOT_FOUND", () => {
+  const error = {
+    code: '42703',
+    message: 'column "usr_id" does not exist',
+  }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).toBe('COLUMN_NOT_FOUND')
+  expect(result.message).toContain('usr_id')
+})

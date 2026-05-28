@@ -84,6 +84,27 @@ export function mapError(
     )
   }
 
+  // COLUMN_NOT_FOUND: referenced column doesn't exist on the table.
+  // MySQL/MariaDB: code='ER_BAD_FIELD_ERROR' / errno=1054
+  // PostgreSQL: code='42703' (SQLSTATE undefined_column)
+  if (
+    errCode === 'ER_BAD_FIELD_ERROR' ||
+    err?.errno === 1054 ||
+    errCode === '42703'
+  ) {
+    const mysqlMatch = errMsg.match(/Unknown column\s+'([^']+)'/i)
+    const pgMatch = errMsg.match(/column\s+"([^"]+)"\s+does not exist/i)
+    const columnName = mysqlMatch?.[1] || pgMatch?.[1] || 'unknown'
+    return new ConnectionError(
+      'COLUMN_NOT_FOUND',
+      `Column '${columnName}' not found`,
+      [
+        'Run `dbcli schema <table>` to see the actual column names',
+        'Column names are case-sensitive on some databases (PostgreSQL with quoted identifiers)',
+      ]
+    )
+  }
+
   // AUTH_FAILED: Authentication (credentials) error
   if (
     errMsg.includes('authentication') ||

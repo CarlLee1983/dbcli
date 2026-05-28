@@ -127,7 +127,15 @@ export interface TableSchema {
 export class ConnectionError extends Error {
   constructor(
     /** Error category code */
-    public code: 'ECONNREFUSED' | 'ETIMEDOUT' | 'AUTH_FAILED' | 'ENOTFOUND' | 'UNKNOWN',
+    public code:
+      | 'ECONNREFUSED'
+      | 'ETIMEDOUT'
+      | 'AUTH_FAILED'
+      | 'ENOTFOUND'
+      | 'SQL_SYNTAX_ERROR'
+      | 'TABLE_NOT_FOUND'
+      | 'COLUMN_NOT_FOUND'
+      | 'UNKNOWN',
     /** User-friendly error message */
     message: string,
     /** Array of actionable troubleshooting hints */

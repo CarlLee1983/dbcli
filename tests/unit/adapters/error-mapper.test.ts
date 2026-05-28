@@ -88,3 +88,18 @@ test('mapError works for all database systems', () => {
   expect(mysqlResult.code).toBe('ECONNREFUSED')
   expect(mariadbResult.code).toBe('ECONNREFUSED')
 })
+
+test('ConnectionError accepts SQL_SYNTAX_ERROR code', () => {
+  const err = new ConnectionError('SQL_SYNTAX_ERROR', 'msg', ['hint'])
+  expect(err.code).toBe('SQL_SYNTAX_ERROR')
+})
+
+test('ConnectionError accepts TABLE_NOT_FOUND code', () => {
+  const err = new ConnectionError('TABLE_NOT_FOUND', 'msg', ['hint'])
+  expect(err.code).toBe('TABLE_NOT_FOUND')
+})
+
+test('ConnectionError accepts COLUMN_NOT_FOUND code', () => {
+  const err = new ConnectionError('COLUMN_NOT_FOUND', 'msg', ['hint'])
+  expect(err.code).toBe('COLUMN_NOT_FOUND')
+})

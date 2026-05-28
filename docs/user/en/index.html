@@ -553,7 +553,37 @@ bun test</code></pre>
             <div class="h-px w-24 bg-border mx-auto mb-8"></div>
             <p class="text-text-muted text-sm font-medium">Powered by dbcli Documentation Engine &bull; 2026 Gravito Labs</p>
         </footer>
-    </main>
+    
+<section id="explain-command">
+  <h2>Query plan inspection — <code>dbcli explain</code></h2>
+  <p>Surface query plans across MySQL/MariaDB and PostgreSQL with a unified row schema and severity-coded annotations.</p>
+  <h3>Basic usage</h3>
+  <pre><code>dbcli explain "SELECT * FROM betting_logs WHERE settled_at &gt;= '2026-03-01'"
+dbcli explain @analytics/live-summary               # saved query
+dbcli explain --analyze "SELECT ..."                 # MariaDB ANALYZE SELECT / PG EXPLAIN ANALYZE
+dbcli explain --format json "..."                    # JSON dump
+dbcli explain --bulk @queries.sql                    # batch from file
+dbcli explain --bulk @analytics/*                    # glob over saved queries</code></pre>
+  <h3>Annotations</h3>
+  <table>
+    <thead><tr><th>Rule</th><th>Severity</th><th>Triggered when</th></tr></thead>
+    <tbody>
+      <tr><td><code>full-scan</code></td><td>red</td><td>MySQL <code>type=ALL</code> or <code>key=NULL</code>; PG <code>Seq Scan</code></td></tr>
+      <tr><td><code>temp-table</code></td><td>yellow</td><td>MySQL <code>Using temporary</code></td></tr>
+      <tr><td><code>filesort</code></td><td>yellow</td><td>MySQL <code>Using filesort</code>; PG <code>Sort Method: external merge</code></td></tr>
+      <tr><td><code>cost-estimate-skew</code></td><td>gray</td><td><code>--analyze</code> actual rows / planner rows &gt; 10×</td></tr>
+      <tr><td><code>nested-loop-large</code></td><td>yellow</td><td>PG <code>Nested Loop</code> with planner rows &gt; 10,000</td></tr>
+    </tbody>
+  </table>
+  <h3>Notes</h3>
+  <ul>
+    <li><code>--analyze</code> runs the query for real; do not use against destructive statements.</li>
+    <li><code>dbcli explain</code> is allowed in <code>query-only</code> permission — no permission upgrade required.</li>
+    <li>Auto-LIMIT is <strong>not</strong> applied to EXPLAIN statements (since v1.23 P1).</li>
+  </ul>
+</section>
+
+</main>
 
     <script>
         // Intersection Observer for Scroll Highlighting

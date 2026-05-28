@@ -11,13 +11,13 @@
  */
 
 import { Command } from 'commander'
-import { AdapterFactory } from '@/adapters'
+import { AdapterFactory, type SqlConnectionOptions } from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { runQueryExplain } from '@/core/explain/runner'
 import { resolveBulkInputs } from '@/core/explain/bulk-runner'
 import { formatExplain, type ExplainFormat } from '@/formatters/explain'
-import { loadSnippets } from '@/core/saved-queries'
+import { loadSnippets, resolveSnippetDirs } from '@/core/saved-queries'
 import type { ExplainPlan } from '@/core/explain/types'
 
 type GlobalOpts = {
@@ -46,7 +46,7 @@ export const explainCommand = new Command()
     }
     const system = connection.system
 
-    const adapter = AdapterFactory.createSqlAdapter(connection)
+    const adapter = AdapterFactory.createSqlAdapter(connection as SqlConnectionOptions)
     await adapter.connect()
     try {
       const savedQueryLoader = makeSavedQueryLoader()
@@ -97,7 +97,7 @@ export const explainCommand = new Command()
  */
 function makeSavedQueryLoader() {
   return async (nameOrGlob: string): Promise<{ name: string; sql: string }[] | null> => {
-    const snippetMap = await loadSnippets({ projectRoot: process.cwd(), includeBuiltin: true })
+    const snippetMap = await loadSnippets(resolveSnippetDirs(process.cwd()))
     const stripAt = (k: string) => k.replace(/^@/, '')
 
     if (nameOrGlob.includes('*')) {

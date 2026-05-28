@@ -1,18 +1,33 @@
 /**
- * ANSI-table EXPLAIN formatter — reuses the project's TableFormatter
- * (generic record formatter: object keys → headers, values → cells)
- * by flattening ExplainRow into a plain record per row.
+ * Plain-text table EXPLAIN formatter — flattens each ExplainRow into a record
+ * and renders an aligned, padded column table (no external table dep).
+ *
+ * NOTE: the project's TableFormatter is schema-specific (ColumnSchema[]), so it
+ * cannot render arbitrary EXPLAIN records — we align columns ourselves, mirroring
+ * the approach used by `dbcli queries list`.
  */
 
-import { TableFormatter } from '@/formatters'
 import type { ExplainAnnotation, ExplainPlan, ExplainRow } from '@/core/explain/types'
 
 export function formatExplainTable(plans: ExplainPlan[]): string {
-  const formatter = new TableFormatter()
   const isBulk = plans.length > 1
-  const flattened = plans.flatMap((plan) => plan.rows.map((row) => toFlatRow(row, plan, isBulk)))
-  if (flattened.length === 0) return '(no rows)'
-  return formatter.format(flattened as unknown as Record<string, unknown>[])
+  const records = plans.flatMap((plan) => plan.rows.map((row) => toFlatRow(row, plan, isBulk)))
+  if (records.length === 0) return '(no rows)'
+
+  const headers = Object.keys(records[0]!)
+  const widths = headers.map((h) =>
+    Math.max(h.length, ...records.map((r) => (r[h] ?? '').length))
+  )
+  const fmtLine = (cells: string[]) =>
+    cells.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
+  const separator = widths.map((w) => '-'.repeat(w)).join('  ')
+
+  const lines = [
+    fmtLine(headers),
+    separator,
+    ...records.map((r) => fmtLine(headers.map((h) => r[h] ?? ''))),
+  ]
+  return lines.join('\n')
 }
 
 function toFlatRow(row: ExplainRow, plan: ExplainPlan, isBulk: boolean): Record<string, string> {

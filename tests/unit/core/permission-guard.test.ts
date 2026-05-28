@@ -373,6 +373,15 @@ test('checkPermission: DROP blocked in query-only', () => {
   expect(result.allowed).toBe(false)
 })
 
+test('checkPermission: UNKNOWN denial mentions current level and asks for issue report', () => {
+  const result = checkPermission('FOO BAR BAZ', 'query-only')
+  expect(result.allowed).toBe(false)
+  expect(result.classification.type).toBe('UNKNOWN')
+  expect(result.reason).toContain('current level: query-only')
+  expect(result.reason.toLowerCase()).toContain('unknown')
+  expect(result.reason).toContain('issue')
+})
+
 // ============================================================================
 // Suite 6: Permission Checks - Read-Write Mode
 // ============================================================================

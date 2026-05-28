@@ -432,9 +432,12 @@ export function checkPermission(sql: string, permission: Permission): Permission
         classification,
       }
     }
+    const isUnknown = classification.type === 'UNKNOWN'
     return {
       allowed: false,
-      reason: `${classification.type} operation requires read-write or admin permission`,
+      reason: isUnknown
+        ? `Unrecognised SQL statement (current level: query-only). Security policy requires read-write+ for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.`
+        : `${classification.type} operation requires read-write or admin permission`,
       classification,
     }
   }

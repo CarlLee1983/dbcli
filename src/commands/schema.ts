@@ -433,7 +433,7 @@ async function handleSingleTableSchema(
 /**
  * Handles schema refresh - detects incremental changes and applies them
  */
-async function handleSchemaRefresh(
+export async function handleSchemaRefresh(
   adapter: DatabaseAdapter,
   config: DbcliConfig,
   options: { config: string; refresh: boolean; force: boolean },
@@ -468,10 +468,14 @@ async function handleSchemaRefresh(
   console.log('🔍 Schema changes detected:')
   console.log(`   ${report.summary}`)
 
-  // Require --force to apply
-  if (!options.force) {
+  // First-time bootstrap: no existing cache to protect, skip --force gate.
+  const isFirstTime = Object.keys(config.schema || {}).length === 0
+  if (!options.force && !isFirstTime) {
     console.log('   Use --force to apply changes')
     return
+  }
+  if (isFirstTime) {
+    console.log('   First-time bootstrap (no existing cache to protect)')
   }
 
   // Build new schema object with all table entries
@@ -500,7 +504,13 @@ async function handleSchemaRefresh(
   // Wave 1 Integration: Persist to layered storage
   const writer = new SchemaWriter(storagePath)
   await writer.save(newSchema, connectionName)
-  console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
+  if (isFirstTime) {
+    console.log(`✅ Schema cache initialised (${Object.keys(newSchema).length} tables)`)
+  } else {
+    console.log(
+      `✅ Schema updated (${report.tablesAdded.length} added / ${report.tablesRemoved.length} removed / ${Object.keys(report.tablesModified).length} modified)`
+    )
+  }
 
   await writeSchema(storagePath, updatedConfig, connectionName)
   console.log(`✅ Schema updated in .dbcli`)

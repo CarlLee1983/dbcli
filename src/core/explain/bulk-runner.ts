@@ -57,7 +57,7 @@ export async function resolveBulkInputs(inputs: string[], deps: BulkDeps): Promi
     }
     // Fallback: treat as file path
     if (!existsSync(ref)) {
-      throw new Error(`No such saved query or file: '${ref}'`)
+      throw new Error(`No such file or saved query: '${ref}'`)
     }
     const text = await readFile(ref, 'utf-8')
     const statements = splitSqlStatements(text)

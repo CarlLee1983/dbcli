@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Fixed
+
+- query-only 模式不再對 `SHOW`/`DESCRIBE`/`EXPLAIN`/`ANALYZE SELECT` 注入 `LIMIT`,避免 server 拒絕(v1.23 P1, issue #1)
+- MariaDB `ANALYZE SELECT` 與 PostgreSQL `EXPLAIN (ANALYZE, BUFFERS) SELECT` 視為 read-only,query-only 模式可執行(v1.23 P1, issue #2)
+- driver 在 execute 階段丟出的 SQL 錯誤(語法錯、table 不存在、column 不存在)不再被誤包成 `Connection failed`;訊息附 actionable hints 與 fuzzy table 候選(v1.23 P1, issue #3)
+- `dbcli schema --refresh` 首次 bootstrap 不再要求 `--force`(v1.23 P1, issue #7)
+- query-only 模式拒絕未知 SQL 時的訊息明確化:加入當前 permission level 與 issue 連結
+
+### Changed
+
+- `ConnectionError.code` union 新增 `SQL_SYNTAX_ERROR` / `TABLE_NOT_FOUND` / `COLUMN_NOT_FOUND`(向後相容;既有 consumer 只匹配 `UNKNOWN` 仍 fallback)
+
+
 ## [1.22.0] - 2026-05-21 - Elasticsearch Shell/Export + Redis Masking
 
 ### Added

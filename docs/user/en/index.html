@@ -97,6 +97,7 @@
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent Recovery</a></li>
+                    <li class="nav-item"><a href="#error-classification" class="nav-link">Errors & Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
                 </ul>
             </section>
@@ -481,6 +482,30 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                     <tr><td><code>3</code></td><td>Every step was skipped by the gate — widen <code>--allow-write</code> or fill placeholders, then retry</td></tr>
                 </tbody>
             </table>
+        </section>
+
+        <!-- doc-key: error-classification -->
+        <section id="error-classification" class="mt-20">
+            <h2>Troubleshooting & Error Reference</h2>
+
+            <h3>Error categories</h3>
+            <p><code>dbcli</code> distinguishes between <strong>connection errors</strong> (server down, auth failed) and <strong>SQL errors</strong> (syntax, missing table, missing column). SQL errors now print:</p>
+            <ul>
+                <li>The specific problem (not "Connection failed")</li>
+                <li>A hint pointing to the right next command (<code>dbcli list</code>, <code>dbcli schema &lt;table&gt;</code>, <code>--no-limit</code>)</li>
+                <li>For missing tables, top-3 fuzzy-match candidates</li>
+            </ul>
+
+            <h3>Query-only mode auto-LIMIT</h3>
+            <p><code>dbcli</code> auto-appends <code>LIMIT 1000</code> to <code>SELECT</code> queries in <code>query-only</code> mode. This <strong>does not</strong> apply to:</p>
+            <ul>
+                <li><code>SHOW</code> / <code>DESCRIBE</code> statements (LIMIT is not valid syntax here)</li>
+                <li><code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code> / MariaDB <code>ANALYZE SELECT</code></li>
+            </ul>
+            <p>Use <code>--no-limit</code> on <code>SELECT</code> to disable when querying <code>information_schema</code>.</p>
+
+            <h3>Schema cache bootstrap</h3>
+            <p>The first <code>dbcli schema --refresh</code> after init writes the cache without <code>--force</code>. Subsequent refreshes that detect changes against an existing cache still require <code>--force</code> to overwrite.</p>
         </section>
 
         <!-- doc-key: documentation-maintenance -->

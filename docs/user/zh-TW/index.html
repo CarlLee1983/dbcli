@@ -97,6 +97,7 @@
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent 修復工作流</a></li>
+                    <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
                 </ul>
             </section>
@@ -481,6 +482,30 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                     <tr><td><code>3</code></td><td>所有步驟都被 gate 跳過（widen <code>--allow-write</code> 或填上 placeholder 再試）</td></tr>
                 </tbody>
             </table>
+        </section>
+
+        <!-- doc-key: error-classification -->
+        <section id="error-classification" class="mt-20">
+            <h2>疑難排解與錯誤參考</h2>
+
+            <h3>錯誤分類</h3>
+            <p><code>dbcli</code> 區分<strong>連線錯誤</strong>（server 沒起、認證失敗）與 <strong>SQL 錯誤</strong>（語法錯、table/column 不存在）。SQL 錯誤現在會印：</p>
+            <ul>
+                <li>具體問題（不再印 "Connection failed"）</li>
+                <li>指向正確下一步的 hint（<code>dbcli list</code>、<code>dbcli schema &lt;table&gt;</code>、<code>--no-limit</code>）</li>
+                <li>對 table 不存在，附上 top-3 fuzzy 候選</li>
+            </ul>
+
+            <h3>Query-only auto-LIMIT 範圍</h3>
+            <p><code>dbcli</code> 會在 <code>query-only</code> 模式對 <code>SELECT</code> 自動加 <code>LIMIT 1000</code>。<strong>不</strong>套用於：</p>
+            <ul>
+                <li><code>SHOW</code> / <code>DESCRIBE</code> 語句（LIMIT 在此非合法語法）</li>
+                <li><code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code> / MariaDB <code>ANALYZE SELECT</code></li>
+            </ul>
+            <p>查 <code>information_schema</code> 時用 <code>--no-limit</code> 關閉。</p>
+
+            <h3>Schema cache bootstrap</h3>
+            <p>第一次 <code>dbcli schema --refresh</code> 不需 <code>--force</code> 即會寫入 cache。後續 refresh 偵測到既有 cache 有 diff 才會要求 <code>--force</code>。</p>
         </section>
 
         <!-- doc-key: documentation-maintenance -->

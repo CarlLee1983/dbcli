@@ -344,6 +344,20 @@ export function classifyStatement(sql: string): StatementClassification {
   const stripped = stripCommentsAndStrings(normalized)
   const upper = stripped.toUpperCase()
 
+  // MariaDB/MySQL: 'ANALYZE SELECT ...' is a read-only EXPLAIN variant.
+  // PostgreSQL uses 'EXPLAIN (ANALYZE ...) SELECT ...' which is handled by
+  // the regular EXPLAIN keyword classifier; this branch only handles the
+  // MariaDB form where ANALYZE is the leading keyword.
+  if (/^\s*ANALYZE\s+SELECT\b/i.test(stripped)) {
+    return {
+      type: 'EXPLAIN',
+      isDangerous: false,
+      keywords: extractAllKeywords(stripped),
+      isComposite: false,
+      confidence: 'HIGH',
+    }
+  }
+
   const composite = detectCompositePatterns(upper)
   const firstKeyword = extractFirstKeyword(stripped)
 
@@ -418,9 +432,12 @@ export function checkPermission(sql: string, permission: Permission): Permission
         classification,
       }
     }
+    const isUnknown = classification.type === 'UNKNOWN'
     return {
       allowed: false,
-      reason: `${classification.type} operation requires read-write or admin permission`,
+      reason: isUnknown
+        ? `Unrecognised SQL statement (current level: query-only). Security policy requires read-write+ for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.`
+        : `${classification.type} operation requires read-write or admin permission`,
       classification,
     }
   }

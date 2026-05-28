@@ -55,10 +55,15 @@ export class QueryExecutor {
         console.error(`⚠ Warning: executing ${classification.type} operation (admin mode)`)
       }
 
-      // 2. Auto-limit in query-only mode (safety default)
+      // 2. Auto-limit in query-only mode (safety default).
+      // Only applies to SELECT — SHOW/DESCRIBE/EXPLAIN do not accept LIMIT and
+      // server rejects with a syntax error. Classification was already computed
+      // by enforcePermission() above.
+      const AUTO_LIMIT_TYPES = new Set(['SELECT'])
       let executeSql = sql
       if (
         this.permission === 'query-only' &&
+        AUTO_LIMIT_TYPES.has(classification.type) &&
         !executeSql.match(/LIMIT\s+\d+/i) &&
         options?.autoLimit !== false
       ) {

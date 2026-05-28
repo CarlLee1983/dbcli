@@ -171,7 +171,11 @@ export async function queryCommand(
     if (options.recovery === true) {
       envelopeId = crypto.randomUUID() // Phase 25 D-51 / D-J
     }
-    if (config) {
+    // A sub-branch (e.g. redisQueryBranch) may have already written a richer
+    // audit entry — with engine-specific metadata — before re-throwing. Skip
+    // writing here to avoid a duplicate, metadata-less generic entry.
+    const alreadyAudited = (error as { __auditWritten?: boolean })?.__auditWritten === true
+    if (config && !alreadyAudited) {
       auditId = await writeAuditEntry(config, 'query', options, {
         success: false,
         sql,
@@ -394,6 +398,9 @@ async function redisQueryBranch(
         error: err as Error,
       })
     }
+    // Signal the top-level handler that this error is already audited, so it
+    // does not overwrite the rich entry above with a generic duplicate.
+    ;(err as { __auditWritten?: boolean }).__auditWritten = true
     throw err
   } finally {
     await redisAdapter.disconnect()

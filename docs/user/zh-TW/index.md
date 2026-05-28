@@ -440,6 +440,32 @@ dbcli recover --from /path/to/archived.json   # 跨機器/歸檔重播
 
 ---
 
+<!-- doc-key: error-classification -->
+## 疑難排解與錯誤參考
+
+### 錯誤分類
+
+`dbcli` 區分**連線錯誤**(server 沒起、認證失敗)與 **SQL 錯誤**(語法錯、table/column 不存在)。SQL 錯誤現在會印:
+
+- 具體問題(不再印 "Connection failed")
+- 指向正確下一步的 hint(`dbcli list`、`dbcli schema <table>`、`--no-limit`)
+- 對 table 不存在,附上 top-3 fuzzy 候選
+
+### Query-only auto-LIMIT 範圍
+
+`dbcli` 會在 `query-only` 模式對 `SELECT` 自動加 `LIMIT 1000`。**不**套用於:
+
+- `SHOW` / `DESCRIBE` 語句(LIMIT 在此非合法語法)
+- `EXPLAIN` / `EXPLAIN ANALYZE` / MariaDB `ANALYZE SELECT`
+
+查 `information_schema` 時用 `--no-limit` 關閉。
+
+### Schema cache bootstrap
+
+第一次 `dbcli schema --refresh` 不需 `--force` 即會寫入 cache。後續 refresh 偵測到既有 cache 有 diff 才會要求 `--force`。
+
+---
+
 <!-- doc-key: documentation-maintenance -->
 ## 文件維護與覆蓋範圍
 

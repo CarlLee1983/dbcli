@@ -442,6 +442,36 @@ dbcli recover --from /path/to/archived.json   # cross-machine / archived replay
 
 ---
 
+<!-- doc-key: error-classification -->
+## Troubleshooting & Error Reference
+
+### Error categories
+
+`dbcli` distinguishes between **connection errors** (server down, auth failed) and
+**SQL errors** (syntax, missing table, missing column). SQL errors now print:
+
+- The specific problem (not "Connection failed")
+- A hint pointing to the right next command (`dbcli list`, `dbcli schema <table>`, `--no-limit`)
+- For missing tables, top-3 fuzzy-match candidates
+
+### Query-only mode auto-LIMIT
+
+`dbcli` auto-appends `LIMIT 1000` to `SELECT` queries in `query-only` mode. This
+**does not** apply to:
+
+- `SHOW` / `DESCRIBE` statements (LIMIT is not valid syntax here)
+- `EXPLAIN` / `EXPLAIN ANALYZE` / MariaDB `ANALYZE SELECT`
+
+Use `--no-limit` on `SELECT` to disable when querying `information_schema`.
+
+### Schema cache bootstrap
+
+The first `dbcli schema --refresh` after init writes the cache without `--force`.
+Subsequent refreshes that detect changes against an existing cache still require
+`--force` to overwrite.
+
+---
+
 <!-- doc-key: documentation-maintenance -->
 ## Documentation Maintenance & Coverage
 

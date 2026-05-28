@@ -2,7 +2,7 @@
  * schema --refresh first-time bootstrap behaviour.
  * When config.schema is empty, --force should not be required.
  */
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -38,6 +38,10 @@ describe('handleSchemaRefresh first-time bootstrap', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'dbcli-schema-bootstrap-'))
   })
 
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
   it('persists schema without --force when cache is empty', async () => {
     const config: DbcliConfig = {
       connection: {
@@ -61,7 +65,6 @@ describe('handleSchemaRefresh first-time bootstrap', () => {
     )
 
     expect(existsSync(path.join(tmpDir, 'schemas'))).toBe(true)
-    rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('still requires --force when cache is non-empty', async () => {
@@ -95,6 +98,5 @@ describe('handleSchemaRefresh first-time bootstrap', () => {
     )
 
     expect(existsSync(path.join(tmpDir, 'schemas'))).toBe(false)
-    rmSync(tmpDir, { recursive: true, force: true })
   })
 })

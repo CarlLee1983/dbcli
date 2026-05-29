@@ -219,7 +219,7 @@ dbcli init --use-env-refs \
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新;每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。支援 SQL 引擎、MongoDB 與 Redis(單行;`.no-limit on/off`)。 |
-| `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|copilot\|cursor>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
+| `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
 | `migrate` | admin | 僅 SQL。**DDL;預設 dry-run** — 需 `--execute` 才會真的執行。 |
 
 任何子指令上的 `--use <name>` 都會把目標切到對應的 v2 連線,但不改變預設值。

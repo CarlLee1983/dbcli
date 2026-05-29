@@ -1138,26 +1138,28 @@ dbcli migrate drop-enum status --execute --force
 
 ### skill
 
-Emit `SKILL.md` (and the companion `reference.md`) to stdout, a file, or one of
-four AI-agent platform directories. The skill is the source of truth that lets
-Claude Code / Gemini / Copilot / Cursor know how to drive dbcli safely.
+Emit `SKILL.md` (and the companion `reference.md`) to stdout, a file, or an
+AI-agent platform directory. The skill is the source of truth that lets
+Claude Code / Gemini / Antigravity / Copilot / Cursor know how to drive dbcli safely.
 
 ```bash
 dbcli skill                                  # print SKILL.md to stdout
 dbcli skill --output ./SKILL.md              # write to a file (no platform install)
 dbcli skill --install claude                 # install to ~/.claude/skills/dbcli/
-dbcli skill --install gemini                 # install to ~/.gemini/skills/dbcli/
+dbcli skill --install gemini                 # install to ~/.gemini/skills/dbcli/ (being phased out)
+dbcli skill --install antigravity            # install to ~/.gemini/antigravity-cli/skills/dbcli/
 dbcli skill --install copilot                # install to .github/skills/dbcli/ (repo-local)
 dbcli skill --install cursor                 # install to .cursor/skills/dbcli/ (repo-local)
 ```
 
 **Options:**
-- `--install <platform>` — `claude` | `gemini` | `copilot` | `cursor`. Writes `SKILL.md` plus `reference.md` next to it so the agent gets progressive disclosure.
+- `--install <platform>` — `claude` | `gemini` | `antigravity` | `copilot` | `cursor` | `codex` | `windsurf`. Writes `SKILL.md` plus `reference.md` next to it so the agent gets progressive disclosure.
 - `--output <path>` — write `SKILL.md` to a file instead of stdout. Does not install `reference.md`.
 
 **Notes:**
 - Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.
-- `claude` / `gemini` install paths are user-global; `copilot` / `cursor` are repo-local under `.github/` / `.cursor/`.
+- `claude` / `gemini` / `antigravity` install paths are user-global; `copilot` / `cursor` are repo-local under `.github/` / `.cursor/`.
+- `gemini` (Gemini CLI) is retained for now but is being phased out in favour of `antigravity` (Antigravity CLI), Google's successor terminal agent.
 - Re-running `--install` overwrites the existing skill atomically; no prompt.
 
 **Permission:** n/a.

@@ -630,7 +630,8 @@ Generate or install AI agent skill documentation.
 dbcli skill                           # Output skill to stdout
 dbcli skill --output SKILL.md         # Write to file
 dbcli skill --install claude          # Install to Claude Code config
-dbcli skill --install gemini          # Install to Gemini CLI
+dbcli skill --install gemini          # Install to Gemini CLI (being phased out)
+dbcli skill --install antigravity     # Install to Antigravity CLI (Gemini CLI's successor)
 dbcli skill --install copilot         # Install to GitHub Copilot
 dbcli skill --install cursor          # Install to Cursor IDE
 ```
@@ -654,6 +655,7 @@ dbcli skill
 # Install for all platforms
 dbcli skill --install claude && \
 dbcli skill --install gemini && \
+dbcli skill --install antigravity && \
 dbcli skill --install copilot && \
 dbcli skill --install cursor
 ```

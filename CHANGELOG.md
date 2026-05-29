@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-05-29 - Antigravity CLI Skill Target
+
+### Added
+
+- **`dbcli skill --install antigravity` 新增 Antigravity CLI 安裝目標。** Antigravity CLI 是 Google Gemini CLI 的後繼者;skill 會寫入 CLI 範疇的全域路徑 `~/.gemini/antigravity-cli/skills/dbcli/SKILL.md`(同目錄附帶 `reference.md`)。`SUPPORTED_PLATFORMS` 一併納入 `antigravity`,故 `dbcli upgrade` 的 skill 過期檢查也會涵蓋此平台。
+
+### Changed
+
+- `gemini`(Gemini CLI)安裝目標暫予保留,但已標示為即將淘汰,建議改用 `antigravity`。README(en/zh-TW)、`assets/SKILL.md`、`assets/SKILL.zh-TW.md`、`assets/reference.md` 與 `docs/user` 的平台清單同步更新。
+
 ## [1.23.1] - 2026-05-29 - Skill Docs Sync
 
 ### Changed

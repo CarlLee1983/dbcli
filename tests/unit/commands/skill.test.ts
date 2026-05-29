@@ -6,7 +6,7 @@
 import { test, expect, describe, spyOn, beforeEach } from 'bun:test'
 import { join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
-import { skillCommand } from '../../../src/commands/skill'
+import { skillCommand, getInstallPath, SUPPORTED_PLATFORMS } from '../../../src/commands/skill'
 
 describe('skillCommand logic', () => {
   let logOutput = ''
@@ -84,5 +84,26 @@ describe('skillCommand logic', () => {
     } finally {
       if (existsSync(testFile)) unlinkSync(testFile)
     }
+  })
+})
+
+describe('getInstallPath platforms', () => {
+  test('antigravity is a supported platform', () => {
+    expect(SUPPORTED_PLATFORMS).toContain('antigravity')
+  })
+
+  test('antigravity installs under ~/.gemini/antigravity-cli/skills/dbcli', () => {
+    const installPath = getInstallPath('antigravity')
+    expect(installPath).toContain(join('.gemini', 'antigravity-cli', 'skills', 'dbcli'))
+    expect(installPath.endsWith('SKILL.md')).toBe(true)
+  })
+
+  test('antigravity path is case-insensitive', () => {
+    expect(getInstallPath('Antigravity')).toBe(getInstallPath('antigravity'))
+  })
+
+  test('gemini is still supported (phase-out, retained)', () => {
+    expect(SUPPORTED_PLATFORMS).toContain('gemini')
+    expect(getInstallPath('gemini')).toContain(join('.gemini', 'skills', 'dbcli'))
   })
 })

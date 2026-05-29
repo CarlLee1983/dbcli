@@ -528,7 +528,8 @@ dbcli export "SELECT * FROM users WHERE active=true" --format json | jq '.data |
 dbcli skill                           # 輸出至 stdout
 dbcli skill --output SKILL.md         # 寫入檔案
 dbcli skill --install claude          # 安裝至 Claude Code 設定
-dbcli skill --install gemini          # 安裝至 Gemini CLI
+dbcli skill --install gemini          # 安裝至 Gemini CLI（即將淘汰）
+dbcli skill --install antigravity     # 安裝至 Antigravity CLI（Gemini CLI 後繼者）
 dbcli skill --install copilot         # 安裝至 GitHub Copilot
 dbcli skill --install cursor          # 安裝至 Cursor IDE
 ```
@@ -552,6 +553,7 @@ dbcli skill
 # 為多平台安裝
 dbcli skill --install claude && \
 dbcli skill --install gemini && \
+dbcli skill --install antigravity && \
 dbcli skill --install copilot && \
 dbcli skill --install cursor
 ```

@@ -171,7 +171,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | :--- | :--- |
 | `shell` | Launches an interactive REPL with auto-completion and SQL highlighting. |
 | `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. |
-| `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, etc.). |
+| `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |

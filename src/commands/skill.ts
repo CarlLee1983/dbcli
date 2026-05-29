@@ -30,17 +30,21 @@ function resolveSkillSource(lang: string): string {
 }
 
 export interface SkillOptions {
-  install?: string // platform: claude, gemini, copilot, cursor
+  install?: string // platform: claude, gemini, antigravity, copilot, cursor
   output?: string // custom output file path
   lang?: 'en' | 'zh-TW' // source language for SKILL content (default 'en', D-73)
 }
 
 /**
  * Supported platforms for skill installation
+ *
+ * NOTE: `gemini` (Gemini CLI) is retained for now but is being phased out in
+ * favour of `antigravity` (Antigravity CLI), Google's successor terminal agent.
  */
 export const SUPPORTED_PLATFORMS = [
   'claude',
   'gemini',
+  'antigravity',
   'copilot',
   'cursor',
   'codex',
@@ -150,6 +154,11 @@ export function getInstallPath(platform: string): string {
     case 'gemini':
       return path.join(home, '.gemini', 'skills', 'dbcli', 'SKILL.md')
 
+    case 'antigravity':
+      // Antigravity CLI (Gemini CLI's successor) loads CLI-scoped skills from
+      // ~/.gemini/antigravity-cli/skills/<name>/SKILL.md
+      return path.join(home, '.gemini', 'antigravity-cli', 'skills', 'dbcli', 'SKILL.md')
+
     case 'codex':
       return path.join(home, '.codex', 'skills', 'dbcli', 'SKILL.md')
 
@@ -229,7 +238,7 @@ export function registerSkillCommand(program: Command): Command {
     .description(t('skill.description'))
     .option(
       '--install <platform>',
-      'Install to platform directory (claude, gemini, copilot, cursor, codex, windsurf)'
+      'Install to platform directory (claude, gemini, antigravity, copilot, cursor, codex, windsurf)'
     )
     .option('--output <path>', 'Write skill to file instead of stdout')
     .addOption(

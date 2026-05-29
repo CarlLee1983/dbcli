@@ -100,6 +100,7 @@
                     <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
                     <li class="nav-item"><a href="#explain-command" class="nav-link">查詢計畫 (explain)</a></li>
+                    <li class="nav-item"><a href="#guide-missing-index-for" class="nav-link">缺失索引建議</a></li>
                 </ul>
             </section>
         </div>
@@ -581,6 +582,23 @@ dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
     <li><code>--analyze</code> 會實際執行 query,<strong>不要</strong>對 DML 用。</li>
     <li><code>dbcli explain</code> 在 <code>query-only</code> permission 即可執行,不需升權。</li>
     <li>EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。</li>
+  </ul>
+</section>
+
+<section id="guide-missing-index-for" class="mt-20">
+  <h2>缺失索引建議 — <code>dbcli guide missing-index-for</code></h2>
+  <p>分析單一 <code>SELECT</code>,結合真實的 <code>EXPLAIN</code> 計畫與既有索引,建議複合索引。唯讀。</p>
+  <h3>基本用法</h3>
+  <pre><code>dbcli guide missing-index-for "SELECT ... FROM betting_logs b JOIN hoster_machines hm ON ..."
+dbcli guide missing-index-for @analytics/live-summary
+dbcli guide missing-index-for "..." --format json        # yaml(預設) | json | markdown
+dbcli guide missing-index-for "..." --min-confidence medium</code></pre>
+  <p>每個候選索引都會帶有 <code>confidence</code>(<code>high</code> / <code>medium</code> / <code>low</code>)與 <code>reason</code>;此工具不會斷言「你一定要建立」。函式/運算式欄位(例如 <code>DATE(settled_at)</code>)以及無法解析的 SQL,會列在 <code>warnings</code> 之下。</p>
+  <h3>限制</h3>
+  <ul>
+    <li>僅支援單一 <code>SELECT</code> — 不支援 INSERT/UPDATE/DELETE、stored procedure 或 view 內容。</li>
+    <li>函式/部分索引只會被標記,不會被建議。</li>
+    <li>超出 node-sql-parser 支援的方言會退回到僅用 EXPLAIN 的啟發式判斷。</li>
   </ul>
 </section>
 

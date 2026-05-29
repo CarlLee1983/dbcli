@@ -22,6 +22,7 @@ import { statusCommand } from './commands/status'
 import { inspectCommand } from './commands/inspect'
 import { reportCommand } from './commands/report'
 import { guideCommand } from './commands/guide'
+import { registerMissingIndexCommand } from './commands/guide-missing-index'
 import { explainCommand } from './commands/explain'
 import { recoveryCommand } from './commands/recovery'
 import { recoverCommand } from './commands/recover'
@@ -328,6 +329,7 @@ program.addCommand(statusCommand)
 program.addCommand(inspectCommand)
 program.addCommand(reportCommand)
 program.addCommand(guideCommand)
+registerMissingIndexCommand(guideCommand)
 program.addCommand(recoveryCommand)
 program.addCommand(recoverCommand)
 program.addCommand(auditCommand)

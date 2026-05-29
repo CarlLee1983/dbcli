@@ -547,3 +547,18 @@ dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
 - `dbcli explain` 在 `query-only` permission 即可執行,不需升權。
 - EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。
 
+## 缺失索引建議 — `dbcli guide missing-index-for`
+
+分析單一 `SELECT`,結合真實的 `EXPLAIN` 計畫與既有索引,建議複合索引。唯讀。
+
+```bash
+dbcli guide missing-index-for "SELECT ... FROM betting_logs b JOIN hoster_machines hm ON ..."
+dbcli guide missing-index-for @analytics/live-summary
+dbcli guide missing-index-for "..." --format json        # yaml(預設) | json | markdown
+dbcli guide missing-index-for "..." --min-confidence medium
+```
+
+每個候選索引都會帶有 `confidence`(`high` / `medium` / `low`)與 `reason`;此工具不會斷言「你一定要建立」。函式/運算式欄位(例如 `DATE(settled_at)`)以及無法解析的 SQL,會列在 `warnings` 之下。
+
+**限制:** 僅支援單一 `SELECT`(不支援 INSERT/UPDATE/DELETE、stored procedure 或 view 內容)。函式/部分索引只會被標記,不會被建議。超出 node-sql-parser 支援的方言會退回到僅用 EXPLAIN 的啟發式判斷。
+

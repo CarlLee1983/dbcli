@@ -35,8 +35,9 @@ export async function resolveSingleQuery(
   if (!raw.startsWith('@')) return raw
   const ref = raw.slice(1)
   const hits = await loader(ref)
-  if (!hits || hits.length === 0) throw new Error(`Saved query '${ref}' not found`)
-  return hits[0].sql
+  const first = hits?.[0]
+  if (!first) throw new Error(`Saved query '${ref}' not found`)
+  return first.sql
 }
 
 function makeSavedQueryLoader(): SavedQueryLoader {

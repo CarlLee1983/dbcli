@@ -75,7 +75,7 @@ function resolveTable(
 ): string | null {
   if (ref.table) return aliasMap.get(ref.table) ?? ref.table
   // Unqualified column: only safe when exactly one table is in play.
-  if (tableOrder.length === 1) return tableOrder[0]
+  if (tableOrder.length === 1) return tableOrder[0] ?? null
   return null
 }
 

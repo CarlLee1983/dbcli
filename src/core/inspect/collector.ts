@@ -11,6 +11,10 @@ import { collectSchemaCache } from './collect-schema-cache'
 import { collectObjects, type ObjectsCollectResult } from './collect-objects'
 import { collectVersion } from './collect-version'
 import { suggestCommands } from './suggest-commands'
+import { loadRecentAudit } from '@/core/audit/recent'
+import { countAgentTasks, resolveAgentTaskDirs } from '@/core/agent-tasks'
+import { topQueriedTable } from './top-table'
+import { buildHints } from './build-hints'
 import {
   INSPECT_SCHEMA_VERSION,
   type InspectOptions,
@@ -110,9 +114,28 @@ export async function collectInspect(opts: InspectOptions): Promise<InspectSnaps
     schemaCache: sc.section,
     snippets: snippets.section,
   }
-  const suggestedCommands = suggestCommands(snapWithoutSuggestions, { brief: opts.brief })
 
-  return { ...snapWithoutSuggestions, suggestedCommands, warnings }
+  // 6. Context signals for suggestions/hints (read-only; never throws → []/0).
+  //    NB: separate from the command-layer `audit_recent` embed (JSON-only, n=5) —
+  //    this load (n=10) drives suggestions on every output format.
+  const auditRecent = config
+    ? await loadRecentAudit(
+        config as Parameters<typeof loadRecentAudit>[0],
+        opts.configPath,
+        10
+      )
+    : []
+  const topTable = topQueriedTable(auditRecent)
+  const taskPackCount = await countAgentTasks(resolveAgentTaskDirs(opts.workspace))
+
+  const suggestedCommands = suggestCommands(snapWithoutSuggestions, {
+    brief: opts.brief,
+    topTable,
+    taskPackCount,
+  })
+  const hints = buildHints(snapWithoutSuggestions, { topTable, taskPackCount })
+
+  return { ...snapWithoutSuggestions, suggestedCommands, hints, warnings }
 }
 
 async function hasConfig(configPath: string): Promise<boolean> {

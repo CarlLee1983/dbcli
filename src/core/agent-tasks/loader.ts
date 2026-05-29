@@ -86,3 +86,22 @@ async function safeCollectMd(root: string): Promise<string[]> {
   await walk(root)
   return out
 }
+
+/**
+ * Lightweight task-pack count. Walks the three task dirs and counts unique
+ * task names (.md files, excluding README) WITHOUT parsing front-matter.
+ * Used by `dbcli inspect` to surface task-pack availability cheaply.
+ * Never throws (missing dirs contribute zero).
+ */
+export async function countAgentTasks(opts: LoadOptions): Promise<number> {
+  const names = new Set<string>()
+  for (const root of [opts.builtinDir, opts.sharedDir, opts.localDir]) {
+    for (const file of await safeCollectMd(root)) {
+      const rel = relative(root, file).split(sep).join('/')
+      if (!rel.endsWith('.md')) continue
+      if (rel.toLowerCase() === 'readme.md') continue
+      names.add(rel.slice(0, -'.md'.length))
+    }
+  }
+  return names.size
+}

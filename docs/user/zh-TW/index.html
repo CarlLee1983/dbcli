@@ -196,6 +196,20 @@ dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code><
                 </tbody>
             </table>
 
+            <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>
+            <p><code>dbcli inspect</code> 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：</p>
+            <ul>
+                <li><strong><code>suggestedCommands</code></strong> — 可直接執行的後續指令，依三層排序：
+                    <ol>
+                        <li><em>Bootstrap（啟動）</em> — <code>dbcli schema --refresh</code>（schema 快取缺失或過期時）與 <code>dbcli list --format json</code>。</li>
+                        <li><em>Context-aware（情境感知）</em> — 由近期活動驅動。當 audit log 偵測到熱門資料表<strong>且</strong>有可用的 task pack 時，建議 <code>dbcli skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code>；並依 snippet intent 提供 <code>dbcli queries suggest &lt;intent&gt;</code>。</li>
+                        <li><em>Discovery（探索）</em> — <code>dbcli skill tasks list</code>（有 task pack 時）與 <code>dbcli doctor --format json</code>。</li>
+                    </ol>
+                </li>
+                <li><strong><code>hints</code></strong> — 人類可讀、不可執行的提示：近期 audit 中最常查詢的資料表、可用 task pack 數量、以及 schema 快取規模與最後刷新時間。在 markdown 輸出會呈現為 <code>## Hints</code> 區塊。</li>
+            </ul>
+            <p>兩個陣列在 <code>--for-agent</code> / <code>--brief</code> 下都會被裁切（hints ≤ 3 條，suggestedCommands 只留最安全的 1 條）。</p>
+
             <!-- doc-key: query-data-operations -->
             <h3 id="query">查詢與資料操作</h3>
             <pre><code># 原生查詢
@@ -273,6 +287,10 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
             </table>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">內建任務包 <code>analyze-table-perf</code></h4>
+                <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
+            </div>
         </section>
 
         <!-- doc-key: html-dashboards -->

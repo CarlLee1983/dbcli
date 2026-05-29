@@ -17,5 +17,6 @@ function toBrief(snap: InspectSnapshot): InspectSnapshot {
     objects,
     snippets: { ...snap.snippets, intents: [] },
     suggestedCommands: snap.suggestedCommands.slice(0, 3),
+    hints: snap.hints.slice(0, 3),
   }
 }

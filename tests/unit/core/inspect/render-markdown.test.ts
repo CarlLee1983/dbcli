@@ -21,6 +21,7 @@ const SNAP: InspectSnapshot = {
     intents: [{ intent: 'perf.slow-query', count: 2 }],
   },
   suggestedCommands: ['dbcli list --format json'],
+  hints: ['21 task packs available — run `dbcli skill tasks list` to browse'],
   warnings: [],
 }
 
@@ -45,5 +46,18 @@ describe('renderMarkdown', () => {
     const idxSugg = md.indexOf('## Suggested commands')
     expect(idxWarn).toBeGreaterThan(-1)
     expect(idxWarn).toBeGreaterThan(idxSugg)
+  })
+
+  test('hints section appears after Suggested commands in full mode', () => {
+    const md = renderMarkdown(SNAP, { brief: false })
+    const idxHints = md.indexOf('## Hints')
+    const idxSugg = md.indexOf('## Suggested commands')
+    expect(idxHints).toBeGreaterThan(idxSugg)
+    expect(md).toContain('21 task packs available')
+  })
+
+  test('brief omits hints section', () => {
+    const md = renderMarkdown(SNAP, { brief: true })
+    expect(md).not.toContain('## Hints')
   })
 })

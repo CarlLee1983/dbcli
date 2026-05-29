@@ -25,6 +25,7 @@ const SNAP: InspectSnapshot = {
     intents: [{ intent: 'perf.slow-query', count: 2 }],
   },
   suggestedCommands: ['dbcli list --format json'],
+  hints: ['Schema cache: 2 tables (last refreshed 2026-05-01T00:00:00Z)'],
   warnings: [],
 }
 
@@ -42,6 +43,7 @@ describe('renderJson', () => {
     expect(Object.keys(parsed).sort()).toEqual([
       'blacklist',
       'connection',
+      'hints',
       'objects',
       'permission',
       'schemaCache',
@@ -61,6 +63,13 @@ describe('renderJson', () => {
     expect(parsed.objects.sample).toBeUndefined()
     expect(parsed.snippets.intents).toEqual([])
     expect(parsed.suggestedCommands.length).toBeLessThanOrEqual(3)
+  })
+
+  test('brief trims hints to <= 3', () => {
+    const parsed = JSON.parse(
+      renderJson({ ...SNAP, hints: ['a', 'b', 'c', 'd', 'e'] }, { brief: true })
+    )
+    expect(parsed.hints.length).toBeLessThanOrEqual(3)
   })
 
   test('redacts: never contains host/password fields', () => {

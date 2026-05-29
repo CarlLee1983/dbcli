@@ -64,6 +64,7 @@
     "lucide-react": "^1.16.0",
     "mongodb": "^7.2.0",
     "mysql2": "^3.22.3",
+    "node-sql-parser": "5",
     "open": "^11.0.0",
     "pg": "^8.21.0",
     "picocolors": "^1.1.1",

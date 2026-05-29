@@ -51,6 +51,7 @@ describe('dbcli inspect (CLI)', () => {
     expect(j.snippets.count).toBeGreaterThan(0)
     expect(Array.isArray(j.suggestedCommands)).toBe(true)
     expect(j.suggestedCommands.length).toBeGreaterThan(0)
+    expect(Array.isArray(j.hints)).toBe(true)
   })
 
   test('--for-agent collapses to brief json', async () => {
@@ -85,5 +86,17 @@ describe('dbcli inspect (CLI)', () => {
     const j = JSON.parse(stdout)
     expect(j.system).toBeNull()
     expect(j.suggestedCommands).toContain('dbcli init')
+  })
+
+  test('inspect collector completes well under the 200ms audit-read gate (no-connect)', async () => {
+    const { collectInspect } = await import('@/core/inspect')
+    const start = performance.now()
+    await collectInspect({
+      workspace: FIXTURE,
+      configPath: join(FIXTURE, '.dbcli'),
+      noConnect: true,
+    })
+    const elapsed = performance.now() - start
+    expect(elapsed).toBeLessThan(200)
   })
 })

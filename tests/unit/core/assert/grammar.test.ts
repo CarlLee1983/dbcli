@@ -16,13 +16,25 @@ describe('parseExpect', () => {
   })
 
   it('parses col predicates', () => {
-    expect(parseExpect('col:email not null')).toEqual({ kind: 'col', column: 'email', pred: { type: 'notNull' } })
-    expect(parseExpect('col:id unique')).toEqual({ kind: 'col', column: 'id', pred: { type: 'unique' } })
+    expect(parseExpect('col:email not null')).toEqual({
+      kind: 'col',
+      column: 'email',
+      pred: { type: 'notNull' },
+    })
+    expect(parseExpect('col:id unique')).toEqual({
+      kind: 'col',
+      column: 'id',
+      pred: { type: 'unique' },
+    })
     expect(parseExpect('col:amount between 0 and 100')).toEqual({
-      kind: 'col', column: 'amount', pred: { type: 'between', low: 0, high: 100 },
+      kind: 'col',
+      column: 'amount',
+      pred: { type: 'between', low: 0, high: 100 },
     })
     expect(parseExpect('col:age >= 18')).toEqual({
-      kind: 'col', column: 'age', pred: { type: 'cmp', op: '>=', value: 18 },
+      kind: 'col',
+      column: 'age',
+      pred: { type: 'cmp', op: '>=', value: 18 },
     })
   })
 

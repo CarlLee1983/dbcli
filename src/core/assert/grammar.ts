@@ -49,10 +49,19 @@ export function parseExpect(input: string): ExpectNode {
     if (/^unique$/i.test(rest)) return { kind: 'col', column, pred: { type: 'unique' } }
     const between = rest.match(/^between\s+(-?\d+(?:\.\d+)?)\s+and\s+(-?\d+(?:\.\d+)?)$/i)
     if (between) {
-      return { kind: 'col', column, pred: { type: 'between', low: Number(between[1]), high: Number(between[2]) } }
+      return {
+        kind: 'col',
+        column,
+        pred: { type: 'between', low: Number(between[1]), high: Number(between[2]) },
+      }
     }
     const cmp = rest.match(new RegExp(`^${OP.source}\\s*(.+)$`))
-    if (cmp) return { kind: 'col', column, pred: { type: 'cmp', op: cmp[1] as Op, value: parseScalar(cmp[2]!) } }
+    if (cmp)
+      return {
+        kind: 'col',
+        column,
+        pred: { type: 'cmp', op: cmp[1] as Op, value: parseScalar(cmp[2]!) },
+      }
   }
 
   throw new AssertExpressionError(input)

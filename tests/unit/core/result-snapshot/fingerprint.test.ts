@@ -3,14 +3,22 @@ import { describe, it, expect } from 'bun:test'
 import { buildFingerprint } from '@/core/result-snapshot/fingerprint'
 import type { QueryResult } from '@/types/query'
 
-function qr(rows: Record<string, unknown>[], columnNames: string[], columnTypes?: string[]): QueryResult<Record<string, unknown>> {
+function qr(
+  rows: Record<string, unknown>[],
+  columnNames: string[],
+  columnTypes?: string[]
+): QueryResult<Record<string, unknown>> {
   return { rows, rowCount: rows.length, columnNames, columnTypes }
 }
 
 describe('buildFingerprint', () => {
   it('captures rowCount, null/distinct counts and numeric aggregates', () => {
     const result = qr(
-      [{ id: 1, amount: 10 }, { id: 2, amount: 30 }, { id: 3, amount: null }],
+      [
+        { id: 1, amount: 10 },
+        { id: 2, amount: 30 },
+        { id: 3, amount: null },
+      ],
       ['id', 'amount'],
       ['integer', 'integer']
     )

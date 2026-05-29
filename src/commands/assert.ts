@@ -1,13 +1,23 @@
 // src/commands/assert.ts
 import { Command } from 'commander'
-import { AdapterFactory, ConnectionError, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { QueryExecutor } from '@/core/query-executor'
-import { loadSnippets, mapSystemToEngine, resolveByName, resolveSnippetDirs } from '@/core/saved-queries'
+import {
+  loadSnippets,
+  mapSystemToEngine,
+  resolveByName,
+  resolveSnippetDirs,
+} from '@/core/saved-queries'
 import { parseExpect } from '@/core/assert/grammar'
 import { evaluateExpect, compareVs } from '@/core/assert/evaluator'
 import { buildFingerprint, compareAgainst } from '@/core/result-snapshot/fingerprint'
@@ -34,7 +44,12 @@ export const assertCommand = new Command()
   .option('--vs <query>', 'Second SQL/@saved query for reconciliation')
   .option('--compare <mode>', 'For --vs: rows | value (default value)', 'value')
   .option('--against <path>', 'Compare current result fingerprint against a saved snapshot')
-  .option('--tolerance <pct>', 'For --against: allowed relative drift, e.g. 0.01 (default 0)', (v) => parseFloat(v), 0)
+  .option(
+    '--tolerance <pct>',
+    'For --against: allowed relative drift, e.g. 0.01 (default 0)',
+    (v) => parseFloat(v),
+    0
+  )
   .option('--no-fail', 'Always exit 0; report pass/fail in output only')
   .option('--format <format>', 'Output format: json (default) or table', 'json')
   .action(async (query: string, options: Record<string, unknown>, command: Command) => {
@@ -51,36 +66,57 @@ export const assertCommand = new Command()
         process.exit(1)
       }
 
-      const adapter = AdapterFactory.createSqlAdapter(requireSqlConnection(config.connection as ConnectionOptions))
+      const adapter = AdapterFactory.createSqlAdapter(
+        requireSqlConnection(config.connection as ConnectionOptions)
+      )
       await adapter.connect()
 
       let verdict: AssertVerdict
       try {
         const blacklistManager = new BlacklistManager(config)
         const blacklistValidator = new BlacklistValidator(blacklistManager)
-        const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, options as { config?: string })
+        const executor = new QueryExecutor(
+          adapter,
+          config.permission,
+          blacklistValidator,
+          config,
+          options as { config?: string }
+        )
 
         const engine = mapSystemToEngine(config.connection.system)
         const dirs = resolveSnippetDirs(process.cwd())
         const snippets = await loadSnippets(dirs)
-        const resolveSql = (q: string) => (q.startsWith('@') ? resolveByName(snippets, q.slice(1), engine).query.sqlBody : q)
+        const resolveSql = (q: string) =>
+          q.startsWith('@') ? resolveByName(snippets, q.slice(1), engine).query.sqlBody : q
 
-        const result: QueryResult<Record<string, unknown>> = await executor.execute(resolveSql(query), { autoLimit: true })
+        const result: QueryResult<Record<string, unknown>> = await executor.execute(
+          resolveSql(query),
+          { autoLimit: true }
+        )
 
         const checks: AssertCheck[] = []
-        if (options.expect) checks.push(evaluateExpect(parseExpect(options.expect as string), result))
+        if (options.expect)
+          checks.push(evaluateExpect(parseExpect(options.expect as string), result))
         if (options.vs) {
-          const other = await executor.execute(resolveSql(options.vs as string), { autoLimit: true })
+          const other = await executor.execute(resolveSql(options.vs as string), {
+            autoLimit: true,
+          })
           checks.push(compareVs(result, other, (options.compare as 'rows' | 'value') ?? 'value'))
         }
         if (options.against) {
           const baseline = await readSnapshot(options.against as string)
-          const current = buildFingerprint(result, { query: resolveSql(query), engine: config.connection.system as SnapshotEngine })
+          const current = buildFingerprint(result, {
+            query: resolveSql(query),
+            engine: config.connection.system as SnapshotEngine,
+          })
           checks.push(...compareAgainst(current, baseline, options.tolerance as number))
         }
 
         verdict = { pass: checks.every((c) => c.pass), checks }
-        await writeAuditEntry(config, 'assert', options as { config?: string }, { success: verdict.pass, sql: query })
+        await writeAuditEntry(config, 'assert', options as { config?: string }, {
+          success: verdict.pass,
+          sql: query,
+        })
       } finally {
         await adapter.disconnect()
       }
@@ -89,7 +125,9 @@ export const assertCommand = new Command()
         console.log(JSON.stringify(verdict, null, 2))
       } else {
         for (const c of verdict.checks) {
-          console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name}  expected=${c.expected} actual=${c.actual}`)
+          console.log(
+            `${c.pass ? 'PASS' : 'FAIL'}  ${c.name}  expected=${c.expected} actual=${c.actual}`
+          )
         }
         console.log(`\nVerdict: ${verdict.pass ? 'PASS' : 'FAIL'}`)
       }
@@ -97,7 +135,8 @@ export const assertCommand = new Command()
     } catch (error) {
       if (error instanceof Error) {
         console.error(error.message)
-        if (error instanceof ConnectionError) error.hints.forEach((h) => console.error(`   Hint: ${h}`))
+        if (error instanceof ConnectionError)
+          error.hints.forEach((h) => console.error(`   Hint: ${h}`))
       }
       process.exit(1)
     }

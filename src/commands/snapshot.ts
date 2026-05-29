@@ -1,7 +1,12 @@
 // src/commands/snapshot.ts
 import { Command } from 'commander'
 import { join } from 'node:path'
-import { AdapterFactory, ConnectionError, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  ConnectionError,
+  type ConnectionOptions,
+  type SqlConnectionOptions,
+} from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
@@ -11,7 +16,12 @@ import { QueryExecutor } from '@/core/query-executor'
 import { extractTableName } from '@/utils/engine-hints'
 import { buildFingerprint } from '@/core/result-snapshot/fingerprint'
 import { writeSnapshot } from '@/core/result-snapshot/serializer'
-import { loadSnippets, mapSystemToEngine, resolveByName, resolveSnippetDirs } from '@/core/saved-queries'
+import {
+  loadSnippets,
+  mapSystemToEngine,
+  resolveByName,
+  resolveSnippetDirs,
+} from '@/core/saved-queries'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { SnapshotEngine } from '@/core/result-snapshot/types'
 
@@ -37,9 +47,14 @@ function defaultSnapshotPath(): string {
 
 export const snapshotCommand = new Command()
   .name('snapshot')
-  .description('Capture a result fingerprint (rowCount + per-column aggregates) for later comparison')
+  .description(
+    'Capture a result fingerprint (rowCount + per-column aggregates) for later comparison'
+  )
   .argument('<query>', 'SQL string or @saved-query reference')
-  .option('--out <path>', 'Write snapshot to this path (default: .dbcli/snapshots/snap-<timestamp>.json)')
+  .option(
+    '--out <path>',
+    'Write snapshot to this path (default: .dbcli/snapshots/snap-<timestamp>.json)'
+  )
   .option('--rows', 'Also include full (blacklist-masked) rows in the snapshot', false)
   .option('--stdout', 'Print snapshot JSON to stdout instead of writing a file', false)
   .option('--format <format>', 'Output format for --stdout: json (default) or table', 'json')
@@ -63,12 +78,20 @@ export const snapshotCommand = new Command()
         sql = resolveByName(snippets, query.slice(1), engine).query.sqlBody
       }
 
-      const adapter = AdapterFactory.createSqlAdapter(requireSqlConnection(config.connection as ConnectionOptions))
+      const adapter = AdapterFactory.createSqlAdapter(
+        requireSqlConnection(config.connection as ConnectionOptions)
+      )
       await adapter.connect()
       try {
         const blacklistManager = new BlacklistManager(config)
         const blacklistValidator = new BlacklistValidator(blacklistManager)
-        const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, options as { config?: string })
+        const executor = new QueryExecutor(
+          adapter,
+          config.permission,
+          blacklistValidator,
+          config,
+          options as { config?: string }
+        )
         const result = await executor.execute(sql, { autoLimit: options.limit !== false })
 
         const table = extractTableName(sql)
@@ -85,16 +108,22 @@ export const snapshotCommand = new Command()
         } else {
           const outPath = (options.out as string) ?? defaultSnapshotPath()
           await writeSnapshot(outPath, snap)
-          console.error(`Snapshot saved to ${outPath} (${snap.rowCount} rows, ${snap.columns.length} columns)`)
+          console.error(
+            `Snapshot saved to ${outPath} (${snap.rowCount} rows, ${snap.columns.length} columns)`
+          )
         }
-        await writeAuditEntry(config, 'snapshot', options as { config?: string }, { success: true, sql })
+        await writeAuditEntry(config, 'snapshot', options as { config?: string }, {
+          success: true,
+          sql,
+        })
       } finally {
         await adapter.disconnect()
       }
     } catch (error) {
       if (error instanceof Error) {
         console.error(error.message)
-        if (error instanceof ConnectionError) error.hints.forEach((h) => console.error(`   Hint: ${h}`))
+        if (error instanceof ConnectionError)
+          error.hints.forEach((h) => console.error(`   Hint: ${h}`))
       }
       process.exit(1)
     }

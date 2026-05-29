@@ -43,11 +43,22 @@ export function buildFingerprint(
   opts: FingerprintOptions
 ): ResultSnapshot {
   const columns: ColumnFingerprint[] = result.columnNames.map((name, i) =>
-    buildColumn(name, result.columnTypes?.[i] ?? 'unknown', result.rows.map((r) => r[name]))
+    buildColumn(
+      name,
+      result.columnTypes?.[i] ?? 'unknown',
+      result.rows.map((r) => r[name])
+    )
   )
   for (const name of opts.redactedColumns ?? []) {
     if (!columns.some((c) => c.name === name)) {
-      columns.push({ name, type: 'redacted', nullCount: 0, distinctCount: 0, checksum: '', redacted: true })
+      columns.push({
+        name,
+        type: 'redacted',
+        nullCount: 0,
+        distinctCount: 0,
+        checksum: '',
+        redacted: true,
+      })
     }
   }
   const rowStrings = result.rows
@@ -87,7 +98,8 @@ export function compareAgainst(
     })
     return checks
   }
-  const within = (a: number, b: number) => (b === 0 ? a === 0 : Math.abs(a - b) / Math.abs(b) <= tolerance)
+  const within = (a: number, b: number) =>
+    b === 0 ? a === 0 : Math.abs(a - b) / Math.abs(b) <= tolerance
   checks.push({
     name: 'rowCount',
     expected: `${baseline.rowCount} ±${tolerance * 100}%`,

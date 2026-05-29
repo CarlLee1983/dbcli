@@ -70,6 +70,12 @@ The plan output is an ordered list of dbcli commands with rationale and risk
 labels. Execute them one at a time — task plans do **not** override blacklist,
 schema, dry-run, or confirmation requirements.
 
+Builtin packs: `diagnose-slow-query` and **(v1.23)** `analyze-table-perf` — a
+read-only `plan-only` pack taking a required `table` parameter that walks
+`blacklist list` → `schema <table> --format json` → `guide index-usage`. `dbcli
+inspect` suggests `analyze-table-perf` automatically for the hottest table in
+recent audit activity.
+
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).
 
@@ -234,25 +240,26 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
 | `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. Supports `--recovery`. |
+| `explain` | query-only+ | **(v1.23)** Read-only query plan with annotations. SQL only. Single query, `@saved-query`, `@file.sql`, or `--bulk @glob/*`. `--analyze` (EXPLAIN ANALYZE / MariaDB ANALYZE SELECT), `--format markdown\|json\|table`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
 | `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. Supports `--verify` to run assertions. |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
 | `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. Supports `--recovery`. |
-| `export` | query-only+ | SQL or MongoDB only. Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
+| `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
-| `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, suggested commands). `--for-agent` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
+| `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
 | `report` | query-only+ | Diagnostic report (health / capacity / perf) built from `@diag/*` snippets. `--section`, `--brief`, `--for-agent`, `--no-connect`. |
-| `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. |
+| `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. **(v1.23)** `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
 | `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
 | `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
 | `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
-| `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). |
+| `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
@@ -295,15 +302,18 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 - `database` field is the logical DB index (default `0`); `list` returns ≤ 100 000 keys via SCAN.
 - **Size guard:** `SCAN`/`HSCAN`/`SSCAN`/`ZSCAN` inject `COUNT 1000`; `LRANGE`/`ZRANGE` clamp `stop`; `ZRANGEBYSCORE` injects `LIMIT 0 1000`; `HGETALL`/`HKEYS`/`HVALS`/`SMEMBERS`/`KEYS` truncate at 1000. Results carry `warnings[]` (`REDIS_SIZE_REWRITE` / `REDIS_SIZE_TRUNCATE`). Pass `--no-limit` (CLI) or `.no-limit on` (shell) to bypass.
 - **Blacklist:** `dbcli blacklist add 'secrets:*'` registers a Redis-native key glob. Reads/writes whose keys match are rejected (`BlacklistRejection`, audited with `metadata.matched_pattern`); `KEYS`/`SCAN MATCH` overlapping a rule are rejected; non-overlapping listings filter blacklisted keys.
+- **Masking (v1.22):** add a `redis.mask` block to `.dbcli` — keys matching a `keyPattern` glob have their value (or named hash `fields`) returned as `[REDACTED]` on reads (`GET`, `GETRANGE`, `HGETALL`, `HGET`, `HMGET`, `HVALS`). Masking coexists with key-glob rejection, and **rejection always wins over masking**.
 - **Shell:** `dbcli shell` on a Redis connection opens a single-line REPL (history, tab completion of commands + key prefixes, `.no-limit on/off`).
 - See reference.md Redis section.
 
 ## Elasticsearch
 
 - DSL (JSON body) or Lucene query string; `--collection <index>` is required on `query`.
-- **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping), `query`, `status`, `use`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
+- **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping), `query`, `export` (v1.22), `shell` (v1.22), `status`, `use`, `doctor`, `upgrade`, `completion`.
+- **Not supported:** `insert`, `update`, `delete`, `check`, `diff`, `migrate`, `q`.
   Writes are not exposed via dedicated subcommands yet — use `query` if the cluster allows or external tools.
+- **Export (v1.22):** `dbcli export` takes a search DSL with `--index <index>` to export hits, or an index name as the query to scroll the whole index via `match_all`. Outputs JSON / JSONL / CSV (default 1000 rows; `--no-limit` scrolls the full index in batches). Index-level blacklist + audit apply.
+- **Shell (v1.22):** `dbcli shell` opens a Kibana Dev Tools-style REPL — request line `<METHOD> /<path>` plus an optional multi-line JSON body, submitted with a blank line; index-level blacklist rejects protected indices and `_search` auto-caps at 1000 when `size` is omitted.
 - Query-only mode caps at 1000 hits; `--no-limit` is bounded at 10 000.
 - Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields.
 - See reference.md Elasticsearch section.

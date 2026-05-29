@@ -161,6 +161,40 @@ dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdou
 > - Hits are flattened: each result row contains `_id` plus dotted-path fields from `_source`. Pass `--format json` to keep nested structures readable.
 > - Query-only mode caps at 1000 hits; `--no-limit` is internally capped at 10 000 (use saved searches / `search_after` for deeper pagination).
 
+### explain
+
+**(v1.23)** Read-only query-plan inspection across MySQL/MariaDB and PostgreSQL,
+wrapping `EXPLAIN` / `EXPLAIN ANALYZE` / MariaDB `ANALYZE SELECT` behind one
+interface. Output is a unified `ExplainRow` schema plus severity-coded
+annotations. SQL `SELECT` only.
+
+```bash
+dbcli explain "SELECT * FROM betting_logs WHERE settled_at >= '2026-03-01'"
+dbcli explain @analytics/live-summary                 # saved query
+dbcli explain @file.sql                               # @file reference
+dbcli explain --analyze "SELECT ..."                  # MariaDB ANALYZE SELECT / PG EXPLAIN ANALYZE
+dbcli explain --format json "..."                     # markdown (default) | json | table
+dbcli explain --bulk @queries.sql                     # batch from file
+dbcli explain --bulk @analytics/*                     # glob over saved queries
+```
+
+**Options:** `--analyze` (run the query for real — EXPLAIN ANALYZE / ANALYZE SELECT), `--format <markdown|json|table>` (default `markdown`), `--bulk <input>` (comma-separated `@file` / `@glob` / `@saved-query`).
+**Permission:** query-only+ (no upgrade required).
+
+**Annotations:**
+
+| Rule | Severity | Triggered when |
+|---|---|---|
+| `full-scan` | red | MySQL `type=ALL` or `key=NULL`; PG `Seq Scan` |
+| `temp-table` | yellow | MySQL `Using temporary` |
+| `filesort` | yellow | MySQL `Using filesort`; PG `Sort Method: external merge` |
+| `cost-estimate-skew` | gray | `--analyze` actual rows / planner rows > 10× |
+| `nested-loop-large` | yellow | PG `Nested Loop` with planner rows > 10,000 |
+
+> Notes:
+> - `--analyze` executes the statement — do not use against destructive SQL.
+> - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
+
 ### plan
 
 Static SQL risk analyzer. Classifies a statement into the same permission tiers
@@ -480,12 +514,19 @@ dbcli export "SELECT * FROM users" --format csv --output users.csv --force  # Sk
 dbcli export "SELECT * FROM users" --format json | jq '.[]'
 dbcli export "SELECT * FROM users" --format jsonl --output users.ndjson
 dbcli export "SELECT * FROM orders" --format html --output orders.html      # standalone dashboard
+
+# Elasticsearch (v1.22)
+dbcli export '{"query":{"match":{"status":"active"}}}' --index orders --format jsonl --output orders.ndjson
+dbcli export orders --format csv --output orders.csv      # index name as query → match_all + scroll
+dbcli export orders --no-limit --format jsonl             # scroll the whole index in batches
 ```
 
-**Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`
-**Permission:** query-only+
+**Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`, `--index <name>` (Elasticsearch), `--no-limit` (Elasticsearch full-index scroll)
+**Permission:** query-only+ — SQL, MongoDB, and **(v1.22)** Elasticsearch.
 
 The `html` format emits the same self-contained dashboard as `query --ui` (see [Interactive HTML dashboard](#interactive-html-dashboard)). Because `export` runs raw SQL (no snippet metadata), the HTML report is always rendered as a sortable / filterable table — no KPIs or charts. Use `dbcli q @<name> --format html` (or `--ui`) for the charted view.
+
+> **Elasticsearch export (v1.22):** pass a search DSL with `--index <index>` to export the hits, or pass an index name as the query to scroll the whole index via `match_all`. Default cap is 1000 rows; `--no-limit` streams the full index via scroll in batches. Index-level blacklist is checked before export and an audit record is written.
 
 ### blacklist
 
@@ -554,6 +595,8 @@ Read-only snapshot for AI agents. Never emits credentials or blacklisted values.
 | `--for-agent` | Shortcut for `--format json --brief` |
 | `--no-connect` | Skip the cheap version/object probe (no DB traffic) |
 | `--probe-timeout <ms>` | Hard timeout for the version/object probe (default 1500) |
+| `--require-schema-cache` | Throw `SCHEMA_CACHE_MISSING` (recovery code) when the active SQL connection has no usable schema cache |
+| `--recovery` | On failure, emit a structured `RecoveryEnvelope` to stdout |
 
 Example:
 
@@ -561,7 +604,14 @@ Example:
 dbcli inspect --for-agent
 ```
 
-Output schema is locked at `schemaVersion: 1`. Sections: `connection`, `permission`, `blacklist`, `objects`, `schemaCache`, `snippets`, `suggestedCommands`, `warnings`.
+Output schema is locked at `schemaVersion: 1`. Sections: `connection`, `permission`, `blacklist`, `objects`, `schemaCache`, `snippets`, `suggestedCommands`, `hints` **(v1.23)**, `warnings`.
+
+**`suggestedCommands` (context-aware, v1.23)** — a three-tier weighted list:
+1. *Bootstrap* — always-safe orientation commands (`blacklist list`, `schema <table>`, ...).
+2. *Context-aware* — driven by recent activity. When a hot table is detected in the audit log **and** task packs are available, suggests `dbcli skill tasks plan analyze-table-perf --param table=<table>` plus `dbcli queries suggest <intent>` from your snippet intents.
+3. *Discovery* — broader exploration commands.
+
+**`hints` (v1.23)** — a parallel array of human-readable, non-executable notes: the most-queried table from recent audit, the number of available task packs, and the schema-cache size with its last-refresh timestamp. In markdown output they render as a `## Hints` section. Audit reads here are read-only and never throw. Both `suggestedCommands` and `hints` are trimmed under `--for-agent` / `--brief` (≤ 3 hints, single safest command).
 
 **Permission:** query-only+
 
@@ -630,6 +680,30 @@ Boundaries:
 - Goal vocabulary is fixed in v1.14.0; user-supplied goals are rejected.
 - Each step carries `risk: 'readonly'` in v1.14.0 (forward-compatible with v1.15.0 recovery).
 - Coexists with `dbcli skill tasks plan` (template-driven). Use guide for ad-hoc goals; use task packs for repeatable workflows.
+
+**Permission:** query-only+
+
+#### guide missing-index-for (v1.23)
+
+A single-query composite-index advisor. Parses one `SELECT`, combines a real
+`EXPLAIN` plan with existing indexes, and emits index candidates each carrying a
+`confidence` (`high` / `medium` / `low`) and a `reason`. Read-only (EXPLAIN +
+index introspection only). MySQL/MariaDB + PostgreSQL.
+
+```bash
+dbcli guide missing-index-for "SELECT ... FROM betting_logs b JOIN hoster_machines hm ON ..."
+dbcli guide missing-index-for @analytics/live-summary       # @saved-query
+dbcli guide missing-index-for "..." --format json           # yaml (default) | json | markdown
+dbcli guide missing-index-for "..." --min-confidence medium # drop candidates below low|medium|high
+```
+
+**Options:** `--format <yaml|json|markdown>` (default `yaml`), `--min-confidence <low|medium|high>`.
+
+Behaviour:
+- Detects existing-index collisions (a single-column index that can be extended into a composite).
+- Functional/expression columns (e.g. `DATE(settled_at)`) and SQL it cannot parse are reported under `warnings`, never as recommendations.
+- Single `SELECT` only — no INSERT/UPDATE/DELETE, stored procedures, or view bodies.
+- Dialects beyond node-sql-parser support fall back to EXPLAIN-only heuristics.
 
 **Permission:** query-only+
 
@@ -1005,6 +1079,11 @@ Inside the shell:
 - Multi-line SQL: keeps accumulating until `;` is found
 - History persists across sessions (~/.dbcli_history)
 
+The REPL flavor depends on the active engine: SQL engines and MongoDB use the
+form above; **Redis** opens a single-line command REPL (see [Redis › Interactive
+shell](#interactive-shell)); **Elasticsearch** opens a Kibana Dev Tools-style
+REPL (v1.22, see [Elasticsearch › Interactive shell](#interactive-shell-v122)).
+
 ### migrate
 
 Schema DDL operations. **All commands default to dry-run** — use `--execute` to actually run the SQL. Destructive operations (DROP) also require `--force`.
@@ -1098,6 +1177,16 @@ dbcli skill tasks plan diagnose-slow-query --param query="..." --format json
 - **list filters:** `--tag <tag>`, `--engine <postgres|mysql|mongodb|redis|elasticsearch>`, `--source <builtin|shared|local>`, `--format <table|json>`.
 - **show:** prints the full task definition (frontmatter + Agent Notes). Use `--format json` for an agent-friendly contract.
 - **plan:** resolves `{{param}}` placeholders, validates required parameters, and emits a stable plan. Plans are **plan-only** in this version — dbcli will never execute the resulting commands automatically.
+
+**Builtin packs:** `diagnose-slow-query` and **(v1.23)** `analyze-table-perf` —
+a read-only (`plan-only`) pack taking a required `table` parameter that walks
+`blacklist list` → `schema <table> --format json` → `guide index-usage --format json`.
+`dbcli inspect` suggests `analyze-table-perf` automatically for the hottest table
+in recent audit activity.
+
+```bash
+dbcli skill tasks plan analyze-table-perf --param table=betting_logs --format json
+```
 
 Task storage layers:
 
@@ -1615,7 +1704,25 @@ dbcli query "KEYS secrets:*"             # → rejected (pattern overlaps a rule
 dbcli query "KEYS *"                      # → returns only non-blacklisted keys
 ```
 
-Rejections are written to the audit log with `success: false` and `metadata.rejection_reason: 'blacklist'` + `matched_pattern`. Value / hash-field masking is deferred.
+Rejections are written to the audit log with `success: false` and `metadata.rejection_reason: 'blacklist'` + `matched_pattern`.
+
+### Value / hash-field masking (v1.22)
+
+Where the key-glob blacklist *rejects*, masking instead *redacts*: a matched read still
+runs, but the sensitive value comes back as `[REDACTED]` so an agent can use the command
+without ever seeing it. Add an optional `redis.mask` block to `.dbcli`:
+
+```yaml
+redis:
+  mask:
+    - keyPattern: 'session:*'          # whole value redacted on read
+    - keyPattern: 'user:*'
+      fields: [password, token]        # only these hash fields redacted
+```
+
+- Applies on reads: `GET`, `GETRANGE`, `HGETALL`, `HGET`, `HMGET`, `HVALS`.
+- A rule without `fields` redacts the entire value; with `fields` only the named hash fields are redacted.
+- Masking and key-glob rejection coexist, and **rejection always wins over masking** — a key that matches a blacklist rule is rejected, never merely masked.
 
 ### Interactive shell
 
@@ -1638,17 +1745,17 @@ Tab completion offers Redis command names and known key prefixes; history persis
 - No `--dry-run` for writes — Redis commands execute immediately. Pair writes with a confirming read (`GET`, `HGETALL`, `EXISTS`).
 - No transaction wrapping (`MULTI`/`EXEC`). Submit one command at a time.
 - `KEYS` requires `admin`. Prefer `SCAN` for routine work.
-- Blacklist enforcement covers **keys** only (Redis-native globs); value and hash-field masking are not yet implemented.
+- Blacklist enforcement covers **keys** (Redis-native globs); value / hash-field **masking** is available via the `redis.mask` config block (v1.22).
 
 ## Elasticsearch Support
 
 Elasticsearch connections speak the REST API. The adapter is fetch-based (no SDK) and supports HTTPS, custom CA, API key, basic auth, and Cloud ID.
 
-**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `status`, `doctor`, `upgrade`, `completion`
+**Supported commands:** `init`, `use`, `list`, `schema`, `query`, `export` (v1.22), `shell` (v1.22), `status`, `doctor`, `upgrade`, `completion`
 
 **Saved queries:** `q` is supported for ES JSON DSL bodies (see "Elasticsearch snippets" below).
 
-**Not supported (use external tooling):** `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `shell`. The permission classifier already understands `_doc` / `_update` / `_bulk` so future write surfaces can be wired in without changing tiers.
+**Not supported (use external tooling):** `insert`, `update`, `delete`, `check`, `diff`, `migrate`. The permission classifier already understands `_doc` / `_update` / `_bulk` so future write surfaces can be wired in without changing tiers.
 
 ### Connection and configuration
 
@@ -1701,6 +1808,38 @@ dbcli query '{"size":0,"aggs":{"by_status":{"terms":{"field":"status.keyword"}}}
 dbcli query 'status:active AND amount:>100' --index orders --limit 100
 ```
 
+### Export (v1.22)
+
+`dbcli export` supports two shapes on an ES connection:
+
+```bash
+# (a) search DSL + --index → export the hits
+dbcli export '{"query":{"match":{"status":"active"}}}' --index orders --format jsonl --output orders.ndjson
+
+# (b) index name as the query → match_all over the whole index (scroll)
+dbcli export orders --format csv --output orders.csv
+dbcli export orders --no-limit --format jsonl     # full index, scrolled in batches
+```
+
+- Outputs JSON / JSONL / CSV. Default cap is 1000 rows; `--no-limit` streams the full index via the scroll API in batches.
+- Index-level blacklist is checked before export and the run is written to the audit log.
+
+### Interactive shell (v1.22)
+
+`dbcli shell` on an ES connection opens a Kibana Dev Tools-style REPL:
+
+```text
+$ dbcli --use local-es shell
+GET /orders/_search
+{
+  "query": { "match": { "status": "active" } }
+}
+                              # ← blank line submits the whole block
+```
+
+- Enter a request line `<METHOD> /<path>`, then an optional multi-line JSON body; a **blank line** submits the block. Responses render as pretty-printed JSON.
+- Read-focused: index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
+
 ### Doctor and diagnostics
 
 `dbcli doctor` runs a dedicated Elasticsearch path:
@@ -1712,7 +1851,7 @@ dbcli query 'status:active AND amount:>100' --index orders --limit 100
 
 ### Limitations
 
-- Writes (`insert`/`update`/`delete`/`export`) are not exposed yet — the adapter implements them, but the CLI currently only routes them for SQL and MongoDB.
+- Writes (`insert`/`update`/`delete`) are not exposed yet — the adapter implements them, but the CLI currently only routes them for SQL and MongoDB. Read-only `export` (v1.22) and the interactive `shell` (v1.22) are available.
 - No `_search/scroll` or PIT pagination at the CLI layer; large pulls need a saved external script.
 - `check`, `diff`, `migrate`, and `q` are SQL-only and exit with errors (or fall through to a generic "unsupported" path).
 - Blacklist column rules are applied to flattened hit rows on `query`; table-level blacklist rejects an index up front.

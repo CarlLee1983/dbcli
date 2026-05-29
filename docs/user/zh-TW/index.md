@@ -84,6 +84,18 @@ dbcli init
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
 
+#### `inspect` 給 agent 的輸出
+
+`dbcli inspect` 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：
+
+*   **`suggestedCommands`** — 可直接執行的後續指令，依三層排序：
+    1.  *Bootstrap（啟動）* — `dbcli schema --refresh`（schema 快取缺失或過期時）與 `dbcli list --format json`。
+    2.  *Context-aware（情境感知）* — 由近期活動驅動。當 audit log 偵測到熱門資料表**且**有可用的 task pack 時，建議 `dbcli skill tasks plan analyze-table-perf --param table=<table>`；並依 snippet intent 提供 `dbcli queries suggest <intent>`。
+    3.  *Discovery（探索）* — `dbcli skill tasks list`（有 task pack 時）與 `dbcli doctor --format json`。
+*   **`hints`** — 人類可讀、不可執行的提示：近期 audit 中最常查詢的資料表、可用 task pack 數量、以及 schema 快取規模與最後刷新時間。在 markdown 輸出會呈現為 `## Hints` 區塊。
+
+兩個陣列在 `--for-agent` / `--brief` 下都會被裁切（hints ≤ 3 條，suggestedCommands 只留最安全的 1 條）。
+
 <!-- doc-key: query-data-operations -->
 ### 查詢與資料操作
 
@@ -163,6 +175,8 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
+
+> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
 ---
 

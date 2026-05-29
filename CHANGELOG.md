@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`dbcli explain` 一級指令。** 把 `EXPLAIN` / `ANALYZE SELECT` / `EXPLAIN (ANALYZE, BUFFERS) SELECT` 包成統一介面,單條 query、`@saved-query`、`@file.sql`、`@glob/*` 通吃。輸出統一的 `ExplainRow` schema,附 5 條 actionable annotations(`full-scan` / `temp-table` / `filesort` / `cost-estimate-skew` / `nested-loop-large`)。輸出格式 markdown(預設)/ json / table。支援 `--bulk` 多筆批次。MariaDB + MySQL + PostgreSQL。(v1.23 P2)
 - **`dbcli guide missing-index-for` 單條 query 複合索引顧問。** 解析一條 `SELECT`,結合真實 `EXPLAIN` 計畫與既有索引,輸出帶 `confidence`(high/medium/low)與 `reason` 的索引候選;偵測既有索引碰撞(single-col 可擴成 composite),並把函式/運算式欄位與無法解析的 SQL 列為 `warnings`。輸出格式 yaml(預設)/ json / markdown,支援 `--min-confidence` 過濾。唯讀(僅 EXPLAIN + 索引內省)。(v1.23 P3)
+- **`dbcli inspect` 情境感知 `suggestedCommands` 與新的 `hints` 欄位。** `suggestedCommands` 改為三層加權(bootstrap / context-aware / discovery):collector 讀近 10 條 audit 找出最熱門資料表,有 task pack 時自動建議 `skill tasks plan analyze-table-perf --param table=<table>` 與 `skill tasks list`。新增與 `suggestedCommands` 平行的 `hints` 欄位(JSON 機器可讀 + markdown `## Hints`),提示最熱門資料表、可用 task pack 數量與 schema 快取概況。新增內建 task pack `analyze-table-perf`(唯讀 `plan-only`,吃必填 `table` 參數)。audit 讀取唯讀且永不 throw。(v1.23 P4)
 
 ### Fixed
 

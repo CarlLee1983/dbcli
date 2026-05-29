@@ -196,6 +196,20 @@ dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code><
                 </tbody>
             </table>
 
+            <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> output for agents</h4>
+            <p><code>dbcli inspect</code> returns two parallel arrays so an agent can orient on the very first call:</p>
+            <ul>
+                <li><strong><code>suggestedCommands</code></strong> — executable next steps, ordered in three tiers:
+                    <ol>
+                        <li><em>Bootstrap</em> — <code>dbcli schema --refresh</code> (when the schema cache is missing or stale) and <code>dbcli list --format json</code>.</li>
+                        <li><em>Context-aware</em> — driven by recent activity. When a hot table is detected in the audit log <strong>and</strong> task packs are available, it suggests <code>dbcli skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code>, plus <code>dbcli queries suggest &lt;intent&gt;</code> from your snippet intents.</li>
+                        <li><em>Discovery</em> — <code>dbcli skill tasks list</code> (when task packs exist) and <code>dbcli doctor --format json</code>.</li>
+                    </ol>
+                </li>
+                <li><strong><code>hints</code></strong> — human-readable, non-executable notes: the most-queried table from recent audit, the number of available task packs, and the schema-cache size with its last-refresh timestamp. In markdown output these render as a <code>## Hints</code> section.</li>
+            </ul>
+            <p>Both arrays are trimmed under <code>--for-agent</code> / <code>--brief</code> (≤ 3 hints, and a single safest suggested command).</p>
+
             <!-- doc-key: query-data-operations -->
             <h3 id="query">Querying & Data Operations</h3>
             <pre><code># Raw Query
@@ -273,6 +287,10 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
                 </tbody>
             </table>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">Builtin task pack <code>analyze-table-perf</code></h4>
+                <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Browse all packs with <code>dbcli skill tasks list</code>.</p>
+            </div>
         </section>
 
         <!-- doc-key: html-dashboards -->

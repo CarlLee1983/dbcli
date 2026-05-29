@@ -84,6 +84,18 @@ dbcli init
 | `inspect` | Provides a read-only snapshot for AI agents (objects, permissions, suggestions). |
 | `status` | Shows a safe summary of the current configuration (no credentials). |
 
+#### `inspect` output for agents
+
+`dbcli inspect` returns two parallel arrays so an agent can orient on the very first call:
+
+*   **`suggestedCommands`** — executable next steps, ordered in three tiers:
+    1.  *Bootstrap* — `dbcli schema --refresh` (when the schema cache is missing or stale) and `dbcli list --format json`.
+    2.  *Context-aware* — driven by recent activity. When a hot table is detected in the audit log **and** task packs are available, it suggests `dbcli skill tasks plan analyze-table-perf --param table=<table>`, plus `dbcli queries suggest <intent>` from your snippet intents.
+    3.  *Discovery* — `dbcli skill tasks list` (when task packs exist) and `dbcli doctor --format json`.
+*   **`hints`** — human-readable, non-executable notes: the most-queried table from recent audit, the number of available task packs, and the schema-cache size with its last-refresh timestamp. In markdown output these render as a `## Hints` section.
+
+Both arrays are trimmed under `--for-agent` / `--brief` (≤ 3 hints, and a single safest suggested command).
+
 <!-- doc-key: query-data-operations -->
 ### Querying & Data Operations
 
@@ -163,6 +175,8 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
+
+> **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Browse all packs with `dbcli skill tasks list`.
 
 ---
 

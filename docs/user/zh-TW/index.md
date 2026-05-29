@@ -15,6 +15,7 @@
     *   [查詢與資料操作](#查詢與資料操作)
     *   [Snippet 管理 (儲存的查詢)](#snippet-管理)
     *   [健康度、診斷與修復](#健康度診斷與修復)
+    *   [資料驗證 (snapshot, assert)](#資料驗證)
     *   [進階工具 (DDL, Shell, AI Skills)](#進階工具)
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
 6.  [資料庫引擎支援矩陣](#資料庫引擎支援矩陣)
@@ -163,6 +164,16 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
 | `--recovery`（所有指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
+
+<!-- doc-key: data-verification -->
+### 資料驗證
+
+驗證資料處理結果是否正確 — 擷取結果指紋,再針對指紋、第二個查詢或行內條件斷言不變量。僅支援 SQL 引擎(PostgreSQL / MySQL / MariaDB)。
+
+| 指令 | 說明 |
+| :--- | :--- |
+| `snapshot <query>` | 擷取**結果指紋**(rowCount + 每欄 null/distinct/min/max/sum + 順序無關的 checksum)。預設檔案 `.dbcli/snapshots/snap-<timestamp>.json`;另有 `--out`、`--rows`、`--stdout`。黑名單欄位在源頭遮罩,快照可安全保存。作為 `assert --against` 的基準。 |
+| `assert <query>` | 驗證**不變量**;失敗時 exit 1,除非 `--no-fail`。`--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`、`--vs <query> --compare rows\|value`(對帳兩個查詢)、`--against <snapshot> --tolerance <pct>`(對基準的漂移;`0` = 完全相符 checksum)。 |
 
 <!-- doc-key: advanced-tools -->
 ### 進階工具

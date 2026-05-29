@@ -250,6 +250,8 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
+| `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
+| `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
 | `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
 | `report` | query-only+ | Diagnostic report (health / capacity / perf) built from `@diag/*` snippets. `--section`, `--brief`, `--for-agent`, `--no-connect`. |

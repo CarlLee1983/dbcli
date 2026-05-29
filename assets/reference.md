@@ -572,6 +572,50 @@ dbcli diff --against before.json --format json
 **Options:** `--snapshot <path>`, `--against <path>`, `--format <json|table>`
 **Permission:** query-only+
 
+### snapshot
+
+Capture a **result fingerprint** of a query (not schema): `rowCount` plus per-column
+aggregates (null/distinct counts, min/max/sum, an order-independent checksum) and a
+top-level `resultChecksum`. Blacklisted columns are masked at the source by QueryExecutor,
+so the fingerprint is safe to store and share. Use it as a baseline for `assert --against`.
+
+```bash
+dbcli snapshot "SELECT * FROM orders WHERE created_at >= '2026-05-01'"   # → .dbcli/snapshots/snap-<timestamp>.json
+dbcli snapshot @analytics/daily-revenue --out base.json                  # saved query → explicit path
+dbcli snapshot "SELECT status, count(*) FROM orders GROUP BY status" --stdout
+dbcli snapshot "SELECT * FROM orders" --rows --out full.json             # also store masked rows
+```
+
+**Options:** `--out <path>` (default `.dbcli/snapshots/snap-<timestamp>.json`), `--rows`, `--stdout`, `--format <json|table>`, `--no-limit`
+**Engines:** SQL only (PostgreSQL / MySQL / MariaDB)
+**Permission:** query-only+
+
+### assert
+
+Assert an **invariant** on a query result. Exits `1` on failure (so it composes in
+scripts / CI) unless `--no-fail` is given. Three modes (combinable):
+
+- `--expect <condition>` — inline check against the result:
+  - `rows > 0` / `rows == 1` … (row count vs operators `> >= < <= == !=`)
+  - `value == 5000` / `value == "done"` (single-cell result; project to one column)
+  - `col:email not null` · `col:id unique` · `col:amount between 0 and 100` · `col:age >= 18`
+- `--vs <query> --compare rows|value` — reconcile against a second query (cross-check totals/counts).
+- `--against <snapshot> --tolerance <pct>` — compare the current result fingerprint to a saved snapshot. `tolerance 0` requires an exact (order-independent) checksum match; `tolerance 0.01` allows ±1% drift on rowCount and each numeric column sum.
+
+```bash
+dbcli assert "SELECT count(*) FROM orders" --expect "value > 0"
+dbcli assert "SELECT * FROM orders WHERE total < 0" --expect "rows == 0"     # no negative totals
+dbcli assert "SELECT email FROM users" --expect "col:email not null"
+dbcli assert "SELECT sum(amount) FROM ledger_a" --vs "SELECT sum(amount) FROM ledger_b" --compare value
+dbcli assert "SELECT * FROM orders" --against base.json --tolerance 0.01
+dbcli assert "SELECT count(*) FROM orders" --expect "value > 100" --no-fail   # report only, exit 0
+```
+
+**Options:** `--expect <condition>`, `--vs <query>`, `--compare <rows|value>` (default `value`), `--against <path>`, `--tolerance <pct>` (default `0`), `--no-fail`, `--format <json|table>`
+**Output:** `AssertVerdict` = `{ pass, checks: [{ name, expected, actual, pass }] }`
+**Engines:** SQL only (PostgreSQL / MySQL / MariaDB)
+**Permission:** query-only+
+
 ### status
 
 Show current configuration status (safe for AI agents, no credentials exposed).

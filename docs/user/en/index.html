@@ -272,6 +272,19 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </div>
             </div>
 
+            <!-- doc-key: data-verification -->
+            <h3 id="data-verification">Data Verification</h3>
+            <p class="text-text-muted mb-4">Verify data-processing correctness — capture a result fingerprint, then assert invariants against it, a second query, or inline conditions. SQL engines only (PostgreSQL / MySQL / MariaDB).</p>
+            <table>
+                <thead>
+                    <tr><th>Command</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>snapshot &lt;query&gt;</code></td><td>Capture a result fingerprint (row count + per-column null/distinct/min/max/sum + an order-independent checksum). Default file <code>.dbcli/snapshots/snap-&lt;timestamp&gt;.json</code>; also <code>--out</code>, <code>--rows</code>, <code>--stdout</code>. Blacklisted columns are masked at the source, so the snapshot is safe to store. Use as a baseline for <code>assert --against</code>.</td></tr>
+                    <tr><td><code>assert &lt;query&gt;</code></td><td>Verify an invariant; exit 1 on failure unless <code>--no-fail</code>. <code>--expect</code> (<code>rows&gt;0</code>, <code>value==X</code>, <code>col:c not null</code>, <code>unique</code>, <code>between a and b</code>, <code>&gt;= n</code>), <code>--vs &lt;query&gt; --compare rows|value</code> (reconcile two queries), <code>--against &lt;snapshot&gt; --tolerance &lt;pct&gt;</code> (drift vs a baseline; <code>0</code> = exact checksum).</td></tr>
+                </tbody>
+            </table>
+
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">Advanced Tools</h3>
             <table>

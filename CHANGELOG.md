@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-05-29 - Data-Layer Verification
+
+### Added
+
+- **`dbcli snapshot <query>` — 結果指紋。** 將任一查詢結果轉成確定性、黑名單安全的 `ResultSnapshot`(`rowCount` + 每欄聚合:null/distinct 計數、min/max/sum、順序無關的 checksum)。預設落檔至 `.dbcli/snapshots/snap-<timestamp>.json`,亦支援 `--out`、`--stdout`、`--rows`(連同遮罩後的列一併存檔)、`--format`、`--no-limit`。
+- **`dbcli assert <query>` — 行內不變量檢查。** 三種模式:`--expect`(`rows > 0`、`value == 5000`、`col:email not null`、`col:id unique`、`col:amount between 0 and 100`、`col:age >= 18`)、`--vs <query> --compare rows|value`(跨查詢對帳)、`--against <snapshot> --tolerance <pct>`(對既有快照基準比對)。預設失敗時 `exit 1`,可用 `--no-fail` 僅報告不改變 exit code。
+- 兩個指令均沿用既有 adapter / QueryExecutor / blacklist / audit 堆疊,黑名單欄位由 QueryExecutor 在源頭遮罩,指紋天生安全。目前支援 SQL 引擎(PostgreSQL / MySQL / MariaDB)。
+
 ## [1.24.0] - 2026-05-29 - Antigravity CLI Skill Target
 
 ### Added

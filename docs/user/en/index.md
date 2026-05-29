@@ -15,6 +15,7 @@
     *   [Querying & Data Operations](#querying--data-operations)
     *   [Snippet Management (Saved Queries)](#snippet-management)
     *   [Health, Diagnostics & Recovery](#health-diagnostics--recovery)
+    *   [Data Verification (snapshot, assert)](#data-verification)
     *   [Advanced Tools (DDL, Shell, AI Skills)](#advanced-tools)
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
 6.  [Database Engine Support Matrix](#database-engine-support-matrix)
@@ -163,6 +164,16 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
 | `--recovery` (all commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, and `schema` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
+
+<!-- doc-key: data-verification -->
+### Data Verification
+
+Verify data-processing correctness — capture a result fingerprint, then assert invariants against it, a second query, or inline conditions. SQL engines only (PostgreSQL / MySQL / MariaDB).
+
+| Command | Description |
+| :--- | :--- |
+| `snapshot <query>` | Captures a **result fingerprint** (row count + per-column null/distinct/min/max/sum + an order-independent checksum). Default file `.dbcli/snapshots/snap-<timestamp>.json`; also `--out`, `--rows`, `--stdout`. Blacklisted columns are masked at the source, so the snapshot is safe to store. Use as a baseline for `assert --against`. |
+| `assert <query>` | Verifies an **invariant**; exits 1 on failure unless `--no-fail`. `--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`, `--vs <query> --compare rows\|value` (reconcile two queries), `--against <snapshot> --tolerance <pct>` (drift vs a baseline; `0` = exact checksum). |
 
 <!-- doc-key: advanced-tools -->
 ### Advanced Tools

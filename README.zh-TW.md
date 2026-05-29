@@ -667,6 +667,50 @@ dbcli diff --against ./schema-before.json --format table
 
 ---
 
+#### `dbcli snapshot`
+
+擷取查詢的**結果指紋**(與 `diff` 不同,`diff` 快照的是 *schema*):rowCount 加上每欄聚合(null/distinct 計數、min/max/sum)與順序無關的 checksum。黑名單欄位在源頭遮罩,因此快照可安全保存。作為 `dbcli assert --against` 的基準。僅支援 SQL 引擎。
+
+**用法:**
+```bash
+dbcli snapshot "SELECT * FROM orders WHERE created_at >= '2026-05-01'"   # → .dbcli/snapshots/snap-<timestamp>.json
+dbcli snapshot @analytics/daily-revenue --out base.json
+dbcli snapshot "SELECT status, count(*) FROM orders GROUP BY status" --stdout
+```
+
+**選項:**
+- `--out <path>` — 輸出路徑(預設:`.dbcli/snapshots/snap-<timestamp>.json`)
+- `--rows` — 連同遮罩後的完整列一併存檔
+- `--stdout` — 將快照 JSON 印到 stdout 而非寫檔
+- `--format json|table` — `--stdout` 的輸出格式(預設:`json`)
+- `--no-limit` — 停用查詢限定模式的自動 LIMIT
+
+---
+
+#### `dbcli assert`
+
+對查詢結果驗證**不變量**。失敗時 `exit 1`(可組合進腳本 / CI),除非加上 `--no-fail`。僅支援 SQL 引擎。
+
+**用法:**
+```bash
+dbcli assert "SELECT count(*) FROM orders" --expect "value > 0"
+dbcli assert "SELECT * FROM orders WHERE total < 0" --expect "rows == 0"
+dbcli assert "SELECT email FROM users" --expect "col:email not null"
+dbcli assert "SELECT sum(amount) FROM ledger_a" --vs "SELECT sum(amount) FROM ledger_b" --compare value
+dbcli assert "SELECT * FROM orders" --against base.json --tolerance 0.01
+```
+
+**選項:**
+- `--expect <condition>` — `rows > 0`、`value == 5000`、`col:email not null`、`col:id unique`、`col:amount between 0 and 100`、`col:age >= 18`
+- `--vs <query>` — 與第二個查詢對帳
+- `--compare rows|value` — `--vs` 的比較模式(預設:`value`)
+- `--against <path>` — 將目前結果指紋與已存快照比對
+- `--tolerance <pct>` — `--against` 容許的相對漂移(例如 `0.01`;預設 `0` = 完全相符 checksum)
+- `--no-fail` — 永遠 exit 0;僅在輸出中報告 pass/fail
+- `--format json|table` — 輸出格式(預設:`json`)
+
+---
+
 #### `dbcli status`
 
 顯示不含連線憑證的設定摘要（權限、資料庫系統、黑名單筆數、設定中繼版本），適合提供給 AI 代理。

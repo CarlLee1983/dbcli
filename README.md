@@ -768,6 +768,50 @@ dbcli diff --against ./schema-before.json --format table
 
 ---
 
+#### `dbcli snapshot`
+
+Capture a **result fingerprint** of a query (distinct from `diff`, which snapshots *schema*): row count plus per-column aggregates (null/distinct counts, min/max/sum) and an order-independent checksum. Blacklisted columns are masked at the source, so the snapshot is safe to store. Use it as a baseline for `dbcli assert --against`. SQL engines only.
+
+**Usage:**
+```bash
+dbcli snapshot "SELECT * FROM orders WHERE created_at >= '2026-05-01'"   # → .dbcli/snapshots/snap-<timestamp>.json
+dbcli snapshot @analytics/daily-revenue --out base.json
+dbcli snapshot "SELECT status, count(*) FROM orders GROUP BY status" --stdout
+```
+
+**Options:**
+- `--out <path>` — Output path (default: `.dbcli/snapshots/snap-<timestamp>.json`)
+- `--rows` — Also store the full (blacklist-masked) rows
+- `--stdout` — Print snapshot JSON to stdout instead of writing a file
+- `--format json|table` — Output format for `--stdout` (default: `json`)
+- `--no-limit` — Disable the automatic query-only LIMIT
+
+---
+
+#### `dbcli assert`
+
+Assert an **invariant** on a query result. Exits `1` on failure (composes in scripts/CI) unless `--no-fail`. SQL engines only.
+
+**Usage:**
+```bash
+dbcli assert "SELECT count(*) FROM orders" --expect "value > 0"
+dbcli assert "SELECT * FROM orders WHERE total < 0" --expect "rows == 0"
+dbcli assert "SELECT email FROM users" --expect "col:email not null"
+dbcli assert "SELECT sum(amount) FROM ledger_a" --vs "SELECT sum(amount) FROM ledger_b" --compare value
+dbcli assert "SELECT * FROM orders" --against base.json --tolerance 0.01
+```
+
+**Options:**
+- `--expect <condition>` — `rows > 0`, `value == 5000`, `col:email not null`, `col:id unique`, `col:amount between 0 and 100`, `col:age >= 18`
+- `--vs <query>` — Reconcile against a second query
+- `--compare rows|value` — Comparison mode for `--vs` (default: `value`)
+- `--against <path>` — Compare the current result fingerprint to a saved snapshot
+- `--tolerance <pct>` — Allowed relative drift for `--against` (e.g. `0.01`; default: `0` = exact checksum match)
+- `--no-fail` — Always exit 0; report pass/fail in output only
+- `--format json|table` — Output format (default: `json`)
+
+---
+
 #### `dbcli status`
 
 Show non-sensitive configuration summary (permission level, DB system, blacklist counts, config metadata version). Does not print connection credentials — intended for AI agents.

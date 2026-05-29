@@ -209,6 +209,8 @@ dbcli init --use-env-refs \
 | `blacklist` | n/a | `list` / `table` / `column` 子指令,從查詢結果中遮蔽敏感資料。 |
 | `check` | query-only+ | 僅 SQL(在 MySQL / MariaDB 最佳)。 |
 | `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。 |
+| `snapshot` | query-only+ | **(v1.25)** 僅 SQL。擷取結果指紋(`rowCount` + 每欄 null/distinct/min/max/sum + 順序無關 checksum)。`--out`(預設 `.dbcli/snapshots/snap-<ts>.json`)、`--rows`、`--stdout`、`--format`、`--no-limit`。作為 `assert --against` 的基準。 |
+| `assert` | query-only+ | **(v1.25)** 僅 SQL。驗證不變量;失敗時 exit 1,除非 `--no-fail`。`--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`、`--vs <query> --compare rows\|value`(對帳)、`--against <snapshot> --tolerance <pct>`。 |
 | `status` | query-only+ | 安全 JSON / 文字摘要(不含憑證)。 |
 | `inspect` | query-only+ | 唯讀脈絡快照(連線、權限、blacklist、物件、snippets、建議指令)。`--for-agent` / `--no-connect` / `--require-schema-cache`。支援 `--recovery`。 |
 | `report` | query-only+ | 以 `@diag/*` snippet 組成的診斷報告(health / capacity / perf)。`--section`、`--brief`、`--for-agent`、`--no-connect`。 |

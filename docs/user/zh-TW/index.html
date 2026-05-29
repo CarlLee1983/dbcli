@@ -272,6 +272,19 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </div>
             </div>
 
+            <!-- doc-key: data-verification -->
+            <h3 id="data-verification">資料驗證</h3>
+            <p class="text-text-muted mb-4">驗證資料處理結果是否正確 — 擷取結果指紋,再針對指紋、第二個查詢或行內條件斷言不變量。僅支援 SQL 引擎(PostgreSQL / MySQL / MariaDB)。</p>
+            <table>
+                <thead>
+                    <tr><th>指令</th><th>用途</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>snapshot &lt;query&gt;</code></td><td>擷取結果指紋(rowCount + 每欄 null/distinct/min/max/sum + 順序無關的 checksum)。預設檔案 <code>.dbcli/snapshots/snap-&lt;timestamp&gt;.json</code>;另有 <code>--out</code>、<code>--rows</code>、<code>--stdout</code>。黑名單欄位在源頭遮罩,快照可安全保存。作為 <code>assert --against</code> 的基準。</td></tr>
+                    <tr><td><code>assert &lt;query&gt;</code></td><td>驗證不變量;失敗時 exit 1,除非 <code>--no-fail</code>。<code>--expect</code>(<code>rows&gt;0</code>、<code>value==X</code>、<code>col:c not null</code>、<code>unique</code>、<code>between a and b</code>、<code>&gt;= n</code>)、<code>--vs &lt;query&gt; --compare rows|value</code>(對帳)、<code>--against &lt;snapshot&gt; --tolerance &lt;pct&gt;</code>(對基準的漂移;<code>0</code> = 完全相符 checksum)。</td></tr>
+                </tbody>
+            </table>
+
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">進階工具</h3>
             <table>

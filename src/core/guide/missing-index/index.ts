@@ -1,0 +1,10 @@
+// src/core/guide/missing-index/index.ts
+export * from './types'
+export { parseSelect, ParseFailure } from './parse-sql'
+export { extract } from './sql-extractor'
+export { makeIndexIntrospector } from './index-introspector'
+export { makeExplainEnricher } from './explain-enricher'
+export { buildCandidates } from './candidate-builder'
+export { scoreCandidate } from './scorer'
+export { collectWarnings } from './warnings'
+export { analyzeMissingIndex, type AnalyzeOptions } from './analyzer'

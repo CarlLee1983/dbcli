@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-05-29 - Skill Docs Sync
+
+### Changed
+
+- 補齊 `assets/SKILL.md` 與 `assets/reference.md`,涵蓋 v1.22(Redis `redis.mask` 遮罩、Elasticsearch export/shell)與 v1.23(`explain`、`guide missing-index-for`、`inspect` 情境感知 `suggestedCommands` + `hints`、內建 task pack `analyze-table-perf`)的指令與旗標說明,使 `dbcli skill --install` 產出的文件與實際行為一致
+
 ## [1.23.0] - 2026-05-29 - Source-Driven Performance Review Tooling
 
 ### Added

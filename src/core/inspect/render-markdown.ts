@@ -72,6 +72,12 @@ export function renderMarkdown(snap: InspectSnapshot, options: RenderOptions = {
   for (const c of snap.suggestedCommands) lines.push(`- \`${c}\``)
   lines.push('')
 
+  if (!brief && snap.hints.length > 0) {
+    lines.push('## Hints')
+    for (const h of snap.hints) lines.push(`- ${h}`)
+    lines.push('')
+  }
+
   if (snap.warnings.length > 0) {
     lines.push('## Warnings')
     for (const w of snap.warnings) lines.push(`- ${w}`)

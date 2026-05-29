@@ -22,6 +22,7 @@ import { statusCommand } from './commands/status'
 import { inspectCommand } from './commands/inspect'
 import { reportCommand } from './commands/report'
 import { guideCommand } from './commands/guide'
+import { explainCommand } from './commands/explain'
 import { recoveryCommand } from './commands/recovery'
 import { recoverCommand } from './commands/recover'
 import { auditCommand } from './commands/audit'
@@ -337,6 +338,7 @@ program.addCommand(shellCommand)
 program.addCommand(migrateCommand)
 program.addCommand(useCommand)
 program.addCommand(queriesCommand)
+program.addCommand(explainCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

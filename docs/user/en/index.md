@@ -553,3 +553,18 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries
 - `dbcli explain` is allowed in `query-only` permission — no permission upgrade required.
 - Auto-LIMIT is **not** applied to EXPLAIN statements (since v1.23 P1).
 
+## Missing-index advisor — `dbcli guide missing-index-for`
+
+Analyse a single `SELECT` and suggest composite indexes, grounded in a real `EXPLAIN` plan and your existing indexes. Read-only.
+
+```bash
+dbcli guide missing-index-for "SELECT ... FROM betting_logs b JOIN hoster_machines hm ON ..."
+dbcli guide missing-index-for @analytics/live-summary
+dbcli guide missing-index-for "..." --format json        # yaml (default) | json | markdown
+dbcli guide missing-index-for "..." --min-confidence medium
+```
+
+Each candidate carries a `confidence` (`high` / `medium` / `low`) and a `reason`; the tool never asserts "you must create this". Functional/expression columns (e.g. `DATE(settled_at)`) and unparseable SQL are reported under `warnings`.
+
+**Limits:** single `SELECT` only (no INSERT/UPDATE/DELETE, stored procedures, or view bodies). Functional/partial indexes are flagged, not recommended. Dialects beyond node-sql-parser support fall back to EXPLAIN-only heuristics.
+

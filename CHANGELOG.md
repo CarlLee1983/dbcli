@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`dbcli explain` 一級指令。** 把 `EXPLAIN` / `ANALYZE SELECT` / `EXPLAIN (ANALYZE, BUFFERS) SELECT` 包成統一介面,單條 query、`@saved-query`、`@file.sql`、`@glob/*` 通吃。輸出統一的 `ExplainRow` schema,附 5 條 actionable annotations(`full-scan` / `temp-table` / `filesort` / `cost-estimate-skew` / `nested-loop-large`)。輸出格式 markdown(預設)/ json / table。支援 `--bulk` 多筆批次。MariaDB + MySQL + PostgreSQL。(v1.23 P2)
+- **`dbcli guide missing-index-for` 單條 query 複合索引顧問。** 解析一條 `SELECT`,結合真實 `EXPLAIN` 計畫與既有索引,輸出帶 `confidence`(high/medium/low)與 `reason` 的索引候選;偵測既有索引碰撞(single-col 可擴成 composite),並把函式/運算式欄位與無法解析的 SQL 列為 `warnings`。輸出格式 yaml(預設)/ json / markdown,支援 `--min-confidence` 過濾。唯讀(僅 EXPLAIN + 索引內省)。(v1.23 P3)
 
 ### Fixed
 

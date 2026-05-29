@@ -100,6 +100,7 @@
                     <li class="nav-item"><a href="#error-classification" class="nav-link">Errors & Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
                     <li class="nav-item"><a href="#explain-command" class="nav-link">Query plan (explain)</a></li>
+                    <li class="nav-item"><a href="#guide-missing-index-for" class="nav-link">Missing-index advisor</a></li>
                 </ul>
             </section>
         </div>
@@ -581,6 +582,23 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries</
     <li><code>--analyze</code> runs the query for real; do not use against destructive statements.</li>
     <li><code>dbcli explain</code> is allowed in <code>query-only</code> permission — no permission upgrade required.</li>
     <li>Auto-LIMIT is <strong>not</strong> applied to EXPLAIN statements (since v1.23 P1).</li>
+  </ul>
+</section>
+
+<section id="guide-missing-index-for" class="mt-20">
+  <h2>Missing-index advisor — <code>dbcli guide missing-index-for</code></h2>
+  <p>Analyse a single <code>SELECT</code> and suggest composite indexes, grounded in a real <code>EXPLAIN</code> plan and your existing indexes. Read-only.</p>
+  <h3>Basic usage</h3>
+  <pre><code>dbcli guide missing-index-for "SELECT ... FROM betting_logs b JOIN hoster_machines hm ON ..."
+dbcli guide missing-index-for @analytics/live-summary
+dbcli guide missing-index-for "..." --format json        # yaml (default) | json | markdown
+dbcli guide missing-index-for "..." --min-confidence medium</code></pre>
+  <p>Each candidate carries a <code>confidence</code> (<code>high</code> / <code>medium</code> / <code>low</code>) and a <code>reason</code>; the tool never asserts "you must create this". Functional/expression columns (e.g. <code>DATE(settled_at)</code>) and unparseable SQL are reported under <code>warnings</code>.</p>
+  <h3>Limits</h3>
+  <ul>
+    <li>Single <code>SELECT</code> only — no INSERT/UPDATE/DELETE, stored procedures, or view bodies.</li>
+    <li>Functional/partial indexes are flagged, not recommended.</li>
+    <li>Dialects beyond node-sql-parser support fall back to EXPLAIN-only heuristics.</li>
   </ul>
 </section>
 

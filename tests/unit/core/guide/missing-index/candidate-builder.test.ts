@@ -14,7 +14,14 @@ const usage = (over: Partial<TableColumnUsage>): TableColumnUsage => ({
 })
 
 test('orders columns equality → range → order', () => {
-  const out = buildCandidates(usage({ rangeColumns: ['settled_at'], equalityColumns: ['user_id'], orderColumns: ['created_at'] }), [])
+  const out = buildCandidates(
+    usage({
+      rangeColumns: ['settled_at'],
+      equalityColumns: ['user_id'],
+      orderColumns: ['created_at'],
+    }),
+    []
+  )
   expect(out[0].columns).toEqual(['user_id', 'settled_at', 'created_at'])
 })
 
@@ -29,14 +36,22 @@ test('dedups a column used in both join and where', () => {
 })
 
 test('drops candidate already fully covered by an existing index prefix', () => {
-  const existing: ExistingIndex[] = [{ name: 'idx_user_time', columns: ['user_id', 'settled_at'], unique: false }]
-  const out = buildCandidates(usage({ equalityColumns: ['user_id'], rangeColumns: ['settled_at'] }), existing)
+  const existing: ExistingIndex[] = [
+    { name: 'idx_user_time', columns: ['user_id', 'settled_at'], unique: false },
+  ]
+  const out = buildCandidates(
+    usage({ equalityColumns: ['user_id'], rangeColumns: ['settled_at'] }),
+    existing
+  )
   expect(out).toEqual([])
 })
 
 test('marks collision when an existing index shares the leftmost column', () => {
   const existing: ExistingIndex[] = [{ name: 'idx_user', columns: ['user_id'], unique: false }]
-  const out = buildCandidates(usage({ equalityColumns: ['user_id'], rangeColumns: ['settled_at'] }), existing)
+  const out = buildCandidates(
+    usage({ equalityColumns: ['user_id'], rangeColumns: ['settled_at'] }),
+    existing
+  )
   expect(out[0].columns).toEqual(['user_id', 'settled_at'])
   expect(out[0].existingIndexCollision).toBe('idx_user')
 })

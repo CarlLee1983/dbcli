@@ -5,7 +5,11 @@
  * the block scalar (`|`) form; column arrays use flow form for readability.
  */
 
-import type { MissingIndexReport, IndexCandidate, AnalysisWarning } from '@/core/guide/missing-index/types'
+import type {
+  MissingIndexReport,
+  IndexCandidate,
+  AnalysisWarning,
+} from '@/core/guide/missing-index/types'
 
 function quoteScalar(s: string): string {
   // Bare-allow common identifier/sentence chars; quote anything riskier.

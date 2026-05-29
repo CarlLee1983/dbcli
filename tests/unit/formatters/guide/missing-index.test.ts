@@ -15,7 +15,9 @@ const report: MissingIndexReport = {
       estimatedRowsReduction: '546 → ~50',
     },
   ],
-  warnings: [{ rule: 'functional-expression', column: 'settled_at', detail: 'DATE() defeats index' }],
+  warnings: [
+    { rule: 'functional-expression', column: 'settled_at', detail: 'DATE() defeats index' },
+  ],
 }
 
 test('json format is parseable and preserves shape', () => {

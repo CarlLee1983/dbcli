@@ -15,9 +15,7 @@ export function formatExplainTable(plans: ExplainPlan[]): string {
   if (records.length === 0) return '(no rows)'
 
   const headers = Object.keys(records[0]!)
-  const widths = headers.map((h) =>
-    Math.max(h.length, ...records.map((r) => (r[h] ?? '').length))
-  )
+  const widths = headers.map((h) => Math.max(h.length, ...records.map((r) => (r[h] ?? '').length)))
   const fmtLine = (cells: string[]) =>
     cells.map((c, i) => (c ?? '').padEnd(widths[i] ?? 0)).join('  ')
   const separator = widths.map((w) => '-'.repeat(w)).join('  ')

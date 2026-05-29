@@ -102,14 +102,18 @@ test('runPgExplain: nested Plans recursively flattens', async () => {
 test('runPgExplain: --analyze appends ANALYZE option', async () => {
   let capturedSql = ''
   const adapter: DatabaseAdapter = {
-    ...adapterReturning([{ Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } }]),
+    ...adapterReturning([
+      { Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } },
+    ]),
     execute: async <T = Record<string, unknown>>(sql: string) => {
       capturedSql = sql
       return {
         rows: [
           {
             'QUERY PLAN': JSON.stringify([
-              { Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } },
+              {
+                Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 },
+              },
             ]),
           } as T,
         ],
@@ -124,14 +128,18 @@ test('runPgExplain: --analyze appends ANALYZE option', async () => {
 test('runPgExplain: vanilla mode omits ANALYZE', async () => {
   let capturedSql = ''
   const adapter: DatabaseAdapter = {
-    ...adapterReturning([{ Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } }]),
+    ...adapterReturning([
+      { Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } },
+    ]),
     execute: async <T = Record<string, unknown>>(sql: string) => {
       capturedSql = sql
       return {
         rows: [
           {
             'QUERY PLAN': JSON.stringify([
-              { Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 } },
+              {
+                Plan: { 'Node Type': 'Result', 'Plan Rows': 1, 'Startup Cost': 0, 'Total Cost': 0 },
+              },
             ]),
           } as T,
         ],

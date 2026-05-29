@@ -10,14 +10,34 @@ test('maps plan rows to per-table facts keyed by driving table', async () => {
       rawSql: 'SELECT 1',
       raw: {},
       rows: [
-        { driving: 'betting_logs', accessType: 'ref', key: 'idx_user', rows: 546, filtered: 20, extra: [], annotations: [] },
-        { driving: 'hoster_machines', accessType: 'ALL', key: null, rows: 20, extra: [], annotations: [] },
+        {
+          driving: 'betting_logs',
+          accessType: 'ref',
+          key: 'idx_user',
+          rows: 546,
+          filtered: 20,
+          extra: [],
+          annotations: [],
+        },
+        {
+          driving: 'hoster_machines',
+          accessType: 'ALL',
+          key: null,
+          rows: 20,
+          extra: [],
+          annotations: [],
+        },
       ],
     }) as ExplainPlan
 
   const enrich = makeExplainEnricher('mysql', {} as any, fakeRunExplain)
   const facts = await enrich('SELECT ...')
-  expect(facts.get('betting_logs')).toEqual({ accessType: 'ref', key: 'idx_user', rows: 546, filtered: 20 })
+  expect(facts.get('betting_logs')).toEqual({
+    accessType: 'ref',
+    key: 'idx_user',
+    rows: 546,
+    filtered: 20,
+  })
   expect(facts.get('hoster_machines')!.accessType).toBe('ALL')
 })
 

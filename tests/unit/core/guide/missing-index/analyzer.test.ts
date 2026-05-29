@@ -1,12 +1,24 @@
 // tests/unit/core/guide/missing-index/analyzer.test.ts
 import { test, expect } from 'bun:test'
 import { analyzeMissingIndex } from '@/core/guide/missing-index/analyzer'
-import type { MissingIndexDeps, QueryAnalysis, EnrichedPlanFacts } from '@/core/guide/missing-index/types'
+import type {
+  MissingIndexDeps,
+  QueryAnalysis,
+  EnrichedPlanFacts,
+} from '@/core/guide/missing-index/types'
 
 const analysis: QueryAnalysis = {
   parsed: true,
   tables: [
-    { table: 'betting_logs', alias: 'b', equalityColumns: ['user_id'], rangeColumns: ['settled_at'], joinColumns: ['user_id'], orderColumns: [], functionalColumns: [{ column: 'settled_at', expr: 'DATE' }] },
+    {
+      table: 'betting_logs',
+      alias: 'b',
+      equalityColumns: ['user_id'],
+      rangeColumns: ['settled_at'],
+      joinColumns: ['user_id'],
+      orderColumns: [],
+      functionalColumns: [{ column: 'settled_at', expr: 'DATE' }],
+    },
   ],
 }
 
@@ -16,7 +28,10 @@ function deps(over: Partial<MissingIndexDeps> = {}): MissingIndexDeps {
     parseSelect: () => ({ type: 'select' }),
     extract: () => analysis,
     getExistingIndexes: async () => [],
-    enrich: async () => new Map<string, EnrichedPlanFacts>([['betting_logs', { accessType: 'ALL', key: null, rows: 50000 }]]),
+    enrich: async () =>
+      new Map<string, EnrichedPlanFacts>([
+        ['betting_logs', { accessType: 'ALL', key: null, rows: 50000 }],
+      ]),
     ...over,
   }
 }

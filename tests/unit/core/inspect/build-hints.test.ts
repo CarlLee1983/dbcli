@@ -9,7 +9,12 @@ const base: SnapshotForSuggest = {
   permission: { level: 'query-only', canWrite: false, canDestruct: false },
   blacklist: { tables: 0, columnRules: 0 },
   objects: { kind: 'tables', count: 0, sample: [] },
-  schemaCache: { available: true, stale: false, lastRefreshed: '2026-05-01T00:00:00Z', totalTables: 115 },
+  schemaCache: {
+    available: true,
+    stale: false,
+    lastRefreshed: '2026-05-01T00:00:00Z',
+    totalTables: 115,
+  },
   snippets: { count: 0, engines: [], intents: [] },
 }
 
@@ -20,8 +25,12 @@ describe('buildHints', () => {
   })
 
   test('task-pack hint pluralizes and references tasks list', () => {
-    expect(buildHints(base, { taskPackCount: 21 }).some((s) => s.includes('21 task packs'))).toBe(true)
-    expect(buildHints(base, { taskPackCount: 1 }).some((s) => s.includes('1 task pack '))).toBe(true)
+    expect(buildHints(base, { taskPackCount: 21 }).some((s) => s.includes('21 task packs'))).toBe(
+      true
+    )
+    expect(buildHints(base, { taskPackCount: 1 }).some((s) => s.includes('1 task pack '))).toBe(
+      true
+    )
   })
 
   test('schema cache hint when available with totalTables', () => {

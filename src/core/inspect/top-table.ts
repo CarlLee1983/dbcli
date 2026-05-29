@@ -15,8 +15,6 @@ export function topQueriedTable(entries: AuditEntryBrief[]): string | null {
     if (!entry.target || !isRealTable(entry.target)) continue
     counts.set(entry.target, (counts.get(entry.target) ?? 0) + 1)
   }
-  const sorted = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
-  )
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   return sorted.length > 0 ? (sorted[0]?.[0] ?? null) : null
 }

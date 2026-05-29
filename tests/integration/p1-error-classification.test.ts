@@ -4,8 +4,7 @@ import type { DatabaseAdapter, SqlConnectionOptions } from '@/adapters/types'
 import { QueryExecutor } from '@/core/query-executor'
 import { ConnectionError } from '@/adapters/types'
 
-const MARIADB_AVAILABLE =
-  !!process.env.TEST_MARIADB_HOST || !!process.env.TEST_MARIADB_DSN
+const MARIADB_AVAILABLE = !!process.env.TEST_MARIADB_HOST || !!process.env.TEST_MARIADB_DSN
 
 const MARIADB_OPTS: SqlConnectionOptions = {
   system: 'mariadb',

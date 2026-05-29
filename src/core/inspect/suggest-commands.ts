@@ -2,10 +2,7 @@ import type { InspectSnapshot, SnapshotSystem } from './types'
 
 const SQL_SYSTEMS: ReadonlyArray<SnapshotSystem> = ['postgresql', 'mysql', 'mariadb']
 
-export type SnapshotForSuggest = Omit<
-  InspectSnapshot,
-  'suggestedCommands' | 'warnings' | 'hints'
->
+export type SnapshotForSuggest = Omit<InspectSnapshot, 'suggestedCommands' | 'warnings' | 'hints'>
 
 export interface SuggestContext {
   brief?: boolean
@@ -15,10 +12,7 @@ export interface SuggestContext {
   taskPackCount?: number
 }
 
-export function suggestCommands(
-  snap: SnapshotForSuggest,
-  ctx: SuggestContext = {}
-): string[] {
+export function suggestCommands(snap: SnapshotForSuggest, ctx: SuggestContext = {}): string[] {
   if (!snap.system) return ['dbcli init']
 
   const out: string[] = []

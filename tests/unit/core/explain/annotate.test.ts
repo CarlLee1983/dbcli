@@ -69,7 +69,14 @@ test('clean row: no annotations', () => {
 
 test('multiple annotations on the same row', () => {
   const [row] = annotateRows(
-    [base({ accessType: 'ALL', key: null, rows: 1000000, extra: ['Using temporary', 'Using filesort'] })],
+    [
+      base({
+        accessType: 'ALL',
+        key: null,
+        rows: 1000000,
+        extra: ['Using temporary', 'Using filesort'],
+      }),
+    ],
     'mariadb'
   )
   const rules = row!.annotations.map((a) => a.rule).sort()

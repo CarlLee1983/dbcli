@@ -27,9 +27,7 @@ export async function runPgExplain(
   sql: string,
   options: ExplainOptions
 ): Promise<ExplainPlan> {
-  const opts = options.analyze
-    ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)'
-    : 'EXPLAIN (FORMAT JSON)'
+  const opts = options.analyze ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)' : 'EXPLAIN (FORMAT JSON)'
   const wrapped = `${opts} ${sql}`
   const result = await adapter.execute<{ 'QUERY PLAN': string | object }>(wrapped)
 

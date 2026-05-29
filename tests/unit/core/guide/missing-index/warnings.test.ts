@@ -30,7 +30,16 @@ test('fallback (parsed=false) emits a single parser-limit warning', () => {
 test('clean analysis emits no warnings', () => {
   const out = collectWarnings({
     parsed: true,
-    tables: [{ table: 't', equalityColumns: ['a'], rangeColumns: [], joinColumns: [], orderColumns: [], functionalColumns: [] }],
+    tables: [
+      {
+        table: 't',
+        equalityColumns: ['a'],
+        rangeColumns: [],
+        joinColumns: [],
+        orderColumns: [],
+        functionalColumns: [],
+      },
+    ],
   })
   expect(out).toEqual([])
 })

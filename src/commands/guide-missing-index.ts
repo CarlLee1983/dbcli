@@ -64,7 +64,9 @@ export function registerMissingIndexCommand(parent: Command): Command {
       }
       const minConfidence = options.minConfidence as Confidence | undefined
       if (minConfidence && !CONFIDENCES.includes(minConfidence)) {
-        console.error(`Unknown --min-confidence '${minConfidence}'. Allowed: ${CONFIDENCES.join(', ')}`)
+        console.error(
+          `Unknown --min-confidence '${minConfidence}'. Allowed: ${CONFIDENCES.join(', ')}`
+        )
         process.exit(1)
       }
 

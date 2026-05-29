@@ -141,7 +141,11 @@ test('mapError: MySQL ER_NO_SUCH_TABLE (1146) → TABLE_NOT_FOUND', () => {
     errno: 1146,
     message: "Table 'station_local.bets' doesn't exist",
   }
-  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb', database: 'station_local' })
+  const result = mapError(error, 'mariadb', {
+    ...mockOptions,
+    system: 'mariadb',
+    database: 'station_local',
+  })
   expect(result.code).toBe('TABLE_NOT_FOUND')
   expect(result.message).toContain('bets')
   expect(result.message).toContain('station_local')
@@ -165,7 +169,7 @@ test('mapError: TABLE_NOT_FOUND does NOT include connection-troubleshooting hint
   expect(result.hints.join(' ')).not.toContain('mysql.log')
 })
 
-test("mapError: MySQL ER_BAD_FIELD_ERROR (1054) → COLUMN_NOT_FOUND", () => {
+test('mapError: MySQL ER_BAD_FIELD_ERROR (1054) → COLUMN_NOT_FOUND', () => {
   const error = {
     code: 'ER_BAD_FIELD_ERROR',
     errno: 1054,
@@ -177,7 +181,7 @@ test("mapError: MySQL ER_BAD_FIELD_ERROR (1054) → COLUMN_NOT_FOUND", () => {
   expect(result.hints.join(' ')).toContain('dbcli schema')
 })
 
-test("mapError: PostgreSQL undefined_column (42703) → COLUMN_NOT_FOUND", () => {
+test('mapError: PostgreSQL undefined_column (42703) → COLUMN_NOT_FOUND', () => {
   const error = {
     code: '42703',
     message: 'column "usr_id" does not exist',

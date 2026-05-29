@@ -1,7 +1,11 @@
 // tests/unit/core/guide/missing-index/scorer.test.ts
 import { test, expect } from 'bun:test'
 import { scoreCandidate } from '@/core/guide/missing-index/scorer'
-import type { IndexCandidate, TableColumnUsage, EnrichedPlanFacts } from '@/core/guide/missing-index/types'
+import type {
+  IndexCandidate,
+  TableColumnUsage,
+  EnrichedPlanFacts,
+} from '@/core/guide/missing-index/types'
 
 const usage: TableColumnUsage = {
   table: 'betting_logs',

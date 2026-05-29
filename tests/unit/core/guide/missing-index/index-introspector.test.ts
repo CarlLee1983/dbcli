@@ -30,7 +30,9 @@ test('returns [] when adapter throws (graceful degradation)', async () => {
 })
 
 test('returns [] when table has no indexes field', async () => {
-  const adapter = { getTableSchema: async () => ({ name: 't', columns: [] }) } as unknown as DatabaseAdapter
+  const adapter = {
+    getTableSchema: async () => ({ name: 't', columns: [] }),
+  } as unknown as DatabaseAdapter
   const introspect = makeIndexIntrospector(adapter)
   expect(await introspect('t')).toEqual([])
 })

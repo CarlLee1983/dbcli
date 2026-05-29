@@ -41,7 +41,9 @@ export async function runMysqlExplain(
 function normalizeRow(raw: RawMysqlExplainRow): ExplainRow {
   const extra =
     typeof raw.Extra === 'string' && raw.Extra.length > 0
-      ? raw.Extra.split(';').map((s) => s.trim()).filter(Boolean)
+      ? raw.Extra.split(';')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : []
   return {
     driving: raw.table ?? '',

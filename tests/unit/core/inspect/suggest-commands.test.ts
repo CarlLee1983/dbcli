@@ -60,9 +60,7 @@ describe('suggestCommands', () => {
 
   test('topTable + task packs → analyze-table-perf in tier 2', () => {
     const cmds = suggestCommands(baseSnap, { topTable: 'betting_logs', taskPackCount: 3 })
-    expect(cmds).toContain(
-      'dbcli skill tasks plan analyze-table-perf --param table=betting_logs'
-    )
+    expect(cmds).toContain('dbcli skill tasks plan analyze-table-perf --param table=betting_logs')
   })
 
   test('task packs available → tasks list appears', () => {

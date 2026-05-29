@@ -35,7 +35,9 @@ SELECT * FROM orders WHERE id = 1;
 SELECT count(*) FROM users;
 `
   )
-  const inputs = await resolveBulkInputs([`@${sqlFile}`], { loadFromSavedQueries: async () => null })
+  const inputs = await resolveBulkInputs([`@${sqlFile}`], {
+    loadFromSavedQueries: async () => null,
+  })
   expect(inputs).toHaveLength(2)
   expect(inputs[0]?.sql).toBe('SELECT * FROM orders WHERE id = 1')
   expect(inputs[1]?.sql).toBe('SELECT count(*) FROM users')

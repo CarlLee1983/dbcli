@@ -5,8 +5,9 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [Unreleased]
+
+## [1.23.0] - 2026-05-29 - Source-Driven Performance Review Tooling
 
 ### Added
 
@@ -25,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `ConnectionError.code` union 新增 `SQL_SYNTAX_ERROR` / `TABLE_NOT_FOUND` / `COLUMN_NOT_FOUND`(向後相容;既有 consumer 只匹配 `UNKNOWN` 仍 fallback)
-
 
 ## [1.22.0] - 2026-05-21 - Elasticsearch Shell/Export + Redis Masking
 
@@ -47,7 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 雙語 user docs(`docs/user/en` / `docs/user/zh-TW`,md + html)新增 ES shell、ES export、Redis 遮罩段落;`docs/feature-matrix.md` 同步 ES export 與 Redis blacklist 儲存格。
 
-
 ## [1.21.0] - 2026-05-20 - Redis-Parity Pack
 
 ### Added
@@ -64,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Out of scope
 
 - Elasticsearch shell、Redis/ES export、Redis value/hash-field 遮罩 — 延後至 v1.22 或之後。
-
 
 ## [1.20.2] - 2026-05-19
 
@@ -518,6 +516,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Stable Release
 
 dbcli v1.0.0 is the first stable release. All three milestones are complete:
+
 - **M1 (v0.6.0):** Smart REPL — interactive shell with SQL + dbcli commands
 - **M2 (v0.8.0):** Schema DDL — CREATE/DROP/ALTER TABLE, INDEX, CONSTRAINT, ENUM
 - **M3 (v1.0.0):** Stabilization — documentation, permission matrix, known limitations update
@@ -684,6 +683,7 @@ Added table and column-level blacklisting to protect sensitive data from AI agen
 ### Configuration
 
 Blacklist rules stored in `.dbcli`:
+
 ```json
 {
   "blacklist": {

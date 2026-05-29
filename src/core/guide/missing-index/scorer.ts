@@ -5,12 +5,7 @@
  * carries a reason and never asserts "you must create this".
  */
 
-import type {
-  Confidence,
-  EnrichedPlanFacts,
-  IndexCandidate,
-  TableColumnUsage,
-} from './types'
+import type { Confidence, EnrichedPlanFacts, IndexCandidate, TableColumnUsage } from './types'
 
 function isFullScan(facts: EnrichedPlanFacts): boolean {
   if (facts.key === null) return true
@@ -20,7 +15,11 @@ function isFullScan(facts: EnrichedPlanFacts): boolean {
 
 /** All WHERE + JOIN columns the table needs, deduped. */
 function requiredColumns(usage: TableColumnUsage): string[] {
-  const set = new Set<string>([...usage.joinColumns, ...usage.equalityColumns, ...usage.rangeColumns])
+  const set = new Set<string>([
+    ...usage.joinColumns,
+    ...usage.equalityColumns,
+    ...usage.rangeColumns,
+  ])
   return [...set]
 }
 

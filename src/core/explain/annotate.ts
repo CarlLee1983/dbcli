@@ -31,7 +31,11 @@ function collectAnnotations(row: ExplainRow, system: DatabaseSystem): ExplainAnn
     })
   }
   if (hasExtra(row, 'Using temporary')) {
-    out.push({ severity: 'yellow', rule: 'temp-table', message: 'Query materialises a temporary table' })
+    out.push({
+      severity: 'yellow',
+      rule: 'temp-table',
+      message: 'Query materialises a temporary table',
+    })
   }
   if (hasFilesort(row, system)) {
     out.push({ severity: 'yellow', rule: 'filesort', message: 'Result sorted on disk (filesort)' })

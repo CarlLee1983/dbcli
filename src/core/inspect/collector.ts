@@ -119,11 +119,7 @@ export async function collectInspect(opts: InspectOptions): Promise<InspectSnaps
   //    NB: separate from the command-layer `audit_recent` embed (JSON-only, n=5) —
   //    this load (n=10) drives suggestions on every output format.
   const auditRecent = config
-    ? await loadRecentAudit(
-        config as Parameters<typeof loadRecentAudit>[0],
-        opts.configPath,
-        10
-      )
+    ? await loadRecentAudit(config as Parameters<typeof loadRecentAudit>[0], opts.configPath, 10)
     : []
   const topTable = topQueriedTable(auditRecent)
   const taskPackCount = await countAgentTasks(resolveAgentTaskDirs(opts.workspace))

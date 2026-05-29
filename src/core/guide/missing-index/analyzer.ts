@@ -8,12 +8,7 @@
  * report with no candidates plus a parser-limit warning.
  */
 
-import type {
-  Confidence,
-  IndexCandidate,
-  MissingIndexDeps,
-  MissingIndexReport,
-} from './types'
+import type { Confidence, IndexCandidate, MissingIndexDeps, MissingIndexReport } from './types'
 import { buildCandidates } from './candidate-builder'
 import { scoreCandidate } from './scorer'
 import { collectWarnings } from './warnings'

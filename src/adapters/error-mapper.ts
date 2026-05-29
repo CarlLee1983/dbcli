@@ -63,11 +63,7 @@ export function mapError(
   // TABLE_NOT_FOUND: server rejected query because referenced table doesn't exist.
   // MySQL/MariaDB: code='ER_NO_SUCH_TABLE' / errno=1146
   // PostgreSQL: code='42P01' (SQLSTATE undefined_table)
-  if (
-    errCode === 'ER_NO_SUCH_TABLE' ||
-    err?.errno === 1146 ||
-    errCode === '42P01'
-  ) {
+  if (errCode === 'ER_NO_SUCH_TABLE' || err?.errno === 1146 || errCode === '42P01') {
     // Extract table name from message:
     //  - MySQL: Table 'db.tablename' doesn't exist
     //  - PG:    relation "tablename" does not exist
@@ -87,22 +83,14 @@ export function mapError(
   // COLUMN_NOT_FOUND: referenced column doesn't exist on the table.
   // MySQL/MariaDB: code='ER_BAD_FIELD_ERROR' / errno=1054
   // PostgreSQL: code='42703' (SQLSTATE undefined_column)
-  if (
-    errCode === 'ER_BAD_FIELD_ERROR' ||
-    err?.errno === 1054 ||
-    errCode === '42703'
-  ) {
+  if (errCode === 'ER_BAD_FIELD_ERROR' || err?.errno === 1054 || errCode === '42703') {
     const mysqlMatch = errMsg.match(/Unknown column\s+'([^']+)'/i)
     const pgMatch = errMsg.match(/column\s+"([^"]+)"\s+does not exist/i)
     const columnName = mysqlMatch?.[1] || pgMatch?.[1] || 'unknown'
-    return new ConnectionError(
-      'COLUMN_NOT_FOUND',
-      `Column '${columnName}' not found`,
-      [
-        'Run `dbcli schema <table>` to see the actual column names',
-        'Column names are case-sensitive on some databases (PostgreSQL with quoted identifiers)',
-      ]
-    )
+    return new ConnectionError('COLUMN_NOT_FOUND', `Column '${columnName}' not found`, [
+      'Run `dbcli schema <table>` to see the actual column names',
+      'Column names are case-sensitive on some databases (PostgreSQL with quoted identifiers)',
+    ])
   }
 
   // AUTH_FAILED: Authentication (credentials) error
@@ -143,20 +131,12 @@ export function mapError(
   // SQL_SYNTAX_ERROR: driver returned a parse error from execute() (not connect()).
   // MySQL/MariaDB: code='ER_PARSE_ERROR' / errno=1064
   // PostgreSQL: code='42601' (SQLSTATE syntax_error)
-  if (
-    errCode === 'ER_PARSE_ERROR' ||
-    err?.errno === 1064 ||
-    errCode === '42601'
-  ) {
-    return new ConnectionError(
-      'SQL_SYNTAX_ERROR',
-      `SQL syntax error: ${errMsg}`,
-      [
-        'Check your SQL syntax near the position reported above',
-        'In query-only mode, dbcli auto-appends LIMIT 1000; use --no-limit to disable',
-        'For SHOW/DESCRIBE/EXPLAIN statements, LIMIT is not allowed — these are not auto-limited',
-      ]
-    )
+  if (errCode === 'ER_PARSE_ERROR' || err?.errno === 1064 || errCode === '42601') {
+    return new ConnectionError('SQL_SYNTAX_ERROR', `SQL syntax error: ${errMsg}`, [
+      'Check your SQL syntax near the position reported above',
+      'In query-only mode, dbcli auto-appends LIMIT 1000; use --no-limit to disable',
+      'For SHOW/DESCRIBE/EXPLAIN statements, LIMIT is not allowed — these are not auto-limited',
+    ])
   }
 
   // UNKNOWN: Fallback for unrecognized errors

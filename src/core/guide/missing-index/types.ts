@@ -40,8 +40,8 @@ export interface ExistingIndex {
 
 /** Facts pulled from the real EXPLAIN plan, keyed by table name in the enricher. */
 export interface EnrichedPlanFacts {
-  accessType: string       // MySQL `type` / PG node-type-mapped accessType
-  key: string | null       // index actually chosen by planner
+  accessType: string // MySQL `type` / PG node-type-mapped accessType
+  key: string | null // index actually chosen by planner
   rows: number
   filtered?: number
 }

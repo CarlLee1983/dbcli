@@ -8,13 +8,15 @@ function usageFor(sql: string, table: string): TableColumnUsage {
   const ast = parseSelect(sql, 'mysql')
   const analysis = extract(ast)
   const u = analysis.tables.find((t) => t.table === table)
-  if (!u) throw new Error(`no usage for ${table} in ${JSON.stringify(analysis.tables.map((x) => x.table))}`)
+  if (!u)
+    throw new Error(
+      `no usage for ${table} in ${JSON.stringify(analysis.tables.map((x) => x.table))}`
+    )
   return u
 }
 
 test('extracts equality and range WHERE columns with alias resolution', () => {
-  const sql =
-    'SELECT b.id FROM betting_logs b WHERE b.user_id = 5 AND b.settled_at >= "2024-01-01"'
+  const sql = 'SELECT b.id FROM betting_logs b WHERE b.user_id = 5 AND b.settled_at >= "2024-01-01"'
   const u = usageFor(sql, 'betting_logs')
   expect(u.alias).toBe('b')
   expect(u.equalityColumns).toContain('user_id')
@@ -45,10 +47,7 @@ test('extracts GROUP BY / ORDER BY columns', () => {
 })
 
 test('records functional columns separately (DATE(x))', () => {
-  const u = usageFor(
-    'SELECT 1 FROM betting_logs b GROUP BY DATE(b.settled_at)',
-    'betting_logs'
-  )
+  const u = usageFor('SELECT 1 FROM betting_logs b GROUP BY DATE(b.settled_at)', 'betting_logs')
   expect(u.functionalColumns.map((f) => f.column)).toContain('settled_at')
   expect(u.functionalColumns[0].expr.toUpperCase()).toContain('DATE')
   // functional column must NOT also be counted as a plain order column

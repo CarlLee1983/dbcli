@@ -17,7 +17,13 @@ function stubAdapter(): DatabaseAdapter {
       affectedRows: 0,
     }),
     listTables: async () => [],
-    getTableSchema: async () => ({ name: '', columns: [], rowCount: 0, primaryKey: undefined, foreignKeys: [] }),
+    getTableSchema: async () => ({
+      name: '',
+      columns: [],
+      rowCount: 0,
+      primaryKey: undefined,
+      foreignKeys: [],
+    }),
     testConnection: async () => true,
     getServerVersion: async () => 'test',
   }

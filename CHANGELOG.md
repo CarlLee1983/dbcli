@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`dbcli explain` 一級指令。** 把 `EXPLAIN` / `ANALYZE SELECT` / `EXPLAIN (ANALYZE, BUFFERS) SELECT` 包成統一介面,單條 query、`@saved-query`、`@file.sql`、`@glob/*` 通吃。輸出統一的 `ExplainRow` schema,附 5 條 actionable annotations(`full-scan` / `temp-table` / `filesort` / `cost-estimate-skew` / `nested-loop-large`)。輸出格式 markdown(預設)/ json / table。支援 `--bulk` 多筆批次。MariaDB + MySQL + PostgreSQL。(v1.23 P2)
+
 ### Fixed
 
 - query-only 模式不再對 `SHOW`/`DESCRIBE`/`EXPLAIN`/`ANALYZE SELECT` 注入 `LIMIT`,避免 server 拒絕(v1.23 P1, issue #1)

@@ -515,3 +515,35 @@ bun test
 ---
 
 *由 Dbcli 文件引擎自動產生。*
+
+## 查詢計畫檢視 — `dbcli explain`
+
+跨 MySQL/MariaDB 與 PostgreSQL 用統一 row schema + severity 標籤呈現查詢計畫。
+
+### 基本用法
+
+```bash
+dbcli explain "SELECT * FROM betting_logs WHERE settled_at >= '2026-03-01'"
+dbcli explain @analytics/live-summary                 # saved query
+dbcli explain --analyze "SELECT ..."                  # MariaDB ANALYZE SELECT / PG EXPLAIN ANALYZE
+dbcli explain --format json "..."                     # 純 JSON
+dbcli explain --bulk @queries.sql                     # 從檔案批次
+dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
+```
+
+### Annotations 規則
+
+| 規則 | 嚴重度 | 觸發條件 |
+|---|---|---|
+| `full-scan` | 紅 | MySQL `type=ALL` 或 `key=NULL`;PG `Seq Scan` |
+| `temp-table` | 黃 | MySQL `Using temporary` |
+| `filesort` | 黃 | MySQL `Using filesort`;PG `Sort Method: external merge` |
+| `cost-estimate-skew` | 灰 | `--analyze` actual rows / planner rows > 10× |
+| `nested-loop-large` | 黃 | PG `Nested Loop` 且 planner rows > 10,000 |
+
+### 注意
+
+- `--analyze` 會實際執行 query,**不要**對 DML 用。
+- `dbcli explain` 在 `query-only` permission 即可執行,不需升權。
+- EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。
+

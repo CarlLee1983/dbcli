@@ -99,6 +99,7 @@
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent 修復工作流</a></li>
                     <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
+                    <li class="nav-item"><a href="#explain-command" class="nav-link">查詢計畫 (explain)</a></li>
                 </ul>
             </section>
         </div>
@@ -553,7 +554,37 @@ bun test</code></pre>
             <div class="h-px w-24 bg-border mx-auto mb-8"></div>
             <p class="text-text-muted text-sm font-medium">由 dbcli 文件引擎精心驅動 &bull; 2026 Gravito Labs</p>
         </footer>
-    </main>
+    
+<section id="explain-command" class="mt-20">
+  <h2>查詢計畫檢視 — <code>dbcli explain</code></h2>
+  <p>跨 MySQL/MariaDB 與 PostgreSQL 用統一 row schema + severity 標籤呈現查詢計畫。</p>
+  <h3>基本用法</h3>
+  <pre><code>dbcli explain "SELECT * FROM betting_logs WHERE settled_at &gt;= '2026-03-01'"
+dbcli explain @analytics/live-summary                 # saved query
+dbcli explain --analyze "SELECT ..."                  # MariaDB ANALYZE SELECT / PG EXPLAIN ANALYZE
+dbcli explain --format json "..."                     # 純 JSON
+dbcli explain --bulk @queries.sql                     # 從檔案批次
+dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob</code></pre>
+  <h3>Annotations 規則</h3>
+  <table>
+    <thead><tr><th>規則</th><th>嚴重度</th><th>觸發條件</th></tr></thead>
+    <tbody>
+      <tr><td><code>full-scan</code></td><td>紅</td><td>MySQL <code>type=ALL</code> 或 <code>key=NULL</code>;PG <code>Seq Scan</code></td></tr>
+      <tr><td><code>temp-table</code></td><td>黃</td><td>MySQL <code>Using temporary</code></td></tr>
+      <tr><td><code>filesort</code></td><td>黃</td><td>MySQL <code>Using filesort</code>;PG <code>Sort Method: external merge</code></td></tr>
+      <tr><td><code>cost-estimate-skew</code></td><td>灰</td><td><code>--analyze</code> actual rows / planner rows &gt; 10×</td></tr>
+      <tr><td><code>nested-loop-large</code></td><td>黃</td><td>PG <code>Nested Loop</code> 且 planner rows &gt; 10,000</td></tr>
+    </tbody>
+  </table>
+  <h3>注意</h3>
+  <ul>
+    <li><code>--analyze</code> 會實際執行 query,<strong>不要</strong>對 DML 用。</li>
+    <li><code>dbcli explain</code> 在 <code>query-only</code> permission 即可執行,不需升權。</li>
+    <li>EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。</li>
+  </ul>
+</section>
+
+</main>
 
     <script>
         // Intersection Observer for Scroll Highlighting

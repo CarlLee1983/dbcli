@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test'
 import { suggestCommands } from '@/core/inspect/suggest-commands'
-import type { InspectSnapshot } from '@/core/inspect/types'
+import type { SnapshotForSuggest } from '@/core/inspect/suggest-commands'
 
-const baseSnap: Omit<InspectSnapshot, 'suggestedCommands' | 'warnings'> = {
+const baseSnap: SnapshotForSuggest = {
   schemaVersion: 1,
   system: 'postgresql',
   connection: { name: 'default', database: 'app', version: null },
@@ -56,5 +56,32 @@ describe('suggestCommands', () => {
       { brief: true }
     )
     expect(cmds).toEqual(['dbcli schema --refresh'])
+  })
+
+  test('topTable + task packs → analyze-table-perf in tier 2', () => {
+    const cmds = suggestCommands(baseSnap, { topTable: 'betting_logs', taskPackCount: 3 })
+    expect(cmds).toContain(
+      'dbcli skill tasks plan analyze-table-perf --param table=betting_logs'
+    )
+  })
+
+  test('task packs available → tasks list appears', () => {
+    const cmds = suggestCommands(baseSnap, { taskPackCount: 3 })
+    expect(cmds).toContain('dbcli skill tasks list')
+  })
+
+  test('no task packs → no skill tasks suggestions', () => {
+    const cmds = suggestCommands(baseSnap, { topTable: 'orders', taskPackCount: 0 })
+    expect(cmds.some((c) => c.startsWith('dbcli skill tasks'))).toBe(false)
+  })
+
+  test('topTable without packs → no analyze-table-perf', () => {
+    const cmds = suggestCommands(baseSnap, { topTable: 'orders', taskPackCount: 0 })
+    expect(cmds.some((c) => c.includes('analyze-table-perf'))).toBe(false)
+  })
+
+  test('no longer emits queries list', () => {
+    const cmds = suggestCommands(baseSnap, { taskPackCount: 3 })
+    expect(cmds).not.toContain('dbcli queries list --format json')
   })
 })

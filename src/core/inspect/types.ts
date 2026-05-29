@@ -72,6 +72,8 @@ export interface InspectSnapshot {
   schemaCache: SchemaCacheSection
   snippets: SnippetsSection
   suggestedCommands: string[]
+  /** P4: parallel to suggestedCommands — human-readable text hints (not executable). */
+  hints: string[]
   warnings: string[]
   /** Phase 25 DOCS-02: last N audit entries (brief shape). Only populated on agent JSON paths (D-57). [] when audit disabled / missing (D-60). */
   audit_recent?: AuditEntryBrief[]

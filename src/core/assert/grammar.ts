@@ -36,15 +36,15 @@ export function parseExpect(input: string): ExpectNode {
   const s = input.trim()
 
   const rows = s.match(new RegExp(`^rows\\s*${OP.source}\\s*(\\d+)$`))
-  if (rows) return { kind: 'rows', op: rows[1] as Op, value: parseInt(rows[2], 10) }
+  if (rows) return { kind: 'rows', op: rows[1] as Op, value: parseInt(rows[2]!, 10) }
 
   const value = s.match(new RegExp(`^value\\s*${OP.source}\\s*(.+)$`))
-  if (value) return { kind: 'value', op: value[1] as Op, value: parseScalar(value[2]) }
+  if (value) return { kind: 'value', op: value[1] as Op, value: parseScalar(value[2]!) }
 
   const col = s.match(/^col:(\w+)\s+(.+)$/)
   if (col) {
-    const column = col[1]
-    const rest = col[2].trim()
+    const column = col[1]!
+    const rest = col[2]!.trim()
     if (/^not\s+null$/i.test(rest)) return { kind: 'col', column, pred: { type: 'notNull' } }
     if (/^unique$/i.test(rest)) return { kind: 'col', column, pred: { type: 'unique' } }
     const between = rest.match(/^between\s+(-?\d+(?:\.\d+)?)\s+and\s+(-?\d+(?:\.\d+)?)$/i)
@@ -52,7 +52,7 @@ export function parseExpect(input: string): ExpectNode {
       return { kind: 'col', column, pred: { type: 'between', low: Number(between[1]), high: Number(between[2]) } }
     }
     const cmp = rest.match(new RegExp(`^${OP.source}\\s*(.+)$`))
-    if (cmp) return { kind: 'col', column, pred: { type: 'cmp', op: cmp[1] as Op, value: parseScalar(cmp[2]) } }
+    if (cmp) return { kind: 'col', column, pred: { type: 'cmp', op: cmp[1] as Op, value: parseScalar(cmp[2]!) } }
   }
 
   throw new AssertExpressionError(input)

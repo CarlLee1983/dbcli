@@ -29,7 +29,7 @@ export function firstScalar(result: QueryResult<Record<string, unknown>>): numbe
     )
   }
   if (result.rows.length === 0) return null
-  const v = result.rows[0][result.columnNames[0]]
+  const v = result.rows[0]![result.columnNames[0]!]
   return v === null || v === undefined ? null : (v as number | string)
 }
 

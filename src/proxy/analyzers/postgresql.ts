@@ -15,16 +15,24 @@ function rowCountFromTag(tag: string): number | null {
   return Number.isInteger(n) ? n : null
 }
 
+/** Maximum plausible PostgreSQL startup-packet length (bytes). */
+const MAX_STARTUP_LEN = 10_000
+
 export function createPostgresAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
   const clientBuf = new FrameBuffer()
   const serverBuf = new FrameBuffer()
   let startupSeen = false
   let awaitingResponse = false
 
-  function readCString(buf: FrameBuffer, start: number, end: number): string {
+  /** Byte index of the NUL terminator (or `end` if none), scanning from `start`. */
+  function cStringEnd(buf: FrameBuffer, start: number, end: number): number {
     let i = start
     while (i < end && buf.byteAt(i) !== 0) i++
-    return buf.text(start, i)
+    return i
+  }
+
+  function readCString(buf: FrameBuffer, start: number, end: number): string {
+    return buf.text(start, cStringEnd(buf, start, end))
   }
 
   function handleClientMessage(type: number, bodyStart: number, bodyEnd: number): void {
@@ -36,7 +44,7 @@ export function createPostgresAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
     } else if (t === 'P' || t === 'B' || t === 'E' || t === 'S' || t === 'D') {
       deps.emit({ kind: 'tag', tag: 'extended_protocol' })
       if (t === 'P') {
-        const nameEnd = bodyStart + readCString(clientBuf, bodyStart, bodyEnd).length + 1
+        const nameEnd = cStringEnd(clientBuf, bodyStart, bodyEnd) + 1 // +1 for NUL
         const sql = readCString(clientBuf, nameEnd, bodyEnd)
         if (sql) deps.emit({ kind: 'query', sql, tags: ['extended_protocol'] })
         awaitingResponse = true
@@ -45,6 +53,7 @@ export function createPostgresAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
   }
 
   function handleServerMessage(type: number, bodyStart: number, bodyEnd: number): void {
+    if (!awaitingResponse) return
     const t = String.fromCharCode(type)
     if (t === 'E') {
       let code: string | null = null
@@ -54,8 +63,9 @@ export function createPostgresAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
         const fieldType = serverBuf.byteAt(i)
         if (fieldType === undefined || fieldType === 0) break
         i += 1
-        const value = readCString(serverBuf, i, bodyEnd)
-        i += value.length + 1
+        const valEnd = cStringEnd(serverBuf, i, bodyEnd)
+        const value = serverBuf.text(i, valEnd)
+        i = valEnd + 1
         if (fieldType === 0x43 /* 'C' */) code = value
         else if (fieldType === 0x4d /* 'M' */) message = value
       }
@@ -80,7 +90,7 @@ export function createPostgresAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
       // If the length field is implausible (> buffer length or > 10000), the
       // first byte is likely a message-type byte, not a length MSB — treat
       // startup as already seen and fall through to typed-message processing.
-      if (len >= 4 && len <= buf.length && len <= 10000) {
+      if (len >= 4 && len <= buf.length && len <= MAX_STARTUP_LEN) {
         startupSeen = true
         buf.consume(len)
       } else {

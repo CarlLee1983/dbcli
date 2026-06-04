@@ -31,6 +31,7 @@ describe('postgres analyzer', () => {
     const { signals, analyzer } = collect()
     analyzer.onData('client_to_server', msg('Q', cstr('SELECT 1')))
     const q = signals.find((s) => s.kind === 'query')
+    expect(q).toBeDefined()
     if (q?.kind === 'query') expect(q.sql).toBe('SELECT 1')
   })
 
@@ -44,6 +45,7 @@ describe('postgres analyzer', () => {
     ]
     analyzer.onData('server_to_client', msg('E', fields))
     const err = signals.find((s) => s.kind === 'error')
+    expect(err).toBeDefined()
     if (err?.kind === 'error') {
       expect(err.code).toBe('42703')
       expect(err.message).toContain('column missing')
@@ -55,6 +57,7 @@ describe('postgres analyzer', () => {
     analyzer.onData('client_to_server', msg('Q', cstr('SELECT 1')))
     analyzer.onData('server_to_client', msg('C', cstr('SELECT 3')))
     const end = signals.find((s) => s.kind === 'query_end')
+    expect(end).toBeDefined()
     if (end?.kind === 'query_end') expect(end.rowCount).toBe(3)
   })
 
@@ -72,5 +75,31 @@ describe('postgres analyzer', () => {
       (len >> 24) & 0xff, (len >> 16) & 0xff, (len >> 8) & 0xff, len & 0xff, ...startupBody,
     ]))
     expect(signals.some((s) => s.kind === 'query')).toBe(false)
+  })
+
+  it('ignores server messages before any query (auth-phase ErrorResponse)', () => {
+    const { signals, analyzer } = collect()
+    // consume the untyped startup packet first so framing is in command phase
+    const startupBody = [0x00, 0x03, 0x00, 0x00, ...cstr('user'), ...cstr('x'), 0]
+    const slen = startupBody.length + 4
+    analyzer.onData('client_to_server', new Uint8Array([
+      (slen >> 24) & 0xff, (slen >> 16) & 0xff, (slen >> 8) & 0xff, slen & 0xff, ...startupBody,
+    ]))
+    const fields = [0x43, ...cstr('28P01'), 0x4d, ...cstr('auth failed'), 0x00]
+    analyzer.onData('server_to_client', msg('E', fields))
+    expect(signals.some((s) => s.kind === 'error')).toBe(false)
+  })
+
+  it('parses an ErrorResponse with a multibyte message without desync', () => {
+    const { signals, analyzer } = collect()
+    analyzer.onData('client_to_server', msg('Q', cstr('SELECT bad')))
+    const fields = [0x43, ...cstr('42703'), 0x4d, ...cstr('欄位不存在'), 0x00]
+    analyzer.onData('server_to_client', msg('E', fields))
+    const err = signals.find((s) => s.kind === 'error')
+    expect(err).toBeDefined()
+    if (err?.kind === 'error') {
+      expect(err.code).toBe('42703')
+      expect(err.message).toBe('欄位不存在')
+    }
   })
 })

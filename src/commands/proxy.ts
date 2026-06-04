@@ -86,79 +86,89 @@ async function runProxy(
   options: ProxyCliOptions,
   command: Command
 ): Promise<void> {
-  validateFormat(options.format ?? 'text', ALLOWED_FORMATS, 'proxy')
-  const redact = (options.redact ?? 'none') as RedactMode
-  if (!ALLOWED_REDACT.includes(redact)) {
-    throw new Error(`Invalid --redact "${redact}". Allowed: none, literals`)
-  }
-
-  const configPath = resolveConfigPath(command, options)
-  let connection: { system: string; host: string; port: number } | null = null
   try {
-    const config = await configModule.read(configPath)
-    if (config.connection) {
-      // configModule.read() resolves env refs at runtime; cast to resolved primitive types.
-      connection = {
-        system: config.connection.system,
-        host: config.connection.host as string,
-        port: config.connection.port as number,
+    validateFormat(options.format ?? 'text', ALLOWED_FORMATS, 'proxy')
+    const redact = (options.redact ?? 'none') as RedactMode
+    if (!ALLOWED_REDACT.includes(redact)) {
+      throw new Error(`Invalid --redact "${redact}". Allowed: none, literals`)
+    }
+
+    const configPath = resolveConfigPath(command, options)
+    let connection: { system: string; host: string; port: number } | null = null
+    try {
+      const config = await configModule.read(configPath)
+      if (config.connection) {
+        // configModule.read() resolves env refs at runtime; cast to resolved primitive types.
+        connection = {
+          system: config.connection.system,
+          host: config.connection.host as string,
+          port: config.connection.port as number,
+        }
       }
+    } catch {
+      // No config is fine when explicit engine + target are given.
     }
-  } catch {
-    // No config is fine when explicit engine + target are given.
-  }
 
-  const resolved = resolveProxyConfig({
-    subcommandEngine,
-    listen: options.listen,
-    target: options.target,
-    connection,
-  })
+    const resolved = resolveProxyConfig({
+      subcommandEngine,
+      listen: options.listen,
+      target: options.target,
+      connection,
+    })
 
-  const eventsPath = options.events ?? join('.dbcli', 'proxy', 'events.jsonl')
-  const slowMs = Number(options.slowMs ?? 1000)
-
-  const server = new ProxyServer({
-    engine: resolved.engine,
-    listen: resolved.listen,
-    target: resolved.target,
-    eventsPath,
-    slowMs,
-    redact,
-    warn: (m) => process.stderr.write(`[proxy] ${m}\n`),
-  })
-
-  await server.start()
-
-  if (options.format === 'json') {
-    process.stdout.write(
-      JSON.stringify({
-        status: 'listening',
-        engine: resolved.engine,
-        listen: `${resolved.listen.host}:${resolved.listen.port}`,
-        target: `${resolved.target.host}:${resolved.target.port}`,
-        events: eventsPath,
-        redact,
-      }) + '\n'
-    )
-  } else {
-    process.stdout.write(
-      `dbcli proxy (${resolved.engine}) listening on ${resolved.listen.host}:${resolved.listen.port}` +
-        ` -> ${resolved.target.host}:${resolved.target.port}\n` +
-        `events: ${eventsPath} | slow-ms: ${slowMs} | redact: ${redact}\n` +
-        `Press Ctrl+C to stop.\n`
-    )
-  }
-
-  // Keep the process alive until interrupted.
-  await new Promise<void>((resolve) => {
-    const shutdown = () => {
-      server.stop()
-      resolve()
+    const eventsPath = options.events ?? join('.dbcli', 'proxy', 'events.jsonl')
+    const slowMs = Number(options.slowMs ?? 1000)
+    if (!Number.isFinite(slowMs) || slowMs < 0) {
+      throw new Error(`Invalid --slow-ms "${options.slowMs}". Expected a non-negative number`)
     }
-    process.on('SIGINT', shutdown)
-    process.on('SIGTERM', shutdown)
-  })
+
+    const server = new ProxyServer({
+      engine: resolved.engine,
+      listen: resolved.listen,
+      target: resolved.target,
+      eventsPath,
+      slowMs,
+      redact,
+      warn: (m) => process.stderr.write(`[proxy] ${m}\n`),
+    })
+
+    await server.start()
+
+    if (options.format === 'json') {
+      process.stdout.write(
+        JSON.stringify({
+          status: 'listening',
+          engine: resolved.engine,
+          listen: `${resolved.listen.host}:${resolved.listen.port}`,
+          target: `${resolved.target.host}:${resolved.target.port}`,
+          events: eventsPath,
+          redact,
+        }) + '\n'
+      )
+    } else {
+      process.stdout.write(
+        `dbcli proxy (${resolved.engine}) listening on ${resolved.listen.host}:${resolved.listen.port}` +
+          ` -> ${resolved.target.host}:${resolved.target.port}\n` +
+          `events: ${eventsPath} | slow-ms: ${slowMs} | redact: ${redact}\n` +
+          `Press Ctrl+C to stop.\n`
+      )
+    }
+
+    // Keep the process alive until interrupted.
+    await new Promise<void>((resolve) => {
+      const shutdown = () => {
+        process.removeListener('SIGINT', shutdown)
+        process.removeListener('SIGTERM', shutdown)
+        server.stop()
+        resolve()
+      }
+      process.on('SIGINT', shutdown)
+      process.on('SIGTERM', shutdown)
+    })
+  } catch (error) {
+    if (error instanceof Error) console.error(error.message)
+    process.exit(1)
+  }
 }
 
 function addCommonOptions(cmd: Command): Command {

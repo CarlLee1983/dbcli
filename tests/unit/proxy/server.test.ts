@@ -74,8 +74,9 @@ describe('ProxyServer (loopback)', () => {
     const echoed = await tcpRoundtrip('127.0.0.1', listenPort, new Uint8Array([10, 20, 30]))
     expect(Array.from(echoed)).toEqual([10, 20, 30]) // bytes survived the relay unchanged
 
-    // Allow async event writes to flush.
-    await Bun.sleep(50)
+    // Allow async event writes to flush (client called s.end(), so the close
+    // lifecycle should also have been recorded by now).
+    await Bun.sleep(100)
     expect(existsSync(eventsPath)).toBe(true)
     const types = readFileSync(eventsPath, 'utf8')
       .trim()
@@ -83,5 +84,6 @@ describe('ProxyServer (loopback)', () => {
       .map((l) => JSON.parse(l).type as string)
     expect(types).toContain('proxy_started')
     expect(types).toContain('session_started')
+    expect(types).toContain('session_ended')
   })
 })

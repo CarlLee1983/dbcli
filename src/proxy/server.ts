@@ -129,6 +129,10 @@ export class ProxyServer {
         clientBytes: relay?.clientBytes ?? 0,
         serverBytes: relay?.serverBytes ?? 0,
       }),
+      // Authoritative fail-loud handler for event-write failures: flips writeFailed
+      // (server stops accepting new sessions) and warns. ProxySession.enqueue also
+      // defensively catches — belt-and-suspenders so a rejection can't wedge the
+      // session's serialized write chain.
       writeEvent: (e) =>
         this.writer.write(e).catch((err) => {
           this.writeFailed = true
@@ -166,6 +170,16 @@ export class ProxyServer {
         onSignal: (s) => session.onSignal(s),
       })
 
+      // Install the live handlers SYNCHRONOUSLY right after relay construction and
+      // BEFORE flushing the early buffer. There must be no `await` between relay
+      // construction and this assignment, so no data/close event can interleave and
+      // run the stale `onClose` (which would leak the upstream socket).
+      const liveUpstream = upstream
+      client.data = {
+        onData: (chunk: Uint8Array) => relay?.fromClient(chunk),
+        onClose: () => void session.end('client_closed').then(() => liveUpstream.end()),
+      }
+
       // Flush any bytes that arrived before the upstream connection was ready.
       for (const chunk of earlyBuffer) {
         relay.fromClient(chunk)
@@ -179,11 +193,15 @@ export class ProxyServer {
       return
     }
 
-    // Update the close handler now that upstream is available.
-    client.data = {
-      onData: (chunk: Uint8Array) => relay?.fromClient(chunk),
-      onClose: () => void session.end('client_closed').then(() => upstream.end()),
+    // session.start() performs the first EventWriter write; if it throws, both
+    // sockets must be closed or the relay would forward forever (socket leak).
+    try {
+      await session.start()
+    } catch (err) {
+      this.o.warn(`session start failed: ${err instanceof Error ? err.message : String(err)}`)
+      client.end()
+      upstream.end()
+      return
     }
-    await session.start()
   }
 }

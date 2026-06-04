@@ -82,12 +82,21 @@ describe('dbcli proxy analyze (CLI)', () => {
     writeFileSync(path, evt('SELECT * FROM users WHERE id = 1', 50) + '\n')
 
     const proc = Bun.spawnSync([
-      'bun', 'run', 'src/cli.ts', 'proxy', 'analyze',
-      '--events', path, '--format', 'text', '--slow-ms', '10',
+      'bun',
+      'run',
+      'src/cli.ts',
+      'proxy',
+      'analyze',
+      '--events',
+      path,
+      '--format',
+      'text',
+      '--slow-ms',
+      '10',
     ])
     expect(proc.exitCode).toBe(0)
     const out = proc.stdout.toString()
-    expect(out).toContain('SUMMARY')      // text format applied (not JSON)
-    expect(out).toContain('slow=1')        // --slow-ms 10 => the 50ms query is slow
+    expect(out).toContain('SUMMARY') // text format applied (not JSON)
+    expect(out).toContain('slow=1') // --slow-ms 10 => the 50ms query is slow
   })
 })

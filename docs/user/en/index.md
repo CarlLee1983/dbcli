@@ -217,6 +217,10 @@ Each completed query appends one JSON object to the event log:
 
 SQL text is always stored in the event log. **Result rows are never stored.** Use `--redact literals` to mask string and number literals in SQL before logging (e.g. `WHERE id = ?` instead of `WHERE id = 42`).
 
+#### Analyze the event log offline
+
+`dbcli proxy analyze` — analyze the captured event log offline (no DB). `--format json|text`, `--top`, `--slow-ms`, `--n-plus-one`, `--no-include-rotated`. Produces summary, per-fingerprint stats (with suggested `explain` / `guide missing-index-for` commands), slowest queries, error groups, hot tables, and N+1 suspects.
+
 #### Limitations (v1)
 
 - **TLS**: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.

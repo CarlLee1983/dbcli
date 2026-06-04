@@ -1,9 +1,5 @@
 // tests/unit/proxy/event-fixtures.ts
-import type {
-  ProxyEvent,
-  QueryCompletedEvent,
-  QueryErroredEvent,
-} from '@/proxy/events'
+import type { ProxyEvent, QueryCompletedEvent, QueryErroredEvent } from '@/proxy/events'
 
 export function completed(overrides: Partial<QueryCompletedEvent> = {}): QueryCompletedEvent {
   return {
@@ -39,7 +35,7 @@ export function errored(overrides: Partial<QueryErroredEvent> = {}): QueryErrore
     queryId: 'qry_err_1',
     client: '127.0.0.1:1',
     target: '127.0.0.1:3306',
-    sql: "SELECT * FROM missing WHERE id = 1",
+    sql: 'SELECT * FROM missing WHERE id = 1',
     statement: 'SELECT',
     tables: ['missing'],
     durationMs: 5,

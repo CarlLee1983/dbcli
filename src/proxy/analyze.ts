@@ -95,8 +95,7 @@ export interface AnalyzeOptions {
   malformedLines: number
 }
 
-export const isCompleted = (e: ProxyEvent): e is QueryCompletedEvent =>
-  e.type === 'query_completed'
+export const isCompleted = (e: ProxyEvent): e is QueryCompletedEvent => e.type === 'query_completed'
 export const isErrored = (e: ProxyEvent): e is QueryErroredEvent => e.type === 'query_errored'
 
 /** Nearest-rank percentile. Returns 0 for an empty set. Does not mutate input. */
@@ -115,11 +114,7 @@ export function fingerprintSql(sql: string): string {
 
 /** Escape a string for embedding inside a double-quoted shell argument. */
 function shellEscapeDq(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/\$/g, '\\$')
-    .replace(/`/g, '\\`')
-    .replace(/"/g, '\\"')
+  return s.replace(/\\/g, '\\\\').replace(/\$/g, '\\$').replace(/`/g, '\\`').replace(/"/g, '\\"')
 }
 
 export function buildByFingerprint(
@@ -214,10 +209,7 @@ export function buildByFingerprint(
       const sql = shellEscapeDq(s.exampleSql)
       return {
         ...s,
-        suggestedCommands: [
-          `dbcli explain "${sql}"`,
-          `dbcli guide missing-index-for "${sql}"`,
-        ],
+        suggestedCommands: [`dbcli explain "${sql}"`, `dbcli guide missing-index-for "${sql}"`],
       }
     }
     return s
@@ -333,7 +325,10 @@ export function buildRepetition(events: ProxyEvent[], threshold: number): Repeti
 
 export function analyzeEvents(events: ProxyEvent[], opts: AnalyzeOptions): AnalysisReport {
   // ISO-8601 strings sort chronologically by lexical order.
-  const timestamps = events.map((e) => e.timestamp).filter(Boolean).sort()
+  const timestamps = events
+    .map((e) => e.timestamp)
+    .filter(Boolean)
+    .sort()
   const from = timestamps[0] ?? null
   const to = timestamps[timestamps.length - 1] ?? null
   return {
@@ -367,9 +362,8 @@ export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSumm
   const errors = errored.length
   const denom = queries + errors
   return {
-    sessions: new Set(
-      events.filter((e) => e.type === 'session_started').map((e) => e.sessionId)
-    ).size,
+    sessions: new Set(events.filter((e) => e.type === 'session_started').map((e) => e.sessionId))
+      .size,
     queries,
     errors,
     errorRate: denom === 0 ? 0 : errors / denom,

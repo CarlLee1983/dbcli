@@ -321,6 +321,9 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h4 class="mt-6 mb-2 font-bold">Privacy</h4>
             <p class="mb-4">SQL text is always stored in the event log. <strong>Result rows are never stored.</strong> Use <code>--redact literals</code> to mask string and number literals in SQL before logging (e.g. <code>WHERE id = ?</code> instead of <code>WHERE id = 42</code>).</p>
 
+            <h4 class="mt-6 mb-2 font-bold">Analyze the event log offline</h4>
+            <p class="mb-4"><code>dbcli proxy analyze</code> — analyze the captured event log offline (no DB). <code>--format json|text</code>, <code>--top</code>, <code>--slow-ms</code>, <code>--n-plus-one</code>, <code>--no-include-rotated</code>. Produces summary, per-fingerprint stats (with suggested <code>explain</code> / <code>guide missing-index-for</code> commands), slowest queries, error groups, hot tables, and N+1 suspects.</p>
+
             <h4 class="mt-6 mb-2 font-bold">Limitations (v1)</h4>
             <ul>
                 <li><strong>TLS</strong>: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.</li>

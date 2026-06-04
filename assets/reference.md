@@ -632,6 +632,10 @@ dbcli proxy postgresql  --listen 127.0.0.1:5434 --target 127.0.0.1:5432
 dbcli proxy mysql       --slow-ms 500 --redact literals   # redact SQL literals in events
 dbcli proxy mariadb     --events ./logs/proxy.jsonl        # custom event file
 dbcli proxy postgresql  --use prod                         # infer target from named connection
+
+dbcli proxy analyze                               # analyze .dbcli/proxy/events.jsonl (JSON)
+dbcli proxy analyze --format text --top 10        # human-readable top-10 view
+dbcli proxy analyze --slow-ms 200 --n-plus-one 5  # custom thresholds
 ```
 
 **Options:**
@@ -650,6 +654,9 @@ dbcli proxy postgresql  --use prod                         # infer target from n
 `slow` is `true` when `durationMs >= --slow-ms` (also printed as a terminal warning). `rowCount` is best-effort (PostgreSQL command tags; `null` for MySQL). TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
 
 **Log rotation:** all writes are serialized through one in-process chain (concurrent sessions never interleave partial lines). The event log auto-rotates to keep one rolling segment — when the next line would reach ~50 MiB or 200,000 entries, the current file is renamed to `<events>.1` (overwriting any prior segment) and a fresh file starts. Worst-case on-disk footprint is ~2× the byte cap.
+
+**`proxy analyze`** — offline aggregation of the event log (no DB). Flags: `--events <path>` (default `.dbcli/proxy/events.jsonl`), `--format json|text` (default `json`), `--top <n>` (default 20; text rows + suggestedCommands depth), `--slow-ms <ms>` (default 1000; recomputes slowCount), `--n-plus-one <n>` (default 10), `--no-include-rotated`. JSON report blocks: `summary`, `byFingerprint` (sorted by total time; SELECT entries in the top-N carry `suggestedCommands` for `explain` / `guide missing-index-for`), `slowest`, `errors`, `hotTables`, `repetition` (N+1 suspects). Reads the current log plus the rotated `.1` segment by default.
+
 **Engines:** MySQL / MariaDB / PostgreSQL
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
 

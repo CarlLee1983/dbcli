@@ -321,6 +321,9 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h4 class="mt-6 mb-2 font-bold">隱私</h4>
             <p class="mb-4">SQL 文字一律儲存於事件日誌。<strong>結果資料列永不儲存。</strong> 使用 <code>--redact literals</code> 可在記錄前遮罩 SQL 中的字串與數字字面值（例如 <code>WHERE id = ?</code> 取代 <code>WHERE id = 42</code>）。</p>
 
+            <h4 class="mt-6 mb-2 font-bold">離線分析事件日誌</h4>
+            <p class="mb-4"><code>dbcli proxy analyze</code> — 離線分析擷取的事件日誌（不連 DB）。<code>--format json|text</code>、<code>--top</code>、<code>--slow-ms</code>、<code>--n-plus-one</code>、<code>--no-include-rotated</code>。輸出總覽、各查詢指紋統計（附 <code>explain</code> / <code>guide missing-index-for</code> 建議指令）、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。</p>
+
             <h4 class="mt-6 mb-2 font-bold">限制（v1）</h4>
             <ul>
                 <li><strong>TLS</strong>：v1 不會解密 TLS。加密連線仍會產生 session 與位元組統計事件，但不會解析或顯示 SQL — 若需要查詢可見度，請在本機分析時停用 SSL。</li>

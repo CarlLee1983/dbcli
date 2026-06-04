@@ -1,6 +1,16 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables, buildRepetition, analyzeEvents } from '@/proxy/analyze'
+import {
+  percentile,
+  fingerprintSql,
+  buildSummary,
+  buildByFingerprint,
+  buildSlowest,
+  buildErrors,
+  buildHotTables,
+  buildRepetition,
+  analyzeEvents,
+} from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {

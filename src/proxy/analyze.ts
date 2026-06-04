@@ -267,6 +267,24 @@ export function buildErrors(events: ProxyEvent[]): ErrorGroup[] {
   return [...groups.values()].sort((a, b) => b.count - a.count)
 }
 
+export function buildHotTables(events: ProxyEvent[]): HotTable[] {
+  const map = new Map<string, { queryCount: number; totalDurationMs: number }>()
+  for (const e of events.filter(isCompleted)) {
+    for (const t of e.tables) {
+      let g = map.get(t)
+      if (!g) {
+        g = { queryCount: 0, totalDurationMs: 0 }
+        map.set(t, g)
+      }
+      g.queryCount += 1
+      g.totalDurationMs += e.durationMs
+    }
+  }
+  return [...map.entries()]
+    .map(([table, g]) => ({ table, queryCount: g.queryCount, totalDurationMs: g.totalDurationMs }))
+    .sort((a, b) => b.queryCount - a.queryCount)
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

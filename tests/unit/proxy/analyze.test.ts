@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -178,5 +178,20 @@ describe('buildErrors', () => {
     expect(groups[0]!.code).toBe('1146')
     expect(groups[0]!.count).toBe(2)
     expect(groups[0]!.fingerprint).toBe('SELECT * FROM x WHERE a = ?')
+  })
+})
+
+describe('buildHotTables', () => {
+  it('counts queries and total duration per table, sorted by count desc', () => {
+    const events = [
+      completed({ tables: ['users'], durationMs: 10 }),
+      completed({ tables: ['users', 'orders'], durationMs: 20 }),
+      completed({ tables: ['orders'], durationMs: 5 }),
+    ]
+    const hot = buildHotTables(events)
+    expect(hot[0]).toEqual({ table: 'users', queryCount: 2, totalDurationMs: 30 })
+    const orders = hot.find((h) => h.table === 'orders')!
+    expect(orders.queryCount).toBe(2)
+    expect(orders.totalDurationMs).toBe(25)
   })
 })

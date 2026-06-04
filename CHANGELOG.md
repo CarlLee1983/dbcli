@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`dbcli proxy` — `--slow-ms` 現在會在事件中標記 `slow`。** `query_completed` 事件新增 `slow: boolean` 欄位（`durationMs >= --slow-ms` 時為 `true`），與既有的終端警告一致。先前 `--slow-ms` 僅印出終端警告，但 CHANGELOG／使用者文件／reference 卻宣稱事件帶有 `slow` 旗標——此落差已修正。同步修正 `reference.md` 的 JSONL 事件範例(欄位名與實際 `query_completed` 結構對齊)，並更新 en／zh-TW 使用者文件(md + html)中對 `--slow-ms` 的描述。
+
 ## [1.26.0] - 2026-06-04 - Observability Proxy
 
 ### Added

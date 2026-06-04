@@ -32,6 +32,7 @@ function sampleEvent(sql: string): QueryCompletedEvent {
     requestBytes: 10,
     responseBytes: 20,
     rowCount: null,
+    slow: false,
     error: null,
     tags: [],
   }

@@ -201,7 +201,7 @@ Change your application's DB host/port to the `--listen` address and leave crede
 | `--listen` | — | Local address to bind (e.g. `127.0.0.1:3307`). Required. |
 | `--target` | — | Upstream DB address. Required unless `--use` is given. |
 | `--events` | `.dbcli/proxy/events.jsonl` | Path to the append-only JSONL event log. |
-| `--slow-ms` | `1000` | Queries exceeding this threshold (ms) are tagged `slow_query`. |
+| `--slow-ms` | `1000` | Queries whose `durationMs` reaches this threshold are flagged `slow: true` in the `query_completed` event (and a terminal warning is printed). |
 | `--redact` | `none` | `none` keeps SQL text as-is; `literals` masks string and number literals. |
 | `--format` | `text` | Console output format: `text` or `json`. |
 

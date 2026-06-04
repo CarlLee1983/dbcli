@@ -138,6 +138,7 @@ export class ProxySession {
     const durationMs = this.o.now() - q.startedAt
     const requestBytes = bytes.clientBytes - q.clientBytesAtStart
     const responseBytes = bytes.serverBytes - q.serverBytesAtStart
+    const slow = durationMs >= this.o.slowMs
     this.enqueue({
       version: PROXY_EVENT_VERSION,
       type: 'query_completed',
@@ -154,10 +155,11 @@ export class ProxySession {
       requestBytes,
       responseBytes,
       rowCount,
+      slow,
       error: null,
       tags: [...q.tags],
     })
-    if (durationMs >= this.o.slowMs) {
+    if (slow) {
       this.o.warn(`slow query (${durationMs}ms): ${q.sql.slice(0, 80)}`)
     }
     this.clientBytesAtBoundary = bytes.clientBytes

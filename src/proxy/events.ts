@@ -60,6 +60,8 @@ export interface QueryCompletedEvent extends BaseEvent {
   requestBytes: number
   responseBytes: number
   rowCount: number | null
+  /** True when durationMs >= the configured --slow-ms threshold. */
+  slow: boolean
   error: null
   tags: string[]
 }

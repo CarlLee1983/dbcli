@@ -643,11 +643,11 @@ dbcli proxy postgresql  --use prod                         # infer target from n
 - `--format <text|json>` — Startup / status output format (default: `text`)
 - `--use <name>` — Target a named v2 connection for `--target` inference
 
-**Event schema (JSONL):**
+**Event schema (JSONL):** each line is one event. `type` is one of `proxy_started`, `session_started`, `query_observed`, `query_completed`, `query_errored`, `session_ended`, `parse_error`. A representative `query_completed` line:
 ```json
-{ "ts": "<ISO-8601>", "engine": "mysql", "query": "SELECT …", "durationMs": 42, "bytes": 128, "slow": false, "error": null }
+{ "version": 1, "type": "query_completed", "timestamp": "<ISO-8601>", "engine": "mysql", "sessionId": "pxy_1", "queryId": "qry_pxy_1_1", "client": "127.0.0.1:54321", "target": "127.0.0.1:3306", "sql": "SELECT * FROM users WHERE id = 1", "statement": "SELECT", "tables": ["users"], "durationMs": 42, "requestBytes": 128, "responseBytes": 512, "rowCount": null, "slow": false, "error": null, "tags": [] }
 ```
-TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
+`slow` is `true` when `durationMs >= --slow-ms` (also printed as a terminal warning). `rowCount` is best-effort (PostgreSQL command tags; `null` for MySQL). TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
 **Engines:** MySQL / MariaDB / PostgreSQL
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
 

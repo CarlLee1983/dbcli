@@ -308,7 +308,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                     <tr><td><code>--listen</code></td><td>—</td><td>Local address to bind (e.g. <code>127.0.0.1:3307</code>). Required.</td></tr>
                     <tr><td><code>--target</code></td><td>—</td><td>Upstream DB address. Required unless <code>--use</code> is given.</td></tr>
                     <tr><td><code>--events</code></td><td><code>.dbcli/proxy/events.jsonl</code></td><td>Path to the append-only JSONL event log.</td></tr>
-                    <tr><td><code>--slow-ms</code></td><td><code>1000</code></td><td>Queries exceeding this threshold (ms) are tagged <code>slow_query</code>.</td></tr>
+                    <tr><td><code>--slow-ms</code></td><td><code>1000</code></td><td>Queries whose <code>durationMs</code> reaches this threshold are flagged <code>slow: true</code> in the <code>query_completed</code> event (and a terminal warning is printed).</td></tr>
                     <tr><td><code>--redact</code></td><td><code>none</code></td><td><code>none</code> keeps SQL text as-is; <code>literals</code> masks string and number literals.</td></tr>
                     <tr><td><code>--format</code></td><td><code>text</code></td><td>Console output format: <code>text</code> or <code>json</code>.</td></tr>
                 </tbody>

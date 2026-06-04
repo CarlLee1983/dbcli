@@ -116,13 +116,30 @@ describe('ProxySession', () => {
     }
   })
 
-  it('prints a slow-query warning when duration exceeds slowMs', async () => {
-    const { session, warnings, advance } = setup({ slowMs: 10 })
+  it('prints a slow-query warning and flags slow=true when duration exceeds slowMs', async () => {
+    const { session, events, warnings, advance } = setup({ slowMs: 10 })
     session.onSignal({ kind: 'query', sql: 'SELECT 1' })
     advance(25)
     session.onSignal({ kind: 'query_end', rowCount: null })
     await session.flush()
     expect(warnings.some((w) => w.includes('slow'))).toBe(true)
+    const completed = events.find((e) => e.type === 'query_completed')
+    if (completed?.type === 'query_completed') {
+      expect(completed.slow).toBe(true)
+    }
+  })
+
+  it('flags slow=false and emits no warning when duration is under slowMs', async () => {
+    const { session, events, warnings, advance } = setup({ slowMs: 100 })
+    session.onSignal({ kind: 'query', sql: 'SELECT 1' })
+    advance(5)
+    session.onSignal({ kind: 'query_end', rowCount: null })
+    await session.flush()
+    expect(warnings.some((w) => w.includes('slow'))).toBe(false)
+    const completed = events.find((e) => e.type === 'query_completed')
+    if (completed?.type === 'query_completed') {
+      expect(completed.slow).toBe(false)
+    }
   })
 
   it('emits a parse_error event for parse_error signals', async () => {

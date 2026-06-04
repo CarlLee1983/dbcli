@@ -201,7 +201,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307
 | `--listen` | — | 本機監聽位址（例如 `127.0.0.1:3307`）。必填。 |
 | `--target` | — | 上游 DB 位址。未指定 `--use` 時必填。 |
 | `--events` | `.dbcli/proxy/events.jsonl` | 僅追加的 JSONL 事件日誌路徑。 |
-| `--slow-ms` | `1000` | 超過此閾值（毫秒）的查詢將標記為 `slow_query`。 |
+| `--slow-ms` | `1000` | `durationMs` 達到此閾值（毫秒）的查詢會在 `query_completed` 事件中標記 `slow: true`（並印出終端警告）。 |
 | `--redact` | `none` | `none` 保留原始 SQL 文字；`literals` 遮罩字串與數字字面值。 |
 | `--format` | `text` | 終端輸出格式：`text` 或 `json`。 |
 

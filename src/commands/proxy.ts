@@ -176,7 +176,11 @@ function addCommonOptions(cmd: Command): Command {
     .option('--listen <host:port>', 'Local proxy listen address (required)')
     .option('--target <host:port>', 'Upstream DB target (optional when config provides host/port)')
     .option('--events <path>', 'Event JSONL path', join('.dbcli', 'proxy', 'events.jsonl'))
-    .option('--slow-ms <number>', 'Slow query terminal warning threshold (ms)', '1000')
+    .option(
+      '--slow-ms <number>',
+      'Threshold (ms); queries at/above it get slow:true in the event + a terminal warning',
+      '1000'
+    )
     .option('--redact <mode>', 'SQL redaction: none | literals', 'none')
     .option('--format <format>', 'Runtime status output: text | json', 'text')
 }

@@ -40,5 +40,6 @@ describe('TcpRelay', () => {
     relay.fromClient(new Uint8Array([1]))
     expect(Array.from(toUpstream[0]!)).toEqual([1]) // forwarded despite throw
     expect(signals.some((s) => s.kind === 'parse_error')).toBe(true)
+    expect(relay.clientBytes).toBe(1)
   })
 })

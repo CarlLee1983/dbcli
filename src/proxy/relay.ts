@@ -22,12 +22,14 @@ export class TcpRelay {
   }
 
   fromClient(bytes: Uint8Array): void {
+    // Write errors propagate — socket lifecycle is owned by the session/server layer.
     this.opts.writeToUpstream(bytes) // forward first
     this.clientBytes += bytes.length
     this.feed('client_to_server', bytes)
   }
 
   fromUpstream(bytes: Uint8Array): void {
+    // Write errors propagate — socket lifecycle is owned by the session/server layer.
     this.opts.writeToClient(bytes) // forward first
     this.serverBytes += bytes.length
     this.feed('server_to_client', bytes)

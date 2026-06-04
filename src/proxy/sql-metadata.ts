@@ -1,38 +1,13 @@
 // src/proxy/sql-metadata.ts
 
-export type StatementType =
-  | 'SELECT'
-  | 'INSERT'
-  | 'UPDATE'
-  | 'DELETE'
-  | 'CREATE'
-  | 'ALTER'
-  | 'DROP'
-  | 'TRUNCATE'
-  | 'BEGIN'
-  | 'COMMIT'
-  | 'ROLLBACK'
-  | 'SET'
-  | 'SHOW'
-  | 'USE'
-  | 'OTHER'
-
-const KNOWN: ReadonlySet<string> = new Set([
-  'SELECT',
-  'INSERT',
-  'UPDATE',
-  'DELETE',
-  'CREATE',
-  'ALTER',
-  'DROP',
-  'TRUNCATE',
-  'BEGIN',
-  'COMMIT',
-  'ROLLBACK',
-  'SET',
-  'SHOW',
-  'USE',
-])
+const KNOWN_KEYWORDS = [
+  'SELECT', 'INSERT', 'UPDATE', 'DELETE',
+  'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
+  'BEGIN', 'COMMIT', 'ROLLBACK', 'SET', 'SHOW', 'USE',
+] as const
+type KnownKeyword = (typeof KNOWN_KEYWORDS)[number]
+export type StatementType = KnownKeyword | 'OTHER'
+const KNOWN: ReadonlySet<string> = new Set(KNOWN_KEYWORDS)
 
 /** Best-effort statement-type detection from the leading keyword. */
 export function detectStatement(sql: string): StatementType {
@@ -47,12 +22,12 @@ const TABLE_RE =
 
 /** Best-effort table extraction. Returns deduped, schema-stripped names. */
 export function extractTables(sql: string): string[] {
-  const out: string[] = []
+  const seen = new Set<string>()
   for (const m of sql.matchAll(TABLE_RE)) {
     const name = m[2] ?? m[1]
-    if (name && !out.includes(name)) out.push(name)
+    if (name) seen.add(name)
   }
-  return out
+  return [...seen]
 }
 
 /** Replace single-quoted strings and numeric literals with '?'. Identifiers untouched. */

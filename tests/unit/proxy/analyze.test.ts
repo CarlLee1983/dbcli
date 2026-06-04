@@ -138,4 +138,16 @@ describe('buildByFingerprint', () => {
     const events = [completed({ sql: 'SELECT * FROM a WHERE id = ?', tables: ['a'] })]
     expect(buildByFingerprint(events, 1000, 20)[0]!.redacted).toBe(true)
   })
+
+  it('escapes $ and backtick in suggestedCommands', () => {
+    const stats = buildByFingerprint(
+      [completed({ sql: 'SELECT `c$x` FROM `t` WHERE id = 1', durationMs: 100 })],
+      1000,
+      20
+    )
+    expect(stats[0]!.suggestedCommands).toEqual([
+      'dbcli explain "SELECT \\`c\\$x\\` FROM \\`t\\` WHERE id = 1"',
+      'dbcli guide missing-index-for "SELECT \\`c\\$x\\` FROM \\`t\\` WHERE id = 1"',
+    ])
+  })
 })

@@ -115,7 +115,11 @@ export function fingerprintSql(sql: string): string {
 
 /** Escape a string for embedding inside a double-quoted shell argument. */
 function shellEscapeDq(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
+    .replace(/"/g, '\\"')
 }
 
 export function buildByFingerprint(

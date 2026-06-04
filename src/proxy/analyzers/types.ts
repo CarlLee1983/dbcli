@@ -20,6 +20,8 @@ export interface ProtocolAnalyzer {
 
 export type AnalyzerFactory = (deps: AnalyzerDeps) => ProtocolAnalyzer
 
+const UTF8 = new TextDecoder()
+
 /**
  * Byte accumulator with packet-framing helpers. Defensive by design:
  * callers peek/read before consuming so partial packets stay buffered until complete.
@@ -78,6 +80,6 @@ export class FrameBuffer {
 
   /** UTF-8 decode a slice. */
   text(start: number, end: number): string {
-    return new TextDecoder().decode(this.buf.subarray(start, end))
+    return UTF8.decode(this.buf.subarray(start, end))
   }
 }

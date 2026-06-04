@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables, buildRepetition } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -193,5 +193,36 @@ describe('buildHotTables', () => {
     const orders = hot.find((h) => h.table === 'orders')!
     expect(orders.queryCount).toBe(2)
     expect(orders.totalDurationMs).toBe(25)
+  })
+})
+
+describe('buildRepetition', () => {
+  it('flags (session, fingerprint) groups at or above the threshold', () => {
+    const base = (id: number, ts: string) =>
+      completed({
+        sessionId: 'pxy_1',
+        sql: `SELECT * FROM items WHERE order_id = ${id}`,
+        tables: ['items'],
+        durationMs: 2,
+        timestamp: ts,
+      })
+    const events = [
+      base(1, '2026-06-04T12:00:00.000Z'),
+      base(2, '2026-06-04T12:00:00.500Z'),
+      base(3, '2026-06-04T12:00:01.000Z'),
+      completed({ sessionId: 'pxy_2', sql: 'SELECT 1' }), // different session/fingerprint
+    ]
+    const rep = buildRepetition(events, 3)
+    expect(rep).toHaveLength(1)
+    expect(rep[0]!.count).toBe(3)
+    expect(rep[0]!.sessionId).toBe('pxy_1')
+    expect(rep[0]!.fingerprint).toBe('SELECT * FROM items WHERE order_id = ?')
+    expect(rep[0]!.spanMs).toBe(1000)
+    expect(rep[0]!.totalDurationMs).toBe(6)
+  })
+
+  it('does not flag groups below the threshold', () => {
+    const events = [completed({ sql: 'SELECT * FROM a WHERE id = 1' })]
+    expect(buildRepetition(events, 10)).toHaveLength(0)
   })
 })

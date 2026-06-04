@@ -285,6 +285,52 @@ export function buildHotTables(events: ProxyEvent[]): HotTable[] {
     .sort((a, b) => b.queryCount - a.queryCount)
 }
 
+export function buildRepetition(events: ProxyEvent[], threshold: number): RepetitionGroup[] {
+  interface Acc {
+    fingerprint: string
+    sessionId: string
+    tables: string[]
+    count: number
+    totalDurationMs: number
+    minTs: number
+    maxTs: number
+  }
+  const groups = new Map<string, Acc>()
+  for (const e of events.filter(isCompleted)) {
+    const fp = fingerprintSql(e.sql)
+    const key = `${e.sessionId} ${fp}`
+    const ts = Date.parse(e.timestamp)
+    let g = groups.get(key)
+    if (!g) {
+      g = {
+        fingerprint: fp,
+        sessionId: e.sessionId,
+        tables: e.tables,
+        count: 0,
+        totalDurationMs: 0,
+        minTs: ts,
+        maxTs: ts,
+      }
+      groups.set(key, g)
+    }
+    g.count += 1
+    g.totalDurationMs += e.durationMs
+    if (ts < g.minTs) g.minTs = ts
+    if (ts > g.maxTs) g.maxTs = ts
+  }
+  return [...groups.values()]
+    .filter((g) => g.count >= threshold)
+    .map((g) => ({
+      fingerprint: g.fingerprint,
+      sessionId: g.sessionId,
+      count: g.count,
+      spanMs: g.maxTs - g.minTs,
+      totalDurationMs: g.totalDurationMs,
+      tables: g.tables,
+    }))
+    .sort((a, b) => b.count - a.count)
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

@@ -217,6 +217,10 @@ dbcli proxy --use local --listen 127.0.0.1:3307
 
 SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使用 `--redact literals` 可在記錄前遮罩 SQL 中的字串與數字字面值（例如 `WHERE id = ?` 取代 `WHERE id = 42`）。
 
+#### 離線分析事件日誌
+
+`dbcli proxy analyze` — 離線分析擷取的事件日誌(不連 DB)。`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。輸出總覽、各查詢指紋統計(附 `explain` / `guide missing-index-for` 建議指令)、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。
+
 #### 限制（v1）
 
 - **TLS**：v1 不會解密 TLS。加密連線仍會產生 session 與位元組統計事件，但不會解析或顯示 SQL — 若需要查詢可見度，請在本機分析時停用 SSL。

@@ -62,6 +62,10 @@ const program = new Command()
   .option('-q, --quiet', 'Suppress non-essential output')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
   .option('--use <connection>', 'Use a specific named connection (v2 config)')
+  // Required so options after a sub-subcommand (e.g. `dbcli proxy analyze --events ...`)
+  // bind to the leaf command instead of being absorbed by an ancestor that shares the
+  // option name. Commander requires every ancestor in the chain to opt in.
+  .enablePositionalOptions()
 
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()

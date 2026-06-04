@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`dbcli proxy analyze` — 離線分析 proxy 事件日誌。** 讀取 `.dbcli/proxy/events.jsonl`(預設含 rotation `.1` 段),聚合成 agent-facing JSON 報告(`summary`、`byFingerprint`、`slowest`、`errors`、`hotTables`、`repetition`)或人類版 text。重用 `redactLiterals` 做 SQL 指紋正規化;對最吃總時間的 SELECT 指紋附上可執行的 `suggestedCommands`(`explain` / `guide missing-index-for`),僅輸出建議指令字串、不自動執行。旗標:`--events`、`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。不連資料庫。
+
 ### Changed
 
 - **`dbcli proxy` — 事件日誌寫入序列化 + 自動輪替。** `EventWriter` 現在將所有寫入(根事件 + 全部 session)序列化到單一 in-process promise 鏈,避免多連線併發時 JSONL 行交錯或 rotation 計數競態;單一寫入失敗只影響該呼叫端(維持 fail-loud),不會卡住後續寫入。新增自動輪替(重用抽出的中性工具 `src/utils/jsonl-rotation.ts`,audit logger 亦改用同一份):當下一行將達 ~50 MiB 或 200,000 筆時,目前檔案改名為 `<events>.1`(覆寫舊段),保留單一滾動段,最壞磁碟用量約為位元組上限的 2 倍。先前 `events.jsonl` 會無限制成長。

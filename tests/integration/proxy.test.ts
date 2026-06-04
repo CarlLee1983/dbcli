@@ -11,12 +11,7 @@ afterEach(() => {
   for (const c of cleanups.splice(0)) c()
 })
 
-interface Case {
-  engine: 'mysql' | 'mariadb' | 'postgresql'
-  host: string
-  port: number
-  connect: (host: string, port: number) => Promise<{ rowCount: number | null; close: () => Promise<void> }>
-}
+type ProxyEngine = 'mysql' | 'mariadb' | 'postgresql'
 
 const MYSQL = {
   host: process.env.MYSQL_HOST || '127.0.0.1',
@@ -33,7 +28,7 @@ const PG = {
   database: process.env.PG_DATABASE || 'dbcli_test',
 }
 
-async function startProxy(engine: Case['engine'], target: { host: string; port: number }) {
+async function startProxy(engine: ProxyEngine, target: { host: string; port: number }) {
   const dir = mkdtempSync(join(tmpdir(), `proxy-it-${engine}-`))
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
   const eventsPath = join(dir, 'events.jsonl')
@@ -61,6 +56,15 @@ function readEventTypes(path: string): string[] {
     .map((l) => JSON.parse(l).type as string)
 }
 
+async function waitForEvent(path: string, type: string, timeoutMs = 3000): Promise<void> {
+  const start = performance.now()
+  while (performance.now() - start < timeoutMs) {
+    if (readEventTypes(path).includes(type)) return
+    await Bun.sleep(20)
+  }
+  throw new Error(`Timed out waiting for event "${type}" in ${path}`)
+}
+
 describe('proxy integration: MySQL/MariaDB smoke', () => {
   it('app driver -> proxy -> MySQL -> SELECT 1, events recorded', async () => {
     if (!(await isDbReachable(MYSQL.host, MYSQL.port))) return // auto-skip
@@ -78,7 +82,7 @@ describe('proxy integration: MySQL/MariaDB smoke', () => {
     expect(Array.isArray(rows)).toBe(true)
     await conn.end()
 
-    await Bun.sleep(100)
+    await waitForEvent(eventsPath, 'query_observed')
     const types = readEventTypes(eventsPath)
     expect(types).toContain('proxy_started')
     expect(types).toContain('session_started')
@@ -105,7 +109,7 @@ describe('proxy integration: PostgreSQL smoke', () => {
     expect(res.rowCount).toBe(1)
     await client.end()
 
-    await Bun.sleep(100)
+    await waitForEvent(eventsPath, 'query_observed')
     const types = readEventTypes(eventsPath)
     expect(types).toContain('proxy_started')
     expect(types).toContain('session_started')
@@ -139,7 +143,7 @@ describe('proxy integration: slow-query warning + completion event', () => {
     await client.query('SELECT pg_sleep(0.05)')
     await client.end()
 
-    await Bun.sleep(150)
+    await waitForEvent(eventsPath, 'query_completed')
     const types = readEventTypes(eventsPath)
     expect(types).toContain('query_completed')
     expect(warnings.some((w) => w.includes('slow'))).toBe(true)

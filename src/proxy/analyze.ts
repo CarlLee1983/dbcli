@@ -331,6 +331,34 @@ export function buildRepetition(events: ProxyEvent[], threshold: number): Repeti
     .sort((a, b) => b.count - a.count)
 }
 
+export function analyzeEvents(events: ProxyEvent[], opts: AnalyzeOptions): AnalysisReport {
+  // ISO-8601 strings sort chronologically by lexical order.
+  const timestamps = events.map((e) => e.timestamp).filter(Boolean).sort()
+  const from = timestamps[0] ?? null
+  const to = timestamps[timestamps.length - 1] ?? null
+  return {
+    version: 1,
+    tool: 'proxy-analyze',
+    engine: events[0]?.engine ?? null,
+    source: {
+      files: opts.sourceFiles,
+      eventsRead: events.length,
+      malformedLines: opts.malformedLines,
+      timeSpan: {
+        from,
+        to,
+        durationMs: from && to ? Date.parse(to) - Date.parse(from) : 0,
+      },
+    },
+    summary: buildSummary(events, opts.slowMs),
+    byFingerprint: buildByFingerprint(events, opts.slowMs, opts.top),
+    slowest: buildSlowest(events, opts.top),
+    errors: buildErrors(events),
+    hotTables: buildHotTables(events),
+    repetition: buildRepetition(events, opts.nPlusOne),
+  }
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

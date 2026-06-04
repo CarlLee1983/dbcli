@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables, buildRepetition } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors, buildHotTables, buildRepetition, analyzeEvents } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -224,5 +224,39 @@ describe('buildRepetition', () => {
   it('does not flag groups below the threshold', () => {
     const events = [completed({ sql: 'SELECT * FROM a WHERE id = 1' })]
     expect(buildRepetition(events, 10)).toHaveLength(0)
+  })
+})
+
+describe('analyzeEvents', () => {
+  const opts = { slowMs: 1000, top: 20, nPlusOne: 10, sourceFiles: ['x.jsonl'], malformedLines: 2 }
+
+  it('assembles all blocks with source metadata and time span', () => {
+    const events = [
+      sessionStarted('pxy_1'),
+      completed({ durationMs: 10, timestamp: '2026-06-04T12:00:00.000Z' }),
+      completed({ durationMs: 30, timestamp: '2026-06-04T12:00:02.000Z' }),
+      errored({ timestamp: '2026-06-04T12:00:01.000Z' }),
+    ]
+    const r = analyzeEvents(events, opts)
+    expect(r.version).toBe(1)
+    expect(r.tool).toBe('proxy-analyze')
+    expect(r.engine).toBe('mysql')
+    expect(r.source.eventsRead).toBe(4)
+    expect(r.source.malformedLines).toBe(2)
+    expect(r.source.files).toEqual(['x.jsonl'])
+    expect(r.source.timeSpan.from).toBe('2026-06-04T12:00:00.000Z')
+    expect(r.source.timeSpan.to).toBe('2026-06-04T12:00:02.000Z')
+    expect(r.source.timeSpan.durationMs).toBe(2000)
+    expect(r.summary.queries).toBe(2)
+    expect(r.byFingerprint.length).toBeGreaterThan(0)
+    expect(r.slowest.length).toBe(2)
+  })
+
+  it('returns a valid zeroed report for no events', () => {
+    const r = analyzeEvents([], opts)
+    expect(r.engine).toBeNull()
+    expect(r.summary.queries).toBe(0)
+    expect(r.source.timeSpan).toEqual({ from: null, to: null, durationMs: 0 })
+    expect(r.byFingerprint).toEqual([])
   })
 })

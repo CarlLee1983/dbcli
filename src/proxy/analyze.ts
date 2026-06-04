@@ -224,6 +224,22 @@ export function buildByFingerprint(
   })
 }
 
+export function buildSlowest(events: ProxyEvent[], top: number): SlowQuery[] {
+  return events
+    .filter(isCompleted)
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, top)
+    .map((e) => ({
+      queryId: e.queryId,
+      durationMs: e.durationMs,
+      sql: e.sql,
+      statement: e.statement,
+      tables: e.tables,
+      timestamp: e.timestamp,
+      sessionId: e.sessionId,
+    }))
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

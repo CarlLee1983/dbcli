@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -149,5 +149,19 @@ describe('buildByFingerprint', () => {
       'dbcli explain "SELECT \\`c\\$x\\` FROM \\`t\\` WHERE id = 1"',
       'dbcli guide missing-index-for "SELECT \\`c\\$x\\` FROM \\`t\\` WHERE id = 1"',
     ])
+  })
+})
+
+describe('buildSlowest', () => {
+  it('returns the top-N completed queries by duration desc', () => {
+    const events = [
+      completed({ durationMs: 10, queryId: 'a' }),
+      completed({ durationMs: 90, queryId: 'b' }),
+      completed({ durationMs: 50, queryId: 'c' }),
+      errored({ durationMs: 999 }), // excluded
+    ]
+    const slow = buildSlowest(events, 2)
+    expect(slow.map((q) => q.queryId)).toEqual(['b', 'c'])
+    expect(slow[0]!.durationMs).toBe(90)
   })
 })

@@ -112,3 +112,32 @@ export function percentile(values: number[], p: number): number {
 export function fingerprintSql(sql: string): string {
   return redactLiterals(sql).replace(/\s+/g, ' ').trim()
 }
+
+export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
+  const completed = events.filter(isCompleted)
+  const errored = events.filter(isErrored)
+  const durations = completed.map((e) => e.durationMs)
+  const queries = completed.length
+  const errors = errored.length
+  const denom = queries + errors
+  return {
+    sessions: new Set(
+      events.filter((e) => e.type === 'session_started').map((e) => e.sessionId)
+    ).size,
+    queries,
+    errors,
+    errorRate: denom === 0 ? 0 : errors / denom,
+    parseErrors: events.filter((e) => e.type === 'parse_error').length,
+    slowCount: completed.filter((e) => e.durationMs >= slowMs).length,
+    latencyMs: {
+      p50: percentile(durations, 50),
+      p95: percentile(durations, 95),
+      p99: percentile(durations, 99),
+      max: durations.length ? Math.max(...durations) : 0,
+    },
+    bytes: {
+      request: completed.reduce((sum, e) => sum + e.requestBytes, 0),
+      response: completed.reduce((sum, e) => sum + e.responseBytes, 0),
+    },
+  }
+}

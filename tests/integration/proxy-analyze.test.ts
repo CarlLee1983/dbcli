@@ -75,4 +75,19 @@ describe('dbcli proxy analyze (CLI)', () => {
     expect(proc.exitCode).toBe(1)
     expect(proc.stderr.toString()).toContain('no events found')
   })
+
+  it('honors --slow-ms and --format text passed after the subcommand', () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    writeFileSync(path, evt('SELECT * FROM users WHERE id = 1', 50) + '\n')
+
+    const proc = Bun.spawnSync([
+      'bun', 'run', 'src/cli.ts', 'proxy', 'analyze',
+      '--events', path, '--format', 'text', '--slow-ms', '10',
+    ])
+    expect(proc.exitCode).toBe(0)
+    const out = proc.stdout.toString()
+    expect(out).toContain('SUMMARY')      // text format applied (not JSON)
+    expect(out).toContain('slow=1')        // --slow-ms 10 => the 50ms query is slow
+  })
 })

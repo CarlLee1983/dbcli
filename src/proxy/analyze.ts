@@ -113,6 +113,113 @@ export function fingerprintSql(sql: string): string {
   return redactLiterals(sql).replace(/\s+/g, ' ').trim()
 }
 
+/** Escape a string for embedding inside a double-quoted shell argument. */
+function shellEscapeDq(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+export function buildByFingerprint(
+  events: ProxyEvent[],
+  slowMs: number,
+  top: number
+): FingerprintStat[] {
+  const errorByFp = new Map<string, number>()
+  for (const e of events.filter(isErrored)) {
+    const fp = fingerprintSql(e.sql)
+    errorByFp.set(fp, (errorByFp.get(fp) ?? 0) + 1)
+  }
+
+  interface Acc {
+    fingerprint: string
+    statement: StatementType
+    tables: string[]
+    durations: number[]
+    reqBytes: number
+    respBytes: number
+    rows: number[]
+    slowCount: number
+    exampleSql: string
+    exampleQueryId: string
+    exampleDuration: number
+  }
+  const groups = new Map<string, Acc>()
+  for (const e of events.filter(isCompleted)) {
+    const fp = fingerprintSql(e.sql)
+    let g = groups.get(fp)
+    if (!g) {
+      g = {
+        fingerprint: fp,
+        statement: e.statement,
+        tables: e.tables,
+        durations: [],
+        reqBytes: 0,
+        respBytes: 0,
+        rows: [],
+        slowCount: 0,
+        exampleSql: e.sql,
+        exampleQueryId: e.queryId,
+        exampleDuration: e.durationMs,
+      }
+      groups.set(fp, g)
+    }
+    g.durations.push(e.durationMs)
+    g.reqBytes += e.requestBytes
+    g.respBytes += e.responseBytes
+    if (e.rowCount !== null) g.rows.push(e.rowCount)
+    if (e.durationMs >= slowMs) g.slowCount += 1
+    if (e.durationMs > g.exampleDuration) {
+      g.exampleDuration = e.durationMs
+      g.exampleSql = e.sql
+      g.exampleQueryId = e.queryId
+    }
+  }
+
+  const stats: FingerprintStat[] = [...groups.values()].map((g) => {
+    const count = g.durations.length
+    const total = g.durations.reduce((sum, d) => sum + d, 0)
+    return {
+      fingerprint: g.fingerprint,
+      statement: g.statement,
+      tables: g.tables,
+      count,
+      durationMs: {
+        total,
+        avg: count ? Math.round(total / count) : 0,
+        p95: percentile(g.durations, 95),
+        max: count ? Math.max(...g.durations) : 0,
+      },
+      rowsAvg: g.rows.length
+        ? Math.round(g.rows.reduce((sum, r) => sum + r, 0) / g.rows.length)
+        : 0,
+      bytesAvg: {
+        request: count ? Math.round(g.reqBytes / count) : 0,
+        response: count ? Math.round(g.respBytes / count) : 0,
+      },
+      errorCount: errorByFp.get(g.fingerprint) ?? 0,
+      slowCount: g.slowCount,
+      redacted: redactLiterals(g.exampleSql) === g.exampleSql,
+      exampleSql: g.exampleSql,
+      exampleQueryId: g.exampleQueryId,
+    }
+  })
+
+  stats.sort((a, b) => b.durationMs.total - a.durationMs.total)
+
+  return stats.map((s, i) => {
+    if (i < top && s.statement === 'SELECT') {
+      const sql = shellEscapeDq(s.exampleSql)
+      return {
+        ...s,
+        suggestedCommands: [
+          `dbcli explain "${sql}"`,
+          `dbcli guide missing-index-for "${sql}"`,
+        ],
+      }
+    }
+    return s
+  })
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -74,5 +74,68 @@ describe('buildSummary', () => {
     const s = buildSummary(events, 1000)
     expect(s.bytes).toEqual({ request: 4, response: 6 })
     expect(s.latencyMs.max).toBe(30)
+  })
+})
+
+describe('buildByFingerprint', () => {
+  it('groups by fingerprint and sorts by total duration desc', () => {
+    const events = [
+      completed({ sql: 'SELECT * FROM a WHERE id = 1', tables: ['a'], durationMs: 5 }),
+      completed({ sql: 'SELECT * FROM a WHERE id = 2', tables: ['a'], durationMs: 7 }),
+      completed({ sql: 'SELECT * FROM b WHERE id = 1', tables: ['b'], durationMs: 100 }),
+    ]
+    const stats = buildByFingerprint(events, 1000, 20)
+    expect(stats).toHaveLength(2)
+    expect(stats[0]!.fingerprint).toBe('SELECT * FROM b WHERE id = ?')
+    const a = stats.find((s) => s.tables[0] === 'a')!
+    expect(a.count).toBe(2)
+    expect(a.durationMs.total).toBe(12)
+  })
+
+  it('keeps the slowest occurrence as the example and counts errors per fingerprint', () => {
+    const events = [
+      completed({ sql: 'SELECT * FROM a WHERE id = 1', durationMs: 5, queryId: 'q1' }),
+      completed({ sql: 'SELECT * FROM a WHERE id = 2', durationMs: 50, queryId: 'q2' }),
+      errored({ sql: 'SELECT * FROM a WHERE id = 9', tables: ['a'] }),
+    ]
+    const [a] = buildByFingerprint(events, 1000, 20)
+    expect(a!.exampleQueryId).toBe('q2')
+    expect(a!.exampleSql).toBe('SELECT * FROM a WHERE id = 2')
+    expect(a!.errorCount).toBe(1)
+  })
+
+  it('attaches suggestedCommands only to top-N SELECT fingerprints', () => {
+    const events = [
+      completed({ sql: 'SELECT * FROM a WHERE id = 1', statement: 'SELECT', durationMs: 100 }),
+      completed({
+        sql: 'UPDATE b SET x = 1 WHERE id = 1',
+        statement: 'UPDATE',
+        tables: ['b'],
+        durationMs: 200,
+      }),
+    ]
+    const stats = buildByFingerprint(events, 1000, 20)
+    const sel = stats.find((s) => s.statement === 'SELECT')!
+    const upd = stats.find((s) => s.statement === 'UPDATE')!
+    expect(sel.suggestedCommands).toEqual([
+      'dbcli explain "SELECT * FROM a WHERE id = 1"',
+      'dbcli guide missing-index-for "SELECT * FROM a WHERE id = 1"',
+    ])
+    expect(upd.suggestedCommands).toBeUndefined()
+  })
+
+  it('does not attach suggestedCommands beyond the top cutoff', () => {
+    const events = [
+      completed({ sql: 'SELECT * FROM a WHERE id = 1', durationMs: 100, tables: ['a'] }),
+      completed({ sql: 'SELECT * FROM b WHERE id = 1', durationMs: 10, tables: ['b'] }),
+    ]
+    const stats = buildByFingerprint(events, 1000, 1) // top=1
+    expect(stats[0]!.suggestedCommands).toBeDefined()
+    expect(stats[1]!.suggestedCommands).toBeUndefined()
+  })
+
+  it('flags redacted when the example SQL has no substitutable literals', () => {
+    const events = [completed({ sql: 'SELECT * FROM a WHERE id = ?', tables: ['a'] })]
+    expect(buildByFingerprint(events, 1000, 20)[0]!.redacted).toBe(true)
   })
 })

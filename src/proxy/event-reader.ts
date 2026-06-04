@@ -27,8 +27,10 @@ export async function readEvents(path: string, opts: ReadOptions): Promise<ReadR
     let raw: string
     try {
       raw = await readFile(file, 'utf8')
-    } catch {
-      continue // file doesn't exist — skip
+    } catch (err) {
+      // ENOENT is expected: a rotated `.1` segment (or the log itself) may not exist.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+      continue
     }
     files.push(file)
     for (const rawLine of raw.split('\n')) {

@@ -73,4 +73,10 @@ describe('readEvents', () => {
     expect(r.files).toEqual([])
     expect(r.events).toEqual([])
   })
+
+  it('propagates non-ENOENT read errors (e.g. a directory path)', async () => {
+    const dir = tmp()
+    // Reading a directory as a file throws EISDIR, which must not be silently skipped.
+    await expect(readEvents(dir, { includeRotated: false })).rejects.toThrow()
+  })
 })

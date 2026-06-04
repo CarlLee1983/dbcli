@@ -6,6 +6,9 @@ import { validateFormat } from '@/utils/validation'
 import { join } from 'node:path'
 import { ProxyServer } from '@/proxy/server'
 import type { ProxyEngine, RedactMode } from '@/proxy/events'
+import { readEvents } from '@/proxy/event-reader'
+import { analyzeEvents } from '@/proxy/analyze'
+import { renderAnalysisText } from '@/proxy/analyze-render'
 
 const SUPPORTED: ProxyEngine[] = ['mysql', 'mariadb', 'postgresql']
 const ALLOWED_FORMATS = ['text', 'json'] as const
@@ -196,6 +199,84 @@ for (const engine of SUPPORTED) {
     }
   )
 }
+
+const ANALYZE_FORMATS = ['json', 'text'] as const
+
+interface ProxyAnalyzeOptions {
+  events?: string
+  format?: string
+  top?: string
+  slowMs?: string
+  nPlusOne?: string
+  includeRotated?: boolean
+}
+
+function parseNonNegInt(value: string | undefined, flag: string, fallback: number): number {
+  if (value === undefined) return fallback
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`Invalid --${flag} "${value}". Expected a non-negative integer`)
+  }
+  return n
+}
+
+const ANALYZE_EVENTS_DEFAULT = join('.dbcli', 'proxy', 'events.jsonl')
+
+async function runAnalyze(options: ProxyAnalyzeOptions, cmd: Command): Promise<void> {
+  try {
+    // Commander assigns options shared with the parent (e.g. --events, --format) to the
+    // parent command when they appear after the subcommand name. Fall through to parent
+    // opts for any option that landed at its default value.
+    const parentOpts = (cmd.parent?.opts() ?? {}) as Record<string, unknown>
+    const resolveStr = (local: string | undefined, parentKey: string, def: string): string =>
+      local !== def ? (local ?? def) : ((parentOpts[parentKey] as string | undefined) ?? def)
+
+    const eventsPath = resolveStr(options.events, 'events', ANALYZE_EVENTS_DEFAULT)
+    const format = resolveStr(options.format, 'format', 'json')
+
+    validateFormat(format, ANALYZE_FORMATS, 'proxy analyze')
+    const top = parseNonNegInt(options.top, 'top', 20)
+    const slowMs = parseNonNegInt(options.slowMs, 'slow-ms', 1000)
+    const nPlusOne = parseNonNegInt(options.nPlusOne, 'n-plus-one', 10)
+
+    const { events, malformedLines, files } = await readEvents(eventsPath, {
+      includeRotated: options.includeRotated !== false,
+    })
+    if (files.length === 0) {
+      throw new Error(`no events found at ${eventsPath}; run 'dbcli proxy <engine>' first`)
+    }
+
+    const report = analyzeEvents(events, {
+      slowMs,
+      top,
+      nPlusOne,
+      sourceFiles: files,
+      malformedLines,
+    })
+
+    if (format === 'text') {
+      process.stdout.write(renderAnalysisText(report, top) + '\n')
+    } else {
+      process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+    }
+  } catch (error) {
+    if (error instanceof Error) console.error(error.message)
+    process.exit(1)
+  }
+}
+
+proxyCommand
+  .command('analyze')
+  .description('Analyze a proxy event log offline (no DB connection)')
+  .option('--events <path>', 'Event JSONL path', ANALYZE_EVENTS_DEFAULT)
+  .option('--format <format>', 'Output format: json | text', 'json')
+  .option('--top <number>', 'Rows shown in text + suggestedCommands depth', '20')
+  .option('--slow-ms <number>', 'Slow-query threshold (ms) for slowCount', '1000')
+  .option('--n-plus-one <number>', 'Min repeats per (session,fingerprint) to flag N+1', '10')
+  .option('--no-include-rotated', 'Do not merge the rotated <events>.1 segment')
+  .action(async (options: ProxyAnalyzeOptions, cmd: Command) => {
+    await runAnalyze(options, cmd)
+  })
 
 // No-subcommand form: infer engine from config / --use.
 addCommonOptions(proxyCommand).action(async (options: ProxyCliOptions, command: Command) => {

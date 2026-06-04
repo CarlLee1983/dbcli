@@ -1,6 +1,6 @@
 // tests/unit/proxy/analyze.test.ts
 import { describe, it, expect } from 'bun:test'
-import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest } from '@/proxy/analyze'
+import { percentile, fingerprintSql, buildSummary, buildByFingerprint, buildSlowest, buildErrors } from '@/proxy/analyze'
 import { completed, errored, sessionStarted } from './event-fixtures'
 
 describe('percentile', () => {
@@ -163,5 +163,20 @@ describe('buildSlowest', () => {
     const slow = buildSlowest(events, 2)
     expect(slow.map((q) => q.queryId)).toEqual(['b', 'c'])
     expect(slow[0]!.durationMs).toBe(90)
+  })
+})
+
+describe('buildErrors', () => {
+  it('groups errors by code+message and sorts by count desc', () => {
+    const events = [
+      errored({ error: { code: '1146', message: 'no table' }, sql: 'SELECT * FROM x WHERE a = 1' }),
+      errored({ error: { code: '1146', message: 'no table' }, sql: 'SELECT * FROM x WHERE a = 2' }),
+      errored({ error: { code: '1064', message: 'syntax' }, sql: 'SELEC 1' }),
+    ]
+    const groups = buildErrors(events)
+    expect(groups).toHaveLength(2)
+    expect(groups[0]!.code).toBe('1146')
+    expect(groups[0]!.count).toBe(2)
+    expect(groups[0]!.fingerprint).toBe('SELECT * FROM x WHERE a = ?')
   })
 })

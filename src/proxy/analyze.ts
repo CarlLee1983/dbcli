@@ -240,6 +240,33 @@ export function buildSlowest(events: ProxyEvent[], top: number): SlowQuery[] {
     }))
 }
 
+export function buildErrors(events: ProxyEvent[]): ErrorGroup[] {
+  interface Acc {
+    code: string | null
+    message: string
+    count: number
+    fingerprint: string
+    exampleSql: string
+  }
+  const groups = new Map<string, Acc>()
+  for (const e of events.filter(isErrored)) {
+    const key = `${e.error.code ?? ''} ${e.error.message}`
+    let g = groups.get(key)
+    if (!g) {
+      g = {
+        code: e.error.code,
+        message: e.error.message,
+        count: 0,
+        fingerprint: fingerprintSql(e.sql),
+        exampleSql: e.sql,
+      }
+      groups.set(key, g)
+    }
+    g.count += 1
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count)
+}
+
 export function buildSummary(events: ProxyEvent[], slowMs: number): AnalysisSummary {
   const completed = events.filter(isCompleted)
   const errored = events.filter(isErrored)

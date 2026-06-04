@@ -711,6 +711,29 @@ dbcli assert "SELECT * FROM orders" --against base.json --tolerance 0.01
 
 ---
 
+#### `dbcli proxy`（v1.26）
+
+MySQL、MariaDB、PostgreSQL 的本地端**開發觀測代理**。將現有應用程式指向代理埠；dbcli 會將所有 TCP 訊框中繼至真實資料庫，並把每個查詢的事件（查詢文字、延遲、傳輸位元組、錯誤）附加到 `.dbcli/proxy/events.jsonl`。僅作觀測使用，不執行任何改寫或封鎖。非正式環境閘道。
+
+**子指令：** `mysql` · `mariadb` · `postgresql`
+
+```bash
+dbcli proxy mysql      --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5434 --target 127.0.0.1:5432
+dbcli proxy mysql      --slow-ms 500 --redact literals
+dbcli proxy mariadb    --events ./logs/proxy.jsonl
+```
+
+**選項：**
+- `--listen <addr:port>` — 代理監聽位址
+- `--target <addr:port>` — 真實資料庫位址（若省略則從 config / `--use` 推斷）
+- `--events <path>` — JSONL 事件記錄路徑（預設：`.dbcli/proxy/events.jsonl`）
+- `--slow-ms <ms>` — 超過此門檻的事件標記 `slow: true`（預設：`1000`）
+- `--redact none|literals` — 從事件記錄中剔除 SQL 字面值（預設：`none`）
+- `--format text|json` — 啟動輸出格式（預設：`text`）
+
+---
+
 #### `dbcli status`
 
 顯示不含連線憑證的設定摘要（權限、資料庫系統、黑名單筆數、設定中繼版本），適合提供給 AI 代理。

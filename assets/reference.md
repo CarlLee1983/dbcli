@@ -616,6 +616,41 @@ dbcli assert "SELECT count(*) FROM orders" --expect "value > 100" --no-fail   # 
 **Engines:** SQL only (PostgreSQL / MySQL / MariaDB)
 **Permission:** query-only+
 
+### proxy
+
+Local-development **observability proxy** for MySQL/MariaDB/PostgreSQL. Inserts dbcli
+between an existing application and its real database: it listens on a configurable
+port, relays TCP frames to the real server, and appends one JSONL event per query to
+`.dbcli/proxy/events.jsonl`. Observe-only — no rewrite, blocking, or query modification.
+Not intended as a production gateway.
+
+**Subcommands:** `mysql` · `mariadb` · `postgresql`
+
+```bash
+dbcli proxy mysql       --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql  --listen 127.0.0.1:5434 --target 127.0.0.1:5432
+dbcli proxy mysql       --slow-ms 500 --redact literals   # redact SQL literals in events
+dbcli proxy mariadb     --events ./logs/proxy.jsonl        # custom event file
+dbcli proxy postgresql  --use prod                         # infer target from named connection
+```
+
+**Options:**
+- `--listen <addr:port>` — Address dbcli will listen on (e.g. `127.0.0.1:3307`)
+- `--target <addr:port>` — Address of the real database server to relay to. If omitted, inferred from the active (or `--use`) connection config.
+- `--events <path>` — JSONL event log path (default: `.dbcli/proxy/events.jsonl`)
+- `--slow-ms <ms>` — Threshold in milliseconds above which events are flagged `slow: true` (default: `1000`)
+- `--redact <none|literals>` — Whether to strip SQL literal values from event records (default: `none`; `literals` removes quoted strings and numbers)
+- `--format <text|json>` — Startup / status output format (default: `text`)
+- `--use <name>` — Target a named v2 connection for `--target` inference
+
+**Event schema (JSONL):**
+```json
+{ "ts": "<ISO-8601>", "engine": "mysql", "query": "SELECT …", "durationMs": 42, "bytes": 128, "slow": false, "error": null }
+```
+TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
+**Engines:** MySQL / MariaDB / PostgreSQL
+**Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
+
 ### status
 
 Show current configuration status (safe for AI agents, no credentials exposed).

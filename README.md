@@ -812,6 +812,29 @@ dbcli assert "SELECT * FROM orders" --against base.json --tolerance 0.01
 
 ---
 
+#### `dbcli proxy` (v1.26)
+
+Local-development **observability proxy** for MySQL, MariaDB, and PostgreSQL. Point an existing app at the proxy port; dbcli relays all TCP frames to the real database and appends one JSONL event per query to `.dbcli/proxy/events.jsonl`. Observe-only — no rewrite or blocking. Not a production gateway.
+
+**Subcommands:** `mysql` · `mariadb` · `postgresql`
+
+```bash
+dbcli proxy mysql      --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5434 --target 127.0.0.1:5432
+dbcli proxy mysql      --slow-ms 500 --redact literals
+dbcli proxy mariadb    --events ./logs/proxy.jsonl
+```
+
+**Options:**
+- `--listen <addr:port>` — Proxy listen address
+- `--target <addr:port>` — Real database address (inferred from config / `--use` if omitted)
+- `--events <path>` — JSONL event log (default: `.dbcli/proxy/events.jsonl`)
+- `--slow-ms <ms>` — Flag events slower than this threshold as `slow: true` (default: `1000`)
+- `--redact none|literals` — Strip SQL literal values from event records (default: `none`)
+- `--format text|json` — Startup output format (default: `text`)
+
+---
+
 #### `dbcli status`
 
 Show non-sensitive configuration summary (permission level, DB system, blacklist counts, config metadata version). Does not print connection credentials — intended for AI agents.

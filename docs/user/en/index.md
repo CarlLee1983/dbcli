@@ -16,6 +16,7 @@
     *   [Snippet Management (Saved Queries)](#snippet-management)
     *   [Health, Diagnostics & Recovery](#health-diagnostics--recovery)
     *   [Data Verification (snapshot, assert)](#data-verification)
+    *   [Local Observability Proxy](#proxy)
     *   [Advanced Tools (DDL, Shell, AI Skills)](#advanced-tools)
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
 6.  [Database Engine Support Matrix](#database-engine-support-matrix)
@@ -174,6 +175,53 @@ Verify data-processing correctness — capture a result fingerprint, then assert
 | :--- | :--- |
 | `snapshot <query>` | Captures a **result fingerprint** (row count + per-column null/distinct/min/max/sum + an order-independent checksum). Default file `.dbcli/snapshots/snap-<timestamp>.json`; also `--out`, `--rows`, `--stdout`. Blacklisted columns are masked at the source, so the snapshot is safe to store. Use as a baseline for `assert --against`. |
 | `assert <query>` | Verifies an **invariant**; exits 1 on failure unless `--no-fail`. `--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`, `--vs <query> --compare rows\|value` (reconcile two queries), `--against <snapshot> --tolerance <pct>` (drift vs a baseline; `0` = exact checksum). |
+
+<!-- doc-key: proxy -->
+### dbcli proxy — Local Observability Proxy
+
+A local development observability proxy — point an existing application at the proxy port and `dbcli` relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. **This is NOT a production gateway.** Use it during local development only.
+
+#### Quick Start
+
+```bash
+# Explicit upstream/downstream
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
+
+# Infer engine + target from a named connection
+dbcli proxy --use local --listen 127.0.0.1:3307
+```
+
+Change your application's DB host/port to the `--listen` address and leave credentials unchanged. The proxy is fully transparent — the application behaves identically.
+
+#### Options
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--listen` | — | Local address to bind (e.g. `127.0.0.1:3307`). Required. |
+| `--target` | — | Upstream DB address. Required unless `--use` is given. |
+| `--events` | `.dbcli/proxy/events.jsonl` | Path to the append-only JSONL event log. |
+| `--slow-ms` | `1000` | Queries exceeding this threshold (ms) are tagged `slow_query`. |
+| `--redact` | `none` | `none` keeps SQL text as-is; `literals` masks string and number literals. |
+| `--format` | `text` | Console output format: `text` or `json`. |
+
+#### Event Log (JSONL)
+
+Each completed query appends one JSON object to the event log:
+
+```json
+{"version":1,"type":"query_completed","timestamp":"2026-06-04T12:00:00.000Z","engine":"mysql","sessionId":"pxy_1","queryId":"qry_pxy_1_1","client":"127.0.0.1:54321","target":"127.0.0.1:3306","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"error":null,"tags":[]}
+```
+
+#### Privacy
+
+SQL text is always stored in the event log. **Result rows are never stored.** Use `--redact literals` to mask string and number literals in SQL before logging (e.g. `WHERE id = ?` instead of `WHERE id = 42`).
+
+#### Limitations (v1)
+
+- **TLS**: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.
+- **MySQL prepared/binary protocol**: Best-effort parsing; tagged `prepared_statement`.
+- **PostgreSQL extended query protocol**: Best-effort parsing; tagged `extended_protocol` or `parse_partial`.
 
 <!-- doc-key: advanced-tools -->
 ### Advanced Tools

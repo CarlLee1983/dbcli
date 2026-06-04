@@ -16,6 +16,7 @@
     *   [Snippet 管理 (儲存的查詢)](#snippet-管理)
     *   [健康度、診斷與修復](#健康度診斷與修復)
     *   [資料驗證 (snapshot, assert)](#資料驗證)
+    *   [本機觀察型 Proxy](#proxy)
     *   [進階工具 (DDL, Shell, AI Skills)](#進階工具)
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
 6.  [資料庫引擎支援矩陣](#資料庫引擎支援矩陣)
@@ -174,6 +175,53 @@ dbcli delete 'user:42' --where '' --plan --format json
 | :--- | :--- |
 | `snapshot <query>` | 擷取**結果指紋**(rowCount + 每欄 null/distinct/min/max/sum + 順序無關的 checksum)。預設檔案 `.dbcli/snapshots/snap-<timestamp>.json`;另有 `--out`、`--rows`、`--stdout`。黑名單欄位在源頭遮罩,快照可安全保存。作為 `assert --against` 的基準。 |
 | `assert <query>` | 驗證**不變量**;失敗時 exit 1,除非 `--no-fail`。`--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`、`--vs <query> --compare rows\|value`(對帳兩個查詢)、`--against <snapshot> --tolerance <pct>`(對基準的漂移;`0` = 完全相符 checksum)。 |
+
+<!-- doc-key: proxy -->
+### dbcli proxy — 本機觀察型 Proxy
+
+本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，`dbcli` 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。**這不是正式環境閘道器。** 僅限本機開發環境使用。
+
+#### 快速開始
+
+```bash
+# 明確指定上游 / 下游
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
+
+# 從具名連線推斷引擎與目標
+dbcli proxy --use local --listen 127.0.0.1:3307
+```
+
+將應用程式的 DB host/port 改為 `--listen` 位址，憑證維持不變。Proxy 完全透明 — 應用程式的行為與直連相同。
+
+#### 選項
+
+| 選項 | 預設值 | 說明 |
+| :--- | :--- | :--- |
+| `--listen` | — | 本機監聽位址（例如 `127.0.0.1:3307`）。必填。 |
+| `--target` | — | 上游 DB 位址。未指定 `--use` 時必填。 |
+| `--events` | `.dbcli/proxy/events.jsonl` | 僅追加的 JSONL 事件日誌路徑。 |
+| `--slow-ms` | `1000` | 超過此閾值（毫秒）的查詢將標記為 `slow_query`。 |
+| `--redact` | `none` | `none` 保留原始 SQL 文字；`literals` 遮罩字串與數字字面值。 |
+| `--format` | `text` | 終端輸出格式：`text` 或 `json`。 |
+
+#### 事件日誌（JSONL）
+
+每筆完成的查詢會在事件日誌中附加一個 JSON 物件：
+
+```json
+{"version":1,"type":"query_completed","timestamp":"2026-06-04T12:00:00.000Z","engine":"mysql","sessionId":"pxy_1","queryId":"qry_pxy_1_1","client":"127.0.0.1:54321","target":"127.0.0.1:3306","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"error":null,"tags":[]}
+```
+
+#### 隱私
+
+SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使用 `--redact literals` 可在記錄前遮罩 SQL 中的字串與數字字面值（例如 `WHERE id = ?` 取代 `WHERE id = 42`）。
+
+#### 限制（v1）
+
+- **TLS**：v1 不會解密 TLS。加密連線仍會產生 session 與位元組統計事件，但不會解析或顯示 SQL — 若需要查詢可見度，請在本機分析時停用 SSL。
+- **MySQL prepared/binary 協議**：盡力解析；標記為 `prepared_statement`。
+- **PostgreSQL extended query 協議**：盡力解析；標記為 `extended_protocol` 或 `parse_partial`。
 
 <!-- doc-key: advanced-tools -->
 ### 進階工具

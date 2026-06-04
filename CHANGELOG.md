@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-06-04 - Observability Proxy
+
+### Added
+
+- **`dbcli proxy` — 本地端開發觀測代理。** 支援 `mysql`、`mariadb`、`postgresql` 子指令。在現有應用程式與真實資料庫之間插入一個中繼層:dbcli 監聽 `--listen` 埠,轉送流量至 `--target`(或 `--use` / config 目標推斷),並把每個查詢的查詢文字、延遲、傳輸位元組、錯誤等事件以 JSONL 格式附加到 `.dbcli/proxy/events.jsonl`(可用 `--events` 覆寫)。僅作觀測使用,不執行任何改寫或封鎖。旗標:`--listen <addr:port>`、`--target <addr:port>`、`--events <path>`(預設 `.dbcli/proxy/events.jsonl`)、`--slow-ms <ms>`(預設 `1000`,超過即在事件中標記 `slow: true`)、`--redact none|literals`(預設 `none`;`literals` 會從事件裡剔除 SQL 字面值)、`--format text|json`(預設 `text`)。TLS 在 v1 僅轉送不解密;prepared / extended 協定為盡力標記。
+
 ## [1.25.0] - 2026-05-29 - Data-Layer Verification
 
 ### Added

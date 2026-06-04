@@ -648,6 +648,8 @@ dbcli proxy postgresql  --use prod                         # infer target from n
 { "version": 1, "type": "query_completed", "timestamp": "<ISO-8601>", "engine": "mysql", "sessionId": "pxy_1", "queryId": "qry_pxy_1_1", "client": "127.0.0.1:54321", "target": "127.0.0.1:3306", "sql": "SELECT * FROM users WHERE id = 1", "statement": "SELECT", "tables": ["users"], "durationMs": 42, "requestBytes": 128, "responseBytes": 512, "rowCount": null, "slow": false, "error": null, "tags": [] }
 ```
 `slow` is `true` when `durationMs >= --slow-ms` (also printed as a terminal warning). `rowCount` is best-effort (PostgreSQL command tags; `null` for MySQL). TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
+
+**Log rotation:** all writes are serialized through one in-process chain (concurrent sessions never interleave partial lines). The event log auto-rotates to keep one rolling segment — when the next line would reach ~50 MiB or 200,000 entries, the current file is renamed to `<events>.1` (overwriting any prior segment) and a fresh file starts. Worst-case on-disk footprint is ~2× the byte cap.
 **Engines:** MySQL / MariaDB / PostgreSQL
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`dbcli proxy` — 事件日誌寫入序列化 + 自動輪替。** `EventWriter` 現在將所有寫入(根事件 + 全部 session)序列化到單一 in-process promise 鏈,避免多連線併發時 JSONL 行交錯或 rotation 計數競態;單一寫入失敗只影響該呼叫端(維持 fail-loud),不會卡住後續寫入。新增自動輪替(重用抽出的中性工具 `src/utils/jsonl-rotation.ts`,audit logger 亦改用同一份):當下一行將達 ~50 MiB 或 200,000 筆時,目前檔案改名為 `<events>.1`(覆寫舊段),保留單一滾動段,最壞磁碟用量約為位元組上限的 2 倍。先前 `events.jsonl` 會無限制成長。
+
 ### Fixed
 
 - **`dbcli proxy` — `--slow-ms` 現在會在事件中標記 `slow`。** `query_completed` 事件新增 `slow: boolean` 欄位（`durationMs >= --slow-ms` 時為 `true`），與既有的終端警告一致。先前 `--slow-ms` 僅印出終端警告，但 CHANGELOG／使用者文件／reference 卻宣稱事件帶有 `slow` 旗標——此落差已修正。同步修正 `reference.md` 的 JSONL 事件範例(欄位名與實際 `query_completed` 結構對齊)，並更新 en／zh-TW 使用者文件(md + html)中對 `--slow-ms` 的描述。

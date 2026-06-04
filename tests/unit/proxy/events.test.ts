@@ -82,4 +82,72 @@ describe('EventWriter', () => {
     const w = new EventWriter({ path, redact: 'none' })
     await expect(w.write(sampleEvent('SELECT 1'))).rejects.toThrow()
   })
+
+  it('serializes concurrent writes without interleaving partial lines', async () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    const w = new EventWriter({ path, redact: 'none' })
+    const N = 50
+    // Fire all writes without awaiting each — they share one writer.
+    await Promise.all(Array.from({ length: N }, (_, i) => w.write(sampleEvent(`SELECT ${i}`))))
+    const lines = readFileSync(path, 'utf8').trim().split('\n')
+    expect(lines.length).toBe(N)
+    // Every line must be a complete, parseable JSON object (no torn writes).
+    const sqls = lines.map((l) => (JSON.parse(l) as QueryCompletedEvent).sql)
+    expect(new Set(sqls).size).toBe(N)
+  })
+
+  it('rotates to <path>.1 when the entry cap is exceeded', async () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    const w = new EventWriter({ path, redact: 'none', rotation: { maxBytes: 1e9, maxEntries: 1 } })
+    await w.write(sampleEvent('SELECT 1')) // current: 1 entry
+    await w.write(sampleEvent('SELECT 2')) // entriesAfter = 2 > 1 -> rotate, then write
+    expect(existsSync(`${path}.1`)).toBe(true)
+    const current = readFileSync(path, 'utf8').trim().split('\n')
+    const previous = readFileSync(`${path}.1`, 'utf8').trim().split('\n')
+    expect(current.length).toBe(1)
+    expect(previous.length).toBe(1)
+    expect((JSON.parse(current[0]!) as QueryCompletedEvent).sql).toBe('SELECT 2')
+    expect((JSON.parse(previous[0]!) as QueryCompletedEvent).sql).toBe('SELECT 1')
+  })
+
+  it('rotates when the byte cap is exceeded', async () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    const lineBytes = Buffer.byteLength(JSON.stringify(sampleEvent('SELECT 1')) + '\n', 'utf8')
+    const w = new EventWriter({
+      path,
+      redact: 'none',
+      rotation: { maxBytes: lineBytes + 1, maxEntries: 1e9 },
+    })
+    await w.write(sampleEvent('SELECT 1')) // size = lineBytes < cap -> no rotate
+    await w.write(sampleEvent('SELECT 1')) // lineBytes + lineBytes >= cap -> rotate
+    expect(existsSync(`${path}.1`)).toBe(true)
+    expect(readFileSync(path, 'utf8').trim().split('\n').length).toBe(1)
+  })
+
+  it('resyncs counters from an existing log so a restart rotates correctly', async () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    const first = new EventWriter({
+      path,
+      redact: 'none',
+      rotation: { maxBytes: 1e9, maxEntries: 2 },
+    })
+    await first.write(sampleEvent('SELECT 1'))
+    await first.write(sampleEvent('SELECT 2')) // 2 entries on disk, at the cap
+
+    // New writer instance (simulating a process restart) over the same file.
+    const second = new EventWriter({
+      path,
+      redact: 'none',
+      rotation: { maxBytes: 1e9, maxEntries: 2 },
+    })
+    await second.write(sampleEvent('SELECT 3')) // entriesAfter = 2+1 = 3 > 2 -> rotate
+    expect(existsSync(`${path}.1`)).toBe(true)
+    const current = readFileSync(path, 'utf8').trim().split('\n')
+    expect(current.length).toBe(1)
+    expect((JSON.parse(current[0]!) as QueryCompletedEvent).sql).toBe('SELECT 3')
+  })
 })

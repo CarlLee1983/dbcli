@@ -186,13 +186,11 @@ export const proxyCommand = new Command()
   .description('Local development observability proxy for MySQL/MariaDB/PostgreSQL (observe-only)')
 
 for (const engine of SUPPORTED) {
-  addCommonOptions(
-    proxyCommand
-      .command(engine)
-      .description(`Proxy a ${engine} connection`)
-  ).action(async (options: ProxyCliOptions, command: Command) => {
-    await runProxy(engine, options, command)
-  })
+  addCommonOptions(proxyCommand.command(engine).description(`Proxy a ${engine} connection`)).action(
+    async (options: ProxyCliOptions, command: Command) => {
+      await runProxy(engine, options, command)
+    }
+  )
 }
 
 // No-subcommand form: infer engine from config / --use.

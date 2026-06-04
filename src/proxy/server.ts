@@ -60,13 +60,13 @@ export class ProxyServer {
       target: `${this.o.target.host}:${this.o.target.port}`,
     })
 
-    const self = this
     this.listener = Bun.listen({
       hostname: this.o.listen.host,
       port: this.o.listen.port,
       socket: {
-        open(client: BunTcpSocket) {
-          void self.handleConnection(client)
+        // Arrow fn so `this` is the ProxyServer instance (avoids aliasing `this`).
+        open: (client: BunTcpSocket) => {
+          void this.handleConnection(client)
         },
         data(client: BunTcpSocket, chunk: Uint8Array) {
           const ctx = client.data as { onData?: (c: Uint8Array) => void } | undefined

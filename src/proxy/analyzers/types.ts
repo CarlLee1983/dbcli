@@ -75,7 +75,7 @@ export class FrameBuffer {
     const b1 = this.buf[offset + 1] ?? 0
     const b2 = this.buf[offset + 2] ?? 0
     const b3 = this.buf[offset + 3] ?? 0
-    return (b0 << 24 >>> 0) + (b1 << 16) + (b2 << 8) + b3
+    return ((b0 << 24) >>> 0) + (b1 << 16) + (b2 << 8) + b3
   }
 
   /** UTF-8 decode a slice. */

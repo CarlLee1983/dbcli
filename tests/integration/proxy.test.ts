@@ -138,7 +138,14 @@ describe('proxy integration: slow-query warning + completion event', () => {
     const port = (server as unknown as { port: number }).port
 
     const { Client } = await import('pg')
-    const client = new Client({ host: '127.0.0.1', port, user: PG.user, password: PG.password, database: PG.database, ssl: false })
+    const client = new Client({
+      host: '127.0.0.1',
+      port,
+      user: PG.user,
+      password: PG.password,
+      database: PG.database,
+      ssl: false,
+    })
     await client.connect()
     await client.query('SELECT pg_sleep(0.05)')
     await client.end()

@@ -1,9 +1,20 @@
 // src/proxy/sql-metadata.ts
 
 const KNOWN_KEYWORDS = [
-  'SELECT', 'INSERT', 'UPDATE', 'DELETE',
-  'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
-  'BEGIN', 'COMMIT', 'ROLLBACK', 'SET', 'SHOW', 'USE',
+  'SELECT',
+  'INSERT',
+  'UPDATE',
+  'DELETE',
+  'CREATE',
+  'ALTER',
+  'DROP',
+  'TRUNCATE',
+  'BEGIN',
+  'COMMIT',
+  'ROLLBACK',
+  'SET',
+  'SHOW',
+  'USE',
 ] as const
 type KnownKeyword = (typeof KNOWN_KEYWORDS)[number]
 export type StatementType = KnownKeyword | 'OTHER'

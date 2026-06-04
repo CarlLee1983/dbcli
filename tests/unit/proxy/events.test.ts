@@ -39,11 +39,11 @@ function sampleEvent(sql: string): QueryCompletedEvent {
 
 describe('applyRedaction', () => {
   it('redacts sql when mode=literals', () => {
-    const e = applyRedaction(sampleEvent("SELECT * FROM users WHERE id=5"), 'literals')
+    const e = applyRedaction(sampleEvent('SELECT * FROM users WHERE id=5'), 'literals')
     expect(e.sql).toBe('SELECT * FROM users WHERE id=?')
   })
   it('leaves sql untouched when mode=none', () => {
-    const e = applyRedaction(sampleEvent("SELECT 1"), 'none')
+    const e = applyRedaction(sampleEvent('SELECT 1'), 'none')
     expect(e.sql).toBe('SELECT 1')
   })
 })
@@ -67,7 +67,7 @@ describe('EventWriter', () => {
     const dir = tmp()
     const path = join(dir, 'events.jsonl')
     const w = new EventWriter({ path, redact: 'literals' })
-    await w.write(sampleEvent("SELECT * FROM users WHERE id=5"))
+    await w.write(sampleEvent('SELECT * FROM users WHERE id=5'))
     const line = readFileSync(path, 'utf8').trim()
     expect(JSON.parse(line).sql).toBe('SELECT * FROM users WHERE id=?')
   })

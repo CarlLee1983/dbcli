@@ -52,13 +52,23 @@ describe('resolveProxyConfig', () => {
 
   it('throws when listen is missing', () => {
     expect(() =>
-      resolveProxyConfig({ subcommandEngine: 'mysql', listen: undefined, target: '127.0.0.1:3306', connection: null })
+      resolveProxyConfig({
+        subcommandEngine: 'mysql',
+        listen: undefined,
+        target: '127.0.0.1:3306',
+        connection: null,
+      })
     ).toThrow(/--listen/)
   })
 
   it('throws when no target can be determined', () => {
     expect(() =>
-      resolveProxyConfig({ subcommandEngine: 'mysql', listen: '127.0.0.1:3307', target: undefined, connection: null })
+      resolveProxyConfig({
+        subcommandEngine: 'mysql',
+        listen: '127.0.0.1:3307',
+        target: undefined,
+        connection: null,
+      })
     ).toThrow(/--target/)
   })
 

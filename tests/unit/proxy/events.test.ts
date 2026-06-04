@@ -1,6 +1,6 @@
 // tests/unit/proxy/events.test.ts
 import { describe, it, expect, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventWriter, applyRedaction, type QueryCompletedEvent } from '@/proxy/events'
@@ -70,5 +70,15 @@ describe('EventWriter', () => {
     await w.write(sampleEvent("SELECT * FROM users WHERE id=5"))
     const line = readFileSync(path, 'utf8').trim()
     expect(JSON.parse(line).sql).toBe('SELECT * FROM users WHERE id=?')
+  })
+
+  it('propagates write errors instead of swallowing them (fail-loud)', async () => {
+    // Point at a path whose parent cannot be created (a file used as a directory).
+    const dir = tmp()
+    const filePath = join(dir, 'blocker')
+    writeFileSync(filePath, 'x') // now `blocker` is a file
+    const path = join(filePath, 'events.jsonl') // mkdir(dirname) will fail: ENOTDIR
+    const w = new EventWriter({ path, redact: 'none' })
+    await expect(w.write(sampleEvent('SELECT 1'))).rejects.toThrow()
   })
 })

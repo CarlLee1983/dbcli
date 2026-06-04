@@ -21,6 +21,14 @@ export function createMysqlAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
   let awaitingResponse = false
 
   function handleClientPacket(payloadStart: number, payloadLen: number): void {
+    // Gate: only command-phase packets have sequence id 0. The HandshakeResponse41
+    // (and any auth-switch continuation) uses seq >= 1. Without this check, a
+    // HandshakeResponse whose capability-flags low byte equals 0x03/0x16/0x17 would
+    // be misinterpreted as a COM_QUERY/COM_STMT_*, leaking username + scrambled
+    // password into the events log. This mirrors the startupSeen gate in the PG analyzer.
+    const seqId = clientBuf.byteAt(payloadStart - 1) // offset 3 in the 4-byte header
+    if (seqId !== 0) return
+
     const cmd = clientBuf.byteAt(payloadStart)
     if (cmd === undefined) return
     if (cmd === COM_QUERY) {

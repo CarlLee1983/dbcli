@@ -88,6 +88,48 @@ describe('proxy integration: MySQL/MariaDB smoke', () => {
     expect(types).toContain('session_started')
     expect(types).toContain('query_observed')
   })
+
+  it('never captures MySQL auth credentials as a query', async () => {
+    if (!(await isDbReachable(MYSQL.host, MYSQL.port))) return
+    const { eventsPath, port } = await startProxy('mysql', { host: MYSQL.host, port: MYSQL.port })
+    const mysql = await import('mysql2/promise')
+    const conn = await mysql.createConnection({
+      host: '127.0.0.1',
+      port,
+      user: MYSQL.user,
+      password: MYSQL.password,
+      database: MYSQL.database,
+    })
+    await conn.query('SELECT 1 AS one')
+    await conn.end()
+    await waitForEvent(eventsPath, 'query_observed')
+    const raw = readFileSync(eventsPath, 'utf8')
+    // The plaintext password must never appear in any persisted event
+    expect(raw).not.toContain(MYSQL.password) // 'testpass' must never be persisted
+  })
+
+  it('app driver -> proxy -> MariaDB (mysql engine) -> SELECT 1, events recorded', async () => {
+    if (!(await isDbReachable(MYSQL.host, MYSQL.port))) return // auto-skip: MariaDB reuses MySQL container
+    const { eventsPath, port } = await startProxy('mariadb', { host: MYSQL.host, port: MYSQL.port })
+
+    const mysql = await import('mysql2/promise')
+    const conn = await mysql.createConnection({
+      host: '127.0.0.1',
+      port,
+      user: MYSQL.user,
+      password: MYSQL.password,
+      database: MYSQL.database,
+    })
+    const [rows] = await conn.query('SELECT 1 AS one')
+    expect(Array.isArray(rows)).toBe(true)
+    await conn.end()
+
+    await waitForEvent(eventsPath, 'query_observed')
+    const types = readEventTypes(eventsPath)
+    expect(types).toContain('proxy_started')
+    expect(types).toContain('session_started')
+    expect(types).toContain('query_observed')
+  })
 })
 
 describe('proxy integration: PostgreSQL smoke', () => {

@@ -82,4 +82,13 @@ describe('mysql analyzer', () => {
     expect(signals.some((s) => s.kind === 'tag' && s.tag === 'parse_partial')).toBe(true)
     expect(signals.some((s) => s.kind === 'query_end')).toBe(true)
   })
+
+  it('does not treat an auth handshake packet (seq != 0) as a COM_QUERY', () => {
+    const { signals, analyzer } = collect()
+    // HandshakeResponse41: seq id 1, capability low-byte == 0x03 collides with COM_QUERY.
+    // Without the seq-id gate this would be misinterpreted as a query, leaking credentials.
+    const fakeAuth = Array.from(new TextEncoder().encode('root\0secretpassword'))
+    analyzer.onData('client_to_server', pkt(1, [0x03, ...fakeAuth]))
+    expect(signals.some((s) => s.kind === 'query')).toBe(false)
+  })
 })

@@ -10,6 +10,7 @@ export interface ProxySessionOptions {
   client: string
   target: string
   slowMs: number
+  /** Monotonic clock for durations (e.g. performance.now()); NOT wall-clock. Event `timestamp` uses Date separately. */
   now: () => number
   getBytes: () => { clientBytes: number; serverBytes: number }
   writeEvent: (event: ProxyEvent) => Promise<void>
@@ -37,9 +38,18 @@ export class ProxySession {
     this.o = opts
   }
 
-  /** Chain a write so flush() can await all in-flight event writes. */
+  /**
+   * Chain a write so flush() can await all in-flight event writes. A failed
+   * write is caught here so a single rejection can never wedge the chain and
+   * silently drop all later events; the server layer owns the fail-loud policy
+   * (it stops accepting new sessions when its writeEvent wrapper sees an error).
+   */
   private enqueue(event: ProxyEvent): void {
-    this.pending = this.pending.then(() => this.o.writeEvent(event))
+    this.pending = this.pending
+      .then(() => this.o.writeEvent(event))
+      .catch((err) => {
+        this.o.warn(`event write failed: ${err instanceof Error ? err.message : String(err)}`)
+      })
   }
 
   async start(): Promise<void> {
@@ -91,6 +101,10 @@ export class ProxySession {
   private beginQuery(sql: string, tags: string[]): void {
     const bytes = this.o.getBytes()
     this.queryCounter += 1
+    // Best-effort byte accounting: requestBytes is measured from the previous
+    // query boundary (clientBytesAtBoundary) rather than the live counter, so any
+    // client bytes that arrive between the previous query's completion and this
+    // query's observation (pipelining, protocol overhead) are attributed here.
     this.active = {
       queryId: `qry_${this.o.sessionId}_${this.queryCounter}`,
       sql,
@@ -111,7 +125,9 @@ export class ProxySession {
       sql,
       statement: detectStatement(sql),
       tables: extractTables(sql),
-      tags: this.active.tags,
+      // Snapshot: later `tag` signals push onto active.tags; the emitted event
+      // must not be mutated after it is enqueued.
+      tags: [...this.active.tags],
     })
   }
 
@@ -139,7 +155,7 @@ export class ProxySession {
       responseBytes,
       rowCount,
       error: null,
-      tags: q.tags,
+      tags: [...q.tags],
     })
     if (durationMs >= this.o.slowMs) {
       this.o.warn(`slow query (${durationMs}ms): ${q.sql.slice(0, 80)}`)
@@ -158,7 +174,7 @@ export class ProxySession {
       timestamp: new Date().toISOString(),
       engine: this.o.engine,
       sessionId: this.o.sessionId,
-      queryId: q?.queryId ?? `qry_${this.o.sessionId}_err`,
+      queryId: q?.queryId ?? `qry_${this.o.sessionId}_err_${++this.queryCounter}`,
       client: this.o.client,
       target: this.o.target,
       sql: q?.sql ?? '',
@@ -169,7 +185,7 @@ export class ProxySession {
       responseBytes: q ? bytes.serverBytes - q.serverBytesAtStart : 0,
       rowCount: null,
       error: { code, message },
-      tags: q?.tags ?? [],
+      tags: q ? [...q.tags] : [],
     })
     this.clientBytesAtBoundary = bytes.clientBytes
     this.active = null

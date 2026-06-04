@@ -60,6 +60,49 @@ describe('ProxySession', () => {
     }
   })
 
+  it('records tag signals on the eventual query_completed event', async () => {
+    const { session, events } = setup()
+    session.onSignal({ kind: 'query', sql: 'SELECT 1' })
+    session.onSignal({ kind: 'tag', tag: 'prepared_statement' })
+    session.onSignal({ kind: 'query_end', rowCount: null })
+    await session.flush()
+    const completed = events.find((e) => e.type === 'query_completed')
+    expect(completed).toBeDefined()
+    if (completed?.type === 'query_completed') {
+      expect(completed.tags).toContain('prepared_statement')
+    }
+    // The earlier query_observed snapshot must NOT have been mutated by the later tag.
+    const observed = events.find((e) => e.type === 'query_observed')
+    if (observed?.type === 'query_observed') {
+      expect(observed.tags).not.toContain('prepared_statement')
+    }
+  })
+
+  it('resets the byte-delta boundary between sequential queries', async () => {
+    const { session, events, setBytes } = setup()
+    setBytes(0, 0)
+    session.onSignal({ kind: 'query', sql: 'SELECT 1' })
+    setBytes(20, 100)
+    session.onSignal({ kind: 'query_end', rowCount: null })
+    // second query: bytes accrue from the previous boundary
+    session.onSignal({ kind: 'query', sql: 'SELECT 2' })
+    setBytes(35, 250)
+    session.onSignal({ kind: 'query_end', rowCount: null })
+    await session.flush()
+    const completed = events.filter((e) => e.type === 'query_completed')
+    expect(completed.length).toBe(2)
+    const first = completed[0]
+    const second = completed[1]
+    if (first?.type === 'query_completed') {
+      expect(first.requestBytes).toBe(20)
+      expect(first.responseBytes).toBe(100)
+    }
+    if (second?.type === 'query_completed') {
+      expect(second.requestBytes).toBe(15) // 35 - 20 (previous boundary)
+      expect(second.responseBytes).toBe(150) // 250 - 100 (snapshot at q2 start)
+    }
+  })
+
   it('emits query_errored on error signal', async () => {
     const { session, events } = setup()
     session.onSignal({ kind: 'query', sql: 'SELECT bad' })

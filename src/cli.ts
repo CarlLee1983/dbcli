@@ -35,6 +35,7 @@ import { upgradeCommand, formatUpdateHint, formatSkillUpdateReminder } from './c
 import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
 import { useCommand } from './commands/use'
+import { proxyCommand } from './commands/proxy'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
@@ -345,6 +346,7 @@ program.addCommand(queriesCommand)
 program.addCommand(explainCommand)
 program.addCommand(snapshotCommand)
 program.addCommand(assertCommand)
+program.addCommand(proxyCommand)
 
 // Show help when no command provided
 if (!process.argv.slice(2).length) {

@@ -316,14 +316,14 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
 
             <h4 class="mt-6 mb-2 font-bold">Event Log (JSONL)</h4>
             <p class="mb-2">Each completed query appends one JSON object to the event log:</p>
-            <pre><code>{"event":"query_completed","engine":"mysql","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"tags":[]}</code></pre>
+            <pre><code>{"version":1,"type":"query_completed","timestamp":"2026-06-04T12:00:00.000Z","engine":"mysql","sessionId":"pxy_1","queryId":"qry_pxy_1_1","client":"127.0.0.1:54321","target":"127.0.0.1:3306","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"error":null,"tags":[]}</code></pre>
 
             <h4 class="mt-6 mb-2 font-bold">Privacy</h4>
             <p class="mb-4">SQL text is always stored in the event log. <strong>Result rows are never stored.</strong> Use <code>--redact literals</code> to mask string and number literals in SQL before logging (e.g. <code>WHERE id = ?</code> instead of <code>WHERE id = 42</code>).</p>
 
             <h4 class="mt-6 mb-2 font-bold">Limitations (v1)</h4>
             <ul>
-                <li><strong>TLS</strong>: TLS connections are relayed byte-for-byte but not decrypted; SQL text is not visible and the event is tagged <code>tls_unparsed</code>. Disable SSL locally to gain full SQL visibility.</li>
+                <li><strong>TLS</strong>: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.</li>
                 <li><strong>MySQL prepared/binary protocol</strong>: Best-effort parsing; tagged <code>prepared_statement</code>.</li>
                 <li><strong>PostgreSQL extended query protocol</strong>: Best-effort parsing; tagged <code>extended_protocol</code> or <code>parse_partial</code>.</li>
             </ul>

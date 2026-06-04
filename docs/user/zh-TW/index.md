@@ -210,7 +210,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307
 每筆完成的查詢會在事件日誌中附加一個 JSON 物件：
 
 ```json
-{"event":"query_completed","engine":"mysql","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"tags":[]}
+{"version":1,"type":"query_completed","timestamp":"2026-06-04T12:00:00.000Z","engine":"mysql","sessionId":"pxy_1","queryId":"qry_pxy_1_1","client":"127.0.0.1:54321","target":"127.0.0.1:3306","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"error":null,"tags":[]}
 ```
 
 #### 隱私
@@ -219,7 +219,7 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 
 #### 限制（v1）
 
-- **TLS**：TLS 連線以位元組為單位轉發，不進行解密；SQL 文字不可見，事件標記為 `tls_unparsed`。如需完整 SQL 可視性，請在本機停用 SSL。
+- **TLS**：v1 不會解密 TLS。加密連線仍會產生 session 與位元組統計事件，但不會解析或顯示 SQL — 若需要查詢可見度，請在本機分析時停用 SSL。
 - **MySQL prepared/binary 協議**：盡力解析；標記為 `prepared_statement`。
 - **PostgreSQL extended query 協議**：盡力解析；標記為 `extended_protocol` 或 `parse_partial`。
 

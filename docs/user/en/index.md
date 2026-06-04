@@ -210,7 +210,7 @@ Change your application's DB host/port to the `--listen` address and leave crede
 Each completed query appends one JSON object to the event log:
 
 ```json
-{"event":"query_completed","engine":"mysql","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"tags":[]}
+{"version":1,"type":"query_completed","timestamp":"2026-06-04T12:00:00.000Z","engine":"mysql","sessionId":"pxy_1","queryId":"qry_pxy_1_1","client":"127.0.0.1:54321","target":"127.0.0.1:3306","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"error":null,"tags":[]}
 ```
 
 #### Privacy
@@ -219,7 +219,7 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 
 #### Limitations (v1)
 
-- **TLS**: TLS connections are relayed byte-for-byte but not decrypted; SQL text is not visible and the event is tagged `tls_unparsed`. Disable SSL locally to gain full SQL visibility.
+- **TLS**: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.
 - **MySQL prepared/binary protocol**: Best-effort parsing; tagged `prepared_statement`.
 - **PostgreSQL extended query protocol**: Best-effort parsing; tagged `extended_protocol` or `parse_partial`.
 

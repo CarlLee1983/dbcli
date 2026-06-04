@@ -59,10 +59,27 @@ describe('mysql analyzer', () => {
     if (q?.kind === 'query') expect(q.sql).toBe('SELECT 12345')
   })
 
-  it('tags prepared statements', () => {
+  it('tags prepared statements on the query signal', () => {
     const { signals, analyzer } = collect()
     const body = Array.from(new TextEncoder().encode('SELECT ?'))
     analyzer.onData('client_to_server', pkt(0, [0x16, ...body])) // COM_STMT_PREPARE
+    const q = signals.find((s) => s.kind === 'query')
+    expect(q).toBeDefined()
+    if (q?.kind === 'query') expect(q.tags).toContain('prepared_statement')
+  })
+
+  it('tags COM_STMT_EXECUTE without emitting a query signal', () => {
+    const { signals, analyzer } = collect()
+    analyzer.onData('client_to_server', pkt(0, [0x17, 0x01, 0x00, 0x00, 0x00])) // COM_STMT_EXECUTE
     expect(signals.some((s) => s.kind === 'tag' && s.tag === 'prepared_statement')).toBe(true)
+    expect(signals.some((s) => s.kind === 'query')).toBe(false)
+  })
+
+  it('emits parse_partial + query_end for a result-set header response', () => {
+    const { signals, analyzer } = collect()
+    analyzer.onData('client_to_server', comQuery('SELECT * FROM t'))
+    analyzer.onData('server_to_client', pkt(1, [0x01])) // column-count header (0x01)
+    expect(signals.some((s) => s.kind === 'tag' && s.tag === 'parse_partial')).toBe(true)
+    expect(signals.some((s) => s.kind === 'query_end')).toBe(true)
   })
 })

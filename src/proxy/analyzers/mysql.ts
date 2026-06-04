@@ -28,16 +28,22 @@ export function createMysqlAnalyzer(deps: AnalyzerDeps): ProtocolAnalyzer {
       deps.emit({ kind: 'query', sql })
       awaitingResponse = true
     } else if (cmd === COM_STMT_PREPARE) {
+      // SQL text IS present in the prepare packet; tag it on the query signal.
       const sql = clientBuf.text(payloadStart + 1, payloadStart + payloadLen)
       deps.emit({ kind: 'query', sql, tags: ['prepared_statement'] })
-      deps.emit({ kind: 'tag', tag: 'prepared_statement' })
       awaitingResponse = true
     } else if (cmd === COM_STMT_EXECUTE) {
+      // No SQL text is available in the execute packet (only bound params), so
+      // we emit a tag rather than a query signal.
       deps.emit({ kind: 'tag', tag: 'prepared_statement' })
       awaitingResponse = true
     }
   }
 
+  // Best-effort (v1): awaitingResponse is a single boolean, so pipelined queries
+  // can conflate responses, and result-set responses emit parse_partial + query_end
+  // on the first server packet rather than tracking column-count -> EOF. The relay
+  // forwards bytes regardless; analysis precision is not a correctness requirement.
   function handleServerPacket(payloadStart: number, payloadLen: number): void {
     if (!awaitingResponse) return
     const first = serverBuf.byteAt(payloadStart)

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`dbcli proxy analyze` — 離線分析 proxy 事件日誌。** 讀取 `.dbcli/proxy/events.jsonl`(預設含 rotation `.1` 段),聚合成 agent-facing JSON 報告(`summary`、`byFingerprint`、`slowest`、`errors`、`hotTables`、`repetition`)或人類版 text。重用 `redactLiterals` 做 SQL 指紋正規化;對最吃總時間的 SELECT 指紋附上可執行的 `suggestedCommands`(`explain` / `guide missing-index-for`),離線產生不自動執行。旗標:`--events`、`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。不連資料庫。
+- **`dbcli proxy analyze` — 離線分析 proxy 事件日誌。** 讀取 `.dbcli/proxy/events.jsonl`(預設含 rotation `.1` 段),聚合成 agent-facing JSON 報告(`summary`、`byFingerprint`、`slowest`、`errors`、`hotTables`、`repetition`)或人類版 text。重用 `redactLiterals` 做 SQL 指紋正規化;對最吃總時間的 SELECT 指紋附上可執行的 `suggestedCommands`(`explain` / `guide missing-index-for`),僅輸出建議指令字串、不自動執行。旗標:`--events`、`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。不連資料庫。
 
 ### Changed
 

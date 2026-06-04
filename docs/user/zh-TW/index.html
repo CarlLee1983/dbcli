@@ -93,6 +93,7 @@
                 <ul class="list-none space-y-1 p-0 m-0">
                     <li class="nav-item"><a href="#snippets" class="nav-link">查詢片段</a></li>
                     <li class="nav-item"><a href="#diagnostics" class="nav-link">診斷修復</a></li>
+                    <li class="nav-item"><a href="#proxy" class="nav-link">觀察型 Proxy</a></li>
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
@@ -284,6 +285,48 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>assert &lt;query&gt;</code></td><td>驗證不變量;失敗時 exit 1,除非 <code>--no-fail</code>。<code>--expect</code>(<code>rows&gt;0</code>、<code>value==X</code>、<code>col:c not null</code>、<code>unique</code>、<code>between a and b</code>、<code>&gt;= n</code>)、<code>--vs &lt;query&gt; --compare rows|value</code>(對帳)、<code>--against &lt;snapshot&gt; --tolerance &lt;pct&gt;</code>(對基準的漂移;<code>0</code> = 完全相符 checksum)。</td></tr>
                 </tbody>
             </table>
+
+            <!-- doc-key: proxy -->
+            <h3 id="proxy">dbcli proxy — 本機觀察型 Proxy</h3>
+            <p class="text-text-muted mb-4">本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，<code>dbcli</code> 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。<strong>這不是正式環境閘道器。</strong> 僅限本機開發環境使用。</p>
+
+            <h4 class="mt-6 mb-2 font-bold">快速開始</h4>
+            <pre><code># 明確指定上游 / 下游
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
+
+# 從具名連線推斷引擎與目標
+dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
+            <p class="mb-4">將應用程式的 DB host/port 改為 <code>--listen</code> 位址，憑證維持不變。Proxy 完全透明 — 應用程式的行為與直連相同。</p>
+
+            <h4 class="mt-6 mb-2 font-bold">選項</h4>
+            <table>
+                <thead>
+                    <tr><th>選項</th><th>預設值</th><th>說明</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>--listen</code></td><td>—</td><td>本機監聽位址（例如 <code>127.0.0.1:3307</code>）。必填。</td></tr>
+                    <tr><td><code>--target</code></td><td>—</td><td>上游 DB 位址。未指定 <code>--use</code> 時必填。</td></tr>
+                    <tr><td><code>--events</code></td><td><code>.dbcli/proxy/events.jsonl</code></td><td>僅追加的 JSONL 事件日誌路徑。</td></tr>
+                    <tr><td><code>--slow-ms</code></td><td><code>1000</code></td><td>超過此閾值（毫秒）的查詢將標記為 <code>slow_query</code>。</td></tr>
+                    <tr><td><code>--redact</code></td><td><code>none</code></td><td><code>none</code> 保留原始 SQL 文字；<code>literals</code> 遮罩字串與數字字面值。</td></tr>
+                    <tr><td><code>--format</code></td><td><code>text</code></td><td>終端輸出格式：<code>text</code> 或 <code>json</code>。</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="mt-6 mb-2 font-bold">事件日誌（JSONL）</h4>
+            <p class="mb-2">每筆完成的查詢會在事件日誌中附加一個 JSON 物件：</p>
+            <pre><code>{"event":"query_completed","engine":"mysql","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"tags":[]}</code></pre>
+
+            <h4 class="mt-6 mb-2 font-bold">隱私</h4>
+            <p class="mb-4">SQL 文字一律儲存於事件日誌。<strong>結果資料列永不儲存。</strong> 使用 <code>--redact literals</code> 可在記錄前遮罩 SQL 中的字串與數字字面值（例如 <code>WHERE id = ?</code> 取代 <code>WHERE id = 42</code>）。</p>
+
+            <h4 class="mt-6 mb-2 font-bold">限制（v1）</h4>
+            <ul>
+                <li><strong>TLS</strong>：TLS 連線以位元組為單位轉發，不進行解密；SQL 文字不可見，事件標記為 <code>tls_unparsed</code>。如需完整 SQL 可視性，請在本機停用 SSL。</li>
+                <li><strong>MySQL prepared/binary 協議</strong>：盡力解析；標記為 <code>prepared_statement</code>。</li>
+                <li><strong>PostgreSQL extended query 協議</strong>：盡力解析；標記為 <code>extended_protocol</code> 或 <code>parse_partial</code>。</li>
+            </ul>
 
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">進階工具</h3>

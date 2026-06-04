@@ -93,6 +93,7 @@
                 <ul class="list-none space-y-1 p-0 m-0">
                     <li class="nav-item"><a href="#snippets" class="nav-link">Snippets</a></li>
                     <li class="nav-item"><a href="#diagnostics" class="nav-link">Diagnostics</a></li>
+                    <li class="nav-item"><a href="#proxy" class="nav-link">Observability Proxy</a></li>
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
@@ -284,6 +285,48 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                     <tr><td><code>assert &lt;query&gt;</code></td><td>Verify an invariant; exit 1 on failure unless <code>--no-fail</code>. <code>--expect</code> (<code>rows&gt;0</code>, <code>value==X</code>, <code>col:c not null</code>, <code>unique</code>, <code>between a and b</code>, <code>&gt;= n</code>), <code>--vs &lt;query&gt; --compare rows|value</code> (reconcile two queries), <code>--against &lt;snapshot&gt; --tolerance &lt;pct&gt;</code> (drift vs a baseline; <code>0</code> = exact checksum).</td></tr>
                 </tbody>
             </table>
+
+            <!-- doc-key: proxy -->
+            <h3 id="proxy">dbcli proxy — Local Observability Proxy</h3>
+            <p class="text-text-muted mb-4">A local development observability proxy — point an existing application at the proxy port and <code>dbcli</code> relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. <strong>This is NOT a production gateway.</strong> Use it during local development only.</p>
+
+            <h4 class="mt-6 mb-2 font-bold">Quick Start</h4>
+            <pre><code># Explicit upstream/downstream
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
+
+# Infer engine + target from a named connection
+dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
+            <p class="mb-4">Change your application's DB host/port to the <code>--listen</code> address and leave credentials unchanged. The proxy is fully transparent — the application behaves identically.</p>
+
+            <h4 class="mt-6 mb-2 font-bold">Options</h4>
+            <table>
+                <thead>
+                    <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>--listen</code></td><td>—</td><td>Local address to bind (e.g. <code>127.0.0.1:3307</code>). Required.</td></tr>
+                    <tr><td><code>--target</code></td><td>—</td><td>Upstream DB address. Required unless <code>--use</code> is given.</td></tr>
+                    <tr><td><code>--events</code></td><td><code>.dbcli/proxy/events.jsonl</code></td><td>Path to the append-only JSONL event log.</td></tr>
+                    <tr><td><code>--slow-ms</code></td><td><code>1000</code></td><td>Queries exceeding this threshold (ms) are tagged <code>slow_query</code>.</td></tr>
+                    <tr><td><code>--redact</code></td><td><code>none</code></td><td><code>none</code> keeps SQL text as-is; <code>literals</code> masks string and number literals.</td></tr>
+                    <tr><td><code>--format</code></td><td><code>text</code></td><td>Console output format: <code>text</code> or <code>json</code>.</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="mt-6 mb-2 font-bold">Event Log (JSONL)</h4>
+            <p class="mb-2">Each completed query appends one JSON object to the event log:</p>
+            <pre><code>{"event":"query_completed","engine":"mysql","sql":"SELECT * FROM users WHERE id = ?","statement":"SELECT","tables":["users"],"durationMs":4,"requestBytes":42,"responseBytes":318,"rowCount":1,"tags":[]}</code></pre>
+
+            <h4 class="mt-6 mb-2 font-bold">Privacy</h4>
+            <p class="mb-4">SQL text is always stored in the event log. <strong>Result rows are never stored.</strong> Use <code>--redact literals</code> to mask string and number literals in SQL before logging (e.g. <code>WHERE id = ?</code> instead of <code>WHERE id = 42</code>).</p>
+
+            <h4 class="mt-6 mb-2 font-bold">Limitations (v1)</h4>
+            <ul>
+                <li><strong>TLS</strong>: TLS connections are relayed byte-for-byte but not decrypted; SQL text is not visible and the event is tagged <code>tls_unparsed</code>. Disable SSL locally to gain full SQL visibility.</li>
+                <li><strong>MySQL prepared/binary protocol</strong>: Best-effort parsing; tagged <code>prepared_statement</code>.</li>
+                <li><strong>PostgreSQL extended query protocol</strong>: Best-effort parsing; tagged <code>extended_protocol</code> or <code>parse_partial</code>.</li>
+            </ul>
 
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">Advanced Tools</h3>

@@ -52,6 +52,9 @@ export interface ErrorGroup {
   count: number
   fingerprint: string
   exampleSql: string
+  tables: string[]
+  suggestedCommands?: string[]
+  hints?: string[]
 }
 
 export interface HotTable {
@@ -67,6 +70,10 @@ export interface RepetitionGroup {
   spanMs: number
   totalDurationMs: number
   tables: string[]
+  statement: StatementType
+  exampleSql: string
+  suggestedCommands?: string[]
+  hints?: string[]
 }
 
 export interface AnalysisReport {
@@ -116,6 +123,15 @@ export function fingerprintSql(sql: string): string {
 function shellEscapeDq(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/\$/g, '\\$').replace(/`/g, '\\`').replace(/"/g, '\\"')
 }
+
+/** Executable next steps for a SELECT: inspect the plan and ask for a composite index. */
+function explainSuggestions(sql: string): string[] {
+  const esc = shellEscapeDq(sql)
+  return [`dbcli explain "${esc}"`, `dbcli guide missing-index-for "${esc}"`]
+}
+
+/** Max tables to surface as `schema` suggestions for a single error group. */
+const MAX_ERROR_SCHEMA_TABLES = 3
 
 export function buildByFingerprint(
   events: ProxyEvent[],
@@ -206,11 +222,7 @@ export function buildByFingerprint(
 
   return stats.map((s, i) => {
     if (i < top && s.statement === 'SELECT') {
-      const sql = shellEscapeDq(s.exampleSql)
-      return {
-        ...s,
-        suggestedCommands: [`dbcli explain "${sql}"`, `dbcli guide missing-index-for "${sql}"`],
-      }
+      return { ...s, suggestedCommands: explainSuggestions(s.exampleSql) }
     }
     return s
   })
@@ -239,6 +251,7 @@ export function buildErrors(events: ProxyEvent[]): ErrorGroup[] {
     count: number
     fingerprint: string
     exampleSql: string
+    tables: string[]
   }
   const groups = new Map<string, Acc>()
   for (const e of events.filter(isErrored)) {
@@ -251,12 +264,30 @@ export function buildErrors(events: ProxyEvent[]): ErrorGroup[] {
         count: 0,
         fingerprint: fingerprintSql(e.sql),
         exampleSql: e.sql,
+        tables: e.tables,
       }
       groups.set(key, g)
     }
     g.count += 1
   }
-  return [...groups.values()].sort((a, b) => b.count - a.count)
+  return [...groups.values()]
+    .sort((a, b) => b.count - a.count)
+    .map((g) => {
+      const schemaCmds = g.tables.slice(0, MAX_ERROR_SCHEMA_TABLES).map((t) => `dbcli schema ${t}`)
+      const hint =
+        `failed ${g.count}×: verify the involved table/column names against the live schema ` +
+        `before fixing the SQL — never guess column names`
+      return {
+        code: g.code,
+        message: g.message,
+        count: g.count,
+        fingerprint: g.fingerprint,
+        exampleSql: g.exampleSql,
+        tables: g.tables,
+        ...(schemaCmds.length ? { suggestedCommands: schemaCmds } : {}),
+        hints: [hint],
+      }
+    })
 }
 
 export function buildHotTables(events: ProxyEvent[]): HotTable[] {
@@ -282,10 +313,13 @@ export function buildRepetition(events: ProxyEvent[], threshold: number): Repeti
     fingerprint: string
     sessionId: string
     tables: string[]
+    statement: StatementType
     count: number
     totalDurationMs: number
     minTs: number
     maxTs: number
+    exampleSql: string
+    exampleDuration: number
   }
   const groups = new Map<string, Acc>()
   for (const e of events.filter(isCompleted)) {
@@ -298,10 +332,13 @@ export function buildRepetition(events: ProxyEvent[], threshold: number): Repeti
         fingerprint: fp,
         sessionId: e.sessionId,
         tables: e.tables,
+        statement: e.statement,
         count: 0,
         totalDurationMs: 0,
         minTs: ts,
         maxTs: ts,
+        exampleSql: e.sql,
+        exampleDuration: e.durationMs,
       }
       groups.set(key, g)
     }
@@ -309,18 +346,34 @@ export function buildRepetition(events: ProxyEvent[], threshold: number): Repeti
     g.totalDurationMs += e.durationMs
     if (ts < g.minTs) g.minTs = ts
     if (ts > g.maxTs) g.maxTs = ts
+    if (e.durationMs > g.exampleDuration) {
+      g.exampleDuration = e.durationMs
+      g.exampleSql = e.sql
+    }
   }
   return [...groups.values()]
     .filter((g) => g.count >= threshold)
-    .map((g) => ({
-      fingerprint: g.fingerprint,
-      sessionId: g.sessionId,
-      count: g.count,
-      spanMs: g.maxTs - g.minTs,
-      totalDurationMs: g.totalDurationMs,
-      tables: g.tables,
-    }))
     .sort((a, b) => b.count - a.count)
+    .map((g) => {
+      const spanMs = g.maxTs - g.minTs
+      const hint =
+        `N+1 suspect: the same query ran ${g.count}× within one session over ${spanMs}ms — ` +
+        `collapse into a single query (JOIN / IN (...)) or cache the result`
+      return {
+        fingerprint: g.fingerprint,
+        sessionId: g.sessionId,
+        count: g.count,
+        spanMs,
+        totalDurationMs: g.totalDurationMs,
+        tables: g.tables,
+        statement: g.statement,
+        exampleSql: g.exampleSql,
+        ...(g.statement === 'SELECT'
+          ? { suggestedCommands: explainSuggestions(g.exampleSql) }
+          : {}),
+        hints: [hint],
+      }
+    })
 }
 
 export function analyzeEvents(events: ProxyEvent[], opts: AnalyzeOptions): AnalysisReport {

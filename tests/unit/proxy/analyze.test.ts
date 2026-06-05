@@ -189,6 +189,30 @@ describe('buildErrors', () => {
     expect(groups[0]!.count).toBe(2)
     expect(groups[0]!.fingerprint).toBe('SELECT * FROM x WHERE a = ?')
   })
+
+  it('captures involved tables and suggests `schema` for each (capped at 3)', () => {
+    const [g] = buildErrors([
+      errored({
+        error: { code: '1054', message: 'unknown column' },
+        sql: 'SELECT 1 FROM a JOIN b JOIN c JOIN d',
+        tables: ['a', 'b', 'c', 'd'],
+      }),
+    ])
+    expect(g!.tables).toEqual(['a', 'b', 'c', 'd'])
+    expect(g!.suggestedCommands).toEqual([
+      'dbcli schema a',
+      'dbcli schema b',
+      'dbcli schema c',
+    ])
+  })
+
+  it('always emits a hint and omits suggestedCommands when no tables are known', () => {
+    const [g] = buildErrors([
+      errored({ error: { code: '1064', message: 'syntax' }, sql: 'SELEC 1', tables: [] }),
+    ])
+    expect(g!.suggestedCommands).toBeUndefined()
+    expect(g!.hints?.length).toBeGreaterThan(0)
+  })
 })
 
 describe('buildHotTables', () => {
@@ -234,6 +258,48 @@ describe('buildRepetition', () => {
   it('does not flag groups below the threshold', () => {
     const events = [completed({ sql: 'SELECT * FROM a WHERE id = 1' })]
     expect(buildRepetition(events, 10)).toHaveLength(0)
+  })
+
+  it('carries the slowest occurrence as a runnable example and suggests explain/guide for SELECT', () => {
+    const ev = (id: number, ms: number, ts: string) =>
+      completed({
+        sessionId: 'pxy_1',
+        sql: `SELECT * FROM items WHERE order_id = ${id}`,
+        statement: 'SELECT',
+        tables: ['items'],
+        durationMs: ms,
+        timestamp: ts,
+      })
+    const rep = buildRepetition(
+      [
+        ev(1, 2, '2026-06-04T12:00:00.000Z'),
+        ev(2, 9, '2026-06-04T12:00:00.500Z'), // slowest -> example
+        ev(3, 2, '2026-06-04T12:00:01.000Z'),
+      ],
+      3
+    )
+    expect(rep[0]!.statement).toBe('SELECT')
+    expect(rep[0]!.exampleSql).toBe('SELECT * FROM items WHERE order_id = 2')
+    expect(rep[0]!.suggestedCommands).toEqual([
+      'dbcli explain "SELECT * FROM items WHERE order_id = 2"',
+      'dbcli guide missing-index-for "SELECT * FROM items WHERE order_id = 2"',
+    ])
+    expect(rep[0]!.hints?.[0]).toContain('N+1')
+  })
+
+  it('omits explain/guide for non-SELECT N+1 groups but still hints', () => {
+    const ev = (i: number) =>
+      completed({
+        sessionId: 'pxy_1',
+        sql: `INSERT INTO log VALUES (${i})`,
+        statement: 'INSERT',
+        tables: ['log'],
+        durationMs: 1,
+        timestamp: `2026-06-04T12:00:0${i}.000Z`,
+      })
+    const rep = buildRepetition([ev(1), ev(2), ev(3)], 3)
+    expect(rep[0]!.suggestedCommands).toBeUndefined()
+    expect(rep[0]!.hints?.length).toBeGreaterThan(0)
   })
 })
 

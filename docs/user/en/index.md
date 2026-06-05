@@ -799,7 +799,15 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 
 #### Analyze the event log offline
 
-`dbcli proxy analyze` — analyze the captured event log offline (no DB). `--format json|text`, `--top`, `--slow-ms`, `--n-plus-one`, `--no-include-rotated`. Produces summary, per-fingerprint stats (with suggested `explain` / `guide missing-index-for` commands), slowest queries, error groups, hot tables, and N+1 suspects.
+`dbcli proxy analyze` — analyze the captured event log offline (no DB). `--format json|text`, `--top`, `--slow-ms`, `--n-plus-one`, `--no-include-rotated`. Produces summary, per-fingerprint stats, slowest queries, error groups, hot tables, and N+1 suspects.
+
+Each actionable block carries machine-readable next steps so an AI agent can move from diagnosis to fix:
+
+*   **SELECT hotspots / N+1** — `suggestedCommands` with `dbcli explain "<sql>"` and `dbcli guide missing-index-for "<sql>"`.
+*   **Errors** — `suggestedCommands` with `dbcli schema <table>` (first 3 tables) plus a `hints` note to verify table/column names before fixing — never guess column names.
+*   **N+1 suspects** — a `hints` note suggesting you batch the repeated query (JOIN / `IN (...)`) or cache the result.
+
+The recommended loop: run `proxy analyze`, then for each finding read its `hints`, run its `suggestedCommands` to gather schema/plan evidence, and apply the fix. The text format aggregates these into `SUGGESTED COMMANDS` and `HINTS` sections; the JSON format keeps them attached to each finding. Suggestions are printed as strings only — `proxy analyze` never executes them. When the proxy ran with `--redact literals`, the example SQL contains `?` placeholders; fill in real values before running the commands.
 
 #### Limitations (v1)
 

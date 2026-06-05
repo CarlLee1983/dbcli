@@ -640,7 +640,14 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p class="mb-4">SQL 文字一律儲存於事件日誌。<strong>結果資料列永不儲存。</strong> 使用 <code>--redact literals</code> 可在記錄前遮罩 SQL 中的字串與數字字面值（例如 <code>WHERE id = ?</code> 取代 <code>WHERE id = 42</code>）。</p>
 
             <h4 class="mt-6 mb-2 font-bold">離線分析事件日誌</h4>
-            <p class="mb-4"><code>dbcli proxy analyze</code> — 離線分析擷取的事件日誌（不連 DB）。<code>--format json|text</code>、<code>--top</code>、<code>--slow-ms</code>、<code>--n-plus-one</code>、<code>--no-include-rotated</code>。輸出總覽、各查詢指紋統計（附 <code>explain</code> / <code>guide missing-index-for</code> 建議指令）、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。</p>
+            <p class="mb-4"><code>dbcli proxy analyze</code> — 離線分析擷取的事件日誌（不連 DB）。<code>--format json|text</code>、<code>--top</code>、<code>--slow-ms</code>、<code>--n-plus-one</code>、<code>--no-include-rotated</code>。輸出總覽、各查詢指紋統計、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。</p>
+            <p class="mb-4">每個可行動的區塊都附帶機器可讀的後續步驟，讓 AI agent 能從「診斷」直接推進到「修正」：</p>
+            <ul class="list-disc pl-6 mb-4">
+              <li><strong>SELECT 熱點 / N+1</strong> — <code>suggestedCommands</code> 提供 <code>dbcli explain "&lt;sql&gt;"</code> 與 <code>dbcli guide missing-index-for "&lt;sql&gt;"</code>。</li>
+              <li><strong>錯誤（errors）</strong> — <code>suggestedCommands</code> 提供 <code>dbcli schema &lt;table&gt;</code>（最多前 3 個表），並附 <code>hints</code> 提醒先核對表名/欄名再修正——切勿臆測欄名。</li>
+              <li><strong>N+1 嫌疑</strong> — <code>hints</code> 建議將重複查詢批次化（JOIN / <code>IN (...)</code>）或快取結果。</li>
+            </ul>
+            <p class="mb-4">建議流程：跑 <code>proxy analyze</code> 後，逐一針對每個發現讀其 <code>hints</code>、執行其 <code>suggestedCommands</code> 蒐集 schema/查詢計畫證據，再套用修正。text 格式會把這些彙整成 <code>SUGGESTED COMMANDS</code> 與 <code>HINTS</code> 區段；JSON 格式則把建議附在各發現上。建議僅以字串輸出——<code>proxy analyze</code> 不會自動執行。若 proxy 啟動時帶了 <code>--redact literals</code>，範例 SQL 會含 <code>?</code> 佔位符；執行指令前請先填回真實值。</p>
 
             <h4 class="mt-6 mb-2 font-bold">限制（v1）</h4>
             <ul>

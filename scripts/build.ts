@@ -24,10 +24,12 @@ if (process.platform !== 'win32') {
 await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
 
 // 3c. Generate a single flat declaration file for the `./core` subpath.
+//     Requires devDep @types/pg: dts-bundle-generator resolves pg types reachable via AdapterFactory.
 //     --export-referenced-types false: export ONLY the barrel's explicit
-//     exports, so referenced types (e.g. a sibling DbcliConfig in @/types)
-//     are inlined as non-exported declarations instead of colliding with the
-//     canonical DbcliConfig the barrel re-exports from @/utils/validation.
+//     exports, so referenced types are inlined as non-exported declarations
+//     instead of colliding. Concretely this avoids a duplicate DbcliConfig:
+//     the interface in src/types/index.ts (reachable via @/types) vs the
+//     Zod-inferred type in src/utils/validation.ts that the barrel re-exports.
 await $`bunx dts-bundle-generator -o dist/core.d.ts --project tsconfig.json --no-check --export-referenced-types false src/core/public.ts`
 
 // 4. UI Template Build & Inlining

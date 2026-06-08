@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "1.27.0",
+  "version": "1.28.0",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -8,6 +8,13 @@
   },
   "bin": {
     "dbcli": "./dist/cli.mjs"
+  },
+  "exports": {
+    ".": "./dist/cli.mjs",
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.mjs"
+    }
   },
   "license": "MIT",
   "author": "Carl Lee",
@@ -79,9 +86,11 @@
     "@inquirer/prompts": "^8.4.3",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
+    "dts-bundle-generator": "^9.5.1",
     "eslint": "^10.4.0",
     "happy-dom": "^20.9.0",
     "postcss": "^8.5.14",

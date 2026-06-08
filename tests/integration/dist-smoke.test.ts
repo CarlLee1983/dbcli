@@ -16,6 +16,9 @@ import { join, resolve } from 'node:path'
 const ROOT = resolve(import.meta.dir, '..', '..')
 const DIST = join(ROOT, 'dist', 'cli.mjs')
 
+// bun run build now runs dts-bundle-generator (~5–6s); raise the hook timeout well above Bun's 5s default.
+const BUILD_TIMEOUT_MS = 60_000
+
 function run(args: string[], cwd: string) {
   return spawnSync('bun', [DIST, ...args], {
     cwd,
@@ -32,13 +35,14 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
     const build = spawnSync('bun', ['run', 'build'], {
       cwd: ROOT,
       encoding: 'utf8',
+      timeout: BUILD_TIMEOUT_MS,
     })
     if (build.status !== 0) {
       throw new Error(`bun run build failed:\n${build.stdout}\n${build.stderr}`)
     }
     workdir = mkdtempSync(join(tmpdir(), 'dbcli-dist-smoke-'))
     mkdirSync(workdir, { recursive: true })
-  })
+  }, BUILD_TIMEOUT_MS)
 
   test('--version succeeds (sanity)', () => {
     const r = run(['--version'], workdir)

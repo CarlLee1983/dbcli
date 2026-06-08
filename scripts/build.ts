@@ -23,6 +23,9 @@ if (process.platform !== 'win32') {
 //     Same externals as the CLI so native drivers stay peer-resolved.
 await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
 
+// 3c. Generate a single flat declaration file for the `./core` subpath.
+await $`bunx dts-bundle-generator -o dist/core.d.ts --project tsconfig.json --no-check src/core/public.ts`
+
 // 4. UI Template Build & Inlining
 console.log('Building UI template...')
 

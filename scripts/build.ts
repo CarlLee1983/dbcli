@@ -19,7 +19,7 @@ if (process.platform !== 'win32') {
   chmodSync(outfile, 0o755)
 }
 
-// 1b. Bundle core library (no shebang) for the `./core` subpath export.
+// 3b. Bundle core library (no shebang) for the `./core` subpath export.
 //     Same externals as the CLI so native drivers stay peer-resolved.
 await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
 

@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.29.0] - 2026-06-08 - Core Config-Read Entrypoint
+
+### Added
+
+- **`@carllee1983/dbcli/core` 新增設定載入入口。** 在 `./core` 子路徑公開 `readConfig(path, connectionName?)`（binding-aware、v1/v2、`{$env}` 展開的統一設定讀取，與 CLI 指令同源）、`resolveConfigStoragePath(path)`（project-binding 解參）與型別 `DbcliConfigV2`。讓外部消費者（如 `dbcli-gui` sidecar）能從 `.dbcli` 專案路徑解出含真實連線資訊的 `DbcliConfig`，不必重寫內部 binding／env 邏輯。CLI 行為不變。
+
 ## [1.28.0] - 2026-06-08 - Core Subpath Export
 
 ### Added

@@ -1,17 +1,22 @@
 import { test, expect, beforeAll } from 'bun:test'
-import { existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { resolve, join } from 'node:path'
 
 // 此測試驗證「對外發布的產物」可被 import，等同外部消費者的視角。
-// 需先 `bun run build` 產生 dist/core.mjs。
+// beforeAll 會重新 build，確保測的是當前原始碼（mirrors dist-smoke.test.ts）。
+
+const ROOT = resolve(import.meta.dir, '..', '..')
 
 beforeAll(() => {
-  if (!existsSync('dist/core.mjs')) {
-    throw new Error('dist/core.mjs 不存在 — 請先執行 `bun run build`')
+  // Rebuild dist so we test current source, not a stale artifact (mirrors dist-smoke.test.ts).
+  const build = spawnSync('bun', ['run', 'build'], { cwd: ROOT, encoding: 'utf8' })
+  if (build.status !== 0) {
+    throw new Error(`bun run build failed:\n${build.stdout}\n${build.stderr}`)
   }
 })
 
 test('dist/core.mjs 暴露 engine 進入點', async () => {
-  const core = await import('../../dist/core.mjs')
+  const core = await import(join(ROOT, 'dist', 'core.mjs'))
   expect(typeof core.AdapterFactory).toBe('function')
   expect(typeof core.QueryExecutor).toBe('function')
   expect(typeof core.SchemaLayeredLoader).toBe('function')

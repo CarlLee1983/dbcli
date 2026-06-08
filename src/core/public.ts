@@ -51,6 +51,7 @@ export type {
   ColumnSchema,
   ExecutionResult,
 } from '@/adapters'
+export type { SqlConnectionOptions, QueryableConnectionOptions } from '@/adapters'
 export type { Permission } from '@/types'
 export type { DbcliConfig } from '@/utils/validation'
 export type { QueryResult } from '@/types/query'

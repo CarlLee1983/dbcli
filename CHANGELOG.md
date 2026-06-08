@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`@carllee1983/dbcli/core` 新增設定載入入口。** 在 `./core` 子路徑公開 `readConfig(path, connectionName?)`（binding-aware、v1/v2、`{$env}` 展開的統一設定讀取，與 CLI 指令同源）、`resolveConfigStoragePath(path)`（project-binding 解參）與型別 `DbcliConfigV2`。讓外部消費者（如 `dbcli-gui` sidecar）能從 `.dbcli` 專案路徑解出含真實連線資訊的 `DbcliConfig`，不必重寫內部 binding／env 邏輯。CLI 行為不變。
+- **`@carllee1983/dbcli/core` 新增設定載入入口。** 在 `./core` 子路徑公開 `readConfig(path, connectionName?)`（binding-aware、v1/v2、`{$env}` 展開的統一設定讀取，與 CLI 指令同源）、`resolveConfigStoragePath(path)`（project-binding 解參）與型別 `DbcliConfigV2`、`SqlConnectionOptions`／`QueryableConnectionOptions`（SQL adapter 連線型別收窄）。讓外部消費者（如 `dbcli-gui` sidecar）能從 `.dbcli` 專案路徑解出含真實連線資訊的 `DbcliConfig`，不必重寫內部 binding／env 邏輯。CLI 行為不變。
 
 ## [1.28.0] - 2026-06-08 - Core Subpath Export
 

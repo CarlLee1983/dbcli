@@ -7,14 +7,20 @@ import { resolve, join } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '..', '..')
 
+// bun run build now runs dts-bundle-generator (~5–6s); raise the hook timeout well above Bun's 5s default.
+const BUILD_TIMEOUT_MS = 60_000
+
 beforeAll(() => {
   // Rebuild dist so we test current source, not a stale artifact (mirrors dist-smoke.test.ts).
-  // dts-bundle-generator can take ~8s on first run; allow generous timeout.
-  const build = spawnSync('bun', ['run', 'build'], { cwd: ROOT, encoding: 'utf8', timeout: 60_000 })
+  const build = spawnSync('bun', ['run', 'build'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: BUILD_TIMEOUT_MS,
+  })
   if (build.status !== 0) {
     throw new Error(`bun run build failed:\n${build.stdout}\n${build.stderr}`)
   }
-}, 60_000)
+}, BUILD_TIMEOUT_MS)
 
 test('dist/core.mjs 暴露 engine 進入點', async () => {
   const core = await import(join(ROOT, 'dist', 'core.mjs'))

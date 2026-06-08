@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.0] - 2026-06-08 - Core Subpath Export
+
+### Added
+
+- **`@carllee1983/dbcli/core` 子路徑匯出。** 新增穩定對外 API barrel（`src/core/public.ts`），透過 `package.json` 的 `exports` map 開出 `./core` 子路徑，並隨套件發布 `dist/core.mjs` 與扁平型別宣告 `dist/core.d.ts`。外部專案（如 `dbcli-gui` 桌面客戶端的 Bun sidecar）可 `import { AdapterFactory, QueryExecutor, SchemaLayeredLoader, listConnections, BlacklistManager } from '@carllee1983/dbcli/core'` 直接重用引擎能力。CLI（`bin`）行為完全不變。
+
 ## [1.27.0] - 2026-06-05 - Proxy Analyze
 
 ### Added

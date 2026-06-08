@@ -29,4 +29,6 @@ test('dist/core.mjs 暴露 engine 進入點', async () => {
   expect(typeof core.SchemaLayeredLoader).toBe('function')
   expect(typeof core.listConnections).toBe('function')
   expect(typeof core.BlacklistManager).toBe('function')
+  expect(typeof core.readConfig).toBe('function')
+  expect(typeof core.resolveConfigStoragePath).toBe('function')
 })

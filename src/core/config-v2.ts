@@ -109,16 +109,20 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
 }
 
 /**
- * Write a v2 config to disk
+ * Write a v2 config to disk atomically (temp file + rename).
+ * Writing to a temp file then renaming over the target is an atomic operation
+ * on the same filesystem, so a crash mid-write can never leave a corrupt config.
  */
 export async function writeV2Config(path: string, config: DbcliConfigV2): Promise<void> {
   DbcliConfigV2Schema.parse(config)
 
   const storagePath = await resolveConfigStoragePath(path)
   const configPath = join(storagePath, 'config.json')
+  const tmpPath = `${configPath}.tmp`
   await Bun.$`mkdir -p ${storagePath}`
   const json = JSON.stringify(config, null, 2)
-  await Bun.write(configPath, json)
+  await Bun.write(tmpPath, json)
+  await Bun.$`mv -f ${tmpPath} ${configPath}` // same-filesystem rename: atomic overwrite
 }
 
 /**

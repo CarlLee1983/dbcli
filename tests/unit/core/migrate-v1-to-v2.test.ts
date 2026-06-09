@@ -53,6 +53,11 @@ describe('migrateV1ToV2', () => {
     expect(process.env.DB_PASSWORD).toBe('legacy-pw')
   })
 
+  test('throws on a non-SQL v1 connection (out of scope)', () => {
+    const mongoV1 = { ...v1(), connection: { system: 'mongodb', host: 'h', port: 27017, user: 'u', database: 'd', password: '' } } as DbcliConfig
+    expect(() => migrateV1ToV2(mongoV1)).toThrow('僅支援 SQL')
+  })
+
   afterEach(async () => {
     await Bun.$`rm -rf ${TMP_DIR}`
     delete process.env.DB_PASSWORD

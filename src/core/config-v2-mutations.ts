@@ -5,6 +5,8 @@ import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
 export type SqlSystem = 'postgresql' | 'mysql' | 'mariadb'
 
+const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb'] as const
+
 /**
  * `$env` 變數名。per-connection 命名空間化:常駐 sidecar 共用 process.env,
  * 且 loadEnvFile 不覆寫既有 key——若兩連線都用 DB_PASSWORD 會撞名取到對方的值。
@@ -80,6 +82,10 @@ export function setDefaultConnection(config: DbcliConfigV2, name: string): Dbcli
  * password 設 {$env:'DB_PASSWORD'},不搬動既有 secret。blacklist/audit/metadata 原樣帶過。
  */
 export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
+  const system = (v1.connection as { system?: string }).system
+  if (!SQL_SYSTEMS.includes(system as SqlSystem)) {
+    throw new Error(`v1→v2 自動升級目前僅支援 SQL 連線(mysql/postgresql/mariadb),不支援 '${system}'`)
+  }
   const c = v1.connection as {
     system: SqlSystem; host: string; port: number; user: string; database: string
   }

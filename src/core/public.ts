@@ -16,9 +16,21 @@ export {
   resolveConnection,
   listConnections,
   readV2Config,
+  writeV2Config,
   loadConnectionEnv,
   detectConfigVersion,
 } from '@/core/config-v2'
+
+// ── Config write (連線管理:GUI/CLI 共用) ──
+export {
+  envVarNameFor,
+  writeConnectionSecret,
+  upsertConnection,
+  removeConnection,
+  setDefaultConnection,
+  migrateV1ToV2,
+} from '@/core/config-v2-mutations'
+export type { ConnectionInput, SqlSystem } from '@/core/config-v2-mutations'
 export type { ResolvedConnection } from '@/core/config-v2'
 
 // ── Config read (unified: binding-aware, v1/v2, {$env}-expanded) ──
@@ -35,7 +47,7 @@ import type { DbcliConfig } from '@/utils/validation'
 export const readConfig = (path: string, connectionName?: string): Promise<DbcliConfig> =>
   configModule.read(path, connectionName)
 
-export { resolveConfigStoragePath } from '@/core/config-binding'
+export { resolveConfigStoragePath, writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
 export type { DbcliConfigV2 } from '@/utils/validation'
 
 // ── Safety ───────────────────────────────────────────────

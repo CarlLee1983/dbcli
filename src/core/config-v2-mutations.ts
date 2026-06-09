@@ -68,6 +68,12 @@ export function removeConnection(config: DbcliConfigV2, name: string): DbcliConf
   return { ...config, connections: rest, default: nextDefault } as DbcliConfigV2
 }
 
+/** 設定預設連線(immutable)。 */
+export function setDefaultConnection(config: DbcliConfigV2, name: string): DbcliConfigV2 {
+  if (!(name in config.connections)) throw new Error(`連線 '${name}' 不存在`)
+  return { ...config, default: name } as DbcliConfigV2
+}
+
 /** 新增或就地覆寫同名連線(immutable)。非機密欄存字面值,password 存 {$env} 參照 +
  *  per-connection envFile。編輯時保留既有 permission;新建預設 'query-only'。 */
 export function upsertConnection(config: DbcliConfigV2, input: ConnectionInput): DbcliConfigV2 {

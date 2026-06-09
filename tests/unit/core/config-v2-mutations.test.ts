@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { writeV2Config, readV2Config, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
-import { envVarNameFor, writeConnectionSecret, upsertConnection, removeConnection } from '@/core/config-v2-mutations'
+import { envVarNameFor, writeConnectionSecret, upsertConnection, removeConnection, setDefaultConnection } from '@/core/config-v2-mutations'
 import type { DbcliConfigV2 } from '@/utils/validation'
 
 const TMP_DIR = '/tmp/dbcli-mutations-test'
@@ -131,5 +131,22 @@ describe('removeConnection', () => {
     const input = twoConns()
     removeConnection(input, 'staging')
     expect(input.connections.staging).toBeDefined()
+  })
+})
+
+describe('setDefaultConnection', () => {
+  function twoConns(): DbcliConfigV2 {
+    return upsertConnection(baseConfig(), { name: 'staging', system: 'mysql', host: 'h', port: 3306, user: 'u', database: 'd' })
+  }
+  test('sets an existing connection as default', () => {
+    expect(setDefaultConnection(twoConns(), 'staging').default).toBe('staging')
+  })
+  test('throws on unknown connection', () => {
+    expect(() => setDefaultConnection(baseConfig(), 'nope')).toThrow("連線 'nope' 不存在")
+  })
+  test('does not mutate input', () => {
+    const input = twoConns()
+    setDefaultConnection(input, 'staging')
+    expect(input.default).toBe('primary')
   })
 })

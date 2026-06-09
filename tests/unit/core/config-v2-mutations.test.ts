@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { writeV2Config, readV2Config, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
-import { envVarNameFor, writeConnectionSecret, upsertConnection } from '@/core/config-v2-mutations'
+import { envVarNameFor, writeConnectionSecret, upsertConnection, removeConnection } from '@/core/config-v2-mutations'
 import type { DbcliConfigV2 } from '@/utils/validation'
 
 const TMP_DIR = '/tmp/dbcli-mutations-test'
@@ -98,5 +98,38 @@ describe('upsertConnection', () => {
     expect(next.connections.primary.permission).toBe('read-write')
     expect(next.connections.primary.host).toBe('newhost')
     expect(next.connections.primary.port).toBe(3307)
+  })
+})
+
+describe('removeConnection', () => {
+  function twoConns(): DbcliConfigV2 {
+    const c = baseConfig()
+    return upsertConnection(c, { name: 'staging', system: 'mysql', host: 'h', port: 3306, user: 'u', database: 'd' })
+  }
+
+  test('removes a non-default connection, keeps default', () => {
+    const next = removeConnection(twoConns(), 'staging')
+    expect(next.connections.staging).toBeUndefined()
+    expect(next.default).toBe('primary')
+  })
+
+  test('removing the default reassigns default to a remaining connection', () => {
+    const next = removeConnection(twoConns(), 'primary')
+    expect(next.connections.primary).toBeUndefined()
+    expect(next.default).toBe('staging')
+  })
+
+  test('throws when removing the last remaining connection', () => {
+    expect(() => removeConnection(baseConfig(), 'primary')).toThrow('無法刪除最後一條連線')
+  })
+
+  test('throws on unknown connection', () => {
+    expect(() => removeConnection(baseConfig(), 'nope')).toThrow("連線 'nope' 不存在")
+  })
+
+  test('does not mutate input', () => {
+    const input = twoConns()
+    removeConnection(input, 'staging')
+    expect(input.connections.staging).toBeDefined()
   })
 })

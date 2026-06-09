@@ -57,6 +57,17 @@ export interface ConnectionInput {
   database: string
 }
 
+/** 刪除連線(immutable)。刪預設則改派為剩餘第一條;刪最後一條則擋下(v2 需至少一條)。 */
+export function removeConnection(config: DbcliConfigV2, name: string): DbcliConfigV2 {
+  if (!(name in config.connections)) throw new Error(`連線 '${name}' 不存在`)
+  const rest = { ...config.connections }
+  delete rest[name]
+  const remaining = Object.keys(rest)
+  if (remaining.length === 0) throw new Error('無法刪除最後一條連線')
+  const nextDefault = config.default === name ? remaining[0] : config.default
+  return { ...config, connections: rest, default: nextDefault } as DbcliConfigV2
+}
+
 /** 新增或就地覆寫同名連線(immutable)。非機密欄存字面值,password 存 {$env} 參照 +
  *  per-connection envFile。編輯時保留既有 permission;新建預設 'query-only'。 */
 export function upsertConnection(config: DbcliConfigV2, input: ConnectionInput): DbcliConfigV2 {

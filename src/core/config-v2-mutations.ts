@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { readV2Config } from '@/core/config-v2'
-import type { DbcliConfigV2 } from '@/utils/validation'
+import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
 export type SqlSystem = 'postgresql' | 'mysql' | 'mariadb'
 
@@ -72,6 +72,34 @@ export function removeConnection(config: DbcliConfigV2, name: string): DbcliConf
 export function setDefaultConnection(config: DbcliConfigV2, name: string): DbcliConfigV2 {
   if (!(name in config.connections)) throw new Error(`連線 '${name}' 不存在`)
   return { ...config, default: name } as DbcliConfigV2
+}
+
+/**
+ * v1 單連線 → v2,產生唯一 'default' 連線。沿用 v1 既有密碼慣例:legacy
+ * `.env.local` 的 `DB_PASSWORD`,故 default 連線 envFile 指向 '.env.local'、
+ * password 設 {$env:'DB_PASSWORD'},不搬動既有 secret。blacklist/audit/metadata 原樣帶過。
+ */
+export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
+  const c = v1.connection as {
+    system: SqlSystem; host: string; port: number; user: string; database: string
+  }
+  return {
+    version: 2,
+    default: 'default',
+    connections: {
+      default: {
+        system: c.system, host: c.host, port: c.port, user: c.user, database: c.database,
+        password: { $env: 'DB_PASSWORD' },
+        permission: v1.permission ?? 'query-only',
+        envFile: '.env.local',
+      },
+    },
+    schema: {},
+    schemas: {},
+    metadata: v1.metadata ?? { version: '2.0' },
+    blacklist: v1.blacklist ?? { tables: [], columns: {} },
+    audit: v1.audit ?? { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+  } as DbcliConfigV2
 }
 
 /** 新增或就地覆寫同名連線(immutable)。非機密欄存字面值,password 存 {$env} 參照 +

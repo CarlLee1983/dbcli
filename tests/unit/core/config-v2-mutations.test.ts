@@ -63,7 +63,7 @@ describe('writeConnectionSecret round-trip', () => {
     expect(lines).toEqual(['DBCLI_PRIMARY_PASSWORD=second'])
   })
 
-  test('throws on unknown connection', () => {
-    expect(writeConnectionSecret(PROJECT, 'nope', 'password', 'x')).rejects.toThrow("連線 'nope' 不存在")
+  test('throws on unknown connection', async () => {
+    await expect(writeConnectionSecret(PROJECT, 'nope', 'password', 'x')).rejects.toThrow("連線 'nope' 不存在")
   })
 })

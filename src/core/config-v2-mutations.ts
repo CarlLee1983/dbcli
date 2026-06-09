@@ -20,6 +20,10 @@ export async function writeConnectionSecret(
   field: 'password',
   value: string,
 ): Promise<void> {
+  if (value.includes('\n') || value.includes('\r')) {
+    throw new Error('secret value 不可包含換行字元')
+  }
+
   const config = await readV2Config(projectPath)
   const conn = config.connections[connName]
   if (!conn) throw new Error(`連線 '${connName}' 不存在`)

@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { readV2Config } from '@/core/config-v2'
+import type { DbcliConfigV2 } from '@/utils/validation'
 
 export type SqlSystem = 'postgresql' | 'mysql' | 'mariadb'
 
@@ -45,4 +46,33 @@ export async function writeConnectionSecret(
     content = content.length && !content.endsWith('\n') ? `${content}\n${line}\n` : `${content}${line}\n`
   }
   await Bun.write(envPath, content)
+}
+
+export interface ConnectionInput {
+  name: string
+  system: SqlSystem
+  host: string
+  port: number
+  user: string
+  database: string
+}
+
+/** 新增或就地覆寫同名連線(immutable)。非機密欄存字面值,password 存 {$env} 參照 +
+ *  per-connection envFile。編輯時保留既有 permission;新建預設 'query-only'。 */
+export function upsertConnection(config: DbcliConfigV2, input: ConnectionInput): DbcliConfigV2 {
+  const existing = config.connections[input.name] as { permission?: string } | undefined
+  const connection = {
+    system: input.system,
+    host: input.host,
+    port: input.port,
+    user: input.user,
+    database: input.database,
+    password: { $env: envVarNameFor(input.name, 'password') },
+    permission: existing?.permission ?? 'query-only',
+    envFile: `.env.${input.name}`,
+  }
+  return {
+    ...config,
+    connections: { ...config.connections, [input.name]: connection },
+  } as DbcliConfigV2
 }

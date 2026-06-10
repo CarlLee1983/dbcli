@@ -12,3 +12,9 @@ describe('public core barrel exposes the connection writer surface', () => {
     }
   })
 })
+
+describe('public core barrel exposes the data-editing surface', () => {
+  test('exports DataExecutor class', () => {
+    expect(typeof (core as Record<string, unknown>).DataExecutor).toBe('function')
+  })
+})

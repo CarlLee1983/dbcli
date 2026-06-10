@@ -9,6 +9,7 @@
 // ── Engine ───────────────────────────────────────────────
 export { AdapterFactory, ConnectionError } from '@/adapters'
 export { QueryExecutor } from '@/core/query-executor'
+export { DataExecutor } from '@/core/data-executor'
 export { SchemaLayeredLoader } from '@/core/schema-loader'
 
 // ── Config (.dbcli resolution) ───────────────────────────
@@ -67,3 +68,4 @@ export type { SqlConnectionOptions, QueryableConnectionOptions } from '@/adapter
 export type { Permission } from '@/types'
 export type { DbcliConfig } from '@/utils/validation'
 export type { QueryResult } from '@/types/query'
+export type { DataExecutionResult, DataExecutionOptions } from '@/types/data'

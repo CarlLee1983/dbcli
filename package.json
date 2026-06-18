@@ -94,7 +94,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@happy-dom/global-registrator": "^20.9.0",
+    "@happy-dom/global-registrator": "^20.10.6",
     "@inquirer/prompts": "^8.4.3",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
@@ -104,7 +104,7 @@
     "autoprefixer": "^10.5.0",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^10.4.0",
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^20.10.6",
     "postcss": "^8.5.14",
     "prettier": "^3.8.3",
     "tailwindcss": "3.4.1",

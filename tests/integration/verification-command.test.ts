@@ -111,4 +111,35 @@ describe('dbcli verification list', () => {
     expect(j.invalid).toHaveLength(1)
     expect(j.invalid[0].filename).toBe('verification-broken.json')
   })
+
+  test('table format prints headers and a row', async () => {
+    const work = await seedWork([
+      { id: 'cccc', createdAt: '2026-06-19T03:00:00.000Z', status: 'verified' },
+    ])
+    const { stdout, code } = await run(work, ['verification', 'list', '--format', 'table'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('createdAt')
+    expect(stdout).toContain('status')
+  })
+
+  test('--subject filters by kind alone', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z', subject: { kind: 'backfill', name: 'alpha' } },
+      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', subject: { kind: 'backfill', name: 'beta' } },
+      { id: 'cccc', createdAt: '2026-06-19T03:00:00.000Z', subject: { kind: 'migration', name: 'gamma' } },
+    ])
+    const { stdout, code } = await run(work, ['verification', 'list', '--format', 'json', '--subject', 'backfill'])
+    expect(code).toBe(0)
+    const ids = JSON.parse(stdout).artifacts.map((a: { id: string }) => a.id)
+    expect(ids).toContain('aaaa')
+    expect(ids).toContain('bbbb')
+    expect(ids).not.toContain('cccc')
+  })
+
+  test('invalid --subject exits 1', async () => {
+    const work = await seedWork([{ id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z' }])
+    const { code, stderr } = await run(work, ['verification', 'list', '--subject', 'bogus'])
+    expect(code).toBe(1)
+    expect(stderr).toContain('bogus')
+  })
 })

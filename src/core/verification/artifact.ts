@@ -61,7 +61,9 @@ export function buildVerificationArtifact(
   input: BuildVerificationArtifactInput
 ): VerificationArtifact {
   if (!isVerificationStatus(input.status)) {
-    throw new Error(`Invalid verification artifact: status '${String(input.status)}' is not allowed`)
+    throw new Error(
+      `Invalid verification artifact: status '${String(input.status)}' is not allowed`
+    )
   }
   const summary = input.summary.trim()
   if (summary.length === 0) {

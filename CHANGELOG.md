@@ -5,6 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.0] - 2026-06-18 - Verification Artifact Writer
+
+### Added
+
+- **驗證證據建構器（`buildVerificationArtifact`）。** 純函式，產生 schema v1 的 `VerificationArtifact`：可注入 `now` / `idFactory` 以利測試確定性、證據文字欄位上限 2000 字元（超過截斷並標註）、證據筆數上限 20（超過保留前 19 筆並補一筆 `manual` 截斷標記）；拒絕非法狀態、空白 summary、空證據。集中化證據裁切,讓後續寫入器與指令介面不必各自重複截斷決策。
+- **`safe-backfill-verify` 計畫的「已規劃」驗證中繼資料。** `dbcli skill tasks plan safe-backfill-verify --format json` 現在輸出一個 `verification` 區塊（`status: "planned"`,取計畫中最後一個 `assert` 步驟作為證據)。此為**已規劃**證據,**不代表**驗證已執行或通過,與結果型 `VerificationArtifact` 明確區隔。其他 task pack 不受影響。
+- **驗證證據寫入器（`writeVerificationArtifact`）。** 將建構出的 artifact 以原子方式寫入 `.dbcli/verification/verification-<YYYYMMDD-HHMMSS>-<short-id>.json`：檔名完全由 artifact 內部產生（UTC 時間戳 + `[a-z0-9]` 淨化短 id,杜絕路徑穿越)、缺少目錄時自動建立、以 `link()` 獨佔建立確保不會靜默覆寫既有檔案、回傳寫入路徑。
+- **`recover --apply --write-verification-artifact`（opt-in)。** 僅在 verify 步驟實際執行時,將 recovery 驗證結果寫成一份 `recovery-verify` artifact（狀態取合約 `verificationStatus`,附 `recoveryRef`)。省略旗標時行為完全不變、不寫入任何檔案;寫入失敗只記到 stderr,不影響結束碼。保留既有 `verifyStatus`、不嵌入任何指令輸出或機密。
+
 ## [1.33.0] - 2026-06-18 - Workflow Pack Expansion
 
 ### Added

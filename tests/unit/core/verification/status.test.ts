@@ -32,7 +32,10 @@ describe('verification status contract', () => {
 
   test('maps skipped recovery verifier to blocked', () => {
     expect(
-      recoveryVerifyToVerificationStatus('indeterminate', skipped('skipped:placeholder', 'missing table'))
+      recoveryVerifyToVerificationStatus(
+        'indeterminate',
+        skipped('skipped:placeholder', 'missing table')
+      )
     ).toBe('blocked')
   })
 

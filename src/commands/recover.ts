@@ -322,9 +322,8 @@ export const recoverCommand = new Command()
       let verificationArtifactPath: string | undefined
       if (options.writeVerificationArtifact === true && result.verificationStatus !== undefined) {
         try {
-          const { buildVerificationArtifact, writeVerificationArtifact } = await import(
-            '@/core/verification'
-          )
+          const { buildVerificationArtifact, writeVerificationArtifact } =
+            await import('@/core/verification')
           const artifact = buildVerificationArtifact({
             status: result.verificationStatus,
             subject: { kind: 'recovery', name: source.envelope.error.code },
@@ -346,9 +345,7 @@ export const recoverCommand = new Command()
           })
           verificationArtifactPath = await writeVerificationArtifact(source.cwd, artifact)
         } catch (e) {
-          console.error(
-            `Failed to write verification artifact: ${(e as Error).message}`
-          )
+          console.error(`Failed to write verification artifact: ${(e as Error).message}`)
         }
       }
 

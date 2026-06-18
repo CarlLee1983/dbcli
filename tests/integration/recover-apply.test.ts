@@ -499,9 +499,21 @@ describe('dbcli recover --apply --write-verification-artifact', () => {
       ok: false,
       error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
       recovery: [
-        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
       ],
-      verify: { order: 0, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --for-agent',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
     })
     const { stdout, code } = await run(
       ['recover', '--apply', '--write-verification-artifact', '--format', 'json'],
@@ -529,9 +541,21 @@ describe('dbcli recover --apply --write-verification-artifact', () => {
       ok: false,
       error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
       recovery: [
-        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+        {
+          order: 1,
+          command: 'dbcli inspect --for-agent',
+          rationale: '',
+          risk: 'readonly',
+          expects: '',
+        },
       ],
-      verify: { order: 0, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+      verify: {
+        order: 0,
+        command: 'dbcli inspect --for-agent',
+        rationale: '',
+        risk: 'readonly',
+        expects: '',
+      },
     })
     const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], cwd)
     expect(code).toBe(0)

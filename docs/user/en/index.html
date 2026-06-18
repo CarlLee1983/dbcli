@@ -97,6 +97,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
+                    <li class="nav-item"><a href="#developer-workflows" class="nav-link">Developer Workflows</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent Recovery</a></li>
                     <li class="nav-item"><a href="#error-classification" class="nav-link">Errors & Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
@@ -491,6 +492,22 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>Self-Verification Loops</strong>: Snippets can declare a <code>verify</code> block in frontmatter; run with <code>--verify</code> to auto-execute checks and assert results.</li>
                 <li><strong>Agent Plugin</strong>: the repo root follows the Ponytail-style plugin layout with <code>.agents/plugins/marketplace.json</code>, <code>.codex-plugin/plugin.json</code>, <code>.claude-plugin/plugin.json</code>, <code>.cursor-plugin/plugin.json</code>, <code>.github/skills/dbcli/</code>, and <code>skills/dbcli/</code>; when <code>dbcli</code> is not globally installed, the skill falls back to <code>bunx @carllee1983/dbcli &lt;command&gt;</code>. See <code>plugins/dbcli-agent/INSTALL.md</code> for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.</li>
             </ul>
+        </section>
+
+        <!-- doc-key: developer-workflows -->
+        <section id="developer-workflows" class="mt-20">
+            <h2>🛠️ Developer Workflows</h2>
+            <p>Beyond ad-hoc queries, dbcli supports the common development tasks where a database is involved. The agent skill ships a compact router for these; the same scenarios apply when you drive dbcli yourself:</p>
+            <ul>
+                <li><strong>DB-backed feature</strong>: map product/code terms to real objects before editing code (<code>inspect --for-agent</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>).</li>
+                <li><strong>Application data bug</strong>: separate stored facts from application-code inference (<code>audit tail --for-agent</code> → <code>schema</code> → a narrow query).</li>
+                <li><strong>ORM or migration work</strong>: ground edits in live schema evidence (<code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>).</li>
+                <li><strong>PR database review</strong>: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.</li>
+                <li><strong>Slow endpoint or query</strong>: read-only diagnostics before index proposals (<code>report --section perf</code> → <code>guide missing-index-for</code>; <code>proxy analyze</code> when logs exist).</li>
+                <li><strong>Safe data backfill</strong>: scope affected rows and preview mutations (<code>update ... --dry-run</code> → read-back or snippet <code>--verify</code>).</li>
+                <li><strong>Environment validation</strong>: check config and connectivity without leaking secrets (<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>).</li>
+            </ul>
+            <p>All inherit the standard safety rules: prefer <code>--format json</code>, run <code>blacklist list</code> before touching sensitive data, confirm names with <code>schema</code>, dry-run writes, and never print credentials or blacklisted values.</p>
         </section>
 
         <!-- doc-key: agent-recovery-workflow -->

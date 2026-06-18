@@ -421,6 +421,23 @@ dbcli export orders --format jsonl --output orders.jsonl
 
 ---
 
+<!-- doc-key: developer-workflows -->
+## 開發者工作流
+
+除了臨時查詢，`dbcli` 也針對「開發任務中牽涉資料庫」的常見情境而設計。Agent skill（[`SKILL.md`](../../../assets/SKILL.md)）內建了精簡的流程路由；當你自己操作 `dbcli` 時同樣適用：
+
+- **DB-backed 功能**：編輯程式碼前先把產品/程式語彙對應到真實資料物件（`inspect --for-agent` → `blacklist list` → `schema <object>` → `queries suggest <intent>`）。
+- **應用程式資料錯誤**：分離資料庫事實與應用程式推論（`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → 最小查詢）。
+- **ORM 或 migration**：用 live schema 證據支撐 model 與 migration 修改（`schema` → `diff --snapshot` → 用 `migrate add-index`/`add-column` 產生 DDL → `diff --against`）。
+- **PR 資料庫風險審查**：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。
+- **慢 endpoint 或查詢**：在提出 index 前優先使用 read-only diagnostics（`report --section perf` → `guide missing-index-for "<query>"`；有 proxy log 時用 `proxy analyze`）。
+- **安全資料回填**：先界定受影響資料範圍並預覽 mutation（`schema` → count/scope query → `update ... --dry-run` → read-back 或 snippet `--verify`）。
+- **環境設定驗證**：不洩漏 secrets 地檢查 config shape 與 connectivity（`status` → `doctor` → `inspect --for-agent --no-connect`）。
+
+以上全部繼承一般安全規則：優先 `--format json`、碰觸敏感資料前先跑 `blacklist list`、用 `schema` 確認名稱、寫入先 dry-run，且絕不列印 credentials 或 blacklisted 值。
+
+---
+
 <!-- doc-key: agent-recovery-workflow -->
 ## Agent 修復工作流
 

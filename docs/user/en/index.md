@@ -421,6 +421,23 @@ dbcli export orders --format jsonl --output orders.jsonl
 
 ---
 
+<!-- doc-key: developer-workflows -->
+## Developer Workflows
+
+Beyond ad-hoc queries, `dbcli` is built for the common development tasks where a database is involved. The agent skill ([`SKILL.md`](../../../assets/SKILL.md)) ships a compact router for these; the same scenarios apply when you drive `dbcli` yourself:
+
+- **DB-backed feature**: map product/code terms to real objects before editing code (`inspect --for-agent` → `blacklist list` → `schema <object>` → `queries suggest <intent>`).
+- **Application data bug**: separate stored facts from application-code inference (`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → a narrow query).
+- **ORM or migration work**: ground model and migration edits in live schema evidence (`schema` → `diff --snapshot` → generate DDL via `migrate add-index`/`add-column` → `diff --against`).
+- **PR database review**: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.
+- **Slow endpoint or query**: prefer read-only diagnostics before proposing indexes (`report --section perf` → `guide missing-index-for "<query>"`; `proxy analyze` when logs exist).
+- **Safe data backfill**: scope affected rows and preview mutations before execution (`schema` → count/scope query → `update ... --dry-run` → read-back or snippet `--verify`).
+- **Environment validation**: check config shape and connectivity without leaking secrets (`status` → `doctor` → `inspect --for-agent --no-connect`).
+
+All of these inherit the standard safety rules: prefer `--format json`, run `blacklist list` before touching sensitive data, confirm names with `schema`, dry-run writes, and never print credentials or blacklisted values.
+
+---
+
 <!-- doc-key: agent-recovery-workflow -->
 ## Agent Recovery Workflow
 

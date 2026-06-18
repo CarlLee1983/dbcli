@@ -97,6 +97,7 @@
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
+                    <li class="nav-item"><a href="#developer-workflows" class="nav-link">開發者工作流</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent 修復工作流</a></li>
                     <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
@@ -491,6 +492,22 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>自我驗證循環</strong>：儲存的查詢片段支援定義 <code>verify</code> 斷言；在 <code>q</code> 執行時加上 <code>--verify</code> 即可自動化驗證。</li>
                 <li><strong>Agent Plugin</strong>：repo root 採用 Ponytail-style plugin layout，包含 <code>.agents/plugins/marketplace.json</code>、<code>.codex-plugin/plugin.json</code>、<code>.claude-plugin/plugin.json</code>、<code>.cursor-plugin/plugin.json</code>、<code>.github/skills/dbcli/</code> 與 <code>skills/dbcli/</code>；若未全域安裝 <code>dbcli</code>，skill 會 fallback 到 <code>bunx @carllee1983/dbcli &lt;command&gt;</code>。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 <code>plugins/dbcli-agent/INSTALL.md</code>，其中包含提交 Cursor marketplace 審核/索引的步驟。</li>
             </ul>
+        </section>
+
+        <!-- doc-key: developer-workflows -->
+        <section id="developer-workflows" class="mt-20">
+            <h2>🛠️ 開發者工作流</h2>
+            <p>除了臨時查詢，dbcli 也針對「開發任務中牽涉資料庫」的常見情境而設計。Agent skill 內建了精簡的流程路由；當你自己操作 dbcli 時同樣適用：</p>
+            <ul>
+                <li><strong>DB-backed 功能</strong>：編輯程式碼前先把產品/程式語彙對應到真實資料物件（<code>inspect --for-agent</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>）。</li>
+                <li><strong>應用程式資料錯誤</strong>：分離資料庫事實與應用程式推論（<code>audit tail --for-agent</code> → <code>schema</code> → 最小查詢）。</li>
+                <li><strong>ORM 或 migration</strong>：用 live schema 證據支撐修改（<code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>）。</li>
+                <li><strong>PR 資料庫風險審查</strong>：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。</li>
+                <li><strong>慢 endpoint 或查詢</strong>：在提出 index 前優先使用 read-only diagnostics（<code>report --section perf</code> → <code>guide missing-index-for</code>；有 proxy log 時用 <code>proxy analyze</code>）。</li>
+                <li><strong>安全資料回填</strong>：先界定受影響資料範圍並預覽 mutation（<code>update ... --dry-run</code> → read-back 或 snippet <code>--verify</code>）。</li>
+                <li><strong>環境設定驗證</strong>：不洩漏 secrets 地檢查 config 與 connectivity（<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>）。</li>
+            </ul>
+            <p>以上全部繼承一般安全規則：優先 <code>--format json</code>、碰觸敏感資料前先跑 <code>blacklist list</code>、用 <code>schema</code> 確認名稱、寫入先 dry-run，且絕不列印 credentials 或 blacklisted 值。</p>
         </section>
 
         <!-- doc-key: agent-recovery-workflow -->

@@ -351,6 +351,10 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Builtin task pack <code>analyze-table-perf</code></h4>
                 <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — <code>audit-permissions</code>, <code>safe-backfill</code>, <code>schema-drift-review</code>, and <code>connection-health</code>. Browse all packs with <code>dbcli skill tasks list</code>.</p>
             </div>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> task plan and the <code>verification</code> block</h4>
+                <p class="m-0">Running <code>dbcli skill tasks plan safe-backfill-verify --format json</code> returns a plan JSON that includes a <code>verification</code> block with <code>status: "planned"</code>. This block describes the read-back assertion that will be run — it is the <strong>planned</strong> evidence definition, <strong>not</strong> a result. A <code>status</code> of <code>"planned"</code> does <strong>not</strong> mean verification has run or passed; it means the task plan knows which check to perform when the task executes.</p>
+            </div>
         </section>
 
         <!-- doc-key: html-dashboards -->
@@ -579,6 +583,15 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                     <tr><td><code>3</code></td><td>Every step was skipped by the gate — widen <code>--allow-write</code> or fill placeholders, then retry</td></tr>
                 </tbody>
             </table>
+
+            <h3 class="mt-10">Persisting a verification artifact (opt-in)</h3>
+            <p>Pass <code>--write-verification-artifact</code> to <code>recover --apply</code> to persist a bounded <code>VerificationArtifact</code> JSON under <code>.dbcli/verification/</code> after the run:</p>
+            <pre><code>dbcli recover --apply --write-verification-artifact</code></pre>
+            <ul>
+                <li>The artifact is written <strong>only when the verify step actually ran</strong> — if the plan had no verify step, nothing is written even when the flag is present.</li>
+                <li>Omitting the flag leaves behavior completely unchanged — no file is ever written.</li>
+                <li>Artifacts contain <strong>no command transcripts, credentials, or connection secrets</strong> — they carry pointer-oriented evidence only (command name, step reference, outcome status).</li>
+            </ul>
         </section>
 
         <!-- doc-key: error-classification -->

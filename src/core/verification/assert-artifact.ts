@@ -1,4 +1,9 @@
-import type { VerificationSubject, VerificationSubjectKind, VerificationArtifact, VerificationEvidenceRef } from './types'
+import type {
+  VerificationSubject,
+  VerificationSubjectKind,
+  VerificationArtifact,
+  VerificationEvidenceRef,
+} from './types'
 import type { AssertVerdict } from '@/core/result-snapshot/types'
 import { redactArgv } from '@/utils/redaction'
 import { buildVerificationArtifact } from './artifact'
@@ -15,8 +20,7 @@ export const VERIFICATION_SUBJECT_KINDS = [
 
 export function isVerificationSubjectKind(value: unknown): value is VerificationSubjectKind {
   return (
-    typeof value === 'string' &&
-    (VERIFICATION_SUBJECT_KINDS as readonly string[]).includes(value)
+    typeof value === 'string' && (VERIFICATION_SUBJECT_KINDS as readonly string[]).includes(value)
   )
 }
 
@@ -36,9 +40,7 @@ export class AssertArtifactError extends Error {
 export function parseVerificationSubject(raw: string): VerificationSubject {
   const idx = raw.indexOf(':')
   if (idx === -1) {
-    throw new AssertArtifactError(
-      `--verification-subject must be "<kind>:<name>" (got '${raw}')`
-    )
+    throw new AssertArtifactError(`--verification-subject must be "<kind>:<name>" (got '${raw}')`)
   }
   const kind = raw.slice(0, idx).trim()
   const name = raw.slice(idx + 1).trim()

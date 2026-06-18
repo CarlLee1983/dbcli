@@ -140,12 +140,22 @@ describe('builtin pack: safe-backfill-verify', () => {
     const program = makeRoot()
     await program.parseAsync(
       [
-        'node', 'dbcli', 'skill', 'tasks', 'plan', 'safe-backfill-verify',
-        '--param', 'table=orders',
-        '--param', 'query=UPDATE orders SET status = 1 WHERE status IS NULL',
-        '--param', 'verify_query=SELECT count(*) FROM orders WHERE status IS NULL',
-        '--param', 'expect=rows == 0',
-        '--format', 'json',
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'safe-backfill-verify',
+        '--param',
+        'table=orders',
+        '--param',
+        'query=UPDATE orders SET status = 1 WHERE status IS NULL',
+        '--param',
+        'verify_query=SELECT count(*) FROM orders WHERE status IS NULL',
+        '--param',
+        'expect=rows == 0',
+        '--format',
+        'json',
       ],
       { from: 'node' }
     )

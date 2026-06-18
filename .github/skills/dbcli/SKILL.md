@@ -151,6 +151,7 @@ Developer workflow guardrails:
   command, and read-back or snippet verification.
 - Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
 - Do not print credentials, copied connection strings, or blacklisted values.
+- To persist result evidence for a read-back assertion, run `assert ... --write-verification-artifact --verification-subject <kind:name>` (kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`).
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 

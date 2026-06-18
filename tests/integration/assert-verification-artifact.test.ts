@@ -34,7 +34,10 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
 function run(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     // --config is a global option and must precede the subcommand
-    const child = spawn('bun', ['run', CLI, '--config', WORK, ...args], { cwd: WORK, env: sanitizeEnv() })
+    const child = spawn('bun', ['run', CLI, '--config', WORK, ...args], {
+      cwd: WORK,
+      env: sanitizeEnv(),
+    })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (b) => (stdout += b.toString()))
@@ -66,7 +69,9 @@ beforeAll(async () => {
     await adapter.execute(`DROP TABLE IF EXISTS ${TABLE}`)
     await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
     // 3 rows with NULL status -> "count where status is null" == 3 (fail), and we can also assert == 0 etc.
-    await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
+    await adapter.execute(
+      `INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`
+    )
     await adapter.disconnect()
 
     WORK = await mkdtemp(join(tmpdir(), 'dbcli-assert-art-'))
@@ -187,7 +192,14 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     await writeFile(
       join(tmp, 'config.json'),
       JSON.stringify({
-        connection: { system: 'postgresql', host: '203.0.113.1', port: 5432, user: 'u', password: 'p', database: 'd' },
+        connection: {
+          system: 'postgresql',
+          host: '203.0.113.1',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
         permission: 'query-only',
         metadata: { createdAt: '2026-06-19T00:00:00.000Z', version: '1.0' },
       }),
@@ -196,7 +208,19 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     // --config is a global option and must precede the subcommand
     const child = spawn(
       'bun',
-      ['run', CLI, '--config', tmp, 'assert', 'SELECT 1', '--expect', 'rows > 0', '--write-verification-artifact', '--verification-subject', 'bogus:x'],
+      [
+        'run',
+        CLI,
+        '--config',
+        tmp,
+        'assert',
+        'SELECT 1',
+        '--expect',
+        'rows > 0',
+        '--write-verification-artifact',
+        '--verification-subject',
+        'bogus:x',
+      ],
       { cwd: tmp, env: sanitizeEnv() }
     )
     let stderr = ''

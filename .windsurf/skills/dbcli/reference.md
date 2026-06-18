@@ -616,6 +616,46 @@ dbcli assert "SELECT count(*) FROM orders" --expect "value > 100" --no-fail   # 
 **Engines:** SQL only (PostgreSQL / MySQL / MariaDB)
 **Permission:** query-only+
 
+#### Verification artifact (--write-verification-artifact)
+
+Opt-in flag trio that persists a **VerificationArtifact JSON** (schema v1) under `<cwd>/.dbcli/verification/` after the assertion runs.
+
+| Flag | Required | Description |
+| :--- | :--- | :--- |
+| `--write-verification-artifact` | opt-in | Trigger artifact write. No-op when no verdict has been produced. |
+| `--verification-subject <kind:name>` | yes (when flag is set) | Subject identifier. Format: `<kind>:<name>`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
+| `--verification-summary <text>` | no | Free-text summary line stored in the artifact. Default when pass: "Assertion verified the expected state." Default when fail: "Assertion did not verify the expected state." |
+
+**Output contract:**
+
+- `--format json` — `AssertVerdict` gains `verificationArtifactPath: string` pointing to the written file.
+- `--format table` — an extra `Verification artifact: <path>` line is printed after the verdict table.
+- A `--no-fail` assertion that fails still records status `not_verified` and stores `exitCode: 1` in evidence.
+
+**Planned vs Result evidence.** `dbcli skill tasks plan safe-backfill-verify --format json` returns a plan containing a `verification` block with `status: "planned"`. That block is the **planned** evidence definition — it describes which check will run. Running `assert --write-verification-artifact` on the actual data produces **result** evidence (`status: "verified"` or `status: "not_verified"`). The two records are distinct; `"planned"` does **not** indicate that verification has run or passed.
+
+> **Casting note:** Postgres returns `count(*)` and `sum()` as bigint (a string in the result set). `value ==` uses strict equality, so `"0" == 0` is false. Cast to `::int` (`count(*)::int`) to ensure numeric comparison works correctly.
+
+```bash
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify
+
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify \
+  --verification-summary "Post-backfill null-status count is zero."
+
+# --no-fail: exits 0 but still records not_verified on failure
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --no-fail \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify
+```
+
 ### proxy
 
 Local-development **observability proxy** for MySQL/MariaDB/PostgreSQL. Inserts dbcli

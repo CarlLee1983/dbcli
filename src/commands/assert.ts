@@ -64,7 +64,10 @@ export const assertCommand = new Command()
     'After the verdict, persist a VerificationArtifact JSON under .dbcli/verification/',
     false
   )
-  .option('--verification-subject <subject>', 'Required with --write-verification-artifact: "<kind>:<name>"')
+  .option(
+    '--verification-subject <subject>',
+    'Required with --write-verification-artifact: "<kind>:<name>"'
+  )
   .option('--verification-summary <text>', 'Optional summary text for the verification artifact')
   .action(async (query: string, options: Record<string, unknown>, command: Command) => {
     try {
@@ -77,14 +80,20 @@ export const assertCommand = new Command()
       if (options.writeVerificationArtifact === true) {
         const raw = options.verificationSubject as string | undefined
         if (!raw) {
-          console.error('--write-verification-artifact requires --verification-subject "<kind>:<name>"')
+          console.error(
+            '--write-verification-artifact requires --verification-subject "<kind>:<name>"'
+          )
           process.exit(1)
         }
         try {
           verificationSubject = parseVerificationSubject(raw)
         } catch (e) {
           // AssertArtifactError (or any parse failure) exits before any DB connection.
-          console.error(e instanceof AssertArtifactError || e instanceof Error ? (e as Error).message : String(e))
+          console.error(
+            e instanceof AssertArtifactError || e instanceof Error
+              ? (e as Error).message
+              : String(e)
+          )
           process.exit(1)
         }
       }

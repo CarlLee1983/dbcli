@@ -176,6 +176,49 @@ Verify data-processing correctness — capture a result fingerprint, then assert
 | `snapshot <query>` | Captures a **result fingerprint** (row count + per-column null/distinct/min/max/sum + an order-independent checksum). Default file `.dbcli/snapshots/snap-<timestamp>.json`; also `--out`, `--rows`, `--stdout`. Blacklisted columns are masked at the source, so the snapshot is safe to store. Use as a baseline for `assert --against`. |
 | `assert <query>` | Verifies an **invariant**; exits 1 on failure unless `--no-fail`. `--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`, `--vs <query> --compare rows\|value` (reconcile two queries), `--against <snapshot> --tolerance <pct>` (drift vs a baseline; `0` = exact checksum). |
 
+#### assert --write-verification-artifact
+
+Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/verification/` whenever you need a durable audit trail for a read-back assertion.
+
+**Flag trio:**
+
+| Flag | Required | Description |
+| :--- | :--- | :--- |
+| `--write-verification-artifact` | yes (opt-in) | Write a VerificationArtifact JSON after the assertion runs. |
+| `--verification-subject <kind:name>` | yes (when flag is set) | Subject being verified. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
+| `--verification-summary <text>` | no | Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state." |
+
+**Output contract:**
+
+- `--format json` — adds `verificationArtifactPath` to the `AssertVerdict` envelope.
+- `--format table` — prints an extra `Verification artifact: <path>` line.
+- Status follows assertion truth: `--no-fail` failures still record `not_verified` / evidence `exitCode: 1`.
+
+**Planned vs Result evidence.** `dbcli skill tasks plan safe-backfill-verify` produces a plan JSON with a `verification` block whose `status` is `"planned"` — this is the **planned** evidence definition describing which check will run. The final `assert --write-verification-artifact` step produces **result** evidence (`status: verified` or `not_verified`). These are two different records; `"planned"` does **not** mean verification has run.
+
+> **Note:** Cast bigint aggregates (`count(*)`, `sum()`) to `::int` so `value ==` compares numerically — Postgres returns bigint as a string, and `value ==` uses strict equality.
+
+```bash
+# 1. plan the workflow (plan-only, planned evidence)
+dbcli skill tasks plan safe-backfill-verify \
+  --param table=orders \
+  --param query="UPDATE orders SET status = 1 WHERE status IS NULL" \
+  --param verify_query="SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --param expect="value == 0"
+
+# 2. dry-run the write manually
+dbcli update orders --where "status IS NULL" --set '{"status": 1}' --dry-run
+
+# 3. execute the write under existing write permissions
+dbcli update orders --where "status IS NULL" --set '{"status": 1}'
+
+# 4. run the final assertion and persist RESULT evidence
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify
+```
+
 <!-- doc-key: proxy -->
 ### dbcli proxy — Local Observability Proxy
 

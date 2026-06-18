@@ -127,6 +127,7 @@ dbcli inspect --for-agent --no-connect --format json
 - 寫入與 backfill 必須包含 scope count、dry-run preview、execution command，以及 read-back 或 snippet verification。
 - 不要直接從 performance suggestion 建 index；應轉成經過 review 的 migration。
 - 不要列印 credentials、複製的連線字串或 blacklisted 值。
+- 若需持久化 read-back 斷言的結果佐證，執行 `assert ... --write-verification-artifact --verification-subject <kind:name>`（允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`）。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
 

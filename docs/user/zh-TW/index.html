@@ -287,6 +287,46 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </tbody>
             </table>
 
+            <h4 class="mt-6 mb-2 font-bold">assert --write-verification-artifact</h4>
+            <p class="mb-4">使用 <code>--write-verification-artifact</code> 可在 read-back 斷言執行後，將<strong>結果佐證記錄</strong>（v1 VerificationArtifact JSON）寫入 <code>.dbcli/verification/</code>，提供可稽核的持久化軌跡。</p>
+            <p class="mb-2"><strong>旗標三件組：</strong></p>
+            <table>
+                <thead>
+                    <tr><th>旗標</th><th>必填</th><th>說明</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>--write-verification-artifact</code></td><td>是（opt-in）</td><td>斷言執行後寫入 VerificationArtifact JSON。</td></tr>
+                    <tr><td><code>--verification-subject &lt;kind:name&gt;</code></td><td>是（啟用旗標時）</td><td>被驗證的標的。允許的 kind：<code>recovery</code>、<code>task-pack</code>、<code>assertion</code>、<code>migration</code>、<code>backfill</code>、<code>manual</code>。</td></tr>
+                    <tr><td><code>--verification-summary &lt;text&gt;</code></td><td>否</td><td>可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。</td></tr>
+                </tbody>
+            </table>
+            <p class="mt-4 mb-2"><strong>輸出合約：</strong></p>
+            <ul>
+                <li><code>--format json</code> — 在 <code>AssertVerdict</code> 信封中新增 <code>verificationArtifactPath</code> 欄位。</li>
+                <li><code>--format table</code> — 額外印出 <code>Verification artifact: &lt;path&gt;</code> 那一行。</li>
+                <li>狀態跟隨斷言真值：<code>--no-fail</code> 失敗仍會記錄 <code>not_verified</code> / 佐證 <code>exitCode: 1</code>。</li>
+            </ul>
+            <p class="mt-4 mb-4"><strong>計畫佐證 vs 結果佐證的區別。</strong> <code>dbcli skill tasks plan safe-backfill-verify</code> 產生的計畫 JSON 包含一個 <code>verification</code> 區塊，其 <code>status</code> 為 <code>"planned"</code> — 這是<strong>計畫中</strong>的佐證定義，描述哪項檢查將在執行時進行。最後的 <code>assert --write-verification-artifact</code> 步驟才會產生<strong>結果</strong>佐證（<code>status: verified</code> 或 <code>not_verified</code>）。這兩者是不同的記錄；<code>"planned"</code> <strong>不代表</strong>驗證已執行。</p>
+            <p class="mb-2 text-sm text-text-muted"><strong>注意：</strong> 請將 bigint 聚合函數（<code>count(*)</code>、<code>sum()</code>）轉型為 <code>::int</code>，讓 <code>value ==</code> 做數值比較 — Postgres 回傳的 bigint 是字串，而 <code>value ==</code> 採嚴格相等。</p>
+            <pre><code># 1. 規劃工作流（plan-only，計畫佐證）
+dbcli skill tasks plan safe-backfill-verify \
+  --param table=orders \
+  --param query="UPDATE orders SET status = 1 WHERE status IS NULL" \
+  --param verify_query="SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --param expect="value == 0"
+
+# 2. 手動 dry-run 寫入操作
+dbcli update orders --where "status IS NULL" --set '{"status": 1}' --dry-run
+
+# 3. 在既有寫入權限下執行寫入
+dbcli update orders --where "status IS NULL" --set '{"status": 1}'
+
+# 4. 執行最終斷言並持久化結果佐證
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — 本機觀察型 Proxy</h3>
             <p class="text-text-muted mb-4">本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，<code>dbcli</code> 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。<strong>這不是正式環境閘道器。</strong> 僅限本機開發環境使用。</p>

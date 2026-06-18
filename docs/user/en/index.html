@@ -287,6 +287,46 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </tbody>
             </table>
 
+            <h4 class="mt-6 mb-2 font-bold">assert --write-verification-artifact</h4>
+            <p class="mb-4">Persist a <strong>result evidence record</strong> (v1 VerificationArtifact JSON) to <code>.dbcli/verification/</code> whenever you need a durable audit trail for a read-back assertion.</p>
+            <p class="mb-2"><strong>Flag trio:</strong></p>
+            <table>
+                <thead>
+                    <tr><th>Flag</th><th>Required</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>--write-verification-artifact</code></td><td>yes (opt-in)</td><td>Write a VerificationArtifact JSON after the assertion runs.</td></tr>
+                    <tr><td><code>--verification-subject &lt;kind:name&gt;</code></td><td>yes (when flag is set)</td><td>Subject being verified. Allowed kinds: <code>recovery</code>, <code>task-pack</code>, <code>assertion</code>, <code>migration</code>, <code>backfill</code>, <code>manual</code>.</td></tr>
+                    <tr><td><code>--verification-summary &lt;text&gt;</code></td><td>no</td><td>Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state."</td></tr>
+                </tbody>
+            </table>
+            <p class="mt-4 mb-2"><strong>Output contract:</strong></p>
+            <ul>
+                <li><code>--format json</code> — adds <code>verificationArtifactPath</code> to the <code>AssertVerdict</code> envelope.</li>
+                <li><code>--format table</code> — prints an extra <code>Verification artifact: &lt;path&gt;</code> line.</li>
+                <li>Status follows assertion truth: <code>--no-fail</code> failures still record <code>not_verified</code> / evidence <code>exitCode: 1</code>.</li>
+            </ul>
+            <p class="mt-4 mb-4"><strong>Planned vs Result evidence.</strong> <code>dbcli skill tasks plan safe-backfill-verify</code> produces a plan JSON with a <code>verification</code> block whose <code>status</code> is <code>"planned"</code> — this is the <strong>planned</strong> evidence definition describing which check will run. The final <code>assert --write-verification-artifact</code> step produces <strong>result</strong> evidence (<code>status: verified</code> or <code>not_verified</code>). These are two different records; <code>"planned"</code> does <strong>not</strong> mean verification has run.</p>
+            <p class="mb-2 text-sm text-text-muted"><strong>Note:</strong> Cast bigint aggregates (<code>count(*)</code>, <code>sum()</code>) to <code>::int</code> so <code>value ==</code> compares numerically — Postgres returns bigint as a string, and <code>value ==</code> uses strict equality.</p>
+            <pre><code># 1. plan the workflow (plan-only, planned evidence)
+dbcli skill tasks plan safe-backfill-verify \
+  --param table=orders \
+  --param query="UPDATE orders SET status = 1 WHERE status IS NULL" \
+  --param verify_query="SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --param expect="value == 0"
+
+# 2. dry-run the write manually
+dbcli update orders --where "status IS NULL" --set '{"status": 1}' --dry-run
+
+# 3. execute the write under existing write permissions
+dbcli update orders --where "status IS NULL" --set '{"status": 1}'
+
+# 4. run the final assertion and persist RESULT evidence
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — Local Observability Proxy</h3>
             <p class="text-text-muted mb-4">A local development observability proxy — point an existing application at the proxy port and <code>dbcli</code> relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. <strong>This is NOT a production gateway.</strong> Use it during local development only.</p>

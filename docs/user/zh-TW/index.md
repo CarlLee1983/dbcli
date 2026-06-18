@@ -176,6 +176,49 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `snapshot <query>` | 擷取**結果指紋**(rowCount + 每欄 null/distinct/min/max/sum + 順序無關的 checksum)。預設檔案 `.dbcli/snapshots/snap-<timestamp>.json`;另有 `--out`、`--rows`、`--stdout`。黑名單欄位在源頭遮罩,快照可安全保存。作為 `assert --against` 的基準。 |
 | `assert <query>` | 驗證**不變量**;失敗時 exit 1,除非 `--no-fail`。`--expect "rows>0 \| value==X \| col:c not null \| unique \| between a and b \| >= n"`、`--vs <query> --compare rows\|value`(對帳兩個查詢)、`--against <snapshot> --tolerance <pct>`(對基準的漂移;`0` = 完全相符 checksum)。 |
 
+#### assert --write-verification-artifact
+
+使用 `--write-verification-artifact` 可在 read-back 斷言執行後,將 **結果佐證記錄**（v1 VerificationArtifact JSON）寫入 `.dbcli/verification/`，提供可稽核的持久化軌跡。
+
+**旗標三件組：**
+
+| 旗標 | 必填 | 說明 |
+| :--- | :--- | :--- |
+| `--write-verification-artifact` | 是（opt-in）| 斷言執行後寫入 VerificationArtifact JSON。 |
+| `--verification-subject <kind:name>` | 是（啟用旗標時）| 被驗證的標的。允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。 |
+| `--verification-summary <text>` | 否 | 可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。 |
+
+**輸出合約：**
+
+- `--format json` — 在 `AssertVerdict` 信封中新增 `verificationArtifactPath` 欄位。
+- `--format table` — 額外印出 `Verification artifact: <path>` 那一行。
+- 狀態跟隨斷言真值：`--no-fail` 失敗仍會記錄 `not_verified` / 佐證 `exitCode: 1`。
+
+**計畫佐證 vs 結果佐證的區別。** `dbcli skill tasks plan safe-backfill-verify` 產生的計畫 JSON 包含一個 `verification` 區塊，其 `status` 為 `"planned"` — 這是**計畫中**的佐證定義，描述哪項檢查將在執行時進行。最後的 `assert --write-verification-artifact` 步驟才會產生**結果**佐證（`status: verified` 或 `not_verified`）。這兩者是不同的記錄；`"planned"` **不代表**驗證已執行。
+
+> **注意：** 請將 bigint 聚合函數（`count(*)`、`sum()`）轉型為 `::int`，讓 `value ==` 做數值比較 — Postgres 回傳的 bigint 是字串，而 `value ==` 採嚴格相等。
+
+```bash
+# 1. 規劃工作流（plan-only，計畫佐證）
+dbcli skill tasks plan safe-backfill-verify \
+  --param table=orders \
+  --param query="UPDATE orders SET status = 1 WHERE status IS NULL" \
+  --param verify_query="SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --param expect="value == 0"
+
+# 2. 手動 dry-run 寫入操作
+dbcli update orders --where "status IS NULL" --set '{"status": 1}' --dry-run
+
+# 3. 在既有寫入權限下執行寫入
+dbcli update orders --where "status IS NULL" --set '{"status": 1}'
+
+# 4. 執行最終斷言並持久化結果佐證
+dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
+  --expect "value == 0" \
+  --write-verification-artifact \
+  --verification-subject backfill:safe-backfill-verify
+```
+
 <!-- doc-key: proxy -->
 ### dbcli proxy — 本機觀察型 Proxy
 

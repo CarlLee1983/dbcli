@@ -20,5 +20,17 @@
     "redis",
     "elasticsearch"
   ],
+  "category": "developer-tools",
+  "tags": [
+    "database",
+    "cli",
+    "agents",
+    "developer-tools",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "elasticsearch"
+  ],
   "skills": "./skills/"
 }

@@ -46,6 +46,10 @@ In Cursor Agent chat:
 Or search for `dbcli-agent` in Cursor's plugin marketplace. Fallback copy
 instructions are in [INSTALL.md](./INSTALL.md#cursor).
 
+Cursor marketplace review/indexing requires the GitHub repository URL and the
+root `.cursor-plugin/plugin.json`; submission steps are documented in
+[INSTALL.md](./INSTALL.md#cursor).
+
 Installing it as a plugin makes the `dbcli` skill available from
 `skills/dbcli/SKILL.md`, with the full command reference next to it.
 

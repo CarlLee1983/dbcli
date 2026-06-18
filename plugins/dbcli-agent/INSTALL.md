@@ -93,6 +93,19 @@ This repository includes Cursor plugin metadata at:
 .cursor-plugin/plugin.json
 ```
 
+For Cursor marketplace review/indexing:
+
+1. Push this repository to GitHub and keep it public.
+2. Keep the single-plugin layout at the repository root:
+   `.cursor-plugin/plugin.json` plus `skills/dbcli/`.
+3. Confirm the manifest name is lowercase kebab-case (`dbcli-agent`) and that
+   `category`, `tags`, `homepage`, `repository`, and `skills` are present.
+4. Submit the repository URL to the Cursor plugin team for review/indexing.
+   The Cursor plugin template currently points submitters to the Cursor
+   community Slack or `kniparko@anysphere.com`.
+5. After indexing, users can install from Cursor Agent chat with
+   `/add-plugin dbcli-agent` or by searching the Cursor plugin marketplace.
+
 The repo also keeps an instruction-file fallback for projects that want to
 vendor the dbcli rule and reference directly.
 

@@ -83,6 +83,14 @@ recent audit activity. Additional read-only packs: `audit-permissions`,
 `safe-backfill`, `schema-drift-review`, `connection-health` — run
 `dbcli skill tasks list` for the full set.
 
+Review & verification packs: `pr-database-review` (assess a PR's changed queries,
+migrations and blacklist risk), `migration-review` (capture pre-change schema and
+preview DDL), `safe-backfill-verify` (backfill planning with a read-back `assert`),
+and `slow-endpoint-investigation` (chain `proxy analyze` → `explain` →
+`guide missing-index-for`). All are read-only `plan-only` — pick the pack matching the
+user's situation before improvising, and run any index/DDL proposal through
+`migration-review` before writing.
+
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).
 

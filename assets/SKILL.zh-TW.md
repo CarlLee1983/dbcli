@@ -70,6 +70,12 @@ dbcli skill tasks plan <task> --param key=value --format json     # 產生計畫
 
 內建套件:`diagnose-slow-query` 與 **(v1.23)** `analyze-table-perf` — 後者是 read-only 的 `plan-only` 套件,需帶入必填的 `table` 參數,依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage`。`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議 `analyze-table-perf`。其他唯讀套件:`audit-permissions`、`safe-backfill`、`schema-drift-review`、`connection-health` — 用 `dbcli skill tasks list` 瀏覽完整清單。
 
+審查與驗證套件:`pr-database-review`(評估 PR 變更的查詢、遷移與 blacklist 風險)、
+`migration-review`(擷取變更前 schema 並預覽 DDL)、`safe-backfill-verify`(backfill 規劃
+搭配 read-back `assert`),以及 `slow-endpoint-investigation`(串接 `proxy analyze` →
+`explain` → `guide missing-index-for`)。全部為唯讀 `plan-only` — 先選擇符合使用者情境的
+套件再行動,任何索引/DDL 提案都應先經 `migration-review` 再寫入。
+
 任務檔放在 `assets/tasks/`(內建)、`.dbcli-shared/tasks/`(共享)與 `.dbcli/tasks/`(本地覆寫)。
 
 ## 開發者工作流

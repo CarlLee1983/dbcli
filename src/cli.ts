@@ -26,6 +26,7 @@ import { registerMissingIndexCommand } from './commands/guide-missing-index'
 import { explainCommand } from './commands/explain'
 import { snapshotCommand } from './commands/snapshot'
 import { assertCommand } from './commands/assert'
+import { verificationCommand } from './commands/verification'
 import { recoveryCommand } from './commands/recovery'
 import { recoverCommand } from './commands/recover'
 import { auditCommand } from './commands/audit'
@@ -350,6 +351,7 @@ program.addCommand(queriesCommand)
 program.addCommand(explainCommand)
 program.addCommand(snapshotCommand)
 program.addCommand(assertCommand)
+program.addCommand(verificationCommand)
 program.addCommand(proxyCommand)
 
 // Show help when no command provided

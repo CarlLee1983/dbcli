@@ -16,6 +16,7 @@
     *   [Snippet 管理 (儲存的查詢)](#snippet-管理)
     *   [健康度、診斷與修復](#健康度診斷與修復)
     *   [資料驗證 (snapshot, assert)](#資料驗證)
+    *   [驗證文物檢視器](#verification-inspect)
     *   [本機觀察型 Proxy](#proxy)
     *   [進階工具 (DDL, Shell, AI Skills)](#進階工具)
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
@@ -217,6 +218,32 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --expect "value == 0" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify
+```
+
+<!-- doc-key: verification-inspect -->
+### verification — 檢視驗證文物（唯讀）
+
+`dbcli verification` 讀取寫入於 `<cwd>/.dbcli/verification/` 下的文物。
+它不連線資料庫、不寫入稽核記錄、也不修改文物。
+儲存根目錄為目前工作目錄，與 `--config` 位置無關。
+
+- `dbcli verification list [--format json|table] [--limit <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid]`
+  — 依最新優先列出文物。
+- `dbcli verification show <id-or-path> [--format json|table]`
+  — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。
+- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
+  — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。
+
+狀態值：`verified`、`not_verified`、`indeterminate`、`blocked`。
+Subject kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。
+
+若 `.dbcli/verification/` 目錄不存在，回傳空結果並以 `0` 退出。
+`list`/`summary` 執行時會略過格式有誤的檔案（可透過 `--include-invalid` 及 `summary` 的無效計數觀察）；對格式有誤的檔案執行 `show` 時，會以 `1` 退出。
+
+```bash
+dbcli verification summary --format json
+dbcli verification list --status verified --subject backfill:safe-backfill-verify
+dbcli verification show ver_abcd --format json
 ```
 
 <!-- doc-key: proxy -->

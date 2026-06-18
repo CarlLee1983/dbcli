@@ -16,6 +16,7 @@
     *   [Snippet Management (Saved Queries)](#snippet-management)
     *   [Health, Diagnostics & Recovery](#health-diagnostics--recovery)
     *   [Data Verification (snapshot, assert)](#data-verification)
+    *   [Verification Artifact Inspector](#verification-inspect)
     *   [Local Observability Proxy](#proxy)
     *   [Advanced Tools (DDL, Shell, AI Skills)](#advanced-tools)
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
@@ -217,6 +218,34 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --expect "value == 0" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify
+```
+
+<!-- doc-key: verification-inspect -->
+### verification — inspect verification artifacts (read-only)
+
+`dbcli verification` reads artifacts written under `<cwd>/.dbcli/verification/`.
+It never connects to a database, never writes audit entries, and never modifies
+artifacts. The storage root is the current working directory, independent of
+`--config`.
+
+- `dbcli verification list [--format json|table] [--limit <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid]`
+  — list artifacts latest-first.
+- `dbcli verification show <id-or-path> [--format json|table]`
+  — print one artifact by exact id, unique id prefix, filename, or in-bounds path.
+- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
+  — latest status, status counts, invalid count, and per-subject breakdown.
+
+Statuses: `verified`, `not_verified`, `indeterminate`, `blocked`.
+Subject kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`.
+
+A missing `.dbcli/verification/` directory returns an empty result and exits `0`.
+Malformed files are skipped during `list`/`summary` (surfaced via `--include-invalid`
+and the `summary` invalid count); selecting a malformed file with `show` exits `1`.
+
+```bash
+dbcli verification summary --format json
+dbcli verification list --status verified --subject backfill:safe-backfill-verify
+dbcli verification show ver_abcd --format json
 ```
 
 <!-- doc-key: proxy -->

@@ -327,6 +327,20 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <!-- doc-key: verification-inspect -->
+            <h3 id="verification-inspect">verification — 檢視驗證文物（唯讀）</h3>
+            <p class="text-text-muted mb-4"><code>dbcli verification</code> 讀取寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、不寫入稽核記錄、也不修改文物。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>
+            <ul class="mb-4">
+                <li><code>dbcli verification list [--format json|table] [--limit &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid]</code> — 依最新優先列出文物。</li>
+                <li><code>dbcli verification show &lt;id-or-path&gt; [--format json|table]</code> — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。</li>
+                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;]</code> — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。</li>
+            </ul>
+            <p class="mb-2">狀態值：<code>verified</code>、<code>not_verified</code>、<code>indeterminate</code>、<code>blocked</code>。<br>Subject kind：<code>recovery</code>、<code>task-pack</code>、<code>assertion</code>、<code>migration</code>、<code>backfill</code>、<code>manual</code>。</p>
+            <p class="mb-4">若 <code>.dbcli/verification/</code> 目錄不存在，回傳空結果並以 <code>0</code> 退出。<code>list</code>/<code>summary</code> 執行時會略過格式有誤的檔案（可透過 <code>--include-invalid</code> 及 <code>summary</code> 的無效計數觀察）；對格式有誤的檔案執行 <code>show</code> 時，會以 <code>1</code> 退出。</p>
+            <pre><code>dbcli verification summary --format json
+dbcli verification list --status verified --subject backfill:safe-backfill-verify
+dbcli verification show ver_abcd --format json</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — 本機觀察型 Proxy</h3>
             <p class="text-text-muted mb-4">本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，<code>dbcli</code> 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。<strong>這不是正式環境閘道器。</strong> 僅限本機開發環境使用。</p>

@@ -327,6 +327,20 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <!-- doc-key: verification-inspect -->
+            <h3 id="verification-inspect">verification — inspect verification artifacts (read-only)</h3>
+            <p class="text-text-muted mb-4"><code>dbcli verification</code> reads artifacts written under <code>&lt;cwd&gt;/.dbcli/verification/</code>. It never connects to a database, never writes audit entries, and never modifies artifacts. The storage root is the current working directory, independent of <code>--config</code>.</p>
+            <ul class="mb-4">
+                <li><code>dbcli verification list [--format json|table] [--limit &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid]</code> — list artifacts latest-first.</li>
+                <li><code>dbcli verification show &lt;id-or-path&gt; [--format json|table]</code> — print one artifact by exact id, unique id prefix, filename, or in-bounds path.</li>
+                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;]</code> — latest status, status counts, invalid count, and per-subject breakdown.</li>
+            </ul>
+            <p class="mb-2">Statuses: <code>verified</code>, <code>not_verified</code>, <code>indeterminate</code>, <code>blocked</code>.<br>Subject kinds: <code>recovery</code>, <code>task-pack</code>, <code>assertion</code>, <code>migration</code>, <code>backfill</code>, <code>manual</code>.</p>
+            <p class="mb-4">A missing <code>.dbcli/verification/</code> directory returns an empty result and exits <code>0</code>. Malformed files are skipped during <code>list</code>/<code>summary</code> (surfaced via <code>--include-invalid</code> and the <code>summary</code> invalid count); selecting a malformed file with <code>show</code> exits <code>1</code>.</p>
+            <pre><code>dbcli verification summary --format json
+dbcli verification list --status verified --subject backfill:safe-backfill-verify
+dbcli verification show ver_abcd --format json</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — Local Observability Proxy</h3>
             <p class="text-text-muted mb-4">A local development observability proxy — point an existing application at the proxy port and <code>dbcli</code> relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. <strong>This is NOT a production gateway.</strong> Use it during local development only.</p>

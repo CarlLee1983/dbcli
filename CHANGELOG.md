@@ -5,6 +5,25 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-06-10 - Data Editing Surface & Agent Plugin Packaging
+
+### Added
+
+- **`@carllee1983/dbcli/core` 公開匯出 `DataExecutor` 與資料執行型別。** 在 `./core` barrel 開出資料編輯介面（insert/update/delete 執行面），讓外部消費者（如 `dbcli-gui` sidecar）能重用與 CLI 同源的資料寫入能力，不必重寫 adapter 邏輯。CLI 行為不變。
+- **Agent plugin 打包與 marketplace 安裝。** 將 dbcli 打包為 agent plugin（Ponytail 風格 marketplace install），新增 GitHub Copilot CLI plugin 支援與 Cursor plugin 安裝（add-plugin metadata、marketplace 提交路徑），並依各 agent 拆分安裝指令與文件。
+- **開發者工作流 skill 指引（en/zh-TW）。** 在 dbcli skill 新增「Developer workflows」段落，把資料庫影響隱含於開發任務時的最小安全路徑（DB-backed 功能、資料錯誤排查、ORM/migration、PR 審查、慢查詢、回填、環境驗證）寫入 SKILL en/zh-TW 與各平台副本，並以可執行的指令錨點取代不可執行的 migrate 範例。
+
+## [1.30.0] - 2026-06-09 - Connection Writer API
+
+### Added
+
+- **`@carllee1983/dbcli/core` 新增連線寫入 API。** 在 `./core` barrel 公開純函式 mutation：`upsertConnection`、`removeConnection`（含預設連線重指派與 last-connection 防護）、`setDefaultConnection`、`migrateV1ToV2`（保留 legacy `.env.local` 密碼）、`writeConnectionSecret` + `envVarNameFor`（per-connection env 命名空間）。讓外部消費者（如 `dbcli-gui` sidecar）能程式化管理 `.dbcli` v2 連線，與 CLI 同源。CLI 行為不變。
+
+### Fixed
+
+- **`writeV2Config` 改為 atomic temp+rename 寫入**，避免寫入中斷時破壞設定庫。
+- **`migrateV1ToV2` 對非 SQL 的 v1 連線 fail-loud 拒絕**，防止把不相容連線寫進 v2 設定庫。
+
 ## [1.29.0] - 2026-06-08 - Core Config-Read Entrypoint
 
 ### Added

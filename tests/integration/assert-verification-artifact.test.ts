@@ -101,7 +101,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
       'assert',
-      `SELECT count(*) AS n FROM ${TABLE} WHERE status IS NULL`,
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
       '--expect',
       'value == 3',
     ])
@@ -116,7 +116,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
       'assert',
-      `SELECT count(*) AS n FROM ${TABLE} WHERE status IS NULL`,
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
       '--expect',
       'value == 3',
       '--write-verification-artifact',
@@ -139,7 +139,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
       'assert',
-      `SELECT count(*) AS n FROM ${TABLE} WHERE status IS NULL`,
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
       '--expect',
       'value == 0',
       '--write-verification-artifact',
@@ -158,7 +158,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
       'assert',
-      `SELECT count(*) AS n FROM ${TABLE} WHERE status IS NULL`,
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
       '--expect',
       'value == 0',
       '--no-fail',

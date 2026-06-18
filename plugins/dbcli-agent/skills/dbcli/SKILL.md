@@ -79,7 +79,9 @@ Builtin packs: `diagnose-slow-query` and **(v1.23)** `analyze-table-perf` — a
 read-only `plan-only` pack taking a required `table` parameter that walks
 `blacklist list` → `schema <table> --format json` → `guide index-usage`. `dbcli
 inspect` suggests `analyze-table-perf` automatically for the hottest table in
-recent audit activity.
+recent audit activity. Additional read-only packs: `audit-permissions`,
+`safe-backfill`, `schema-drift-review`, `connection-health` — run
+`dbcli skill tasks list` for the full set.
 
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).
@@ -319,7 +321,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
-| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
+| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 `--use <name>` on any subcommand targets a v2 connection without changing the default.

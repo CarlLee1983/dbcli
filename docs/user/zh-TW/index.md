@@ -239,7 +239,7 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
-> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。用 `dbcli skill tasks list` 瀏覽所有 task pack。
+> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
 ---
 

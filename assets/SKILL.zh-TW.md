@@ -68,7 +68,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # 產生計畫
 
 計畫輸出是一組附帶說明與風險標籤的 dbcli 指令序列。請逐一執行 — 任務計畫**不會**繞過 blacklist、schema、dry-run 或確認等要求。
 
-內建套件:`diagnose-slow-query` 與 **(v1.23)** `analyze-table-perf` — 後者是 read-only 的 `plan-only` 套件,需帶入必填的 `table` 參數,依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage`。`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議 `analyze-table-perf`。
+內建套件:`diagnose-slow-query` 與 **(v1.23)** `analyze-table-perf` — 後者是 read-only 的 `plan-only` 套件,需帶入必填的 `table` 參數,依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage`。`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議 `analyze-table-perf`。其他唯讀套件:`audit-permissions`、`safe-backfill`、`schema-drift-review`、`connection-health` — 用 `dbcli skill tasks list` 瀏覽完整清單。
 
 任務檔放在 `assets/tasks/`(內建)、`.dbcli-shared/tasks/`(共享)與 `.dbcli/tasks/`(本地覆寫)。
 
@@ -270,7 +270,7 @@ dbcli init --use-env-refs \
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新;每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。支援 SQL 引擎、MongoDB 與 Redis(單行;`.no-limit on/off`)。 |
-| `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
+| `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷。 |
 | `migrate` | admin | 僅 SQL。**DDL;預設 dry-run** — 需 `--execute` 才會真的執行。 |
 
 任何子指令上的 `--use <name>` 都會把目標切到對應的 v2 連線,但不改變預設值。

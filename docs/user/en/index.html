@@ -349,7 +349,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </table>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Builtin task pack <code>analyze-table-perf</code></h4>
-                <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Browse all packs with <code>dbcli skill tasks list</code>.</p>
+                <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — <code>audit-permissions</code>, <code>safe-backfill</code>, <code>schema-drift-review</code>, and <code>connection-health</code>. Browse all packs with <code>dbcli skill tasks list</code>.</p>
             </div>
         </section>
 

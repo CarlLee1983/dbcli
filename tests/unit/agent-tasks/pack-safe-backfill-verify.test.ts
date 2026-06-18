@@ -136,6 +136,27 @@ describe('builtin pack: safe-backfill-verify', () => {
     expect(pack).toContain('dbcli update <table> --where "<predicate>" --set \'<json>\' --dry-run')
   })
 
+  test('planned verification metadata carries no result artifact path', async () => {
+    const program = makeRoot()
+    await program.parseAsync(
+      [
+        'node', 'dbcli', 'skill', 'tasks', 'plan', 'safe-backfill-verify',
+        '--param', 'table=orders',
+        '--param', 'query=UPDATE orders SET status = 1 WHERE status IS NULL',
+        '--param', 'verify_query=SELECT count(*) FROM orders WHERE status IS NULL',
+        '--param', 'expect=rows == 0',
+        '--format', 'json',
+      ],
+      { from: 'node' }
+    )
+    const plan = JSON.parse(logOut)
+    expect(plan.verification.status).toBe('planned')
+    expect(plan.verification.verificationArtifactPath).toBeUndefined()
+    expect(plan.verification.evidence[0].verificationArtifactPath).toBeUndefined()
+    // planned evidence has no executed exitCode
+    expect(plan.verification.evidence[0].exitCode).toBeUndefined()
+  })
+
   void logSpy
   void exitSpy
 })

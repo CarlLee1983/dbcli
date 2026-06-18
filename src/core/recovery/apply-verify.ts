@@ -4,6 +4,11 @@ import { classifyStep } from './apply-gate'
 import { executeStep, type ExecOptions, type ExecOutcome } from './apply-exec'
 import { evaluateVerify } from './verify-heuristic'
 import type { StepResult, VerifyStatus } from './apply-types'
+import {
+  recoveryVerifyToVerificationStatus,
+  stepResultToBlockedReason,
+  type VerificationStatus,
+} from '@/core/verification'
 
 type Executor = (argv: string[], opts: ExecOptions) => Promise<ExecOutcome>
 
@@ -34,6 +39,8 @@ export interface VerifyContext {
 export interface VerifyOutcome {
   result: StepResult
   status: VerifyStatus
+  contractStatus: VerificationStatus
+  blockedReason?: string
 }
 
 /**
@@ -47,14 +54,17 @@ export interface VerifyOutcome {
 export async function runVerifyStep(step: GuideStep, ctx: VerifyContext): Promise<VerifyOutcome> {
   const decision = classifyStep(step, 'none', ctx.code)
   if (decision.kind !== 'run') {
+    const result: StepResult = {
+      order: VERIFY_ORDER_SENTINEL,
+      command: step.command,
+      status: decision.kind,
+      reason: decision.reason,
+    }
     return {
-      result: {
-        order: VERIFY_ORDER_SENTINEL,
-        command: step.command,
-        status: decision.kind,
-        reason: decision.reason,
-      },
+      result,
       status: 'indeterminate',
+      contractStatus: recoveryVerifyToVerificationStatus('indeterminate', result),
+      blockedReason: stepResultToBlockedReason(result),
     }
   }
 
@@ -78,5 +88,11 @@ export async function runVerifyStep(step: GuideStep, ctx: VerifyContext): Promis
     truncated: outcome.truncated,
   }
 
-  return { result, status: evaluateVerify(ctx.code, outcome) }
+  const status = evaluateVerify(ctx.code, outcome)
+  return {
+    result,
+    status,
+    contractStatus: recoveryVerifyToVerificationStatus(status, result),
+    blockedReason: stepResultToBlockedReason(result),
+  }
 }

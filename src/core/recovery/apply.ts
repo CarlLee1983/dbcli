@@ -10,6 +10,7 @@ import {
   type StepResult,
   type VerifyStatus,
 } from './apply-types'
+import type { VerificationStatus } from '@/core/verification'
 
 type Executor = (argv: string[], opts: ExecOptions) => Promise<ExecOutcome>
 
@@ -75,6 +76,8 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
 
   let verifyResult: StepResult | undefined
   let verifyStatus: VerifyStatus | undefined
+  let verificationStatus: VerificationStatus | undefined
+  let verificationBlockedReason: string | undefined
   if (finalStatus === 'ok' && opts.noVerify !== true && input.envelope.verify !== undefined) {
     const v = await runVerifyStep(input.envelope.verify, {
       code: input.envelope.error.code,
@@ -86,6 +89,8 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
     })
     verifyResult = v.result
     verifyStatus = v.status
+    verificationStatus = v.contractStatus
+    verificationBlockedReason = v.blockedReason
   }
 
   return {
@@ -99,5 +104,7 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
     stoppedAt,
     ...(verifyResult ? { verifyResult } : {}),
     ...(verifyStatus ? { verifyStatus } : {}),
+    ...(verificationStatus ? { verificationStatus } : {}),
+    ...(verificationBlockedReason ? { verificationBlockedReason } : {}),
   }
 }

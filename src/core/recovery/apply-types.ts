@@ -1,4 +1,5 @@
 import type { RecoveryEnvelope } from './types'
+import type { VerificationStatus } from '@/core/verification'
 
 export const APPLY_SCHEMA_VERSION = 1 as const
 
@@ -89,6 +90,10 @@ export interface ApplyResult {
   /** P4: present iff verify ran (i.e. finalStatus === 'ok' && !noVerify && envelope.verify). */
   verifyResult?: StepResult
   verifyStatus?: VerifyStatus
+  /** Contract-compatible verification status. Present iff verify ran. */
+  verificationStatus?: VerificationStatus
+  /** Present when verificationStatus === 'blocked'. */
+  verificationBlockedReason?: string
 }
 
 export interface SavedRecoveryEnvelope {

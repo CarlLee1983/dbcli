@@ -241,6 +241,8 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
+> **`safe-backfill-verify` 任務計畫與 `verification` 區塊。** 執行 `dbcli skill tasks plan safe-backfill-verify --format json` 回傳的計畫 JSON 中包含一個 `verification` 區塊，其 `status` 為 `"planned"`。此區塊描述任務執行時將進行的回讀斷言 — 這是**計畫中**的佐證定義，**而非執行結果**。`status: "planned"` **不代表**驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。
+
 ---
 
 <!-- doc-key: html-dashboards -->
@@ -532,6 +534,20 @@ dbcli recover --from /path/to/archived.json   # 跨機器/歸檔重播
 | `1` | 某一步執行失敗 |
 | `2` | envelope 缺失、不存在或格式錯誤 |
 | `3` | 所有步驟都被 gate 跳過（widen `--allow-write` 或填上 placeholder 再試） |
+
+### 持久化驗證成果（選用）
+
+在 `recover --apply` 加上 `--write-verification-artifact` 旗標，執行結束後會在 `.dbcli/verification/` 下寫入一份有界的 `VerificationArtifact` JSON：
+
+```bash
+dbcli recover --apply --write-verification-artifact
+```
+
+**條件與保證：**
+
+- 成果檔案**只在 verify 步驟真正執行後才會寫入** — 若計畫中沒有 verify 步驟，即便有此旗標也不會產生任何檔案。
+- 省略旗標時行為完全不變 — 任何情況下都不會寫入檔案。
+- 成果檔案**不含指令記錄、憑證或連線密碼** — 僅包含指向式的佐證（指令名稱、步驟參照、結果狀態）。
 
 ---
 

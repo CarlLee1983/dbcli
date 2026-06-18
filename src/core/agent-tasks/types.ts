@@ -3,6 +3,12 @@
  * 第一版：plan-only、step.type 僅支援 'command'
  */
 
+import type {
+  VERIFICATION_ARTIFACT_SCHEMA_VERSION,
+  VerificationEvidenceRef,
+  VerificationSubject,
+} from '@/core/verification'
+
 export type AgentTaskSource = 'builtin' | 'shared' | 'local'
 export type AgentTaskMode = 'plan-only'
 export type AgentTaskStepType = 'command'
@@ -55,6 +61,18 @@ export interface AgentTaskPlanStep {
   risk?: AgentTaskRisk
 }
 
+/**
+ * Planned (not result) verification metadata for a plan-only task pack.
+ * `status: 'planned'` is deliberately distinct from VerificationArtifact result
+ * statuses — agents must NOT treat this as proof that verification ran.
+ */
+export interface AgentTaskPlanVerification {
+  status: 'planned'
+  subject: VerificationSubject
+  evidence: VerificationEvidenceRef[]
+  artifactSchemaVersion: typeof VERIFICATION_ARTIFACT_SCHEMA_VERSION
+}
+
 export interface AgentTaskPlan {
   name: string
   source: AgentTaskSource
@@ -65,6 +83,8 @@ export interface AgentTaskPlan {
   parameters: AgentTaskParamValues
   steps: AgentTaskPlanStep[]
   warnings: string[]
+  /** Present only for packs that resolve a verification (assert) step, e.g. safe-backfill-verify. */
+  verification?: AgentTaskPlanVerification
 }
 
 export class AgentTaskError extends Error {

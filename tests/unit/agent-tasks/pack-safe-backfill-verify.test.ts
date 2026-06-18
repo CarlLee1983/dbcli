@@ -63,6 +63,63 @@ describe('builtin pack: safe-backfill-verify', () => {
     )
   })
 
+  test('plan includes planned verification metadata referencing the resolved assert command', async () => {
+    const program = makeRoot()
+    await program.parseAsync(
+      [
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'safe-backfill-verify',
+        '--param',
+        'table=orders',
+        '--param',
+        'query=UPDATE orders SET status = 1 WHERE status IS NULL',
+        '--param',
+        'verify_query=SELECT count(*) FROM orders WHERE status IS NULL',
+        '--param',
+        'expect=rows == 0',
+        '--format',
+        'json',
+      ],
+      { from: 'node' }
+    )
+    expect(exitCode).toBeUndefined()
+    const plan = JSON.parse(logOut)
+    expect(plan.verification).toBeDefined()
+    expect(plan.verification.status).toBe('planned')
+    expect(plan.verification.artifactSchemaVersion).toBe(1)
+    expect(plan.verification.subject).toEqual({ kind: 'backfill', name: 'safe-backfill-verify' })
+    const ev = plan.verification.evidence[0]
+    expect(ev.kind).toBe('assert')
+    expect(ev.command).toBe(
+      'assert "SELECT count(*) FROM orders WHERE status IS NULL" --expect "rows == 0"'
+    )
+    expect(ev.taskName).toBe('safe-backfill-verify')
+    expect(ev.step).toBe(4)
+  })
+
+  test('planned verification metadata never claims a terminal status', async () => {
+    const program = makeRoot()
+    await program.parseAsync(
+      [
+        'node', 'dbcli', 'skill', 'tasks', 'plan', 'safe-backfill-verify',
+        '--param', 'table=orders',
+        '--param', 'query=UPDATE orders SET status = 1 WHERE status IS NULL',
+        '--param', 'verify_query=SELECT count(*) FROM orders WHERE status IS NULL',
+        '--param', 'expect=rows == 0',
+        '--format', 'json',
+      ],
+      { from: 'node' }
+    )
+    const plan = JSON.parse(logOut)
+    expect(['verified', 'not_verified', 'indeterminate', 'blocked']).not.toContain(
+      plan.verification.status
+    )
+  })
+
   test('agent notes do not suggest unsupported raw query dry-run', async () => {
     const pack = await Bun.file('assets/tasks/safe-backfill-verify.md').text()
     expect(pack).not.toContain('dbcli query "{{query}}" --dry-run')

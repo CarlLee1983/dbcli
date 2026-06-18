@@ -241,6 +241,8 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 
+> **`safe-backfill-verify` task plan and the `verification` block.** Running `dbcli skill tasks plan safe-backfill-verify --format json` returns a plan JSON that includes a `verification` block with `status: "planned"`. This block describes the read-back assertion that will be run — it is the **planned** evidence definition, **not** a result. A `status` of `"planned"` does **not** mean verification has run or passed; it means the task plan knows which check to perform when the task executes.
+
 ---
 
 <!-- doc-key: html-dashboards -->
@@ -534,6 +536,20 @@ dbcli recover --from /path/to/archived.json   # cross-machine / archived replay
 | `1` | A step failed |
 | `2` | Envelope missing, unreadable, or malformed |
 | `3` | Every step was skipped by the gate — widen `--allow-write` or fill placeholders, then retry |
+
+### Persisting a verification artifact (opt-in)
+
+Pass `--write-verification-artifact` to `recover --apply` to persist a bounded `VerificationArtifact` JSON under `.dbcli/verification/` after the run:
+
+```bash
+dbcli recover --apply --write-verification-artifact
+```
+
+**Conditions and guarantees:**
+
+- The artifact is written **only when the verify step actually ran** — if the plan had no verify step, nothing is written even when the flag is present.
+- Omitting the flag leaves behavior completely unchanged — no file is ever written.
+- Artifacts contain **no command transcripts, credentials, or connection secrets** — they carry pointer-oriented evidence only (command name, step reference, outcome status).
 
 ---
 

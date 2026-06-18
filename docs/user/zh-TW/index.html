@@ -351,6 +351,10 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                 <h4 class="mt-0 mb-3 font-bold text-text-main">內建任務包 <code>analyze-table-perf</code></h4>
                 <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code> 與 <code>connection-health</code>。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
             </div>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>
+                <p class="m-0">執行 <code>dbcli skill tasks plan safe-backfill-verify --format json</code> 回傳的計畫 JSON 中包含一個 <code>verification</code> 區塊，其 <code>status</code> 為 <code>"planned"</code>。此區塊描述任務執行時將進行的回讀斷言 — 這是<strong>計畫中</strong>的佐證定義，<strong>而非執行結果</strong>。<code>status: "planned"</code> <strong>不代表</strong>驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。</p>
+            </div>
         </section>
 
         <!-- doc-key: html-dashboards -->
@@ -579,6 +583,15 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                     <tr><td><code>3</code></td><td>所有步驟都被 gate 跳過（widen <code>--allow-write</code> 或填上 placeholder 再試）</td></tr>
                 </tbody>
             </table>
+
+            <h3 class="mt-10">持久化驗證成果（選用）</h3>
+            <p>在 <code>recover --apply</code> 加上 <code>--write-verification-artifact</code> 旗標，執行結束後會在 <code>.dbcli/verification/</code> 下寫入一份有界的 <code>VerificationArtifact</code> JSON：</p>
+            <pre><code>dbcli recover --apply --write-verification-artifact</code></pre>
+            <ul>
+                <li>成果檔案<strong>只在 verify 步驟真正執行後才會寫入</strong> — 若計畫中沒有 verify 步驟，即便有此旗標也不會產生任何檔案。</li>
+                <li>省略旗標時行為完全不變 — 任何情況下都不會寫入檔案。</li>
+                <li>成果檔案<strong>不含指令記錄、憑證或連線密碼</strong> — 僅包含指向式的佐證（指令名稱、步驟參照、結果狀態）。</li>
+            </ul>
         </section>
 
         <!-- doc-key: error-classification -->

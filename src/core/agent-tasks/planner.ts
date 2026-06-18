@@ -1,11 +1,16 @@
 import { splitArgv } from './argv-split'
 import {
+  VERIFICATION_ARTIFACT_SCHEMA_VERSION,
+  type VerificationEvidenceRef,
+} from '@/core/verification'
+import {
   AgentTaskError,
   type AgentTask,
   type AgentTaskParam,
   type AgentTaskParamValues,
   type AgentTaskPlan,
   type AgentTaskPlanStep,
+  type AgentTaskPlanVerification,
 } from './types'
 
 export interface PlanInput {
@@ -31,7 +36,7 @@ export function planAgentTask(input: PlanInput): AgentTaskPlan {
     return out
   })
 
-  return {
+  const plan: AgentTaskPlan = {
     name: input.task.name,
     source: input.task.source,
     file: input.task.file,
@@ -41,6 +46,38 @@ export function planAgentTask(input: PlanInput): AgentTaskPlan {
     parameters: resolved,
     steps,
     warnings,
+  }
+
+  const verification = deriveVerification(input.task.name, steps)
+  if (verification) plan.verification = verification
+
+  return plan
+}
+
+/**
+ * Build planned verification metadata from the resolved final `assert` step.
+ * Only safe-backfill-verify opts in for this milestone. Returns undefined when
+ * the pack has no resolved assert step.
+ */
+function deriveVerification(
+  taskName: string,
+  steps: AgentTaskPlanStep[]
+): AgentTaskPlanVerification | undefined {
+  if (taskName !== 'safe-backfill-verify') return undefined
+  const index = steps.findLastIndex((s) => s.resolvedCommand.startsWith('assert '))
+  if (index === -1) return undefined
+  const assertStep = steps[index]!
+  const evidence: VerificationEvidenceRef = {
+    kind: 'assert',
+    command: assertStep.resolvedCommand,
+    taskName,
+    step: index + 1,
+  }
+  return {
+    status: 'planned',
+    subject: { kind: 'backfill', name: 'safe-backfill-verify' },
+    evidence: [evidence],
+    artifactSchemaVersion: VERIFICATION_ARTIFACT_SCHEMA_VERSION,
   }
 }
 

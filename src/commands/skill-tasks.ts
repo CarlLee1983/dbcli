@@ -207,6 +207,7 @@ async function runPlan(taskName: string, options: PlanOptions): Promise<void> {
           parameters: plan.parameters,
           steps: plan.steps,
           warnings: plan.warnings,
+          ...(plan.verification ? { verification: plan.verification } : {}),
         },
         null,
         2

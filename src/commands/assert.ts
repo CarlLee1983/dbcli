@@ -25,6 +25,13 @@ import { readSnapshot } from '@/core/result-snapshot/serializer'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { AssertCheck, AssertVerdict, SnapshotEngine } from '@/core/result-snapshot/types'
 import type { QueryResult } from '@/types/query'
+import {
+  parseVerificationSubject,
+  buildAssertVerificationArtifact,
+  writeVerificationArtifact,
+  AssertArtifactError,
+} from '@/core/verification'
+import type { VerificationSubject } from '@/core/verification'
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb']
@@ -52,12 +59,34 @@ export const assertCommand = new Command()
   )
   .option('--no-fail', 'Always exit 0; report pass/fail in output only')
   .option('--format <format>', 'Output format: json (default) or table', 'json')
+  .option(
+    '--write-verification-artifact',
+    'After the verdict, persist a VerificationArtifact JSON under .dbcli/verification/',
+    false
+  )
+  .option('--verification-subject <subject>', 'Required with --write-verification-artifact: "<kind>:<name>"')
+  .option('--verification-summary <text>', 'Optional summary text for the verification artifact')
   .action(async (query: string, options: Record<string, unknown>, command: Command) => {
     try {
       validateFormat(options.format as string, ALLOWED_FORMATS, 'assert')
       if (!options.expect && !options.vs && !options.against) {
         console.error('Specify one of --expect, --vs, or --against')
         process.exit(1)
+      }
+      let verificationSubject: VerificationSubject | undefined
+      if (options.writeVerificationArtifact === true) {
+        const raw = options.verificationSubject as string | undefined
+        if (!raw) {
+          console.error('--write-verification-artifact requires --verification-subject "<kind>:<name>"')
+          process.exit(1)
+        }
+        try {
+          verificationSubject = parseVerificationSubject(raw)
+        } catch (e) {
+          // AssertArtifactError (or any parse failure) exits before any DB connection.
+          console.error(e instanceof AssertArtifactError || e instanceof Error ? (e as Error).message : String(e))
+          process.exit(1)
+        }
       }
       const configPath = resolveConfigPath(command, options as { config?: string })
       const config = await configModule.read(configPath)
@@ -71,6 +100,7 @@ export const assertCommand = new Command()
       )
       await adapter.connect()
 
+      let auditRef: string | null = null
       let verdict: AssertVerdict
       try {
         const blacklistManager = new BlacklistManager(config)
@@ -113,7 +143,7 @@ export const assertCommand = new Command()
         }
 
         verdict = { pass: checks.every((c) => c.pass), checks }
-        await writeAuditEntry(config, 'assert', options as { config?: string }, {
+        auditRef = await writeAuditEntry(config, 'assert', options as { config?: string }, {
           success: verdict.pass,
           sql: query,
         })
@@ -121,8 +151,31 @@ export const assertCommand = new Command()
         await adapter.disconnect()
       }
 
+      let verificationArtifactPath: string | undefined
+      if (options.writeVerificationArtifact === true && verificationSubject) {
+        try {
+          const artifact = buildAssertVerificationArtifact({
+            verdict,
+            subject: verificationSubject,
+            summary: options.verificationSummary as string | undefined,
+            argv: process.argv,
+            auditRef,
+          })
+          verificationArtifactPath = await writeVerificationArtifact(process.cwd(), artifact)
+        } catch (e) {
+          // Spec §9: a local write failure must not hide or flip the assertion verdict.
+          console.error(`Failed to write verification artifact: ${(e as Error).message}`)
+        }
+      }
+
       if (options.format === 'json') {
-        console.log(JSON.stringify(verdict, null, 2))
+        console.log(
+          JSON.stringify(
+            { ...verdict, ...(verificationArtifactPath ? { verificationArtifactPath } : {}) },
+            null,
+            2
+          )
+        )
       } else {
         for (const c of verdict.checks) {
           console.log(
@@ -130,6 +183,9 @@ export const assertCommand = new Command()
           )
         }
         console.log(`\nVerdict: ${verdict.pass ? 'PASS' : 'FAIL'}`)
+        if (verificationArtifactPath) {
+          console.log(`Verification artifact: ${verificationArtifactPath}`)
+        }
       }
       process.exit(verdict.pass || options.fail === false ? 0 : 1)
     } catch (error) {

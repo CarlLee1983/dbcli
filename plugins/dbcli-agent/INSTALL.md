@@ -78,11 +78,25 @@ used by Gemini/Antigravity-style agents.
 
 ## Cursor
 
-Cursor does not use the Codex/Claude-style plugin marketplace path here. It is
-instruction-file based: install the dbcli rule and reference into the project
-where Cursor should use dbcli.
+Cursor can install plugins from Cursor Agent chat when the plugin is available
+in Cursor's plugin marketplace:
 
-### Option A: from an existing dbcli checkout
+```text
+/add-plugin dbcli-agent
+```
+
+Or search for `dbcli-agent` in Cursor's plugin marketplace.
+
+This repository includes Cursor plugin metadata at:
+
+```text
+.cursor-plugin/plugin.json
+```
+
+The repo also keeps an instruction-file fallback for projects that want to
+vendor the dbcli rule and reference directly.
+
+### Fallback A: from an existing dbcli checkout
 
 Run this from the target project where Cursor should see dbcli:
 
@@ -93,7 +107,7 @@ cp "$DBCLI_REPO/.cursor/rules/dbcli.mdc" .cursor/rules/dbcli.mdc
 cp "$DBCLI_REPO/.cursor/skills/dbcli/reference.md" .cursor/skills/dbcli/reference.md
 ```
 
-### Option B: clone dbcli first
+### Fallback B: clone dbcli first
 
 ```bash
 git clone https://github.com/CarlLee1983/dbcli.git /tmp/dbcli-agent-plugin
@@ -103,7 +117,7 @@ cp /tmp/dbcli-agent-plugin/.cursor/rules/dbcli.mdc .cursor/rules/dbcli.mdc
 cp /tmp/dbcli-agent-plugin/.cursor/skills/dbcli/reference.md .cursor/skills/dbcli/reference.md
 ```
 
-### Option C: from this repo checkout
+### Fallback C: from this repo checkout
 
 When your shell is already inside the dbcli checkout, the local installer writes
 the Cursor files into the current working directory:
@@ -112,7 +126,8 @@ the Cursor files into the current working directory:
 plugins/dbcli-agent/scripts/install-skills.sh cursor
 ```
 
-Open or reload the target project in Cursor after installing. Cursor should read:
+Open or reload the target project in Cursor after installing fallback files.
+Cursor should read:
 
 ```text
 .cursor/rules/dbcli.mdc

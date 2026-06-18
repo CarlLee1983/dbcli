@@ -1136,6 +1136,9 @@ dbcli skill --install copilot
 # Cursor IDE
 dbcli skill --install cursor
 
+# Cursor plugin marketplace
+#   /add-plugin dbcli-agent
+
 # Codex plugin marketplace
 #   codex plugin marketplace add CarlLee1983/dbcli
 # 接著開啟 /plugins 並安裝 dbcli-agent。
@@ -1192,7 +1195,7 @@ dbcli skill --install cursor
 
 **Skill 路徑：** 在**目前工作目錄**執行 `dbcli skill --install cursor` 時，寫入 **`.cursor/rules/dbcli.mdc`**（摘要與工作流程）及 **`.cursor/skills/dbcli/reference.md`**（完整旗標與範例）。
 
-**Plugin-style 安裝說明：** `plugins/dbcli-agent/INSTALL.md#cursor`。
+**Cursor plugin 安裝：** 在 Cursor Agent chat 執行 `/add-plugin dbcli-agent`，或參考 `plugins/dbcli-agent/INSTALL.md#cursor` 的 marketplace 與 fallback 說明。
 
 ---
 

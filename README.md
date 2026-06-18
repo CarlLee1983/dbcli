@@ -1240,6 +1240,9 @@ dbcli skill --install copilot
 # Cursor IDE (AI-native editor)
 dbcli skill --install cursor
 
+# Cursor plugin marketplace
+#   /add-plugin dbcli-agent
+
 # Codex plugin marketplace
 #   codex plugin marketplace add CarlLee1983/dbcli
 # Then open /plugins and install dbcli-agent.
@@ -1296,7 +1299,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 **Skill location:** `.cursor/rules/dbcli.mdc` (summary + workflows) and `.cursor/skills/dbcli/reference.md` (full command flags and examples) under the **current working directory** when you run `dbcli skill --install cursor`.
 
-**Plugin-style install guide:** `plugins/dbcli-agent/INSTALL.md#cursor`.
+**Cursor plugin install:** in Cursor Agent chat, run `/add-plugin dbcli-agent`, or see `plugins/dbcli-agent/INSTALL.md#cursor` for marketplace and fallback options.
 
 ---
 

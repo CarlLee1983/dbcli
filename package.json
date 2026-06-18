@@ -48,6 +48,7 @@
     "skills/",
     ".codex-plugin/",
     ".claude-plugin/",
+    ".cursor-plugin/",
     ".agents/",
     ".cursor/",
     ".github/skills/",

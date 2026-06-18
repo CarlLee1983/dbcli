@@ -1248,7 +1248,7 @@ dbcli skill --install codex                  # install to ~/.codex/skills/dbcli/
 **Notes:**
 - Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.
 - `claude` / `gemini` / `antigravity` install paths are user-global; `copilot` / `cursor` are repo-local under `.github/` / `.cursor/`.
-- Cursor's plugin-style path is instruction-file based rather than marketplace based; see `plugins/dbcli-agent/INSTALL.md#cursor` for clone/copy and local installer options.
+- Cursor can install through `/add-plugin dbcli-agent` when available in Cursor's plugin marketplace; this repo includes `.cursor-plugin/plugin.json`. Instruction-file fallback options remain documented in `plugins/dbcli-agent/INSTALL.md#cursor`.
 - Codex can consume the repo through the Ponytail-style marketplace layout at `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`; plugin installs provide the skill from `skills/dbcli/`, and the skill falls back to `bunx @carllee1983/dbcli` when `dbcli` is not on `PATH`.
 - Agent plugin installation details live in `plugins/dbcli-agent/INSTALL.md`, including Codex, Claude Code, GitHub Copilot CLI, Antigravity (`agy`), and Cursor targets.
 - `gemini` (Gemini CLI) is retained for now but is being phased out in favour of `antigravity` (Antigravity CLI), Google's successor terminal agent.

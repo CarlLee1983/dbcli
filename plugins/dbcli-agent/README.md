@@ -37,8 +37,14 @@ agy plugin install https://github.com/CarlLee1983/dbcli
 
 ## Cursor
 
-Cursor is instruction-file based. Use the Cursor section in
-[INSTALL.md](./INSTALL.md#cursor).
+In Cursor Agent chat:
+
+```text
+/add-plugin dbcli-agent
+```
+
+Or search for `dbcli-agent` in Cursor's plugin marketplace. Fallback copy
+instructions are in [INSTALL.md](./INSTALL.md#cursor).
 
 Installing it as a plugin makes the `dbcli` skill available from
 `skills/dbcli/SKILL.md`, with the full command reference next to it.

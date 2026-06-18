@@ -1,0 +1,24 @@
+{
+  "name": "dbcli-agent",
+  "displayName": "dbcli Agent",
+  "description": "Database CLI skill and command reference for AI agents.",
+  "version": "1.31.0",
+  "author": {
+    "name": "Carl Lee",
+    "url": "https://github.com/CarlLee1983"
+  },
+  "homepage": "https://github.com/CarlLee1983/dbcli",
+  "repository": "https://github.com/CarlLee1983/dbcli",
+  "license": "MIT",
+  "keywords": [
+    "database",
+    "cli",
+    "ai-agent",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "elasticsearch"
+  ],
+  "skills": "./skills/"
+}

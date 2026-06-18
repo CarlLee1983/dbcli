@@ -143,3 +143,64 @@ describe('dbcli verification list', () => {
     expect(stderr).toContain('bogus')
   })
 })
+
+describe('dbcli verification show', () => {
+  test('prints the full matching artifact by id', async () => {
+    const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
+    const { stdout, code } = await run(work, ['verification', 'show', 'abcd1234', '--format', 'json'])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.path).toContain('.dbcli/verification')
+    expect(j.artifact.id).toBe('abcd1234')
+    expect(j.artifact.schemaVersion).toBe(1)
+  })
+
+  test('unique prefix succeeds', async () => {
+    const work = await seedWork([
+      { id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' },
+      { id: 'zzzz0000', createdAt: '2026-06-19T02:00:00.000Z' },
+    ])
+    const { stdout, code } = await run(work, ['verification', 'show', 'abcd', '--format', 'json'])
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).artifact.id).toBe('abcd1234')
+  })
+
+  test('ambiguous prefix exits 1 with candidates', async () => {
+    const work = await seedWork([
+      { id: 'abcd1111', createdAt: '2026-06-19T01:00:00.000Z' },
+      { id: 'abcd2222', createdAt: '2026-06-19T02:00:00.000Z' },
+    ])
+    const { code, stderr } = await run(work, ['verification', 'show', 'abcd'])
+    expect(code).toBe(1)
+    expect(stderr.toLowerCase()).toContain('ambiguous')
+  })
+
+  test('no match exits 1', async () => {
+    const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
+    const { code } = await run(work, ['verification', 'show', 'nope'])
+    expect(code).toBe(1)
+  })
+
+  test('path outside the storage dir exits 1', async () => {
+    const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
+    const { code, stderr } = await run(work, [
+      'verification',
+      'show',
+      '.dbcli/verification/../../etc/passwd',
+    ])
+    expect(code).toBe(1)
+    expect(stderr.toLowerCase()).toContain('outside')
+  })
+
+  test('selecting a malformed file exits 1 with a bounded error', async () => {
+    const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
+    await writeFile(join(work, '.dbcli', 'verification', 'verification-broken.json'), '{ not json', 'utf8')
+    const { code, stderr } = await run(work, [
+      'verification',
+      'show',
+      '.dbcli/verification/verification-broken.json',
+    ])
+    expect(code).toBe(1)
+    expect(stderr.toLowerCase()).toContain('invalid')
+  })
+})

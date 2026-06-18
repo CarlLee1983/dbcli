@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import {
   readVerificationArtifacts,
   filterVerificationArtifacts,
+  findVerificationArtifact,
+  VerificationArtifactSelectionError,
   VERIFICATION_STATUSES,
   VERIFICATION_SUBJECT_KINDS,
   isVerificationSubjectKind,
@@ -75,6 +77,28 @@ function listItem(r: VerificationArtifactRecord): Record<string, unknown> {
   }
 }
 
+function renderShowTable(r: VerificationArtifactRecord): string {
+  const a = r.artifact
+  const lines = [
+    `Id:          ${a.id}`,
+    `Created at:  ${a.createdAt}`,
+    `Status:      ${a.status}`,
+    `Subject:     ${subjectLabel(a.subject)}`,
+    `Summary:     ${a.summary}`,
+  ]
+  if (a.blockedReason) lines.push(`Blocked:     ${a.blockedReason}`)
+  lines.push('Evidence:')
+  for (const e of a.evidence) {
+    const parts = [`kind=${e.kind}`]
+    if (e.exitCode !== undefined) parts.push(`exitCode=${e.exitCode}`)
+    if (e.command !== undefined) parts.push(`command=${e.command}`)
+    if (e.auditRef !== undefined) parts.push(`auditRef=${e.auditRef}`)
+    if (e.note !== undefined) parts.push(`note=${e.note}`)
+    lines.push(`  - ${parts.join(' ')}`)
+  }
+  return lines.join('\n')
+}
+
 export const verificationCommand = new Command('verification').description(
   'Read-only inspection of verification artifacts under .dbcli/verification/'
 )
@@ -126,6 +150,36 @@ verificationCommand
         r.artifact.id,
       ])
       console.log(renderTable(rows, ['createdAt', 'status', 'subject', 'id']))
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+verificationCommand
+  .command('show <selector>')
+  .description('Print one verification artifact by id, prefix, filename, or path')
+  .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')}`, 'json')
+  .action(async (selector: string, options: Record<string, unknown>) => {
+    try {
+      const format = options.format as string
+      validateFormat(format, ALLOWED_FORMATS, 'verification show')
+      const read = await readVerificationArtifacts(process.cwd())
+      let record: VerificationArtifactRecord
+      try {
+        record = findVerificationArtifact(read, selector)
+      } catch (e) {
+        if (e instanceof VerificationArtifactSelectionError) {
+          console.error(e.message)
+          process.exit(1)
+        }
+        throw e
+      }
+      if (format === 'json') {
+        console.log(JSON.stringify({ path: record.path, artifact: record.artifact }, null, 2))
+      } else {
+        console.log(renderShowTable(record))
+      }
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

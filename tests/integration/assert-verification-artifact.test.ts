@@ -62,25 +62,30 @@ beforeAll(async () => {
     DB_OK = false
     return
   }
-  await adapter.execute(`DROP TABLE IF EXISTS ${TABLE}`)
-  await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
-  // 3 rows with NULL status -> "count where status is null" == 3 (fail), and we can also assert == 0 etc.
-  await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
-  await adapter.disconnect()
+  try {
+    await adapter.execute(`DROP TABLE IF EXISTS ${TABLE}`)
+    await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
+    // 3 rows with NULL status -> "count where status is null" == 3 (fail), and we can also assert == 0 etc.
+    await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
+    await adapter.disconnect()
 
-  WORK = await mkdtemp(join(tmpdir(), 'dbcli-assert-art-'))
-  // Canonical config layout used by other integration tests: <work>/config.json
-  // ( the assert command writes the artifact under <work>/.dbcli/verification/ ).
-  await writeFile(
-    join(WORK, 'config.json'),
-    JSON.stringify({
-      connection: CONN,
-      permission: 'query-only',
-      metadata: { createdAt: '2026-06-19T00:00:00.000Z', version: '1.0' },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
-    }),
-    'utf8'
-  )
+    WORK = await mkdtemp(join(tmpdir(), 'dbcli-assert-art-'))
+    // Canonical config layout used by other integration tests: <work>/config.json
+    // ( the assert command writes the artifact under <work>/.dbcli/verification/ ).
+    await writeFile(
+      join(WORK, 'config.json'),
+      JSON.stringify({
+        connection: CONN,
+        permission: 'query-only',
+        metadata: { createdAt: '2026-06-19T00:00:00.000Z', version: '1.0' },
+        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      }),
+      'utf8'
+    )
+  } catch {
+    DB_OK = false
+    await adapter.disconnect().catch(() => {})
+  }
 })
 
 afterAll(async () => {
@@ -149,6 +154,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     const j = JSON.parse(stdout)
     expect(j.pass).toBe(false)
     expect(code).toBe(1)
+    expect(j.verificationArtifactPath).toBeDefined()
     const raw = JSON.parse(await readFile(j.verificationArtifactPath, 'utf8'))
     expect(raw.status).toBe('not_verified')
     expect(raw.evidence[0].exitCode).toBe(1)
@@ -169,6 +175,7 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     const j = JSON.parse(stdout)
     expect(j.pass).toBe(false)
     expect(code).toBe(0)
+    expect(j.verificationArtifactPath).toBeDefined()
     const raw = JSON.parse(await readFile(j.verificationArtifactPath, 'utf8'))
     expect(raw.status).toBe('not_verified')
     expect(raw.evidence[0].exitCode).toBe(1)

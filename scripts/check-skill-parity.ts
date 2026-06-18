@@ -87,10 +87,54 @@ for (let i = 0; i < max; i += 1) {
   }
 }
 
+// Semantic guard: a curated set of language-INVARIANT, safety-critical tokens
+// (command names, permission levels, danger flags) that must survive translation.
+// Structural counts miss the case where zh-TW keeps the same shape but a row's
+// command/flag wording was localized away — e.g. a translator dropping `--dry-run`
+// or `blacklist` from a cell. These tokens read identically in both languages, so
+// asymmetric presence is a real regression, not a translation choice.
+const KEY_TOKENS = [
+  // core commands an agent must never lose sight of
+  '`query`',
+  '`insert`',
+  '`update`',
+  '`delete`',
+  '`export`',
+  '`schema`',
+  'blacklist',
+  // safety-critical flags / guardrails
+  '--dry-run',
+  '--no-limit',
+  '--recovery',
+  'LIMIT 1000',
+  // permission levels
+  'query-only',
+  'read-write',
+  'data-admin',
+] as const
+
+for (const token of KEY_TOKENS) {
+  const inEn = enSrc.includes(token)
+  const inZh = zhSrc.includes(token)
+  if (inEn && !inZh) {
+    problems.push(
+      `safety/command token "${token}" present in ${files.en} but missing in ${files['zh-TW']}.`
+    )
+  } else if (!inEn && inZh) {
+    problems.push(
+      `safety/command token "${token}" present in ${files['zh-TW']} but missing in ${files.en}.`
+    )
+  } else if (!inEn && !inZh) {
+    problems.push(`safety/command token "${token}" missing from BOTH files (stale token list?).`)
+  }
+}
+
 if (problems.length > 0) {
   console.error('✗ SKILL en/zh-TW parity check failed:')
   for (const p of problems) console.error(`  - ${p}`)
   process.exit(1)
 }
 
-console.log(`✓ SKILL en/zh-TW structurally aligned: ${en.length} sections`)
+console.log(
+  `✓ SKILL en/zh-TW aligned: ${en.length} sections, ${KEY_TOKENS.length} safety/command tokens present in both`
+)

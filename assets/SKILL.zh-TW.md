@@ -68,34 +68,9 @@ dbcli skill tasks plan <task> --param key=value --format json     # 產生計畫
 
 計畫輸出是一組附帶說明與風險標籤的 dbcli 指令序列。請逐一執行 — 任務計畫**不會**繞過 blacklist、schema、dry-run 或確認等要求。
 
+內建套件:`diagnose-slow-query` 與 **(v1.23)** `analyze-table-perf` — 後者是 read-only 的 `plan-only` 套件,需帶入必填的 `table` 參數,依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage`。`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議 `analyze-table-perf`。
+
 任務檔放在 `assets/tasks/`(內建)、`.dbcli-shared/tasks/`(共享)與 `.dbcli/tasks/`(本地覆寫)。
-
-## Audit Log 使用
-
-當需要跨 session 或事後 forensics 重建工具歷史時,請優先使用 audit log,而非從零開始查詢 DB 狀態。
-
-**情境 1 — Session handoff(接手前一個 agent 的工作):**
-
-```bash
-dbcli audit tail --for-agent --n 10           # 最近 10 筆(JSON envelope)
-dbcli audit tail --all --for-agent --n 20     # 跨連線合併(D4)
-```
-
-取回 agent-facing JSON envelope,包含 `session_id` / `engine` / `command` / `target` / `success`,協助新 agent 快速掌握前一段工作脈絡。技術細節:metadata-only,**不**包含原始 SQL body / cell 值 / params(D3 鎖定)。
-
-**情境 2 — Forensics(重建失敗現場):**
-
-```bash
-dbcli recover --format json                   # 觀察 audit_recent 嵌入 + recovery_ref
-dbcli audit show <id-prefix>                  # 完整單筆 entry(≥4 字元 prefix)
-dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 audit entry
-```
-
-`inspect` / `guide` / `recover` / `recover --apply` 的 agent JSON 內嵌 `audit_recent: AuditEntryBrief[]`(最近 5 筆),無須額外呼叫 audit CLI 即可看到歷史脈絡。Envelope 的 `audit_ref` 與 audit entry 的 `recovery_ref` 互為雙向指標。
-
-**完整雙向覆蓋(v1.20.1+):** `recovery_ref` / `audit_ref` 雙向連結已在所有支援 `--recovery` 的指令上佈線:`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`。Agent 可透過 `dbcli audit tail --recovery-ref <id>` 從 envelope 反查 audit entry(反方向用 `dbcli audit show --recovery-ref <id>`)。v1.20.0 中 6 個 DML/DDL 指令的部分覆蓋缺口已於 v1.20.1 關閉。
-
-詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。完整 agent 復原 walkthrough(各錯誤碼 end-to-end 情境、`--next` 多輪逐步、envelope ⇄ audit pivot、risk gate cheat sheet)見 [`reference.md`](./reference.md) §Recovery Cookbook(英文)。
 
 ## 開發者工作流
 
@@ -143,6 +118,33 @@ dbcli inspect --for-agent --no-connect --format json
 - 不要列印 credentials、複製的連線字串或 blacklisted 值。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
+
+## Audit Log 使用
+
+當需要跨 session 或事後 forensics 重建工具歷史時,請優先使用 audit log,而非從零開始查詢 DB 狀態。
+
+**情境 1 — Session handoff(接手前一個 agent 的工作):**
+
+```bash
+dbcli audit tail --for-agent --n 10           # 最近 10 筆(JSON envelope)
+dbcli audit tail --all --for-agent --n 20     # 跨連線合併(D4)
+```
+
+取回 agent-facing JSON envelope,包含 `session_id` / `engine` / `command` / `target` / `success`,協助新 agent 快速掌握前一段工作脈絡。技術細節:metadata-only,**不**包含原始 SQL body / cell 值 / params(D3 鎖定)。
+
+**情境 2 — Forensics(重建失敗現場):**
+
+```bash
+dbcli recover --format json                   # 觀察 audit_recent 嵌入 + recovery_ref
+dbcli audit show <id-prefix>                  # 完整單筆 entry(≥4 字元 prefix)
+dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 audit entry
+```
+
+`inspect` / `guide` / `recover` / `recover --apply` 的 agent JSON 內嵌 `audit_recent: AuditEntryBrief[]`(最近 5 筆),無須額外呼叫 audit CLI 即可看到歷史脈絡。Envelope 的 `audit_ref` 與 audit entry 的 `recovery_ref` 互為雙向指標。
+
+**完整雙向覆蓋(v1.20.1+):** `recovery_ref` / `audit_ref` 雙向連結已在所有支援 `--recovery` 的指令上佈線:`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`。Agent 可透過 `dbcli audit tail --recovery-ref <id>` 從 envelope 反查 audit entry(反方向用 `dbcli audit show --recovery-ref <id>`)。v1.20.0 中 6 個 DML/DDL 指令的部分覆蓋缺口已於 v1.20.1 關閉。
+
+詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。完整 agent 復原 walkthrough(各錯誤碼 end-to-end 情境、`--next` 多輪逐步、envelope ⇄ audit pivot、risk gate cheat sheet)見 [`reference.md`](./reference.md) §Recovery Cookbook(英文)。
 
 ## 快速開始
 
@@ -245,6 +247,7 @@ dbcli init --use-env-refs \
 | `list` | query-only+ | 資料表(SQL)、collections(MongoDB)、keys(Redis)或 indices(Elasticsearch)。 |
 | `schema` | query-only+ | SQL:單表或全掃描存入 `.dbcli/schemas/`。MongoDB:sampled。ES:flattened mapping。Redis:僅單一 key(type / TTL / size)。支援 `--recovery`。 |
 | `query` | query-only+ | SQL、Mongo JSON(`--collection`)、Redis 指令、ES DSL / Lucene(`--collection`)。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。支援 `--recovery`。 |
+| `explain` | query-only+ | **(v1.23)** 唯讀查詢計畫並附註解。僅 SQL。單一查詢、`@saved-query`、`@file.sql` 或 `--bulk @glob/*`。`--analyze`(EXPLAIN ANALYZE / MariaDB ANALYZE SELECT)、`--format markdown\|json\|table`。 |
 | `plan` | n/a | 靜態 SQL 風險分析器(`--format text\|json`);不連線即可分類語句。 |
 | `q` | query-only+ | 以 `@name` 執行已儲存 snippet，搭配 `--param k=v`。支援 `--verify` 以執行斷言。 |
 | `queries` | n/a | 管理已儲存 snippet:`list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`。 |

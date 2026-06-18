@@ -31,6 +31,13 @@ the CLI package has not been installed globally.
      - `failed` — verifier exited non-zero or timed out.
      - `indeterminate` — verifier exited 0 but the heuristic could not confirm the fix (JSON parse failure, missing field, gate skip).
      Verify is **only run when** `finalStatus === 'ok'`. Pass `--no-verify` to skip it. Heuristic is intentionally cheap; agents should still re-run their own check against the original failing operation when correctness matters.
+
+Verification outcome vocabulary: use `verified` only when required evidence matched;
+use `not_verified` when the check ran and contradicted the expected state; use
+`indeterminate` when the check ran but evidence was ambiguous; use `blocked` when
+verification could not run because of config, permission, schema, placeholder, or
+safety gates.
+
    - **v1.17.0 P2 Multi-turn `--next`.** When `--apply` is too coarse — interactive blocks it, the plan needs per-step inspection, or the agent wants to drive recovery with its own tools — execute steps one at a time and ask dbcli for the next:
 
      ```bash

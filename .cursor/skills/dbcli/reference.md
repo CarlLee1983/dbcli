@@ -1168,11 +1168,11 @@ dbcli verification list --include-invalid --format json
 
 | Flag | Purpose | Default |
 |---|---|---|
-| `--format <json\|table>` | Output format. | `table` |
-| `--limit <n>` | Maximum number of entries to return. | no limit |
+| `--format <json\|table>` | Output format. | `json` |
+| `--limit <n>` | Maximum number of entries to return. | `20` |
 | `--status <status>` | Filter by status. One of: `verified`, `not_verified`, `indeterminate`, `blocked`. | all |
 | `--subject <kind[:name]>` | Filter by subject kind or exact `kind:name`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. | all |
-| `--include-invalid` | Surface malformed artifact files (normally skipped silently). Malformed entries appear with `valid: false` and a `parseError` field. | off |
+| `--include-invalid` | Surface malformed artifact files (normally skipped silently). Invalid files are returned as a separate top-level `invalid` array in JSON output, each entry shaped `{ "path": "...", "filename": "...", "error": "..." }`. When off, `invalid` is `[]`. | off |
 
 **Missing directory:** if `.dbcli/verification/` does not exist, exits `0` with an
 empty result (list: `[]`, summary: zero counts).
@@ -1193,8 +1193,8 @@ dbcli verification show .dbcli/verification/abc123.json --format json
 
 | Flag | Purpose | Default |
 |---|---|---|
-| `<id-or-path>` | Positional. The artifact `id` (UUID) or a relative/absolute path to the artifact file. | required |
-| `--format <json\|table>` | Output format. | `table` |
+| `<id-or-path>` | Positional. The artifact `id` (format `ver_<base36>_<hex>`), a unique id prefix, the artifact filename, or a path to the file inside `.dbcli/verification/`. | required |
+| `--format <json\|table>` | Output format. | `json` |
 
 **Exit codes:**
 - `0` — artifact found and valid.
@@ -1213,20 +1213,30 @@ dbcli verification summary --subject migration:add-status-column --format json
 
 | Flag | Purpose | Default |
 |---|---|---|
-| `--format <json\|table>` | Output format. | `table` |
+| `--format <json\|table>` | Output format. | `json` |
 | `--status <status>` | Filter to a single status before summarising. | all |
 | `--subject <kind[:name]>` | Filter by subject kind or exact `kind:name`. | all |
 
 **Output shape (JSON):**
 ```json
 {
-  "total": 4,
-  "verified": 2,
-  "not_verified": 1,
-  "indeterminate": 0,
-  "blocked": 1
+  "storageDir": "/abs/path/.dbcli/verification",
+  "latest": {
+    "path": "...",
+    "id": "ver_...",
+    "createdAt": "2026-06-19T01:02:03.000Z",
+    "status": "verified",
+    "subject": { "kind": "backfill", "name": "safe-backfill-verify" },
+    "summary": "..."
+  },
+  "counts": { "total": 4, "verified": 2, "not_verified": 1, "indeterminate": 0, "blocked": 1, "invalid": 0 },
+  "subjects": [
+    { "subject": { "kind": "backfill", "name": "safe-backfill-verify" }, "total": 3, "latestStatus": "verified", "latestCreatedAt": "2026-06-19T01:02:03.000Z" }
+  ]
 }
 ```
+
+`latest` is `null` when no valid artifacts match the filters.
 
 **Statuses:**
 

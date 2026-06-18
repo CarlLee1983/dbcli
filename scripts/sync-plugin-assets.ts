@@ -1,41 +1,41 @@
 const mappings = [
-  ["assets/SKILL.md", "plugins/dbcli-agent/skills/dbcli/SKILL.md"],
-  ["assets/reference.md", "plugins/dbcli-agent/skills/dbcli/reference.md"],
-  ["assets/SKILL.md", "skills/dbcli/SKILL.md"],
-  ["assets/reference.md", "skills/dbcli/reference.md"],
-  ["assets/SKILL.md", ".cursor/rules/dbcli.mdc"],
-  ["assets/reference.md", ".cursor/skills/dbcli/reference.md"],
-  ["assets/SKILL.md", ".github/skills/dbcli/SKILL.md"],
-  ["assets/reference.md", ".github/skills/dbcli/reference.md"],
-  ["assets/SKILL.md", ".windsurfrules"],
-  ["assets/reference.md", ".windsurf/skills/dbcli/reference.md"],
-] as const;
+  ['assets/SKILL.md', 'plugins/dbcli-agent/skills/dbcli/SKILL.md'],
+  ['assets/reference.md', 'plugins/dbcli-agent/skills/dbcli/reference.md'],
+  ['assets/SKILL.md', 'skills/dbcli/SKILL.md'],
+  ['assets/reference.md', 'skills/dbcli/reference.md'],
+  ['assets/SKILL.md', '.cursor/rules/dbcli.mdc'],
+  ['assets/reference.md', '.cursor/skills/dbcli/reference.md'],
+  ['assets/SKILL.md', '.github/skills/dbcli/SKILL.md'],
+  ['assets/reference.md', '.github/skills/dbcli/reference.md'],
+  ['assets/SKILL.md', '.windsurfrules'],
+  ['assets/reference.md', '.windsurf/skills/dbcli/reference.md'],
+] as const
 
-const write = process.argv.includes("--write");
-let drift = false;
+const write = process.argv.includes('--write')
+let drift = false
 
 for (const [source, target] of mappings) {
-  const sourceText = await Bun.file(source).text();
-  const targetFile = Bun.file(target);
-  const targetExists = await targetFile.exists();
-  const targetText = targetExists ? await targetFile.text() : "";
+  const sourceText = await Bun.file(source).text()
+  const targetFile = Bun.file(target)
+  const targetExists = await targetFile.exists()
+  const targetText = targetExists ? await targetFile.text() : ''
 
   if (sourceText === targetText) {
-    console.log(`ok ${target}`);
-    continue;
+    console.log(`ok ${target}`)
+    continue
   }
 
   if (write) {
-    await Bun.write(target, sourceText);
-    console.log(`synced ${target}`);
-    continue;
+    await Bun.write(target, sourceText)
+    console.log(`synced ${target}`)
+    continue
   }
 
-  drift = true;
-  console.error(`drift ${target} differs from ${source}`);
+  drift = true
+  console.error(`drift ${target} differs from ${source}`)
 }
 
 if (drift) {
-  console.error("Run `bun run plugin:sync` to refresh plugin skill assets.");
-  process.exit(1);
+  console.error('Run `bun run plugin:sync` to refresh plugin skill assets.')
+  process.exit(1)
 }

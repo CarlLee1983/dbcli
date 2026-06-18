@@ -72,8 +72,8 @@
     "skill:check": "bun run scripts/check-skill-parity.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
-    "lint": "eslint src tests --ext .ts --max-warnings=0",
-    "lint:fix": "eslint src tests --ext .ts --fix --max-warnings=0",
+    "lint": "eslint src tests scripts --ext .ts --max-warnings=0",
+    "lint:fix": "eslint src tests scripts --ext .ts --fix --max-warnings=0",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {

@@ -9,7 +9,7 @@ step '1/8 bun audit'
 bun audit
 
 step '2/8 prettier --check'
-bunx prettier --check "src/**/*.ts" "tests/**/*.ts"
+bunx prettier --check "src/**/*.ts" "tests/**/*.ts" "scripts/**/*.ts"
 
 step '3/8 typecheck'
 bun run typecheck

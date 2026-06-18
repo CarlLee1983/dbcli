@@ -152,6 +152,9 @@ Developer workflow guardrails:
 - Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
 - Do not print credentials, copied connection strings, or blacklisted values.
 - To persist result evidence for a read-back assertion, run `assert ... --write-verification-artifact --verification-subject <kind:name>` (kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`).
+- Inspect verification evidence (read-only): `dbcli verification summary --format json`
+  (also `verification list` / `verification show <id>`). Reads `.dbcli/verification/`;
+  no DB connection, no audit writes.
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 
@@ -326,6 +329,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
 | `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
 | `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
+| `verification` | n/a | Read-only. Inspect verification artifacts written by `assert --write-verification-artifact`. Subcommands: `list`, `show <id>`, `summary`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
 | `proxy` | n/a | **(v1.26)** MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Subcommands: `mysql` \| `mariadb` \| `postgresql`. `--listen`, `--target`, `--events` (default `.dbcli/proxy/events.jsonl`), `--slow-ms` (default `1000`), `--redact none\|literals` (default `none`). Observe-only. **(v1.27)** `proxy analyze` aggregates the event log offline into a JSON/text report (summary, byFingerprint with suggestedCommands, slowest, errors, hotTables, N+1) — `--format`, `--top`, `--slow-ms`, `--n-plus-one`. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
 | `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |

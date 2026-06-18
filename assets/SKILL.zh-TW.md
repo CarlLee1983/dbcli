@@ -128,6 +128,9 @@ dbcli inspect --for-agent --no-connect --format json
 - 不要直接從 performance suggestion 建 index；應轉成經過 review 的 migration。
 - 不要列印 credentials、複製的連線字串或 blacklisted 值。
 - 若需持久化 read-back 斷言的結果佐證，執行 `assert ... --write-verification-artifact --verification-subject <kind:name>`（允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`）。
+- 檢視驗證佐證（唯讀）：`dbcli verification summary --format json`
+  （亦可用 `verification list` / `verification show <id>`）。讀取 `.dbcli/verification/`；
+  不需 DB 連線，不寫入 audit log。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
 
@@ -271,6 +274,7 @@ dbcli init --use-env-refs \
 | `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。 |
 | `snapshot` | query-only+ | **(v1.25)** 僅 SQL。擷取結果指紋(`rowCount` + 每欄 null/distinct/min/max/sum + 順序無關 checksum)。`--out`(預設 `.dbcli/snapshots/snap-<ts>.json`)、`--rows`、`--stdout`、`--format`、`--no-limit`。作為 `assert --against` 的基準。 |
 | `assert` | query-only+ | **(v1.25)** 僅 SQL。驗證不變量;失敗時 exit 1,除非 `--no-fail`。`--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`、`--vs <query> --compare rows\|value`(對帳)、`--against <snapshot> --tolerance <pct>`。 |
+| `verification` | n/a | 唯讀。檢視由 `assert --write-verification-artifact` 寫入的驗證 artifact。子指令：`list`、`show <id>`、`summary`。讀取 `<cwd>/.dbcli/verification/`；不需 DB 連線，不寫入 audit log。 |
 | `proxy` | n/a | **(v1.26)** 僅 MySQL/MariaDB/PostgreSQL。本地端開發觀測代理 — 中繼應用程式流量至真實資料庫,並將查詢 / 延遲 / 位元組 / 錯誤事件附加到 `.dbcli/proxy/events.jsonl`。子指令:`mysql` \| `mariadb` \| `postgresql`。`--listen`、`--target`、`--events`(預設 `.dbcli/proxy/events.jsonl`)、`--slow-ms`(預設 `1000`)、`--redact none\|literals`(預設 `none`)。僅作觀測,不改寫或封鎖。 |
 | `status` | query-only+ | 安全 JSON / 文字摘要(不含憑證)。 |
 | `inspect` | query-only+ | 唯讀脈絡快照(連線、權限、blacklist、物件、snippets、建議指令)。`--for-agent` / `--no-connect` / `--require-schema-cache`。支援 `--recovery`。 |

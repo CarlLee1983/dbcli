@@ -27,6 +27,7 @@ step '7/8 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
 
 step '8/8 doc-presence'
+bun run skill:check
 PKG_VERSION=$(node -p "require('./package.json').version")
 if ! grep -qE '^\| `audit` ' docs/feature-matrix.md; then
   echo "  ✗ docs/feature-matrix.md missing 'audit' row" >&2

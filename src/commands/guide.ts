@@ -27,6 +27,10 @@ function parseGoal(value: string): GuideGoalId {
 
 export const guideCommand = new Command()
   .name('guide')
+  // Required so `--format` after the `missing-index-for` subcommand binds to that
+  // leaf command instead of being absorbed by this parent's same-named `--format`.
+  // Commander requires every ancestor in the chain to opt in (program already does).
+  .enablePositionalOptions()
   .description(t('guide.description'))
   .argument('[goal]', `Guide goal ID; one of [${ALLOWED_GOALS.join(', ')}]`)
   .option('--format <format>', 'Output format: json (default) or markdown', 'json')

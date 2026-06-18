@@ -335,6 +335,9 @@ export const recoverCommand = new Command()
                 command: result.verifyResult?.command,
                 exitCode: result.verifyResult?.exitCode,
                 recoveryRef: source.path,
+                // auditRef intentionally omitted: audit_recent is loaded only on the
+                // json path and there is no stable per-step audit ref to attach here.
+                // Spec §10 lists auditRef as "when available"; it isn't, in this surface.
               },
             ],
             ...(result.verificationBlockedReason

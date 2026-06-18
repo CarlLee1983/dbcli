@@ -9,9 +9,22 @@ const PROJECT = join(TMP, '.dbcli')
 
 function cfg(defaultName: string): DbcliConfigV2 {
   return {
-    version: 2, default: defaultName,
-    connections: { [defaultName]: { system: 'mysql', host: 'h', port: 3306, user: 'u', password: '', database: 'd', permission: 'query-only' } },
-    schema: {}, schemas: {}, metadata: { version: '2.0' },
+    version: 2,
+    default: defaultName,
+    connections: {
+      [defaultName]: {
+        system: 'mysql',
+        host: 'h',
+        port: 3306,
+        user: 'u',
+        password: '',
+        database: 'd',
+        permission: 'query-only',
+      },
+    },
+    schema: {},
+    schemas: {},
+    metadata: { version: '2.0' },
     blacklist: { tables: [], columns: {} },
     audit: { enabled: true, rotation: { max_bytes: 10485760, max_entries: 1000 } },
   } as DbcliConfigV2
@@ -19,10 +32,13 @@ function cfg(defaultName: string): DbcliConfigV2 {
 
 describe('writeV2Config atomic write', () => {
   beforeEach(async () => {
-    await Bun.$`rm -rf ${TMP}`; await Bun.$`mkdir -p ${PROJECT}`
+    await Bun.$`rm -rf ${TMP}`
+    await Bun.$`mkdir -p ${PROJECT}`
     await writeProjectBinding(PROJECT, getProjectStoragePath(PROJECT))
   })
-  afterEach(async () => { await Bun.$`rm -rf ${TMP}` })
+  afterEach(async () => {
+    await Bun.$`rm -rf ${TMP}`
+  })
 
   test('writes config readable back; leaves no .tmp behind', async () => {
     await writeV2Config(PROJECT, cfg('primary'))

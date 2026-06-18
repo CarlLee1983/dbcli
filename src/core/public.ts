@@ -48,7 +48,11 @@ import type { DbcliConfig } from '@/utils/validation'
 export const readConfig = (path: string, connectionName?: string): Promise<DbcliConfig> =>
   configModule.read(path, connectionName)
 
-export { resolveConfigStoragePath, writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
+export {
+  resolveConfigStoragePath,
+  writeProjectBinding,
+  getProjectStoragePath,
+} from '@/core/config-binding'
 export type { DbcliConfigV2 } from '@/utils/validation'
 
 // ── Safety ───────────────────────────────────────────────

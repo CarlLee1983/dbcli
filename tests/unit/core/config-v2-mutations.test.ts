@@ -2,7 +2,13 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { writeV2Config, readV2Config, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
-import { envVarNameFor, writeConnectionSecret, upsertConnection, removeConnection, setDefaultConnection } from '@/core/config-v2-mutations'
+import {
+  envVarNameFor,
+  writeConnectionSecret,
+  upsertConnection,
+  removeConnection,
+  setDefaultConnection,
+} from '@/core/config-v2-mutations'
 import type { DbcliConfigV2 } from '@/utils/validation'
 
 const TMP_DIR = '/tmp/dbcli-mutations-test'
@@ -14,12 +20,18 @@ function baseConfig(): DbcliConfigV2 {
     default: 'primary',
     connections: {
       primary: {
-        system: 'mysql', host: 'localhost', port: 3306,
-        user: 'root', password: { $env: 'DBCLI_PRIMARY_PASSWORD' },
-        database: 'app', permission: 'query-only', envFile: '.env.primary',
+        system: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        user: 'root',
+        password: { $env: 'DBCLI_PRIMARY_PASSWORD' },
+        database: 'app',
+        permission: 'query-only',
+        envFile: '.env.primary',
       },
     },
-    schema: {}, schemas: {},
+    schema: {},
+    schemas: {},
     metadata: { version: '2.0' },
     blacklist: { tables: [], columns: {} },
     audit: { enabled: true, rotation: { max_bytes: 10485760, max_entries: 1000 } },
@@ -64,17 +76,28 @@ describe('writeConnectionSecret round-trip', () => {
   })
 
   test('throws on unknown connection', async () => {
-    await expect(writeConnectionSecret(PROJECT, 'nope', 'password', 'x')).rejects.toThrow("連線 'nope' 不存在")
+    await expect(writeConnectionSecret(PROJECT, 'nope', 'password', 'x')).rejects.toThrow(
+      "連線 'nope' 不存在"
+    )
   })
 })
 
 describe('upsertConnection', () => {
   test('adds a new connection with literal non-secrets + {$env} password + envFile', () => {
     const next = upsertConnection(baseConfig(), {
-      name: 'staging', system: 'postgresql', host: 'db.stg', port: 5432, user: 'app', database: 'app',
+      name: 'staging',
+      system: 'postgresql',
+      host: 'db.stg',
+      port: 5432,
+      user: 'app',
+      database: 'app',
     })
     expect(next.connections.staging).toEqual({
-      system: 'postgresql', host: 'db.stg', port: 5432, user: 'app', database: 'app',
+      system: 'postgresql',
+      host: 'db.stg',
+      port: 5432,
+      user: 'app',
+      database: 'app',
       password: { $env: 'DBCLI_STAGING_PASSWORD' },
       permission: 'query-only',
       envFile: '.env.staging',
@@ -85,7 +108,14 @@ describe('upsertConnection', () => {
 
   test('does not mutate the input config (immutability)', () => {
     const input = baseConfig()
-    upsertConnection(input, { name: 'staging', system: 'mysql', host: 'h', port: 3306, user: 'u', database: 'd' })
+    upsertConnection(input, {
+      name: 'staging',
+      system: 'mysql',
+      host: 'h',
+      port: 3306,
+      user: 'u',
+      database: 'd',
+    })
     expect(input.connections.staging).toBeUndefined()
   })
 
@@ -93,7 +123,12 @@ describe('upsertConnection', () => {
     const withRW = baseConfig()
     ;(withRW.connections.primary as { permission: string }).permission = 'read-write'
     const next = upsertConnection(withRW, {
-      name: 'primary', system: 'mysql', host: 'newhost', port: 3307, user: 'root', database: 'app2',
+      name: 'primary',
+      system: 'mysql',
+      host: 'newhost',
+      port: 3307,
+      user: 'root',
+      database: 'app2',
     })
     expect(next.connections.primary.permission).toBe('read-write')
     expect(next.connections.primary.host).toBe('newhost')
@@ -104,7 +139,14 @@ describe('upsertConnection', () => {
 describe('removeConnection', () => {
   function twoConns(): DbcliConfigV2 {
     const c = baseConfig()
-    return upsertConnection(c, { name: 'staging', system: 'mysql', host: 'h', port: 3306, user: 'u', database: 'd' })
+    return upsertConnection(c, {
+      name: 'staging',
+      system: 'mysql',
+      host: 'h',
+      port: 3306,
+      user: 'u',
+      database: 'd',
+    })
   }
 
   test('removes a non-default connection, keeps default', () => {
@@ -136,7 +178,14 @@ describe('removeConnection', () => {
 
 describe('setDefaultConnection', () => {
   function twoConns(): DbcliConfigV2 {
-    return upsertConnection(baseConfig(), { name: 'staging', system: 'mysql', host: 'h', port: 3306, user: 'u', database: 'd' })
+    return upsertConnection(baseConfig(), {
+      name: 'staging',
+      system: 'mysql',
+      host: 'h',
+      port: 3306,
+      user: 'u',
+      database: 'd',
+    })
   }
   test('sets an existing connection as default', () => {
     expect(setDefaultConnection(twoConns(), 'staging').default).toBe('staging')

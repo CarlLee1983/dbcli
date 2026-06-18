@@ -12,7 +12,10 @@ const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb'] as const
  * 且 loadEnvFile 不覆寫既有 key——若兩連線都用 DB_PASSWORD 會撞名取到對方的值。
  */
 export function envVarNameFor(connName: string, field: 'password'): string {
-  const slug = connName.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const slug = connName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
   return `DBCLI_${slug}_${field.toUpperCase()}`
 }
 
@@ -21,7 +24,7 @@ export async function writeConnectionSecret(
   projectPath: string,
   connName: string,
   field: 'password',
-  value: string,
+  value: string
 ): Promise<void> {
   if (value.includes('\n') || value.includes('\r')) {
     throw new Error('secret value 不可包含換行字元')
@@ -45,7 +48,8 @@ export async function writeConnectionSecret(
   if (re.test(content)) {
     content = content.replace(re, line)
   } else {
-    content = content.length && !content.endsWith('\n') ? `${content}\n${line}\n` : `${content}${line}\n`
+    content =
+      content.length && !content.endsWith('\n') ? `${content}\n${line}\n` : `${content}${line}\n`
   }
   await Bun.write(envPath, content)
 }
@@ -84,17 +88,27 @@ export function setDefaultConnection(config: DbcliConfigV2, name: string): Dbcli
 export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
   const system = (v1.connection as { system?: string }).system
   if (!SQL_SYSTEMS.includes(system as SqlSystem)) {
-    throw new Error(`v1→v2 自動升級目前僅支援 SQL 連線(mysql/postgresql/mariadb),不支援 '${system}'`)
+    throw new Error(
+      `v1→v2 自動升級目前僅支援 SQL 連線(mysql/postgresql/mariadb),不支援 '${system}'`
+    )
   }
   const c = v1.connection as {
-    system: SqlSystem; host: string; port: number; user: string; database: string
+    system: SqlSystem
+    host: string
+    port: number
+    user: string
+    database: string
   }
   return {
     version: 2,
     default: 'default',
     connections: {
       default: {
-        system: c.system, host: c.host, port: c.port, user: c.user, database: c.database,
+        system: c.system,
+        host: c.host,
+        port: c.port,
+        user: c.user,
+        database: c.database,
         password: { $env: 'DB_PASSWORD' },
         permission: v1.permission ?? 'query-only',
         envFile: '.env.local',

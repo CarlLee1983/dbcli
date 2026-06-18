@@ -10,7 +10,14 @@ const PROJECT = join(TMP_DIR, '.dbcli')
 
 function v1(): DbcliConfig {
   return {
-    connection: { system: 'mariadb', host: 'localhost', port: 3306, user: 'root', password: '', database: 'app' },
+    connection: {
+      system: 'mariadb',
+      host: 'localhost',
+      port: 3306,
+      user: 'root',
+      password: '',
+      database: 'app',
+    },
     permission: 'query-only',
     schema: {},
     metadata: { version: '1.0' },
@@ -54,7 +61,17 @@ describe('migrateV1ToV2', () => {
   })
 
   test('throws on a non-SQL v1 connection (out of scope)', () => {
-    const mongoV1 = { ...v1(), connection: { system: 'mongodb', host: 'h', port: 27017, user: 'u', database: 'd', password: '' } } as DbcliConfig
+    const mongoV1 = {
+      ...v1(),
+      connection: {
+        system: 'mongodb',
+        host: 'h',
+        port: 27017,
+        user: 'u',
+        database: 'd',
+        password: '',
+      },
+    } as DbcliConfig
     expect(() => migrateV1ToV2(mongoV1)).toThrow('僅支援 SQL')
   })
 
@@ -62,5 +79,7 @@ describe('migrateV1ToV2', () => {
     await Bun.$`rm -rf ${TMP_DIR}`
     delete process.env.DB_PASSWORD
   })
-  beforeEach(async () => { delete process.env.DB_PASSWORD })
+  beforeEach(async () => {
+    delete process.env.DB_PASSWORD
+  })
 })

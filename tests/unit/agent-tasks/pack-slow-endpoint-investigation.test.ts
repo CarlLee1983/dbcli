@@ -37,8 +37,16 @@ describe('builtin pack: slow-endpoint-investigation', () => {
     const program = makeRoot()
     await program.parseAsync(
       [
-        'node', 'dbcli', 'skill', 'tasks', 'plan', 'slow-endpoint-investigation',
-        '--param', 'query=SELECT 1', '--format', 'json',
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'slow-endpoint-investigation',
+        '--param',
+        'query=SELECT 1',
+        '--format',
+        'json',
       ],
       { from: 'node' }
     )

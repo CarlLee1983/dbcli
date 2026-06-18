@@ -37,16 +37,26 @@ describe('builtin pack: migration-review', () => {
     const program = makeRoot()
     await program.parseAsync(
       [
-        'node', 'dbcli', 'skill', 'tasks', 'plan', 'migration-review',
-        '--param', 'table=orders',
-        '--param', 'ddl=ALTER TABLE orders ADD COLUMN note text',
-        '--format', 'json',
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'migration-review',
+        '--param',
+        'table=orders',
+        '--param',
+        'ddl=ALTER TABLE orders ADD COLUMN note text',
+        '--format',
+        'json',
       ],
       { from: 'node' }
     )
     expect(exitCode).toBeUndefined()
     expect(logOut).toContain('"resolvedCommand": "schema orders --format json"')
-    expect(logOut).toContain('"resolvedCommand": "plan \\"ALTER TABLE orders ADD COLUMN note text\\""')
+    expect(logOut).toContain(
+      '"resolvedCommand": "plan \\"ALTER TABLE orders ADD COLUMN note text\\""'
+    )
   })
 
   test('plan fails when a required parameter is missing', async () => {

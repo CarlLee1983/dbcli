@@ -37,8 +37,16 @@ describe('builtin pack: pr-database-review', () => {
     const program = makeRoot()
     await program.parseAsync(
       [
-        'node', 'dbcli', 'skill', 'tasks', 'plan', 'pr-database-review',
-        '--param', 'query=SELECT 1', '--format', 'json',
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'pr-database-review',
+        '--param',
+        'query=SELECT 1',
+        '--format',
+        'json',
       ],
       { from: 'node' }
     )

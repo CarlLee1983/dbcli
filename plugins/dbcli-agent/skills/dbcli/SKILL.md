@@ -84,6 +84,57 @@ recent audit activity.
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).
 
+## Developer workflows
+
+Use these workflows when database impact is implicit in a development task. Keep
+the normal dbcli safety rules: prefer `--format json`, run `blacklist list`
+before touching sensitive data, confirm names with `schema`, dry-run writes, and
+use `--recovery` / `recover` after failures.
+
+| Situation | Use dbcli for | Minimum safe path |
+| --- | --- | --- |
+| DB-backed feature | Map product/code terms to real objects before editing code. | `inspect --for-agent` -> `blacklist list` -> `schema <object>` -> `queries suggest <intent>` |
+| Application data bug | Separate stored facts from application-code inference. | `inspect --for-agent` -> `audit tail --for-agent --n 10` -> `blacklist list` -> `schema <object>` -> narrow query/snippet |
+| ORM or migration work | Ground model and migration edits in live schema evidence. | `schema --format json` -> `diff --snapshot <name>` -> migration dry-run -> `diff --against <snapshot>` |
+| PR database review | Check query, write, migration, export, fixture, and blacklist risk. | Review changed persistence paths, then propose concrete `schema`, `plan`, `dry-run`, `report`, or `guide` commands for each material claim. |
+| Slow endpoint or query | Prefer read-only diagnostics before index proposals. | `report --section perf` -> task pack `analyze-table-perf` -> `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
+| Safe data backfill | Scope affected rows and preview mutations before execution. | `blacklist list` -> `schema <object>` -> count/scope query -> `update ... --dry-run` -> read-back or snippet `--verify`. |
+| Environment validation | Check config shape and connectivity without leaking secrets. | `status --format json` -> `doctor --format json` -> `inspect --for-agent --no-connect --format json`. |
+
+Copy-paste command anchors:
+
+```bash
+dbcli inspect --for-agent --format json
+dbcli blacklist list --format json
+dbcli schema <object> --format json
+dbcli queries suggest <intent> --format json
+dbcli audit tail --for-agent --n 10
+dbcli schema --format json
+dbcli diff --snapshot <name>
+dbcli migrate <migration-file>
+dbcli diff --against <snapshot>
+dbcli report --section perf --format json
+dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
+dbcli guide missing-index-for "<query>" --format json
+dbcli proxy analyze --format json
+dbcli query "<count/scope query>" --format json
+dbcli update <object> --where "<bounded predicate>" --set '<json>' --dry-run --format json
+dbcli status --format json
+dbcli doctor --format json
+dbcli inspect --for-agent --no-connect --format json
+```
+
+Developer workflow guardrails:
+
+- Never invent table, collection, key, index, or field names. Confirm them with
+  `schema` before writing code that depends on them.
+- Separate database facts from application-code inference. Report which dbcli
+  output shaped the code or review conclusion.
+- For writes and backfills, include scope count, dry-run preview, execution
+  command, and read-back or snippet verification.
+- Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
+- Do not print credentials, copied connection strings, or blacklisted values.
+
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 
 ## Audit Log usage

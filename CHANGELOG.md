@@ -5,6 +5,19 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.0] - 2026-06-18 - Agent Task Packs Expansion & Skill Parity Guards
+
+### Added
+
+- **4 個新的內建 Agent Task Pack（皆 `plan-only` 唯讀）。** `audit-permissions`（權限等級與 blacklist 覆蓋稽核）、`safe-backfill`（在寫入前做 blacklist + schema + 風險檢查的回填計畫）、`schema-drift-review`（快取/committed schema 與線上 schema 的漂移比對）、`connection-health`（連線可達性 / 設定 / 容量分級三步診斷）。皆走確定存在的唯讀指令;用 `dbcli skill tasks list` 瀏覽完整清單。
+- **平台清單 parity 檢查（`scripts/check-platform-parity.ts`，`bun run platform:check`）。** 以 `SUPPORTED_PLATFORMS` 為單一真實來源，驗證 README、SKILL.md、SKILL.zh-TW.md、reference.md 與 CLI `--install` 選項描述的平台列舉完全一致（缺項或多項皆報錯），並掛進 `release-check.sh`。
+- **語意 parity 守門。** `scripts/check-skill-parity.ts` 在結構比對外，新增 14 個語言不變的安全/命令 token（`query`/`insert`/`update`/`delete`/`export`/`schema`、`blacklist`、`--dry-run`/`--no-limit`/`--recovery`、`LIMIT 1000`、三個權限等級）在 EN 與 zh-TW 皆須對稱出現的檢查。
+- **安裝與 context CLI 測試覆蓋。** 新增 `skill --install` 對 7 個平台寫入 temp HOME/cwd 的 smoke 測試（含 cursor/windsurf 的 root-rule + reference 雙檔結構），以及 `skill context` 的 xml/json/markdown、預設格式、無效格式與 blacklist 不外洩的 CLI 入口測試。
+
+### Fixed
+
+- **`codex` / `windsurf` 安裝目標文件漂移。** 兩者已存在於 `SUPPORTED_PLATFORMS`（`--install` 實際可用），卻在 `SKILL.md` / `SKILL.zh-TW.md` 缺漏、`windsurf` 在 README 缺漏。已補齊並重新同步所有 plugin/skill 副本;新的 `platform:check` 會防止再次漂移。
+
 ## [1.31.0] - 2026-06-10 - Data Editing Surface & Agent Plugin Packaging
 
 ### Added

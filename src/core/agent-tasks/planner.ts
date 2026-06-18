@@ -64,7 +64,7 @@ function deriveVerification(
   steps: AgentTaskPlanStep[]
 ): AgentTaskPlanVerification | undefined {
   if (taskName !== 'safe-backfill-verify') return undefined
-  const index = steps.findIndex((s) => s.resolvedCommand.startsWith('assert '))
+  const index = steps.findLastIndex((s) => s.resolvedCommand.startsWith('assert '))
   if (index === -1) return undefined
   const assertStep = steps[index]!
   const evidence: VerificationEvidenceRef = {

@@ -28,6 +28,11 @@ description: 為 AI 代理設計、具權限控管的資料庫 CLI。可用於�
      - `failed` — 驗證器以非零退出或逾時。
      - `indeterminate` — 驗證器以 0 退出,但啟發式判斷無法確認修復(JSON 解析失敗、欄位缺失、門控略過)。
      Verify **僅在** `finalStatus === 'ok'` 時執行。傳 `--no-verify` 可略過。啟發式刻意輕量;正確性重要時,代理仍應自行對原始失敗操作再驗證一次。
+
+驗證結果詞彙:只有在必要證據符合預期時才使用 `verified`;檢查已執行但結果違反預期時使用
+`not_verified`;檢查已執行但證據不足或模糊時使用 `indeterminate`;因 config、權限、schema、
+placeholder 或安全閘門導致驗證無法執行時使用 `blocked`。
+
    - **v1.17.0 P2 Multi-turn `--next`(多輪逐步執行)。** 當 `--apply` 顆粒度過粗(interactive 卡住、計畫需要逐步檢視,或代理希望用自有工具驅動復原)時,可逐步執行步驟並向 dbcli 詢問下一步:
 
      ```bash

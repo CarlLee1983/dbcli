@@ -116,3 +116,38 @@ describe('runVerifyStep — exec dispatch', () => {
     expect(r.status).toBe('indeterminate')
   })
 })
+
+describe('runVerifyStep — verification contract bridge', () => {
+  test('skipped verifier exposes contractStatus blocked while preserving legacy status', async () => {
+    const step: GuideStep = { ...validVerifyStep, command: 'dbcli schema <table> --format json' }
+    const r = await runVerifyStep(step, {
+      code: 'SCHEMA_CACHE_MISSING',
+      cwd: '/tmp',
+      env: process.env,
+    })
+
+    expect(r.status).toBe('indeterminate')
+    expect(r.contractStatus).toBe('blocked')
+    expect(r.blockedReason).toBeTruthy()
+  })
+
+  test('passed verifier exposes contractStatus verified', async () => {
+    __setVerifyExecutorForTests(async () => ({
+      exitCode: 0,
+      stdout: '{}',
+      stderr: '',
+      durationMs: 5,
+      truncated: false,
+      timedOut: false,
+    }))
+
+    const r = await runVerifyStep(validVerifyStep, {
+      code: 'BLACKLIST_TABLE',
+      cwd: '/tmp',
+      env: process.env,
+    })
+
+    expect(r.status).toBe('passed')
+    expect(r.contractStatus).toBe('verified')
+  })
+})

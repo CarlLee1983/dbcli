@@ -204,3 +204,46 @@ describe('dbcli verification show', () => {
     expect(stderr.toLowerCase()).toContain('invalid')
   })
 })
+
+describe('dbcli verification summary', () => {
+  test('returns latest, counts, invalid count, and subject breakdown', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-19T03:00:00.000Z', status: 'verified', subject: { kind: 'backfill', name: 'one' } },
+      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', status: 'not_verified', subject: { kind: 'backfill', name: 'one' } },
+      { id: 'cccc', createdAt: '2026-06-19T01:00:00.000Z', status: 'blocked', subject: { kind: 'migration', name: 'm' } },
+    ])
+    await writeFile(join(work, '.dbcli', 'verification', 'verification-broken.json'), '{ not json', 'utf8')
+    const { stdout, code } = await run(work, ['verification', 'summary', '--format', 'json'])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.storageDir).toContain('.dbcli/verification')
+    expect(j.latest.id).toBe('aaaa')
+    expect(j.counts).toEqual({ total: 3, verified: 1, not_verified: 1, indeterminate: 0, blocked: 1, invalid: 1 })
+    expect(j.subjects[0]).toEqual({
+      subject: { kind: 'backfill', name: 'one' },
+      total: 2,
+      latestStatus: 'verified',
+      latestCreatedAt: '2026-06-19T03:00:00.000Z',
+    })
+  })
+
+  test('no valid artifacts yields null latest, zero counts, exit 0', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-vsum-empty-'))
+    const { stdout, code } = await run(work, ['verification', 'summary', '--format', 'json'])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.latest).toBeNull()
+    expect(j.counts.total).toBe(0)
+  })
+
+  test('--subject scopes the summary', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-19T02:00:00.000Z', subject: { kind: 'backfill', name: 'one' } },
+      { id: 'bbbb', createdAt: '2026-06-19T01:00:00.000Z', subject: { kind: 'migration', name: 'm' } },
+    ])
+    const { stdout } = await run(work, ['verification', 'summary', '--format', 'json', '--subject', 'backfill'])
+    const j = JSON.parse(stdout)
+    expect(j.counts.total).toBe(1)
+    expect(j.latest.id).toBe('aaaa')
+  })
+})

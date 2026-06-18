@@ -45,5 +45,8 @@ docs/superpowers/
 .worktrees/
 .claude/worktrees/
 
+# claude code local runtime artifacts
+.claude/scheduled_tasks.lock
+
 # omx
 .omx/

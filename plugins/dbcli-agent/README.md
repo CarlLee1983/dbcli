@@ -4,19 +4,41 @@ Agent skill bundle for dbcli.
 
 Full installation instructions: [INSTALL.md](./INSTALL.md).
 
-This repo can be installed like the Ponytail plugin:
+This repo can be installed like the Ponytail plugin. Use the command set for
+your agent:
+
+## Claude Code
 
 ```text
 /plugin marketplace add CarlLee1983/dbcli
 /plugin install dbcli-agent@dbcli-agent
 ```
 
+## Codex
+
 ```bash
 codex plugin marketplace add CarlLee1983/dbcli
+```
+
+Then open `/plugins` and install `dbcli-agent`.
+
+## GitHub Copilot CLI
+
+```bash
 copilot plugin marketplace add CarlLee1983/dbcli
 copilot plugin install dbcli-agent@dbcli-agent
+```
+
+## Antigravity CLI
+
+```bash
 agy plugin install https://github.com/CarlLee1983/dbcli
 ```
+
+## Cursor
+
+Cursor is instruction-file based. Use the Cursor section in
+[INSTALL.md](./INSTALL.md#cursor).
 
 Installing it as a plugin makes the `dbcli` skill available from
 `skills/dbcli/SKILL.md`, with the full command reference next to it.

@@ -1136,8 +1136,7 @@ dbcli skill --install copilot
 # Cursor IDE
 dbcli skill --install cursor
 
-# Codex plugin bundle
-# Ponytail-style marketplace 安裝：
+# Codex plugin marketplace
 #   codex plugin marketplace add CarlLee1983/dbcli
 # 接著開啟 /plugins 並安裝 dbcli-agent。
 # 完整安裝說明：plugins/dbcli-agent/INSTALL.md

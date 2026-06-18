@@ -1240,8 +1240,7 @@ dbcli skill --install copilot
 # Cursor IDE (AI-native editor)
 dbcli skill --install cursor
 
-# Codex plugin bundle
-# Ponytail-style marketplace install:
+# Codex plugin marketplace
 #   codex plugin marketplace add CarlLee1983/dbcli
 # Then open /plugins and install dbcli-agent.
 # Full install guide: plugins/dbcli-agent/INSTALL.md

@@ -417,6 +417,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 5.  **稽核日誌 (Audit Log)**：詳見 [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log)。
 6.  **AI 協作提示注入**：`dbcli skill context` 將連線資訊、schema 快取和儲存查詢元資料序列化為高度壓縮、針對 token 優化的 XML、Markdown 或 JSON 結構，專門設計用於 AI 提示詞注入。
 7.  **自我驗證循環**：Snippet 可以定義 `verify` frontmatter 元資料（指定 `query` 與 LHS-運算子-RHS 的 `expects` 斷言）。使用 `dbcli q @name --verify` 執行查詢時，會自動執行主要指令、執行驗證查詢，並驗證傳回資料集的斷言。
+8.  **Codex Plugin**：`plugins/dbcli-agent` 會把 dbcli skill 與 reference 打包給 plugin 安裝使用。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`。
 
 ---
 
@@ -638,4 +639,3 @@ dbcli guide missing-index-for "..." --min-confidence medium
 每個候選索引都會帶有 `confidence`(`high` / `medium` / `low`)與 `reason`;此工具不會斷言「你一定要建立」。函式/運算式欄位(例如 `DATE(settled_at)`)以及無法解析的 SQL,會列在 `warnings` 之下。
 
 **限制:** 僅支援單一 `SELECT`(不支援 INSERT/UPDATE/DELETE、stored procedure 或 view 內容)。函式/部分索引只會被標記,不會被建議。超出 node-sql-parser 支援的方言會退回到僅用 EXPLAIN 的啟發式判斷。
-

@@ -417,6 +417,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 5.  **Audit Log**: see [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log).
 6.  **AI Collaboration Prompting**: `dbcli skill context` serializes connection, schema cache, and saved query metadata into a highly-compressed, token-optimized XML, Markdown, or JSON structure designed specifically for AI prompt insertion.
 7.  **Self-Verification Loops**: Snippets can define `verify` frontmatter metadata (specifying a `query` and LHS-Operator-RHS `expects` assertions). Running a query with `dbcli q @name --verify` automatically executes the primary command, runs the verification query, and validates assertions against the returned dataset.
+8.  **Codex Plugin**: `plugins/dbcli-agent` bundles the dbcli skill and reference for plugin installs. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, Antigravity, and Cursor install commands.
 
 ---
 
@@ -644,4 +645,3 @@ dbcli guide missing-index-for "..." --min-confidence medium
 Each candidate carries a `confidence` (`high` / `medium` / `low`) and a `reason`; the tool never asserts "you must create this". Functional/expression columns (e.g. `DATE(settled_at)`) and unparseable SQL are reported under `warnings`.
 
 **Limits:** single `SELECT` only (no INSERT/UPDATE/DELETE, stored procedures, or view bodies). Functional/partial indexes are flagged, not recommended. Dialects beyond node-sql-parser support fall back to EXPLAIN-only heuristics.
-

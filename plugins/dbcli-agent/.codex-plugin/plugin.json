@@ -1,0 +1,40 @@
+{
+  "name": "dbcli-agent",
+  "version": "1.31.0",
+  "description": "Database CLI skill and command reference for AI agents",
+  "author": {
+    "name": "Carl Lee",
+    "url": "https://github.com/CarlLee1983"
+  },
+  "homepage": "https://github.com/CarlLee1983/dbcli",
+  "repository": "https://github.com/CarlLee1983/dbcli",
+  "license": "MIT",
+  "keywords": [
+    "database",
+    "cli",
+    "ai-agent",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "elasticsearch"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "dbcli Agent",
+    "shortDescription": "Use dbcli safely from Codex.",
+    "longDescription": "Installs the dbcli agent skill and reference guide so Codex can inspect schemas, query databases, respect blacklist boundaries, and recover from database errors through the dbcli command workflow.",
+    "developerName": "Carl Lee",
+    "category": "Productivity",
+    "capabilities": [
+      "Database",
+      "Local CLI",
+      "Agent Skill"
+    ],
+    "defaultPrompt": [
+      "Inspect my database with dbcli.",
+      "Show schema safely with dbcli.",
+      "Diagnose a dbcli query failure."
+    ]
+  }
+}

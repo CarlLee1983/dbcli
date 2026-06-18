@@ -532,6 +532,7 @@ dbcli skill --install gemini          # 安裝至 Gemini CLI（即將淘汰）
 dbcli skill --install antigravity     # 安裝至 Antigravity CLI（Gemini CLI 後繼者）
 dbcli skill --install copilot         # 安裝至 GitHub Copilot
 dbcli skill --install cursor          # 安裝至 Cursor IDE
+dbcli skill --install codex           # 安裝至 Codex skills
 ```
 
 **行為：**
@@ -555,7 +556,8 @@ dbcli skill --install claude && \
 dbcli skill --install gemini && \
 dbcli skill --install antigravity && \
 dbcli skill --install copilot && \
-dbcli skill --install cursor
+dbcli skill --install cursor && \
+dbcli skill --install codex
 ```
 
 ---
@@ -1129,6 +1131,10 @@ dbcli skill --install copilot
 
 # Cursor IDE
 dbcli skill --install cursor
+
+# Codex plugin bundle
+# 從 plugins/dbcli-agent 安裝 plugin 可直接取得 skill。
+# 完整安裝說明：plugins/dbcli-agent/INSTALL.md
 ```
 
 安裝後，AI 可依你的權限等級使用 dbcli 查詢、插入、更新或匯出資料。
@@ -1180,6 +1186,19 @@ dbcli skill --install cursor
 5. 在 Composer 中：「新增一筆使用者」或「匯出使用者資料」
 
 **Skill 路徑：** 在**目前工作目錄**執行 `dbcli skill --install cursor` 時，寫入 **`.cursor/rules/dbcli.mdc`**（摘要與工作流程）及 **`.cursor/skills/dbcli/reference.md`**（完整旗標與範例）。
+
+---
+
+#### Codex
+
+1. 從 `plugins/dbcli-agent` 安裝 Codex plugin，直接載入 dbcli skill。
+2. 若要常駐 CLI，請全域安裝 dbcli：`bun install -g @carllee1983/dbcli` 或 `npm install -g @carllee1983/dbcli`。
+3. 若未全域安裝，plugin 內的 skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback。
+4. 初始化：`dbcli init` 或 `bunx @carllee1983/dbcli init`。
+
+**Plugin skill 路徑：** `plugins/dbcli-agent/skills/dbcli/`（`SKILL.md` + `reference.md`）。
+
+**安裝說明：** `plugins/dbcli-agent/INSTALL.md`。
 
 ---
 

@@ -634,6 +634,7 @@ dbcli skill --install gemini          # Install to Gemini CLI (being phased out)
 dbcli skill --install antigravity     # Install to Antigravity CLI (Gemini CLI's successor)
 dbcli skill --install copilot         # Install to GitHub Copilot
 dbcli skill --install cursor          # Install to Cursor IDE
+dbcli skill --install codex           # Install to Codex skills
 ```
 
 **Behavior:**
@@ -657,7 +658,8 @@ dbcli skill --install claude && \
 dbcli skill --install gemini && \
 dbcli skill --install antigravity && \
 dbcli skill --install copilot && \
-dbcli skill --install cursor
+dbcli skill --install cursor && \
+dbcli skill --install codex
 ```
 
 ---
@@ -1233,6 +1235,10 @@ dbcli skill --install copilot
 
 # Cursor IDE (AI-native editor)
 dbcli skill --install cursor
+
+# Codex plugin bundle
+# Install the plugin from plugins/dbcli-agent to get the skill directly.
+# Full install guide: plugins/dbcli-agent/INSTALL.md
 ```
 
 After installation, the AI agent will have access to dbcli commands and can use them to query, insert, update, or export data based on your permission level.
@@ -1284,6 +1290,19 @@ After installation, the AI agent will have access to dbcli commands and can use 
 5. Use Cursor's Composer: "Insert a new user" or "Export user data"
 
 **Skill location:** `.cursor/rules/dbcli.mdc` (summary + workflows) and `.cursor/skills/dbcli/reference.md` (full command flags and examples) under the **current working directory** when you run `dbcli skill --install cursor`.
+
+---
+
+#### Codex
+
+1. Install the Codex plugin from `plugins/dbcli-agent` to load the dbcli skill directly.
+2. For a persistent CLI, install dbcli globally: `bun install -g @carllee1983/dbcli` or `npm install -g @carllee1983/dbcli`.
+3. Without a global install, the plugin skill uses `bunx @carllee1983/dbcli <command>` as its fallback.
+4. Initialize: `dbcli init` or `bunx @carllee1983/dbcli init`.
+
+**Plugin skill location:** `plugins/dbcli-agent/skills/dbcli/` (SKILL.md + reference.md).
+
+**Install guide:** `plugins/dbcli-agent/INSTALL.md`.
 
 ---
 

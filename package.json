@@ -44,6 +44,7 @@
   "files": [
     "dist/",
     "assets/",
+    "plugins/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -53,6 +54,8 @@
     "build": "bun run scripts/build.ts",
     "prepublishOnly": "bun run build",
     "release:check": "bash scripts/release-check.sh",
+    "plugin:sync": "bun run scripts/sync-plugin-assets.ts --write",
+    "plugin:check": "bun run scripts/sync-plugin-assets.ts",
     "test": "bun test",
     "test:unit": "bun test tests/unit tests/core",
     "test:integration": "bun test tests/integration",

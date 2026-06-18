@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, isAbsolute, resolve, sep } from 'node:path'
 import type {
   VerificationArtifact,
   VerificationStatus,
@@ -123,5 +123,159 @@ export async function readVerificationArtifacts(
   return { storageDir, artifacts, invalid }
 }
 
-// Re-export type-only names used by later helpers in this file (Task 2).
-export type { VerificationStatus, VerificationSubject, VerificationSubjectKind }
+export interface VerificationArtifactFilters {
+  status?: VerificationStatus
+  subject?: { kind: VerificationSubjectKind; name?: string }
+}
+
+export interface VerificationArtifactSummary {
+  storageDir: string
+  latest: {
+    path: string
+    id: string
+    createdAt: string
+    status: VerificationStatus
+    subject: VerificationSubject
+    summary: string
+  } | null
+  counts: {
+    total: number
+    verified: number
+    not_verified: number
+    indeterminate: number
+    blocked: number
+    invalid: number
+  }
+  subjects: Array<{
+    subject: VerificationSubject
+    total: number
+    latestStatus: VerificationStatus
+    latestCreatedAt: string
+  }>
+}
+
+/** Thrown when a `show` selector matches zero, many, or an out-of-bounds artifact. */
+export class VerificationArtifactSelectionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VerificationArtifactSelectionError'
+    Object.setPrototypeOf(this, VerificationArtifactSelectionError.prototype)
+  }
+}
+
+export function filterVerificationArtifacts(
+  artifacts: VerificationArtifactRecord[],
+  filters: VerificationArtifactFilters
+): VerificationArtifactRecord[] {
+  return artifacts.filter((r) => {
+    if (filters.status && r.artifact.status !== filters.status) return false
+    if (filters.subject) {
+      if (r.artifact.subject.kind !== filters.subject.kind) return false
+      if (filters.subject.name !== undefined && r.artifact.subject.name !== filters.subject.name) {
+        return false
+      }
+    }
+    return true
+  })
+}
+
+export function summarizeVerificationArtifacts(
+  input: ReadVerificationArtifactsResult,
+  filters?: VerificationArtifactFilters
+): VerificationArtifactSummary {
+  const matched = filters
+    ? filterVerificationArtifacts(input.artifacts, filters)
+    : input.artifacts
+
+  const counts = {
+    total: matched.length,
+    verified: 0,
+    not_verified: 0,
+    indeterminate: 0,
+    blocked: 0,
+    invalid: input.invalid.length,
+  }
+  for (const r of matched) counts[r.artifact.status] += 1
+
+  // matched preserves the reader's latest-first order, so index 0 is the latest.
+  const head = matched[0]
+  const latest = head
+    ? {
+        path: head.path,
+        id: head.artifact.id,
+        createdAt: head.artifact.createdAt,
+        status: head.artifact.status,
+        subject: head.artifact.subject,
+        summary: head.artifact.summary,
+      }
+    : null
+
+  const bySubject = new Map<string, VerificationArtifactSummary['subjects'][number]>()
+  for (const r of matched) {
+    const { subject } = r.artifact
+    const key = `${subject.kind}::${subject.name ?? ''}`
+    const existing = bySubject.get(key)
+    if (!existing) {
+      // First seen is the latest for this subject (matched is latest-first).
+      bySubject.set(key, {
+        subject,
+        total: 1,
+        latestStatus: r.artifact.status,
+        latestCreatedAt: r.artifact.createdAt,
+      })
+    } else {
+      existing.total += 1
+    }
+  }
+  const subjects = Array.from(bySubject.values()).sort((a, b) =>
+    a.latestCreatedAt < b.latestCreatedAt ? 1 : a.latestCreatedAt > b.latestCreatedAt ? -1 : 0
+  )
+
+  return { storageDir: input.storageDir, latest, counts, subjects }
+}
+
+/** A selector is treated as a filesystem path when it contains a path separator. */
+function looksLikePath(selector: string): boolean {
+  return selector.includes('/') || selector.includes('\\') || isAbsolute(selector)
+}
+
+export function findVerificationArtifact(
+  input: ReadVerificationArtifactsResult,
+  selector: string
+): VerificationArtifactRecord {
+  if (looksLikePath(selector)) {
+    const resolved = resolve(selector)
+    const root = input.storageDir
+    if (resolved !== root && !resolved.startsWith(root + sep)) {
+      throw new VerificationArtifactSelectionError(
+        `Path is outside the verification directory: ${resolved}`
+      )
+    }
+    const hit = input.artifacts.find((r) => r.path === resolved)
+    if (hit) return hit
+    const bad = input.invalid.find((r) => r.path === resolved)
+    if (bad) {
+      throw new VerificationArtifactSelectionError(
+        `Artifact at ${bad.filename} is invalid: ${bad.error}`
+      )
+    }
+    throw new VerificationArtifactSelectionError(`No artifact found at path: ${resolved}`)
+  }
+
+  const exact = input.artifacts.filter((r) => r.artifact.id === selector)
+  if (exact.length === 1) return exact[0]!
+
+  const prefix = input.artifacts.filter((r) => r.artifact.id.startsWith(selector))
+  if (prefix.length === 1) return prefix[0]!
+  if (prefix.length > 1) {
+    const candidates = prefix.slice(0, 10).map((r) => r.artifact.id).join(', ')
+    throw new VerificationArtifactSelectionError(
+      `Selector '${selector}' is ambiguous. Candidates: ${candidates}`
+    )
+  }
+
+  const byName = input.artifacts.filter((r) => r.filename === selector)
+  if (byName.length === 1) return byName[0]!
+
+  throw new VerificationArtifactSelectionError(`No artifact matches selector '${selector}'`)
+}

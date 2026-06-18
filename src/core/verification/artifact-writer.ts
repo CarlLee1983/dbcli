@@ -1,4 +1,4 @@
-import { mkdir, rename, writeFile, access } from 'node:fs/promises'
+import { mkdir, writeFile, link, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { VerificationArtifact } from './types'
 
@@ -33,20 +33,11 @@ export function verificationArtifactFilename(artifact: VerificationArtifact): st
   return `verification-${timeStamp(artifact.createdAt)}-${shortId(artifact.id)}.json`
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /**
  * Persist an artifact atomically under `<storageDir>/.dbcli/verification/`.
  * - Creates the directory if missing.
  * - Generates the filename internally (no caller-controlled path segments).
- * - Writes to a temp file then renames (atomic on the same filesystem).
+ * - Writes to a temp file then uses atomic link to place it (fails with EEXIST if target exists).
  * - Throws rather than overwriting an existing artifact.
  * @returns the absolute path written.
  */
@@ -58,12 +49,19 @@ export async function writeVerificationArtifact(
   await mkdir(dir, { recursive: true })
 
   const target = join(dir, verificationArtifactFilename(artifact))
-  if (await exists(target)) {
-    throw new Error(`Verification artifact already exists: ${target}`)
-  }
-
   const tmp = `${target}.${process.pid}.tmp`
-  await writeFile(tmp, JSON.stringify(artifact, null, 2), 'utf8')
-  await rename(tmp, target)
+  try {
+    await writeFile(tmp, JSON.stringify(artifact, null, 2), 'utf8')
+    try {
+      await link(tmp, target)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new Error(`Verification artifact already exists: ${target}`)
+      }
+      throw e
+    }
+  } finally {
+    await unlink(tmp).catch(() => {})
+  }
   return target
 }

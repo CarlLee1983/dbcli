@@ -35,6 +35,9 @@ export { BlacklistManager } from './blacklist-manager'
 export { BlacklistValidator, BlacklistError } from './blacklist-validator'
 export type { BlacklistConfig, ColumnBlacklist, BlacklistState } from '@/types/blacklist'
 
+// Verification contract
+export * from './verification'
+
 // Size category utility
 export { getSizeCategory } from './size-category'
 export type { SizeCategory } from './size-category'

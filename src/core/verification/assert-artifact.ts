@@ -1,4 +1,7 @@
-import type { VerificationSubject, VerificationSubjectKind } from './types'
+import type { VerificationSubject, VerificationSubjectKind, VerificationArtifact, VerificationEvidenceRef } from './types'
+import type { AssertVerdict } from '@/core/result-snapshot/types'
+import { redactArgv } from '@/utils/redaction'
+import { buildVerificationArtifact } from './artifact'
 
 /** Runtime list of allowed subject kinds — mirrors VerificationSubjectKind in types.ts. */
 export const VERIFICATION_SUBJECT_KINDS = [
@@ -50,4 +53,48 @@ export function parseVerificationSubject(raw: string): VerificationSubject {
     )
   }
   return { kind, name }
+}
+
+export interface BuildAssertArtifactInput {
+  verdict: AssertVerdict
+  subject: VerificationSubject
+  /** Explicit summary; when omitted a bounded default is derived from the verdict. */
+  summary?: string
+  /** Raw argv for redacted command evidence (typically process.argv). */
+  argv: string[]
+  /** Audit entry id from writeAuditEntry; null/undefined when audit is off or failed. */
+  auditRef?: string | null
+  now?: () => Date
+  idFactory?: () => string
+}
+
+function defaultSummary(pass: boolean): string {
+  return pass
+    ? 'Assertion verified the expected state.'
+    : 'Assertion did not verify the expected state.'
+}
+
+/**
+ * Map an AssertVerdict to a v1 VerificationArtifact. Status and evidence exitCode
+ * follow assertion truth (verdict.pass), never the process exit code, so a
+ * --no-fail failure still records not_verified / exitCode 1.
+ */
+export function buildAssertVerificationArtifact(
+  input: BuildAssertArtifactInput
+): VerificationArtifact {
+  const pass = input.verdict.pass
+  const evidence: VerificationEvidenceRef = {
+    kind: 'assert',
+    command: redactArgv(input.argv),
+    exitCode: pass ? 0 : 1,
+    ...(input.auditRef ? { auditRef: input.auditRef } : {}),
+  }
+  return buildVerificationArtifact({
+    status: pass ? 'verified' : 'not_verified',
+    subject: input.subject,
+    summary: input.summary?.trim() || defaultSummary(pass),
+    evidence: [evidence],
+    now: input.now,
+    idFactory: input.idFactory,
+  })
 }

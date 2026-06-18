@@ -184,7 +184,7 @@ Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/v
 
 | Flag | Required | Description |
 | :--- | :--- | :--- |
-| `--write-verification-artifact` | yes (opt-in) | Write a VerificationArtifact JSON after the assertion runs. |
+| `--write-verification-artifact` | opt-in | Write a VerificationArtifact JSON after the assertion runs. |
 | `--verification-subject <kind:name>` | yes (when flag is set) | Subject being verified. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
 | `--verification-summary <text>` | no | Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state." |
 

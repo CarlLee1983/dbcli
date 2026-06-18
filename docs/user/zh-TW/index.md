@@ -184,7 +184,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 
 | 旗標 | 必填 | 說明 |
 | :--- | :--- | :--- |
-| `--write-verification-artifact` | 是（opt-in）| 斷言執行後寫入 VerificationArtifact JSON。 |
+| `--write-verification-artifact` | 選用 | 斷言執行後寫入 VerificationArtifact JSON。 |
 | `--verification-subject <kind:name>` | 是（啟用旗標時）| 被驗證的標的。允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。 |
 | `--verification-summary <text>` | 否 | 可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。 |
 

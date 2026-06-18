@@ -135,7 +135,7 @@ dbcli diff --snapshot <name>
 For migration preview:
 
 ```bash
-dbcli migrate <migration-file>
+dbcli migrate add-index <table>
 dbcli diff --against <snapshot>
 ```
 

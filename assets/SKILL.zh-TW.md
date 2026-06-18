@@ -105,7 +105,7 @@ dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 
 | --- | --- | --- |
 | DB-backed 功能 | 編輯程式碼前先把產品/程式語彙對應到真實資料物件。 | `inspect --for-agent` -> `blacklist list` -> `schema <object>` -> `queries suggest <intent>` |
 | 應用程式資料錯誤 | 分離資料庫事實與應用程式推論。 | `inspect --for-agent` -> `audit tail --for-agent --n 10` -> `blacklist list` -> `schema <object>` -> 最小查詢/snippet |
-| ORM 或 migration | 用 live schema 證據支撐 model 與 migration 修改。 | `schema --format json` -> `diff --snapshot <name>` -> migration dry-run -> `diff --against <snapshot>` |
+| ORM 或 migration | 用 live schema 證據支撐 model 與 migration 修改。 | `schema --format json` -> `diff --snapshot <name>` -> 用 `migrate add-index`/`add-column` 產生 DDL(預覽 SQL)-> `diff --against <snapshot>` |
 | PR 資料庫風險審查 | 檢查 query、write、migration、export、fixture 與 blacklist 風險。 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
 | 慢 endpoint 或查詢 | 在提出 index 前優先使用 read-only diagnostics。 | `report --section perf` -> task pack `analyze-table-perf` -> `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
 | 安全資料回填 | 先界定受影響資料範圍並預覽 mutation。 | `blacklist list` -> `schema <object>` -> count/scope query -> `update ... --dry-run` -> read-back 或 snippet `--verify`。 |
@@ -121,7 +121,7 @@ dbcli queries suggest <intent> --format json
 dbcli audit tail --for-agent --n 10
 dbcli schema --format json
 dbcli diff --snapshot <name>
-dbcli migrate <migration-file>
+dbcli migrate add-index <table>
 dbcli diff --against <snapshot>
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json

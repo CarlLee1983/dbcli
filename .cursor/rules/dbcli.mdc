@@ -95,7 +95,7 @@ use `--recovery` / `recover` after failures.
 | --- | --- | --- |
 | DB-backed feature | Map product/code terms to real objects before editing code. | `inspect --for-agent` -> `blacklist list` -> `schema <object>` -> `queries suggest <intent>` |
 | Application data bug | Separate stored facts from application-code inference. | `inspect --for-agent` -> `audit tail --for-agent --n 10` -> `blacklist list` -> `schema <object>` -> narrow query/snippet |
-| ORM or migration work | Ground model and migration edits in live schema evidence. | `schema --format json` -> `diff --snapshot <name>` -> migration dry-run -> `diff --against <snapshot>` |
+| ORM or migration work | Ground model and migration edits in live schema evidence. | `schema --format json` -> `diff --snapshot <name>` -> generate DDL via `migrate add-index`/`add-column` (preview SQL) -> `diff --against <snapshot>` |
 | PR database review | Check query, write, migration, export, fixture, and blacklist risk. | Review changed persistence paths, then propose concrete `schema`, `plan`, `dry-run`, `report`, or `guide` commands for each material claim. |
 | Slow endpoint or query | Prefer read-only diagnostics before index proposals. | `report --section perf` -> task pack `analyze-table-perf` -> `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
 | Safe data backfill | Scope affected rows and preview mutations before execution. | `blacklist list` -> `schema <object>` -> count/scope query -> `update ... --dry-run` -> read-back or snippet `--verify`. |
@@ -111,7 +111,7 @@ dbcli queries suggest <intent> --format json
 dbcli audit tail --for-agent --n 10
 dbcli schema --format json
 dbcli diff --snapshot <name>
-dbcli migrate <migration-file>
+dbcli migrate add-index <table>
 dbcli diff --against <snapshot>
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json

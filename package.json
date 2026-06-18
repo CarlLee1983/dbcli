@@ -50,6 +50,7 @@
     ".claude-plugin/",
     ".agents/",
     ".cursor/",
+    ".github/skills/",
     "gemini-extension.json",
     "README.md",
     "CHANGELOG.md",

@@ -489,7 +489,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>稽核日誌 (Audit Log)</strong>：<code>audit tail --for-agent</code> 用於 session handoff；每個指令失敗時加上 <code>--recovery</code> 都會寫入互相對應的 <code>audit.recovery_ref</code> ↔ <code>envelope.audit_ref</code> UUID，agent 可透過 <code>audit tail --recovery-ref &lt;id&gt;</code> 從 envelope 反查 audit entry。</li>
                 <li><strong>AI 協作提示注入</strong>：<code>dbcli skill context</code> 將連線資訊、schema 快取和儲存查詢序列化為高度壓縮且專門設計用於 AI 提示詞注入的 XML/Markdown/JSON 格式。</li>
                 <li><strong>自我驗證循環</strong>：儲存的查詢片段支援定義 <code>verify</code> 斷言；在 <code>q</code> 執行時加上 <code>--verify</code> 即可自動化驗證。</li>
-                <li><strong>Agent Plugin</strong>：repo root 採用 Ponytail-style plugin layout，包含 <code>.agents/plugins/marketplace.json</code>、<code>.codex-plugin/plugin.json</code>、<code>.claude-plugin/plugin.json</code> 與 <code>skills/dbcli/</code>；若未全域安裝 <code>dbcli</code>，skill 會 fallback 到 <code>bunx @carllee1983/dbcli &lt;command&gt;</code>。Codex、Claude Code、Antigravity、Cursor 的安裝命令請見 <code>plugins/dbcli-agent/INSTALL.md</code>。</li>
+                <li><strong>Agent Plugin</strong>：repo root 採用 Ponytail-style plugin layout，包含 <code>.agents/plugins/marketplace.json</code>、<code>.codex-plugin/plugin.json</code>、<code>.claude-plugin/plugin.json</code>、<code>.github/skills/dbcli/</code> 與 <code>skills/dbcli/</code>；若未全域安裝 <code>dbcli</code>，skill 會 fallback 到 <code>bunx @carllee1983/dbcli &lt;command&gt;</code>。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 <code>plugins/dbcli-agent/INSTALL.md</code>。</li>
             </ul>
         </section>
 

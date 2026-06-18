@@ -10,11 +10,12 @@ reference_file="${skill_dir}/reference.md"
 usage() {
   cat <<'EOF'
 Usage:
-  install-skills.sh [all|codex|claude|antigravity|agy|cursor]
+  install-skills.sh [all|codex|claude|copilot|antigravity|agy|cursor]
 
 Installs the bundled dbcli skill files into agent-specific locations:
   codex        ~/.codex/skills/dbcli/
   claude       ~/.claude/skills/dbcli/
+  copilot      ./.github/skills/dbcli/
   antigravity  ~/.gemini/antigravity-cli/skills/dbcli/
   cursor       ./.cursor/rules/dbcli.mdc + ./.cursor/skills/dbcli/reference.md
 
@@ -47,6 +48,9 @@ install_platform() {
     claude)
       copy_pair "${HOME}/.claude/skills/dbcli"
       ;;
+    copilot)
+      copy_pair ".github/skills/dbcli"
+      ;;
     antigravity|agy)
       copy_pair "${HOME}/.gemini/antigravity-cli/skills/dbcli"
       ;;
@@ -56,6 +60,7 @@ install_platform() {
     all)
       install_platform codex
       install_platform claude
+      install_platform copilot
       install_platform antigravity
       install_platform cursor
       ;;

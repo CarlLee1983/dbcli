@@ -417,7 +417,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 5.  **Audit Log**: see [`SKILL.md`](../../../assets/SKILL.md) / [`README §Audit Log`](../../../README.md#audit-log).
 6.  **AI Collaboration Prompting**: `dbcli skill context` serializes connection, schema cache, and saved query metadata into a highly-compressed, token-optimized XML, Markdown, or JSON structure designed specifically for AI prompt insertion.
 7.  **Self-Verification Loops**: Snippets can define `verify` frontmatter metadata (specifying a `query` and LHS-Operator-RHS `expects` assertions). Running a query with `dbcli q @name --verify` automatically executes the primary command, runs the verification query, and validates assertions against the returned dataset.
-8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, Antigravity, and Cursor install commands.
+8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands.
 
 ---
 

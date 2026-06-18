@@ -13,6 +13,8 @@ This repo can be installed like the Ponytail plugin:
 
 ```bash
 codex plugin marketplace add CarlLee1983/dbcli
+copilot plugin marketplace add CarlLee1983/dbcli
+copilot plugin install dbcli-agent@dbcli-agent
 agy plugin install https://github.com/CarlLee1983/dbcli
 ```
 

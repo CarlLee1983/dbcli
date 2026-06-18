@@ -1233,6 +1233,10 @@ dbcli skill --install gemini
 # GitHub Copilot CLI
 dbcli skill --install copilot
 
+# GitHub Copilot CLI plugin marketplace
+#   copilot plugin marketplace add CarlLee1983/dbcli
+#   copilot plugin install dbcli-agent@dbcli-agent
+
 # Cursor IDE (AI-native editor)
 dbcli skill --install cursor
 

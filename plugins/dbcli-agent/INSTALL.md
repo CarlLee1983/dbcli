@@ -27,6 +27,29 @@ In Claude Code:
 
 Start a new Claude Code session after install so the skill is reloaded.
 
+## GitHub Copilot CLI
+
+From a shell:
+
+```bash
+copilot plugin marketplace add CarlLee1983/dbcli
+copilot plugin install dbcli-agent@dbcli-agent
+```
+
+In an interactive Copilot CLI session, use the slash equivalents:
+
+```text
+/plugin marketplace add CarlLee1983/dbcli
+/plugin install dbcli-agent@dbcli-agent
+```
+
+For instruction-only project fallback, this repo also ships:
+
+```text
+.github/skills/dbcli/SKILL.md
+.github/skills/dbcli/reference.md
+```
+
 ## Codex
 
 From a shell:
@@ -86,6 +109,7 @@ Single-target installs:
 ```bash
 plugins/dbcli-agent/scripts/install-skills.sh codex
 plugins/dbcli-agent/scripts/install-skills.sh claude
+plugins/dbcli-agent/scripts/install-skills.sh copilot
 plugins/dbcli-agent/scripts/install-skills.sh antigravity
 plugins/dbcli-agent/scripts/install-skills.sh agy
 plugins/dbcli-agent/scripts/install-skills.sh cursor
@@ -99,6 +123,7 @@ Install targets:
 | --- | --- |
 | Codex | `~/.codex/skills/dbcli/SKILL.md` and `reference.md` |
 | Claude Code | `~/.claude/skills/dbcli/SKILL.md` and `reference.md` |
+| GitHub Copilot CLI | `.github/skills/dbcli/SKILL.md` and `reference.md` |
 | Antigravity | `~/.gemini/antigravity-cli/skills/dbcli/SKILL.md` and `reference.md` |
 | Cursor | `.cursor/rules/dbcli.mdc` and `.cursor/skills/dbcli/reference.md` |
 
@@ -131,6 +156,7 @@ For local script installs, check the files for the targets you installed:
 test -f ~/.codex/skills/dbcli/SKILL.md
 test -f ~/.claude/skills/dbcli/SKILL.md
 test -f ~/.gemini/antigravity-cli/skills/dbcli/SKILL.md
+test -f .github/skills/dbcli/SKILL.md
 test -f .cursor/rules/dbcli.mdc
 ```
 

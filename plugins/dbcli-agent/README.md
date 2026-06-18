@@ -4,7 +4,19 @@ Agent skill bundle for dbcli.
 
 Full installation instructions: [INSTALL.md](./INSTALL.md).
 
-Installing this as a Codex plugin makes the `dbcli` skill available from
+This repo can be installed like the Ponytail plugin:
+
+```text
+/plugin marketplace add CarlLee1983/dbcli
+/plugin install dbcli-agent@dbcli-agent
+```
+
+```bash
+codex plugin marketplace add CarlLee1983/dbcli
+agy plugin install https://github.com/CarlLee1983/dbcli
+```
+
+Installing it as a plugin makes the `dbcli` skill available from
 `skills/dbcli/SKILL.md`, with the full command reference next to it.
 
 The same bundled skill files can also be installed into Claude Code,

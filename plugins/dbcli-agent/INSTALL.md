@@ -1,11 +1,12 @@
 # dbcli Agent Plugin Installation
 
-This guide explains how to install the bundled dbcli agent skill for Codex,
-Claude Code, Antigravity, and Cursor.
+This repo follows the same installation shape as
+`DietrichGebert/ponytail`: the repository root contains the plugin metadata, a
+marketplace file, and portable agent skill/rule copies.
 
 ## What Gets Installed
 
-The plugin bundle contains one canonical skill:
+The canonical skill files are:
 
 - `skills/dbcli/SKILL.md`
 - `skills/dbcli/reference.md`
@@ -15,24 +16,72 @@ blacklist rules, schema confirmation, dry runs, recovery envelopes, and the
 `bunx @carllee1983/dbcli <command>` fallback when `dbcli` is not globally
 installed.
 
-## Install All Supported Agent Targets
+## Claude Code
 
-Run this from the dbcli repository root:
+In Claude Code:
+
+```text
+/plugin marketplace add CarlLee1983/dbcli
+/plugin install dbcli-agent@dbcli-agent
+```
+
+Start a new Claude Code session after install so the skill is reloaded.
+
+## Codex
+
+From a shell:
+
+```bash
+codex plugin marketplace add CarlLee1983/dbcli
+codex
+```
+
+Then open `/plugins`, select the dbcli Agent marketplace, and install
+`dbcli-agent`. Start a new thread after install.
+
+The same marketplace install also applies to the Codex desktop app after it
+reloads plugin metadata.
+
+## Antigravity CLI
+
+Antigravity (`agy`) can install from the GitHub repository URL:
+
+```bash
+agy plugin install https://github.com/CarlLee1983/dbcli
+```
+
+The repo also includes `gemini-extension.json`, matching the extension layout
+used by Gemini/Antigravity-style agents.
+
+## Cursor
+
+Cursor is instruction-file based. Copy or sync the repo-provided files into the
+project where Cursor should use dbcli:
+
+```bash
+DBCLI_REPO=/path/to/dbcli
+mkdir -p .cursor/rules .cursor/skills/dbcli
+cp "$DBCLI_REPO/.cursor/rules/dbcli.mdc" .cursor/rules/dbcli.mdc
+cp "$DBCLI_REPO/.cursor/skills/dbcli/reference.md" .cursor/skills/dbcli/reference.md
+```
+
+When working from a checkout of this repo, the local installer does the same
+copy for the current project:
+
+```bash
+plugins/dbcli-agent/scripts/install-skills.sh cursor
+```
+
+## Local Checkout Installer
+
+If you are working from a checkout and want to install the skill into all
+supported local targets at once:
 
 ```bash
 plugins/dbcli-agent/scripts/install-skills.sh all
 ```
 
-This installs the bundled skill into:
-
-| Target | Installed files |
-| --- | --- |
-| Codex | `~/.codex/skills/dbcli/SKILL.md` and `reference.md` |
-| Claude Code | `~/.claude/skills/dbcli/SKILL.md` and `reference.md` |
-| Antigravity | `~/.gemini/antigravity-cli/skills/dbcli/SKILL.md` and `reference.md` |
-| Cursor | `.cursor/rules/dbcli.mdc` and `.cursor/skills/dbcli/reference.md` |
-
-## Install One Target
+Single-target installs:
 
 ```bash
 plugins/dbcli-agent/scripts/install-skills.sh codex
@@ -44,22 +93,14 @@ plugins/dbcli-agent/scripts/install-skills.sh cursor
 
 `agy` is an alias for `antigravity`.
 
-## Codex Plugin Install
+Install targets:
 
-Codex can also install this directory as a plugin because it includes:
-
-```text
-plugins/dbcli-agent/.codex-plugin/plugin.json
-```
-
-When installed as a Codex plugin, Codex reads the skill from:
-
-```text
-plugins/dbcli-agent/skills/dbcli/
-```
-
-The `install-skills.sh codex` command is still useful when you want the same
-skill available through Codex's regular user skill directory.
+| Target | Installed files |
+| --- | --- |
+| Codex | `~/.codex/skills/dbcli/SKILL.md` and `reference.md` |
+| Claude Code | `~/.claude/skills/dbcli/SKILL.md` and `reference.md` |
+| Antigravity | `~/.gemini/antigravity-cli/skills/dbcli/SKILL.md` and `reference.md` |
+| Cursor | `.cursor/rules/dbcli.mdc` and `.cursor/skills/dbcli/reference.md` |
 
 ## Optional: Install the dbcli CLI
 
@@ -84,7 +125,7 @@ npm install -g @carllee1983/dbcli
 
 ## Verify Installation
 
-Check the files for the targets you installed:
+For local script installs, check the files for the targets you installed:
 
 ```bash
 test -f ~/.codex/skills/dbcli/SKILL.md
@@ -93,16 +134,17 @@ test -f ~/.gemini/antigravity-cli/skills/dbcli/SKILL.md
 test -f .cursor/rules/dbcli.mdc
 ```
 
-Then start a new agent session so the tool reloads skills.
+For marketplace installs, open a new agent session and confirm the `dbcli`
+skill is listed or can be invoked by a database task.
 
 ## Keep Plugin Assets In Sync
 
-The plugin skill files are copies of the package sources:
+The portable copies are generated from:
 
 - `assets/SKILL.md`
 - `assets/reference.md`
 
-After editing either source file, refresh and check the plugin copies:
+After editing either source file, refresh and check every copy:
 
 ```bash
 bun run plugin:sync
@@ -119,6 +161,3 @@ bunx @carllee1983/dbcli --version
 
 If that works, the skill can use dbcli without a global install. If it fails,
 install Bun or use the persistent CLI installer above.
-
-Cursor installs are project-local. Run `install-skills.sh cursor` from the
-project where Cursor should see `.cursor/rules/dbcli.mdc`.

@@ -1,0 +1,21 @@
+{
+  "name": "dbcli-agent",
+  "interface": {
+    "displayName": "dbcli Agent"
+  },
+  "plugins": [
+    {
+      "name": "dbcli-agent",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/CarlLee1983/dbcli.git",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

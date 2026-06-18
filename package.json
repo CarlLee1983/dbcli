@@ -45,6 +45,12 @@
     "dist/",
     "assets/",
     "plugins/",
+    "skills/",
+    ".codex-plugin/",
+    ".claude-plugin/",
+    ".agents/",
+    ".cursor/",
+    "gemini-extension.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

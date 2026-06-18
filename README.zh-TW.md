@@ -1133,7 +1133,9 @@ dbcli skill --install copilot
 dbcli skill --install cursor
 
 # Codex plugin bundle
-# 從 plugins/dbcli-agent 安裝 plugin 可直接取得 skill。
+# Ponytail-style marketplace 安裝：
+#   codex plugin marketplace add CarlLee1983/dbcli
+# 接著開啟 /plugins 並安裝 dbcli-agent。
 # 完整安裝說明：plugins/dbcli-agent/INSTALL.md
 ```
 
@@ -1191,12 +1193,13 @@ dbcli skill --install cursor
 
 #### Codex
 
-1. 從 `plugins/dbcli-agent` 安裝 Codex plugin，直接載入 dbcli skill。
-2. 若要常駐 CLI，請全域安裝 dbcli：`bun install -g @carllee1983/dbcli` 或 `npm install -g @carllee1983/dbcli`。
-3. 若未全域安裝，plugin 內的 skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback。
-4. 初始化：`dbcli init` 或 `bunx @carllee1983/dbcli init`。
+1. 加入 marketplace：`codex plugin marketplace add CarlLee1983/dbcli`。
+2. 開啟 `/plugins`，選擇 dbcli Agent marketplace，並安裝 `dbcli-agent`。
+3. 若要常駐 CLI，請全域安裝 dbcli：`bun install -g @carllee1983/dbcli` 或 `npm install -g @carllee1983/dbcli`。
+4. 若未全域安裝，plugin 內的 skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback。
+5. 初始化：`dbcli init` 或 `bunx @carllee1983/dbcli init`。
 
-**Plugin skill 路徑：** `plugins/dbcli-agent/skills/dbcli/`（`SKILL.md` + `reference.md`）。
+**Plugin skill 路徑：** `skills/dbcli/`（`SKILL.md` + `reference.md`）。
 
 **安裝說明：** `plugins/dbcli-agent/INSTALL.md`。
 

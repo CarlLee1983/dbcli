@@ -1,6 +1,10 @@
 const mappings = [
   ["assets/SKILL.md", "plugins/dbcli-agent/skills/dbcli/SKILL.md"],
   ["assets/reference.md", "plugins/dbcli-agent/skills/dbcli/reference.md"],
+  ["assets/SKILL.md", "skills/dbcli/SKILL.md"],
+  ["assets/reference.md", "skills/dbcli/reference.md"],
+  ["assets/SKILL.md", ".cursor/rules/dbcli.mdc"],
+  ["assets/reference.md", ".cursor/skills/dbcli/reference.md"],
 ] as const;
 
 const write = process.argv.includes("--write");

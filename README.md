@@ -1237,7 +1237,9 @@ dbcli skill --install copilot
 dbcli skill --install cursor
 
 # Codex plugin bundle
-# Install the plugin from plugins/dbcli-agent to get the skill directly.
+# Ponytail-style marketplace install:
+#   codex plugin marketplace add CarlLee1983/dbcli
+# Then open /plugins and install dbcli-agent.
 # Full install guide: plugins/dbcli-agent/INSTALL.md
 ```
 
@@ -1295,12 +1297,13 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Codex
 
-1. Install the Codex plugin from `plugins/dbcli-agent` to load the dbcli skill directly.
-2. For a persistent CLI, install dbcli globally: `bun install -g @carllee1983/dbcli` or `npm install -g @carllee1983/dbcli`.
-3. Without a global install, the plugin skill uses `bunx @carllee1983/dbcli <command>` as its fallback.
-4. Initialize: `dbcli init` or `bunx @carllee1983/dbcli init`.
+1. Add the marketplace: `codex plugin marketplace add CarlLee1983/dbcli`.
+2. Open `/plugins`, select the dbcli Agent marketplace, and install `dbcli-agent`.
+3. For a persistent CLI, install dbcli globally: `bun install -g @carllee1983/dbcli` or `npm install -g @carllee1983/dbcli`.
+4. Without a global install, the plugin skill uses `bunx @carllee1983/dbcli <command>` as its fallback.
+5. Initialize: `dbcli init` or `bunx @carllee1983/dbcli init`.
 
-**Plugin skill location:** `plugins/dbcli-agent/skills/dbcli/` (SKILL.md + reference.md).
+**Plugin skill location:** `skills/dbcli/` (SKILL.md + reference.md).
 
 **Install guide:** `plugins/dbcli-agent/INSTALL.md`.
 

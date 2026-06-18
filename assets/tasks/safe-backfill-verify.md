@@ -52,8 +52,11 @@ PLANS — the execution sequence the agent runs manually is:
 2. Capture the scope: run `assert "{{verify_query}}" --expect "{{expect}}"` BEFORE the
    write to record the starting count (or run the SELECT directly), so the expected
    delta is known.
-3. Preview the write: `dbcli query "{{query}}" --dry-run` (or `dbcli update ... --dry-run`).
-4. Execute once the dry-run looks correct: re-run with `--execute`.
+3. Preview the write with the matching write command, for example
+   `dbcli update <table> --where "<predicate>" --set '<json>' --dry-run`. Keep raw
+   SQL in `plan "{{query}}"`; `query` does not dry-run arbitrary writes.
+4. Execute once the dry-run looks correct: re-run the write command without `--dry-run`
+   and with the required confirmation/force flag for your environment.
 5. Verify: re-run `assert "{{verify_query}}" --expect "{{expect}}"` AFTER the write.
    `verified` means the read-back matched; anything else means stop and recover.
 

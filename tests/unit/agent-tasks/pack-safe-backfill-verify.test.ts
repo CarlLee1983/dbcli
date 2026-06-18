@@ -63,6 +63,12 @@ describe('builtin pack: safe-backfill-verify', () => {
     )
   })
 
+  test('agent notes do not suggest unsupported raw query dry-run', async () => {
+    const pack = await Bun.file('assets/tasks/safe-backfill-verify.md').text()
+    expect(pack).not.toContain('dbcli query "{{query}}" --dry-run')
+    expect(pack).toContain('dbcli update <table> --where "<predicate>" --set \'<json>\' --dry-run')
+  })
+
   void logSpy
   void exitSpy
 })

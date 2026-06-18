@@ -616,6 +616,50 @@ dbcli assert "SELECT count(*) FROM orders" --expect "value > 100" --no-fail   # 
 **Engines:** SQL only (PostgreSQL / MySQL / MariaDB)
 **Permission:** query-only+
 
+### proxy
+
+Local-development **observability proxy** for MySQL/MariaDB/PostgreSQL. Inserts dbcli
+between an existing application and its real database: it listens on a configurable
+port, relays TCP frames to the real server, and appends one JSONL event per query to
+`.dbcli/proxy/events.jsonl`. Observe-only — no rewrite, blocking, or query modification.
+Not intended as a production gateway.
+
+**Subcommands:** `mysql` · `mariadb` · `postgresql`
+
+```bash
+dbcli proxy mysql       --listen 127.0.0.1:3307 --target 127.0.0.1:3306
+dbcli proxy postgresql  --listen 127.0.0.1:5434 --target 127.0.0.1:5432
+dbcli proxy mysql       --slow-ms 500 --redact literals   # redact SQL literals in events
+dbcli proxy mariadb     --events ./logs/proxy.jsonl        # custom event file
+dbcli proxy postgresql  --use prod                         # infer target from named connection
+
+dbcli proxy analyze                               # analyze .dbcli/proxy/events.jsonl (JSON)
+dbcli proxy analyze --format text --top 10        # human-readable top-10 view
+dbcli proxy analyze --slow-ms 200 --n-plus-one 5  # custom thresholds
+```
+
+**Options:**
+- `--listen <addr:port>` — Address dbcli will listen on (e.g. `127.0.0.1:3307`)
+- `--target <addr:port>` — Address of the real database server to relay to. If omitted, inferred from the active (or `--use`) connection config.
+- `--events <path>` — JSONL event log path (default: `.dbcli/proxy/events.jsonl`)
+- `--slow-ms <ms>` — Threshold in milliseconds above which events are flagged `slow: true` (default: `1000`)
+- `--redact <none|literals>` — Whether to strip SQL literal values from event records (default: `none`; `literals` removes quoted strings and numbers)
+- `--format <text|json>` — Startup / status output format (default: `text`)
+- `--use <name>` — Target a named v2 connection for `--target` inference
+
+**Event schema (JSONL):** each line is one event. `type` is one of `proxy_started`, `session_started`, `query_observed`, `query_completed`, `query_errored`, `session_ended`, `parse_error`. A representative `query_completed` line:
+```json
+{ "version": 1, "type": "query_completed", "timestamp": "<ISO-8601>", "engine": "mysql", "sessionId": "pxy_1", "queryId": "qry_pxy_1_1", "client": "127.0.0.1:54321", "target": "127.0.0.1:3306", "sql": "SELECT * FROM users WHERE id = 1", "statement": "SELECT", "tables": ["users"], "durationMs": 42, "requestBytes": 128, "responseBytes": 512, "rowCount": null, "slow": false, "error": null, "tags": [] }
+```
+`slow` is `true` when `durationMs >= --slow-ms` (also printed as a terminal warning). `rowCount` is best-effort (PostgreSQL command tags; `null` for MySQL). TLS is relayed but not decrypted in v1. Prepared/extended wire protocols are best-effort tagged.
+
+**Log rotation:** all writes are serialized through one in-process chain (concurrent sessions never interleave partial lines). The event log auto-rotates to keep one rolling segment — when the next line would reach ~50 MiB or 200,000 entries, the current file is renamed to `<events>.1` (overwriting any prior segment) and a fresh file starts. Worst-case on-disk footprint is ~2× the byte cap.
+
+**`proxy analyze`** — offline aggregation of the event log (no DB). Flags: `--events <path>` (default `.dbcli/proxy/events.jsonl`), `--format json|text` (default `json`), `--top <n>` (default 20; text rows + suggestedCommands depth), `--slow-ms <ms>` (default 1000; recomputes slowCount), `--n-plus-one <n>` (default 10), `--no-include-rotated`. JSON report blocks: `summary`, `byFingerprint` (sorted by total time; SELECT entries in the top-N carry `suggestedCommands` for `explain` / `guide missing-index-for`), `slowest`, `errors`, `hotTables`, `repetition` (N+1 suspects). Reads the current log plus the rotated `.1` segment by default.
+
+**Engines:** MySQL / MariaDB / PostgreSQL
+**Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
+
 ### status
 
 Show current configuration status (safe for AI agents, no credentials exposed).
@@ -1194,6 +1238,7 @@ dbcli skill --install gemini                 # install to ~/.gemini/skills/dbcli
 dbcli skill --install antigravity            # install to ~/.gemini/antigravity-cli/skills/dbcli/
 dbcli skill --install copilot                # install to .github/skills/dbcli/ (repo-local)
 dbcli skill --install cursor                 # install to .cursor/skills/dbcli/ (repo-local)
+dbcli skill --install codex                  # install to ~/.codex/skills/dbcli/
 ```
 
 **Options:**
@@ -1203,6 +1248,9 @@ dbcli skill --install cursor                 # install to .cursor/skills/dbcli/ 
 **Notes:**
 - Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.
 - `claude` / `gemini` / `antigravity` install paths are user-global; `copilot` / `cursor` are repo-local under `.github/` / `.cursor/`.
+- Cursor can install through `/add-plugin dbcli-agent` when available in Cursor's plugin marketplace; this repo includes `.cursor-plugin/plugin.json`. Instruction-file fallback options remain documented in `plugins/dbcli-agent/INSTALL.md#cursor`.
+- Codex can consume the repo through the Ponytail-style marketplace layout at `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`; plugin installs provide the skill from `skills/dbcli/`, and the skill falls back to `bunx @carllee1983/dbcli` when `dbcli` is not on `PATH`.
+- Agent plugin installation details live in `plugins/dbcli-agent/INSTALL.md`, including Codex, Claude Code, GitHub Copilot CLI, Antigravity (`agy`), and Cursor targets.
 - `gemini` (Gemini CLI) is retained for now but is being phased out in favour of `antigravity` (Antigravity CLI), Google's successor terminal agent.
 - Re-running `--install` overwrites the existing skill atomically; no prompt.
 

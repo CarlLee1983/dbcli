@@ -78,8 +78,13 @@ used by Gemini/Antigravity-style agents.
 
 ## Cursor
 
-Cursor is instruction-file based. Copy or sync the repo-provided files into the
-project where Cursor should use dbcli:
+Cursor does not use the Codex/Claude-style plugin marketplace path here. It is
+instruction-file based: install the dbcli rule and reference into the project
+where Cursor should use dbcli.
+
+### Option A: from an existing dbcli checkout
+
+Run this from the target project where Cursor should see dbcli:
 
 ```bash
 DBCLI_REPO=/path/to/dbcli
@@ -88,11 +93,30 @@ cp "$DBCLI_REPO/.cursor/rules/dbcli.mdc" .cursor/rules/dbcli.mdc
 cp "$DBCLI_REPO/.cursor/skills/dbcli/reference.md" .cursor/skills/dbcli/reference.md
 ```
 
-When working from a checkout of this repo, the local installer does the same
-copy for the current project:
+### Option B: clone dbcli first
+
+```bash
+git clone https://github.com/CarlLee1983/dbcli.git /tmp/dbcli-agent-plugin
+cd /path/to/your/project
+mkdir -p .cursor/rules .cursor/skills/dbcli
+cp /tmp/dbcli-agent-plugin/.cursor/rules/dbcli.mdc .cursor/rules/dbcli.mdc
+cp /tmp/dbcli-agent-plugin/.cursor/skills/dbcli/reference.md .cursor/skills/dbcli/reference.md
+```
+
+### Option C: from this repo checkout
+
+When your shell is already inside the dbcli checkout, the local installer writes
+the Cursor files into the current working directory:
 
 ```bash
 plugins/dbcli-agent/scripts/install-skills.sh cursor
+```
+
+Open or reload the target project in Cursor after installing. Cursor should read:
+
+```text
+.cursor/rules/dbcli.mdc
+.cursor/skills/dbcli/reference.md
 ```
 
 ## Local Checkout Installer

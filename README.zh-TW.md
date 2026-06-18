@@ -1193,6 +1193,8 @@ dbcli skill --install cursor
 
 **Skill 路徑：** 在**目前工作目錄**執行 `dbcli skill --install cursor` 時，寫入 **`.cursor/rules/dbcli.mdc`**（摘要與工作流程）及 **`.cursor/skills/dbcli/reference.md`**（完整旗標與範例）。
 
+**Plugin-style 安裝說明：** `plugins/dbcli-agent/INSTALL.md#cursor`。
+
 ---
 
 #### Codex

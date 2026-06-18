@@ -1297,6 +1297,8 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 **Skill location:** `.cursor/rules/dbcli.mdc` (summary + workflows) and `.cursor/skills/dbcli/reference.md` (full command flags and examples) under the **current working directory** when you run `dbcli skill --install cursor`.
 
+**Plugin-style install guide:** `plugins/dbcli-agent/INSTALL.md#cursor`.
+
 ---
 
 #### Codex

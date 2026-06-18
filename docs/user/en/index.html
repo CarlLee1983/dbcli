@@ -288,7 +288,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
             </table>
 
             <h4 class="mt-6 mb-2 font-bold">assert --write-verification-artifact</h4>
-            <p class="mb-4">Persist a <strong>result evidence record</strong> (v1 VerificationArtifact JSON) to <code>.dbcli/verification/</code> whenever you need a durable audit trail for a read-back assertion.</p>
+            <p class="mb-4">Persist a <strong>result evidence record</strong> (v1 VerificationArtifact JSON) to <code>.dbcli/verification/</code> whenever you need a durable audit trail for a read-back assertion. The verification artifact is always written to <code>&lt;cwd&gt;/.dbcli/verification/</code> (relative to the current working directory), regardless of where the <code>--config</code> file is located.</p>
             <p class="mb-2"><strong>Flag trio:</strong></p>
             <table>
                 <thead>

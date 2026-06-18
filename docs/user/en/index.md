@@ -178,7 +178,7 @@ Verify data-processing correctness — capture a result fingerprint, then assert
 
 #### assert --write-verification-artifact
 
-Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/verification/` whenever you need a durable audit trail for a read-back assertion.
+Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/verification/` whenever you need a durable audit trail for a read-back assertion. The verification artifact is always written to `<cwd>/.dbcli/verification/` (relative to the current working directory), regardless of where the `--config` file is located.
 
 **Flag trio:**
 

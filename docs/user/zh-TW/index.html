@@ -288,7 +288,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
             </table>
 
             <h4 class="mt-6 mb-2 font-bold">assert --write-verification-artifact</h4>
-            <p class="mb-4">使用 <code>--write-verification-artifact</code> 可在 read-back 斷言執行後，將<strong>結果佐證記錄</strong>（v1 VerificationArtifact JSON）寫入 <code>.dbcli/verification/</code>，提供可稽核的持久化軌跡。</p>
+            <p class="mb-4">使用 <code>--write-verification-artifact</code> 可在 read-back 斷言執行後，將<strong>結果佐證記錄</strong>（v1 VerificationArtifact JSON）寫入 <code>.dbcli/verification/</code>，提供可稽核的持久化軌跡。驗證文物會持續寫入 <code>&lt;cwd&gt;/.dbcli/verification/</code>（相對於當前工作目錄），不受 <code>--config</code> 檔案位置影響。</p>
             <p class="mb-2"><strong>旗標三件組：</strong></p>
             <table>
                 <thead>

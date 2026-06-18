@@ -618,7 +618,7 @@ dbcli assert "SELECT count(*) FROM orders" --expect "value > 100" --no-fail   # 
 
 #### Verification artifact (--write-verification-artifact)
 
-Opt-in flag trio that persists a **VerificationArtifact JSON** (schema v1) under `<cwd>/.dbcli/verification/` after the assertion runs.
+Opt-in flag trio that persists a **VerificationArtifact JSON** (schema v1) under `<cwd>/.dbcli/verification/` after the assertion runs. The artifact is always written to `<cwd>/.dbcli/verification/` (relative to the current working directory), regardless of where the `--config` file is located.
 
 | Flag | Required | Description |
 | :--- | :--- | :--- |

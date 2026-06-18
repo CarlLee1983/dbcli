@@ -178,7 +178,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 
 #### assert --write-verification-artifact
 
-使用 `--write-verification-artifact` 可在 read-back 斷言執行後,將 **結果佐證記錄**（v1 VerificationArtifact JSON）寫入 `.dbcli/verification/`，提供可稽核的持久化軌跡。
+使用 `--write-verification-artifact` 可在 read-back 斷言執行後,將 **結果佐證記錄**（v1 VerificationArtifact JSON）寫入 `.dbcli/verification/`，提供可稽核的持久化軌跡。驗證文物會持續寫入 `<cwd>/.dbcli/verification/`（相對於當前工作目錄），不受 `--config` 檔案位置影響。
 
 **旗標三件組：**
 

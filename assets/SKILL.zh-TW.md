@@ -97,6 +97,51 @@ dbcli audit show --recovery-ref <envelope-id> # 反向找出觸發 envelope 的 
 
 詳細指令參考:[`reference.md`](./reference.md) §audit(英文)。完整 agent 復原 walkthrough(各錯誤碼 end-to-end 情境、`--next` 多輪逐步、envelope ⇄ audit pivot、risk gate cheat sheet)見 [`reference.md`](./reference.md) §Recovery Cookbook(英文)。
 
+## 開發者工作流
+
+當資料庫影響隱含在開發任務中時使用這些流程。保留一般 dbcli 安全規則：優先使用 `--format json`，碰觸敏感資料前先跑 `blacklist list`，用 `schema` 確認名稱，寫入先 dry-run，失敗後使用 `--recovery` / `recover`。
+
+| 情境 | 使用 dbcli 的目的 | 最小安全路徑 |
+| --- | --- | --- |
+| DB-backed 功能 | 編輯程式碼前先把產品/程式語彙對應到真實資料物件。 | `inspect --for-agent` -> `blacklist list` -> `schema <object>` -> `queries suggest <intent>` |
+| 應用程式資料錯誤 | 分離資料庫事實與應用程式推論。 | `inspect --for-agent` -> `audit tail --for-agent --n 10` -> `blacklist list` -> `schema <object>` -> 最小查詢/snippet |
+| ORM 或 migration | 用 live schema 證據支撐 model 與 migration 修改。 | `schema --format json` -> `diff --snapshot <name>` -> migration dry-run -> `diff --against <snapshot>` |
+| PR 資料庫風險審查 | 檢查 query、write、migration、export、fixture 與 blacklist 風險。 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
+| 慢 endpoint 或查詢 | 在提出 index 前優先使用 read-only diagnostics。 | `report --section perf` -> task pack `analyze-table-perf` -> `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
+| 安全資料回填 | 先界定受影響資料範圍並預覽 mutation。 | `blacklist list` -> `schema <object>` -> count/scope query -> `update ... --dry-run` -> read-back 或 snippet `--verify`。 |
+| 環境設定驗證 | 不洩漏 secrets 地檢查 config shape 與 connectivity。 | `status --format json` -> `doctor --format json` -> `inspect --for-agent --no-connect --format json`。 |
+
+可直接複製的指令錨點：
+
+```bash
+dbcli inspect --for-agent --format json
+dbcli blacklist list --format json
+dbcli schema <object> --format json
+dbcli queries suggest <intent> --format json
+dbcli audit tail --for-agent --n 10
+dbcli schema --format json
+dbcli diff --snapshot <name>
+dbcli migrate <migration-file>
+dbcli diff --against <snapshot>
+dbcli report --section perf --format json
+dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
+dbcli guide missing-index-for "<query>" --format json
+dbcli proxy analyze --format json
+dbcli query "<count/scope query>" --format json
+dbcli update <object> --where "<bounded predicate>" --set '<json>' --dry-run --format json
+dbcli status --format json
+dbcli doctor --format json
+dbcli inspect --for-agent --no-connect --format json
+```
+
+開發者工作流守門規則：
+
+- 不要猜測 table、collection、key、index 或 field 名稱。先用 `schema` 確認，再編寫依賴這些名稱的程式碼。
+- 分離資料庫事實與應用程式推論。回報是哪個 dbcli 輸出影響了程式修改或 review 結論。
+- 寫入與 backfill 必須包含 scope count、dry-run preview、execution command，以及 read-back 或 snippet verification。
+- 不要直接從 performance suggestion 建 index；應轉成經過 review 的 migration。
+- 不要列印 credentials、複製的連線字串或 blacklisted 值。
+
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
 
 ## 快速開始

@@ -225,6 +225,11 @@ export const recoverCommand = new Command()
     `Open the risk gate one tier; values: ${ALLOWED_TIERS.join(' | ')}`
   )
   .option('--no-verify', 'Skip the verify step appended after a successful --apply')
+  .option(
+    '--write-verification-artifact',
+    'After --apply, persist a VerificationArtifact JSON under .dbcli/verification/ when the verify step ran',
+    false
+  )
   .option('--next', 'Look up the single next step in the multi-turn protocol', false)
   .option('--after-step <n>', 'For --next: 1-based order of the step the agent just executed')
   .option('--result <value>', 'For --next: JSON StepResultSummary (or @<path> to read from a file)')
@@ -314,12 +319,55 @@ export const recoverCommand = new Command()
         { allowWrite, noVerify }
       )
 
+      let verificationArtifactPath: string | undefined
+      if (options.writeVerificationArtifact === true && result.verificationStatus !== undefined) {
+        try {
+          const { buildVerificationArtifact, writeVerificationArtifact } = await import(
+            '@/core/verification'
+          )
+          const artifact = buildVerificationArtifact({
+            status: result.verificationStatus,
+            subject: { kind: 'recovery', name: source.envelope.error.code },
+            summary: `recover --apply verify step reported ${result.verificationStatus}.`,
+            evidence: [
+              {
+                kind: 'recovery-verify',
+                command: result.verifyResult?.command,
+                exitCode: result.verifyResult?.exitCode,
+                recoveryRef: source.path,
+              },
+            ],
+            ...(result.verificationBlockedReason
+              ? { blockedReason: result.verificationBlockedReason }
+              : {}),
+          })
+          verificationArtifactPath = await writeVerificationArtifact(source.cwd, artifact)
+        } catch (e) {
+          console.error(
+            `Failed to write verification artifact: ${(e as Error).message}`
+          )
+        }
+      }
+
       if (format === 'markdown') {
         console.log(renderApplyMarkdown(result))
+        if (verificationArtifactPath) {
+          console.log(`\nVerification artifact: ${verificationArtifactPath}`)
+        }
       } else {
         // Phase 25 DOCS-02: same pattern as no-apply branch — wrap at print site
         // so ApplyResult type stays clean (mirrors D-52 separation for symmetry).
-        console.log(JSON.stringify({ ...result, audit_recent }, null, 2))
+        console.log(
+          JSON.stringify(
+            {
+              ...result,
+              audit_recent,
+              ...(verificationArtifactPath ? { verificationArtifactPath } : {}),
+            },
+            null,
+            2
+          )
+        )
       }
       process.exit(exitCodeFor(result.finalStatus))
     } catch (err) {

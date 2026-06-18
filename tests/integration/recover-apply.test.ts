@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, mkdir, cp, realpath } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, mkdir, cp, realpath, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -488,5 +488,61 @@ describe('dbcli recover --apply verify (P4)', () => {
     expect(code).toBe(0)
     const payload = JSON.parse(stdout)
     expect(payload.verifyStatus).toBe('passed')
+  })
+})
+
+describe('dbcli recover --apply --write-verification-artifact', () => {
+  test('writes a verification artifact when the verify step runs', async () => {
+    await seedSavedEnvelope(FIXTURE, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+      ],
+      verify: { order: 0, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+    })
+    const { stdout, code } = await run(
+      ['recover', '--apply', '--write-verification-artifact', '--format', 'json'],
+      FIXTURE
+    )
+    expect(code).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.verifyStatus).toBe('passed')
+    expect(payload.verificationArtifactPath).toBeDefined()
+
+    const dir = join(FIXTURE, '.dbcli/verification')
+    const entries = (await readdir(dir)).filter((f) => f.startsWith('verification-'))
+    expect(entries.length).toBeGreaterThanOrEqual(1)
+    const written = JSON.parse(await readFile(join(dir, entries[entries.length - 1]!), 'utf8'))
+    expect(written.schemaVersion).toBe(1)
+    expect(written.status).toBe('verified')
+    expect(written.evidence[0].kind).toBe('recovery-verify')
+  })
+
+  test('without the flag, output is unchanged and nothing is written', async () => {
+    const cwd = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-verif-noflag-')))
+    await seedSavedEnvelope(cwd, {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      error: { code: 'BLACKLIST_TABLE', category: 'blacklist', message: 'x' },
+      recovery: [
+        { order: 1, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+      ],
+      verify: { order: 0, command: 'dbcli inspect --for-agent', rationale: '', risk: 'readonly', expects: '' },
+    })
+    const { stdout, code } = await run(['recover', '--apply', '--format', 'json'], cwd)
+    expect(code).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.verificationArtifactPath).toBeUndefined()
+    let entries: string[] = []
+    try {
+      entries = await readdir(join(cwd, '.dbcli/verification'))
+    } catch {
+      entries = []
+    }
+    expect(entries.length).toBe(0)
   })
 })

@@ -1276,7 +1276,11 @@ dbcli skill tasks plan diagnose-slow-query --param query="..." --format json
 a read-only (`plan-only`) pack taking a required `table` parameter that walks
 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`.
 `dbcli inspect` suggests `analyze-table-perf` automatically for the hottest table
-in recent audit activity.
+in recent audit activity. Additional read-only packs ship for common agent
+workflows: `audit-permissions` (permission/blacklist audit), `safe-backfill`
+(plan a write with blacklist+schema+risk checks), `schema-drift-review` (cached
+vs live schema diff), and `connection-health` (reachability/config/capacity
+triage). Run `dbcli skill tasks list` for the full set.
 
 ```bash
 dbcli skill tasks plan analyze-table-perf --param table=betting_logs --format json

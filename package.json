@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "1.31.0",
+  "version": "1.32.0",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -70,6 +70,7 @@
     "test:docker": "docker compose -f docker-compose.test.yml up -d --wait && bun test tests/integration/adapters; docker compose -f docker-compose.test.yml down",
     "docs:check": "bun run scripts/check-user-docs.ts",
     "skill:check": "bun run scripts/check-skill-parity.ts",
+    "platform:check": "bun run scripts/check-platform-parity.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
     "lint": "eslint src tests scripts --ext .ts --max-warnings=0",

@@ -635,6 +635,7 @@ dbcli skill --install antigravity     # Install to Antigravity CLI (Gemini CLI's
 dbcli skill --install copilot         # Install to GitHub Copilot
 dbcli skill --install cursor          # Install to Cursor IDE
 dbcli skill --install codex           # Install to Codex skills
+dbcli skill --install windsurf        # Install to Windsurf (.windsurfrules)
 ```
 
 **Behavior:**

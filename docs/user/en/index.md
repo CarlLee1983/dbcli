@@ -239,7 +239,7 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
-> **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Browse all packs with `dbcli skill tasks list`.
+> **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 
 ---
 

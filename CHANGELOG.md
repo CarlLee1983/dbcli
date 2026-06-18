@@ -5,6 +5,13 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.0] - 2026-06-18 - Workflow Pack Expansion
+
+### Added
+
+- **4 個新的 plan-only Agent Task Pack（皆唯讀)。** `pr-database-review`（PR 變更持久化路徑、查詢、migration 的資料庫風險審查)、`migration-review`（在套用 DDL 前擷取變更前 schema 證據並預覽 migration)、`safe-backfill-verify`（規劃安全 backfill 並產生 read-back `assert` 驗證指令)、`slow-endpoint-investigation`（串接 proxy / explain / missing-index 證據調查慢端點)。每個 pack 都以 `safety.mode: plan-only`、`risk: readonly` 步驟組成,只產生計畫、永不寫入;SQL 類 pack 先支援 `postgres` 與 `mysql`。
+- **Skill 路由更新（en / zh-TW)。** 在 `SKILL.md` 與 `SKILL.zh-TW.md` 的 Agent Task Packs 段落各加入一段精簡導引,讓 agent 在自行組合手動的審查、migration、backfill、效能流程前,先選擇對應的 workflow pack;已重新同步所有 plugin / platform skill 副本。
+
 ## [1.32.0] - 2026-06-18 - Agent Task Packs Expansion & Skill Parity Guards
 
 ### Added

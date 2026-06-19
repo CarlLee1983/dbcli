@@ -149,4 +149,12 @@ describe('selectPrunePlan', () => {
     const plan = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, mtimes)
     expect(plan.candidates).toEqual([])
   })
+
+  test('invalid records with no mtime entry are excluded even with includeInvalid', () => {
+    const invalid = [
+      { path: '/repo/.dbcli/verification/verification-nomtime.json', filename: 'verification-nomtime.json', error: 'bad json' },
+    ]
+    const plan = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, new Map())
+    expect(plan.candidates).toEqual([])
+  })
 })

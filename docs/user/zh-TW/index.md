@@ -220,6 +220,28 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
+#### verify safe-backfill
+
+在不執行任何 `UPDATE` 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；`--after-write` 模式重新執行防護、執行回讀斷言，並寫入驗證文物。
+
+> ⚠️ `verify safe-backfill` 永遠不會執行 backfill 寫入。請先透過一般寫入指令執行已核准的寫入，再執行 `--after-write`。
+
+預檢（Preflight）：
+
+    dbcli verify safe-backfill \
+      --table users \
+      --query "UPDATE users SET status = 1 WHERE status IS NULL" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE status IS NULL" \
+      --expect "value == 0"
+
+After-write（寫入文物）：
+
+    dbcli verify safe-backfill ... --after-write
+
+檢視結果：`dbcli verification show <artifact-id>`。
+
+結果狀態：`verified`（回讀符合 `--expect`）、`not_verified`（回讀與 `--expect` 相悖）、`blocked`（防護失敗 — blacklist、schema、plan，或 verify-query 非唯讀）、`indeterminate`（斷言已執行但無法產生可信的結論）。
+
 <!-- doc-key: verification-inspect -->
 ### verification — 檢視與管理驗證文物
 

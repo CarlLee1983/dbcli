@@ -327,6 +327,20 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
+            <p class="mb-4">Verify a safe backfill without ever executing the <code>UPDATE</code>. Preflight (default) runs read-only guards and prints the exact after-write command; <code>--after-write</code> re-runs the guards, runs the read-back assertion, and writes a verification artifact.</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> never executes the backfill write. Run the approved write through your normal write command first, then run <code>--after-write</code>.</p>
+            <p class="mb-2"><strong>Preflight:</strong></p>
+            <pre><code>dbcli verify safe-backfill \
+  --table users \
+  --query "UPDATE users SET status = 1 WHERE status IS NULL" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status IS NULL" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>After-write (writes the artifact):</strong></p>
+            <pre><code>dbcli verify safe-backfill ... --after-write</code></pre>
+            <p class="mt-4 mb-4">Inspect the result: <code>dbcli verification show &lt;artifact-id&gt;</code>.</p>
+            <p class="mb-4">Result status: <code>verified</code> (read-back matched <code>--expect</code>), <code>not_verified</code> (read-back contradicted <code>--expect</code>), <code>blocked</code> (a guard failed — blacklist, schema, plan, or a non-read-only verify-query), <code>indeterminate</code> (the assertion ran but could not yield a trustworthy verdict).</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> works on artifacts written under <code>&lt;cwd&gt;/.dbcli/verification/</code>. It never connects to a database and never writes audit entries. <code>list</code>, <code>show</code>, and <code>summary</code> are read-only filesystem inspection; <code>prune</code> is a local lifecycle command that is dry-run by default and deletes files only with <code>--execute --force</code>. The storage root is the current working directory, independent of <code>--config</code>.</p>

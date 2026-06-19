@@ -1144,6 +1144,36 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 
 **Permission:** n/a
 
+### verify
+
+Run a verification scenario. `verify` executes scenarios; `verification` inspects the
+artifacts they leave behind. The scenario NEVER executes the backfill write.
+
+```bash
+# Preflight (default): read-only guards + the exact after-write command. No artifact.
+dbcli verify safe-backfill \
+  --table users \
+  --query "UPDATE users SET status = 1 WHERE status IS NULL" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status IS NULL" \
+  --expect "value == 0"
+
+# After-write: re-run guards, run the read-back assertion, write a v1 artifact.
+dbcli verify safe-backfill ... --after-write
+
+# JSON for agents.
+dbcli verify safe-backfill ... --format json
+```
+
+Options: `--table` (req), `--query` (req, analyzed not executed), `--verify-query`
+(req, read-only), `--expect` (req), `--after-write`, `--format <table|json>`,
+`--subject-name <name>`, `--summary <text>`.
+
+Status: `ready`/`blocked` in preflight (no artifact); `verified`, `not_verified`,
+`blocked`, or `indeterminate` in after-write (artifact written). `blocked` = a guard
+failed (blacklist/schema/plan/non-read-only verify-query); `not_verified` = the
+read-back contradicted `--expect`; `indeterminate` = the assertion could not produce a
+trustworthy verdict. Inspect the result with `dbcli verification show <artifact-id>`.
+
 ### verification
 
 (v1.33.0+) Local **VerificationArtifact** inspection and lifecycle surface over

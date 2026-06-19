@@ -1,10 +1,6 @@
 import { lstat, unlink } from 'node:fs/promises'
 import { basename, resolve, sep } from 'node:path'
-import type {
-  VerificationStatus,
-  VerificationSubject,
-  VerificationSubjectKind,
-} from './types'
+import type { VerificationStatus, VerificationSubject, VerificationSubjectKind } from './types'
 import {
   readVerificationArtifacts,
   filterVerificationArtifacts,

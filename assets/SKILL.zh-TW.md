@@ -130,6 +130,9 @@ dbcli inspect --for-agent --no-connect --format json
 - 若需持久化 read-back 斷言的結果佐證，執行 `assert ... --write-verification-artifact --verification-subject <kind:name>`（允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`）。
 - 檢視驗證佐證（唯讀）：`dbcli verification summary --format json`
   （亦可用 `verification list` / `verification show <id>`）。以 `dbcli verification prune --older-than 30d` 回收舊文物（dry-run；加上 `--execute --force` 才刪除）。
+- `tasks plan safe-backfill-verify` — 當使用者只需要計畫時使用。
+- `verify safe-backfill` — 在真實 backfill 前（preflight）及執行後（`--after-write`）使用，需要持久佐證時必用。永不執行寫入。
+- `verification show <id>` — 引用最終文物。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。
 

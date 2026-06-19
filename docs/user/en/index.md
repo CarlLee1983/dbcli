@@ -220,6 +220,34 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
+#### verify safe-backfill
+
+Verify a safe backfill without ever executing the `UPDATE`. Preflight (default) runs
+read-only guards and prints the exact after-write command; `--after-write` re-runs the
+guards, runs the read-back assertion, and writes a verification artifact.
+
+> ⚠️ `verify safe-backfill` never executes the backfill write. Run the approved write
+> through your normal write command first, then run `--after-write`.
+
+Preflight:
+
+    dbcli verify safe-backfill \
+      --table users \
+      --query "UPDATE users SET status = 1 WHERE status IS NULL" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE status IS NULL" \
+      --expect "value == 0"
+
+After-write (writes the artifact):
+
+    dbcli verify safe-backfill ... --after-write
+
+Inspect the result: `dbcli verification show <artifact-id>`.
+
+Result status: `verified` (read-back matched `--expect`), `not_verified` (read-back
+contradicted `--expect`), `blocked` (a guard failed — blacklist, schema, plan, or a
+non-read-only verify-query), `indeterminate` (the assertion ran but could not yield a
+trustworthy verdict).
+
 <!-- doc-key: verification-inspect -->
 ### verification — inspect & manage verification artifacts
 

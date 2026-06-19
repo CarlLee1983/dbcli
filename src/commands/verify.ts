@@ -42,7 +42,9 @@ function boundedReason(message: string): string {
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!SQL_SYSTEMS.includes(connection.system)) {
-    throw new Error(`verify safe-backfill currently supports SQL engines only, got: ${connection.system}`)
+    throw new Error(
+      `verify safe-backfill currently supports SQL engines only, got: ${connection.system}`
+    )
   }
   return connection as SqlConnectionOptions
 }
@@ -91,7 +93,10 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
     planGuard: async (query): Promise<GuardOutcome> => {
       const r = analyzePlan(query)
       if (!isUpdateOperation(r.operation)) {
-        return { ok: false, reason: boundedReason(`--query must be an UPDATE statement (got ${r.operation}).`) }
+        return {
+          ok: false,
+          reason: boundedReason(`--query must be an UPDATE statement (got ${r.operation}).`),
+        }
       }
       if (r.decision === 'BLOCK') {
         const why = r.riskFactors[0]?.message ?? 'plan blocked the write'
@@ -102,14 +107,23 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
     verifyReadonlyGuard: async (verifyQuery): Promise<GuardOutcome> => {
       const r = analyze(verifyQuery)
       if (!isReadOnlyOperation(r.operation)) {
-        return { ok: false, reason: boundedReason(`--verify-query must be read-only (got ${r.operation}).`) }
+        return {
+          ok: false,
+          reason: boundedReason(`--verify-query must be read-only (got ${r.operation}).`),
+        }
       }
       return { ok: true }
     },
     runAssertion: async (input: SafeBackfillInput): Promise<AssertionOutcome> => {
       try {
         const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-        const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, ctx.options)
+        const executor = new QueryExecutor(
+          adapter,
+          config.permission,
+          blacklistValidator,
+          config,
+          ctx.options
+        )
         const result = await executor.execute(input.verifyQuery, { autoLimit: true })
         const check = evaluateExpect(parseExpect(input.expect), result)
         const auditRef = await writeAuditEntry(config, 'verify', ctx.options, {
@@ -154,7 +168,8 @@ function renderAfterWriteTable(r: AfterWriteResult, artifactPath?: string): stri
     `Table:       ${r.table}`,
     `Status:      ${r.status}`,
   ]
-  if (r.assertion) lines.push(`Assertion:   ${r.assertion.expect} -> ${r.assertion.passed ? 'PASS' : 'FAIL'}`)
+  if (r.assertion)
+    lines.push(`Assertion:   ${r.assertion.expect} -> ${r.assertion.passed ? 'PASS' : 'FAIL'}`)
   if (r.blockedReason) lines.push(`Reason:      ${r.blockedReason}`)
   lines.push(`Summary:     ${r.artifact.summary}`)
   lines.push(`Artifact id: ${r.artifact.id}`)
@@ -169,7 +184,11 @@ function preflightJson(r: PreflightResult): unknown {
     mode: r.mode,
     status: r.status,
     table: r.table,
-    guards: r.guards.map((g) => ({ name: g.name, status: g.status, ...(g.reason ? { reason: g.reason } : {}) })),
+    guards: r.guards.map((g) => ({
+      name: g.name,
+      status: g.status,
+      ...(g.reason ? { reason: g.reason } : {}),
+    })),
     afterWriteCommand: r.afterWriteCommand,
   }
 }
@@ -196,7 +215,9 @@ export const verifyCommand = new Command('verify').description(
 
 verifyCommand
   .command('safe-backfill')
-  .description('Preflight or after-write verification for a safe backfill; never executes the UPDATE')
+  .description(
+    'Preflight or after-write verification for a safe backfill; never executes the UPDATE'
+  )
   .requiredOption('--table <table>', 'Target table name')
   .requiredOption('--query <sql>', 'Proposed backfill UPDATE statement (analyzed, never executed)')
   .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the final assertion')
@@ -220,7 +241,9 @@ verifyCommand
       })
     } catch (e) {
       // Input errors fail closed before any DB connection.
-      console.error(e instanceof VerifyInputError || e instanceof Error ? (e as Error).message : String(e))
+      console.error(
+        e instanceof VerifyInputError || e instanceof Error ? (e as Error).message : String(e)
+      )
       process.exit(1)
     }
 
@@ -231,7 +254,9 @@ verifyCommand
         console.error('Database not configured. Run: dbcli init')
         process.exit(1)
       }
-      const adapter = AdapterFactory.createSqlAdapter(requireSqlConnection(config.connection as ConnectionOptions))
+      const adapter = AdapterFactory.createSqlAdapter(
+        requireSqlConnection(config.connection as ConnectionOptions)
+      )
       await adapter.connect()
 
       const runners = buildRealRunners({ adapter, config, options: options as { config?: string } })
@@ -267,7 +292,10 @@ verifyCommand
       if (input.format === 'json') {
         console.log(
           JSON.stringify(
-            { ...(afterWriteJson(result, artifactPath) as object), ...(artifactError ? { artifactError } : {}) },
+            {
+              ...(afterWriteJson(result, artifactPath) as object),
+              ...(artifactError ? { artifactError } : {}),
+            },
             null,
             2
           )
@@ -283,7 +311,8 @@ verifyCommand
     } catch (error) {
       if (error instanceof Error) {
         console.error(error.message)
-        if (error instanceof ConnectionError) error.hints.forEach((h) => console.error(`   Hint: ${h}`))
+        if (error instanceof ConnectionError)
+          error.hints.forEach((h) => console.error(`   Hint: ${h}`))
       }
       process.exit(1)
     }

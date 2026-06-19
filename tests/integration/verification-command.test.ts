@@ -365,7 +365,14 @@ describe('dbcli verification prune', () => {
       { id: 'new1', createdAt: daysAgoISO(1) },
     ])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -381,7 +388,13 @@ describe('dbcli verification prune', () => {
   test('--execute without --force exits 1 and deletes nothing', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { code, stderr } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--execute',
     ])
     expect(code).toBe(1)
     expect(stderr.toLowerCase()).toContain('force')
@@ -393,7 +406,15 @@ describe('dbcli verification prune', () => {
   test('--force without --execute performs dry-run only', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--force', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--force',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     expect(JSON.parse(stdout).dryRun).toBe(true)
@@ -407,7 +428,16 @@ describe('dbcli verification prune', () => {
       { id: 'new1', createdAt: daysAgoISO(1) },
     ])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute', '--force', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--execute',
+      '--force',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -424,7 +454,14 @@ describe('dbcli verification prune', () => {
       { id: 'old2', createdAt: daysAgoISO(90) },
     ])
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '1', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '1',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(j.protected.map((p: { id: string }) => p.id)).toEqual(['old2'])
@@ -437,7 +474,16 @@ describe('dbcli verification prune', () => {
       { id: 'noo', createdAt: daysAgoISO(90), status: 'not_verified' },
     ])
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--status', 'verified', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--status',
+      'verified',
+      '--format',
+      'json',
     ])
     expect(JSON.parse(stdout).candidates.map((c: { id: string }) => c.id)).toEqual(['okk'])
   })
@@ -449,15 +495,35 @@ describe('dbcli verification prune', () => {
     const old = new Date(Date.now() - 100 * DAY_MS)
     await utimes(broken, old, old)
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--include-invalid', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--include-invalid',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
-    expect(j.candidates.some((c: { invalid: boolean; filename: string }) => c.invalid && c.filename === 'verification-broken.json')).toBe(true)
+    expect(
+      j.candidates.some(
+        (c: { invalid: boolean; filename: string }) =>
+          c.invalid && c.filename === 'verification-broken.json'
+      )
+    ).toBe(true)
   })
 
   test('missing directory exits 0 with empty arrays', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
-    const { stdout, code } = await run(work, ['verification', 'prune', '--older-than', '30d', '--format', 'json'])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--format',
+      'json',
+    ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.candidates).toEqual([])
@@ -481,7 +547,14 @@ describe('dbcli verification prune', () => {
   test('table format prints the summary header', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'table',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--format',
+      'table',
     ])
     expect(code).toBe(0)
     expect(stdout).toContain('mode')
@@ -528,7 +601,13 @@ describe('dbcli verification malformed-artifact hardening', () => {
   test('show --format table never crashes on malformed JSON; reports via invalid path', async () => {
     const { work, file } = await seedWithMalformed()
     const selector = join('.dbcli', 'verification', file)
-    const { stderr, code } = await run(work, ['verification', 'show', selector, '--format', 'table'])
+    const { stderr, code } = await run(work, [
+      'verification',
+      'show',
+      selector,
+      '--format',
+      'table',
+    ])
     expect(code).toBe(1)
     expect(stderr).toContain('is invalid')
     expect(stderr).not.toContain('TypeError')

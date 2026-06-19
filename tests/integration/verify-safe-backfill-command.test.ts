@@ -31,7 +31,10 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   return out
 }
 
-function run(args: string[], cwd = WORK): Promise<{ stdout: string; stderr: string; code: number }> {
+function run(
+  args: string[],
+  cwd = WORK
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     const child = spawn('bun', ['run', CLI, '--config', cwd, ...args], { cwd, env: sanitizeEnv() })
     let stdout = ''
@@ -66,7 +69,9 @@ beforeAll(async () => {
     await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
     // 3 rows with NULL status: the read-back "count where status is null" is 3 here
     // (the scenario never runs the UPDATE, so the count stays 3 for the test).
-    await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
+    await adapter.execute(
+      `INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`
+    )
     await adapter.disconnect()
 
     WORK = await mkdtemp(join(tmpdir(), 'dbcli-verify-sbf-'))
@@ -103,11 +108,16 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('preflight prints the after-write command and writes no artifact', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
-      '--expect', 'value == 3',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
     ])
     expect(code).toBe(0)
     expect(stdout).toContain('--after-write')
@@ -117,12 +127,18 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('preflight --format json returns stable shape', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
-      '--expect', 'value == 3',
-      '--format', 'json',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
@@ -131,7 +147,10 @@ describe('dbcli verify safe-backfill (integration)', () => {
     expect(j.status).toBe('ready')
     expect(j.table).toBe(TABLE)
     expect(j.guards.map((g: { name: string }) => g.name)).toEqual([
-      'blacklist', 'schema', 'plan', 'verify-query-readonly',
+      'blacklist',
+      'schema',
+      'plan',
+      'verify-query-readonly',
     ])
     expect(j.afterWriteCommand).toContain('--after-write')
   })
@@ -139,19 +158,29 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('after-write success writes a verified artifact', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
-      '--expect', 'value == 3',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
       '--after-write',
-      '--format', 'json',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
     expect(j.status).toBe('verified')
     expect(j.artifact.path).toContain('.dbcli/verification/')
-    expect(j.artifact.subject).toEqual({ kind: 'backfill', name: TABLE, command: 'verify safe-backfill' })
+    expect(j.artifact.subject).toEqual({
+      kind: 'backfill',
+      name: TABLE,
+      command: 'verify safe-backfill',
+    })
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
     expect(raw.schemaVersion).toBe(1)
     expect(raw.status).toBe('verified')
@@ -161,13 +190,19 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('after-write assertion failure exits 1 and writes not_verified', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
-      '--expect', 'value == 0',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 0',
       '--after-write',
-      '--format', 'json',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
@@ -179,13 +214,19 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('after-write with a non-read-only verify-query is blocked and writes a blocked artifact', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `UPDATE ${TABLE} SET status = 9 WHERE id = 1`,
-      '--expect', 'rows == 0',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `UPDATE ${TABLE} SET status = 9 WHERE id = 1`,
+      '--expect',
+      'rows == 0',
       '--after-write',
-      '--format', 'json',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
@@ -198,12 +239,18 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('invalid --format fails before running guards', async () => {
     if (!DB_OK) return
     const { stderr, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT 1`,
-      '--expect', 'rows > 0',
-      '--format', 'csv',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT 1`,
+      '--expect',
+      'rows > 0',
+      '--format',
+      'csv',
     ])
     expect(code).toBe(1)
     expect(stderr).toContain("Invalid --format 'csv'")
@@ -212,10 +259,14 @@ describe('dbcli verify safe-backfill (integration)', () => {
   test('missing --expect fails before running guards', async () => {
     if (!DB_OK) return
     const { stderr, code } = await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT 1`,
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT 1`,
     ])
     expect(code).toBe(1)
     // Commander's required-option error.
@@ -226,20 +277,33 @@ describe('dbcli verify safe-backfill (integration)', () => {
     if (!DB_OK) return
     // Ensure at least one artifact exists from the success case above.
     await run([
-      'verify', 'safe-backfill',
-      '--table', TABLE,
-      '--query', UPDATE_SQL,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
-      '--expect', 'value == 3',
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
       '--after-write',
-      '--format', 'json',
+      '--format',
+      'json',
     ])
     const { stdout, code } = await run([
-      'verification', 'list', '--subject', `backfill:${TABLE}`, '--format', 'json',
+      'verification',
+      'list',
+      '--subject',
+      `backfill:${TABLE}`,
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.artifacts.length).toBeGreaterThan(0)
-    expect(j.artifacts.every((a: { subject: { kind: string } }) => a.subject.kind === 'backfill')).toBe(true)
+    expect(
+      j.artifacts.every((a: { subject: { kind: string } }) => a.subject.kind === 'backfill')
+    ).toBe(true)
   })
 })

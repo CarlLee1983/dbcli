@@ -95,7 +95,12 @@ export function normalizeSafeBackfillInput(raw: Record<string, unknown>): SafeBa
   }
 }
 
-const READ_ONLY_OPERATIONS: readonly QueryRiskOperation[] = ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN']
+const READ_ONLY_OPERATIONS: readonly QueryRiskOperation[] = [
+  'SELECT',
+  'SHOW',
+  'DESCRIBE',
+  'EXPLAIN',
+]
 
 export function isReadOnlyOperation(op: QueryRiskOperation): boolean {
   return READ_ONLY_OPERATIONS.includes(op)
@@ -233,7 +238,8 @@ export async function runSafeBackfillAfterWrite(
   // Blocked: a required guard failed. Persist a bounded artifact with no assert evidence.
   if (!allGuardsPassed(guards)) {
     const failed = guards.find((g) => g.status === 'failed')
-    const blockedReason = failed?.reason ?? 'A required guard failed before the read-back assertion.'
+    const blockedReason =
+      failed?.reason ?? 'A required guard failed before the read-back assertion.'
     const artifact = buildVerificationArtifact({
       status: 'blocked',
       subject,

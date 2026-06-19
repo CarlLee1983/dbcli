@@ -72,7 +72,14 @@ function validateEvidence(value: unknown, index: number): VerificationEvidenceRe
   if (!isVerificationEvidenceKind(e.kind)) {
     throw new Error(`evidence[${index}].kind is not a valid evidence kind`)
   }
-  const stringFields = ['command', 'auditRef', 'recoveryRef', 'snapshotPath', 'taskName', 'note'] as const
+  const stringFields = [
+    'command',
+    'auditRef',
+    'recoveryRef',
+    'snapshotPath',
+    'taskName',
+    'note',
+  ] as const
   for (const field of stringFields) {
     if (e[field] !== undefined && typeof e[field] !== 'string') {
       throw new Error(`evidence[${index}].${field} must be a string when present`)

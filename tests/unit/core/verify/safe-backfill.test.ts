@@ -15,7 +15,7 @@ import {
 
 const RAW = {
   table: 'users',
-  query: "UPDATE users SET status = 1 WHERE status IS NULL",
+  query: 'UPDATE users SET status = 1 WHERE status IS NULL',
   verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE status IS NULL',
   expect: 'value == 0',
 }
@@ -103,7 +103,7 @@ describe('buildSafeBackfillSubject', () => {
 
 const PRE_RAW = {
   table: 'users',
-  query: "UPDATE users SET status = 1 WHERE status IS NULL",
+  query: 'UPDATE users SET status = 1 WHERE status IS NULL',
   verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE status IS NULL',
   expect: 'value == 0',
 }
@@ -239,7 +239,11 @@ describe('runSafeBackfillAfterWrite', () => {
   })
 
   test('--subject-name overrides the artifact subject name', async () => {
-    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true, subjectName: 'nightly' })
+    const input = normalizeSafeBackfillInput({
+      ...PRE_RAW,
+      afterWrite: true,
+      subjectName: 'nightly',
+    })
     const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
     expect(result.artifact.subject.name).toBe('nightly')
   })

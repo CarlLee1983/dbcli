@@ -285,7 +285,9 @@ describe('validateVerificationArtifact (v1 hardening)', () => {
   }
 
   test('rejects evidence: [null] as invalid', async () => {
-    const root = await seed([{ name: 'verification-a.json', content: badJson({ evidence: [null] }) }])
+    const root = await seed([
+      { name: 'verification-a.json', content: badJson({ evidence: [null] }) },
+    ])
     const result = await readVerificationArtifacts(root)
     expect(result.artifacts).toEqual([])
     expect(result.invalid).toHaveLength(1)

@@ -257,11 +257,12 @@ trustworthy verdict).
   `SHOW`, `DESCRIBE`, and data-modifying CTEs (`WITH … (DELETE … RETURNING) …`) are
   rejected — on PostgreSQL `EXPLAIN ANALYZE <write>` actually performs the write, so
   the read-back is restricted to statements that can never mutate data.
-- The `--query` **UPDATE target must equal `--table`**. An `UPDATE` against any other
+- The `--query` **UPDATE target must equal `--table`**, compared **schema-aware**
+  (`public.users` does not satisfy `--table audit.users`). An `UPDATE` against any other
   table is blocked, so the read-back you assert on always matches the table you wrote.
 - The persisted artifact stores only a **bounded, literal-free label** of the
-  verify-query (string literals are stripped) — raw SQL and any embedded values are
-  never written to disk.
+  verify-query **and `--expect`** — string, numeric, and dollar-quoted (`$$…$$`)
+  literals are stripped, so raw SQL and any embedded values are never written to disk.
 - The printed after-write command is **shell-escaped**, so it stays correct even when
   the SQL contains quotes; it also carries through `--subject-name`, `--summary`, and a
   non-default `--format`.

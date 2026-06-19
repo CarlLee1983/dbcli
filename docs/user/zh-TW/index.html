@@ -344,8 +344,8 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             <p class="mb-2 font-medium">防護約束（fail closed）：</p>
             <ul class="mb-4 ml-6 list-disc">
               <li><code>--verify-query</code> 必須是<strong>單純的 <code>SELECT</code></strong>。<code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code>、<code>SHOW</code>、<code>DESCRIBE</code>，以及會寫入資料的 CTE（<code>WITH … (DELETE … RETURNING) …</code>）都會被拒絕 — 在 PostgreSQL 上 <code>EXPLAIN ANALYZE &lt;write&gt;</code> 會真的執行寫入，因此回讀僅限於絕不會變更資料的語句。</li>
-              <li><code>--query</code> 的 <strong>UPDATE 目標必須等於 <code>--table</code></strong>。對其他資料表的 <code>UPDATE</code> 會被阻擋，確保你斷言的回讀對象與實際寫入的資料表一致。</li>
-              <li>持久化的文物僅儲存 verify-query 的<strong>有界、去除字面值的標籤</strong>（string literal 會被移除）— 原始 SQL 及任何內嵌值都不會寫入磁碟。</li>
+              <li><code>--query</code> 的 <strong>UPDATE 目標必須等於 <code>--table</code></strong>，並以 <strong>schema-aware</strong> 方式比對（<code>public.users</code> 不會通過 <code>--table audit.users</code>）。對其他資料表的 <code>UPDATE</code> 會被阻擋，確保你斷言的回讀對象與實際寫入的資料表一致。</li>
+              <li>持久化的文物僅儲存 verify-query <strong>與 <code>--expect</code></strong> 的<strong>有界、去除字面值的標籤</strong>：字串、數字與 dollar-quoted（<code>$$…$$</code>）字面值都會被移除，原始 SQL 及任何內嵌值都不會寫入磁碟。</li>
               <li>印出的 after-write 指令會做 <strong>shell escaping</strong>，即使 SQL 含有引號也維持正確；並會帶上 <code>--subject-name</code>、<code>--summary</code> 與非預設的 <code>--format</code>。</li>
             </ul>
             <p class="mb-4">💡 <strong>同一資料表的重複 backfill。</strong>文物的 subject 名稱預設為資料表（<code>backfill:&lt;table&gt;</code>）。當你對同一資料表執行多個不同的 backfill 時，請傳入 <code>--subject-name &lt;唯一標籤&gt;</code>，讓每次操作在 <code>dbcli verification list</code> 中都能獨立追蹤。</p>

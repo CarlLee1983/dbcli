@@ -39,6 +39,11 @@ describe('redaction utils', () => {
       const sql = 'SELECT name, age FROM users ORDER BY age DESC LIMIT 10'
       expect(redactSql(sql)).toBe('SELECT name, age FROM users ORDER BY age DESC LIMIT 0')
     })
+
+    test('redacts PostgreSQL dollar-quoted strings (untagged and tagged)', () => {
+      expect(redactSql('SELECT * FROM t WHERE token = $$secret$$')).not.toContain('secret')
+      expect(redactSql('SELECT * FROM t WHERE token = $tag$secret$tag$')).not.toContain('secret')
+    })
   })
 
   describe('redactParams', () => {

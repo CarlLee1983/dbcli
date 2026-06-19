@@ -24,6 +24,7 @@ import {
   runSafeBackfillAfterWrite,
   isPlainSelectVerifyQuery,
   isUpdateOperation,
+  extractUpdateTargetTable,
   updateTargetMatchesTable,
   VerifyInputError,
   type SafeBackfillInput,
@@ -105,8 +106,8 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
         const why = r.riskFactors[0]?.message ?? 'plan blocked the write'
         return { ok: false, reason: boundedReason(`plan blocked the write: ${why}`) }
       }
-      if (!updateTargetMatchesTable(r.targetTables, ctx.targetTable)) {
-        const got = r.targetTables[0] ?? 'unknown'
+      if (!updateTargetMatchesTable(query, ctx.targetTable)) {
+        const got = extractUpdateTargetTable(query) ?? 'unknown'
         return {
           ok: false,
           reason: boundedReason(

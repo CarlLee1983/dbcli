@@ -1171,8 +1171,10 @@ Options: `--table` (req), `--query` (req, analyzed not executed), `--verify-quer
 Guard constraints (fail closed): `--verify-query` must be a **plain `SELECT`** —
 `EXPLAIN`/`EXPLAIN ANALYZE`, `SHOW`, `DESCRIBE`, and data-modifying CTEs are rejected
 (on PostgreSQL `EXPLAIN ANALYZE <write>` actually performs the write). The `--query`
-**UPDATE target must equal `--table`**. The persisted artifact stores only a bounded,
-literal-free label of the verify-query (never raw SQL/values). The printed after-write
+**UPDATE target must equal `--table`**, compared schema-aware (`public.users` ≠
+`audit.users`). The persisted artifact stores only a bounded, literal-free label of the
+verify-query and `--expect` — string, numeric, and dollar-quoted literals are stripped,
+so raw SQL/values are never written to disk. The printed after-write
 command is shell-escaped and carries through `--subject-name`/`--summary`/non-default
 `--format`. For repeated backfills on the same table, pass a unique `--subject-name` so
 each operation is independently traceable (the subject defaults to `backfill:<table>`).

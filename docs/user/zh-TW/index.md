@@ -247,8 +247,8 @@ After-write（寫入文物）：
 **防護約束（fail closed）：**
 
 - `--verify-query` 必須是**單純的 `SELECT`**。`EXPLAIN` / `EXPLAIN ANALYZE`、`SHOW`、`DESCRIBE`，以及會寫入資料的 CTE（`WITH … (DELETE … RETURNING) …`）都會被拒絕 — 在 PostgreSQL 上 `EXPLAIN ANALYZE <write>` 會真的執行寫入，因此回讀僅限於絕不會變更資料的語句。
-- `--query` 的 **UPDATE 目標必須等於 `--table`**。對其他資料表的 `UPDATE` 會被阻擋，確保你斷言的回讀對象與實際寫入的資料表一致。
-- 持久化的文物僅儲存 verify-query 的**有界、去除字面值的標籤**（string literal 會被移除）— 原始 SQL 及任何內嵌值都不會寫入磁碟。
+- `--query` 的 **UPDATE 目標必須等於 `--table`**，並以 **schema-aware** 方式比對（`public.users` 不會通過 `--table audit.users`）。對其他資料表的 `UPDATE` 會被阻擋，確保你斷言的回讀對象與實際寫入的資料表一致。
+- 持久化的文物僅儲存 verify-query **與 `--expect`** 的**有界、去除字面值的標籤**：字串、數字與 dollar-quoted（`$$…$$`）字面值都會被移除，原始 SQL 及任何內嵌值都不會寫入磁碟。
 - 印出的 after-write 指令會做 **shell escaping**，即使 SQL 含有引號也維持正確；並會帶上 `--subject-name`、`--summary` 與非預設的 `--format`。
 
 > 💡 **同一資料表的重複 backfill。** 文物的 subject 名稱預設為資料表（`backfill:<table>`）。當你對同一資料表執行多個不同的 backfill 時，請傳入 `--subject-name <唯一標籤>`，讓每次操作在 `dbcli verification list` 中都能獨立追蹤。

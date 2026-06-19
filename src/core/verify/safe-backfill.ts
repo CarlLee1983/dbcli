@@ -5,6 +5,7 @@ import type {
   VerificationArtifact,
 } from '@/core/verification'
 import { buildVerificationArtifact } from '@/core/verification'
+import { redactSql } from '@/utils/redaction'
 import type { QueryRiskOperation } from '@/types/query-risk'
 
 export type VerifyMode = 'preflight' | 'after-write'
@@ -136,32 +137,71 @@ export function isPlainSelectVerifyQuery(op: QueryRiskOperation, sql: string): b
   return !WRITE_OR_DDL_KEYWORDS.test(stripSingleQuotedLiterals(sql))
 }
 
-/** Normalize a table reference for comparison: strip schema prefix, quotes, and case. */
+/** Strip surrounding quotes/brackets and lowercase a single identifier segment. */
+function cleanSegment(segment: string): string {
+  return segment.replace(/^[`"[]+|[`"\]]+$/g, '').trim().toLowerCase()
+}
+
+/** Normalize a table reference to its bare name: strip schema prefix, quotes, and case. */
 export function normalizeTableName(name: string): string {
   const trimmed = name.trim()
   const bare = trimmed.includes('.') ? (trimmed.split('.').pop() ?? trimmed) : trimmed
-  return bare.replace(/^[`"[]+|[`"\]]+$/g, '').trim().toLowerCase()
+  return cleanSegment(bare)
+}
+
+/** Split a (possibly schema-qualified) table reference into normalized schema + name. */
+function splitQualifiedTable(ref: string): { schema: string | null; name: string } {
+  const parts = ref.trim().split('.').map(cleanSegment).filter((p) => p.length > 0)
+  const name = parts.length > 0 ? (parts[parts.length - 1] as string) : ''
+  const schema = parts.length >= 2 ? (parts[parts.length - 2] as string) : null
+  return { schema, name }
 }
 
 /**
- * The UPDATE target is the first table the analyzer extracts (the `UPDATE <t>`
- * name is added before any FROM/JOIN tables). The backfill is only safe when
- * that target matches the declared `--table`.
+ * Compare two table references in a schema-aware way: the bare names must match,
+ * and when BOTH sides carry a schema, the schemas must match too. If either side
+ * omits the schema we fall back to a bare-name match (the caller did not pin a
+ * schema, so we cannot reject on one).
  */
-export function updateTargetMatchesTable(targetTables: string[], table: string): boolean {
-  const target = targetTables[0]
-  if (!target) return false
-  return normalizeTableName(target) === normalizeTableName(table)
+export function tableRefsMatch(a: string, b: string): boolean {
+  const x = splitQualifiedTable(a)
+  const y = splitQualifiedTable(b)
+  if (!x.name || x.name !== y.name) return false
+  if (x.schema && y.schema) return x.schema === y.schema
+  return true
 }
 
 /**
- * Produce a bounded, literal-free label for persisting a verify-query in an
- * artifact. Strips single-quoted string literals (so secret values are never
- * written to disk), collapses whitespace, and caps the length.
+ * Extract the (possibly schema-qualified) UPDATE target from a raw statement.
+ * Reads the target straight from the SQL — the risk analyzer strips schema
+ * prefixes, so its extracted tables cannot be used for a schema-aware check.
+ */
+export function extractUpdateTargetTable(sql: string): string | null {
+  const match = sql.match(
+    /\bUPDATE\s+(?:ONLY\s+)?((?:[`"[]?[\w]+[`"\]]?\.){0,2}[`"[]?[\w]+[`"\]]?)/i
+  )
+  return match?.[1] ?? null
+}
+
+/**
+ * The backfill is only safe when the `--query` UPDATE target matches the declared
+ * `--table`, compared schema-aware so `UPDATE public.users` cannot pass as
+ * `--table audit.users`.
+ */
+export function updateTargetMatchesTable(query: string, table: string): boolean {
+  const target = extractUpdateTargetTable(query)
+  if (!target) return false
+  return tableRefsMatch(target, table)
+}
+
+/**
+ * Produce a bounded, literal-free label for persisting a verify-query (or an
+ * --expect expression) in an artifact. Reuses the shared SQL redactor so string,
+ * double-quoted, dollar-quoted, and numeric literals — plus sensitive
+ * key/value patterns — are stripped, then collapses whitespace and caps length.
  */
 export function redactSqlForEvidence(sql: string, maxLen = 100): string {
-  const noLiterals = sql.replace(/'(?:[^']|'')*'/g, '?')
-  const collapsed = noLiterals.replace(/\s+/g, ' ').trim()
+  const collapsed = redactSql(sql).replace(/\s+/g, ' ').trim()
   return collapsed.length <= maxLen ? collapsed : `${collapsed.slice(0, maxLen - 1)}…`
 }
 
@@ -335,8 +375,9 @@ export async function runSafeBackfillAfterWrite(
 
   const assertEvidence: VerificationEvidenceRef = {
     kind: 'assert',
-    // Persist only a bounded, literal-free label — never the raw verify SQL.
-    command: `assert <${redactSqlForEvidence(input.verifyQuery)}> --expect "${input.expect}"`,
+    // Persist only bounded, literal-free labels — never the raw verify SQL or
+    // raw --expect (both can carry sensitive literal values).
+    command: `assert <${redactSqlForEvidence(input.verifyQuery)}> --expect <${redactSqlForEvidence(input.expect)}>`,
     exitCode: status === 'verified' ? 0 : 1,
     ...(outcome.auditRef ? { auditRef: outcome.auditRef } : {}),
     ...(status === 'indeterminate' && outcome.reason ? { note: outcome.reason } : {}),

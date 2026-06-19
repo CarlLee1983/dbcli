@@ -5,6 +5,7 @@ import {
   isUpdateOperation,
   isPlainSelectVerifyQuery,
   normalizeTableName,
+  extractUpdateTargetTable,
   updateTargetMatchesTable,
   redactSqlForEvidence,
   buildAfterWriteCommand,
@@ -107,22 +108,53 @@ describe('updateTargetMatchesTable', () => {
     expect(normalizeTableName('users')).toBe('users')
   })
 
-  test('matches when the UPDATE target equals --table', () => {
-    expect(updateTargetMatchesTable(['users'], 'users')).toBe(true)
-    expect(updateTargetMatchesTable(['users'], 'public.users')).toBe(true)
+  test('extractUpdateTargetTable returns the (qualified) UPDATE target', () => {
+    expect(extractUpdateTargetTable('UPDATE users SET x = 1 WHERE id = 2')).toBe('users')
+    expect(extractUpdateTargetTable('UPDATE public.users SET x = 1 WHERE id = 2')).toBe(
+      'public.users'
+    )
+    expect(extractUpdateTargetTable('UPDATE ONLY audit.users SET x = 1 WHERE id = 2')).toBe(
+      'audit.users'
+    )
+    expect(extractUpdateTargetTable('SELECT 1')).toBeNull()
   })
 
-  test('does not match when the UPDATE target is a different table', () => {
-    expect(updateTargetMatchesTable(['accounts', 'users'], 'users')).toBe(false)
-    expect(updateTargetMatchesTable([], 'users')).toBe(false)
+  test('matches when the UPDATE target equals --table', () => {
+    expect(updateTargetMatchesTable('UPDATE users SET x=1 WHERE id=2', 'users')).toBe(true)
+    expect(updateTargetMatchesTable('UPDATE public.users SET x=1 WHERE id=2', 'public.users')).toBe(
+      true
+    )
+  })
+
+  test('falls back to the bare name only when one side omits the schema', () => {
+    expect(updateTargetMatchesTable('UPDATE users SET x=1 WHERE id=2', 'public.users')).toBe(true)
+    expect(updateTargetMatchesTable('UPDATE public.users SET x=1 WHERE id=2', 'users')).toBe(true)
+  })
+
+  test('rejects the same table name in a different schema', () => {
+    expect(updateTargetMatchesTable('UPDATE public.users SET x=1 WHERE id=2', 'audit.users')).toBe(
+      false
+    )
+  })
+
+  test('rejects a different table and a query with no UPDATE target', () => {
+    expect(updateTargetMatchesTable('UPDATE accounts SET x=1 WHERE id=2', 'users')).toBe(false)
+    expect(updateTargetMatchesTable('SELECT 1', 'users')).toBe(false)
   })
 })
 
 describe('redactSqlForEvidence', () => {
-  test('strips single-quoted string literals', () => {
+  test('strips single-quoted string literals and numeric literals', () => {
     const red = redactSqlForEvidence("SELECT 1 FROM t WHERE email = 'secret@example.com'")
     expect(red).not.toContain('secret@example.com')
-    expect(red).toContain('SELECT 1 FROM t WHERE email =')
+    expect(red).toContain('SELECT')
+    expect(red).toContain('FROM t WHERE email =')
+  })
+
+  test('strips numeric literals and dollar-quoted strings', () => {
+    const red = redactSqlForEvidence('SELECT * FROM t WHERE id = 12345 AND token = $$secret$$')
+    expect(red).not.toContain('12345')
+    expect(red).not.toContain('secret')
   })
 
   test('collapses whitespace and bounds length', () => {
@@ -340,5 +372,19 @@ describe('runSafeBackfillAfterWrite', () => {
     expect(blob).not.toContain('5432')
     // Only the assertion label is recorded, never executed result rows.
     expect(blob).not.toMatch(/"rows"\s*:/)
+  })
+
+  test('evidence never persists literal values from the verify-query or --expect', async () => {
+    const input = normalizeSafeBackfillInput({
+      ...PRE_RAW,
+      afterWrite: true,
+      verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE id = 12345 AND token = $$topsecret$$',
+      expect: "value == 'sensitive-literal'",
+    })
+    const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
+    const blob = JSON.stringify(result.artifact.evidence)
+    expect(blob).not.toContain('12345')
+    expect(blob).not.toContain('topsecret')
+    expect(blob).not.toContain('sensitive-literal')
   })
 })

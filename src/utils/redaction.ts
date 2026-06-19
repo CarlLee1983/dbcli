@@ -72,6 +72,9 @@ export function redactSensitive(text: string): string {
  */
 export function redactSql(sql: string): string {
   const redacted = sql
+    // Redact PostgreSQL dollar-quoted strings: $$...$$ or $tag$...$tag$ (must run
+    // before the string/number passes since the body can contain anything).
+    .replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, "'?'")
     // Redact string literals: '...' or "..."
     .replace(/(['"])(?:(?!\1|\\).|\\.)*\1/g, "'?'")
     // Redact numeric literals

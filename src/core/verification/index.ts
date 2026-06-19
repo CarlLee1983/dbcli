@@ -1,5 +1,6 @@
 export * from './types'
 export * from './status'
+export * from './evidence'
 export * from './artifact'
 export * from './artifact-writer'
 export * from './assert-artifact'

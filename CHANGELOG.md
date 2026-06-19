@@ -5,6 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.0] - 2026-06-19 - Verification Inspect & Prune Surface
+
+### Added
+
+- **`dbcli assert --write-verification-artifact` 橋接（opt-in）。** `assert` 的判定結果（verdict）現在可選擇性地寫成一份結果型 `VerificationArtifact`：透過 subject 解析器將斷言主體對應到 artifact 的 `subject`、依 pass/fail 對應驗證狀態，並以既有的原子寫入器落地於 `.dbcli/verification/`。省略旗標時行為完全不變、不寫入任何檔案；`safe-backfill-verify` 仍維持 plan-only。artifact 路徑一律相對於 cwd，與 `--config` 無關。
+- **唯讀 `verification` 指令介面（inspect + 生命週期）。** 新增核心 artifact 讀取器（含 schema 驗證、filter / summarize / find 輔助函式），並以此建構出 `verification list`（表格輸出，支援 subject-kind 篩選）、`verification show`、`verification summary` 等唯讀檢視指令，讓 agent 能直接讀取與彙整既有驗證證據，而非自行解析檔案。
+- **`verification prune` 保留期清理。** 依保留期（duration 解析）與全域 `--keep-latest` 規則挑選清理候選，全域 keep-latest 優先於各項篩選；具刪除安全防護（缺少 mtime 的檔案排除在外、預設 dry-run 預覽、`--execute` 才實際刪除），並在 execute 模式輸出 deleted / skipped 明細表。
+- **完整 v1 證據驗證。** 對 `subject` / `evidence` / 選用欄位進行完整驗證，並加入執行期 evidence-kind 防護，確保讀取與寫入兩端對 schema v1 的解讀一致。
+
 ## [1.34.0] - 2026-06-18 - Verification Artifact Writer
 
 ### Added

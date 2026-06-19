@@ -339,7 +339,16 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             <p class="mt-4 mb-2"><strong>After-write (writes the artifact):</strong></p>
             <pre><code>dbcli verify safe-backfill ... --after-write</code></pre>
             <p class="mt-4 mb-4">Inspect the result: <code>dbcli verification show &lt;artifact-id&gt;</code>.</p>
+            <p class="mb-4">Preflight also echoes the <strong>planned update</strong> (the <code>--query</code> you must run yourself) so the printed output is a complete, copy-pasteable record of the operation.</p>
             <p class="mb-4">Result status: <code>verified</code> (read-back matched <code>--expect</code>), <code>not_verified</code> (read-back contradicted <code>--expect</code>), <code>blocked</code> (a guard failed — blacklist, schema, plan, or a non-read-only verify-query), <code>indeterminate</code> (the assertion ran but could not yield a trustworthy verdict).</p>
+            <p class="mb-2 font-medium">Guard constraints (fail closed):</p>
+            <ul class="mb-4 ml-6 list-disc">
+              <li><code>--verify-query</code> must be a <strong>plain <code>SELECT</code></strong>. <code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code>, <code>SHOW</code>, <code>DESCRIBE</code>, and data-modifying CTEs (<code>WITH … (DELETE … RETURNING) …</code>) are rejected — on PostgreSQL <code>EXPLAIN ANALYZE &lt;write&gt;</code> actually performs the write, so the read-back is restricted to statements that can never mutate data.</li>
+              <li>The <code>--query</code> <strong>UPDATE target must equal <code>--table</code></strong>. An <code>UPDATE</code> against any other table is blocked, so the read-back you assert on always matches the table you wrote.</li>
+              <li>The persisted artifact stores only a <strong>bounded, literal-free label</strong> of the verify-query (string literals are stripped) — raw SQL and any embedded values are never written to disk.</li>
+              <li>The printed after-write command is <strong>shell-escaped</strong>, so it stays correct even when the SQL contains quotes; it also carries through <code>--subject-name</code>, <code>--summary</code>, and a non-default <code>--format</code>.</li>
+            </ul>
+            <p class="mb-4">💡 <strong>Repeated backfills on the same table.</strong> Artifacts default their subject name to the table (<code>backfill:&lt;table&gt;</code>). When you run multiple distinct backfills against the same table, pass <code>--subject-name &lt;unique-label&gt;</code> so each operation is independently traceable in <code>dbcli verification list</code>.</p>
 
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>

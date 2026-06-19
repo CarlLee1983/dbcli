@@ -3,6 +3,10 @@ import {
   normalizeSafeBackfillInput,
   isReadOnlyOperation,
   isUpdateOperation,
+  isPlainSelectVerifyQuery,
+  normalizeTableName,
+  updateTargetMatchesTable,
+  redactSqlForEvidence,
   buildAfterWriteCommand,
   buildSafeBackfillSubject,
   VerifyInputError,
@@ -68,22 +72,102 @@ describe('operation classifiers', () => {
   })
 })
 
+describe('operation classifiers (plain SELECT)', () => {
+  test('isPlainSelectVerifyQuery accepts a plain SELECT', () => {
+    expect(isPlainSelectVerifyQuery('SELECT', 'SELECT count(*) FROM users WHERE x IS NULL')).toBe(
+      true
+    )
+  })
+
+  test('isPlainSelectVerifyQuery rejects EXPLAIN (e.g. EXPLAIN ANALYZE UPDATE can write)', () => {
+    expect(isPlainSelectVerifyQuery('EXPLAIN', 'EXPLAIN ANALYZE UPDATE users SET x = 1')).toBe(false)
+  })
+
+  test('isPlainSelectVerifyQuery rejects SHOW/DESCRIBE even though they are read-only', () => {
+    expect(isPlainSelectVerifyQuery('SHOW', 'SHOW TABLES')).toBe(false)
+    expect(isPlainSelectVerifyQuery('DESCRIBE', 'DESCRIBE users')).toBe(false)
+  })
+
+  test('isPlainSelectVerifyQuery rejects a data-modifying CTE that reports as SELECT', () => {
+    const cte = 'WITH d AS (DELETE FROM users WHERE id = 1 RETURNING *) SELECT count(*) FROM d'
+    expect(isPlainSelectVerifyQuery('SELECT', cte)).toBe(false)
+  })
+
+  test('isPlainSelectVerifyQuery ignores write-like words inside string literals', () => {
+    expect(isPlainSelectVerifyQuery('SELECT', "SELECT count(*) FROM t WHERE note = 'delete me'")).toBe(
+      true
+    )
+  })
+})
+
+describe('updateTargetMatchesTable', () => {
+  test('normalizeTableName strips schema, quotes, and case', () => {
+    expect(normalizeTableName('public."Users"')).toBe('users')
+    expect(normalizeTableName('`users`')).toBe('users')
+    expect(normalizeTableName('users')).toBe('users')
+  })
+
+  test('matches when the UPDATE target equals --table', () => {
+    expect(updateTargetMatchesTable(['users'], 'users')).toBe(true)
+    expect(updateTargetMatchesTable(['users'], 'public.users')).toBe(true)
+  })
+
+  test('does not match when the UPDATE target is a different table', () => {
+    expect(updateTargetMatchesTable(['accounts', 'users'], 'users')).toBe(false)
+    expect(updateTargetMatchesTable([], 'users')).toBe(false)
+  })
+})
+
+describe('redactSqlForEvidence', () => {
+  test('strips single-quoted string literals', () => {
+    const red = redactSqlForEvidence("SELECT 1 FROM t WHERE email = 'secret@example.com'")
+    expect(red).not.toContain('secret@example.com')
+    expect(red).toContain('SELECT 1 FROM t WHERE email =')
+  })
+
+  test('collapses whitespace and bounds length', () => {
+    const long = `SELECT ${'a'.repeat(200)} FROM t`
+    const red = redactSqlForEvidence(long, 40)
+    expect(red.length).toBeLessThanOrEqual(40)
+    expect(red.endsWith('…')).toBe(true)
+  })
+})
+
 describe('buildAfterWriteCommand', () => {
-  test('renders a runnable --after-write command with quoted sql', () => {
+  test('renders a runnable --after-write command with shell-quoted sql', () => {
     const cmd = buildAfterWriteCommand(normalizeSafeBackfillInput({ ...RAW }))
     expect(cmd).toContain('dbcli verify safe-backfill')
-    expect(cmd).toContain('--table users')
-    expect(cmd).toContain(`--query "${RAW.query}"`)
-    expect(cmd).toContain(`--verify-query "${RAW.verifyQuery}"`)
-    expect(cmd).toContain(`--expect "${RAW.expect}"`)
+    expect(cmd).toContain(`--table 'users'`)
+    expect(cmd).toContain(`--query '${RAW.query}'`)
+    expect(cmd).toContain(`--verify-query '${RAW.verifyQuery}'`)
+    expect(cmd).toContain(`--expect '${RAW.expect}'`)
     expect(cmd).toContain('--after-write')
+  })
+
+  test('escapes embedded single quotes safely', () => {
+    const query = `UPDATE t SET note = 'x' WHERE id = 1`
+    const cmd = buildAfterWriteCommand(normalizeSafeBackfillInput({ ...RAW, query }))
+    expect(cmd).toContain(`--query 'UPDATE t SET note = '\\''x'\\'' WHERE id = 1'`)
   })
 
   test('includes --subject-name when set', () => {
     const cmd = buildAfterWriteCommand(
       normalizeSafeBackfillInput({ ...RAW, subjectName: 'nightly' })
     )
-    expect(cmd).toContain('--subject-name nightly')
+    expect(cmd).toContain(`--subject-name 'nightly'`)
+  })
+
+  test('includes --summary and non-default --format', () => {
+    const cmd = buildAfterWriteCommand(
+      normalizeSafeBackfillInput({ ...RAW, summary: 'manual note', format: 'json' })
+    )
+    expect(cmd).toContain(`--summary 'manual note'`)
+    expect(cmd).toContain('--format json')
+  })
+
+  test('omits --format when it is the default (table)', () => {
+    const cmd = buildAfterWriteCommand(normalizeSafeBackfillInput({ ...RAW }))
+    expect(cmd).not.toContain('--format')
   })
 })
 

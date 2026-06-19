@@ -211,6 +211,100 @@ describe('dbcli verify safe-backfill (integration)', () => {
     expect(raw.status).toBe('not_verified')
   })
 
+  test('preflight JSON includes the planned update and the table render shows it', async () => {
+    if (!DB_OK) return
+    const json = await run([
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
+      '--format',
+      'json',
+    ])
+    expect(json.code).toBe(0)
+    expect(JSON.parse(json.stdout).plannedUpdate).toBe(UPDATE_SQL)
+
+    const tableOut = await run([
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
+    ])
+    expect(tableOut.stdout).toContain('Planned update')
+    expect(tableOut.stdout).toContain(UPDATE_SQL)
+  })
+
+  // P0 regression: EXPLAIN ANALYZE <write> executes the write on PostgreSQL, so an
+  // EXPLAIN verify-query must be blocked before the read-back ever runs it.
+  test('after-write with an EXPLAIN ANALYZE verify-query is blocked (never executed)', async () => {
+    if (!DB_OK) return
+    const { stdout, code } = await run([
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      UPDATE_SQL,
+      '--verify-query',
+      `EXPLAIN ANALYZE UPDATE ${TABLE} SET status = 9 WHERE id = 1`,
+      '--expect',
+      'rows == 0',
+      '--after-write',
+      '--format',
+      'json',
+    ])
+    const j = JSON.parse(stdout)
+    expect(code).toBe(1)
+    expect(j.status).toBe('blocked')
+    const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
+    expect(raw.blockedReason).toContain('plain SELECT')
+    // The probe row must be untouched: status stays NULL because EXPLAIN never ran.
+    const { stdout: checkOut } = await run([
+      'query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE id = 1 AND status = 9`,
+      '--format',
+      'json',
+    ])
+    expect(JSON.parse(checkOut).rows[0].n).toBe(0)
+  })
+
+  // P1 regression: the UPDATE target must equal --table.
+  test('after-write where the UPDATE target differs from --table is blocked', async () => {
+    if (!DB_OK) return
+    const { stdout, code } = await run([
+      'verify',
+      'safe-backfill',
+      '--table',
+      TABLE,
+      '--query',
+      `UPDATE some_other_table SET status = 1 WHERE status IS NULL`,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 3',
+      '--after-write',
+      '--format',
+      'json',
+    ])
+    const j = JSON.parse(stdout)
+    expect(code).toBe(1)
+    expect(j.status).toBe('blocked')
+    const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
+    expect(raw.blockedReason).toContain('must match --table')
+  })
+
   test('after-write with a non-read-only verify-query is blocked and writes a blocked artifact', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([

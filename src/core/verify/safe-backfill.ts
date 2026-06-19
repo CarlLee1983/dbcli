@@ -110,16 +110,78 @@ export function isUpdateOperation(op: QueryRiskOperation): boolean {
   return op === 'UPDATE'
 }
 
+/**
+ * Data-modifying / DDL keywords used as a defence-in-depth check for the
+ * verify-query. We strip single-quoted string literals first so a value like
+ * `note = 'delete me'` does not trip the guard. This catches data-modifying
+ * CTEs (e.g. `WITH d AS (DELETE ... RETURNING *) SELECT ...`) which classify as
+ * SELECT but still execute writes on PostgreSQL.
+ */
+const WRITE_OR_DDL_KEYWORDS =
+  /\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME)\b/i
+
+function stripSingleQuotedLiterals(sql: string): string {
+  return sql.replace(/'(?:[^']|'')*'/g, ' ')
+}
+
+/**
+ * A verify-query is safe to execute only when it is a plain SELECT.
+ * EXPLAIN/SHOW/DESCRIBE are read-ish but `EXPLAIN ANALYZE <write>` actually runs
+ * the write on PostgreSQL, so they are rejected outright. As a second line of
+ * defence we also reject any SELECT whose body contains write/DDL keywords
+ * (data-modifying CTEs).
+ */
+export function isPlainSelectVerifyQuery(op: QueryRiskOperation, sql: string): boolean {
+  if (op !== 'SELECT') return false
+  return !WRITE_OR_DDL_KEYWORDS.test(stripSingleQuotedLiterals(sql))
+}
+
+/** Normalize a table reference for comparison: strip schema prefix, quotes, and case. */
+export function normalizeTableName(name: string): string {
+  const trimmed = name.trim()
+  const bare = trimmed.includes('.') ? (trimmed.split('.').pop() ?? trimmed) : trimmed
+  return bare.replace(/^[`"[]+|[`"\]]+$/g, '').trim().toLowerCase()
+}
+
+/**
+ * The UPDATE target is the first table the analyzer extracts (the `UPDATE <t>`
+ * name is added before any FROM/JOIN tables). The backfill is only safe when
+ * that target matches the declared `--table`.
+ */
+export function updateTargetMatchesTable(targetTables: string[], table: string): boolean {
+  const target = targetTables[0]
+  if (!target) return false
+  return normalizeTableName(target) === normalizeTableName(table)
+}
+
+/**
+ * Produce a bounded, literal-free label for persisting a verify-query in an
+ * artifact. Strips single-quoted string literals (so secret values are never
+ * written to disk), collapses whitespace, and caps the length.
+ */
+export function redactSqlForEvidence(sql: string, maxLen = 100): string {
+  const noLiterals = sql.replace(/'(?:[^']|'')*'/g, '?')
+  const collapsed = noLiterals.replace(/\s+/g, ' ').trim()
+  return collapsed.length <= maxLen ? collapsed : `${collapsed.slice(0, maxLen - 1)}…`
+}
+
+/** POSIX shell single-quote escaping: wrap in '…' and escape embedded quotes as '\''. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
 /** Render the exact `--after-write` command an agent should run after the real backfill write. */
 export function buildAfterWriteCommand(input: SafeBackfillInput): string {
   const parts = [
     'dbcli verify safe-backfill',
-    `--table ${input.table}`,
-    `--query "${input.query}"`,
-    `--verify-query "${input.verifyQuery}"`,
-    `--expect "${input.expect}"`,
+    `--table ${shellQuote(input.table)}`,
+    `--query ${shellQuote(input.query)}`,
+    `--verify-query ${shellQuote(input.verifyQuery)}`,
+    `--expect ${shellQuote(input.expect)}`,
   ]
-  if (input.subjectName) parts.push(`--subject-name ${input.subjectName}`)
+  if (input.subjectName) parts.push(`--subject-name ${shellQuote(input.subjectName)}`)
+  if (input.summary) parts.push(`--summary ${shellQuote(input.summary)}`)
+  if (input.format !== 'table') parts.push(`--format ${input.format}`)
   parts.push('--after-write')
   return parts.join(' ')
 }
@@ -146,6 +208,8 @@ export interface PreflightResult {
   mode: 'preflight'
   status: 'ready' | 'blocked'
   table: string
+  /** The proposed backfill UPDATE the agent must run themselves; never executed here. */
+  plannedUpdate: string
   guards: GuardResult[]
   afterWriteCommand: string
 }
@@ -192,6 +256,7 @@ export async function runSafeBackfillPreflight(
     mode: 'preflight',
     status: allGuardsPassed(guards) ? 'ready' : 'blocked',
     table: input.table,
+    plannedUpdate: input.query,
     guards,
     afterWriteCommand: buildAfterWriteCommand(input),
   }
@@ -270,7 +335,8 @@ export async function runSafeBackfillAfterWrite(
 
   const assertEvidence: VerificationEvidenceRef = {
     kind: 'assert',
-    command: `assert "${input.verifyQuery}" --expect "${input.expect}"`,
+    // Persist only a bounded, literal-free label — never the raw verify SQL.
+    command: `assert <${redactSqlForEvidence(input.verifyQuery)}> --expect "${input.expect}"`,
     exitCode: status === 'verified' ? 0 : 1,
     ...(outcome.auditRef ? { auditRef: outcome.auditRef } : {}),
     ...(status === 'indeterminate' && outcome.reason ? { note: outcome.reason } : {}),

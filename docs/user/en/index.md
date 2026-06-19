@@ -243,10 +243,33 @@ After-write (writes the artifact):
 
 Inspect the result: `dbcli verification show <artifact-id>`.
 
+Preflight also echoes the **planned update** (the `--query` you must run yourself) so
+the printed output is a complete, copy-pasteable record of the operation.
+
 Result status: `verified` (read-back matched `--expect`), `not_verified` (read-back
 contradicted `--expect`), `blocked` (a guard failed — blacklist, schema, plan, or a
 non-read-only verify-query), `indeterminate` (the assertion ran but could not yield a
 trustworthy verdict).
+
+**Guard constraints (fail closed):**
+
+- `--verify-query` must be a **plain `SELECT`**. `EXPLAIN` / `EXPLAIN ANALYZE`,
+  `SHOW`, `DESCRIBE`, and data-modifying CTEs (`WITH … (DELETE … RETURNING) …`) are
+  rejected — on PostgreSQL `EXPLAIN ANALYZE <write>` actually performs the write, so
+  the read-back is restricted to statements that can never mutate data.
+- The `--query` **UPDATE target must equal `--table`**. An `UPDATE` against any other
+  table is blocked, so the read-back you assert on always matches the table you wrote.
+- The persisted artifact stores only a **bounded, literal-free label** of the
+  verify-query (string literals are stripped) — raw SQL and any embedded values are
+  never written to disk.
+- The printed after-write command is **shell-escaped**, so it stays correct even when
+  the SQL contains quotes; it also carries through `--subject-name`, `--summary`, and a
+  non-default `--format`.
+
+> 💡 **Repeated backfills on the same table.** Artifacts default their subject name to
+> the table (`backfill:<table>`). When you run multiple distinct backfills against the
+> same table, pass `--subject-name <unique-label>` so each operation is independently
+> traceable in `dbcli verification list`.
 
 <!-- doc-key: verification-inspect -->
 ### verification — inspect & manage verification artifacts

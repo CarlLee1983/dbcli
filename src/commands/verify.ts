@@ -22,8 +22,9 @@ import {
   normalizeSafeBackfillInput,
   runSafeBackfillPreflight,
   runSafeBackfillAfterWrite,
-  isReadOnlyOperation,
+  isPlainSelectVerifyQuery,
   isUpdateOperation,
+  updateTargetMatchesTable,
   VerifyInputError,
   type SafeBackfillInput,
   type SafeBackfillRunners,
@@ -54,6 +55,8 @@ interface RealRunnerContext {
   adapter: ReturnType<typeof AdapterFactory.createSqlAdapter>
   config: Awaited<ReturnType<typeof configModule.read>>
   options: { config?: string }
+  // The declared --table; the plan guard requires the UPDATE target to match it.
+  targetTable: string
 }
 
 /** Build the production runners that touch config / adapter / analyzer. */
@@ -102,14 +105,25 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
         const why = r.riskFactors[0]?.message ?? 'plan blocked the write'
         return { ok: false, reason: boundedReason(`plan blocked the write: ${why}`) }
       }
+      if (!updateTargetMatchesTable(r.targetTables, ctx.targetTable)) {
+        const got = r.targetTables[0] ?? 'unknown'
+        return {
+          ok: false,
+          reason: boundedReason(
+            `--query UPDATE target '${got}' must match --table '${ctx.targetTable}'.`
+          ),
+        }
+      }
       return { ok: true }
     },
     verifyReadonlyGuard: async (verifyQuery): Promise<GuardOutcome> => {
       const r = analyze(verifyQuery)
-      if (!isReadOnlyOperation(r.operation)) {
+      if (!isPlainSelectVerifyQuery(r.operation, verifyQuery)) {
         return {
           ok: false,
-          reason: boundedReason(`--verify-query must be read-only (got ${r.operation}).`),
+          reason: boundedReason(
+            `--verify-query must be a read-only plain SELECT (got ${r.operation}).`
+          ),
         }
       }
       return { ok: true }
@@ -155,6 +169,8 @@ function renderPreflightTable(r: PreflightResult): string {
   for (const g of r.guards) {
     lines.push(`  - ${g.name}: ${g.status}${g.reason ? ` (${g.reason})` : ''}`)
   }
+  lines.push('', 'Planned update (you run this yourself; this command never executes it):')
+  lines.push(`  ${r.plannedUpdate}`)
   lines.push('', 'After-write command (run AFTER you execute the approved backfill write):')
   lines.push(`  ${r.afterWriteCommand}`)
   lines.push('', 'Note: this scenario never executes the backfill write itself.')
@@ -184,6 +200,7 @@ function preflightJson(r: PreflightResult): unknown {
     mode: r.mode,
     status: r.status,
     table: r.table,
+    plannedUpdate: r.plannedUpdate,
     guards: r.guards.map((g) => ({
       name: g.name,
       status: g.status,
@@ -259,7 +276,12 @@ verifyCommand
       )
       await adapter.connect()
 
-      const runners = buildRealRunners({ adapter, config, options: options as { config?: string } })
+      const runners = buildRealRunners({
+        adapter,
+        config,
+        options: options as { config?: string },
+        targetTable: input.table,
+      })
 
       if (!input.afterWrite) {
         let result: PreflightResult

@@ -1165,14 +1165,24 @@ dbcli verify safe-backfill ... --format json
 ```
 
 Options: `--table` (req), `--query` (req, analyzed not executed), `--verify-query`
-(req, read-only), `--expect` (req), `--after-write`, `--format <table|json>`,
+(req, **plain SELECT only**), `--expect` (req), `--after-write`, `--format <table|json>`,
 `--subject-name <name>`, `--summary <text>`.
+
+Guard constraints (fail closed): `--verify-query` must be a **plain `SELECT`** —
+`EXPLAIN`/`EXPLAIN ANALYZE`, `SHOW`, `DESCRIBE`, and data-modifying CTEs are rejected
+(on PostgreSQL `EXPLAIN ANALYZE <write>` actually performs the write). The `--query`
+**UPDATE target must equal `--table`**. The persisted artifact stores only a bounded,
+literal-free label of the verify-query (never raw SQL/values). The printed after-write
+command is shell-escaped and carries through `--subject-name`/`--summary`/non-default
+`--format`. For repeated backfills on the same table, pass a unique `--subject-name` so
+each operation is independently traceable (the subject defaults to `backfill:<table>`).
 
 Status: `ready`/`blocked` in preflight (no artifact); `verified`, `not_verified`,
 `blocked`, or `indeterminate` in after-write (artifact written). `blocked` = a guard
-failed (blacklist/schema/plan/non-read-only verify-query); `not_verified` = the
-read-back contradicted `--expect`; `indeterminate` = the assertion could not produce a
-trustworthy verdict. Inspect the result with `dbcli verification show <artifact-id>`.
+failed (blacklist/schema/plan/verify-query-not-plain-SELECT/target-table-mismatch);
+`not_verified` = the read-back contradicted `--expect`; `indeterminate` = the assertion
+could not produce a trustworthy verdict. Inspect the result with
+`dbcli verification show <artifact-id>`.
 
 ### verification
 

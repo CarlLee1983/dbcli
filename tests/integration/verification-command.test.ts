@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile, utimes } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -532,5 +532,55 @@ describe('dbcli verification malformed-artifact hardening', () => {
     expect(code).toBe(1)
     expect(stderr).toContain('is invalid')
     expect(stderr).not.toContain('TypeError')
+  })
+})
+
+describe('dbcli verification prune execute-mode table detail', () => {
+  test('table output lists deleted files after deletion', async () => {
+    // One old valid artifact; keep-latest 0 so it is eligible; older-than 1d so age passes.
+    const work = await seedWork([{ id: 'old1', createdAt: '2020-01-01T00:00:00.000Z' }])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'prune',
+      '--older-than',
+      '1d',
+      '--keep-latest',
+      '0',
+      '--execute',
+      '--force',
+      '--format',
+      'table',
+    ])
+    expect(code).toBe(0)
+    expect(stdout).toContain('deleted')
+    expect(stdout).toContain('verification-')
+    expect(stdout).toContain('old1')
+  })
+
+  test('table output lists skipped files when a candidate hits a safety guard', async () => {
+    // A real old artifact plus a symlink named like an artifact; the symlink is a
+    // candidate (its resolved content is valid + old) but lstat marks it not-regular-file.
+    const work = await seedWork([{ id: 'real1', createdAt: '2020-01-01T00:00:00.000Z' }])
+    const dir = join(work, '.dbcli', 'verification')
+    const realName = 'verification-20200101-000000-real1.json'
+    const linkName = 'verification-20200101-000000-zlink.json'
+    await symlink(join(dir, realName), join(dir, linkName))
+
+    const { stdout, code } = await run(work, [
+      'verification',
+      'prune',
+      '--older-than',
+      '1d',
+      '--keep-latest',
+      '0',
+      '--execute',
+      '--force',
+      '--format',
+      'table',
+    ])
+    expect(code).toBe(0)
+    expect(stdout).toContain('skipped')
+    expect(stdout).toContain('not-regular-file')
+    expect(stdout).toContain(linkName)
   })
 })

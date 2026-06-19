@@ -156,7 +156,9 @@ function renderPruneTable(result: PruneResult): string {
     ],
     ['mode', 'cutoff', 'candidates', 'protected', 'deleted', 'skipped']
   )
-  if (result.dryRun && result.candidates.length > 0) {
+
+  if (result.dryRun) {
+    if (result.candidates.length === 0) return header
     const rows = result.candidates.map((c) => [
       c.createdAt ?? '(invalid)',
       c.status ?? '-',
@@ -167,7 +169,18 @@ function renderPruneTable(result: PruneResult): string {
     const body = renderTable(rows, ['createdAt', 'status', 'subject', 'id', 'filename'])
     return `${header}\n\ncandidates\n${body}`
   }
-  return header
+
+  // Execute mode: surface file-level accountability for what was deleted and skipped.
+  const sections = [header]
+  if (result.deleted.length > 0) {
+    const rows = result.deleted.map((d) => [d.id ?? '-', d.filename])
+    sections.push(`deleted\n${renderTable(rows, ['id', 'filename'])}`)
+  }
+  if (result.skipped.length > 0) {
+    const rows = result.skipped.map((s) => [s.reason, s.id ?? '-', s.filename])
+    sections.push(`skipped\n${renderTable(rows, ['reason', 'id', 'filename'])}`)
+  }
+  return sections.join('\n\n')
 }
 
 export const verificationCommand = new Command('verification').description(

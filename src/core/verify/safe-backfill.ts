@@ -1,0 +1,129 @@
+import type {
+  VerificationStatus,
+  VerificationSubject,
+  VerificationEvidenceRef,
+  VerificationArtifact,
+} from '@/core/verification'
+import { buildVerificationArtifact } from '@/core/verification'
+import type { QueryRiskOperation } from '@/types/query-risk'
+
+export type VerifyMode = 'preflight' | 'after-write'
+export type GuardName = 'blacklist' | 'schema' | 'plan' | 'verify-query-readonly'
+export type GuardStatus = 'passed' | 'failed'
+
+export interface GuardResult {
+  name: GuardName
+  status: GuardStatus
+  reason?: string
+}
+
+/** Result of one injected guard runner. `reason` is a bounded human-readable note on failure. */
+export interface GuardOutcome {
+  ok: boolean
+  reason?: string
+}
+
+/**
+ * Result of the injected assertion runner.
+ * - ran=false means the evaluator could not produce a trustworthy verdict (-> indeterminate).
+ * - pass is only meaningful when ran=true.
+ */
+export interface AssertionOutcome {
+  ran: boolean
+  pass?: boolean
+  reason?: string
+  auditRef?: string | null
+}
+
+export interface SafeBackfillInput {
+  table: string
+  query: string
+  verifyQuery: string
+  expect: string
+  afterWrite: boolean
+  format: 'table' | 'json'
+  subjectName?: string
+  summary?: string
+}
+
+const ALLOWED_FORMATS = ['table', 'json'] as const
+
+/** Thrown for malformed CLI input, before any guard runs or DB connection opens. */
+export class VerifyInputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VerifyInputError'
+    Object.setPrototypeOf(this, VerifyInputError.prototype)
+  }
+}
+
+function requireNonEmpty(value: unknown, flag: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new VerifyInputError(`${flag} is required and must be a non-empty string`)
+  }
+  return value.trim()
+}
+
+/** Validate and normalize raw CLI options into a typed SafeBackfillInput. */
+export function normalizeSafeBackfillInput(raw: Record<string, unknown>): SafeBackfillInput {
+  const table = requireNonEmpty(raw.table, '--table')
+  const query = requireNonEmpty(raw.query, '--query')
+  const verifyQuery = requireNonEmpty(raw.verifyQuery, '--verify-query')
+  const expect = requireNonEmpty(raw.expect, '--expect')
+
+  const format = (raw.format as string | undefined) ?? 'table'
+  if (!(ALLOWED_FORMATS as readonly string[]).includes(format)) {
+    throw new VerifyInputError(
+      `Invalid --format '${format}'. Allowed: ${ALLOWED_FORMATS.join(', ')}`
+    )
+  }
+
+  const subjectNameRaw = raw.subjectName as string | undefined
+  const summaryRaw = raw.summary as string | undefined
+
+  return {
+    table,
+    query,
+    verifyQuery,
+    expect,
+    afterWrite: raw.afterWrite === true,
+    format: format as 'table' | 'json',
+    ...(subjectNameRaw && subjectNameRaw.trim().length > 0
+      ? { subjectName: subjectNameRaw.trim() }
+      : {}),
+    ...(summaryRaw && summaryRaw.trim().length > 0 ? { summary: summaryRaw.trim() } : {}),
+  }
+}
+
+const READ_ONLY_OPERATIONS: readonly QueryRiskOperation[] = ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN']
+
+export function isReadOnlyOperation(op: QueryRiskOperation): boolean {
+  return READ_ONLY_OPERATIONS.includes(op)
+}
+
+export function isUpdateOperation(op: QueryRiskOperation): boolean {
+  return op === 'UPDATE'
+}
+
+/** Render the exact `--after-write` command an agent should run after the real backfill write. */
+export function buildAfterWriteCommand(input: SafeBackfillInput): string {
+  const parts = [
+    'dbcli verify safe-backfill',
+    `--table ${input.table}`,
+    `--query "${input.query}"`,
+    `--verify-query "${input.verifyQuery}"`,
+    `--expect "${input.expect}"`,
+  ]
+  if (input.subjectName) parts.push(`--subject-name ${input.subjectName}`)
+  parts.push('--after-write')
+  return parts.join(' ')
+}
+
+/** Build the v1 artifact subject for a safe-backfill result. Defaults name to the table. */
+export function buildSafeBackfillSubject(input: SafeBackfillInput): VerificationSubject {
+  return {
+    kind: 'backfill',
+    name: input.subjectName ?? input.table,
+    command: 'verify safe-backfill',
+  }
+}

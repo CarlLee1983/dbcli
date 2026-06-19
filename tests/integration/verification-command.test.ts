@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -350,5 +350,142 @@ describe('dbcli verification summary', () => {
     const j = JSON.parse(stdout)
     expect(j.counts.total).toBe(1)
     expect(j.latest.id).toBe('aaaa')
+  })
+})
+
+const DAY_MS = 24 * 60 * 60 * 1000
+function daysAgoISO(n: number): string {
+  return new Date(Date.now() - n * DAY_MS).toISOString()
+}
+
+describe('dbcli verification prune', () => {
+  test('dry-run is the default: reports candidates, deletes nothing, exit 0', async () => {
+    const work = await seedWork([
+      { id: 'old1', createdAt: daysAgoISO(100) },
+      { id: 'new1', createdAt: daysAgoISO(1) },
+    ])
+    const { stdout, code } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'json',
+    ])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.dryRun).toBe(true)
+    expect(j.storageDir).toContain('.dbcli/verification')
+    expect(j.candidates.map((c: { id: string }) => c.id)).toEqual(['old1'])
+    expect(j.deleted).toEqual([])
+    expect(j).toHaveProperty('protected')
+    expect(j).toHaveProperty('skipped')
+    expect(j).toHaveProperty('cutoff')
+  })
+
+  test('--execute without --force exits 1 and deletes nothing', async () => {
+    const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
+    const { code, stderr } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute',
+    ])
+    expect(code).toBe(1)
+    expect(stderr.toLowerCase()).toContain('force')
+    // Confirm nothing was deleted by re-listing.
+    const after = await run(work, ['verification', 'list', '--format', 'json'])
+    expect(JSON.parse(after.stdout).artifacts).toHaveLength(1)
+  })
+
+  test('--force without --execute performs dry-run only', async () => {
+    const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
+    const { stdout, code } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--force', '--format', 'json',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).dryRun).toBe(true)
+    const after = await run(work, ['verification', 'list', '--format', 'json'])
+    expect(JSON.parse(after.stdout).artifacts).toHaveLength(1)
+  })
+
+  test('--execute --force deletes only selected artifacts', async () => {
+    const work = await seedWork([
+      { id: 'old1', createdAt: daysAgoISO(100) },
+      { id: 'new1', createdAt: daysAgoISO(1) },
+    ])
+    const { stdout, code } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute', '--force', '--format', 'json',
+    ])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.dryRun).toBe(false)
+    expect(j.deleted.map((d: { id: string }) => d.id)).toEqual(['old1'])
+    const after = await run(work, ['verification', 'list', '--format', 'json'])
+    expect(after.stdout).not.toContain('"id": "old1"')
+    expect(after.stdout).toContain('"id": "new1"')
+  })
+
+  test('keep-latest protects newest by default', async () => {
+    const work = await seedWork([
+      { id: 'old1', createdAt: daysAgoISO(100) },
+      { id: 'old2', createdAt: daysAgoISO(90) },
+    ])
+    const { stdout } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '1', '--format', 'json',
+    ])
+    const j = JSON.parse(stdout)
+    expect(j.protected.map((p: { id: string }) => p.id)).toEqual(['old2'])
+    expect(j.candidates.map((c: { id: string }) => c.id)).toEqual(['old1'])
+  })
+
+  test('--status filters candidates', async () => {
+    const work = await seedWork([
+      { id: 'okk', createdAt: daysAgoISO(100), status: 'verified' },
+      { id: 'noo', createdAt: daysAgoISO(90), status: 'not_verified' },
+    ])
+    const { stdout } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--status', 'verified', '--format', 'json',
+    ])
+    expect(JSON.parse(stdout).candidates.map((c: { id: string }) => c.id)).toEqual(['okk'])
+  })
+
+  test('--include-invalid selects old malformed files', async () => {
+    const work = await seedWork([{ id: 'valid1', createdAt: daysAgoISO(100) }])
+    const broken = join(work, '.dbcli', 'verification', 'verification-broken.json')
+    await writeFile(broken, '{ not json', 'utf8')
+    const old = new Date(Date.now() - 100 * DAY_MS)
+    await utimes(broken, old, old)
+    const { stdout } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--include-invalid', '--format', 'json',
+    ])
+    const j = JSON.parse(stdout)
+    expect(j.candidates.some((c: { invalid: boolean; filename: string }) => c.invalid && c.filename === 'verification-broken.json')).toBe(true)
+  })
+
+  test('missing directory exits 0 with empty arrays', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
+    const { stdout, code } = await run(work, ['verification', 'prune', '--older-than', '30d', '--format', 'json'])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.candidates).toEqual([])
+    expect(j.protected).toEqual([])
+  })
+
+  test('missing --older-than exits 1', async () => {
+    const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
+    const { code, stderr } = await run(work, ['verification', 'prune', '--format', 'json'])
+    expect(code).toBe(1)
+    expect(stderr.toLowerCase()).toContain('older-than')
+  })
+
+  test('invalid --older-than exits 1', async () => {
+    const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
+    const { code, stderr } = await run(work, ['verification', 'prune', '--older-than', '1h'])
+    expect(code).toBe(1)
+    expect(stderr).toContain('1h')
+  })
+
+  test('table format prints the summary header', async () => {
+    const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
+    const { stdout, code } = await run(work, [
+      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'table',
+    ])
+    expect(code).toBe(0)
+    expect(stdout).toContain('mode')
+    expect(stdout).toContain('dry-run')
+    expect(stdout).toContain('candidates')
   })
 })

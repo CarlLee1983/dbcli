@@ -8,11 +8,16 @@ import {
   VERIFICATION_STATUSES,
   VERIFICATION_SUBJECT_KINDS,
   isVerificationSubjectKind,
+  pruneVerificationArtifacts,
+  parseOlderThanDays,
   type VerificationArtifactFilters,
   type VerificationArtifactRecord,
   type VerificationArtifactSummary,
   type VerificationStatus,
   type VerificationSubjectKind,
+  type VerificationSubject,
+  type PruneCriteria,
+  type PruneResult,
 } from '@/core/verification'
 import { validateFormat } from '@/utils/validation'
 
@@ -131,6 +136,40 @@ function renderSummaryTable(s: VerificationArtifactSummary): string {
   return lines.join('\n')
 }
 
+function pruneSubjectLabel(subject: VerificationSubject | null): string {
+  if (!subject) return '-'
+  return subject.name ? `${subject.kind}:${subject.name}` : subject.kind
+}
+
+function renderPruneTable(result: PruneResult): string {
+  const mode = result.dryRun ? 'dry-run' : 'execute'
+  const header = renderTable(
+    [
+      [
+        mode,
+        result.cutoff,
+        String(result.candidates.length),
+        String(result.protected.length),
+        String(result.deleted.length),
+        String(result.skipped.length),
+      ],
+    ],
+    ['mode', 'cutoff', 'candidates', 'protected', 'deleted', 'skipped']
+  )
+  if (result.dryRun && result.candidates.length > 0) {
+    const rows = result.candidates.map((c) => [
+      c.createdAt ?? '(invalid)',
+      c.status ?? '-',
+      pruneSubjectLabel(c.subject),
+      c.id ?? '-',
+      c.filename,
+    ])
+    const body = renderTable(rows, ['createdAt', 'status', 'subject', 'id', 'filename'])
+    return `${header}\n\ncandidates\n${body}`
+  }
+  return header
+}
+
 export const verificationCommand = new Command('verification').description(
   'Read-only inspection of verification artifacts under .dbcli/verification/'
 )
@@ -241,6 +280,70 @@ verificationCommand
         console.log(JSON.stringify(summary, null, 2))
       } else {
         console.log(renderSummaryTable(summary))
+      }
+    } catch (error) {
+      console.error((error as Error).message)
+      process.exit(1)
+    }
+  })
+
+verificationCommand
+  .command('prune')
+  .description(
+    'Preview or delete local verification artifacts by retention criteria (dry-run by default)'
+  )
+  .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')}`, 'json')
+  .option('--older-than <duration>', 'Minimum artifact age in whole days, e.g. 7d, 30d (required)')
+  .option('--keep-latest <n>', 'Always protect the latest N valid artifacts', String(DEFAULT_LIMIT))
+  .option('--status <status>', 'Select only valid artifacts with this status')
+  .option('--subject <kind:name>', 'Select only valid artifacts with this subject')
+  .option(
+    '--include-invalid',
+    'Allow malformed verification-*.json files to be selected by file mtime',
+    false
+  )
+  .option('--execute', 'Delete selected candidates instead of previewing (requires --force)', false)
+  .option('--force', 'Acknowledge deletion; required together with --execute', false)
+  .action(async (options: Record<string, unknown>) => {
+    try {
+      const format = options.format as string
+      validateFormat(format, ALLOWED_FORMATS, 'verification prune')
+
+      const olderThanRaw = options.olderThan as string | undefined
+      if (olderThanRaw === undefined) {
+        throw new Error('--older-than is required (e.g. --older-than 30d).')
+      }
+      const olderThanDays = parseOlderThanDays(olderThanRaw)
+
+      const rawKeep = parseInt(String(options.keepLatest ?? DEFAULT_LIMIT), 10)
+      const keepLatest = Number.isFinite(rawKeep) && rawKeep >= 0 ? rawKeep : DEFAULT_LIMIT
+
+      const execute = options.execute === true
+      const force = options.force === true
+      if (execute && !force) {
+        throw new Error('Refusing to delete without --force. Re-run with --execute --force.')
+      }
+
+      const filters = buildFilters({
+        status: options.status as string | undefined,
+        subject: options.subject as string | undefined,
+      })
+      const criteria: PruneCriteria = {
+        olderThanDays,
+        keepLatest,
+        includeInvalid: options.includeInvalid === true,
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.subject ? { subject: filters.subject } : {}),
+      }
+
+      const result = await pruneVerificationArtifacts(process.cwd(), criteria, {
+        execute: execute && force,
+      })
+
+      if (format === 'json') {
+        console.log(JSON.stringify(result, null, 2))
+      } else {
+        console.log(renderPruneTable(result))
       }
     } catch (error) {
       console.error((error as Error).message)

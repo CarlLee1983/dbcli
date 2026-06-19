@@ -221,12 +221,13 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
 ```
 
 <!-- doc-key: verification-inspect -->
-### verification — inspect verification artifacts (read-only)
+### verification — inspect & manage verification artifacts
 
-`dbcli verification` reads artifacts written under `<cwd>/.dbcli/verification/`.
-It never connects to a database, never writes audit entries, and never modifies
-artifacts. The storage root is the current working directory, independent of
-`--config`.
+`dbcli verification` works on artifacts written under `<cwd>/.dbcli/verification/`.
+It never connects to a database and never writes audit entries. `list`, `show`,
+and `summary` are read-only filesystem inspection; `prune` is a local lifecycle
+command that is dry-run by default and deletes files only with `--execute --force`.
+The storage root is the current working directory, independent of `--config`.
 
 - `dbcli verification list [--format json|table] [--limit <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid]`
   — list artifacts latest-first.
@@ -244,9 +245,12 @@ A missing `.dbcli/verification/` directory returns an empty result and exits `0`
 Malformed files are skipped during `list`/`summary` (surfaced via `--include-invalid`
 and the `summary` invalid count); selecting a malformed file with `show` exits `1`.
 
-`prune` is dry-run by default and protects the latest `--keep-latest` (default 20) valid
-artifacts. It deletes files only when both `--execute` and `--force` are given, and only
-regular `verification-*.json` files inside `.dbcli/verification/`.
+`prune` is dry-run by default. `--keep-latest` (default 20) always protects the
+newest N **valid** artifacts across all subjects and statuses **before** the
+`--status`/`--subject` filters are applied. `prune` deletes files only when both
+`--execute` and `--force` are given, and only regular `verification-*.json` files
+inside `.dbcli/verification/`; execute-mode table output lists each deleted and
+skipped file.
 
 ```bash
 dbcli verification summary --format json

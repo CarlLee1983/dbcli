@@ -1146,12 +1146,13 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 
 ### verification
 
-(v1.33.0+) Read-only command surface for inspecting **VerificationArtifact** files
-written by `assert --write-verification-artifact`. Reads `<cwd>/.dbcli/verification/`
-(always relative to the current working directory, regardless of `--config` location).
-Requires no database connection and performs no audit writes.
+(v1.33.0+) Local **VerificationArtifact** inspection and lifecycle surface over
+`<cwd>/.dbcli/verification/` (always relative to the current working directory,
+regardless of `--config` location). `list`, `show`, and `summary` are read-only;
+`prune` is a local lifecycle command — dry-run by default, deleting only with
+`--execute --force`. Requires no database connection and performs no audit writes.
 
-**Subcommands:** `list` · `show` · `summary`
+**Subcommands:** `list` · `show` · `summary` · `prune`
 
 #### `verification list`
 
@@ -1253,7 +1254,7 @@ dbcli verification prune --older-than 90d --status verified --keep-latest 50 --e
 | --- | --- | --- |
 | `--format <format>` | `json` | `json` or `table`. JSON is the authoritative contract. |
 | `--older-than <Nd>` | required | Minimum age in whole days (`7d`, `30d`, `365d`). |
-| `--keep-latest <n>` | `20` | Always protect the latest N valid artifacts. `0` protects none. |
+| `--keep-latest <n>` | `20` | Always protect the latest N valid artifacts across all subjects/statuses before filters. `0` protects none. |
 | `--status <status>` | none | Select only valid artifacts with this status. |
 | `--subject <kind:name>` | none | Select only valid artifacts with this subject. |
 | `--include-invalid` | `false` | Also select malformed `verification-*.json` files, by file mtime. |

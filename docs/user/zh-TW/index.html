@@ -328,8 +328,8 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
             <!-- doc-key: verification-inspect -->
-            <h3 id="verification-inspect">verification — 檢視驗證文物（唯讀）</h3>
-            <p class="text-text-muted mb-4"><code>dbcli verification</code> 讀取寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、不寫入稽核記錄、也不修改文物。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>
+            <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>
+            <p class="text-text-muted mb-4"><code>dbcli verification</code> 操作寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、也不寫入稽核記錄。<code>list</code>、<code>show</code>、<code>summary</code> 為唯讀的檔案系統檢視；<code>prune</code> 為本機生命週期指令，預設為 dry-run，僅在帶上 <code>--execute --force</code> 時才刪除檔案。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>
             <ul class="mb-4">
                 <li><code>dbcli verification list [--format json|table] [--limit &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid]</code> — 依最新優先列出文物。</li>
                 <li><code>dbcli verification show &lt;id-or-path&gt; [--format json|table]</code> — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。</li>
@@ -338,7 +338,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             </ul>
             <p class="mb-2">狀態值：<code>verified</code>、<code>not_verified</code>、<code>indeterminate</code>、<code>blocked</code>。<br>Subject kind：<code>recovery</code>、<code>task-pack</code>、<code>assertion</code>、<code>migration</code>、<code>backfill</code>、<code>manual</code>。</p>
             <p class="mb-4">若 <code>.dbcli/verification/</code> 目錄不存在，回傳空結果並以 <code>0</code> 退出。<code>list</code>/<code>summary</code> 執行時會略過格式有誤的檔案（可透過 <code>--include-invalid</code> 及 <code>summary</code> 的無效計數觀察）；對格式有誤的檔案執行 <code>show</code> 時，會以 <code>1</code> 退出。</p>
-            <p class="mb-4"><code>prune</code> 預設為 dry-run，並保護最新的 <code>--keep-latest</code>（預設 20）筆有效產物。只有同時帶上 <code>--execute</code> 與 <code>--force</code> 時才會刪除，且僅刪除 <code>.dbcli/verification/</code> 內符合 <code>verification-*.json</code> 的一般檔案。</p>
+            <p class="mb-4"><code>prune</code> 預設為 dry-run。<code>--keep-latest</code>（預設 20）一律保護最新的 N 筆<strong>有效</strong>文物，範圍涵蓋所有 subject 與 status，且在套用 <code>--status</code>/<code>--subject</code> 篩選<strong>之前</strong>先行保護。只有同時帶上 <code>--execute</code> 與 <code>--force</code> 時才會刪除，且僅刪除 <code>.dbcli/verification/</code> 內符合 <code>verification-*.json</code> 的一般檔案；execute 模式的表格輸出會逐一列出已刪除與略過的檔案。</p>
             <pre><code>dbcli verification summary --format json
 dbcli verification list --status verified --subject backfill:safe-backfill-verify
 dbcli verification show ver_abcd --format json

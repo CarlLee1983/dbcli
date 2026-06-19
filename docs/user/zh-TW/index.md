@@ -221,11 +221,12 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
 ```
 
 <!-- doc-key: verification-inspect -->
-### verification — 檢視驗證文物（唯讀）
+### verification — 檢視與管理驗證文物
 
-`dbcli verification` 讀取寫入於 `<cwd>/.dbcli/verification/` 下的文物。
-它不連線資料庫、不寫入稽核記錄、也不修改文物。
-儲存根目錄為目前工作目錄，與 `--config` 位置無關。
+`dbcli verification` 操作寫入於 `<cwd>/.dbcli/verification/` 下的文物。
+它不連線資料庫、也不寫入稽核記錄。`list`、`show`、`summary` 為唯讀的檔案系統檢視;
+`prune` 為本機生命週期指令,預設為 dry-run,僅在帶上 `--execute --force` 時才刪除檔案。
+儲存根目錄為目前工作目錄,與 `--config` 位置無關。
 
 - `dbcli verification list [--format json|table] [--limit <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid]`
   — 依最新優先列出文物。
@@ -242,9 +243,10 @@ Subject kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`
 若 `.dbcli/verification/` 目錄不存在，回傳空結果並以 `0` 退出。
 `list`/`summary` 執行時會略過格式有誤的檔案（可透過 `--include-invalid` 及 `summary` 的無效計數觀察）；對格式有誤的檔案執行 `show` 時，會以 `1` 退出。
 
-`prune` 預設為 dry-run，並保護最新的 `--keep-latest`（預設 20）筆有效產物。只有同時帶上
-`--execute` 與 `--force` 時才會刪除，且僅刪除 `.dbcli/verification/` 內符合 `verification-*.json`
-的一般檔案。
+`prune` 預設為 dry-run。`--keep-latest`(預設 20)一律保護最新的 N 筆**有效**文物,
+範圍涵蓋所有 subject 與 status,且在套用 `--status`/`--subject` 篩選**之前**先行保護。
+只有同時帶上 `--execute` 與 `--force` 時才會刪除,且僅刪除 `.dbcli/verification/`
+內符合 `verification-*.json` 的一般檔案;execute 模式的表格輸出會逐一列出已刪除與略過的檔案。
 
 ```bash
 dbcli verification summary --format json

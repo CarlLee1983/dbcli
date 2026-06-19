@@ -152,9 +152,9 @@ Developer workflow guardrails:
 - Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
 - Do not print credentials, copied connection strings, or blacklisted values.
 - To persist result evidence for a read-back assertion, run `assert ... --write-verification-artifact --verification-subject <kind:name>` (kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`).
-- Inspect verification evidence (read-only): `dbcli verification summary --format json`
-  (also `verification list` / `verification show <id>`). Reads `.dbcli/verification/`;
-  no DB connection, no audit writes.
+- Inspect result evidence (read-only): `dbcli verification summary --format json`
+  (also `verification list` / `verification show <id>`). Reclaim old artifacts with
+  `dbcli verification prune --older-than 30d` (dry-run; add `--execute --force` to delete).
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 

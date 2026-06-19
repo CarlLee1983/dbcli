@@ -157,6 +157,36 @@ describe('selectPrunePlan', () => {
     const plan = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, new Map())
     expect(plan.candidates).toEqual([])
   })
+
+  test('keep-latest protects the newest artifact globally before status filter applies', () => {
+    // Newest is not_verified; a status-scoped prune still protects it via keep-latest.
+    const read_result: ReadVerificationArtifactsResult = {
+      storageDir: '/repo/.dbcli/verification',
+      artifacts: [
+        rec('newest', '2026-06-19T05:00:00.000Z', { status: 'not_verified' }),
+        rec('mid', '2026-06-18T05:00:00.000Z', { status: 'verified' }),
+        rec('old', '2026-06-17T05:00:00.000Z', { status: 'verified' }),
+      ],
+      invalid: [],
+    }
+    const criteria: PruneCriteria = {
+      olderThanDays: 1,
+      keepLatest: 1,
+      status: 'verified',
+      includeInvalid: false,
+    }
+    // Cutoff far in the future so every artifact is age-eligible; only protection differs.
+    const cutoffMs = Date.parse('2999-01-01T00:00:00.000Z')
+
+    const plan = selectPrunePlan(read_result, criteria, cutoffMs, new Map())
+
+    // keep-latest 1 protects the newest globally, even though it fails the status filter.
+    expect(plan.protected.map((p) => p.id)).toEqual(['newest'])
+    // The status filter then applies to the unprotected remainder.
+    expect(plan.candidates.map((c) => c.id)).toEqual(['mid', 'old'])
+    // The globally protected newest is never selected for deletion.
+    expect(plan.candidates.some((c) => c.id === 'newest')).toBe(false)
+  })
 })
 
 import { mkdtemp, mkdir, writeFile, utimes, symlink, stat, lstat } from 'node:fs/promises'

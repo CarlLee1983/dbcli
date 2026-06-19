@@ -184,7 +184,7 @@ function renderPruneTable(result: PruneResult): string {
 }
 
 export const verificationCommand = new Command('verification').description(
-  'Read-only inspection of verification artifacts under .dbcli/verification/'
+  'Inspect and manage local verification artifacts under .dbcli/verification/'
 )
 
 verificationCommand
@@ -307,7 +307,11 @@ verificationCommand
   )
   .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')}`, 'json')
   .option('--older-than <duration>', 'Minimum artifact age in whole days, e.g. 7d, 30d (required)')
-  .option('--keep-latest <n>', 'Always protect the latest N valid artifacts', String(DEFAULT_LIMIT))
+  .option(
+    '--keep-latest <n>',
+    'Always protect the latest N valid artifacts across all subjects/statuses before filters',
+    String(DEFAULT_LIMIT)
+  )
   .option('--status <status>', 'Select only valid artifacts with this status')
   .option('--subject <kind:name>', 'Select only valid artifacts with this subject')
   .option(

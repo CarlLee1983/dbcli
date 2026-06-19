@@ -584,3 +584,24 @@ describe('dbcli verification prune execute-mode table detail', () => {
     expect(stdout).toContain(linkName)
   })
 })
+
+describe('dbcli verification --help wording', () => {
+  test('parent help describes inspection + lifecycle, not globally read-only', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-vhelp-'))
+    const { stdout, code } = await run(work, ['verification', '--help'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('Inspect and manage local verification artifacts')
+    expect(stdout).not.toContain('Read-only inspection of verification artifacts')
+  })
+
+  test('prune --help states keep-latest is global before filters', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-vhelp-'))
+    const { stdout, code } = await run(work, ['verification', 'prune', '--help'])
+    expect(code).toBe(0)
+    // commander wraps the option help, so assert the distinctive phrase that
+    // renders intact on one line rather than the full wrapped string. Also
+    // assert 'across' so the wrapped word cannot silently disappear.
+    expect(stdout).toContain('across')
+    expect(stdout).toContain('all subjects/statuses before filters')
+  })
+})

@@ -6,6 +6,10 @@ import {
   buildAfterWriteCommand,
   buildSafeBackfillSubject,
   VerifyInputError,
+  runSafeBackfillPreflight,
+  type SafeBackfillRunners,
+  type GuardOutcome,
+  type AssertionOutcome,
 } from '@/core/verify/safe-backfill'
 
 const RAW = {
@@ -93,5 +97,73 @@ describe('buildSafeBackfillSubject', () => {
       normalizeSafeBackfillInput({ ...RAW, subjectName: 'nightly' })
     )
     expect(s.name).toBe('nightly')
+  })
+})
+
+const PRE_RAW = {
+  table: 'users',
+  query: "UPDATE users SET status = 1 WHERE status IS NULL",
+  verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE status IS NULL',
+  expect: 'value == 0',
+}
+
+function passingRunners(over: Partial<SafeBackfillRunners> = {}): SafeBackfillRunners {
+  const ok = async (): Promise<GuardOutcome> => ({ ok: true })
+  const assertOk = async (): Promise<AssertionOutcome> => ({ ran: true, pass: true })
+  return {
+    blacklistGuard: ok,
+    schemaGuard: ok,
+    planGuard: ok,
+    verifyReadonlyGuard: ok,
+    runAssertion: assertOk,
+    ...over,
+  }
+}
+
+describe('runSafeBackfillPreflight', () => {
+  test('all guards pass -> ready, four guard results, after-write command present', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW })
+    const result = await runSafeBackfillPreflight(input, passingRunners())
+    expect(result.status).toBe('ready')
+    expect(result.mode).toBe('preflight')
+    expect(result.guards.map((g) => g.name)).toEqual([
+      'blacklist',
+      'schema',
+      'plan',
+      'verify-query-readonly',
+    ])
+    expect(result.guards.every((g) => g.status === 'passed')).toBe(true)
+    expect(result.afterWriteCommand).toContain('--after-write')
+  })
+
+  test('a failing guard short-circuits, returns blocked with a bounded reason', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW })
+    const result = await runSafeBackfillPreflight(
+      input,
+      passingRunners({
+        schemaGuard: async () => ({ ok: false, reason: "Table 'users' does not exist" }),
+      })
+    )
+    expect(result.status).toBe('blocked')
+    // blacklist passed, schema failed, plan + readonly never ran (short-circuit).
+    expect(result.guards.map((g) => g.name)).toEqual(['blacklist', 'schema'])
+    const schema = result.guards.find((g) => g.name === 'schema')
+    expect(schema?.status).toBe('failed')
+    expect(schema?.reason).toContain('does not exist')
+  })
+
+  test('preflight never invokes the assertion runner', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW })
+    let called = false
+    await runSafeBackfillPreflight(
+      input,
+      passingRunners({
+        runAssertion: async () => {
+          called = true
+          return { ran: true, pass: true }
+        },
+      })
+    )
+    expect(called).toBe(false)
   })
 })

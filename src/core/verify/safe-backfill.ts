@@ -127,3 +127,67 @@ export function buildSafeBackfillSubject(input: SafeBackfillInput): Verification
     command: 'verify safe-backfill',
   }
 }
+
+export interface SafeBackfillRunners {
+  blacklistGuard: (table: string) => Promise<GuardOutcome>
+  schemaGuard: (table: string) => Promise<GuardOutcome>
+  planGuard: (query: string) => Promise<GuardOutcome>
+  verifyReadonlyGuard: (verifyQuery: string) => Promise<GuardOutcome>
+  runAssertion: (input: SafeBackfillInput) => Promise<AssertionOutcome>
+}
+
+export interface PreflightResult {
+  scenario: 'safe-backfill'
+  mode: 'preflight'
+  status: 'ready' | 'blocked'
+  table: string
+  guards: GuardResult[]
+  afterWriteCommand: string
+}
+
+/**
+ * Run the four read-only guards in order, stopping at the first failure.
+ * The returned array contains only the guards that actually ran, so callers can
+ * see exactly which guard blocked the scenario.
+ */
+async function runGuards(
+  input: SafeBackfillInput,
+  runners: SafeBackfillRunners
+): Promise<GuardResult[]> {
+  const sequence: Array<[GuardName, () => Promise<GuardOutcome>]> = [
+    ['blacklist', () => runners.blacklistGuard(input.table)],
+    ['schema', () => runners.schemaGuard(input.table)],
+    ['plan', () => runners.planGuard(input.query)],
+    ['verify-query-readonly', () => runners.verifyReadonlyGuard(input.verifyQuery)],
+  ]
+  const results: GuardResult[] = []
+  for (const [name, run] of sequence) {
+    const outcome = await run()
+    results.push({
+      name,
+      status: outcome.ok ? 'passed' : 'failed',
+      ...(outcome.reason ? { reason: outcome.reason } : {}),
+    })
+    if (!outcome.ok) break
+  }
+  return results
+}
+
+function allGuardsPassed(guards: GuardResult[]): boolean {
+  return guards.length === 4 && guards.every((g) => g.status === 'passed')
+}
+
+export async function runSafeBackfillPreflight(
+  input: SafeBackfillInput,
+  runners: SafeBackfillRunners
+): Promise<PreflightResult> {
+  const guards = await runGuards(input, runners)
+  return {
+    scenario: 'safe-backfill',
+    mode: 'preflight',
+    status: allGuardsPassed(guards) ? 'ready' : 'blocked',
+    table: input.table,
+    guards,
+    afterWriteCommand: buildAfterWriteCommand(input),
+  }
+}

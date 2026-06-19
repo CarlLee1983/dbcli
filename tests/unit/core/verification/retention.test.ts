@@ -160,7 +160,7 @@ describe('selectPrunePlan', () => {
 
   test('keep-latest protects the newest artifact globally before status filter applies', () => {
     // Newest is not_verified; a status-scoped prune still protects it via keep-latest.
-    const read_result: ReadVerificationArtifactsResult = {
+    const readResult: ReadVerificationArtifactsResult = {
       storageDir: '/repo/.dbcli/verification',
       artifacts: [
         rec('newest', '2026-06-19T05:00:00.000Z', { status: 'not_verified' }),
@@ -178,7 +178,7 @@ describe('selectPrunePlan', () => {
     // Cutoff far in the future so every artifact is age-eligible; only protection differs.
     const cutoffMs = Date.parse('2999-01-01T00:00:00.000Z')
 
-    const plan = selectPrunePlan(read_result, criteria, cutoffMs, new Map())
+    const plan = selectPrunePlan(readResult, criteria, cutoffMs, new Map())
 
     // keep-latest 1 protects the newest globally, even though it fails the status filter.
     expect(plan.protected.map((p) => p.id)).toEqual(['newest'])

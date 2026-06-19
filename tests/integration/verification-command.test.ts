@@ -582,6 +582,8 @@ describe('dbcli verification prune execute-mode table detail', () => {
     expect(stdout).toContain('skipped')
     expect(stdout).toContain('not-regular-file')
     expect(stdout).toContain(linkName)
+    // The real artifact in the same run is still deleted while the symlink is spared.
+    expect(stdout).toContain('real1')
   })
 })
 

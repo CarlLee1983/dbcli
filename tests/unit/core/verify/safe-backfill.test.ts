@@ -283,6 +283,17 @@ describe('runSafeBackfillPreflight', () => {
     )
     expect(called).toBe(false)
   })
+
+  test('guard order is exactly blacklist, schema, plan, verify-query-readonly (regression lock)', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW })
+    const result = await runSafeBackfillPreflight(input, passingRunners())
+    expect(result.guards.map((g) => g.name)).toEqual([
+      'blacklist',
+      'schema',
+      'plan',
+      'verify-query-readonly',
+    ])
+  })
 })
 
 const FIXED = {

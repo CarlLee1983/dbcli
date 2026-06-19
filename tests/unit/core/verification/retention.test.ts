@@ -158,3 +158,167 @@ describe('selectPrunePlan', () => {
     expect(plan.candidates).toEqual([])
   })
 })
+
+import { mkdtemp, mkdir, writeFile, utimes, symlink, stat, lstat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  pruneVerificationArtifacts,
+  isInsideStorageDir,
+  hasArtifactFilename,
+  VERIFICATION_DIR_RELATIVE,
+} from '@/core/verification'
+
+const NOW = Date.parse('2026-06-19T00:00:00.000Z')
+const OLD = '2026-01-01T00:00:00.000Z' // ~170d before NOW
+const RECENT = '2026-06-18T00:00:00.000Z' // 1d before NOW
+
+async function seedRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'dbcli-prune-'))
+  await mkdir(join(root, VERIFICATION_DIR_RELATIVE), { recursive: true })
+  return root
+}
+
+async function writeArtifact(root: string, id: string, createdAt: string, over: object = {}): Promise<string> {
+  const file = join(root, VERIFICATION_DIR_RELATIVE, `verification-${id}.json`)
+  const artifact = {
+    schemaVersion: 1,
+    id,
+    createdAt,
+    status: 'verified',
+    subject: { kind: 'backfill', name: 'safe-backfill-verify' },
+    summary: 'ok',
+    evidence: [{ kind: 'assert', exitCode: 0 }],
+    ...over,
+  }
+  await writeFile(file, JSON.stringify(artifact), 'utf8')
+  return file
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+describe('isInsideStorageDir / hasArtifactFilename', () => {
+  test('rejects traversal and non-artifact filenames', () => {
+    const dir = '/repo/.dbcli/verification'
+    expect(isInsideStorageDir(dir, '/repo/.dbcli/verification/verification-a.json')).toBe(true)
+    expect(isInsideStorageDir(dir, '/repo/.dbcli/verification/../../etc/passwd')).toBe(false)
+    expect(isInsideStorageDir(dir, '/repo/.dbcli/other/verification-a.json')).toBe(false)
+    expect(hasArtifactFilename('/repo/.dbcli/verification/verification-a.json')).toBe(true)
+    expect(hasArtifactFilename('/repo/.dbcli/verification/notes.json')).toBe(false)
+    expect(hasArtifactFilename('/repo/.dbcli/verification/verification-a.txt')).toBe(false)
+  })
+})
+
+describe('pruneVerificationArtifacts', () => {
+  test('missing directory yields an empty result, exit-safe', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
+    const result = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 20, includeInvalid: false },
+      { execute: false, nowMs: NOW }
+    )
+    expect(result.dryRun).toBe(true)
+    expect(result.candidates).toEqual([])
+    expect(result.protected).toEqual([])
+    expect(result.deleted).toEqual([])
+    expect(result.skipped).toEqual([])
+    expect(result.cutoff).toBe('2026-05-20T00:00:00.000Z')
+    expect(result.storageDir).toContain('.dbcli/verification')
+  })
+
+  test('dry-run reports candidates and deletes nothing', async () => {
+    const root = await seedRoot()
+    const oldFile = await writeArtifact(root, 'old', OLD)
+    const newFile = await writeArtifact(root, 'new', RECENT)
+    const result = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: false },
+      { execute: false, nowMs: NOW }
+    )
+    expect(result.dryRun).toBe(true)
+    expect(result.candidates.map((c) => c.id)).toEqual(['old'])
+    expect(result.deleted).toEqual([])
+    expect(await exists(oldFile)).toBe(true)
+    expect(await exists(newFile)).toBe(true)
+  })
+
+  test('execute deletes only selected candidates', async () => {
+    const root = await seedRoot()
+    const oldFile = await writeArtifact(root, 'old', OLD)
+    const newFile = await writeArtifact(root, 'new', RECENT)
+    const result = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: false },
+      { execute: true, nowMs: NOW }
+    )
+    expect(result.dryRun).toBe(false)
+    expect(result.candidates).toEqual([])
+    expect(result.deleted.map((d) => d.id)).toEqual(['old'])
+    expect(result.skipped).toEqual([])
+    expect(await exists(oldFile)).toBe(false)
+    expect(await exists(newFile)).toBe(true)
+  })
+
+  test('keep-latest protects the newest valid artifacts even in execute mode', async () => {
+    const root = await seedRoot()
+    const f1 = await writeArtifact(root, 'old1', '2026-01-01T00:00:00.000Z')
+    const f2 = await writeArtifact(root, 'old2', '2026-01-02T00:00:00.000Z')
+    await writeArtifact(root, 'old3', '2026-01-03T00:00:00.000Z')
+    const result = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 2, includeInvalid: false },
+      { execute: true, nowMs: NOW }
+    )
+    expect(result.protected.map((p) => p.id).sort()).toEqual(['old2', 'old3'])
+    expect(result.deleted.map((d) => d.id)).toEqual(['old1'])
+    expect(await exists(f1)).toBe(false)
+    expect(await exists(f2)).toBe(true)
+  })
+
+  test('include-invalid selects old malformed files by mtime', async () => {
+    const root = await seedRoot()
+    await writeArtifact(root, 'valid', OLD)
+    const broken = join(root, VERIFICATION_DIR_RELATIVE, 'verification-broken.json')
+    await writeFile(broken, '{ not json', 'utf8')
+    const oldSeconds = OLD // utimes accepts a Date
+    await utimes(broken, new Date(oldSeconds), new Date(oldSeconds))
+
+    const off = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: false },
+      { execute: false, nowMs: NOW }
+    )
+    expect(off.candidates.some((c) => c.invalid)).toBe(false)
+
+    const on = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: true },
+      { execute: false, nowMs: NOW }
+    )
+    expect(on.candidates.some((c) => c.invalid && c.filename === 'verification-broken.json')).toBe(true)
+  })
+
+  test('symlinks inside the storage dir are skipped, not deleted', async () => {
+    const root = await seedRoot()
+    const real = await writeArtifact(root, 'old', OLD)
+    const link = join(root, VERIFICATION_DIR_RELATIVE, 'verification-link.json')
+    await symlink(real, link)
+    const result = await pruneVerificationArtifacts(
+      root,
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: false },
+      { execute: true, nowMs: NOW }
+    )
+    // Both the real file and the symlink read as valid (readFile follows links).
+    expect(result.deleted.map((d) => d.filename)).toContain('verification-old.json')
+    const skippedLink = result.skipped.find((s) => s.filename === 'verification-link.json')
+    expect(skippedLink?.reason).toBe('not-regular-file')
+    expect((await lstat(link)).isSymbolicLink()).toBe(true) // entry still present (now dangling)
+  })
+})

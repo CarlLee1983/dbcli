@@ -1,9 +1,12 @@
+import { lstat, unlink } from 'node:fs/promises'
+import { basename, resolve, sep } from 'node:path'
 import type {
   VerificationStatus,
   VerificationSubject,
   VerificationSubjectKind,
 } from './types'
 import {
+  readVerificationArtifacts,
   filterVerificationArtifacts,
   type ReadVerificationArtifactsResult,
 } from './reader'
@@ -156,4 +159,131 @@ export function selectPrunePlan(
     : []
 
   return { protected: protectedRecords, candidates: [...validCandidates, ...invalidCandidates] }
+}
+
+/** Bound any single-line error message to a short, log-safe length. */
+function boundError(message: string): string {
+  const single = message.replace(/\s+/g, ' ').trim()
+  return single.length <= 200 ? single : single.slice(0, 199) + '…'
+}
+
+/** True when `candidatePath` resolves to a location inside `storageDir`. */
+export function isInsideStorageDir(storageDir: string, candidatePath: string): boolean {
+  const resolved = resolve(candidatePath)
+  return resolved === storageDir || resolved.startsWith(storageDir + sep)
+}
+
+/** True when the basename matches the `verification-*.json` artifact pattern. */
+export function hasArtifactFilename(candidatePath: string): boolean {
+  return /^verification-.*\.json$/.test(basename(candidatePath))
+}
+
+/**
+ * Delete one candidate behind time-of-use safety guards. Never follows symlinks
+ * (uses lstat) and never deletes anything but a regular `verification-*.json`
+ * file inside the storage dir. Returns a skip reason instead of throwing.
+ */
+async function safeDeleteCandidate(
+  storageDir: string,
+  candidate: PruneCandidate
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const resolved = resolve(candidate.path)
+  if (!isInsideStorageDir(storageDir, resolved)) return { ok: false, reason: 'outside-storage-dir' }
+  if (!hasArtifactFilename(resolved)) return { ok: false, reason: 'filename-mismatch' }
+
+  let stats
+  try {
+    stats = await lstat(resolved)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: 'missing' }
+    return { ok: false, reason: boundError((e as Error).message) }
+  }
+  if (!stats.isFile()) return { ok: false, reason: 'not-regular-file' }
+
+  try {
+    await unlink(resolved)
+    return { ok: true }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: 'missing' }
+    return { ok: false, reason: boundError((e as Error).message) }
+  }
+}
+
+/**
+ * Preview (dry-run) or delete local verification artifacts by retention criteria.
+ * Deletion only happens when `options.execute` is true; the CLI is responsible
+ * for enforcing the `--execute`/`--force` double guard before setting it.
+ */
+export async function pruneVerificationArtifacts(
+  storageRoot: string,
+  criteria: PruneCriteria,
+  options: PruneOptions
+): Promise<PruneResult> {
+  const nowMs = options.nowMs ?? Date.now()
+  const cutoffMs = computeCutoffMs(nowMs, criteria.olderThanDays)
+  const cutoff = new Date(cutoffMs).toISOString()
+
+  const read = await readVerificationArtifacts(storageRoot)
+
+  const invalidMtimes = new Map<string, number>()
+  if (criteria.includeInvalid) {
+    for (const r of read.invalid) {
+      try {
+        const stats = await lstat(r.path)
+        invalidMtimes.set(r.path, stats.mtimeMs)
+      } catch {
+        // Unreadable invalid file: leave it out so it can never be selected.
+      }
+    }
+  }
+
+  const plan = selectPrunePlan(read, criteria, cutoffMs, invalidMtimes)
+
+  const resultCriteria: PruneResult['criteria'] = {
+    olderThanDays: criteria.olderThanDays,
+    keepLatest: criteria.keepLatest,
+    includeInvalid: criteria.includeInvalid,
+    ...(criteria.status ? { status: criteria.status } : {}),
+    ...(criteria.subject ? { subject: criteria.subject } : {}),
+  }
+
+  if (!options.execute) {
+    return {
+      storageDir: read.storageDir,
+      dryRun: true,
+      cutoff,
+      criteria: resultCriteria,
+      protected: plan.protected,
+      candidates: plan.candidates,
+      deleted: [],
+      skipped: [],
+    }
+  }
+
+  const deleted: PruneDeleted[] = []
+  const skipped: PruneSkipped[] = []
+  for (const candidate of plan.candidates) {
+    const outcome = await safeDeleteCandidate(read.storageDir, candidate)
+    if (outcome.ok) {
+      deleted.push({ path: candidate.path, filename: candidate.filename, id: candidate.id })
+    } else {
+      skipped.push({
+        path: candidate.path,
+        filename: candidate.filename,
+        id: candidate.id,
+        reason: outcome.reason,
+      })
+    }
+  }
+
+  return {
+    storageDir: read.storageDir,
+    dryRun: false,
+    cutoff,
+    criteria: resultCriteria,
+    protected: plan.protected,
+    candidates: [],
+    deleted,
+    skipped,
+  }
 }

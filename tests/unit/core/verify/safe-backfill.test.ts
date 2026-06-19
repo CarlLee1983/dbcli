@@ -7,6 +7,7 @@ import {
   buildSafeBackfillSubject,
   VerifyInputError,
   runSafeBackfillPreflight,
+  runSafeBackfillAfterWrite,
   type SafeBackfillRunners,
   type GuardOutcome,
   type AssertionOutcome,
@@ -165,5 +166,91 @@ describe('runSafeBackfillPreflight', () => {
       })
     )
     expect(called).toBe(false)
+  })
+})
+
+const FIXED = {
+  now: () => new Date('2026-06-19T00:00:00.000Z'),
+  idFactory: () => 'ver_fixed_0001',
+}
+
+describe('runSafeBackfillAfterWrite', () => {
+  test('guards pass + assertion pass -> verified, assert evidence exitCode 0', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
+    expect(result.status).toBe('verified')
+    expect(result.assertion).toEqual({ expect: 'value == 0', passed: true })
+    expect(result.artifact.status).toBe('verified')
+    expect(result.artifact.subject).toEqual({
+      kind: 'backfill',
+      name: 'users',
+      command: 'verify safe-backfill',
+    })
+    const kinds = result.artifact.evidence.map((e) => e.kind)
+    expect(kinds).toContain('task-pack-plan')
+    expect(kinds).toContain('assert')
+    const assertEv = result.artifact.evidence.find((e) => e.kind === 'assert')
+    expect(assertEv?.exitCode).toBe(0)
+  })
+
+  test('guards pass + assertion fail -> not_verified, assert evidence exitCode 1', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(
+      input,
+      passingRunners({ runAssertion: async () => ({ ran: true, pass: false }) }),
+      FIXED
+    )
+    expect(result.status).toBe('not_verified')
+    expect(result.assertion).toEqual({ expect: 'value == 0', passed: false })
+    expect(result.artifact.status).toBe('not_verified')
+    const assertEv = result.artifact.evidence.find((e) => e.kind === 'assert')
+    expect(assertEv?.exitCode).toBe(1)
+  })
+
+  test('failing guard -> blocked, artifact has blockedReason and no assert evidence', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(
+      input,
+      passingRunners({
+        planGuard: async () => ({ ok: false, reason: 'plan blocked the write (no WHERE)' }),
+      }),
+      FIXED
+    )
+    expect(result.status).toBe('blocked')
+    expect(result.blockedReason).toContain('plan blocked the write')
+    expect(result.artifact.status).toBe('blocked')
+    expect(result.artifact.blockedReason).toContain('plan blocked the write')
+    expect(result.artifact.evidence.some((e) => e.kind === 'assert')).toBe(false)
+    expect(result.assertion).toBeUndefined()
+  })
+
+  test('assertion engine error (ran=false) -> indeterminate', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(
+      input,
+      passingRunners({
+        runAssertion: async () => ({ ran: false, reason: 'assert shape error: no scalar column' }),
+      }),
+      FIXED
+    )
+    expect(result.status).toBe('indeterminate')
+    expect(result.artifact.status).toBe('indeterminate')
+    expect(result.assertion).toBeUndefined()
+  })
+
+  test('--subject-name overrides the artifact subject name', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true, subjectName: 'nightly' })
+    const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
+    expect(result.artifact.subject.name).toBe('nightly')
+  })
+
+  test('evidence carries no raw rows or connection details', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
+    const blob = JSON.stringify(result.artifact.evidence)
+    expect(blob).not.toContain('password')
+    expect(blob).not.toContain('5432')
+    // Only the assertion label is recorded, never executed result rows.
+    expect(blob).not.toMatch(/"rows"\s*:/)
   })
 })

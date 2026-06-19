@@ -191,3 +191,102 @@ export async function runSafeBackfillPreflight(
     afterWriteCommand: buildAfterWriteCommand(input),
   }
 }
+
+export interface AfterWriteResult {
+  scenario: 'safe-backfill'
+  mode: 'after-write'
+  status: VerificationStatus
+  table: string
+  guards: GuardResult[]
+  assertion?: { expect: string; passed: boolean }
+  artifact: VerificationArtifact
+  blockedReason?: string
+}
+
+const TASK_PACK_EVIDENCE: VerificationEvidenceRef = {
+  kind: 'task-pack-plan',
+  taskName: 'safe-backfill-verify',
+  note: 'Preflight guards ran before read-back verification.',
+}
+
+function defaultSummary(status: VerificationStatus, table: string): string {
+  switch (status) {
+    case 'verified':
+      return `Read-back assertion verified the backfill outcome on ${table}.`
+    case 'not_verified':
+      return `Read-back assertion did not match the expected outcome on ${table}.`
+    case 'blocked':
+      return `Safe-backfill verification was blocked before the read-back assertion on ${table}.`
+    default:
+      return `Safe-backfill verification could not produce a trustworthy verdict on ${table}.`
+  }
+}
+
+export async function runSafeBackfillAfterWrite(
+  input: SafeBackfillInput,
+  runners: SafeBackfillRunners,
+  clock: { now?: () => Date; idFactory?: () => string } = {}
+): Promise<AfterWriteResult> {
+  const subject = buildSafeBackfillSubject(input)
+  const guards = await runGuards(input, runners)
+
+  // Blocked: a required guard failed. Persist a bounded artifact with no assert evidence.
+  if (!allGuardsPassed(guards)) {
+    const failed = guards.find((g) => g.status === 'failed')
+    const blockedReason = failed?.reason ?? 'A required guard failed before the read-back assertion.'
+    const artifact = buildVerificationArtifact({
+      status: 'blocked',
+      subject,
+      summary: input.summary ?? defaultSummary('blocked', input.table),
+      evidence: [TASK_PACK_EVIDENCE],
+      blockedReason,
+      now: clock.now,
+      idFactory: clock.idFactory,
+    })
+    return {
+      scenario: 'safe-backfill',
+      mode: 'after-write',
+      status: 'blocked',
+      table: input.table,
+      guards,
+      artifact,
+      blockedReason,
+    }
+  }
+
+  // Guards passed: run the read-back assertion and map its verdict.
+  const outcome = await runners.runAssertion(input)
+  const status: VerificationStatus = !outcome.ran
+    ? 'indeterminate'
+    : outcome.pass
+      ? 'verified'
+      : 'not_verified'
+
+  const assertEvidence: VerificationEvidenceRef = {
+    kind: 'assert',
+    command: `assert "${input.verifyQuery}" --expect "${input.expect}"`,
+    exitCode: status === 'verified' ? 0 : 1,
+    ...(outcome.auditRef ? { auditRef: outcome.auditRef } : {}),
+    ...(status === 'indeterminate' && outcome.reason ? { note: outcome.reason } : {}),
+  }
+
+  const artifact = buildVerificationArtifact({
+    status,
+    subject,
+    summary: input.summary ?? defaultSummary(status, input.table),
+    evidence: [TASK_PACK_EVIDENCE, assertEvidence],
+    ...(status === 'indeterminate' && outcome.reason ? { blockedReason: outcome.reason } : {}),
+    now: clock.now,
+    idFactory: clock.idFactory,
+  })
+
+  return {
+    scenario: 'safe-backfill',
+    mode: 'after-write',
+    status,
+    table: input.table,
+    guards,
+    ...(outcome.ran ? { assertion: { expect: input.expect, passed: outcome.pass === true } } : {}),
+    artifact,
+  }
+}

@@ -61,8 +61,16 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
   const schema = (config.schema ?? {}) as Record<string, TableSchema>
   const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
 
+  // analyze with the live connection permission (used for verify-query readonly check)
   const analyze = (sql: string) =>
     analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+
+  // analyzePlan uses read-write permission so the plan guard can approve a valid UPDATE
+  // even when the connection is query-only. The plan guard validates structural safety
+  // (UPDATE with WHERE, no mass-delete risk, etc.); connection permission is enforced
+  // separately by the execution layer — which never actually runs the backfill write.
+  const analyzePlan = (sql: string) =>
+    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup })
 
   return {
     blacklistGuard: async (table): Promise<GuardOutcome> => {
@@ -81,7 +89,7 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
       }
     },
     planGuard: async (query): Promise<GuardOutcome> => {
-      const r = analyze(query)
+      const r = analyzePlan(query)
       if (!isUpdateOperation(r.operation)) {
         return { ok: false, reason: boundedReason(`--query must be an UPDATE statement (got ${r.operation}).`) }
       }

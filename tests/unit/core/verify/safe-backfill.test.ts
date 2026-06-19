@@ -16,7 +16,7 @@ import {
   type SafeBackfillRunners,
   type GuardOutcome,
   type AssertionOutcome,
-} from '@/core/verify/safe-backfill'
+} from '@/core/verify'
 
 const RAW = {
   table: 'users',

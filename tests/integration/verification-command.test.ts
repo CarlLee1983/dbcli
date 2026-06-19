@@ -368,6 +368,38 @@ describe('dbcli verification summary', () => {
     expect(j.counts.total).toBe(1)
     expect(j.latest.id).toBe('aaaa')
   })
+
+  test('--latest-only JSON returns storageDir, latest, counts and omits subjects', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-20T01:00:00.000Z', subject: { kind: 'migration', name: 'm' } },
+      { id: 'bbbb', createdAt: '2026-06-20T02:00:00.000Z', subject: { kind: 'migration', name: 'm' } },
+    ])
+    const { stdout, code } = await run(work, [
+      'verification', 'summary', '--latest-only', '--format', 'json',
+    ])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.latest.id).toBe('bbbb')
+    expect(j.counts.total).toBe(2)
+    expect('subjects' in j).toBe(false)
+  })
+
+  test('--latest-only with no artifacts exits 0 with latest null', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-vcmd-lo-'))
+    const { stdout, code } = await run(work, [
+      'verification', 'summary', '--latest-only', '--format', 'json',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).latest).toBeNull()
+  })
+
+  test('summary without --latest-only is unchanged (still includes subjects)', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-20T01:00:00.000Z' },
+    ])
+    const { stdout } = await run(work, ['verification', 'summary', '--format', 'json'])
+    expect('subjects' in JSON.parse(stdout)).toBe(true)
+  })
 })
 
 const DAY_MS = 24 * 60 * 60 * 1000

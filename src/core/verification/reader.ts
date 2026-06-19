@@ -210,6 +210,19 @@ export interface VerificationArtifactSummary {
   }>
 }
 
+export interface VerificationLatestOnlySummary {
+  storageDir: string
+  latest: VerificationArtifactSummary['latest']
+  counts: VerificationArtifactSummary['counts']
+}
+
+/** Project a full summary down to its latest-artifact + counts contract (drops subjects). */
+export function toLatestOnlySummary(
+  summary: VerificationArtifactSummary
+): VerificationLatestOnlySummary {
+  return { storageDir: summary.storageDir, latest: summary.latest, counts: summary.counts }
+}
+
 /** Thrown when a `show` selector matches zero, many, or an out-of-bounds artifact. */
 export class VerificationArtifactSelectionError extends Error {
   constructor(message: string) {

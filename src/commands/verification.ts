@@ -4,6 +4,7 @@ import {
   filterVerificationArtifacts,
   findVerificationArtifact,
   summarizeVerificationArtifacts,
+  toLatestOnlySummary,
   VerificationArtifactSelectionError,
   VERIFICATION_STATUSES,
   VERIFICATION_SUBJECT_KINDS,
@@ -13,6 +14,7 @@ import {
   type VerificationArtifactFilters,
   type VerificationArtifactRecord,
   type VerificationArtifactSummary,
+  type VerificationLatestOnlySummary,
   type VerificationStatus,
   type VerificationSubjectKind,
   type VerificationSubject,
@@ -133,6 +135,22 @@ function renderSummaryTable(s: VerificationArtifactSummary): string {
       )
     }
   }
+  return lines.join('\n')
+}
+
+function renderLatestOnlyTable(s: VerificationLatestOnlySummary): string {
+  const lines: string[] = [`Storage dir: ${s.storageDir}`]
+  if (s.latest) {
+    lines.push(`Latest:      ${s.latest.id} (${s.latest.status}) ${s.latest.createdAt}`)
+    lines.push(`             ${subjectLabel(s.latest.subject)} — ${s.latest.summary}`)
+  } else {
+    lines.push('Latest:      (none)')
+  }
+  lines.push(
+    `Counts:      total=${s.counts.total} verified=${s.counts.verified} ` +
+      `not_verified=${s.counts.not_verified} indeterminate=${s.counts.indeterminate} ` +
+      `blocked=${s.counts.blocked} invalid=${s.counts.invalid}`
+  )
   return lines.join('\n')
 }
 
@@ -277,6 +295,7 @@ verificationCommand
   .option('--format <format>', `Output format: ${ALLOWED_FORMATS.join(' | ')}`, 'json')
   .option('--subject <kind:name>', 'Summarize only matching subject artifacts')
   .option('--status <status>', 'Summarize only matching status artifacts')
+  .option('--latest-only', 'Print only the latest matching artifact and status counts', false)
   .action(async (options: Record<string, unknown>) => {
     try {
       const format = options.format as string
@@ -287,6 +306,15 @@ verificationCommand
       })
       const read = await readVerificationArtifacts(process.cwd())
       const summary = summarizeVerificationArtifacts(read, filters)
+      if (options.latestOnly === true) {
+        const latestOnly = toLatestOnlySummary(summary)
+        if (format === 'json') {
+          console.log(JSON.stringify(latestOnly, null, 2))
+        } else {
+          console.log(renderLatestOnlyTable(latestOnly))
+        }
+        return
+      }
       if (format === 'json') {
         console.log(JSON.stringify(summary, null, 2))
       } else {

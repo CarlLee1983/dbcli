@@ -2,12 +2,14 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join, isAbsolute, resolve, sep } from 'node:path'
 import type {
   VerificationArtifact,
+  VerificationEvidenceRef,
   VerificationStatus,
   VerificationSubject,
   VerificationSubjectKind,
 } from './types'
 import { VERIFICATION_ARTIFACT_SCHEMA_VERSION } from './types'
 import { isVerificationStatus } from './status'
+import { isVerificationEvidenceKind } from './evidence'
 import { isVerificationSubjectKind } from './assert-artifact'
 import { VERIFICATION_DIR_RELATIVE } from './artifact-writer'
 
@@ -43,6 +45,48 @@ function boundError(message: string): string {
   return single.length <= INVALID_ERROR_MAX ? single : single.slice(0, INVALID_ERROR_MAX - 1) + '…'
 }
 
+/** Validate the `subject` field of a v1 artifact. Throws on the first failure. */
+function validateSubject(value: unknown): VerificationSubject {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('subject must be an object')
+  }
+  const s = value as Record<string, unknown>
+  if (!isVerificationSubjectKind(s.kind)) {
+    throw new Error('subject.kind is not a valid verification subject kind')
+  }
+  if (s.name !== undefined && typeof s.name !== 'string') {
+    throw new Error('subject.name must be a string when present')
+  }
+  if (s.command !== undefined && typeof s.command !== 'string') {
+    throw new Error('subject.command must be a string when present')
+  }
+  return value as VerificationSubject
+}
+
+/** Validate one `evidence` array element of a v1 artifact. Throws on the first failure. */
+function validateEvidence(value: unknown, index: number): VerificationEvidenceRef {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`evidence[${index}] must be an object`)
+  }
+  const e = value as Record<string, unknown>
+  if (!isVerificationEvidenceKind(e.kind)) {
+    throw new Error(`evidence[${index}].kind is not a valid evidence kind`)
+  }
+  const stringFields = ['command', 'auditRef', 'recoveryRef', 'snapshotPath', 'taskName', 'note'] as const
+  for (const field of stringFields) {
+    if (e[field] !== undefined && typeof e[field] !== 'string') {
+      throw new Error(`evidence[${index}].${field} must be a string when present`)
+    }
+  }
+  const numberFields = ['exitCode', 'step'] as const
+  for (const field of numberFields) {
+    if (e[field] !== undefined && typeof e[field] !== 'number') {
+      throw new Error(`evidence[${index}].${field} must be a number when present`)
+    }
+  }
+  return value as VerificationEvidenceRef
+}
+
 /**
  * Validate an unknown parsed value as a v1 VerificationArtifact.
  * Throws Error with a short message on the first failure.
@@ -64,15 +108,16 @@ export function validateVerificationArtifact(value: unknown): VerificationArtifa
   if (!isVerificationStatus(v.status)) {
     throw new Error(`status '${String(v.status)}' is not a valid verification status`)
   }
-  const subject = v.subject as Record<string, unknown> | undefined
-  if (!subject || !isVerificationSubjectKind(subject.kind)) {
-    throw new Error('subject.kind is not a valid verification subject kind')
-  }
+  validateSubject(v.subject)
   if (typeof v.summary !== 'string' || v.summary.length === 0) {
     throw new Error('summary must be a non-empty string')
   }
   if (!Array.isArray(v.evidence) || v.evidence.length === 0) {
     throw new Error('evidence must be a non-empty array')
+  }
+  v.evidence.forEach((item, index) => validateEvidence(item, index))
+  if (v.blockedReason !== undefined && typeof v.blockedReason !== 'string') {
+    throw new Error('blockedReason must be a string when present')
   }
   return value as VerificationArtifact
 }

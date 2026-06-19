@@ -489,3 +489,48 @@ describe('dbcli verification prune', () => {
     expect(stdout).toContain('candidates')
   })
 })
+
+describe('dbcli verification malformed-artifact hardening', () => {
+  // Write one malformed artifact (evidence: [null]) into a seeded workspace.
+  async function seedWithMalformed(): Promise<{ work: string; file: string }> {
+    const work = await seedWork([{ id: 'good', createdAt: '2026-06-19T01:02:03.000Z' }])
+    const dir = join(work, '.dbcli', 'verification')
+    const file = 'verification-20260101-000000-bad.json'
+    const malformed = {
+      schemaVersion: 1,
+      id: 'ver_bad',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      status: 'verified',
+      subject: { kind: 'backfill', name: 'x' },
+      summary: 'malformed evidence',
+      evidence: [null],
+    }
+    await writeFile(join(dir, file), JSON.stringify(malformed, null, 2), 'utf8')
+    return { work, file }
+  }
+
+  test('list --include-invalid reports evidence:[null] under invalid, not artifacts', async () => {
+    const { work } = await seedWithMalformed()
+    const { stdout, code } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--include-invalid',
+    ])
+    expect(code).toBe(0)
+    const j = JSON.parse(stdout)
+    expect(j.artifacts.some((a: { id: string }) => a.id === 'ver_bad')).toBe(false)
+    expect(j.invalid).toHaveLength(1)
+    expect(j.invalid[0].filename).toBe('verification-20260101-000000-bad.json')
+  })
+
+  test('show --format table never crashes on malformed JSON; reports via invalid path', async () => {
+    const { work, file } = await seedWithMalformed()
+    const selector = join('.dbcli', 'verification', file)
+    const { stderr, code } = await run(work, ['verification', 'show', selector, '--format', 'table'])
+    expect(code).toBe(1)
+    expect(stderr).toContain('is invalid')
+    expect(stderr).not.toContain('TypeError')
+  })
+})

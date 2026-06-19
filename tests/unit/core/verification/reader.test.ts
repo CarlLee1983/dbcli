@@ -9,6 +9,7 @@ import {
   summarizeVerificationArtifacts,
   findVerificationArtifact,
   VerificationArtifactSelectionError,
+  INVALID_ERROR_MAX,
 } from '@/core/verification'
 import type {
   VerificationArtifact,
@@ -274,5 +275,103 @@ describe('findVerificationArtifact', () => {
     expect(() =>
       findVerificationArtifact(input, '/repo/.dbcli/verification/../../etc/passwd')
     ).toThrow(VerificationArtifactSelectionError)
+  })
+})
+
+describe('validateVerificationArtifact (v1 hardening)', () => {
+  // Build a JSON string from the valid base with arbitrary (possibly malformed) overrides.
+  function badJson(overrides: Record<string, unknown>): string {
+    return JSON.stringify({ ...artifact(), ...overrides } as unknown)
+  }
+
+  test('rejects evidence: [null] as invalid', async () => {
+    const root = await seed([{ name: 'verification-a.json', content: badJson({ evidence: [null] }) }])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+    expect(result.invalid[0]!.filename).toBe('verification-a.json')
+    expect(result.invalid[0]!.error.length).toBeLessThanOrEqual(INVALID_ERROR_MAX)
+  })
+
+  test('rejects evidence with an unknown kind', async () => {
+    const root = await seed([
+      { name: 'verification-b.json', content: badJson({ evidence: [{ kind: 'bogus' }] }) },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+  })
+
+  test('rejects evidence optional fields with wrong types', async () => {
+    const root = await seed([
+      {
+        name: 'verification-c.json',
+        content: badJson({ evidence: [{ kind: 'assert', exitCode: 'zero' }] }),
+      },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+  })
+
+  test('rejects subject.name with a non-string value', async () => {
+    const root = await seed([
+      { name: 'verification-d.json', content: badJson({ subject: { kind: 'backfill', name: 5 } }) },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+  })
+
+  test('rejects subject.command with a non-string value', async () => {
+    const root = await seed([
+      {
+        name: 'verification-e.json',
+        content: badJson({ subject: { kind: 'backfill', command: true } }),
+      },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+  })
+
+  test('rejects blockedReason with a non-string value', async () => {
+    const root = await seed([
+      { name: 'verification-f.json', content: badJson({ blockedReason: 42 }) },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+  })
+
+  test('accepts a valid artifact with all known optional evidence fields', async () => {
+    const root = await seed([
+      {
+        name: 'verification-g.json',
+        content: JSON.stringify(
+          artifact({
+            blockedReason: 'skipped: missing config',
+            subject: { kind: 'recovery', name: 'r1', command: 'dbcli recover --apply' },
+            evidence: [
+              {
+                kind: 'recovery-verify',
+                command: 'dbcli assert ...',
+                exitCode: 0,
+                auditRef: 'aud_1',
+                recoveryRef: 'rec_1',
+                snapshotPath: '.dbcli/snapshots/s.json',
+                taskName: 'safe-backfill-verify',
+                step: 2,
+                note: 'all good',
+              },
+            ],
+          })
+        ),
+      },
+    ])
+    const result = await readVerificationArtifacts(root)
+    expect(result.invalid).toEqual([])
+    expect(result.artifacts).toHaveLength(1)
+    expect(result.artifacts[0]!.artifact.evidence[0]!.kind).toBe('recovery-verify')
   })
 })

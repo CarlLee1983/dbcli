@@ -83,10 +83,7 @@ describe('selectPrunePlan', () => {
 
   test('keep-latest 0 protects nothing; only artifacts older than cutoff are candidates', () => {
     const plan = selectPrunePlan(
-      read([
-        rec('new', '2026-06-19T00:00:00.000Z'),
-        rec('old', '2026-01-01T00:00:00.000Z'),
-      ]),
+      read([rec('new', '2026-06-19T00:00:00.000Z'), rec('old', '2026-01-01T00:00:00.000Z')]),
       baseCriteria,
       cutoff,
       new Map()
@@ -123,16 +120,28 @@ describe('selectPrunePlan', () => {
 
   test('invalid records are excluded by default and selected (by mtime) only with includeInvalid', () => {
     const invalid = [
-      { path: '/repo/.dbcli/verification/verification-broken.json', filename: 'verification-broken.json', error: 'bad json' },
+      {
+        path: '/repo/.dbcli/verification/verification-broken.json',
+        filename: 'verification-broken.json',
+        error: 'bad json',
+      },
     ]
     const mtimes = new Map<string, number>([
-      ['/repo/.dbcli/verification/verification-broken.json', Date.parse('2026-01-01T00:00:00.000Z')],
+      [
+        '/repo/.dbcli/verification/verification-broken.json',
+        Date.parse('2026-01-01T00:00:00.000Z'),
+      ],
     ])
 
     const off = selectPrunePlan(read([], invalid), baseCriteria, cutoff, mtimes)
     expect(off.candidates).toEqual([])
 
-    const on = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, mtimes)
+    const on = selectPrunePlan(
+      read([], invalid),
+      { ...baseCriteria, includeInvalid: true },
+      cutoff,
+      mtimes
+    )
     expect(on.candidates).toHaveLength(1)
     expect(on.candidates[0]!.invalid).toBe(true)
     expect(on.candidates[0]!.id).toBeNull()
@@ -141,20 +150,41 @@ describe('selectPrunePlan', () => {
 
   test('includeInvalid keeps recent invalid files (mtime newer than cutoff) untouched', () => {
     const invalid = [
-      { path: '/repo/.dbcli/verification/verification-recent.json', filename: 'verification-recent.json', error: 'bad json' },
+      {
+        path: '/repo/.dbcli/verification/verification-recent.json',
+        filename: 'verification-recent.json',
+        error: 'bad json',
+      },
     ]
     const mtimes = new Map<string, number>([
-      ['/repo/.dbcli/verification/verification-recent.json', Date.parse('2026-06-18T00:00:00.000Z')],
+      [
+        '/repo/.dbcli/verification/verification-recent.json',
+        Date.parse('2026-06-18T00:00:00.000Z'),
+      ],
     ])
-    const plan = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, mtimes)
+    const plan = selectPrunePlan(
+      read([], invalid),
+      { ...baseCriteria, includeInvalid: true },
+      cutoff,
+      mtimes
+    )
     expect(plan.candidates).toEqual([])
   })
 
   test('invalid records with no mtime entry are excluded even with includeInvalid', () => {
     const invalid = [
-      { path: '/repo/.dbcli/verification/verification-nomtime.json', filename: 'verification-nomtime.json', error: 'bad json' },
+      {
+        path: '/repo/.dbcli/verification/verification-nomtime.json',
+        filename: 'verification-nomtime.json',
+        error: 'bad json',
+      },
     ]
-    const plan = selectPrunePlan(read([], invalid), { ...baseCriteria, includeInvalid: true }, cutoff, new Map())
+    const plan = selectPrunePlan(
+      read([], invalid),
+      { ...baseCriteria, includeInvalid: true },
+      cutoff,
+      new Map()
+    )
     expect(plan.candidates).toEqual([])
   })
 
@@ -189,7 +219,7 @@ describe('selectPrunePlan', () => {
   })
 })
 
-import { mkdtemp, mkdir, writeFile, utimes, symlink, stat, lstat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -209,7 +239,12 @@ async function seedRoot(): Promise<string> {
   return root
 }
 
-async function writeArtifact(root: string, id: string, createdAt: string, over: object = {}): Promise<string> {
+async function writeArtifact(
+  root: string,
+  id: string,
+  createdAt: string,
+  over: object = {}
+): Promise<string> {
   const file = join(root, VERIFICATION_DIR_RELATIVE, `verification-${id}.json`)
   const artifact = {
     schemaVersion: 1,
@@ -332,23 +367,25 @@ describe('pruneVerificationArtifacts', () => {
       { olderThanDays: 30, keepLatest: 0, includeInvalid: true },
       { execute: false, nowMs: NOW }
     )
-    expect(on.candidates.some((c) => c.invalid && c.filename === 'verification-broken.json')).toBe(true)
+    expect(on.candidates.some((c) => c.invalid && c.filename === 'verification-broken.json')).toBe(
+      true
+    )
   })
 
-  test('symlinks inside the storage dir are skipped, not deleted', async () => {
+  test('non-regular invalid candidates are skipped, not deleted', async () => {
     const root = await seedRoot()
-    const real = await writeArtifact(root, 'old', OLD)
-    const link = join(root, VERIFICATION_DIR_RELATIVE, 'verification-link.json')
-    await symlink(real, link)
+    await writeArtifact(root, 'old', OLD)
+    const invalidDir = join(root, VERIFICATION_DIR_RELATIVE, 'verification-dir.json')
+    await mkdir(invalidDir)
+    await utimes(invalidDir, new Date(OLD), new Date(OLD))
     const result = await pruneVerificationArtifacts(
       root,
-      { olderThanDays: 30, keepLatest: 0, includeInvalid: false },
+      { olderThanDays: 30, keepLatest: 0, includeInvalid: true },
       { execute: true, nowMs: NOW }
     )
-    // Both the real file and the symlink read as valid (readFile follows links).
     expect(result.deleted.map((d) => d.filename)).toContain('verification-old.json')
-    const skippedLink = result.skipped.find((s) => s.filename === 'verification-link.json')
-    expect(skippedLink?.reason).toBe('not-regular-file')
-    expect((await lstat(link)).isSymbolicLink()).toBe(true) // entry still present (now dangling)
+    const skippedDir = result.skipped.find((s) => s.filename === 'verification-dir.json')
+    expect(skippedDir?.reason).toBe('not-regular-file')
+    expect((await stat(invalidDir)).isDirectory()).toBe(true)
   })
 })

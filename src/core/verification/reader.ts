@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { lstat, readdir, readFile } from 'node:fs/promises'
 import { join, isAbsolute, resolve, sep } from 'node:path'
 import type {
   VerificationArtifact,
@@ -72,7 +72,14 @@ function validateEvidence(value: unknown, index: number): VerificationEvidenceRe
   if (!isVerificationEvidenceKind(e.kind)) {
     throw new Error(`evidence[${index}].kind is not a valid evidence kind`)
   }
-  const stringFields = ['command', 'auditRef', 'recoveryRef', 'snapshotPath', 'taskName', 'note'] as const
+  const stringFields = [
+    'command',
+    'auditRef',
+    'recoveryRef',
+    'snapshotPath',
+    'taskName',
+    'note',
+  ] as const
   for (const field of stringFields) {
     if (e[field] !== undefined && typeof e[field] !== 'string') {
       throw new Error(`evidence[${index}].${field} must be a string when present`)
@@ -149,6 +156,10 @@ export async function readVerificationArtifacts(
   for (const filename of names.filter(isArtifactFilename)) {
     const path = join(storageDir, filename)
     try {
+      const stats = await lstat(path)
+      if (!stats.isFile()) {
+        throw new Error('artifact path is not a regular file')
+      }
       const raw = await readFile(path, 'utf8')
       const parsed = JSON.parse(raw) as unknown
       const artifact = validateVerificationArtifact(parsed)

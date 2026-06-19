@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile, utimes, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -155,6 +155,23 @@ describe('dbcli verification list', () => {
     expect(code).toBe(0)
     expect(stdout).toContain('createdAt')
     expect(stdout).toContain('status')
+  })
+
+  test('--limit 0 returns zero valid artifacts', async () => {
+    const work = await seedWork([
+      { id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z' },
+      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z' },
+    ])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--limit',
+      '0',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).artifacts).toEqual([])
   })
 
   test('--subject filters by kind alone', async () => {
@@ -365,7 +382,14 @@ describe('dbcli verification prune', () => {
       { id: 'new1', createdAt: daysAgoISO(1) },
     ])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -381,7 +405,13 @@ describe('dbcli verification prune', () => {
   test('--execute without --force exits 1 and deletes nothing', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { code, stderr } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--execute',
     ])
     expect(code).toBe(1)
     expect(stderr.toLowerCase()).toContain('force')
@@ -393,7 +423,15 @@ describe('dbcli verification prune', () => {
   test('--force without --execute performs dry-run only', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--force', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--force',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     expect(JSON.parse(stdout).dryRun).toBe(true)
@@ -407,7 +445,16 @@ describe('dbcli verification prune', () => {
       { id: 'new1', createdAt: daysAgoISO(1) },
     ])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--execute', '--force', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--execute',
+      '--force',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -424,7 +471,14 @@ describe('dbcli verification prune', () => {
       { id: 'old2', createdAt: daysAgoISO(90) },
     ])
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '1', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '1',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(j.protected.map((p: { id: string }) => p.id)).toEqual(['old2'])
@@ -437,7 +491,16 @@ describe('dbcli verification prune', () => {
       { id: 'noo', createdAt: daysAgoISO(90), status: 'not_verified' },
     ])
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--status', 'verified', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--status',
+      'verified',
+      '--format',
+      'json',
     ])
     expect(JSON.parse(stdout).candidates.map((c: { id: string }) => c.id)).toEqual(['okk'])
   })
@@ -449,15 +512,35 @@ describe('dbcli verification prune', () => {
     const old = new Date(Date.now() - 100 * DAY_MS)
     await utimes(broken, old, old)
     const { stdout } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--include-invalid', '--format', 'json',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--include-invalid',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
-    expect(j.candidates.some((c: { invalid: boolean; filename: string }) => c.invalid && c.filename === 'verification-broken.json')).toBe(true)
+    expect(
+      j.candidates.some(
+        (c: { invalid: boolean; filename: string }) =>
+          c.invalid && c.filename === 'verification-broken.json'
+      )
+    ).toBe(true)
   })
 
   test('missing directory exits 0 with empty arrays', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
-    const { stdout, code } = await run(work, ['verification', 'prune', '--older-than', '30d', '--format', 'json'])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--format',
+      'json',
+    ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.candidates).toEqual([])
@@ -481,7 +564,14 @@ describe('dbcli verification prune', () => {
   test('table format prints the summary header', async () => {
     const work = await seedWork([{ id: 'old1', createdAt: daysAgoISO(100) }])
     const { stdout, code } = await run(work, [
-      'verification', 'prune', '--older-than', '30d', '--keep-latest', '0', '--format', 'table',
+      'verification',
+      'prune',
+      '--older-than',
+      '30d',
+      '--keep-latest',
+      '0',
+      '--format',
+      'table',
     ])
     expect(code).toBe(0)
     expect(stdout).toContain('mode')
@@ -528,7 +618,13 @@ describe('dbcli verification malformed-artifact hardening', () => {
   test('show --format table never crashes on malformed JSON; reports via invalid path', async () => {
     const { work, file } = await seedWithMalformed()
     const selector = join('.dbcli', 'verification', file)
-    const { stderr, code } = await run(work, ['verification', 'show', selector, '--format', 'table'])
+    const { stderr, code } = await run(work, [
+      'verification',
+      'show',
+      selector,
+      '--format',
+      'table',
+    ])
     expect(code).toBe(1)
     expect(stderr).toContain('is invalid')
     expect(stderr).not.toContain('TypeError')
@@ -558,13 +654,15 @@ describe('dbcli verification prune execute-mode table detail', () => {
   })
 
   test('table output lists skipped files when a candidate hits a safety guard', async () => {
-    // A real old artifact plus a symlink named like an artifact; the symlink is a
-    // candidate (its resolved content is valid + old) but lstat marks it not-regular-file.
+    // A real old artifact plus an old directory named like an artifact. The directory is
+    // selected only through --include-invalid, then the delete guard skips it as not regular.
     const work = await seedWork([{ id: 'real1', createdAt: '2020-01-01T00:00:00.000Z' }])
     const dir = join(work, '.dbcli', 'verification')
-    const realName = 'verification-20200101-000000-real1.json'
-    const linkName = 'verification-20200101-000000-zlink.json'
-    await symlink(join(dir, realName), join(dir, linkName))
+    const invalidName = 'verification-20200101-000000-zdir.json'
+    const invalidPath = join(dir, invalidName)
+    await mkdir(invalidPath)
+    const old = new Date('2020-01-01T00:00:00.000Z')
+    await utimes(invalidPath, old, old)
 
     const { stdout, code } = await run(work, [
       'verification',
@@ -575,14 +673,15 @@ describe('dbcli verification prune execute-mode table detail', () => {
       '0',
       '--execute',
       '--force',
+      '--include-invalid',
       '--format',
       'table',
     ])
     expect(code).toBe(0)
     expect(stdout).toContain('skipped')
     expect(stdout).toContain('not-regular-file')
-    expect(stdout).toContain(linkName)
-    // The real artifact in the same run is still deleted while the symlink is spared.
+    expect(stdout).toContain(invalidName)
+    // The real artifact in the same run is still deleted while the invalid directory is spared.
     expect(stdout).toContain('real1')
   })
 })

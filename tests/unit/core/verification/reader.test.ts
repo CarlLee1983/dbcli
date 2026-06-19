@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -112,6 +112,21 @@ describe('readVerificationArtifacts', () => {
       expect(inv.error).not.toContain('\n')
       expect(inv.error.length).toBeLessThanOrEqual(200)
     }
+  })
+
+  test('does not follow symlinked artifact files', async () => {
+    const root = await seed([])
+    const external = await mkdtemp(join(tmpdir(), 'dbcli-vreader-external-'))
+    const target = join(external, 'verification-outside.json')
+    await writeFile(target, JSON.stringify(artifact({ id: 'ver_outside' })), 'utf8')
+    await symlink(target, join(root, VERIFICATION_DIR_RELATIVE, 'verification-symlink.json'))
+
+    const result = await readVerificationArtifacts(root)
+
+    expect(result.artifacts).toEqual([])
+    expect(result.invalid).toHaveLength(1)
+    expect(result.invalid[0]!.filename).toBe('verification-symlink.json')
+    expect(result.invalid[0]!.error).toContain('not a regular file')
   })
 })
 
@@ -285,7 +300,9 @@ describe('validateVerificationArtifact (v1 hardening)', () => {
   }
 
   test('rejects evidence: [null] as invalid', async () => {
-    const root = await seed([{ name: 'verification-a.json', content: badJson({ evidence: [null] }) }])
+    const root = await seed([
+      { name: 'verification-a.json', content: badJson({ evidence: [null] }) },
+    ])
     const result = await readVerificationArtifacts(root)
     expect(result.artifacts).toEqual([])
     expect(result.invalid).toHaveLength(1)

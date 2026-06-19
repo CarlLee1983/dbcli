@@ -199,10 +199,8 @@ verificationCommand
     try {
       const format = options.format as string
       validateFormat(format, ALLOWED_FORMATS, 'verification list')
-      const limit = Math.max(
-        0,
-        parseInt(String(options.limit ?? DEFAULT_LIMIT), 10) || DEFAULT_LIMIT
-      )
+      const parsedLimit = parseInt(String(options.limit ?? DEFAULT_LIMIT), 10)
+      const limit = Number.isNaN(parsedLimit) ? DEFAULT_LIMIT : Math.max(0, parsedLimit)
       const filters = buildFilters({
         status: options.status as string | undefined,
         subject: options.subject as string | undefined,

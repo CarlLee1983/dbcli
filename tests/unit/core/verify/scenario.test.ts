@@ -84,7 +84,10 @@ describe('runGuardSequence / allGuardsPassed', () => {
   })
 
   test('allGuardsPassed requires the expected count and all passed', async () => {
-    const guards = await runGuardSequence<'a' | 'b'>([['a', ok], ['b', ok]])
+    const guards = await runGuardSequence<'a' | 'b'>([
+      ['a', ok],
+      ['b', ok],
+    ])
     expect(allGuardsPassed(guards, 2)).toBe(true)
     expect(allGuardsPassed(guards, 3)).toBe(false)
   })

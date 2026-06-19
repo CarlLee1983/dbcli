@@ -20,6 +20,9 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   for (const [k, v] of Object.entries(process.env)) {
     if (/^DBCLI_/i.test(k)) continue
     if (k === 'DATABASE_URL') continue
+    // Strip libpq env vars so "empty workspace" tests cannot accidentally
+    // connect to a live Postgres instance present in the test runner's env.
+    if (/^PG(HOST|PORT|USER|PASSWORD|DATABASE|SSLMODE|APPNAME)$/i.test(k)) continue
     out[k] = v
   }
   out.NODE_ENV = 'test'

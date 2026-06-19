@@ -84,7 +84,10 @@ export function renderAfterWriteCommand(scenario: string, flags: string[]): stri
 }
 
 function cleanSegment(segment: string): string {
-  return segment.replace(/^[`"[]+|[`"\]]+$/g, '').trim().toLowerCase()
+  return segment
+    .replace(/^[`"[]+|[`"\]]+$/g, '')
+    .trim()
+    .toLowerCase()
 }
 
 /** Normalize a table reference to its bare name: strip schema prefix, quotes, case. */
@@ -95,7 +98,11 @@ export function normalizeTableName(name: string): string {
 }
 
 function splitQualifiedTable(ref: string): { schema: string | null; name: string } {
-  const parts = ref.trim().split('.').map(cleanSegment).filter((p) => p.length > 0)
+  const parts = ref
+    .trim()
+    .split('.')
+    .map(cleanSegment)
+    .filter((p) => p.length > 0)
   const name = parts.length > 0 ? (parts[parts.length - 1] as string) : ''
   const schema = parts.length >= 2 ? (parts[parts.length - 2] as string) : null
   return { schema, name }

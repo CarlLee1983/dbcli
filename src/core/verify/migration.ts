@@ -40,12 +40,17 @@ export function ddlTargetMatchesTable(ddl: string, table: string): boolean {
  */
 export function classifyMigrationDdl(sql: string): { ok: boolean; reason?: string } {
   if (!isSingleStatement(sql)) {
-    return { ok: false, reason: boundedReason('--ddl must be a single statement (no `;`-separated statements).') }
+    return {
+      ok: false,
+      reason: boundedReason('--ddl must be a single statement (no `;`-separated statements).'),
+    }
   }
   if (!isAlterTableDdl(sql)) {
     return {
       ok: false,
-      reason: boundedReason('--ddl must be an ALTER TABLE statement; the MVP blocks CREATE/DROP/INDEX and other DDL.'),
+      reason: boundedReason(
+        '--ddl must be an ALTER TABLE statement; the MVP blocks CREATE/DROP/INDEX and other DDL.'
+      ),
     }
   }
   return { ok: true }

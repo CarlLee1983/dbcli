@@ -53,7 +53,9 @@ describe('toLatestOnlySummary', () => {
 
   test('one artifact -> latest is that artifact', () => {
     const summary = summarizeVerificationArtifacts(
-      read([record('a', '2026-06-20T01:00:00.000Z', 'verified', { kind: 'migration', name: 'users' })])
+      read([
+        record('a', '2026-06-20T01:00:00.000Z', 'verified', { kind: 'migration', name: 'users' }),
+      ])
     )
     const latestOnly = toLatestOnlySummary(summary)
     expect(latestOnly.latest?.id).toBe('a')
@@ -63,7 +65,10 @@ describe('toLatestOnlySummary', () => {
   test('multiple subjects -> latest is newest across all (reader order is latest-first)', () => {
     const summary = summarizeVerificationArtifacts(
       read([
-        record('newest', '2026-06-20T03:00:00.000Z', 'not_verified', { kind: 'migration', name: 'b' }),
+        record('newest', '2026-06-20T03:00:00.000Z', 'not_verified', {
+          kind: 'migration',
+          name: 'b',
+        }),
         record('mid', '2026-06-20T02:00:00.000Z', 'verified', { kind: 'backfill', name: 'a' }),
       ])
     )

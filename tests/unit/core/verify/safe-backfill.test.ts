@@ -81,7 +81,9 @@ describe('operation classifiers (plain SELECT)', () => {
   })
 
   test('isPlainSelectVerifyQuery rejects EXPLAIN (e.g. EXPLAIN ANALYZE UPDATE can write)', () => {
-    expect(isPlainSelectVerifyQuery('EXPLAIN', 'EXPLAIN ANALYZE UPDATE users SET x = 1')).toBe(false)
+    expect(isPlainSelectVerifyQuery('EXPLAIN', 'EXPLAIN ANALYZE UPDATE users SET x = 1')).toBe(
+      false
+    )
   })
 
   test('isPlainSelectVerifyQuery rejects SHOW/DESCRIBE even though they are read-only', () => {
@@ -95,9 +97,9 @@ describe('operation classifiers (plain SELECT)', () => {
   })
 
   test('isPlainSelectVerifyQuery ignores write-like words inside string literals', () => {
-    expect(isPlainSelectVerifyQuery('SELECT', "SELECT count(*) FROM t WHERE note = 'delete me'")).toBe(
-      true
-    )
+    expect(
+      isPlainSelectVerifyQuery('SELECT', "SELECT count(*) FROM t WHERE note = 'delete me'")
+    ).toBe(true)
   })
 })
 
@@ -389,7 +391,8 @@ describe('runSafeBackfillAfterWrite', () => {
     const input = normalizeSafeBackfillInput({
       ...PRE_RAW,
       afterWrite: true,
-      verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE id = 12345 AND token = $$topsecret$$',
+      verifyQuery:
+        'SELECT count(*)::int AS n FROM users WHERE id = 12345 AND token = $$topsecret$$',
       expect: "value == 'sensitive-literal'",
     })
     const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)

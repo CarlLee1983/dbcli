@@ -48,7 +48,10 @@ import {
 
 const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb']
 
-function requireSqlConnection(connection: ConnectionOptions, scenario: string): SqlConnectionOptions {
+function requireSqlConnection(
+  connection: ConnectionOptions,
+  scenario: string
+): SqlConnectionOptions {
   if (!SQL_SYSTEMS.includes(connection.system)) {
     throw new Error(
       `verify ${scenario} currently supports SQL engines only, got: ${connection.system}`
@@ -329,7 +332,10 @@ function renderMigrationPreflightTable(r: MigrationPreflightResult): string {
   for (const g of r.guards) {
     lines.push(`  - ${g.name}: ${g.status}${g.reason ? ` (${g.reason})` : ''}`)
   }
-  lines.push('', 'Planned migration DDL (you apply this externally; this command never executes it):')
+  lines.push(
+    '',
+    'Planned migration DDL (you apply this externally; this command never executes it):'
+  )
   lines.push(`  ${r.plannedDdl}`)
   lines.push('', 'After-write command (run AFTER the migration is applied externally):')
   lines.push(`  ${r.afterWriteCommand}`)
@@ -337,7 +343,10 @@ function renderMigrationPreflightTable(r: MigrationPreflightResult): string {
   return lines.join('\n')
 }
 
-function renderMigrationAfterWriteTable(r: MigrationAfterWriteResult, artifactPath?: string): string {
+function renderMigrationAfterWriteTable(
+  r: MigrationAfterWriteResult,
+  artifactPath?: string
+): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
     `Mode:        after-write`,

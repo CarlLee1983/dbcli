@@ -33,7 +33,10 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   return out
 }
 
-function run(args: string[], cwd = WORK): Promise<{ stdout: string; stderr: string; code: number }> {
+function run(
+  args: string[],
+  cwd = WORK
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     const child = spawn('bun', ['run', CLI, '--config', cwd, ...args], { cwd, env: sanitizeEnv() })
     let stdout = ''
@@ -66,7 +69,9 @@ beforeAll(async () => {
   try {
     await adapter.execute(`DROP TABLE IF EXISTS ${TABLE}`)
     await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
-    await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
+    await adapter.execute(
+      `INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`
+    )
     await adapter.disconnect()
 
     WORK = await mkdtemp(join(tmpdir(), 'dbcli-verify-mig-'))
@@ -103,12 +108,18 @@ describe('dbcli verify migration (integration)', () => {
   test('preflight --format json has the stable migration shape and writes no artifact', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', DDL,
-      '--verify-query', VERIFY,
-      '--expect', 'value == 3',
-      '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      DDL,
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 3',
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -118,7 +129,10 @@ describe('dbcli verify migration (integration)', () => {
     expect(j.table).toBe(TABLE)
     expect(j.plannedDdl).toBe(DDL)
     expect(j.guards.map((g: { name: string }) => g.name)).toEqual([
-      'blacklist', 'schema', 'ddl', 'verify-query-readonly',
+      'blacklist',
+      'schema',
+      'ddl',
+      'verify-query-readonly',
     ])
     expect(j.afterWriteCommand).toContain('--after-write')
     expect(await listArtifacts()).toHaveLength(0)
@@ -127,12 +141,19 @@ describe('dbcli verify migration (integration)', () => {
   test('after-write success writes a migration artifact (DDL never executed)', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', DDL,
-      '--verify-query', VERIFY,
-      '--expect', 'value == 3',
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      DDL,
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 3',
+      '--after-write',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
@@ -145,7 +166,9 @@ describe('dbcli verify migration (integration)', () => {
     const probe = await run([
       'query',
       `SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = '${TABLE}' AND column_name = 'never_added'`,
-      '--no-limit', '--format', 'json',
+      '--no-limit',
+      '--format',
+      'json',
     ])
     expect(JSON.parse(probe.stdout).rows[0].n).toBe(0)
   })
@@ -153,12 +176,19 @@ describe('dbcli verify migration (integration)', () => {
   test('after-write assertion failure exits 1 and writes not_verified', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', DDL,
-      '--verify-query', VERIFY,
-      '--expect', 'value == 0',
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      DDL,
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 0',
+      '--after-write',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
@@ -174,12 +204,19 @@ describe('dbcli verify migration (integration)', () => {
       `ALTER TABLE ${TABLE} ADD COLUMN a int; DROP TABLE ${TABLE}`,
     ]) {
       const { stdout, code } = await run([
-        'verify', 'migration',
-        '--table', TABLE,
-        '--ddl', ddl,
-        '--verify-query', VERIFY,
-        '--expect', 'value == 3',
-        '--after-write', '--format', 'json',
+        'verify',
+        'migration',
+        '--table',
+        TABLE,
+        '--ddl',
+        ddl,
+        '--verify-query',
+        VERIFY,
+        '--expect',
+        'value == 3',
+        '--after-write',
+        '--format',
+        'json',
       ])
       const j = JSON.parse(stdout)
       expect(code).toBe(1)
@@ -192,12 +229,19 @@ describe('dbcli verify migration (integration)', () => {
   test('DDL targeting a different table than --table is blocked', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', `ALTER TABLE ${TABLE}_other ADD COLUMN a int`,
-      '--verify-query', VERIFY,
-      '--expect', 'value == 3',
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      `ALTER TABLE ${TABLE}_other ADD COLUMN a int`,
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 3',
+      '--after-write',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
@@ -209,12 +253,19 @@ describe('dbcli verify migration (integration)', () => {
   test('EXPLAIN / data-modifying verify-query is blocked', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', DDL,
-      '--verify-query', `EXPLAIN ANALYZE UPDATE ${TABLE} SET status = 9 WHERE id = 1`,
-      '--expect', 'rows == 0',
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      DDL,
+      '--verify-query',
+      `EXPLAIN ANALYZE UPDATE ${TABLE} SET status = 9 WHERE id = 1`,
+      '--expect',
+      'rows == 0',
+      '--after-write',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
@@ -226,15 +277,27 @@ describe('dbcli verify migration (integration)', () => {
   test('verification list --subject migration:<table> finds the artifact', async () => {
     if (!DB_OK) return
     await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', DDL,
-      '--verify-query', VERIFY,
-      '--expect', 'value == 3',
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      DDL,
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 3',
+      '--after-write',
+      '--format',
+      'json',
     ])
     const { stdout, code } = await run([
-      'verification', 'list', '--subject', `migration:${TABLE}`, '--format', 'json',
+      'verification',
+      'list',
+      '--subject',
+      `migration:${TABLE}`,
+      '--format',
+      'json',
     ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -247,12 +310,19 @@ describe('dbcli verify migration (integration)', () => {
   test('artifacts do not persist raw DDL/verify-query/expect literals', async () => {
     if (!DB_OK) return
     const { stdout } = await run([
-      'verify', 'migration',
-      '--table', TABLE,
-      '--ddl', `ALTER TABLE ${TABLE} ADD COLUMN token text DEFAULT 'topsecret'`,
-      '--verify-query', `SELECT count(*)::int AS n FROM ${TABLE} WHERE id = 12345`,
-      '--expect', "value == 'sensitive-literal'",
-      '--after-write', '--format', 'json',
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      `ALTER TABLE ${TABLE} ADD COLUMN token text DEFAULT 'topsecret'`,
+      '--verify-query',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE id = 12345`,
+      '--expect',
+      "value == 'sensitive-literal'",
+      '--after-write',
+      '--format',
+      'json',
     ])
     const j = JSON.parse(stdout)
     const raw = await readFile(j.artifact.path, 'utf8')

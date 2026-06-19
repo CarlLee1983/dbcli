@@ -220,6 +220,9 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
+> `dbcli verify` **執行**驗證情境（safe-backfill、migration），永不執行寫入或 DDL。
+> `dbcli verification` **檢視與管理**這些情境產生的本機結果文物（位於 `.dbcli/verification/`）。
+
 #### verify safe-backfill
 
 在不執行任何 `UPDATE` 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；`--after-write` 模式重新執行防護、執行回讀斷言，並寫入驗證文物。
@@ -253,6 +256,37 @@ After-write（寫入文物）：
 
 > 💡 **同一資料表的重複 backfill。** 文物的 subject 名稱預設為資料表（`backfill:<table>`）。當你對同一資料表執行多個不同的 backfill 時，請傳入 `--subject-name <唯一標籤>`，讓每次操作在 `dbcli verification list` 中都能獨立追蹤。
 
+#### verify migration
+
+針對 schema migration 進行預檢或 after-write 驗證。**此指令永遠不會執行 DDL** — 它分析提案的 `ALTER TABLE`、執行唯讀防護，並（在 after-write 模式下）在你於外部套用 migration 後記錄佐證。
+
+> ⚠️ `verify migration` 永不執行 DDL。請先在外部套用 migration，再執行 `--after-write` 記錄佐證。
+
+預檢（Preflight）：
+
+    dbcli verify migration \
+      --table users \
+      --ddl "ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE verified_at IS NOT NULL" \
+      --expect "value == 0"
+
+在外部套用 migration 後：
+
+    dbcli verify migration ... --after-write
+
+| Option | 必填 | 說明 |
+| --- | --- | --- |
+| `--table <table>` | 是 | Migration 影響的資料表。 |
+| `--ddl <sql>` | 是 | 提案的 migration DDL，僅分析，永不執行。MVP 僅接受 `ALTER TABLE`。 |
+| `--verify-query <sql>` | 是 | migration 後回讀驗證用的純 `SELECT`。 |
+| `--expect <expr>` | 是 | 回讀結果的斷言表達式。 |
+| `--after-write` | 否 | 執行 migration 後的斷言並寫入 v1 文物。 |
+| `--format <table\|json>` | 否 | 輸出格式，預設 `table`。 |
+| `--subject-name <name>` | 否 | 文物 subject 名稱，預設為資料表名稱。 |
+| `--summary <text>` | 否 | 選填文物摘要覆寫。 |
+
+預檢回傳 `ready` 或 `blocked` 並印出精確的 after-write 指令；**`ready` 不等於 `verified`** — 只表示防護通過。After-write 將回讀斷言對應至 `verified` / `not_verified` / `indeterminate`，防護失敗則為 `blocked`。MVP 中 `CREATE TABLE`、`DROP TABLE`、`CREATE INDEX` 及多語句 DDL 均會被阻擋。
+
 <!-- doc-key: verification-inspect -->
 ### verification — 檢視與管理驗證文物
 
@@ -265,8 +299,8 @@ After-write（寫入文物）：
   — 依最新優先列出文物。
 - `dbcli verification show <id-or-path> [--format json|table]`
   — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。
-- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
-  — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。
+- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>] [--latest-only]`
+  — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。`--latest-only` 縮小為最新的一筆符合有效文物加上各狀態計數（省略 `subjects` 細分）；無符合文物時以 `0` 退出並回傳 `latest: null`。
 - `dbcli verification prune --older-than <Nd> [--format json|table] [--keep-latest <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid] [--execute --force]`
   — 預覽（dry-run）或依保留條件刪除本機驗證產物檔案。
 

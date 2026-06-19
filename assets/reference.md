@@ -1146,8 +1146,9 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 
 ### verify
 
-Run a verification scenario. `verify` executes scenarios; `verification` inspects the
-artifacts they leave behind. The scenario NEVER executes the backfill write.
+Run a verification scenario. `verify` **runs** verification scenarios (safe-backfill,
+migration) and never executes writes/DDL. `verification` **inspects and manages** the
+local result artifacts those scenarios produce under `.dbcli/verification/`.
 
 ```bash
 # Preflight (default): read-only guards + the exact after-write command. No artifact.
@@ -1185,6 +1186,44 @@ failed (blacklist/schema/plan/verify-query-not-plain-SELECT/target-table-mismatc
 `not_verified` = the read-back contradicted `--expect`; `indeterminate` = the assertion
 could not produce a trustworthy verdict. Inspect the result with
 `dbcli verification show <artifact-id>`.
+
+#### `verify migration`
+
+Preflight or after-write verification for a schema migration. **This command never
+executes DDL** — it analyzes the proposed `ALTER TABLE`, runs read-only guards, and
+(in after-write mode) records evidence after you apply the migration externally.
+
+```bash
+# Preflight: read-only guards + the exact after-write command. Returns ready or blocked.
+dbcli verify migration \
+  --table users \
+  --ddl "ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE verified_at IS NOT NULL" \
+  --expect "value == 0"
+
+# After the migration is applied externally, record evidence:
+dbcli verify migration ... --after-write
+
+# JSON for agents.
+dbcli verify migration ... --format json
+```
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--table <table>` | yes | Table affected by the migration. |
+| `--ddl <sql>` | yes | Proposed migration DDL, analyzed but never executed. MVP accepts `ALTER TABLE` only. |
+| `--verify-query <sql>` | yes | Plain `SELECT` for post-migration read-back verification. |
+| `--expect <expr>` | yes | Assertion expression for the read-back result. |
+| `--after-write` | no | Run the post-migration assertion and write a v1 artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override. |
+
+Preflight returns `ready` or `blocked` and prints the exact after-write command;
+**`ready` is not `verified`** — it only means the guards passed. After-write maps the
+read-back assertion to `verified` / `not_verified` / `indeterminate`, and a failed
+guard to `blocked`. `CREATE TABLE`, `DROP TABLE`, `CREATE INDEX`, and multi-statement
+DDL are blocked in the MVP.
 
 ### verification
 
@@ -1259,6 +1298,7 @@ dbcli verification summary --subject migration:add-status-column --format json
 | `--format <json\|table>` | Output format. | `json` |
 | `--status <status>` | Filter to a single status before summarising. | all |
 | `--subject <kind[:name]>` | Filter by subject kind or exact `kind:name`. | all |
+| `--latest-only` | Narrow to the latest matching valid artifact plus status counts; the `subjects` breakdown is omitted. Missing artifacts return exit `0` with `latest: null`. | off |
 
 **Output shape (JSON):**
 ```json

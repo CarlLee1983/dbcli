@@ -220,6 +220,10 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
+> `dbcli verify` **runs** verification scenarios (safe-backfill, migration) and never
+> executes writes/DDL. `dbcli verification` **inspects and manages** the local result
+> artifacts those scenarios produce under `.dbcli/verification/`.
+
 #### verify safe-backfill
 
 Verify a safe backfill without ever executing the `UPDATE`. Preflight (default) runs
@@ -272,6 +276,44 @@ trustworthy verdict).
 > same table, pass `--subject-name <unique-label>` so each operation is independently
 > traceable in `dbcli verification list`.
 
+#### verify migration
+
+Preflight or after-write verification for a schema migration. **This command never
+executes DDL** — it analyzes the proposed `ALTER TABLE`, runs read-only guards, and
+(in after-write mode) records evidence after you apply the migration externally.
+
+> ⚠️ `verify migration` never executes DDL. Apply the migration externally first, then
+> run `--after-write` to record evidence.
+
+Preflight:
+
+    dbcli verify migration \
+      --table users \
+      --ddl "ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE verified_at IS NOT NULL" \
+      --expect "value == 0"
+
+After the migration is applied externally:
+
+    dbcli verify migration ... --after-write
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--table <table>` | yes | Table affected by the migration. |
+| `--ddl <sql>` | yes | Proposed migration DDL, analyzed but never executed. MVP accepts `ALTER TABLE` only. |
+| `--verify-query <sql>` | yes | Plain `SELECT` for post-migration read-back verification. |
+| `--expect <expr>` | yes | Assertion expression for the read-back result. |
+| `--after-write` | no | Run the post-migration assertion and write a v1 artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override. |
+
+Preflight returns `ready` or `blocked` and prints the exact after-write command;
+**`ready` is not `verified`** — it only means the guards passed. After-write maps the
+read-back assertion to `verified` / `not_verified` / `indeterminate`, and a failed
+guard to `blocked`. `CREATE TABLE`, `DROP TABLE`, `CREATE INDEX`, and multi-statement
+DDL are blocked in the MVP.
+
 <!-- doc-key: verification-inspect -->
 ### verification — inspect & manage verification artifacts
 
@@ -285,8 +327,8 @@ The storage root is the current working directory, independent of `--config`.
   — list artifacts latest-first.
 - `dbcli verification show <id-or-path> [--format json|table]`
   — print one artifact by exact id, unique id prefix, filename, or in-bounds path.
-- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
-  — latest status, status counts, invalid count, and per-subject breakdown.
+- `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>] [--latest-only]`
+  — latest status, status counts, invalid count, and per-subject breakdown. `--latest-only` narrows to the latest matching valid artifact plus status counts (the `subjects` breakdown is omitted); missing artifacts return exit `0` with `latest: null`.
 - `dbcli verification prune --older-than <Nd> [--format json|table] [--keep-latest <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid] [--execute --force]`
   — preview (dry-run) or delete local artifact files by retention criteria.
 

@@ -38,6 +38,8 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `upgrade` | N/A | N/A | N/A | N/A | N/A | N/A | Update checks are engine-independent. |
 | `recover` | N/A | N/A | N/A | N/A | N/A | N/A | Automated remediation and multi-turn protocol; engine-independent logic operating on saved envelopes. |
 | `skill` | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. New: `skill tasks list/show/plan` exposes plan-only Agent Task Packs (built-in + `.dbcli-shared/tasks/` + `.dbcli/tasks/`); plans never execute commands. |
+| `verify` | N/A | N/A | N/A | N/A | N/A | N/A | Runs non-executing verification scenarios: `safe-backfill` (analyzes UPDATE, never writes) and `migration` (analyzes ALTER TABLE DDL, never executes DDL). Both scenarios produce local `.dbcli/verification/` artifacts in `--after-write` mode. |
+| `verification` | N/A | N/A | N/A | N/A | N/A | N/A | Inspects and manages local VerificationArtifact files. Subcommands: `list` / `show` / `summary` / `prune` (all `local-write` or `readonly`). `summary --latest-only` narrows to the latest matching artifact plus status counts. Never connects to a database. |
 | `audit` | N/A | N/A | N/A | N/A | N/A | N/A | Cross-engine local capability writing `.dbcli/audit/<conn>.jsonl`. Subcommands: `tail` / `show` / `health` (`readonly`), `clear` (`local-write`). See `assets/reference.md` §audit. |
 
 ## Side-effect tiers

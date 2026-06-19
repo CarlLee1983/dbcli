@@ -327,6 +327,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>runs</strong> verification scenarios (safe-backfill, migration) and never executes writes/DDL. <code>dbcli verification</code> <strong>inspects and manages</strong> the local result artifacts those scenarios produce under <code>.dbcli/verification/</code>.</p>
             <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
             <p class="mb-4">Verify a safe backfill without ever executing the <code>UPDATE</code>. Preflight (default) runs read-only guards and prints the exact after-write command; <code>--after-write</code> re-runs the guards, runs the read-back assertion, and writes a verification artifact.</p>
             <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> never executes the backfill write. Run the approved write through your normal write command first, then run <code>--after-write</code>.</p>
@@ -350,13 +351,39 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             </ul>
             <p class="mb-4">💡 <strong>Repeated backfills on the same table.</strong> Artifacts default their subject name to the table (<code>backfill:&lt;table&gt;</code>). When you run multiple distinct backfills against the same table, pass <code>--subject-name &lt;unique-label&gt;</code> so each operation is independently traceable in <code>dbcli verification list</code>.</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify migration</h4>
+            <p class="mb-4">Preflight or after-write verification for a schema migration. <strong>This command never executes DDL</strong> — it analyzes the proposed <code>ALTER TABLE</code>, runs read-only guards, and (in after-write mode) records evidence after you apply the migration externally.</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify migration</code> never executes DDL. Apply the migration externally first, then run <code>--after-write</code> to record evidence.</p>
+            <p class="mb-2"><strong>Preflight:</strong></p>
+            <pre><code>dbcli verify migration \
+  --table users \
+  --ddl "ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE verified_at IS NOT NULL" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>After the migration is applied externally:</strong></p>
+            <pre><code>dbcli verify migration ... --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>yes</td><td>Table affected by the migration.</td></tr>
+                <tr><td><code>--ddl &lt;sql&gt;</code></td><td>yes</td><td>Proposed migration DDL, analyzed but never executed. MVP accepts <code>ALTER TABLE</code> only.</td></tr>
+                <tr><td><code>--verify-query &lt;sql&gt;</code></td><td>yes</td><td>Plain <code>SELECT</code> for post-migration read-back verification.</td></tr>
+                <tr><td><code>--expect &lt;expr&gt;</code></td><td>yes</td><td>Assertion expression for the read-back result.</td></tr>
+                <tr><td><code>--after-write</code></td><td>no</td><td>Run the post-migration assertion and write a v1 artifact.</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>no</td><td>Output format, default <code>table</code>.</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>no</td><td>Artifact subject name. Default is the table name.</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>no</td><td>Optional artifact summary override.</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4">Preflight returns <code>ready</code> or <code>blocked</code> and prints the exact after-write command; <strong><code>ready</code> is not <code>verified</code></strong> — it only means the guards passed. After-write maps the read-back assertion to <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>, and a failed guard to <code>blocked</code>. <code>CREATE TABLE</code>, <code>DROP TABLE</code>, <code>CREATE INDEX</code>, and multi-statement DDL are blocked in the MVP.</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> works on artifacts written under <code>&lt;cwd&gt;/.dbcli/verification/</code>. It never connects to a database and never writes audit entries. <code>list</code>, <code>show</code>, and <code>summary</code> are read-only filesystem inspection; <code>prune</code> is a local lifecycle command that is dry-run by default and deletes files only with <code>--execute --force</code>. The storage root is the current working directory, independent of <code>--config</code>.</p>
             <ul class="mb-4">
                 <li><code>dbcli verification list [--format json|table] [--limit &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid]</code> — list artifacts latest-first.</li>
                 <li><code>dbcli verification show &lt;id-or-path&gt; [--format json|table]</code> — print one artifact by exact id, unique id prefix, filename, or in-bounds path.</li>
-                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;]</code> — latest status, status counts, invalid count, and per-subject breakdown.</li>
+                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--latest-only]</code> — latest status, status counts, invalid count, and per-subject breakdown. <code>--latest-only</code> narrows to the latest matching valid artifact plus status counts (the <code>subjects</code> breakdown is omitted); missing artifacts return exit <code>0</code> with <code>latest: null</code>.</li>
                 <li><code>dbcli verification prune --older-than &lt;Nd&gt; [--format json|table] [--keep-latest &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid] [--execute --force]</code> — preview (dry-run) or delete local artifact files by retention criteria.</li>
             </ul>
             <p class="mb-2">Statuses: <code>verified</code>, <code>not_verified</code>, <code>indeterminate</code>, <code>blocked</code>.<br>Subject kinds: <code>recovery</code>, <code>task-pack</code>, <code>assertion</code>, <code>migration</code>, <code>backfill</code>, <code>manual</code>.</p>

@@ -327,6 +327,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>執行</strong>驗證情境（safe-backfill、migration），永不執行寫入或 DDL。<code>dbcli verification</code> <strong>檢視與管理</strong>這些情境產生的本機結果文物（位於 <code>.dbcli/verification/</code>）。</p>
             <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
             <p class="mb-4">在不執行任何 <code>UPDATE</code> 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；<code>--after-write</code> 模式重新執行防護、執行回讀斷言，並寫入驗證文物。</p>
             <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> 永遠不會執行 backfill 寫入。請先透過一般寫入指令執行已核准的寫入，再執行 <code>--after-write</code>。</p>
@@ -350,13 +351,39 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             </ul>
             <p class="mb-4">💡 <strong>同一資料表的重複 backfill。</strong>文物的 subject 名稱預設為資料表（<code>backfill:&lt;table&gt;</code>）。當你對同一資料表執行多個不同的 backfill 時，請傳入 <code>--subject-name &lt;唯一標籤&gt;</code>，讓每次操作在 <code>dbcli verification list</code> 中都能獨立追蹤。</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify migration</h4>
+            <p class="mb-4">針對 schema migration 進行預檢或 after-write 驗證。<strong>此指令永遠不會執行 DDL</strong> — 它分析提案的 <code>ALTER TABLE</code>、執行唯讀防護，並（在 after-write 模式下）在你於外部套用 migration 後記錄佐證。</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify migration</code> 永不執行 DDL。請先在外部套用 migration，再執行 <code>--after-write</code> 記錄佐證。</p>
+            <p class="mb-2"><strong>預檢（Preflight）：</strong></p>
+            <pre><code>dbcli verify migration \
+  --table users \
+  --ddl "ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE verified_at IS NOT NULL" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>在外部套用 migration 後：</strong></p>
+            <pre><code>dbcli verify migration ... --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>必填</th><th>說明</th></tr></thead>
+              <tbody>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>是</td><td>Migration 影響的資料表。</td></tr>
+                <tr><td><code>--ddl &lt;sql&gt;</code></td><td>是</td><td>提案的 migration DDL，僅分析，永不執行。MVP 僅接受 <code>ALTER TABLE</code>。</td></tr>
+                <tr><td><code>--verify-query &lt;sql&gt;</code></td><td>是</td><td>migration 後回讀驗證用的純 <code>SELECT</code>。</td></tr>
+                <tr><td><code>--expect &lt;expr&gt;</code></td><td>是</td><td>回讀結果的斷言表達式。</td></tr>
+                <tr><td><code>--after-write</code></td><td>否</td><td>執行 migration 後的斷言並寫入 v1 文物。</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>否</td><td>輸出格式，預設 <code>table</code>。</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>否</td><td>文物 subject 名稱，預設為資料表名稱。</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>否</td><td>選填文物摘要覆寫。</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4">預檢回傳 <code>ready</code> 或 <code>blocked</code> 並印出精確的 after-write 指令；<strong><code>ready</code> 不等於 <code>verified</code></strong> — 只表示防護通過。After-write 將回讀斷言對應至 <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>，防護失敗則為 <code>blocked</code>。MVP 中 <code>CREATE TABLE</code>、<code>DROP TABLE</code>、<code>CREATE INDEX</code> 及多語句 DDL 均會被阻擋。</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> 操作寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、也不寫入稽核記錄。<code>list</code>、<code>show</code>、<code>summary</code> 為唯讀的檔案系統檢視；<code>prune</code> 為本機生命週期指令，預設為 dry-run，僅在帶上 <code>--execute --force</code> 時才刪除檔案。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>
             <ul class="mb-4">
                 <li><code>dbcli verification list [--format json|table] [--limit &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid]</code> — 依最新優先列出文物。</li>
                 <li><code>dbcli verification show &lt;id-or-path&gt; [--format json|table]</code> — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。</li>
-                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;]</code> — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。</li>
+                <li><code>dbcli verification summary [--format json|table] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--latest-only]</code> — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。<code>--latest-only</code> 縮小為最新的一筆符合有效文物加上各狀態計數（省略 <code>subjects</code> 細分）；無符合文物時以 <code>0</code> 退出並回傳 <code>latest: null</code>。</li>
                 <li><code>dbcli verification prune --older-than &lt;Nd&gt; [--format json|table] [--keep-latest &lt;n&gt;] [--status &lt;status&gt;] [--subject &lt;kind[:name]&gt;] [--include-invalid] [--execute --force]</code> — 預覽（dry-run）或依保留條件刪除本機驗證產物檔案。</li>
             </ul>
             <p class="mb-2">狀態值：<code>verified</code>、<code>not_verified</code>、<code>indeterminate</code>、<code>blocked</code>。<br>Subject kind：<code>recovery</code>、<code>task-pack</code>、<code>assertion</code>、<code>migration</code>、<code>backfill</code>、<code>manual</code>。</p>

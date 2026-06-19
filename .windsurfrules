@@ -155,6 +155,12 @@ Developer workflow guardrails:
 - Inspect result evidence (read-only): `dbcli verification summary --format json`
   (also `verification list` / `verification show <id>`). Reclaim old artifacts with
   `dbcli verification prune --older-than 30d` (dry-run; add `--execute --force` to delete).
+- `tasks plan safe-backfill-verify` — when the user needs a plan only.
+- `verify safe-backfill` — before a real safe backfill (preflight) and after it
+  (`--after-write`) when durable evidence is required. Never executes the write.
+- `tasks plan migration-review` — when the user needs a migration plan only (plan output, no DDL executed).
+- `verify migration` — preflight a schema migration (analyze DDL, run guards) and after the migration is applied externally (`--after-write`) to record evidence. Never executes DDL.
+- `verification show <id>` — cite the final artifact.
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
 

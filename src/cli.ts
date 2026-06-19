@@ -27,6 +27,7 @@ import { explainCommand } from './commands/explain'
 import { snapshotCommand } from './commands/snapshot'
 import { assertCommand } from './commands/assert'
 import { verificationCommand } from './commands/verification'
+import { verifyCommand } from './commands/verify'
 import { recoveryCommand } from './commands/recovery'
 import { recoverCommand } from './commands/recover'
 import { auditCommand } from './commands/audit'
@@ -352,6 +353,7 @@ program.addCommand(explainCommand)
 program.addCommand(snapshotCommand)
 program.addCommand(assertCommand)
 program.addCommand(verificationCommand)
+program.addCommand(verifyCommand)
 program.addCommand(proxyCommand)
 
 // Show help when no command provided

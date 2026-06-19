@@ -327,6 +327,20 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
+            <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
+            <p class="mb-4">在不執行任何 <code>UPDATE</code> 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；<code>--after-write</code> 模式重新執行防護、執行回讀斷言，並寫入驗證文物。</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> 永遠不會執行 backfill 寫入。請先透過一般寫入指令執行已核准的寫入，再執行 <code>--after-write</code>。</p>
+            <p class="mb-2"><strong>預檢（Preflight）：</strong></p>
+            <pre><code>dbcli verify safe-backfill \
+  --table users \
+  --query "UPDATE users SET status = 1 WHERE status IS NULL" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status IS NULL" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>After-write（寫入文物）：</strong></p>
+            <pre><code>dbcli verify safe-backfill ... --after-write</code></pre>
+            <p class="mt-4 mb-4">檢視結果：<code>dbcli verification show &lt;artifact-id&gt;</code>。</p>
+            <p class="mb-4">結果狀態：<code>verified</code>（回讀符合 <code>--expect</code>）、<code>not_verified</code>（回讀與 <code>--expect</code> 相悖）、<code>blocked</code>（防護失敗 — blacklist、schema、plan，或 verify-query 非唯讀）、<code>indeterminate</code>（斷言已執行但無法產生可信的結論）。</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> 操作寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、也不寫入稽核記錄。<code>list</code>、<code>show</code>、<code>summary</code> 為唯讀的檔案系統檢視；<code>prune</code> 為本機生命週期指令，預設為 dry-run，僅在帶上 <code>--execute --force</code> 時才刪除檔案。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>

@@ -233,6 +233,8 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   — 以精確 id、唯一 id 前綴、檔名或路徑印出單筆文物。
 - `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
   — 顯示最新狀態、各狀態計數、無效計數及每個 subject 的細分。
+- `dbcli verification prune --older-than <Nd> [--format json|table] [--keep-latest <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid] [--execute --force]`
+  — 預覽（dry-run）或依保留條件刪除本機驗證產物檔案。
 
 狀態值：`verified`、`not_verified`、`indeterminate`、`blocked`。
 Subject kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。
@@ -240,10 +242,16 @@ Subject kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`
 若 `.dbcli/verification/` 目錄不存在，回傳空結果並以 `0` 退出。
 `list`/`summary` 執行時會略過格式有誤的檔案（可透過 `--include-invalid` 及 `summary` 的無效計數觀察）；對格式有誤的檔案執行 `show` 時，會以 `1` 退出。
 
+`prune` 預設為 dry-run，並保護最新的 `--keep-latest`（預設 20）筆有效產物。只有同時帶上
+`--execute` 與 `--force` 時才會刪除，且僅刪除 `.dbcli/verification/` 內符合 `verification-*.json`
+的一般檔案。
+
 ```bash
 dbcli verification summary --format json
 dbcli verification list --status verified --subject backfill:safe-backfill-verify
 dbcli verification show ver_abcd --format json
+dbcli verification prune --older-than 30d --format json
+dbcli verification prune --older-than 30d --keep-latest 20 --execute --force
 ```
 
 <!-- doc-key: proxy -->

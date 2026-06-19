@@ -234,6 +234,8 @@ artifacts. The storage root is the current working directory, independent of
   — print one artifact by exact id, unique id prefix, filename, or in-bounds path.
 - `dbcli verification summary [--format json|table] [--status <status>] [--subject <kind[:name]>]`
   — latest status, status counts, invalid count, and per-subject breakdown.
+- `dbcli verification prune --older-than <Nd> [--format json|table] [--keep-latest <n>] [--status <status>] [--subject <kind[:name]>] [--include-invalid] [--execute --force]`
+  — preview (dry-run) or delete local artifact files by retention criteria.
 
 Statuses: `verified`, `not_verified`, `indeterminate`, `blocked`.
 Subject kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`.
@@ -242,10 +244,16 @@ A missing `.dbcli/verification/` directory returns an empty result and exits `0`
 Malformed files are skipped during `list`/`summary` (surfaced via `--include-invalid`
 and the `summary` invalid count); selecting a malformed file with `show` exits `1`.
 
+`prune` is dry-run by default and protects the latest `--keep-latest` (default 20) valid
+artifacts. It deletes files only when both `--execute` and `--force` are given, and only
+regular `verification-*.json` files inside `.dbcli/verification/`.
+
 ```bash
 dbcli verification summary --format json
 dbcli verification list --status verified --subject backfill:safe-backfill-verify
 dbcli verification show ver_abcd --format json
+dbcli verification prune --older-than 30d --format json
+dbcli verification prune --older-than 30d --keep-latest 20 --execute --force
 ```
 
 <!-- doc-key: proxy -->

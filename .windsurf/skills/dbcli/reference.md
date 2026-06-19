@@ -1238,6 +1238,34 @@ dbcli verification summary --subject migration:add-status-column --format json
 
 `latest` is `null` when no valid artifacts match the filters.
 
+#### `verification prune`
+
+Preview or delete local verification artifacts under `<cwd>/.dbcli/verification/` by
+explicit retention criteria. **Dry-run by default**; deletes only with `--execute --force`.
+
+```bash
+dbcli verification prune --older-than 30d --format json          # preview candidates
+dbcli verification prune --older-than 30d --execute --force      # delete after preview
+dbcli verification prune --older-than 90d --status verified --keep-latest 50 --execute --force
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--format <format>` | `json` | `json` or `table`. JSON is the authoritative contract. |
+| `--older-than <Nd>` | required | Minimum age in whole days (`7d`, `30d`, `365d`). |
+| `--keep-latest <n>` | `20` | Always protect the latest N valid artifacts. `0` protects none. |
+| `--status <status>` | none | Select only valid artifacts with this status. |
+| `--subject <kind:name>` | none | Select only valid artifacts with this subject. |
+| `--include-invalid` | `false` | Also select malformed `verification-*.json` files, by file mtime. |
+| `--execute` | `false` | Delete instead of preview. Requires `--force`. |
+| `--force` | `false` | Acknowledge deletion; required with `--execute`. |
+
+Safety: deletion is scoped to regular `verification-*.json` files inside
+`.dbcli/verification/`; symlinks, directories, and path escapes are skipped with a
+reason. No database connection is opened and no audit entry is written. JSON output
+includes `storageDir`, `dryRun`, `cutoff`, `criteria`, `protected`, `candidates`,
+`deleted`, and `skipped`.
+
 **Statuses:**
 
 | Status | Meaning |

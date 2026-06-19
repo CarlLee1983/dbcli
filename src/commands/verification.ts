@@ -22,9 +22,7 @@ const DEFAULT_LIMIT = 20
 /** Parse `--status`; exits 1 with a concise allowed-status message on failure. */
 export function parseStatusFilter(raw: string): VerificationStatus {
   if (!(VERIFICATION_STATUSES as readonly string[]).includes(raw)) {
-    throw new Error(
-      `Invalid --status '${raw}'. Allowed: ${VERIFICATION_STATUSES.join(', ')}`
-    )
+    throw new Error(`Invalid --status '${raw}'. Allowed: ${VERIFICATION_STATUSES.join(', ')}`)
   }
   return raw as VerificationStatus
 }
@@ -61,8 +59,14 @@ function renderTable(rows: string[][], headers: string[]): string {
   const all = [headers, ...rows]
   const widths = headers.map((_, c) => Math.max(...all.map((r) => (r[c] ?? '').length)))
   const fmt = (r: string[]): string =>
-    r.map((cell, i) => (cell ?? '').padEnd(widths[i] ?? 0)).join('   ').trimEnd()
-  const sep = widths.map((w) => '-'.repeat(w)).join('   ').trimEnd()
+    r
+      .map((cell, i) => (cell ?? '').padEnd(widths[i] ?? 0))
+      .join('   ')
+      .trimEnd()
+  const sep = widths
+    .map((w) => '-'.repeat(w))
+    .join('   ')
+    .trimEnd()
   return [fmt(headers), sep, ...rows.map(fmt)].join('\n')
 }
 
@@ -143,7 +147,10 @@ verificationCommand
     try {
       const format = options.format as string
       validateFormat(format, ALLOWED_FORMATS, 'verification list')
-      const limit = Math.max(0, parseInt(String(options.limit ?? DEFAULT_LIMIT), 10) || DEFAULT_LIMIT)
+      const limit = Math.max(
+        0,
+        parseInt(String(options.limit ?? DEFAULT_LIMIT), 10) || DEFAULT_LIMIT
+      )
       const filters = buildFilters({
         status: options.status as string | undefined,
         subject: options.subject as string | undefined,

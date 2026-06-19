@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,7 +16,10 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
   return out
 }
 
-function run(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+function run(
+  cwd: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     const child = spawn('bun', ['run', CLI, ...args], { cwd, env: sanitizeEnv() })
     let stdout = ''
@@ -83,16 +86,38 @@ describe('dbcli verification list', () => {
       { id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z', status: 'verified' },
       { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', status: 'not_verified' },
     ])
-    const { stdout } = await run(work, ['verification', 'list', '--format', 'json', '--status', 'verified'])
+    const { stdout } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--status',
+      'verified',
+    ])
     expect(JSON.parse(stdout).artifacts.map((a: { id: string }) => a.id)).toEqual(['aaaa'])
   })
 
   test('--subject filters by kind:name', async () => {
     const work = await seedWork([
-      { id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z', subject: { kind: 'backfill', name: 'one' } },
-      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', subject: { kind: 'migration', name: 'two' } },
+      {
+        id: 'aaaa',
+        createdAt: '2026-06-19T01:00:00.000Z',
+        subject: { kind: 'backfill', name: 'one' },
+      },
+      {
+        id: 'bbbb',
+        createdAt: '2026-06-19T02:00:00.000Z',
+        subject: { kind: 'migration', name: 'two' },
+      },
     ])
-    const { stdout } = await run(work, ['verification', 'list', '--format', 'json', '--subject', 'migration:two'])
+    const { stdout } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--subject',
+      'migration:two',
+    ])
     expect(JSON.parse(stdout).artifacts.map((a: { id: string }) => a.id)).toEqual(['bbbb'])
   })
 
@@ -105,8 +130,18 @@ describe('dbcli verification list', () => {
 
   test('--include-invalid surfaces bounded invalid records', async () => {
     const work = await seedWork([{ id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z' }])
-    await writeFile(join(work, '.dbcli', 'verification', 'verification-broken.json'), '{ not json', 'utf8')
-    const { stdout } = await run(work, ['verification', 'list', '--format', 'json', '--include-invalid'])
+    await writeFile(
+      join(work, '.dbcli', 'verification', 'verification-broken.json'),
+      '{ not json',
+      'utf8'
+    )
+    const { stdout } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--include-invalid',
+    ])
     const j = JSON.parse(stdout)
     expect(j.invalid).toHaveLength(1)
     expect(j.invalid[0].filename).toBe('verification-broken.json')
@@ -124,11 +159,30 @@ describe('dbcli verification list', () => {
 
   test('--subject filters by kind alone', async () => {
     const work = await seedWork([
-      { id: 'aaaa', createdAt: '2026-06-19T01:00:00.000Z', subject: { kind: 'backfill', name: 'alpha' } },
-      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', subject: { kind: 'backfill', name: 'beta' } },
-      { id: 'cccc', createdAt: '2026-06-19T03:00:00.000Z', subject: { kind: 'migration', name: 'gamma' } },
+      {
+        id: 'aaaa',
+        createdAt: '2026-06-19T01:00:00.000Z',
+        subject: { kind: 'backfill', name: 'alpha' },
+      },
+      {
+        id: 'bbbb',
+        createdAt: '2026-06-19T02:00:00.000Z',
+        subject: { kind: 'backfill', name: 'beta' },
+      },
+      {
+        id: 'cccc',
+        createdAt: '2026-06-19T03:00:00.000Z',
+        subject: { kind: 'migration', name: 'gamma' },
+      },
     ])
-    const { stdout, code } = await run(work, ['verification', 'list', '--format', 'json', '--subject', 'backfill'])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'list',
+      '--format',
+      'json',
+      '--subject',
+      'backfill',
+    ])
     expect(code).toBe(0)
     const ids = JSON.parse(stdout).artifacts.map((a: { id: string }) => a.id)
     expect(ids).toContain('aaaa')
@@ -147,7 +201,13 @@ describe('dbcli verification list', () => {
 describe('dbcli verification show', () => {
   test('prints the full matching artifact by id', async () => {
     const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
-    const { stdout, code } = await run(work, ['verification', 'show', 'abcd1234', '--format', 'json'])
+    const { stdout, code } = await run(work, [
+      'verification',
+      'show',
+      'abcd1234',
+      '--format',
+      'json',
+    ])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.path).toContain('.dbcli/verification')
@@ -194,7 +254,11 @@ describe('dbcli verification show', () => {
 
   test('selecting a malformed file exits 1 with a bounded error', async () => {
     const work = await seedWork([{ id: 'abcd1234', createdAt: '2026-06-19T01:00:00.000Z' }])
-    await writeFile(join(work, '.dbcli', 'verification', 'verification-broken.json'), '{ not json', 'utf8')
+    await writeFile(
+      join(work, '.dbcli', 'verification', 'verification-broken.json'),
+      '{ not json',
+      'utf8'
+    )
     const { code, stderr } = await run(work, [
       'verification',
       'show',
@@ -208,17 +272,43 @@ describe('dbcli verification show', () => {
 describe('dbcli verification summary', () => {
   test('returns latest, counts, invalid count, and subject breakdown', async () => {
     const work = await seedWork([
-      { id: 'aaaa', createdAt: '2026-06-19T03:00:00.000Z', status: 'verified', subject: { kind: 'backfill', name: 'one' } },
-      { id: 'bbbb', createdAt: '2026-06-19T02:00:00.000Z', status: 'not_verified', subject: { kind: 'backfill', name: 'one' } },
-      { id: 'cccc', createdAt: '2026-06-19T01:00:00.000Z', status: 'blocked', subject: { kind: 'migration', name: 'm' } },
+      {
+        id: 'aaaa',
+        createdAt: '2026-06-19T03:00:00.000Z',
+        status: 'verified',
+        subject: { kind: 'backfill', name: 'one' },
+      },
+      {
+        id: 'bbbb',
+        createdAt: '2026-06-19T02:00:00.000Z',
+        status: 'not_verified',
+        subject: { kind: 'backfill', name: 'one' },
+      },
+      {
+        id: 'cccc',
+        createdAt: '2026-06-19T01:00:00.000Z',
+        status: 'blocked',
+        subject: { kind: 'migration', name: 'm' },
+      },
     ])
-    await writeFile(join(work, '.dbcli', 'verification', 'verification-broken.json'), '{ not json', 'utf8')
+    await writeFile(
+      join(work, '.dbcli', 'verification', 'verification-broken.json'),
+      '{ not json',
+      'utf8'
+    )
     const { stdout, code } = await run(work, ['verification', 'summary', '--format', 'json'])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
     expect(j.storageDir).toContain('.dbcli/verification')
     expect(j.latest.id).toBe('aaaa')
-    expect(j.counts).toEqual({ total: 3, verified: 1, not_verified: 1, indeterminate: 0, blocked: 1, invalid: 1 })
+    expect(j.counts).toEqual({
+      total: 3,
+      verified: 1,
+      not_verified: 1,
+      indeterminate: 0,
+      blocked: 1,
+      invalid: 1,
+    })
     expect(j.subjects[0]).toEqual({
       subject: { kind: 'backfill', name: 'one' },
       total: 2,
@@ -238,10 +328,25 @@ describe('dbcli verification summary', () => {
 
   test('--subject scopes the summary', async () => {
     const work = await seedWork([
-      { id: 'aaaa', createdAt: '2026-06-19T02:00:00.000Z', subject: { kind: 'backfill', name: 'one' } },
-      { id: 'bbbb', createdAt: '2026-06-19T01:00:00.000Z', subject: { kind: 'migration', name: 'm' } },
+      {
+        id: 'aaaa',
+        createdAt: '2026-06-19T02:00:00.000Z',
+        subject: { kind: 'backfill', name: 'one' },
+      },
+      {
+        id: 'bbbb',
+        createdAt: '2026-06-19T01:00:00.000Z',
+        subject: { kind: 'migration', name: 'm' },
+      },
     ])
-    const { stdout } = await run(work, ['verification', 'summary', '--format', 'json', '--subject', 'backfill'])
+    const { stdout } = await run(work, [
+      'verification',
+      'summary',
+      '--format',
+      'json',
+      '--subject',
+      'backfill',
+    ])
     const j = JSON.parse(stdout)
     expect(j.counts.total).toBe(1)
     expect(j.latest.id).toBe('aaaa')

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +10,11 @@ import {
   findVerificationArtifact,
   VerificationArtifactSelectionError,
 } from '@/core/verification'
-import type { VerificationArtifact, VerificationArtifactRecord, ReadVerificationArtifactsResult } from '@/core/verification'
+import type {
+  VerificationArtifact,
+  VerificationArtifactRecord,
+  ReadVerificationArtifactsResult,
+} from '@/core/verification'
 
 function artifact(overrides: Partial<VerificationArtifact> = {}): VerificationArtifact {
   return {
@@ -25,9 +29,7 @@ function artifact(overrides: Partial<VerificationArtifact> = {}): VerificationAr
   }
 }
 
-async function seed(
-  files: Array<{ name: string; content: string }>
-): Promise<string> {
+async function seed(files: Array<{ name: string; content: string }>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'dbcli-vreader-'))
   const dir = join(root, VERIFICATION_DIR_RELATIVE)
   await mkdir(dir, { recursive: true })
@@ -48,11 +50,15 @@ describe('readVerificationArtifacts', () => {
     const root = await seed([
       {
         name: 'verification-20260619-010203-aaaa.json',
-        content: JSON.stringify(artifact({ id: 'ver_aaaa', createdAt: '2026-06-19T01:02:03.000Z' })),
+        content: JSON.stringify(
+          artifact({ id: 'ver_aaaa', createdAt: '2026-06-19T01:02:03.000Z' })
+        ),
       },
       {
         name: 'verification-20260619-020304-bbbb.json',
-        content: JSON.stringify(artifact({ id: 'ver_bbbb', createdAt: '2026-06-19T02:03:04.000Z' })),
+        content: JSON.stringify(
+          artifact({ id: 'ver_bbbb', createdAt: '2026-06-19T02:03:04.000Z' })
+        ),
       },
       { name: 'not-a-verification.json', content: '{}' },
       { name: 'verification-readme.txt', content: 'ignore me' },
@@ -127,22 +133,37 @@ function readResult(records: VerificationArtifactRecord[]): ReadVerificationArti
 
 describe('filterVerificationArtifacts', () => {
   const recs = [
-    record('a', '2026-06-19T03:00:00.000Z', { status: 'verified', subject: { kind: 'backfill', name: 'one' } }),
-    record('b', '2026-06-19T02:00:00.000Z', { status: 'not_verified', subject: { kind: 'backfill', name: 'two' } }),
-    record('c', '2026-06-19T01:00:00.000Z', { status: 'verified', subject: { kind: 'migration', name: 'three' } }),
+    record('a', '2026-06-19T03:00:00.000Z', {
+      status: 'verified',
+      subject: { kind: 'backfill', name: 'one' },
+    }),
+    record('b', '2026-06-19T02:00:00.000Z', {
+      status: 'not_verified',
+      subject: { kind: 'backfill', name: 'two' },
+    }),
+    record('c', '2026-06-19T01:00:00.000Z', {
+      status: 'verified',
+      subject: { kind: 'migration', name: 'three' },
+    }),
   ]
 
   test('filters by status', () => {
-    expect(filterVerificationArtifacts(recs, { status: 'verified' }).map((r) => r.artifact.id)).toEqual(['a', 'c'])
+    expect(
+      filterVerificationArtifacts(recs, { status: 'verified' }).map((r) => r.artifact.id)
+    ).toEqual(['a', 'c'])
   })
 
   test('filters by subject kind only', () => {
-    expect(filterVerificationArtifacts(recs, { subject: { kind: 'backfill' } }).map((r) => r.artifact.id)).toEqual(['a', 'b'])
+    expect(
+      filterVerificationArtifacts(recs, { subject: { kind: 'backfill' } }).map((r) => r.artifact.id)
+    ).toEqual(['a', 'b'])
   })
 
   test('filters by subject kind and name', () => {
     expect(
-      filterVerificationArtifacts(recs, { subject: { kind: 'backfill', name: 'two' } }).map((r) => r.artifact.id)
+      filterVerificationArtifacts(recs, { subject: { kind: 'backfill', name: 'two' } }).map(
+        (r) => r.artifact.id
+      )
     ).toEqual(['b'])
   })
 })
@@ -150,19 +171,41 @@ describe('filterVerificationArtifacts', () => {
 describe('summarizeVerificationArtifacts', () => {
   test('counts statuses, picks latest, groups subjects', () => {
     const recs = [
-      record('a', '2026-06-19T03:00:00.000Z', { status: 'verified', subject: { kind: 'backfill', name: 'one' } }),
-      record('b', '2026-06-19T02:00:00.000Z', { status: 'not_verified', subject: { kind: 'backfill', name: 'one' } }),
-      record('c', '2026-06-19T01:00:00.000Z', { status: 'blocked', subject: { kind: 'migration', name: 'm' } }),
+      record('a', '2026-06-19T03:00:00.000Z', {
+        status: 'verified',
+        subject: { kind: 'backfill', name: 'one' },
+      }),
+      record('b', '2026-06-19T02:00:00.000Z', {
+        status: 'not_verified',
+        subject: { kind: 'backfill', name: 'one' },
+      }),
+      record('c', '2026-06-19T01:00:00.000Z', {
+        status: 'blocked',
+        subject: { kind: 'migration', name: 'm' },
+      }),
     ]
     const input: ReadVerificationArtifactsResult = {
       storageDir: '/repo/.dbcli/verification',
       artifacts: recs,
-      invalid: [{ path: '/repo/.dbcli/verification/verification-bad.json', filename: 'verification-bad.json', error: 'bad' }],
+      invalid: [
+        {
+          path: '/repo/.dbcli/verification/verification-bad.json',
+          filename: 'verification-bad.json',
+          error: 'bad',
+        },
+      ],
     }
     const s = summarizeVerificationArtifacts(input)
     expect(s.storageDir).toBe('/repo/.dbcli/verification')
     expect(s.latest?.id).toBe('a')
-    expect(s.counts).toEqual({ total: 3, verified: 1, not_verified: 1, indeterminate: 0, blocked: 1, invalid: 1 })
+    expect(s.counts).toEqual({
+      total: 3,
+      verified: 1,
+      not_verified: 1,
+      indeterminate: 0,
+      blocked: 1,
+      invalid: 1,
+    })
     expect(s.subjects[0]).toEqual({
       subject: { kind: 'backfill', name: 'one' },
       total: 2,
@@ -174,7 +217,14 @@ describe('summarizeVerificationArtifacts', () => {
   test('empty input yields null latest and zero counts', () => {
     const s = summarizeVerificationArtifacts(readResult([]))
     expect(s.latest).toBeNull()
-    expect(s.counts).toEqual({ total: 0, verified: 0, not_verified: 0, indeterminate: 0, blocked: 0, invalid: 0 })
+    expect(s.counts).toEqual({
+      total: 0,
+      verified: 0,
+      not_verified: 0,
+      indeterminate: 0,
+      blocked: 0,
+      invalid: 0,
+    })
     expect(s.subjects).toEqual([])
   })
 })
@@ -196,26 +246,33 @@ describe('findVerificationArtifact', () => {
   })
 
   test('ambiguous prefix throws selection error', () => {
-    expect(() => findVerificationArtifact(input, 'ver_abc')).toThrow(VerificationArtifactSelectionError)
+    expect(() => findVerificationArtifact(input, 'ver_abc')).toThrow(
+      VerificationArtifactSelectionError
+    )
   })
 
   test('matches by filename', () => {
-    expect(findVerificationArtifact(input, 'verification-x-ver_zzzz0000.json').artifact.id).toBe('ver_zzzz0000')
+    expect(findVerificationArtifact(input, 'verification-x-ver_zzzz0000.json').artifact.id).toBe(
+      'ver_zzzz0000'
+    )
   })
 
   test('no match throws selection error', () => {
-    expect(() => findVerificationArtifact(input, 'ver_nope')).toThrow(VerificationArtifactSelectionError)
+    expect(() => findVerificationArtifact(input, 'ver_nope')).toThrow(
+      VerificationArtifactSelectionError
+    )
   })
 
   test('explicit path inside storage dir matches', () => {
     expect(
-      findVerificationArtifact(input, '/repo/.dbcli/verification/verification-x-ver_abcd1234.json').artifact.id
+      findVerificationArtifact(input, '/repo/.dbcli/verification/verification-x-ver_abcd1234.json')
+        .artifact.id
     ).toBe('ver_abcd1234')
   })
 
   test('explicit path outside storage dir throws', () => {
-    expect(() => findVerificationArtifact(input, '/repo/.dbcli/verification/../../etc/passwd')).toThrow(
-      VerificationArtifactSelectionError
-    )
+    expect(() =>
+      findVerificationArtifact(input, '/repo/.dbcli/verification/../../etc/passwd')
+    ).toThrow(VerificationArtifactSelectionError)
   })
 })

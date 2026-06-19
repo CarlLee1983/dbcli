@@ -183,9 +183,7 @@ export function summarizeVerificationArtifacts(
   input: ReadVerificationArtifactsResult,
   filters?: VerificationArtifactFilters
 ): VerificationArtifactSummary {
-  const matched = filters
-    ? filterVerificationArtifacts(input.artifacts, filters)
-    : input.artifacts
+  const matched = filters ? filterVerificationArtifacts(input.artifacts, filters) : input.artifacts
 
   const counts = {
     total: matched.length,
@@ -268,7 +266,10 @@ export function findVerificationArtifact(
   const prefix = input.artifacts.filter((r) => r.artifact.id.startsWith(selector))
   if (prefix.length === 1) return prefix[0]!
   if (prefix.length > 1) {
-    const candidates = prefix.slice(0, 10).map((r) => r.artifact.id).join(', ')
+    const candidates = prefix
+      .slice(0, 10)
+      .map((r) => r.artifact.id)
+      .join(', ')
     throw new VerificationArtifactSelectionError(
       `Selector '${selector}' is ambiguous. Candidates: ${candidates}`
     )

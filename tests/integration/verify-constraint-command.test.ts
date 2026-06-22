@@ -13,11 +13,16 @@ const FIXED = { now: () => new Date('2026-06-22T00:00:00.000Z'), idFactory: () =
 function runners(over: Partial<ConstraintRunners> = {}): ConstraintRunners {
   const ok = async (): Promise<GuardOutcome> => ({ ok: true })
   return {
-    violationSql: 'SELECT COUNT(*) AS violation_count FROM "orders" AS c LEFT JOIN "users" AS p ON c."user_id" = p."id" WHERE c."user_id" IS NOT NULL AND p."id" IS NULL',
+    violationSql:
+      'SELECT COUNT(*) AS violation_count FROM "orders" AS c LEFT JOIN "users" AS p ON c."user_id" = p."id" WHERE c."user_id" IS NOT NULL AND p."id" IS NULL',
     blacklistGuard: ok,
     schemaGuard: ok,
     violationReadonlyGuard: ok,
-    runViolationCount: async (): Promise<ViolationCountOutcome> => ({ ran: true, count: 0, auditRef: null }),
+    runViolationCount: async (): Promise<ViolationCountOutcome> => ({
+      ran: true,
+      count: 0,
+      auditRef: null,
+    }),
     ...over,
   }
 }
@@ -31,7 +36,11 @@ describe('verify constraint artifact contract', () => {
       references: 'users.id',
     })
     const r = await runConstraintAfterWrite(input, runners(), FIXED)
-    expect(r.artifact.subject).toEqual({ kind: 'table', name: 'orders', command: 'verify constraint' })
+    expect(r.artifact.subject).toEqual({
+      kind: 'table',
+      name: 'orders',
+      command: 'verify constraint',
+    })
     expect(r.artifact.schemaVersion).toBe(VERIFICATION_ARTIFACT_SCHEMA_VERSION)
     expect(r.status).toBe('verified')
   })

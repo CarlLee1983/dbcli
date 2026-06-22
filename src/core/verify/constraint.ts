@@ -181,11 +181,16 @@ export function buildConstraintSubject(input: ConstraintInput): VerificationSubj
   }
 }
 
-export function buildConstraintAfterWriteCommand(input: ConstraintInput, baseline?: number): string {
+export function buildConstraintAfterWriteCommand(
+  input: ConstraintInput,
+  baseline?: number
+): string {
   const flags = [`--check ${input.check}`, `--table ${shellQuote(input.table)}`]
   if (input.check === 'fk') {
     flags.push(`--column ${shellQuote(input.columns[0] as string)}`)
-    flags.push(`--references ${shellQuote(`${input.references!.table}.${input.references!.column}`)}`)
+    flags.push(
+      `--references ${shellQuote(`${input.references!.table}.${input.references!.column}`)}`
+    )
   } else if (input.check === 'custom') {
     flags.push(`--violation-query ${shellQuote(input.violationQuery as string)}`)
   } else {

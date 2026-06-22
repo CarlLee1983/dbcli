@@ -415,10 +415,7 @@ function constraintEngineOf(system: string): ConstraintEngine {
   return system as ConstraintEngine
 }
 
-function buildConstraintRunners(
-  ctx: RealRunnerContext,
-  input: ConstraintInput
-): ConstraintRunners {
+function buildConstraintRunners(ctx: RealRunnerContext, input: ConstraintInput): ConstraintRunners {
   const { adapter, config } = ctx
   const blacklist = (config.blacklist ?? { tables: [], columns: {} }) as BlacklistConfig
   const schema = (config.schema ?? {}) as Record<string, TableSchema>
@@ -426,9 +423,7 @@ function buildConstraintRunners(
   const analyze = (sql: string) =>
     analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
 
-  const engine = constraintEngineOf(
-    (config.connection as ConnectionOptions).system
-  )
+  const engine = constraintEngineOf((config.connection as ConnectionOptions).system)
   const violationSql = buildViolationQuery(input, engine)
 
   const columnsExist = async (table: string, cols: string[]): Promise<string | null> => {
@@ -496,11 +491,19 @@ function buildConstraintRunners(
           sql: violationSql,
         })
         if (scalar === null) {
-          return { ran: false, reason: boundedReason('violation query returned no count'), auditRef }
+          return {
+            ran: false,
+            reason: boundedReason('violation query returned no count'),
+            auditRef,
+          }
         }
         const count = typeof scalar === 'number' ? scalar : Number(scalar)
         if (!Number.isFinite(count)) {
-          return { ran: false, reason: boundedReason(`violation count not numeric: ${scalar}`), auditRef }
+          return {
+            ran: false,
+            reason: boundedReason(`violation count not numeric: ${scalar}`),
+            auditRef,
+          }
         }
         return { ran: true, count, auditRef }
       } catch (e) {
@@ -1054,11 +1057,28 @@ const constraintScenario: VerifyScenarioDefinition<
         'Column to check (repeatable for not-null/unique; the child FK column for fk)',
         (val: string, prev: string[] = []) => [...prev, val]
       )
-      .option('--references <table.column>', 'Referenced <table>.<column> (required for --check fk)')
-      .option('--violation-query <sql>', 'Read-only SELECT counting violations (required for --check custom)')
-      .option('--allow-preexisting', 'Tolerate pre-existing violations: verified when count <= --baseline', false)
-      .option('--baseline <n>', 'Baseline violation count measured at preflight (use with --allow-preexisting)')
-      .option('--after-write', 'Re-run the violation count and write a verification artifact', false)
+      .option(
+        '--references <table.column>',
+        'Referenced <table>.<column> (required for --check fk)'
+      )
+      .option(
+        '--violation-query <sql>',
+        'Read-only SELECT counting violations (required for --check custom)'
+      )
+      .option(
+        '--allow-preexisting',
+        'Tolerate pre-existing violations: verified when count <= --baseline',
+        false
+      )
+      .option(
+        '--baseline <n>',
+        'Baseline violation count measured at preflight (use with --allow-preexisting)'
+      )
+      .option(
+        '--after-write',
+        'Re-run the violation count and write a verification artifact',
+        false
+      )
       .option('--format <format>', 'Output format: table (default) or json', 'table')
       .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
       .option('--summary <text>', 'Optional artifact summary override (after-write mode)')

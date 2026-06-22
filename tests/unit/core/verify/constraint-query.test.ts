@@ -22,21 +22,31 @@ describe('quoteIdent', () => {
 
 describe('buildNotNullViolationQuery', () => {
   test('single column', () => {
-    expect(buildNotNullViolationQuery({ engine: 'postgresql', table: 'users', columns: ['email'] })).toBe(
-      'SELECT COUNT(*) AS violation_count FROM "users" WHERE "email" IS NULL'
-    )
+    expect(
+      buildNotNullViolationQuery({ engine: 'postgresql', table: 'users', columns: ['email'] })
+    ).toBe('SELECT COUNT(*) AS violation_count FROM "users" WHERE "email" IS NULL')
   })
   test('multiple columns OR-joined', () => {
     expect(
-      buildNotNullViolationQuery({ engine: 'postgresql', table: 'users', columns: ['email', 'name'] })
-    ).toBe('SELECT COUNT(*) AS violation_count FROM "users" WHERE "email" IS NULL OR "name" IS NULL')
+      buildNotNullViolationQuery({
+        engine: 'postgresql',
+        table: 'users',
+        columns: ['email', 'name'],
+      })
+    ).toBe(
+      'SELECT COUNT(*) AS violation_count FROM "users" WHERE "email" IS NULL OR "name" IS NULL'
+    )
   })
 })
 
 describe('buildUniqueViolationQuery', () => {
   test('composite key', () => {
     expect(
-      buildUniqueViolationQuery({ engine: 'postgresql', table: 'members', columns: ['org_id', 'email'] })
+      buildUniqueViolationQuery({
+        engine: 'postgresql',
+        table: 'members',
+        columns: ['org_id', 'email'],
+      })
     ).toBe(
       'SELECT COUNT(*) AS violation_count FROM (SELECT 1 FROM "members" GROUP BY "org_id", "email" HAVING COUNT(*) > 1) AS dups'
     )

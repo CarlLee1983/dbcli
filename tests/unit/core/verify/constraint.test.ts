@@ -37,26 +37,42 @@ describe('normalizeConstraintInput', () => {
     expect(input.columns).toEqual(['user_id'])
     expect(input.references).toEqual({ table: 'users', column: 'id' })
     expect(() =>
-      normalizeConstraintInput({ check: 'fk', table: 'orders', column: ['a', 'b'], references: 'users.id' })
+      normalizeConstraintInput({
+        check: 'fk',
+        table: 'orders',
+        column: ['a', 'b'],
+        references: 'users.id',
+      })
     ).toThrow(VerifyInputError)
     expect(() =>
       normalizeConstraintInput({ check: 'fk', table: 'orders', column: ['user_id'] })
     ).toThrow(VerifyInputError)
     expect(() =>
-      normalizeConstraintInput({ check: 'fk', table: 'orders', column: ['user_id'], references: 'usersid' })
+      normalizeConstraintInput({
+        check: 'fk',
+        table: 'orders',
+        column: ['user_id'],
+        references: 'usersid',
+      })
     ).toThrow(VerifyInputError)
   })
   test('not-null / unique require at least one column and forbid references/violation-query', () => {
-    expect(normalizeConstraintInput({ check: 'not-null', table: 'users', column: ['email'] }).columns).toEqual([
-      'email',
-    ])
-    expect(normalizeConstraintInput({ check: 'unique', table: 'm', column: ['a', 'b'] }).columns).toEqual([
-      'a',
-      'b',
-    ])
-    expect(() => normalizeConstraintInput({ check: 'not-null', table: 'users' })).toThrow(VerifyInputError)
+    expect(
+      normalizeConstraintInput({ check: 'not-null', table: 'users', column: ['email'] }).columns
+    ).toEqual(['email'])
+    expect(
+      normalizeConstraintInput({ check: 'unique', table: 'm', column: ['a', 'b'] }).columns
+    ).toEqual(['a', 'b'])
+    expect(() => normalizeConstraintInput({ check: 'not-null', table: 'users' })).toThrow(
+      VerifyInputError
+    )
     expect(() =>
-      normalizeConstraintInput({ check: 'unique', table: 'm', column: ['a'], violationQuery: 'SELECT 1' })
+      normalizeConstraintInput({
+        check: 'unique',
+        table: 'm',
+        column: ['a'],
+        violationQuery: 'SELECT 1',
+      })
     ).toThrow(VerifyInputError)
   })
   test('custom requires --violation-query and forbids columns/references', () => {
@@ -67,9 +83,16 @@ describe('normalizeConstraintInput', () => {
     })
     expect(input.violationQuery).toContain('violation_count')
     expect(input.columns).toEqual([])
-    expect(() => normalizeConstraintInput({ check: 'custom', table: 'users' })).toThrow(VerifyInputError)
+    expect(() => normalizeConstraintInput({ check: 'custom', table: 'users' })).toThrow(
+      VerifyInputError
+    )
     expect(() =>
-      normalizeConstraintInput({ check: 'custom', table: 'users', violationQuery: 'SELECT 1', column: ['x'] })
+      normalizeConstraintInput({
+        check: 'custom',
+        table: 'users',
+        violationQuery: 'SELECT 1',
+        column: ['x'],
+      })
     ).toThrow(VerifyInputError)
   })
   test('baseline parses a non-negative integer (default 0); allowPreexisting defaults false', () => {
@@ -86,10 +109,20 @@ describe('normalizeConstraintInput', () => {
     expect(b.baseline).toBe(5)
     expect(b.allowPreexisting).toBe(true)
     expect(() =>
-      normalizeConstraintInput({ check: 'not-null', table: 'users', column: ['email'], baseline: '-1' })
+      normalizeConstraintInput({
+        check: 'not-null',
+        table: 'users',
+        column: ['email'],
+        baseline: '-1',
+      })
     ).toThrow(VerifyInputError)
     expect(() =>
-      normalizeConstraintInput({ check: 'not-null', table: 'users', column: ['email'], baseline: 'x' })
+      normalizeConstraintInput({
+        check: 'not-null',
+        table: 'users',
+        column: ['email'],
+        baseline: 'x',
+      })
     ).toThrow(VerifyInputError)
   })
   test('defaults format=table and afterWrite=false', () => {
@@ -137,17 +170,23 @@ describe('buildConstraintAfterWriteCommand', () => {
 
 describe('runConstraintPreflight', () => {
   test('ready when all guards pass; captures baseline from the count', async () => {
-    const r = await runConstraintPreflight(normalizeConstraintInput({ ...NN_RAW }), runners({
-      runViolationCount: async () => ({ ran: true, count: 2 }),
-    }))
+    const r = await runConstraintPreflight(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners({
+        runViolationCount: async () => ({ ran: true, count: 2 }),
+      })
+    )
     expect(r.status).toBe('ready')
     expect(r.baseline).toBe(2)
     expect(r.guards).toHaveLength(3)
   })
   test('blocked when a guard fails; no baseline', async () => {
-    const r = await runConstraintPreflight(normalizeConstraintInput({ ...NN_RAW }), runners({
-      blacklistGuard: async () => ({ ok: false, reason: 'blacklisted' }),
-    }))
+    const r = await runConstraintPreflight(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners({
+        blacklistGuard: async () => ({ ok: false, reason: 'blacklisted' }),
+      })
+    )
     expect(r.status).toBe('blocked')
     expect(r.baseline).toBeUndefined()
   })
@@ -155,10 +194,18 @@ describe('runConstraintPreflight', () => {
 
 describe('runConstraintAfterWrite verdict mapping', () => {
   test('verified when violations == 0 (strict default)', async () => {
-    const r = await runConstraintAfterWrite(normalizeConstraintInput({ ...NN_RAW }), runners(), FIXED)
+    const r = await runConstraintAfterWrite(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners(),
+      FIXED
+    )
     expect(r.status).toBe('verified')
     expect(r.assertion).toEqual({ violations: 0, threshold: 0, passed: true })
-    expect(r.artifact.subject).toEqual({ kind: 'table', name: 'users', command: 'verify constraint' })
+    expect(r.artifact.subject).toEqual({
+      kind: 'table',
+      name: 'users',
+      command: 'verify constraint',
+    })
   })
   test('not_verified when violations > 0 (strict default)', async () => {
     const r = await runConstraintAfterWrite(

@@ -40,3 +40,24 @@ export function buildFkViolationQuery(a: {
   const ref = quoteIdent(a.refColumn, a.engine)
   return `SELECT COUNT(*) AS violation_count FROM ${quoteIdent(a.table, a.engine)} AS c LEFT JOIN ${quoteIdent(a.refTable, a.engine)} AS p ON c.${col} = p.${ref} WHERE c.${col} IS NOT NULL AND p.${ref} IS NULL`
 }
+
+import type { ConstraintInput } from './constraint'
+
+export function buildViolationQuery(input: ConstraintInput, engine: ConstraintEngine): string {
+  switch (input.check) {
+    case 'custom':
+      return input.violationQuery as string
+    case 'not-null':
+      return buildNotNullViolationQuery({ engine, table: input.table, columns: input.columns })
+    case 'unique':
+      return buildUniqueViolationQuery({ engine, table: input.table, columns: input.columns })
+    case 'fk':
+      return buildFkViolationQuery({
+        engine,
+        table: input.table,
+        column: input.columns[0] as string,
+        refTable: input.references!.table,
+        refColumn: input.references!.column,
+      })
+  }
+}

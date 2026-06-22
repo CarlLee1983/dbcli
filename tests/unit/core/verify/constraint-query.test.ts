@@ -58,3 +58,28 @@ describe('buildFkViolationQuery', () => {
     )
   })
 })
+
+import { buildViolationQuery } from '@/core/verify/constraint-query'
+import { normalizeConstraintInput } from '@/core/verify/constraint'
+
+describe('buildViolationQuery dispatches by check', () => {
+  test('custom returns the agent-supplied query verbatim', () => {
+    const input = normalizeConstraintInput({
+      check: 'custom',
+      table: 'users',
+      violationQuery: 'SELECT COUNT(*) AS violation_count FROM users WHERE banned',
+    })
+    expect(buildViolationQuery(input, 'postgresql')).toBe(
+      'SELECT COUNT(*) AS violation_count FROM users WHERE banned'
+    )
+  })
+  test('fk dispatches to the orphan-count builder', () => {
+    const input = normalizeConstraintInput({
+      check: 'fk',
+      table: 'orders',
+      column: ['user_id'],
+      references: 'users.id',
+    })
+    expect(buildViolationQuery(input, 'postgresql')).toContain('LEFT JOIN "users" AS p')
+  })
+})

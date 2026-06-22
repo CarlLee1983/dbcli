@@ -39,8 +39,10 @@ describe('parseVerificationSubject', () => {
 
   test('isVerificationSubjectKind matches the known set', () => {
     expect(isVerificationSubjectKind('backfill')).toBe(true)
+    expect(isVerificationSubjectKind('table')).toBe(true)
     expect(isVerificationSubjectKind('nope')).toBe(false)
     expect(VERIFICATION_SUBJECT_KINDS).toContain('assertion')
+    expect(VERIFICATION_SUBJECT_KINDS).toContain('table')
   })
 })
 

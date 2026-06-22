@@ -15,6 +15,7 @@ export const VERIFICATION_SUBJECT_KINDS = [
   'assertion',
   'migration',
   'backfill',
+  'table',
   'manual',
 ] as const satisfies readonly VerificationSubjectKind[]
 

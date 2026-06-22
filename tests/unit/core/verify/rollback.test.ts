@@ -22,7 +22,7 @@ const DDL_RAW = {
 const DML_RAW = {
   kind: 'dml',
   table: 'users',
-  statement: "UPDATE users SET status = NULL WHERE status = 9",
+  statement: 'UPDATE users SET status = NULL WHERE status = 9',
   verifyQuery: 'SELECT count(*)::int AS n FROM users WHERE status = 9',
   expect: 'value == 0',
 }
@@ -117,7 +117,10 @@ describe('buildRollbackAfterWriteCommand', () => {
 
 describe('runRollbackPreflight', () => {
   test('ddl kind: all guards pass -> ready, statement guard is named "ddl"', async () => {
-    const result = await runRollbackPreflight(normalizeRollbackInput({ ...DDL_RAW }), passingRunners())
+    const result = await runRollbackPreflight(
+      normalizeRollbackInput({ ...DDL_RAW }),
+      passingRunners()
+    )
     expect(result.status).toBe('ready')
     expect(result.kind).toBe('ddl')
     expect(result.plannedStatement).toBe(DDL_RAW.statement)
@@ -130,7 +133,10 @@ describe('runRollbackPreflight', () => {
   })
 
   test('dml kind: statement guard is named "plan"', async () => {
-    const result = await runRollbackPreflight(normalizeRollbackInput({ ...DML_RAW }), passingRunners())
+    const result = await runRollbackPreflight(
+      normalizeRollbackInput({ ...DML_RAW }),
+      passingRunners()
+    )
     expect(result.kind).toBe('dml')
     expect(result.guards.map((g) => g.name)).toEqual([
       'blacklist',

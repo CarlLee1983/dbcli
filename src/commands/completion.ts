@@ -62,13 +62,18 @@ export function generateBashCompletion(root: CompletionCommandNode): string {
   const entries = flattenCommandTree(root)
   const rootOpts = optionFlags(root).join(' ')
   const commandPathHelper = bashCaseReturnFunction('_dbcli_is_command_path', commandPathKeys(root))
-  const optionValueHelper = bashCaseReturnFunction('_dbcli_option_takes_value_key', optionValueKeys(root))
+  const optionValueHelper = bashCaseReturnFunction(
+    '_dbcli_option_takes_value_key',
+    optionValueKeys(root)
+  )
 
   const cmdArms = entries
     .filter((e) => e.node.children.length > 0)
     .map((e) => {
       const key = e.path.join(' ')
-      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(' ')
+      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(
+        ' '
+      )
       return `    "${key}") COMPREPLY=( $(compgen -W "${words}" -- "$cur") ) ;;`
     })
     .join('\n')
@@ -135,13 +140,18 @@ export function generateZshCompletion(root: CompletionCommandNode): string {
   const entries = flattenCommandTree(root)
   const rootOpts = optionFlags(root).join(' ')
   const commandPathHelper = zshCaseReturnFunction('_dbcli_is_command_path', commandPathKeys(root))
-  const optionValueHelper = zshCaseReturnFunction('_dbcli_option_takes_value_key', optionValueKeys(root))
+  const optionValueHelper = zshCaseReturnFunction(
+    '_dbcli_option_takes_value_key',
+    optionValueKeys(root)
+  )
 
   const cmdArms = entries
     .filter((e) => e.node.children.length > 0)
     .map((e) => {
       const key = e.path.join(' ')
-      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(' ')
+      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(
+        ' '
+      )
       return `    "${key}") compadd -- ${words} ;;`
     })
     .join('\n')
@@ -264,7 +274,8 @@ export function generateFishCompletion(root: CompletionCommandNode): string {
   const sanitize = (s: string): string => s.replace(/'/g, '')
 
   for (const e of entries) {
-    const cond = e.path.length === 0 ? '__fish_use_subcommand' : `__fish_dbcli_path ${e.path.join(' ')}`
+    const cond =
+      e.path.length === 0 ? '__fish_use_subcommand' : `__fish_dbcli_path ${e.path.join(' ')}`
     for (const child of e.node.children) {
       lines.push(
         `complete -c dbcli -n '${cond}' -a ${child.name} -d '${sanitize(child.description) || child.name}'`
@@ -273,7 +284,9 @@ export function generateFishCompletion(root: CompletionCommandNode): string {
     for (const o of e.node.options) {
       const long = (o.long ?? '').replace(/^--/, '')
       if (!long) continue
-      lines.push(`complete -c dbcli -n '${cond}' -l ${long} -d '${sanitize(o.description || o.long || '')}'`)
+      lines.push(
+        `complete -c dbcli -n '${cond}' -l ${long} -d '${sanitize(o.description || o.long || '')}'`
+      )
     }
   }
 

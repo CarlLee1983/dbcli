@@ -1,10 +1,6 @@
 // src/core/repl/completer.ts
 import type { ReplContext } from './types'
-import {
-  SQL_KEYWORDS_FOR_COMPLETION,
-  SQL_KEYWORDS_FOR_DETECTION,
-  META_COMMANDS,
-} from './types'
+import { SQL_KEYWORDS_FOR_COMPLETION, SQL_KEYWORDS_FOR_DETECTION, META_COMMANDS } from './types'
 import { getReplCommandNames } from './command-registry'
 import { REDIS_COMMAND_TABLE } from '@/adapters/redis/command-metadata'
 

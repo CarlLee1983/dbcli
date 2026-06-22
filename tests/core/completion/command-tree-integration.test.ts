@@ -12,10 +12,29 @@ describe('buildProgram + buildCompletionTree integration', () => {
   test('top-level names include the full registered surface', () => {
     const names = listTopLevelCommandNames(root)
     for (const expected of [
-      'list', 'schema', 'query', 'q', 'queries', 'insert', 'update', 'delete',
-      'export', 'blacklist', 'inspect', 'report', 'guide', 'audit', 'verify',
-      'verification', 'proxy', 'assert', 'snapshot', 'use', 'migrate',
-      'completion', 'shell',
+      'list',
+      'schema',
+      'query',
+      'q',
+      'queries',
+      'insert',
+      'update',
+      'delete',
+      'export',
+      'blacklist',
+      'inspect',
+      'report',
+      'guide',
+      'audit',
+      'verify',
+      'verification',
+      'proxy',
+      'assert',
+      'snapshot',
+      'use',
+      'migrate',
+      'completion',
+      'shell',
     ]) {
       expect(names).toContain(expected)
     }
@@ -24,8 +43,12 @@ describe('buildProgram + buildCompletionTree integration', () => {
   test('subcommand-heavy groups expose children', () => {
     expect(findCommandPath(root, ['queries'])!.children.map((c) => c.name)).toContain('list')
     expect(findCommandPath(root, ['migrate'])!.children.map((c) => c.name)).toContain('add-column')
-    expect(findCommandPath(root, ['verify'])!.children.map((c) => c.name)).toContain('safe-backfill')
-    expect(findCommandPath(root, ['verification'])!.children.map((c) => c.name)).toContain('summary')
+    expect(findCommandPath(root, ['verify'])!.children.map((c) => c.name)).toContain(
+      'safe-backfill'
+    )
+    expect(findCommandPath(root, ['verification'])!.children.map((c) => c.name)).toContain(
+      'summary'
+    )
     expect(findCommandPath(root, ['audit'])!.children.map((c) => c.name)).toContain('tail')
     expect(findCommandPath(root, ['blacklist'])!.children.map((c) => c.name)).toContain('table')
   })

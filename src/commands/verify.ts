@@ -279,7 +279,9 @@ function buildRollbackRunners(ctx: RealRunnerContext, input: RollbackInput): Rol
     if (!isSingleStatement(statement)) {
       return {
         ok: false,
-        reason: boundedReason('--statement must be a single statement (no `;`-separated statements).'),
+        reason: boundedReason(
+          '--statement must be a single statement (no `;`-separated statements).'
+        ),
       }
     }
     if (!isAlterTableDdl(statement)) {
@@ -310,7 +312,9 @@ function buildRollbackRunners(ctx: RealRunnerContext, input: RollbackInput): Rol
     if (!ddlTargetMatchesTable(statement, table)) {
       return {
         ok: false,
-        reason: boundedReason(`--statement ALTER TABLE target '${target}' must match --table '${table}'.`),
+        reason: boundedReason(
+          `--statement ALTER TABLE target '${target}' must match --table '${table}'.`
+        ),
       }
     }
     return { ok: true }
@@ -522,7 +526,10 @@ function buildMigrationPreflightJson(r: MigrationPreflightResult): unknown {
   }
 }
 
-function buildMigrationAfterWriteJson(r: MigrationAfterWriteResult, artifactPath?: string): unknown {
+function buildMigrationAfterWriteJson(
+  r: MigrationAfterWriteResult,
+  artifactPath?: string
+): unknown {
   return {
     scenario: r.scenario,
     mode: r.mode,
@@ -775,7 +782,10 @@ const rollbackScenario: VerifyScenarioDefinition<
         '--statement <sql>',
         'Proposed reverting statement (analyzed, never executed)'
       )
-      .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the post-rollback assertion')
+      .requiredOption(
+        '--verify-query <sql>',
+        'Read-only SELECT used by the post-rollback assertion'
+      )
       .requiredOption('--expect <expr>', 'Assertion expression, e.g. "value == 0"')
       .option(
         '--after-write',
@@ -846,7 +856,12 @@ export const BUILTIN_VERIFY_SCENARIOS: AnyVerifyScenario[] = [
  * once -> build runners -> run preflight/after-write -> render -> persist artifact
  * (after-write) -> disconnect in finally -> map state to exit code.
  */
-async function executeScenario<Input extends VerifyScenarioInputBase, Runners, Preflight, AfterWrite>(
+async function executeScenario<
+  Input extends VerifyScenarioInputBase,
+  Runners,
+  Preflight,
+  AfterWrite,
+>(
   def: VerifyScenarioDefinition<Input, Runners, Preflight, AfterWrite>,
   options: Record<string, unknown>,
   command: Command

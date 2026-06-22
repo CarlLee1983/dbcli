@@ -72,7 +72,9 @@ beforeAll(async () => {
   try {
     await adapter.execute(`DROP TABLE IF EXISTS ${TABLE}`)
     await adapter.execute(`CREATE TABLE ${TABLE} (id int, status int)`)
-    await adapter.execute(`INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`)
+    await adapter.execute(
+      `INSERT INTO ${TABLE} (id, status) VALUES (1, NULL), (2, NULL), (3, NULL)`
+    )
     await adapter.disconnect()
 
     WORK = await mkdtemp(join(tmpdir(), 'dbcli-verify-rb-'))

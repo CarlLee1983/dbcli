@@ -148,9 +148,8 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // never drifts from the actual CLI surface. Dynamic import avoids the static
   // cycle: program imports shellCommand, which imports this module.
   const { buildProgram } = await import('@/program')
-  const { buildCompletionTree, listTopLevelCommandNames } = await import(
-    '@/core/completion/command-tree'
-  )
+  const { buildCompletionTree, listTopLevelCommandNames } =
+    await import('@/core/completion/command-tree')
   const { setReplCommandNames } = await import('@/core/repl/command-registry')
   setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
 

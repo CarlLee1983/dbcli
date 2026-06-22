@@ -46,7 +46,11 @@ program.hook('preAction', (thisCommand, actionCommand) => {
 
   setGlobalLogger(createLogger(level))
 
-  if (!opts.quiet && !QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) && !shouldSkipBackgroundChecks()) {
+  if (
+    !opts.quiet &&
+    !QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) &&
+    !shouldSkipBackgroundChecks()
+  ) {
     const configPath = resolveConfigPath(actionCommand)
     void (async () => {
       try {
@@ -73,7 +77,8 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
     process.stderr.write(formatUpdateHint(_bgVersionCheckResult.latestVersion) + '\n')
   }
 
-  const isQuietOutput = QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) || actionCommand.name() === 'skill'
+  const isQuietOutput =
+    QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) || actionCommand.name() === 'skill'
   if (!thisCommand.opts().quiet && !isQuietOutput && !shouldSkipBackgroundChecks()) {
     const outdatedSkills = await checkSkillUpdates()
     if (outdatedSkills.length > 0) {

@@ -11,7 +11,12 @@ import {
 } from '../../../src/commands/completion'
 import type { CompletionCommandNode } from '../../../src/core/completion/command-tree'
 
-function opt(long: string): { long: string; requiredValue: boolean; optionalValue: boolean; description: string } {
+function opt(long: string): {
+  long: string
+  requiredValue: boolean
+  optionalValue: boolean
+  description: string
+} {
   return { long, requiredValue: true, optionalValue: false, description: long }
 }
 
@@ -39,7 +44,9 @@ const ROOT: CompletionCommandNode = {
       name: 'skill',
       description: 'skill',
       options: [opt('--lang')],
-      children: [{ name: 'context', description: 'context', options: [opt('--format')], children: [] }],
+      children: [
+        { name: 'context', description: 'context', options: [opt('--format')], children: [] },
+      ],
     },
     {
       name: 'migrate',
@@ -131,7 +138,14 @@ describe('generateBashCompletion', () => {
     expect(script).toContain('add')
   })
   test('keeps nested option completion after option values', async () => {
-    const candidates = await runBashCompletion(script, ['dbcli', 'queries', 'list', '--format', 'json', '--'])
+    const candidates = await runBashCompletion(script, [
+      'dbcli',
+      'queries',
+      'list',
+      '--format',
+      'json',
+      '--',
+    ])
     expect(candidates).toContain('--tag')
     expect(candidates).toContain('--engine')
     expect(candidates).not.toContain('--config')
@@ -142,7 +156,14 @@ describe('generateBashCompletion', () => {
     expect(candidates).not.toContain('--config')
   })
   test('keeps child command path after parent option value', async () => {
-    const candidates = await runBashCompletion(script, ['dbcli', 'skill', '--lang', 'zh-TW', 'context', '--'])
+    const candidates = await runBashCompletion(script, [
+      'dbcli',
+      'skill',
+      '--lang',
+      'zh-TW',
+      'context',
+      '--',
+    ])
     expect(candidates).toContain('--format')
     expect(candidates).not.toContain('--config')
   })
@@ -169,7 +190,7 @@ describe('generateZshCompletion', () => {
 describe('generateFishCompletion', () => {
   const script = generateFishCompletion(ROOT)
   test('root subcommand completion', () => {
-    expect(script).toContain("__fish_use_subcommand")
+    expect(script).toContain('__fish_use_subcommand')
     expect(script).toContain('-a queries')
   })
   test('scoped nested subcommand + option completion', () => {

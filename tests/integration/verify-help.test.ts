@@ -29,6 +29,7 @@ describe('verify --help surface', () => {
     expectCleanHelp(result)
     expect(result.stdout).toContain('safe-backfill')
     expect(result.stdout).toContain('migration')
+    expect(result.stdout).toContain('rollback')
   })
 
   test('verify safe-backfill --help keeps its option surface', async () => {
@@ -56,6 +57,25 @@ describe('verify --help surface', () => {
     for (const flag of [
       '--table',
       '--ddl',
+      '--verify-query',
+      '--expect',
+      '--after-write',
+      '--format',
+      '--subject-name',
+      '--summary',
+    ]) {
+      expect(stdout).toContain(flag)
+    }
+  })
+
+  test('verify rollback --help exposes --kind and --statement', async () => {
+    const result = await runHelp(['verify', 'rollback', '--help'])
+    expectCleanHelp(result)
+    const { stdout } = result
+    for (const flag of [
+      '--kind',
+      '--table',
+      '--statement',
       '--verify-query',
       '--expect',
       '--after-write',

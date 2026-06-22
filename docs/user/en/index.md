@@ -324,6 +324,63 @@ escapes, or more than three parts) are **blocked before** the after-write
 assertion, with a reason that says the target could not be parsed — distinct from
 the `must match --table` mismatch reason.
 
+#### verify rollback
+
+Preflight or after-write verification for a rollback you apply externally — either
+reverting a schema migration (`--kind ddl`) or reverting a data change
+(`--kind dml`). **This command never executes the reverting statement** — it
+analyzes the proposed `--statement`, runs read-only guards, and (in after-write
+mode) records evidence after you apply the rollback yourself.
+
+> ⚠️ `verify rollback` never executes the rollback statement. Apply the rollback
+> externally first, then run `--after-write` to record evidence.
+
+Schema rollback preflight (`--kind ddl`, a single `ALTER TABLE`):
+
+    dbcli verify rollback \
+      --kind ddl \
+      --table users \
+      --statement "ALTER TABLE users DROP COLUMN verified_at" \
+      --verify-query "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verified_at'" \
+      --expect "value == 0"
+
+Data rollback preflight (`--kind dml`, a single `UPDATE`):
+
+    dbcli verify rollback \
+      --kind dml \
+      --table users \
+      --statement "UPDATE users SET status = NULL WHERE status = 9" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE status = 9" \
+      --expect "value == 0"
+
+After the rollback is applied externally:
+
+    dbcli verify rollback --kind <ddl|dml> ... --after-write
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--kind <ddl\|dml>` | yes | Reverting-statement kind: `ddl` (a single `ALTER TABLE`) or `dml` (a single `UPDATE`). |
+| `--table <table>` | yes | Table affected by the rollback. |
+| `--statement <sql>` | yes | Proposed reverting statement, analyzed but never executed. |
+| `--verify-query <sql>` | yes | Plain `SELECT` for post-rollback read-back verification. |
+| `--expect <expr>` | yes | Assertion expression for the read-back result. |
+| `--after-write` | no | Run the post-rollback assertion and write a v1 artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override. |
+
+`--kind` selects which grammar the statement must satisfy and reuses the same
+guards as the sibling scenarios: `ddl` reuses the `verify migration` `ALTER TABLE`
+contract (single statement, target must match `--table`); `dml` reuses the
+`verify safe-backfill` plan contract (`UPDATE` only, must have a `WHERE`, target
+must match `--table`). Preflight returns `ready` or `blocked`; **`ready` is not
+`verified`**. After-write maps the read-back assertion to `verified` /
+`not_verified` / `indeterminate`, and a failed guard to `blocked`. The artifact
+records the rollback under the existing subject kind (`migration` for `ddl`,
+`backfill` for `dml`) with `command: verify rollback`. The MVP supports a single
+`ALTER TABLE` for `ddl` and a single `UPDATE` for `dml`; `INSERT`/`DELETE` reverts
+are not yet supported.
+
 <!-- doc-key: verification-inspect -->
 ### verification — inspect & manage verification artifacts
 

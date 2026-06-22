@@ -378,6 +378,41 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             <p class="mb-4">Preflight returns <code>ready</code> or <code>blocked</code> and prints the exact after-write command; <strong><code>ready</code> is not <code>verified</code></strong> — it only means the guards passed. After-write maps the read-back assertion to <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>, and a failed guard to <code>blocked</code>. <code>CREATE TABLE</code>, <code>DROP TABLE</code>, <code>CREATE INDEX</code>, and multi-statement DDL are blocked in the MVP.</p>
             <p class="mb-4">The <code>ALTER TABLE</code> target may be <code>table</code>, <code>schema.table</code>, or <code>catalog.schema.table</code>. Each segment is a simple unquoted name (<code>[A-Za-z_][A-Za-z0-9_]*</code>) or a quoted identifier — double-quoted (<code>"…"</code>), backtick-quoted (<code>`…`</code>), or bracket-quoted (<code>[…]</code>) — so <code>"user accounts"</code> or <code>"tenant-1"."orders"</code> are accepted. Targets that cannot be fully parsed under this contract (unterminated quotes, unsupported escapes, or more than three parts) are blocked before the after-write assertion with a "could not be parsed" reason, distinct from the <code>must match --table</code> mismatch reason.</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify rollback</h4>
+            <p class="mb-4">Preflight or after-write verification for a rollback you apply externally — either reverting a schema migration (<code>--kind ddl</code>) or reverting a data change (<code>--kind dml</code>). <strong>This command never executes the reverting statement</strong> — it analyzes the proposed <code>--statement</code>, runs read-only guards, and (in after-write mode) records evidence after you apply the rollback yourself.</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify rollback</code> never executes the rollback statement. Apply the rollback externally first, then run <code>--after-write</code> to record evidence.</p>
+            <p class="mb-2"><strong>Schema rollback preflight (<code>--kind ddl</code>, a single <code>ALTER TABLE</code>):</strong></p>
+            <pre><code>dbcli verify rollback \
+  --kind ddl \
+  --table users \
+  --statement "ALTER TABLE users DROP COLUMN verified_at" \
+  --verify-query "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verified_at'" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>Data rollback preflight (<code>--kind dml</code>, a single <code>UPDATE</code>):</strong></p>
+            <pre><code>dbcli verify rollback \
+  --kind dml \
+  --table users \
+  --statement "UPDATE users SET status = NULL WHERE status = 9" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status = 9" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>After the rollback is applied externally:</strong></p>
+            <pre><code>dbcli verify rollback --kind &lt;ddl|dml&gt; ... --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>--kind &lt;ddl|dml&gt;</code></td><td>yes</td><td>Reverting-statement kind: <code>ddl</code> (a single <code>ALTER TABLE</code>) or <code>dml</code> (a single <code>UPDATE</code>).</td></tr>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>yes</td><td>Table affected by the rollback.</td></tr>
+                <tr><td><code>--statement &lt;sql&gt;</code></td><td>yes</td><td>Proposed reverting statement, analyzed but never executed.</td></tr>
+                <tr><td><code>--verify-query &lt;sql&gt;</code></td><td>yes</td><td>Plain <code>SELECT</code> for post-rollback read-back verification.</td></tr>
+                <tr><td><code>--expect &lt;expr&gt;</code></td><td>yes</td><td>Assertion expression for the read-back result.</td></tr>
+                <tr><td><code>--after-write</code></td><td>no</td><td>Run the post-rollback assertion and write a v1 artifact.</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>no</td><td>Output format, default <code>table</code>.</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>no</td><td>Artifact subject name. Default is the table name.</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>no</td><td>Optional artifact summary override.</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4"><code>--kind</code> selects which grammar the statement must satisfy and reuses the same guards as the sibling scenarios: <code>ddl</code> reuses the <code>verify migration</code> <code>ALTER TABLE</code> contract (single statement, target must match <code>--table</code>); <code>dml</code> reuses the <code>verify safe-backfill</code> plan contract (<code>UPDATE</code> only, must have a <code>WHERE</code>, target must match <code>--table</code>). Preflight returns <code>ready</code> or <code>blocked</code>; <strong><code>ready</code> is not <code>verified</code></strong>. After-write maps the read-back assertion to <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>, and a failed guard to <code>blocked</code>. The artifact records the rollback under the existing subject kind (<code>migration</code> for <code>ddl</code>, <code>backfill</code> for <code>dml</code>) with <code>command: verify rollback</code>. The MVP supports a single <code>ALTER TABLE</code> for <code>ddl</code> and a single <code>UPDATE</code> for <code>dml</code>; <code>INSERT</code>/<code>DELETE</code> reverts are not yet supported.</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> works on artifacts written under <code>&lt;cwd&gt;/.dbcli/verification/</code>. It never connects to a database and never writes audit entries. <code>list</code>, <code>show</code>, and <code>summary</code> are read-only filesystem inspection; <code>prune</code> is a local lifecycle command that is dry-run by default and deletes files only with <code>--execute --force</code>. The storage root is the current working directory, independent of <code>--config</code>.</p>

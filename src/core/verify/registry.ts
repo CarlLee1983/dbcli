@@ -5,7 +5,7 @@ import type { configModule } from '@/core/config'
 import type { VerificationArtifact } from '@/core/verification'
 
 /** Subject classification for a built-in verify scenario (auditable, never user-extended). */
-export type VerifyScenarioSubjectKind = 'table' | 'migration'
+export type VerifyScenarioSubjectKind = 'table' | 'migration' | 'rollback'
 
 /** Fields every scenario input must expose so the generic lifecycle can drive flow. */
 export interface VerifyScenarioInputBase {

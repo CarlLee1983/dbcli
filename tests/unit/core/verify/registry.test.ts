@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { BUILTIN_VERIFY_SCENARIOS } from '@/commands/verify'
 import type { VerifyScenarioSubjectKind } from '@/core/verify'
 
-const SUBJECT_KINDS: VerifyScenarioSubjectKind[] = ['table', 'migration']
+const SUBJECT_KINDS: VerifyScenarioSubjectKind[] = ['table', 'migration', 'rollback']
 const REQUIRED_HOOKS = [
   'configureOptions',
   'normalize',
@@ -20,7 +20,7 @@ const REQUIRED_HOOKS = [
 describe('BUILTIN_VERIFY_SCENARIOS registry', () => {
   test('contains exactly the expected built-in scenario names', () => {
     const names = BUILTIN_VERIFY_SCENARIOS.map((s) => s.name).sort()
-    expect(names).toEqual(['migration', 'safe-backfill'])
+    expect(names).toEqual(['migration', 'rollback', 'safe-backfill'])
   })
 
   test('scenario names are unique', () => {

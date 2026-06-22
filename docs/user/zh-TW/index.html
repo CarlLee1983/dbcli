@@ -378,6 +378,41 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             <p class="mb-4">預檢回傳 <code>ready</code> 或 <code>blocked</code> 並印出精確的 after-write 指令；<strong><code>ready</code> 不等於 <code>verified</code></strong> — 只表示防護通過。After-write 將回讀斷言對應至 <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>，防護失敗則為 <code>blocked</code>。MVP 中 <code>CREATE TABLE</code>、<code>DROP TABLE</code>、<code>CREATE INDEX</code> 及多語句 DDL 均會被阻擋。</p>
             <p class="mb-4"><code>ALTER TABLE</code> 目標可為 <code>table</code>、<code>schema.table</code> 或 <code>catalog.schema.table</code>。每個區段可為簡單未加引號的名稱（<code>[A-Za-z_][A-Za-z0-9_]*</code>）或加引號的識別字 — 雙引號（<code>"…"</code>）、反引號（<code>`…`</code>）或方括號（<code>[…]</code>） — 因此 <code>"user accounts"</code> 或 <code>"tenant-1"."orders"</code> 皆可接受。無法在此契約下完整解析的目標（未封閉的引號、不支援的跳脫、或超過三個區段）會在 after-write 斷言之前被阻擋，原因明示「目標無法解析」，與 <code>must match --table</code> 的不符原因有所區別。</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify rollback</h4>
+            <p class="mb-4">針對你於外部套用的 rollback 進行預檢或 after-write 驗證 — 可還原 schema migration（<code>--kind ddl</code>）或還原資料變更（<code>--kind dml</code>）。<strong>此指令永遠不會執行還原語句</strong> — 它分析提案的 <code>--statement</code>、執行唯讀防護，並（在 after-write 模式下）在你自行套用 rollback 後記錄佐證。</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify rollback</code> 永不執行 rollback 語句。請先在外部套用 rollback，再執行 <code>--after-write</code> 記錄佐證。</p>
+            <p class="mb-2"><strong>Schema rollback 預檢（<code>--kind ddl</code>，單一 <code>ALTER TABLE</code>）：</strong></p>
+            <pre><code>dbcli verify rollback \
+  --kind ddl \
+  --table users \
+  --statement "ALTER TABLE users DROP COLUMN verified_at" \
+  --verify-query "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verified_at'" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>資料 rollback 預檢（<code>--kind dml</code>，單一 <code>UPDATE</code>）：</strong></p>
+            <pre><code>dbcli verify rollback \
+  --kind dml \
+  --table users \
+  --statement "UPDATE users SET status = NULL WHERE status = 9" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status = 9" \
+  --expect "value == 0"</code></pre>
+            <p class="mt-4 mb-2"><strong>在外部套用 rollback 後：</strong></p>
+            <pre><code>dbcli verify rollback --kind &lt;ddl|dml&gt; ... --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>必填</th><th>說明</th></tr></thead>
+              <tbody>
+                <tr><td><code>--kind &lt;ddl|dml&gt;</code></td><td>是</td><td>還原語句種類：<code>ddl</code>（單一 <code>ALTER TABLE</code>）或 <code>dml</code>（單一 <code>UPDATE</code>）。</td></tr>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>是</td><td>Rollback 影響的資料表。</td></tr>
+                <tr><td><code>--statement &lt;sql&gt;</code></td><td>是</td><td>提案的還原語句，僅分析，永不執行。</td></tr>
+                <tr><td><code>--verify-query &lt;sql&gt;</code></td><td>是</td><td>rollback 後回讀驗證用的純 <code>SELECT</code>。</td></tr>
+                <tr><td><code>--expect &lt;expr&gt;</code></td><td>是</td><td>回讀結果的斷言表達式。</td></tr>
+                <tr><td><code>--after-write</code></td><td>否</td><td>執行 rollback 後的斷言並寫入 v1 文物。</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>否</td><td>輸出格式，預設 <code>table</code>。</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>否</td><td>文物 subject 名稱，預設為資料表名稱。</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>否</td><td>選填文物摘要覆寫。</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4"><code>--kind</code> 決定語句須符合哪一種文法，並復用同類 scenario 的防護：<code>ddl</code> 復用 <code>verify migration</code> 的 <code>ALTER TABLE</code> 契約（單一語句、目標須符合 <code>--table</code>）；<code>dml</code> 復用 <code>verify safe-backfill</code> 的 plan 契約（僅 <code>UPDATE</code>、須含 <code>WHERE</code>、目標須符合 <code>--table</code>）。預檢回傳 <code>ready</code> 或 <code>blocked</code>；<strong><code>ready</code> 不等於 <code>verified</code></strong>。After-write 將回讀斷言對應至 <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>，防護失敗則為 <code>blocked</code>。文物會以既有的 subject kind 記錄此 rollback（<code>ddl</code> 為 <code>migration</code>，<code>dml</code> 為 <code>backfill</code>），並標記 <code>command: verify rollback</code>。MVP 中 <code>ddl</code> 僅支援單一 <code>ALTER TABLE</code>、<code>dml</code> 僅支援單一 <code>UPDATE</code>；尚未支援 <code>INSERT</code>／<code>DELETE</code> 還原。</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> 操作寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、也不寫入稽核記錄。<code>list</code>、<code>show</code>、<code>summary</code> 為唯讀的檔案系統檢視；<code>prune</code> 為本機生命週期指令，預設為 dry-run，僅在帶上 <code>--execute --force</code> 時才刪除檔案。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>

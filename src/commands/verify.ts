@@ -33,6 +33,13 @@ import {
   runMigrationAfterWrite,
   classifyMigrationDdl,
   classifyMigrationTarget,
+  isSingleStatement,
+  isAlterTableDdl,
+  extractAlterTableTarget,
+  ddlTargetMatchesTable,
+  normalizeRollbackInput,
+  runRollbackPreflight,
+  runRollbackAfterWrite,
   type SafeBackfillInput,
   type SafeBackfillRunners,
   type GuardOutcome,
@@ -43,6 +50,10 @@ import {
   type MigrationRunners,
   type MigrationPreflightResult,
   type MigrationAfterWriteResult,
+  type RollbackInput,
+  type RollbackRunners,
+  type RollbackPreflightResult,
+  type RollbackAfterWriteResult,
   type RealRunnerContext,
   type VerifyScenarioDefinition,
   type VerifyScenarioInputBase,
@@ -244,6 +255,147 @@ function buildMigrationRunners(ctx: RealRunnerContext): MigrationRunners {
   }
 }
 
+/**
+ * Build the rollback runners. The statement guard branches on `input.kind` and
+ * reuses the sibling scenarios' predicates (no duplicated safety logic): the DDL
+ * path reuses the migration ALTER TABLE classifiers, the DML path reuses the
+ * safe-backfill UPDATE plan checks. Bounded reasons name the actual `--statement`
+ * flag rather than `--ddl` / `--query`.
+ */
+function buildRollbackRunners(ctx: RealRunnerContext, input: RollbackInput): RollbackRunners {
+  const { adapter, config } = ctx
+  const blacklist = (config.blacklist ?? { tables: [], columns: {} }) as BlacklistConfig
+  const schema = (config.schema ?? {}) as Record<string, TableSchema>
+  const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
+
+  const analyze = (sql: string) =>
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+  // read-write so the plan guard can approve a valid reverting UPDATE even on a
+  // query-only connection; the reverting write is never executed here.
+  const analyzePlan = (sql: string) =>
+    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup })
+
+  const ddlStatementGuard = async (statement: string, table: string): Promise<GuardOutcome> => {
+    if (!isSingleStatement(statement)) {
+      return {
+        ok: false,
+        reason: boundedReason('--statement must be a single statement (no `;`-separated statements).'),
+      }
+    }
+    if (!isAlterTableDdl(statement)) {
+      return {
+        ok: false,
+        reason: boundedReason(
+          '--statement must be an ALTER TABLE statement for --kind ddl; CREATE/DROP/INDEX are blocked.'
+        ),
+      }
+    }
+    const r = analyze(statement)
+    if (r.operation !== 'DDL') {
+      return {
+        ok: false,
+        reason: boundedReason(`--statement did not classify as DDL (got ${r.operation}).`),
+      }
+    }
+    const target = extractAlterTableTarget(statement)
+    if (target === null) {
+      return {
+        ok: false,
+        reason: boundedReason(
+          '--statement ALTER TABLE target could not be parsed under the supported identifier ' +
+            'contract (simple or quoted names, up to catalog.schema.table).'
+        ),
+      }
+    }
+    if (!ddlTargetMatchesTable(statement, table)) {
+      return {
+        ok: false,
+        reason: boundedReason(`--statement ALTER TABLE target '${target}' must match --table '${table}'.`),
+      }
+    }
+    return { ok: true }
+  }
+
+  const dmlStatementGuard = async (statement: string, table: string): Promise<GuardOutcome> => {
+    const r = analyzePlan(statement)
+    if (!isUpdateOperation(r.operation)) {
+      return {
+        ok: false,
+        reason: boundedReason(
+          `--statement must be an UPDATE statement for --kind dml (got ${r.operation}).`
+        ),
+      }
+    }
+    if (r.decision === 'BLOCK') {
+      const why = r.riskFactors[0]?.message ?? 'plan blocked the write'
+      return { ok: false, reason: boundedReason(`plan blocked the rollback write: ${why}`) }
+    }
+    if (!updateTargetMatchesTable(statement, table)) {
+      const got = extractUpdateTargetTable(statement) ?? 'unknown'
+      return {
+        ok: false,
+        reason: boundedReason(`--statement UPDATE target '${got}' must match --table '${table}'.`),
+      }
+    }
+    return { ok: true }
+  }
+
+  return {
+    blacklistGuard: async (table): Promise<GuardOutcome> => {
+      const bm = new BlacklistManager(config)
+      if (bm.isTableBlacklisted(table) && !bm.canOverrideBlacklist()) {
+        return { ok: false, reason: boundedReason(`Target table '${table}' is blacklisted.`) }
+      }
+      return { ok: true }
+    },
+    schemaGuard: async (table): Promise<GuardOutcome> => {
+      try {
+        await adapter.getTableSchema(table)
+        return { ok: true }
+      } catch (e) {
+        return { ok: false, reason: boundedReason(`schema check failed: ${(e as Error).message}`) }
+      }
+    },
+    statementGuard: input.kind === 'ddl' ? ddlStatementGuard : dmlStatementGuard,
+    verifyReadonlyGuard: async (verifyQuery): Promise<GuardOutcome> => {
+      const r = analyze(verifyQuery)
+      if (!isPlainSelectVerifyQuery(r.operation, verifyQuery)) {
+        return {
+          ok: false,
+          reason: boundedReason(
+            `--verify-query must be a read-only plain SELECT (got ${r.operation}).`
+          ),
+        }
+      }
+      return { ok: true }
+    },
+    runAssertion: async (rollbackInput: RollbackInput): Promise<AssertionOutcome> => {
+      try {
+        const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
+        const executor = new QueryExecutor(
+          adapter,
+          config.permission,
+          blacklistValidator,
+          config,
+          ctx.options
+        )
+        const result = await executor.execute(rollbackInput.verifyQuery, { autoLimit: true })
+        const check = evaluateExpect(parseExpect(rollbackInput.expect), result)
+        const auditRef = await writeAuditEntry(config, 'verify', ctx.options, {
+          success: check.pass,
+          sql: rollbackInput.verifyQuery,
+        })
+        return { ran: true, pass: check.pass, auditRef }
+      } catch (e) {
+        if (e instanceof AssertExpressionError || e instanceof AssertShapeError) {
+          return { ran: false, reason: boundedReason((e as Error).message) }
+        }
+        return { ran: false, reason: boundedReason((e as Error).message) }
+      }
+    },
+  }
+}
+
 function formatPreflightTable(r: PreflightResult): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
@@ -375,6 +527,81 @@ function buildMigrationAfterWriteJson(r: MigrationAfterWriteResult, artifactPath
     scenario: r.scenario,
     mode: r.mode,
     status: r.status,
+    table: r.table,
+    artifact: {
+      id: r.artifact.id,
+      ...(artifactPath ? { path: artifactPath } : {}),
+      subject: r.artifact.subject,
+    },
+    ...(r.assertion ? { assertion: r.assertion } : {}),
+    ...(r.blockedReason ? { blockedReason: r.blockedReason } : {}),
+  }
+}
+
+function formatRollbackPreflightTable(r: RollbackPreflightResult): string {
+  const lines = [
+    `Scenario:    ${r.scenario}`,
+    `Mode:        preflight`,
+    `Kind:        ${r.kind}`,
+    `Table:       ${r.table}`,
+    `Status:      ${r.status}`,
+    'Guards:',
+  ]
+  for (const g of r.guards) {
+    lines.push(`  - ${g.name}: ${g.status}${g.reason ? ` (${g.reason})` : ''}`)
+  }
+  lines.push(
+    '',
+    'Planned rollback statement (you apply this externally; this command never executes it):'
+  )
+  lines.push(`  ${r.plannedStatement}`)
+  lines.push('', 'After-write command (run AFTER the rollback is applied externally):')
+  lines.push(`  ${r.afterWriteCommand}`)
+  lines.push('', 'Note: this scenario never executes the rollback statement itself.')
+  return lines.join('\n')
+}
+
+function formatRollbackAfterWriteTable(r: RollbackAfterWriteResult, artifactPath?: string): string {
+  const lines = [
+    `Scenario:    ${r.scenario}`,
+    `Mode:        after-write`,
+    `Kind:        ${r.kind}`,
+    `Table:       ${r.table}`,
+    `Status:      ${r.status}`,
+  ]
+  if (r.assertion)
+    lines.push(`Assertion:   ${r.assertion.expect} -> ${r.assertion.passed ? 'PASS' : 'FAIL'}`)
+  if (r.blockedReason) lines.push(`Reason:      ${r.blockedReason}`)
+  lines.push(`Summary:     ${r.artifact.summary}`)
+  lines.push(`Artifact id: ${r.artifact.id}`)
+  if (artifactPath) lines.push(`Artifact:    ${artifactPath}`)
+  lines.push('', `Next: dbcli verification show ${r.artifact.id}`)
+  return lines.join('\n')
+}
+
+function buildRollbackPreflightJson(r: RollbackPreflightResult): unknown {
+  return {
+    scenario: r.scenario,
+    mode: r.mode,
+    status: r.status,
+    kind: r.kind,
+    table: r.table,
+    plannedStatement: r.plannedStatement,
+    guards: r.guards.map((g) => ({
+      name: g.name,
+      status: g.status,
+      ...(g.reason ? { reason: g.reason } : {}),
+    })),
+    afterWriteCommand: r.afterWriteCommand,
+  }
+}
+
+function buildRollbackAfterWriteJson(r: RollbackAfterWriteResult, artifactPath?: string): unknown {
+  return {
+    scenario: r.scenario,
+    mode: r.mode,
+    status: r.status,
+    kind: r.kind,
     table: r.table,
     artifact: {
       id: r.artifact.id,
@@ -530,10 +757,84 @@ const migrationScenario: VerifyScenarioDefinition<
   },
 }
 
+const rollbackScenario: VerifyScenarioDefinition<
+  RollbackInput,
+  RollbackRunners,
+  RollbackPreflightResult,
+  RollbackAfterWriteResult
+> = {
+  name: 'rollback',
+  description:
+    'Preflight or after-write verification for an externally-applied rollback (--kind ddl|dml); never executes the statement',
+  subjectKind: 'rollback',
+  configureOptions(command) {
+    return command
+      .requiredOption('--kind <kind>', 'Rollback statement kind: ddl (ALTER TABLE) or dml (UPDATE)')
+      .requiredOption('--table <table>', 'Table affected by the rollback')
+      .requiredOption(
+        '--statement <sql>',
+        'Proposed reverting statement (analyzed, never executed)'
+      )
+      .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the post-rollback assertion')
+      .requiredOption('--expect <expr>', 'Assertion expression, e.g. "value == 0"')
+      .option(
+        '--after-write',
+        'Run the read-back assertion and write a verification artifact',
+        false
+      )
+      .option('--format <format>', 'Output format: table (default) or json', 'table')
+      .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
+      .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
+  },
+  normalize(options) {
+    return normalizeRollbackInput({
+      kind: options.kind,
+      table: options.table,
+      statement: options.statement,
+      verifyQuery: options.verifyQuery,
+      expect: options.expect,
+      afterWrite: options.afterWrite === true,
+      format: options.format,
+      subjectName: options.subjectName,
+      summary: options.summary,
+    })
+  },
+  createRunners(context, input) {
+    return buildRollbackRunners(context, input)
+  },
+  runPreflight(input, runners) {
+    return runRollbackPreflight(input, runners)
+  },
+  runAfterWrite(input, runners) {
+    return runRollbackAfterWrite(input, runners)
+  },
+  renderPreflight(result, format) {
+    return format === 'json'
+      ? JSON.stringify(buildRollbackPreflightJson(result), null, 2)
+      : formatRollbackPreflightTable(result)
+  },
+  artifactOf(result) {
+    return result.artifact
+  },
+  afterWriteJson(result, artifactPath) {
+    return buildRollbackAfterWriteJson(result, artifactPath)
+  },
+  renderAfterWriteTable(result, artifactPath) {
+    return formatRollbackAfterWriteTable(result, artifactPath)
+  },
+  isPreflightReady(result) {
+    return result.status === 'ready'
+  },
+  isAfterWriteVerified(result, artifactError) {
+    return result.status === 'verified' && !artifactError
+  },
+}
+
 /** All built-in verify scenarios, in CLI registration order. */
 export const BUILTIN_VERIFY_SCENARIOS: AnyVerifyScenario[] = [
   safeBackfillScenario,
   migrationScenario,
+  rollbackScenario,
 ]
 
 // --- Generic command lifecycle -------------------------------------------

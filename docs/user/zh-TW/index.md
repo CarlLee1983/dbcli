@@ -289,6 +289,48 @@ After-write（寫入文物）：
 
 **支援的 `ALTER TABLE` 目標識別字。** 目標可為 `table`、`schema.table` 或 `catalog.schema.table`。每個區段可為簡單未加引號的名稱（`[A-Za-z_][A-Za-z0-9_]*`），或加引號的識別字 — 雙引號（`"…"`）、反引號（`` `…` ``）或方括號（`[…]`） — 因此含空白或連字號的名稱（如 `"user accounts"` 或 `"tenant-1"."orders"`）皆可接受。無法在此契約下完整解析的目標（未封閉的引號、不支援的跳脫、或超過三個區段）會在 after-write 斷言**之前被阻擋**，原因會明示「目標無法解析」 — 與 `must match --table` 的不符原因有所區別。
 
+#### verify rollback
+
+針對你於外部套用的 rollback 進行預檢或 after-write 驗證 — 可還原 schema migration（`--kind ddl`）或還原資料變更（`--kind dml`）。**此指令永遠不會執行還原語句** — 它分析提案的 `--statement`、執行唯讀防護，並（在 after-write 模式下）在你自行套用 rollback 後記錄佐證。
+
+> ⚠️ `verify rollback` 永不執行 rollback 語句。請先在外部套用 rollback，再執行 `--after-write` 記錄佐證。
+
+Schema rollback 預檢（`--kind ddl`，單一 `ALTER TABLE`）：
+
+    dbcli verify rollback \
+      --kind ddl \
+      --table users \
+      --statement "ALTER TABLE users DROP COLUMN verified_at" \
+      --verify-query "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verified_at'" \
+      --expect "value == 0"
+
+資料 rollback 預檢（`--kind dml`，單一 `UPDATE`）：
+
+    dbcli verify rollback \
+      --kind dml \
+      --table users \
+      --statement "UPDATE users SET status = NULL WHERE status = 9" \
+      --verify-query "SELECT count(*)::int AS n FROM users WHERE status = 9" \
+      --expect "value == 0"
+
+在外部套用 rollback 後：
+
+    dbcli verify rollback --kind <ddl|dml> ... --after-write
+
+| Option | 必填 | 說明 |
+| --- | --- | --- |
+| `--kind <ddl\|dml>` | 是 | 還原語句種類：`ddl`（單一 `ALTER TABLE`）或 `dml`（單一 `UPDATE`）。 |
+| `--table <table>` | 是 | Rollback 影響的資料表。 |
+| `--statement <sql>` | 是 | 提案的還原語句，僅分析，永不執行。 |
+| `--verify-query <sql>` | 是 | rollback 後回讀驗證用的純 `SELECT`。 |
+| `--expect <expr>` | 是 | 回讀結果的斷言表達式。 |
+| `--after-write` | 否 | 執行 rollback 後的斷言並寫入 v1 文物。 |
+| `--format <table\|json>` | 否 | 輸出格式，預設 `table`。 |
+| `--subject-name <name>` | 否 | 文物 subject 名稱，預設為資料表名稱。 |
+| `--summary <text>` | 否 | 選填文物摘要覆寫。 |
+
+`--kind` 決定語句須符合哪一種文法，並復用同類 scenario 的防護：`ddl` 復用 `verify migration` 的 `ALTER TABLE` 契約（單一語句、目標須符合 `--table`）；`dml` 復用 `verify safe-backfill` 的 plan 契約（僅 `UPDATE`、須含 `WHERE`、目標須符合 `--table`）。預檢回傳 `ready` 或 `blocked`；**`ready` 不等於 `verified`**。After-write 將回讀斷言對應至 `verified` / `not_verified` / `indeterminate`，防護失敗則為 `blocked`。文物會以既有的 subject kind 記錄此 rollback（`ddl` 為 `migration`，`dml` 為 `backfill`），並標記 `command: verify rollback`。MVP 中 `ddl` 僅支援單一 `ALTER TABLE`、`dml` 僅支援單一 `UPDATE`；尚未支援 `INSERT`／`DELETE` 還原。
+
 <!-- doc-key: verification-inspect -->
 ### verification — 檢視與管理驗證文物
 

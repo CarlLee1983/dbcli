@@ -10,8 +10,9 @@ let names: readonly string[] = []
 let known: ReadonlySet<string> = new Set()
 
 export function setReplCommandNames(input: readonly string[]): void {
-  names = [...input]
-  known = new Set(input.filter((n) => !REPL_DENYLIST.has(n)))
+  const allowed = input.filter((n) => !REPL_DENYLIST.has(n))
+  names = allowed
+  known = new Set(allowed)
 }
 
 export function getReplCommandNames(): readonly string[] {

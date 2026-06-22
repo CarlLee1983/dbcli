@@ -31,6 +31,10 @@ describe('REPL command registry parity', () => {
     expect(isReplCommandKnown('shell')).toBe(false)
   })
 
+  test('completion list excludes denylisted commands', () => {
+    expect(getReplCommandNames()).not.toContain('shell')
+  })
+
   test('unknown command is not dispatchable', () => {
     expect(isReplCommandKnown('definitely-not-a-command')).toBe(false)
   })

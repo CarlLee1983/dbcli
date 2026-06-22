@@ -5,6 +5,17 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.37.0] - 2026-06-22 - Rollback Scenario & Nested Shell Completions
+
+### Added
+
+- **`dbcli verify rollback` 情境執行器(第三個內建 verify 情境)。** 透過已穩定的 scenario registry 註冊,以 preflight / after-write 兩種模式驗證「還原變更後資料庫是否回到預期的先前狀態」,且**永遠不執行**還原寫入 / DDL——只分析 `--statement` 並執行回讀斷言。以必填的 `--kind <ddl|dml>` 選擇還原語句文法:`ddl` 複用 `migration` 的單語句 `ALTER TABLE` 契約,`dml` 複用 `safe-backfill` 的 `UPDATE` plan 契約。安全邏輯完全複用兩個 sibling 情境的 classifier,無重複實作。artifact 沿用既有 subject kind(`ddl→migration`、`dml→backfill`)並以 `subject.command = 'verify rollback'` 記錄出處,因此 artifact schema 與版本不變。
+- **巢狀 bash / zsh / fish shell 補全。** 以遞迴 command-tree metadata model 從指令樹生成巢狀子指令與旗標補全,並由共用 registry 驅動 REPL 的補全與分派;補全會排除 denylisted 指令。
+
+### Changed
+
+- **REPL 補全 / 分派改由共用 registry 驅動。** 補全與指令分派統一從同一份 command registry 取得,降低 CLI 與 REPL 之間補全行為漂移的風險;`buildProgram` 抽成可重用 factory 並消除補全啟動噪音。
+
 ## [1.36.0] - 2026-06-22 - Verification Scenario Runner Suite
 
 ### Added

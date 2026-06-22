@@ -2,6 +2,11 @@ import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { join } from 'path'
 import { homedir } from 'os'
+
+function resolveHome(): string {
+  return process.env.HOME ?? homedir()
+}
+
 import {
   buildCompletionTree,
   flattenCommandTree,
@@ -153,7 +158,7 @@ export function generateFishCompletion(root: CompletionCommandNode): string {
 }
 
 export function getInstallPath(shell: string): string {
-  const home = homedir()
+  const home = resolveHome()
   switch (shell) {
     case 'bash':
       return join(home, '.bashrc')
@@ -181,7 +186,7 @@ export async function installCompletion(shell: string, script: string): Promise<
   const targetPath = getInstallPath(shell)
 
   if (shell === 'fish') {
-    const dir = join(homedir(), '.config', 'fish', 'completions')
+    const dir = join(resolveHome(), '.config', 'fish', 'completions')
     await Bun.$`mkdir -p ${dir}`.quiet()
     await Bun.file(targetPath).write(script)
     console.log(colors.success(`✓ Fish completion installed to ${targetPath}`))

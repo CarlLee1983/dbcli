@@ -788,6 +788,12 @@ dbcli completion --install zsh   # 指定 shell 安裝
 
 **支援 shell：** bash、zsh、fish
 
+已安裝的補全支援**巢狀子指令**，例如 `dbcli queries list --<TAB>`、`dbcli migrate add-column --<TAB>` 與 `dbcli verify safe-backfill --<TAB>`。
+
+在 `dbcli shell` 中，指令補全會依照目前的指令範圍運作，因此新增的指令（`q`、`queries`、`inspect`、`verify`、`proxy`、`snapshot` 等）會自動補全並可被執行。
+
+`--install` 採用**標記區塊管理**：它只會在 shell 設定檔寫入單一管理區塊，重新執行時會「取代」該區塊，而不會重複新增。
+
 ---
 
 #### `dbcli upgrade`

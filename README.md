@@ -890,6 +890,12 @@ dbcli completion --install zsh   # Install for specific shell
 
 **Supported shells:** bash, zsh, fish
 
+Installed completions cover **nested subcommands** — for example `dbcli queries list --<TAB>`, `dbcli migrate add-column --<TAB>`, and `dbcli verify safe-backfill --<TAB>`.
+
+Inside `dbcli shell`, command completion follows the current command surface, so newly added commands (`q`, `queries`, `inspect`, `verify`, `proxy`, `snapshot`, …) complete and dispatch automatically.
+
+`--install` is **marker-managed**: it writes a single block to your shell rc file and re-running it replaces that block rather than duplicating it.
+
 ---
 
 #### `dbcli upgrade`

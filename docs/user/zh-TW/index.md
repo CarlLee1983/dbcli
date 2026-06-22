@@ -388,6 +388,18 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
+### Shell 自動補全
+
+`dbcli completion <bash|zsh|fish>` 會輸出補全腳本；`dbcli completion --install` 會安裝它。
+已安裝的補全支援巢狀子指令，例如 `dbcli queries list --<TAB>`、
+`dbcli migrate add-column --<TAB>` 與 `dbcli verify safe-backfill --<TAB>`。
+
+在 `dbcli shell` 中，指令補全會依照目前的指令範圍運作，因此新增的指令
+（`q`、`queries`、`inspect`、`verify`、`proxy`、`snapshot` 等）會自動補全並可被執行。
+
+`dbcli completion --install` 採用標記區塊管理：它只會在 shell 設定檔寫入單一管理區塊，
+重新執行時會「取代」該區塊，而不會重複新增。
+
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
 > **`safe-backfill-verify` 任務計畫與 `verification` 區塊。** 執行 `dbcli skill tasks plan safe-backfill-verify --format json` 回傳的計畫 JSON 中包含一個 `verification` 區塊，其 `status` 為 `"planned"`。此區塊描述任務執行時將進行的回讀斷言 — 這是**計畫中**的佐證定義，**而非執行結果**。`status: "planned"` **不代表**驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。

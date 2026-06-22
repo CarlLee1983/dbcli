@@ -427,6 +427,20 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
+### Shell completion
+
+`dbcli completion <bash|zsh|fish>` prints a completion script; `dbcli completion --install`
+installs it. Installed completions cover nested subcommands — for example
+`dbcli queries list --<TAB>`, `dbcli migrate add-column --<TAB>`, and
+`dbcli verify safe-backfill --<TAB>`.
+
+Inside `dbcli shell`, command completion follows the current command surface, so newly
+added commands (`q`, `queries`, `inspect`, `verify`, `proxy`, `snapshot`, …) complete and
+dispatch automatically.
+
+`dbcli completion --install` is marker-managed: it writes a single managed block to your
+shell rc file and re-running it replaces that block rather than duplicating it.
+
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 
 > **`safe-backfill-verify` task plan and the `verification` block.** Running `dbcli skill tasks plan safe-backfill-verify --format json` returns a plan JSON that includes a `verification` block with `status: "planned"`. This block describes the read-back assertion that will be run — it is the **planned** evidence definition, **not** a result. A `status` of `"planned"` does **not** mean verification has run or passed; it means the task plan knows which check to perform when the task executes.

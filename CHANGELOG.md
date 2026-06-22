@@ -5,6 +5,19 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.0] - 2026-06-22 - Verification Scenario Runner Suite
+
+### Added
+
+- **`dbcli verify safe-backfill` 情境執行器。** 以 preflight / after-write 兩種模式驗證安全回填工作流，並**永遠不執行回填寫入**：preflight 依序跑黑名單、schema、目標表與唯讀 verify-query 防護後回傳 `ready` / `blocked` 並印出精確的 after-write 指令；after-write 重跑防護、執行回讀斷言，並寫入 v1 `VerificationArtifact`（狀態對應 `verified` / `not_verified` / `indeterminate`，防護失敗為 `blocked`）。
+- **`dbcli verify migration` 情境執行器。** 對 schema migration 做 preflight / after-write 驗證，且**永遠不執行 DDL**：分析提案的 `ALTER TABLE`、跑唯讀防護、要求 DDL 目標與 `--table` 相符（schema-aware），after-write 後記錄 `migration` 主體的證據。MVP 僅接受單語句 `ALTER TABLE`，並阻擋 `CREATE TABLE` / `DROP TABLE` / `CREATE INDEX` 及多語句 DDL。
+- **`ALTER TABLE` 目標識別字契約。** `verify migration` 的目標擷取改用 quote-aware tokenizer：支援 `table` / `schema.table` / `catalog.schema.table`，每區段可為未加引號名稱或雙引號 / 反引號 / 方括號識別字（含 `""`、`]]` 跳脫），因此 `"user accounts"`、`"tenant-1"."orders"` 等含空白或連字號的名稱皆可接受。無法完整解析的目標（未封閉引號、不支援的跳脫、超過三段）會 fail closed 並以「目標無法解析」為由阻擋，與 `must match --table` 的不符原因明確區分。
+- **`verification summary --latest-only` 交接選項。** 於既有 summary 輸出之上額外回傳最新一筆有效 artifact，方便 agent 在交接時直接引用最新證據；無 artifact 時回傳 `latest: null` 並維持 exit 0，無效檔案不會被升入 `latest`。
+
+### Changed
+
+- **抽取共用情境原語至 `src/core/verify/scenario.ts`。** 防護排序、all-guards-passed 判定、有界原因、狀態對應、shell-quote 與證據遮蔽等共用邏輯集中於此，`safe-backfill` 重構為消費這些原語且**對外行為零變更**，降低後續情境的重複實作風險。
+
 ## [1.35.0] - 2026-06-19 - Verification Inspect & Prune Surface
 
 ### Added

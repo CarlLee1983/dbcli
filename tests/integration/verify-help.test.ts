@@ -24,12 +24,13 @@ function expectCleanHelp({ stderr, code }: { stderr: string; code: number }) {
 }
 
 describe('verify --help surface', () => {
-  test('verify --help lists both built-in scenarios', async () => {
+  test('verify --help lists all built-in scenarios', async () => {
     const result = await runHelp(['verify', '--help'])
     expectCleanHelp(result)
     expect(result.stdout).toContain('safe-backfill')
     expect(result.stdout).toContain('migration')
     expect(result.stdout).toContain('rollback')
+    expect(result.stdout).toContain('constraint')
   })
 
   test('verify safe-backfill --help keeps its option surface', async () => {
@@ -78,6 +79,27 @@ describe('verify --help surface', () => {
       '--statement',
       '--verify-query',
       '--expect',
+      '--after-write',
+      '--format',
+      '--subject-name',
+      '--summary',
+    ]) {
+      expect(stdout).toContain(flag)
+    }
+  })
+
+  test('verify constraint --help exposes its option surface', async () => {
+    const result = await runHelp(['verify', 'constraint', '--help'])
+    expectCleanHelp(result)
+    const { stdout } = result
+    for (const flag of [
+      '--table',
+      '--check',
+      '--column',
+      '--references',
+      '--violation-query',
+      '--allow-preexisting',
+      '--baseline',
       '--after-write',
       '--format',
       '--subject-name',

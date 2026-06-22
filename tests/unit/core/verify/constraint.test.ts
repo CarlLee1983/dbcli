@@ -2,8 +2,15 @@ import { describe, test, expect } from 'bun:test'
 import {
   normalizeConstraintCheck,
   normalizeConstraintInput,
+  buildConstraintSubject,
+  buildConstraintAfterWriteCommand,
+  runConstraintPreflight,
+  runConstraintAfterWrite,
+  type ConstraintRunners,
+  type ViolationCountOutcome,
 } from '@/core/verify/constraint'
 import { VerifyInputError } from '@/core/verify/scenario'
+import type { GuardOutcome } from '@/core/verify'
 
 describe('normalizeConstraintCheck', () => {
   test('accepts the four supported checks', () => {
@@ -89,5 +96,106 @@ describe('normalizeConstraintInput', () => {
     const input = normalizeConstraintInput({ check: 'not-null', table: 'users', column: ['email'] })
     expect(input.format).toBe('table')
     expect(input.afterWrite).toBe(false)
+  })
+})
+
+const FIXED = { now: () => new Date('2026-06-22T00:00:00.000Z'), idFactory: () => 'ver_ct_0001' }
+const NN_RAW = { check: 'not-null', table: 'users', column: ['email'] }
+
+function runners(over: Partial<ConstraintRunners> = {}): ConstraintRunners {
+  const ok = async (): Promise<GuardOutcome> => ({ ok: true })
+  return {
+    violationSql: 'SELECT COUNT(*) AS violation_count FROM "users" WHERE "email" IS NULL',
+    blacklistGuard: ok,
+    schemaGuard: ok,
+    violationReadonlyGuard: ok,
+    runViolationCount: async (): Promise<ViolationCountOutcome> => ({ ran: true, count: 0 }),
+    ...over,
+  }
+}
+
+describe('buildConstraintSubject reuses the table artifact subject', () => {
+  test('kind table, command verify constraint', () => {
+    expect(buildConstraintSubject(normalizeConstraintInput({ ...NN_RAW }))).toEqual({
+      kind: 'table',
+      name: 'users',
+      command: 'verify constraint',
+    })
+  })
+})
+
+describe('buildConstraintAfterWriteCommand', () => {
+  test('appends --allow-preexisting --baseline only when baseline > 0', () => {
+    const input = normalizeConstraintInput({ ...NN_RAW })
+    expect(buildConstraintAfterWriteCommand(input, 0)).not.toContain('--allow-preexisting')
+    const tolerant = buildConstraintAfterWriteCommand(input, 3)
+    expect(tolerant).toContain('--allow-preexisting')
+    expect(tolerant).toContain('--baseline 3')
+    expect(tolerant).toContain('--after-write')
+  })
+})
+
+describe('runConstraintPreflight', () => {
+  test('ready when all guards pass; captures baseline from the count', async () => {
+    const r = await runConstraintPreflight(normalizeConstraintInput({ ...NN_RAW }), runners({
+      runViolationCount: async () => ({ ran: true, count: 2 }),
+    }))
+    expect(r.status).toBe('ready')
+    expect(r.baseline).toBe(2)
+    expect(r.guards).toHaveLength(3)
+  })
+  test('blocked when a guard fails; no baseline', async () => {
+    const r = await runConstraintPreflight(normalizeConstraintInput({ ...NN_RAW }), runners({
+      blacklistGuard: async () => ({ ok: false, reason: 'blacklisted' }),
+    }))
+    expect(r.status).toBe('blocked')
+    expect(r.baseline).toBeUndefined()
+  })
+})
+
+describe('runConstraintAfterWrite verdict mapping', () => {
+  test('verified when violations == 0 (strict default)', async () => {
+    const r = await runConstraintAfterWrite(normalizeConstraintInput({ ...NN_RAW }), runners(), FIXED)
+    expect(r.status).toBe('verified')
+    expect(r.assertion).toEqual({ violations: 0, threshold: 0, passed: true })
+    expect(r.artifact.subject).toEqual({ kind: 'table', name: 'users', command: 'verify constraint' })
+  })
+  test('not_verified when violations > 0 (strict default)', async () => {
+    const r = await runConstraintAfterWrite(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners({ runViolationCount: async () => ({ ran: true, count: 4 }) }),
+      FIXED
+    )
+    expect(r.status).toBe('not_verified')
+    expect(r.assertion).toEqual({ violations: 4, threshold: 0, passed: false })
+  })
+  test('verified under --allow-preexisting when violations <= baseline', async () => {
+    const input = normalizeConstraintInput({ ...NN_RAW, allowPreexisting: true, baseline: '5' })
+    const r = await runConstraintAfterWrite(
+      input,
+      runners({ runViolationCount: async () => ({ ran: true, count: 5 }) }),
+      FIXED
+    )
+    expect(r.status).toBe('verified')
+    expect(r.assertion).toEqual({ violations: 5, threshold: 5, passed: true })
+  })
+  test('indeterminate when the count cannot be read', async () => {
+    const r = await runConstraintAfterWrite(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners({ runViolationCount: async () => ({ ran: false, reason: 'syntax error' }) }),
+      FIXED
+    )
+    expect(r.status).toBe('indeterminate')
+    expect(r.assertion).toBeUndefined()
+  })
+  test('blocked when a guard fails; artifact carries no assertion evidence', async () => {
+    const r = await runConstraintAfterWrite(
+      normalizeConstraintInput({ ...NN_RAW }),
+      runners({ schemaGuard: async () => ({ ok: false, reason: 'no such column' }) }),
+      FIXED
+    )
+    expect(r.status).toBe('blocked')
+    expect(r.blockedReason).toBe('no such column')
+    expect(r.artifact.evidence).toHaveLength(1)
   })
 })

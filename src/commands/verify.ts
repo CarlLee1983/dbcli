@@ -13,7 +13,7 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { QueryExecutor } from '@/core/query-executor'
 import { analyzeQueryRisk } from '@/core/query-risk-analyzer'
 import { parseExpect, AssertExpressionError } from '@/core/assert/grammar'
-import { evaluateExpect, AssertShapeError } from '@/core/assert/evaluator'
+import { evaluateExpect, AssertShapeError, firstScalar } from '@/core/assert/evaluator'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { writeVerificationArtifact } from '@/core/verification'
 import type { BlacklistConfig } from '@/types/blacklist'
@@ -40,6 +40,10 @@ import {
   normalizeRollbackInput,
   runRollbackPreflight,
   runRollbackAfterWrite,
+  normalizeConstraintInput,
+  buildViolationQuery,
+  runConstraintPreflight,
+  runConstraintAfterWrite,
   type SafeBackfillInput,
   type SafeBackfillRunners,
   type GuardOutcome,
@@ -54,6 +58,12 @@ import {
   type RollbackRunners,
   type RollbackPreflightResult,
   type RollbackAfterWriteResult,
+  type ConstraintInput,
+  type ConstraintRunners,
+  type ConstraintEngine,
+  type ConstraintPreflightResult,
+  type ConstraintAfterWriteResult,
+  type ViolationCountOutcome,
   type RealRunnerContext,
   type VerifyScenarioDefinition,
   type VerifyScenarioInputBase,
@@ -400,6 +410,106 @@ function buildRollbackRunners(ctx: RealRunnerContext, input: RollbackInput): Rol
   }
 }
 
+function constraintEngineOf(system: string): ConstraintEngine {
+  // SQL_SYSTEMS guard already restricts to these three.
+  return system as ConstraintEngine
+}
+
+function buildConstraintRunners(
+  ctx: RealRunnerContext,
+  input: ConstraintInput
+): ConstraintRunners {
+  const { adapter, config } = ctx
+  const blacklist = (config.blacklist ?? { tables: [], columns: {} }) as BlacklistConfig
+  const schema = (config.schema ?? {}) as Record<string, TableSchema>
+  const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
+  const analyze = (sql: string) =>
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+
+  const engine = constraintEngineOf(
+    (config.connection as ConnectionOptions).system
+  )
+  const violationSql = buildViolationQuery(input, engine)
+
+  const columnsExist = async (table: string, cols: string[]): Promise<string | null> => {
+    const ts = await adapter.getTableSchema(table)
+    const present = new Set(ts.columns.map((c) => c.name.toLowerCase()))
+    const missing = cols.filter((c) => !present.has(c.trim().toLowerCase()))
+    return missing.length > 0 ? `unknown column(s) on ${table}: ${missing.join(', ')}` : null
+  }
+
+  return {
+    violationSql,
+    blacklistGuard: async (): Promise<GuardOutcome> => {
+      const bm = new BlacklistManager(config)
+      const targets = [input.table, ...(input.references ? [input.references.table] : [])]
+      for (const t of targets) {
+        if (bm.isTableBlacklisted(t) && !bm.canOverrideBlacklist()) {
+          return { ok: false, reason: boundedReason(`Target table '${t}' is blacklisted.`) }
+        }
+      }
+      return { ok: true }
+    },
+    schemaGuard: async (): Promise<GuardOutcome> => {
+      try {
+        if (input.check !== 'custom') {
+          const miss = await columnsExist(input.table, input.columns)
+          if (miss) return { ok: false, reason: boundedReason(miss) }
+        } else {
+          await adapter.getTableSchema(input.table)
+        }
+        if (input.references) {
+          const refMiss = await columnsExist(input.references.table, [input.references.column])
+          if (refMiss) return { ok: false, reason: boundedReason(refMiss) }
+        }
+        return { ok: true }
+      } catch (e) {
+        return { ok: false, reason: boundedReason(`schema check failed: ${(e as Error).message}`) }
+      }
+    },
+    violationReadonlyGuard: async (): Promise<GuardOutcome> => {
+      const r = analyze(violationSql)
+      if (!isPlainSelectVerifyQuery(r.operation, violationSql)) {
+        return {
+          ok: false,
+          reason: boundedReason(
+            `violation query must be a read-only plain SELECT (got ${r.operation}).`
+          ),
+        }
+      }
+      return { ok: true }
+    },
+    runViolationCount: async (): Promise<ViolationCountOutcome> => {
+      try {
+        const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
+        const executor = new QueryExecutor(
+          adapter,
+          config.permission,
+          blacklistValidator,
+          config,
+          ctx.options
+        )
+        const result = await executor.execute(violationSql, { autoLimit: true })
+        const scalar = firstScalar(result)
+        const auditRef = await writeAuditEntry(config, 'verify', ctx.options, {
+          success: true,
+          sql: violationSql,
+        })
+        if (scalar === null) {
+          return { ran: false, reason: 'violation query returned no count', auditRef }
+        }
+        const count = typeof scalar === 'number' ? scalar : Number(scalar)
+        if (!Number.isFinite(count)) {
+          return { ran: false, reason: boundedReason(`violation count not numeric: ${scalar}`), auditRef }
+        }
+        return { ran: true, count, auditRef }
+      } catch (e) {
+        return { ran: false, reason: boundedReason((e as Error).message) }
+      }
+    },
+  }
+}
+
 function formatPreflightTable(r: PreflightResult): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
@@ -609,6 +719,91 @@ function buildRollbackAfterWriteJson(r: RollbackAfterWriteResult, artifactPath?:
     mode: r.mode,
     status: r.status,
     kind: r.kind,
+    table: r.table,
+    artifact: {
+      id: r.artifact.id,
+      ...(artifactPath ? { path: artifactPath } : {}),
+      subject: r.artifact.subject,
+    },
+    ...(r.assertion ? { assertion: r.assertion } : {}),
+    ...(r.blockedReason ? { blockedReason: r.blockedReason } : {}),
+  }
+}
+
+function formatConstraintPreflightTable(r: ConstraintPreflightResult): string {
+  const lines = [
+    `Scenario:    ${r.scenario}`,
+    `Mode:        preflight`,
+    `Check:       ${r.check}`,
+    `Table:       ${r.table}`,
+    `Status:      ${r.status}`,
+    'Guards:',
+  ]
+  for (const g of r.guards) {
+    lines.push(`  - ${g.name}: ${g.status}${g.reason ? ` (${g.reason})` : ''}`)
+  }
+  if (r.baseline !== undefined) lines.push('', `Baseline violations: ${r.baseline}`)
+  lines.push('', 'Violation query (read-only; this command never executes a write):')
+  lines.push(`  ${r.violationSql}`)
+  lines.push('', 'After-write command (run AFTER you apply your change externally):')
+  lines.push(`  ${r.afterWriteCommand}`)
+  lines.push(
+    '',
+    'Note: default verdict requires 0 violations; add --allow-preexisting --baseline <N> to tolerate pre-existing ones.'
+  )
+  return lines.join('\n')
+}
+
+function formatConstraintAfterWriteTable(
+  r: ConstraintAfterWriteResult,
+  artifactPath?: string
+): string {
+  const lines = [
+    `Scenario:    ${r.scenario}`,
+    `Mode:        after-write`,
+    `Check:       ${r.check}`,
+    `Table:       ${r.table}`,
+    `Status:      ${r.status}`,
+  ]
+  if (r.assertion)
+    lines.push(
+      `Violations:  ${r.assertion.violations} (threshold <= ${r.assertion.threshold}) -> ${r.assertion.passed ? 'PASS' : 'FAIL'}`
+    )
+  if (r.blockedReason) lines.push(`Reason:      ${r.blockedReason}`)
+  lines.push(`Summary:     ${r.artifact.summary}`)
+  lines.push(`Artifact id: ${r.artifact.id}`)
+  if (artifactPath) lines.push(`Artifact:    ${artifactPath}`)
+  lines.push('', `Next: dbcli verification show ${r.artifact.id}`)
+  return lines.join('\n')
+}
+
+function buildConstraintPreflightJson(r: ConstraintPreflightResult): unknown {
+  return {
+    scenario: r.scenario,
+    mode: r.mode,
+    status: r.status,
+    check: r.check,
+    table: r.table,
+    violationSql: r.violationSql,
+    ...(r.baseline !== undefined ? { baseline: r.baseline } : {}),
+    guards: r.guards.map((g) => ({
+      name: g.name,
+      status: g.status,
+      ...(g.reason ? { reason: g.reason } : {}),
+    })),
+    afterWriteCommand: r.afterWriteCommand,
+  }
+}
+
+function buildConstraintAfterWriteJson(
+  r: ConstraintAfterWriteResult,
+  artifactPath?: string
+): unknown {
+  return {
+    scenario: r.scenario,
+    mode: r.mode,
+    status: r.status,
+    check: r.check,
     table: r.table,
     artifact: {
       id: r.artifact.id,
@@ -840,11 +1035,86 @@ const rollbackScenario: VerifyScenarioDefinition<
   },
 }
 
+const constraintScenario: VerifyScenarioDefinition<
+  ConstraintInput,
+  ConstraintRunners,
+  ConstraintPreflightResult,
+  ConstraintAfterWriteResult
+> = {
+  name: 'constraint',
+  description:
+    'Preflight or after-write verification that a data-integrity invariant holds across your change (--check fk|not-null|unique|custom); never executes a write',
+  subjectKind: 'table',
+  configureOptions(command) {
+    return command
+      .requiredOption('--table <table>', 'Table the invariant is checked on')
+      .requiredOption('--check <kind>', 'Constraint kind: fk | not-null | unique | custom')
+      .option(
+        '--column <name>',
+        'Column to check (repeatable for not-null/unique; the child FK column for fk)',
+        (val: string, prev: string[] = []) => [...prev, val]
+      )
+      .option('--references <table.column>', 'Referenced <table>.<column> (required for --check fk)')
+      .option('--violation-query <sql>', 'Read-only SELECT counting violations (required for --check custom)')
+      .option('--allow-preexisting', 'Tolerate pre-existing violations: verified when count <= --baseline', false)
+      .option('--baseline <n>', 'Baseline violation count measured at preflight (use with --allow-preexisting)')
+      .option('--after-write', 'Re-run the violation count and write a verification artifact', false)
+      .option('--format <format>', 'Output format: table (default) or json', 'table')
+      .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
+      .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
+  },
+  normalize(options) {
+    return normalizeConstraintInput({
+      table: options.table,
+      check: options.check,
+      column: options.column,
+      references: options.references,
+      violationQuery: options.violationQuery,
+      allowPreexisting: options.allowPreexisting === true,
+      baseline: options.baseline,
+      afterWrite: options.afterWrite === true,
+      format: options.format,
+      subjectName: options.subjectName,
+      summary: options.summary,
+    })
+  },
+  createRunners(context, input) {
+    return buildConstraintRunners(context, input)
+  },
+  runPreflight(input, runners) {
+    return runConstraintPreflight(input, runners)
+  },
+  runAfterWrite(input, runners) {
+    return runConstraintAfterWrite(input, runners)
+  },
+  renderPreflight(result, format) {
+    return format === 'json'
+      ? JSON.stringify(buildConstraintPreflightJson(result), null, 2)
+      : formatConstraintPreflightTable(result)
+  },
+  artifactOf(result) {
+    return result.artifact
+  },
+  afterWriteJson(result, artifactPath) {
+    return buildConstraintAfterWriteJson(result, artifactPath)
+  },
+  renderAfterWriteTable(result, artifactPath) {
+    return formatConstraintAfterWriteTable(result, artifactPath)
+  },
+  isPreflightReady(result) {
+    return result.status === 'ready'
+  },
+  isAfterWriteVerified(result, artifactError) {
+    return result.status === 'verified' && !artifactError
+  },
+}
+
 /** All built-in verify scenarios, in CLI registration order. */
 export const BUILTIN_VERIFY_SCENARIOS: AnyVerifyScenario[] = [
   safeBackfillScenario,
   migrationScenario,
   rollbackScenario,
+  constraintScenario,
 ]
 
 // --- Generic command lifecycle -------------------------------------------

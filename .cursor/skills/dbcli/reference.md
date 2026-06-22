@@ -1294,6 +1294,74 @@ The artifact schema is unchanged: a rollback reuses the existing subject kinds �
 `subject.command = "verify rollback"` plus the summary, so `verification` filters and
 retention are unaffected.
 
+#### `verify constraint`
+
+(v1.38.0+) Preflight or after-write verification that a **data-integrity invariant holds**
+across your change — foreign-key consistency, NOT NULL coverage, uniqueness, or a custom
+violation query. **This command never executes a write** — it only runs read-only
+`COUNT(*)` violation queries against the live table and (in after-write mode) records
+evidence. Four check kinds, selected by `--check`:
+
+- `--check fk` — counts orphaned rows in the child table. Requires `--column` (the child
+  FK column) and `--references <table.column>` (the referenced parent column).
+- `--check not-null` — counts rows where the column value is NULL. `--column` is
+  repeatable; each column is checked independently.
+- `--check unique` — counts duplicate values in one or more columns. `--column` is
+  repeatable; all listed columns are combined into a single uniqueness check.
+- `--check custom` — executes the caller-supplied `--violation-query <sql>`, which must
+  be a plain read-only `SELECT` returning a single integer count of violations.
+
+```bash
+# FK preflight — verify no orphaned orders before a migration.
+dbcli verify constraint \
+  --table orders \
+  --check fk \
+  --column customer_id \
+  --references customers.id
+
+# NOT NULL preflight — verify the column is fully populated.
+dbcli verify constraint \
+  --table users \
+  --check not-null \
+  --column email
+
+# After the write is applied externally — record evidence.
+dbcli verify constraint --table orders --check fk --column customer_id \
+  --references customers.id --after-write
+
+# JSON output for agents.
+dbcli verify constraint --table users --check not-null --column email --format json
+```
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--table <table>` | yes | Table the invariant is checked on. |
+| `--check <kind>` | yes | Constraint kind: `fk` \| `not-null` \| `unique` \| `custom`. |
+| `--column <name>` | yes (fk/not-null/unique) | Column to check. Repeatable for `not-null`/`unique`; the child FK column for `fk`. |
+| `--references <table.column>` | yes (fk only) | Referenced `<table>.<column>` for the FK parent lookup. |
+| `--violation-query <sql>` | yes (custom only) | Read-only `SELECT` returning a single integer count of violations. |
+| `--allow-preexisting` | no | Tolerate pre-existing violations: verified when `count ≤ --baseline` (default: `false`). |
+| `--baseline <n>` | no | Baseline violation count measured at preflight (use with `--allow-preexisting`). |
+| `--after-write` | no | Re-run the violation count and write a v1 verification artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override (after-write mode). |
+
+**Verdict rules.** Preflight returns `ready` or `blocked`; **`ready` is not `verified`**.
+After-write maps the violation count to `verified` (violations ≤ threshold) or
+`not_verified` (violations > threshold), and a failed guard to `blocked`; a query error
+yields `indeterminate`. The default threshold is `0` (strict: zero violations allowed).
+With `--allow-preexisting`, the threshold is the `--baseline` count captured at preflight,
+so the no-regression rule passes as long as the after-write count does not exceed the
+preflight count.
+
+**MVP restrictions.** SQL engines only (PostgreSQL / MySQL / SQLite — requires an active
+`--config` connection). FK checks support a single child column; composite FK constraints
+are not yet supported. The command never executes any write or DDL statement.
+
+The artifact uses `subject.kind = 'table'` and `subject.command = 'verify constraint'`,
+so `verification` filters and retention are unaffected by the new scenario.
+
 ### verification
 
 (v1.33.0+) Local **VerificationArtifact** inspection and lifecycle surface over

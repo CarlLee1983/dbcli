@@ -381,6 +381,68 @@ records the rollback under the existing subject kind (`migration` for `ddl`,
 `ALTER TABLE` for `ddl` and a single `UPDATE` for `dml`; `INSERT`/`DELETE` reverts
 are not yet supported.
 
+#### verify constraint
+
+Preflight or after-write verification that a **data-integrity invariant holds** across
+your change — foreign-key consistency, NOT NULL coverage, uniqueness, or a custom
+violation query. **This command never executes a write** — it only runs read-only
+`COUNT(*)` violation queries and (in after-write mode) records evidence.
+
+> ⚠️ `verify constraint` never executes a write or DDL statement. Run preflight before
+> your change, then run `--after-write` afterward to record evidence.
+
+Four check kinds, selected by `--check`:
+
+- `fk` — counts orphaned rows (child column has no matching parent). Requires `--column`
+  and `--references <table.column>`.
+- `not-null` — counts NULL values in the column(s). `--column` is repeatable.
+- `unique` — counts duplicate values across the column(s). `--column` is repeatable.
+- `custom` — executes your `--violation-query <sql>` (a read-only `SELECT` returning a
+  single integer count of violations).
+
+FK preflight (verify no orphaned orders before a migration):
+
+    dbcli verify constraint \
+      --table orders \
+      --check fk \
+      --column customer_id \
+      --references customers.id
+
+NOT NULL preflight (verify the column is fully populated):
+
+    dbcli verify constraint \
+      --table users \
+      --check not-null \
+      --column email
+
+After the change is applied externally:
+
+    dbcli verify constraint --table orders --check fk --column customer_id \
+      --references customers.id --after-write
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--table <table>` | yes | Table the invariant is checked on. |
+| `--check <kind>` | yes | Constraint kind: `fk` \| `not-null` \| `unique` \| `custom`. |
+| `--column <name>` | yes (fk/not-null/unique) | Column to check. Repeatable for `not-null`/`unique`; the child FK column for `fk`. |
+| `--references <table.column>` | yes (fk only) | Referenced `<table>.<column>` for FK parent lookup. |
+| `--violation-query <sql>` | yes (custom only) | Read-only `SELECT` returning a single integer violation count. |
+| `--allow-preexisting` | no | No-regression mode: verified when `count ≤ --baseline`. |
+| `--baseline <n>` | no | Baseline violation count from preflight (use with `--allow-preexisting`). |
+| `--after-write` | no | Re-run the violation count and write a v1 artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override. |
+
+Preflight returns `ready` or `blocked`; **`ready` is not `verified`**. After-write maps
+the count to `verified` (violations ≤ threshold) or `not_verified` (violations >
+threshold). The default threshold is `0` (strict). With `--allow-preexisting`, the
+threshold is the `--baseline` count from preflight — verified as long as violations do
+not exceed the pre-existing level. A query error yields `indeterminate`; a failed guard
+yields `blocked`. The artifact uses `subject.kind = 'table'` and
+`command: verify constraint`. MVP: SQL engines only; single FK column; never executes
+writes.
+
 <!-- doc-key: verification-inspect -->
 ### verification — inspect & manage verification artifacts
 

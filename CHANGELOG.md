@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.38.0] - 2026-06-22 - verify constraint Scenario
+
+### Added
+
+- **`dbcli verify constraint` 情境執行器（第四個內建 verify 情境）。** 以 preflight / after-write 兩種模式驗證「資料完整性不變式是否成立」，且**永遠不執行寫入或 DDL** — 只執行唯讀 `COUNT(*)` 違規查詢。以 `--check <kind>` 選擇四種限制類型：`fk`（孤兒列，需 `--column` + `--references <table.column>`）、`not-null`（NULL 值統計，`--column` 可重複）、`unique`（重複值統計，`--column` 可重複）、`custom`（呼叫端自訂的唯讀 `--violation-query <sql>`）。預設 threshold 為 `0`（嚴格：零違規即通過）；啟用 `--allow-preexisting` + `--baseline <n>` 可改為無回退模式（after-write 筆數 ≤ preflight baseline 即通過）。文物沿用 `subject.kind = 'table'`、`subject.command = 'verify constraint'`，artifact schema 與版本不變。MVP 僅限 SQL 引擎，FK 僅支援單一子欄位。
+
 ## [1.37.1] - 2026-06-22 - Skill Documentation Parity for verify rollback
 
 ### Fixed

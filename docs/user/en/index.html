@@ -413,6 +413,48 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             </table>
             <p class="mb-4"><code>--kind</code> selects which grammar the statement must satisfy and reuses the same guards as the sibling scenarios: <code>ddl</code> reuses the <code>verify migration</code> <code>ALTER TABLE</code> contract (single statement, target must match <code>--table</code>); <code>dml</code> reuses the <code>verify safe-backfill</code> plan contract (<code>UPDATE</code> only, must have a <code>WHERE</code>, target must match <code>--table</code>). Preflight returns <code>ready</code> or <code>blocked</code>; <strong><code>ready</code> is not <code>verified</code></strong>. After-write maps the read-back assertion to <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>, and a failed guard to <code>blocked</code>. The artifact records the rollback under the existing subject kind (<code>migration</code> for <code>ddl</code>, <code>backfill</code> for <code>dml</code>) with <code>command: verify rollback</code>. The MVP supports a single <code>ALTER TABLE</code> for <code>ddl</code> and a single <code>UPDATE</code> for <code>dml</code>; <code>INSERT</code>/<code>DELETE</code> reverts are not yet supported.</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify constraint</h4>
+            <p class="mb-4">Preflight or after-write verification that a <strong>data-integrity invariant holds</strong> across your change — foreign-key consistency, NOT NULL coverage, uniqueness, or a custom violation query. <strong>This command never executes a write</strong> — it only runs read-only <code>COUNT(*)</code> violation queries and (in after-write mode) records evidence.</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify constraint</code> never executes a write or DDL statement. Run preflight before your change, then run <code>--after-write</code> afterward to record evidence.</p>
+            <p class="mb-2">Four check kinds, selected by <code>--check</code>:</p>
+            <ul class="mb-4">
+              <li><code>fk</code> — counts orphaned rows (child column has no matching parent). Requires <code>--column</code> and <code>--references &lt;table.column&gt;</code>.</li>
+              <li><code>not-null</code> — counts NULL values in the column(s). <code>--column</code> is repeatable.</li>
+              <li><code>unique</code> — counts duplicate values across the column(s). <code>--column</code> is repeatable.</li>
+              <li><code>custom</code> — executes your <code>--violation-query &lt;sql&gt;</code> (a read-only <code>SELECT</code> returning a single integer count of violations).</li>
+            </ul>
+            <p class="mb-2"><strong>FK preflight (verify no orphaned orders before a migration):</strong></p>
+            <pre><code>dbcli verify constraint \
+  --table orders \
+  --check fk \
+  --column customer_id \
+  --references customers.id</code></pre>
+            <p class="mt-4 mb-2"><strong>NOT NULL preflight (verify the column is fully populated):</strong></p>
+            <pre><code>dbcli verify constraint \
+  --table users \
+  --check not-null \
+  --column email</code></pre>
+            <p class="mt-4 mb-2"><strong>After the change is applied externally:</strong></p>
+            <pre><code>dbcli verify constraint --table orders --check fk --column customer_id \
+  --references customers.id --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>yes</td><td>Table the invariant is checked on.</td></tr>
+                <tr><td><code>--check &lt;kind&gt;</code></td><td>yes</td><td>Constraint kind: <code>fk</code> | <code>not-null</code> | <code>unique</code> | <code>custom</code>.</td></tr>
+                <tr><td><code>--column &lt;name&gt;</code></td><td>yes (fk/not-null/unique)</td><td>Column to check. Repeatable for <code>not-null</code>/<code>unique</code>; the child FK column for <code>fk</code>.</td></tr>
+                <tr><td><code>--references &lt;table.column&gt;</code></td><td>yes (fk only)</td><td>Referenced <code>&lt;table&gt;.&lt;column&gt;</code> for FK parent lookup.</td></tr>
+                <tr><td><code>--violation-query &lt;sql&gt;</code></td><td>yes (custom only)</td><td>Read-only <code>SELECT</code> returning a single integer violation count.</td></tr>
+                <tr><td><code>--allow-preexisting</code></td><td>no</td><td>No-regression mode: verified when <code>count ≤ --baseline</code>.</td></tr>
+                <tr><td><code>--baseline &lt;n&gt;</code></td><td>no</td><td>Baseline violation count from preflight (use with <code>--allow-preexisting</code>).</td></tr>
+                <tr><td><code>--after-write</code></td><td>no</td><td>Re-run the violation count and write a v1 artifact.</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>no</td><td>Output format, default <code>table</code>.</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>no</td><td>Artifact subject name. Default is the table name.</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>no</td><td>Optional artifact summary override.</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4">Preflight returns <code>ready</code> or <code>blocked</code>; <strong><code>ready</code> is not <code>verified</code></strong>. After-write maps the count to <code>verified</code> (violations ≤ threshold) or <code>not_verified</code> (violations > threshold). The default threshold is <code>0</code> (strict). With <code>--allow-preexisting</code>, the threshold is the <code>--baseline</code> count from preflight — verified as long as violations do not exceed the pre-existing level. A query error yields <code>indeterminate</code>; a failed guard yields <code>blocked</code>. The artifact uses <code>subject.kind = 'table'</code> and <code>command: verify constraint</code>. MVP: SQL engines only; single FK column; never executes writes.</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> works on artifacts written under <code>&lt;cwd&gt;/.dbcli/verification/</code>. It never connects to a database and never writes audit entries. <code>list</code>, <code>show</code>, and <code>summary</code> are read-only filesystem inspection; <code>prune</code> is a local lifecycle command that is dry-run by default and deletes files only with <code>--execute --force</code>. The storage root is the current working directory, independent of <code>--config</code>.</p>

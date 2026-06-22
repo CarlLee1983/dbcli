@@ -43,4 +43,11 @@ describe('buildProgram + buildCompletionTree integration', () => {
     expect(longs).toContain('--subject-name')
     expect(longs).toContain('--summary')
   })
+
+  test('buildProgram() is reusable — second call does not throw', () => {
+    expect(() => {
+      buildProgram()
+      buildProgram()
+    }).not.toThrow()
+  })
 })

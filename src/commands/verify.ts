@@ -43,6 +43,10 @@ import {
   type MigrationRunners,
   type MigrationPreflightResult,
   type MigrationAfterWriteResult,
+  type RealRunnerContext,
+  type VerifyScenarioDefinition,
+  type VerifyScenarioInputBase,
+  type AnyVerifyScenario,
 } from '@/core/verify'
 
 const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb']
@@ -57,15 +61,6 @@ function requireSqlConnection(
     )
   }
   return connection as SqlConnectionOptions
-}
-
-interface RealRunnerContext {
-  // Resolved once and shared across guards/assertion.
-  adapter: ReturnType<typeof AdapterFactory.createSqlAdapter>
-  config: Awaited<ReturnType<typeof configModule.read>>
-  options: { config?: string }
-  // The declared --table; the plan guard requires the UPDATE target to match it.
-  targetTable: string
 }
 
 /** Build the production runners that touch config / adapter / analyzer. */
@@ -249,7 +244,7 @@ function buildMigrationRunners(ctx: RealRunnerContext): MigrationRunners {
   }
 }
 
-function renderPreflightTable(r: PreflightResult): string {
+function formatPreflightTable(r: PreflightResult): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
     `Mode:        preflight`,
@@ -268,7 +263,7 @@ function renderPreflightTable(r: PreflightResult): string {
   return lines.join('\n')
 }
 
-function renderAfterWriteTable(r: AfterWriteResult, artifactPath?: string): string {
+function formatAfterWriteTable(r: AfterWriteResult, artifactPath?: string): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
     `Mode:        after-write`,
@@ -285,7 +280,7 @@ function renderAfterWriteTable(r: AfterWriteResult, artifactPath?: string): stri
   return lines.join('\n')
 }
 
-function preflightJson(r: PreflightResult): unknown {
+function buildPreflightJson(r: PreflightResult): unknown {
   return {
     scenario: r.scenario,
     mode: r.mode,
@@ -301,7 +296,7 @@ function preflightJson(r: PreflightResult): unknown {
   }
 }
 
-function afterWriteJson(r: AfterWriteResult, artifactPath?: string): unknown {
+function buildAfterWriteJson(r: AfterWriteResult, artifactPath?: string): unknown {
   return {
     scenario: r.scenario,
     mode: r.mode,
@@ -317,7 +312,7 @@ function afterWriteJson(r: AfterWriteResult, artifactPath?: string): unknown {
   }
 }
 
-function renderMigrationPreflightTable(r: MigrationPreflightResult): string {
+function formatMigrationPreflightTable(r: MigrationPreflightResult): string {
   const lines = [
     `Scenario:    ${r.scenario}`,
     `Mode:        preflight`,
@@ -339,7 +334,7 @@ function renderMigrationPreflightTable(r: MigrationPreflightResult): string {
   return lines.join('\n')
 }
 
-function renderMigrationAfterWriteTable(
+function formatMigrationAfterWriteTable(
   r: MigrationAfterWriteResult,
   artifactPath?: string
 ): string {
@@ -359,7 +354,7 @@ function renderMigrationAfterWriteTable(
   return lines.join('\n')
 }
 
-function migrationPreflightJson(r: MigrationPreflightResult): unknown {
+function buildMigrationPreflightJson(r: MigrationPreflightResult): unknown {
   return {
     scenario: r.scenario,
     mode: r.mode,
@@ -375,7 +370,7 @@ function migrationPreflightJson(r: MigrationPreflightResult): unknown {
   }
 }
 
-function migrationAfterWriteJson(r: MigrationAfterWriteResult, artifactPath?: string): unknown {
+function buildMigrationAfterWriteJson(r: MigrationAfterWriteResult, artifactPath?: string): unknown {
   return {
     scenario: r.scenario,
     mode: r.mode,
@@ -391,224 +386,269 @@ function migrationAfterWriteJson(r: MigrationAfterWriteResult, artifactPath?: st
   }
 }
 
+// --- Scenario definitions -------------------------------------------------
+
+const safeBackfillScenario: VerifyScenarioDefinition<
+  SafeBackfillInput,
+  SafeBackfillRunners,
+  PreflightResult,
+  AfterWriteResult
+> = {
+  name: 'safe-backfill',
+  description:
+    'Preflight or after-write verification for a safe backfill; never executes the UPDATE',
+  subjectKind: 'table',
+  configureOptions(command) {
+    return command
+      .requiredOption('--table <table>', 'Target table name')
+      .requiredOption(
+        '--query <sql>',
+        'Proposed backfill UPDATE statement (analyzed, never executed)'
+      )
+      .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the final assertion')
+      .requiredOption('--expect <expr>', 'Assertion expression, e.g. "rows == 0"')
+      .option(
+        '--after-write',
+        'Run the read-back assertion and write a verification artifact',
+        false
+      )
+      .option('--format <format>', 'Output format: table (default) or json', 'table')
+      .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
+      .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
+  },
+  normalize(options) {
+    return normalizeSafeBackfillInput({
+      table: options.table,
+      query: options.query,
+      verifyQuery: options.verifyQuery,
+      expect: options.expect,
+      afterWrite: options.afterWrite === true,
+      format: options.format,
+      subjectName: options.subjectName,
+      summary: options.summary,
+    })
+  },
+  createRunners(context) {
+    return buildRealRunners(context)
+  },
+  runPreflight(input, runners) {
+    return runSafeBackfillPreflight(input, runners)
+  },
+  runAfterWrite(input, runners) {
+    return runSafeBackfillAfterWrite(input, runners)
+  },
+  renderPreflight(result, format) {
+    return format === 'json'
+      ? JSON.stringify(buildPreflightJson(result), null, 2)
+      : formatPreflightTable(result)
+  },
+  artifactOf(result) {
+    return result.artifact
+  },
+  afterWriteJson(result, artifactPath) {
+    return buildAfterWriteJson(result, artifactPath)
+  },
+  renderAfterWriteTable(result, artifactPath) {
+    return formatAfterWriteTable(result, artifactPath)
+  },
+  isPreflightReady(result) {
+    return result.status === 'ready'
+  },
+  isAfterWriteVerified(result, artifactError) {
+    return result.status === 'verified' && !artifactError
+  },
+}
+
+const migrationScenario: VerifyScenarioDefinition<
+  MigrationInput,
+  MigrationRunners,
+  MigrationPreflightResult,
+  MigrationAfterWriteResult
+> = {
+  name: 'migration',
+  description:
+    'Preflight or after-write verification for an externally-applied migration; never executes DDL',
+  subjectKind: 'migration',
+  configureOptions(command) {
+    return command
+      .requiredOption('--table <table>', 'Table affected by the migration')
+      .requiredOption('--ddl <sql>', 'Proposed ALTER TABLE DDL (analyzed, never executed)')
+      .requiredOption(
+        '--verify-query <sql>',
+        'Read-only SELECT used by the post-migration assertion'
+      )
+      .requiredOption('--expect <expr>', 'Assertion expression, e.g. "value == 0"')
+      .option(
+        '--after-write',
+        'Run the read-back assertion and write a verification artifact',
+        false
+      )
+      .option('--format <format>', 'Output format: table (default) or json', 'table')
+      .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
+      .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
+  },
+  normalize(options) {
+    return normalizeMigrationInput({
+      table: options.table,
+      ddl: options.ddl,
+      verifyQuery: options.verifyQuery,
+      expect: options.expect,
+      afterWrite: options.afterWrite === true,
+      format: options.format,
+      subjectName: options.subjectName,
+      summary: options.summary,
+    })
+  },
+  createRunners(context) {
+    return buildMigrationRunners(context)
+  },
+  runPreflight(input, runners) {
+    return runMigrationPreflight(input, runners)
+  },
+  runAfterWrite(input, runners) {
+    return runMigrationAfterWrite(input, runners)
+  },
+  renderPreflight(result, format) {
+    return format === 'json'
+      ? JSON.stringify(buildMigrationPreflightJson(result), null, 2)
+      : formatMigrationPreflightTable(result)
+  },
+  artifactOf(result) {
+    return result.artifact
+  },
+  afterWriteJson(result, artifactPath) {
+    return buildMigrationAfterWriteJson(result, artifactPath)
+  },
+  renderAfterWriteTable(result, artifactPath) {
+    return formatMigrationAfterWriteTable(result, artifactPath)
+  },
+  isPreflightReady(result) {
+    return result.status === 'ready'
+  },
+  isAfterWriteVerified(result, artifactError) {
+    return result.status === 'verified' && !artifactError
+  },
+}
+
+/** All built-in verify scenarios, in CLI registration order. */
+export const BUILTIN_VERIFY_SCENARIOS: AnyVerifyScenario[] = [
+  safeBackfillScenario,
+  migrationScenario,
+]
+
+// --- Generic command lifecycle -------------------------------------------
+
+/**
+ * The shared verify command lifecycle. Preserves the exact execution order and
+ * exit-code rules both scenarios used before the registry: normalize (fail closed
+ * before any DB connection) -> resolve config -> require SQL connection -> connect
+ * once -> build runners -> run preflight/after-write -> render -> persist artifact
+ * (after-write) -> disconnect in finally -> map state to exit code.
+ */
+async function executeScenario<Input extends VerifyScenarioInputBase, Runners, Preflight, AfterWrite>(
+  def: VerifyScenarioDefinition<Input, Runners, Preflight, AfterWrite>,
+  options: Record<string, unknown>,
+  command: Command
+): Promise<void> {
+  let input: Input
+  try {
+    input = def.normalize(options)
+  } catch (e) {
+    // Input errors fail closed before any DB connection.
+    console.error(
+      e instanceof VerifyInputError || e instanceof Error ? (e as Error).message : String(e)
+    )
+    process.exit(1)
+  }
+
+  try {
+    const configPath = resolveConfigPath(command, options as { config?: string })
+    const config = await configModule.read(configPath)
+    if (!config.connection) {
+      console.error('Database not configured. Run: dbcli init')
+      process.exit(1)
+    }
+    const adapter = AdapterFactory.createSqlAdapter(
+      requireSqlConnection(config.connection as ConnectionOptions, def.name)
+    )
+    await adapter.connect()
+
+    const runners = def.createRunners(
+      { adapter, config, options: options as { config?: string }, targetTable: input.table },
+      input
+    )
+
+    if (!input.afterWrite) {
+      let result: Preflight
+      try {
+        result = await def.runPreflight(input, runners)
+      } finally {
+        await adapter.disconnect()
+      }
+      console.log(def.renderPreflight(result, input.format))
+      process.exit(def.isPreflightReady(result) ? 0 : 1)
+    }
+
+    // After-write mode.
+    let result: AfterWrite
+    try {
+      result = await def.runAfterWrite(input, runners)
+    } finally {
+      await adapter.disconnect()
+    }
+
+    let artifactPath: string | undefined
+    let artifactError: string | undefined
+    try {
+      artifactPath = await writeVerificationArtifact(process.cwd(), def.artifactOf(result))
+    } catch (e) {
+      artifactError = (e as Error).message
+    }
+
+    if (input.format === 'json') {
+      console.log(
+        JSON.stringify(
+          {
+            ...(def.afterWriteJson(result, artifactPath) as object),
+            ...(artifactError ? { artifactError } : {}),
+          },
+          null,
+          2
+        )
+      )
+    } else {
+      console.log(def.renderAfterWriteTable(result, artifactPath))
+      if (artifactError) console.error(`Failed to write verification artifact: ${artifactError}`)
+    }
+
+    // Verified exits 0 only when the artifact also persisted; any other state exits 1.
+    process.exit(def.isAfterWriteVerified(result, artifactError) ? 0 : 1)
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(error.message)
+      if (error instanceof ConnectionError)
+        error.hints.forEach((h) => console.error(`   Hint: ${h}`))
+    }
+    process.exit(1)
+  }
+}
+
+/** Wire one scenario definition onto the parent verify command. */
+function registerScenario<Input extends VerifyScenarioInputBase, Runners, Preflight, AfterWrite>(
+  parent: Command,
+  def: VerifyScenarioDefinition<Input, Runners, Preflight, AfterWrite>
+): void {
+  const command = parent.command(def.name).description(def.description)
+  def.configureOptions(command)
+  command.action((options: Record<string, unknown>, cmd: Command) =>
+    executeScenario(def, options, cmd)
+  )
+}
+
 export const verifyCommand = new Command('verify').description(
   'Run verification scenarios (preflight or after-write). Never executes writes.'
 )
 
-verifyCommand
-  .command('safe-backfill')
-  .description(
-    'Preflight or after-write verification for a safe backfill; never executes the UPDATE'
-  )
-  .requiredOption('--table <table>', 'Target table name')
-  .requiredOption('--query <sql>', 'Proposed backfill UPDATE statement (analyzed, never executed)')
-  .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the final assertion')
-  .requiredOption('--expect <expr>', 'Assertion expression, e.g. "rows == 0"')
-  .option('--after-write', 'Run the read-back assertion and write a verification artifact', false)
-  .option('--format <format>', 'Output format: table (default) or json', 'table')
-  .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
-  .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
-  .action(async (options: Record<string, unknown>, command: Command) => {
-    let input: SafeBackfillInput
-    try {
-      input = normalizeSafeBackfillInput({
-        table: options.table,
-        query: options.query,
-        verifyQuery: options.verifyQuery,
-        expect: options.expect,
-        afterWrite: options.afterWrite === true,
-        format: options.format,
-        subjectName: options.subjectName,
-        summary: options.summary,
-      })
-    } catch (e) {
-      // Input errors fail closed before any DB connection.
-      console.error(
-        e instanceof VerifyInputError || e instanceof Error ? (e as Error).message : String(e)
-      )
-      process.exit(1)
-    }
-
-    try {
-      const configPath = resolveConfigPath(command, options as { config?: string })
-      const config = await configModule.read(configPath)
-      if (!config.connection) {
-        console.error('Database not configured. Run: dbcli init')
-        process.exit(1)
-      }
-      const adapter = AdapterFactory.createSqlAdapter(
-        requireSqlConnection(config.connection as ConnectionOptions, 'safe-backfill')
-      )
-      await adapter.connect()
-
-      const runners = buildRealRunners({
-        adapter,
-        config,
-        options: options as { config?: string },
-        targetTable: input.table,
-      })
-
-      if (!input.afterWrite) {
-        let result: PreflightResult
-        try {
-          result = await runSafeBackfillPreflight(input, runners)
-        } finally {
-          await adapter.disconnect()
-        }
-        if (input.format === 'json') console.log(JSON.stringify(preflightJson(result), null, 2))
-        else console.log(renderPreflightTable(result))
-        process.exit(result.status === 'ready' ? 0 : 1)
-      }
-
-      // After-write mode.
-      let result: AfterWriteResult
-      try {
-        result = await runSafeBackfillAfterWrite(input, runners)
-      } finally {
-        await adapter.disconnect()
-      }
-
-      let artifactPath: string | undefined
-      let artifactError: string | undefined
-      try {
-        artifactPath = await writeVerificationArtifact(process.cwd(), result.artifact)
-      } catch (e) {
-        artifactError = (e as Error).message
-      }
-
-      if (input.format === 'json') {
-        console.log(
-          JSON.stringify(
-            {
-              ...(afterWriteJson(result, artifactPath) as object),
-              ...(artifactError ? { artifactError } : {}),
-            },
-            null,
-            2
-          )
-        )
-      } else {
-        console.log(renderAfterWriteTable(result, artifactPath))
-        if (artifactError) console.error(`Failed to write verification artifact: ${artifactError}`)
-      }
-
-      // Verified exits 0 only when the artifact also persisted; any other state exits 1.
-      const verifiedOk = result.status === 'verified' && !artifactError
-      process.exit(verifiedOk ? 0 : 1)
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(error.message)
-        if (error instanceof ConnectionError)
-          error.hints.forEach((h) => console.error(`   Hint: ${h}`))
-      }
-      process.exit(1)
-    }
-  })
-
-verifyCommand
-  .command('migration')
-  .description(
-    'Preflight or after-write verification for an externally-applied migration; never executes DDL'
-  )
-  .requiredOption('--table <table>', 'Table affected by the migration')
-  .requiredOption('--ddl <sql>', 'Proposed ALTER TABLE DDL (analyzed, never executed)')
-  .requiredOption('--verify-query <sql>', 'Read-only SELECT used by the post-migration assertion')
-  .requiredOption('--expect <expr>', 'Assertion expression, e.g. "value == 0"')
-  .option('--after-write', 'Run the read-back assertion and write a verification artifact', false)
-  .option('--format <format>', 'Output format: table (default) or json', 'table')
-  .option('--subject-name <name>', 'Optional artifact subject name (default: table)')
-  .option('--summary <text>', 'Optional artifact summary override (after-write mode)')
-  .action(async (options: Record<string, unknown>, command: Command) => {
-    let input: MigrationInput
-    try {
-      input = normalizeMigrationInput({
-        table: options.table,
-        ddl: options.ddl,
-        verifyQuery: options.verifyQuery,
-        expect: options.expect,
-        afterWrite: options.afterWrite === true,
-        format: options.format,
-        subjectName: options.subjectName,
-        summary: options.summary,
-      })
-    } catch (e) {
-      console.error(
-        e instanceof VerifyInputError || e instanceof Error ? (e as Error).message : String(e)
-      )
-      process.exit(1)
-    }
-
-    try {
-      const configPath = resolveConfigPath(command, options as { config?: string })
-      const config = await configModule.read(configPath)
-      if (!config.connection) {
-        console.error('Database not configured. Run: dbcli init')
-        process.exit(1)
-      }
-      const adapter = AdapterFactory.createSqlAdapter(
-        requireSqlConnection(config.connection as ConnectionOptions, 'migration')
-      )
-      await adapter.connect()
-
-      const runners = buildMigrationRunners({
-        adapter,
-        config,
-        options: options as { config?: string },
-        targetTable: input.table,
-      })
-
-      if (!input.afterWrite) {
-        let result: MigrationPreflightResult
-        try {
-          result = await runMigrationPreflight(input, runners)
-        } finally {
-          await adapter.disconnect()
-        }
-        if (input.format === 'json')
-          console.log(JSON.stringify(migrationPreflightJson(result), null, 2))
-        else console.log(renderMigrationPreflightTable(result))
-        process.exit(result.status === 'ready' ? 0 : 1)
-      }
-
-      let result: MigrationAfterWriteResult
-      try {
-        result = await runMigrationAfterWrite(input, runners)
-      } finally {
-        await adapter.disconnect()
-      }
-
-      let artifactPath: string | undefined
-      let artifactError: string | undefined
-      try {
-        artifactPath = await writeVerificationArtifact(process.cwd(), result.artifact)
-      } catch (e) {
-        artifactError = (e as Error).message
-      }
-
-      if (input.format === 'json') {
-        console.log(
-          JSON.stringify(
-            {
-              ...(migrationAfterWriteJson(result, artifactPath) as object),
-              ...(artifactError ? { artifactError } : {}),
-            },
-            null,
-            2
-          )
-        )
-      } else {
-        console.log(renderMigrationAfterWriteTable(result, artifactPath))
-        if (artifactError) console.error(`Failed to write verification artifact: ${artifactError}`)
-      }
-
-      const verifiedOk = result.status === 'verified' && !artifactError
-      process.exit(verifiedOk ? 0 : 1)
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(error.message)
-        if (error instanceof ConnectionError)
-          error.hints.forEach((h) => console.error(`   Hint: ${h}`))
-      }
-      process.exit(1)
-    }
-  })
+for (const scenario of BUILTIN_VERIFY_SCENARIOS) {
+  registerScenario(verifyCommand, scenario)
+}

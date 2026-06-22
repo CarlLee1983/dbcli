@@ -2,16 +2,15 @@ import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { join } from 'path'
 import { homedir } from 'os'
-
-function resolveHome(): string {
-  return process.env.HOME ?? homedir()
-}
-
 import {
   buildCompletionTree,
   flattenCommandTree,
   type CompletionCommandNode,
 } from '@/core/completion/command-tree'
+
+function resolveHome(): string {
+  return process.env.HOME ?? homedir()
+}
 
 function optionFlags(node: CompletionCommandNode): string[] {
   return node.options.map((o) => o.long ?? o.short).filter((x): x is string => Boolean(x))

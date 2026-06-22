@@ -50,9 +50,8 @@ function makeSavedQueryLoader(): SavedQueryLoader {
 }
 
 export function registerMissingIndexCommand(parent: Command): Command {
-  if (parent.commands.some((c) => c.name() === 'missing-index-for')) {
-    return parent
-  }
+  const existing = parent.commands.find((c) => c.name() === 'missing-index-for')
+  if (existing) return existing
   parent
     .command('missing-index-for')
     .description('Suggest composite indexes for a single SELECT (read-only)')

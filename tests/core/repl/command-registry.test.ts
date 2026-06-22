@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeAll } from 'bun:test'
 import { buildProgram } from '../../../src/program'
 import {
   buildCompletionTree,
@@ -11,8 +11,10 @@ import {
 } from '../../../src/core/repl/command-registry'
 
 describe('REPL command registry parity', () => {
-  const top = listTopLevelCommandNames(buildCompletionTree(buildProgram()))
-  setReplCommandNames(top)
+  beforeAll(() => {
+    const top = listTopLevelCommandNames(buildCompletionTree(buildProgram()))
+    setReplCommandNames(top)
+  })
 
   test('completion list includes newly registered commands', () => {
     const names = getReplCommandNames()

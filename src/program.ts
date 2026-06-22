@@ -38,6 +38,15 @@ import { useCommand } from './commands/use'
 import { proxyCommand } from './commands/proxy'
 import pkg from '../package.json'
 
+/**
+ * Build the dbcli Commander program with all commands registered.
+ *
+ * NOTE: command objects are module-level singletons shared across calls, so a
+ * second buildProgram() re-parents them onto the newest program. Callers must
+ * use the returned program immediately (parse it, or read its command tree) and
+ * must NOT retain a previously returned program — its subcommands' .parent will
+ * have been repointed. cli.ts builds once; shell.ts builds-and-discards.
+ */
 export function buildProgram(): Command {
   const program = new Command()
     .name('dbcli')

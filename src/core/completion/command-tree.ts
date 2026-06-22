@@ -22,8 +22,8 @@ export interface CompletionPathEntry {
 
 function toOption(opt: Option): CompletionOption {
   return {
-    long: opt.long ?? undefined,
-    short: opt.short ?? undefined,
+    long: opt.long,
+    short: opt.short,
     requiredValue: opt.required ?? false,
     optionalValue: opt.optional ?? false,
     description: opt.description ?? '',

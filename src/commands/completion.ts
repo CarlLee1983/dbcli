@@ -2,118 +2,150 @@ import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { join } from 'path'
 import { homedir } from 'os'
+import {
+  buildCompletionTree,
+  flattenCommandTree,
+  type CompletionCommandNode,
+} from '@/core/completion/command-tree'
 
-export interface CommandInfo {
-  name: string
-  options: string[]
+function optionFlags(node: CompletionCommandNode): string[] {
+  return node.options.map((o) => o.long ?? o.short).filter((x): x is string => Boolean(x))
 }
 
-function extractCommands(program: Command): CommandInfo[] {
-  return program.commands.map((cmd) => ({
-    name: cmd.name(),
-    options: cmd.options.map((o) => o.long ?? o.short ?? '').filter(Boolean),
-  }))
+function childNames(node: CompletionCommandNode): string[] {
+  return node.children.map((c) => c.name)
 }
 
-function extractGlobalOptions(program: Command): string[] {
-  return program.options.map((o) => o.long ?? o.short ?? '').filter(Boolean)
-}
+export function generateBashCompletion(root: CompletionCommandNode): string {
+  const entries = flattenCommandTree(root)
+  const rootOpts = optionFlags(root).join(' ')
 
-export function generateBashCompletion(commands: CommandInfo[], globalOptions: string[]): string {
-  const cmdNames = commands.map((c) => c.name).join(' ')
-  const globalOpts = globalOptions.join(' ')
+  const cmdArms = entries
+    .filter((e) => e.node.children.length > 0)
+    .map((e) => {
+      const key = e.path.join(' ')
+      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(' ')
+      return `    "${key}") COMPREPLY=( $(compgen -W "${words}" -- "$cur") ) ;;`
+    })
+    .join('\n')
 
-  const caseEntries = commands
-    .map(
-      (c) =>
-        `    ${c.name})\n      COMPREPLY=( $(compgen -W "${c.options.join(' ')}" -- "\${cur}") )\n      ;;`
-    )
+  const optArms = entries
+    .filter((e) => optionFlags(e.node).length > 0)
+    .map((e) => {
+      const key = e.path.join(' ')
+      return `    "${key}") COMPREPLY=( $(compgen -W "${optionFlags(e.node).join(' ')}" -- "$cur") ) ;;`
+    })
     .join('\n')
 
   return `#!/bin/bash
 # dbcli bash completion — auto-generated, do not edit
 _dbcli_completions() {
-  local cur prev commands
+  local cur path w i
   cur="\${COMP_WORDS[COMP_CWORD]}"
-  prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  commands="${cmdNames}"
+  path=""
+  for (( i=1; i < COMP_CWORD; i++ )); do
+    w="\${COMP_WORDS[i]}"
+    [[ "$w" == -* ]] && continue
+    if [[ -z "$path" ]]; then path="$w"; else path="$path $w"; fi
+  done
 
-  if [[ \${COMP_CWORD} -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "\${commands} ${globalOpts}" -- "\${cur}") )
+  if [[ "$cur" == -* ]]; then
+    case "$path" in
+${optArms}
+      *) COMPREPLY=( $(compgen -W "${rootOpts}" -- "$cur") ) ;;
+    esac
     return 0
   fi
 
-  case "\${COMP_WORDS[1]}" in
-${caseEntries}
-    *)
-      COMPREPLY=( $(compgen -W "${globalOpts}" -- "\${cur}") )
-      ;;
+  case "$path" in
+${cmdArms}
+    *) COMPREPLY=( $(compgen -W "${rootOpts}" -- "$cur") ) ;;
   esac
 }
 complete -F _dbcli_completions dbcli
 `
 }
 
-export function generateZshCompletion(commands: CommandInfo[], globalOptions: string[]): string {
-  const cmdLines = commands.map((c) => `    '${c.name}:${c.name} command'`).join('\n')
+export function generateZshCompletion(root: CompletionCommandNode): string {
+  const entries = flattenCommandTree(root)
+  const rootOpts = optionFlags(root).join(' ')
 
-  const subcmdCases = commands
-    .map((c) => {
-      const opts = c.options.map((o) => `'${o}[${o}]'`).join(' ')
-      return `  ${c.name})\n    _arguments ${opts}\n    ;;`
+  const cmdArms = entries
+    .filter((e) => e.node.children.length > 0)
+    .map((e) => {
+      const key = e.path.join(' ')
+      const words = [...childNames(e.node), ...(e.path.length === 0 ? optionFlags(root) : [])].join(' ')
+      return `    "${key}") compadd -- ${words} ;;`
     })
     .join('\n')
 
-  const globalOpts = globalOptions.map((o) => `'${o}[${o}]'`).join(' ')
+  const optArms = entries
+    .filter((e) => optionFlags(e.node).length > 0)
+    .map((e) => {
+      const key = e.path.join(' ')
+      return `    "${key}") compadd -- ${optionFlags(e.node).join(' ')} ;;`
+    })
+    .join('\n')
 
   return `#compdef dbcli
 # dbcli zsh completion — auto-generated, do not edit
 _dbcli() {
-  local -a commands
-  commands=(
-${cmdLines}
-  )
+  local path w i cur
+  cur="\${words[CURRENT]}"
+  path=""
+  for (( i=2; i < CURRENT; i++ )); do
+    w="\${words[i]}"
+    [[ "$w" == -* ]] && continue
+    if [[ -z "$path" ]]; then path="$w"; else path="$path $w"; fi
+  done
 
-  _arguments -C \\
-    ${globalOpts} \\
-    '1:command:->cmd' \\
-    '*::arg:->args'
-
-  case "$state" in
-  cmd)
-    _describe 'command' commands
-    ;;
-  args)
-    case "$words[1]" in
-${subcmdCases}
+  if [[ "$cur" == -* ]]; then
+    case "$path" in
+${optArms}
+      *) compadd -- ${rootOpts} ;;
     esac
-    ;;
+    return
+  fi
+
+  case "$path" in
+${cmdArms}
+    *) compadd -- ${rootOpts} ;;
   esac
 }
-_dbcli
+_dbcli "$@"
 `
 }
 
-export function generateFishCompletion(commands: CommandInfo[], globalOptions: string[]): string {
-  const lines = ['# dbcli fish completion — auto-generated, do not edit', '']
+export function generateFishCompletion(root: CompletionCommandNode): string {
+  const entries = flattenCommandTree(root)
+  const lines: string[] = [
+    '# dbcli fish completion — auto-generated, do not edit',
+    '',
+    'function __fish_dbcli_path',
+    '    set -l tokens (commandline -opc)',
+    '    set -l path',
+    '    for t in $tokens[2..-1]',
+    "        string match -q -- '-*' $t; and continue",
+    '        set path $path $t',
+    '    end',
+    "    test (string join ' ' $path) = (string join ' ' $argv)",
+    'end',
+    '',
+  ]
 
-  for (const opt of globalOptions) {
-    const longName = opt.replace(/^--/, '')
-    lines.push(`complete -c dbcli -n '__fish_use_subcommand' -l ${longName} -d '${opt}'`)
-  }
+  const sanitize = (s: string): string => s.replace(/'/g, '')
 
-  for (const cmd of commands) {
-    lines.push(
-      `complete -c dbcli -n '__fish_use_subcommand' -a ${cmd.name} -d '${cmd.name} command'`
-    )
-  }
-
-  for (const cmd of commands) {
-    for (const opt of cmd.options) {
-      const longName = opt.replace(/^--/, '')
+  for (const e of entries) {
+    const cond = e.path.length === 0 ? '__fish_use_subcommand' : `__fish_dbcli_path ${e.path.join(' ')}`
+    for (const child of e.node.children) {
       lines.push(
-        `complete -c dbcli -n '__fish_seen_subcommand_from ${cmd.name}' -l ${longName} -d '${opt}'`
+        `complete -c dbcli -n '${cond}' -a ${child.name} -d '${sanitize(child.description) || child.name}'`
       )
+    }
+    for (const o of e.node.options) {
+      const long = (o.long ?? '').replace(/^--/, '')
+      if (!long) continue
+      lines.push(`complete -c dbcli -n '${cond}' -l ${long} -d '${sanitize(o.description || o.long || '')}'`)
     }
   }
 
@@ -145,7 +177,7 @@ export function detectShell(): string {
 const MARKER_START = '# >>> dbcli completion >>>'
 const MARKER_END = '# <<< dbcli completion <<<'
 
-async function installCompletion(shell: string, script: string): Promise<void> {
+export async function installCompletion(shell: string, script: string): Promise<void> {
   const targetPath = getInstallPath(shell)
 
   if (shell === 'fish') {
@@ -165,12 +197,20 @@ async function installCompletion(shell: string, script: string): Promise<void> {
   const markerRegex = new RegExp(`${MARKER_START}[\\s\\S]*?${MARKER_END}\\n?`, 'g')
   content = content.replace(markerRegex, '')
 
-  const block = `\n${MARKER_START}\neval "$(dbcli completion ${shell})"\n${MARKER_END}\n`
+  const block = `\n${MARKER_START}\neval "$(DBCLI_NO_UPDATE_CHECK=1 dbcli completion ${shell})"\n${MARKER_END}\n`
   content = content.trimEnd() + '\n' + block
 
   await Bun.file(targetPath).write(content)
   console.log(colors.success(`✓ Completion installed to ${targetPath}`))
   console.log(colors.info(`  Run: source ${targetPath}`))
+}
+
+type Generator = (root: CompletionCommandNode) => string
+
+const GENERATORS: Record<string, Generator> = {
+  bash: generateBashCompletion,
+  zsh: generateZshCompletion,
+  fish: generateFishCompletion,
 }
 
 export const completionCommand = new Command('completion')
@@ -184,37 +224,27 @@ export const completionCommand = new Command('completion')
       process.exit(1)
     }
 
-    const commands = extractCommands(parentProgram)
-    const globalOptions = extractGlobalOptions(parentProgram)
+    const root = buildCompletionTree(parentProgram)
 
-    if (options.install !== undefined) {
-      const shell =
-        typeof options.install === 'string' ? options.install : (shellArg ?? detectShell())
-      const generators: Record<string, typeof generateBashCompletion> = {
-        bash: generateBashCompletion,
-        zsh: generateZshCompletion,
-        fish: generateFishCompletion,
-      }
-      const generate = generators[shell]
-      if (!generate) {
-        console.error(colors.error(`Unsupported shell: ${shell}. Supported: bash, zsh, fish`))
-        process.exit(1)
-      }
-      const script = generate(commands, globalOptions)
-      await installCompletion(shell, script)
-      return
-    }
+    const installing = options.install !== undefined
+    const shell = installing
+      ? typeof options.install === 'string'
+        ? options.install
+        : (shellArg ?? detectShell())
+      : (shellArg ?? detectShell())
 
-    const shell = shellArg ?? detectShell()
-    const generators: Record<string, typeof generateBashCompletion> = {
-      bash: generateBashCompletion,
-      zsh: generateZshCompletion,
-      fish: generateFishCompletion,
-    }
-    const generate = generators[shell]
+    const generate = GENERATORS[shell]
     if (!generate) {
       console.error(colors.error(`Unsupported shell: ${shell}. Supported: bash, zsh, fish`))
       process.exit(1)
     }
-    process.stdout.write(generate(commands, globalOptions))
+
+    const script = generate(root)
+
+    if (installing) {
+      await installCompletion(shell, script)
+      return
+    }
+
+    process.stdout.write(script)
   })

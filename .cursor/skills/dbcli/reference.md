@@ -1147,8 +1147,8 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 ### verify
 
 Run a verification scenario. `verify` **runs** verification scenarios (safe-backfill,
-migration) and never executes writes/DDL. `verification` **inspects and manages** the
-local result artifacts those scenarios produce under `.dbcli/verification/`.
+migration, rollback) and never executes writes/DDL. `verification` **inspects and manages**
+the local result artifacts those scenarios produce under `.dbcli/verification/`.
 
 ```bash
 # Preflight (default): read-only guards + the exact after-write command. No artifact.
@@ -1232,6 +1232,67 @@ identifier — double-quoted (`"…"`), backtick-quoted (`` `…` ``), or bracke
 cannot be fully parsed under this contract (unterminated quotes, unsupported escapes,
 or more than three parts) are blocked before the after-write assertion with a
 "could not be parsed" reason, distinct from the `must match --table` mismatch reason.
+
+#### `verify rollback`
+
+(v1.37.0+) Preflight or after-write verification for an **externally-applied rollback** —
+confirming that after you reverted a change the database is back to the expected prior
+state. **This command never executes the reverting statement** — it analyzes it, runs
+read-only guards, and (in after-write mode) records evidence after you apply the rollback
+externally. One scenario covers both schema and data rollbacks via a required
+`--kind <ddl|dml>` selector:
+
+- `--kind ddl` — revert a schema migration. `--statement` is a single `ALTER TABLE`
+  (e.g. dropping a column a forward migration added). Reuses the `migration` DDL gates.
+- `--kind dml` — revert a data change. `--statement` is a single `UPDATE` that restores
+  prior values. Reuses the `safe-backfill` UPDATE plan gates.
+
+```bash
+# Schema rollback (--kind ddl) — preflight, then record evidence after applying it.
+dbcli verify rollback \
+  --kind ddl \
+  --table users \
+  --statement "ALTER TABLE users DROP COLUMN verified_at" \
+  --verify-query "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verified_at'" \
+  --expect "value == 0"
+dbcli verify rollback --kind ddl ... --after-write
+
+# Data rollback (--kind dml) — revert an UPDATE, then read back.
+dbcli verify rollback \
+  --kind dml \
+  --table users \
+  --statement "UPDATE users SET status = NULL WHERE status = 1" \
+  --verify-query "SELECT count(*)::int AS n FROM users WHERE status = 1" \
+  --expect "value == 0"
+dbcli verify rollback --kind dml ... --after-write
+
+# JSON for agents (both kinds).
+dbcli verify rollback --kind ddl ... --format json
+```
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--kind <ddl\|dml>` | yes | Reverting-statement grammar: `ddl` (single `ALTER TABLE`) or `dml` (single `UPDATE`). Invalid value fails closed before any DB connection. |
+| `--table <table>` | yes | Table affected by the rollback. |
+| `--statement <sql>` | yes | Proposed reverting statement, analyzed but never executed. |
+| `--verify-query <sql>` | yes | Plain `SELECT` for post-rollback read-back verification. |
+| `--expect <expr>` | yes | Assertion expression for the read-back result. |
+| `--after-write` | no | Run the post-rollback assertion and write a v1 artifact. |
+| `--format <table\|json>` | no | Output format, default `table`. |
+| `--subject-name <name>` | no | Artifact subject name. Default is the table name. |
+| `--summary <text>` | no | Optional artifact summary override. |
+
+A single `--statement` flag is used for both kinds (instead of reusing `--ddl` / `--query`)
+to keep the dual-kind surface honest. The guard sequence, statuses (`ready`/`blocked` in
+preflight; `verified` / `not_verified` / `blocked` / `indeterminate` in after-write), and
+exit codes are identical to the other two scenarios. **MVP restrictions:** DML rollback is
+`UPDATE`-only (INSERT/DELETE reverts deferred); DDL rollback is single `ALTER TABLE` only,
+using the same identifier contract as `verify migration`.
+
+The artifact schema is unchanged: a rollback reuses the existing subject kinds —
+`--kind ddl` → `migration`, `--kind dml` → `backfill` — and records its provenance via
+`subject.command = "verify rollback"` plus the summary, so `verification` filters and
+retention are unaffected.
 
 ### verification
 

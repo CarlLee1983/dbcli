@@ -160,6 +160,7 @@ Developer workflow guardrails:
   (`--after-write`) when durable evidence is required. Never executes the write.
 - `tasks plan migration-review` — when the user needs a migration plan only (plan output, no DDL executed).
 - `verify migration` — preflight a schema migration (analyze DDL, run guards) and after the migration is applied externally (`--after-write`) to record evidence. Never executes DDL.
+- `verify rollback --kind <ddl|dml>` — verify that a reverting change restored the prior state: preflight analyzes the reverting `ALTER TABLE` (`--kind ddl`) or `UPDATE` (`--kind dml`) via `--statement`, and `--after-write` records evidence after you apply it externally. Never executes the statement.
 - `verification show <id>` — cite the final artifact.
 
 Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).

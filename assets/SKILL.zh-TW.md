@@ -134,6 +134,7 @@ dbcli inspect --for-agent --no-connect --format json
 - `verify safe-backfill` — 在真實 backfill 前（preflight）及執行後（`--after-write`）使用，需要持久佐證時必用。永不執行寫入。
 - `tasks plan migration-review` — 當使用者只需要 migration 計畫時使用（僅輸出計畫，不執行 DDL）。
 - `verify migration` — 預檢 schema migration（分析 DDL、執行防護），並在外部套用 migration 後（`--after-write`）記錄佐證。永不執行 DDL。
+- `verify rollback --kind <ddl|dml>` — 驗證「還原變更」是否讓資料庫回到先前狀態：preflight 透過 `--statement` 分析還原用的 `ALTER TABLE`（`--kind ddl`）或 `UPDATE`（`--kind dml`），並於外部套用後以 `--after-write` 記錄佐證。永不執行該語句。
 - `verification show <id>` — 引用最終文物。
 
 完整旗標、每個指令的可貼上範例、`migrate` DDL、互動式 `shell` 與 MongoDB / Redis / ES 教學在 [reference.md](reference.md)(安裝時與本檔放在一起)。

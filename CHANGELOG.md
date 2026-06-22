@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.37.1] - 2026-06-22 - Skill Documentation Parity for verify rollback
+
+### Fixed
+
+- **Skill 文件補上 `verify rollback`。** v1.37.0 出貨的 `dbcli verify rollback` 先前未寫進可安裝的 skill 文件，導致安裝 skill 的 agent 不知道此指令存在。於 `assets/SKILL.md` / `assets/SKILL.zh-TW.md` 加入工作流速覽行，並於 `assets/reference.md` 新增完整 `#### verify rollback` 區段（`--kind ddl|dml`、`--statement`、preflight / after-write 雙範例、MVP 限制與 artifact subject 對應）。透過 `plugin:sync` 將內容傳播到所有受管理的平台副本（`skills/`、`.github/skills/`、`.cursor/`、`.windsurf/`、`plugins/`）。純文件變更，無程式行為更動。
+
 ## [1.37.0] - 2026-06-22 - Rollback Scenario & Nested Shell Completions
 
 ### Added

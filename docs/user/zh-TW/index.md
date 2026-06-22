@@ -393,6 +393,8 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 `dbcli completion <bash|zsh|fish>` 會輸出補全腳本；`dbcli completion --install` 會安裝它。
 已安裝的補全支援巢狀子指令，例如 `dbcli queries list --<TAB>`、
 `dbcli migrate add-column --<TAB>` 與 `dbcli verify safe-backfill --<TAB>`。
+在 option value 或位置參數之後也會維持 leaf command 範圍，例如
+`dbcli queries list --format json --<TAB>`。
 
 在 `dbcli shell` 中，指令補全會依照目前的指令範圍運作，因此新增的指令
 （`q`、`queries`、`inspect`、`verify`、`proxy`、`snapshot` 等）會自動補全並可被執行。

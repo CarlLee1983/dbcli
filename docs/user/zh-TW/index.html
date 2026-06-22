@@ -458,7 +458,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </table>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Shell 自動補全</h4>
-                <p><code>dbcli completion &lt;bash|zsh|fish&gt;</code> 會輸出補全腳本；<code>dbcli completion --install</code> 會安裝它。已安裝的補全支援<strong>巢狀子指令</strong>，例如 <code>dbcli queries list --&lt;TAB&gt;</code>、<code>dbcli migrate add-column --&lt;TAB&gt;</code> 與 <code>dbcli verify safe-backfill --&lt;TAB&gt;</code>。</p>
+                <p><code>dbcli completion &lt;bash|zsh|fish&gt;</code> 會輸出補全腳本；<code>dbcli completion --install</code> 會安裝它。已安裝的補全支援<strong>巢狀子指令</strong>，例如 <code>dbcli queries list --&lt;TAB&gt;</code>、<code>dbcli migrate add-column --&lt;TAB&gt;</code> 與 <code>dbcli verify safe-backfill --&lt;TAB&gt;</code>。在 option value 或位置參數之後也會維持 leaf command 範圍，例如 <code>dbcli queries list --format json --&lt;TAB&gt;</code>。</p>
                 <p>在 <code>dbcli shell</code> 中，指令補全會依照目前的指令範圍運作，因此新增的指令（<code>q</code>、<code>queries</code>、<code>inspect</code>、<code>verify</code>、<code>proxy</code>、<code>snapshot</code> 等）會自動補全並可被執行。</p>
                 <p class="m-0"><code>dbcli completion --install</code> 採用<strong>標記區塊管理</strong>：它只會在 shell 設定檔寫入單一管理區塊，重新執行時會「取代」該區塊，而不會重複新增。</p>
             </div>

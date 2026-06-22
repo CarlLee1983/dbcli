@@ -458,7 +458,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </table>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Shell completion</h4>
-                <p><code>dbcli completion &lt;bash|zsh|fish&gt;</code> prints a completion script; <code>dbcli completion --install</code> installs it. Installed completions cover <strong>nested subcommands</strong> — for example <code>dbcli queries list --&lt;TAB&gt;</code>, <code>dbcli migrate add-column --&lt;TAB&gt;</code>, and <code>dbcli verify safe-backfill --&lt;TAB&gt;</code>.</p>
+                <p><code>dbcli completion &lt;bash|zsh|fish&gt;</code> prints a completion script; <code>dbcli completion --install</code> installs it. Installed completions cover <strong>nested subcommands</strong> — for example <code>dbcli queries list --&lt;TAB&gt;</code>, <code>dbcli migrate add-column --&lt;TAB&gt;</code>, and <code>dbcli verify safe-backfill --&lt;TAB&gt;</code>. They keep the leaf command scope after option values or positional arguments, such as <code>dbcli queries list --format json --&lt;TAB&gt;</code>.</p>
                 <p>Inside <code>dbcli shell</code>, command completion follows the current command surface, so newly added commands (<code>q</code>, <code>queries</code>, <code>inspect</code>, <code>verify</code>, <code>proxy</code>, <code>snapshot</code>, …) complete and dispatch automatically.</p>
                 <p class="m-0"><code>dbcli completion --install</code> is <strong>marker-managed</strong>: it writes a single managed block to your shell rc file and re-running it replaces that block rather than duplicating it.</p>
             </div>

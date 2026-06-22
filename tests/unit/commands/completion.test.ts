@@ -1,4 +1,7 @@
 import { describe, test, expect } from 'bun:test'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   generateBashCompletion,
   generateZshCompletion,
@@ -18,6 +21,7 @@ const ROOT: CompletionCommandNode = {
   options: [opt('--config'), opt('--use')],
   children: [
     { name: 'list', description: 'list', options: [opt('--format')], children: [] },
+    { name: 'query', description: 'query', options: [opt('--format')], children: [] },
     {
       name: 'queries',
       description: 'snippets',
@@ -30,6 +34,12 @@ const ROOT: CompletionCommandNode = {
           children: [],
         },
       ],
+    },
+    {
+      name: 'skill',
+      description: 'skill',
+      options: [opt('--lang')],
+      children: [{ name: 'context', description: 'context', options: [opt('--format')], children: [] }],
     },
     {
       name: 'migrate',
@@ -73,6 +83,27 @@ const ROOT: CompletionCommandNode = {
   ],
 }
 
+async function writeTempScript(name: string, script: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'dbcli-completion-'))
+  const path = join(dir, name)
+  await Bun.write(path, script)
+  return path
+}
+
+async function runBashCompletion(script: string, words: readonly string[]): Promise<string[]> {
+  const scriptPath = await writeTempScript('dbcli-completion.bash', script)
+  const arrayWords = words.map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(' ')
+  const command = [
+    `source "${scriptPath}"`,
+    `COMP_WORDS=(${arrayWords})`,
+    `COMP_CWORD=${words.length - 1}`,
+    '_dbcli_completions',
+    'printf "%s\\n" "${COMPREPLY[@]}"',
+  ].join('; ')
+  const output = await Bun.$`bash -lc ${command}`.text()
+  return output.trim().split('\n').filter(Boolean)
+}
+
 describe('generateBashCompletion', () => {
   const script = generateBashCompletion(ROOT)
   test('has shebang and registration', () => {
@@ -99,6 +130,22 @@ describe('generateBashCompletion', () => {
     expect(script).toContain('"blacklist table")')
     expect(script).toContain('add')
   })
+  test('keeps nested option completion after option values', async () => {
+    const candidates = await runBashCompletion(script, ['dbcli', 'queries', 'list', '--format', 'json', '--'])
+    expect(candidates).toContain('--tag')
+    expect(candidates).toContain('--engine')
+    expect(candidates).not.toContain('--config')
+  })
+  test('keeps command option completion after positional args', async () => {
+    const candidates = await runBashCompletion(script, ['dbcli', 'query', 'select 1', '--'])
+    expect(candidates).toContain('--format')
+    expect(candidates).not.toContain('--config')
+  })
+  test('keeps child command path after parent option value', async () => {
+    const candidates = await runBashCompletion(script, ['dbcli', 'skill', '--lang', 'zh-TW', 'context', '--'])
+    expect(candidates).toContain('--format')
+    expect(candidates).not.toContain('--config')
+  })
 })
 
 describe('generateZshCompletion', () => {
@@ -110,6 +157,12 @@ describe('generateZshCompletion', () => {
     expect(script).toContain('"queries list")')
     expect(script).toContain('--format --tag --engine --source')
     expect(script).toContain('"blacklist table")')
+  })
+  test('registers function instead of invoking compadd during rc eval', async () => {
+    const scriptPath = await writeTempScript('dbcli-completion.zsh', script)
+    await Bun.$`zsh -f -c ${`eval "$(cat "${scriptPath}")"`}`.quiet()
+    expect(script).toContain('compdef _dbcli dbcli')
+    expect(script).not.toContain('_dbcli "$@"')
   })
 })
 
@@ -123,6 +176,10 @@ describe('generateFishCompletion', () => {
     expect(script).toContain('__fish_dbcli_path queries list')
     expect(script).toContain('__fish_dbcli_path blacklist table')
     expect(script).toContain('-l after-write')
+  })
+  test('known path cases return for each matched path', () => {
+    expect(script).toContain("case 'queries list'\n            return 0")
+    expect(script).toContain("case 'skill context'\n            return 0")
   })
 })
 

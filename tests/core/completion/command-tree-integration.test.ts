@@ -50,4 +50,27 @@ describe('buildProgram + buildCompletionTree integration', () => {
       buildProgram()
     }).not.toThrow()
   })
+
+  // Lifetime contract (see the NOTE on buildProgram in src/program.ts): command
+  // objects are module-level singletons, so a second buildProgram() re-parents
+  // them onto the newest program and the previously returned program goes stale.
+  // This test locks that behavior so nobody caches an old program instance.
+  test('buildProgram() re-parents shared command singletons onto the newest program', () => {
+    const first = buildProgram()
+    const firstCompletion = first.commands.find((c) => c.name() === 'completion')!
+    expect(firstCompletion.parent).toBe(first)
+
+    const second = buildProgram()
+    const secondCompletion = second.commands.find((c) => c.name() === 'completion')!
+
+    // Same shared Command instance surfaces in both programs...
+    expect(secondCompletion).toBe(firstCompletion)
+    // ...and its .parent has been repointed to the newest program, so the first
+    // program is now stale and must not be retained by callers.
+    expect(firstCompletion.parent).toBe(second)
+    expect(firstCompletion.parent).not.toBe(first)
+
+    // The newest program still yields a complete, usable command tree.
+    expect(buildCompletionTree(second).children.map((c) => c.name)).toContain('completion')
+  })
 })

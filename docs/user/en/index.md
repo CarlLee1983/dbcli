@@ -432,7 +432,8 @@ SQL text is always stored in the event log. **Result rows are never stored.** Us
 `dbcli completion <bash|zsh|fish>` prints a completion script; `dbcli completion --install`
 installs it. Installed completions cover **nested subcommands** — for example
 `dbcli queries list --<TAB>`, `dbcli migrate add-column --<TAB>`, and
-`dbcli verify safe-backfill --<TAB>`.
+`dbcli verify safe-backfill --<TAB>`. They keep the leaf command scope after
+option values or positional arguments, such as `dbcli queries list --format json --<TAB>`.
 
 Inside `dbcli shell`, command completion follows the current command surface, so newly
 added commands (`q`, `queries`, `inspect`, `verify`, `proxy`, `snapshot`, …) complete and

@@ -20,9 +20,49 @@ function childNames(node: CompletionCommandNode): string[] {
   return node.children.map((c) => c.name)
 }
 
+function commandPathKeys(root: CompletionCommandNode): string[] {
+  return flattenCommandTree(root)
+    .map((e) => e.path.join(' '))
+    .filter(Boolean)
+}
+
+function optionValueKeys(root: CompletionCommandNode): string[] {
+  return flattenCommandTree(root).flatMap((e) => {
+    const path = e.path.join(' ')
+    return e.node.options.flatMap((o) => {
+      if (!o.requiredValue && !o.optionalValue) return []
+      return [o.long, o.short]
+        .filter((flag): flag is string => Boolean(flag))
+        .map((flag) => `${path}|||${flag}`)
+    })
+  })
+}
+
+function bashCaseReturnFunction(name: string, values: readonly string[]): string {
+  const arms = values.map((value) => `    "${value}") return 0 ;;`).join('\n')
+  return `${name}() {
+  case "$1" in
+${arms}
+  esac
+  return 1
+}`
+}
+
+function zshCaseReturnFunction(name: string, values: readonly string[]): string {
+  const arms = values.map((value) => `    "${value}") return 0 ;;`).join('\n')
+  return `${name}() {
+  case "$1" in
+${arms}
+  esac
+  return 1
+}`
+}
+
 export function generateBashCompletion(root: CompletionCommandNode): string {
   const entries = flattenCommandTree(root)
   const rootOpts = optionFlags(root).join(' ')
+  const commandPathHelper = bashCaseReturnFunction('_dbcli_is_command_path', commandPathKeys(root))
+  const optionValueHelper = bashCaseReturnFunction('_dbcli_option_takes_value_key', optionValueKeys(root))
 
   const cmdArms = entries
     .filter((e) => e.node.children.length > 0)
@@ -43,14 +83,35 @@ export function generateBashCompletion(root: CompletionCommandNode): string {
 
   return `#!/bin/bash
 # dbcli bash completion — auto-generated, do not edit
+${commandPathHelper}
+
+${optionValueHelper}
+
+_dbcli_option_takes_value() {
+  _dbcli_option_takes_value_key "$1|||$2"
+}
+
 _dbcli_completions() {
-  local cur path w i
+  local cur path w i candidate skip_value
   cur="\${COMP_WORDS[COMP_CWORD]}"
   path=""
+  skip_value=0
   for (( i=1; i < COMP_CWORD; i++ )); do
     w="\${COMP_WORDS[i]}"
-    [[ "$w" == -* ]] && continue
-    if [[ -z "$path" ]]; then path="$w"; else path="$path $w"; fi
+    if [[ -z "$path" ]]; then candidate="$w"; else candidate="$path $w"; fi
+    if _dbcli_is_command_path "$candidate"; then
+      path="$candidate"
+      skip_value=0
+      continue
+    fi
+    if [[ "$skip_value" == "1" ]]; then
+      skip_value=0
+      continue
+    fi
+    if [[ "$w" == -* ]]; then
+      if _dbcli_option_takes_value "$path" "$w"; then skip_value=1; fi
+      continue
+    fi
   done
 
   if [[ "$cur" == -* ]]; then
@@ -73,6 +134,8 @@ complete -F _dbcli_completions dbcli
 export function generateZshCompletion(root: CompletionCommandNode): string {
   const entries = flattenCommandTree(root)
   const rootOpts = optionFlags(root).join(' ')
+  const commandPathHelper = zshCaseReturnFunction('_dbcli_is_command_path', commandPathKeys(root))
+  const optionValueHelper = zshCaseReturnFunction('_dbcli_option_takes_value_key', optionValueKeys(root))
 
   const cmdArms = entries
     .filter((e) => e.node.children.length > 0)
@@ -93,14 +156,35 @@ export function generateZshCompletion(root: CompletionCommandNode): string {
 
   return `#compdef dbcli
 # dbcli zsh completion — auto-generated, do not edit
+${commandPathHelper}
+
+${optionValueHelper}
+
+_dbcli_option_takes_value() {
+  _dbcli_option_takes_value_key "$1|||$2"
+}
+
 _dbcli() {
-  local path w i cur
+  local path w i cur candidate skip_value
   cur="\${words[CURRENT]}"
   path=""
+  skip_value=0
   for (( i=2; i < CURRENT; i++ )); do
     w="\${words[i]}"
-    [[ "$w" == -* ]] && continue
-    if [[ -z "$path" ]]; then path="$w"; else path="$path $w"; fi
+    if [[ -z "$path" ]]; then candidate="$w"; else candidate="$path $w"; fi
+    if _dbcli_is_command_path "$candidate"; then
+      path="$candidate"
+      skip_value=0
+      continue
+    fi
+    if [[ "$skip_value" == "1" ]]; then
+      skip_value=0
+      continue
+    fi
+    if [[ "$w" == -* ]]; then
+      if _dbcli_option_takes_value "$path" "$w"; then skip_value=1; fi
+      continue
+    fi
   done
 
   if [[ "$cur" == -* ]]; then
@@ -116,21 +200,61 @@ ${cmdArms}
     *) compadd -- ${rootOpts} ;;
   esac
 }
-_dbcli "$@"
+autoload -Uz compinit
+(( $+functions[compdef] )) || compinit -D
+compdef _dbcli dbcli
 `
 }
 
 export function generateFishCompletion(root: CompletionCommandNode): string {
   const entries = flattenCommandTree(root)
+  const fishPathCases = commandPathKeys(root)
+    .map((path) => `        case '${path}'\n            return 0`)
+    .join('\n')
+  const fishOptionValueCases = optionValueKeys(root)
+    .map((key) => `        case '${key}'\n            return 0`)
+    .join('\n')
   const lines: string[] = [
     '# dbcli fish completion — auto-generated, do not edit',
+    '',
+    'function __fish_dbcli_known_path',
+    "    set -l joined (string join ' ' $argv)",
+    '    switch $joined',
+    fishPathCases,
+    '    end',
+    '    return 1',
+    'end',
+    '',
+    'function __fish_dbcli_option_takes_value',
+    '    set -l key "$argv[1]|||$argv[2]"',
+    '    switch $key',
+    fishOptionValueCases,
+    '    end',
+    '    return 1',
+    'end',
     '',
     'function __fish_dbcli_path',
     '    set -l tokens (commandline -opc)',
     '    set -l path',
+    '    set -l skip_value 0',
     '    for t in $tokens[2..-1]',
-    "        string match -q -- '-*' $t; and continue",
-    '        set path $path $t',
+    "        set -l candidate (string join ' ' $path $t)",
+    '        if __fish_dbcli_known_path $candidate',
+    '            set path $path $t',
+    '            set skip_value 0',
+    '            continue',
+    '        end',
+    '        if test $skip_value -eq 1',
+    '            set skip_value 0',
+    '            continue',
+    '        end',
+    "        if string match -q -- '-*' $t",
+    "            set -l current_path (string join ' ' $path)",
+    '            if __fish_dbcli_option_takes_value "$current_path" "$t"',
+    '                set skip_value 1',
+    '            end',
+    '            continue',
+    '        end',
     '    end',
     "    test (string join ' ' $path) = (string join ' ' $argv)",
     'end',

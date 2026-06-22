@@ -376,6 +376,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
               </tbody>
             </table>
             <p class="mb-4">預檢回傳 <code>ready</code> 或 <code>blocked</code> 並印出精確的 after-write 指令；<strong><code>ready</code> 不等於 <code>verified</code></strong> — 只表示防護通過。After-write 將回讀斷言對應至 <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>，防護失敗則為 <code>blocked</code>。MVP 中 <code>CREATE TABLE</code>、<code>DROP TABLE</code>、<code>CREATE INDEX</code> 及多語句 DDL 均會被阻擋。</p>
+            <p class="mb-4"><code>ALTER TABLE</code> 目標可為 <code>table</code>、<code>schema.table</code> 或 <code>catalog.schema.table</code>。每個區段可為簡單未加引號的名稱（<code>[A-Za-z_][A-Za-z0-9_]*</code>）或加引號的識別字 — 雙引號（<code>"…"</code>）、反引號（<code>`…`</code>）或方括號（<code>[…]</code>） — 因此 <code>"user accounts"</code> 或 <code>"tenant-1"."orders"</code> 皆可接受。無法在此契約下完整解析的目標（未封閉的引號、不支援的跳脫、或超過三個區段）會在 after-write 斷言之前被阻擋，原因明示「目標無法解析」，與 <code>must match --table</code> 的不符原因有所區別。</p>
 
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>

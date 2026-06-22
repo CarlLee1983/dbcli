@@ -32,8 +32,7 @@ import {
   runMigrationPreflight,
   runMigrationAfterWrite,
   classifyMigrationDdl,
-  ddlTargetMatchesTable,
-  extractAlterTableTarget,
+  classifyMigrationTarget,
   type SafeBackfillInput,
   type SafeBackfillRunners,
   type GuardOutcome,
@@ -205,13 +204,10 @@ function buildMigrationRunners(ctx: RealRunnerContext): MigrationRunners {
           reason: boundedReason(`--ddl did not classify as DDL (got ${r.operation}).`),
         }
       }
-      if (!ddlTargetMatchesTable(ddl, table)) {
-        const got = extractAlterTableTarget(ddl) ?? 'unknown'
-        return {
-          ok: false,
-          reason: boundedReason(`--ddl ALTER TABLE target '${got}' must match --table '${table}'.`),
-        }
-      }
+      // Target must be fully parsable AND match --table; the helper distinguishes
+      // an unparsable target from a clean mismatch in its bounded reason.
+      const targetCheck = classifyMigrationTarget(ddl, table)
+      if (!targetCheck.ok) return { ok: false, reason: targetCheck.reason }
       return { ok: true }
     },
     verifyReadonlyGuard: async (verifyQuery): Promise<GuardOutcome> => {

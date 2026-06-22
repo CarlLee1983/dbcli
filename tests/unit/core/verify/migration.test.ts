@@ -5,6 +5,7 @@ import {
   extractAlterTableTarget,
   ddlTargetMatchesTable,
   classifyMigrationDdl,
+  classifyMigrationTarget,
 } from '@/core/verify/migration'
 import {
   normalizeMigrationInput,
@@ -47,6 +48,72 @@ describe('migration DDL classification', () => {
     expect(ddlTargetMatchesTable('ALTER TABLE public.users ADD a int', 'public.users')).toBe(true)
     expect(ddlTargetMatchesTable('ALTER TABLE public.users ADD a int', 'audit.users')).toBe(false)
     expect(ddlTargetMatchesTable('ALTER TABLE users ADD a int', 'public.users')).toBe(true)
+  })
+
+  test('extractAlterTableTarget fully extracts common quoted identifier forms', () => {
+    // double-quoted with spaces (previously truncated by the simple regex)
+    expect(extractAlterTableTarget('ALTER TABLE "user accounts" ADD a int')).toBe('"user accounts"')
+    // schema with a hyphen inside a double-quoted segment
+    expect(extractAlterTableTarget('ALTER TABLE "tenant-1"."orders" ADD a int')).toBe(
+      '"tenant-1"."orders"'
+    )
+    // mixed unquoted schema + quoted mixed-case table
+    expect(extractAlterTableTarget('ALTER TABLE public."Users" ADD a int')).toBe('public."Users"')
+    // backtick-quoted qualified target
+    expect(extractAlterTableTarget('ALTER TABLE `tenant-data`.`orders` ADD a int')).toBe(
+      '`tenant-data`.`orders`'
+    )
+    // bracket-quoted qualified target
+    expect(extractAlterTableTarget('ALTER TABLE [tenant-data].[orders] ADD a int')).toBe(
+      '[tenant-data].[orders]'
+    )
+    // whitespace around the dot is tolerated and normalized away
+    expect(extractAlterTableTarget('ALTER TABLE public . users ADD a int')).toBe('public.users')
+  })
+
+  test('extractAlterTableTarget fails closed on unsupported identifier forms', () => {
+    // more than three qualified parts
+    expect(extractAlterTableTarget('ALTER TABLE a.b.c.d ADD x int')).toBeNull()
+    // unterminated quoted identifier
+    expect(extractAlterTableTarget('ALTER TABLE "orders ADD x int')).toBeNull()
+    // unsupported escape: a backslash does not escape a double quote
+    expect(extractAlterTableTarget('ALTER TABLE "a\\"b" ADD x int')).toBeNull()
+    // unquoted identifier may not start with a digit
+    expect(extractAlterTableTarget('ALTER TABLE 1table ADD x int')).toBeNull()
+    // non-ALTER DDL never yields a target
+    expect(extractAlterTableTarget('DROP TABLE users')).toBeNull()
+  })
+
+  test('ddlTargetMatchesTable handles quoted and schema-qualified mismatch', () => {
+    expect(
+      ddlTargetMatchesTable('ALTER TABLE "tenant-1"."orders" ADD a int', '"tenant-1"."orders"')
+    ).toBe(true)
+    expect(
+      ddlTargetMatchesTable('ALTER TABLE "tenant-1"."orders" ADD a int', '"tenant-2"."orders"')
+    ).toBe(false)
+    expect(ddlTargetMatchesTable('ALTER TABLE "user accounts" ADD a int', 'user accounts')).toBe(
+      true
+    )
+  })
+
+  test('classifyMigrationTarget distinguishes unparsable targets from mismatches', () => {
+    // matching target passes
+    expect(classifyMigrationTarget('ALTER TABLE public.users ADD a int', 'public.users')).toEqual({
+      ok: true,
+    })
+    // unparsable target -> contract reason, never a mismatch reason
+    const unparsable = classifyMigrationTarget('ALTER TABLE "orders ADD a int', 'orders')
+    expect(unparsable.ok).toBe(false)
+    expect((unparsable as { reason: string }).reason).toContain('could not be parsed')
+    expect((unparsable as { reason: string }).reason).not.toContain('must match')
+    // extracted but different -> mismatch reason names both bounded identifiers
+    const mismatch = classifyMigrationTarget('ALTER TABLE audit.users ADD a int', 'public.users')
+    expect(mismatch.ok).toBe(false)
+    expect((mismatch as { reason: string }).reason).toContain('must match --table')
+    expect((mismatch as { reason: string }).reason).toContain('audit.users')
+    // bounded reasons
+    expect((unparsable as { reason: string }).reason.length).toBeLessThanOrEqual(200)
+    expect((mismatch as { reason: string }).reason.length).toBeLessThanOrEqual(200)
   })
 
   test('classifyMigrationDdl blocks non-ALTER and multi-statement with bounded reasons', () => {

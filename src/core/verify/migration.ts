@@ -16,15 +16,115 @@ export function isAlterTableDdl(sql: string): boolean {
   return /^\s*ALTER\s+TABLE\b/i.test(stripStringLiterals(sql))
 }
 
+/** Matches the `ALTER TABLE [IF EXISTS] [ONLY]` prefix; the target begins right after. */
+const ALTER_TABLE_PREFIX = /^\s*ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?/i
+
+/** The most qualified target the MVP accepts: `catalog.schema.table`. */
+const MAX_TARGET_PARTS = 3
+
+interface Segment {
+  /** Raw source text of the segment, quotes included. */
+  text: string
+  /** Index just past the segment in the source. */
+  end: number
+}
+
 /**
- * Extract the (possibly schema-qualified) ALTER TABLE target straight from the SQL.
- * Handles optional `IF EXISTS` and `ONLY`, quoted and schema-qualified names.
+ * Read one quote-delimited identifier segment where the quote character doubles
+ * itself to escape (`""`, ` `` `). Returns null if the quote is never closed.
+ */
+function readDoubledQuoteSegment(sql: string, start: number, quote: string): Segment | null {
+  let i = start + 1
+  while (i < sql.length) {
+    if (sql[i] === quote) {
+      if (sql[i + 1] === quote) {
+        i += 2 // doubled quote escapes itself
+        continue
+      }
+      return { text: sql.slice(start, i + 1), end: i + 1 }
+    }
+    i += 1
+  }
+  return null // unterminated
+}
+
+/** Read a bracket-quoted identifier segment (`[name]`) where `]]` escapes a `]`. */
+function readBracketSegment(sql: string, start: number): Segment | null {
+  let i = start + 1
+  while (i < sql.length) {
+    if (sql[i] === ']') {
+      if (sql[i + 1] === ']') {
+        i += 2
+        continue
+      }
+      return { text: sql.slice(start, i + 1), end: i + 1 }
+    }
+    i += 1
+  }
+  return null
+}
+
+/** Read a bare unquoted identifier: `[A-Za-z_][A-Za-z0-9_]*`. */
+function readUnquotedSegment(sql: string, start: number): Segment | null {
+  const match = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(start))
+  if (!match) return null
+  return { text: match[0], end: start + match[0].length }
+}
+
+function readSegment(sql: string, start: number): Segment | null {
+  const c = sql[start]
+  if (c === undefined) return null
+  if (c === '"' || c === '`') return readDoubledQuoteSegment(sql, start, c)
+  if (c === '[') return readBracketSegment(sql, start)
+  return readUnquotedSegment(sql, start)
+}
+
+function skipSpaces(sql: string, i: number): number {
+  while (i < sql.length && /\s/.test(sql[i] as string)) i += 1
+  return i
+}
+
+/**
+ * Extract the (possibly schema-qualified) ALTER TABLE target.
+ *
+ * Accepts a dotted sequence of up to three identifier segments after an
+ * `ALTER TABLE [IF EXISTS] [ONLY]` prefix. Each segment may be unquoted
+ * (`[A-Za-z_][A-Za-z0-9_]*`), double-quoted or backtick-quoted (with doubled-quote
+ * escapes), or bracket-quoted (with `]]` escapes). Whitespace around dots is allowed.
+ *
+ * Returns the normalized dotted target (segments joined by `.`, original quoting
+ * preserved) or null when the target cannot be fully parsed — partial or malformed
+ * targets fail closed so the migration guard never blocks on a misleading name.
  */
 export function extractAlterTableTarget(sql: string): string | null {
-  const match = sql.match(
-    /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?((?:[`"[]?[\w]+[`"\]]?\.){0,2}[`"[]?[\w]+[`"\]]?)/i
-  )
-  return match?.[1] ?? null
+  const prefix = ALTER_TABLE_PREFIX.exec(sql)
+  if (!prefix) return null
+
+  const segments: string[] = []
+  let i = prefix[0].length
+  for (;;) {
+    i = skipSpaces(sql, i)
+    const segment = readSegment(sql, i)
+    if (!segment) return null
+    segments.push(segment.text)
+    if (segments.length > MAX_TARGET_PARTS) return null
+    i = segment.end
+
+    // A target continues only across a single dot (whitespace around it is fine).
+    const afterSpaces = skipSpaces(sql, i)
+    if (sql[afterSpaces] === '.') {
+      i = afterSpaces + 1
+      continue
+    }
+    break
+  }
+
+  // The target must end at a clean boundary: end of input, whitespace, or a
+  // trailing `;`. Anything else (e.g. a stray quote) means a malformed target.
+  const next = sql[i]
+  if (next !== undefined && next !== ';' && !/\s/.test(next)) return null
+
+  return segments.join('.')
 }
 
 /** The migration is only safe when the DDL target matches --table, schema-aware. */
@@ -32,6 +132,35 @@ export function ddlTargetMatchesTable(ddl: string, table: string): boolean {
   const target = extractAlterTableTarget(ddl)
   if (!target) return false
   return tableRefsMatch(target, table)
+}
+
+/**
+ * Decide whether the ALTER TABLE target is acceptable for `--table`, returning a
+ * bounded reason that distinguishes an unparsable target from a clean mismatch so
+ * the CLI block reason is actionable. Reasons carry only identifier names, never
+ * the raw DDL body.
+ */
+export function classifyMigrationTarget(
+  ddl: string,
+  table: string
+): { ok: true } | { ok: false; reason: string } {
+  const target = extractAlterTableTarget(ddl)
+  if (target === null) {
+    return {
+      ok: false,
+      reason: boundedReason(
+        '--ddl ALTER TABLE target could not be parsed under the supported identifier contract ' +
+          '(simple or quoted names, up to catalog.schema.table).'
+      ),
+    }
+  }
+  if (!tableRefsMatch(target, table)) {
+    return {
+      ok: false,
+      reason: boundedReason(`--ddl ALTER TABLE target '${target}' must match --table '${table}'.`),
+    }
+  }
+  return { ok: true }
 }
 
 /**

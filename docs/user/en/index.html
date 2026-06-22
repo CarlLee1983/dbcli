@@ -376,6 +376,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
               </tbody>
             </table>
             <p class="mb-4">Preflight returns <code>ready</code> or <code>blocked</code> and prints the exact after-write command; <strong><code>ready</code> is not <code>verified</code></strong> — it only means the guards passed. After-write maps the read-back assertion to <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>, and a failed guard to <code>blocked</code>. <code>CREATE TABLE</code>, <code>DROP TABLE</code>, <code>CREATE INDEX</code>, and multi-statement DDL are blocked in the MVP.</p>
+            <p class="mb-4">The <code>ALTER TABLE</code> target may be <code>table</code>, <code>schema.table</code>, or <code>catalog.schema.table</code>. Each segment is a simple unquoted name (<code>[A-Za-z_][A-Za-z0-9_]*</code>) or a quoted identifier — double-quoted (<code>"…"</code>), backtick-quoted (<code>`…`</code>), or bracket-quoted (<code>[…]</code>) — so <code>"user accounts"</code> or <code>"tenant-1"."orders"</code> are accepted. Targets that cannot be fully parsed under this contract (unterminated quotes, unsupported escapes, or more than three parts) are blocked before the after-write assertion with a "could not be parsed" reason, distinct from the <code>must match --table</code> mismatch reason.</p>
 
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — inspect &amp; manage verification artifacts</h3>

@@ -1225,6 +1225,14 @@ read-back assertion to `verified` / `not_verified` / `indeterminate`, and a fail
 guard to `blocked`. `CREATE TABLE`, `DROP TABLE`, `CREATE INDEX`, and multi-statement
 DDL are blocked in the MVP.
 
+The `ALTER TABLE` target may be `table`, `schema.table`, or `catalog.schema.table`.
+Each segment is a simple unquoted name (`[A-Za-z_][A-Za-z0-9_]*`) or a quoted
+identifier — double-quoted (`"…"`), backtick-quoted (`` `…` ``), or bracket-quoted
+(`[…]`) — so `"user accounts"` or `"tenant-1"."orders"` are accepted. Targets that
+cannot be fully parsed under this contract (unterminated quotes, unsupported escapes,
+or more than three parts) are blocked before the after-write assertion with a
+"could not be parsed" reason, distinct from the `must match --table` mismatch reason.
+
 ### verification
 
 (v1.33.0+) Local **VerificationArtifact** inspection and lifecycle surface over

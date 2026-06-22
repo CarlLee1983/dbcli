@@ -287,6 +287,8 @@ After-write（寫入文物）：
 
 預檢回傳 `ready` 或 `blocked` 並印出精確的 after-write 指令；**`ready` 不等於 `verified`** — 只表示防護通過。After-write 將回讀斷言對應至 `verified` / `not_verified` / `indeterminate`，防護失敗則為 `blocked`。MVP 中 `CREATE TABLE`、`DROP TABLE`、`CREATE INDEX` 及多語句 DDL 均會被阻擋。
 
+**支援的 `ALTER TABLE` 目標識別字。** 目標可為 `table`、`schema.table` 或 `catalog.schema.table`。每個區段可為簡單未加引號的名稱（`[A-Za-z_][A-Za-z0-9_]*`），或加引號的識別字 — 雙引號（`"…"`）、反引號（`` `…` ``）或方括號（`[…]`） — 因此含空白或連字號的名稱（如 `"user accounts"` 或 `"tenant-1"."orders"`）皆可接受。無法在此契約下完整解析的目標（未封閉的引號、不支援的跳脫、或超過三個區段）會在 after-write 斷言**之前被阻擋**，原因會明示「目標無法解析」 — 與 `must match --table` 的不符原因有所區別。
+
 <!-- doc-key: verification-inspect -->
 ### verification — 檢視與管理驗證文物
 

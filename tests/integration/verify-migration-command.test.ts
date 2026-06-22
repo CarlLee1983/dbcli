@@ -250,6 +250,31 @@ describe('dbcli verify migration (integration)', () => {
     expect(raw.blockedReason).toContain('must match --table')
   })
 
+  test('DDL with an unparsable ALTER TABLE target is blocked with a contract reason', async () => {
+    if (!DB_OK) return
+    const { stdout, code } = await run([
+      'verify',
+      'migration',
+      '--table',
+      TABLE,
+      '--ddl',
+      `ALTER TABLE "${TABLE} ADD COLUMN a int`, // unterminated double-quoted target
+      '--verify-query',
+      VERIFY,
+      '--expect',
+      'value == 3',
+      '--after-write',
+      '--format',
+      'json',
+    ])
+    const j = JSON.parse(stdout)
+    expect(code).toBe(1)
+    expect(j.status).toBe('blocked')
+    const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
+    expect(raw.blockedReason).toContain('could not be parsed')
+    expect(raw.blockedReason).not.toContain('must match --table')
+  })
+
   test('EXPLAIN / data-modifying verify-query is blocked', async () => {
     if (!DB_OK) return
     const { stdout, code } = await run([

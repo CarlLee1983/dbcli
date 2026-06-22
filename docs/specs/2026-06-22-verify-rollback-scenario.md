@@ -1,7 +1,7 @@
 # Verify Rollback Scenario Design Specification
 
 **Date:** 2026-06-22  
-**Status:** Draft for implementation  
+**Status:** Implemented & Accepted (commit `3e30bb0`) — see §14  
 **Baseline:** dbcli v1.36.0 verify scenario runner suite + scenario registry
 (`docs/specs/2026-06-22-verify-scenario-registry.md`, Implemented)
 
@@ -292,3 +292,50 @@ and tests pin the option set so it cannot drift silently.
   spec and version bump).
 - Revisit a public scenario contract only after the three built-ins share the
   stable lifecycle in production.
+
+## 14. Verification Record
+
+**Status:** Implemented & Accepted on 2026-06-22 (commit `3e30bb0` —
+`feat: [verify] add rollback scenario (--kind ddl|dml)`).
+
+### Delivered modules
+
+- `src/core/verify/rollback.ts` — `RollbackKind`, `RollbackInput`,
+  `normalizeRollbackKind` / `normalizeRollbackInput`, `RollbackRunners`,
+  `RollbackPreflightResult` / `RollbackAfterWriteResult`, `runRollbackPreflight`,
+  `runRollbackAfterWrite`, `buildRollbackSubject`,
+  `buildRollbackAfterWriteCommand`, `statementGuardName`.
+- `src/core/verify/registry.ts` — `VerifyScenarioSubjectKind` extended with
+  `'rollback'`.
+- `src/core/verify/index.ts` — `export * from './rollback'`.
+- `src/commands/verify.ts` — `buildRollbackRunners(ctx, input)` (kind-branched
+  statement guard), renderers, `rollbackScenario` appended to
+  `BUILTIN_VERIFY_SCENARIOS` after `migrationScenario`. Generic
+  `executeScenario` lifecycle unchanged.
+- Tests: `tests/unit/core/verify/rollback.test.ts`, extended
+  `registry.test.ts`, `tests/integration/verify-rollback-command.test.ts`,
+  extended `verify-help.test.ts`.
+- User docs: `verify rollback` subsection added to all four
+  `docs/user/{en,zh-TW}/index.{md,html}` under the existing `command-reference`
+  doc-key.
+
+### §10 acceptance — full gate run 2026-06-22
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | preflight/after-write under §8 lifecycle + exit codes | ✅ | flows through unchanged `executeScenario` |
+| 2 | no duplicated safety logic; gates reused from siblings | ✅ | `buildRollbackRunners` calls migration/safe-backfill predicates directly |
+| 3 | artifact schema unchanged; mapped existing kinds | ✅ | `buildRollbackSubject`: `ddl→migration`, `dml→backfill`, `command:'verify rollback'` |
+| 4 | three scenarios; registry invariant tests pass | ✅ | `BUILTIN_VERIFY_SCENARIOS = [safe-backfill, migration, rollback]` |
+| 5 | safe-backfill / migration behavior unchanged | ✅ | full suite green |
+| 6 | four `docs/user` files document `verify rollback` | ✅ | `docs:check` aligned |
+| 7 | `bun test` + `typecheck` + `lint` + `docs:check` pass | ✅ | see gate results below |
+
+**Gate results:** `bun test` → 3361 pass / 0 fail / 26 skip (DB-adapter
+integration tests, no DB running). `bun run typecheck` (`tsc --noEmit`) → exit 0.
+`bun run lint` (eslint `--max-warnings=0`) → exit 0. `bun run docs:check` → en
+and zh-TW topics aligned.
+
+All seven §10 criteria pass; implementation matches the §5–§8 contracts with no
+gaps. Only the §13 deferred follow-ups (INSERT/DELETE DML rollback; a dedicated
+`'rollback'` artifact subject kind) remain out of scope.

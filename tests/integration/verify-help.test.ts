@@ -4,26 +4,37 @@ import { resolve } from 'node:path'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
-function runHelp(args: string[]): Promise<{ stdout: string; code: number }> {
+function runHelp(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
     const child = spawn('bun', ['run', CLI, ...args], {
       env: { ...process.env, DBCLI_NO_UPDATE_CHECK: '1' },
     })
     let stdout = ''
+    let stderr = ''
     child.stdout.on('data', (b) => (stdout += b.toString()))
-    child.on('close', (code) => res({ stdout, code: code ?? 0 }))
+    child.stderr.on('data', (b) => (stderr += b.toString()))
+    child.on('close', (code) => res({ stdout, stderr, code: code ?? 0 }))
   })
+}
+
+/** `--help` must exit 0 with a clean stderr; anything else signals CLI-surface drift. */
+function expectCleanHelp({ stderr, code }: { stderr: string; code: number }) {
+  expect(code).toBe(0)
+  expect(stderr).toBe('')
 }
 
 describe('verify --help surface', () => {
   test('verify --help lists both built-in scenarios', async () => {
-    const { stdout } = await runHelp(['verify', '--help'])
-    expect(stdout).toContain('safe-backfill')
-    expect(stdout).toContain('migration')
+    const result = await runHelp(['verify', '--help'])
+    expectCleanHelp(result)
+    expect(result.stdout).toContain('safe-backfill')
+    expect(result.stdout).toContain('migration')
   })
 
   test('verify safe-backfill --help keeps its option surface', async () => {
-    const { stdout } = await runHelp(['verify', 'safe-backfill', '--help'])
+    const result = await runHelp(['verify', 'safe-backfill', '--help'])
+    expectCleanHelp(result)
+    const { stdout } = result
     for (const flag of [
       '--table',
       '--query',
@@ -39,7 +50,9 @@ describe('verify --help surface', () => {
   })
 
   test('verify migration --help keeps its option surface', async () => {
-    const { stdout } = await runHelp(['verify', 'migration', '--help'])
+    const result = await runHelp(['verify', 'migration', '--help'])
+    expectCleanHelp(result)
+    const { stdout } = result
     for (const flag of [
       '--table',
       '--ddl',

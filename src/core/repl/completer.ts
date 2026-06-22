@@ -3,9 +3,9 @@ import type { ReplContext } from './types'
 import {
   SQL_KEYWORDS_FOR_COMPLETION,
   SQL_KEYWORDS_FOR_DETECTION,
-  DBCLI_COMMANDS,
   META_COMMANDS,
 } from './types'
+import { getReplCommandNames } from './command-registry'
 import { REDIS_COMMAND_TABLE } from '@/adapters/redis/command-metadata'
 
 const REDIS_COMMANDS = Object.keys(REDIS_COMMAND_TABLE)
@@ -84,7 +84,7 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
     const words = trimmed.split(/\s+/)
     if (words.length === 1) {
       // Completing the command name itself
-      const cmdHits = matchWithSuffix([...DBCLI_COMMANDS], lastWord)
+      const cmdHits = matchWithSuffix([...getReplCommandNames()], lastWord)
       const sqlHits = matchWithSuffix([...SQL_KEYWORDS_FOR_COMPLETION], lastWord)
       return [[...cmdHits[0], ...sqlHits[0]], lastWord]
     }

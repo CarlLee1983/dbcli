@@ -1,14 +1,10 @@
 // src/core/repl/command-dispatcher.ts
-import { DBCLI_COMMANDS } from './types'
+import { isReplCommandKnown } from './command-registry'
 
 export interface ParsedCommand {
   readonly command: string
   readonly args: readonly string[]
 }
-
-const BLOCKED_FROM_REPL = new Set(['shell'])
-
-const knownCommands = new Set(DBCLI_COMMANDS.filter((c) => !BLOCKED_FROM_REPL.has(c)))
 
 export function parseCommandLine(input: string): ParsedCommand {
   const trimmed = input.trim()
@@ -56,5 +52,5 @@ function splitRespectingQuotes(input: string): string[] {
 }
 
 export function isKnownCommand(name: string): boolean {
-  return knownCommands.has(name)
+  return isReplCommandKnown(name)
 }

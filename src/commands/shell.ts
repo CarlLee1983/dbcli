@@ -144,6 +144,16 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     columnsByTable,
   }
 
+  // Seed REPL command completion/dispatch from the live Commander tree so it
+  // never drifts from the actual CLI surface. Dynamic import avoids the static
+  // cycle: program imports shellCommand, which imports this module.
+  const { buildProgram } = await import('@/program')
+  const { buildCompletionTree, listTopLevelCommandNames } = await import(
+    '@/core/completion/command-tree'
+  )
+  const { setReplCommandNames } = await import('@/core/repl/command-registry')
+  setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
+
   const engine = new ReplEngine(adapter, context, HISTORY_PATH, config)
   const complete = createCompleter(context)
 

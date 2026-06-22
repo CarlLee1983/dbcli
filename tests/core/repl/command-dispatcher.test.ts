@@ -1,6 +1,16 @@
 // tests/core/repl/command-dispatcher.test.ts
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeAll } from 'bun:test'
 import { parseCommandLine, isKnownCommand } from '../../../src/core/repl/command-dispatcher'
+import { buildProgram } from '../../../src/program'
+import {
+  buildCompletionTree,
+  listTopLevelCommandNames,
+} from '../../../src/core/completion/command-tree'
+import { setReplCommandNames } from '../../../src/core/repl/command-registry'
+
+beforeAll(() => {
+  setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
+})
 
 describe('parseCommandLine', () => {
   test('parses simple command', () => {

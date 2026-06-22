@@ -496,7 +496,7 @@ function buildConstraintRunners(
           sql: violationSql,
         })
         if (scalar === null) {
-          return { ran: false, reason: 'violation query returned no count', auditRef }
+          return { ran: false, reason: boundedReason('violation query returned no count'), auditRef }
         }
         const count = typeof scalar === 'number' ? scalar : Number(scalar)
         if (!Number.isFinite(count)) {

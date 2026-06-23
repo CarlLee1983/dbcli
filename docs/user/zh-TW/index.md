@@ -694,6 +694,49 @@ dbcli export orders --format jsonl --output orders.jsonl
 
 ---
 
+<!-- doc-key: usage-scenarios -->
+## 使用情境速查
+
+上面的開發者工作流是**最小安全路徑**。本節把具體情境對應到明確的指令路徑，依「你怎麼遇到它」分三類:**具名任務**(優先用已發布的 task pack)、**跨領域操作需求**、**特定引擎工作**。以下全部繼承安全基線(`blacklist list` → `schema` → 寫入先 dry-run)。
+
+### A. Task-pack 情境(優先用已發布的 pack,別自己編步驟)
+
+當請求對應到某個具名工作流時,用 pack 來探索與產生計畫,而不是憑記憶拼步驟。所有 pack 都是唯讀 `plan-only`,且仍繼承 blacklist → schema → dry-run 規則。
+
+```bash
+dbcli skill tasks list --format json                       # 探索可用 pack
+dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標籤的有序計畫
+```
+
+| 情境(使用者怎麼說) | 路徑 | Pack |
+| --- | --- | --- |
+| 「這條 SQL 很慢」(已有語句) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
+| 「X 表很重/很熱」(已有表名) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
+| 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"`(串接 `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| 全環境效能掃描 | `report --section perf` → `guide slow-query` | _(report + guide,無 pack)_ |
+| 「給 agent 寫權限前先稽核」 | `skill tasks plan audit-permissions`(可選 `--param table=<table>` 抽查欄位覆蓋) | `audit-permissions` |
+| 「線上 schema 跟 committed cache 一致嗎?」 | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |
+| 「連線健康嗎?」 | `skill tasks plan connection-health` | `connection-health` |
+| 「審這個動到 DB 的 PR」 | `skill tasks plan pr-database-review`;任何 DDL/index 想法先過 `migration-review` 再寫 | `pr-database-review` / `migration-review` |
+| 「安全回填 X 欄位」 | `skill tasks plan safe-backfill-verify --param table=<t> --param query="<UPDATE>" --param verify_query="<SELECT count(*)>"` | `safe-backfill` / `safe-backfill-verify` |
+
+Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.dbcli-shared/tasks/`(團隊)、`.dbcli/tasks/`(本地覆寫)。計畫不會凌駕 blacklist、schema、dry-run 或確認要求——一次執行一步。
+
+### B. 跨領域情境
+
+- **多環境切換(v2)**:`dbcli use prod` 切換預設;`dbcli query --use staging "<SQL>"` 只覆寫單次呼叫。每個具名連線有**獨立的 schema cache**(`.dbcli/schemas/<conn>/`)——切換後先跑一次 `dbcli schema --use <name>`,否則可能讀到別的連線的欄位。(見 **連線管理**。)
+- **CI 中把密鑰留在 `.dbcli` 之外**:`dbcli init --use-env-refs` 把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照。非互動環境**必須**給齊五個 `--env-*` 旗標,否則 `init` 報錯——絕不悄悄退回明文。
+- **驗證不變式或寫入結果**:`snapshot` 建基準 → `assert --against <snap> --tolerance <pct>` 比對;`q @name --verify` 跑 snippet 斷言;`recover --apply --write-verification-artifact` 留下不含機密的證據。(見 **資料驗證**。)
+- **本地開發抓 N+1 / 慢查詢**:讓應用程式走 `dbcli proxy <engine> --listen ... --target ...` 收集事件,再用 `dbcli proxy analyze` 離線聚合出 N+1、最慢查詢與熱表發現。(見 **dbcli proxy**。)
+
+### C. 特定引擎情境
+
+- **MongoDB**:schema 採 `$sample` 抽樣(dot-path 帶 `presence` / `redacted`);blacklist 接受 dotted path 與尾端萬用字元(`profile.tokens.*`)。寫入在沒有明確運算子(`$inc` / `$push` / …)時自動包成 `$set`。
+- **Redis**:`q @snippet` 只能跑**唯讀**命令;`delete` 涵蓋 `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`(需 `data-admin`);用 key glob blacklist(`secrets:*`)加上可選的值遮罩保護 key。`query` 沒有 `--dry-run`——安全來自權限閘門;要預覽刪除請用 `delete <key> --dry-run`。
+- **Elasticsearch**:用 DSL body 或 Lucene 字串查詢(`--collection <index>`);用 `match_all` scroll `export` 整個 index;`shell` 開啟 Kibana Dev Tools 風格 REPL。
+
+---
+
 <!-- doc-key: agent-recovery-workflow -->
 ## Agent 修復工作流
 

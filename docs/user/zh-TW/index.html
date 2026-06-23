@@ -36,8 +36,9 @@
             h3 { @apply text-xl font-bold mt-12 mb-6 text-text-main; }
             p { @apply mb-6 leading-relaxed text-text-muted text-[1.05rem]; }
             ul { @apply list-none mb-8 space-y-3; }
-            li { @apply flex items-start gap-3 text-text-muted; }
-            li:not(.nav-item)::before { content: "→"; @apply text-primary font-bold mt-0.5; }
+            li { @apply text-text-muted; }
+            li:not(.nav-item) { @apply relative pl-6 leading-relaxed; }
+            li:not(.nav-item)::before { content: "→"; @apply absolute left-0 top-0 text-primary font-bold; }
             code { @apply bg-white px-1.5 py-0.5 rounded text-[0.85rem] font-mono text-primary border border-border; }
             pre { @apply relative bg-[#332F2E] rounded-lg p-6 mb-8 overflow-x-auto border border-secondary/20 shadow-sm; }
             pre code { @apply bg-transparent p-0 text-[#EDE8E4] text-[0.9rem] leading-relaxed border-none; }
@@ -98,6 +99,7 @@
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
                     <li class="nav-item"><a href="#developer-workflows" class="nav-link">開發者工作流</a></li>
+                    <li class="nav-item"><a href="#usage-scenarios" class="nav-link">使用情境速查</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent 修復工作流</a></li>
                     <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
@@ -704,6 +706,50 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>環境設定驗證</strong>：不洩漏 secrets 地檢查 config 與 connectivity（<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>）。</li>
             </ul>
             <p>以上全部繼承一般安全規則：優先 <code>--format json</code>、碰觸敏感資料前先跑 <code>blacklist list</code>、用 <code>schema</code> 確認名稱、寫入先 dry-run，且絕不列印 credentials 或 blacklisted 值。</p>
+        </section>
+
+        <!-- doc-key: usage-scenarios -->
+        <section id="usage-scenarios" class="mt-20">
+            <h2>🎯 使用情境速查</h2>
+            <p>上面的開發者工作流是<em>最小安全路徑</em>。本節把具體情境對應到明確的指令路徑，依「你怎麼遇到它」分三類：<strong>具名任務</strong>（優先用已發布的 task pack）、<strong>跨領域操作需求</strong>、<strong>特定引擎工作</strong>。以下全部繼承安全基線（<code>blacklist list</code> → <code>schema</code> → 寫入先 dry-run）。</p>
+
+            <h3 class="mt-10">A. Task-pack 情境</h3>
+            <p>當請求對應到某個具名工作流時，用 pack 來探索與產生計畫，而不是憑記憶拼步驟。所有 pack 都是唯讀 <code>plan-only</code>，且仍繼承 blacklist → schema → dry-run 規則。</p>
+            <pre><code>dbcli skill tasks list --format json                       # 探索可用 pack
+dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風險標籤的有序計畫</code></pre>
+            <table>
+                <thead>
+                    <tr><th>情境（使用者怎麼說）</th><th>路徑</th><th>Pack</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>「這條 SQL 很慢」（已有語句）</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
+                    <tr><td>「X 表很重/很熱」（已有表名）</td><td><code>skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code></td><td><code>analyze-table-perf</code></td></tr>
+                    <tr><td>「這個 API 端點慢」</td><td><code>skill tasks plan slow-endpoint-investigation --param query="&lt;SQL&gt;"</code>（串接 <code>proxy</code> + <code>explain</code> + missing-index）</td><td><code>slow-endpoint-investigation</code></td></tr>
+                    <tr><td>全環境效能掃描</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
+                    <tr><td>「給 agent 寫權限前先稽核」</td><td><code>skill tasks plan audit-permissions</code>（可選 <code>--param table=&lt;table&gt;</code>）</td><td><code>audit-permissions</code></td></tr>
+                    <tr><td>「線上 schema 跟 committed cache 一致嗎？」</td><td><code>skill tasks plan schema-drift-review --param table=&lt;table&gt;</code></td><td><code>schema-drift-review</code></td></tr>
+                    <tr><td>「連線健康嗎？」</td><td><code>skill tasks plan connection-health</code></td><td><code>connection-health</code></td></tr>
+                    <tr><td>「審這個動到 DB 的 PR」</td><td><code>skill tasks plan pr-database-review</code>；DDL/index 想法先過 <code>migration-review</code></td><td><code>pr-database-review</code> / <code>migration-review</code></td></tr>
+                    <tr><td>「安全回填 X 欄位」</td><td><code>skill tasks plan safe-backfill-verify --param table=&lt;t&gt; --param query="&lt;UPDATE&gt;" --param verify_query="&lt;SELECT count(*)&gt;"</code></td><td><code>safe-backfill</code> / <code>safe-backfill-verify</code></td></tr>
+                </tbody>
+            </table>
+            <p>Pack 解析順序為 <strong>local &gt; shared &gt; builtin</strong>：<code>assets/tasks/</code>（builtin）、<code>.dbcli-shared/tasks/</code>（團隊）、<code>.dbcli/tasks/</code>（本地覆寫）。計畫不會凌駕 blacklist、schema、dry-run 或確認要求——一次執行一步。</p>
+
+            <h3 class="mt-10">B. 跨領域情境</h3>
+            <ul>
+                <li><strong>多環境切換（v2）</strong>：<code>dbcli use prod</code> 切換預設；<code>dbcli query --use staging "&lt;SQL&gt;"</code> 只覆寫單次呼叫。每個具名連線有<strong>獨立的 schema cache</strong>（<code>.dbcli/schemas/&lt;conn&gt;/</code>）——切換後先跑一次 <code>dbcli schema --use &lt;name&gt;</code>，否則可能讀到別的連線的欄位。見 <a href="#connections" class="text-primary font-bold underline">連線管理</a>。</li>
+                <li><strong>CI 中把密鑰留在 <code>.dbcli</code> 之外</strong>：<code>dbcli init --use-env-refs</code> 把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照。非互動環境<strong>必須</strong>給齊五個 <code>--env-*</code> 旗標，否則 <code>init</code> 報錯——絕不悄悄退回明文。</li>
+                <li><strong>驗證不變式或寫入結果</strong>：<code>snapshot</code> 建基準 → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> 比對；<code>q @name --verify</code> 跑 snippet 斷言；<code>recover --apply --write-verification-artifact</code> 留下不含機密的證據。見 <a href="#data-verification" class="text-primary font-bold underline">資料驗證</a>。</li>
+                <li><strong>本地開發抓 N+1 / 慢查詢</strong>：讓應用程式走 <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> 收集事件，再用 <code>dbcli proxy analyze</code> 離線聚合出 N+1、最慢查詢與熱表發現。見 <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>。</li>
+            </ul>
+
+            <h3 class="mt-10">C. 特定引擎情境</h3>
+            <ul>
+                <li><strong>MongoDB</strong>：schema 採 <code>$sample</code> 抽樣（dot-path 帶 <code>presence</code> / <code>redacted</code>）；blacklist 接受 dotted path 與尾端萬用字元（<code>profile.tokens.*</code>）。寫入在沒有明確運算子（<code>$inc</code> / <code>$push</code> / …）時自動包成 <code>$set</code>。</li>
+                <li><strong>Redis</strong>：<code>q @snippet</code> 只能跑<strong>唯讀</strong>命令；<code>delete</code> 涵蓋 <code>DEL</code> / <code>HDEL</code> / <code>LREM</code> / <code>SREM</code> / <code>ZREM</code>（需 <code>data-admin</code>）；用 key glob blacklist（<code>secrets:*</code>）加上可選值遮罩保護 key。<code>query</code> 沒有 <code>--dry-run</code>——安全來自權限閘門；要預覽刪除請用 <code>delete &lt;key&gt; --dry-run</code>。</li>
+                <li><strong>Elasticsearch</strong>：用 DSL body 或 Lucene 字串查詢（<code>--collection &lt;index&gt;</code>）；用 <code>match_all</code> scroll <code>export</code> 整個 index；<code>shell</code> 開啟 Kibana Dev Tools 風格 REPL。</li>
+            </ul>
+            <p>完整能力矩陣見 <a href="#engines" class="text-primary font-bold underline">引擎支援</a>。</p>
         </section>
 
         <!-- doc-key: agent-recovery-workflow -->

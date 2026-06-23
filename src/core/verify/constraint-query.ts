@@ -1,3 +1,5 @@
+import type { ConstraintInput } from './constraint'
+
 export type ConstraintEngine = 'postgresql' | 'mysql' | 'mariadb'
 
 /** Quote each dot-separated segment of an identifier for the target engine. */
@@ -40,8 +42,6 @@ export function buildFkViolationQuery(a: {
   const ref = quoteIdent(a.refColumn, a.engine)
   return `SELECT COUNT(*) AS violation_count FROM ${quoteIdent(a.table, a.engine)} AS c LEFT JOIN ${quoteIdent(a.refTable, a.engine)} AS p ON c.${col} = p.${ref} WHERE c.${col} IS NOT NULL AND p.${ref} IS NULL`
 }
-
-import type { ConstraintInput } from './constraint'
 
 export function buildViolationQuery(input: ConstraintInput, engine: ConstraintEngine): string {
   switch (input.check) {

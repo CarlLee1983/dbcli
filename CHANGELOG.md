@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.38.1] - 2026-06-23 - Redis delete 能力對齊 & SKILL.md 任務路由重構
+
+### Fixed
+
+- **Redis `delete` 能力宣告由 `unsupported` 修正為 `limited` / `db-write`。** `delete.ts` 早已具備完整的 Redis 刪除分支（`DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`、data-admin 權限閘、`--dry-run`、黑名單、稽核），但 `capabilities.ts` 仍宣告為 `unsupported`，與實作矛盾，導致能力表低報 Redis 刪除支援。改宣告為 `limited`（`db-write`，標註「基本刪除，需 data-admin、支援 `--dry-run`」）以對齊實作。於 SKILL.md 的 src 驗證期間發現。
+
+### Changed
+
+- **`assets/SKILL.md` 重構為任務路由決策樹。** 由原先結構改寫為以任務為導向的決策樹（task-routing decision tree），讓安裝 skill 的 agent 能依任務類型快速定位對應的指令工作流。純文件結構調整，無程式行為更動。
+
 ## [1.38.0] - 2026-06-22 - verify constraint Scenario
 
 ### Added

@@ -36,8 +36,9 @@
             h3 { @apply text-xl font-bold mt-12 mb-6 text-text-main; }
             p { @apply mb-6 leading-relaxed text-text-muted text-[1.05rem]; }
             ul { @apply list-none mb-8 space-y-3; }
-            li { @apply flex items-start gap-3 text-text-muted; }
-            li:not(.nav-item)::before { content: "→"; @apply text-primary font-bold mt-0.5; }
+            li { @apply text-text-muted; }
+            li:not(.nav-item) { @apply relative pl-6 leading-relaxed; }
+            li:not(.nav-item)::before { content: "→"; @apply absolute left-0 top-0 text-primary font-bold; }
             code { @apply bg-white px-1.5 py-0.5 rounded text-[0.85rem] font-mono text-primary border border-border; }
             pre { @apply relative bg-[#332F2E] rounded-lg p-6 mb-8 overflow-x-auto border border-secondary/20 shadow-sm; }
             pre code { @apply bg-transparent p-0 text-[#EDE8E4] text-[0.9rem] leading-relaxed border-none; }

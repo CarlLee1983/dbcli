@@ -20,7 +20,7 @@ const REQUIRED_HOOKS = [
 describe('BUILTIN_VERIFY_SCENARIOS registry', () => {
   test('contains exactly the expected built-in scenario names', () => {
     const names = BUILTIN_VERIFY_SCENARIOS.map((s) => s.name).sort()
-    expect(names).toEqual(['migration', 'rollback', 'safe-backfill'])
+    expect(names).toEqual(['constraint', 'migration', 'rollback', 'safe-backfill'])
   })
 
   test('scenario names are unique', () => {

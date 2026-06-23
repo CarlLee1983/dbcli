@@ -15,6 +15,7 @@ export type VerificationSubjectKind =
   | 'assertion'
   | 'migration'
   | 'backfill'
+  | 'table'
   | 'manual'
 
 export interface VerificationEvidenceRef {

@@ -413,6 +413,48 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             </table>
             <p class="mb-4"><code>--kind</code> 決定語句須符合哪一種文法，並復用同類 scenario 的防護：<code>ddl</code> 復用 <code>verify migration</code> 的 <code>ALTER TABLE</code> 契約（單一語句、目標須符合 <code>--table</code>）；<code>dml</code> 復用 <code>verify safe-backfill</code> 的 plan 契約（僅 <code>UPDATE</code>、須含 <code>WHERE</code>、目標須符合 <code>--table</code>）。預檢回傳 <code>ready</code> 或 <code>blocked</code>；<strong><code>ready</code> 不等於 <code>verified</code></strong>。After-write 將回讀斷言對應至 <code>verified</code> / <code>not_verified</code> / <code>indeterminate</code>，防護失敗則為 <code>blocked</code>。文物會以既有的 subject kind 記錄此 rollback（<code>ddl</code> 為 <code>migration</code>，<code>dml</code> 為 <code>backfill</code>），並標記 <code>command: verify rollback</code>。MVP 中 <code>ddl</code> 僅支援單一 <code>ALTER TABLE</code>、<code>dml</code> 僅支援單一 <code>UPDATE</code>；尚未支援 <code>INSERT</code>／<code>DELETE</code> 還原。</p>
 
+            <h4 class="mt-6 mb-2 font-bold">verify constraint</h4>
+            <p class="mb-4">預檢或 after-write 驗證「<strong>資料完整性不變式是否成立</strong>」 — 外鍵一致性、NOT NULL 覆蓋率、唯一性或自訂違規查詢。<strong>此指令永遠不會執行寫入</strong> — 只執行唯讀 <code>COUNT(*)</code> 違規查詢，並（在 after-write 模式下）記錄佐證。</p>
+            <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify constraint</code> 永不執行寫入或 DDL 語句。請在變更前執行 preflight，變更套用後再以 <code>--after-write</code> 記錄佐證。</p>
+            <p class="mb-2">以 <code>--check</code> 選擇四種檢查類型：</p>
+            <ul class="mb-4">
+              <li><code>fk</code> — 統計孤兒列數（子欄位無對應父列）。需提供 <code>--column</code> 與 <code>--references &lt;table.column&gt;</code>。</li>
+              <li><code>not-null</code> — 統計欄位值為 NULL 的列數。<code>--column</code> 可重複使用。</li>
+              <li><code>unique</code> — 統計欄位值重複的列數。<code>--column</code> 可重複使用。</li>
+              <li><code>custom</code> — 執行你提供的 <code>--violation-query &lt;sql&gt;</code>（唯讀 <code>SELECT</code>，回傳單一整數違規筆數）。</li>
+            </ul>
+            <p class="mb-2"><strong>FK 預檢（在 migration 前驗證無孤兒 orders）：</strong></p>
+            <pre><code>dbcli verify constraint \
+  --table orders \
+  --check fk \
+  --column customer_id \
+  --references customers.id</code></pre>
+            <p class="mt-4 mb-2"><strong>NOT NULL 預檢（驗證欄位已完整填寫）：</strong></p>
+            <pre><code>dbcli verify constraint \
+  --table users \
+  --check not-null \
+  --column email</code></pre>
+            <p class="mt-4 mb-2"><strong>在外部套用變更後：</strong></p>
+            <pre><code>dbcli verify constraint --table orders --check fk --column customer_id \
+  --references customers.id --after-write</code></pre>
+            <table class="mt-4 mb-4">
+              <thead><tr><th>Option</th><th>必填</th><th>說明</th></tr></thead>
+              <tbody>
+                <tr><td><code>--table &lt;table&gt;</code></td><td>是</td><td>受檢資料表。</td></tr>
+                <tr><td><code>--check &lt;kind&gt;</code></td><td>是</td><td>限制類型：<code>fk</code> | <code>not-null</code> | <code>unique</code> | <code>custom</code>。</td></tr>
+                <tr><td><code>--column &lt;name&gt;</code></td><td>是（fk/not-null/unique）</td><td>受檢欄位。<code>not-null</code>/<code>unique</code> 可重複；<code>fk</code> 為子欄位。</td></tr>
+                <tr><td><code>--references &lt;table.column&gt;</code></td><td>是（fk）</td><td>FK 父查詢的參照 <code>&lt;table&gt;.&lt;column&gt;</code>。</td></tr>
+                <tr><td><code>--violation-query &lt;sql&gt;</code></td><td>是（custom）</td><td>唯讀 <code>SELECT</code>，回傳單一整數違規筆數。</td></tr>
+                <tr><td><code>--allow-preexisting</code></td><td>否</td><td>無回退模式：<code>count ≤ --baseline</code> 時視為驗證通過。</td></tr>
+                <tr><td><code>--baseline &lt;n&gt;</code></td><td>否</td><td>preflight 量測的基準違規筆數（搭配 <code>--allow-preexisting</code>）。</td></tr>
+                <tr><td><code>--after-write</code></td><td>否</td><td>重新計算違規筆數並寫入 v1 文物。</td></tr>
+                <tr><td><code>--format &lt;table|json&gt;</code></td><td>否</td><td>輸出格式，預設 <code>table</code>。</td></tr>
+                <tr><td><code>--subject-name &lt;name&gt;</code></td><td>否</td><td>文物 subject 名稱，預設為資料表名稱。</td></tr>
+                <tr><td><code>--summary &lt;text&gt;</code></td><td>否</td><td>選填文物摘要覆寫。</td></tr>
+              </tbody>
+            </table>
+            <p class="mb-4">預檢回傳 <code>ready</code> 或 <code>blocked</code>；<strong><code>ready</code> 不等於 <code>verified</code></strong>。After-write 將違規筆數對應至 <code>verified</code>（violations ≤ threshold）或 <code>not_verified</code>（violations > threshold）。預設 threshold 為 <code>0</code>（嚴格模式）。啟用 <code>--allow-preexisting</code> 時，threshold 為 preflight 量測的 <code>--baseline</code> 筆數 — 只要 after-write 筆數不超過預既存水準即視為通過。查詢錯誤回傳 <code>indeterminate</code>，防護失敗回傳 <code>blocked</code>。文物使用 <code>subject.kind = 'table'</code>、<code>command: verify constraint</code>。MVP：僅限 SQL 引擎；FK 僅支援單一欄位；永不執行寫入。</p>
+
             <!-- doc-key: verification-inspect -->
             <h3 id="verification-inspect">verification — 檢視與管理驗證文物</h3>
             <p class="text-text-muted mb-4"><code>dbcli verification</code> 操作寫入於 <code>&lt;cwd&gt;/.dbcli/verification/</code> 下的文物。它不連線資料庫、也不寫入稽核記錄。<code>list</code>、<code>show</code>、<code>summary</code> 為唯讀的檔案系統檢視；<code>prune</code> 為本機生命週期指令，預設為 dry-run，僅在帶上 <code>--execute --force</code> 時才刪除檔案。儲存根目錄為目前工作目錄，與 <code>--config</code> 位置無關。</p>

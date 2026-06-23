@@ -331,6 +331,55 @@ Schema rollback 預檢（`--kind ddl`，單一 `ALTER TABLE`）：
 
 `--kind` 決定語句須符合哪一種文法，並復用同類 scenario 的防護：`ddl` 復用 `verify migration` 的 `ALTER TABLE` 契約（單一語句、目標須符合 `--table`）；`dml` 復用 `verify safe-backfill` 的 plan 契約（僅 `UPDATE`、須含 `WHERE`、目標須符合 `--table`）。預檢回傳 `ready` 或 `blocked`；**`ready` 不等於 `verified`**。After-write 將回讀斷言對應至 `verified` / `not_verified` / `indeterminate`，防護失敗則為 `blocked`。文物會以既有的 subject kind 記錄此 rollback（`ddl` 為 `migration`，`dml` 為 `backfill`），並標記 `command: verify rollback`。MVP 中 `ddl` 僅支援單一 `ALTER TABLE`、`dml` 僅支援單一 `UPDATE`；尚未支援 `INSERT`／`DELETE` 還原。
 
+#### verify constraint
+
+預檢或 after-write 驗證「**資料完整性不變式是否成立**」 — 外鍵一致性、NOT NULL 覆蓋率、唯一性或自訂違規查詢。**此指令永遠不會執行寫入** — 只執行唯讀 `COUNT(*)` 違規查詢，並（在 after-write 模式下）記錄佐證。
+
+> ⚠️ `verify constraint` 永不執行寫入或 DDL 語句。請在變更前執行 preflight，變更套用後再以 `--after-write` 記錄佐證。
+
+以 `--check` 選擇四種檢查類型：
+
+- `fk` — 統計孤兒列數（子欄位無對應父列）。需提供 `--column` 與 `--references <table.column>`。
+- `not-null` — 統計欄位值為 NULL 的列數。`--column` 可重複使用。
+- `unique` — 統計欄位值重複的列數。`--column` 可重複使用。
+- `custom` — 執行你提供的 `--violation-query <sql>`（唯讀 `SELECT`，回傳單一整數違規筆數）。
+
+FK 預檢（在 migration 前驗證無孤兒 orders）：
+
+    dbcli verify constraint \
+      --table orders \
+      --check fk \
+      --column customer_id \
+      --references customers.id
+
+NOT NULL 預檢（驗證欄位已完整填寫）：
+
+    dbcli verify constraint \
+      --table users \
+      --check not-null \
+      --column email
+
+在外部套用變更後：
+
+    dbcli verify constraint --table orders --check fk --column customer_id \
+      --references customers.id --after-write
+
+| Option | 必填 | 說明 |
+| --- | --- | --- |
+| `--table <table>` | 是 | 受檢資料表。 |
+| `--check <kind>` | 是 | 限制類型：`fk` \| `not-null` \| `unique` \| `custom`。 |
+| `--column <name>` | 是（fk/not-null/unique） | 受檢欄位。`not-null`/`unique` 可重複；`fk` 為子欄位。 |
+| `--references <table.column>` | 是（fk） | FK 父查詢的參照 `<table>.<column>`。 |
+| `--violation-query <sql>` | 是（custom） | 唯讀 `SELECT`，回傳單一整數違規筆數。 |
+| `--allow-preexisting` | 否 | 無回退模式：`count ≤ --baseline` 時視為驗證通過。 |
+| `--baseline <n>` | 否 | preflight 量測的基準違規筆數（搭配 `--allow-preexisting`）。 |
+| `--after-write` | 否 | 重新計算違規筆數並寫入 v1 文物。 |
+| `--format <table\|json>` | 否 | 輸出格式，預設 `table`。 |
+| `--subject-name <name>` | 否 | 文物 subject 名稱，預設為資料表名稱。 |
+| `--summary <text>` | 否 | 選填文物摘要覆寫。 |
+
+預檢回傳 `ready` 或 `blocked`；**`ready` 不等於 `verified`**。After-write 將違規筆數對應至 `verified`（violations ≤ threshold）或 `not_verified`（violations > threshold）。預設 threshold 為 `0`（嚴格模式）。啟用 `--allow-preexisting` 時，threshold 為 preflight 量測的 `--baseline` 筆數 — 只要 after-write 筆數不超過預既存水準即視為通過。查詢錯誤回傳 `indeterminate`，防護失敗回傳 `blocked`。文物使用 `subject.kind = 'table'`、`command: verify constraint`。MVP：僅限 SQL 引擎；FK 僅支援單一欄位；永不執行寫入。
+
 <!-- doc-key: verification-inspect -->
 ### verification — 檢視與管理驗證文物
 

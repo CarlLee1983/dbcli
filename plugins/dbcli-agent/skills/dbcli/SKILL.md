@@ -12,65 +12,54 @@ If the `dbcli` executable is not available in `PATH`, use
 fallback for Codex plugin installs where the skill is installed by the plugin but
 the CLI package has not been installed globally.
 
-## AI agent workflow (follow in order)
+## How to use dbcli
 
-0. `dbcli skill context --format xml` — LLM prompt context payload: serializes connection metadata, schema caches, and saved queries into a compressed XML/JSON structure for prompt injection.
-1. `dbcli inspect --for-agent` — bounded snapshot: connection, permission, blacklist, objects, snippets, suggested next commands.
-2. `dbcli report --format json` — diagnostic report (health/capacity/perf) using built-in snippets.
-3. `dbcli guide <goal> --format json` — deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). Use `dbcli guide --list` to see goals.
-4. `dbcli recovery --code <CODE>` — look up structured recovery commands for a known error code (e.g. `CONN_REFUSED`, `PERMISSION_DENIED`, `SNIPPET_NOT_FOUND`). Pass `--recovery` to `dbcli query` / `dbcli q` to have failures emit a `RecoveryEnvelope` directly. In v1.16.0 the `--recovery` flag is also accepted by `dbcli insert`, `dbcli update`, `dbcli delete`, `dbcli export`, `dbcli schema`, and `dbcli inspect` (which also gained `--require-schema-cache` for the `SCHEMA_CACHE_MISSING` path).
-   - **v1.17.0** `dbcli recover` reads the auto-saved envelope (`.dbcli/last-recovery.json`) written by any prior `--recovery` failure. Inspect it (Markdown by default) or pass `--apply` to execute the saved plan under risk gating.
-   - **v1.17.0** `dbcli recover --apply` runs `risk=readonly` and `risk=dry-run` steps by default. Open the gate one tier with `--allow-write=readonly-cmd` (run local-side writes such as `blacklist remove`) or `--allow-write=write-cmd` (also run steps that mutate the connected database). Pass `--from <file>` to read an explicit envelope instead of the auto-saved one. Use `--format json` for an aggregated machine-readable result.
-   - Exit codes: `0` ok, `1` step failed, `2` envelope missing/malformed, `3` every step skipped (open `--allow-write` or fix interactive/placeholder).
-   - GuideStep optional fields agents should respect:
-     - `interactive: true` — step requires a TTY (`dbcli init` family). `dbcli recover --apply` skips with `skipped:interactive`.
-     - `dbWrite: true` — step mutates the connected database. Gates the highest risk tier; reserved for future write-side recovery steps.
-     - `placeholders: ['<token>', ...]` — agent must replace these tokens before `--apply` will execute. Skipped with `skipped:placeholder`.
-   - **v1.17.0 P4 Verification.** After `--apply` finishes the main plan, dbcli runs **one extra read-only step** (`envelope.verify`) to probe whether the original failure is gone. The output gains `verifyResult` (the executed step) and `verifyStatus`:
-     - `passed` — verifier exited 0 and (where applicable) the expected JSON shape was found.
-     - `failed` — verifier exited non-zero or timed out.
-     - `indeterminate` — verifier exited 0 but the heuristic could not confirm the fix (JSON parse failure, missing field, gate skip).
-     Verify is **only run when** `finalStatus === 'ok'`. Pass `--no-verify` to skip it. Heuristic is intentionally cheap; agents should still re-run their own check against the original failing operation when correctness matters.
+**Safety baseline — apply to every operation:**
 
-Verification outcome vocabulary: use `verified` only when required evidence matched;
-use `not_verified` when the check ran and contradicted the expected state; use
-`indeterminate` when the check ran but evidence was ambiguous; use `blocked` when
-verification could not run because of config, permission, schema, placeholder, or
-safety gates.
+1. `dbcli blacklist list` — confirm sensitive-data boundaries.
+2. `dbcli schema <object> --format json` — confirm real column/field names. **Never guess.**
+3. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
 
-   - **v1.17.0 P2 Multi-turn `--next`.** When `--apply` is too coarse — interactive blocks it, the plan needs per-step inspection, or the agent wants to drive recovery with its own tools — execute steps one at a time and ask dbcli for the next:
+> `report` and `guide` already embed an `inspect` snapshot — you do **not** need to run
+> `dbcli inspect` first. Run `dbcli inspect --for-agent` manually only when you want the
+> audit-recent context or to diagnose a connection problem.
 
-     ```bash
-     # The agent reads step 1 from the envelope, runs it, then asks dbcli for step 2:
-     dbcli recover --next --after-step 1 --result '{"status":"ok","exitCode":0}'
-     # Returns a NextResult envelope:
-     # {
-     #   "schemaVersion": 1,
-     #   "kind": "step",
-     #   "errorCode": "BLACKLIST_TABLE",
-     #   "cursor": 2,
-     #   "totalSteps": 3,
-     #   "step": { "order": 2, "command": "dbcli inspect --for-agent", ... }
-     # }
-     # After the last step, dbcli returns kind: "done".
-     ```
+**Then route by task:**
 
-     `--result` accepts inline JSON `StepResultSummary` or `@<path>` to read from a file. `stdoutSummary` and `stderrSummary` are capped at 4 KB each — pre-truncate to the **last** 4 KB before passing. `--next` is mutually exclusive with `--apply`. Each call is independent (no persisted cursor) — the agent tracks `--after-step` itself.
+| Task | Path |
+| --- | --- |
+| A named workflow fits ("diagnose slow query", "audit permissions") | `skill tasks list` → `skill tasks plan <pack>` — **prefer this; do not invent steps** |
+| A fixed diagnostic goal | `guide <goal>` (`slow-query` / `capacity` / `health` / `index-usage` / `permissions` / `schema-overview`; `guide --list`) |
+| Setting up a connection | see **Connection setup** |
+| Anything else | run commands manually; consult the **Developer workflows** cheat-sheet |
 
-     **Connection branching.** For `CONN_*` codes, the envelope ships a `branches` map + `branchFork` descriptor. Step 1 (`dbcli doctor --format json`) is the fork point: pass the doctor JSON in `--result.stdoutSummary` and `--next` will pick one of four labeled branches (`doctor-clean` / `doctor-config-missing` / `doctor-auth-error` / `doctor-network-error`). NextResult then carries `branchId` and `branchDescription`; subsequent calls must echo `--branch <id>` to walk that branch. Parse failure / unmatched keywords fall back to linear `recovery`. `--apply` ignores branches entirely.
-5. `dbcli blacklist list` — sensitive data boundaries.
-6. `dbcli schema <table> --format json` — real column names (SQL/Mongo/ES) or `schema <key>` (Redis). **Never guess.**
-7. Run `query` / `insert` / `update` / `delete` / `export` within permission.
-8. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
-   - **v1.21.0 Self-Verification Loops**: If a snippet defines a `verify` block in its frontmatter, run the snippet with `dbcli q @name --verify` to automatically run primary changes, execute the verification query, and validate assertions.
+Slow-query diagnosis has three canonical paths (pick by what you already know):
+
+- Known slow SQL → `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"`
+- Known hot table → `skill tasks plan analyze-table-perf --param table=<table>`
+- Whole-environment scan → `report --section perf` → `guide slow-query`
+
+`report --section perf` already runs the slow-query, index-usage, and cache-hit diagnostics —
+afterwards add only the `@diag/*` it does not cover (`missing-indexes`, `locks`, `connections`,
+`table-sizes`). Once you have a specific slow statement, `explain --analyze "<SQL>"` shows its plan.
+
+**On failure:** pass `--recovery` to `query` / `q` / `insert` / `update` / `delete` /
+`export` / `schema` / `inspect`. The command emits a `RecoveryEnvelope` to stdout and saves
+it to `.dbcli/last-recovery.json`; then `dbcli recover` inspects it and `dbcli recover --apply`
+runs the saved plan under risk gating. Multi-turn `--next`, connection branching, and the
+post-apply verify probe are documented in reference.md §Recovery Cookbook.
+
+When reporting a check's outcome use the vocabulary `verified` (evidence matched) /
+`not_verified` (check ran and contradicted) / `indeterminate` (ran but ambiguous) /
+`blocked` (could not run due to config, permission, schema, placeholder, or safety gate).
 
 Prefer `--format json` for agent-friendly output.
 
 ## Agent Task Packs
 
-When the user asks for a database workflow (e.g. "diagnose this slow query", "audit
-permissions", "review long-running operations"), prefer published task templates
-over inventing steps from memory.
+When the user asks for a database workflow ("diagnose this slow query", "audit
+permissions", "review long-running operations"), **prefer published task templates over
+inventing steps from memory.**
 
 ```bash
 dbcli skill tasks list --format json                              # discover
@@ -78,45 +67,34 @@ dbcli skill tasks show <task>                                     # inspect
 dbcli skill tasks plan <task> --param key=value --format json     # generate plan
 ```
 
-The plan output is an ordered list of dbcli commands with rationale and risk
-labels. Execute them one at a time — task plans do **not** override blacklist,
-schema, dry-run, or confirmation requirements.
+The plan is an ordered list of dbcli commands with rationale and risk labels. Execute them
+one at a time — task plans do **not** override blacklist, schema, dry-run, or confirmation
+requirements.
 
-Builtin packs: `diagnose-slow-query` and **(v1.23)** `analyze-table-perf` — a
-read-only `plan-only` pack taking a required `table` parameter that walks
-`blacklist list` → `schema <table> --format json` → `guide index-usage`. `dbcli
-inspect` suggests `analyze-table-perf` automatically for the hottest table in
-recent audit activity. Additional read-only packs: `audit-permissions`,
-`safe-backfill`, `schema-drift-review`, `connection-health` — run
-`dbcli skill tasks list` for the full set.
-
-Review & verification packs: `pr-database-review` (assess a PR's changed queries,
-migrations and blacklist risk), `migration-review` (capture pre-change schema and
-preview DDL), `safe-backfill-verify` (backfill planning with a read-back `assert`),
-and `slow-endpoint-investigation` (chain `proxy analyze` → `explain` →
-`guide missing-index-for`). All are read-only `plan-only` — pick the pack matching the
-user's situation before improvising, and run any index/DDL proposal through
-`migration-review` before writing.
+Builtin packs: `diagnose-slow-query` (targets a specific SQL), `analyze-table-perf` (targets
+a specific table; `dbcli inspect` auto-suggests it for the hottest table in recent audit
+activity), `audit-permissions`, `safe-backfill`, `schema-drift-review`, `connection-health`.
+Review/verify packs: `pr-database-review`, `migration-review`, `safe-backfill-verify`,
+`slow-endpoint-investigation`. All are read-only `plan-only` — pick the pack matching the
+situation, and run any index/DDL proposal through `migration-review` before writing.
 
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).
 
 ## Developer workflows
 
-Use these workflows when database impact is implicit in a development task. Keep
-the normal dbcli safety rules: prefer `--format json`, run `blacklist list`
-before touching sensitive data, confirm names with `schema`, dry-run writes, and
-use `--recovery` / `recover` after failures.
+Use these workflows when database impact is implicit in a development task. The safety baseline
+in **How to use dbcli** still applies.
 
-| Situation | Use dbcli for | Minimum safe path |
-| --- | --- | --- |
-| DB-backed feature | Map product/code terms to real objects before editing code. | `inspect --for-agent` -> `blacklist list` -> `schema <object>` -> `queries suggest <intent>` |
-| Application data bug | Separate stored facts from application-code inference. | `inspect --for-agent` -> `audit tail --for-agent --n 10` -> `blacklist list` -> `schema <object>` -> narrow query/snippet |
-| ORM or migration work | Ground model and migration edits in live schema evidence. | `schema --format json` -> `diff --snapshot <name>` -> generate DDL via `migrate add-index`/`add-column` (preview SQL) -> `diff --against <snapshot>` |
-| PR database review | Check query, write, migration, export, fixture, and blacklist risk. | Review changed persistence paths, then propose concrete `schema`, `plan`, `dry-run`, `report`, or `guide` commands for each material claim. |
-| Slow endpoint or query | Prefer read-only diagnostics before index proposals. | `report --section perf` -> task pack `analyze-table-perf` -> `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
-| Safe data backfill | Scope affected rows and preview mutations before execution. | `blacklist list` -> `schema <object>` -> count/scope query -> `update ... --dry-run` -> read-back or snippet `--verify`. |
-| Environment validation | Check config shape and connectivity without leaking secrets. | `status --format json` -> `doctor --format json` -> `inspect --for-agent --no-connect --format json`. |
+| Situation | Minimum safe path |
+| --- | --- |
+| DB-backed feature | `blacklist list` → `schema <object>` → `queries suggest <intent>` |
+| Application data bug | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → narrow query |
+| ORM or migration work | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column` (preview SQL) → `diff --against <snapshot>` |
+| PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
+| Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
+| Safe data backfill | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back or snippet `--verify`. |
+| Environment validation | `status --format json` → `doctor --format json` → `inspect --for-agent --no-connect`. |
 
 Copy-paste command anchors:
 
@@ -126,86 +104,43 @@ dbcli blacklist list --format json
 dbcli schema <object> --format json
 dbcli queries suggest <intent> --format json
 dbcli audit tail --for-agent --n 10
-dbcli schema --format json
 dbcli diff --snapshot <name>
-dbcli migrate add-index <table>
-dbcli diff --against <snapshot>
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
 dbcli guide missing-index-for "<query>" --format json
-dbcli proxy analyze --format json
-dbcli query "<count/scope query>" --format json
 dbcli update <object> --where "<bounded predicate>" --set '<json>' --dry-run --format json
-dbcli status --format json
-dbcli doctor --format json
 dbcli inspect --for-agent --no-connect --format json
 ```
 
-Developer workflow guardrails:
+Guardrails:
 
-- Never invent table, collection, key, index, or field names. Confirm them with
-  `schema` before writing code that depends on them.
-- Separate database facts from application-code inference. Report which dbcli
-  output shaped the code or review conclusion.
-- For writes and backfills, include scope count, dry-run preview, execution
-  command, and read-back or snippet verification.
+- Never invent table, collection, key, index, or field names. Confirm with `schema`.
+- Separate database facts from application-code inference. Report which dbcli output shaped the conclusion.
+- For writes and backfills, include scope count, dry-run preview, execution command, and read-back.
 - Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
 - Do not print credentials, copied connection strings, or blacklisted values.
-- To persist result evidence for a read-back assertion, run `assert ... --write-verification-artifact --verification-subject <kind:name>` (kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`).
-- Inspect result evidence (read-only): `dbcli verification summary --format json`
-  (also `verification list` / `verification show <id>`). Reclaim old artifacts with
-  `dbcli verification prune --older-than 30d` (dry-run; add `--execute --force` to delete).
-- `tasks plan safe-backfill-verify` — when the user needs a plan only.
-- `verify safe-backfill` — before a real safe backfill (preflight) and after it
-  (`--after-write`) when durable evidence is required. Never executes the write.
-- `tasks plan migration-review` — when the user needs a migration plan only (plan output, no DDL executed).
-- `verify migration` — preflight a schema migration (analyze DDL, run guards) and after the migration is applied externally (`--after-write`) to record evidence. Never executes DDL.
-- `verify rollback --kind <ddl|dml>` — verify that a reverting change restored the prior state: preflight analyzes the reverting `ALTER TABLE` (`--kind ddl`) or `UPDATE` (`--kind dml`) via `--statement`, and `--after-write` records evidence after you apply it externally. Never executes the statement.
-- `verify constraint --check <fk|not-null|unique|custom>` — preflight or after-write verification that a data-integrity invariant holds: counts violations via a read-only query and records evidence with `--after-write`. Supports `--allow-preexisting` / `--baseline` for no-regression mode. Never executes a write.
-- `verification show <id>` — cite the final artifact.
+- Durable evidence: `assert … --write-verification-artifact --verification-subject <kind:name>`;
+  inspect with `verification summary` / `list` / `show <id>`. The `verify safe-backfill` /
+  `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>`
+  family runs preflight + `--after-write` checks and **never executes the write**. Full flags
+  and the per-command blocks are in reference.md.
 
-Full flags, per-command copy-paste blocks, `migrate` DDL, interactive `shell`, and MongoDB/Redis/ES walkthroughs are in [reference.md](reference.md) (installed next to this file).
+## Audit log
 
-## Audit Log usage
-
-Use the audit log when you need cross-session history or forensics on what dbcli
-has done on this database, rather than re-querying live DB state from scratch.
-
-**Scenario 1 — Session handoff (picking up where another agent left off):**
+Use the audit log for cross-session history or failure forensics instead of re-querying
+live DB state.
 
 ```bash
-dbcli audit tail --for-agent --n 10           # last 10 entries as JSON envelope
-dbcli audit tail --all --for-agent --n 20     # cross-connection merged view (D4)
+dbcli audit tail --for-agent --n 10          # last N entries (JSON envelope, metadata-only)
+dbcli audit show <id-prefix>                 # full entry by id prefix (≥4 chars)
+dbcli audit show --recovery-ref <env-id>     # find the entry that emitted an envelope
 ```
 
-Returns an agent-facing JSON envelope with `session_id` / `engine` / `command` /
-`target` / `success` per entry. Metadata-only by design — never raw SQL bodies,
-`--param` values, or result cell contents (D3 lock).
-
-**Scenario 2 — Forensics (reconstructing a failure):**
-
-```bash
-dbcli recover --format json                   # inspect audit_recent embed + recovery_ref
-dbcli audit show <id-prefix>                  # full entry by id prefix (>=4 chars)
-dbcli audit show --recovery-ref <envelope-id> # find entry that emitted an envelope
-```
-
-The `inspect` / `guide` / `recover` / `recover --apply` agent JSON output embeds
-`audit_recent: AuditEntryBrief[]` (last 5 entries) — a fresh session has immediate
-history context. The envelope's `audit_ref` and the audit entry's `recovery_ref`
-point at each other; agents can pivot either direction.
-
-Bi-directional `recovery_ref` / `audit_ref` linkage is wired on every command
-that accepts `--recovery`: `query`, `inspect`, `insert`, `update`, `delete`,
-`export`, `q`, and `schema`. Agents can pivot from an envelope to its audit
-entry via `audit tail --recovery-ref <id>`.
-
-Audit entries are written to `.dbcli/audit/<connection>.jsonl` with rotation at
-~10 MB or 1000 entries. `audit.enabled = false` in `.dbcli` opts out (default ON
-since v1.20.0). For flag reference see [`reference.md`](./reference.md) §audit.
-For end-to-end recovery walkthroughs (per-code scenarios, `--next` multi-turn,
-envelope ⇄ audit pivot, risk-gate cheat sheet) see
-[`reference.md`](./reference.md) §Recovery Cookbook.
+The `inspect` / `guide` / `recover` agent JSON embeds `audit_recent` (last 5 entries) — a
+fresh session has immediate history. An envelope's `audit_ref` and an audit entry's
+`recovery_ref` point at each other, so you can pivot either way. Audit is on by default
+(`audit.enabled = false` to opt out); entries are metadata-only (never SQL bodies, `--param`
+values, or result cells) and rotate at ~10 MB / 1000 entries. Full flags: reference.md §audit.
 
 ## Quick start
 
@@ -236,12 +171,12 @@ or `doctor` / `status` reports a missing or invalid config, follow this flow.
 2. **Where do credentials live?**
    - Already in a `.env` (`DATABASE_URL` or `DB_HOST` / `DB_PORT` / `DB_USER` /
      `DB_PASSWORD` / `DB_NAME` | `DB_DATABASE`) → `init` parses it automatically.
-   - Need to keep secrets out of `.dbcli` (CI/CD, multi-env) → `--use-env-refs`
-     plus `--env-host` / `--env-port` / `--env-user` / `--env-password` / `--env-database`.
+   - Need to keep secrets out of `.dbcli` (CI/CD, multi-env) → `--use-env-refs` (see below).
    - Plain values are acceptable → pass `--host` / `--port` / `--user` /
      `--password` / `--name` (and `--system`).
 3. **What permission tier?** Default to the **lowest** that satisfies the task:
-   `query-only` → `read-write` → `data-admin` → `admin`. Set with `--permission`.
+   `query-only` → `read-write` → `data-admin` → `admin`. Set with `--permission`
+   (defaults to `query-only`).
 4. **Verify, never assume.** After init: `dbcli status` (system + permission +
    blacklist summary, no creds) and `dbcli doctor --format json` (env, config
    shape, connectivity, schema-cache age, Mongo SRV path).
@@ -281,25 +216,38 @@ dbcli init --conn-name staging --env-file .env.staging --permission query-only
 dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
 dbcli use --list                          # show all, * marks default
 dbcli use prod                            # switch default
-dbcli query --use staging "SELECT 1"      # one-shot override
+dbcli query --use staging "SELECT 1"      # one-shot override on any subcommand
 dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
 
-Per-connection schema cache lives at `.dbcli/schemas/<connection>/`. Run
-`dbcli schema --use <name>` once per connection before `schema <table>` —
-otherwise the cache may serve another connection's columns.
+Each named connection has its own schema cache at `.dbcli/schemas/<connection>/`. Run
+`dbcli schema --use <name>` once per connection **before** `schema <table>` — otherwise the
+cache may serve another connection's columns. `schema --refresh` / `--reset` manage the cache
+(reference.md). `--skip-test` skips the init-time TCP connection test; it is implied
+automatically when `--use-env-refs` is set (the `$env` refs have no value to connect with yet).
+`--system` is optional for v2 — without it the engine is inferred from `--env-file` / `.env`
+(`DATABASE_URL` scheme), defaulting to `postgresql`.
 
 ### env-refs (keep secrets out of `.dbcli`)
 
+Store credentials as `{ "$env": "VAR" }` references resolved at runtime, never plaintext:
+
 ```bash
-dbcli init --use-env-refs \
-  --env-host DB_HOST --env-port DB_PORT \
-  --env-user DB_USER --env-password DB_PASSWORD --env-database DB_NAME
+# Default key names: DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_DATABASE
+dbcli init --use-env-refs
+
+# Non-default key names — name each one explicitly (required in CI):
+dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-test \
+  --env-host PROD_DB_HOST --env-port PROD_DB_PORT \
+  --env-user PROD_DB_USER --env-password PROD_DB_PASSWORD --env-database PROD_DB_NAME
 ```
 
-Stored as `{ "$env": "DB_HOST" }` etc. and resolved at runtime. Pair with
-`--env-file <path>` (v2) when each connection has its own env file.
+In an **interactive terminal**, omitting the `--env-*` flags prompts for each key name
+(defaults above) — you can type a non-default name like `PROD_DB_PASSWORD` and it is stored
+as a `$env` ref. In a **non-interactive / CI** run you **must** pass all five `--env-*`
+flags; otherwise `init` exits with an error — it never silently falls back to plaintext.
+`--env-file <path>` is the path to the env file, independent of the `$env` key names.
 
 ### Common gotchas
 
@@ -330,7 +278,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. Supports `--verify` to run assertions. |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
-| `delete` | data-admin+ | SQL or MongoDB only. `--where` required; `--dry-run` first. Supports `--recovery`. |
+| `delete` | data-admin+ | SQL or MongoDB; Redis has a basic implementation (see Redis section). `--where` required; `--dry-run` first. Supports `--recovery`. |
 | `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
@@ -338,10 +286,10 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
 | `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `verification` | n/a | Inspect and manage local verification artifacts. `list` / `show <id-or-path>` / `summary` are read-only; `prune` is dry-run by default and deletes only with `--execute --force`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
-| `proxy` | n/a | **(v1.26)** MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Subcommands: `mysql` \| `mariadb` \| `postgresql`. `--listen`, `--target`, `--events` (default `.dbcli/proxy/events.jsonl`), `--slow-ms` (default `1000`), `--redact none\|literals` (default `none`). Observe-only. **(v1.27)** `proxy analyze` aggregates the event log offline into a JSON/text report (summary, byFingerprint with suggestedCommands, slowest, errors, hotTables, N+1) — `--format`, `--top`, `--slow-ms`, `--n-plus-one`. |
+| `proxy` | n/a | **(v1.26)** MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Subcommands: `mysql` \| `mariadb` \| `postgresql`. `--listen`, `--target`, `--events`, `--slow-ms` (default `1000`), `--redact none\|literals`. Observe-only. **(v1.27)** `proxy analyze` aggregates the event log offline into a JSON/text report (summary, byFingerprint with suggestedCommands, slowest, errors, hotTables, N+1) — errors out if no events exist yet. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
 | `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
-| `report` | query-only+ | Diagnostic report (health / capacity / perf) built from `@diag/*` snippets. `--section`, `--brief`, `--for-agent`, `--no-connect`. |
+| `report` | query-only+ | Diagnostic report built from `@diag/*` snippets. `--section <health\|capacity\|perf>` (comma-separated to combine), `--brief`, `--for-agent`, `--no-connect`. |
 | `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. **(v1.23)** `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
 | `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
 | `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
@@ -349,11 +297,27 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
-| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for LLM prompt context payload. |
+| `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
-`--use <name>` on any subcommand targets a v2 connection without changing the default.
-`--recovery` is honoured by `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`; on failure these emit a `RecoveryEnvelope` JSON to stdout, suppress the human stderr message, and atomically save the envelope to `.dbcli/last-recovery.json` for `dbcli recover` to consume.
+`--use <name>` on any subcommand (including `status` / `doctor`) targets a v2 connection
+without changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `update`,
+`delete`, `export`, `schema`, and `inspect` (see **On failure** above).
+
+**Write & query flag semantics** (SQL/Mongo `insert`/`update`):
+
+- `--set` (update) / `--data` (insert) take a **JSON object string**, not a SQL fragment:
+  `dbcli update users --where "id=42" --set '{"email":"new@example.com"}'`. For MongoDB, a
+  JSON without `$` operators is auto-wrapped as `$set`; explicit operators pass through.
+  `insert --data` can also read the object from stdin.
+- `--where` (SQL) accepts only `col=val` or `col1=val1 AND col2=val2` — **not** full SQL
+  (no `>=`, `!=`, `LIKE`, `OR`). MongoDB `--where` takes a full JSON filter
+  (`'{"status":"pending"}'`), falling back to `col=val` when it is not valid JSON.
+- `--dry-run` prints the parameterized SQL (with `$1` / `?` placeholders, not real values)
+  and `rows_affected: 0`; proceed once `status:"success"` and the SQL shape matches the
+  intended `--where` / `--set`. MongoDB prints a shell-style preview.
+- `--recovery` is recommended for automated agent pipelines (enables `dbcli recover --apply`
+  after a failure); optional for one-off manual writes.
 
 ## Permission levels
 
@@ -364,170 +328,116 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | data-admin | + DELETE (DML, no DDL) |
 | admin | + DDL via `migrate` and destructive ops |
 
-## Multi-connection (v2)
-
-- Each named connection has its own schema dir: `.dbcli/schemas/<connection>/`.
-- Run `dbcli schema --use <name>` once per connection before `schema <table>` — otherwise the cache may return another connection's columns.
-- `schema --refresh` / `--reset` manage the cache; see reference.md.
-
 ## MongoDB
 
-- JSON filter object (`find`) or JSON array (`aggregate`); SQL is rejected. `--collection <name>` is required on `query`.
-- **Supported:** `init`, `list`, `schema` (sampled), `query`, `insert`, `update`, `delete`, `export`, `q` (saved queries), `status`, `use`, `shell`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `diff`, `migrate`, `check`.
-- Schema is **sampled** by `$sample` (default 100 docs, max 1000). Pass `--sample-method natural` to use `find().limit()` instead. Columns surface as dot-paths (e.g. `profile.tokens.access`) with `presence` (0..1) and `redacted: true` flags for blacklist hits.
-- **Write planner tiers:** `$set`/`$unset` → `ALLOW`; `$rename` → `WARN` (informational); `$inc`/`$mul`/`$min`/`$max`/`$currentDate` → `WARN`; `$push`/`$pull`/`$pullAll`/`$pop`/`$addToSet` → `WARN`; `$bit` → `WARN`; `$where` and unknown operators → `BLOCK`.
-- **Nested blacklist:** `blacklist.columns[<collection>]` accepts dotted paths (`profile.email`) and trailing-wildcard prefixes (`profile.tokens.*`); middle wildcards are rejected with a warning at `dbcli blacklist list`. Read paths replace matched values with the literal string `[REDACTED]`.
-- **Saved queries:** snippet file ends in `.mongodb.sql`. Frontmatter requires `engine: mongodb` and `operation: find` or `operation: aggregate`. `target: <collection>` is the default collection (override with `--collection`). Body is JSON (object for `find`, array for `aggregate`); `{{param}}` placeholders are JSON-encoded.
-- See reference.md MongoDB section for full syntax and examples.
+- `query` takes a JSON filter object (`find`) or array (`aggregate`); SQL is rejected.
+  `--collection <name>` is required on `query`.
+- **Supported:** `init`, `list`, `schema` (sampled), `query`, `insert`, `update`, `delete`,
+  `export`, `q`, `status`, `use`, `shell`, `doctor`. **Not supported:** `diff`, `migrate`, `check`.
+- Schema is **sampled** by `$sample` (default 100 docs, max 1000; `--sample-method natural`
+  uses `find().limit()`). Columns surface as dot-paths (e.g. `profile.tokens.access`) with
+  `presence` (0..1) and `redacted` flags.
+- Writes: `--set` / `--data` JSON is auto-wrapped as `$set` when no `$` operator is present;
+  explicit operators (`$set`/`$inc`/`$push`/…) pass through. Nested blacklist accepts dotted
+  paths (`profile.email`) and trailing wildcards (`profile.tokens.*`). Saved snippets end in
+  `.mongodb.sql` (frontmatter `engine: mongodb`, `operation: find|aggregate`). Full
+  write-planner tiers and syntax: reference.md MongoDB section.
 
 ## Redis
 
-- Command-style execution; `query` runs a whitelisted Redis command (e.g. `GET`, `HSET`, `DEL`).
-- **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample), `query`, `shell`, `status`, `use`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `schema` full scan, `insert`, `update`, `delete`, `export`, `check`, `diff`, `migrate`, `q`.
-  Use `query "DEL <key>"` etc. for writes — they go through the same permission gate.
-- Permission tiers map to commands: read commands → `query-only`; mutators (`SET`, `HSET`, ...) → `read-write`; `DEL` / `UNLINK` → `data-admin`.
-- `database` field is the logical DB index (default `0`); `list` returns ≤ 100 000 keys via SCAN.
-- **Size guard:** `SCAN`/`HSCAN`/`SSCAN`/`ZSCAN` inject `COUNT 1000`; `LRANGE`/`ZRANGE` clamp `stop`; `ZRANGEBYSCORE` injects `LIMIT 0 1000`; `HGETALL`/`HKEYS`/`HVALS`/`SMEMBERS`/`KEYS` truncate at 1000. Results carry `warnings[]` (`REDIS_SIZE_REWRITE` / `REDIS_SIZE_TRUNCATE`). Pass `--no-limit` (CLI) or `.no-limit on` (shell) to bypass.
-- **Blacklist:** `dbcli blacklist add 'secrets:*'` registers a Redis-native key glob. Reads/writes whose keys match are rejected (`BlacklistRejection`, audited with `metadata.matched_pattern`); `KEYS`/`SCAN MATCH` overlapping a rule are rejected; non-overlapping listings filter blacklisted keys.
-- **Masking (v1.22):** add a `redis.mask` block to `.dbcli` — keys matching a `keyPattern` glob have their value (or named hash `fields`) returned as `[REDACTED]` on reads (`GET`, `GETRANGE`, `HGETALL`, `HGET`, `HMGET`, `HVALS`). Masking coexists with key-glob rejection, and **rejection always wins over masking**.
-- **Shell:** `dbcli shell` on a Redis connection opens a single-line REPL (history, tab completion of commands + key prefixes, `.no-limit on/off`).
-- See reference.md Redis section.
+- `query` runs a single **whitelisted** Redis command (e.g. `GET`, `SET`, `HSET`, `DEL`).
+  The full whitelist and the per-command permission tier are defined in reference.md.
+- **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample),
+  `query`, `q` (saved snippets — **read-only commands only**), `delete` (basic implementation:
+  `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`, needs `data-admin`; `query "DEL <key>"` also
+  works), `shell`, `status`, `use`, `doctor`. **Not supported:** `schema` full scan,
+  `insert`, `update`, `check`, `diff`, `migrate`.
+- **Permission tiers:** reads (`GET`/`HGET`/`SCAN`/…) → `query-only`; mutators
+  (`SET`/`HSET`/`INCR`/`EXPIRE`/`SETEX`/`RENAME`/…) → `read-write`; `DEL`/`UNLINK`/`HDEL`/`XDEL`
+  → `data-admin`. A command not in the whitelist is refused.
+- **No `--dry-run` for Redis `query`** — write safety comes from the permission gate and key
+  blacklist (matching reads/writes are rejected). To preview a delete, use `delete <key> --dry-run`.
+- `database` is the logical DB index (default `0`). `dbcli blacklist add 'secrets:*'`
+  registers a key glob; an optional `redis.mask` block masks values on read. Size guards
+  (SCAN/HGETALL truncation, `--no-limit` to bypass) and masking details: reference.md Redis section.
 
 ## Elasticsearch
 
-- DSL (JSON body) or Lucene query string; `--collection <index>` is required on `query`.
-- **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping), `query`, `export` (v1.22), `shell` (v1.22), `status`, `use`, `doctor`, `upgrade`, `completion`.
-- **Not supported:** `insert`, `update`, `delete`, `check`, `diff`, `migrate`, `q`.
-  Writes are not exposed via dedicated subcommands yet — use `query` if the cluster allows or external tools.
-- **Export (v1.22):** `dbcli export` takes a search DSL with `--index <index>` to export hits, or an index name as the query to scroll the whole index via `match_all`. Outputs JSON / JSONL / CSV (default 1000 rows; `--no-limit` scrolls the full index in batches). Index-level blacklist + audit apply.
-- **Shell (v1.22):** `dbcli shell` opens a Kibana Dev Tools-style REPL — request line `<METHOD> /<path>` plus an optional multi-line JSON body, submitted with a blank line; index-level blacklist rejects protected indices and `_search` auto-caps at 1000 when `size` is omitted.
-- Query-only mode caps at 1000 hits; `--no-limit` is bounded at 10 000.
-- Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields.
-- See reference.md Elasticsearch section.
+- `query` takes a DSL (JSON body) or Lucene query string; `--collection <index>` is required.
+- **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping),
+  `query`, `export` (v1.22), `shell` (v1.22), `status`, `use`, `doctor`. **Not supported:**
+  `insert`, `update`, `delete`, `check`, `diff`, `migrate`.
+- `export` takes a search DSL with `--index <index>`, or an index name as the query to scroll
+  the whole index via `match_all`. Query-only caps at 1000 hits; `--no-limit` is bounded at 10 000.
+- Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields. `shell` opens a
+  Kibana Dev Tools-style REPL. Full syntax and examples: reference.md Elasticsearch section.
 
 ## Saved queries
 
-Run reusable parameterised SELECT snippets stored in your repo.
+Run reusable parameterised snippets stored in your repo.
 
 | Step | Command |
 |------|---------|
-| 1. Discover | `dbcli queries list` |
+| 1. Discover | `dbcli queries list` (or `queries search <keywords>` / `queries suggest <intent>`) |
 | 2. Inspect | `dbcli queries show @<name>` |
-| 3. Run     | `dbcli q @<name> --param k=v` |
+| 3. Run     | `dbcli q @<name> --param k=v` (blacklist always enforced) |
 
-### When you don't know which query to run
+Common intents: `perf.slow-query`, `perf.cache-hit`, `capacity.size`, `safety.connections`,
+`monitor.cluster-health`.
 
-1. `dbcli queries search <keywords>` — natural keywords, fuzzy ranked
-2. `dbcli queries suggest <intent>` — browse a category
-   Common intents: perf.slow-query, perf.cache-hit, capacity.size,
-                   safety.connections, monitor.cluster-health
-3. Once you find one: `dbcli q @<name>` (blacklist always enforced)
+Snippets resolve **local > shared > builtin** (local wins): `builtin` (bundled `@diag/*`,
+read-only) / `.dbcli-shared/queries/` (team) / `.dbcli/queries/` (personal). Manage local
+snippets with `queries new | edit | delete | rename | copy | import | export`. Each `.sql`
+file declares YAML frontmatter inside `-- ---` blocks (name, description, engine, params, tags,
+optional `intent`, optional `visual`).
 
-Snippets resolve from three layers, **local > shared > builtin** (local wins):
-- `builtin` — bundled with dbcli (e.g. `@diag/*`); read-only at runtime
-- `.dbcli-shared/queries/` — committed, team-shared
-- `.dbcli/queries/` — gitignored, personal override
-
-Manage local snippets with `queries new | edit | delete | rename | copy | import | export`
-(see reference.md). Use `copy` / `import` to fork a builtin or shared snippet into the
-local layer for editing.
-
-Each `.sql` file may declare YAML frontmatter inside `-- ---` blocks
-(name, description, engine, params, tags, optional `intent`, optional `visual`).
-The `visual:` block drives the interactive dashboard (see "Interactive HTML dashboard"
-below). See `dbcli queries show @<name> --format json` for the machine-readable contract.
-
-### Engine-specific bodies
-
-Each snippet's body format is determined by the `engine` frontmatter field:
+Body format by `engine`:
 
 | Engine            | Body format            | Notes |
 |-------------------|------------------------|-------|
 | postgres / mysql  | Single SELECT or WITH  | `:name` → driver bind (`$1` / `?`) |
 | elasticsearch     | JSON DSL               | `:name` → JSON-aware substitution; `index:` field required |
-| redis             | Single Redis command   | `:name` → raw text; only read commands allowed |
+| redis             | Single Redis command   | `:name` → raw text; **only read commands allowed** |
 
 Mixed-family `engine` arrays (e.g. `[postgres, elasticsearch]`) are rejected at parse time.
 
 ### Built-in diagnostic snippets
 
-dbcli ships ready-made diagnostic queries. Run with `dbcli q @diag/<topic>`:
+Run with `dbcli q @diag/<topic>` (engine variant auto-picked by the active connection):
 
 | key                     | purpose                                  |
 |-------------------------|------------------------------------------|
 | `@diag/connections`     | active sessions                          |
-| `@diag/long-running`    | queries above `min_seconds` (default 30) |
+| `@diag/long-running`    | queries above `min_seconds` (`--param min_seconds=N`, default 30) |
 | `@diag/table-sizes`     | table data/index size with row counts    |
 | `@diag/index-usage`     | indexes by scan count                    |
 | `@diag/missing-indexes` | tables dominated by sequential scans     |
 | `@diag/locks`           | lock-wait chains                         |
 | `@diag/db-size`         | database size summary                    |
 | `@diag/cache-hit`       | buffer cache hit ratios                  |
-| `@diag/es-cluster-health` | document counts per index (ES connections) |
-| `@diag/redis-key-stats`   | sample SCAN over keyspace (Redis connections) |
-
-Engine variants are picked automatically based on the active connection.
-Override any of them by placing a same-named file under `.dbcli-shared/queries/`
-or `.dbcli/queries/`.
+| `@diag/es-cluster-health` | document counts per index (ES)         |
+| `@diag/redis-key-stats`   | sample SCAN over keyspace (Redis)      |
 
 ## Interactive HTML dashboard
 
-`query`, `q`, and `export` can render results as a standalone, self-contained HTML
-report powered by a bundled React + Recharts template (`assets/ui-template.html`,
-injected via a hardened `window.__DBCLI_PAYLOAD__ = {...}` block — `<` is escaped
-to neutralise `</script>` payloads).
+`query`, `q`, and `export` can render results as a standalone, self-contained HTML report
+(bundled React + Recharts template).
 
 ```bash
-# Open in browser (writes to a temp file, then `open`/`xdg-open`/`start`)
-dbcli query "SELECT day, dau FROM dau_daily" --ui
-dbcli q @analytics/revenue --param days=30 --ui
-
-# Pipe HTML to stdout (CI artifacts, email, static hosting)
-dbcli query "SELECT * FROM orders" --format html > orders.html
-
-# Export to a file (interchangeable with json/jsonl/csv)
+dbcli query "SELECT day, dau FROM dau_daily" --ui          # open in browser
+dbcli query "SELECT * FROM orders" --format html > out.html # pipe HTML to stdout
 dbcli export "SELECT * FROM orders" --format html --output orders.html
 ```
 
-`--ui` implies `--format html` and opens the file; `--format html` alone prints to
-stdout. Blacklist redaction is applied **before** rendering — the dashboard never
-sees masked columns.
-
-### Snippet `visual:` block
-
-To get KPIs and charts (rather than just a sortable table), add a `visual:` block
-to the snippet's frontmatter. Column names must exist in the result row.
-
-```sql
--- ---
--- name: Revenue Trend
--- engine: postgres
--- params:
---   days: { type: int, default: 30 }
--- visual:
---   title: Revenue (last :days days)
---   kpis:
---     - { label: Total Revenue,  value_column: total_revenue, format: currency }
---     - { label: Orders,         value_column: order_count,   format: number   }
---     - { label: Conversion,     value_column: conv_rate,     format: percent  }
---   charts:
---     - { type: line, title: Daily Revenue, x: day, y: [revenue] }
---     - { type: bar,  title: By Channel,    x: channel, y: [revenue, refunds] }
--- ---
-SELECT ...
-```
-
-- `kpis[].format`: `currency` / `number` / `percent` (omit for raw value).
-- `charts[].type`: `line` / `bar` / `area` / `pie` / `scatter`.
-- Raw `query` invocations (no snippet) render a sortable/filterable table only —
-  there is no `visual:` to attach.
+`--ui` implies `--format html` and opens the file; `--format html` alone prints to stdout.
+Blacklist redaction is applied **before** rendering. To get KPIs and charts instead of a plain
+table, add a `visual:` block (`title`, `kpis[]`, `charts[]`) to the snippet frontmatter — see
+reference.md for the full `visual:` schema. Raw `query` invocations render a sortable table only.
 
 ## Common workflows
 
 - **Debug odd state:** `schema` → `check` → `query` with tight `WHERE` → follow FKs from schema JSON. Evidence over theory.
-- **After INSERT/UPDATE:** `--dry-run` → run → `query` read-back; explain mismatches via triggers, defaults, or blacklist.
+- **After INSERT/UPDATE:** follow the write sequence in **How to use dbcli** (`--dry-run` → run → `query` read-back); explain mismatches via triggers, defaults, or blacklist.
 - **Migrations:** `diff --snapshot` → `migrate` (dry-run → `--execute`) → `diff --against` → `check` affected tables. DROP requires `--force`.
 - **Health / growth:** `check --all` (huge tables skipped unless `--include-large`); consult schema `sizeCategory` before ad-hoc queries.
 - **Codegen from live DB:** `schema --format json` to drive an ORM; cross-check once with `dbcli query`.

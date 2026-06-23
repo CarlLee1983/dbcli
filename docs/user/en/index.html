@@ -98,6 +98,7 @@
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
                     <li class="nav-item"><a href="#developer-workflows" class="nav-link">Developer Workflows</a></li>
+                    <li class="nav-item"><a href="#usage-scenarios" class="nav-link">Usage Scenarios</a></li>
                     <li class="nav-item"><a href="#agent-recovery" class="nav-link">Agent Recovery</a></li>
                     <li class="nav-item"><a href="#error-classification" class="nav-link">Errors & Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
@@ -704,6 +705,50 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>Environment validation</strong>: check config and connectivity without leaking secrets (<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>).</li>
             </ul>
             <p>All inherit the standard safety rules: prefer <code>--format json</code>, run <code>blacklist list</code> before touching sensitive data, confirm names with <code>schema</code>, dry-run writes, and never print credentials or blacklisted values.</p>
+        </section>
+
+        <!-- doc-key: usage-scenarios -->
+        <section id="usage-scenarios" class="mt-20">
+            <h2>🎯 Usage Scenarios</h2>
+            <p>The Developer Workflows above are the <em>minimum safe paths</em>. This section maps concrete situations to an exact command path, grouped by how you arrive at them: a <strong>named task</strong> (prefer a published pack), a <strong>cross-cutting operational need</strong>, or an <strong>engine-specific</strong> job. Everything here inherits the safety baseline (<code>blacklist list</code> → <code>schema</code> → dry-run writes).</p>
+
+            <h3 class="mt-10">A. Task-pack scenarios</h3>
+            <p>When a request matches a named workflow, discover and plan with a pack instead of inventing steps from memory. All packs are read-only <code>plan-only</code> and still inherit the blacklist → schema → dry-run rules.</p>
+            <pre><code>dbcli skill tasks list --format json                       # discover packs
+dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an ordered, risk-labelled plan</code></pre>
+            <table>
+                <thead>
+                    <tr><th>Situation (what the user says)</th><th>Path</th><th>Pack</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>"This SQL is slow" (you have the statement)</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
+                    <tr><td>"Table X is hot / heavy" (you have the table)</td><td><code>skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code></td><td><code>analyze-table-perf</code></td></tr>
+                    <tr><td>"This API endpoint is slow"</td><td><code>skill tasks plan slow-endpoint-investigation --param query="&lt;SQL&gt;"</code> (pairs <code>proxy</code> + <code>explain</code> + missing-index)</td><td><code>slow-endpoint-investigation</code></td></tr>
+                    <tr><td>Whole-environment perf scan</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
+                    <tr><td>"Audit access before granting writes"</td><td><code>skill tasks plan audit-permissions</code> (optional <code>--param table=&lt;table&gt;</code>)</td><td><code>audit-permissions</code></td></tr>
+                    <tr><td>"Does the live schema match the committed cache?"</td><td><code>skill tasks plan schema-drift-review --param table=&lt;table&gt;</code></td><td><code>schema-drift-review</code></td></tr>
+                    <tr><td>"Is the connection healthy?"</td><td><code>skill tasks plan connection-health</code></td><td><code>connection-health</code></td></tr>
+                    <tr><td>"Review this DB-touching PR"</td><td><code>skill tasks plan pr-database-review</code>; run DDL/index ideas through <code>migration-review</code> first</td><td><code>pr-database-review</code> / <code>migration-review</code></td></tr>
+                    <tr><td>"Backfill column X safely"</td><td><code>skill tasks plan safe-backfill-verify --param table=&lt;t&gt; --param query="&lt;UPDATE&gt;" --param verify_query="&lt;SELECT count(*)&gt;"</code></td><td><code>safe-backfill</code> / <code>safe-backfill-verify</code></td></tr>
+                </tbody>
+            </table>
+            <p>Packs resolve <strong>local &gt; shared &gt; builtin</strong>: <code>assets/tasks/</code> (builtin), <code>.dbcli-shared/tasks/</code> (team), <code>.dbcli/tasks/</code> (local override). A plan never overrides blacklist, schema, dry-run, or confirmation requirements — execute its steps one at a time.</p>
+
+            <h3 class="mt-10">B. Cross-cutting scenarios</h3>
+            <ul>
+                <li><strong>Switch between environments (v2)</strong>: <code>dbcli use prod</code> changes the default; <code>dbcli query --use staging "&lt;SQL&gt;"</code> overrides for one call only. Each named connection has its <strong>own schema cache</strong> at <code>.dbcli/schemas/&lt;conn&gt;/</code> — run <code>dbcli schema --use &lt;name&gt;</code> once after switching, or you may read another connection's columns. See <a href="#connections" class="text-primary font-bold underline">Connection Management</a>.</li>
+                <li><strong>Keep secrets out of <code>.dbcli</code> in CI</strong>: <code>dbcli init --use-env-refs</code> stores <code>{ "$env": "VAR" }</code> references resolved at runtime. In a non-interactive run you <strong>must</strong> pass all five <code>--env-*</code> flags or <code>init</code> errors out — it never silently falls back to plaintext.</li>
+                <li><strong>Verify an invariant or write outcome</strong>: <code>snapshot</code> captures a baseline → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> compares; <code>q @name --verify</code> runs snippet assertions; <code>recover --apply --write-verification-artifact</code> persists secret-free evidence. See <a href="#data-verification" class="text-primary font-bold underline">Data Verification</a>.</li>
+                <li><strong>Spot N+1 / slow queries in local dev</strong>: run the app through <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> to capture events, then <code>dbcli proxy analyze</code> aggregates them offline into N+1, slowest-query, and hot-table findings. See <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>.</li>
+            </ul>
+
+            <h3 class="mt-10">C. Engine-specific scenarios</h3>
+            <ul>
+                <li><strong>MongoDB</strong>: schema is <code>$sample</code>-based (dot-paths carry <code>presence</code> / <code>redacted</code>); blacklist accepts dotted paths and trailing wildcards (<code>profile.tokens.*</code>). Writes auto-wrap as <code>$set</code> unless an explicit operator (<code>$inc</code> / <code>$push</code> / …) is present.</li>
+                <li><strong>Redis</strong>: <code>q @snippet</code> runs <strong>read-only</strong> commands only; <code>delete</code> covers <code>DEL</code> / <code>HDEL</code> / <code>LREM</code> / <code>SREM</code> / <code>ZREM</code> (needs <code>data-admin</code>); protect keys with a glob blacklist (<code>secrets:*</code>) plus optional value masking. There is no <code>--dry-run</code> on <code>query</code> — safety is the permission gate; preview a delete with <code>delete &lt;key&gt; --dry-run</code>.</li>
+                <li><strong>Elasticsearch</strong>: query with a DSL body or Lucene string (<code>--collection &lt;index&gt;</code>); <code>export</code> a whole index via <code>match_all</code> scroll; <code>shell</code> opens a Kibana Dev Tools-style REPL.</li>
+            </ul>
+            <p>See <a href="#engines" class="text-primary font-bold underline">Engine Support</a> for the full capability matrix.</p>
         </section>
 
         <!-- doc-key: agent-recovery-workflow -->

@@ -762,6 +762,49 @@ All of these inherit the standard safety rules: prefer `--format json`, run `bla
 
 ---
 
+<!-- doc-key: usage-scenarios -->
+## Usage Scenarios
+
+The Developer Workflows above are the *minimum safe paths*. This section maps concrete situations to an exact command path, grouped by how you arrive at them: a **named task** (prefer a published pack), a **cross-cutting operational need**, or an **engine-specific** job. Everything here inherits the safety baseline (`blacklist list` → `schema` → dry-run writes).
+
+### A. Task-pack scenarios (prefer published packs over improvised steps)
+
+When a request matches a named workflow, discover and plan with a pack instead of inventing steps from memory. All packs are read-only `plan-only` and still inherit the blacklist → schema → dry-run rules.
+
+```bash
+dbcli skill tasks list --format json                       # discover packs
+dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered, risk-labelled plan
+```
+
+| Situation (what the user says) | Path | Pack |
+| --- | --- | --- |
+| "This SQL is slow" (you have the statement) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
+| "Table X is hot / heavy" (you have the table) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
+| "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"` (pairs `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| Whole-environment perf scan | `report --section perf` → `guide slow-query` | _(report + guide, no pack)_ |
+| "Audit access before granting writes" | `skill tasks plan audit-permissions` (optional `--param table=<table>` to spot-check column coverage) | `audit-permissions` |
+| "Does the live schema match the committed cache?" | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |
+| "Is the connection healthy?" | `skill tasks plan connection-health` | `connection-health` |
+| "Review this DB-touching PR" | `skill tasks plan pr-database-review`; run any DDL/index idea through `migration-review` before writing | `pr-database-review` / `migration-review` |
+| "Backfill column X safely" | `skill tasks plan safe-backfill-verify --param table=<t> --param query="<UPDATE>" --param verify_query="<SELECT count(*)>"` | `safe-backfill` / `safe-backfill-verify` |
+
+Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (team), `.dbcli/tasks/` (local override). A plan never overrides blacklist, schema, dry-run, or confirmation requirements — execute its steps one at a time.
+
+### B. Cross-cutting scenarios
+
+- **Switch between environments (v2)**: `dbcli use prod` changes the default; `dbcli query --use staging "<SQL>"` overrides for one call only. Each named connection has its **own schema cache** at `.dbcli/schemas/<conn>/` — run `dbcli schema --use <name>` once after switching, or you may read another connection's columns. (See **Connection Management**.)
+- **Keep secrets out of `.dbcli` in CI**: `dbcli init --use-env-refs` stores `{ "$env": "VAR" }` references resolved at runtime. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext.
+- **Verify an invariant or write outcome**: `snapshot` captures a baseline → `assert --against <snap> --tolerance <pct>` compares; `q @name --verify` runs snippet assertions; `recover --apply --write-verification-artifact` persists secret-free evidence. (See **Data Verification**.)
+- **Spot N+1 / slow queries in local dev**: run the app through `dbcli proxy <engine> --listen ... --target ...` to capture events, then `dbcli proxy analyze` aggregates them offline into N+1, slowest-query, and hot-table findings. (See **dbcli proxy**.)
+
+### C. Engine-specific scenarios
+
+- **MongoDB**: schema is `$sample`-based (dot-paths carry `presence` / `redacted`); blacklist accepts dotted paths and trailing wildcards (`profile.tokens.*`). Writes auto-wrap as `$set` unless an explicit operator (`$inc` / `$push` / …) is present.
+- **Redis**: `q @snippet` runs **read-only** commands only; `delete` covers `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM` (needs `data-admin`); protect keys with a glob blacklist (`secrets:*`) plus optional value masking. There is no `--dry-run` on `query` — safety is the permission gate; preview a delete with `delete <key> --dry-run`.
+- **Elasticsearch**: query with a DSL body or Lucene string (`--collection <index>`); `export` a whole index via `match_all` scroll; `shell` opens a Kibana Dev Tools-style REPL.
+
+---
+
 <!-- doc-key: agent-recovery-workflow -->
 ## Agent Recovery Workflow
 

@@ -251,7 +251,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       ),
       insert: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
       update: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
-      delete: cap('unsupported', 'none', 'Dedicated write subcommand is not exposed.'),
+      delete: cap('limited', 'db-write', 'Basic delete via DEL/HDEL/LREM/SREM/ZREM (needs data-admin); supports --dry-run.'),
       export: cap('unsupported', 'none', 'Redis export is not supported.'),
       blacklist: cap(
         'limited',

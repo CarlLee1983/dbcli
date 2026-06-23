@@ -1355,7 +1355,7 @@ With `--allow-preexisting`, the threshold is the `--baseline` count captured at 
 so the no-regression rule passes as long as the after-write count does not exceed the
 preflight count.
 
-**MVP restrictions.** SQL engines only (PostgreSQL / MySQL / SQLite — requires an active
+**MVP restrictions.** SQL engines only (PostgreSQL / MySQL / MariaDB — requires an active
 `--config` connection). FK checks support a single child column; composite FK constraints
 are not yet supported. The command never executes any write or DDL statement.
 

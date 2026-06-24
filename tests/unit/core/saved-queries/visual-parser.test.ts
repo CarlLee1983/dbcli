@@ -75,7 +75,7 @@ SELECT 1`,
 })
 
 test('parseSavedQuery accepts all four supported chart types', () => {
-  for (const type of ['line', 'bar', 'area', 'pie']) {
+  for (const type of ['line', 'bar', 'area', 'pie'] as const) {
     const input: ParseInput = {
       key: `@chart-${type}`,
       file: 'test.sql',

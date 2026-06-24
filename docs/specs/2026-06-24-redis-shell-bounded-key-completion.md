@@ -1,9 +1,22 @@
 # Redis Shell Bounded Key Completion Design Specification
 
 **Date:** 2026-06-24
-**Status:** Designed — pending implementation
+**Status:** Implemented (2026-06-24) — retained as a design record
 **Baseline:** dbcli v1.38.1 Redis shell (`src/commands/shell.ts`,
 `src/adapters/redis-adapter.ts`)
+
+> **Verification note (2026-06-24):** Implemented and merged on
+> `feat/redis-shell-bounded-key-completion` (merge `21fb9df`): `98050b4`
+> generalizes `scanAllKeys` with a `maxKeys` cap (default `100_000`) and adds
+> `RedisAdapter.sampleKeyNames`; `0b857d6` adds `REDIS_COMPLETION_KEY_LIMIT =
+> 1000` and the best-effort `populateRedisKeyCompletion` helper, rewires the
+> `runShell` Redis branch, and prints the dim truncation notice. Covered by new
+> tests in `tests/unit/adapters/redis-adapter.test.ts` (cap stop, cursor drain,
+> blacklist-vs-truncation) and `tests/commands/shell.test.ts` (sampled names,
+> limit passthrough, best-effort throw). Full suite 3395 pass / 0 fail / 26 skip;
+> `bun run typecheck` and `bun run lint` clean. Non-goals honored: no `docs/user/`
+> change, no DBSIZE/background load, `listCollections` and the per-command size
+> guard unchanged.
 
 > **Origin:** Deferred follow-up from
 > `docs/specs/2026-06-22-command-completion-source-of-truth.md:406-412` (§17):

@@ -136,22 +136,26 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     }
   }
 
+  // Derive REPL command completion/dispatch names from the live Commander tree
+  // so they never drift from the actual CLI surface. The snapshot is injected
+  // into ReplContext below — no module-level state. Dynamic import avoids the
+  // static cycle: program imports shellCommand, which imports this module.
+  const { buildProgram } = await import('@/program')
+  const { buildCompletionTree, listTopLevelCommandNames } =
+    await import('@/core/completion/command-tree')
+  const { deriveReplCommandNames } = await import('@/core/repl/command-registry')
+  const commandNames = deriveReplCommandNames(
+    listTopLevelCommandNames(buildCompletionTree(buildProgram()))
+  )
+
   const context: ReplContext = {
     configPath,
     permission: config.permission,
     system: config.connection.system,
     tableNames,
     columnsByTable,
+    commandNames,
   }
-
-  // Seed REPL command completion/dispatch from the live Commander tree so it
-  // never drifts from the actual CLI surface. Dynamic import avoids the static
-  // cycle: program imports shellCommand, which imports this module.
-  const { buildProgram } = await import('@/program')
-  const { buildCompletionTree, listTopLevelCommandNames } =
-    await import('@/core/completion/command-tree')
-  const { setReplCommandNames } = await import('@/core/repl/command-registry')
-  setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
 
   const engine = new ReplEngine(adapter, context, HISTORY_PATH, config)
   const complete = createCompleter(context)

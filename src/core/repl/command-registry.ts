@@ -1,24 +1,16 @@
 // src/core/repl/command-registry.ts
-// Single source of REPL-visible command names, seeded at shell startup from the
-// same Commander tree that drives installed shell completion.
+// Pure derivation of REPL-visible command names from the CLI command surface.
+// No module-level state: callers build the snapshot once (in shell.ts) and pass
+// it explicitly through ReplContext into createCompleter() / isKnownCommand().
 
 // Commands that are unsafe or nonsensical to dispatch from inside the REPL.
 // `shell` is excluded to prevent recursive shell launches.
 export const REPL_DENYLIST: ReadonlySet<string> = new Set(['shell'])
 
-let names: readonly string[] = []
-let known: ReadonlySet<string> = new Set()
-
-export function setReplCommandNames(input: readonly string[]): void {
-  const allowed = input.filter((n) => !REPL_DENYLIST.has(n))
-  names = allowed
-  known = new Set(allowed)
-}
-
-export function getReplCommandNames(): readonly string[] {
-  return names
-}
-
-export function isReplCommandKnown(name: string): boolean {
-  return known.has(name)
+/**
+ * Filter a top-level command list down to the REPL-visible set, dropping any
+ * denylisted command. Pure — the same input always yields the same snapshot.
+ */
+export function deriveReplCommandNames(topLevel: readonly string[]): readonly string[] {
+  return topLevel.filter((n) => !REPL_DENYLIST.has(n))
 }

@@ -1,5 +1,4 @@
 // src/core/repl/command-dispatcher.ts
-import { isReplCommandKnown } from './command-registry'
 
 export interface ParsedCommand {
   readonly command: string
@@ -51,6 +50,11 @@ function splitRespectingQuotes(input: string): string[] {
   return tokens
 }
 
-export function isKnownCommand(name: string): boolean {
-  return isReplCommandKnown(name)
+/**
+ * Whether `name` is a REPL-dispatchable command. The candidate set is passed in
+ * explicitly (sourced from `ReplContext.commandNames`) rather than read from
+ * module-level state, so callers control the command surface.
+ */
+export function isKnownCommand(name: string, commandNames: readonly string[]): boolean {
+  return commandNames.includes(name)
 }

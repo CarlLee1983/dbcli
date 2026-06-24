@@ -27,6 +27,7 @@ const redisContext: ReplContext = {
   system: 'redis',
   tableNames: [],
   columnsByTable: {},
+  commandNames: [],
 }
 
 test('Redis: bare single-line GET executes (no semicolon)', async () => {

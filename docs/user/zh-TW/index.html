@@ -329,7 +329,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
-            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>執行</strong>驗證情境（safe-backfill、migration），永不執行寫入或 DDL。<code>dbcli verification</code> <strong>檢視與管理</strong>這些情境產生的本機結果文物（位於 <code>.dbcli/verification/</code>）。</p>
+            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>執行</strong>驗證情境（safe-backfill、migration、rollback、constraint），永不執行寫入或 DDL。<code>dbcli verification</code> <strong>檢視與管理</strong>這些情境產生的本機結果文物（位於 <code>.dbcli/verification/</code>）。</p>
             <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
             <p class="mb-4">在不執行任何 <code>UPDATE</code> 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；<code>--after-write</code> 模式重新執行防護、執行回讀斷言，並寫入驗證文物。</p>
             <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> 永遠不會執行 backfill 寫入。請先透過一般寫入指令執行已核准的寫入，再執行 <code>--after-write</code>。</p>

@@ -220,8 +220,8 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
-> `dbcli verify` **runs** verification scenarios (safe-backfill, migration) and never
-> executes writes/DDL. `dbcli verification` **inspects and manages** the local result
+> `dbcli verify` **runs** verification scenarios (safe-backfill, migration, rollback,
+> constraint) and never executes writes/DDL. `dbcli verification` **inspects and manages** the local result
 > artifacts those scenarios produce under `.dbcli/verification/`.
 
 #### verify safe-backfill

@@ -26,6 +26,7 @@ const mockContext: ReplContext = {
   system: 'postgresql',
   tableNames: ['users'],
   columnsByTable: { users: ['id', 'name'] },
+  commandNames: [],
 }
 
 describe('ReplEngine', () => {

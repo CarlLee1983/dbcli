@@ -1,43 +1,35 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import { buildProgram } from '../../../src/program'
 import {
   buildCompletionTree,
   listTopLevelCommandNames,
 } from '../../../src/core/completion/command-tree'
-import {
-  setReplCommandNames,
-  getReplCommandNames,
-  isReplCommandKnown,
-} from '../../../src/core/repl/command-registry'
+import { deriveReplCommandNames, REPL_DENYLIST } from '../../../src/core/repl/command-registry'
 
-describe('REPL command registry parity', () => {
-  beforeAll(() => {
-    const top = listTopLevelCommandNames(buildCompletionTree(buildProgram()))
-    setReplCommandNames(top)
-  })
+describe('deriveReplCommandNames', () => {
+  const topLevel = listTopLevelCommandNames(buildCompletionTree(buildProgram()))
+  const names = deriveReplCommandNames(topLevel)
 
-  test('completion list includes newly registered commands', () => {
-    const names = getReplCommandNames()
+  test('includes newly registered commands', () => {
     for (const c of ['q', 'queries', 'inspect', 'verify', 'proxy', 'snapshot']) {
       expect(names).toContain(c)
     }
   })
 
-  test('dispatch recognizes the same set', () => {
-    expect(isReplCommandKnown('queries')).toBe(true)
-    expect(isReplCommandKnown('verify')).toBe(true)
-    expect(isReplCommandKnown('snapshot')).toBe(true)
+  test('excludes denylisted commands', () => {
+    expect(names).not.toContain('shell')
   })
 
-  test('shell is denylisted from dispatch but never crashes', () => {
-    expect(isReplCommandKnown('shell')).toBe(false)
+  test('is pure — same input yields an equal snapshot', () => {
+    expect(deriveReplCommandNames(topLevel)).toEqual(names)
   })
 
-  test('completion list excludes denylisted commands', () => {
-    expect(getReplCommandNames()).not.toContain('shell')
+  test('drops every denylist member from an arbitrary input', () => {
+    const filtered = deriveReplCommandNames(['list', 'shell', 'schema'])
+    expect(filtered).toEqual(['list', 'schema'])
   })
 
-  test('unknown command is not dispatchable', () => {
-    expect(isReplCommandKnown('definitely-not-a-command')).toBe(false)
+  test('REPL_DENYLIST contains shell to prevent recursive launches', () => {
+    expect(REPL_DENYLIST.has('shell')).toBe(true)
   })
 })

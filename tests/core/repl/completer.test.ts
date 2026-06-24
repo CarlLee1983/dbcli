@@ -1,5 +1,5 @@
 // tests/core/repl/completer.test.ts
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import { createCompleter } from '../../../src/core/repl/completer'
 import type { ReplContext } from '../../../src/core/repl/types'
 import { buildProgram } from '../../../src/program'
@@ -7,11 +7,11 @@ import {
   buildCompletionTree,
   listTopLevelCommandNames,
 } from '../../../src/core/completion/command-tree'
-import { setReplCommandNames } from '../../../src/core/repl/command-registry'
+import { deriveReplCommandNames } from '../../../src/core/repl/command-registry'
 
-beforeAll(() => {
-  setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
-})
+const commandNames = deriveReplCommandNames(
+  listTopLevelCommandNames(buildCompletionTree(buildProgram()))
+)
 
 const ctx: ReplContext = {
   configPath: '.dbcli',
@@ -23,6 +23,7 @@ const ctx: ReplContext = {
     orders: ['id', 'user_id', 'total', 'status'],
     products: ['id', 'title', 'price'],
   },
+  commandNames,
 }
 
 describe('createCompleter', () => {

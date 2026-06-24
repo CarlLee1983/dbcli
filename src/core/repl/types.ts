@@ -24,6 +24,12 @@ export interface ReplContext {
   readonly system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
   readonly tableNames: readonly string[]
   readonly columnsByTable: Readonly<Record<string, readonly string[]>>
+  /**
+   * REPL-visible top-level command names (denylist already applied), derived
+   * once from the live Commander tree and injected here so completion/dispatch
+   * never depend on mutable module-level state.
+   */
+  readonly commandNames: readonly string[]
 }
 
 export interface MetaCommandResult {

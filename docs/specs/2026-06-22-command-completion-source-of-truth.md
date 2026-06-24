@@ -10,10 +10,12 @@
 > bash/zsh/fish from it; the REPL seeds command names from the same tree via
 > `src/core/repl/command-registry.ts` (seeded in `src/commands/shell.ts`).
 > Covered by `tests/unit/commands/completion.test.ts` and
-> `tests/core/repl/completer.test.ts`. Remaining follow-up: the REPL command
-> registry is still a module-level singleton seeded at shell startup (acceptable
-> interim of §9 option 2); migrating to an explicit snapshot passed into
-> `createCompleter()` / `isKnownCommand()` (§9 option 1) is deferred backlog.
+> `tests/core/repl/completer.test.ts`. Follow-up resolved: the REPL command
+> registry is no longer a module-level singleton. `src/core/repl/command-registry.ts`
+> is now a stateless `deriveReplCommandNames()` helper (plus `REPL_DENYLIST`);
+> `src/commands/shell.ts` builds the command-name snapshot once and injects it via
+> `ReplContext.commandNames` into `createCompleter()` and `isKnownCommand()`
+> (§9 option 1, the preferred shape).
 
 ## 1. Purpose
 

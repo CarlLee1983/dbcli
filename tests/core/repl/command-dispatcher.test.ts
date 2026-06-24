@@ -1,16 +1,16 @@
 // tests/core/repl/command-dispatcher.test.ts
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import { parseCommandLine, isKnownCommand } from '../../../src/core/repl/command-dispatcher'
 import { buildProgram } from '../../../src/program'
 import {
   buildCompletionTree,
   listTopLevelCommandNames,
 } from '../../../src/core/completion/command-tree'
-import { setReplCommandNames } from '../../../src/core/repl/command-registry'
+import { deriveReplCommandNames } from '../../../src/core/repl/command-registry'
 
-beforeAll(() => {
-  setReplCommandNames(listTopLevelCommandNames(buildCompletionTree(buildProgram())))
-})
+const commandNames = deriveReplCommandNames(
+  listTopLevelCommandNames(buildCompletionTree(buildProgram()))
+)
 
 describe('parseCommandLine', () => {
   test('parses simple command', () => {
@@ -52,26 +52,26 @@ describe('parseCommandLine', () => {
 
 describe('isKnownCommand', () => {
   test('recognizes list', () => {
-    expect(isKnownCommand('list')).toBe(true)
+    expect(isKnownCommand('list', commandNames)).toBe(true)
   })
 
   test('recognizes schema', () => {
-    expect(isKnownCommand('schema')).toBe(true)
+    expect(isKnownCommand('schema', commandNames)).toBe(true)
   })
 
   test('recognizes blacklist', () => {
-    expect(isKnownCommand('blacklist')).toBe(true)
+    expect(isKnownCommand('blacklist', commandNames)).toBe(true)
   })
 
   test('rejects unknown command', () => {
-    expect(isKnownCommand('foobar')).toBe(false)
+    expect(isKnownCommand('foobar', commandNames)).toBe(false)
   })
 
   test('rejects SQL keyword', () => {
-    expect(isKnownCommand('SELECT')).toBe(false)
+    expect(isKnownCommand('SELECT', commandNames)).toBe(false)
   })
 
   test('does not recognize shell command (prevent recursion)', () => {
-    expect(isKnownCommand('shell')).toBe(false)
+    expect(isKnownCommand('shell', commandNames)).toBe(false)
   })
 })

@@ -110,7 +110,7 @@ export class ReplEngine {
   private async handleCommand(input: string): Promise<ProcessResult> {
     const parsed = parseCommandLine(input)
 
-    if (!isKnownCommand(parsed.command)) {
+    if (!isKnownCommand(parsed.command, this.context.commandNames)) {
       // Non-SQL engines (Redis) accept raw single-line commands that are not dbcli
       // subcommands; execute them directly instead of rejecting. SQL engines keep
       // the unknown-command behavior.

@@ -517,3 +517,44 @@ test('rejection wins over masking', async () => {
   await adapter.connect()
   await expect(adapter.execute('GET secret:pw')).rejects.toThrow('BlacklistRejection')
 })
+
+describe('RedisAdapter — sampleKeyNames (bounded completion)', () => {
+  test('stops after one SCAN once the key budget is reached', async () => {
+    const { adapter, client } = makeAdapter()
+    // First batch already fills the budget of 3; cursor is non-zero so a naive
+    // full scan would issue a second SCAN. The cap must prevent that.
+    client.scanResponses = [
+      ['1', ['k1', 'k2', 'k3']],
+      ['0', ['k4', 'k5']],
+    ]
+    await adapter.connect()
+    const { names, truncated } = await adapter.sampleKeyNames(3)
+    const scanCalls = client.sendLog.filter((e) => e.cmd === 'SCAN')
+    expect(scanCalls.length).toBe(1)
+    expect(names.sort()).toEqual(['k1', 'k2', 'k3'])
+    expect(truncated).toBe(true)
+  })
+
+  test('drains the cursor and reports not-truncated when below budget', async () => {
+    const { adapter, client } = makeAdapter()
+    client.scanResponses = [
+      ['1', ['user:1']],
+      ['0', ['user:2']],
+    ]
+    await adapter.connect()
+    const { names, truncated } = await adapter.sampleKeyNames(1000)
+    expect(names.sort()).toEqual(['user:1', 'user:2'])
+    expect(truncated).toBe(false)
+  })
+
+  test('filters blacklisted keys out of the sample but truncation reflects the raw scan', async () => {
+    const { adapter, client } = makeAdapter()
+    adapter.setBlacklistRules(['secret:*'])
+    client.scanResponses = [['0', ['user:1', 'secret:token', 'user:2']]]
+    await adapter.connect()
+    const { names, truncated } = await adapter.sampleKeyNames(3)
+    expect(names.sort()).toEqual(['user:1', 'user:2'])
+    // 3 raw keys hit the budget of 3 -> truncated, even though one was filtered out.
+    expect(truncated).toBe(true)
+  })
+})

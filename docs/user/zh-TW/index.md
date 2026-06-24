@@ -508,7 +508,7 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 dbcli query "SELECT * FROM daily_metrics" --ui
 ```
 
-**KPI 與圖表**：在 Snippet 的 Frontmatter 中加入 `visual:` 區塊，即可直接在儀表板中呈現自定義圖表（折線圖、長條圖、圓餅圖等）。
+**KPI 與圖表**：在 Snippet 的 Frontmatter 中加入 `visual:` 區塊，即可直接在儀表板中呈現自定義圖表與 KPI。支援的圖表類型為 `line`（折線圖）、`bar`（長條圖）、`area`（區域圖）、`pie`（圓餅圖）四種；指定其他類型會在解析時報錯。
 
 ---
 

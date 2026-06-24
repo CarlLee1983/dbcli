@@ -73,3 +73,75 @@ SELECT 1`,
   expect(query.meta.visual?.kpis).toBeUndefined()
   expect(query.meta.visual?.charts).toBeUndefined()
 })
+
+test('parseSavedQuery accepts all four supported chart types', () => {
+  for (const type of ['line', 'bar', 'area', 'pie'] as const) {
+    const input: ParseInput = {
+      key: `@chart-${type}`,
+      file: 'test.sql',
+      source: 'local',
+      text: `-- ---
+-- visual:
+--   charts:
+--     - type: "${type}"
+--       x: "day"
+--       y: ["revenue"]
+-- ---
+SELECT 1`,
+    }
+    const { query } = parseSavedQuery(input)
+    expect(query.meta.visual?.charts?.[0]?.type).toBe(type)
+  }
+})
+
+test('parseSavedQuery throws on an unsupported chart type with the supported list', () => {
+  const input: ParseInput = {
+    key: '@bad-chart',
+    file: 'test.sql',
+    source: 'local',
+    text: `-- ---
+-- visual:
+--   charts:
+--     - type: "scatter"
+--       x: "day"
+--       y: ["revenue"]
+-- ---
+SELECT 1`,
+  }
+  expect(() => parseSavedQuery(input)).toThrow(/invalid chart type 'scatter'/)
+  expect(() => parseSavedQuery(input)).toThrow(/line, bar, area, pie/)
+})
+
+test('parseSavedQuery throws on a chart type typo', () => {
+  const input: ParseInput = {
+    key: '@typo-chart',
+    file: 'test.sql',
+    source: 'local',
+    text: `-- ---
+-- visual:
+--   charts:
+--     - type: "barr"
+--       x: "day"
+--       y: ["revenue"]
+-- ---
+SELECT 1`,
+  }
+  expect(() => parseSavedQuery(input)).toThrow(/invalid chart type 'barr'/)
+})
+
+test('parseSavedQuery still drops shape-invalid charts without throwing', () => {
+  const input: ParseInput = {
+    key: '@shape-invalid',
+    file: 'test.sql',
+    source: 'local',
+    text: `-- ---
+-- visual:
+--   charts:
+--     - type: "line"
+--       x: "day"
+-- ---
+SELECT 1`,
+  }
+  const { query } = parseSavedQuery(input)
+  expect(query.meta.visual?.charts).toBeUndefined()
+})

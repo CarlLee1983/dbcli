@@ -556,7 +556,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h2>📊 Interactive HTML Dashboards</h2>
             <p>Generate standalone React-powered reports by appending the <code>--ui</code> flag.</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
-            <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter.</p>
+            <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter. Supported chart types are <code>line</code>, <code>bar</code>, <code>area</code>, and <code>pie</code>; any other type is rejected at parse time.</p>
         </section>
 
         <!-- doc-key: engine-support -->

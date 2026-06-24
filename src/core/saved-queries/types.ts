@@ -51,8 +51,12 @@ export interface VisualKPI {
   format?: 'currency' | 'number' | 'percent'
 }
 
+export const SUPPORTED_CHART_TYPES = ['line', 'bar', 'area', 'pie'] as const
+
+export type ChartType = (typeof SUPPORTED_CHART_TYPES)[number]
+
 export interface VisualChart {
-  type: 'line' | 'bar' | 'area' | 'pie' | 'scatter'
+  type: ChartType
   title?: string
   x: string
   y: string[]

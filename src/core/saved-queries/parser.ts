@@ -14,6 +14,8 @@ import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
 import {
   SavedQueryError,
+  SUPPORTED_CHART_TYPES,
+  type ChartType,
   type EngineTag,
   type ParamSpec,
   type ParamType,
@@ -130,7 +132,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : []
   const index = typeof raw.index === 'string' ? raw.index : undefined
   const intent = normaliseIntent(raw.intent, input)
-  const visual = normaliseVisual(raw.visual)
+  const visual = normaliseVisual(raw.visual, input)
   const target = typeof raw.target === 'string' ? raw.target : undefined
   const operation =
     raw.operation === 'find' || raw.operation === 'aggregate'
@@ -157,7 +159,7 @@ function parseFrontmatter(yaml: string, input: ParseInput): ParsedFrontmatter {
   }
 }
 
-function normaliseVisual(value: unknown): any {
+function normaliseVisual(value: unknown, input: ParseInput): any {
   if (value === undefined || value === null || typeof value !== 'object') return undefined
   const raw = value as Record<string, unknown>
 
@@ -185,6 +187,13 @@ function normaliseVisual(value: unknown): any {
       if (typeof item === 'object' && item !== null) {
         const c = item as Record<string, unknown>
         if (typeof c.type === 'string' && typeof c.x === 'string' && Array.isArray(c.y)) {
+          if (!SUPPORTED_CHART_TYPES.includes(c.type as ChartType)) {
+            throw new SavedQueryError(
+              `Snippet '${input.key}' has invalid chart type '${c.type}' (supported: ${SUPPORTED_CHART_TYPES.join(', ')})`,
+              'PARSE_ERROR',
+              input.file
+            )
+          }
           charts.push({
             type: c.type,
             title: typeof c.title === 'string' ? c.title : undefined,

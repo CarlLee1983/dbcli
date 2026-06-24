@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`--ui` dashboard chart type 改為解析時驗證。** Saved query 的 `visual.charts[].type` 現以單一合法集合 `line` / `bar` / `area` / `pie` 驗證；指定未支援的類型（含打錯字）會在解析時拋出 `SavedQueryError`（`PARSE_ERROR`），訊息列出合法清單。先前的行為是把任何未知類型**靜默畫成圓餅圖**。型別宣告中從未被渲染的 `scatter` 一併移除。
+
+### Fixed
+
+- **未知 chart type 不再靜默偽裝成圓餅圖。** dashboard 渲染端對非可渲染類型顯示明確的「Unsupported chart type」佔位，而非 fallthrough 成 `PieChart`。
+
 ## [1.38.1] - 2026-06-23 - Redis delete 能力對齊 & SKILL.md 任務路由重構
 
 ### Fixed

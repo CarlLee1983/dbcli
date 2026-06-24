@@ -556,7 +556,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h2>📊 互動式 HTML 儀表板</h2>
             <p>在指令後加上 <code>--ui</code> 旗標，即可產生獨立的 React 報表並自動開啟。</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
-            <p>豐富的視覺化組件（圖表、KPI）可透過 Snippet frontmatter 中的 <code>visual:</code> 區塊進行設定。</p>
+            <p>豐富的視覺化組件（圖表、KPI）可透過 Snippet frontmatter 中的 <code>visual:</code> 區塊進行設定。支援的圖表類型為 <code>line</code>、<code>bar</code>、<code>area</code>、<code>pie</code> 四種；指定其他類型會在解析時報錯。</p>
         </section>
 
         <!-- doc-key: engine-support -->

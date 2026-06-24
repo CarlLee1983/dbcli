@@ -576,7 +576,7 @@ Use the `--ui` flag to open query results in a beautiful, interactive React-base
 dbcli query "SELECT * FROM daily_metrics" --ui
 ```
 
-**KPIs & Charts**: Add a `visual:` block to your snippet's frontmatter to render custom charts (line, bar, pie, etc.) and KPIs directly in the dashboard.
+**KPIs & Charts**: Add a `visual:` block to your snippet's frontmatter to render custom charts and KPIs directly in the dashboard. Supported chart types are `line`, `bar`, `area`, and `pie`; any other type is rejected at parse time.
 
 ---
 

@@ -220,7 +220,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify
 ```
 
-> `dbcli verify` **執行**驗證情境（safe-backfill、migration），永不執行寫入或 DDL。
+> `dbcli verify` **執行**驗證情境（safe-backfill、migration、rollback、constraint），永不執行寫入或 DDL。
 > `dbcli verification` **檢視與管理**這些情境產生的本機結果文物（位於 `.dbcli/verification/`）。
 
 #### verify safe-backfill

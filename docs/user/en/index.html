@@ -329,7 +329,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --write-verification-artifact \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
-            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>runs</strong> verification scenarios (safe-backfill, migration) and never executes writes/DDL. <code>dbcli verification</code> <strong>inspects and manages</strong> the local result artifacts those scenarios produce under <code>.dbcli/verification/</code>.</p>
+            <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>runs</strong> verification scenarios (safe-backfill, migration, rollback, constraint) and never executes writes/DDL. <code>dbcli verification</code> <strong>inspects and manages</strong> the local result artifacts those scenarios produce under <code>.dbcli/verification/</code>.</p>
             <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
             <p class="mb-4">Verify a safe backfill without ever executing the <code>UPDATE</code>. Preflight (default) runs read-only guards and prints the exact after-write command; <code>--after-write</code> re-runs the guards, runs the read-back assertion, and writes a verification artifact.</p>
             <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> never executes the backfill write. Run the approved write through your normal write command first, then run <code>--after-write</code>.</p>

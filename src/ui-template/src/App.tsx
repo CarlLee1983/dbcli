@@ -52,6 +52,7 @@ declare global {
 }
 
 const COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4']
+const RENDERABLE_CHART_TYPES = ['line', 'bar', 'area', 'pie']
 
 const CustomTooltip = ({
   active,
@@ -167,6 +168,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex-1 min-h-0">
+                  {RENDERABLE_CHART_TYPES.includes(chart.type) ? (
                   <ResponsiveContainer width="100%" height="100%">
                     {chart.type === 'line' ? (
                       <LineChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -317,6 +319,11 @@ export default function App() {
                       </PieChart>
                     )}
                   </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-sm text-slate-400">
+                      Unsupported chart type: {chart.type}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

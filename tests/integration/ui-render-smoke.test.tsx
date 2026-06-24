@@ -63,3 +63,28 @@ test('App renders gracefully when rows is empty', () => {
   setPayload({ meta: { name: 'Empty', visual: {} }, rows: [] })
   expect(() => render(<App />)).not.toThrow()
 })
+
+test('App shows an unsupported-chart placeholder instead of a pie chart for unknown types', () => {
+  setPayload({
+    meta: {
+      name: 'Unknown Chart',
+      visual: { charts: [{ type: 'scatter', title: 'Scatter', x: 'a', y: ['b'] }] },
+    },
+    rows: [{ a: 1, b: 2 }],
+  })
+
+  render(<App />)
+  expect(screen.getByText(/Unsupported chart type/i)).toBeDefined()
+})
+
+test('App renders a pie chart type without throwing', () => {
+  setPayload({
+    meta: {
+      name: 'Pie',
+      visual: { charts: [{ type: 'pie', title: 'Share', x: 'cat', y: ['val'] }] },
+    },
+    rows: [{ cat: 'A', val: 5 }],
+  })
+
+  expect(() => render(<App />)).not.toThrow()
+})

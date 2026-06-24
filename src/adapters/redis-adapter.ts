@@ -137,6 +137,23 @@ export class RedisAdapter implements QueryableAdapter {
     return keys.filter((k) => !regexes.some((r) => r.test(k))).map((name) => ({ name }))
   }
 
+  /**
+   * Sample up to `limit` key names for shell tab completion, applying the same
+   * blacklist filtering as listCollections. `truncated` is true when the raw
+   * scan hit the budget (i.e. the keyspace is larger than the sample), which is
+   * derived before blacklist filtering since truncation is a property of the scan.
+   */
+  async sampleKeyNames(limit: number): Promise<{ names: string[]; truncated: boolean }> {
+    const client = this.requireClient()
+    const keys = await scanAllKeys(client, '*', limit, limit)
+    const truncated = keys.length >= limit
+    const rules = this.blacklistRules
+    if (rules.length === 0) return { names: keys, truncated }
+    const regexes = rules.map((p) => globToRegex(p))
+    const names = keys.filter((k) => !regexes.some((r) => r.test(k)))
+    return { names, truncated }
+  }
+
   async getDbSize(): Promise<number> {
     const client = this.requireClient()
     const reply = (await client.send('DBSIZE', [])) as number
@@ -465,7 +482,12 @@ export function parseRedisCommand(input: string): string[] {
   return tokens
 }
 
-async function scanAllKeys(client: RedisClient, pattern: string, count: number): Promise<string[]> {
+async function scanAllKeys(
+  client: RedisClient,
+  pattern: string,
+  count: number,
+  maxKeys: number = 100_000
+): Promise<string[]> {
   const seen = new Set<string>()
   let cursor = '0'
   do {
@@ -479,7 +501,7 @@ async function scanAllKeys(client: RedisClient, pattern: string, count: number):
     const [next, batch] = reply
     for (const k of batch) seen.add(k)
     cursor = next
-    if (seen.size >= 100_000) break
+    if (seen.size >= maxKeys) break
   } while (cursor !== '0')
   return Array.from(seen)
 }

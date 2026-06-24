@@ -4,6 +4,8 @@ import {
   shellCommand,
   populateMongoColumns,
   MONGO_COMPLETION_EAGER_THRESHOLD,
+  populateRedisKeyCompletion,
+  REDIS_COMPLETION_KEY_LIMIT,
 } from '../../src/commands/shell'
 import type { QueryableAdapter } from '../../src/adapters/types'
 
@@ -103,5 +105,42 @@ describe('populateMongoColumns', () => {
     const adapter = makeAdapter({})
     const result = await populateMongoColumns(adapter, [])
     expect(Object.keys(result)).toHaveLength(0)
+  })
+})
+
+describe('populateRedisKeyCompletion', () => {
+  test('returns sampled names and truncated flag from the adapter', async () => {
+    const adapter = {
+      sampleKeyNames: async (_limit: number) => ({
+        names: ['user:1', 'user:2'],
+        truncated: true,
+      }),
+    }
+    const result = await populateRedisKeyCompletion(adapter)
+    expect(result.tableNames).toEqual(['user:1', 'user:2'])
+    expect(result.truncated).toBe(true)
+  })
+
+  test('passes the configured key limit to the adapter', async () => {
+    let received = -1
+    const adapter = {
+      sampleKeyNames: async (limit: number) => {
+        received = limit
+        return { names: [], truncated: false }
+      },
+    }
+    await populateRedisKeyCompletion(adapter)
+    expect(received).toBe(REDIS_COMPLETION_KEY_LIMIT)
+  })
+
+  test('is best-effort: a throwing adapter yields empty completion, no rethrow', async () => {
+    const adapter = {
+      sampleKeyNames: async (_limit: number): Promise<{ names: string[]; truncated: boolean }> => {
+        throw new Error('SCAN failed')
+      },
+    }
+    const result = await populateRedisKeyCompletion(adapter)
+    expect(result.tableNames).toEqual([])
+    expect(result.truncated).toBe(false)
   })
 })

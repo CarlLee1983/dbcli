@@ -30,6 +30,9 @@ const HISTORY_PATH = join(homedir(), '.dbcli_history')
 /** Eager column completion is skipped above this collection count to keep shell startup fast. */
 export const MONGO_COMPLETION_EAGER_THRESHOLD = 20
 
+/** Redis shell samples at most this many keys for tab completion to keep startup fast. */
+export const REDIS_COMPLETION_KEY_LIMIT = 1000
+
 /**
  * Populate column completion data for a MongoDB shell session.
  * Eagerly samples each collection's schema when collection count is at or below
@@ -54,6 +57,23 @@ export async function populateMongoColumns(
     }
   }
   return columnsByTable
+}
+
+/**
+ * Sample Redis key names for a shell session's tab completion. Best-effort:
+ * a scan failure yields empty completion so the prompt is never blocked.
+ * `truncated` is true when the keyspace exceeded the sample budget.
+ */
+export async function populateRedisKeyCompletion(
+  adapter: { sampleKeyNames(limit: number): Promise<{ names: string[]; truncated: boolean }> },
+  limit: number = REDIS_COMPLETION_KEY_LIMIT
+): Promise<{ tableNames: string[]; truncated: boolean }> {
+  try {
+    const { names, truncated } = await adapter.sampleKeyNames(limit)
+    return { tableNames: names, truncated }
+  } catch {
+    return { tableNames: [], truncated: false }
+  }
 }
 
 export const shellCommand = new Command('shell')
@@ -109,9 +129,16 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   let tableNames: string[] = []
   let columnsByTable: Record<string, string[]> = {}
   if (isRedis) {
-    const keys = await adapter.listTables()
-    tableNames = keys.map((k) => k.name)
+    const completion = await populateRedisKeyCompletion(redisInner!)
+    tableNames = completion.tableNames
     columnsByTable = {}
+    if (completion.truncated) {
+      console.error(
+        pc.dim(
+          `Redis shell: large keyspace; tab completion limited to the first ${REDIS_COMPLETION_KEY_LIMIT} keys.`
+        )
+      )
+    }
   } else if (isMongoDB) {
     const collections = await adapter.listTables()
     tableNames = collections.map((collection) => collection.name)

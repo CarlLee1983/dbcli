@@ -1,4 +1,4 @@
-import { describe, test, expect, spyOn, beforeEach } from 'bun:test'
+import { describe, test, expect, spyOn, beforeEach, afterAll, mock } from 'bun:test'
 import { Command } from 'commander'
 import { registerSkillTasksCommand } from '@/commands/skill-tasks'
 
@@ -60,4 +60,11 @@ describe('builtin pack: slow-endpoint-investigation', () => {
 
   void logSpy
   void exitSpy
+})
+
+// Restore spies once this file completes so they don't leak into later test
+// files (bun's spyOn persists across files within a process; file order differs
+// by OS, so leaked spies can fail unrelated tests on Linux CI).
+afterAll(() => {
+  mock.restore()
 })

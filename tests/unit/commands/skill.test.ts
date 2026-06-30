@@ -3,7 +3,7 @@
  * Tests the skill command logic directly
  */
 
-import { test, expect, describe, spyOn, beforeEach } from 'bun:test'
+import { test, expect, describe, spyOn, beforeEach, afterAll, mock } from 'bun:test'
 import { join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
 import { skillCommand, getInstallPath, SUPPORTED_PLATFORMS } from '../../../src/commands/skill'
@@ -106,4 +106,11 @@ describe('getInstallPath platforms', () => {
     expect(SUPPORTED_PLATFORMS).toContain('gemini')
     expect(getInstallPath('gemini')).toContain(join('.gemini', 'skills', 'dbcli'))
   })
+})
+
+// Restore spies once this file completes so they don't leak into later test
+// files (bun's spyOn persists across files within a process; file order differs
+// by OS, so leaked spies can fail unrelated tests on Linux CI).
+afterAll(() => {
+  mock.restore()
 })

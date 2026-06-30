@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, afterAll, spyOn, mock as bunMock } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,6 +69,15 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(originalCwd)
   rmSync(workdir, { recursive: true, force: true })
+})
+
+// Restore spies (AdapterFactory.createAdapter, config.read, console.log,
+// process.exit) once this file completes so they do not leak into later test
+// files. Bun's spyOn persists across files in the same process; without this
+// the mocked createAdapter/process.exit pollute factory/insert-plan/delete-plan
+// tests when bun runs files in a different order (e.g. Linux CI vs macOS).
+afterAll(() => {
+  bunMock.restore()
 })
 
 describe('dbcli q', () => {

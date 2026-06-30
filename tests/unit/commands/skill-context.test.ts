@@ -7,7 +7,7 @@
  * commander command so a regression in the agent-prompt payload surface is caught.
  */
 
-import { describe, test, expect, spyOn, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test'
 import { Command } from 'commander'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs'
@@ -137,4 +137,11 @@ describe('skill context (CLI entrypoint)', () => {
   void logSpy
   void errSpy
   void exitSpy
+})
+
+// Restore spies once this file completes so they don't leak into later test
+// files (bun's spyOn persists across files within a process; file order differs
+// by OS, so leaked spies can fail unrelated tests on Linux CI).
+afterAll(() => {
+  mock.restore()
 })

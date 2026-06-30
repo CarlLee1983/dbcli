@@ -9,7 +9,7 @@
  * developer's real config.
  */
 
-import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { test, expect, describe, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test'
 import { join, dirname } from 'node:path'
 import { mkdtempSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -84,4 +84,11 @@ describe('skill --install smoke (per platform)', () => {
     expect(existsSync(join(sandbox, '.windsurfrules'))).toBe(true)
     expect(existsSync(join(sandbox, '.windsurf', 'skills', 'dbcli', 'reference.md'))).toBe(true)
   })
+})
+
+// Restore spies once this file completes so they don't leak into later test
+// files (bun's spyOn persists across files within a process; file order differs
+// by OS, so leaked spies can fail unrelated tests on Linux CI).
+afterAll(() => {
+  mock.restore()
 })

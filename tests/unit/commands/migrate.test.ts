@@ -3,7 +3,7 @@
  * Tests core migration logic directly by calling runDDL
  */
 
-import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { test, expect, describe, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test'
 import { join } from 'path'
 import { runDDL } from '../../../src/commands/migrate'
 
@@ -218,4 +218,11 @@ describe('migrate core logic', () => {
       expect(result.status).toBe('success')
     })
   })
+})
+
+// Restore spies once this file completes so they don't leak into later test
+// files (bun's spyOn persists across files within a process; file order differs
+// by OS, so leaked spies can fail unrelated tests on Linux CI).
+afterAll(() => {
+  mock.restore()
 })

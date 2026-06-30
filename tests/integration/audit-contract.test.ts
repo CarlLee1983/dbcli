@@ -80,7 +80,10 @@ describe('Audit Contract Integration', () => {
 
     const rawSql = "INSERT INTO users (name, secret) VALUES ('John', 'password123')"
     const rawArgv = ['node', 'query', rawSql, '--password', 'my-secret-pw', '--config', 'prod.env']
-    const rawParams = { api_key: 'sk-12345', details: { token: 'abc' } }
+    // Use a distinctive token value: a short fragment like 'abc' collides with
+    // random session_id/uuid characters in the serialized log, causing a flaky
+    // false-positive in the no-sensitive-fragments check below.
+    const rawParams = { api_key: 'sk-12345', details: { token: 'tok-7f3q-secret' } }
 
     const entryPayload = {
       engine: 'mysql' as const,
@@ -104,7 +107,12 @@ describe('Audit Contract Integration', () => {
     const logContent = await readFile(auditFile, 'utf8')
 
     // SCHEMA-03: Redaction verification
-    expectNoSensitiveFragments(logContent, ['password123', 'my-secret-pw', 'sk-12345', 'abc'])
+    expectNoSensitiveFragments(logContent, [
+      'password123',
+      'my-secret-pw',
+      'sk-12345',
+      'tok-7f3q-secret',
+    ])
 
     const parsed = JSON.parse(logContent.trim())
     expect(parsed.redacted_query).toContain('--password <redacted>')

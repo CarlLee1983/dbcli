@@ -3,6 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
+import { mkdir, rm } from 'node:fs/promises'
 import { ErrorRecoveryManager } from '@/core/error-recovery'
 import type { DbcliConfig } from '@/utils/validation'
 import { tmpdir } from 'os'
@@ -25,8 +26,7 @@ const mockConfig: DbcliConfig = {
 
 test('ErrorRecoveryManager - initialize creates recovery dir', async () => {
   const testDir = join(tmpdir(), `recovery-test-${Date.now()}`)
-  const mkResult = Bun.spawn(['mkdir', '-p', testDir])
-  await mkResult.exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   const initialized = await manager.initialize()
@@ -34,12 +34,12 @@ test('ErrorRecoveryManager - initialize creates recovery dir', async () => {
   expect(initialized).toBe(true)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - creates recovery point', async () => {
   const testDir = join(tmpdir(), `recovery-point-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   await manager.initialize()
@@ -57,12 +57,12 @@ test('ErrorRecoveryManager - creates recovery point', async () => {
   expect(await backupFile.exists()).toBe(true)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - restores from recovery point', async () => {
   const testDir = join(tmpdir(), `recovery-restore-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   await manager.initialize()
@@ -78,12 +78,12 @@ test('ErrorRecoveryManager - restores from recovery point', async () => {
   expect(restored.permission).toBe('query-only')
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - getRecoveryState works', async () => {
   const testDir = join(tmpdir(), `recovery-state-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   await manager.initialize()
@@ -99,12 +99,12 @@ test('ErrorRecoveryManager - getRecoveryState works', async () => {
   expect(state.maxBackups).toBe(10)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - cleanup respects maxBackups', async () => {
   const testDir = join(tmpdir(), `recovery-cleanup-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir, 2) // Max 2 backups
   await manager.initialize()
@@ -120,12 +120,12 @@ test('ErrorRecoveryManager - cleanup respects maxBackups', async () => {
   expect(state.maxBackups).toBe(2)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - withRecovery restores on error', async () => {
   const testDir = join(tmpdir(), `recovery-with-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   await manager.initialize()
@@ -155,12 +155,12 @@ test('ErrorRecoveryManager - withRecovery restores on error', async () => {
   expect(restored.connection.system).toBe('postgresql')
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ErrorRecoveryManager - withRecovery succeeds on success', async () => {
   const testDir = join(tmpdir(), `recovery-success-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ErrorRecoveryManager(testDir)
   await manager.initialize()
@@ -176,5 +176,5 @@ test('ErrorRecoveryManager - withRecovery succeeds on success', async () => {
   expect(result).toBe('success')
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })

@@ -3,13 +3,14 @@
  */
 
 import { test, expect } from 'bun:test'
+import { mkdir, rm } from 'node:fs/promises'
 import { ConcurrentLockManager } from '@/core/concurrent-lock'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 test('ConcurrentLockManager - acquires and releases lock', async () => {
   const testDir = join(tmpdir(), `lock-test-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ConcurrentLockManager(testDir)
 
@@ -27,12 +28,12 @@ test('ConcurrentLockManager - acquires and releases lock', async () => {
   expect(manager.isLockHeld()).toBe(false)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ConcurrentLockManager - lock age tracking', async () => {
   const testDir = join(tmpdir(), `lock-age-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ConcurrentLockManager(testDir)
 
@@ -53,12 +54,12 @@ test('ConcurrentLockManager - lock age tracking', async () => {
   expect(manager.getLockAge()).toBe(null)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ConcurrentLockManager - withLock helper', async () => {
   const testDir = join(tmpdir(), `lock-helper-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager = new ConcurrentLockManager(testDir)
 
@@ -74,12 +75,12 @@ test('ConcurrentLockManager - withLock helper', async () => {
   expect(manager.isLockHeld()).toBe(false) // Lock released after
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 test('ConcurrentLockManager - timeout on lock acquisition', async () => {
   const testDir = join(tmpdir(), `lock-timeout-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const manager1 = new ConcurrentLockManager(testDir, 100) // Very short timeout
   const manager2 = new ConcurrentLockManager(testDir, 100)
@@ -98,5 +99,5 @@ test('ConcurrentLockManager - timeout on lock acquisition', async () => {
 
   // Cleanup
   await manager1.releaseLock()
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })

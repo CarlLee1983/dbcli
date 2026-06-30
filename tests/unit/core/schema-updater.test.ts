@@ -3,6 +3,7 @@
  */
 
 import { test, expect } from 'bun:test'
+import { mkdir } from 'node:fs/promises'
 import { SchemaUpdater } from '@/core/schema-updater'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
@@ -92,7 +93,7 @@ test('SchemaUpdater - generates patch for added tables', async () => {
 
   // Mock file system for config
   const tempDir = '/tmp/schema-updater-test'
-  await Bun.spawn(['mkdir', '-p', tempDir]).exited
+  await mkdir(tempDir, { recursive: true })
 
   const configPath = `${tempDir}/config.json`
   await Bun.write(Bun.file(configPath), JSON.stringify(oldConfig, null, 2))

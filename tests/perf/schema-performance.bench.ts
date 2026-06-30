@@ -9,6 +9,7 @@
  */
 
 import { ColumnIndexBuilder } from '@/core/column-index'
+import { mkdir, rm } from 'node:fs/promises'
 import { SchemaOptimizer } from '@/core/schema-optimizer'
 import { AtomicFileWriter } from '@/core/atomic-writer'
 import type { TableSchema } from '@/adapters/types'
@@ -124,7 +125,7 @@ async function benchmarkAtomicFileWriter() {
   console.log('\n=== Atomic File Writing ===')
 
   const testDir = join(tmpdir(), `bench-atomic-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const writer = new AtomicFileWriter()
   const fileSizes = [1024, 10 * 1024, 100 * 1024] // 1KB, 10KB, 100KB
@@ -141,7 +142,7 @@ async function benchmarkAtomicFileWriter() {
   }
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 }
 
 /**

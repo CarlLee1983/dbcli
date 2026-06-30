@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from 'bun:test'
+import { mkdir, rm } from 'node:fs/promises'
 import { SchemaUpdater } from '@/core/schema-updater'
 import { SchemaCacheManager } from '@/core/schema-cache'
 import { ConcurrentLockManager } from '@/core/concurrent-lock'
@@ -62,7 +63,7 @@ class MockDatabaseAdapter implements DatabaseAdapter {
  */
 test('Integration: Schema refresh detects changes', async () => {
   const testDir = join(tmpdir(), `integration-1-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const adapter = new MockDatabaseAdapter()
   const cache = new SchemaCacheManager(testDir)
@@ -101,7 +102,7 @@ test('Integration: Schema refresh detects changes', async () => {
   expect(await adapter.listTables()).toHaveLength(1)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 /**
@@ -109,7 +110,7 @@ test('Integration: Schema refresh detects changes', async () => {
  */
 test('Integration: Lock provides mutual exclusion', async () => {
   const testDir = join(tmpdir(), `integration-2-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const lock = new ConcurrentLockManager(testDir)
 
@@ -128,7 +129,7 @@ test('Integration: Lock provides mutual exclusion', async () => {
   expect(lock.getLockAge()).toBe(null)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 /**
@@ -136,7 +137,7 @@ test('Integration: Lock provides mutual exclusion', async () => {
  */
 test('Integration: Error recovery restores on failure', async () => {
   const testDir = join(tmpdir(), `integration-3-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const recovery = new ErrorRecoveryManager(testDir)
   await recovery.initialize()
@@ -180,7 +181,7 @@ test('Integration: Error recovery restores on failure', async () => {
   expect(restored.schema!['test_table']).toBeDefined()
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 /**
@@ -259,7 +260,7 @@ test('Integration: Schema optimizer analyzes design', () => {
  */
 test('Integration: Complete workflow with all components', async () => {
   const testDir = join(tmpdir(), `integration-6-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const adapter = new MockDatabaseAdapter()
   const _cache = new SchemaCacheManager(testDir)
@@ -315,7 +316,7 @@ test('Integration: Complete workflow with all components', async () => {
   expect(lock.isLockHeld()).toBe(false)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })
 
 /**
@@ -323,7 +324,7 @@ test('Integration: Complete workflow with all components', async () => {
  */
 test('Integration: Cache statistics tracking', async () => {
   const testDir = join(tmpdir(), `integration-7-${Date.now()}`)
-  await Bun.spawn(['mkdir', '-p', testDir]).exited
+  await mkdir(testDir, { recursive: true })
 
   const cache = new SchemaCacheManager(testDir)
   await cache.initialize()
@@ -337,5 +338,5 @@ test('Integration: Cache statistics tracking', async () => {
   expect(stats.maxItems).toBeGreaterThan(0)
 
   // Cleanup
-  await Bun.spawn(['rm', '-rf', testDir]).exited
+  await rm(testDir, { recursive: true, force: true })
 })

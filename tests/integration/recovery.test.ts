@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, mkdir, cp, realpath } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, mkdir, cp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -284,7 +284,7 @@ describe('dbcli inspect --recovery (integration)', () => {
   test('--require-schema-cache + --recovery on a workspace with no schema cache emits SCHEMA_CACHE_MISSING envelope', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
     await cp(FIXTURE, work, { recursive: true })
-    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+    await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
     const { stdout, code } = await run(
       ['inspect', '--no-connect', '--require-schema-cache', '--recovery', '--format', 'json'],
@@ -301,7 +301,7 @@ describe('dbcli inspect --recovery (integration)', () => {
   test('--require-schema-cache without --recovery prints stderr and exits non-zero', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
     await cp(FIXTURE, work, { recursive: true })
-    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+    await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
     const { stdout, stderr, code } = await run(
       ['inspect', '--no-connect', '--require-schema-cache'],
@@ -315,7 +315,7 @@ describe('dbcli inspect --recovery (integration)', () => {
   test('inspect without --require-schema-cache returns the snapshot (no throw)', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
     await cp(FIXTURE, work, { recursive: true })
-    await Bun.spawn(['rm', '-rf', join(work, '.dbcli/schemas')]).exited
+    await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
     const { stdout, code } = await run(['inspect', '--no-connect', '--format', 'json'], work)
     expect(code).toBe(0)

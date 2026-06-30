@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.1] - 2026-06-30 - Skill report dashboard routing
+
+### Changed
+
+- **Skill 路由補上 DB report / dashboard / HTML UI 意圖。** `assets/SKILL.md` / `assets/SKILL.zh-TW.md` 的 metadata、任務路由表、開發者速查與 HTML dashboard 範例現在明確導向 `queries search|suggest` → `queries show` → `q @<name> --ui` / `--format html`，並保留 raw SQL `export --format html` 的檔案輸出路徑。已透過 `plugin:sync` 同步到所有受管理平台副本。純文件 / skill 變更，無 CLI 行為更動。
+
 ## [1.39.0] - 2026-06-24 - Dashboard chart type 解析時邊界驗證
 
 ### Changed

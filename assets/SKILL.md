@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, exploring table/collection/key/index structures, switching database environments, protecting sensitive data from AI access, or performing automated recovery and guided remediation after command failures. For exhaustive flags and examples, read the sibling `reference.md`.
+description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, generate DB reports or interactive HTML dashboards, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, generating a report/dashboard/HTML UI from raw SQL or saved snippets, exploring table/collection/key/index structures, switching database environments, protecting sensitive data from AI access, or performing automated recovery and guided remediation after command failures. For exhaustive flags and examples, read the sibling `reference.md`.
 ---
 
 # dbcli
@@ -30,6 +30,7 @@ the CLI package has not been installed globally.
 | --- | --- |
 | A named workflow fits ("diagnose slow query", "audit permissions") | `skill tasks list` → `skill tasks plan <pack>` — **prefer this; do not invent steps** |
 | A fixed diagnostic goal | `guide <goal>` (`slow-query` / `capacity` / `health` / `index-usage` / `permissions` / `schema-overview`; `guide --list`) |
+| A DB report / dashboard / HTML UI | `blacklist list` → `queries search <keywords>` or `queries suggest <intent>` → `queries show @<name>` → browser: `q @<name> --param k=v --ui`; file: `q @<name> --format html > report.html` or `export "<SQL>" --format html --output report.html` |
 | Setting up a connection | see **Connection setup** |
 | Anything else | run commands manually; consult the **Developer workflows** cheat-sheet |
 
@@ -89,6 +90,7 @@ in **How to use dbcli** still applies.
 | Situation | Minimum safe path |
 | --- | --- |
 | DB-backed feature | `blacklist list` → `schema <object>` → `queries suggest <intent>` |
+| DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` or `--format html` |
 | Application data bug | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → narrow query |
 | ORM or migration work | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column` (preview SQL) → `diff --against <snapshot>` |
 | PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
@@ -103,6 +105,11 @@ dbcli inspect --for-agent --format json
 dbcli blacklist list --format json
 dbcli schema <object> --format json
 dbcli queries suggest <intent> --format json
+dbcli queries search <report keywords> --format json
+dbcli queries show @<name> --format json
+dbcli q @<name> --param k=v --ui
+dbcli q @<name> --param k=v --format html > report.html
+dbcli export "<SQL>" --format html --output report.html
 dbcli audit tail --for-agent --n 10
 dbcli diff --snapshot <name>
 dbcli report --section perf --format json
@@ -425,14 +432,18 @@ Run with `dbcli q @diag/<topic>` (engine variant auto-picked by the active conne
 
 ```bash
 dbcli query "SELECT day, dau FROM dau_daily" --ui          # open in browser
+dbcli q @analytics/revenue --param days=30 --ui            # snippet metadata + charts/KPIs
+dbcli q @analytics/revenue --param days=30 --format html > report.html
 dbcli query "SELECT * FROM orders" --format html > out.html # pipe HTML to stdout
 dbcli export "SELECT * FROM orders" --format html --output orders.html
 ```
 
 `--ui` implies `--format html` and opens the file; `--format html` alone prints to stdout.
-Blacklist redaction is applied **before** rendering. To get KPIs and charts instead of a plain
-table, add a `visual:` block (`title`, `kpis[]`, `charts[]`) to the snippet frontmatter — see
-reference.md for the full `visual:` schema. Raw `query` invocations render a sortable table only.
+When a saved snippet exists, prefer `q @<name> --ui` / `q @<name> --format html` because snippet
+metadata can drive titles, KPI cards, and charts. Blacklist redaction is applied **before**
+rendering. To get KPIs and charts instead of a plain table, add a `visual:` block (`title`,
+`kpis[]`, `charts[]`) to the snippet frontmatter — see reference.md for the full `visual:`
+schema. Raw `query` / `export` invocations render a sortable table only.
 
 ## Common workflows
 

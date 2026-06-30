@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, exploring table/collection/key/index structures, switching database environments, protecting sensitive data from AI access, or performing automated recovery and guided remediation after command failures. For exhaustive flags and examples, read the sibling `reference.md`.
+description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, generate DB reports or interactive HTML dashboards, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, generating a report/dashboard/HTML UI from raw SQL or saved snippets, exploring table/collection/key/index structures, switching database environments, protecting sensitive data from AI access, or performing automated recovery and guided remediation after command failures. For exhaustive flags and examples, read the sibling `reference.md`.
 ---
 
 # dbcli
@@ -25,6 +25,7 @@ description: Database CLI for AI agents with permission-based access control. Us
 | --- | --- |
 | 有名稱的工作流程符合（「診斷慢查詢」、「審計權限」） | `skill tasks list` → `skill tasks plan <pack>` — **優先選用；不要自己組合步驟** |
 | 固定診斷目標 | `guide <goal>`（`slow-query` / `capacity` / `health` / `index-usage` / `permissions` / `schema-overview`；`guide --list`） |
+| DB report / dashboard / HTML UI | `blacklist list` → `queries search <keywords>` 或 `queries suggest <intent>` → `queries show @<name>` → 瀏覽器：`q @<name> --param k=v --ui`；檔案：`q @<name> --format html > report.html` 或 `export "<SQL>" --format html --output report.html` |
 | 設定連線 | 見 **連線設定** |
 | 其他情況 | 手動執行指令；參考 **開發者工作流** 速查表 |
 
@@ -65,6 +66,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 | 情境 | 最小安全路徑 |
 | --- | --- |
 | DB-backed 功能 | `blacklist list` → `schema <object>` → `queries suggest <intent>` |
+| DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` 或 `--format html` |
 | 應用程式資料錯誤 | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → 最小查詢 |
 | ORM 或 migration | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column`（預覽 SQL）→ `diff --against <snapshot>` |
 | PR 資料庫風險審查 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
@@ -77,6 +79,11 @@ dbcli inspect --for-agent --format json
 dbcli blacklist list --format json
 dbcli schema <object> --format json
 dbcli queries suggest <intent> --format json
+dbcli queries search <report keywords> --format json
+dbcli queries show @<name> --format json
+dbcli q @<name> --param k=v --ui
+dbcli q @<name> --param k=v --format html > report.html
+dbcli export "<SQL>" --format html --output report.html
 dbcli audit tail --for-agent --n 10
 dbcli diff --snapshot <name>
 dbcli report --section perf --format json
@@ -329,11 +336,13 @@ Snippet 從三層解析，**local > shared > builtin**（本地優先）：`buil
 
 ```bash
 dbcli query "SELECT day, dau FROM dau_daily" --ui          # open in browser
+dbcli q @analytics/revenue --param days=30 --ui            # snippet metadata + charts/KPIs
+dbcli q @analytics/revenue --param days=30 --format html > report.html
 dbcli query "SELECT * FROM orders" --format html > out.html # pipe HTML to stdout
 dbcli export "SELECT * FROM orders" --format html --output orders.html
 ```
 
-`--ui` 隱含 `--format html` 並開啟檔案；`--format html` 單獨使用則寫到 stdout。Blacklist 遮蔽在渲染**之前**套用。若要取得 KPI 與圖表而非純 table，請在 snippet frontmatter 加上 `visual:` 區塊（`title`、`kpis[]`、`charts[]`）— 完整 `visual:` schema 見 reference.md。原始 `query` 呼叫只能渲染 sortable table。
+`--ui` 隱含 `--format html` 並開啟檔案；`--format html` 單獨使用則寫到 stdout。若已存在 saved snippet，優先用 `q @<name> --ui` / `q @<name> --format html`，因為 snippet metadata 可驅動標題、KPI cards 與圖表。Blacklist 遮蔽在渲染**之前**套用。若要取得 KPI 與圖表而非純 table，請在 snippet frontmatter 加上 `visual:` 區塊（`title`、`kpis[]`、`charts[]`）— 完整 `visual:` schema 見 reference.md。原始 `query` / `export` 呼叫只能渲染 sortable table。
 
 ## 常見工作流程
 

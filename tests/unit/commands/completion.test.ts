@@ -179,12 +179,18 @@ describe('generateZshCompletion', () => {
     expect(script).toContain('--format --tag --engine --source')
     expect(script).toContain('"blacklist table")')
   })
-  test('registers function instead of invoking compadd during rc eval', async () => {
-    const scriptPath = await writeTempScript('dbcli-completion.zsh', script)
-    await Bun.$`zsh -f -c ${`eval "$(cat "${scriptPath}")"`}`.quiet()
-    expect(script).toContain('compdef _dbcli dbcli')
-    expect(script).not.toContain('_dbcli "$@"')
-  })
+  // This case evaluates the generated script under a real zsh. CI runners on
+  // Linux/Windows don't ship zsh, so skip there instead of failing; it still
+  // runs on macOS (CI and dev) where zsh is always present.
+  test.skipIf(Bun.which('zsh') === null)(
+    'registers function instead of invoking compadd during rc eval',
+    async () => {
+      const scriptPath = await writeTempScript('dbcli-completion.zsh', script)
+      await Bun.$`zsh -f -c ${`eval "$(cat "${scriptPath}")"`}`.quiet()
+      expect(script).toContain('compdef _dbcli dbcli')
+      expect(script).not.toContain('_dbcli "$@"')
+    }
+  )
 })
 
 describe('generateFishCompletion', () => {

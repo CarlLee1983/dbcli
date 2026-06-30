@@ -2,6 +2,7 @@ import { Command } from 'commander'
 import { colors } from '@/utils/colors'
 import { join } from 'path'
 import { homedir } from 'os'
+import { mkdir } from 'node:fs/promises'
 import {
   buildCompletionTree,
   flattenCommandTree,
@@ -323,7 +324,7 @@ export async function installCompletion(shell: string, script: string): Promise<
 
   if (shell === 'fish') {
     const dir = join(resolveHome(), '.config', 'fish', 'completions')
-    await Bun.$`mkdir -p ${dir}`.quiet()
+    await mkdir(dir, { recursive: true })
     await Bun.file(targetPath).write(script)
     console.log(colors.success(`✓ Fish completion installed to ${targetPath}`))
     return

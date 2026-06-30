@@ -212,7 +212,11 @@ describe('Test 6: rotation overwrites existing .1 (D-10 single rolling segment)'
 })
 
 describe('Test 7: fail-soft on readonly dir (STORE-04, success criterion 4)', () => {
-  test('returns skipped:write-failed; getHealth.lastError populated; one stderr warning', async () => {
+  // chmod(0o555) does not make a directory unwritable on Windows, so the write
+  // would succeed and the fail-soft path never triggers. Skip there.
+  test.skipIf(process.platform === 'win32')(
+    'returns skipped:write-failed; getHealth.lastError populated; one stderr warning',
+    async () => {
     const dbcliDir = join(workDir, '.dbcli')
     await mkdir(dbcliDir, { recursive: true })
     await chmod(dbcliDir, 0o555)
@@ -234,11 +238,15 @@ describe('Test 7: fail-soft on readonly dir (STORE-04, success criterion 4)', ()
       return typeof arg === 'string' && arg.includes('dbcli audit')
     })
     expect(writes.length).toBe(1)
-  })
+    }
+  )
 })
 
 describe('Test 8: once-per-process warning cadence (D-16)', () => {
-  test('three more failed writes after the first -> total stderr warnings remains 1; lastError updates', async () => {
+  // See Test 7: readonly-dir semantics differ on Windows; skip there.
+  test.skipIf(process.platform === 'win32')(
+    'three more failed writes after the first -> total stderr warnings remains 1; lastError updates',
+    async () => {
     const dbcliDir = join(workDir, '.dbcli')
     await mkdir(dbcliDir, { recursive: true })
     await chmod(dbcliDir, 0o555)
@@ -261,7 +269,8 @@ describe('Test 8: once-per-process warning cadence (D-16)', () => {
     const finalErrorTs = logger.getHealth().lastError?.ts
     expect(finalErrorTs).not.toBeUndefined()
     expect(finalErrorTs).not.toBe(firstErrorTs)
-  })
+    }
+  )
 })
 
 describe('Test 9: getHealth shape when disabled', () => {

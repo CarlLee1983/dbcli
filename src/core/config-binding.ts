@@ -80,8 +80,8 @@ export async function writeProjectBinding(
     },
   }
 
-  await Bun.$`mkdir -p ${projectPath}`
-  await Bun.$`mkdir -p ${storagePath}`
+  await mkdir(projectPath, { recursive: true })
+  await mkdir(storagePath, { recursive: true })
   await Bun.file(join(projectPath, BINDING_FILE_NAME)).write(JSON.stringify(binding, null, 2))
 
   return binding

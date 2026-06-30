@@ -12,6 +12,7 @@
 
 import { Command } from 'commander'
 import { join } from 'path'
+import { mkdir } from 'node:fs/promises'
 import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { configModule } from '@/core/config'
@@ -523,7 +524,7 @@ async function initCommandHandler(
 
     // Write config
     const storagePath = getProjectStoragePath(configPath)
-    await Bun.$`mkdir -p ${storagePath}`
+    await mkdir(storagePath, { recursive: true })
     await configModule.write(storagePath, newConfig)
     await migrateLegacyProjectEnvLocal(configPath, storagePath)
     await writeProjectBinding(configPath, storagePath)
@@ -707,7 +708,7 @@ async function initCommandHandler(
   }
 
   const storagePath = getProjectStoragePath(configPath)
-  await Bun.$`mkdir -p ${storagePath}`
+  await mkdir(storagePath, { recursive: true })
   await configModule.write(storagePath, newConfig)
   await migrateLegacyProjectEnvLocal(configPath, storagePath)
   await writeProjectBinding(configPath, storagePath)
@@ -830,7 +831,7 @@ async function handleMongoDBInit(ctx: {
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
   const storagePath = getProjectStoragePath(configPath)
-  await Bun.$`mkdir -p ${storagePath}`
+  await mkdir(storagePath, { recursive: true })
   await configModule.write(storagePath, newConfig)
   await migrateLegacyProjectEnvLocal(configPath, storagePath)
   await writeProjectBinding(configPath, storagePath)

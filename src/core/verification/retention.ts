@@ -165,8 +165,13 @@ function boundError(message: string): string {
 
 /** True when `candidatePath` resolves to a location inside `storageDir`. */
 export function isInsideStorageDir(storageDir: string, candidatePath: string): boolean {
+  // Resolve BOTH sides: on Windows resolve() rewrites a POSIX-looking path to a
+  // drive-letter/backslash form, so comparing a resolved candidate against a
+  // raw storageDir would never match. Normalising both keeps the check correct
+  // cross-platform.
+  const base = resolve(storageDir)
   const resolved = resolve(candidatePath)
-  return resolved === storageDir || resolved.startsWith(storageDir + sep)
+  return resolved === base || resolved.startsWith(base + sep)
 }
 
 /** True when the basename matches the `verification-*.json` artifact pattern. */

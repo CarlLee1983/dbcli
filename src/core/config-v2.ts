@@ -10,6 +10,7 @@ import { ConfigError } from '@/utils/errors'
 import { loadEnvFile } from '@/core/env-loader'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
+import { mkdir, rename } from 'node:fs/promises'
 
 /**
  * Detect config version from raw parsed JSON
@@ -119,10 +120,13 @@ export async function writeV2Config(path: string, config: DbcliConfigV2): Promis
   const storagePath = await resolveConfigStoragePath(path)
   const configPath = join(storagePath, 'config.json')
   const tmpPath = `${configPath}.tmp`
-  await Bun.$`mkdir -p ${storagePath}`
+  // Use node:fs APIs (not shelled-out mkdir/mv) so writes are portable: Bun's
+  // shell can't handle Windows drive-letter/backslash paths. node's rename
+  // replaces an existing target on every platform (atomic on the same fs).
+  await mkdir(storagePath, { recursive: true })
   const json = JSON.stringify(config, null, 2)
   await Bun.write(tmpPath, json)
-  await Bun.$`mv -f ${tmpPath} ${configPath}` // same-filesystem rename: atomic overwrite
+  await rename(tmpPath, configPath) // same-filesystem rename: atomic overwrite
 }
 
 /**

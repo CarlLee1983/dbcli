@@ -311,16 +311,19 @@ export function findVerificationArtifact(
   selector: string
 ): VerificationArtifactRecord {
   if (looksLikePath(selector)) {
+    // Resolve every path before comparing: on Windows resolve() rewrites a
+    // POSIX-style path to a drive-letter/backslash form, so the stored r.path
+    // and storageDir must be resolved too or nothing would ever match.
     const resolved = resolve(selector)
-    const root = input.storageDir
+    const root = resolve(input.storageDir)
     if (resolved !== root && !resolved.startsWith(root + sep)) {
       throw new VerificationArtifactSelectionError(
         `Path is outside the verification directory: ${resolved}`
       )
     }
-    const hit = input.artifacts.find((r) => r.path === resolved)
+    const hit = input.artifacts.find((r) => resolve(r.path) === resolved)
     if (hit) return hit
-    const bad = input.invalid.find((r) => r.path === resolved)
+    const bad = input.invalid.find((r) => resolve(r.path) === resolved)
     if (bad) {
       throw new VerificationArtifactSelectionError(
         `Artifact at ${bad.filename} is invalid: ${bad.error}`

@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, renameSync } from 'node:fs'
+import { writeFileSync, mkdirSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto' // Phase 25 D-51
 import { classifyError } from './classify'
@@ -36,7 +36,10 @@ export function emitRecoveryEnvelope(
   const envelopeId = options.envelopeId ?? randomUUID()
   writeLastEnvelopeSync(cwd, envelope, argv, envelopeId, options.auditRef)
   // D-52: stdout shape is RecoveryEnvelope body, NOT SavedRecoveryEnvelope wrapper. Unchanged.
-  process.stdout.write(renderJson(envelope, { brief: options.brief === true }) + '\n')
+  // Use a synchronous fd-1 write rather than process.stdout.write: when stdout
+  // is a pipe (e.g. a spawned subprocess), Windows can truncate the async
+  // buffer on the immediately-following process.exit(), losing the output.
+  writeSync(1, renderJson(envelope, { brief: options.brief === true }) + '\n')
   process.exit(options.exitCode ?? 1)
 }
 
@@ -54,7 +57,6 @@ function writeLastEnvelopeSync(
   auditRef: string | undefined // Phase 25 D-53
 ): void {
   const target = join(cwd, LAST_ENVELOPE_PATH)
-  const tmp = `${target}.tmp`
   const payload: SavedRecoveryEnvelope = {
     schemaVersion: 1,
     id,
@@ -65,9 +67,12 @@ function writeLastEnvelopeSync(
     envelope,
   }
   try {
+    // Write directly to the target (no temp+rename): this runs immediately
+    // before process.exit(), and a plain synchronous writeFileSync is the most
+    // portable durable write — the temp+rename dance added Windows fragility for
+    // no real benefit on a small best-effort file.
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf8')
-    renameSync(tmp, target)
+    writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8')
   } catch {
     // Best-effort: writes are warnings, not errors.
   }

@@ -15,6 +15,7 @@ import { ConfigError } from '@/utils/errors'
 import { detectConfigVersion, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { readProjectBinding, resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
+import { mkdir } from 'node:fs/promises'
 
 /**
  * 全域 --use 連線名稱，由 CLI preAction hook 設定
@@ -431,7 +432,7 @@ export const configModule = {
 
       // Directory mode: separate config and .env.local
       if (isDirectory || path.endsWith('.dbcli') || (path === storagePath && isDirectory)) {
-        await Bun.$`mkdir -p ${storagePath}`
+        await mkdir(storagePath, { recursive: true })
 
         // Check if using env var references (password is a { "$env": "..." } object)
         const hasEnvReferences = isEnvReference(

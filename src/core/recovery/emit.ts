@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, writeSync } from 'node:fs'
+import { writeFileSync, mkdirSync, renameSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto' // Phase 25 D-51
 import { classifyError } from './classify'
@@ -57,6 +57,7 @@ function writeLastEnvelopeSync(
   auditRef: string | undefined // Phase 25 D-53
 ): void {
   const target = join(cwd, LAST_ENVELOPE_PATH)
+  const tmp = `${target}.tmp`
   const payload: SavedRecoveryEnvelope = {
     schemaVersion: 1,
     id,
@@ -67,12 +68,9 @@ function writeLastEnvelopeSync(
     envelope,
   }
   try {
-    // Write directly to the target (no temp+rename): this runs immediately
-    // before process.exit(), and a plain synchronous writeFileSync is the most
-    // portable durable write — the temp+rename dance added Windows fragility for
-    // no real benefit on a small best-effort file.
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8')
+    writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf8')
+    renameSync(tmp, target)
   } catch {
     // Best-effort: writes are warnings, not errors.
   }

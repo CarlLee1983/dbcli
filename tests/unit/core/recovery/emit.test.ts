@@ -9,15 +9,20 @@ import { spawnSync } from 'node:child_process'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { writeLastEnvelope } from '@/core/recovery/last-envelope'
 import type { RecoveryEnvelope } from '@/core/recovery/types'
 
 const emitModulePath = resolve(import.meta.dir, '../../../../src/core/recovery/emit.ts')
+// Embed a file:// URL, not a raw OS path: a Windows path (D:\a\...) interpolated
+// into a single-quoted import specifier corrupts on backslash escapes, and the
+// hoisted static import then fails to resolve before the try/catch can run.
+const emitModuleSpecifier = pathToFileURL(emitModulePath).href
 
 function emitScript(workDir: string, opts: Record<string, unknown>): string {
   return `
-import { emitRecoveryEnvelope } from '${emitModulePath}'
+import { emitRecoveryEnvelope } from '${emitModuleSpecifier}'
 try {
   emitRecoveryEnvelope(
     new Error('boom'),

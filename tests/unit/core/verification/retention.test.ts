@@ -295,7 +295,7 @@ describe('pruneVerificationArtifacts', () => {
     expect(result.deleted).toEqual([])
     expect(result.skipped).toEqual([])
     expect(result.cutoff).toBe('2026-05-20T00:00:00.000Z')
-    expect(result.storageDir).toContain('.dbcli/verification')
+    expect(result.storageDir).toContain(join('.dbcli', 'verification'))
   })
 
   test('dry-run reports candidates and deletes nothing', async () => {

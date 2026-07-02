@@ -52,6 +52,8 @@ bun install -g @carllee1983/dbcli
 ### 初始化連線
 `init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。
 
+在幕後，`init` 會在專案的 `./.dbcli/config.json` 寫入一個 `version: 3` 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 `~/.config/dbcli/projects/<project-name>-<sha1-12>/`。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 `.dbcli/` 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。
+
 ```bash
 dbcli init
 ```
@@ -542,7 +544,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ### MongoDB 巢狀黑名單
 
-`.dbcli` 內的 `blacklist.columns[<collection>]` 接受點分路徑與一個結尾萬用字元：
+dbcli 設定內的 `blacklist.columns[<collection>]` 接受點分路徑與一個結尾萬用字元：
 
 ```json
 {
@@ -599,7 +601,7 @@ dbcli query "KEYS secrets:*"        # 拒絕(pattern 與規則重疊)
 dbcli list                           # 黑名單 keys 被濾掉
 ```
 
-**遮罩(Masking,v1.22)** — key glob 黑名單是「拒絕」,遮罩則是「屏蔽」:命中的讀取會回傳 `[REDACTED]`,讓 AI 代理仍能執行指令,但永遠看不到敏感值。在 `.dbcli` 設定中加入選用的 `redis.mask` 區塊:
+**遮罩(Masking,v1.22)** — key glob 黑名單是「拒絕」,遮罩則是「屏蔽」:命中的讀取會回傳 `[REDACTED]`,讓 AI 代理仍能執行指令,但永遠看不到敏感值。在 dbcli 設定中加入選用的 `redis.mask` 區塊:
 
 ```json
 {
@@ -725,7 +727,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 ### B. 跨領域情境
 
 - **多環境切換(v2)**:`dbcli use prod` 切換預設;`dbcli query --use staging "<SQL>"` 只覆寫單次呼叫。每個具名連線有**獨立的 schema cache**(`.dbcli/schemas/<conn>/`)——切換後先跑一次 `dbcli schema --use <name>`,否則可能讀到別的連線的欄位。(見 **連線管理**。)
-- **CI 中把密鑰留在 `.dbcli` 之外**:`dbcli init --use-env-refs` 把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照。非互動環境**必須**給齊五個 `--env-*` 旗標,否則 `init` 報錯——絕不悄悄退回明文。
+- **CI 中用環境變數參照密鑰**:連線設定本來就存放在 home storage(`~/.config/dbcli/…`),不會寫進專案 `.dbcli/`。`dbcli init --use-env-refs` 更進一步,把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照而非明文。非互動式執行時必須傳入全部五個 `--env-*` 旗標,否則 `init` 會直接報錯——絕不會默默退回明文。
 - **驗證不變式或寫入結果**:`snapshot` 建基準 → `assert --against <snap> --tolerance <pct>` 比對;`q @name --verify` 跑 snippet 斷言;`recover --apply --write-verification-artifact` 留下不含機密的證據。(見 **資料驗證**。)
 - **本地開發抓 N+1 / 慢查詢**:讓應用程式走 `dbcli proxy <engine> --listen ... --target ...` 收集事件,再用 `dbcli proxy analyze` 離線聚合出 N+1、最慢查詢與熱表發現。(見 **dbcli proxy**。)
 

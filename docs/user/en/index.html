@@ -147,15 +147,15 @@
                     <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                         <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
-                    <h3 class="mt-0 mb-2 text-lg font-bold">Plan Mode</h3>
-                    <p class="text-sm m-0">Static SQL analysis to identify risks before connecting to any live database.</p>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">Query Risk Analyzer</h3>
+                    <p class="text-sm m-0">Static SQL analysis (<code>plan</code>) to identify risks before connecting to any live database.</p>
                 </div>
                 <div class="group p-6 paper-card">
                     <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                         <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     </div>
                     <h3 class="mt-0 mb-2 text-lg font-bold">Antigravity Protocol</h3>
-                    <p class="text-sm m-0">A rigorous Architect-Builder-Auditor workflow ensuring high reliability and quality.</p>
+                    <p class="text-sm m-0">A workflow separation between Architect (Planning) and Builder (Execution) to ensure strategy precedes action.</p>
                 </div>
             </div>
         </section>
@@ -171,6 +171,7 @@ npm install -g @carllee1983/dbcli
 bun install -g @carllee1983/dbcli</code></pre>
             <p>Initialize your first connection with the interactive wizard:</p>
             <pre><code>dbcli init</code></pre>
+            <p>Behind the scenes, <code>init</code> writes a small <code>version: 3</code> binding stub to <code>./.dbcli/config.json</code> in your project, while the real connection settings and any credentials are stored in your home directory at <code>~/.config/dbcli/projects/&lt;project-name&gt;-&lt;sha1-12&gt;/</code>. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project <code>.dbcli/</code> only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).</p>
         </section>
 
         <!-- doc-key: connection-management -->
@@ -253,6 +254,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><code>dbcli queries list</code>: View the full inventory of available snippets.</li>
                 <li><code>dbcli queries search</code>: Search snippets using fuzzy keywords.</li>
                 <li><code>dbcli queries suggest</code>: Get suggestions based on operational intent.</li>
+                <li><code>dbcli queries new @my/query --local</code>: Scaffold a new local snippet.</li>
             </ul>
 
             <!-- doc-key: diagnostics-recovery -->
@@ -585,7 +587,14 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                             <td class="text-left font-bold px-8">Schema Caching</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
-                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Saved Snippets</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
@@ -596,7 +605,14 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
-                            <td class="text-left font-bold px-8">AI Workflows</td>
+                            <td class="text-left font-bold px-8">DDL (Migrate)</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">Interactive UI</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -638,7 +654,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </ul>
 
             <h3 class="mt-8">MongoDB nested blacklist</h3>
-            <p><code>.dbcli</code> <code>blacklist.columns[&lt;collection&gt;]</code> accepts dotted paths and one trailing wildcard, e.g. <code>profile.tokens.*</code>. Wildcards anywhere other than the final segment are skipped with a warning at <code>dbcli blacklist list</code>.</p>
+            <p>The dbcli config <code>blacklist.columns[&lt;collection&gt;]</code> accepts dotted paths and one trailing wildcard, e.g. <code>profile.tokens.*</code>. Wildcards anywhere other than the final segment are skipped with a warning at <code>dbcli blacklist list</code>.</p>
 
             <h3 class="mt-8">MongoDB schema sampling</h3>
             <p><code>dbcli schema &lt;collection&gt; [--sample-size 100] [--sample-method random|natural]</code>. <code>random</code> (default) uses <code>$sample</code>; falls back to natural order on driver error. Columns include nested dot-paths with <code>presence</code> (0..1) and <code>redacted: true</code> for blacklist hits.</p>
@@ -649,7 +665,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h3 class="mt-8">Redis: size guard, blacklist, and shell (v1.21.0)</h3>
             <p><strong>Size guard</strong> — unbounded reads are bounded automatically: <code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> get <code>COUNT 1000</code> injected (or a larger value capped); <code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> clamp <code>stop</code> to a span of 1000; <code>ZRANGEBYSCORE</code> gets <code>LIMIT 0 1000</code>; <code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> truncate at 1000. Results carry <code>warnings[]</code> (<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>). Use <code>--no-limit</code> (CLI) or <code>.no-limit on</code> (shell) to bypass.</p>
             <p><strong>Blacklist</strong> — rules are enforced as Redis-native key globs (<code>*</code>, <code>?</code>, <code>[abc]</code>, <code>[a-z]</code>). <code>dbcli blacklist add 'secrets:*'</code> then reads/writes whose keys match are rejected (<code>BlacklistRejection</code>, audited with <code>matched_pattern</code>); <code>KEYS</code>/<code>SCAN MATCH</code> overlapping a rule are rejected; <code>list</code> filters blacklisted keys.</p>
-            <p><strong>Masking (v1.22)</strong> — where the key-glob blacklist <em>rejects</em>, masking <em>redacts</em>: matched reads return <code>[REDACTED]</code> so an agent can run the command without seeing the sensitive value. Add an optional <code>redis.mask</code> block to <code>.dbcli</code>, e.g. <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>. <code>fields</code> present → only those hash fields are redacted (<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>); <code>fields</code> absent → the whole value is redacted (<code>GET</code>/<code>GETRANGE</code> and every hash field). Masking covers <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>. <strong>Rejection wins over masking</strong> — a key matching both a <code>blacklist</code> and a <code>mask</code> rule is rejected outright and never reaches masking.</p>
+            <p><strong>Masking (v1.22)</strong> — where the key-glob blacklist <em>rejects</em>, masking <em>redacts</em>: matched reads return <code>[REDACTED]</code> so an agent can run the command without seeing the sensitive value. Add an optional <code>redis.mask</code> block to your dbcli config, e.g. <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>. <code>fields</code> present → only those hash fields are redacted (<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>); <code>fields</code> absent → the whole value is redacted (<code>GET</code>/<code>GETRANGE</code> and every hash field). Masking covers <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>. <strong>Rejection wins over masking</strong> — a key matching both a <code>blacklist</code> and a <code>mask</code> rule is rejected outright and never reaches masking.</p>
             <p><strong>Shell</strong> — <code>dbcli shell</code> on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a <code>.no-limit on/off</code> toggle. Type commands directly, no trailing semicolon (e.g. <code>GET mykey</code>).</p>
             <h3 class="mt-8">Elasticsearch: interactive shell (v1.22.0)</h3>
             <p><code>dbcli shell</code> on an Elasticsearch connection opens a dedicated Kibana Dev Tools-style REPL. Enter a request line <code>&lt;METHOD&gt; /&lt;path&gt;</code>, then an optional multi-line JSON body, and submit the whole block with a <strong>blank line</strong>. Responses render as pretty-printed JSON.</p>
@@ -697,12 +713,12 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
             <h2>🛠️ Developer Workflows</h2>
             <p>Beyond ad-hoc queries, dbcli supports the common development tasks where a database is involved. The agent skill ships a compact router for these; the same scenarios apply when you drive dbcli yourself:</p>
             <ul>
-                <li><strong>DB-backed feature</strong>: map product/code terms to real objects before editing code (<code>inspect --for-agent</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>).</li>
-                <li><strong>Application data bug</strong>: separate stored facts from application-code inference (<code>audit tail --for-agent</code> → <code>schema</code> → a narrow query).</li>
-                <li><strong>ORM or migration work</strong>: ground edits in live schema evidence (<code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>).</li>
+                <li><strong>DB-backed feature</strong>: map product/code terms to real objects before editing code (<code>inspect --for-agent</code> → <code>blacklist list</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>).</li>
+                <li><strong>Application data bug</strong>: separate stored facts from application-code inference (<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → a narrow query).</li>
+                <li><strong>ORM or migration work</strong>: ground edits in live schema evidence (<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>).</li>
                 <li><strong>PR database review</strong>: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.</li>
                 <li><strong>Slow endpoint or query</strong>: read-only diagnostics before index proposals (<code>report --section perf</code> → <code>guide missing-index-for</code>; <code>proxy analyze</code> when logs exist).</li>
-                <li><strong>Safe data backfill</strong>: scope affected rows and preview mutations (<code>update ... --dry-run</code> → read-back or snippet <code>--verify</code>).</li>
+                <li><strong>Safe data backfill</strong>: scope affected rows and preview mutations (<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back or snippet <code>--verify</code>).</li>
                 <li><strong>Environment validation</strong>: check config and connectivity without leaking secrets (<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>).</li>
             </ul>
             <p>All inherit the standard safety rules: prefer <code>--format json</code>, run <code>blacklist list</code> before touching sensitive data, confirm names with <code>schema</code>, dry-run writes, and never print credentials or blacklisted values.</p>
@@ -738,7 +754,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an o
             <h3 class="mt-10">B. Cross-cutting scenarios</h3>
             <ul>
                 <li><strong>Switch between environments (v2)</strong>: <code>dbcli use prod</code> changes the default; <code>dbcli query --use staging "&lt;SQL&gt;"</code> overrides for one call only. Each named connection has its <strong>own schema cache</strong> at <code>.dbcli/schemas/&lt;conn&gt;/</code> — run <code>dbcli schema --use &lt;name&gt;</code> once after switching, or you may read another connection's columns. See <a href="#connections" class="text-primary font-bold underline">Connection Management</a>.</li>
-                <li><strong>Keep secrets out of <code>.dbcli</code> in CI</strong>: <code>dbcli init --use-env-refs</code> stores <code>{ "$env": "VAR" }</code> references resolved at runtime. In a non-interactive run you <strong>must</strong> pass all five <code>--env-*</code> flags or <code>init</code> errors out — it never silently falls back to plaintext.</li>
+                <li><strong>Reference env vars for secrets in CI</strong>: connection settings already live in home storage (<code>~/.config/dbcli/…</code>), never in the project <code>.dbcli/</code>. <code>dbcli init --use-env-refs</code> goes further and stores <code>{ "$env": "VAR" }</code> references resolved at runtime instead of any plaintext. In a non-interactive run you <strong>must</strong> pass all five <code>--env-*</code> flags or <code>init</code> errors out — it never silently falls back to plaintext.</li>
                 <li><strong>Verify an invariant or write outcome</strong>: <code>snapshot</code> captures a baseline → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> compares; <code>q @name --verify</code> runs snippet assertions; <code>recover --apply --write-verification-artifact</code> persists secret-free evidence. See <a href="#data-verification" class="text-primary font-bold underline">Data Verification</a>.</li>
                 <li><strong>Spot N+1 / slow queries in local dev</strong>: run the app through <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> to capture events, then <code>dbcli proxy analyze</code> aggregates them offline into N+1, slowest-query, and hot-table findings. See <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>.</li>
             </ul>
@@ -890,9 +906,14 @@ bun test</code></pre>
                 <tbody>
                     <tr><td>Installation & setup</td><td>Install commands, initialization, environment variables, and safe secret handling.</td></tr>
                     <tr><td>Connections</td><td>Multi-connection layout, listing, switching, one-shot <code>--use</code>, and environment examples.</td></tr>
+                    <tr><td>Discovery</td><td><code>list</code>, <code>schema</code>, <code>inspect</code>, <code>status</code>, output formats, and when AI agents should inspect before querying.</td></tr>
                     <tr><td>Reads & writes</td><td><code>query</code>, <code>q</code>, <code>export</code>, <code>insert</code>, <code>update</code>, <code>delete</code>, <code>--dry-run</code>, and write guards.</td></tr>
+                    <tr><td>Snippets</td><td><code>queries list/search/suggest/new</code>, resolution order, parameters, and visualization frontmatter.</td></tr>
                     <tr><td>Diagnostics & recovery</td><td><code>doctor</code>, <code>check</code>, <code>diff</code>, <code>report</code>, <code>guide</code>, <code>recover</code>, and <code>--recovery</code>.</td></tr>
+                    <tr><td>Advanced tooling</td><td><code>shell</code>, <code>migrate</code>, <code>skill --install</code>, <code>skill tasks</code>, <code>completion</code>, and supported permission levels.</td></tr>
+                    <tr><td>Engines</td><td>PostgreSQL/MySQL/MariaDB, MongoDB, Redis, Elasticsearch support differences and known limitations.</td></tr>
                     <tr><td>AI usage</td><td>Blacklist check, schema confirmation, dry-run/risk planning, then execution.</td></tr>
+                    <tr><td>HTML dashboards</td><td><code>--ui</code>, export behavior, chart/KPI configuration, and browser/report expectations.</td></tr>
                 </tbody>
             </table>
         </section>

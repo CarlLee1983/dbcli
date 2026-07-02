@@ -147,15 +147,15 @@
                     <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                         <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
-                    <h3 class="mt-0 mb-2 text-lg font-bold">計畫模式 (Plan Mode)</h3>
-                    <p class="text-sm m-0">在不連線資料庫的情況下進行靜態 SQL 風險分析，防患於未然。</p>
+                    <h3 class="mt-0 mb-2 text-lg font-bold">查詢風險分析器 (Query Risk Analyzer)</h3>
+                    <p class="text-sm m-0">透過 <code>plan</code> 進行靜態 SQL 風險分析，在連線任何線上資料庫前找出風險。</p>
                 </div>
                 <div class="group p-6 paper-card">
                     <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                         <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     </div>
                     <h3 class="mt-0 mb-2 text-lg font-bold">Antigravity 協議</h3>
-                    <p class="text-sm m-0">嚴謹的架構師-建設者-稽核員工作流，確保高可靠度與開發品質。</p>
+                    <p class="text-sm m-0">將工作流拆分為 Architect（架構師／規劃）與 Builder（建設者／執行），確保行動前必有策略。</p>
                 </div>
             </div>
         </section>
@@ -171,6 +171,7 @@ npm install -g @carllee1983/dbcli
 bun install -g @carllee1983/dbcli</code></pre>
             <p>透過互動式導覽初始化您的第一個連線：</p>
             <pre><code>dbcli init</code></pre>
+            <p>在幕後，<code>init</code> 會在專案的 <code>./.dbcli/config.json</code> 寫入一個 <code>version: 3</code> 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 <code>~/.config/dbcli/projects/&lt;project-name&gt;-&lt;sha1-12&gt;/</code>。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 <code>.dbcli/</code> 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。</p>
         </section>
 
         <!-- doc-key: connection-management -->
@@ -253,6 +254,7 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 <li><code>dbcli queries list</code>：檢視所有可用片段。</li>
                 <li><code>dbcli queries search</code>：使用模糊關鍵字搜尋。</li>
                 <li><code>dbcli queries suggest</code>：根據操作意圖獲取建議。</li>
+                <li><code>dbcli queries new @my/query --local</code>：建立新的本地片段。</li>
             </ul>
 
             <!-- doc-key: diagnostics-recovery -->
@@ -585,7 +587,14 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                             <td class="text-left font-bold px-8">結構快取</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
-                            <td><span class="text-secondary font-bold">⚠️</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">儲存 Snippets</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
@@ -596,7 +605,14 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
-                            <td class="text-left font-bold px-8">AI 工作流</td>
+                            <td class="text-left font-bold px-8">結構變更 (DDL)</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                        </tr>
+                        <tr class="hover:bg-primary/5 transition-colors">
+                            <td class="text-left font-bold px-8">互動式 UI</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -638,7 +654,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </ul>
 
             <h3 class="mt-8">MongoDB 巢狀黑名單</h3>
-            <p><code>.dbcli</code> 的 <code>blacklist.columns[&lt;collection&gt;]</code> 接受點分路徑與一個結尾萬用字元，例如 <code>profile.tokens.*</code>。萬用字元若不在最後一段會被略過，並在 <code>dbcli blacklist list</code> 時提出警告。</p>
+            <p>dbcli 設定的 <code>blacklist.columns[&lt;collection&gt;]</code> 接受點分路徑與一個結尾萬用字元，例如 <code>profile.tokens.*</code>。萬用字元若不在最後一段會被略過，並在 <code>dbcli blacklist list</code> 時提出警告。</p>
 
             <h3 class="mt-8">MongoDB schema 採樣</h3>
             <p><code>dbcli schema &lt;collection&gt; [--sample-size 100] [--sample-method random|natural]</code>。<code>random</code>（預設）使用 <code>$sample</code>，驅動錯誤時退回自然順序。輸出包含巢狀 dot-path，附帶 <code>presence</code>（0..1）與命中黑名單時的 <code>redacted: true</code>。</p>
@@ -649,7 +665,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <h3 class="mt-8">Redis：大小防護、黑名單與 shell（v1.21.0）</h3>
             <p><strong>大小防護</strong> — 無上限的讀取會自動加上界線：<code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> 補上 <code>COUNT 1000</code>（較大值會被夾限）；<code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> 夾限 <code>stop</code> 至 1000 區間；<code>ZRANGEBYSCORE</code> 補上 <code>LIMIT 0 1000</code>；<code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> 在 1000 筆截斷。結果帶有 <code>warnings[]</code>（<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>）。以 <code>--no-limit</code>（CLI）或 <code>.no-limit on</code>（shell）略過。</p>
             <p><strong>黑名單</strong> — 規則以 Redis 原生 key glob（<code>*</code>、<code>?</code>、<code>[abc]</code>、<code>[a-z]</code>）強制。<code>dbcli blacklist add 'secrets:*'</code> 後，命中的讀寫會被拒絕（<code>BlacklistRejection</code>，稽核記錄含 <code>matched_pattern</code>）；與規則重疊的 <code>KEYS</code>/<code>SCAN MATCH</code> 會被拒絕；<code>list</code> 會濾掉黑名單 keys。</p>
-            <p><strong>遮罩（Masking，v1.22）</strong> — key glob 黑名單是「拒絕」，遮罩則是「屏蔽」：命中的讀取會回傳 <code>[REDACTED]</code>，讓 AI 代理仍能執行指令但看不到敏感值。在 <code>.dbcli</code> 加入選用的 <code>redis.mask</code> 區塊，例如 <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>。有 <code>fields</code> → 只遮罩這些 hash 欄位（<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>）；無 <code>fields</code> → 遮罩整個值（<code>GET</code>/<code>GETRANGE</code> 及 hash 所有欄位）。遮罩涵蓋 <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>。<strong>拒絕優先於遮罩</strong> — 同時命中 <code>blacklist</code> 與 <code>mask</code> 規則的 key 會直接被拒絕，不會進入遮罩流程。</p>
+            <p><strong>遮罩（Masking，v1.22）</strong> — key glob 黑名單是「拒絕」，遮罩則是「屏蔽」：命中的讀取會回傳 <code>[REDACTED]</code>，讓 AI 代理仍能執行指令但看不到敏感值。在 dbcli 設定中加入選用的 <code>redis.mask</code> 區塊，例如 <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>。有 <code>fields</code> → 只遮罩這些 hash 欄位（<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>）；無 <code>fields</code> → 遮罩整個值（<code>GET</code>/<code>GETRANGE</code> 及 hash 所有欄位）。遮罩涵蓋 <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>。<strong>拒絕優先於遮罩</strong> — 同時命中 <code>blacklist</code> 與 <code>mask</code> 規則的 key 會直接被拒絕，不會進入遮罩流程。</p>
             <p><strong>Shell</strong> — Redis 連線執行 <code>dbcli shell</code> 會開啟單行 REPL，具備歷史、tab 補全（指令 + key 前綴）與 <code>.no-limit on/off</code> 切換。指令直接輸入，毋須結尾分號（例如 <code>GET mykey</code>）。</p>
             <h3 class="mt-8">Elasticsearch：互動式 shell（v1.22.0）</h3>
             <p>Elasticsearch 連線執行 <code>dbcli shell</code> 會開啟專屬的 Kibana Dev Tools 風格 REPL。輸入請求行 <code>&lt;METHOD&gt; /&lt;path&gt;</code>，接著可選的多行 JSON body，再以<strong>空白行</strong>送出整個區塊。回應以美化後的 JSON 呈現。</p>
@@ -697,12 +713,12 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
             <h2>🛠️ 開發者工作流</h2>
             <p>除了臨時查詢，dbcli 也針對「開發任務中牽涉資料庫」的常見情境而設計。Agent skill 內建了精簡的流程路由；當你自己操作 dbcli 時同樣適用：</p>
             <ul>
-                <li><strong>DB-backed 功能</strong>：編輯程式碼前先把產品/程式語彙對應到真實資料物件（<code>inspect --for-agent</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>）。</li>
-                <li><strong>應用程式資料錯誤</strong>：分離資料庫事實與應用程式推論（<code>audit tail --for-agent</code> → <code>schema</code> → 最小查詢）。</li>
-                <li><strong>ORM 或 migration</strong>：用 live schema 證據支撐修改（<code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>）。</li>
+                <li><strong>DB-backed 功能</strong>：編輯程式碼前先把產品/程式語彙對應到真實資料物件（<code>inspect --for-agent</code> → <code>blacklist list</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>）。</li>
+                <li><strong>應用程式資料錯誤</strong>：分離資料庫事實與應用程式推論（<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → 最小查詢）。</li>
+                <li><strong>ORM 或 migration</strong>：用 live schema 證據支撐修改（<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>）。</li>
                 <li><strong>PR 資料庫風險審查</strong>：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。</li>
                 <li><strong>慢 endpoint 或查詢</strong>：在提出 index 前優先使用 read-only diagnostics（<code>report --section perf</code> → <code>guide missing-index-for</code>；有 proxy log 時用 <code>proxy analyze</code>）。</li>
-                <li><strong>安全資料回填</strong>：先界定受影響資料範圍並預覽 mutation（<code>update ... --dry-run</code> → read-back 或 snippet <code>--verify</code>）。</li>
+                <li><strong>安全資料回填</strong>：先界定受影響資料範圍並預覽 mutation（<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back 或 snippet <code>--verify</code>）。</li>
                 <li><strong>環境設定驗證</strong>：不洩漏 secrets 地檢查 config 與 connectivity（<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>）。</li>
             </ul>
             <p>以上全部繼承一般安全規則：優先 <code>--format json</code>、碰觸敏感資料前先跑 <code>blacklist list</code>、用 <code>schema</code> 確認名稱、寫入先 dry-run，且絕不列印 credentials 或 blacklisted 值。</p>
@@ -738,7 +754,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
             <h3 class="mt-10">B. 跨領域情境</h3>
             <ul>
                 <li><strong>多環境切換（v2）</strong>：<code>dbcli use prod</code> 切換預設；<code>dbcli query --use staging "&lt;SQL&gt;"</code> 只覆寫單次呼叫。每個具名連線有<strong>獨立的 schema cache</strong>（<code>.dbcli/schemas/&lt;conn&gt;/</code>）——切換後先跑一次 <code>dbcli schema --use &lt;name&gt;</code>，否則可能讀到別的連線的欄位。見 <a href="#connections" class="text-primary font-bold underline">連線管理</a>。</li>
-                <li><strong>CI 中把密鑰留在 <code>.dbcli</code> 之外</strong>：<code>dbcli init --use-env-refs</code> 把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照。非互動環境<strong>必須</strong>給齊五個 <code>--env-*</code> 旗標，否則 <code>init</code> 報錯——絕不悄悄退回明文。</li>
+                <li><strong>CI 中用環境變數參照密鑰</strong>：連線設定本來就存放在 home storage（<code>~/.config/dbcli/…</code>），不會寫進專案 <code>.dbcli/</code>。<code>dbcli init --use-env-refs</code> 更進一步，把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照而非明文。非互動式執行時<strong>必須</strong>傳入全部五個 <code>--env-*</code> 旗標，否則 <code>init</code> 會直接報錯——絕不會默默退回明文。</li>
                 <li><strong>驗證不變式或寫入結果</strong>：<code>snapshot</code> 建基準 → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> 比對；<code>q @name --verify</code> 跑 snippet 斷言；<code>recover --apply --write-verification-artifact</code> 留下不含機密的證據。見 <a href="#data-verification" class="text-primary font-bold underline">資料驗證</a>。</li>
                 <li><strong>本地開發抓 N+1 / 慢查詢</strong>：讓應用程式走 <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> 收集事件，再用 <code>dbcli proxy analyze</code> 離線聚合出 N+1、最慢查詢與熱表發現。見 <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>。</li>
             </ul>
@@ -890,9 +906,14 @@ bun test</code></pre>
                 <tbody>
                     <tr><td>安裝與設定</td><td>安裝指令、初始化、環境變數與機密資訊安全處理。</td></tr>
                     <tr><td>連線</td><td>多連線結構、列出、切換、單次 <code>--use</code> 與環境範例。</td></tr>
+                    <tr><td>探索</td><td><code>list</code>、<code>schema</code>、<code>inspect</code>、<code>status</code>、輸出格式，以及 AI 代理查詢前應先檢查的時機。</td></tr>
                     <tr><td>讀取與寫入</td><td><code>query</code>、<code>q</code>、<code>export</code>、<code>insert</code>、<code>update</code>、<code>delete</code>、<code>--dry-run</code> 與寫入保護。</td></tr>
+                    <tr><td>Snippets</td><td><code>queries list/search/suggest/new</code>、解析順序、參數與視覺化 frontmatter。</td></tr>
                     <tr><td>診斷與修復</td><td><code>doctor</code>、<code>check</code>、<code>diff</code>、<code>report</code>、<code>guide</code>、<code>recover</code> 與 <code>--recovery</code>。</td></tr>
+                    <tr><td>進階工具</td><td><code>shell</code>、<code>migrate</code>、<code>skill --install</code>、<code>skill tasks</code>、<code>completion</code> 與支援的權限層級。</td></tr>
+                    <tr><td>引擎</td><td>PostgreSQL/MySQL/MariaDB、MongoDB、Redis、Elasticsearch 的支援差異與已知限制。</td></tr>
                     <tr><td>AI 使用</td><td>黑名單檢查、schema 確認、dry-run/風險規劃，最後才執行。</td></tr>
+                    <tr><td>HTML 儀表板</td><td><code>--ui</code>、匯出行為、圖表/KPI 設定，以及瀏覽器/報表預期。</td></tr>
                 </tbody>
             </table>
         </section>

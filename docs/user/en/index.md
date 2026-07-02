@@ -52,6 +52,8 @@ bun install -g @carllee1983/dbcli
 ### Initializing a Connection
 The `init` command guides you through setting up your first connection. It can automatically parse existing `.env` files.
 
+Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/config.json` in your project, while the real connection settings and any credentials are stored in your home directory at `~/.config/dbcli/projects/<project-name>-<sha1-12>/`. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project `.dbcli/` only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).
+
 ```bash
 dbcli init
 ```
@@ -610,7 +612,7 @@ Run `dbcli update --dry-run` to view the plan before executing.
 
 ### MongoDB nested blacklist
 
-`.dbcli` `blacklist.columns[<collection>]` accepts dotted paths and one trailing wildcard:
+The dbcli config `blacklist.columns[<collection>]` accepts dotted paths and one trailing wildcard:
 
 ```json
 {
@@ -667,7 +669,7 @@ dbcli query "KEYS secrets:*"        # rejected (pattern overlaps a rule)
 dbcli list                           # blacklisted keys filtered out
 ```
 
-**Masking (v1.22)** — where the key-glob blacklist *rejects*, masking instead *redacts*: matched reads return `[REDACTED]` so an agent can still run the command without ever seeing the sensitive value. Add an optional `redis.mask` block to your `.dbcli` config:
+**Masking (v1.22)** — where the key-glob blacklist *rejects*, masking instead *redacts*: matched reads return `[REDACTED]` so an agent can still run the command without ever seeing the sensitive value. Add an optional `redis.mask` block to your dbcli config:
 
 ```json
 {
@@ -793,7 +795,7 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 ### B. Cross-cutting scenarios
 
 - **Switch between environments (v2)**: `dbcli use prod` changes the default; `dbcli query --use staging "<SQL>"` overrides for one call only. Each named connection has its **own schema cache** at `.dbcli/schemas/<conn>/` — run `dbcli schema --use <name>` once after switching, or you may read another connection's columns. (See **Connection Management**.)
-- **Keep secrets out of `.dbcli` in CI**: `dbcli init --use-env-refs` stores `{ "$env": "VAR" }` references resolved at runtime. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext.
+- **Reference env vars for secrets in CI**: connection settings already live in home storage (`~/.config/dbcli/…`), never in the project `.dbcli/`. `dbcli init --use-env-refs` goes further and stores `{ "$env": "VAR" }` references resolved at runtime instead of any plaintext. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext.
 - **Verify an invariant or write outcome**: `snapshot` captures a baseline → `assert --against <snap> --tolerance <pct>` compares; `q @name --verify` runs snippet assertions; `recover --apply --write-verification-artifact` persists secret-free evidence. (See **Data Verification**.)
 - **Spot N+1 / slow queries in local dev**: run the app through `dbcli proxy <engine> --listen ... --target ...` to capture events, then `dbcli proxy analyze` aggregates them offline into N+1, slowest-query, and hot-table findings. (See **dbcli proxy**.)
 

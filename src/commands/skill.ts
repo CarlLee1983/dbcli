@@ -13,9 +13,6 @@ import { gatherContext } from '@/core/context/context'
 import { serializeXml, serializeJson, serializeMarkdown } from '@/core/context/serializer'
 import { resolveConfigPath } from '@/utils/config-path'
 
-/** Absolute path to the static SKILL.md (relative to package root) */
-const SKILL_SOURCE_PATH = packageAssetPath('SKILL.md')
-
 /** Long-form command reference (sibling to SKILL in assets/ and in install dir) */
 const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
 
@@ -113,9 +110,16 @@ export async function checkSkillUpdates(): Promise<string[]> {
   const outdated: string[] = []
 
   try {
-    const sourceFile = Bun.file(SKILL_SOURCE_PATH)
-    if (!(await sourceFile.exists())) return []
-    const sourceContent = await sourceFile.text()
+    // A skill may be installed from any supported source language (D-73), and
+    // every language ships the same version. An install is current if it matches
+    // ANY current source. Comparing only against English falsely flagged every
+    // `--lang zh-TW` install as outdated forever (fired on each command).
+    const sourceContents: string[] = []
+    for (const lang of ['en', 'zh-TW'] as const) {
+      const sourceFile = Bun.file(resolveSkillSource(lang))
+      if (await sourceFile.exists()) sourceContents.push(await sourceFile.text())
+    }
+    if (sourceContents.length === 0) return []
 
     for (const platform of SUPPORTED_PLATFORMS) {
       try {
@@ -124,7 +128,7 @@ export async function checkSkillUpdates(): Promise<string[]> {
 
         if (await installedFile.exists()) {
           const installedContent = await installedFile.text()
-          if (installedContent !== sourceContent) {
+          if (!sourceContents.includes(installedContent)) {
             outdated.push(platform)
           }
         }

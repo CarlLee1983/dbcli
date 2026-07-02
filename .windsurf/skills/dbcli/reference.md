@@ -249,6 +249,7 @@ dbcli q @analytics/revenue --param days=30 --format html > report.html
 - `--dry-run` — print the bound SQL + values without executing
 - `--use <name>` — pick a v2 named connection
 - `--recovery` — emit a `RecoveryEnvelope` on failure (see `recover`)
+- `--verify` — run the snippet's verification assertions after execution (only if the snippet defines them)
 
 **Permission:** query-only+
 
@@ -474,9 +475,10 @@ Insert data into a table.
 dbcli insert users --data '{"name":"Alice","email":"alice@example.com"}'
 dbcli insert users --data '{"name":"Alice"}' --dry-run
 dbcli insert users --data '{"name":"Alice"}' --force
+dbcli insert users --data '{"name":"Alice"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--data <json>`, `--dry-run`, `--force`
+**Options:** `--data <json>`, `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
 **Permission:** read-write+
 
 ### update
@@ -486,9 +488,10 @@ Update existing data.
 ```bash
 dbcli update users --where "id=1" --set '{"name":"Bob"}'
 dbcli update users --where "id=1" --set '{"name":"Bob"}' --dry-run
+dbcli update users --where "id=1" --set '{"name":"Bob"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`
+**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
 **Permission:** read-write+
 
 ### delete
@@ -499,9 +502,10 @@ Delete data from a table.
 dbcli delete users --where "id=1"
 dbcli delete users --where "id=1" --dry-run
 dbcli delete users --where "id=1" --force
+dbcli delete users --where "id=1" --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--dry-run`, `--force`
+**Options:** `--where <condition>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
 **Permission:** data-admin+
 
 ### export
@@ -521,7 +525,7 @@ dbcli export orders --format csv --output orders.csv      # index name as query 
 dbcli export orders --no-limit --format jsonl             # scroll the whole index in batches
 ```
 
-**Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`, `--index <name>` (Elasticsearch), `--no-limit` (Elasticsearch full-index scroll)
+**Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`, `--collection <name>` (MongoDB collection) / `--index <name>` (Elasticsearch index; alias for `--collection`), `--limit <number>` (overrides auto-limit), `--no-limit` (Elasticsearch full-index scroll)
 **Permission:** query-only+ — SQL, MongoDB, and **(v1.22)** Elasticsearch.
 
 The `html` format emits the same self-contained dashboard as `query --ui` (see [Interactive HTML dashboard](#interactive-html-dashboard)). Because `export` runs raw SQL (no snippet metadata), the HTML report is always rendered as a sortable / filterable table — no KPIs or charts. Use `dbcli q @<name> --format html` (or `--ui`) for the charted view.
@@ -892,6 +896,7 @@ Boundaries:
 | `--from <path>` | Read the envelope from this file instead of `.dbcli/last-recovery.json`. Accepts raw `RecoveryEnvelope` or `SavedRecoveryEnvelope`. | — |
 | `--allow-write <tier>` | Open the risk gate. Values: `readonly-cmd` (local-side writes) \| `write-cmd` (database writes). | `none` |
 | `--no-verify` | Skip the verify step appended after a successful `--apply`. | off (verify runs by default) |
+| `--write-verification-artifact` | After a successful `--apply`, persist a secret-free `VerificationArtifact` JSON under `.dbcli/verification/`. | off |
 | `--format <format>` | `markdown` \| `json`. | `markdown` for inspect, `json` for `--apply` |
 
 #### Plan source resolution
@@ -1650,6 +1655,7 @@ dbcli skill --install codex                  # install to ~/.codex/skills/dbcli/
 **Options:**
 - `--install <platform>` — `claude` | `gemini` | `antigravity` | `copilot` | `cursor` | `codex` | `windsurf`. Writes `SKILL.md` plus `reference.md` next to it so the agent gets progressive disclosure.
 - `--output <path>` — write `SKILL.md` to a file instead of stdout. Does not install `reference.md`.
+- `--lang <en|zh-TW>` — source language for the emitted SKILL content (default `en`). It selects `assets/SKILL.md` vs `assets/SKILL.zh-TW.md`; the install/output filename stays `SKILL.md` regardless.
 
 **Notes:**
 - Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.
@@ -1661,6 +1667,21 @@ dbcli skill --install codex                  # install to ~/.codex/skills/dbcli/
 - Re-running `--install` overwrites the existing skill atomically; no prompt.
 
 **Permission:** n/a.
+
+### skill context
+
+Emit an AI-friendly snapshot of the connected database's schema and saved-query snippets (blacklist-filtered) so an agent can be primed with the current context.
+
+```bash
+dbcli skill context                      # XML (default)
+dbcli skill context --format json
+dbcli skill context --format markdown
+```
+
+**Options:**
+- `--format <xml|json|markdown>` — output format (default: `xml`)
+
+**Permission:** query-only+ — read-only; blacklisted objects are never emitted.
 
 ### skill tasks (Agent Task Packs)
 
@@ -2201,7 +2222,7 @@ Rewrites emit a `REDIS_SIZE_REWRITE` warning; truncations emit `REDIS_SIZE_TRUNC
 Blacklist rules are enforced as **Redis-native key globs** (`*`, `?`, `[abc]`, `[a-z]`):
 
 ```bash
-dbcli blacklist add 'secrets:*'          # register a key-glob rule
+dbcli blacklist table add 'secrets:*'    # register a key-glob rule
 dbcli query "GET secrets:api_key"        # → BlacklistRejection (exit non-zero)
 dbcli query "MGET safe:k secrets:api"    # → rejected (any matching key fails the whole command)
 dbcli query "KEYS secrets:*"             # → rejected (pattern overlaps a rule)

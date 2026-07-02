@@ -364,7 +364,7 @@ without changing the default. `--recovery` is honoured by `query`, `q`, `insert`
   → `data-admin`. A command not in the whitelist is refused.
 - **No `--dry-run` for Redis `query`** — write safety comes from the permission gate and key
   blacklist (matching reads/writes are rejected). To preview a delete, use `delete <key> --dry-run`.
-- `database` is the logical DB index (default `0`). `dbcli blacklist add 'secrets:*'`
+- `database` is the logical DB index (default `0`). `dbcli blacklist table add 'secrets:*'`
   registers a key glob; an optional `redis.mask` block masks values on read. Size guards
   (SCAN/HGETALL truncation, `--no-limit` to bypass) and masking details: reference.md Redis section.
 

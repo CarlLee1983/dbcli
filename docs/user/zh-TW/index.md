@@ -595,7 +595,7 @@ dbcli query "HGETALL bighash" --no-limit  # 完整回覆,不截斷
 **黑名單** — 規則以 Redis 原生 key glob(`*`、`?`、`[abc]`、`[a-z]`)強制:
 
 ```bash
-dbcli blacklist add 'secrets:*'
+dbcli blacklist table add 'secrets:*'
 dbcli query "GET secrets:api_key"   # 拒絕(BlacklistRejection);稽核記錄含 matched_pattern
 dbcli query "KEYS secrets:*"        # 拒絕(pattern 與規則重疊)
 dbcli list                           # 黑名單 keys 被濾掉

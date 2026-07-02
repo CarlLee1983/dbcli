@@ -663,7 +663,7 @@ dbcli query "HGETALL bighash" --no-limit  # full reply, no truncation
 **Blacklist** — rules are enforced as Redis-native key globs (`*`, `?`, `[abc]`, `[a-z]`):
 
 ```bash
-dbcli blacklist add 'secrets:*'
+dbcli blacklist table add 'secrets:*'
 dbcli query "GET secrets:api_key"   # rejected (BlacklistRejection); audited with matched_pattern
 dbcli query "KEYS secrets:*"        # rejected (pattern overlaps a rule)
 dbcli list                           # blacklisted keys filtered out

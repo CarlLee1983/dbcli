@@ -280,7 +280,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 - **支援：** `init`、`list`（透過 SCAN 列 keys）、`schema <key>`（type / TTL / size / sample）、`query`、`q`（saved snippet — **僅唯讀命令**）、`delete`（基本實作：`DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`，需 `data-admin`；`query "DEL <key>"` 亦可）、`shell`、`status`、`use`、`doctor`。**不支援：** `schema` 全掃描、`insert`、`update`、`check`、`diff`、`migrate`。
 - **權限分層：** 讀取類（`GET`/`HGET`/`SCAN`/…）→ `query-only`；mutator（`SET`/`HSET`/`INCR`/`EXPIRE`/`SETEX`/`RENAME`/…）→ `read-write`；`DEL`/`UNLINK`/`HDEL`/`XDEL` → `data-admin`。白名單外的指令一律拒絕。
 - **Redis `query` 無 `--dry-run`** — 寫入安全來自權限門檻與 key 黑名單（命中的讀寫會被拒絕）。如需預覽刪除，請用 `delete <key> --dry-run`。
-- `database` 是 logical DB index（預設 `0`）。`dbcli blacklist add 'secrets:*'` 註冊 key glob；可選的 `redis.mask` 區塊在讀取時遮罩值。大小防護（SCAN/HGETALL 截斷，`--no-limit` 可略過）與遮罩細節：reference.md Redis 段落。
+- `database` 是 logical DB index（預設 `0`）。`dbcli blacklist table add 'secrets:*'` 註冊 key glob；可選的 `redis.mask` 區塊在讀取時遮罩值。大小防護（SCAN/HGETALL 截斷，`--no-limit` 可略過）與遮罩細節：reference.md Redis 段落。
 
 ## Elasticsearch
 

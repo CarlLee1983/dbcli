@@ -49,3 +49,20 @@ jobs:
       - name: Run performance benchmarks
         run: bun run test:perf
         continue-on-error: true
+
+  docs-parity:
+    # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
+    # platform copies, or user docs fall out of sync. Runs once (not per matrix).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Documentation & skill drift guards
+        run: |
+          bun run skill:check
+          bun run platform:check
+          bun run plugin:check
+          bun run docs:check

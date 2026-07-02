@@ -278,7 +278,7 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). All 8 steps (encoded in `scripts/release-check.sh`) run in CI and must pass locally before tagging.
+The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full 8-step gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging.
 
 ### Pre-Release Checklist
 

@@ -83,7 +83,24 @@ export function registerSkillTasksCommand(parent: Command): Command {
   return tasks
 }
 
+// Runtime allow-lists for the filter flags (mirrors the AgentTaskEngine /
+// AgentTaskSource types). Kept here so an invalid filter fails loudly instead of
+// silently returning an empty list.
+const VALID_ENGINES: AgentTaskEngine[] = ['postgres', 'mysql', 'mongodb', 'redis', 'elasticsearch']
+const VALID_SOURCES: AgentTaskSource[] = ['builtin', 'shared', 'local']
+
 async function runList(options: ListOptions): Promise<void> {
+  if (options.engine && !VALID_ENGINES.includes(options.engine)) {
+    throw new Error(
+      `Invalid --engine '${options.engine}'. Valid engines: ${VALID_ENGINES.join(', ')}`
+    )
+  }
+  if (options.source && !VALID_SOURCES.includes(options.source)) {
+    throw new Error(
+      `Invalid --source '${options.source}'. Valid sources: ${VALID_SOURCES.join(', ')}`
+    )
+  }
+
   const map = await loadAgentTasks(resolveAgentTaskDirs(process.cwd()))
   const filtered = filterTasks(map, {
     tag: options.tag,

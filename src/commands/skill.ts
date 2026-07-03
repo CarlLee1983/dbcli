@@ -17,6 +17,18 @@ import { resolveConfigPath } from '@/utils/config-path'
 const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
 
 /**
+ * Marker that identifies dbcli-authored skill content (the frontmatter `name`),
+ * stable across versions and source languages. Used to tell our own installed
+ * skill apart from an unrelated file that happens to live at the same path
+ * (notably the shared project-root `.windsurfrules`).
+ */
+const SKILL_SENTINEL = 'name: dbcli'
+
+function looksLikeDbcliSkill(content: string): boolean {
+  return content.includes(SKILL_SENTINEL)
+}
+
+/**
  * Resolve the SKILL source markdown file path based on the requested language.
  * `--lang` is a SOURCE-FILE SELECTOR, not a `DBCLI_LANG` integration (D-73).
  * Target install/output filename stays `SKILL.md` regardless of source (D-74).
@@ -27,7 +39,7 @@ function resolveSkillSource(lang: string): string {
 }
 
 export interface SkillOptions {
-  install?: string // platform: claude, gemini, antigravity, copilot, cursor
+  install?: string // platform: claude, gemini, antigravity, copilot, cursor, codex, windsurf
   output?: string // custom output file path
   lang?: 'en' | 'zh-TW' // source language for SKILL content (default 'en', D-73)
 }
@@ -74,6 +86,11 @@ export async function skillCommand(_program: Command, options: SkillOptions): Pr
 
     // 2. Handle output based on options
     if (options.output) {
+      if (options.install) {
+        console.error(
+          `dbcli skill: --install ${options.install} ignored because --output was provided.`
+        )
+      }
       await Bun.file(options.output).write(skillMarkdown)
       console.error(`Skill written to ${options.output}`)
       return
@@ -128,7 +145,10 @@ export async function checkSkillUpdates(): Promise<string[]> {
 
         if (await installedFile.exists()) {
           const installedContent = await installedFile.text()
-          if (!sourceContents.includes(installedContent)) {
+          // Only a real dbcli skill can be "outdated". A shared-path file that
+          // isn't ours (e.g. a user's own `.windsurfrules`) must be left alone,
+          // not flagged — flagging it nags the user to reinstall and clobber it.
+          if (looksLikeDbcliSkill(installedContent) && !sourceContents.includes(installedContent)) {
             outdated.push(platform)
           }
         }
@@ -196,6 +216,13 @@ async function writeSkillInstall(
 ): Promise<{ referencePath: string | null }> {
   const platformLower = platform.toLowerCase()
   await ensureDir(path.dirname(installPath))
+
+  // windsurf installs to the SHARED project-root `.windsurfrules`. Preserve a
+  // user's own rules file (one that isn't our skill) before overwriting it.
+  if (platformLower === 'windsurf') {
+    await backupForeignFile(installPath, `${installPath}.dbcli-backup`)
+  }
+
   await Bun.file(installPath).write(skillMarkdown)
 
   // Platforms that use a rule file in root + companion reference in a hidden dir
@@ -210,6 +237,30 @@ async function writeSkillInstall(
   const refPath = path.join(path.dirname(installPath), 'reference.md')
   await Bun.file(refPath).write(referenceMarkdown)
   return { referencePath: refPath }
+}
+
+/**
+ * Backs up a file at `target` to `backup` when it exists and is NOT a dbcli
+ * skill — so installing over a user's own shared file (e.g. `.windsurfrules`)
+ * never silently loses their content. An existing backup is not clobbered.
+ */
+async function backupForeignFile(target: string, backup: string): Promise<void> {
+  const targetFile = Bun.file(target)
+  if (!(await targetFile.exists())) return
+  const existing = await targetFile.text()
+  if (looksLikeDbcliSkill(existing)) return // already our skill; nothing to preserve
+
+  const base = path.basename(target)
+  if (await Bun.file(backup).exists()) {
+    console.error(
+      `dbcli skill: ${base} already has a backup at ${path.basename(backup)}; leaving it untouched.`
+    )
+    return
+  }
+  await Bun.file(backup).write(existing)
+  console.error(
+    `dbcli skill: preserved your existing ${base} → ${path.basename(backup)} before installing the skill.`
+  )
 }
 
 /**

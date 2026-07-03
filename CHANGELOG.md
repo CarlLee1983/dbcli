@@ -5,11 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.39.1] - 2026-07-03 - Skill 路由、安裝安全強化與 Windows 跨平台
+## [1.39.2] - 2026-07-03 - Windows 跨平台、skill 安裝安全與 plugin 版本對齊
+
+> npm `1.39.1` 已於 2026-06-30 發布；本批修復在其後累積於同一版號下（npm 版本不可覆蓋），故獨立為 1.39.2 以便日後發布。
 
 ### Fixed
 
-- **Dashboard 請求不再落入通用 query 路由。** 先前 dashboard / report 意圖的請求會 fall through 到一般 query 路徑；現已正確導向 dashboard 專用流程。
 - **Windows 跨平台修復（Windows CI 首次全綠）。** filesystem 操作與 path 檢查改為跨平台實作、修正 `emit` 子行程 import 與殘留的 path assertion，並以 portable `node:fs` 取代僅限 unix 的 coreutils spawns。此前 Windows job 從未通過（fail-fast 總是先取消它）。
 - **Skill 安裝安全強化。** 修正 output / install 旗標衝突、強化安裝安全檢查與 task 過濾條件。
 - **zh-TW skill 安裝不再被誤判為永遠過期。**
@@ -17,13 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Skill 路由補上 DB report / dashboard / HTML UI 意圖。** `assets/SKILL.md` / `assets/SKILL.zh-TW.md` 的 metadata、任務路由表、開發者速查與 HTML dashboard 範例現在明確導向 `queries search|suggest` → `queries show` → `q @<name> --ui` / `--format html`，並保留 raw SQL `export --format html` 的檔案輸出路徑。已透過 `plugin:sync` 同步到所有受管理平台副本。
 - **文件補齊。** 明示 `--where` 僅支援等值比較、補上 Redis / Elasticsearch 寫入模型說明、記錄 home-storage 綁定並重新同步 md/html parity、對齊 config-location-policy 與實作綁定模型。
-- **Plugin manifest 版本對齊。** `.claude-plugin` / `.cursor-plugin` / `.codex-plugin` 及 `plugins/dbcli-agent` 的 `plugin.json` 版本由 1.37.1 / 1.31.0 一併更新為 1.39.1（此前隨發布漂移，未跟上主版本）。
+- **Plugin manifest 版本對齊。** `.claude-plugin` / `.cursor-plugin` / `.codex-plugin` 及 `plugins/dbcli-agent` 的 `plugin.json` 版本更新為 1.39.2（先前漂移在 1.37.1 / 1.31.0，未跟上主版本；`plugin:sync` / `plugin:check` 只同步 skill 內容不同步版本）。
 
 ### Internal
 
-- CI 加入 doc / skill drift guards 並修正 release-gate 說明；新增 `reference.md` 指令覆蓋契約測試；移除失效的 `validate-skill.sh`（testing doc 改指向 `bun test`）；稽核冗餘測試改用 collision-proof token sentinel；zsh 不存在時跳過 rc-eval 測試；每檔還原 leaked spies 以修正順序相依的 CI 失敗。
+- CI 加入 doc / skill drift guards 並修正 release-gate 說明；新增 `reference.md` 指令覆蓋契約測試；移除失效的 `validate-skill.sh`（testing doc 改指向 `bun test`）；稽核冗餘測試改用 collision-proof token sentinel；zsh 不存在時跳過 rc-eval 測試；每檔還原 leaked spies 以修正順序相依的 CI 失敗；prettier 對齊 `q` / audit `logger` 測試。
+
+## [1.39.1] - 2026-06-30 - Skill report dashboard routing
+
+### Fixed
+
+- **Dashboard 請求不再落入通用 query 路由。** 先前 dashboard / report 意圖的請求會 fall through 到一般 query 路徑；現已正確導向 dashboard 專用流程。
+
+### Changed
+
+- **Skill 路由補上 DB report / dashboard / HTML UI 意圖。** `assets/SKILL.md` / `assets/SKILL.zh-TW.md` 的 metadata、任務路由表、開發者速查與 HTML dashboard 範例現在明確導向 `queries search|suggest` → `queries show` → `q @<name> --ui` / `--format html`，並保留 raw SQL `export --format html` 的檔案輸出路徑。已透過 `plugin:sync` 同步到所有受管理平台副本。純文件 / skill 變更。
 
 ## [1.39.0] - 2026-06-24 - Dashboard chart type 解析時邊界驗證
 

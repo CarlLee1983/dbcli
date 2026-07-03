@@ -15,7 +15,16 @@ description: Database CLI for AI agents with permission-based access control. Us
 
 1. `dbcli blacklist list` — 確認敏感資料邊界。
 2. `dbcli schema <object> --format json` — 確認真實欄位名稱。**禁止猜測。**
-3. 所有寫入：`--dry-run`（SQL / Mongo）→ 實際執行 → `query` 回讀確認。
+3. 所有寫入：`--dry-run`（SQL / Mongo）→ 實際執行 → `query` 回讀確認。Redis 的 `query`
+   **沒有 `--dry-run`**（見 **Redis** 節）；Elasticsearch 為**唯讀**。
+
+**`update` / `delete` 的 `--where` 僅支援等式（SQL）。** 只接受 `col=val` 或
+`col1=v1 AND col2=v2`。比較 / 模式運算子（`>`、`>=`、`<`、`!=`、`LIKE`、`IN`）會直接
+**報錯**；更危險的是，`OR` 會被**靜默當成值的一部分** — `a=1 OR b=2` 會被解析成
+`a = "1 OR b=2"`，比對到錯誤的列（或完全比對不到）。需要範圍或複合條件時，先用
+`query` / `export` 撈出目標列的主鍵，再對每個主鍵執行一次
+`update` / `delete --where "id=<pk>"`（逐一等式）— 或升級交給人類處理。（MongoDB 的
+`--where` 接受完整 JSON filter，不受此限。）
 
 > `report` 與 `guide` 已內嵌 `inspect` 快照 — **不需要**先跑 `dbcli inspect`。只有在需要 audit-recent 脈絡或診斷連線問題時，才手動跑 `dbcli inspect --for-agent`。
 
@@ -283,6 +292,12 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 - `database` 是 logical DB index（預設 `0`）。`dbcli blacklist table add 'secrets:*'` 註冊 key glob；可選的 `redis.mask` 區塊在讀取時遮罩值。大小防護（SCAN/HGETALL 截斷，`--no-limit` 可略過）與遮罩細節：reference.md Redis 段落。
 
 ## Elasticsearch
+
+**dbcli 對 Elasticsearch 為唯讀 — 不支援 `insert` / `update` / `delete`。**
+
+```bash
+dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
+```
 
 - `query` 接受 DSL（JSON body）或 Lucene query string；`--collection <index>` 為必填。
 - **支援：** `init`、`list`（含文件數的索引清單）、`schema [index]`（flattened mapping）、`query`、`export`（v1.22）、`shell`（v1.22）、`status`、`use`、`doctor`。**不支援：** `insert`、`update`、`delete`、`check`、`diff`、`migrate`。

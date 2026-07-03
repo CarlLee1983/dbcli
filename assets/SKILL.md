@@ -18,7 +18,16 @@ the CLI package has not been installed globally.
 
 1. `dbcli blacklist list` — confirm sensitive-data boundaries.
 2. `dbcli schema <object> --format json` — confirm real column/field names. **Never guess.**
-3. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm.
+3. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm. Redis
+   `query` has **no `--dry-run`** (see **Redis**); Elasticsearch is **read-only**.
+
+**`update` / `delete` `--where` is equality-only (SQL).** It accepts **only** `col=val` or
+`col1=v1 AND col2=v2`. A comparison / pattern operator (`>`, `>=`, `<`, `!=`, `LIKE`, `IN`)
+is a **parse error**; worse, `OR` is **silently swallowed into the value** — `a=1 OR b=2`
+parses as `a = "1 OR b=2"` and matches the wrong rows (or none). For a range or compound
+condition, first `query` / `export` the target rows' primary keys, then run one
+`update` / `delete --where "id=<pk>"` per key — or escalate to a human. (MongoDB `--where`
+takes a full JSON filter and is exempt.)
 
 > `report` and `guide` already embed an `inspect` snapshot — you do **not** need to run
 > `dbcli inspect` first. Run `dbcli inspect --for-agent` manually only when you want the
@@ -369,6 +378,12 @@ without changing the default. `--recovery` is honoured by `query`, `q`, `insert`
   (SCAN/HGETALL truncation, `--no-limit` to bypass) and masking details: reference.md Redis section.
 
 ## Elasticsearch
+
+**dbcli is read-only against Elasticsearch — `insert` / `update` / `delete` are not supported.**
+
+```bash
+dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
+```
 
 - `query` takes a DSL (JSON body) or Lucene query string; `--collection <index>` is required.
 - **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping),

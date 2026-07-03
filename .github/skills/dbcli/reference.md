@@ -494,6 +494,13 @@ dbcli update users --where "id=1" --set '{"name":"Bob"}' --plan --format json   
 **Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
 **Permission:** read-write+
 
+> **`--where` grammar (SQL `update` / `delete`)** — equality only: `col=val` or
+> `col1=v1 AND col2=v2`. Comparison / pattern operators (`>`, `>=`, `<`, `!=`, `LIKE`, `IN`)
+> raise a parse error, and `OR` is **silently folded into the value** (`a=1 OR b=2` parses as
+> `a = "1 OR b=2"`, matching nothing intended). For ranges or compound predicates, select the
+> target primary keys first, then issue one `update` / `delete --where "id=<pk>"` per key.
+> (MongoDB `--where` accepts a full JSON filter and is exempt.)
+
 ### delete
 
 Delete data from a table.

@@ -1,6 +1,6 @@
 # AI Platform Integration Testing Checklist
 
-After running `bun run build` and `scripts/validate-skill.sh`, perform manual testing on each platform.
+After running `bun run build` and `bun test`, perform manual testing on each platform.
 
 ## Claude Code (Anthropic)
 
@@ -41,5 +41,5 @@ After running `bun run build` and `scripts/validate-skill.sh`, perform manual te
 ## Notes
 
 - Some platforms (Gemini, Copilot) may not be installed in dev environment; skip if unavailable
-- Validation script (`validate-skill.sh`) checks CLI-level correctness; manual testing verifies IDE integration
+- Automated tests (`bun test`, incl. `tests/unit/commands/skill*` and `tests/unit/skill-assets/`) check CLI-level skill correctness; manual testing verifies IDE integration
 - If skill installation fails on any platform, check that skill format matches platform expectations (all use YAML frontmatter)

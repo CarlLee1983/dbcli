@@ -64,7 +64,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 
 計畫輸出是一組附帶說明與風險標籤的 dbcli 指令序列。請逐一執行 — 任務計畫**不會**繞過 blacklist、schema、dry-run 或確認等要求。
 
-內建套件：`diagnose-slow-query`（針對特定 SQL）、`analyze-table-perf`（針對特定資料表；`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議此套件）、`audit-permissions`、`safe-backfill`、`schema-drift-review`、`connection-health`。審查與驗證套件：`pr-database-review`、`migration-review`、`safe-backfill-verify`、`slow-endpoint-investigation`。全部為唯讀 `plan-only` — 選擇符合使用者情境的套件，任何索引 / DDL 提案都應先經 `migration-review` 再寫入。
+內建套件（SQL — postgres/mysql）：`diagnose-slow-query`（針對特定 SQL）、`analyze-table-perf`（針對特定資料表；`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議此套件）、`audit-permissions`、`safe-backfill`、`schema-drift-review`、`connection-health`。審查與驗證套件：`pr-database-review`、`migration-review`、`safe-backfill-verify`、`slow-endpoint-investigation`。MongoDB 套件：`mongo-safe-backfill`（以 dry-run 預覽的回填）、`mongo-schema-drift-review`（抽樣 dot-path 漂移）。全部為唯讀 `plan-only` — 選擇符合使用者情境的套件，任何索引 / DDL 提案都應先經 `migration-review` 再寫入。Redis/Elasticsearch 目前尚無套件——請改以 `guide` / `report` 為主。
 
 任務檔放在 `assets/tasks/`（內建）、`.dbcli-shared/tasks/`（共享）與 `.dbcli/tasks/`（本地覆寫）。
 

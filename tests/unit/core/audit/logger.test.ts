@@ -217,27 +217,27 @@ describe('Test 7: fail-soft on readonly dir (STORE-04, success criterion 4)', ()
   test.skipIf(process.platform === 'win32')(
     'returns skipped:write-failed; getHealth.lastError populated; one stderr warning',
     async () => {
-    const dbcliDir = join(workDir, '.dbcli')
-    await mkdir(dbcliDir, { recursive: true })
-    await chmod(dbcliDir, 0o555)
+      const dbcliDir = join(workDir, '.dbcli')
+      await mkdir(dbcliDir, { recursive: true })
+      await chmod(dbcliDir, 0o555)
 
-    stderrSpy = spyOn(process.stderr, 'write')
+      stderrSpy = spyOn(process.stderr, 'write')
 
-    const logger = makeLogger({})
-    const result = await logger.write(BASE_ENTRY)
+      const logger = makeLogger({})
+      const result = await logger.write(BASE_ENTRY)
 
-    expect('skipped' in result).toBe(true)
-    if (!('skipped' in result)) throw new Error('unreachable')
-    expect(result.skipped).toBe('write-failed')
+      expect('skipped' in result).toBe(true)
+      if (!('skipped' in result)) throw new Error('unreachable')
+      expect(result.skipped).toBe('write-failed')
 
-    const health = logger.getHealth()
-    expect(health.lastError).not.toBeNull()
+      const health = logger.getHealth()
+      expect(health.lastError).not.toBeNull()
 
-    const writes = stderrSpy.mock.calls.filter((call) => {
-      const arg = call[0]
-      return typeof arg === 'string' && arg.includes('dbcli audit')
-    })
-    expect(writes.length).toBe(1)
+      const writes = stderrSpy.mock.calls.filter((call) => {
+        const arg = call[0]
+        return typeof arg === 'string' && arg.includes('dbcli audit')
+      })
+      expect(writes.length).toBe(1)
     }
   )
 })
@@ -247,28 +247,28 @@ describe('Test 8: once-per-process warning cadence (D-16)', () => {
   test.skipIf(process.platform === 'win32')(
     'three more failed writes after the first -> total stderr warnings remains 1; lastError updates',
     async () => {
-    const dbcliDir = join(workDir, '.dbcli')
-    await mkdir(dbcliDir, { recursive: true })
-    await chmod(dbcliDir, 0o555)
+      const dbcliDir = join(workDir, '.dbcli')
+      await mkdir(dbcliDir, { recursive: true })
+      await chmod(dbcliDir, 0o555)
 
-    stderrSpy = spyOn(process.stderr, 'write')
+      stderrSpy = spyOn(process.stderr, 'write')
 
-    const logger = makeLogger({})
-    await logger.write(BASE_ENTRY)
-    const firstErrorTs = logger.getHealth().lastError?.ts
+      const logger = makeLogger({})
+      await logger.write(BASE_ENTRY)
+      const firstErrorTs = logger.getHealth().lastError?.ts
 
-    await new Promise((r) => setTimeout(r, 5))
-    await logger.write(BASE_ENTRY)
+      await new Promise((r) => setTimeout(r, 5))
+      await logger.write(BASE_ENTRY)
 
-    const writes = stderrSpy.mock.calls.filter((call) => {
-      const arg = call[0]
-      return typeof arg === 'string' && arg.includes('dbcli audit')
-    })
-    expect(writes.length).toBe(1)
+      const writes = stderrSpy.mock.calls.filter((call) => {
+        const arg = call[0]
+        return typeof arg === 'string' && arg.includes('dbcli audit')
+      })
+      expect(writes.length).toBe(1)
 
-    const finalErrorTs = logger.getHealth().lastError?.ts
-    expect(finalErrorTs).not.toBeUndefined()
-    expect(finalErrorTs).not.toBe(firstErrorTs)
+      const finalErrorTs = logger.getHealth().lastError?.ts
+      expect(finalErrorTs).not.toBeUndefined()
+      expect(finalErrorTs).not.toBe(firstErrorTs)
     }
   )
 })

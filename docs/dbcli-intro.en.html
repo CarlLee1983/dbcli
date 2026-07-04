@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dbcli — 讓 AI Agent 安全地操作你的資料庫</title>
+<title>dbcli — Securely Operate Your Database with AI Agents</title>
 <style>
   :root {
     --bg: #0b0e14;
@@ -328,10 +328,11 @@
 <header class="hero">
   <div class="container">
     <span class="kicker">dbcli — Database CLI for AI Agents</span>
-    <h1>你在 vibe coding，<br>但你的 Agent 不該<em>裸連</em>資料庫</h1>
+    <h1>You are vibe coding,<br>but your Agent should not <em>connect raw</em> to the database</h1>
     <p class="sub">
-      dbcli 是一支專為 AI Agent 設計的資料庫 CLI。讓 Claude Code、Cursor、Copilot、Gemini
-      能自己查 schema、下查詢、產報表 —— 而你的帳號密碼、機敏欄位，從頭到尾不會出現在對話裡。
+      dbcli is a database CLI built for AI agents. Claude Code, Cursor, Copilot, Gemini,
+      and others can inspect schemas, run queries, and generate reports without ever seeing
+      your credentials or sensitive fields in chat.
     </p>
     <div class="badge-row">
       <span class="badge">MySQL</span>
@@ -342,16 +343,19 @@
       <span class="badge">Elasticsearch</span>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#quickstart">3 分鐘上手</a>
+      <a class="btn btn-primary" href="#quickstart">Get Started in 3 Minutes</a>
       <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">GitHub →</a>
-      <a class="btn btn-ghost" href="dbcli-intro.en.html">English</a>
+    </div>
+
+    <div class="cta-row" style="margin-top: 10px;">
+      <a class="btn btn-ghost" href="dbcli-intro.html">中文版本</a>
     </div>
 
     <div class="hero-install">
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">zsh — 安裝只要一行</span>
+          <span class="title">zsh — one-line install</span>
         </div>
         <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
 <span class="c"># 或不安裝直接用</span>
@@ -361,7 +365,7 @@
 
     <figure class="image-figure">
       <img src="assets/dbcli-intro/hero.png" alt="AI agent 透過 dbcli 管線連接多種資料庫，憑證保存在盾牌後方的保險庫。">
-      <figcaption>Agent 只透過 dbcli 操作資料庫，憑證隔離在對話之外。</figcaption>
+      <figcaption>Agents operate the database through dbcli; credentials stay isolated from the conversation.</figcaption>
     </figure>
   </div>
 </header>
@@ -372,28 +376,28 @@
 <section>
   <div class="container">
     <span class="kicker">The Problem</span>
-    <h2>把 DATABASE_URL 直接餵給 Agent，是在賭什麼？</h2>
+    <h2>What are you betting on when you hand DATABASE_URL straight to an Agent?</h2>
     <p class="section-lead">
-      Vibe coding 最爽的時刻，是 Agent 幫你把資料撈出來、把 bug 修掉。
-      最痛的時刻，是它猜錯欄位名寫出一坨錯誤查詢、把密碼印進對話紀錄，
-      或是一句沒有 WHERE 的 UPDATE 掃過整張表。
+      The best part of vibe coding is when the Agent pulls the data and fixes the bug.
+      The worst part is when it guesses the wrong column name, prints a password into chat history,
+      or runs a DELETE without a WHERE clause across the whole table.
     </p>
     <div class="grid grid-3">
       <div class="card pain">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-key"></use></svg></div>
-        <h3>憑證直接進了對話</h3>
-        <p>連線字串貼進 prompt、寫進專案設定檔，等於把 production 密碼交給每一次對話、每一次 commit。</p>
+        <h3>Credentials spill into chat</h3>
+        <p>Paste a connection string into a prompt or project config and you are handing production secrets to every conversation and every commit.</p>
       </div>
       <div class="card pain">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-dice"></use></svg></div>
-        <h3>Agent 用猜的寫 SQL</h3>
-        <p>欄位叫 <code class="inline">user_name</code> 還是 <code class="inline">username</code>？
-        猜錯就是查不到，或更糟 —— 查到不該查的。</p>
+        <h3>The Agent writes SQL by guessing</h3>
+        <p>Is the column named <code class="inline">user_name</code> or <code class="inline">username</code>?
+        A wrong guess means no result, or worse, a result you should never have seen.</p>
       </div>
       <div class="card pain">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-alert"></use></svg></div>
-        <h3>寫入沒有安全網</h3>
-        <p>沒有 dry-run、沒有權限分級、沒有稽核紀錄。一句失控的 DELETE，你只能去翻備份。</p>
+        <h3>Writes have no safety net</h3>
+        <p>No dry-run, no permission tiers, no audit trail. One runaway DELETE and your only option is the backup.</p>
       </div>
     </div>
   </div>
@@ -404,38 +408,38 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 1 · Credential Isolation</span>
-    <h2>帳號密碼隔離：Agent 拿得到資料，拿不到鑰匙</h2>
+    <span class="kicker">Value 1 · Credential Isolation</span>
+    <h2>Credential isolation: the Agent gets the data, not the keys</h2>
     <p class="section-lead">
-      這是 dbcli 和「直接給 Agent 一條連線字串」最根本的差異。
-      憑證由 dbcli 管理，Agent 只呼叫指令、只看到結果 —— 密碼從不流經對話上下文。
+      This is the fundamental difference between dbcli and giving an Agent a raw connection string.
+      dbcli owns the credentials; the Agent only invokes commands and sees results, so passwords
+      never flow through chat context.
     </p>
     <div class="grid grid-2">
       <div class="card highlight">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-database"></use></svg></div>
-        <h3>設定不放專案目錄</h3>
-        <p>完整連線設定存在 <code class="inline">~/.config/dbcli/projects/&lt;id&gt;/</code>，
-        專案裡只留一個不含機敏內容的 binding stub。不會被 Agent 掃到，也不會誤 commit 進 git。</p>
+        <h3>Config stays out of the project tree</h3>
+        <p>The full connection config lives in <code class="inline">~/.config/dbcli/projects/&lt;id&gt;/</code>,
+        while the project keeps only a non-sensitive binding stub. The Agent will not scan it, and it will not get committed by accident.</p>
       </div>
       <div class="card highlight">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-link"></use></svg></div>
-        <h3>env-refs：連設定檔都沒有明文</h3>
-        <p><code class="inline">init --use-env-refs</code> 把憑證存成
-        <code class="inline">{"$env": "DB_PASSWORD"}</code> 執行期才解析的參照，
-        適合 CI/CD 與多環境。CI 缺 key 直接報錯，絕不默默 fallback 成明文。</p>
+        <h3>env-refs: not even the config file is plaintext</h3>
+        <p><code class="inline">init --use-env-refs</code> stores credentials as a runtime-resolved reference like
+        <code class="inline">{"$env": "DB_PASSWORD"}</code>, which is a good fit for CI/CD and multi-environment setups.
+        If CI is missing the key, it fails loudly instead of silently falling back to plaintext.</p>
       </div>
       <div class="card highlight">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-eye-off"></use></svg></div>
-        <h3>任何輸出都不吐憑證</h3>
-        <p><code class="inline">status</code>、<code class="inline">doctor</code>、錯誤訊息、稽核紀錄
-        —— 所有給 Agent 看的輸出都經過設計，連線字串與密碼一律不出現。</p>
+        <h3>No output ever leaks credentials</h3>
+        <p><code class="inline">status</code>, <code class="inline">doctor</code>, error messages, and audit logs
+        are all designed for Agent consumption without ever printing connection strings or passwords.</p>
       </div>
       <div class="card highlight">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-globe"></use></svg></div>
-        <h3>多連線、各自的權限等級</h3>
-        <p>本地、staging、prod 是同專案裡的<strong>具名連線</strong>，各自獨立憑證、獨立權限、
-        獨立 schema 快取。最常見的配置：本地開 <code class="inline">read-write</code> 放手讓 Agent 實驗，
-        prod 鎖 <code class="inline">query-only</code> —— 想寫也寫不了。</p>
+        <h3>Multiple connections, separate privilege levels</h3>
+        <p>Local, staging, and prod are <strong>named connections</strong> inside the same project, each with independent credentials, permissions, and schema caches.
+        The most common setup is <code class="inline">read-write</code> locally so the Agent can experiment, while prod stays locked to <code class="inline">query-only</code>.</p>
       </div>
     </div>
 
@@ -443,30 +447,30 @@
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">本地放心寫，線上鎖唯讀 —— 一個專案、兩條連線、兩種權限</span>
+          <span class="title">Local writes are safe, prod is read-only — one project, two connections, two privilege levels</span>
         </div>
-        <pre><span class="c"># 本地 DB：開發用，允許寫入</span>
+        <pre><span class="c"># Local DB: development use, writes allowed</span>
 <span class="p">$</span> dbcli init --conn-name local --env-file .env.local --permission read-write
 
-<span class="c"># 線上 DB：唯讀 + 憑證用 $env 參照，設定檔裡沒有明文密碼</span>
+<span class="c"># Prod DB: read-only + credentials stored as $env refs, no plaintext password in config</span>
 <span class="p">$</span> dbcli init --conn-name prod --env-file .env.production \
     --use-env-refs --permission <span class="w">query-only</span>
 
-<span class="p">$</span> dbcli use local                          <span class="c"># 平常預設操作本地</span>
-<span class="p">$</span> dbcli query --use prod "SELECT …"        <span class="c"># 需要時單次指向線上，只能讀</span>
+<span class="p">$</span> dbcli use local                          <span class="c"># Default to local day-to-day</span>
+<span class="p">$</span> dbcli query --use prod "SELECT …"        <span class="c"># Temporarily point at prod when needed; read-only only</span>
 <span class="p">$</span> dbcli update --use prod orders …
 <span class="d">✗ Permission denied: connection "prod" is query-only</span></pre>
       </div>
       <p style="color: var(--text-dim); font-size: 0.92rem; margin-top: 14px;">
-        權限跟著<strong>連線</strong>走，不是跟著對話走 —— 無論 Agent 被 prompt 成什麼樣子，
-        對 prod 的寫入在 dbcli 這一層就被拒絕。Debug 時 Agent 可以自由對照兩邊資料，
-        卻不可能「順手」改到線上。
+        Permissions follow the <strong>connection</strong>, not the conversation. No matter how the Agent is prompted,
+        writes to prod are rejected at the dbcli layer. During debugging the Agent can compare both sides freely,
+        but it can never accidentally mutate prod.
       </p>
     </div>
 
     <figure class="image-figure">
       <img src="assets/dbcli-intro/credential-isolation.png" alt="AI Agent、dbcli gateway、資料庫與本機憑證盒之間的憑證隔離架構圖。">
-      <figcaption>Agent 送出 CLI 指令；dbcli 讀取本機憑證後連線，憑證不回流到 Agent。</figcaption>
+      <figcaption>The Agent sends CLI commands; dbcli reads local credentials to connect, and credentials never flow back to the Agent.</figcaption>
     </figure>
   </div>
 </section>
@@ -476,20 +480,20 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 2 · Sensitive Data Blacklist</span>
-    <h2>敏感欄位黑名單：AI 看不到，就洩漏不了</h2>
+    <span class="kicker">Value 2 · Sensitive Data Blacklist</span>
+    <h2>Sensitive-data blacklist: if the AI cannot see it, it cannot leak it</h2>
     <p class="section-lead">
-      把 <code class="inline">password</code>、<code class="inline">token</code>、個資欄位加入 blacklist，
-      查詢結果在<strong>回到 Agent 之前</strong>就被遮罩 —— 包含報表與 HTML dashboard。
-      支援 SQL 欄位/資料表、MongoDB 巢狀 dot-path 萬用字元、Redis key glob。
+      Add <code class="inline">password</code>, <code class="inline">token</code>, and PII fields to the blacklist,
+      and results are masked <strong>before they return to the Agent</strong> — including reports and HTML dashboards.
+      SQL columns/tables, MongoDB nested dot-path wildcards, and Redis key globs are supported.
     </p>
     <div class="terminal">
       <div class="terminal-bar">
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="title">blacklist 實際效果</span>
+        <span class="title">What blacklist does in practice</span>
       </div>
       <pre><span class="p">$</span> dbcli blacklist column add users.password
-<span class="p">$</span> dbcli blacklist table add 'secrets:*'          <span class="c"># Redis key glob 也支援</span>
+<span class="p">$</span> dbcli blacklist table add 'secrets:*'          <span class="c"># Redis key glob is supported too</span>
 <span class="p">$</span> dbcli query "SELECT id, email, password FROM users LIMIT 2"
 ┌────┬──────────────────┬──────────────┐
 │ id │ email            │ password     │
@@ -506,36 +510,36 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 3 · Layered Safety</span>
-    <h2>四級權限 + 全程安全網，寫入不再是一場豪賭</h2>
+    <span class="kicker">Value 3 · Layered Safety</span>
+    <h2>Four permission levels plus an end-to-end safety net, so writes are no longer a gamble</h2>
     <p class="section-lead">
-      預設 <code class="inline">query-only</code>，Agent 想做什麼，就給到哪一級 —— 一個 flag 的事。
-      即使開放寫入，每一步仍有護欄。
+      The default is <code class="inline">query-only</code>; give the Agent only the level it needs — it is just a flag.
+      Even when writes are enabled, every step still has guardrails.
     </p>
     <div class="ladder">
-      <div class="rung"><span class="lv">query-only</span><span class="desc">預設。SELECT、list、schema、export。查詢自動加 LIMIT 1000，Agent 掃不垮你的表。</span></div>
-      <div class="rung"><span class="lv">read-write</span><span class="desc">+ INSERT、UPDATE。所有寫入先 <code class="inline">--dry-run</code> 預覽參數化 SQL 再執行。</span></div>
-      <div class="rung"><span class="lv">data-admin</span><span class="desc">+ DELETE（僅 DML）。<code class="inline">--where</code> 為必填且刻意限制為等值條件，防止範圍誤殺。</span></div>
-      <div class="rung"><span class="lv">admin</span><span class="desc">+ DDL。<code class="inline">migrate</code> 預設就是 dry-run，要 <code class="inline">--execute</code> 才真的動手；DROP 還要再加 <code class="inline">--force</code>。</span></div>
+      <div class="rung"><span class="lv">query-only</span><span class="desc">Default. SELECT, list, schema, export. Queries auto-append LIMIT 1000 so the Agent cannot overwhelm your tables.</span></div>
+      <div class="rung"><span class="lv">read-write</span><span class="desc">Adds INSERT and UPDATE. Every write is previewed with <code class="inline">--dry-run</code> before execution.</span></div>
+      <div class="rung"><span class="lv">data-admin</span><span class="desc">Adds DELETE (DML only). <code class="inline">--where</code> is required and intentionally limited to equality conditions to avoid broad mistakes.</span></div>
+      <div class="rung"><span class="lv">admin</span><span class="desc">Adds DDL. <code class="inline">migrate</code> defaults to dry-run; you need <code class="inline">--execute</code> to actually run it, and DROP still requires <code class="inline">--force</code>.</span></div>
     </div>
 
     <div class="grid grid-3" style="margin-top: 28px;">
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-receipt"></use></svg></div>
-        <h3>Audit log 全程留痕</h3>
-        <p>每個操作留下 metadata 稽核紀錄（不含 SQL 內文與資料值），跨 session 可回溯「Agent 到底做了什麼」。</p>
+        <h3>Audit log keeps a trail</h3>
+        <p>Every operation leaves a metadata audit record, without SQL text or data values, so you can trace what the Agent did across sessions.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-bandage"></use></svg></div>
-        <h3>失敗自動產生復原計畫</h3>
-        <p>指令加 <code class="inline">--recovery</code>，失敗時自動存下結構化復原方案；
-        <code class="inline">dbcli recover --apply</code> 在風險分級下執行安全修復步驟。</p>
+        <h3>Recovery plans are generated automatically on failure</h3>
+        <p>Add <code class="inline">--recovery</code> and failed runs persist a structured recovery plan automatically;
+        <code class="inline">dbcli recover --apply</code> executes the safe remediation steps under risk-based control.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-shield"></use></svg></div>
-        <h3>靜態風險分析</h3>
-        <p><code class="inline">dbcli plan</code> 不連線就能分類一句 SQL 的風險等級；
-        Elasticsearch 更是整個唯讀，想寫也寫不了。</p>
+        <h3>Static risk analysis</h3>
+        <p><code class="inline">dbcli plan</code> can classify the risk level of a SQL statement without connecting;
+        Elasticsearch is read-only end-to-end, so writes are impossible there.</p>
       </div>
     </div>
   </div>
@@ -546,54 +550,54 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 4 · Agent-Native</span>
-    <h2>不只安全，Agent 用起來是真的順</h2>
+    <span class="kicker">Value 4 · Agent-Native</span>
+    <h2>Safe is not enough; the Agent experience also has to be smooth</h2>
     <p class="section-lead">
-      dbcli 不是「一支普通 CLI 剛好能被 Agent 呼叫」，而是每個輸出、每個工作流都為 Agent 設計。
-      一行 <code class="inline">dbcli skill --install claude</code>，Agent 就自帶完整使用手冊。
+      dbcli is not “a normal CLI that happens to be callable by an Agent.” Every output and workflow is designed for the Agent.
+      One line of <code class="inline">dbcli skill --install claude</code> gives the Agent its full operating manual.
     </p>
     <div class="grid grid-2">
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-ruler"></use></svg></div>
-        <h3>Schema 探索，杜絕欄位用猜的</h3>
-        <p><code class="inline">schema users --format json</code> 給出真實欄位、預估列數、大小分級。
-        Skill 明文規定：<strong>禁止猜欄位名，先查 schema</strong>。MongoDB 用取樣推 dot-path 結構，Redis 看 key 型別/TTL。</p>
+        <h3>Schema exploration to avoid guessing columns</h3>
+        <p><code class="inline">schema users --format json</code> returns real columns, estimated row counts, and size bands.
+        The skill says it plainly: <strong>do not guess column names; check schema first</strong>. MongoDB infers dot-path structure from sampling, and Redis shows key type and TTL.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-clipboard"></use></svg></div>
-        <h3>Task Packs：現成的專家工作流</h3>
-        <p>「診斷慢查詢」「稽核權限」「安全 backfill」「schema 漂移檢查」…
-        <code class="inline">skill tasks plan</code> 直接產出一份帶風險標籤的逐步計畫，Agent 照做就好，不必自己發明步驟。</p>
+        <h3>Task Packs: ready-made expert workflows</h3>
+        <p>“Diagnose a slow query,” “audit permissions,” “safe backfill,” “schema drift check”...
+        <code class="inline">skill tasks plan</code> emits a step-by-step plan with risk labels, so the Agent can follow it instead of inventing steps.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-chart"></use></svg></div>
-        <h3>一句話變出互動式報表</h3>
-        <p><code class="inline">q @analytics/revenue --ui</code> 直接在瀏覽器開出含 KPI 卡與圖表的
-        HTML dashboard（React + Recharts、單檔可分享）。blacklist 遮罩在渲染前就完成。</p>
+        <h3>Turn one sentence into an interactive report</h3>
+        <p><code class="inline">q @analytics/revenue --ui</code> opens an HTML dashboard in the browser with KPI cards and charts.
+        It is a single shareable file, and blacklist masking happens before render.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-repeat"></use></svg></div>
-        <h3>可重用的參數化查詢</h3>
-        <p>Saved queries 存在 repo 裡（local / 團隊共享 / 內建 <code class="inline">@diag/*</code> 三層），
-        Agent 用 <code class="inline">queries suggest</code> 依意圖找到現成 SQL，而不是每次重寫。</p>
+        <h3>Reusable parameterized queries</h3>
+        <p>Saved queries live in the repo in three layers — local, shared, and built-in <code class="inline">@diag/*</code> —
+        so the Agent can use <code class="inline">queries suggest</code> to find existing SQL by intent instead of rewriting it each time.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-compass"></use></svg></div>
-        <h3>guide / report：診斷有 SOP</h3>
-        <p><code class="inline">guide slow-query</code> 給出確定性的下一步指令；
-        <code class="inline">report --section perf</code> 一次跑完慢查詢、索引使用率、cache 命中率體檢。</p>
+        <h3>guide / report: diagnosis with SOPs</h3>
+        <p><code class="inline">guide slow-query</code> gives deterministic next-step commands;
+        <code class="inline">report --section perf</code> runs a complete check for slow queries, index usage, and cache hit rate.</p>
       </div>
       <div class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#icon-handshake"></use></svg></div>
-        <h3>七大平台 skill 一鍵安裝</h3>
-        <p>Claude Code、Cursor、Copilot、Gemini、Codex、Windsurf、Antigravity ——
-        <code class="inline">skill --install &lt;platform&gt;</code> 把工作流與完整參考文件裝進對應目錄。</p>
+        <h3>One-click skill install for seven platforms</h3>
+        <p>Claude Code, Cursor, Copilot, Gemini, Codex, Windsurf, and Antigravity —
+        <code class="inline">skill --install &lt;platform&gt;</code> installs the workflow and full reference docs into the right directory.</p>
       </div>
     </div>
 
     <figure class="image-figure">
-      <img src="assets/dbcli-intro/dashboard.png" alt="深色模式 analytics dashboard，包含 KPI 卡、折線圖、長條圖與已遮罩資料表。">
-      <figcaption>dbcli 可把查詢結果轉成互動式 dashboard，敏感欄位在渲染前已遮罩。</figcaption>
+      <img src="assets/dbcli-intro/dashboard.png" alt="Dark-mode analytics dashboard with KPI cards, trend lines, bar chart, and masked data table.">
+      <figcaption>dbcli can turn query results into an interactive dashboard, with sensitive fields masked before rendering.</figcaption>
     </figure>
   </div>
 </section>
@@ -603,26 +607,26 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 5 · One-Command Onboarding</span>
-    <h2>Plugin 一鍵裝進 Claude Code、Codex —— 連 CLI 都不用先裝</h2>
+    <span class="kicker">Feature 5 · One-Command Onboarding</span>
+    <h2>Install the plugin into Claude Code or Codex with one click - no CLI install needed first</h2>
     <p class="section-lead">
-      dbcli 同時發佈為 <strong>plugin marketplace 套件</strong>與<strong>可安裝的 agent skill</strong>。
-      走 plugin 這條路，你甚至不需要先全域安裝 CLI —— plugin 內建
-      <code class="inline">bunx @carllee1983/dbcli</code> fallback，裝完即用。
+      dbcli ships both as a <strong>plugin marketplace package</strong> and as an <strong>installable agent skill</strong>.
+      If you choose the plugin path, you do not even need a global CLI install first - the plugin includes a
+      <code class="inline">bunx @carllee1983/dbcli</code> fallback and works immediately after installation.
     </p>
     <div class="grid grid-2">
       <div class="card highlight install-card">
         <div>
           <span class="plat">Claude Code</span><span class="plat">Codex</span><span class="plat">Copilot CLI</span><span class="plat">Cursor</span>
-          <h3 style="margin-top: 12px;">路線 A：Plugin Marketplace</h3>
+          <h3 style="margin-top: 12px;">Path A: Plugin Marketplace</h3>
           <p style="color: var(--text-dim); font-size: 0.94rem;">
-            在 agent 裡貼一行指令，skill、完整參考文件、安全工作流全部到位。
-            開新 session 就能直接說「幫我查資料庫」。</p>
+            Paste one command into the Agent, and the skill, full reference docs, and safe workflow are all in place.
+            Start a new session and simply say "check the database for me."</p>
         </div>
         <div class="terminal">
           <div class="terminal-bar">
             <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="title">在各 Agent 內安裝 plugin</span>
+            <span class="title">Install the plugin in each Agent</span>
           </div>
           <pre><span class="c"># Claude Code</span>
 <span class="p">/plugin</span> marketplace add CarlLee1983/dbcli
@@ -630,7 +634,7 @@
 
 <span class="c"># Codex</span>
 <span class="p">$</span> codex plugin marketplace add CarlLee1983/dbcli
-<span class="c">#   → /plugins 內安裝 dbcli-agent</span>
+<span class="c">#   → installs dbcli-agent in /plugins</span>
 
 <span class="c"># GitHub Copilot CLI</span>
 <span class="p">$</span> copilot plugin marketplace add CarlLee1983/dbcli
@@ -643,20 +647,21 @@
       <div class="card install-card">
         <div>
           <span class="plat">claude</span><span class="plat">codex</span><span class="plat">cursor</span><span class="plat">copilot</span><span class="plat">gemini</span><span class="plat">windsurf</span><span class="plat">antigravity</span>
-          <h3 style="margin-top: 12px;">路線 B：<code class="inline">skill --install</code></h3>
+          <h3 style="margin-top: 12px;">Path B: <code class="inline">skill --install</code></h3>
           <p style="color: var(--text-dim); font-size: 0.94rem;">
-            已經全域安裝 CLI？一行指令把 skill 文件（工作流 + 完整參考手冊）寫進
-            對應平台的 skill 目錄，七大平台通用，且會做覆蓋保護不弄壞你既有的設定。</p>
+            Already have the CLI installed globally? One command writes the skill docs
+            (workflow plus full reference manual) into the correct platform skill directory.
+            It works across all seven platforms and protects your existing configuration from being overwritten.</p>
         </div>
         <div class="terminal">
           <div class="terminal-bar">
             <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="title">skill 安裝</span>
+            <span class="title">Skill install</span>
           </div>
           <pre><span class="p">$</span> dbcli skill --install claude       <span class="c"># Claude Code</span>
 <span class="p">$</span> dbcli skill --install cursor       <span class="c"># Cursor</span>
 <span class="p">$</span> dbcli skill --install gemini       <span class="c"># Gemini CLI</span>
-<span class="c"># … codex / copilot / windsurf / antigravity</span></pre>
+<span class="c"># ... codex / copilot / windsurf / antigravity</span></pre>
         </div>
       </div>
     </div>
@@ -668,26 +673,27 @@
 ============================================================ -->
 <section>
   <div class="container">
-    <span class="kicker">賣點 6 · Skill in Action</span>
-    <h2>你用說的，Agent 動手 —— 這就是裝上 skill 之後的日常</h2>
+    <span class="kicker">Feature 6 · Skill in Action</span>
+    <h2>You speak, the Agent works - that is the everyday experience after installing the skill</h2>
     <p class="section-lead">
-      不用背指令、不用會 SQL、不用知道什麼是 N+1。你講人話，Agent 照著 skill 內建的
-      資料庫 SOP 安全地做完，回報你聽得懂的結果。想看門道的人，每段對話都可以展開「幕後指令」。
+      No memorized commands, no SQL, and no need to know what N+1 means. You speak naturally, and the Agent
+      follows the database SOP built into the skill to finish the job safely, then reports back in plain language.
+      If you want the mechanics, every conversation can expand the "behind the scenes" commands.
     </p>
     <div class="grid grid-2">
 
       <div class="scenario">
-        <span class="perk">不用會 SQL</span>
-        <div class="you">這支 API 怎麼越用越慢？幫我看一下 🥲</div>
+        <span class="perk">No SQL required</span>
+        <div class="you">Why is this API getting slower the more we use it? Take a look 🥲</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          查到了。<span class="hl">orders 表少了一個索引</span>，每次查詢都在掃全表
-          —— <span class="num">120 萬</span>筆掃好掃滿。我已經準備好一份加索引的
-          migration 提案，預估能把這支 API 從 <span class="num">2.4s</span> 壓到
-          <span class="num">30ms</span>，你點頭我就送出 review。
+          Found it. The <span class="hl">orders table is missing an index</span>, so every query is doing a full scan
+          on <span class="num">1.2 million</span> rows. I have a migration proposal ready to add the index.
+          It should cut this API from <span class="num">2.4s</span> to <span class="num">30ms</span>.
+          Say the word and I'll submit it for review.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli report --section perf
 <span class="p">→</span> dbcli skill tasks plan analyze-table-perf --param table=orders
 <span class="p">→</span> dbcli guide missing-index-for "SELECT …"</span>
@@ -695,108 +701,108 @@
       </div>
 
       <div class="scenario">
-        <span class="perk">寫入有安全網</span>
-        <div class="you">幫我把測試環境這批舊訂單改成 archived</div>
+        <span class="perk">Writes have guardrails</span>
+        <div class="you">Mark this batch of old test orders as archived</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          這批共 <span class="num">1,204</span> 筆。我先用 <span class="hl">dry-run 預覽</span>了
-          要執行的變更（不會真的動資料），看起來範圍正確 —— 已執行完畢，
-          並且<span class="hl">讀回驗證</span>過每一筆都改好了。全程有留稽核紀錄，隨時可回查。
+          There are <span class="num">1,204</span> rows. I first used a <span class="hl">dry-run preview</span>
+          to confirm the change set without touching data. The scope looks right, so I ran it,
+          then <span class="hl">read back the results</span> to verify every row was updated.
+          Audit logs are in place the whole time.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli query "SELECT COUNT(*) …"        <span style="color:#6b7688"># 先數影響幾筆</span>
 <span class="p">→</span> dbcli update orders --where "…" --set '…' --dry-run
-<span class="p">→</span> 執行 → query 讀回確認 → audit 留痕</span>
+<span class="p">→</span> execute → query readback → audit trail</span>
         </details>
       </div>
 
       <div class="scenario">
-        <span class="perk">結論有憑有據</span>
-        <div class="you">幫我 review 這個 PR，它動到好幾張表的寫入</div>
+        <span class="perk">Evidence-backed conclusions</span>
+        <div class="you">Review this PR for me. It touches writes across several tables.</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          審完了。<span class="num">3</span> 個資料庫相關的疑慮：兩個
-          <span class="hl">verified</span>（確認沒問題，附驗證輸出），一個
-          <span class="hl">not_verified</span> —— PR 假設 <code class="inline">status</code>
-          欄位有預設值，但實際 schema 沒有。建議請作者補上，不然新寫入會是 NULL。
+          Reviewed. There are <span class="num">3</span> database-related concerns: two are
+          <span class="hl">verified</span> with proof attached, and one is
+          <span class="hl">not_verified</span> - the PR assumes the <code class="inline">status</code>
+          column has a default value, but the actual schema does not. Ask the author to add it, or new writes will end up NULL.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli skill tasks plan pr-database-review
-<span class="p">→</span> dbcli schema / plan / --dry-run 逐項驗證 PR 的假設</span>
+<span class="p">→</span> dbcli schema / plan / --dry-run to verify each PR assumption</span>
         </details>
       </div>
 
       <div class="scenario">
-        <span class="perk">報表一句話搞定</span>
-        <div class="you">等等要開會，給我這個月營收的 dashboard 🙏</div>
+        <span class="perk">Dashboards in one sentence</span>
+        <div class="you">I have a meeting soon. Give me this month's revenue dashboard 🙏</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          開好了，瀏覽器裡那份就是：<span class="hl">4 張 KPI 卡 + 趨勢圖 + 明細表</span>，
-          單一 HTML 檔，直接丟群組大家都能開。放心，客戶 email 之類的敏感欄位
-          在產生前就<span class="hl">自動遮罩</span>掉了。
+          It's ready. The browser view has <span class="hl">4 KPI cards + a trend chart + a detail table</span>,
+          all in a single HTML file you can share with the team. Sensitive fields like customer email
+          were <span class="hl">masked automatically</span> before generation.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli queries suggest "monthly revenue"
 <span class="p">→</span> dbcli q @analytics/revenue --param days=30 --ui</span>
         </details>
       </div>
 
       <div class="scenario">
-        <span class="perk">看穿 ORM 黑箱</span>
-        <div class="you">我都用 ORM，總覺得它偷偷產生了很爛的 SQL…</div>
+        <span class="perk">See through ORM black boxes</span>
+        <div class="you">We use an ORM, and I keep suspecting it is secretly generating terrible SQL...</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          你的直覺是對的 😅 我在 app 和資料庫之間掛了觀測代理錄了 10 分鐘：
-          商品列表頁有一個 <span class="hl">N+1 迴圈</span> —— 一頁觸發
-          <span class="num">101</span> 次查詢。改成 eager loading 加一個索引後，
-          頁面載入從 <span class="num">1.8s</span> 降到 <span class="num">90ms</span>。
+          Your instinct is right 😅 I ran an observability proxy between the app and the database for 10 minutes:
+          the product list page has an <span class="hl">N+1 loop</span> - one page triggers
+          <span class="num">101</span> queries. After switching to eager loading and adding an index,
+          page load time dropped from <span class="num">1.8s</span> to <span class="num">90ms</span>.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli proxy postgresql --listen 5433 --target localhost:5432
-<span class="p">→</span> 照常操作 app → dbcli proxy analyze   <span style="color:#6b7688"># N+1、慢查詢、hot tables</span>
+<span class="p">→</span> use the app normally → dbcli proxy analyze   <span style="color:#6b7688"># N+1, slow queries, hot tables</span>
 <span class="p">→</span> dbcli explain --analyze "&lt;最慢那句&gt;"</span>
         </details>
       </div>
 
       <div class="scenario">
-        <span class="perk">migration 不再靠信仰</span>
-        <div class="you">跑完 migration 了，schema 真的長對了嗎？</div>
+        <span class="perk">Migrations without faith</span>
+        <div class="you">The migration finished - did the schema actually come out right?</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          比對過 migration 前後的快照：新欄位、新索引都在，但抓到一個意外 ——
-          <span class="hl"><code class="inline">price</code> 被改成了 FLOAT</span>，
-          金額用浮點數會有精度問題。建議在進 staging 前改回 DECIMAL，我可以幫你出修正的 migration。
+          I compared the snapshots before and after the migration: the new columns and indexes are there,
+          but I found a surprise - <span class="hl"><code class="inline">price</code> was changed to FLOAT</span>.
+          Money in floating point will drift. Change it back to DECIMAL before staging, and I can draft the fix migration.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
           <span class="chain"><span class="p">→</span> dbcli diff --snapshot before-migrate
-<span class="p">→</span> 跑 ORM migration → dbcli diff --against before-migrate
+<span class="p">→</span> run ORM migration → dbcli diff --against before-migrate
 <span class="p">→</span> dbcli check orders</span>
         </details>
       </div>
 
       <div class="scenario" style="grid-column: 1 / -1;">
-        <span class="perk">碰真實資料 · 線上零風險</span>
-        <div class="you">這個 bug 本地重現不了，好像只有線上資料才會踩到 —— 幫我查</div>
+        <span class="perk">Real data, zero production risk</span>
+        <div class="you">I can't reproduce this bug locally. It seems to only happen with production data - help me trace it.</div>
         <div class="agent">
           <span class="who">AGENT</span>
-          找到了。線上有 <span class="num">17</span> 筆舊訂單的
-          <code class="inline">coupon</code> 欄位是十年前的舊格式，你的新程式碼沒處理到。
-          我<span class="hl">用唯讀權限</span>看了線上的資料長相，回<span class="hl">本地</span>造了
-          一筆一模一樣的測試資料重現 bug，修好也驗證過了 ——
-          <span class="hl">整個過程線上資料庫連一個位元都沒被改到</span>，因為 prod
-          連線本來就被設成 query-only，我想寫也寫不了。
+          Found it. There are <span class="num">17</span> old production orders whose
+          <code class="inline">coupon</code> field still uses a format from ten years ago, and your new code does not handle it.
+          I <span class="hl">used read-only access</span> to inspect the production data shape, then recreated the issue
+          <span class="hl">locally</span> with a matching test record, fixed it, and verified the fix.
+          <span class="hl">Nothing in production changed at all</span>, because the prod connection is query-only by default.
         </div>
         <details class="behind">
-          <summary>幕後：Agent 其實跑了這些</summary>
-          <span class="chain"><span class="p">→</span> dbcli schema orders --use prod --format json     <span style="color:#6b7688"># 線上真實結構</span>
-<span class="p">→</span> dbcli query --use prod "SELECT … WHERE …"         <span style="color:#6b7688"># 唯讀撈出踩雷資料的形狀</span>
-<span class="p">→</span> dbcli insert orders --use local --data '…' --dry-run  <span style="color:#6b7688"># 本地重建案例</span>
-<span class="p">→</span> 本地修正 → dbcli query --use local 驗證 → 收工</span>
+          <summary>Behind the scenes: what the Agent actually ran</summary>
+          <span class="chain"><span class="p">→</span> dbcli schema orders --use prod --format json     <span style="color:#6b7688"># inspect the real prod schema</span>
+<span class="p">→</span> dbcli query --use prod "SELECT … WHERE …"         <span style="color:#6b7688"># inspect the data shape read-only</span>
+<span class="p">→</span> dbcli insert orders --use local --data '…' --dry-run  <span style="color:#6b7688"># recreate the case locally</span>
+<span class="p">→</span> fix locally → dbcli query --use local verify → done</span>
         </details>
       </div>
 
@@ -810,52 +816,52 @@
 <section>
   <div class="container">
     <span class="kicker">Before / After</span>
-    <h2>同一個 Agent，兩種世界</h2>
-    <p class="section-lead">左邊是把連線字串直接交給 Agent；右邊是透過 dbcli。</p>
+    <h2>Same Agent, two different worlds</h2>
+    <p class="section-lead">On the left, you hand the connection string straight to the Agent. On the right, you go through dbcli.</p>
     <div class="compare-wrap">
       <table class="compare">
         <thead>
           <tr>
             <th></th>
-            <th>直接給 Agent 連線字串</th>
-            <th class="vs-dbcli">透過 dbcli</th>
+            <th>Give the Agent the connection string directly</th>
+            <th class="vs-dbcli">Go through dbcli</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>憑證位置</td>
-            <td class="bad">出現在 prompt、對話紀錄、專案設定檔</td>
-            <td class="good">存於 <code class="inline">~/.config/dbcli</code> 或 <code class="inline">$env</code> 參照，永不進入對話</td>
+            <td>Credential location</td>
+            <td class="bad">Shows up in prompts, chat logs, and project config files</td>
+            <td class="good">Stored in <code class="inline">~/.config/dbcli</code> or via <code class="inline">$env</code> references, never in conversation</td>
           </tr>
           <tr>
-            <td>敏感欄位</td>
-            <td class="bad">SELECT 得到什麼，Agent 就看到什麼</td>
-            <td class="good">blacklist 在回傳前遮罩，含報表輸出</td>
+            <td>Sensitive fields</td>
+            <td class="bad">Whatever SELECT returns is visible to the Agent</td>
+            <td class="good">Blacklist masks them before return, including report output</td>
           </tr>
           <tr>
-            <td>權限範圍</td>
-            <td class="bad">DB 帳號有多大權限，Agent 就有多大</td>
-            <td class="good">四級權限預設最低，逐級開放</td>
+            <td>Permission scope</td>
+            <td class="bad">The Agent gets every privilege the DB account has</td>
+            <td class="good">Four permission levels start at the minimum and open up gradually</td>
           </tr>
           <tr>
-            <td>寫入防護</td>
-            <td class="bad">寄望 Agent 自律</td>
-            <td class="good">dry-run 預覽、等值 WHERE 限制、DDL 需 <code class="inline">--execute</code></td>
+            <td>Write protection</td>
+            <td class="bad">Hoping the Agent behaves</td>
+            <td class="good">dry-run preview, equality-based WHERE restrictions, DDL requires <code class="inline">--execute</code></td>
           </tr>
           <tr>
-            <td>失控查詢</td>
-            <td class="bad">全表掃描直接送出</td>
-            <td class="good">自動 LIMIT 1000、大表尺寸警示</td>
+            <td>Runaway queries</td>
+            <td class="bad">Full table scans go out unchanged</td>
+            <td class="good">Automatic LIMIT 1000 and large-table warnings</td>
           </tr>
           <tr>
-            <td>事後追溯</td>
-            <td class="bad">翻對話紀錄自求多福</td>
-            <td class="good">audit log 留痕 + recovery 復原計畫</td>
+            <td>After-the-fact traceability</td>
+            <td class="bad">Rely on chat history and hope for the best</td>
+            <td class="good">Audit logs plus recovery plans</td>
           </tr>
           <tr>
-            <td>Schema 認知</td>
-            <td class="bad">Agent 憑記憶與想像猜欄位</td>
-            <td class="good"><code class="inline">schema</code> 快取真實結構，猜測被明文禁止</td>
+            <td>Schema awareness</td>
+            <td class="bad">The Agent guesses fields from memory and imagination</td>
+            <td class="good"><code class="inline">schema</code> caches the real structure, and guessing is explicitly banned</td>
           </tr>
         </tbody>
       </table>
@@ -869,36 +875,37 @@
 <section id="quickstart">
   <div class="container">
     <span class="kicker">Quick Start</span>
-    <h2>3 分鐘，讓你的 Agent 學會安全用資料庫</h2>
+    <h2>Three minutes to teach your Agent safe database use</h2>
     <div class="steps">
       <div class="step">
         <div>
-          <h3>安裝並初始化連線</h3>
-          <p>有 <code class="inline">.env</code>（含 <code class="inline">DATABASE_URL</code>）的專案，
-          <code class="inline">dbcli init</code> 會自動解析 —— 你不必手打任何密碼。</p>
+          <h3>Install and initialize connections</h3>
+          <p>For projects with a <code class="inline">.env</code> file that includes <code class="inline">DATABASE_URL</code>,
+          <code class="inline">dbcli init</code> resolves it automatically - no password typing required.</p>
         </div>
       </div>
       <div class="step">
         <div>
-          <h3>把該藏的藏好</h3>
-          <p><code class="inline">dbcli blacklist column add users.password</code>，
-          再用 <code class="inline">dbcli status</code> 確認權限等級與遮罩範圍。</p>
+          <h3>Hide what should stay hidden</h3>
+          <p><code class="inline">dbcli blacklist column add users.password</code>,
+          then use <code class="inline">dbcli status</code> to confirm permission levels and masking scope.</p>
         </div>
       </div>
       <div class="step">
         <div>
-          <h3>幫 Agent 裝上 skill 或 plugin</h3>
-          <p><code class="inline">dbcli skill --install claude</code>（或 cursor / copilot / gemini…），
-          也可以在 Claude Code / Codex 裡直接 <code class="inline">/plugin marketplace add CarlLee1983/dbcli</code>。
-          Agent 立刻懂得先查 blacklist、再查 schema、寫入必 dry-run 的完整安全流程。</p>
+          <h3>Install the skill or plugin for the Agent</h3>
+          <p><code class="inline">dbcli skill --install claude</code> (or cursor / copilot / gemini ...),
+          or add it directly in Claude Code / Codex with
+          <code class="inline">/plugin marketplace add CarlLee1983/dbcli</code>.
+          The Agent immediately learns the full safety flow: check blacklist first, then schema, and always dry-run writes.</p>
         </div>
       </div>
       <div class="step">
         <div>
-          <h3>開始 vibe coding</h3>
-          <p>「幫我看昨天的訂單為什麼變少」—— Agent 自己跑
+          <h3>Start vibe coding</h3>
+          <p>"Why did yesterday's orders drop?" - the Agent runs
           <code class="inline">schema</code> → <code class="inline">query</code> → <code class="inline">report</code>，
-          你看結果就好。</p>
+          and you just read the result.</p>
         </div>
       </div>
     </div>
@@ -907,13 +914,13 @@
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">完整流程</span>
+          <span class="title">End-to-end flow</span>
         </div>
         <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
-<span class="p">$</span> dbcli init                                    <span class="c"># 自動解析 .env，設定存到 ~/.config/dbcli</span>
-<span class="p">$</span> dbcli blacklist column add users.password     <span class="c"># 機敏欄位上鎖</span>
-<span class="p">$</span> dbcli skill --install claude                  <span class="c"># Agent 獲得完整安全工作流</span>
-<span class="p">$</span> dbcli query "SELECT * FROM orders" --ui       <span class="c"># 順手開個互動報表</span></pre>
+<span class="p">$</span> dbcli init                                    <span class="c"># auto-parse .env and store settings in ~/.config/dbcli</span>
+<span class="p">$</span> dbcli blacklist column add users.password     <span class="c"># lock sensitive columns</span>
+<span class="p">$</span> dbcli skill --install claude                  <span class="c"># give the Agent the full safe workflow</span>
+<span class="p">$</span> dbcli query "SELECT * FROM orders" --ui       <span class="c"># spin up an interactive report</span></pre>
       </div>
     </div>
   </div>
@@ -925,44 +932,44 @@
 <section>
   <div class="container">
     <span class="kicker">FAQ</span>
-    <h2>常見問題</h2>
+    <h2>Frequently asked questions</h2>
     <details>
-      <summary>我不會寫 SQL，這工具跟我有關嗎？</summary>
-      <p>正是為你設計的。你用自然語言請 Agent 處理資料，dbcli 負責讓這件事安全發生：
-      Agent 透過 schema 確認真實結構、透過 saved queries 與 task packs 使用現成的專家查詢，
-      而你不需要看得懂中間的 SQL —— 只需要看得懂結果。</p>
+      <summary>I do not write SQL. Is this for me?</summary>
+      <p>Yes. You ask the Agent to handle data in natural language, and dbcli makes that safe:
+      the Agent uses schema to confirm the real structure, uses saved queries and task packs for ready-made expert queries,
+      and you never need to read the SQL in between - only the result.</p>
     </details>
     <details>
-      <summary>Agent 會不會不小心刪掉我的資料？</summary>
-      <p>預設權限是 <code class="inline">query-only</code>，連 INSERT 都做不了。就算你開到
-      <code class="inline">data-admin</code>，DELETE 仍強制要求 WHERE 條件、建議先 dry-run，
-      且等值限制讓「一句掃全表」在語法層就被擋下。DDL 更要 <code class="inline">admin</code> +
-      <code class="inline">--execute</code> + DROP 加 <code class="inline">--force</code> 三重確認。</p>
+      <summary>Could the Agent accidentally delete my data?</summary>
+      <p>The default permission is <code class="inline">query-only</code>, so it cannot even INSERT. Even if you raise it to
+      <code class="inline">data-admin</code>, DELETE still requires a WHERE clause, recommends dry-run first,
+      and equality restrictions block "scan the whole table" at the syntax level. DDL needs
+      <code class="inline">admin</code> + <code class="inline">--execute</code> + DROP with <code class="inline">--force</code> for triple confirmation.</p>
     </details>
     <details>
-      <summary>支援哪些資料庫？</summary>
+      <summary>Which databases are supported?</summary>
       <p>MySQL、PostgreSQL、MariaDB、MongoDB、Redis、Elasticsearch，
-      同一專案可同時設定多條具名連線（staging / prod / 分租戶），各自獨立的憑證、權限與 schema 快取。</p>
+      and a single project can define multiple named connections at once (staging / prod / per-tenant), each with its own credentials, permissions, and schema cache.</p>
     </details>
     <details>
-      <summary>跟直接用 MCP database server 差在哪？</summary>
-      <p>dbcli 是「權限與資料防護內建」的一層：憑證隔離、blacklist 遮罩、權限分級、dry-run、
-      audit、recovery 全部開箱即用，且同一支 CLI 通吃七個 Agent 平台 —— 不綁定任何單一協定或編輯器，
-      人類自己在終端機也能用。</p>
+      <summary>How is this different from using an MCP database server directly?</summary>
+      <p>dbcli is the layer with built-in permissions and data protection: credential isolation, blacklist masking,
+      permission tiers, dry-run, audit, and recovery all work out of the box. The same CLI works across seven Agent platforms,
+      so it is not tied to any single protocol or editor, and humans can use it directly in the terminal too.</p>
     </details>
     <details>
-      <summary>Plugin 和 skill --install 該選哪個？</summary>
-      <p>都會裝進同一份 skill（工作流 + 完整參考文件），效果相同。差別在入口：
-      <strong>plugin</strong> 從 agent 內的 marketplace 一鍵安裝，還內建
-      <code class="inline">bunx</code> fallback，不用先全域安裝 CLI，最適合快速試用；
-      <strong><code class="inline">skill --install</code></strong> 適合已全域安裝 dbcli 的人，
-      一支 CLI 就能佈署到七個平台，也方便版本升級時同步更新 skill 文件。</p>
+      <summary>Which should I use, plugin or skill --install?</summary>
+      <p>Both install the same skill bundle - workflow plus full reference docs - so the end result is the same. The difference is the entry point:
+      <strong>plugin</strong> installs from the Agent marketplace with a built-in <code class="inline">bunx</code> fallback,
+      so you do not need a global CLI install first, which makes it ideal for quick trials;
+      <strong><code class="inline">skill --install</code></strong> is better if dbcli is already installed globally,
+      because one CLI can deploy to all seven platforms and keep the skill docs aligned during upgrades.</p>
     </details>
     <details>
-      <summary>team 協作怎麼辦？</summary>
-      <p>Saved queries 可放 <code class="inline">.dbcli-shared/</code> 進 git 與團隊共享；
-      憑證則走 <code class="inline">--use-env-refs</code>，每個人 / 每條 CI pipeline 用自己的環境變數，
-      repo 裡永遠沒有明文密碼。</p>
+      <summary>What about team collaboration?</summary>
+      <p>Saved queries can live in <code class="inline">.dbcli-shared/</code> and be shared in git;
+      credentials use <code class="inline">--use-env-refs</code>, so each person and each CI pipeline uses its own environment variables,
+      and the repo never contains plaintext passwords.</p>
     </details>
   </div>
 </section>
@@ -972,13 +979,13 @@
 ============================================================ -->
 <section class="final-cta">
   <div class="container">
-    <h2>讓 Agent 放心地碰資料，<br>讓你放心地 vibe。</h2>
+    <h2>Let the Agent touch data safely,<br>so you can keep vibing.</h2>
     <p class="section-lead" style="margin: 16px auto 36px; text-align: center;">
-      一行安裝、預設最低權限、憑證零外洩。今天就把資料庫交給你的 Agent —— 安全地。
+      One-line install, minimum privileges by default, and no credential leakage. Hand the database to your Agent today - safely.
     </p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://www.npmjs.com/package/@carllee1983/dbcli">npm install -g @carllee1983/dbcli</a>
-      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">閱讀文件</a>
+      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">Read the docs</a>
     </div>
   </div>
 </section>

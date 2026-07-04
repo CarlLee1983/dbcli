@@ -1714,7 +1714,10 @@ in recent audit activity. Additional read-only packs ship for common agent
 workflows: `audit-permissions` (permission/blacklist audit), `safe-backfill`
 (plan a write with blacklist+schema+risk checks), `schema-drift-review` (cached
 vs live schema diff), and `connection-health` (reachability/config/capacity
-triage). Run `dbcli skill tasks list` for the full set.
+triage). **MongoDB packs:** `mongo-safe-backfill` (dry-run–previewed backfill)
+and `mongo-schema-drift-review` (sampled dot-path drift, with a `sample_size` knob
+to damp sampling noise); filter them with `dbcli skill tasks list --engine mongodb`.
+Run `dbcli skill tasks list` for the full set.
 
 ```bash
 dbcli skill tasks plan analyze-table-perf --param table=betting_logs --format json

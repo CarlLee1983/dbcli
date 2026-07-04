@@ -81,12 +81,15 @@ The plan is an ordered list of dbcli commands with rationale and risk labels. Ex
 one at a time — task plans do **not** override blacklist, schema, dry-run, or confirmation
 requirements.
 
-Builtin packs: `diagnose-slow-query` (targets a specific SQL), `analyze-table-perf` (targets
-a specific table; `dbcli inspect` auto-suggests it for the hottest table in recent audit
-activity), `audit-permissions`, `safe-backfill`, `schema-drift-review`, `connection-health`.
-Review/verify packs: `pr-database-review`, `migration-review`, `safe-backfill-verify`,
-`slow-endpoint-investigation`. All are read-only `plan-only` — pick the pack matching the
-situation, and run any index/DDL proposal through `migration-review` before writing.
+Builtin packs (SQL — postgres/mysql): `diagnose-slow-query` (targets a specific SQL),
+`analyze-table-perf` (targets a specific table; `dbcli inspect` auto-suggests it for the
+hottest table in recent audit activity), `audit-permissions`, `safe-backfill`,
+`schema-drift-review`, `connection-health`. Review/verify packs: `pr-database-review`,
+`migration-review`, `safe-backfill-verify`, `slow-endpoint-investigation`. MongoDB packs:
+`mongo-safe-backfill` (dry-run–previewed backfill), `mongo-schema-drift-review` (sampled
+dot-path drift). All are read-only `plan-only` — pick the pack matching the situation, and
+run any index/DDL proposal through `migration-review` before writing. Redis/Elasticsearch
+have no packs yet — lead with `guide` / `report` there.
 
 Tasks live under `assets/tasks/` (builtin), `.dbcli-shared/tasks/` (shared), and
 `.dbcli/tasks/` (local override).

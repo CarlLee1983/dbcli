@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dbcli — 讓 AI Agent 安全地操作你的資料庫</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg-soft: #12161f;
+    --bg-card: #161b26;
+    --border: #232a38;
+    --text: #e6e9ef;
+    --text-dim: #9aa4b2;
+    --accent: #4fd1a5;
+    --accent-soft: rgba(79, 209, 165, 0.12);
+    --warn: #f2a65a;
+    --danger: #e5636f;
+    --code-bg: #0d1117;
+    --mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+    line-height: 1.75;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 88px 0; }
+  section:nth-of-type(even) { background: var(--bg-soft); }
+
+  h1, h2, h3 { line-height: 1.35; font-weight: 700; }
+  h2 { font-size: 2rem; margin-bottom: 12px; }
+  .section-lead { color: var(--text-dim); font-size: 1.05rem; max-width: 720px; margin-bottom: 48px; }
+  .kicker {
+    display: inline-block; font-size: 0.8rem; letter-spacing: 0.12em;
+    color: var(--accent); text-transform: uppercase; font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  /* ===== Hero ===== */
+  .hero {
+    padding: 110px 0 90px;
+    background:
+      radial-gradient(ellipse 60% 50% at 70% 10%, rgba(79,209,165,0.10), transparent),
+      radial-gradient(ellipse 50% 40% at 20% 90%, rgba(79,120,209,0.08), transparent);
+    text-align: center;
+  }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin-bottom: 20px; }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero .sub {
+    color: var(--text-dim); font-size: 1.15rem; max-width: 680px;
+    margin: 0 auto 36px;
+  }
+  .badge-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 36px; }
+  .badge {
+    font-size: 0.82rem; padding: 5px 14px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--text-dim); background: var(--bg-card);
+  }
+  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 13px 28px; border-radius: 10px;
+    font-weight: 600; font-size: 1rem; transition: transform .15s, box-shadow .15s;
+  }
+  .btn-primary { background: var(--accent); color: #08110d; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,209,165,0.25); text-decoration: none; }
+  .btn-ghost { border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--accent); text-decoration: none; }
+  .hero-install {
+    margin: 40px auto 0; max-width: 560px; text-align: left;
+  }
+
+  /* ===== Code blocks / terminal ===== */
+  .terminal {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-family: var(--mono);
+    font-size: 0.86rem;
+  }
+  .terminal-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px; background: #151a23; border-bottom: 1px solid var(--border);
+  }
+  .terminal-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .terminal-bar .title { margin-left: 10px; color: var(--text-dim); font-size: 0.76rem; }
+  .terminal pre { padding: 18px 20px; overflow-x: auto; line-height: 1.7; color: #c9d1d9; }
+  .terminal .c { color: #6b7688; }          /* comment */
+  .terminal .p { color: var(--accent); }     /* prompt / highlight */
+  .terminal .s { color: #79b8ff; }           /* string / value */
+  .terminal .w { color: var(--warn); }       /* warning */
+  .terminal .d { color: var(--danger); }     /* danger / redacted */
+  code.inline {
+    font-family: var(--mono); font-size: 0.85em;
+    background: var(--code-bg); border: 1px solid var(--border);
+    padding: 2px 7px; border-radius: 6px; color: var(--accent);
+  }
+
+  /* ===== Images ===== */
+  .image-figure {
+    margin: 36px 0 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-card);
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  }
+  .image-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .image-figure figcaption {
+    padding: 12px 16px;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    border-top: 1px solid var(--border);
+    background: rgba(13, 17, 23, 0.62);
+  }
+
+  /* ===== Cards / grid ===== */
+  .grid { display: grid; gap: 20px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 860px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 26px;
+  }
+  .card .icon {
+    width: 42px; height: 42px; margin-bottom: 14px;
+    border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
+    color: var(--accent); background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.22);
+  }
+  .card .icon svg { width: 23px; height: 23px; stroke-width: 2; }
+  .card h3 { font-size: 1.1rem; margin-bottom: 10px; }
+  .card p { color: var(--text-dim); font-size: 0.94rem; }
+  .card.highlight { border-color: rgba(79,209,165,0.45); background: linear-gradient(180deg, rgba(79,209,165,0.06), var(--bg-card)); }
+
+  /* ===== Pain points ===== */
+  .pain { border-left: 3px solid var(--danger); }
+  .pain h3 { color: #f0aab1; }
+
+  /* ===== Compare table ===== */
+  .compare-wrap { overflow-x: auto; }
+  table.compare {
+    width: 100%; border-collapse: collapse; font-size: 0.93rem; min-width: 640px;
+  }
+  table.compare th, table.compare td {
+    padding: 14px 18px; border-bottom: 1px solid var(--border); text-align: left;
+    vertical-align: top;
+  }
+  table.compare th { color: var(--text-dim); font-weight: 600; font-size: 0.85rem; }
+  table.compare th.vs-dbcli { color: var(--accent); }
+  table.compare td.bad { color: #d99aa1; }
+  table.compare td.good { color: #a9e6cf; }
+  table.compare td:first-child { color: var(--text-dim); white-space: nowrap; }
+
+  /* ===== Steps ===== */
+  .steps { counter-reset: step; display: grid; gap: 18px; }
+  .step {
+    display: flex; gap: 20px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    flex: 0 0 40px; height: 40px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1.1rem;
+  }
+  .step h3 { font-size: 1.05rem; margin-bottom: 6px; }
+  .step p { color: var(--text-dim); font-size: 0.93rem; }
+
+  /* ===== Permission ladder ===== */
+  .ladder { display: grid; gap: 12px; }
+  .rung {
+    display: flex; align-items: baseline; gap: 18px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 22px;
+  }
+  .rung .lv {
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    color: var(--accent); flex: 0 0 130px;
+  }
+  .rung .desc { color: var(--text-dim); font-size: 0.92rem; }
+  .rung:nth-child(1) { border-left: 4px solid #4fd1a5; }
+  .rung:nth-child(2) { border-left: 4px solid #79b8ff; }
+  .rung:nth-child(3) { border-left: 4px solid var(--warn); }
+  .rung:nth-child(4) { border-left: 4px solid var(--danger); }
+
+  /* ===== Install tabs ===== */
+  .install-card { display: flex; flex-direction: column; gap: 16px; }
+  .install-card .plat {
+    display: inline-block; font-family: var(--mono); font-size: 0.78rem;
+    color: var(--accent); background: var(--accent-soft);
+    border: 1px solid rgba(79,209,165,0.22); border-radius: 6px;
+    padding: 2px 10px; margin-right: 6px;
+  }
+  .install-card .terminal { font-size: 0.8rem; }
+
+  /* ===== Scenarios (chat style) ===== */
+  .scenario {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .scenario .perk {
+    align-self: flex-start; font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.06em; color: var(--accent);
+    background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.25);
+    border-radius: 999px; padding: 3px 12px;
+  }
+  .scenario .you {
+    align-self: flex-end; max-width: 88%;
+    background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.3);
+    border-radius: 14px 14px 4px 14px; padding: 11px 16px;
+    font-size: 0.95rem;
+  }
+  .scenario .agent {
+    align-self: flex-start; max-width: 92%; position: relative;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 14px 14px 14px 4px; padding: 12px 16px;
+    font-size: 0.93rem; color: var(--text);
+  }
+  .scenario .agent .who {
+    display: block; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .scenario .agent .hl { color: var(--accent); font-weight: 600; }
+  .scenario .agent .num { color: #79b8ff; font-weight: 700; font-family: var(--mono); font-size: 0.9em; }
+  .scenario details.behind {
+    background: transparent; border: none; padding: 0; margin: 0;
+  }
+  .scenario details.behind summary {
+    cursor: pointer; font-size: 0.8rem; font-weight: 500;
+    color: var(--text-dim); list-style: none;
+  }
+  .scenario details.behind summary::before { content: "▸ "; color: var(--accent); }
+  .scenario details.behind[open] summary::before { content: "▾ "; }
+  .scenario details.behind summary::-webkit-details-marker { display: none; }
+  .scenario details.behind .chain {
+    font-family: var(--mono); font-size: 0.78rem; color: #9aa4b2;
+    display: block; margin-top: 10px; line-height: 1.9;
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: pre;
+  }
+  .scenario details.behind .chain .p { color: var(--accent); }
+
+  /* ===== FAQ ===== */
+  details {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 24px; margin-bottom: 14px;
+  }
+  details summary { cursor: pointer; font-weight: 600; font-size: 1rem; }
+  details p { color: var(--text-dim); margin-top: 12px; font-size: 0.94rem; }
+
+  /* ===== Footer / CTA ===== */
+  .final-cta {
+    text-align: center;
+    background:
+      radial-gradient(ellipse 55% 60% at 50% 100%, rgba(79,209,165,0.12), transparent),
+      var(--bg-soft);
+  }
+  footer {
+    border-top: 1px solid var(--border); padding: 36px 0;
+    color: var(--text-dim); font-size: 0.85rem; text-align: center;
+  }
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l7-7 3 3-2 2 2 2-2 2-2-2-3.5 3.5"/>
+  </symbol>
+  <symbol id="icon-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r=".8" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r=".8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="icon-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 2L4 14h7l-1 8 10-14h-7l1-6z"/>
+  </symbol>
+  <symbol id="icon-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>
+  </symbol>
+  <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/>
+  </symbol>
+  <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13.4 13.4 0 0 1-2.8 4.1"/><path d="M6.6 6.7A13.3 13.3 0 0 0 2.5 12c1 2.5 4.5 7 9.5 7a9.7 9.7 0 0 0 4.1-.9"/>
+  </symbol>
+  <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.2 2.4 3.4 5.4 3.4 9S14.2 18.6 12 21c-2.2-2.4-3.4-5.4-3.4-9S9.8 5.4 12 3z"/>
+  </symbol>
+  <symbol id="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6M9 16h4"/>
+  </symbol>
+  <symbol id="icon-bandage" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M10 10l4 4"/><path d="M8.5 12.5h.01M11.5 9.5h.01M12.5 14.5h.01M15.5 11.5h.01"/>
+  </symbol>
+  <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-5"/>
+  </symbol>
+  <symbol id="icon-ruler" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19L19 4l1 1L5 20l-1-1z"/><path d="M8 16l-2-2M11 13l-1.5-1.5M14 10l-2-2M17 7l-1.5-1.5"/>
+  </symbol>
+  <symbol id="icon-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 4h6l1 2h3v15H5V6h3l1-2z"/><path d="M9 10h6M9 14h6M9 18h4"/>
+  </symbol>
+  <symbol id="icon-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l3-4 3 2 4-7"/><path d="M17 6h3v3"/>
+  </symbol>
+  <symbol id="icon-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>
+  </symbol>
+  <symbol id="icon-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/>
+  </symbol>
+  <symbol id="icon-handshake" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 11l3-3 4 4 2-2"/><path d="M3 12l4-4 3 3"/><path d="M21 12l-4-4-3 3"/><path d="M8 14l2 2a2 2 0 0 0 3 0l3-3"/><path d="M6 16l2 2M18 16l-2 2"/>
+  </symbol>
+</svg>
+
+<!-- ============================================================
+     HERO
+============================================================ -->
+<header class="hero">
+  <div class="container">
+    <span class="kicker">dbcli — Database CLI for AI Agents</span>
+    <h1>你在 vibe coding，<br>但你的 Agent 不該<em>裸連</em>資料庫</h1>
+    <p class="sub">
+      dbcli 是一支專為 AI Agent 設計的資料庫 CLI。讓 Claude Code、Cursor、Copilot、Gemini
+      能自己查 schema、下查詢、產報表 —— 而你的帳號密碼、機敏欄位，從頭到尾不會出現在對話裡。
+    </p>
+    <div class="badge-row">
+      <span class="badge">MySQL</span>
+      <span class="badge">PostgreSQL</span>
+      <span class="badge">MariaDB</span>
+      <span class="badge">MongoDB</span>
+      <span class="badge">Redis</span>
+      <span class="badge">Elasticsearch</span>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#quickstart">3 分鐘上手</a>
+      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">GitHub →</a>
+    </div>
+
+    <div class="hero-install">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">zsh — 安裝只要一行</span>
+        </div>
+        <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
+<span class="c"># 或不安裝直接用</span>
+<span class="p">$</span> npx @carllee1983/dbcli init</pre>
+      </div>
+    </div>
+
+    <figure class="image-figure">
+      <img src="assets/dbcli-intro/hero.png" alt="AI agent 透過 dbcli 管線連接多種資料庫，憑證保存在盾牌後方的保險庫。">
+      <figcaption>Agent 只透過 dbcli 操作資料庫，憑證隔離在對話之外。</figcaption>
+    </figure>
+  </div>
+</header>
+
+<!-- ============================================================
+     PAIN POINTS
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">The Problem</span>
+    <h2>把 DATABASE_URL 直接餵給 Agent，是在賭什麼？</h2>
+    <p class="section-lead">
+      Vibe coding 最爽的時刻，是 Agent 幫你把資料撈出來、把 bug 修掉。
+      最痛的時刻，是它猜錯欄位名寫出一坨錯誤查詢、把密碼印進對話紀錄，
+      或是一句沒有 WHERE 的 UPDATE 掃過整張表。
+    </p>
+    <div class="grid grid-3">
+      <div class="card pain">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-key"></use></svg></div>
+        <h3>憑證直接進了對話</h3>
+        <p>連線字串貼進 prompt、寫進專案設定檔，等於把 production 密碼交給每一次對話、每一次 commit。</p>
+      </div>
+      <div class="card pain">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-dice"></use></svg></div>
+        <h3>Agent 用猜的寫 SQL</h3>
+        <p>欄位叫 <code class="inline">user_name</code> 還是 <code class="inline">username</code>？
+        猜錯就是查不到，或更糟 —— 查到不該查的。</p>
+      </div>
+      <div class="card pain">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-alert"></use></svg></div>
+        <h3>寫入沒有安全網</h3>
+        <p>沒有 dry-run、沒有權限分級、沒有稽核紀錄。一句失控的 DELETE，你只能去翻備份。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CORE VALUE: CREDENTIAL ISOLATION
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 1 · Credential Isolation</span>
+    <h2>帳號密碼隔離：Agent 拿得到資料，拿不到鑰匙</h2>
+    <p class="section-lead">
+      這是 dbcli 和「直接給 Agent 一條連線字串」最根本的差異。
+      憑證由 dbcli 管理，Agent 只呼叫指令、只看到結果 —— 密碼從不流經對話上下文。
+    </p>
+    <div class="grid grid-2">
+      <div class="card highlight">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-database"></use></svg></div>
+        <h3>設定不放專案目錄</h3>
+        <p>完整連線設定存在 <code class="inline">~/.config/dbcli/projects/&lt;id&gt;/</code>，
+        專案裡只留一個不含機敏內容的 binding stub。不會被 Agent 掃到，也不會誤 commit 進 git。</p>
+      </div>
+      <div class="card highlight">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-link"></use></svg></div>
+        <h3>env-refs：連設定檔都沒有明文</h3>
+        <p><code class="inline">init --use-env-refs</code> 把憑證存成
+        <code class="inline">{"$env": "DB_PASSWORD"}</code> 執行期才解析的參照，
+        適合 CI/CD 與多環境。CI 缺 key 直接報錯，絕不默默 fallback 成明文。</p>
+      </div>
+      <div class="card highlight">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-eye-off"></use></svg></div>
+        <h3>任何輸出都不吐憑證</h3>
+        <p><code class="inline">status</code>、<code class="inline">doctor</code>、錯誤訊息、稽核紀錄
+        —— 所有給 Agent 看的輸出都經過設計，連線字串與密碼一律不出現。</p>
+      </div>
+      <div class="card highlight">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-globe"></use></svg></div>
+        <h3>多連線、各自的權限等級</h3>
+        <p>本地、staging、prod 是同專案裡的<strong>具名連線</strong>，各自獨立憑證、獨立權限、
+        獨立 schema 快取。最常見的配置：本地開 <code class="inline">read-write</code> 放手讓 Agent 實驗，
+        prod 鎖 <code class="inline">query-only</code> —— 想寫也寫不了。</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 28px;">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">本地放心寫，線上鎖唯讀 —— 一個專案、兩條連線、兩種權限</span>
+        </div>
+        <pre><span class="c"># 本地 DB：開發用，允許寫入</span>
+<span class="p">$</span> dbcli init --conn-name local --env-file .env.local --permission read-write
+
+<span class="c"># 線上 DB：唯讀 + 憑證用 $env 參照，設定檔裡沒有明文密碼</span>
+<span class="p">$</span> dbcli init --conn-name prod --env-file .env.production \
+    --use-env-refs --permission <span class="w">query-only</span>
+
+<span class="p">$</span> dbcli use local                          <span class="c"># 平常預設操作本地</span>
+<span class="p">$</span> dbcli query --use prod "SELECT …"        <span class="c"># 需要時單次指向線上，只能讀</span>
+<span class="p">$</span> dbcli update --use prod orders …
+<span class="d">✗ Permission denied: connection "prod" is query-only</span></pre>
+      </div>
+      <p style="color: var(--text-dim); font-size: 0.92rem; margin-top: 14px;">
+        權限跟著<strong>連線</strong>走，不是跟著對話走 —— 無論 Agent 被 prompt 成什麼樣子，
+        對 prod 的寫入在 dbcli 這一層就被拒絕。Debug 時 Agent 可以自由對照兩邊資料，
+        卻不可能「順手」改到線上。
+      </p>
+    </div>
+
+    <figure class="image-figure">
+      <img src="assets/dbcli-intro/credential-isolation.png" alt="AI Agent、dbcli gateway、資料庫與本機憑證盒之間的憑證隔離架構圖。">
+      <figcaption>Agent 送出 CLI 指令；dbcli 讀取本機憑證後連線，憑證不回流到 Agent。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================================================
+     CORE VALUE: BLACKLIST
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 2 · Sensitive Data Blacklist</span>
+    <h2>敏感欄位黑名單：AI 看不到，就洩漏不了</h2>
+    <p class="section-lead">
+      把 <code class="inline">password</code>、<code class="inline">token</code>、個資欄位加入 blacklist，
+      查詢結果在<strong>回到 Agent 之前</strong>就被遮罩 —— 包含報表與 HTML dashboard。
+      支援 SQL 欄位/資料表、MongoDB 巢狀 dot-path 萬用字元、Redis key glob。
+    </p>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="title">blacklist 實際效果</span>
+      </div>
+      <pre><span class="p">$</span> dbcli blacklist column add users.password
+<span class="p">$</span> dbcli blacklist table add 'secrets:*'          <span class="c"># Redis key glob 也支援</span>
+<span class="p">$</span> dbcli query "SELECT id, email, password FROM users LIMIT 2"
+┌────┬──────────────────┬──────────────┐
+│ id │ email            │ password     │
+├────┼──────────────────┼──────────────┤
+│ 1  │ <span class="s">a@example.com</span>    │ <span class="d">[REDACTED]</span>   │
+│ 2  │ <span class="s">b@example.com</span>    │ <span class="d">[REDACTED]</span>   │
+└────┴──────────────────┴──────────────┘</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CORE VALUE: PERMISSION + WRITE SAFETY
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 3 · Layered Safety</span>
+    <h2>四級權限 + 全程安全網，寫入不再是一場豪賭</h2>
+    <p class="section-lead">
+      預設 <code class="inline">query-only</code>，Agent 想做什麼，就給到哪一級 —— 一個 flag 的事。
+      即使開放寫入，每一步仍有護欄。
+    </p>
+    <div class="ladder">
+      <div class="rung"><span class="lv">query-only</span><span class="desc">預設。SELECT、list、schema、export。查詢自動加 LIMIT 1000，Agent 掃不垮你的表。</span></div>
+      <div class="rung"><span class="lv">read-write</span><span class="desc">+ INSERT、UPDATE。所有寫入先 <code class="inline">--dry-run</code> 預覽參數化 SQL 再執行。</span></div>
+      <div class="rung"><span class="lv">data-admin</span><span class="desc">+ DELETE（僅 DML）。<code class="inline">--where</code> 為必填且刻意限制為等值條件，防止範圍誤殺。</span></div>
+      <div class="rung"><span class="lv">admin</span><span class="desc">+ DDL。<code class="inline">migrate</code> 預設就是 dry-run，要 <code class="inline">--execute</code> 才真的動手；DROP 還要再加 <code class="inline">--force</code>。</span></div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 28px;">
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-receipt"></use></svg></div>
+        <h3>Audit log 全程留痕</h3>
+        <p>每個操作留下 metadata 稽核紀錄（不含 SQL 內文與資料值），跨 session 可回溯「Agent 到底做了什麼」。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-bandage"></use></svg></div>
+        <h3>失敗自動產生復原計畫</h3>
+        <p>指令加 <code class="inline">--recovery</code>，失敗時自動存下結構化復原方案；
+        <code class="inline">dbcli recover --apply</code> 在風險分級下執行安全修復步驟。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-shield"></use></svg></div>
+        <h3>靜態風險分析</h3>
+        <p><code class="inline">dbcli plan</code> 不連線就能分類一句 SQL 的風險等級；
+        Elasticsearch 更是整個唯讀，想寫也寫不了。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CORE VALUE: AGENT-NATIVE DX
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 4 · Agent-Native</span>
+    <h2>不只安全，Agent 用起來是真的順</h2>
+    <p class="section-lead">
+      dbcli 不是「一支普通 CLI 剛好能被 Agent 呼叫」，而是每個輸出、每個工作流都為 Agent 設計。
+      一行 <code class="inline">dbcli skill --install claude</code>，Agent 就自帶完整使用手冊。
+    </p>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-ruler"></use></svg></div>
+        <h3>Schema 探索，杜絕欄位用猜的</h3>
+        <p><code class="inline">schema users --format json</code> 給出真實欄位、預估列數、大小分級。
+        Skill 明文規定：<strong>禁止猜欄位名，先查 schema</strong>。MongoDB 用取樣推 dot-path 結構，Redis 看 key 型別/TTL。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-clipboard"></use></svg></div>
+        <h3>Task Packs：現成的專家工作流</h3>
+        <p>「診斷慢查詢」「稽核權限」「安全 backfill」「schema 漂移檢查」…
+        <code class="inline">skill tasks plan</code> 直接產出一份帶風險標籤的逐步計畫，Agent 照做就好，不必自己發明步驟。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-chart"></use></svg></div>
+        <h3>一句話變出互動式報表</h3>
+        <p><code class="inline">q @analytics/revenue --ui</code> 直接在瀏覽器開出含 KPI 卡與圖表的
+        HTML dashboard（React + Recharts、單檔可分享）。blacklist 遮罩在渲染前就完成。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-repeat"></use></svg></div>
+        <h3>可重用的參數化查詢</h3>
+        <p>Saved queries 存在 repo 裡（local / 團隊共享 / 內建 <code class="inline">@diag/*</code> 三層），
+        Agent 用 <code class="inline">queries suggest</code> 依意圖找到現成 SQL，而不是每次重寫。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-compass"></use></svg></div>
+        <h3>guide / report：診斷有 SOP</h3>
+        <p><code class="inline">guide slow-query</code> 給出確定性的下一步指令；
+        <code class="inline">report --section perf</code> 一次跑完慢查詢、索引使用率、cache 命中率體檢。</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#icon-handshake"></use></svg></div>
+        <h3>七大平台 skill 一鍵安裝</h3>
+        <p>Claude Code、Cursor、Copilot、Gemini、Codex、Windsurf、Antigravity ——
+        <code class="inline">skill --install &lt;platform&gt;</code> 把工作流與完整參考文件裝進對應目錄。</p>
+      </div>
+    </div>
+
+    <figure class="image-figure">
+      <img src="assets/dbcli-intro/dashboard.png" alt="深色模式 analytics dashboard，包含 KPI 卡、折線圖、長條圖與已遮罩資料表。">
+      <figcaption>dbcli 可把查詢結果轉成互動式 dashboard，敏感欄位在渲染前已遮罩。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================================================
+     PLUGIN / SKILL INSTALL
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 5 · One-Command Onboarding</span>
+    <h2>Plugin 一鍵裝進 Claude Code、Codex —— 連 CLI 都不用先裝</h2>
+    <p class="section-lead">
+      dbcli 同時發佈為 <strong>plugin marketplace 套件</strong>與<strong>可安裝的 agent skill</strong>。
+      走 plugin 這條路，你甚至不需要先全域安裝 CLI —— plugin 內建
+      <code class="inline">bunx @carllee1983/dbcli</code> fallback，裝完即用。
+    </p>
+    <div class="grid grid-2">
+      <div class="card highlight install-card">
+        <div>
+          <span class="plat">Claude Code</span><span class="plat">Codex</span><span class="plat">Copilot CLI</span><span class="plat">Cursor</span>
+          <h3 style="margin-top: 12px;">路線 A：Plugin Marketplace</h3>
+          <p style="color: var(--text-dim); font-size: 0.94rem;">
+            在 agent 裡貼一行指令，skill、完整參考文件、安全工作流全部到位。
+            開新 session 就能直接說「幫我查資料庫」。</p>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="title">在各 Agent 內安裝 plugin</span>
+          </div>
+          <pre><span class="c"># Claude Code</span>
+<span class="p">/plugin</span> marketplace add CarlLee1983/dbcli
+<span class="p">/plugin</span> install dbcli-agent@dbcli-agent
+
+<span class="c"># Codex</span>
+<span class="p">$</span> codex plugin marketplace add CarlLee1983/dbcli
+<span class="c">#   → /plugins 內安裝 dbcli-agent</span>
+
+<span class="c"># GitHub Copilot CLI</span>
+<span class="p">$</span> copilot plugin marketplace add CarlLee1983/dbcli
+<span class="p">$</span> copilot plugin install dbcli-agent@dbcli-agent
+
+<span class="c"># Cursor（Agent chat 內）</span>
+<span class="p">/add-plugin</span> dbcli-agent</pre>
+        </div>
+      </div>
+      <div class="card install-card">
+        <div>
+          <span class="plat">claude</span><span class="plat">codex</span><span class="plat">cursor</span><span class="plat">copilot</span><span class="plat">gemini</span><span class="plat">windsurf</span><span class="plat">antigravity</span>
+          <h3 style="margin-top: 12px;">路線 B：<code class="inline">skill --install</code></h3>
+          <p style="color: var(--text-dim); font-size: 0.94rem;">
+            已經全域安裝 CLI？一行指令把 skill 文件（工作流 + 完整參考手冊）寫進
+            對應平台的 skill 目錄，七大平台通用，且會做覆蓋保護不弄壞你既有的設定。</p>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="title">skill 安裝</span>
+          </div>
+          <pre><span class="p">$</span> dbcli skill --install claude       <span class="c"># Claude Code</span>
+<span class="p">$</span> dbcli skill --install cursor       <span class="c"># Cursor</span>
+<span class="p">$</span> dbcli skill --install gemini       <span class="c"># Gemini CLI</span>
+<span class="c"># … codex / copilot / windsurf / antigravity</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SKILL IN ACTION
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">賣點 6 · Skill in Action</span>
+    <h2>你用說的，Agent 動手 —— 這就是裝上 skill 之後的日常</h2>
+    <p class="section-lead">
+      不用背指令、不用會 SQL、不用知道什麼是 N+1。你講人話，Agent 照著 skill 內建的
+      資料庫 SOP 安全地做完，回報你聽得懂的結果。想看門道的人，每段對話都可以展開「幕後指令」。
+    </p>
+    <div class="grid grid-2">
+
+      <div class="scenario">
+        <span class="perk">不用會 SQL</span>
+        <div class="you">這支 API 怎麼越用越慢？幫我看一下 🥲</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          查到了。<span class="hl">orders 表少了一個索引</span>，每次查詢都在掃全表
+          —— <span class="num">120 萬</span>筆掃好掃滿。我已經準備好一份加索引的
+          migration 提案，預估能把這支 API 從 <span class="num">2.4s</span> 壓到
+          <span class="num">30ms</span>，你點頭我就送出 review。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli report --section perf
+<span class="p">→</span> dbcli skill tasks plan analyze-table-perf --param table=orders
+<span class="p">→</span> dbcli guide missing-index-for "SELECT …"</span>
+        </details>
+      </div>
+
+      <div class="scenario">
+        <span class="perk">寫入有安全網</span>
+        <div class="you">幫我把測試環境這批舊訂單改成 archived</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          這批共 <span class="num">1,204</span> 筆。我先用 <span class="hl">dry-run 預覽</span>了
+          要執行的變更（不會真的動資料），看起來範圍正確 —— 已執行完畢，
+          並且<span class="hl">讀回驗證</span>過每一筆都改好了。全程有留稽核紀錄，隨時可回查。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli query "SELECT COUNT(*) …"        <span style="color:#6b7688"># 先數影響幾筆</span>
+<span class="p">→</span> dbcli update orders --where "…" --set '…' --dry-run
+<span class="p">→</span> 執行 → query 讀回確認 → audit 留痕</span>
+        </details>
+      </div>
+
+      <div class="scenario">
+        <span class="perk">結論有憑有據</span>
+        <div class="you">幫我 review 這個 PR，它動到好幾張表的寫入</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          審完了。<span class="num">3</span> 個資料庫相關的疑慮：兩個
+          <span class="hl">verified</span>（確認沒問題，附驗證輸出），一個
+          <span class="hl">not_verified</span> —— PR 假設 <code class="inline">status</code>
+          欄位有預設值，但實際 schema 沒有。建議請作者補上，不然新寫入會是 NULL。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli skill tasks plan pr-database-review
+<span class="p">→</span> dbcli schema / plan / --dry-run 逐項驗證 PR 的假設</span>
+        </details>
+      </div>
+
+      <div class="scenario">
+        <span class="perk">報表一句話搞定</span>
+        <div class="you">等等要開會，給我這個月營收的 dashboard 🙏</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          開好了，瀏覽器裡那份就是：<span class="hl">4 張 KPI 卡 + 趨勢圖 + 明細表</span>，
+          單一 HTML 檔，直接丟群組大家都能開。放心，客戶 email 之類的敏感欄位
+          在產生前就<span class="hl">自動遮罩</span>掉了。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli queries suggest "monthly revenue"
+<span class="p">→</span> dbcli q @analytics/revenue --param days=30 --ui</span>
+        </details>
+      </div>
+
+      <div class="scenario">
+        <span class="perk">看穿 ORM 黑箱</span>
+        <div class="you">我都用 ORM，總覺得它偷偷產生了很爛的 SQL…</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          你的直覺是對的 😅 我在 app 和資料庫之間掛了觀測代理錄了 10 分鐘：
+          商品列表頁有一個 <span class="hl">N+1 迴圈</span> —— 一頁觸發
+          <span class="num">101</span> 次查詢。改成 eager loading 加一個索引後，
+          頁面載入從 <span class="num">1.8s</span> 降到 <span class="num">90ms</span>。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli proxy postgresql --listen 5433 --target localhost:5432
+<span class="p">→</span> 照常操作 app → dbcli proxy analyze   <span style="color:#6b7688"># N+1、慢查詢、hot tables</span>
+<span class="p">→</span> dbcli explain --analyze "&lt;最慢那句&gt;"</span>
+        </details>
+      </div>
+
+      <div class="scenario">
+        <span class="perk">migration 不再靠信仰</span>
+        <div class="you">跑完 migration 了，schema 真的長對了嗎？</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          比對過 migration 前後的快照：新欄位、新索引都在，但抓到一個意外 ——
+          <span class="hl"><code class="inline">price</code> 被改成了 FLOAT</span>，
+          金額用浮點數會有精度問題。建議在進 staging 前改回 DECIMAL，我可以幫你出修正的 migration。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli diff --snapshot before-migrate
+<span class="p">→</span> 跑 ORM migration → dbcli diff --against before-migrate
+<span class="p">→</span> dbcli check orders</span>
+        </details>
+      </div>
+
+      <div class="scenario" style="grid-column: 1 / -1;">
+        <span class="perk">碰真實資料 · 線上零風險</span>
+        <div class="you">這個 bug 本地重現不了，好像只有線上資料才會踩到 —— 幫我查</div>
+        <div class="agent">
+          <span class="who">AGENT</span>
+          找到了。線上有 <span class="num">17</span> 筆舊訂單的
+          <code class="inline">coupon</code> 欄位是十年前的舊格式，你的新程式碼沒處理到。
+          我<span class="hl">用唯讀權限</span>看了線上的資料長相，回<span class="hl">本地</span>造了
+          一筆一模一樣的測試資料重現 bug，修好也驗證過了 ——
+          <span class="hl">整個過程線上資料庫連一個位元都沒被改到</span>，因為 prod
+          連線本來就被設成 query-only，我想寫也寫不了。
+        </div>
+        <details class="behind">
+          <summary>幕後：Agent 其實跑了這些</summary>
+          <span class="chain"><span class="p">→</span> dbcli schema orders --use prod --format json     <span style="color:#6b7688"># 線上真實結構</span>
+<span class="p">→</span> dbcli query --use prod "SELECT … WHERE …"         <span style="color:#6b7688"># 唯讀撈出踩雷資料的形狀</span>
+<span class="p">→</span> dbcli insert orders --use local --data '…' --dry-run  <span style="color:#6b7688"># 本地重建案例</span>
+<span class="p">→</span> 本地修正 → dbcli query --use local 驗證 → 收工</span>
+        </details>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     COMPARISON
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">Before / After</span>
+    <h2>同一個 Agent，兩種世界</h2>
+    <p class="section-lead">左邊是把連線字串直接交給 Agent；右邊是透過 dbcli。</p>
+    <div class="compare-wrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th></th>
+            <th>直接給 Agent 連線字串</th>
+            <th class="vs-dbcli">透過 dbcli</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>憑證位置</td>
+            <td class="bad">出現在 prompt、對話紀錄、專案設定檔</td>
+            <td class="good">存於 <code class="inline">~/.config/dbcli</code> 或 <code class="inline">$env</code> 參照，永不進入對話</td>
+          </tr>
+          <tr>
+            <td>敏感欄位</td>
+            <td class="bad">SELECT 得到什麼，Agent 就看到什麼</td>
+            <td class="good">blacklist 在回傳前遮罩，含報表輸出</td>
+          </tr>
+          <tr>
+            <td>權限範圍</td>
+            <td class="bad">DB 帳號有多大權限，Agent 就有多大</td>
+            <td class="good">四級權限預設最低，逐級開放</td>
+          </tr>
+          <tr>
+            <td>寫入防護</td>
+            <td class="bad">寄望 Agent 自律</td>
+            <td class="good">dry-run 預覽、等值 WHERE 限制、DDL 需 <code class="inline">--execute</code></td>
+          </tr>
+          <tr>
+            <td>失控查詢</td>
+            <td class="bad">全表掃描直接送出</td>
+            <td class="good">自動 LIMIT 1000、大表尺寸警示</td>
+          </tr>
+          <tr>
+            <td>事後追溯</td>
+            <td class="bad">翻對話紀錄自求多福</td>
+            <td class="good">audit log 留痕 + recovery 復原計畫</td>
+          </tr>
+          <tr>
+            <td>Schema 認知</td>
+            <td class="bad">Agent 憑記憶與想像猜欄位</td>
+            <td class="good"><code class="inline">schema</code> 快取真實結構，猜測被明文禁止</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     QUICK START
+============================================================ -->
+<section id="quickstart">
+  <div class="container">
+    <span class="kicker">Quick Start</span>
+    <h2>3 分鐘，讓你的 Agent 學會安全用資料庫</h2>
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>安裝並初始化連線</h3>
+          <p>有 <code class="inline">.env</code>（含 <code class="inline">DATABASE_URL</code>）的專案，
+          <code class="inline">dbcli init</code> 會自動解析 —— 你不必手打任何密碼。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>把該藏的藏好</h3>
+          <p><code class="inline">dbcli blacklist column add users.password</code>，
+          再用 <code class="inline">dbcli status</code> 確認權限等級與遮罩範圍。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>幫 Agent 裝上 skill 或 plugin</h3>
+          <p><code class="inline">dbcli skill --install claude</code>（或 cursor / copilot / gemini…），
+          也可以在 Claude Code / Codex 裡直接 <code class="inline">/plugin marketplace add CarlLee1983/dbcli</code>。
+          Agent 立刻懂得先查 blacklist、再查 schema、寫入必 dry-run 的完整安全流程。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>開始 vibe coding</h3>
+          <p>「幫我看昨天的訂單為什麼變少」—— Agent 自己跑
+          <code class="inline">schema</code> → <code class="inline">query</code> → <code class="inline">report</code>，
+          你看結果就好。</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 36px;">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">完整流程</span>
+        </div>
+        <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
+<span class="p">$</span> dbcli init                                    <span class="c"># 自動解析 .env，設定存到 ~/.config/dbcli</span>
+<span class="p">$</span> dbcli blacklist column add users.password     <span class="c"># 機敏欄位上鎖</span>
+<span class="p">$</span> dbcli skill --install claude                  <span class="c"># Agent 獲得完整安全工作流</span>
+<span class="p">$</span> dbcli query "SELECT * FROM orders" --ui       <span class="c"># 順手開個互動報表</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FAQ
+============================================================ -->
+<section>
+  <div class="container">
+    <span class="kicker">FAQ</span>
+    <h2>常見問題</h2>
+    <details>
+      <summary>我不會寫 SQL，這工具跟我有關嗎？</summary>
+      <p>正是為你設計的。你用自然語言請 Agent 處理資料，dbcli 負責讓這件事安全發生：
+      Agent 透過 schema 確認真實結構、透過 saved queries 與 task packs 使用現成的專家查詢，
+      而你不需要看得懂中間的 SQL —— 只需要看得懂結果。</p>
+    </details>
+    <details>
+      <summary>Agent 會不會不小心刪掉我的資料？</summary>
+      <p>預設權限是 <code class="inline">query-only</code>，連 INSERT 都做不了。就算你開到
+      <code class="inline">data-admin</code>，DELETE 仍強制要求 WHERE 條件、建議先 dry-run，
+      且等值限制讓「一句掃全表」在語法層就被擋下。DDL 更要 <code class="inline">admin</code> +
+      <code class="inline">--execute</code> + DROP 加 <code class="inline">--force</code> 三重確認。</p>
+    </details>
+    <details>
+      <summary>支援哪些資料庫？</summary>
+      <p>MySQL、PostgreSQL、MariaDB、MongoDB、Redis、Elasticsearch，
+      同一專案可同時設定多條具名連線（staging / prod / 分租戶），各自獨立的憑證、權限與 schema 快取。</p>
+    </details>
+    <details>
+      <summary>跟直接用 MCP database server 差在哪？</summary>
+      <p>dbcli 是「權限與資料防護內建」的一層：憑證隔離、blacklist 遮罩、權限分級、dry-run、
+      audit、recovery 全部開箱即用，且同一支 CLI 通吃七個 Agent 平台 —— 不綁定任何單一協定或編輯器，
+      人類自己在終端機也能用。</p>
+    </details>
+    <details>
+      <summary>Plugin 和 skill --install 該選哪個？</summary>
+      <p>都會裝進同一份 skill（工作流 + 完整參考文件），效果相同。差別在入口：
+      <strong>plugin</strong> 從 agent 內的 marketplace 一鍵安裝，還內建
+      <code class="inline">bunx</code> fallback，不用先全域安裝 CLI，最適合快速試用；
+      <strong><code class="inline">skill --install</code></strong> 適合已全域安裝 dbcli 的人，
+      一支 CLI 就能佈署到七個平台，也方便版本升級時同步更新 skill 文件。</p>
+    </details>
+    <details>
+      <summary>team 協作怎麼辦？</summary>
+      <p>Saved queries 可放 <code class="inline">.dbcli-shared/</code> 進 git 與團隊共享；
+      憑證則走 <code class="inline">--use-env-refs</code>，每個人 / 每條 CI pipeline 用自己的環境變數，
+      repo 裡永遠沒有明文密碼。</p>
+    </details>
+  </div>
+</section>
+
+<!-- ============================================================
+     FINAL CTA
+============================================================ -->
+<section class="final-cta">
+  <div class="container">
+    <h2>讓 Agent 放心地碰資料，<br>讓你放心地 vibe。</h2>
+    <p class="section-lead" style="margin: 16px auto 36px; text-align: center;">
+      一行安裝、預設最低權限、憑證零外洩。今天就把資料庫交給你的 Agent —— 安全地。
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://www.npmjs.com/package/@carllee1983/dbcli">npm install -g @carllee1983/dbcli</a>
+      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">閱讀文件</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    dbcli · Database CLI for AI Agents · MIT License ·
+    <a href="https://github.com/CarlLee1983/dbcli">GitHub</a> ·
+    <a href="https://www.npmjs.com/package/@carllee1983/dbcli">npm</a>
+  </div>
+</footer>
+
+</body>
+</html>

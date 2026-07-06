@@ -10,6 +10,7 @@
   "homepage": "https://github.com/CarlLee1983/dbcli",
   "repository": "https://github.com/CarlLee1983/dbcli",
   "license": "MIT",
+  "logo": "docs/assets/dbcli-intro/cursor-marketplace.png",
   "keywords": [
     "database",
     "cli",

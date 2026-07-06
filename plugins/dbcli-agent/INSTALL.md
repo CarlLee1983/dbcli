@@ -104,13 +104,16 @@ review/indexing:
 1. Push this repository to GitHub and keep it public.
 2. Keep the single-plugin layout at the repository root:
    `.cursor-plugin/plugin.json` plus `skills/dbcli/`.
-3. Confirm the manifest name is lowercase kebab-case (`dbcli-agent`) and that
-   `category`, `tags`, `homepage`, `repository`, and `skills` are present.
-4. Submit the repository URL to the Cursor plugin team for review/indexing.
-   The Cursor plugin template currently points submitters to the Cursor
-   community Slack or `kniparko@anysphere.com`.
-5. After indexing, users can install from Cursor Agent chat with
-   `/add-plugin dbcli-agent` or by searching the Cursor plugin marketplace.
+3. Confirm the manifest name is lowercase kebab-case (`dbcli-agent`), the skill
+   files carry YAML frontmatter, `README.md` exists at the repo root, and all
+   manifest paths are relative with no `..` or absolute paths.
+4. Submit the repository at <https://cursor.com/marketplace/publish>. This is the
+   current channel — the marketplace launched with Cursor 2.5 (2026-02-17) and
+   every plugin is manually reviewed and must be open source. Do **not** email
+   `kniparko@anysphere.com`; that address came from an older plugin template and
+   is not the submission path.
+5. After the plugin is reviewed and listed, users can install from Cursor Agent
+   chat with `/add-plugin dbcli-agent` or by searching the Cursor marketplace.
 
 The repo also keeps an instruction-file fallback for projects that want to
 vendor the dbcli rule and reference directly.

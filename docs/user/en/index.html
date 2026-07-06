@@ -116,7 +116,7 @@
         <section id="overview" class="py-12">
             <h1 class="fade-in duration-700">dbcli Documentation</h1>
             <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
-                Engineered for human developers and AI agents. A high-performance, secure, and unified database management CLI.
+                A security-first database CLI for human developers and AI agents — one interface for SQL, MongoDB, Redis, and Elasticsearch.
             </p>
             <div class="flex gap-4 mt-8 fade-in duration-700 delay-300">
                 <a href="#getting-started" class="px-6 py-3 bg-primary hover:opacity-90 text-white rounded-md font-bold shadow-sm transition-all hover:-translate-y-0.5">Get Started</a>
@@ -177,7 +177,7 @@ bun install -g @carllee1983/dbcli</code></pre>
         <!-- doc-key: connection-management -->
         <section id="connections">
             <h2>Connection Management</h2>
-            <p>Switch between Production, Staging, and Local environments with ease:</p>
+            <p>Switch between Production, Staging, and Local environments:</p>
             <pre><code>dbcli use --list         # List all connection names
 dbcli use staging        # Switch your default connection
 dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code></pre>
@@ -695,7 +695,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
         <!-- doc-key: ai-agent-integration -->
         <section id="ai">
             <h2>🤖 AI Agent Integration</h2>
-            <p>Dbcli is engineered to be the standard "Database Driver" for modern AI agents:</p>
+            <p>Dbcli is designed to be the "Database Driver" for AI agents:</p>
             <ul>
                 <li><strong>Machine-Readable Errors</strong>: JSON-formatted <code>--recovery</code> envelopes.</li>
                 <li><strong>Context Optimization</strong>: <code>--for-agent</code> flag reduces token bloat.</li>

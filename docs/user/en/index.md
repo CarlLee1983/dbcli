@@ -1,7 +1,7 @@
 # dbcli Comprehensive Documentation
 
 <!-- doc-key: overview -->
-`dbcli` is a high-performance, security-first Database CLI specifically designed for both human developers and AI agents. It provides a unified interface for SQL (PostgreSQL, MySQL), NoSQL (MongoDB), Key-Value (Redis), and Search (Elasticsearch) databases, featuring permission-based access control, sensitive data blacklisting, and automated diagnostic workflows.
+`dbcli` is a security-first database CLI for both human developers and AI agents. It puts SQL (PostgreSQL, MySQL), NoSQL (MongoDB), Key-Value (Redis), and Search (Elasticsearch) databases behind one interface, with permission-based access control, sensitive-data blacklisting, and automated diagnostic workflows.
 
 ---
 
@@ -58,14 +58,14 @@ Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/
 dbcli init
 ```
 
-**Pro Tip:** Use `--use-env-refs` to keep secrets out of your configuration file and read them from environment variables instead.
+Use `--use-env-refs` to keep secrets out of the config file and read them from environment variables instead.
 
 ---
 
 <!-- doc-key: connection-management -->
 ## Connection Management
 
-`dbcli` supports multi-connection configurations (v2), allowing you to switch between environments (Staging, Production, Local) seamlessly.
+`dbcli` supports multi-connection configurations (v2) so you can switch between Local, Staging, and Production environments.
 
 *   **List all connections**: `dbcli use --list`
 *   **Switch default connection**: `dbcli use <name>`
@@ -572,7 +572,7 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 <!-- doc-key: html-dashboards -->
 ## Interactive HTML Dashboards
 
-Use the `--ui` flag to open query results in a beautiful, interactive React-based dashboard in your browser.
+Use the `--ui` flag to open query results in an interactive React dashboard in your browser.
 
 ```bash
 dbcli query "SELECT * FROM daily_metrics" --ui

@@ -1,7 +1,7 @@
 # dbcli 完整說明文件
 
 <!-- doc-key: overview -->
-`dbcli` 是一款專為人類開發者與 AI 代理（AI Agents）設計的高效能、安全優先的資料庫 CLI 工具。它為 SQL（PostgreSQL、MySQL）、NoSQL（MongoDB）、Key-Value（Redis）及 Search（Elasticsearch）資料庫提供統一的操作介面，具備權限存取控制、敏感資料黑名單及自動化診斷工作流等核心功能。
+`dbcli` 是一款安全優先的資料庫 CLI，供人類開發者與 AI 代理（AI Agents）使用。它把 SQL（PostgreSQL、MySQL）、NoSQL（MongoDB）、Key-Value（Redis）與 Search（Elasticsearch）收攏到同一套操作介面，內建權限存取控制、敏感資料黑名單與自動化診斷工作流。
 
 ---
 
@@ -58,14 +58,14 @@ bun install -g @carllee1983/dbcli
 dbcli init
 ```
 
-**專家建議：** 使用 `--use-env-refs` 可將機密資訊保留在環境變數中，而非直接寫入設定檔，這對於 CI/CD 環境非常安全。
+使用 `--use-env-refs` 可把機密留在環境變數，不寫進設定檔；CI/CD 環境尤其適用。
 
 ---
 
 <!-- doc-key: connection-management -->
 ## 連線管理
 
-`dbcli` 支援多連線配置 (v2)，讓你能在開發 (Local)、測試 (Staging) 與正式 (Production) 環境間切換自如。
+`dbcli` 支援多連線配置 (v2)，讓你在開發 (Local)、測試 (Staging) 與正式 (Production) 環境間切換。
 
 *   **列出所有連線**：`dbcli use --list`
 *   **切換預設連線**：`dbcli use <name>`
@@ -504,7 +504,7 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 <!-- doc-key: html-dashboards -->
 ## 互動式 HTML 儀表板
 
-在查詢時加上 `--ui` 旗標，即可在瀏覽器中開啟精美的互動式 React 報表。
+在查詢時加上 `--ui` 旗標，即可在瀏覽器中開啟互動式 React 報表。
 
 ```bash
 dbcli query "SELECT * FROM daily_metrics" --ui
@@ -666,7 +666,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 <!-- doc-key: ai-agent-integration -->
 ## AI 代理整合
 
-`dbcli` 從底層就是為了成為 AI 代理的「資料庫驅動程式」而設計的。
+`dbcli` 設計成 AI 代理的「資料庫驅動程式」。
 
 1.  **SKILL.md**：透過 `dbcli skill` 提供 AI 指引，讓代理知道安全的指令路徑。
 2.  **修復封包 (Recovery Envelopes)**：當指令失敗時，使用 `--recovery` 獲得機器可讀的 JSON 錯誤及修復建議。

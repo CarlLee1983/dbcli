@@ -116,7 +116,7 @@
         <section id="overview" class="py-12">
             <h1 class="fade-in duration-700">dbcli 完整說明文件</h1>
             <p class="text-xl font-medium text-text-muted max-w-3xl leading-relaxed fade-in duration-700 delay-200">
-                專為人類開發者與 AI 代理量身打造。高效、安全、統一的跨平台資料庫管理終端。
+                給人類開發者與 AI 代理的安全優先資料庫 CLI —— SQL、MongoDB、Redis、Elasticsearch 共用同一套介面。
             </p>
             <div class="flex gap-4 mt-8 fade-in duration-700 delay-300">
                 <a href="#getting-started" class="px-6 py-3 bg-primary hover:opacity-90 text-white rounded-md font-bold shadow-sm transition-all hover:-translate-y-0.5">立即開始</a>
@@ -177,7 +177,7 @@ bun install -g @carllee1983/dbcli</code></pre>
         <!-- doc-key: connection-management -->
         <section id="connections">
             <h2>連線管理</h2>
-            <p>輕鬆在正式 (Prod)、測試 (Staging) 及本地 (Local) 環境間切換：</p>
+            <p>在正式 (Prod)、測試 (Staging) 及本地 (Local) 環境間切換：</p>
             <pre><code>dbcli use --list         # 列出所有連線名稱
 dbcli use staging        # 切換預設連線
 dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code></pre>
@@ -695,7 +695,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
         <!-- doc-key: ai-agent-integration -->
         <section id="ai">
             <h2>🤖 AI 代理整合</h2>
-            <p>Dbcli 是專為現代 AI 代理設計的標準「資料庫驅動程式」：</p>
+            <p>Dbcli 設計成 AI 代理的「資料庫驅動程式」：</p>
             <ul>
                 <li><strong>機器可讀錯誤</strong>：JSON 格式的 <code>--recovery</code> 故障修復封包。</li>
                 <li><strong>內容優化</strong>：<code>--for-agent</code> 旗標大幅減少 Token 消耗。</li>

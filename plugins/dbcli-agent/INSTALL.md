@@ -78,8 +78,13 @@ used by Gemini/Antigravity-style agents.
 
 ## Cursor
 
-Cursor can install plugins from Cursor Agent chat when the plugin is available
-in Cursor's plugin marketplace:
+> **Current status: manual install.** `dbcli-agent` is not yet indexed in
+> Cursor's plugin marketplace, so `/add-plugin dbcli-agent` in Cursor Agent chat
+> will not find it. Use one of the manual fallbacks below. The `/add-plugin`
+> command only works once the plugin has been indexed (see the submission steps
+> that follow).
+
+Once the plugin is indexed, Cursor can install it from Cursor Agent chat:
 
 ```text
 /add-plugin dbcli-agent
@@ -93,7 +98,8 @@ This repository includes Cursor plugin metadata at:
 .cursor-plugin/plugin.json
 ```
 
-For Cursor marketplace review/indexing:
+To get `/add-plugin` working, submit the repo for Cursor marketplace
+review/indexing:
 
 1. Push this repository to GitHub and keep it public.
 2. Keep the single-plugin layout at the repository root:

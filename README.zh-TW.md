@@ -4,7 +4,7 @@
 
 統一的資料庫 CLI 工具，讓 AI 代理（Claude Code、Gemini、Copilot、Cursor）能安全地查詢、探索與操作資料庫。
 
-**核心價值：** AI 代理可透過單一、具權限控管的 CLI 工具，在敏感資料保護下安全且智慧地存取專案資料庫。
+**核心價值：** AI 代理可透過單一、具權限控管的 CLI 工具，在敏感資料保護下安全存取專案資料庫。
 
 > **安全性更新：** `dbcli init` 現在只會在 `./.dbcli/config.json` 寫入一個很小的專案綁定 stub。完整的連線設定會存放在 `~/.config/dbcli/projects/<project-id>/config.json`，因此敏感設定預設不會留在專案工作區內。
 

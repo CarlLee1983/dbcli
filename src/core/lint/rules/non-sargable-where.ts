@@ -52,7 +52,7 @@ export const nonSargableWhereRule: LintRule = {
       findings.push({
         rule: 'non-sargable-where',
         severity: 'warn',
-        message: `${computation} applied to a column on the left of '${operator}' prevents index use (non-sargable). Move the computation to the literal side, use a generated/expression index, or restate the predicate.`,
+        message: `${computation} applied to a column on the left of '${operator}' may prevent use of a conventional index (non-sargable). An expression index or generated-column index may still support this predicate; otherwise move the computation to the literal side or restate the predicate.`,
         span: findingSpan(ctx.sql, 'where'),
         schemaVerified: false,
       })

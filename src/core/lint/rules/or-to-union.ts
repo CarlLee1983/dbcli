@@ -11,9 +11,16 @@ function columnName(node: AstNode): string | null {
   return typeof value === 'string' ? value : null
 }
 
+function columnIdentity(node: AstNode): string | null {
+  const name = columnName(node)
+  if (!name) return null
+  const table = node.table
+  return typeof table === 'string' && table.length > 0 ? `${table}.${name}` : name
+}
+
 function columnOf(side: AstNode | undefined): string | null {
   if (!side) return null
-  if (side.type === 'column_ref') return columnName(side)
+  if (side.type === 'column_ref') return columnIdentity(side)
   if (side.type === 'binary_expr') return columnOf(side.left as AstNode | undefined)
   return null
 }
@@ -39,7 +46,7 @@ export const orToUnionRule: LintRule = {
       {
         rule: 'or-to-union',
         severity: 'info',
-        message: `OR across different columns (${leftColumn} / ${rightColumn}) often defeats index selection. Consider rewriting as two indexed queries combined with UNION ALL (dedupe with UNION if rows can overlap).`,
+        message: `OR across different columns (${leftColumn} / ${rightColumn}) can complicate index selection. Only consider separate indexed branches combined with UNION ALL when the predicates are mutually exclusive and the rewrite preserves row identity and multiplicity. Verify result equivalence and compare plans; UNION deduplication is not a generic semantic fallback.`,
         span: findingSpan(ctx.sql, ' or '),
         schemaVerified: false,
       },

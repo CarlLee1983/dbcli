@@ -29,7 +29,7 @@ export const subqueryToJoinRule: LintRule = {
         rule: 'subquery-to-join',
         severity: 'info',
         message:
-          'IN (SELECT …) may be executed as a dependent subquery on some planners. Consider an equivalent JOIN or EXISTS and compare plans with explain.',
+          'IN (SELECT …) may be executed as a dependent subquery on some planners. Consider an equivalent EXISTS, or a JOIN only when the inner result is unique or explicitly deduplicated so the rewrite preserves IN semi-join semantics. Verify result equivalence and compare plans with explain.',
         span: findingSpan(ctx.sql, 'in ('),
         schemaVerified: false,
       })

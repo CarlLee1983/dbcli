@@ -4,7 +4,7 @@
 
 **Goal:** Add `dbcli lint` — a static, schema-aware SQL anti-pattern advisor that reports findings with rewrite drafts and verify commands, never executing anything.
 
-**Architecture:** A rule engine in `src/core/lint/` parses SQL with `node-sql-parser` (existing dependency, same wrapper pattern as `src/core/guide/missing-index/parse-sql.ts`), runs one-file-per-rule checks, and enriches schema-aware rules from the local schema cache embedded in `.dbcli` config (`config.schema`, same source `dbcli plan` uses — no DB connection ever). A thin command layer (`src/commands/lint.ts`) reuses `resolveBulkInputs` from the explain bulk-runner for `@snippet` / `@file` / `--bulk` inputs, and wires audit + `--recovery` following the existing `plan.ts` / `schema.ts` patterns.
+**Architecture:** A rule engine in `src/core/lint/` parses SQL with `node-sql-parser` (existing dependency, same wrapper pattern as `src/core/guide/missing-index/parse-sql.ts`), runs one-file-per-rule checks, and enriches schema-aware rules from the layered local cache under `.dbcli/schemas/` through the existing `SchemaLayeredLoader` abstraction. The existing global `--use <conn>` option selects the per-connection cache directory. A thin command layer (`src/commands/lint.ts`) reuses `resolveBulkInputs` from the explain bulk-runner for `@snippet` / `@file` / `--bulk` inputs, and wires audit + `--recovery` following the existing `plan.ts` / `schema.ts` patterns.
 
 **Tech Stack:** Bun + TypeScript ESM, commander 13, node-sql-parser 5, zod (config already validated upstream), `bun test`.
 
@@ -12,12 +12,20 @@
 
 - Spec: `docs/superpowers/specs/2026-07-19-lint-and-orm-drift-design.md` §1.
 - SQL engines only: `postgresql` / `mysql` / `mariadb`. Other systems → error message `dbcli lint requires a SQL connection (postgresql/mysql/mariadb), got: <system>` and exit 1.
-- Never connect to the database. Schema data comes only from `config.schema`.
+- Never connect to the database. Schema data comes only from `.dbcli/schemas/` through `SchemaLayeredLoader`; `config.schema` is not a lint schema source.
+- Preserve the existing global `--use <conn>` option and use it to select `.dbcli/schemas/<conn>/` for v2 configurations.
 - Never execute or apply rewrites. `rewrite` is a draft; `verifyCommand` is always a `dbcli explain --analyze "<sql>"` string.
 - Findings vocabulary: severity `info | warn | error`; skipped schema rules use reason strings starting with `blocked:`.
 - Imports use the `@/` alias (existing tsconfig paths). All files ESM, no default exports (match existing command/core modules).
 - Run `bun test <file>` after each RED/GREEN step; run `bun run lint` (eslint) before each commit if the repo script exists (`bun run --list` shows it) — fix warnings in touched files only.
 - Commit messages: conventional commits, English subject fine, no attribution footer.
+- Rule tests may be grouped into the three task-level files in this plan, but every rule must have its own clearly named, independently executable `test(...)` case covering its hit and no-hit behavior; schema-aware rules also cover cache-present and cache-unavailable behavior.
+
+## Approved Specification Resolutions (2026-07-19)
+
+- The design spec governs schema architecture: layered files under `.dbcli/schemas/` are loaded through `SchemaLayeredLoader`; references to `config.schema` in the original plan were an oversight.
+- The design spec governs the CLI surface: `--use <conn>` remains available as the existing global option and selects the named connection plus its isolated schema cache.
+- The grouped rule-test files in Tasks 3–5 are an approved plan-level organization choice, provided each rule retains clearly named, independently executable test cases.
 
 ## File Structure (final state)
 
@@ -26,7 +34,7 @@ src/core/lint/
   types.ts        # LintFinding, LintReport, LintRule, LintRuleContext, severities
   parse.ts        # parseSingleStatement(sql, system) → ast | ParseFailure (mirrors missing-index/parse-sql.ts, allows any single statement)
   ast-utils.ts    # walkExpr, whereOf, collectTables, findingSpan helpers
-  context.ts      # buildSchemaContext(config.schema) → SchemaContext
+  context.ts      # SchemaLayeredLoader-backed loadSchemaContext + in-memory buildSchemaContext
   engine.ts       # lintSql(sql, opts) → LintReport ; ALL_RULES registry
   rules/select-star.ts
   rules/non-sargable-where.ts
@@ -40,7 +48,7 @@ src/core/lint/
 src/formatters/lint.ts
 src/commands/lint.ts
 src/program.ts                  # register lintCommand (modify)
-tests/unit/core/lint/*.test.ts  # engine, context, one file per rule
+tests/unit/core/lint/*.test.ts  # engine/context plus three grouped rule suites with one test case per rule
 tests/unit/commands/lint.test.ts
 tests/unit/formatters/lint.test.ts
 ```
@@ -290,16 +298,23 @@ git commit -m "feat: add lint core types, parse wrapper, and AST helpers"
 - Test: `tests/unit/core/lint/context.test.ts`
 
 **Interfaces:**
-- Consumes: `SchemaContext`, `TableSchema` (Task 1 / `@/adapters/types`).
-- Produces: `buildSchemaContext(schema: Record<string, TableSchema> | undefined): SchemaContext`. Rules call `ctx.schema.available` / `resolveColumn`.
+- Consumes: `SchemaContext`, `TableSchema` (Task 1 / `@/adapters/types`) and `SchemaLayeredLoader` from `@/core/schema-loader`.
+- Produces:
+  - `buildSchemaContext(schema: Record<string, TableSchema> | undefined): SchemaContext` for rule/engine unit tests.
+  - `loadSchemaContext(dbcliPath: string, connectionName?: string): Promise<SchemaContext>` as the production path. It loads only `.dbcli/schemas/` (or `.dbcli/schemas/<connectionName>/`) through `SchemaLayeredLoader`; it never reads `config.schema` and never connects to a database.
+  - Rules call `ctx.schema.available` / `resolveColumn`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // tests/unit/core/lint/context.test.ts
 import { describe, test, expect } from 'bun:test'
-import { buildSchemaContext } from '@/core/lint/context'
+import { buildSchemaContext, loadSchemaContext } from '@/core/lint/context'
+import { SchemaWriter } from '@/core/schema-writer'
 import type { TableSchema } from '@/adapters/types'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const users: TableSchema = {
   name: 'users',
@@ -327,6 +342,18 @@ describe('buildSchemaContext', () => {
     expect(ctx.resolveColumn(['orders'], 'id')).toBeUndefined()
     expect(ctx.resolveColumn(['users'], 'nope')).toBeUndefined()
   })
+
+  test('loads the named connection from the layered .dbcli/schemas cache', async () => {
+    const dbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-lint-schema-'))
+    try {
+      await new SchemaWriter(dbcliPath).save({ users }, 'staging')
+      const ctx = await loadSchemaContext(dbcliPath, 'staging')
+      expect(ctx.available).toBe(true)
+      expect(ctx.getTable('users')?.columns[0]?.name).toBe('id')
+    } finally {
+      await rm(dbcliPath, { recursive: true, force: true })
+    }
+  })
 })
 ```
 
@@ -340,6 +367,7 @@ Expected: FAIL — module not found.
 ```ts
 // src/core/lint/context.ts
 import type { TableSchema } from '@/adapters/types'
+import { SchemaLayeredLoader } from '@/core/schema-loader'
 import type { SchemaContext } from './types'
 
 export function buildSchemaContext(
@@ -364,12 +392,26 @@ export function buildSchemaContext(
     },
   }
 }
+
+export async function loadSchemaContext(
+  dbcliPath: string,
+  connectionName?: string
+): Promise<SchemaContext> {
+  const loader = new SchemaLayeredLoader(dbcliPath, { connectionName })
+  const { cache, index } = await loader.initialize()
+  const schema: Record<string, TableSchema> = {}
+  for (const tableName of Object.keys(index?.tables ?? {})) {
+    const table = await cache.getTableSchema(tableName)
+    if (table) schema[tableName] = table
+  }
+  return buildSchemaContext(schema)
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/unit/core/lint/context.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1132,10 +1174,10 @@ git commit -m "feat: add schema-aware implicit-cast and not-in-nullable lint rul
 - Test: `tests/unit/core/lint/engine.test.ts`
 
 **Interfaces:**
-- Consumes: all 9 rules (Tasks 3–5), `parseSingleStatement`/`ParseFailure` (Task 1), `buildSchemaContext` (Task 2).
+- Consumes: all 9 rules (Tasks 3–5), `parseSingleStatement`/`ParseFailure` (Task 1), and a `SchemaContext` produced by Task 2.
 - Produces (used by the command in Task 8):
   - `ALL_RULES: LintRule[]` (exported for docs/tests)
-  - `lintSql(sql: string, opts: { system: SqlDatabaseSystem; schema?: Record<string, TableSchema>; minSeverity?: LintSeverity; noSchema?: boolean }, label?: string): LintReport`
+  - `lintSql(sql: string, opts: { system: SqlDatabaseSystem; schema?: SchemaContext; minSeverity?: LintSeverity; noSchema?: boolean }, label?: string): LintReport`
 
 Behavior contract:
 - Parse failure → report with `parseError` set, empty `findings`, all rules listed in `skippedRules` with reason `blocked: parse failed`.
@@ -1149,14 +1191,16 @@ Behavior contract:
 // tests/unit/core/lint/engine.test.ts
 import { describe, test, expect } from 'bun:test'
 import { lintSql, ALL_RULES } from '@/core/lint/engine'
+import { buildSchemaContext } from '@/core/lint/context'
 import type { TableSchema } from '@/adapters/types'
 
-const schema: Record<string, TableSchema> = {
+const schemaTables: Record<string, TableSchema> = {
   users: {
     name: 'users',
     columns: [{ name: 'id', type: 'integer', nullable: false }],
   },
 }
+const schema = buildSchemaContext(schemaTables)
 
 describe('lintSql', () => {
   test('registry holds all 9 rules', () => {
@@ -1186,8 +1230,10 @@ describe('lintSql', () => {
   test('skips schema rules without cache, with blocked reason', () => {
     const report = lintSql("SELECT id FROM users WHERE id = '1'", { system: 'postgresql' })
     expect(report.findings.map((f) => f.rule)).not.toContain('implicit-cast')
-    const skipped = report.skippedRules.find((s) => s.rule === 'implicit-cast')
-    expect(skipped?.reason).toBe('blocked: schema cache unavailable (run dbcli schema)')
+    for (const rule of ['implicit-cast', 'not-in-nullable']) {
+      const skipped = report.skippedRules.find((s) => s.rule === rule)
+      expect(skipped?.reason).toBe('blocked: schema cache unavailable (run dbcli schema)')
+    }
   })
 
   test('runs schema rules when cache provided; --no-schema forces skip', () => {
@@ -1240,8 +1286,8 @@ Expected: FAIL — module not found.
 
 ```ts
 // src/core/lint/engine.ts
-import type { SqlDatabaseSystem, TableSchema } from '@/adapters/types'
-import type { LintReport, LintRule, LintSeverity } from './types'
+import type { SqlDatabaseSystem } from '@/adapters/types'
+import type { LintReport, LintRule, LintSeverity, SchemaContext } from './types'
 import { parseSingleStatement, ParseFailure } from './parse'
 import { buildSchemaContext } from './context'
 import { selectStarRule } from './rules/select-star'
@@ -1270,7 +1316,7 @@ const SEVERITY_RANK: Record<LintSeverity, number> = { info: 0, warn: 1, error: 2
 
 export interface LintSqlOptions {
   system: SqlDatabaseSystem
-  schema?: Record<string, TableSchema>
+  schema?: SchemaContext
   minSeverity?: LintSeverity
   noSchema?: boolean
 }
@@ -1303,7 +1349,7 @@ export function lintSql(sql: string, opts: LintSqlOptions, label?: string): Lint
     throw e
   }
 
-  const schemaCtx = buildSchemaContext(opts.noSchema ? undefined : opts.schema)
+  const schemaCtx = opts.noSchema ? buildSchemaContext(undefined) : (opts.schema ?? buildSchemaContext(undefined))
   const ctx = { system: opts.system, sql, ast, schema: schemaCtx }
   const minRank = SEVERITY_RANK[opts.minSeverity ?? 'info']
 
@@ -1500,13 +1546,14 @@ git commit -m "feat: add lint output formatter (text/json/markdown)"
 - Test: `tests/unit/commands/lint.test.ts`
 
 **Interfaces:**
-- Consumes: `lintSql`/`LintSqlOptions` (Task 6), `formatLint`/`LintFormat` (Task 7), `resolveBulkInputs` from `@/core/explain/bulk-runner`, `loadSnippets`/`resolveSnippetDirs` from `@/core/saved-queries`, `configModule` from `@/core/config`, `resolveConfigPath` from `@/utils/config-path`, `writeAuditEntry` from `@/core/audit/integration-helper`, `emitRecoveryEnvelope` from `@/core/recovery` (dynamic import, as in `schema.ts:346-353`).
+- Consumes: `lintSql`/`LintSqlOptions` (Task 6), `loadSchemaContext` (Task 2), `formatLint`/`LintFormat` (Task 7), `resolveBulkInputs` from `@/core/explain/bulk-runner`, `loadSnippets`/`resolveSnippetDirs` from `@/core/saved-queries`, `configModule`/`getSchemaIsolationConnectionName` from `@/core/config`, `resolveConfigStoragePath` from `@/core/config-binding`, `resolveConfigPath` from `@/utils/config-path`, `writeAuditEntry` from `@/core/audit/integration-helper`, `emitRecoveryEnvelope` from `@/core/recovery` (dynamic import, as in `schema.ts:346-353`).
 - Produces: `lintCommand: Command` (commander). Also exports `runLint(...)` for tests.
 
 Command spec:
 
 ```
 dbcli lint [queries...]
+  --use <conn>            existing global option; select named connection + schema cache
   --format <fmt>          text | json | markdown   (default: text)
   --min-severity <level>  info | warn | error      (default: info)
   --no-schema             skip schema-aware rules even when cache exists
@@ -1514,33 +1561,35 @@ dbcli lint [queries...]
   --recovery              on failure, emit a structured recovery envelope
 ```
 
-- Reads config only (no adapter, no connect). Rejects non-SQL systems with the standard message (Global Constraints).
-- Schema source: `config.schema` (`Record<string, TableSchema>`), exactly like `src/commands/plan.ts:36-45`.
+- Reads config plus layered schema-cache files only (no adapter, no connect). Rejects non-SQL systems with the standard message (Global Constraints).
+- Schema source: call `resolveConfigStoragePath(configPath)`, resolve the v2 cache slot with `getSchemaIsolationConnectionName(configPath)`, then call `loadSchemaContext(storagePath, connectionName)`. Never pass `config.schema` into lint.
+- `--use <conn>` is the existing global option registered in `src/program.ts`; document and test invocation as `dbcli --use <conn> lint ...`. The global pre-action hook selects the config connection, and `getSchemaIsolationConnectionName` selects `.dbcli/schemas/<conn>/`.
 - On success: `writeAuditEntry(config, 'lint', options, { success: true, target: '*', metadata: { queries: reports.length, findings: totalFindings } })`.
 - On failure: audit `success: false` + recovery envelope when `--recovery` (copy the `catch` structure of `src/commands/schema.ts:331-362` with `operation: 'lint'`), then `process.exit(1)`.
 
 - [ ] **Step 1: Write the failing test**
 
 Structure the command so the core is testable without process.exit: export
-`runLint(queries, options, deps)` where `deps` supplies config + a saved-query loader,
-and have the commander `.action` call it. Tests exercise `runLint` directly.
+`runLint(queries, options, deps)` where `deps` supplies config, a loaded schema context,
+and a saved-query loader, and have the commander `.action` call it. Tests exercise
+`runLint` directly.
 
 ```ts
 // tests/unit/commands/lint.test.ts
 import { describe, test, expect } from 'bun:test'
 import { runLint } from '@/commands/lint'
+import { buildSchemaContext } from '@/core/lint/context'
 import type { TableSchema } from '@/adapters/types'
 
 const baseConfig = {
   connection: { system: 'postgresql' },
   permission: 'query-only',
-  schema: {
-    users: {
-      name: 'users',
-      columns: [{ name: 'id', type: 'integer', nullable: false }],
-    } as TableSchema,
-  },
 }
+const users: TableSchema = {
+  name: 'users',
+  columns: [{ name: 'id', type: 'integer', nullable: false }],
+}
+const schema = buildSchemaContext({ users })
 
 const noSnippets = async () => null
 
@@ -1548,6 +1597,7 @@ describe('runLint', () => {
   test('lints an inline query and returns reports', async () => {
     const { reports } = await runLint(['SELECT * FROM users'], { format: 'json' }, {
       config: baseConfig as never,
+      schema,
       loadSavedQuery: noSnippets,
     })
     expect(reports).toHaveLength(1)
@@ -1558,6 +1608,7 @@ describe('runLint', () => {
     await expect(
       runLint(['SELECT 1'], {}, {
         config: { ...baseConfig, connection: { system: 'redis' } } as never,
+        schema,
         loadSavedQuery: noSnippets,
       })
     ).rejects.toThrow('dbcli lint requires a SQL connection')
@@ -1565,7 +1616,7 @@ describe('runLint', () => {
 
   test('errors when no query given', async () => {
     await expect(
-      runLint([], {}, { config: baseConfig as never, loadSavedQuery: noSnippets })
+      runLint([], {}, { config: baseConfig as never, schema, loadSavedQuery: noSnippets })
     ).rejects.toThrow('No query provided')
   })
 
@@ -1573,7 +1624,7 @@ describe('runLint', () => {
     const { reports } = await runLint(
       ["SELECT id FROM users WHERE id = '1'"],
       { noSchema: true },
-      { config: baseConfig as never, loadSavedQuery: noSnippets }
+      { config: baseConfig as never, schema, loadSavedQuery: noSnippets }
     )
     expect(reports[0].skippedRules.find((s) => s.rule === 'implicit-cast')?.reason).toBe(
       'blocked: --no-schema'
@@ -1585,6 +1636,7 @@ describe('runLint', () => {
       name === 'perf/top' ? [{ name: 'perf/top', sql: 'SELECT * FROM users' }] : null
     const { reports } = await runLint(['@perf/top'], {}, {
       config: baseConfig as never,
+      schema,
       loadSavedQuery: loader,
     })
     expect(reports[0].label).toBe('perf/top')
@@ -1604,21 +1656,23 @@ Expected: FAIL — module not found.
 // src/commands/lint.ts
 /**
  * `dbcli lint` — static, schema-aware SQL anti-pattern advisor.
- * Never connects to the database; schema facts come from the local cache in
- * `.dbcli` config (same source as `dbcli plan`). Report-only: rewrites are
+ * Never connects to the database; schema facts come from the layered local
+ * cache under `.dbcli/schemas/`. Report-only: rewrites are
  * drafts to verify with `dbcli explain --analyze`, never executed here.
  */
 import { Command } from 'commander'
-import { configModule } from '@/core/config'
+import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
+import { resolveConfigStoragePath } from '@/core/config-binding'
 import { resolveConfigPath } from '@/utils/config-path'
 import { resolveBulkInputs } from '@/core/explain/bulk-runner'
 import { loadSnippets, resolveSnippetDirs } from '@/core/saved-queries'
 import { lintSql, type LintSqlOptions } from '@/core/lint/engine'
-import type { LintReport, LintSeverity } from '@/core/lint/types'
+import { buildSchemaContext, loadSchemaContext } from '@/core/lint/context'
+import type { LintReport, LintSeverity, SchemaContext } from '@/core/lint/types'
 import { formatLint, type LintFormat } from '@/formatters/lint'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
-import type { SqlDatabaseSystem, TableSchema } from '@/adapters/types'
+import type { SqlDatabaseSystem } from '@/adapters/types'
 
 const FORMATS: LintFormat[] = ['text', 'json', 'markdown']
 const SEVERITIES: LintSeverity[] = ['info', 'warn', 'error']
@@ -1636,6 +1690,7 @@ type SavedQueryLoader = (nameOrGlob: string) => Promise<{ name: string; sql: str
 
 interface LintDeps {
   config: DbcliConfig
+  schema: SchemaContext
   loadSavedQuery: SavedQueryLoader
 }
 
@@ -1673,7 +1728,7 @@ export async function runLint(
 
   const lintOpts: LintSqlOptions = {
     system: system as SqlDatabaseSystem,
-    schema: (deps.config.schema ?? {}) as Record<string, TableSchema>,
+    schema: deps.schema,
     minSeverity,
     noSchema: options.noSchema === true,
   }
@@ -1721,8 +1776,16 @@ export const lintCommand = new Command()
     let config: DbcliConfig | undefined
     try {
       config = await configModule.read(configPath)
+      const schema =
+        options.noSchema === true
+          ? buildSchemaContext(undefined)
+          : await loadSchemaContext(
+              await resolveConfigStoragePath(configPath),
+              await getSchemaIsolationConnectionName(configPath)
+            )
       const { reports, output } = await runLint(queries, options, {
         config,
+        schema,
         loadSavedQuery: makeSavedQueryLoader(),
       })
       console.log(output)
@@ -1781,7 +1844,7 @@ program.addCommand(lintCommand)
 
 Run: `bun test tests/unit/commands/lint.test.ts`
 Expected: PASS (5 tests).
-Then smoke the CLI end-to-end without a DB: `bun run src/cli.ts lint "SELECT * FROM nonexistent" --format json` — in a dir with a SQL `.dbcli` it prints a JSON report; without config it errors cleanly.
+Then smoke the CLI end-to-end without a DB: `bun run src/cli.ts --use staging lint "SELECT * FROM nonexistent" --format json` — in a dir with a v2 SQL `.dbcli` and `.dbcli/schemas/staging/` it prints a JSON report from that cache; without config it errors cleanly.
 Then full suite: `bun test tests/unit` — expected all green.
 
 - [ ] **Step 5: Commit**
@@ -1875,7 +1938,7 @@ git commit -m "feat: insert lint step into diagnose-slow-query pack and slow-que
 1. Command overview table — insert after the `explain` row:
 
 ```markdown
-| `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the local schema cache. Findings carry rewrite drafts + `explain --analyze` verify commands — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
+| `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + `explain --analyze` verify commands — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
 ```
 
 2. "Slow endpoint or query" row in **Developer workflows** — change the path to:
@@ -1896,7 +1959,7 @@ git commit -m "feat: insert lint step into diagnose-slow-query pack and slow-que
 
 - [ ] **Step 3: Add the full `lint` block to `assets/reference.md`**
 
-Place it after the `explain` section, following the sibling sections' structure: synopsis, all five flags with defaults, the 9 rule names with one-line descriptions, skip semantics (`blocked:` reasons), two examples (inline + `--bulk @glob`), and a JSON output sample trimmed to one finding.
+Place it after the `explain` section, following the sibling sections' structure: synopsis, the five lint-local flags with defaults plus the global `--use <conn>` selector, the 9 rule names with one-line descriptions, layered-cache and skip semantics (`blocked:` reasons), two examples (inline + `--bulk @glob`), and a JSON output sample trimmed to one finding.
 
 - [ ] **Step 4: Update user docs (both languages, both formats)**
 

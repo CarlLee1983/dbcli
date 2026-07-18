@@ -278,9 +278,8 @@
           <summary>看看 Agent 背後執行了什麼</summary>
           <pre><code>dbcli blacklist list
 dbcli schema subscriptions --format json
-dbcli query "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --format json --recovery
-dbcli recover
-dbcli export "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --format html --output churn-report.html</code></pre>
+dbcli query "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --recovery --ui
+dbcli recover</code></pre>
         </details>
       </div>
     </section>
@@ -348,25 +347,15 @@ dbcli export "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_
             <p>Claude Code 可從 marketplace 安裝 plugin；Codex 可在 CLI 初始化後安裝 skill。</p>
             <div class="command-box"><pre><code>/plugin marketplace add CarlLee1983/dbcli
 /plugin install dbcli@carllee1983-dbcli</code></pre><button class="copy-button" type="button" aria-label="複製 Claude Code Plugin 安裝指令" aria-live="polite" data-copy="/plugin marketplace add CarlLee1983/dbcli&#10;/plugin install dbcli@carllee1983-dbcli">複製</button></div>
-            <div class="command-box"><pre><code>bunx @carllee1983/dbcli init
-dbcli skill --install codex</code></pre><button class="copy-button" type="button" aria-label="複製 Codex Skill 安裝指令" aria-live="polite" data-copy="bunx @carllee1983/dbcli init&#10;dbcli skill --install codex">複製</button></div>
-            <ul class="platform-install-list" aria-label="各平台 skill selector 與安裝路徑">
-              <li><strong>Claude Code</strong><br><code>dbcli skill --install claude</code><span class="install-path"><code>~/.claude/skills/dbcli/</code></span></li>
-              <li><strong>Codex</strong><br><code>dbcli skill --install codex</code><span class="install-path"><code>~/.codex/skills/dbcli/</code></span></li>
-              <li><strong>Cursor</strong><br><code>dbcli skill --install cursor</code><span class="install-path"><code>專案/.cursor/rules/dbcli.mdc</code> 與 <code>專案/.cursor/skills/dbcli/reference.md</code></span></li>
-              <li><strong>GitHub Copilot</strong><br><code>dbcli skill --install copilot</code><span class="install-path"><code>專案/.github/skills/dbcli/</code></span></li>
-              <li><strong>Gemini CLI</strong>（保留支援、逐步由 Antigravity 取代）<br><code>dbcli skill --install gemini</code><span class="install-path"><code>~/.gemini/skills/dbcli/</code></span></li>
-              <li><strong>Antigravity</strong><br><code>dbcli skill --install antigravity</code><span class="install-path"><code>~/.gemini/antigravity-cli/skills/dbcli/</code></span></li>
-              <li><strong>Windsurf</strong><br><code>dbcli skill --install windsurf</code><span class="install-path"><code>專案/.windsurfrules</code> 與 <code>專案/.windsurf/skills/dbcli/reference.md</code></span></li>
-              <li><strong>OpenCode</strong><span class="install-path">目前列為可搭配使用的 Agent 平台，但 dbcli CLI 尚未提供經驗證的專用 selector 或安裝路徑；請勿套用其他平台命令。</span></li>
-            </ul>
+            <div class="command-box"><pre><code>dbcli skill --install codex</code></pre><button class="copy-button" type="button" aria-label="複製 Codex Skill 安裝指令" aria-live="polite" data-copy="dbcli skill --install codex">複製</button></div>
+            <p style="margin-top:18px">Skill 也支援 Claude Code、Cursor、GitHub Copilot、Gemini CLI、Antigravity 與 Windsurf。OpenCode 可搭配使用，但目前沒有專用 selector；請勿套用其他平台的安裝命令。</p>
           </article>
           <article class="quick-card">
             <span class="route-badge">次要路線 · CLI</span>
             <h3>先建立連線設定</h3>
             <p>使用 bunx 執行初始化精靈；之後 Agent 可透過 skill 使用相同的安全工作流。</p>
             <div class="command-box"><pre><code>bunx @carllee1983/dbcli init</code></pre><button class="copy-button" type="button" aria-label="複製 CLI 初始化指令" aria-live="polite" data-copy="bunx @carllee1983/dbcli init">複製</button></div>
-            <p style="margin-top:18px">上方列出每個已驗證平台的具體 selector 與安裝路徑；請依平台選用，不必猜測 placeholder。</p>
+            <p style="margin-top:18px">完成初始化後，再依使用的 Agent 安裝對應整合；完整平台說明請見使用者文件。</p>
           </article>
         </div>
         <div class="support-links">
@@ -382,6 +371,7 @@ dbcli skill --install codex</code></pre><button class="copy-button" type="button
         <div class="section-heading"><p class="section-kicker">FAQ</p><h2>常見問題</h2></div>
         <div class="faq-list">
           <details><summary>我不會寫 SQL，這工具跟我有關嗎？</summary><p>正是為你設計的。你用自然語言請 Agent 處理資料，dbcli 讓 Agent 先用 schema 確認真實結構，再重用 saved queries 與 task packs 的專家查詢；你不必讀懂中間的 SQL，只需要檢查結果。</p></details>
+          <details><summary>Agent 會不會不小心刪掉我的資料？</summary><p>預設權限是 <code>query-only</code>，連 INSERT 都做不了。就算你開到 <code>data-admin</code>，DELETE 仍強制要求 WHERE 條件、建議先 dry-run，且等值限制讓「一句掃全表」在語法層就被擋下。DDL 更要 <code>admin</code> + <code>--execute</code> + DROP 加 <code>--force</code> 三重確認。</p></details>
           <details><summary>支援哪些資料庫？</summary><p>支援 MySQL、PostgreSQL、MariaDB、MongoDB、Redis 與 Elasticsearch。同一專案可設定多條具名連線（例如 staging、production 或不同租戶），各自使用獨立憑證、權限與 schema 快取。</p></details>
           <details><summary>跟直接使用 MCP database server 有什麼不同？</summary><p>dbcli 把權限與資料防護內建在資料庫操作層：憑證隔離、blacklist 遮罩、權限分級、dry-run、audit 與 recovery 都可直接使用。它不綁定單一 Agent 協定或編輯器，人類也能在終端機使用同一套工作流。</p></details>
           <details><summary>團隊要怎麼協作？</summary><p>Saved queries 可放進 <code>.dbcli-shared/</code> 並透過 git 與團隊共享；憑證可使用 <code>--use-env-refs</code>，讓每位成員與每條 CI pipeline 使用自己的環境變數，repository 不必保存明文密碼。</p></details>

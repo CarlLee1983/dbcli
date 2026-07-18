@@ -86,3 +86,38 @@ git diff --check
 ```
 
 Result: PASS (no whitespace errors).
+
+## Second-round review fixes
+
+- Restored the legacy FAQ “Agent 會不會不小心刪掉我的資料？” with its substantive default `query-only`, DELETE, and DDL protections.
+- Limited Quickstart command display to the four commands explicitly approved by the brief. Other platform support is now plain prose, and OpenCode explicitly says no dedicated selector currently exists.
+- Removed the duplicated export SQL. The single two-month churn comparison now opens the interactive report directly with `dbcli query "..." --recovery --ui`.
+
+## Second-round verification
+
+Command and complete result:
+
+```text
+$ bun test tests/docs/intro-pages.test.ts --test-name-pattern "zh-TW"
+bun test v1.3.10 (30e609e0)
+
+tests/docs/intro-pages.test.ts:
+(pass) zh-TW intro page > uses the approved semantic product-page structure [19.88ms]
+(pass) zh-TW intro page > leads with workflow value instead of installation [12.57ms]
+(pass) zh-TW intro page > has accessible navigation and motion fallback [5.74ms]
+(pass) zh-TW intro page > links to the counterpart locale with a relative URL [7.31ms]
+
+ 4 pass
+ 5 filtered out
+ 0 fail
+ 17 expect() calls
+Ran 4 tests across 1 file. [162.00ms]
+```
+
+Command and complete result:
+
+```text
+$ git diff --check
+```
+
+Result: exit 0 with no output.

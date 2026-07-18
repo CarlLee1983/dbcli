@@ -4,7 +4,7 @@
  */
 import { Parser } from 'node-sql-parser'
 import type { SqlDatabaseSystem } from '@/adapters/types'
-import type { AstNode } from './types'
+import type { AstNode } from '@/core/lint/types'
 
 export class ParseFailure extends Error {
   constructor(message: string) {

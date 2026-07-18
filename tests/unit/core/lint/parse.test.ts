@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test'
 import { parseSingleStatement, ParseFailure } from '@/core/lint/parse'
-import { collectTables, whereOf, findingSpan } from '@/core/lint/ast-utils'
+import { collectTables, whereOf, findingSpan, walkExpr } from '@/core/lint/ast-utils'
+import { verifyWith } from '@/core/lint/types'
 
 describe('lint parse', () => {
   test('parses a single SELECT into an ast with type select', () => {
@@ -37,5 +38,31 @@ describe('lint parse', () => {
   test('findingSpan locates a fragment case-insensitively, else whole string', () => {
     expect(findingSpan('SELECT * FROM users', 'select *')).toEqual({ start: 0, end: 8 })
     expect(findingSpan('SELECT * FROM users', 'nope')).toEqual({ start: 0, end: 19 })
+  })
+
+  test('walkExpr visits nested expression nodes depth-first', () => {
+    const visited: string[] = []
+    const expression = {
+      type: 'binary_expr',
+      left: { type: 'column_ref' },
+      right: {
+        type: 'function',
+        args: { value: [{ type: 'number' }] },
+      },
+    }
+
+    walkExpr(expression, (node) => {
+      if (typeof node.type === 'string') visited.push(node.type)
+    })
+
+    expect(visited).toEqual(['binary_expr', 'column_ref', 'function', 'number'])
+  })
+
+  test('verifyWith shell-escapes SQL inside the double-quoted command argument', () => {
+    const sql = "SELECT '$()', `uname`, '$VAR', 'C:\\tmp', '\"quoted\"'"
+
+    expect(verifyWith(sql)).toBe(
+      "dbcli explain --analyze \"SELECT '\\$()', \\`uname\\`, '\\$VAR', 'C:\\\\tmp', '\\\"quoted\\\"'\""
+    )
   })
 })

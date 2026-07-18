@@ -1,4 +1,4 @@
-import type { AstNode } from './types'
+import type { AstNode } from '@/core/lint/types'
 
 /** Depth-first walk over expression-ish nodes (left/right/args/value/expr arrays). */
 export function walkExpr(node: unknown, visit: (n: AstNode) => void): void {

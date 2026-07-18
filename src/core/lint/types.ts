@@ -48,5 +48,5 @@ export interface LintRule {
 }
 
 export function verifyWith(sql: string): string {
-  return `dbcli explain --analyze "${sql.replace(/"/g, '\\"')}"`
+  return `dbcli explain --analyze "${sql.replace(/[\\$`"]/g, '\\$&')}"`
 }

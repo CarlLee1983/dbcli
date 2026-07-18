@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { TableSchema } from '@/adapters/types'
+import type { SqlDatabaseSystem, TableSchema } from '@/adapters/types'
 import { buildSchemaContext } from '@/core/lint/context'
 import { parseSingleStatement } from '@/core/lint/parse'
 import { missingLimitOffsetRule } from '@/core/lint/rules/missing-limit-offset'
@@ -7,11 +7,15 @@ import { selectStarRule } from '@/core/lint/rules/select-star'
 import { unanchoredLikeRule } from '@/core/lint/rules/unanchored-like'
 import type { LintRuleContext } from '@/core/lint/types'
 
-function ctxFor(sql: string, schema?: Record<string, TableSchema>): LintRuleContext {
+function ctxFor(
+  sql: string,
+  schema?: Record<string, TableSchema>,
+  system: SqlDatabaseSystem = 'postgresql'
+): LintRuleContext {
   return {
-    system: 'postgresql',
+    system,
     sql,
-    ast: parseSingleStatement(sql, 'postgresql'),
+    ast: parseSingleStatement(sql, system),
     schema: buildSchemaContext(schema),
   }
 }
@@ -37,6 +41,79 @@ describe('select-star', () => {
     expect(findings[0].rewrite?.sql).toBe('SELECT id, email FROM users')
     expect(findings[0].rewrite?.confidence).toBe('high')
     expect(findings[0].verifyCommand).toContain('dbcli explain --analyze')
+    expect(findings[0].schemaVerified).toBe(true)
+  })
+
+  test('rewrites the projection wildcard instead of a star in a leading comment', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [
+        { name: 'id', type: 'integer', nullable: false },
+        { name: 'email', type: 'varchar(255)', nullable: true },
+      ],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('/* retain * marker */ SELECT * FROM users', { users })
+    )
+
+    expect(findings[0].rewrite?.sql).toBe(
+      '/* retain * marker */ SELECT id, email FROM users'
+    )
+    expect(findings[0].rewrite?.confidence).toBe('high')
+    expect(findings[0].schemaVerified).toBe(true)
+  })
+
+  test('withholds rewrite for a mixed projection containing multiplication and a wildcard', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [
+        { name: 'price', type: 'numeric', nullable: false },
+        { name: 'quantity', type: 'integer', nullable: false },
+      ],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT price * quantity, * FROM users', { users })
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].verifyCommand).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('quotes and escapes unsafe PostgreSQL schema column identifiers', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [
+        { name: 'select', type: 'text', nullable: false },
+        { name: 'full name', type: 'text', nullable: false },
+        { name: 'display"name', type: 'text', nullable: false },
+      ],
+    }
+    const findings = selectStarRule.check(ctxFor('SELECT * FROM users', { users }))
+
+    expect(findings[0].rewrite?.sql).toBe(
+      'SELECT "select", "full name", "display""name" FROM users'
+    )
+    expect(findings[0].schemaVerified).toBe(true)
+  })
+
+  test('quotes and escapes unsafe MySQL schema column identifiers', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [
+        { name: 'select', type: 'text', nullable: false },
+        { name: 'full name', type: 'text', nullable: false },
+        { name: 'tick`name', type: 'text', nullable: false },
+      ],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM users', { users }, 'mysql')
+    )
+
+    expect(findings[0].rewrite?.sql).toBe(
+      'SELECT `select`, `full name`, `tick``name` FROM users'
+    )
     expect(findings[0].schemaVerified).toBe(true)
   })
 

@@ -13,6 +13,34 @@ async function loadIntroPage(path: string) {
   return { html, document: window.document };
 }
 
+function cssText(document: Document) {
+  return [...document.querySelectorAll("style")].map((style) => style.textContent).join("\n");
+}
+
+function hexToRgb(hex: string) {
+  const value = hex.replace("#", "");
+  return [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16));
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (hex: string) => {
+    const channels = hexToRgb(hex).map((channel) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (lighter! + 0.05) / (darker! + 0.05);
+}
+
+function rootTokens(document: Document) {
+  const root = cssText(document).match(/:root\s*\{([^}]+)\}/)?.[1] ?? "";
+  return Object.fromEntries(
+    [...root.matchAll(/--([\w-]+):\s*(#[\da-f]{6})/gi)].map((match) => [match[1], match[2].toLowerCase()]),
+  );
+}
+
 describe.each(pages)("$locale intro page", ({ path, counterpart }) => {
   test("uses the approved semantic product-page structure", async () => {
     const { document } = await loadIntroPage(path);
@@ -47,6 +75,44 @@ describe.each(pages)("$locale intro page", ({ path, counterpart }) => {
     const { document } = await loadIntroPage(path);
     expect(document.querySelector(`a[href="./${counterpart}"]`)).not.toBeNull();
   });
+
+  test("keeps text links comfortably tappable", async () => {
+    const { html } = await loadIntroPage(path);
+    expect(html).toMatch(/\.brand[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.nav-links a,\s*\.locale-link[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.support-links a[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.footer-links a[^}]*min-height:\s*44px/);
+  });
+
+  test("labels the hero conversation as an example in visible copy", async () => {
+    const { document } = await loadIntroPage(path);
+    const panel = document.querySelector(".conversation-panel");
+    expect(panel?.textContent).toMatch(/示意|example/i);
+  });
+
+  test("all internal fragment links have targets", async () => {
+    const { document } = await loadIntroPage(path);
+    for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+      const target = link.getAttribute("href")!.slice(1);
+      expect(target.length).toBeGreaterThan(0);
+      expect(document.getElementById(target)).not.toBeNull();
+    }
+  });
+
+  test("core normal-text color combinations meet WCAG AA", async () => {
+    const { document } = await loadIntroPage(path);
+    const tokens = rootTokens(document);
+    const combinations = [
+      ["orange-text", "cream"],
+      ["orange-text", "paper"],
+      ["orange-text", "orange-soft"],
+      ["paper", "orange-action"],
+      ["blue-text", "blue-soft"],
+    ] as const;
+    for (const [foreground, background] of combinations) {
+      expect(contrastRatio(tokens[foreground]!, tokens[background]!)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });
 
 test("locale pages expose the same section and component contract", async () => {
@@ -64,6 +130,33 @@ test("locale pages expose the same section and component contract", async () => 
   expect(zh.document.querySelectorAll(".platform-chip").length).toBe(
     en.document.querySelectorAll(".platform-chip").length,
   );
+  expect(zh.document.querySelectorAll(".faq-list details").length).toBe(
+    en.document.querySelectorAll(".faq-list details").length,
+  );
+  expect(zh.document.querySelectorAll(".faq-list details").length).toBe(9);
+
+  const commands = (document: Document) =>
+    [...document.querySelectorAll("#quickstart .command-box code")]
+      .flatMap((code) => (code.textContent ?? "").trim().split("\n"))
+      .filter(Boolean);
+  const approvedCommands = [
+    "/plugin marketplace add CarlLee1983/dbcli",
+    "/plugin install dbcli@carllee1983-dbcli",
+    "dbcli skill --install codex",
+    "bunx @carllee1983/dbcli init",
+  ];
+  expect(commands(zh.document)).toEqual(approvedCommands);
+  expect(commands(en.document)).toEqual(approvedCommands);
+  expect(cssText(zh.document)).toBe(cssText(en.document));
+});
+
+test.each(pages)("$locale uses the real interactive-report command labels", async ({ path }) => {
+  const { document } = await loadIntroPage(path);
+  const labels = [...document.querySelectorAll(".command-label")].map((label) => label.textContent?.trim());
+  expect(labels).not.toContain("report");
+  expect(labels).not.toContain("recover · report");
+  expect(labels).toContain("query --ui");
+  expect(labels).toContain("recover · query --ui");
 });
 
 test("English interface contains no residual Traditional Chinese copy", async () => {

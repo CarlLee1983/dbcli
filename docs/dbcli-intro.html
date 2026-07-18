@@ -12,8 +12,11 @@
       --ink: #28231f;
       --muted: #716a63;
       --orange: #e8673f;
+      --orange-text: #a94322;
+      --orange-action: #a94322;
       --orange-soft: #fff0df;
       --blue: #5f7fbc;
+      --blue-text: #45649d;
       --blue-soft: #edf3ff;
       --green: #28745a;
       --green-soft: #e4f3ec;
@@ -33,7 +36,7 @@
       font-family: Inter, "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
       line-height: 1.7;
     }
-    :focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+    :focus-visible { outline: 3px solid var(--blue-text); outline-offset: 4px; }
     section[id] { scroll-margin-top: 92px; }
     a { color: inherit; }
     code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
@@ -50,13 +53,13 @@
     .nav {
       min-height: 72px; display: flex; align-items: center; gap: 24px;
     }
-    .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; }
+    .brand { display: inline-flex; align-items: center; min-height: 44px; gap: 10px; text-decoration: none; font-weight: 800; }
     .brand-mark {
       width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px;
       color: white; background: var(--orange); box-shadow: 0 7px 20px rgba(232, 103, 63, .22);
     }
     .nav-links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
-    .nav-links a, .locale-link { color: var(--muted); text-decoration: none; font-size: .92rem; }
+    .nav-links a, .locale-link { display: inline-flex; align-items: center; min-height: 44px; padding-block: 8px; color: var(--muted); text-decoration: none; font-size: .92rem; }
     .nav-links a:hover, .locale-link:hover { color: var(--ink); }
     .button {
       display: inline-flex; justify-content: center; align-items: center; min-height: 46px;
@@ -64,9 +67,9 @@
       font-weight: 750; text-decoration: none; transition: transform .2s, box-shadow .2s;
     }
     .button:hover { transform: translateY(-2px); }
-    .button-primary { background: var(--orange); color: white; box-shadow: 0 10px 28px rgba(232, 103, 63, .22); }
+    .button-primary { background: var(--orange-action); color: var(--paper); box-shadow: 0 10px 28px rgba(169, 67, 34, .22); }
     .button-secondary { border-color: var(--line); background: var(--paper); }
-    .nav-cta { min-height: 40px; padding: 7px 16px; font-size: .9rem; }
+    .nav-cta { min-height: 44px; padding: 7px 16px; font-size: .9rem; }
 
     main { overflow: hidden; }
     .hero {
@@ -75,7 +78,7 @@
       align-items: center; gap: 58px;
     }
     .eyebrow, .section-kicker, .panel-label, .command-label {
-      margin: 0 0 12px; color: var(--orange); font-size: .78rem; font-weight: 800;
+      margin: 0 0 12px; color: var(--orange-text); font-size: .78rem; font-weight: 800;
       letter-spacing: .11em; text-transform: uppercase;
     }
     h1 { margin: 0; font-size: clamp(2.7rem, 5.2vw, 5.2rem); line-height: 1.08; letter-spacing: -.055em; }
@@ -116,13 +119,13 @@
     }
     .workflow-step::before {
       content: "0" counter(workflow); display: block; margin-bottom: 34px;
-      color: var(--orange); font-weight: 850; font-size: .78rem; letter-spacing: .08em;
+      color: var(--orange-text); font-weight: 850; font-size: .78rem; letter-spacing: .08em;
     }
     .workflow-step h3, .value-card h3, .safety-layer h3, .quick-card h3 { margin: 0 0 10px; font-size: 1.08rem; }
     .workflow-step p, .value-card p, .safety-layer p, .quick-card p { margin: 0; color: var(--muted); font-size: .92rem; }
     .command-label {
       display: inline-block; margin: 18px 0 0; padding: 4px 8px; border-radius: 6px;
-      color: var(--blue); background: var(--blue-soft); font-family: monospace; letter-spacing: 0; text-transform: none;
+      color: var(--blue-text); background: var(--blue-soft); font-family: monospace; letter-spacing: 0; text-transform: none;
     }
     .behind-scenes {
       margin-top: 16px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--ink); color: white;
@@ -136,7 +139,7 @@
     }
     .card-number {
       display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 40px;
-      border-radius: 13px; color: var(--orange); background: var(--orange-soft); font-weight: 850;
+      border-radius: 13px; color: var(--orange-text); background: var(--orange-soft); font-weight: 850;
     }
     .safety-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .safety-layer {
@@ -155,7 +158,7 @@
     .quick-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; }
     .quick-card { padding: 30px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--paper); }
     .quick-card-primary { border-color: #f2c9b8; box-shadow: var(--shadow); }
-    .route-badge { display: inline-block; margin-bottom: 18px; padding: 5px 10px; border-radius: 999px; background: var(--orange-soft); color: var(--orange); font-size: .76rem; font-weight: 800; }
+    .route-badge { display: inline-block; margin-bottom: 18px; padding: 5px 10px; border-radius: 999px; background: var(--orange-soft); color: var(--orange-text); font-size: .76rem; font-weight: 800; }
     .command-box {
       position: relative; margin-top: 18px; padding: 18px 94px 18px 18px;
       border-radius: 14px; background: #2d2926; color: #fffaf3; overflow-x: auto;
@@ -171,7 +174,7 @@
     .platform-install-list code { display: inline-block; margin-top: 4px; }
     .install-path { display: block; margin-top: 4px; color: var(--muted); font-size: .84rem; }
     .support-links { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 24px; }
-    .support-links a { color: var(--blue); font-weight: 700; }
+    .support-links a { display: inline-flex; align-items: center; min-height: 44px; padding-block: 8px; color: var(--blue-text); font-weight: 700; }
     .faq-list { max-width: 900px; }
     .faq-list details { border-top: 1px solid var(--line); }
     .faq-list details:last-child { border-bottom: 1px solid var(--line); }
@@ -180,7 +183,7 @@
     footer { padding: 44px 0; border-top: 1px solid var(--line); }
     .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; color: var(--muted); font-size: .88rem; }
     .footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
-    .footer-links a { color: var(--muted); }
+    .footer-links a { display: inline-flex; align-items: center; min-height: 44px; padding-block: 8px; color: var(--muted); }
 
     @media (max-width: 1000px) {
       .workflow-grid { grid-template-columns: repeat(2, 1fr); }
@@ -218,7 +221,7 @@
   <a class="skip-link" href="#main-content">跳到主要內容</a>
   <header class="site-header">
     <nav class="nav container" aria-label="主要導覽">
-      <a class="brand" href="#" aria-label="dbcli 首頁"><span class="brand-mark">d</span>dbcli</a>
+      <a class="brand" href="#main-content" aria-label="dbcli 首頁"><span class="brand-mark">d</span>dbcli</a>
       <div class="nav-links">
         <a href="#workflow">運作方式</a>
         <a href="#efficiency">效率</a>
@@ -244,7 +247,7 @@
       </div>
       <div class="conversation-guardrails" aria-label="使用者對話與 dbcli 安全防護示意">
         <article class="conversation-panel">
-          <h2 class="panel-label">你與 Agent</h2>
+          <h2 class="panel-label">對話示意 · 你與 Agent</h2>
           <div class="message message-user">找出本月流失最多的方案，整理成圖表。</div>
           <div class="message message-agent">完成。企業方案流失率上升 8.4%，並已產生可分享報表。</div>
         </article>
@@ -272,7 +275,7 @@
           <article class="workflow-step"><h3>確認結構</h3><p>先讀實際 schema，避免猜錯欄位或資料型別。</p><span class="command-label">schema</span></article>
           <article class="workflow-step"><h3>套用防護</h3><p>套用黑名單、權限層級與查詢筆數限制。</p><span class="command-label">blacklist · permission</span></article>
           <article class="workflow-step"><h3>執行與驗證</h3><p>執行查詢、檢查結果；錯誤時取得引導式修復方案。</p><span class="command-label">query · recover</span></article>
-          <article class="workflow-step"><h3>交付結果</h3><p>把結論整理成可分享、可互動的報表。</p><span class="command-label">report</span></article>
+          <article class="workflow-step"><h3>交付結果</h3><p>把結論整理成可分享、可互動的報表。</p><span class="command-label">query --ui</span></article>
         </div>
         <details class="behind-scenes">
           <summary>看看 Agent 背後執行了什麼</summary>
@@ -293,7 +296,7 @@ dbcli recover</code></pre>
         <div class="card-grid">
           <article class="value-card"><span class="card-number">01</span><h3>一個請求走完整條流程</h3><p>從查詢、分析到報表交付，不必逐條指揮 Agent。</p><span class="command-label">task workflow</span></article>
           <article class="value-card"><span class="card-number">02</span><h3>重用結構與查詢知識</h3><p>先確認 schema，再發現並重用團隊保存的查詢片段。</p><span class="command-label">schema · queries</span></article>
-          <article class="value-card"><span class="card-number">03</span><h3>診斷後直接交付</h3><p>錯誤有復原指引，成功結果可轉成互動式報表。</p><span class="command-label">recover · report</span></article>
+          <article class="value-card"><span class="card-number">03</span><h3>診斷後直接交付</h3><p>錯誤有復原指引，成功結果可轉成互動式報表。</p><span class="command-label">recover · query --ui</span></article>
         </div>
       </div>
     </section>

@@ -1,1002 +1,415 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dbcli — Securely Operate Your Database with AI Agents</title>
-<style>
-  :root {
-    --bg: #0b0e14;
-    --bg-soft: #12161f;
-    --bg-card: #161b26;
-    --border: #232a38;
-    --text: #e6e9ef;
-    --text-dim: #9aa4b2;
-    --accent: #4fd1a5;
-    --accent-soft: rgba(79, 209, 165, 0.12);
-    --warn: #f2a65a;
-    --danger: #e5636f;
-    --code-bg: #0d1117;
-    --mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
-    line-height: 1.75;
-  }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
-  section { padding: 88px 0; }
-  section:nth-of-type(even) { background: var(--bg-soft); }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="dbcli helps AI agents complete database work faster and more safely.">
+  <title>dbcli — Name the outcome. Your agent delivers.</title>
+  <style>
+    :root {
+      --cream: #fffaf3;
+      --paper: #ffffff;
+      --ink: #28231f;
+      --muted: #716a63;
+      --orange: #e8673f;
+      --orange-soft: #fff0df;
+      --blue: #5f7fbc;
+      --blue-soft: #edf3ff;
+      --green: #28745a;
+      --green-soft: #e4f3ec;
+      --line: #e9dfd3;
+      --shadow: 0 20px 60px rgba(83, 61, 42, 0.09);
+      --radius-lg: 28px;
+      --radius-md: 18px;
+      --content: 1180px;
+    }
 
-  h1, h2, h3 { line-height: 1.35; font-weight: 700; }
-  h2 { font-size: 2rem; margin-bottom: 12px; }
-  .section-lead { color: var(--text-dim); font-size: 1.05rem; max-width: 720px; margin-bottom: 48px; }
-  .kicker {
-    display: inline-block; font-size: 0.8rem; letter-spacing: 0.12em;
-    color: var(--accent); text-transform: uppercase; font-weight: 600;
-    margin-bottom: 12px;
-  }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--cream);
+      font-family: Inter, "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+      line-height: 1.7;
+    }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+    section[id] { scroll-margin-top: 92px; }
+    a { color: inherit; }
+    code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
+    .container { width: min(calc(100% - 40px), var(--content)); margin-inline: auto; }
+    .skip-link {
+      position: fixed; z-index: 20; top: 8px; left: 8px; padding: 10px 14px;
+      border-radius: 8px; background: var(--ink); color: white; transform: translateY(-150%);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .site-header {
+      position: sticky; z-index: 10; top: 0; border-bottom: 1px solid rgba(233, 223, 211, .9);
+      background: rgba(255, 250, 243, .92); backdrop-filter: blur(16px);
+    }
+    .nav {
+      min-height: 72px; display: flex; align-items: center; gap: 24px;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; }
+    .brand-mark {
+      width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px;
+      color: white; background: var(--orange); box-shadow: 0 7px 20px rgba(232, 103, 63, .22);
+    }
+    .nav-links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
+    .nav-links a, .locale-link { color: var(--muted); text-decoration: none; font-size: .92rem; }
+    .nav-links a:hover, .locale-link:hover { color: var(--ink); }
+    .button {
+      display: inline-flex; justify-content: center; align-items: center; min-height: 46px;
+      padding: 10px 20px; border: 1px solid transparent; border-radius: 999px;
+      font-weight: 750; text-decoration: none; transition: transform .2s, box-shadow .2s;
+    }
+    .button:hover { transform: translateY(-2px); }
+    .button-primary { background: var(--orange); color: white; box-shadow: 0 10px 28px rgba(232, 103, 63, .22); }
+    .button-secondary { border-color: var(--line); background: var(--paper); }
+    .nav-cta { min-height: 40px; padding: 7px 16px; font-size: .9rem; }
 
-  /* ===== Hero ===== */
-  .hero {
-    padding: 110px 0 90px;
-    background:
-      radial-gradient(ellipse 60% 50% at 70% 10%, rgba(79,209,165,0.10), transparent),
-      radial-gradient(ellipse 50% 40% at 20% 90%, rgba(79,120,209,0.08), transparent);
-    text-align: center;
-  }
-  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin-bottom: 20px; }
-  .hero h1 em { font-style: normal; color: var(--accent); }
-  .hero .sub {
-    color: var(--text-dim); font-size: 1.15rem; max-width: 680px;
-    margin: 0 auto 36px;
-  }
-  .badge-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 36px; }
-  .badge {
-    font-size: 0.82rem; padding: 5px 14px; border-radius: 999px;
-    border: 1px solid var(--border); color: var(--text-dim); background: var(--bg-card);
-  }
-  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-  .btn {
-    display: inline-block; padding: 13px 28px; border-radius: 10px;
-    font-weight: 600; font-size: 1rem; transition: transform .15s, box-shadow .15s;
-  }
-  .btn-primary { background: var(--accent); color: #08110d; }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,209,165,0.25); text-decoration: none; }
-  .btn-ghost { border: 1px solid var(--border); color: var(--text); }
-  .btn-ghost:hover { border-color: var(--accent); text-decoration: none; }
-  .hero-install {
-    margin: 40px auto 0; max-width: 560px; text-align: left;
-  }
+    main { overflow: hidden; }
+    .hero {
+      width: min(calc(100% - 40px), var(--content)); margin-inline: auto; padding: 96px 0 88px;
+      display: grid; grid-template-columns: minmax(0, .92fr) minmax(500px, 1.08fr);
+      align-items: center; gap: 58px;
+    }
+    .eyebrow, .section-kicker, .panel-label, .command-label {
+      margin: 0 0 12px; color: var(--orange); font-size: .78rem; font-weight: 800;
+      letter-spacing: .11em; text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: clamp(2.7rem, 5.2vw, 5.2rem); line-height: 1.08; letter-spacing: -.055em; }
+    .hero-lead { max-width: 650px; margin: 26px 0 0; color: var(--muted); font-size: 1.12rem; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+    .conversation-guardrails {
+      position: relative; display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px;
+      padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg);
+      background: rgba(255,255,255,.6); box-shadow: var(--shadow);
+    }
+    .conversation-guardrails::before {
+      content: ""; position: absolute; inset: -45px -60px auto auto; z-index: -1;
+      width: 200px; height: 200px; border-radius: 50%; background: var(--orange-soft);
+    }
+    .conversation-panel, .guardrails-panel {
+      min-height: 310px; padding: 24px; border-radius: var(--radius-md); background: var(--paper);
+    }
+    .guardrails-panel { background: var(--green-soft); }
+    .message { width: 90%; margin-top: 24px; padding: 14px 16px; border-radius: 16px; font-size: .9rem; }
+    .message-user { margin-left: auto; border-bottom-right-radius: 5px; background: var(--blue-soft); }
+    .message-agent { border-bottom-left-radius: 5px; background: var(--orange-soft); }
+    .guardrail-list { display: grid; gap: 15px; margin: 24px 0 0; padding: 0; list-style: none; }
+    .guardrail-list li { display: flex; gap: 10px; align-items: center; font-weight: 650; }
+    .guardrail-list li::before {
+      content: "✓"; width: 25px; height: 25px; display: grid; place-items: center;
+      flex: 0 0 auto; border-radius: 50%; color: white; background: var(--green); font-size: .8rem;
+    }
 
-  /* ===== Code blocks / terminal ===== */
-  .terminal {
-    background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: 12px; overflow: hidden; font-family: var(--mono);
-    font-size: 0.86rem;
-  }
-  .terminal-bar {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 14px; background: #151a23; border-bottom: 1px solid var(--border);
-  }
-  .terminal-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
-  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
-  .terminal-bar .title { margin-left: 10px; color: var(--text-dim); font-size: 0.76rem; }
-  .terminal pre { padding: 18px 20px; overflow-x: auto; line-height: 1.7; color: #c9d1d9; }
-  .terminal .c { color: #6b7688; }          /* comment */
-  .terminal .p { color: var(--accent); }     /* prompt / highlight */
-  .terminal .s { color: #79b8ff; }           /* string / value */
-  .terminal .w { color: var(--warn); }       /* warning */
-  .terminal .d { color: var(--danger); }     /* danger / redacted */
-  code.inline {
-    font-family: var(--mono); font-size: 0.85em;
-    background: var(--code-bg); border: 1px solid var(--border);
-    padding: 2px 7px; border-radius: 6px; color: var(--accent);
-  }
+    .section { padding: 100px 0; }
+    .section-paper { background: var(--paper); }
+    .section-heading { max-width: 730px; margin-bottom: 44px; }
+    .section-heading h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1.12; letter-spacing: -.04em; }
+    .section-heading p:last-child { color: var(--muted); margin: 18px 0 0; font-size: 1.05rem; }
+    .workflow-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; counter-reset: workflow; }
+    .workflow-step {
+      position: relative; min-height: 240px; padding: 24px 20px; border: 1px solid var(--line);
+      border-radius: var(--radius-md); background: var(--paper); counter-increment: workflow;
+    }
+    .workflow-step::before {
+      content: "0" counter(workflow); display: block; margin-bottom: 34px;
+      color: var(--orange); font-weight: 850; font-size: .78rem; letter-spacing: .08em;
+    }
+    .workflow-step h3, .value-card h3, .safety-layer h3, .quick-card h3 { margin: 0 0 10px; font-size: 1.08rem; }
+    .workflow-step p, .value-card p, .safety-layer p, .quick-card p { margin: 0; color: var(--muted); font-size: .92rem; }
+    .command-label {
+      display: inline-block; margin: 18px 0 0; padding: 4px 8px; border-radius: 6px;
+      color: var(--blue); background: var(--blue-soft); font-family: monospace; letter-spacing: 0; text-transform: none;
+    }
+    .behind-scenes {
+      margin-top: 16px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--ink); color: white;
+    }
+    .behind-scenes summary { cursor: pointer; padding: 18px 22px; font-weight: 700; }
+    .behind-scenes pre { margin: 0; padding: 0 22px 22px; overflow-x: auto; color: #ddd3ca; font-size: .84rem; line-height: 1.8; }
 
-  /* ===== Images ===== */
-  .image-figure {
-    margin: 36px 0 0;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: var(--bg-card);
-    overflow: hidden;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
-  }
-  .image-figure img {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
-  .image-figure figcaption {
-    padding: 12px 16px;
-    color: var(--text-dim);
-    font-size: 0.82rem;
-    border-top: 1px solid var(--border);
-    background: rgba(13, 17, 23, 0.62);
-  }
+    .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .value-card {
+      padding: 30px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper);
+    }
+    .card-number {
+      display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 40px;
+      border-radius: 13px; color: var(--orange); background: var(--orange-soft); font-weight: 850;
+    }
+    .safety-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .safety-layer {
+      padding: 26px; border-radius: var(--radius-md); background: var(--green-soft);
+    }
+    .safety-layer:nth-child(even) { background: var(--blue-soft); }
+    .safety-icon { margin-bottom: 32px; font-size: 1.45rem; }
+    .platform-groups { display: grid; gap: 30px; }
+    .platform-group h3 { margin: 0 0 14px; color: var(--muted); font-size: .82rem; letter-spacing: .1em; text-transform: uppercase; }
+    .platform-list { display: flex; flex-wrap: wrap; gap: 10px; }
+    .platform-chip {
+      padding: 10px 17px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--paper); box-shadow: 0 6px 20px rgba(83,61,42,.04); font-weight: 650;
+    }
 
-  /* ===== Cards / grid ===== */
-  .grid { display: grid; gap: 20px; }
-  .grid-3 { grid-template-columns: repeat(3, 1fr); }
-  .grid-2 { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 860px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
-  .card {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 26px;
-  }
-  .card .icon {
-    width: 42px; height: 42px; margin-bottom: 14px;
-    border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
-    color: var(--accent); background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.22);
-  }
-  .card .icon svg { width: 23px; height: 23px; stroke-width: 2; }
-  .card h3 { font-size: 1.1rem; margin-bottom: 10px; }
-  .card p { color: var(--text-dim); font-size: 0.94rem; }
-  .card.highlight { border-color: rgba(79,209,165,0.45); background: linear-gradient(180deg, rgba(79,209,165,0.06), var(--bg-card)); }
+    .quick-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; }
+    .quick-card { padding: 30px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--paper); }
+    .quick-card-primary { border-color: #f2c9b8; box-shadow: var(--shadow); }
+    .route-badge { display: inline-block; margin-bottom: 18px; padding: 5px 10px; border-radius: 999px; background: var(--orange-soft); color: var(--orange); font-size: .76rem; font-weight: 800; }
+    .command-box {
+      position: relative; margin-top: 18px; padding: 18px 94px 18px 18px;
+      border-radius: 14px; background: #2d2926; color: #fffaf3; overflow-x: auto;
+    }
+    .command-box pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; line-height: 1.8; }
+    .copy-button {
+      position: absolute; top: 12px; right: 12px; border: 1px solid #665f59; border-radius: 8px;
+      min-width: 44px; min-height: 44px; padding: 7px 10px; color: white; background: transparent; cursor: pointer;
+    }
+    .platform-install-list { margin: 20px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .platform-install-list li { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .platform-install-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+    .platform-install-list code { display: inline-block; margin-top: 4px; }
+    .install-path { display: block; margin-top: 4px; color: var(--muted); font-size: .84rem; }
+    .support-links { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 24px; }
+    .support-links a { color: var(--blue); font-weight: 700; }
+    .faq-list { max-width: 900px; }
+    .faq-list details { border-top: 1px solid var(--line); }
+    .faq-list details:last-child { border-bottom: 1px solid var(--line); }
+    .faq-list summary { cursor: pointer; padding: 22px 0; font-size: 1.05rem; font-weight: 750; }
+    .faq-list p { margin: -6px 0 22px; color: var(--muted); }
+    footer { padding: 44px 0; border-top: 1px solid var(--line); }
+    .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; color: var(--muted); font-size: .88rem; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .footer-links a { color: var(--muted); }
 
-  /* ===== Pain points ===== */
-  .pain { border-left: 3px solid var(--danger); }
-  .pain h3 { color: #f0aab1; }
-
-  /* ===== Compare table ===== */
-  .compare-wrap { overflow-x: auto; }
-  table.compare {
-    width: 100%; border-collapse: collapse; font-size: 0.93rem; min-width: 640px;
-  }
-  table.compare th, table.compare td {
-    padding: 14px 18px; border-bottom: 1px solid var(--border); text-align: left;
-    vertical-align: top;
-  }
-  table.compare th { color: var(--text-dim); font-weight: 600; font-size: 0.85rem; }
-  table.compare th.vs-dbcli { color: var(--accent); }
-  table.compare td.bad { color: #d99aa1; }
-  table.compare td.good { color: #a9e6cf; }
-  table.compare td:first-child { color: var(--text-dim); white-space: nowrap; }
-
-  /* ===== Steps ===== */
-  .steps { counter-reset: step; display: grid; gap: 18px; }
-  .step {
-    display: flex; gap: 20px; background: var(--bg-card);
-    border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px;
-  }
-  .step::before {
-    counter-increment: step; content: counter(step);
-    flex: 0 0 40px; height: 40px; border-radius: 50%;
-    background: var(--accent-soft); color: var(--accent);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 1.1rem;
-  }
-  .step h3 { font-size: 1.05rem; margin-bottom: 6px; }
-  .step p { color: var(--text-dim); font-size: 0.93rem; }
-
-  /* ===== Permission ladder ===== */
-  .ladder { display: grid; gap: 12px; }
-  .rung {
-    display: flex; align-items: baseline; gap: 18px;
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 16px 22px;
-  }
-  .rung .lv {
-    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
-    color: var(--accent); flex: 0 0 130px;
-  }
-  .rung .desc { color: var(--text-dim); font-size: 0.92rem; }
-  .rung:nth-child(1) { border-left: 4px solid #4fd1a5; }
-  .rung:nth-child(2) { border-left: 4px solid #79b8ff; }
-  .rung:nth-child(3) { border-left: 4px solid var(--warn); }
-  .rung:nth-child(4) { border-left: 4px solid var(--danger); }
-
-  /* ===== Install tabs ===== */
-  .install-card { display: flex; flex-direction: column; gap: 16px; }
-  .install-card .plat {
-    display: inline-block; font-family: var(--mono); font-size: 0.78rem;
-    color: var(--accent); background: var(--accent-soft);
-    border: 1px solid rgba(79,209,165,0.22); border-radius: 6px;
-    padding: 2px 10px; margin-right: 6px;
-  }
-  .install-card .terminal { font-size: 0.8rem; }
-
-  /* ===== Scenarios (chat style) ===== */
-  .scenario {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px;
-  }
-  .scenario .perk {
-    align-self: flex-start; font-size: 0.75rem; font-weight: 700;
-    letter-spacing: 0.06em; color: var(--accent);
-    background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.25);
-    border-radius: 999px; padding: 3px 12px;
-  }
-  .scenario .you {
-    align-self: flex-end; max-width: 88%;
-    background: var(--accent-soft); border: 1px solid rgba(79,209,165,0.3);
-    border-radius: 14px 14px 4px 14px; padding: 11px 16px;
-    font-size: 0.95rem;
-  }
-  .scenario .agent {
-    align-self: flex-start; max-width: 92%; position: relative;
-    background: var(--bg-soft); border: 1px solid var(--border);
-    border-radius: 14px 14px 14px 4px; padding: 12px 16px;
-    font-size: 0.93rem; color: var(--text);
-  }
-  .scenario .agent .who {
-    display: block; font-size: 0.72rem; font-weight: 700;
-    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 6px;
-  }
-  .scenario .agent .hl { color: var(--accent); font-weight: 600; }
-  .scenario .agent .num { color: #79b8ff; font-weight: 700; font-family: var(--mono); font-size: 0.9em; }
-  .scenario details.behind {
-    background: transparent; border: none; padding: 0; margin: 0;
-  }
-  .scenario details.behind summary {
-    cursor: pointer; font-size: 0.8rem; font-weight: 500;
-    color: var(--text-dim); list-style: none;
-  }
-  .scenario details.behind summary::before { content: "▸ "; color: var(--accent); }
-  .scenario details.behind[open] summary::before { content: "▾ "; }
-  .scenario details.behind summary::-webkit-details-marker { display: none; }
-  .scenario details.behind .chain {
-    font-family: var(--mono); font-size: 0.78rem; color: #9aa4b2;
-    display: block; margin-top: 10px; line-height: 1.9;
-    background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: pre;
-  }
-  .scenario details.behind .chain .p { color: var(--accent); }
-
-  /* ===== FAQ ===== */
-  details {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 18px 24px; margin-bottom: 14px;
-  }
-  details summary { cursor: pointer; font-weight: 600; font-size: 1rem; }
-  details p { color: var(--text-dim); margin-top: 12px; font-size: 0.94rem; }
-
-  /* ===== Footer / CTA ===== */
-  .final-cta {
-    text-align: center;
-    background:
-      radial-gradient(ellipse 55% 60% at 50% 100%, rgba(79,209,165,0.12), transparent),
-      var(--bg-soft);
-  }
-  footer {
-    border-top: 1px solid var(--border); padding: 36px 0;
-    color: var(--text-dim); font-size: 0.85rem; text-align: center;
-  }
-</style>
+    @media (max-width: 1000px) {
+      .workflow-grid { grid-template-columns: repeat(2, 1fr); }
+      .safety-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 820px) {
+      .nav-links { display: none; }
+      .hero { grid-template-columns: 1fr; }
+      .conversation-guardrails { grid-template-columns: 1fr; }
+      .hero { padding-top: 64px; }
+      .conversation-panel, .guardrails-panel { min-height: auto; }
+      .card-grid, .quick-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .container, .hero { width: min(calc(100% - 28px), var(--content)); }
+      .locale-link { margin-left: auto; }
+      .nav-cta { display: none; }
+      h1 { font-size: 2.65rem; }
+      .section { padding: 76px 0; }
+      .workflow-grid, .safety-grid { grid-template-columns: 1fr; }
+      .workflow-step { min-height: auto; }
+      .footer-inner { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
 </head>
 <body>
-<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
-  <symbol id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l7-7 3 3-2 2 2 2-2 2-2-2-3.5 3.5"/>
-  </symbol>
-  <symbol id="icon-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r=".8" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r=".8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/>
-  </symbol>
-  <symbol id="icon-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M13 2L4 14h7l-1 8 10-14h-7l1-6z"/>
-  </symbol>
-  <symbol id="icon-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>
-  </symbol>
-  <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/>
-  </symbol>
-  <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13.4 13.4 0 0 1-2.8 4.1"/><path d="M6.6 6.7A13.3 13.3 0 0 0 2.5 12c1 2.5 4.5 7 9.5 7a9.7 9.7 0 0 0 4.1-.9"/>
-  </symbol>
-  <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.2 2.4 3.4 5.4 3.4 9S14.2 18.6 12 21c-2.2-2.4-3.4-5.4-3.4-9S9.8 5.4 12 3z"/>
-  </symbol>
-  <symbol id="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6M9 16h4"/>
-  </symbol>
-  <symbol id="icon-bandage" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M10 10l4 4"/><path d="M8.5 12.5h.01M11.5 9.5h.01M12.5 14.5h.01M15.5 11.5h.01"/>
-  </symbol>
-  <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-5"/>
-  </symbol>
-  <symbol id="icon-ruler" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 19L19 4l1 1L5 20l-1-1z"/><path d="M8 16l-2-2M11 13l-1.5-1.5M14 10l-2-2M17 7l-1.5-1.5"/>
-  </symbol>
-  <symbol id="icon-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M9 4h6l1 2h3v15H5V6h3l1-2z"/><path d="M9 10h6M9 14h6M9 18h4"/>
-  </symbol>
-  <symbol id="icon-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l3-4 3 2 4-7"/><path d="M17 6h3v3"/>
-  </symbol>
-  <symbol id="icon-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>
-  </symbol>
-  <symbol id="icon-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/>
-  </symbol>
-  <symbol id="icon-handshake" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M7 11l3-3 4 4 2-2"/><path d="M3 12l4-4 3 3"/><path d="M21 12l-4-4-3 3"/><path d="M8 14l2 2a2 2 0 0 0 3 0l3-3"/><path d="M6 16l2 2M18 16l-2 2"/>
-  </symbol>
-</svg>
-
-<!-- ============================================================
-     HERO
-============================================================ -->
-<header class="hero">
-  <div class="container">
-    <span class="kicker">dbcli — Database CLI for AI Agents</span>
-    <h1>You are vibe coding,<br>but your Agent should not <em>connect raw</em> to the database</h1>
-    <p class="sub">
-      dbcli is a database CLI built for AI agents. Claude Code, Cursor, Copilot, Gemini,
-      and others can inspect schemas, run queries, and generate reports without ever seeing
-      your credentials or sensitive fields in chat.
-    </p>
-    <div class="badge-row">
-      <span class="badge">MySQL</span>
-      <span class="badge">PostgreSQL</span>
-      <span class="badge">MariaDB</span>
-      <span class="badge">MongoDB</span>
-      <span class="badge">Redis</span>
-      <span class="badge">Elasticsearch</span>
-    </div>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#quickstart">Get Started in 3 Minutes</a>
-      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">GitHub →</a>
-    </div>
-
-    <div class="cta-row" style="margin-top: 10px;">
-      <a class="btn btn-ghost" href="dbcli-intro.html">中文版本</a>
-    </div>
-
-    <div class="hero-install">
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">zsh — one-line install</span>
-        </div>
-        <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
-<span class="c"># 或不安裝直接用</span>
-<span class="p">$</span> npx @carllee1983/dbcli init</pre>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header">
+    <nav class="nav container" aria-label="Main navigation">
+      <a class="brand" href="#" aria-label="dbcli home"><span class="brand-mark">d</span>dbcli</a>
+      <div class="nav-links">
+        <a href="#workflow">How it works</a>
+        <a href="#efficiency">Efficiency</a>
+        <a href="#safety">Safety</a>
+        <a href="#platforms">Platforms</a>
+        <a href="#faq">FAQ</a>
       </div>
-    </div>
+      <a class="locale-link" href="./dbcli-intro.html" lang="zh-Hant">繁體中文</a>
+      <a class="button button-primary nav-cta" href="#quickstart">Get started</a>
+    </nav>
+  </header>
 
-    <figure class="image-figure">
-      <img src="assets/dbcli-intro/hero.png" alt="AI agent 透過 dbcli 管線連接多種資料庫，憑證保存在盾牌後方的保險庫。">
-      <figcaption>Agents operate the database through dbcli; credentials stay isolated from the conversation.</figcaption>
-    </figure>
-  </div>
-</header>
-
-<!-- ============================================================
-     PAIN POINTS
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">The Problem</span>
-    <h2>What are you betting on when you hand DATABASE_URL straight to an Agent?</h2>
-    <p class="section-lead">
-      The best part of vibe coding is when the Agent pulls the data and fixes the bug.
-      The worst part is when it guesses the wrong column name, prints a password into chat history,
-      or runs a DELETE without a WHERE clause across the whole table.
-    </p>
-    <div class="grid grid-3">
-      <div class="card pain">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-key"></use></svg></div>
-        <h3>Credentials spill into chat</h3>
-        <p>Paste a connection string into a prompt or project config and you are handing production secrets to every conversation and every commit.</p>
-      </div>
-      <div class="card pain">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-dice"></use></svg></div>
-        <h3>The Agent writes SQL by guessing</h3>
-        <p>Is the column named <code class="inline">user_name</code> or <code class="inline">username</code>?
-        A wrong guess means no result, or worse, a result you should never have seen.</p>
-      </div>
-      <div class="card pain">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-alert"></use></svg></div>
-        <h3>Writes have no safety net</h3>
-        <p>No dry-run, no permission tiers, no audit trail. One runaway DELETE and your only option is the backup.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     CORE VALUE: CREDENTIAL ISOLATION
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Value 1 · Credential Isolation</span>
-    <h2>Credential isolation: the Agent gets the data, not the keys</h2>
-    <p class="section-lead">
-      This is the fundamental difference between dbcli and giving an Agent a raw connection string.
-      dbcli owns the credentials; the Agent only invokes commands and sees results, so passwords
-      never flow through chat context.
-    </p>
-    <div class="grid grid-2">
-      <div class="card highlight">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-database"></use></svg></div>
-        <h3>Config stays out of the project tree</h3>
-        <p>The full connection config lives in <code class="inline">~/.config/dbcli/projects/&lt;id&gt;/</code>,
-        while the project keeps only a non-sensitive binding stub. The Agent will not scan it, and it will not get committed by accident.</p>
-      </div>
-      <div class="card highlight">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-link"></use></svg></div>
-        <h3>env-refs: not even the config file is plaintext</h3>
-        <p><code class="inline">init --use-env-refs</code> stores credentials as a runtime-resolved reference like
-        <code class="inline">{"$env": "DB_PASSWORD"}</code>, which is a good fit for CI/CD and multi-environment setups.
-        If CI is missing the key, it fails loudly instead of silently falling back to plaintext.</p>
-      </div>
-      <div class="card highlight">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-eye-off"></use></svg></div>
-        <h3>No output ever leaks credentials</h3>
-        <p><code class="inline">status</code>, <code class="inline">doctor</code>, error messages, and audit logs
-        are all designed for Agent consumption without ever printing connection strings or passwords.</p>
-      </div>
-      <div class="card highlight">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-globe"></use></svg></div>
-        <h3>Multiple connections, separate privilege levels</h3>
-        <p>Local, staging, and prod are <strong>named connections</strong> inside the same project, each with independent credentials, permissions, and schema caches.
-        The most common setup is <code class="inline">read-write</code> locally so the Agent can experiment, while prod stays locked to <code class="inline">query-only</code>.</p>
-      </div>
-    </div>
-
-    <div style="margin-top: 28px;">
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">Local writes are safe, prod is read-only — one project, two connections, two privilege levels</span>
-        </div>
-        <pre><span class="c"># Local DB: development use, writes allowed</span>
-<span class="p">$</span> dbcli init --conn-name local --env-file .env.local --permission read-write
-
-<span class="c"># Prod DB: read-only + credentials stored as $env refs, no plaintext password in config</span>
-<span class="p">$</span> dbcli init --conn-name prod --env-file .env.production \
-    --use-env-refs --permission <span class="w">query-only</span>
-
-<span class="p">$</span> dbcli use local                          <span class="c"># Default to local day-to-day</span>
-<span class="p">$</span> dbcli query --use prod "SELECT …"        <span class="c"># Temporarily point at prod when needed; read-only only</span>
-<span class="p">$</span> dbcli update --use prod orders …
-<span class="d">✗ Permission denied: connection "prod" is query-only</span></pre>
-      </div>
-      <p style="color: var(--text-dim); font-size: 0.92rem; margin-top: 14px;">
-        Permissions follow the <strong>connection</strong>, not the conversation. No matter how the Agent is prompted,
-        writes to prod are rejected at the dbcli layer. During debugging the Agent can compare both sides freely,
-        but it can never accidentally mutate prod.
-      </p>
-    </div>
-
-    <figure class="image-figure">
-      <img src="assets/dbcli-intro/credential-isolation.png" alt="AI Agent、dbcli gateway、資料庫與本機憑證盒之間的憑證隔離架構圖。">
-      <figcaption>The Agent sends CLI commands; dbcli reads local credentials to connect, and credentials never flow back to the Agent.</figcaption>
-    </figure>
-  </div>
-</section>
-
-<!-- ============================================================
-     CORE VALUE: BLACKLIST
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Value 2 · Sensitive Data Blacklist</span>
-    <h2>Sensitive-data blacklist: if the AI cannot see it, it cannot leak it</h2>
-    <p class="section-lead">
-      Add <code class="inline">password</code>, <code class="inline">token</code>, and PII fields to the blacklist,
-      and results are masked <strong>before they return to the Agent</strong> — including reports and HTML dashboards.
-      SQL columns/tables, MongoDB nested dot-path wildcards, and Redis key globs are supported.
-    </p>
-    <div class="terminal">
-      <div class="terminal-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="title">What blacklist does in practice</span>
-      </div>
-      <pre><span class="p">$</span> dbcli blacklist column add users.password
-<span class="p">$</span> dbcli blacklist table add 'secrets:*'          <span class="c"># Redis key glob is supported too</span>
-<span class="p">$</span> dbcli query "SELECT id, email, password FROM users LIMIT 2"
-┌────┬──────────────────┬──────────────┐
-│ id │ email            │ password     │
-├────┼──────────────────┼──────────────┤
-│ 1  │ <span class="s">a@example.com</span>    │ <span class="d">[REDACTED]</span>   │
-│ 2  │ <span class="s">b@example.com</span>    │ <span class="d">[REDACTED]</span>   │
-└────┴──────────────────┴──────────────┘</pre>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     CORE VALUE: PERMISSION + WRITE SAFETY
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Value 3 · Layered Safety</span>
-    <h2>Four permission levels plus an end-to-end safety net, so writes are no longer a gamble</h2>
-    <p class="section-lead">
-      The default is <code class="inline">query-only</code>; give the Agent only the level it needs — it is just a flag.
-      Even when writes are enabled, every step still has guardrails.
-    </p>
-    <div class="ladder">
-      <div class="rung"><span class="lv">query-only</span><span class="desc">Default. SELECT, list, schema, export. Queries auto-append LIMIT 1000 so the Agent cannot overwhelm your tables.</span></div>
-      <div class="rung"><span class="lv">read-write</span><span class="desc">Adds INSERT and UPDATE. Every write is previewed with <code class="inline">--dry-run</code> before execution.</span></div>
-      <div class="rung"><span class="lv">data-admin</span><span class="desc">Adds DELETE (DML only). <code class="inline">--where</code> is required and intentionally limited to equality conditions to avoid broad mistakes.</span></div>
-      <div class="rung"><span class="lv">admin</span><span class="desc">Adds DDL. <code class="inline">migrate</code> defaults to dry-run; you need <code class="inline">--execute</code> to actually run it, and DROP still requires <code class="inline">--force</code>.</span></div>
-    </div>
-
-    <div class="grid grid-3" style="margin-top: 28px;">
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-receipt"></use></svg></div>
-        <h3>Audit log keeps a trail</h3>
-        <p>Every operation leaves a metadata audit record, without SQL text or data values, so you can trace what the Agent did across sessions.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-bandage"></use></svg></div>
-        <h3>Recovery plans are generated automatically on failure</h3>
-        <p>Add <code class="inline">--recovery</code> and failed runs persist a structured recovery plan automatically;
-        <code class="inline">dbcli recover --apply</code> executes the safe remediation steps under risk-based control.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-shield"></use></svg></div>
-        <h3>Static risk analysis</h3>
-        <p><code class="inline">dbcli plan</code> can classify the risk level of a SQL statement without connecting;
-        Elasticsearch is read-only end-to-end, so writes are impossible there.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     CORE VALUE: AGENT-NATIVE DX
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Value 4 · Agent-Native</span>
-    <h2>Safe is not enough; the Agent experience also has to be smooth</h2>
-    <p class="section-lead">
-      dbcli is not “a normal CLI that happens to be callable by an Agent.” Every output and workflow is designed for the Agent.
-      One line of <code class="inline">dbcli skill --install claude</code> gives the Agent its full operating manual.
-    </p>
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-ruler"></use></svg></div>
-        <h3>Schema exploration to avoid guessing columns</h3>
-        <p><code class="inline">schema users --format json</code> returns real columns, estimated row counts, and size bands.
-        The skill says it plainly: <strong>do not guess column names; check schema first</strong>. MongoDB infers dot-path structure from sampling, and Redis shows key type and TTL.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-clipboard"></use></svg></div>
-        <h3>Task Packs: ready-made expert workflows</h3>
-        <p>“Diagnose a slow query,” “audit permissions,” “safe backfill,” “schema drift check”...
-        <code class="inline">skill tasks plan</code> emits a step-by-step plan with risk labels, so the Agent can follow it instead of inventing steps.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-chart"></use></svg></div>
-        <h3>Turn one sentence into an interactive report</h3>
-        <p><code class="inline">q @analytics/revenue --ui</code> opens an HTML dashboard in the browser with KPI cards and charts.
-        It is a single shareable file, and blacklist masking happens before render.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-repeat"></use></svg></div>
-        <h3>Reusable parameterized queries</h3>
-        <p>Saved queries live in the repo in three layers — local, shared, and built-in <code class="inline">@diag/*</code> —
-        so the Agent can use <code class="inline">queries suggest</code> to find existing SQL by intent instead of rewriting it each time.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-compass"></use></svg></div>
-        <h3>guide / report: diagnosis with SOPs</h3>
-        <p><code class="inline">guide slow-query</code> gives deterministic next-step commands;
-        <code class="inline">report --section perf</code> runs a complete check for slow queries, index usage, and cache hit rate.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#icon-handshake"></use></svg></div>
-        <h3>One-click skill install for seven platforms</h3>
-        <p>Claude Code, Cursor, Copilot, Gemini, Codex, Windsurf, and Antigravity —
-        <code class="inline">skill --install &lt;platform&gt;</code> installs the workflow and full reference docs into the right directory.</p>
-      </div>
-    </div>
-
-    <figure class="image-figure">
-      <img src="assets/dbcli-intro/dashboard.png" alt="Dark-mode analytics dashboard with KPI cards, trend lines, bar chart, and masked data table.">
-      <figcaption>dbcli can turn query results into an interactive dashboard, with sensitive fields masked before rendering.</figcaption>
-    </figure>
-  </div>
-</section>
-
-<!-- ============================================================
-     PLUGIN / SKILL INSTALL
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Feature 5 · One-Command Onboarding</span>
-    <h2>Install the plugin into Claude Code or Codex with one click - no CLI install needed first</h2>
-    <p class="section-lead">
-      dbcli ships both as a <strong>plugin marketplace package</strong> and as an <strong>installable agent skill</strong>.
-      If you choose the plugin path, you do not even need a global CLI install first - the plugin includes a
-      <code class="inline">bunx @carllee1983/dbcli</code> fallback and works immediately after installation.
-    </p>
-    <div class="grid grid-2">
-      <div class="card highlight install-card">
-        <div>
-          <span class="plat">Claude Code</span><span class="plat">Codex</span><span class="plat">Copilot CLI</span><span class="plat">Cursor</span>
-          <h3 style="margin-top: 12px;">Path A: Plugin Marketplace</h3>
-          <p style="color: var(--text-dim); font-size: 0.94rem;">
-            Paste one command into the Agent, and the skill, full reference docs, and safe workflow are all in place.
-            Start a new session and simply say "check the database for me."</p>
-        </div>
-        <div class="terminal">
-          <div class="terminal-bar">
-            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="title">Install the plugin in each Agent</span>
-          </div>
-          <pre><span class="c"># Claude Code</span>
-<span class="p">/plugin</span> marketplace add CarlLee1983/dbcli
-<span class="p">/plugin</span> install dbcli-agent@dbcli-agent
-
-<span class="c"># Codex</span>
-<span class="p">$</span> codex plugin marketplace add CarlLee1983/dbcli
-<span class="c">#   → installs dbcli-agent in /plugins</span>
-
-<span class="c"># GitHub Copilot CLI</span>
-<span class="p">$</span> copilot plugin marketplace add CarlLee1983/dbcli
-<span class="p">$</span> copilot plugin install dbcli-agent@dbcli-agent
-
-<span class="c"># Cursor（Agent chat 內）</span>
-<span class="p">/add-plugin</span> dbcli-agent</pre>
+  <main id="main-content">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">Move faster. Stay in control.</p>
+        <h1 id="hero-title">Name the outcome. Your agent delivers.<br>dbcli keeps the data safe.</h1>
+        <p class="hero-lead">From analysis to interactive reports, your agent gets database work done while dbcli verifies structure, protects sensitive data, and enforces clear boundaries.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#workflow">See how it works</a>
+          <a class="button button-secondary" href="https://github.com/CarlLee1983/dbcli">View on GitHub</a>
         </div>
       </div>
-      <div class="card install-card">
-        <div>
-          <span class="plat">claude</span><span class="plat">codex</span><span class="plat">cursor</span><span class="plat">copilot</span><span class="plat">gemini</span><span class="plat">windsurf</span><span class="plat">antigravity</span>
-          <h3 style="margin-top: 12px;">Path B: <code class="inline">skill --install</code></h3>
-          <p style="color: var(--text-dim); font-size: 0.94rem;">
-            Already have the CLI installed globally? One command writes the skill docs
-            (workflow plus full reference manual) into the correct platform skill directory.
-            It works across all seven platforms and protects your existing configuration from being overwritten.</p>
-        </div>
-        <div class="terminal">
-          <div class="terminal-bar">
-            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="title">Skill install</span>
-          </div>
-          <pre><span class="p">$</span> dbcli skill --install claude       <span class="c"># Claude Code</span>
-<span class="p">$</span> dbcli skill --install cursor       <span class="c"># Cursor</span>
-<span class="p">$</span> dbcli skill --install gemini       <span class="c"># Gemini CLI</span>
-<span class="c"># ... codex / copilot / windsurf / antigravity</span></pre>
-        </div>
+      <div class="conversation-guardrails" aria-label="Example agent conversation and dbcli guardrails">
+        <article class="conversation-panel">
+          <h2 class="panel-label">You and your agent</h2>
+          <div class="message message-user">Find the plan with the highest churn this month and turn it into a chart.</div>
+          <div class="message message-agent">Done. Enterprise-plan churn rose 8.4%, and the shareable report is ready.</div>
+        </article>
+        <article class="guardrails-panel">
+          <h2 class="panel-label">dbcli behind the scenes</h2>
+          <ul class="guardrail-list">
+            <li>Verifies the actual schema</li>
+            <li>Masks sensitive fields</li>
+            <li>Limits query scope</li>
+            <li>Verifies and records results</li>
+          </ul>
+        </article>
       </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<!-- ============================================================
-     SKILL IN ACTION
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Feature 6 · Skill in Action</span>
-    <h2>You speak, the Agent works - that is the everyday experience after installing the skill</h2>
-    <p class="section-lead">
-      No memorized commands, no SQL, and no need to know what N+1 means. You speak naturally, and the Agent
-      follows the database SOP built into the skill to finish the job safely, then reports back in plain language.
-      If you want the mechanics, every conversation can expand the "behind the scenes" commands.
-    </p>
-    <div class="grid grid-2">
-
-      <div class="scenario">
-        <span class="perk">No SQL required</span>
-        <div class="you">Why is this API getting slower the more we use it? Take a look 🥲</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          Found it. The <span class="hl">orders table is missing an index</span>, so every query is doing a full scan
-          on <span class="num">1.2 million</span> rows. I have a migration proposal ready to add the index.
-          It should cut this API from <span class="num">2.4s</span> to <span class="num">30ms</span>.
-          Say the word and I'll submit it for review.
+    <section class="section section-paper" id="workflow">
+      <div class="container">
+        <div class="section-heading">
+          <p class="section-kicker">A real workflow</p>
+          <h2>One request. Five dependable steps.</h2>
+          <p>Your agent never guesses its way into the data. dbcli connects schema checks, guardrails, execution, and verification in one repeatable flow.</p>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli report --section perf
-<span class="p">→</span> dbcli skill tasks plan analyze-table-perf --param table=orders
-<span class="p">→</span> dbcli guide missing-index-for "SELECT …"</span>
+        <div class="workflow-grid">
+          <article class="workflow-step"><h3>Describe the outcome</h3><p>State the question and the deliverable you want in plain language.</p><span class="command-label">your request</span></article>
+          <article class="workflow-step"><h3>Confirm structure</h3><p>Read the real schema first, so fields and types are never guessed.</p><span class="command-label">schema</span></article>
+          <article class="workflow-step"><h3>Apply guardrails</h3><p>Enforce blacklists, permission levels, and result limits.</p><span class="command-label">blacklist · permission</span></article>
+          <article class="workflow-step"><h3>Execute and verify</h3><p>Run the query, check the result, and get guided recovery when something fails.</p><span class="command-label">query · recover</span></article>
+          <article class="workflow-step"><h3>Deliver the result</h3><p>Package the conclusion as a shareable, interactive report.</p><span class="command-label">report</span></article>
+        </div>
+        <details class="behind-scenes">
+          <summary>See what the agent ran behind the scenes</summary>
+          <pre><code>dbcli blacklist list
+dbcli schema subscriptions --format json
+dbcli query "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --recovery --ui
+dbcli recover</code></pre>
         </details>
       </div>
+    </section>
 
-      <div class="scenario">
-        <span class="perk">Writes have guardrails</span>
-        <div class="you">Mark this batch of old test orders as archived</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          There are <span class="num">1,204</span> rows. I first used a <span class="hl">dry-run preview</span>
-          to confirm the change set without touching data. The scope looks right, so I ran it,
-          then <span class="hl">read back the results</span> to verify every row was updated.
-          Audit logs are in place the whole time.
+    <section class="section" id="efficiency">
+      <div class="container">
+        <div class="section-heading">
+          <p class="section-kicker">Fast without skipping steps</p>
+          <h2>Turn back-and-forth work into one delivery</h2>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli query "SELECT COUNT(*) …"        <span style="color:#6b7688"># 先數影響幾筆</span>
-<span class="p">→</span> dbcli update orders --where "…" --set '…' --dry-run
-<span class="p">→</span> execute → query readback → audit trail</span>
-        </details>
-      </div>
-
-      <div class="scenario">
-        <span class="perk">Evidence-backed conclusions</span>
-        <div class="you">Review this PR for me. It touches writes across several tables.</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          Reviewed. There are <span class="num">3</span> database-related concerns: two are
-          <span class="hl">verified</span> with proof attached, and one is
-          <span class="hl">not_verified</span> - the PR assumes the <code class="inline">status</code>
-          column has a default value, but the actual schema does not. Ask the author to add it, or new writes will end up NULL.
+        <div class="card-grid">
+          <article class="value-card"><span class="card-number">01</span><h3>One request, end to end</h3><p>Move from query to analysis to report without directing every command.</p><span class="command-label">task workflow</span></article>
+          <article class="value-card"><span class="card-number">02</span><h3>Reuse schema and query knowledge</h3><p>Confirm the schema, then discover and reuse queries your team has saved.</p><span class="command-label">schema · queries</span></article>
+          <article class="value-card"><span class="card-number">03</span><h3>Diagnose, then deliver</h3><p>Failures come with recovery guidance; successful results become interactive reports.</p><span class="command-label">recover · report</span></article>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli skill tasks plan pr-database-review
-<span class="p">→</span> dbcli schema / plan / --dry-run to verify each PR assumption</span>
-        </details>
       </div>
+    </section>
 
-      <div class="scenario">
-        <span class="perk">Dashboards in one sentence</span>
-        <div class="you">I have a meeting soon. Give me this month's revenue dashboard 🙏</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          It's ready. The browser view has <span class="hl">4 KPI cards + a trend chart + a detail table</span>,
-          all in a single HTML file you can share with the team. Sensitive fields like customer email
-          were <span class="hl">masked automatically</span> before generation.
+    <section class="section section-paper" id="safety">
+      <div class="container">
+        <div class="section-heading">
+          <p class="section-kicker">Layered protection</p>
+          <h2>Safety is a boundary at every step</h2>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli queries suggest "monthly revenue"
-<span class="p">→</span> dbcli q @analytics/revenue --param days=30 --ui</span>
-        </details>
-      </div>
-
-      <div class="scenario">
-        <span class="perk">See through ORM black boxes</span>
-        <div class="you">We use an ORM, and I keep suspecting it is secretly generating terrible SQL...</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          Your instinct is right 😅 I ran an observability proxy between the app and the database for 10 minutes:
-          the product list page has an <span class="hl">N+1 loop</span> - one page triggers
-          <span class="num">101</span> queries. After switching to eager loading and adding an index,
-          page load time dropped from <span class="num">1.8s</span> to <span class="num">90ms</span>.
+        <div class="safety-grid">
+          <article class="safety-layer"><div class="safety-icon" aria-hidden="true">◉</div><h3>Credential isolation</h3><p>Agents use fixed connection profiles without reading or exposing database passwords.</p><span class="command-label">profile</span></article>
+          <article class="safety-layer"><div class="safety-icon" aria-hidden="true">⊘</div><h3>Sensitive-field blacklist</h3><p>Fields and tables are protected before query results can expose sensitive content.</p><span class="command-label">blacklist</span></article>
+          <article class="safety-layer"><div class="safety-icon" aria-hidden="true">⌁</div><h3>Permissions and previews</h3><p>Permission levels limit actions, while dry runs preview writes before execution.</p><span class="command-label">permission · --dry-run</span></article>
+          <article class="safety-layer"><div class="safety-icon" aria-hidden="true">✓</div><h3>Verification, recovery, and audit</h3><p>Verify outcomes, offer safe recovery steps, and retain an operational record.</p><span class="command-label">verify · recover · audit</span></article>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli proxy postgresql --listen 5433 --target localhost:5432
-<span class="p">→</span> use the app normally → dbcli proxy analyze   <span style="color:#6b7688"># N+1, slow queries, hot tables</span>
-<span class="p">→</span> dbcli explain --analyze "&lt;最慢那句&gt;"</span>
-        </details>
       </div>
+    </section>
 
-      <div class="scenario">
-        <span class="perk">Migrations without faith</span>
-        <div class="you">The migration finished - did the schema actually come out right?</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          I compared the snapshots before and after the migration: the new columns and indexes are there,
-          but I found a surprise - <span class="hl"><code class="inline">price</code> was changed to FLOAT</span>.
-          Money in floating point will drift. Change it back to DECIMAL before staging, and I can draft the fix migration.
+    <section class="section" id="platforms">
+      <div class="container">
+        <div class="section-heading">
+          <p class="section-kicker">Keep the tools you already use</p>
+          <h2>One workflow for your databases and agents</h2>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli diff --snapshot before-migrate
-<span class="p">→</span> run ORM migration → dbcli diff --against before-migrate
-<span class="p">→</span> dbcli check orders</span>
-        </details>
-      </div>
-
-      <div class="scenario" style="grid-column: 1 / -1;">
-        <span class="perk">Real data, zero production risk</span>
-        <div class="you">I can't reproduce this bug locally. It seems to only happen with production data - help me trace it.</div>
-        <div class="agent">
-          <span class="who">AGENT</span>
-          Found it. There are <span class="num">17</span> old production orders whose
-          <code class="inline">coupon</code> field still uses a format from ten years ago, and your new code does not handle it.
-          I <span class="hl">used read-only access</span> to inspect the production data shape, then recreated the issue
-          <span class="hl">locally</span> with a matching test record, fixed it, and verified the fix.
-          <span class="hl">Nothing in production changed at all</span>, because the prod connection is query-only by default.
+        <div class="platform-groups">
+          <div class="platform-group"><h3>Databases</h3><div class="platform-list">
+            <span class="platform-chip">PostgreSQL</span><span class="platform-chip">MySQL</span><span class="platform-chip">MariaDB</span>
+            <span class="platform-chip">MongoDB</span><span class="platform-chip">Redis</span><span class="platform-chip">Elasticsearch</span>
+          </div></div>
+          <div class="platform-group"><h3>AI Agent</h3><div class="platform-list">
+            <span class="platform-chip">Claude Code</span><span class="platform-chip">Codex</span><span class="platform-chip">Cursor</span>
+            <span class="platform-chip">Gemini CLI</span><span class="platform-chip">GitHub Copilot</span><span class="platform-chip">OpenCode</span>
+            <span class="platform-chip">Antigravity</span>
+          </div></div>
         </div>
-        <details class="behind">
-          <summary>Behind the scenes: what the Agent actually ran</summary>
-          <span class="chain"><span class="p">→</span> dbcli schema orders --use prod --format json     <span style="color:#6b7688"># inspect the real prod schema</span>
-<span class="p">→</span> dbcli query --use prod "SELECT … WHERE …"         <span style="color:#6b7688"># inspect the data shape read-only</span>
-<span class="p">→</span> dbcli insert orders --use local --data '…' --dry-run  <span style="color:#6b7688"># recreate the case locally</span>
-<span class="p">→</span> fix locally → dbcli query --use local verify → done</span>
-        </details>
       </div>
+    </section>
 
+    <section class="section section-paper" id="quickstart">
+      <div class="container">
+        <div class="section-heading">
+          <p class="section-kicker">Quickstart</p>
+          <h2>Put dbcli in your agent's toolbox</h2>
+          <p>Plugin or Skill is the most direct agent integration. You can also initialize the CLI on its own.</p>
+        </div>
+        <div class="quick-grid">
+          <article class="quick-card quick-card-primary">
+            <span class="route-badge">Recommended · Plugin / Skill</span>
+            <h3>Install the complete operating guide</h3>
+            <p>Install the plugin from the Claude Code marketplace, or install the Codex skill after initializing the CLI.</p>
+            <div class="command-box"><pre><code>/plugin marketplace add CarlLee1983/dbcli
+/plugin install dbcli@carllee1983-dbcli</code></pre><button class="copy-button" type="button" aria-label="Copy Claude Code plugin installation commands" aria-live="polite" data-copy="/plugin marketplace add CarlLee1983/dbcli&#10;/plugin install dbcli@carllee1983-dbcli">Copy</button></div>
+            <div class="command-box"><pre><code>dbcli skill --install codex</code></pre><button class="copy-button" type="button" aria-label="Copy Codex skill installation command" aria-live="polite" data-copy="dbcli skill --install codex">Copy</button></div>
+            <p style="margin-top:18px">The Skill also supports Claude Code, Cursor, GitHub Copilot, Gemini CLI, Antigravity, and Windsurf. OpenCode works with dbcli but currently has no dedicated selector; do not substitute another platform's install command.</p>
+          </article>
+          <article class="quick-card">
+            <span class="route-badge">Alternative · CLI</span>
+            <h3>Create a connection profile first</h3>
+            <p>Run the setup wizard with bunx. Your agent can then use the same safe workflow through the Skill.</p>
+            <div class="command-box"><pre><code>bunx @carllee1983/dbcli init</code></pre><button class="copy-button" type="button" aria-label="Copy CLI initialization command" aria-live="polite" data-copy="bunx @carllee1983/dbcli init">Copy</button></div>
+            <p style="margin-top:18px">After initialization, install the integration for your agent. See the user guide for full platform details.</p>
+          </article>
+        </div>
+        <div class="support-links">
+          <a href="https://github.com/CarlLee1983/dbcli">GitHub source</a>
+          <a href="./user/en/">Full English documentation</a>
+          <a href="./dbcli-intro.html" lang="zh-Hant">Traditional Chinese</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="container">
+        <div class="section-heading"><p class="section-kicker">FAQ</p><h2>Frequently asked questions</h2></div>
+        <div class="faq-list">
+          <details><summary>I don't write SQL. Is dbcli still for me?</summary><p>Yes. Ask your agent to work with data in plain language. dbcli has it confirm the real structure with <code>schema</code>, then reuse expert queries from saved queries and task packs. You only need to review the result, not decipher the SQL in between.</p></details>
+          <details><summary>Could an agent accidentally delete my data?</summary><p>The default permission is <code>query-only</code>, which cannot even INSERT. At <code>data-admin</code>, DELETE still requires a WHERE clause, recommends a dry run first, and equality-only conditions prevent broad table scans. DDL adds three more gates: <code>admin</code>, <code>--execute</code>, and <code>--force</code> for DROP.</p></details>
+          <details><summary>Which databases are supported?</summary><p>MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch. A project can hold multiple named connections—for staging, production, or separate tenants—with independent credentials, permissions, and schema caches.</p></details>
+          <details><summary>How is this different from using an MCP database server directly?</summary><p>dbcli builds permissions and data protection into the database operations layer: credential isolation, blacklist masking, permission tiers, dry runs, audit, and recovery are ready to use. It is not tied to one agent protocol or editor, and people can use the same workflow in a terminal.</p></details>
+          <details><summary>How do teams collaborate?</summary><p>Saved queries can live in <code>.dbcli-shared/</code> and travel through git. Use <code>--use-env-refs</code> for credentials so every teammate and CI pipeline supplies its own environment variables while the repository remains free of plaintext passwords.</p></details>
+          <details><summary>Will dbcli give my database password to the agent?</summary><p>No. Connection profiles isolate credentials. The agent runs fixed dbcli commands and never needs to read or return the password.</p></details>
+          <details><summary>Is dbcli read-only?</summary><p>No. Available operations depend on the configured permission level. Write workflows can be previewed with a dry run and then executed only with explicit authorization.</p></details>
+          <details><summary>Should I choose the Plugin or skill --install?</summary><p>Choose the Plugin when your agent supports a plugin marketplace for centralized installation and updates. If dbcli is already installed globally, or you prefer repository- or user-level guidance, use <code>dbcli skill --install &lt;platform&gt;</code>.</p></details>
+          <details><summary>Will the agent start guessing when a query fails?</summary><p>The workflow confirms the schema first. If a command with recovery enabled fails, dbcli creates a recovery plan so the agent can inspect it and apply only safe remediation steps.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <span>dbcli · Database CLI built for AI agents.</span>
+      <div class="footer-links"><a href="https://github.com/CarlLee1983/dbcli">GitHub</a><a href="./user/en/">Full documentation</a><a href="./dbcli-intro.html" lang="zh-Hant">Traditional Chinese</a></div>
     </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     COMPARISON
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">Before / After</span>
-    <h2>Same Agent, two different worlds</h2>
-    <p class="section-lead">On the left, you hand the connection string straight to the Agent. On the right, you go through dbcli.</p>
-    <div class="compare-wrap">
-      <table class="compare">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Give the Agent the connection string directly</th>
-            <th class="vs-dbcli">Go through dbcli</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Credential location</td>
-            <td class="bad">Shows up in prompts, chat logs, and project config files</td>
-            <td class="good">Stored in <code class="inline">~/.config/dbcli</code> or via <code class="inline">$env</code> references, never in conversation</td>
-          </tr>
-          <tr>
-            <td>Sensitive fields</td>
-            <td class="bad">Whatever SELECT returns is visible to the Agent</td>
-            <td class="good">Blacklist masks them before return, including report output</td>
-          </tr>
-          <tr>
-            <td>Permission scope</td>
-            <td class="bad">The Agent gets every privilege the DB account has</td>
-            <td class="good">Four permission levels start at the minimum and open up gradually</td>
-          </tr>
-          <tr>
-            <td>Write protection</td>
-            <td class="bad">Hoping the Agent behaves</td>
-            <td class="good">dry-run preview, equality-based WHERE restrictions, DDL requires <code class="inline">--execute</code></td>
-          </tr>
-          <tr>
-            <td>Runaway queries</td>
-            <td class="bad">Full table scans go out unchanged</td>
-            <td class="good">Automatic LIMIT 1000 and large-table warnings</td>
-          </tr>
-          <tr>
-            <td>After-the-fact traceability</td>
-            <td class="bad">Rely on chat history and hope for the best</td>
-            <td class="good">Audit logs plus recovery plans</td>
-          </tr>
-          <tr>
-            <td>Schema awareness</td>
-            <td class="bad">The Agent guesses fields from memory and imagination</td>
-            <td class="good"><code class="inline">schema</code> caches the real structure, and guessing is explicitly banned</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     QUICK START
-============================================================ -->
-<section id="quickstart">
-  <div class="container">
-    <span class="kicker">Quick Start</span>
-    <h2>Three minutes to teach your Agent safe database use</h2>
-    <div class="steps">
-      <div class="step">
-        <div>
-          <h3>Install and initialize connections</h3>
-          <p>For projects with a <code class="inline">.env</code> file that includes <code class="inline">DATABASE_URL</code>,
-          <code class="inline">dbcli init</code> resolves it automatically - no password typing required.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <h3>Hide what should stay hidden</h3>
-          <p><code class="inline">dbcli blacklist column add users.password</code>,
-          then use <code class="inline">dbcli status</code> to confirm permission levels and masking scope.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <h3>Install the skill or plugin for the Agent</h3>
-          <p><code class="inline">dbcli skill --install claude</code> (or cursor / copilot / gemini ...),
-          or add it directly in Claude Code / Codex with
-          <code class="inline">/plugin marketplace add CarlLee1983/dbcli</code>.
-          The Agent immediately learns the full safety flow: check blacklist first, then schema, and always dry-run writes.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div>
-          <h3>Start vibe coding</h3>
-          <p>"Why did yesterday's orders drop?" - the Agent runs
-          <code class="inline">schema</code> → <code class="inline">query</code> → <code class="inline">report</code>，
-          and you just read the result.</p>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-top: 36px;">
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">End-to-end flow</span>
-        </div>
-        <pre><span class="p">$</span> npm install -g @carllee1983/dbcli
-<span class="p">$</span> dbcli init                                    <span class="c"># auto-parse .env and store settings in ~/.config/dbcli</span>
-<span class="p">$</span> dbcli blacklist column add users.password     <span class="c"># lock sensitive columns</span>
-<span class="p">$</span> dbcli skill --install claude                  <span class="c"># give the Agent the full safe workflow</span>
-<span class="p">$</span> dbcli query "SELECT * FROM orders" --ui       <span class="c"># spin up an interactive report</span></pre>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     FAQ
-============================================================ -->
-<section>
-  <div class="container">
-    <span class="kicker">FAQ</span>
-    <h2>Frequently asked questions</h2>
-    <details>
-      <summary>I do not write SQL. Is this for me?</summary>
-      <p>Yes. You ask the Agent to handle data in natural language, and dbcli makes that safe:
-      the Agent uses schema to confirm the real structure, uses saved queries and task packs for ready-made expert queries,
-      and you never need to read the SQL in between - only the result.</p>
-    </details>
-    <details>
-      <summary>Could the Agent accidentally delete my data?</summary>
-      <p>The default permission is <code class="inline">query-only</code>, so it cannot even INSERT. Even if you raise it to
-      <code class="inline">data-admin</code>, DELETE still requires a WHERE clause, recommends dry-run first,
-      and equality restrictions block "scan the whole table" at the syntax level. DDL needs
-      <code class="inline">admin</code> + <code class="inline">--execute</code> + DROP with <code class="inline">--force</code> for triple confirmation.</p>
-    </details>
-    <details>
-      <summary>Which databases are supported?</summary>
-      <p>MySQL、PostgreSQL、MariaDB、MongoDB、Redis、Elasticsearch，
-      and a single project can define multiple named connections at once (staging / prod / per-tenant), each with its own credentials, permissions, and schema cache.</p>
-    </details>
-    <details>
-      <summary>How is this different from using an MCP database server directly?</summary>
-      <p>dbcli is the layer with built-in permissions and data protection: credential isolation, blacklist masking,
-      permission tiers, dry-run, audit, and recovery all work out of the box. The same CLI works across seven Agent platforms,
-      so it is not tied to any single protocol or editor, and humans can use it directly in the terminal too.</p>
-    </details>
-    <details>
-      <summary>Which should I use, plugin or skill --install?</summary>
-      <p>Both install the same skill bundle - workflow plus full reference docs - so the end result is the same. The difference is the entry point:
-      <strong>plugin</strong> installs from the Agent marketplace with a built-in <code class="inline">bunx</code> fallback,
-      so you do not need a global CLI install first, which makes it ideal for quick trials;
-      <strong><code class="inline">skill --install</code></strong> is better if dbcli is already installed globally,
-      because one CLI can deploy to all seven platforms and keep the skill docs aligned during upgrades.</p>
-    </details>
-    <details>
-      <summary>What about team collaboration?</summary>
-      <p>Saved queries can live in <code class="inline">.dbcli-shared/</code> and be shared in git;
-      credentials use <code class="inline">--use-env-refs</code>, so each person and each CI pipeline uses its own environment variables,
-      and the repo never contains plaintext passwords.</p>
-    </details>
-  </div>
-</section>
-
-<!-- ============================================================
-     FINAL CTA
-============================================================ -->
-<section class="final-cta">
-  <div class="container">
-    <h2>Let the Agent touch data safely,<br>so you can keep vibing.</h2>
-    <p class="section-lead" style="margin: 16px auto 36px; text-align: center;">
-      One-line install, minimum privileges by default, and no credential leakage. Hand the database to your Agent today - safely.
-    </p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="https://www.npmjs.com/package/@carllee1983/dbcli">npm install -g @carllee1983/dbcli</a>
-      <a class="btn btn-ghost" href="https://github.com/CarlLee1983/dbcli">Read the docs</a>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="container">
-    dbcli · Database CLI for AI Agents · MIT License ·
-    <a href="https://github.com/CarlLee1983/dbcli">GitHub</a> ·
-    <a href="https://www.npmjs.com/package/@carllee1983/dbcli">npm</a>
-  </div>
-</footer>
-
+  </footer>
+  <script>
+    const copyResetTimers = new WeakMap();
+    document.querySelectorAll(".copy-button").forEach((button) => {
+      const originalLabel = button.textContent;
+      button.addEventListener("click", async () => {
+        const pendingReset = copyResetTimers.get(button);
+        if (pendingReset) window.clearTimeout(pendingReset);
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          button.textContent = "Copied";
+        } catch {
+          button.textContent = "Copy manually";
+        }
+        const resetTimer = window.setTimeout(() => {
+          button.textContent = originalLabel;
+          copyResetTimers.delete(button);
+        }, 1500);
+        copyResetTimers.set(button, resetTimer);
+      });
+    });
+  </script>
 </body>
 </html>

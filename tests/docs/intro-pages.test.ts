@@ -65,3 +65,23 @@ test("locale pages expose the same section and component contract", async () => 
     en.document.querySelectorAll(".platform-chip").length,
   );
 });
+
+test("English interface contains no residual Traditional Chinese copy", async () => {
+  const { document } = await loadIntroPage("docs/dbcli-intro.en.html");
+  const clone = document.documentElement.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(".locale-link").forEach((node) => node.remove());
+  expect(clone.textContent).not.toMatch(/[\u3400-\u9fff]/);
+});
+
+test.each(pages)("$locale local assets exist", async ({ path }) => {
+  const { document } = await loadIntroPage(path);
+  for (const element of document.querySelectorAll<HTMLImageElement>("img[src]")) {
+    const src = element.getAttribute("src")!;
+    if (/^(https?:|data:)/.test(src)) continue;
+    const resolved = new URL(src, `file://${process.cwd()}/${path}`).pathname;
+    expect(await Bun.file(resolved).exists()).toBe(true);
+    expect(element.getAttribute("width")).toBeTruthy();
+    expect(element.getAttribute("height")).toBeTruthy();
+    expect(element.hasAttribute("alt")).toBe(true);
+  }
+});

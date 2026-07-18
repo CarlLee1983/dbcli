@@ -113,3 +113,67 @@ contains the resulting commit hash.
 - Contrast coverage targets the core normal-text token/background combinations
   named in the review; it does not attempt to statically resolve every possible
   inherited CSS color in the document.
+
+## Final re-review touch-target fix
+
+### Change
+
+- Extended the tappability contract for navigation/locale, support, and footer
+  links to require `min-width: 44px` as well as `min-height: 44px`.
+- Applied byte-identical CSS to both locale pages with `display: inline-flex`,
+  centered alignment on both axes, and 44px minimum width and height.
+
+### RED
+
+Command:
+
+```text
+$ bun test tests/docs/intro-pages.test.ts
+```
+
+Result:
+
+```text
+20 pass
+2 fail
+106 expect() calls
+Ran 22 tests across 1 file.
+```
+
+Both locale instances of `keeps text links comfortably tappable` failed at the
+new `.nav-links a, .locale-link` `min-width: 44px` assertion. The received CSS
+had the existing height requirement but no minimum width, confirming that the
+new contract detected the remaining review finding.
+
+### GREEN
+
+Command:
+
+```text
+$ bun test tests/docs/intro-pages.test.ts
+```
+
+Result:
+
+```text
+22 pass
+0 fail
+114 expect() calls
+Ran 22 tests across 1 file.
+```
+
+Additional verification:
+
+```text
+$ bun -e '<extract and compare both <style> blocks>'
+CSS blocks byte-identical
+
+$ git diff --check
+(exit 0, no output)
+```
+
+### Concerns
+
+- No additional concerns. The explicit 44px minimum width can add horizontal
+  space only to labels narrower than 44px; wrapping remains enabled in support
+  and footer link containers.

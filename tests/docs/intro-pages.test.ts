@@ -80,8 +80,11 @@ describe.each(pages)("$locale intro page", ({ path, counterpart }) => {
     const { html } = await loadIntroPage(path);
     expect(html).toMatch(/\.brand[^}]*min-height:\s*44px/);
     expect(html).toMatch(/\.nav-links a,\s*\.locale-link[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.nav-links a,\s*\.locale-link[^}]*min-width:\s*44px/);
     expect(html).toMatch(/\.support-links a[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.support-links a[^}]*min-width:\s*44px/);
     expect(html).toMatch(/\.footer-links a[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.footer-links a[^}]*min-width:\s*44px/);
   });
 
   test("labels the hero conversation as an example in visible copy", async () => {

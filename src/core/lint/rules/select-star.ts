@@ -43,36 +43,102 @@ function isSoleUnqualifiedStar(ast: AstNode): boolean {
   )
 }
 
-function isSoleProjectionMarker(ast: AstNode): boolean {
-  if (ast.type !== 'select' || !Array.isArray(ast.columns) || ast.columns.length !== 1) {
-    return false
-  }
-  const column = ast.columns[0] as AstNode
-  const expr = columnExpr(column)
-  return (
-    (column.as === null || column.as === undefined) &&
-    expr?.type === 'column_ref' &&
-    (expr.table === null || expr.table === undefined) &&
-    columnRefName(expr) === PROJECTION_MARKER
-  )
+function projectionHasMarker(ast: AstNode): boolean {
+  if (ast.type !== 'select' || !Array.isArray(ast.columns)) return false
+  return ast.columns.some((column) => {
+    const expr = columnExpr(column)
+    return expr?.type === 'column_ref' && columnRefName(expr) === PROJECTION_MARKER
+  })
 }
 
-function projectionWildcardIndex(
+function unquotedStarIndexes(sql: string): number[] {
+  const indexes: number[] = []
+  let quote: "'" | '"' | '`' | null = null
+  let dollarQuote: string | null = null
+  let lineComment = false
+  let blockCommentDepth = 0
+
+  for (let index = 0; index < sql.length; index++) {
+    const char = sql[index]
+    const next = sql[index + 1]
+
+    if (lineComment) {
+      if (char === '\n' || char === '\r') lineComment = false
+      continue
+    }
+
+    if (blockCommentDepth > 0) {
+      if (char === '/' && next === '*') {
+        blockCommentDepth++
+        index++
+      } else if (char === '*' && next === '/') {
+        blockCommentDepth--
+        index++
+      }
+      continue
+    }
+
+    if (dollarQuote) {
+      if (sql.startsWith(dollarQuote, index)) {
+        index += dollarQuote.length - 1
+        dollarQuote = null
+      }
+      continue
+    }
+
+    if (quote) {
+      if (char === '\\') {
+        index++
+      } else if (char === quote) {
+        if (next === quote) {
+          index++
+        } else {
+          quote = null
+        }
+      }
+      continue
+    }
+
+    if (char === '-' && next === '-') {
+      lineComment = true
+      index++
+    } else if (char === '#') {
+      lineComment = true
+    } else if (char === '/' && next === '*') {
+      blockCommentDepth = 1
+      index++
+    } else if (char === "'" || char === '"' || char === '`') {
+      quote = char
+    } else if (char === '$') {
+      const match = sql.slice(index).match(/^\$(?:[a-zA-Z_][a-zA-Z0-9_]*)?\$/)
+      if (match) {
+        dollarQuote = match[0]
+        index += dollarQuote.length - 1
+      }
+    } else if (char === '*') {
+      indexes.push(index)
+    }
+  }
+
+  return indexes
+}
+
+function projectionWildcardIndexes(
   sql: string,
   system: SqlDatabaseSystem
-): number | undefined {
+): number[] {
   const matches: number[] = []
-  for (let index = sql.indexOf('*'); index !== -1; index = sql.indexOf('*', index + 1)) {
+  for (const index of unquotedStarIndexes(sql)) {
     const candidate = `${sql.slice(0, index)}${PROJECTION_MARKER}${sql.slice(index + 1)}`
     try {
-      if (isSoleProjectionMarker(parseSingleStatement(candidate, system))) {
+      if (projectionHasMarker(parseSingleStatement(candidate, system))) {
         matches.push(index)
       }
     } catch {
-      // Replacing stars in comments, strings, or operators may make invalid SQL.
+      // Parser rejection means this star cannot be identified safely as a projection.
     }
   }
-  return matches.length === 1 ? matches[0] : undefined
+  return matches
 }
 
 function canUseBareIdentifier(name: string, system: SqlDatabaseSystem): boolean {
@@ -107,6 +173,8 @@ export const selectStarRule: LintRule = {
   requiresSchema: false,
   check(ctx) {
     if (ctx.ast.type !== 'select' || !isStar(ctx.ast)) return []
+    const wildcardIndexes = projectionWildcardIndexes(ctx.sql, ctx.system)
+    if (wildcardIndexes.length === 0) return []
 
     const finding: LintFinding = {
       rule: 'select-star',
@@ -125,8 +193,8 @@ export const selectStarRule: LintRule = {
     ) {
       const table = ctx.schema.getTable(tables[0]!)
       if (table && table.columns.length > 0) {
-        const wildcardIndex = projectionWildcardIndex(ctx.sql, ctx.system)
-        if (wildcardIndex !== undefined) {
+        if (wildcardIndexes.length === 1) {
+          const wildcardIndex = wildcardIndexes[0]!
           const columns = table.columns
             .map((column) => renderIdentifier(column.name, ctx.system))
             .join(', ')

@@ -117,6 +117,18 @@ describe('select-star', () => {
     expect(findings[0].schemaVerified).toBe(true)
   })
 
+  test('does not flag a backtick-quoted asterisk column in MySQL', () => {
+    expect(
+      selectStarRule.check(ctxFor('SELECT `*` FROM users', undefined, 'mysql'))
+    ).toHaveLength(0)
+  })
+
+  test('does not flag a backtick-quoted asterisk column in MariaDB', () => {
+    expect(
+      selectStarRule.check(ctxFor('SELECT `*` FROM users', undefined, 'mariadb'))
+    ).toHaveLength(0)
+  })
+
   test('does not flag explicit columns', () => {
     expect(selectStarRule.check(ctxFor('SELECT id FROM users'))).toHaveLength(0)
   })

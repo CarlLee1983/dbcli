@@ -163,8 +163,13 @@
     .command-box pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; line-height: 1.8; }
     .copy-button {
       position: absolute; top: 12px; right: 12px; border: 1px solid #665f59; border-radius: 8px;
-      padding: 7px 10px; color: white; background: transparent; cursor: pointer;
+      min-width: 44px; min-height: 44px; padding: 7px 10px; color: white; background: transparent; cursor: pointer;
     }
+    .platform-install-list { margin: 20px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .platform-install-list li { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .platform-install-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+    .platform-install-list code { display: inline-block; margin-top: 4px; }
+    .install-path { display: block; margin-top: 4px; color: var(--muted); font-size: .84rem; }
     .support-links { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 24px; }
     .support-links a { color: var(--blue); font-weight: 700; }
     .faq-list { max-width: 900px; }
@@ -239,12 +244,12 @@
       </div>
       <div class="conversation-guardrails" aria-label="使用者對話與 dbcli 安全防護示意">
         <article class="conversation-panel">
-          <p class="panel-label">你與 Agent</p>
+          <h2 class="panel-label">你與 Agent</h2>
           <div class="message message-user">找出本月流失最多的方案，整理成圖表。</div>
           <div class="message message-agent">完成。企業方案流失率上升 8.4%，並已產生可分享報表。</div>
         </article>
         <article class="guardrails-panel">
-          <p class="panel-label">dbcli 在背後</p>
+          <h2 class="panel-label">dbcli 在背後</h2>
           <ul class="guardrail-list">
             <li>確認實際資料結構</li>
             <li>隱藏敏感欄位</li>
@@ -273,9 +278,9 @@
           <summary>看看 Agent 背後執行了什麼</summary>
           <pre><code>dbcli blacklist list
 dbcli schema subscriptions --format json
-dbcli query "SELECT plan, COUNT(*) AS churned FROM subscriptions WHERE status = 'cancelled' GROUP BY plan" --format json --recovery
+dbcli query "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --format json --recovery
 dbcli recover
-dbcli export "SELECT plan, COUNT(*) AS churned FROM subscriptions WHERE status = 'cancelled' GROUP BY plan" --format html --output churn-report.html</code></pre>
+dbcli export "WITH months AS (SELECT date_trunc('month', CURRENT_DATE) AS month_start UNION ALL SELECT date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'), rates AS (SELECT m.month_start, s.plan, COUNT(*) FILTER (WHERE s.cancelled_at &gt;= m.month_start AND s.cancelled_at &lt; m.month_start + INTERVAL '1 month')::numeric / NULLIF(COUNT(*) FILTER (WHERE s.created_at &lt; m.month_start AND (s.cancelled_at IS NULL OR s.cancelled_at &gt;= m.month_start)), 0) * 100 AS churn_rate FROM months m CROSS JOIN subscriptions s GROUP BY m.month_start, s.plan), compared AS (SELECT plan, churn_rate, LAG(churn_rate) OVER (PARTITION BY plan ORDER BY month_start) AS previous_rate, month_start FROM rates) SELECT plan, ROUND(churn_rate, 1) AS churn_rate_pct, ROUND((churn_rate - previous_rate) / NULLIF(previous_rate, 0) * 100, 1) AS increase_pct FROM compared WHERE month_start = date_trunc('month', CURRENT_DATE) ORDER BY increase_pct DESC" --format html --output churn-report.html</code></pre>
         </details>
       </div>
     </section>
@@ -345,13 +350,23 @@ dbcli export "SELECT plan, COUNT(*) AS churned FROM subscriptions WHERE status =
 /plugin install dbcli@carllee1983-dbcli</code></pre><button class="copy-button" type="button" aria-label="複製 Claude Code Plugin 安裝指令" aria-live="polite" data-copy="/plugin marketplace add CarlLee1983/dbcli&#10;/plugin install dbcli@carllee1983-dbcli">複製</button></div>
             <div class="command-box"><pre><code>bunx @carllee1983/dbcli init
 dbcli skill --install codex</code></pre><button class="copy-button" type="button" aria-label="複製 Codex Skill 安裝指令" aria-live="polite" data-copy="bunx @carllee1983/dbcli init&#10;dbcli skill --install codex">複製</button></div>
+            <ul class="platform-install-list" aria-label="各平台 skill selector 與安裝路徑">
+              <li><strong>Claude Code</strong><br><code>dbcli skill --install claude</code><span class="install-path"><code>~/.claude/skills/dbcli/</code></span></li>
+              <li><strong>Codex</strong><br><code>dbcli skill --install codex</code><span class="install-path"><code>~/.codex/skills/dbcli/</code></span></li>
+              <li><strong>Cursor</strong><br><code>dbcli skill --install cursor</code><span class="install-path"><code>專案/.cursor/rules/dbcli.mdc</code> 與 <code>專案/.cursor/skills/dbcli/reference.md</code></span></li>
+              <li><strong>GitHub Copilot</strong><br><code>dbcli skill --install copilot</code><span class="install-path"><code>專案/.github/skills/dbcli/</code></span></li>
+              <li><strong>Gemini CLI</strong>（保留支援、逐步由 Antigravity 取代）<br><code>dbcli skill --install gemini</code><span class="install-path"><code>~/.gemini/skills/dbcli/</code></span></li>
+              <li><strong>Antigravity</strong><br><code>dbcli skill --install antigravity</code><span class="install-path"><code>~/.gemini/antigravity-cli/skills/dbcli/</code></span></li>
+              <li><strong>Windsurf</strong><br><code>dbcli skill --install windsurf</code><span class="install-path"><code>專案/.windsurfrules</code> 與 <code>專案/.windsurf/skills/dbcli/reference.md</code></span></li>
+              <li><strong>OpenCode</strong><span class="install-path">目前列為可搭配使用的 Agent 平台，但 dbcli CLI 尚未提供經驗證的專用 selector 或安裝路徑；請勿套用其他平台命令。</span></li>
+            </ul>
           </article>
           <article class="quick-card">
             <span class="route-badge">次要路線 · CLI</span>
             <h3>先建立連線設定</h3>
             <p>使用 bunx 執行初始化精靈；之後 Agent 可透過 skill 使用相同的安全工作流。</p>
             <div class="command-box"><pre><code>bunx @carllee1983/dbcli init</code></pre><button class="copy-button" type="button" aria-label="複製 CLI 初始化指令" aria-live="polite" data-copy="bunx @carllee1983/dbcli init">複製</button></div>
-            <p style="margin-top:18px">同一套 <code>skill --install &lt;platform&gt;</code> 流程也支援 Claude Code、Cursor、Gemini CLI、GitHub Copilot 與 Antigravity。</p>
+            <p style="margin-top:18px">上方列出每個已驗證平台的具體 selector 與安裝路徑；請依平台選用，不必猜測 placeholder。</p>
           </article>
         </div>
         <div class="support-links">
@@ -366,6 +381,10 @@ dbcli skill --install codex</code></pre><button class="copy-button" type="button
       <div class="container">
         <div class="section-heading"><p class="section-kicker">FAQ</p><h2>常見問題</h2></div>
         <div class="faq-list">
+          <details><summary>我不會寫 SQL，這工具跟我有關嗎？</summary><p>正是為你設計的。你用自然語言請 Agent 處理資料，dbcli 讓 Agent 先用 schema 確認真實結構，再重用 saved queries 與 task packs 的專家查詢；你不必讀懂中間的 SQL，只需要檢查結果。</p></details>
+          <details><summary>支援哪些資料庫？</summary><p>支援 MySQL、PostgreSQL、MariaDB、MongoDB、Redis 與 Elasticsearch。同一專案可設定多條具名連線（例如 staging、production 或不同租戶），各自使用獨立憑證、權限與 schema 快取。</p></details>
+          <details><summary>跟直接使用 MCP database server 有什麼不同？</summary><p>dbcli 把權限與資料防護內建在資料庫操作層：憑證隔離、blacklist 遮罩、權限分級、dry-run、audit 與 recovery 都可直接使用。它不綁定單一 Agent 協定或編輯器，人類也能在終端機使用同一套工作流。</p></details>
+          <details><summary>團隊要怎麼協作？</summary><p>Saved queries 可放進 <code>.dbcli-shared/</code> 並透過 git 與團隊共享；憑證可使用 <code>--use-env-refs</code>，讓每位成員與每條 CI pipeline 使用自己的環境變數，repository 不必保存明文密碼。</p></details>
           <details><summary>dbcli 會把我的資料庫密碼交給 Agent 嗎？</summary><p>不會。dbcli 透過連線設定隔離憑證，Agent 使用固定的 dbcli 命令，不需要讀取或回傳密碼。</p></details>
           <details><summary>它只能讀取資料嗎？</summary><p>不是。可用操作取決於設定的權限層級；寫入工作流可先 dry-run 預覽，再由明確授權執行。</p></details>
           <details><summary>Plugin 和 skill --install 該選哪個？</summary><p>支援 plugin marketplace 的 Agent 可優先選 Plugin，安裝與更新更集中；已全域安裝 dbcli，或偏好 repo／使用者層級指引時，使用 <code>dbcli skill --install &lt;platform&gt;</code>。</p></details>
@@ -382,18 +401,23 @@ dbcli skill --install codex</code></pre><button class="copy-button" type="button
     </div>
   </footer>
   <script>
+    const copyResetTimers = new WeakMap();
     document.querySelectorAll(".copy-button").forEach((button) => {
       const originalLabel = button.textContent;
       button.addEventListener("click", async () => {
+        const pendingReset = copyResetTimers.get(button);
+        if (pendingReset) window.clearTimeout(pendingReset);
         try {
           await navigator.clipboard.writeText(button.dataset.copy);
           button.textContent = "已複製";
         } catch {
           button.textContent = "請手動複製";
         }
-        window.setTimeout(() => {
+        const resetTimer = window.setTimeout(() => {
           button.textContent = originalLabel;
+          copyResetTimers.delete(button);
         }, 1500);
+        copyResetTimers.set(button, resetTimer);
       });
     });
   </script>

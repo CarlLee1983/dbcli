@@ -718,9 +718,13 @@ execute a proposal. An empty cache fails with
 separate `--snapshot` / `--against` workflow.
 
 ```bash
-# Prisma and normalized JSON accept exactly one file
+# Prisma, normalized JSON, and Drizzle accept exactly one file
 dbcli diff --against-orm prisma/schema.prisma --format json
 dbcli diff --against-orm schema.normalized.json --orm-format json --format table
+
+# Drizzle requires a PostgreSQL drizzle-kit v7 snapshot (generate it first)
+drizzle-kit generate
+dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
 
 # DDL accepts repeatable or comma-separated paths and real filesystem globs
 dbcli diff --against-orm "migrations/*.sql" --format markdown
@@ -733,8 +737,9 @@ dbcli diff --against-orm prisma/schema.prisma --ignore 'public.audit_*,public.Le
 
 | Option | Behavior |
 | :--- | :--- |
-| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and put in deterministic path order, then parsed as one shared ordered context so an index in a later file can attach to a table declared in an earlier file. Prisma and normalized JSON accept exactly one file, and globs are rejected for those formats. |
-| `--orm-format prisma\|ddl\|json` | Override extension/content detection. Without it, dbcli detects Prisma, DDL, or normalized JSON from the path and content. |
+| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and put in deterministic path order, then parsed as one shared ordered context so an index in a later file can attach to a table declared in an earlier file. Prisma, normalized JSON, and Drizzle accept exactly one file, and globs are rejected for those formats. |
+| Drizzle input | Run `drizzle-kit generate`, then pass the PostgreSQL drizzle-kit v7 snapshot at `drizzle/meta/<NNNN>_snapshot.json`. TypeScript ORM schema sources (`.ts` or `.TS`) are rejected with that snapshot-generation hint; dbcli does not parse them directly. |
+| `--orm-format prisma\|ddl\|json\|drizzle` | Override extension/content detection. Without it, dbcli detects Prisma, DDL, normalized JSON, or a Drizzle snapshot from the path and content. |
 | `--ignore <globs>` | Comma-separated, case-sensitive table globs. Patterns match the qualified display identity (for example `public.Users`). `_prisma_migrations` is always unmanaged. |
 | `--format json\|table\|markdown` | Select machine JSON, human table, or Markdown output. Markdown is available only in ORM drift mode. |
 | `--recovery` | On an I/O, configuration, empty-cache, invalid-format, or unsupported-engine failure, emit and save a structured recovery envelope. Invalid Prisma/DDL constructs normally become `unparsed` entries instead of throwing. |
@@ -783,9 +788,11 @@ another.
 columns, multi-schema datasource configuration, malformed declarations, unknown
 attributes, and unsupported native mappings are never guessed.
 
-Prisma and DDL constructs outside the supported subset are retained in
+Prisma, DDL, and Drizzle constructs outside the supported subset are retained in
 `unparsed` with a `blocked:` reason. These entries are separate from scored drift:
 inspect and resolve them before treating an otherwise clean summary as complete.
+Drizzle enums and other unsupported snapshot constructs therefore appear as blocked
+`unparsed` entries rather than managed tables or columns.
 Multi-file DDL is consumed as one deterministic shared ordered statement context,
 so later `CREATE INDEX` statements can reference tables declared in earlier
 files. PostgreSQL `PARTITION BY` and MySQL/MariaDB table engine, charset, and

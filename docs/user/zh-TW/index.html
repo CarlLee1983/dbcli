@@ -285,12 +285,14 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
 
             <div class="paper-card p-6 border-l-4 border-l-primary mb-12">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">ORM 定義漂移</h4>
-                <p><code>diff --against-orm</code> 會將 Prisma、DDL 或 normalized JSON 與既有 SQL schema cache 比對。比對只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 <code>schema --format json</code>；cache 為空時會 exit <code>1</code> 並要求執行 <code>dbcli schema</code>。</p>
+                <p><code>diff --against-orm</code> 會將 Prisma、DDL、normalized JSON 或 PostgreSQL Drizzle snapshot 與既有 SQL schema cache 比對。比對只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 <code>schema --format json</code>；cache 為空時會 exit <code>1</code> 並要求執行 <code>dbcli schema</code>。</p>
                 <pre><code>dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
 dbcli diff --against-orm prisma/schema.prisma --format json
 dbcli diff --against-orm "migrations/*.sql" --format markdown
+drizzle-kit generate
+dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
 dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></pre>
-                <p><code>--against-orm</code> 可重複使用，也接受逗號分隔路徑。DDL 支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma 與 normalized JSON 只接受一個檔案。用 <code>--orm-format prisma|ddl|json</code> 覆寫偵測、<code>--ignore &lt;globs&gt;</code> 傳入大小寫敏感的 qualified table pattern，並以 <code>--format json|table|markdown</code> 選擇輸出。</p>
+                <p><code>--against-orm</code> 可重複使用，也接受逗號分隔路徑。DDL 支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 <code>drizzle/meta/&lt;NNNN&gt;_snapshot.json</code> 的 PostgreSQL drizzle-kit v7 snapshot；請先執行 <code>drizzle-kit generate</code>。TypeScript ORM schema source（<code>.ts</code> 或 <code>.TS</code>）不會被直接解析，而是會被拒絕並顯示上述提示。用 <code>--orm-format prisma|ddl|json|drizzle</code> 覆寫偵測、<code>--ignore &lt;globs&gt;</code> 傳入大小寫敏感的 qualified table pattern，並以 <code>--format json|table|markdown</code> 選擇輸出。</p>
                 <table>
                     <thead><tr><th>類別</th><th>意義</th></tr></thead>
                     <tbody>
@@ -300,7 +302,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
                         <tr><td><code>unmanaged</code></td><td>忽略的資料表；會列出但不計分。</td></tr>
                     </tbody>
                 </table>
-                <p>只有計分後的 error 會決定 drift exit code：有 error 時 exit <code>1</code>，只有 warning、info、<code>unmanaged</code> 或 <code>unparsed</code> 時 exit <code>0</code>；操作失敗仍會 exit <code>1</code>，並可由 <code>--recovery</code> 包裝。PostgreSQL schema/table storage 會精確保留且大小寫敏感，因此 <code>users</code> 與 <code>"Users"</code> 可並存。解析 DDL 時，未引用的 <code>Users</code> 會折成 <code>users</code>，而引用的 <code>"Users"</code> 只會解析成 <code>Users</code>；quote state 來自 parsed identifier，絕不從顯示大小寫推測。重複 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL 語法會以 <code>blocked:</code> 原因保留在 <code>unparsed</code>。PostgreSQL <code>PARTITION BY</code> 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 會產生 <code>blocked:</code> 項目，且不建立 managed table。Normalized JSON 要求每個 <code>unparsed.reason</code> 都以 <code>blocked:</code> 開頭。結構化 index 比對會去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。</p>
+                <p>只有計分後的 error 會決定 drift exit code：有 error 時 exit <code>1</code>，只有 warning、info、<code>unmanaged</code> 或 <code>unparsed</code> 時 exit <code>0</code>；操作失敗仍會 exit <code>1</code>，並可由 <code>--recovery</code> 包裝。PostgreSQL schema/table storage 會精確保留且大小寫敏感，因此 <code>users</code> 與 <code>"Users"</code> 可並存。解析 DDL 時，未引用的 <code>Users</code> 會折成 <code>users</code>，而引用的 <code>"Users"</code> 只會解析成 <code>Users</code>；quote state 來自 parsed identifier，絕不從顯示大小寫推測。重複 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL/Drizzle construct 會以 <code>blocked:</code> 原因保留在 <code>unparsed</code>，包含 Drizzle enum 與其他不支援的 snapshot construct。PostgreSQL <code>PARTITION BY</code> 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 會產生 <code>blocked:</code> 項目，且不建立 managed table。Normalized JSON 要求每個 <code>unparsed.reason</code> 都以 <code>blocked:</code> 開頭。結構化 index 比對會去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。</p>
                 <p>提案是 shell-safe 文字，預設仍為 dry-run。安全且未 qualified 的新增可產生 <code>migrate</code>；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 <code>migration-review</code>，不會輸出損壞指令。Table、column 或 type positional 若以 <code>-</code> 開頭也會升級；以 dash 開頭的 option value 則使用 option-safe attached syntax，例如 <code>--default=-1</code> 或 <code>--columns=--config,email</code>。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：</p>
                 <pre><code>dbcli skill tasks plan migration-review \
   --param "table=${exact_table}" \

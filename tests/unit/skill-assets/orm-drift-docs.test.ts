@@ -23,10 +23,13 @@ describe('ORM drift documentation contract', () => {
     for (const skill of [english, traditionalChinese]) {
       expect(skill).toContain('`orm-drift-review`')
       expect(skill).toContain('`--against-orm <path>`')
-      expect(skill).toContain('`--orm-format prisma\\|ddl\\|json`')
+      expect(skill).toContain('`--orm-format prisma\\|ddl\\|json\\|drizzle`')
       expect(skill).toContain('`--ignore <globs>`')
       expect(skill).toContain('`--format json\\|table\\|markdown`')
       expect(skill).toContain('`migration-review`')
+      expect(skill).toContain('drizzle/meta/<NNNN>_snapshot.json')
+      expect(skill).toContain('drizzle-kit generate')
+      expect(skill).toContain('`.ts`')
     }
   })
 
@@ -37,7 +40,14 @@ describe('ORM drift documentation contract', () => {
       '--against-orm <paths>',
       'repeatable or comma-separated',
       'DDL inputs support real filesystem globs',
-      'Prisma and normalized JSON accept exactly one file',
+      'Prisma, normalized JSON, and Drizzle accept exactly one file',
+      'PostgreSQL drizzle-kit v7 snapshot',
+      'drizzle/meta/<NNNN>_snapshot.json',
+      'drizzle-kit generate',
+      '(`.ts` or `.TS`)',
+      '--orm-format prisma\\|ddl\\|json\\|drizzle',
+      'Drizzle enums',
+      'blocked',
       'does not open a database connection',
       'exit code `1`',
       '`missing_in_db`',
@@ -84,6 +94,16 @@ describe('ORM drift documentation contract', () => {
       expect(document).toContain('users')
       expect(document).toContain('Users')
       expect(document).toContain('--recovery')
+      expect(document).toContain('Drizzle')
+      expect(document).toContain('PostgreSQL drizzle-kit v7 snapshot')
+      expect(document).toContain('drizzle/meta/')
+      expect(document).toContain('_snapshot.json')
+      expect(document).toContain('drizzle-kit generate')
+      expect(document).toContain('--orm-format prisma|ddl|json|drizzle')
+      expect(document).toContain('.ts')
+      expect(document).toContain('enum')
+      expect(document).toContain('unparsed')
+      expect(document).toContain('blocked:')
     }
   })
 })

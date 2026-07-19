@@ -84,14 +84,14 @@ export function lintSql(sql: string, opts: LintSqlOptions, label?: string): Lint
   const skippedRules: LintReport['skippedRules'] = []
 
   for (const rule of ALL_RULES) {
-    if (rule.requiresSchema && !schema.available) {
+    if (!schema.available && (rule.requiresSchema || rule.usesOptionalSchema)) {
       skippedRules.push({
         rule: rule.name,
         reason: opts.noSchema
           ? 'blocked: --no-schema'
           : 'blocked: schema cache unavailable (run dbcli schema)',
       })
-      continue
+      if (rule.requiresSchema) continue
     }
 
     findings.push(

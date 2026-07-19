@@ -6,6 +6,7 @@ import {
   walkExprInStatement,
   whereOf,
 } from '@/core/lint/ast-utils'
+import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 
 interface NullHazard {
@@ -38,7 +39,62 @@ const NULL_PROPAGATING_BINARY = new Set([
   'OR',
 ])
 const NULL_PROPAGATING_UNARY = new Set(['+', '-', '~', 'NOT'])
-const NULL_ON_EMPTY_AGGREGATES = new Set(['MIN', 'MAX', 'AVG', 'SUM'])
+const COMMON_NULL_ON_EMPTY_AGGREGATES = [
+  'MIN',
+  'MAX',
+  'AVG',
+  'SUM',
+] as const
+const NULL_ON_EMPTY_AGGREGATES: Record<
+  SqlDatabaseSystem,
+  ReadonlySet<string>
+> = {
+  postgresql: new Set([
+    ...COMMON_NULL_ON_EMPTY_AGGREGATES,
+    'ARRAY_AGG',
+    'STRING_AGG',
+    'JSON_AGG',
+    'JSONB_AGG',
+    'JSON_ARRAYAGG',
+    'JSON_OBJECT_AGG',
+    'JSONB_OBJECT_AGG',
+    'JSON_OBJECTAGG',
+    'XMLAGG',
+    'BIT_AND',
+    'BIT_OR',
+    'BOOL_AND',
+    'BOOL_OR',
+    'EVERY',
+    'RANGE_AGG',
+    'RANGE_INTERSECT_AGG',
+  ]),
+  mysql: new Set([
+    ...COMMON_NULL_ON_EMPTY_AGGREGATES,
+    'GROUP_CONCAT',
+    'JSON_ARRAYAGG',
+    'JSON_OBJECTAGG',
+    'STD',
+    'STDDEV',
+    'STDDEV_POP',
+    'STDDEV_SAMP',
+    'VARIANCE',
+    'VAR_POP',
+    'VAR_SAMP',
+  ]),
+  mariadb: new Set([
+    ...COMMON_NULL_ON_EMPTY_AGGREGATES,
+    'GROUP_CONCAT',
+    'JSON_ARRAYAGG',
+    'JSON_OBJECTAGG',
+    'STD',
+    'STDDEV',
+    'STDDEV_POP',
+    'STDDEV_SAMP',
+    'VARIANCE',
+    'VAR_POP',
+    'VAR_SAMP',
+  ]),
+}
 
 interface RelationBinding {
   table: string
@@ -118,13 +174,19 @@ function columnIsNullExtended(
 
 function aggregateName(node: AstNode): string | undefined {
   if (typeof node.name === 'string') return node.name.toUpperCase()
+  if (!node.name || typeof node.name !== 'object') return undefined
+  const parts = (node.name as AstNode).name
+  if (!Array.isArray(parts) || parts.length !== 1) return undefined
+  const part = parts[0] as AstNode
+  if (typeof part.value === 'string') return part.value.toUpperCase()
   return undefined
 }
 
 function nullableExpression(
   node: AstNode,
   statement: AstNode,
-  schema: Parameters<typeof resolveColumnRef>[0]
+  schema: Parameters<typeof resolveColumnRef>[0],
+  system: SqlDatabaseSystem
 ): string | undefined {
   if (node.type === 'null') return 'NULL'
 
@@ -144,18 +206,25 @@ function nullableExpression(
     for (const argument of args) {
       const result = argument.result as AstNode | undefined
       if (!result) continue
-      const nullable = nullableExpression(result, statement, schema)
+      const nullable = nullableExpression(result, statement, schema, system)
       if (nullable) return nullable
     }
     return undefined
   }
 
-  if (node.type === 'aggr_func') {
+  if (node.type === 'aggr_func' || node.type === 'function') {
     const name = aggregateName(node)
-    if (name && NULL_ON_EMPTY_AGGREGATES.has(name)) {
+    if (name && NULL_ON_EMPTY_AGGREGATES[system].has(name)) {
       return `${name} aggregate`
     }
     return undefined
+  }
+
+  if (node.type === 'cast') {
+    const expression = node.expr as AstNode | undefined
+    if (expression) {
+      return nullableExpression(expression, statement, schema, system)
+    }
   }
 
   if (
@@ -166,7 +235,7 @@ function nullableExpression(
     const right = node.right as AstNode | undefined
     for (const candidate of [left, right]) {
       if (!candidate) continue
-      const nullable = nullableExpression(candidate, statement, schema)
+      const nullable = nullableExpression(candidate, statement, schema, system)
       if (nullable) return nullable
     }
   }
@@ -176,7 +245,9 @@ function nullableExpression(
     NULL_PROPAGATING_UNARY.has(String(node.operator).toUpperCase())
   ) {
     const expression = node.expr as AstNode | undefined
-    if (expression) return nullableExpression(expression, statement, schema)
+    if (expression) {
+      return nullableExpression(expression, statement, schema, system)
+    }
   }
 
   return undefined
@@ -200,11 +271,24 @@ function equivalentExpression(
   if (left.type === 'column_ref') {
     const leftResolved = resolveColumnRef(schema, statement, left)
     const rightResolved = resolveColumnRef(schema, statement, right)
-    return (
+    if (
       leftResolved !== undefined &&
       rightResolved !== undefined &&
       leftResolved.table === rightResolved.table &&
       leftResolved.column.name === rightResolved.column.name
+    ) {
+      return true
+    }
+    if (schema.available) return false
+
+    const leftReference = columnRefParts(left)
+    const rightReference = columnRefParts(right)
+    return (
+      leftReference !== null &&
+      rightReference !== null &&
+      leftReference.qualifier?.toLowerCase() ===
+        rightReference.qualifier?.toLowerCase() &&
+      leftReference.column.toLowerCase() === rightReference.column.toLowerCase()
     )
   }
 
@@ -246,28 +330,80 @@ function equivalentExpression(
     )
   }
 
+  if (
+    left.type === 'case' ||
+    left.type === 'aggr_func' ||
+    left.type === 'function' ||
+    left.type === 'cast'
+  ) {
+    return equivalentStructure(left, right, statement, schema)
+  }
+
   return false
 }
 
-function whereNullRejectsProjection(
-  where: AstNode | undefined,
+function equivalentStructure(
+  left: unknown,
+  right: unknown,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): boolean {
+  if (left === right) return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) =>
+        equivalentStructure(value, right[index], statement, schema)
+      )
+    )
+  }
+  if (
+    !left ||
+    typeof left !== 'object' ||
+    !right ||
+    typeof right !== 'object'
+  ) {
+    return false
+  }
+
+  const leftNode = left as AstNode
+  const rightNode = right as AstNode
+  if (leftNode.type === 'column_ref' || rightNode.type === 'column_ref') {
+    return equivalentExpression(leftNode, rightNode, statement, schema)
+  }
+
+  const leftKeys = Object.keys(leftNode).sort()
+  const rightKeys = Object.keys(rightNode).sort()
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index]) &&
+    leftKeys.every((key) =>
+      equivalentStructure(leftNode[key], rightNode[key], statement, schema)
+    )
+  )
+}
+
+function predicateNullRejectsProjection(
+  predicate: AstNode | undefined,
   projection: AstNode,
   statement: AstNode,
   schema: Parameters<typeof resolveColumnRef>[0]
 ): boolean {
-  if (!where || where.type !== 'binary_expr') return false
-  const operator = String(where.operator).toUpperCase()
+  if (!predicate || predicate.type !== 'binary_expr') return false
+  const operator = String(predicate.operator).toUpperCase()
   if (operator === 'OR') return false
   if (operator === 'AND') {
     return (
-      whereNullRejectsProjection(
-        where.left as AstNode | undefined,
+      predicateNullRejectsProjection(
+        predicate.left as AstNode | undefined,
         projection,
         statement,
         schema
       ) ||
-      whereNullRejectsProjection(
-        where.right as AstNode | undefined,
+      predicateNullRejectsProjection(
+        predicate.right as AstNode | undefined,
         projection,
         statement,
         schema
@@ -276,8 +412,8 @@ function whereNullRejectsProjection(
   }
   if (operator !== 'IS NOT' && operator !== 'IS NOT NULL') return false
 
-  const testedExpression = where.left as AstNode | undefined
-  const right = where.right as AstNode | undefined
+  const testedExpression = predicate.left as AstNode | undefined
+  const right = predicate.right as AstNode | undefined
   if (!testedExpression || (operator === 'IS NOT' && right?.type !== 'null')) {
     return false
   }
@@ -292,7 +428,8 @@ function whereNullRejectsProjection(
 function rhsHazard(
   right: AstNode | undefined,
   statement: AstNode,
-  schema: Parameters<typeof resolveColumnRef>[0]
+  schema: Parameters<typeof resolveColumnRef>[0],
+  system: SqlDatabaseSystem
 ): NullHazard | undefined {
   const values = right?.value
   if (!Array.isArray(values)) return undefined
@@ -308,15 +445,21 @@ function rhsHazard(
       const nullable = nullableExpression(
         expression,
         subquery as AstNode,
-        schema
+        schema,
+        system
       )
       if (
         nullable &&
-        !whereNullRejectsProjection(
-          (subquery as AstNode).where as AstNode | undefined,
-          expression,
-          subquery as AstNode,
-          schema
+        ![
+          (subquery as AstNode).where,
+          (subquery as AstNode).having,
+        ].some((predicate) =>
+          predicateNullRejectsProjection(
+            predicate as AstNode | undefined,
+            expression,
+            subquery as AstNode,
+            schema
+          )
         )
       ) {
         return {
@@ -328,7 +471,7 @@ function rhsHazard(
       continue
     }
 
-    const nullable = nullableExpression(item, statement, schema)
+    const nullable = nullableExpression(item, statement, schema, system)
     if (nullable) {
       return { kind: 'nullable-expression', expression: nullable }
     }
@@ -352,7 +495,8 @@ function hazardMessage(hazard: NullHazard): string {
 
 export const notInNullableRule: LintRule = {
   name: 'not-in-nullable',
-  requiresSchema: true,
+  requiresSchema: false,
+  usesOptionalSchema: true,
   check(ctx) {
     const where = whereOf(ctx.ast)
     if (!where) return []
@@ -386,7 +530,8 @@ export const notInNullableRule: LintRule = {
       const hazard = rhsHazard(
         node.right as AstNode | undefined,
         ctx.ast,
-        ctx.schema
+        ctx.schema,
+        ctx.system
       )
       if (!hazard) return
 
@@ -395,7 +540,7 @@ export const notInNullableRule: LintRule = {
         severity: 'warn',
         message: hazardMessage(hazard),
         span: hasExactSpan ? candidateSpan : whereRange,
-        schemaVerified: true,
+        schemaVerified: ctx.schema.available,
       })
     })
 

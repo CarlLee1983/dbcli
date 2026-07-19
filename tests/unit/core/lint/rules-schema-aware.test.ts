@@ -401,6 +401,54 @@ describe('not-in-nullable', () => {
     expect(findings[0].message).toContain('right-hand')
   })
 
+  for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
+    test(`${system} flags CAST of a nullable value in the NOT IN list`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (1, CAST(nullable_number AS BIGINT))',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+    })
+
+    test(`${system} flags CAST of a nullable subquery projection`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT CAST(u.nullable_number AS BIGINT) FROM users u)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+    })
+  }
+
+  test('suppresses an exact CAST projection guarded directly in WHERE', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CAST(u.nullable_number AS BIGINT) FROM users u WHERE CAST(u.nullable_number AS BIGINT) IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps an exact CAST projection finding when its guard is under OR', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CAST(u.nullable_number AS BIGINT) FROM users u WHERE CAST(u.nullable_number AS BIGINT) IS NOT NULL OR u.id > 0)',
+          schema
+        )
+      )
+    ).toHaveLength(1)
+  })
+
   test('does not flag a non-null literal list', () => {
     expect(
       notInNullableRule.check(
@@ -514,6 +562,39 @@ describe('not-in-nullable', () => {
     ).toHaveLength(0)
   })
 
+  test('suppresses an exact CASE projection guarded directly in WHERE', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id END FROM blocked_users b WHERE CASE WHEN b.id > 0 THEN b.id END IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('suppresses an exact CASE projection guarded under AND in WHERE', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id END FROM blocked_users b WHERE b.id > 0 AND CASE WHEN b.id > 0 THEN b.id END IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps an exact CASE projection finding when its WHERE guard is under OR', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id END FROM blocked_users b WHERE CASE WHEN b.id > 0 THEN b.id END IS NOT NULL OR b.id > 0)',
+          schema
+        )
+      )
+    ).toHaveLength(1)
+  })
+
   for (const aggregate of ['MIN', 'MAX', 'AVG', 'SUM'] as const) {
     test(`flags ${aggregate} as nullable on empty input`, () => {
       const findings = notInNullableRule.check(
@@ -539,6 +620,149 @@ describe('not-in-nullable', () => {
       )
     ).toHaveLength(0)
   })
+
+  test('suppresses an exact SUM projection guarded directly in HAVING', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT SUM(b.id) FROM blocked_users b HAVING SUM(b.id) IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('suppresses an exact SUM projection guarded under AND in HAVING', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT SUM(b.id) FROM blocked_users b HAVING COUNT(*) > 0 AND SUM(b.id) IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps an exact SUM projection finding when its HAVING guard is under OR', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT SUM(b.id) FROM blocked_users b HAVING SUM(b.id) IS NOT NULL OR COUNT(*) > 0)',
+          schema
+        )
+      )
+    ).toHaveLength(1)
+  })
+
+  test('PostgreSQL flags ARRAY_AGG because it is NULL on empty input', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT ARRAY_AGG(b.id) FROM blocked_users b)',
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(1)
+  })
+
+  test('PostgreSQL flags STRING_AGG because it is NULL on empty input', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          "SELECT id FROM users WHERE id NOT IN (SELECT STRING_AGG(b.email, ',') FROM blocked_users b)",
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(1)
+  })
+
+  test('PostgreSQL suppresses exact ARRAY_AGG guarded in HAVING', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT ARRAY_AGG(b.id) FROM blocked_users b HAVING ARRAY_AGG(b.id) IS NOT NULL)',
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('PostgreSQL keeps ARRAY_AGG finding when HAVING guard is under OR', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT ARRAY_AGG(b.id) FROM blocked_users b HAVING ARRAY_AGG(b.id) IS NOT NULL OR COUNT(*) > 0)',
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(1)
+  })
+
+  test('PostgreSQL keeps COUNT non-null on empty input', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT COUNT(b.id) FROM blocked_users b)',
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  for (const system of ['mysql', 'mariadb'] as const) {
+    test(`${system} flags GROUP_CONCAT because it is NULL on empty input`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT GROUP_CONCAT(b.id) FROM blocked_users b)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+    })
+
+    test(`${system} suppresses exact GROUP_CONCAT guarded in HAVING`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT GROUP_CONCAT(b.id) FROM blocked_users b HAVING GROUP_CONCAT(b.id) IS NOT NULL)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(0)
+    })
+
+    test(`${system} keeps GROUP_CONCAT finding when HAVING guard is under OR`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT GROUP_CONCAT(b.id) FROM blocked_users b HAVING GROUP_CONCAT(b.id) IS NOT NULL OR COUNT(*) > 0)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+    })
+
+    test(`${system} keeps COUNT non-null on empty input`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT COUNT(b.id) FROM blocked_users b)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(0)
+    })
+  }
 
   for (const system of ['mysql', 'mariadb'] as const) {
     test(`recognizes structurally nullable CASE and SUM projections for ${system}`, () => {

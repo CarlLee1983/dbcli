@@ -48,12 +48,16 @@ describe('lintSql', () => {
     )
   })
 
-  test('skips not-in-nullable without a schema cache', () => {
+  test('runs static not-in-nullable checks without a schema cache', () => {
     const report = lintSql('SELECT id FROM users WHERE id NOT IN (1, NULL)', {
       system: 'postgresql',
     })
 
-    expect(report.findings.map((finding) => finding.rule)).not.toContain('not-in-nullable')
+    const finding = report.findings.find(
+      (candidate) => candidate.rule === 'not-in-nullable'
+    )
+    expect(finding).toBeDefined()
+    expect(finding?.schemaVerified).toBe(false)
     expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
       'blocked: schema cache unavailable (run dbcli schema)'
     )
@@ -92,16 +96,62 @@ describe('lintSql', () => {
     )
   })
 
-  test('--no-schema explicitly blocks not-in-nullable', () => {
+  test('--no-schema still runs static not-in-nullable checks', () => {
     const report = lintSql('SELECT id FROM users WHERE id NOT IN (1, NULL)', {
       system: 'postgresql',
       schema,
       noSchema: true,
     })
 
-    expect(report.findings.map((finding) => finding.rule)).not.toContain('not-in-nullable')
+    const finding = report.findings.find(
+      (candidate) => candidate.rule === 'not-in-nullable'
+    )
+    expect(finding).toBeDefined()
+    expect(finding?.schemaVerified).toBe(false)
     expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
       'blocked: --no-schema'
+    )
+  })
+
+  test('runs structurally nullable CASE checks without schema metadata', () => {
+    const report = lintSql(
+      'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN id > 0 THEN id END FROM blocked_users)',
+      { system: 'postgresql' }
+    )
+    const finding = report.findings.find(
+      (candidate) => candidate.rule === 'not-in-nullable'
+    )
+
+    expect(finding).toBeDefined()
+    expect(finding?.schemaVerified).toBe(false)
+  })
+
+  test('runs structurally nullable aggregate checks with --no-schema', () => {
+    const report = lintSql(
+      'SELECT id FROM users WHERE id NOT IN (SELECT ARRAY_AGG(id) FROM blocked_users)',
+      { system: 'postgresql', schema, noSchema: true }
+    )
+    const finding = report.findings.find(
+      (candidate) => candidate.rule === 'not-in-nullable'
+    )
+
+    expect(finding).toBeDefined()
+    expect(finding?.schemaVerified).toBe(false)
+  })
+
+  test('does not infer nullable columns when schema metadata is unavailable', () => {
+    const report = lintSql(
+      'SELECT id FROM users WHERE id NOT IN (SELECT nullable_id FROM blocked_users)',
+      { system: 'postgresql' }
+    )
+
+    expect(
+      report.findings.filter(
+        (candidate) => candidate.rule === 'not-in-nullable'
+      )
+    ).toHaveLength(0)
+    expect(report.skippedRules.map((skipped) => skipped.rule)).toContain(
+      'not-in-nullable'
     )
   })
 

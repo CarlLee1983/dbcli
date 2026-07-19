@@ -45,6 +45,7 @@ export interface LintRuleContext {
 export interface LintRule {
   name: string
   requiresSchema: boolean
+  usesOptionalSchema?: boolean
   check(ctx: LintRuleContext): LintFinding[]
 }
 

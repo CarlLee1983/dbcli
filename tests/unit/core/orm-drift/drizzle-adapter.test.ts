@@ -4,6 +4,10 @@ import type { NormalizedSchema, NormalizedTable } from '@/core/orm-drift/normali
 
 const snapshot = JSON.parse(await Bun.file('tests/fixtures/orm-drift/drizzle-snapshot.json').text())
 
+interface MutableIndex extends Record<string, unknown> {
+  columns: Array<Record<string, unknown>>
+}
+
 function tableNamed(schema: NormalizedSchema, name: string): NormalizedTable {
   const table = schema.tables.find((candidate) => candidate.identity.table === name)
   expect(table).toBeDefined()
@@ -62,6 +66,128 @@ describe('parseDrizzleSnapshot', () => {
       location: 'public.users.indexes.users_email_idx',
       reason: expect.stringContaining('blocked:'),
     })
+  })
+
+  test('indexes with unsupported or unknown semantics are omitted instead of reduced', () => {
+    const variants: Array<[string, (index: MutableIndex) => void]> = [
+      ['partial predicate', (index) => (index.where = 'email IS NOT NULL')],
+      ['non-btree method', (index) => (index.method = 'hash')],
+      ['storage parameters', (index) => (index.with = { fillfactor: '70' })],
+      ['concurrent creation', (index) => (index.concurrently = true)],
+      ['descending order', (index) => (index.columns[0]!.asc = false)],
+      ['non-default null order', (index) => (index.columns[0]!.nulls = 'first')],
+      ['operator class', (index) => (index.columns[0]!.opclass = 'text_pattern_ops')],
+      ['unknown option', (index) => (index.futureIndexOption = true)],
+      ['unknown column option', (index) => (index.columns[0]!.futureColumnOption = true)],
+    ]
+
+    for (const [label, mutate] of variants) {
+      const withUnsupported = structuredClone(snapshot)
+      mutate(withUnsupported.tables['public.users'].indexes.users_email_idx)
+
+      const out = parseDrizzleSnapshot(withUnsupported)
+      expect(tableNamed(out, 'users').indexes, label).toEqual([])
+      expect(
+        out.unparsed.some(
+          (entry) =>
+            entry.location.startsWith('public.users.indexes.users_email_idx') &&
+            entry.reason.startsWith('blocked:')
+        ),
+        label
+      ).toBe(true)
+    }
+  })
+
+  test('columns with unsupported or unknown semantics are omitted instead of reduced', () => {
+    const variants: Array<[string, (column: Record<string, unknown>) => void]> = [
+      ['schema-qualified type', (column) => (column.typeSchema = 'public')],
+      ['generated value', (column) => (column.generated = { type: 'stored', as: "'generated'" })],
+      [
+        'identity',
+        (column) =>
+          (column.identity = {
+            type: 'always',
+            name: 'users_bio_seq',
+            schema: 'public',
+            increment: '1',
+            minValue: '1',
+            maxValue: '2147483647',
+            startWith: '1',
+            cache: '1',
+            cycle: false,
+          }),
+      ],
+      ['column uniqueness', (column) => (column.isUnique = true)],
+      ['unique constraint name', (column) => (column.uniqueName = 'users_bio_unique')],
+      ['nulls-not-distinct uniqueness', (column) => (column.nullsNotDistinct = true)],
+      ['unknown option', (column) => (column.futureColumnOption = true)],
+    ]
+
+    for (const [label, mutate] of variants) {
+      const withUnsupported = structuredClone(snapshot)
+      mutate(withUnsupported.tables['public.users'].columns.bio)
+
+      const out = parseDrizzleSnapshot(withUnsupported)
+      expect(
+        tableNamed(out, 'users').columns.some((column) => column.name === 'bio'),
+        label
+      ).toBe(false)
+      expect(
+        out.unparsed.some(
+          (entry) =>
+            entry.location.startsWith('public.users.columns.bio') &&
+            entry.reason.startsWith('blocked:')
+        ),
+        label
+      ).toBe(true)
+    }
+  })
+
+  test('surfaces every blocked reason when one construct has multiple unsupported semantics', () => {
+    const withUnsupported = structuredClone(snapshot)
+    const index = withUnsupported.tables['public.users'].indexes.users_email_idx
+    index.where = 'email IS NOT NULL'
+    index.futureIndexOption = true
+    const column = withUnsupported.tables['public.users'].columns.bio
+    column.generated = { type: 'stored', as: "'generated'" }
+    column.futureColumnOption = true
+
+    const out = parseDrizzleSnapshot(withUnsupported)
+    expect(tableNamed(out, 'users').indexes).toEqual([])
+    expect(tableNamed(out, 'users').columns.some((candidate) => candidate.name === 'bio')).toBe(
+      false
+    )
+    expect(out.unparsed.map((entry) => entry.location)).toEqual(
+      expect.arrayContaining([
+        'public.users.indexes.users_email_idx.where',
+        'public.users.indexes.users_email_idx.futureIndexOption',
+        'public.users.columns.bio.generated',
+        'public.users.columns.bio.futureColumnOption',
+      ])
+    )
+  })
+
+  test('foreign keys with unsupported or unknown semantics are omitted instead of reduced', () => {
+    const variants: Array<[string, (foreignKey: Record<string, unknown>) => void]> = [
+      ['referential action', (foreignKey) => (foreignKey.onDelete = 'cascade')],
+      ['unknown option', (foreignKey) => (foreignKey.futureForeignKeyOption = true)],
+    ]
+
+    for (const [label, mutate] of variants) {
+      const withUnsupported = structuredClone(snapshot)
+      mutate(withUnsupported.tables['public.users'].foreignKeys.users_org_fk)
+
+      const out = parseDrizzleSnapshot(withUnsupported)
+      expect(tableNamed(out, 'users').foreignKeys, label).toEqual([])
+      expect(
+        out.unparsed.some(
+          (entry) =>
+            entry.location.startsWith('public.users.foreignKeys.users_org_fk') &&
+            entry.reason.startsWith('blocked:')
+        ),
+        label
+      ).toBe(true)
+    }
   })
 
   test('unsupported and unknown schema fields are surfaced with blocked reasons', () => {

@@ -178,8 +178,9 @@ function parseColumns(
       continue
     }
 
-    surfaceUnknownFields(rawColumn, COLUMN_FIELDS, location, unparsed)
-    surfaceUnsupportedColumnFields(rawColumn, location, unparsed)
+    const hasUnknownFields = surfaceUnknownFields(rawColumn, COLUMN_FIELDS, location, unparsed)
+    const hasUnsupportedFields = surfaceUnsupportedColumnFields(rawColumn, location, unparsed)
+    if (hasUnknownFields || hasUnsupportedFields) continue
 
     const name = stringValue(rawColumn.name) ?? columnKey
     const rawType = stringValue(rawColumn.type)
@@ -217,8 +218,8 @@ function parseIndexes(
       continue
     }
 
-    surfaceUnknownFields(rawIndex, INDEX_FIELDS, location, unparsed)
-    surfaceUnsupportedIndexOptions(rawIndex, location, unparsed)
+    let blocked = surfaceUnknownFields(rawIndex, INDEX_FIELDS, location, unparsed)
+    blocked = surfaceUnsupportedIndexOptions(rawIndex, location, unparsed) || blocked
 
     if (!Array.isArray(rawIndex.columns)) {
       addBlocked(unparsed, location, 'index columns must use the v7 structured array')
@@ -226,7 +227,6 @@ function parseIndexes(
     }
 
     const columns: string[] = []
-    let blocked = false
     for (const [columnIndex, rawColumn] of rawIndex.columns.entries()) {
       const columnLocation = `${location}.columns.${columnIndex}`
       if (!isObject(rawColumn)) {
@@ -234,13 +234,14 @@ function parseIndexes(
         blocked = true
         break
       }
-      surfaceUnknownFields(rawColumn, INDEX_COLUMN_FIELDS, columnLocation, unparsed)
+      blocked =
+        surfaceUnknownFields(rawColumn, INDEX_COLUMN_FIELDS, columnLocation, unparsed) || blocked
       if (rawColumn.isExpression !== false || typeof rawColumn.expression !== 'string') {
         addBlocked(unparsed, location, 'expression or malformed indexes are not compared')
         blocked = true
         break
       }
-      surfaceUnsupportedIndexColumnOptions(rawColumn, columnLocation, unparsed)
+      blocked = surfaceUnsupportedIndexColumnOptions(rawColumn, columnLocation, unparsed) || blocked
       columns.push(rawColumn.expression)
     }
     if (blocked) continue
@@ -272,9 +273,10 @@ function parseForeignKeys(
       continue
     }
 
-    surfaceUnknownFields(rawForeignKey, FOREIGN_KEY_FIELDS, location, unparsed)
+    let blocked = surfaceUnknownFields(rawForeignKey, FOREIGN_KEY_FIELDS, location, unparsed)
     if (rawForeignKey.onUpdate !== undefined || rawForeignKey.onDelete !== undefined) {
       addBlocked(unparsed, location, 'foreign-key actions are not compared')
+      blocked = true
     }
 
     const columns = stringArray(rawForeignKey.columnsFrom)
@@ -284,6 +286,7 @@ function parseForeignKeys(
       addBlocked(unparsed, location, 'foreign key shape is malformed')
       continue
     }
+    if (blocked) continue
     const refSchema = stringValue(rawForeignKey.schemaTo)
     table.foreignKeys.push({
       columns,
@@ -297,10 +300,12 @@ function surfaceUnsupportedColumnFields(
   column: JsonObject,
   location: string,
   unparsed: UnparsedEntry[]
-): void {
+): boolean {
+  let blocked = false
   for (const field of ['typeSchema', 'generated', 'identity'] as const) {
     if (column[field] !== undefined) {
       addBlocked(unparsed, `${location}.${field}`, `column ${field} metadata is not compared`)
+      blocked = true
     }
   }
   if (
@@ -309,42 +314,55 @@ function surfaceUnsupportedColumnFields(
     column.nullsNotDistinct === true
   ) {
     addBlocked(unparsed, location, 'column-level unique constraints are not compared')
+    blocked = true
   }
+  return blocked
 }
 
 function surfaceUnsupportedIndexOptions(
   index: JsonObject,
   location: string,
   unparsed: UnparsedEntry[]
-): void {
+): boolean {
+  let blocked = false
   if (index.method !== undefined && index.method !== 'btree') {
     addBlocked(unparsed, `${location}.method`, 'non-btree index methods are not compared')
+    blocked = true
   }
   if (index.where !== undefined) {
     addBlocked(unparsed, `${location}.where`, 'partial-index predicates are not compared')
+    blocked = true
   }
-  if (index.with !== undefined) {
+  if (index.with !== undefined && (!isObject(index.with) || Object.keys(index.with).length > 0)) {
     addBlocked(unparsed, `${location}.with`, 'index storage parameters are not compared')
+    blocked = true
   }
   if (index.concurrently === true) {
     addBlocked(unparsed, `${location}.concurrently`, 'concurrent index creation is not compared')
+    blocked = true
   }
+  return blocked
 }
 
 function surfaceUnsupportedIndexColumnOptions(
   column: JsonObject,
   location: string,
   unparsed: UnparsedEntry[]
-): void {
+): boolean {
+  let blocked = false
   if (column.asc === false) {
     addBlocked(unparsed, `${location}.asc`, 'descending index order is not compared')
+    blocked = true
   }
   if (column.nulls !== undefined && column.nulls !== 'last') {
     addBlocked(unparsed, `${location}.nulls`, 'non-default index null ordering is not compared')
+    blocked = true
   }
   if (column.opclass !== undefined) {
     addBlocked(unparsed, `${location}.opclass`, 'index operator classes are not compared')
+    blocked = true
   }
+  return blocked
 }
 
 function surfaceUnsupportedCollections(
@@ -371,7 +389,8 @@ function surfaceUnknownFields(
   knownFields: ReadonlySet<string>,
   parentLocation: string,
   unparsed: UnparsedEntry[]
-): void {
+): boolean {
+  let blocked = false
   for (const field of Object.keys(object)) {
     if (!knownFields.has(field)) {
       addBlocked(
@@ -379,8 +398,10 @@ function surfaceUnknownFields(
         joinLocation(parentLocation, field),
         `unknown drizzle schema field '${field}'`
       )
+      blocked = true
     }
   }
+  return blocked
 }
 
 function stringArray(value: unknown): string[] | undefined {

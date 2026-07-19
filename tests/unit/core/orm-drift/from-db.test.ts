@@ -63,4 +63,45 @@ describe('normalizeDbSchema', () => {
     ])
     expect(out.tables.every((table) => table.parsedIdentifier === undefined)).toBe(true)
   })
+
+  test('rejects duplicate exact catalog identities', () => {
+    expect(() =>
+      normalizeDbSchema({
+        first: { name: 'Users', schema: 'public', columns: [] },
+        second: { name: 'Users', schema: 'public', columns: [] },
+      })
+    ).toThrow("duplicate table identity 'public.Users'")
+  })
+
+  test('derives the exact default schema when every catalog table agrees', () => {
+    const out = normalizeDbSchema({
+      users: { name: 'users', schema: 'public', columns: [] },
+      posts: { name: 'posts', schema: 'public', columns: [] },
+    })
+
+    expect(out.defaultSchema).toBe('public')
+  })
+
+  test('explicit default schema wins over catalog derivation', () => {
+    const out = normalizeDbSchema(
+      {
+        users: { name: 'users', schema: 'public', columns: [] },
+      },
+      { defaultSchema: 'configured' }
+    )
+
+    expect(out.defaultSchema).toBe('configured')
+  })
+
+  test('does not guess a default schema from zero or multiple catalog schemas', () => {
+    expect(
+      normalizeDbSchema({ users: { name: 'users', columns: [] } }).defaultSchema
+    ).toBeUndefined()
+    expect(
+      normalizeDbSchema({
+        users: { name: 'users', schema: 'public', columns: [] },
+        audit: { name: 'audit', schema: 'accounts', columns: [] },
+      }).defaultSchema
+    ).toBeUndefined()
+  })
 })

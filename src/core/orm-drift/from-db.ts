@@ -1,14 +1,38 @@
 import type { TableSchema } from '@/adapters/types'
 import type { NormalizedSchema } from './normalized-schema'
+import { qualifiedTableName, tableIdentityKey } from './table-identity'
 
 export function normalizeDbSchema(
   schema: Record<string, TableSchema>,
   options: { defaultSchema?: string } = {}
 ): NormalizedSchema {
+  const sourceTables = Object.values(schema)
+  const identities = new Set<string>()
+  for (const table of sourceTables) {
+    const identity = {
+      ...(table.schema !== undefined && { schema: table.schema }),
+      table: table.name,
+    }
+    const key = tableIdentityKey(identity)
+    if (identities.has(key)) {
+      throw new Error(`duplicate table identity '${qualifiedTableName(identity)}'`)
+    }
+    identities.add(key)
+  }
+
+  const catalogSchemas = new Set(
+    sourceTables
+      .map((table) => table.schema)
+      .filter((catalogSchema): catalogSchema is string => catalogSchema !== undefined)
+  )
+  const derivedDefaultSchema =
+    catalogSchemas.size === 1 ? catalogSchemas.values().next().value : undefined
+  const defaultSchema = options.defaultSchema ?? derivedDefaultSchema
+
   return {
     source: 'db',
-    ...(options.defaultSchema !== undefined && { defaultSchema: options.defaultSchema }),
-    tables: Object.values(schema).map((table) => ({
+    ...(defaultSchema !== undefined && { defaultSchema }),
+    tables: sourceTables.map((table) => ({
       identity: {
         ...(table.schema !== undefined && { schema: table.schema }),
         table: table.name,

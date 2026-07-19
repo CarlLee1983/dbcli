@@ -94,6 +94,46 @@ describe('normalizedSchemaZod', () => {
       })
     ).toThrow()
   })
+
+  test('rejects duplicate exact table identities', () => {
+    const table = {
+      identity: { schema: 'public', table: 'Users' },
+      columns: [],
+      indexes: [],
+      foreignKeys: [],
+    }
+
+    expect(() =>
+      normalizedSchemaZod.parse({
+        source: 'json',
+        tables: [table, table],
+        unparsed: [],
+      })
+    ).toThrow(/duplicate table identity 'public\.Users'/)
+  })
+
+  test('accepts case-distinct table identities', () => {
+    const parsed = normalizedSchemaZod.parse({
+      source: 'json',
+      tables: [
+        {
+          identity: { schema: 'public', table: 'users' },
+          columns: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+        {
+          identity: { schema: 'public', table: 'Users' },
+          columns: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+      ],
+      unparsed: [],
+    })
+
+    expect(parsed.tables.map((table) => table.identity.table)).toEqual(['users', 'Users'])
+  })
 })
 
 describe('table identity', () => {

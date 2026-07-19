@@ -291,11 +291,26 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           array_agg(ccu.column_name) as ref_columns
         FROM information_schema.table_constraints AS tc
         JOIN information_schema.key_column_usage AS kcu
-          ON tc.table_name = kcu.table_name AND tc.constraint_name = kcu.constraint_name
+          ON tc.constraint_catalog = kcu.constraint_catalog
+          AND tc.constraint_schema = kcu.constraint_schema
+          AND tc.constraint_name = kcu.constraint_name
+          AND tc.table_catalog = kcu.table_catalog
+          AND tc.table_schema = kcu.table_schema
+          AND tc.table_name = kcu.table_name
         JOIN information_schema.constraint_column_usage AS ccu
-          ON ccu.constraint_name = tc.constraint_name
-        WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
-        GROUP BY tc.constraint_name, ccu.table_schema, ccu.table_name
+          ON tc.constraint_catalog = ccu.constraint_catalog
+          AND tc.constraint_schema = ccu.constraint_schema
+          AND tc.constraint_name = ccu.constraint_name
+        WHERE tc.table_name = $1
+          AND tc.table_schema = 'public'
+          AND tc.constraint_type = 'FOREIGN KEY'
+        GROUP BY
+          tc.constraint_catalog,
+          tc.constraint_schema,
+          tc.constraint_name,
+          ccu.table_catalog,
+          ccu.table_schema,
+          ccu.table_name
       `
 
       const fkResult = await this.execute<{

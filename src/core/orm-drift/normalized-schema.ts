@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { qualifiedTableName, tableIdentityKey } from '@/core/orm-drift/table-identity'
 
 export type OrmSource = 'db' | 'prisma' | 'ddl' | 'json' | 'drizzle' | 'typeorm' | 'sequelize'
 
@@ -101,12 +102,27 @@ const tableZod = z.object({
   ),
 })
 
-export const normalizedSchemaZod = z.object({
-  source: z.enum(['db', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
-  defaultSchema: z.string().min(1).optional(),
-  tables: z.array(tableZod),
-  unparsed: z.array(z.object({ location: z.string(), reason: z.string() })),
-}) satisfies z.ZodType<NormalizedSchema>
+export const normalizedSchemaZod = z
+  .object({
+    source: z.enum(['db', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
+    defaultSchema: z.string().min(1).optional(),
+    tables: z.array(tableZod),
+    unparsed: z.array(z.object({ location: z.string(), reason: z.string() })),
+  })
+  .superRefine((schema, context) => {
+    const identities = new Set<string>()
+    for (const [index, table] of schema.tables.entries()) {
+      const key = tableIdentityKey(table.identity)
+      if (identities.has(key)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tables', index, 'identity'],
+          message: `duplicate table identity '${qualifiedTableName(table.identity)}'`,
+        })
+      }
+      identities.add(key)
+    }
+  }) satisfies z.ZodType<NormalizedSchema>
 
 export type TypeFamily =
   | 'integer'

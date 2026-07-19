@@ -230,6 +230,78 @@ describe('parseDdl', () => {
       { schema: 'Tenant', table: 'Users' },
     ])
   })
+
+  test('resolves mixed quoted and unquoted schema/table components independently', () => {
+    const out = parseDdl(
+      'CREATE TABLE Tenant."Users" (id INTEGER); CREATE TABLE "Tenant".Users (id INTEGER);',
+      'postgresql'
+    )
+
+    expect(out.tables.map((table) => table.identity)).toEqual([
+      { schema: 'tenant', table: 'Users' },
+      { schema: 'Tenant', table: 'users' },
+    ])
+    expect(out.tables.map((table) => table.parsedIdentifier)).toEqual([
+      {
+        schema: { value: 'Tenant', quoted: false },
+        table: { value: 'Users', quoted: true },
+      },
+      {
+        schema: { value: 'Tenant', quoted: true },
+        table: { value: 'Users', quoted: false },
+      },
+    ])
+  })
+
+  test('preserves quote state for schema-qualified foreign-key targets', () => {
+    const out = parseDdl(
+      'CREATE TABLE child (parent_id INTEGER REFERENCES "Tenant"."Users"(id));',
+      'postgresql'
+    )
+    const foreignKey = tableNamed(out, 'child').foreignKeys[0]
+
+    expect(foreignKey?.refTable).toEqual({ schema: 'Tenant', table: 'Users' })
+    expect(foreignKey?.parsedRefIdentifier).toEqual({
+      schema: { value: 'Tenant', quoted: true },
+      table: { value: 'Users', quoted: true },
+    })
+  })
+
+  test('preserves exact targets after IF NOT EXISTS', () => {
+    const out = parseDdl('CREATE TABLE IF NOT EXISTS "Users" (id INTEGER);', 'postgresql')
+
+    expect(out.tables[0]?.identity).toEqual({ table: 'Users' })
+    expect(out.tables[0]?.parsedIdentifier).toEqual({
+      table: { value: 'Users', quoted: true },
+    })
+  })
+
+  test('preserves exact targets when comments separate target tokens', () => {
+    const out = parseDdl(
+      'CREATE /* create */ TABLE /* target */ Tenant /* schema */ . /* table */ "Users" (id INTEGER);',
+      'postgresql'
+    )
+
+    expect(out.tables[0]?.identity).toEqual({ schema: 'tenant', table: 'Users' })
+    expect(out.tables[0]?.parsedIdentifier).toEqual({
+      schema: { value: 'Tenant', quoted: false },
+      table: { value: 'Users', quoted: true },
+    })
+  })
+
+  test('attaches CREATE INDEX only to the exact quoted target', () => {
+    const out = parseDdl(
+      'CREATE TABLE users (id INTEGER); CREATE TABLE "Users" (id INTEGER); CREATE INDEX exact_idx ON "Users" (id);',
+      'postgresql'
+    )
+
+    expect(tableNamed(out, 'users').indexes).toEqual([])
+    expect(tableNamed(out, 'Users').indexes).toContainEqual({
+      name: 'exact_idx',
+      columns: ['id'],
+      unique: false,
+    })
+  })
 })
 
 describe('detectOrmFormat', () => {

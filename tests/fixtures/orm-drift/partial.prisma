@@ -1,0 +1,11 @@
+model Widget {
+  id     Int          @id
+  status WidgetStatus
+  meta   Json
+
+  @@fulltext([meta])
+}
+
+enum WidgetStatus {
+  ACTIVE
+}

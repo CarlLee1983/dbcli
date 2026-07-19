@@ -61,11 +61,25 @@ function entryWithProposals(
   return { ...entry, proposedCommands: proposalsFor(entry, subject) }
 }
 
+function codePointOrder(left: string, right: string): number {
+  const leftCodePoints = [...left]
+  const rightCodePoints = [...right]
+  const length = Math.min(leftCodePoints.length, rightCodePoints.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const difference =
+      leftCodePoints[index]!.codePointAt(0)! - rightCodePoints[index]!.codePointAt(0)!
+    if (difference !== 0) return difference
+  }
+
+  return leftCodePoints.length - rightCodePoints.length
+}
+
 const entryOrder = (left: DriftEntry, right: DriftEntry): number =>
-  left.table.localeCompare(right.table) ||
-  left.object.localeCompare(right.object) ||
-  left.category.localeCompare(right.category) ||
-  left.detail.localeCompare(right.detail)
+  codePointOrder(left.table, right.table) ||
+  codePointOrder(left.object, right.object) ||
+  codePointOrder(left.category, right.category) ||
+  codePointOrder(left.detail, right.detail)
 
 export function compareNormalized(
   orm: NormalizedSchema,

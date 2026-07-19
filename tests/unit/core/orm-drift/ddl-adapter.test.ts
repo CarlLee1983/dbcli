@@ -100,6 +100,34 @@ describe('parseDdl', () => {
     expect(out.unparsed[0].reason).toContain('blocked: unsupported table definition')
   })
 
+  test('blocks PostgreSQL partition semantics instead of emitting a regular table', () => {
+    const out = parseDdl('CREATE TABLE events (id INTEGER) PARTITION BY RANGE (id);', 'postgresql')
+
+    expect(out.tables).toEqual([])
+    expect(out.unparsed).toHaveLength(1)
+    expect(out.unparsed[0]).toMatchObject({
+      location: 'events',
+      reason: expect.stringContaining('blocked: unsupported CREATE TABLE table_options'),
+    })
+  })
+
+  test.each(['mysql', 'mariadb'] as const)(
+    'blocks %s table engine and charset options instead of discarding them',
+    (system) => {
+      const out = parseDdl(
+        'CREATE TABLE events (id INTEGER) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;',
+        system
+      )
+
+      expect(out.tables).toEqual([])
+      expect(out.unparsed).toHaveLength(1)
+      expect(out.unparsed[0]).toMatchObject({
+        location: 'events',
+        reason: expect.stringContaining('blocked: unsupported CREATE TABLE table_options'),
+      })
+    }
+  )
+
   test.each(['postgresql', 'mysql', 'mariadb'] as const)(
     'preserves precision and scale for %s numeric types',
     (system) => {

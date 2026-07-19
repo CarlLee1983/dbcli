@@ -19,6 +19,15 @@ export function shellArg(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`
 }
 
+function optionWithValue(option: string, value: string): string {
+  const separator = value.startsWith('-') ? '=' : ' '
+  return `${option}${separator}${shellArg(value)}`
+}
+
+function hasCommanderSafePositionals(values: string[]): boolean {
+  return values.every((value) => !value.startsWith('-'))
+}
+
 function qualifiedTargetEscalation(table: NormalizedTableIdentity): string[] {
   return escalateProposal(
     `schema-qualified table '${qualifiedTableName(table)}' is not losslessly representable by dbcli migrate`
@@ -39,25 +48,36 @@ export function addColumnProposal(
   column: NormalizedColumn
 ): string[] {
   if (table.schema !== undefined) return qualifiedTargetEscalation(table)
+  if (!hasCommanderSafePositionals([table.table, column.name, column.type])) {
+    return escalateProposal(
+      'table, column, and type positional values beginning with a dash require manual migration review'
+    )
+  }
 
   const command = [
     `dbcli migrate add-column ${shellArg(table.table)} ${shellArg(column.name)} ${shellArg(column.type)}`,
   ]
   if (column.nullable) command.push('--nullable')
-  if (column.default !== undefined) command.push(`--default ${shellArg(column.default)}`)
+  if (column.default !== undefined) command.push(optionWithValue('--default', column.default))
   return [REVIEW_NOTE, command.join(' ')]
 }
 
 export function addIndexProposal(table: NormalizedTableIdentity, index: NormalizedIndex): string[] {
   if (table.schema !== undefined) return qualifiedTargetEscalation(table)
+  if (!hasCommanderSafePositionals([table.table])) {
+    return escalateProposal(
+      'table positional values beginning with a dash require manual migration review'
+    )
+  }
   if (!hasLosslessColumnList(index)) {
     return escalateProposal(
       `index columns for table '${qualifiedTableName(table)}' are not losslessly representable by --columns`
     )
   }
 
+  const columns = index.columns.join(',')
   const command = [
-    `dbcli migrate add-index ${shellArg(table.table)} --columns ${shellArg(index.columns.join(','))}`,
+    `dbcli migrate add-index ${shellArg(table.table)} ${optionWithValue('--columns', columns)}`,
   ]
   if (index.unique) command.push('--unique')
   return [REVIEW_NOTE, command.join(' ')]

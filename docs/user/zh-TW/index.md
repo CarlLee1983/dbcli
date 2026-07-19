@@ -89,7 +89,7 @@ dbcli init
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
 
-在 PostgreSQL 中，`schema` 會依宣告順序回報複合外鍵欄位、依來源資料表區隔重複使用的 constraint 名稱，並保留被參照 schema 與資料表在 catalog 中的原始拼字。
+在 PostgreSQL 中，`schema` 全程使用精確的 `public` catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 `public` relation。Row count 會同時 qualify 並 quote `"public"` 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。
 
 #### `inspect` 給 agent 的輸出
 
@@ -183,11 +183,11 @@ dbcli diff --against-orm "migrations/*.sql" --format markdown
 dbcli diff --against-orm prisma/schema.prisma --recovery --format json
 ```
 
-`--against-orm` 可重複使用，也接受逗號分隔路徑。DDL 輸入支援真實 filesystem glob 與多檔；Prisma 與 normalized JSON 只接受一個檔案。用 `--orm-format prisma|ddl|json` 覆寫偵測、`--ignore <globs>` 傳入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。error-level drift 會 exit `1`；`--recovery` 會包裝操作失敗。
+`--against-orm` 可重複使用，也接受逗號分隔路徑。DDL 輸入支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma 與 normalized JSON 只接受一個檔案。用 `--orm-format prisma|ddl|json` 覆寫偵測、`--ignore <globs>` 傳入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。只有計分後的 error 會決定 drift exit code：有 error 時 exit `1`，只有 warning、info、`unmanaged` 或 `unparsed` 時 exit `0`；操作失敗仍會 exit `1`，並可由 `--recovery` 包裝。
 
-Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL 語法會以 `blocked:` 原因出現在 `unparsed`。Index 依結構化欄位與 uniqueness 比對、去重，報告排序穩定。
+Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL 語法會以 `blocked:` 原因出現在 `unparsed`。PostgreSQL `PARTITION BY` 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 都不支援：它們會產生 `blocked:` 項目，且不建立 managed table。Normalized JSON 也要求每個 `unparsed.reason` 都以 `blocked:` 開頭。Index 依結構化欄位與 uniqueness 比對、去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。
 
-提案是 shell-safe 文字，預設仍是 dry-run。安全且未 qualified 的欄位/index 新增可產生 `migrate`；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 `migration-review`，不會輸出損壞指令。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：
+提案是 shell-safe 文字，預設仍是 dry-run。安全且未 qualified 的欄位/index 新增可產生 `migrate`；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 `migration-review`，不會輸出損壞指令。Table、column 或 type positional 若以 `-` 開頭也會升級；以 dash 開頭的 option value 則使用 option-safe attached syntax，例如 `--default=-1` 或 `--columns=--config,email`。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：
 
 ```sh
 dbcli skill tasks plan migration-review \

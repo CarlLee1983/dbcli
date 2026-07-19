@@ -107,7 +107,9 @@ export const normalizedSchemaZod = z
     source: z.enum(['db', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
     defaultSchema: z.string().min(1).optional(),
     tables: z.array(tableZod),
-    unparsed: z.array(z.object({ location: z.string(), reason: z.string() })),
+    unparsed: z.array(
+      z.object({ location: z.string(), reason: z.string().startsWith('blocked:') })
+    ),
   })
   .superRefine((schema, context) => {
     const identities = new Set<string>()

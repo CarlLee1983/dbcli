@@ -105,6 +105,7 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 
 **Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
+> **PostgreSQL:** Introspection uses the exact `public` catalog identity throughout. Full catalog/schema/table joins prevent a reused constraint name from contaminating another table; enum lookup includes its namespace; composite primary-key order comes from the exact table OID and index ordinality; and row estimates are scoped to the exact `public` relation. Row-count SQL qualifies and quotes both `"public"` and the exact table identifier, escaping embedded quotes so mixed-case or punctuation-bearing names remain distinct and safe.
 > **Redis:** `schema <key>` is required (no full scan). The output exposes `type`, `ttl`, `size`, and a small `sample` (e.g. first 5 hash keys). `--reset` / `--refresh` are rejected — Redis caches no schema.
 > **Elasticsearch:** `schema [index]` flattens the `_mapping` properties (nested `a.b.c`) and emits each `.fields` multi-field as a separate column (e.g. `text` + `text.keyword`). Full scan iterates all non-system indices and stores per-connection caches alongside SQL engines.
 > **MongoDB:** schema is sampled via `$sample` (default 100, max 1000). `--sample-method natural` switches to `find().limit()`; `random` (default) falls back to natural order on driver error. Output columns surface nested dot-paths with `presence` (0..1) and `redacted: true` flags for blacklist-matched paths. The persisted cache records `sampleMethod` and `sampleSize`; `dbcli doctor` reports them via a `sampled: method=…, size=…` line.
@@ -732,16 +733,17 @@ dbcli diff --against-orm prisma/schema.prisma --ignore 'public.audit_*,public.Le
 
 | Option | Behavior |
 | :--- | :--- |
-| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and sorted. Prisma and normalized JSON accept exactly one file, and globs are rejected for those formats. |
+| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and put in deterministic path order, then parsed as one shared ordered context so an index in a later file can attach to a table declared in an earlier file. Prisma and normalized JSON accept exactly one file, and globs are rejected for those formats. |
 | `--orm-format prisma\|ddl\|json` | Override extension/content detection. Without it, dbcli detects Prisma, DDL, or normalized JSON from the path and content. |
 | `--ignore <globs>` | Comma-separated, case-sensitive table globs. Patterns match the qualified display identity (for example `public.Users`). `_prisma_migrations` is always unmanaged. |
 | `--format json\|table\|markdown` | Select machine JSON, human table, or Markdown output. Markdown is available only in ORM drift mode. |
 | `--recovery` | On an I/O, configuration, empty-cache, invalid-format, or unsupported-engine failure, emit and save a structured recovery envelope. Invalid Prisma/DDL constructs normally become `unparsed` entries instead of throwing. |
 
-The command supports PostgreSQL, MySQL, and MariaDB configurations. It exits with
-code `1` when the report contains error-level scored drift, and `0` when it does
-not. Command/configuration failures also exit code `1`. The four drift categories
-and tolerance rules are:
+The command supports PostgreSQL, MySQL, and MariaDB configurations. Only
+error-level **scored drift** determines the report's drift exit code: one or more
+scored errors exits `1`; warnings, infos, `unmanaged`, or `unparsed` entries alone
+exit `0`. Command/configuration failures independently exit code `1`. The four
+drift categories and tolerance rules are:
 
 | Category | Severity and comparison rule |
 | :--- | :--- |
@@ -755,8 +757,8 @@ Type-family tolerance deliberately treats engine spellings such as `text` and
 `info`, while an integer/text family difference is an `error`. Indexes compare
 by structural index signatures — ordered, case-folded column names plus
 uniqueness — rather than by engine-specific index names. Duplicate signatures
-are emitted once, and drift entries use stable table/object/category/detail
-sorting.
+are emitted once. Drift entries sort deterministically by table, object, category,
+and detail using Unicode code-point order, never locale-dependent collation.
 
 **Schema and table identity.** Storage preserves exact, case-sensitive schema
 and table names from the database catalog. Exact, case-sensitive `(schema, table)`
@@ -784,9 +786,15 @@ attributes, and unsupported native mappings are never guessed.
 Prisma and DDL constructs outside the supported subset are retained in
 `unparsed` with a `blocked:` reason. These entries are separate from scored drift:
 inspect and resolve them before treating an otherwise clean summary as complete.
+Multi-file DDL is consumed as one deterministic shared ordered statement context,
+so later `CREATE INDEX` statements can reference tables declared in earlier
+files. PostgreSQL `PARTITION BY` and MySQL/MariaDB table engine, charset, and
+other `CREATE TABLE` table options are unsupported: the construct produces a
+`blocked:` `unparsed` entry and does not emit a managed ORM table.
 The normalized JSON escape hatch is Zod-validated and uses an array of tables
 with explicit exact `identity` objects; optional parsed identifiers must include
-their `quoted` flags.
+their `quoted` flags, and every normalized JSON `unparsed.reason` must start with
+`blocked:`.
 
 ```json
 {
@@ -814,7 +822,10 @@ unquoted; unsafe shell characters are POSIX single-quoted. Table creation,
 removal, mismatch, and DB-only drift escalate to `migration-review`. A
 schema-qualified target, or index columns that the current `migrate --columns`
 CLI cannot represent losslessly, also escalates instead of emitting a corrupt
-command. Proposals are text only and never add `--execute`.
+command. Any table, column, or type positional beginning with `-` also escalates
+so Commander cannot reinterpret it as an option. A leading-dash option value is
+rendered with option-safe attached syntax, for example `--default=-1` or
+`--columns=--config,email`. Proposals are text only and never add `--execute`.
 
 For a guided, cache-refreshing review, use the built-in `orm-drift-review` pack:
 

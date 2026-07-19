@@ -10,6 +10,10 @@ import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`
+}
+
 /**
  * PostgreSQL adapter implementation using pg library
  * Handles connection management, query execution, and schema introspection
@@ -227,9 +231,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
             SELECT EXISTS(
               SELECT 1 FROM information_schema.table_constraints tc
               JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-              WHERE tc.table_name = $1
-                AND tc.table_schema = 'public'
+                ON tc.constraint_catalog = kcu.constraint_catalog
+                AND tc.constraint_schema = kcu.constraint_schema
+                AND tc.constraint_name = kcu.constraint_name
+              WHERE tc.table_catalog = c.table_catalog
+                AND tc.table_schema = c.table_schema
+                AND tc.table_name = c.table_name
+                AND kcu.table_catalog = c.table_catalog
+                AND kcu.table_schema = c.table_schema
+                AND kcu.table_name = c.table_name
                 AND tc.constraint_type = 'PRIMARY KEY'
                 AND kcu.column_name = c.column_name
             )
@@ -263,8 +273,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           c.column_name as name,
           array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
         FROM information_schema.columns c
-        JOIN pg_type t ON t.typname = c.udt_name
-        JOIN pg_enum e ON e.enumtypid = t.oid
+        JOIN pg_catalog.pg_type AS enum_type
+          ON enum_type.typname = c.udt_name
+        JOIN pg_catalog.pg_namespace AS enum_schema
+          ON enum_schema.oid = enum_type.typnamespace
+          AND enum_schema.nspname = c.udt_schema
+        JOIN pg_catalog.pg_enum AS e ON e.enumtypid = enum_type.oid
         WHERE c.table_name = $1
           AND c.table_schema = 'public'
         GROUP BY c.column_name
@@ -363,9 +377,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
       // Get estimated row count from pg_class
       const estimateQuery = `
-        SELECT reltuples::bigint as estimated_rows
-        FROM pg_class
-        WHERE relname = $1
+        SELECT source_table.reltuples::bigint as estimated_rows
+        FROM pg_catalog.pg_class AS source_table
+        JOIN pg_catalog.pg_namespace AS source_schema
+          ON source_schema.oid = source_table.relnamespace
+        WHERE source_table.relname = $1
+          AND source_schema.nspname = 'public'
       `
       const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
         tableName,
@@ -374,22 +391,30 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
       // Extract primary key constraint
       const pkQuery = `
-        SELECT array_agg(a.attname) as columns
-        FROM (
-          SELECT a.attname
-          FROM pg_index i
-          JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-          WHERE i.indisprimary AND i.indrelid = $1::regclass
-          ORDER BY a.attnum
-        ) a
+        SELECT
+          array_agg(primary_key_column.attname ORDER BY primary_key.ordinality) as columns
+        FROM pg_catalog.pg_index AS index_info
+        JOIN pg_catalog.pg_class AS source_table
+          ON source_table.oid = index_info.indrelid
+        JOIN pg_catalog.pg_namespace AS source_schema
+          ON source_schema.oid = source_table.relnamespace
+        JOIN LATERAL unnest(index_info.indkey) WITH ORDINALITY
+          AS primary_key(attnum, ordinality) ON TRUE
+        JOIN pg_catalog.pg_attribute AS primary_key_column
+          ON primary_key_column.attrelid = source_table.oid
+          AND primary_key_column.attnum = primary_key.attnum
+        WHERE index_info.indisprimary
+          AND source_table.relname = $1
+          AND source_schema.nspname = 'public'
       `
 
       const pkResult = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
       const pkResults = pkResult.rows
 
       // Get row count
+      const qualifiedTableName = `${quoteIdentifier('public')}.${quoteIdentifier(tableName)}`
       const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM "${tableName}"`
+        `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
       )
 
       // Ensure primaryKey is always an array

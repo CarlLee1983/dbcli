@@ -10,7 +10,7 @@ import {
 import { configModule } from '@/core/config'
 import type { ColumnSchema, SqlDatabaseSystem, TableSchema } from '@/adapters/types'
 import { detectOrmFormat, type OrmFormat } from '@/core/orm-drift/adapters/detect'
-import { parseDdl } from '@/core/orm-drift/adapters/ddl'
+import { parseDdl, parseDdlFiles } from '@/core/orm-drift/adapters/ddl'
 import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
 import { compareNormalized, type DriftReport } from '@/core/orm-drift/compare'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
@@ -144,13 +144,20 @@ export async function runDrift(
     throw new Error('Glob ORM schema inputs are supported only for DDL')
   }
 
-  const schemas = inputs.map(({ content, format }) => {
-    if (format === 'prisma') return parsePrismaSchema(content)
-    if (format === 'ddl') return parseDdl(content, system as SqlDatabaseSystem)
-    const parsed = normalizedSchemaZod.parse(JSON.parse(content))
-    return { ...parsed, source: 'json' as const }
-  })
-  const orm = mergeNormalizedSchemas(schemas)
+  const orm =
+    inputs[0]?.format === 'ddl'
+      ? parseDdlFiles(
+          inputs.map((input) => input.content),
+          system as SqlDatabaseSystem
+        )
+      : mergeNormalizedSchemas(
+          inputs.map(({ content, format }) => {
+            if (format === 'prisma') return parsePrismaSchema(content)
+            if (format === 'ddl') return parseDdl(content, system as SqlDatabaseSystem)
+            const parsed = normalizedSchemaZod.parse(JSON.parse(content))
+            return { ...parsed, source: 'json' as const }
+          })
+        )
   const ignore = (options.ignore ?? '')
     .split(',')
     .map((pattern) => pattern.trim())

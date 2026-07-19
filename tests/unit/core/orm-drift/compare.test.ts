@@ -278,6 +278,21 @@ describe('compareNormalized', () => {
     expect(forward.entries.map((entry) => entry.table)).toEqual(['a', 'z'])
   })
 
+  test('entry ordering compares Unicode code points without locale-dependent case folding', () => {
+    const report = compareNormalized(
+      schemaWith([
+        table({ table: 'ä' }),
+        table({ table: 'Á' }),
+        table({ table: 'a' }),
+        table({ table: 'A' }),
+      ]),
+      dbWith([]),
+      { ignore: [] }
+    )
+
+    expect(report.entries.map((entry) => entry.table)).toEqual(['A', 'a', 'Á', 'ä'])
+  })
+
   test('entry ordering is stable across mixed column and index insertion order', () => {
     const makeOrmTable = (reverse: boolean) =>
       table(
@@ -563,13 +578,13 @@ describe('compareNormalized', () => {
 
   test('unparsed entries from the ORM and database are merged in source order', () => {
     const orm = schemaWith([users])
-    orm.unparsed.push({ location: 'schema.prisma:3', reason: 'unsupported attribute' })
+    orm.unparsed.push({ location: 'schema.prisma:3', reason: 'blocked: unsupported attribute' })
     const db = dbWith([users])
-    db.unparsed.push({ location: 'users.generated', reason: 'unsupported expression' })
+    db.unparsed.push({ location: 'users.generated', reason: 'blocked: unsupported expression' })
 
     expect(compareNormalized(orm, db, { ignore: [] }).unparsed).toEqual([
-      { location: 'schema.prisma:3', reason: 'unsupported attribute' },
-      { location: 'users.generated', reason: 'unsupported expression' },
+      { location: 'schema.prisma:3', reason: 'blocked: unsupported attribute' },
+      { location: 'users.generated', reason: 'blocked: unsupported expression' },
     ])
   })
 })
@@ -732,6 +747,66 @@ describe('proposalsFor', () => {
         }
       )[1]
     ).toBe('dbcli migrate add-column users age integer --nullable')
+  })
+
+  test('positional identifiers and types beginning with a dash escalate instead of becoming options', () => {
+    const unsafeSubjects = [
+      {
+        table: { table: '--execute' },
+        column: { name: 'safe', type: 'text', nullable: false },
+      },
+      {
+        table: { table: 'users' },
+        column: { name: '--config', type: 'text', nullable: false },
+      },
+      {
+        table: { table: 'users' },
+        column: { name: 'safe', type: '--execute', nullable: false },
+      },
+    ] satisfies Array<{ table: NormalizedTableIdentity; column: NormalizedColumn }>
+
+    for (const subject of unsafeSubjects) {
+      const commands = addColumnProposal(subject.table, subject.column)
+      expect(commands).toHaveLength(1)
+      expect(commands[0]).toStartWith('# escalate:')
+      expect(commands.join('\n')).not.toContain('dbcli migrate add-column')
+    }
+  })
+
+  test('leading-dash option values use attached syntax while simple values keep documented output', () => {
+    expect(
+      addColumnProposal(
+        { table: 'users' },
+        {
+          name: 'balance',
+          type: 'integer',
+          nullable: false,
+          default: '-1',
+        }
+      )[1]
+    ).toBe('dbcli migrate add-column users balance integer --default=-1')
+
+    expect(
+      addIndexProposal(
+        { table: 'users' },
+        {
+          columns: ['--config', 'email'],
+          unique: false,
+        }
+      )[1]
+    ).toBe('dbcli migrate add-index users --columns=--config,email')
+
+    expect(
+      addColumnProposal(
+        { table: 'users' },
+        {
+          name: 'age',
+          type: 'integer',
+          nullable: false,
+          default: '18',
+        }
+      )[1]
+    ).toBe('dbcli migrate add-column users age integer --default 18')
   })
 
   test('returns no commands for unmanaged entries', () => {

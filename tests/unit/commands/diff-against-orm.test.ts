@@ -134,6 +134,26 @@ describe('runDrift', () => {
     expect(report.entries.map((entry) => entry.table)).toContain('public.Beta')
   })
 
+  test('attaches an index from a later DDL file to a table from an earlier file', async () => {
+    const table = await write('001-table.sql', ddl('users'))
+    const index = await write('002-index.sql', 'CREATE INDEX users_id_idx ON users (id);')
+    const indexedConfig = {
+      ...config,
+      schema: {
+        users: {
+          ...usersTable,
+          indexes: [{ name: 'users_id_idx', columns: ['id'], unique: false }],
+        },
+      },
+    }
+
+    const { report } = await runDrift([index, table], {}, indexedConfig as never)
+
+    expect(report.entries).toEqual([])
+    expect(report.unparsed).toEqual([])
+    expect(report.summary.errors).toBe(0)
+  })
+
   test('rejects duplicate exact identities across DDL files', async () => {
     const first = await write('001.sql', ddl('users'))
     const second = await write('002.sql', ddl('users'))
@@ -237,6 +257,29 @@ describe('runDrift', () => {
     const { report } = await runDrift([path], {}, config as never)
 
     expect(report.unparsed.length).toBeGreaterThan(0)
+  })
+
+  test('surfaces blocked DDL table options without silently managing the table', async () => {
+    const path = await write(
+      'partitioned.sql',
+      'CREATE TABLE users (id INTEGER PRIMARY KEY) PARTITION BY RANGE (id);'
+    )
+    const { report } = await runDrift([path], {}, config as never)
+
+    expect(report.entries).toContainEqual(
+      expect.objectContaining({
+        category: 'missing_in_orm',
+        table: 'public.users',
+        object: 'table',
+      })
+    )
+    expect(report.unparsed).toEqual([
+      expect.objectContaining({
+        location: 'users',
+        reason: expect.stringContaining('blocked: unsupported CREATE TABLE table_options'),
+      }),
+    ])
+    expect(report.summary.errors).toBe(0)
   })
 })
 

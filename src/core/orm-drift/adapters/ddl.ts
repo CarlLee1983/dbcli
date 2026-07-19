@@ -33,6 +33,7 @@ interface DdlContext {
   tables: NormalizedTable[]
   tablesByIdentity: Map<string, NormalizedTable>
   unparsed: UnparsedEntry[]
+  duplicateTableIdentity?: string
 }
 
 interface IdentifierCursor {
@@ -41,37 +42,59 @@ interface IdentifierCursor {
 }
 
 export function parseDdl(sql: string, system: SqlDatabaseSystem): NormalizedSchema {
+  return parseDdlDocuments([sql], system).schema
+}
+
+export function parseDdlFiles(sqlDocuments: string[], system: SqlDatabaseSystem): NormalizedSchema {
+  const parsed = parseDdlDocuments(sqlDocuments, system)
+  if (parsed.duplicateTableIdentity !== undefined) {
+    throw new Error(`duplicate table identity '${parsed.duplicateTableIdentity}'`)
+  }
+  return parsed.schema
+}
+
+function parseDdlDocuments(
+  sqlDocuments: string[],
+  system: SqlDatabaseSystem
+): { schema: NormalizedSchema; duplicateTableIdentity?: string } {
   const context: DdlContext = {
     tables: [],
     tablesByIdentity: new Map(),
     unparsed: [],
   }
 
-  for (const statement of splitSqlStatements(sql)) {
-    let ast: unknown
-    try {
-      ast = parser.astify(statement, { database: DIALECT[system] })
-    } catch (error) {
-      context.unparsed.push({
-        location: statement.slice(0, 60),
-        reason: `blocked: parse failed — ${firstErrorLine(error)}`,
-      })
-      continue
-    }
-
-    for (const node of Array.isArray(ast) ? ast : [ast]) {
-      if (!isAst(node)) {
+  for (const sql of sqlDocuments) {
+    for (const statement of splitSqlStatements(sql)) {
+      let ast: unknown
+      try {
+        ast = parser.astify(statement, { database: DIALECT[system] })
+      } catch (error) {
         context.unparsed.push({
           location: statement.slice(0, 60),
-          reason: 'blocked: parser produced a malformed statement',
+          reason: `blocked: parse failed — ${firstErrorLine(error)}`,
         })
         continue
       }
-      consumeStatement(node, statement, context)
+
+      for (const node of Array.isArray(ast) ? ast : [ast]) {
+        if (!isAst(node)) {
+          context.unparsed.push({
+            location: statement.slice(0, 60),
+            reason: 'blocked: parser produced a malformed statement',
+          })
+          continue
+        }
+        consumeStatement(node, statement, context)
+      }
     }
   }
 
-  return { source: 'ddl', tables: context.tables, unparsed: context.unparsed }
+  return {
+    schema: { source: 'ddl', tables: context.tables, unparsed: context.unparsed },
+    ...(context.duplicateTableIdentity !== undefined && {
+      duplicateTableIdentity: context.duplicateTableIdentity,
+    }),
+  }
 }
 
 function consumeStatement(node: Ast, statement: string, context: DdlContext): void {
@@ -109,6 +132,21 @@ function consumeCreateTable(node: Ast, statement: string, context: DdlContext): 
   }
   const identity = resolveTableIdentifier(parsedIdentifier)
   const tableName = qualifiedTableName(identity)
+
+  const unsupportedTableField = firstMeaningfulUnsupportedField(node, [
+    'type',
+    'keyword',
+    'if_not_exists',
+    'table',
+    'create_definitions',
+  ])
+  if (unsupportedTableField) {
+    context.unparsed.push({
+      location: tableName,
+      reason: `blocked: unsupported CREATE TABLE ${unsupportedTableField}`,
+    })
+    return
+  }
 
   if (!Array.isArray(node.create_definitions)) {
     context.unparsed.push({
@@ -170,6 +208,7 @@ function consumeCreateTable(node: Ast, statement: string, context: DdlContext): 
 
   const key = tableIdentityKey(identity)
   if (context.tablesByIdentity.has(key)) {
+    context.duplicateTableIdentity ??= tableName
     context.unparsed.push({
       location: tableName,
       reason: `blocked: duplicate table identity '${tableName}'`,

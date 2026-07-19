@@ -134,6 +134,22 @@ describe('normalizedSchemaZod', () => {
 
     expect(parsed.tables.map((table) => table.identity.table)).toEqual(['users', 'Users'])
   })
+
+  test('requires JSON escape-hatch unparsed reasons to declare blocked handling', () => {
+    const doc = {
+      source: 'json',
+      tables: [],
+      unparsed: [{ location: 'schema.json:1', reason: 'unsupported construct' }],
+    }
+
+    expect(() => normalizedSchemaZod.parse(doc)).toThrow()
+    expect(
+      normalizedSchemaZod.parse({
+        ...doc,
+        unparsed: [{ location: 'schema.json:1', reason: 'blocked: unsupported construct' }],
+      }).unparsed
+    ).toEqual([{ location: 'schema.json:1', reason: 'blocked: unsupported construct' }])
+  })
 })
 
 describe('table identity', () => {

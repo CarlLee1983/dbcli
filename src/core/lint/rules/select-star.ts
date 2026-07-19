@@ -1,4 +1,4 @@
-import { collectTables, findingSpan } from '@/core/lint/ast-utils'
+import { findingSpan, singlePhysicalTable } from '@/core/lint/ast-utils'
 import { parseSingleStatement } from '@/core/lint/parse'
 import { verifyWith } from '@/core/lint/types'
 import type { SqlDatabaseSystem } from '@/adapters/types'
@@ -184,14 +184,14 @@ export const selectStarRule: LintRule = {
       span: findingSpan(ctx.sql, 'select *'),
       schemaVerified: false,
     }
-    const tables = collectTables(ctx.ast)
+    const tableName = singlePhysicalTable(ctx.ast)
 
     if (
       ctx.schema.available &&
-      tables.length === 1 &&
+      tableName &&
       isSoleUnqualifiedStar(ctx.ast)
     ) {
-      const table = ctx.schema.getTable(tables[0]!)
+      const table = ctx.schema.getTable(tableName)
       if (table && table.columns.length > 0) {
         if (wildcardIndexes.length === 1) {
           const wildcardIndex = wildcardIndexes[0]!

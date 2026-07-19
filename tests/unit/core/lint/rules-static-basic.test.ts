@@ -44,6 +44,54 @@ describe('select-star', () => {
     expect(findings[0].schemaVerified).toBe(true)
   })
 
+  test('withholds a schema rewrite when a CTE shadows a cached physical table', () => {
+    const physicalX: TableSchema = {
+      name: 'x',
+      columns: [{ name: 'physical_only', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('WITH x AS (SELECT 1 AS cte_only) SELECT * FROM x', {
+        x: physicalX,
+      })
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].verifyCommand).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('withholds a schema rewrite for a derived relation', () => {
+    const physicalX: TableSchema = {
+      name: 'x',
+      columns: [{ name: 'physical_only', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM (SELECT 1 AS derived_only) x', {
+        x: physicalX,
+      })
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].verifyCommand).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('keeps the schema rewrite for one unambiguous physical table', () => {
+    const physicalX: TableSchema = {
+      name: 'x',
+      columns: [{ name: 'physical_only', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM x', { x: physicalX })
+    )
+
+    expect(findings[0].rewrite?.sql).toBe('SELECT physical_only FROM x')
+    expect(findings[0].rewrite?.confidence).toBe('high')
+    expect(findings[0].schemaVerified).toBe(true)
+  })
+
   test('withholds PostgreSQL select-star rewrite for a case-folded schema collision', () => {
     const lower: TableSchema = {
       name: 'foo',

@@ -55,6 +55,53 @@ export function collectTables(ast: AstNode): string[] {
   return tables
 }
 
+function cteName(binding: unknown): string | undefined {
+  if (!binding || typeof binding !== 'object') return undefined
+  const name = (binding as AstNode).name
+  if (typeof name === 'string') return name
+  if (!name || typeof name !== 'object') return undefined
+  const value = (name as AstNode).value
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * Returns the table name only when the statement's FROM clause proves it is a
+ * single physical relation. CTE and derived bindings are intentionally
+ * excluded because the schema cache describes physical tables only.
+ */
+export function singlePhysicalTable(ast: AstNode): string | undefined {
+  const from = ast.from
+  if (!Array.isArray(from) || from.length !== 1) return undefined
+
+  const source = from[0] as AstNode
+  if (source.expr && typeof source.expr === 'object') return undefined
+  const table = source.table
+  if (typeof table !== 'string') return undefined
+
+  const withBindings = ast.with
+  if (!Array.isArray(withBindings) || withBindings.length === 0) {
+    return table
+  }
+
+  const names = withBindings.map(cteName)
+  if (names.some((name) => name === undefined)) return undefined
+
+  const isQualified =
+    typeof source.db === 'string' && source.db.trim().length > 0
+  if (
+    !isQualified &&
+    names.some(
+      (name) =>
+        typeof name === 'string' &&
+        name.toLowerCase() === table.toLowerCase()
+    )
+  ) {
+    return undefined
+  }
+
+  return table
+}
+
 export function columnRefParts(
   node: AstNode
 ): { column: string; qualifier?: string } | null {

@@ -244,9 +244,12 @@ dbcli --use staging lint @analytics/live-summary --min-severity warn
 | `not-in-nullable` | warn | A right-hand `NOT IN` value that can be NULL: an explicit `NULL`, a nullable subquery projection, or another nullable RHS expression when type information is available. A nullable left-hand column is not this rule. |
 
 `implicit-cast` and `not-in-nullable` read the selected cache through the schema
-loader abstraction. The default connection uses `.dbcli/schemas/`; global
-`dbcli --use <conn> lint …` selects `.dbcli/schemas/<conn>/`. The command never
-refreshes the cache and never falls back to schema embedded in config.
+loader abstraction. All schema caches live beneath `.dbcli/schemas/`. A v2
+configuration always uses `.dbcli/schemas/<resolved-connection>/`, including
+the configured default. The root `.dbcli/schemas/` directory is only the
+v1/legacy unnamed cache. Global `dbcli --use <conn> lint …` selects another
+named v2 slot. The command never refreshes the cache and never falls back to
+schema embedded in config.
 
 Skipped rules are returned with machine-readable `blocked:` reasons:
 

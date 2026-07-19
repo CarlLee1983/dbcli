@@ -967,7 +967,7 @@ dbcli lint @queries.sql                                          # SQL file
 dbcli lint --bulk '@queries/**/*.sql'                            # filesystem glob
 dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # mixed bulk inputs
 dbcli --use staging lint @analytics/live-summary --format json   # named cache</code></pre>
-  <p>The global selector must precede the command: <code>dbcli --use &lt;conn&gt; lint …</code>. It selects <code>.dbcli/schemas/&lt;conn&gt;/</code>; the default connection reads <code>.dbcli/schemas/</code>. <code>lint</code> never falls back to <code>config.schema</code> and never connects to refresh missing metadata.</p>
+  <p>All schema caches live beneath <code>.dbcli/schemas/</code>. A v2 configuration always uses <code>.dbcli/schemas/&lt;resolved-connection&gt;/</code>, including the configured default. The root <code>.dbcli/schemas/</code> directory is only the v1/legacy unnamed cache. The global selector must precede the command: <code>dbcli --use &lt;conn&gt; lint …</code>; it selects another named v2 slot. <code>lint</code> never falls back to <code>config.schema</code> and never connects to refresh missing metadata.</p>
   <table>
     <thead><tr><th>Option</th><th>Default</th><th>Behavior</th></tr></thead>
     <tbody>

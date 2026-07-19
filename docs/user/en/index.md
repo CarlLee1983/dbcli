@@ -1050,11 +1050,12 @@ dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # mixed bulk in
 dbcli --use staging lint @analytics/live-summary --format json   # named cache
 ```
 
-The global selector must precede the command:
-`dbcli --use <conn> lint …`. It selects the named connection's isolated cache at
-`.dbcli/schemas/<conn>/`; the default connection reads `.dbcli/schemas/`.
-`lint` never falls back to `config.schema` and never connects to refresh missing
-metadata.
+All schema caches live beneath `.dbcli/schemas/`. A v2 configuration always
+uses `.dbcli/schemas/<resolved-connection>/`, including the configured default.
+The root `.dbcli/schemas/` directory is only the v1/legacy unnamed cache. The
+global selector must precede the command: `dbcli --use <conn> lint …`; it
+selects another named v2 slot. `lint` never falls back to `config.schema` and
+never connects to refresh missing metadata.
 
 | Option | Default | Behavior |
 | :--- | :--- | :--- |

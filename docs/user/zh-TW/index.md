@@ -976,10 +976,11 @@ dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # 混合批次�
 dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 ```
 
-全域 selector 必須放在指令之前：`dbcli --use <conn> lint …`。它會選擇
-`.dbcli/schemas/<conn>/` 中該命名連線的隔離快取；預設連線則讀取
-`.dbcli/schemas/`。`lint` 不會退回讀取 `config.schema`，也不會為了補齊
-缺少的 metadata 而連線。
+所有 schema 快取都位於 `.dbcli/schemas/` 之下。v2 一律使用
+`.dbcli/schemas/<resolved-connection>/`，包含設定的預設連線。根目錄
+`.dbcli/schemas/` 只供 v1/legacy 未命名快取使用。全域 selector 必須放在
+指令之前：`dbcli --use <conn> lint …`；它會選擇另一個具名 v2 slot。
+`lint` 不會退回讀取 `config.schema`，也不會為了補齊缺少的 metadata 而連線。
 
 | 選項 | 預設值 | 行為 |
 | :--- | :--- | :--- |

@@ -33,7 +33,7 @@ describe('lint documentation', () => {
     const reference = await read('assets/reference.md')
 
     expect(reference).toContain('dbcli --use <conn> lint')
-    expect(reference).toContain('.dbcli/schemas/<conn>/')
+    expect(reference).toContain('.dbcli/schemas/<resolved-connection>/')
     expect(reference).toContain('never opens a database connection')
     expect(reference).toContain('blocked: parse failed')
     expect(reference).toContain('blocked: --no-schema')
@@ -57,6 +57,44 @@ describe('lint documentation', () => {
       expect(doc).toContain('IS NOT NULL')
       expect(doc).toContain('NOT EXISTS')
       for (const rule of RULES) expect(doc).toContain(rule)
+    }
+  })
+
+  test('documents distinct v1 root and v2 resolved-connection cache slots', async () => {
+    const [reference, englishMarkdown, englishHtml, chineseMarkdown, chineseHtml] =
+      await Promise.all([
+        read('assets/reference.md'),
+        read('docs/user/en/index.md'),
+        read('docs/user/en/index.html'),
+        read('docs/user/zh-TW/index.md'),
+        read('docs/user/zh-TW/index.html'),
+      ])
+    const compactReference = reference.replace(/\s+/g, ' ')
+
+    expect(compactReference).toContain(
+      'All schema caches live beneath `.dbcli/schemas/`.',
+    )
+    expect(compactReference).toContain('including the configured default')
+    expect(compactReference).toContain(
+      'root `.dbcli/schemas/` directory is only the v1/legacy unnamed cache',
+    )
+    expect(compactReference).toContain(
+      'Global `dbcli --use <conn> lint …` selects another named v2 slot.',
+    )
+    expect(reference).not.toContain(
+      'The default connection uses `.dbcli/schemas/`',
+    )
+
+    for (const doc of [englishMarkdown, englishHtml]) {
+      expect(doc).toContain('including the configured default')
+      expect(doc).toContain('v1/legacy unnamed cache')
+      expect(doc).not.toContain('the default connection reads')
+    }
+
+    for (const doc of [chineseMarkdown, chineseHtml]) {
+      expect(doc).toContain('包含設定的預設連線')
+      expect(doc).toContain('v1/legacy 未命名快取')
+      expect(doc).not.toContain('預設連線則讀取')
     }
   })
 })

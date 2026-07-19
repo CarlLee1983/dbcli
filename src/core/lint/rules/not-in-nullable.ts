@@ -694,20 +694,26 @@ function visitExpression(
   }
 
   const node = value as AstNode
+  if (node.type === 'select') {
+    visitStatement(node, visitNotIn)
+    return
+  }
   if (node.ast && typeof node.ast === 'object') {
     visitStatement(node.ast as AstNode, visitNotIn)
     return
   }
 
-  if (
-    node.type === 'binary_expr' &&
-    String(node.operator).toUpperCase() === 'NOT IN'
-  ) {
-    visitNotIn(node, statement)
+  if (node.type === 'binary_expr') {
+    visitExpression(node.left, statement, visitNotIn)
+    if (String(node.operator).toUpperCase() === 'NOT IN') {
+      visitNotIn(node, statement)
+    }
+    visitExpression(node.right, statement, visitNotIn)
+    return
   }
 
-  for (const key of ['left', 'right', 'args', 'value', 'expr', 'columns']) {
-    if (key in node) visitExpression(node[key], statement, visitNotIn)
+  for (const nested of Object.values(node)) {
+    visitExpression(nested, statement, visitNotIn)
   }
 }
 

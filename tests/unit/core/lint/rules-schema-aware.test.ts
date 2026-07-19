@@ -1200,6 +1200,34 @@ describe('not-in-nullable', () => {
     ])
   })
 
+  test('recursively analyzes inline window specification expressions', () => {
+    const sql =
+      'SELECT SUM(id) OVER (ORDER BY id NOT IN (1, NULL)) FROM users'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+      'NOT IN'
+    )
+  })
+
+  test('maps nested infix findings to their own lexical NOT IN operators', () => {
+    const sql =
+      'SELECT (id NOT IN (1, NULL)) NOT IN (CASE WHEN id > 0 THEN 1 END) FROM users'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(2)
+    const first = findings.find(
+      (finding) => finding.span.start === sql.indexOf('NOT IN')
+    )
+    const second = findings.find(
+      (finding) => finding.span.start === sql.lastIndexOf('NOT IN')
+    )
+    expect(first?.message).toContain('list contains NULL')
+    expect(second?.message).toContain('CASE expression')
+  })
+
   test('places the NOT IN span on the operator instead of marker text', () => {
     const sql =
       "SELECT id FROM users WHERE 'NOT IN marker' = 'x' OR id NOT IN (1, NULL)"

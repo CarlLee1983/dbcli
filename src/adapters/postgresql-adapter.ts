@@ -284,33 +284,40 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // Extract foreign key constraints
       const fkQuery = `
         SELECT
-          tc.constraint_name as name,
-          array_agg(kcu.column_name) as columns,
-          ccu.table_schema as ref_schema,
-          ccu.table_name as ref_table,
-          array_agg(ccu.column_name) as ref_columns
-        FROM information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-          ON tc.constraint_catalog = kcu.constraint_catalog
-          AND tc.constraint_schema = kcu.constraint_schema
-          AND tc.constraint_name = kcu.constraint_name
-          AND tc.table_catalog = kcu.table_catalog
-          AND tc.table_schema = kcu.table_schema
-          AND tc.table_name = kcu.table_name
-        JOIN information_schema.constraint_column_usage AS ccu
-          ON tc.constraint_catalog = ccu.constraint_catalog
-          AND tc.constraint_schema = ccu.constraint_schema
-          AND tc.constraint_name = ccu.constraint_name
-        WHERE tc.table_name = $1
-          AND tc.table_schema = 'public'
-          AND tc.constraint_type = 'FOREIGN KEY'
+          constraint_info.conname as name,
+          array_agg(source_column.attname ORDER BY source_key.ordinality) as columns,
+          referenced_schema.nspname as ref_schema,
+          referenced_table.relname as ref_table,
+          array_agg(referenced_column.attname ORDER BY source_key.ordinality) as ref_columns
+        FROM pg_catalog.pg_constraint AS constraint_info
+        JOIN pg_catalog.pg_class AS source_table
+          ON source_table.oid = constraint_info.conrelid
+        JOIN pg_catalog.pg_namespace AS source_schema
+          ON source_schema.oid = source_table.relnamespace
+        JOIN pg_catalog.pg_class AS referenced_table
+          ON referenced_table.oid = constraint_info.confrelid
+        JOIN pg_catalog.pg_namespace AS referenced_schema
+          ON referenced_schema.oid = referenced_table.relnamespace
+        JOIN LATERAL unnest(constraint_info.conkey) WITH ORDINALITY
+          AS source_key(attnum, ordinality) ON TRUE
+        JOIN LATERAL unnest(constraint_info.confkey) WITH ORDINALITY
+          AS referenced_key(attnum, ordinality)
+          ON referenced_key.ordinality = source_key.ordinality
+        JOIN pg_catalog.pg_attribute AS source_column
+          ON source_column.attrelid = constraint_info.conrelid
+          AND source_column.attnum = source_key.attnum
+        JOIN pg_catalog.pg_attribute AS referenced_column
+          ON referenced_column.attrelid = constraint_info.confrelid
+          AND referenced_column.attnum = referenced_key.attnum
+        WHERE constraint_info.contype = 'f'
+          AND source_table.relname = $1
+          AND source_schema.nspname = 'public'
         GROUP BY
-          tc.constraint_catalog,
-          tc.constraint_schema,
-          tc.constraint_name,
-          ccu.table_catalog,
-          ccu.table_schema,
-          ccu.table_name
+          constraint_info.oid,
+          constraint_info.conname,
+          referenced_schema.nspname,
+          referenced_table.relname
+        ORDER BY constraint_info.oid
       `
 
       const fkResult = await this.execute<{

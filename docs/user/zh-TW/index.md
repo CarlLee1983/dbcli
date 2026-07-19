@@ -89,6 +89,8 @@ dbcli init
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
 
+在 PostgreSQL 中，`schema` 會依宣告順序回報複合外鍵欄位、依來源資料表區隔重複使用的 constraint 名稱，並保留被參照 schema 與資料表在 catalog 中的原始拼字。
+
 #### `inspect` 給 agent 的輸出
 
 `dbcli inspect` 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：

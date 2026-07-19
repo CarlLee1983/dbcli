@@ -201,6 +201,7 @@ dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code><
                     <tr><td><code>status</code></td><td>配置與連線健康度摘要。</td></tr>
                 </tbody>
             </table>
+            <p>在 PostgreSQL 中，<code>schema</code> 會依宣告順序回報複合外鍵欄位、依來源資料表區隔重複使用的 constraint 名稱，並保留被參照 schema 與資料表在 catalog 中的原始拼字。</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>
             <p><code>dbcli inspect</code> 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：</p>

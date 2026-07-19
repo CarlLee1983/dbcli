@@ -201,6 +201,7 @@ dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code><
                     <tr><td><code>status</code></td><td>Config and connectivity health summary.</td></tr>
                 </tbody>
             </table>
+            <p>For PostgreSQL, <code>schema</code> reports composite foreign-key columns in declaration order, scopes reused constraint names to their source table, and preserves the catalog spelling of referenced schemas and tables.</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> output for agents</h4>
             <p><code>dbcli inspect</code> returns two parallel arrays so an agent can orient on the very first call:</p>

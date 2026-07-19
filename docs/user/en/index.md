@@ -89,6 +89,8 @@ Use `--use-env-refs` to keep secrets out of the config file and read them from e
 | `inspect` | Provides a read-only snapshot for AI agents (objects, permissions, suggestions). |
 | `status` | Shows a safe summary of the current configuration (no credentials). |
 
+For PostgreSQL, `schema` reports composite foreign-key columns in declaration order, scopes reused constraint names to their source table, and preserves the catalog spelling of referenced schemas and tables.
+
 #### `inspect` output for agents
 
 `dbcli inspect` returns two parallel arrays so an agent can orient on the very first call:

@@ -74,6 +74,23 @@ describe('or-to-union', () => {
     expect(findings[0].message).toContain('Verify')
   })
 
+  test('flags top-level OR when one branch wraps a single column in a function', () => {
+    const findings = orToUnionRule.check(
+      ctxFor("SELECT * FROM users WHERE LOWER(email) = 'a' OR name = 'b' LIMIT 10 OFFSET 5000")
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('email / name')
+  })
+
+  test('does not guess a column identity from a multi-column function branch', () => {
+    expect(
+      orToUnionRule.check(
+        ctxFor("SELECT id FROM users WHERE COALESCE(email, name) = 'a' OR id = 1")
+      )
+    ).toHaveLength(0)
+  })
+
   test('does not flag OR on the same column', () => {
     expect(
       orToUnionRule.check(

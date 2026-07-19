@@ -1,4 +1,4 @@
-import { findingSpan, whereOf } from '@/core/lint/ast-utils'
+import { findingSpan, walkExpr, whereOf } from '@/core/lint/ast-utils'
 import type { AstNode, LintRule } from '@/core/lint/types'
 
 function columnName(node: AstNode): string | null {
@@ -18,9 +18,20 @@ function columnIdentity(node: AstNode): string | null {
   return typeof table === 'string' && table.length > 0 ? `${table}.${name}` : name
 }
 
+function singleColumnWithin(node: unknown): string | null {
+  const columns = new Set<string>()
+  walkExpr(node, (candidate) => {
+    if (candidate.type !== 'column_ref') return
+    const identity = columnIdentity(candidate)
+    if (identity) columns.add(identity)
+  })
+  return columns.size === 1 ? [...columns][0]! : null
+}
+
 function columnOf(side: AstNode | undefined): string | null {
   if (!side) return null
   if (side.type === 'column_ref') return columnIdentity(side)
+  if (side.type === 'function') return singleColumnWithin(side.args)
   if (side.type === 'binary_expr') return columnOf(side.left as AstNode | undefined)
   return null
 }

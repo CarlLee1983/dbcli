@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+import { resolve } from 'node:path'
 import { Command } from 'commander'
 import {
   AdapterFactory,
@@ -6,8 +8,15 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { configModule } from '@/core/config'
-import type { ColumnSchema } from '@/adapters/types'
-import { validateFormat } from '@/utils/validation'
+import type { ColumnSchema, SqlDatabaseSystem, TableSchema } from '@/adapters/types'
+import { detectOrmFormat, type OrmFormat } from '@/core/orm-drift/adapters/detect'
+import { parseDdl } from '@/core/orm-drift/adapters/ddl'
+import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
+import { compareNormalized, type DriftReport } from '@/core/orm-drift/compare'
+import { normalizeDbSchema } from '@/core/orm-drift/from-db'
+import { normalizedSchemaZod, type NormalizedSchema } from '@/core/orm-drift/normalized-schema'
+import { formatDrift, type DriftFormat } from '@/formatters/orm-drift'
+import { validateFormat, type DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -17,6 +26,174 @@ function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptio
 }
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
+const DRIFT_FORMATS = ['json', 'table', 'markdown'] as const
+const ORM_FORMATS = ['prisma', 'ddl', 'json'] as const
+
+export interface DriftOptions {
+  ormFormat?: OrmFormat
+  ignore?: string
+}
+
+export interface DiffActionOptions {
+  snapshot?: string
+  against?: string
+  againstOrm?: string[] | string
+  ormFormat?: string
+  ignore?: string
+  recovery?: boolean
+  format: string
+  config: string
+}
+
+export function parseAgainstOrmValues(values: string[] | string): string[] {
+  const rawValues = Array.isArray(values) ? values : [values]
+  const paths = rawValues
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const uniquePaths = [...new Set(paths)]
+  if (uniquePaths.length === 0) {
+    throw new Error('At least one ORM schema input is required')
+  }
+  return uniquePaths
+}
+
+function hasGlobMagic(path: string): boolean {
+  return /[*?[\]{}!]/.test(path)
+}
+
+export async function expandOrmPaths(inputs: string[] | string): Promise<string[]> {
+  const paths = parseAgainstOrmValues(inputs)
+  const expanded = new Set<string>()
+
+  for (const path of paths) {
+    if (!hasGlobMagic(path)) {
+      expanded.add(resolve(path))
+      continue
+    }
+
+    const matches = await Array.fromAsync(
+      new Bun.Glob(path).scan({
+        cwd: process.cwd(),
+        absolute: true,
+        onlyFiles: true,
+      })
+    )
+    if (matches.length === 0) {
+      throw new Error(`ORM schema glob matched no files: ${path}`)
+    }
+    for (const match of matches) expanded.add(resolve(match))
+  }
+
+  return [...expanded].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+}
+
+function parseOrmFormat(value: string | undefined): OrmFormat | undefined {
+  if (value === undefined) return undefined
+  validateFormat(value, ORM_FORMATS, 'diff --orm-format')
+  return value as OrmFormat
+}
+
+function mergeNormalizedSchemas(schemas: NormalizedSchema[]): NormalizedSchema {
+  const first = schemas[0]
+  if (!first) throw new Error('At least one ORM schema input is required')
+
+  return normalizedSchemaZod.parse({
+    source: first.source,
+    ...(first.defaultSchema !== undefined && { defaultSchema: first.defaultSchema }),
+    tables: schemas.flatMap((schema) => schema.tables),
+    unparsed: schemas.flatMap((schema) => schema.unparsed),
+  })
+}
+
+export async function runDrift(
+  paths: string[],
+  options: DriftOptions,
+  config: DbcliConfig
+): Promise<{ report: DriftReport }> {
+  const system = config.connection?.system
+  if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
+    throw new Error(`This command requires a SQL connection, got: ${system ?? 'none'}`)
+  }
+
+  const cached = (config.schema ?? {}) as Record<string, TableSchema>
+  if (Object.keys(cached).length === 0) {
+    throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
+  }
+
+  const ormFormat = parseOrmFormat(options.ormFormat)
+  const includesGlob = parseAgainstOrmValues(paths).some(hasGlobMagic)
+  const expandedPaths = await expandOrmPaths(paths)
+  const inputs: Array<{ path: string; content: string; format: OrmFormat }> = []
+
+  for (const path of expandedPaths) {
+    const file = Bun.file(path)
+    if (!(await file.exists())) throw new Error(`ORM schema file not found: ${path}`)
+    const content = await file.text()
+    inputs.push({
+      path,
+      content,
+      format: ormFormat ?? detectOrmFormat(path, content),
+    })
+  }
+
+  if (inputs.length > 1 && inputs.some((input) => input.format !== 'ddl')) {
+    throw new Error('Multiple ORM schema files are supported only for DDL inputs')
+  }
+  if (includesGlob && inputs.some((input) => input.format !== 'ddl')) {
+    throw new Error('Glob ORM schema inputs are supported only for DDL')
+  }
+
+  const schemas = inputs.map(({ content, format }) => {
+    if (format === 'prisma') return parsePrismaSchema(content)
+    if (format === 'ddl') return parseDdl(content, system as SqlDatabaseSystem)
+    const parsed = normalizedSchemaZod.parse(JSON.parse(content))
+    return { ...parsed, source: 'json' as const }
+  })
+  const orm = mergeNormalizedSchemas(schemas)
+  const ignore = (options.ignore ?? '')
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+  const db = normalizeDbSchema(
+    cached,
+    system === 'postgresql' ? { defaultSchema: 'public' } : undefined
+  )
+
+  return { report: compareNormalized(orm, db, { ignore }) }
+}
+
+export function validateDiffModes(options: {
+  snapshot?: string
+  against?: string
+  againstOrm?: string[] | string
+}): 'snapshot' | 'against' | 'againstOrm' {
+  const modes = [
+    options.snapshot ? 'snapshot' : undefined,
+    options.against ? 'against' : undefined,
+    Array.isArray(options.againstOrm)
+      ? options.againstOrm.length > 0
+        ? 'againstOrm'
+        : undefined
+      : options.againstOrm !== undefined
+        ? 'againstOrm'
+        : undefined,
+  ].filter(Boolean) as Array<'snapshot' | 'against' | 'againstOrm'>
+
+  if (modes.length > 1) {
+    throw new Error('Choose exactly one of --snapshot, --against, or --against-orm')
+  }
+  if (modes.length === 0) {
+    throw new Error(
+      'Specify --snapshot <path> to save, --against <path> to compare, or --against-orm <path> for ORM drift'
+    )
+  }
+  return modes[0]!
+}
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value]
+}
 
 export interface SchemaSnapshot {
   tables: Record<
@@ -165,23 +342,52 @@ export const diffCommand = new Command()
   .description('Compare schema snapshots to detect changes')
   .option('--snapshot <path>', 'Save current schema snapshot to file')
   .option('--against <path>', 'Compare current schema against a snapshot file')
-  .option('--format <format>', 'Output format: json (default) or table', 'json')
+  .option(
+    '--against-orm <paths>',
+    'Compare ORM schema definition(s), repeatable or comma-separated; DDL supports globs',
+    collectOption,
+    []
+  )
+  .option('--orm-format <fmt>', 'Force ORM input format: prisma | ddl | json')
+  .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
+  .option(
+    '--format <format>',
+    'Output format: json (default), table, or markdown (ORM drift only)',
+    'json'
+  )
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .option(
+    '--recovery',
+    'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
+    false
+  )
   .action(diffAction)
 
-async function diffAction(options: {
-  snapshot?: string
-  against?: string
-  format: string
-  config: string
-}) {
-  try {
-    validateFormat(options.format, ALLOWED_FORMATS, 'diff')
+export async function diffAction(options: DiffActionOptions): Promise<void> {
+  const driftMode =
+    (Array.isArray(options.againstOrm)
+      ? options.againstOrm.length > 0
+      : options.againstOrm !== undefined) === true
 
-    if (!options.snapshot && !options.against) {
-      console.error('Specify --snapshot <path> to save, or --against <path> to compare')
-      process.exit(1)
+  try {
+    const mode = validateDiffModes(options)
+
+    if (mode === 'againstOrm') {
+      validateFormat(options.format, DRIFT_FORMATS, 'diff --against-orm')
+      const ormFormat = parseOrmFormat(options.ormFormat)
+      const config = await configModule.read(options.config)
+      const paths = parseAgainstOrmValues(options.againstOrm ?? [])
+      const { report } = await runDrift(
+        paths,
+        { ...(ormFormat !== undefined && { ormFormat }), ignore: options.ignore },
+        config
+      )
+      console.log(formatDrift(report, options.format as DriftFormat))
+      process.exitCode = report.summary.errors > 0 ? 1 : 0
+      return
     }
+
+    validateFormat(options.format, ALLOWED_FORMATS, 'diff')
 
     const config = await configModule.read(options.config)
     if (!config.connection) {
@@ -284,6 +490,11 @@ async function diffAction(options: {
       await adapter.disconnect()
     }
   } catch (error) {
+    if (driftMode && options.recovery === true) {
+      const { emitRecoveryEnvelope } = await import('@/core/recovery')
+      emitRecoveryEnvelope(error, { operation: 'diff' }, { envelopeId: crypto.randomUUID() })
+    }
+
     if (error instanceof Error) {
       console.error(error.message)
       if (error instanceof ConnectionError) {

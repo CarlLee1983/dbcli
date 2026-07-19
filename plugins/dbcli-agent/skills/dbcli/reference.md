@@ -196,8 +196,9 @@ dbcli explain --bulk @analytics/*                     # glob over saved queries
 >   structurally proven to be a read-only, function-free `SELECT` (including
 >   SELECT-only CTEs). Explicit function and table-function calls are unproven
 >   because user-defined and built-in functions may have side effects. DML, DDL,
->   data-modifying CTEs, session assignments, function-bearing SQL, and unrecognized SQL are rejected
->   before the adapter is invoked; use plain `dbcli explain` for those statements.
+>   data-modifying CTEs, session assignments, function-bearing SQL, and
+>   unrecognized SQL are rejected before the adapter is invoked; use plain
+>   `dbcli explain` for those statements.
 > - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
 
 ### lint
@@ -271,11 +272,9 @@ Every finding includes its rule, severity, source span, message, and
 `schemaVerified` state. Some findings also carry a confidence-labelled rewrite
 draft and a shell-safe verification command. It uses
 `dbcli explain --analyze` only when the statement is structurally proven read-only;
-function-bearing and session-assignment statements are unproven, so lint falls back
-to plain `dbcli explain`.
-These are
-suggestions only: `lint` neither executes the verification command nor changes
-the query.
+function-bearing and session-assignment statements are unproven, so lint
+falls back to plain `dbcli explain`. These are suggestions only: `lint` neither
+executes the verification command nor changes the query.
 
 When schema identifiers collide after case folding, schema-aware findings and
 rewrites are withheld. The SQL parser does not preserve reliable quote

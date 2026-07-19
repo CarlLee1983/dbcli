@@ -361,7 +361,7 @@ describe('not-in-nullable', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0].severity).toBe('warn')
     expect(findings[0].message).toContain('NULL')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0].schemaVerified).toBe(false)
     expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
       'NOT IN'
     )
@@ -378,6 +378,7 @@ describe('not-in-nullable', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0].message).toContain('IS NOT NULL')
     expect(findings[0].message).toContain('NOT EXISTS')
+    expect(findings[0].schemaVerified).toBe(true)
     expect(findings[0].rewrite).toBeUndefined()
   })
 
@@ -596,6 +597,7 @@ describe('not-in-nullable', () => {
 
     expect(findings).toHaveLength(1)
     expect(findings[0].message).toContain('nullable expression')
+    expect(findings[0].schemaVerified).toBe(false)
     expect(findings[0].rewrite).toBeUndefined()
   })
 
@@ -654,9 +656,49 @@ describe('not-in-nullable', () => {
 
       expect(findings).toHaveLength(1)
       expect(findings[0].message).toContain(aggregate)
+      expect(findings[0].schemaVerified).toBe(false)
       expect(findings[0].rewrite).toBeUndefined()
     })
   }
+
+  test('PostgreSQL flags CORR as a known null-on-empty function aggregate', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (SELECT CORR(b.id, b.id) FROM blocked_users b)',
+        schema,
+        'postgresql'
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('CORR')
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('flags an unrecognized parser aggregate node conservatively', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (SELECT GROUP_CONCAT(b.id) FROM blocked_users b)',
+        schema,
+        'postgresql'
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('GROUP_CONCAT')
+  })
+
+  test('does not treat an arbitrary function AST node as an aggregate', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT LOWER(b.email) FROM blocked_users b)',
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(0)
+  })
 
   test('does not flag COUNT because its result is non-null on empty input', () => {
     expect(
@@ -810,7 +852,45 @@ describe('not-in-nullable', () => {
         )
       ).toHaveLength(0)
     })
+
+    for (const aggregate of ['BIT_AND', 'BIT_OR', 'BIT_XOR'] as const) {
+      test(`${system} keeps neutral-value ${aggregate} non-null on empty input`, () => {
+        expect(
+          notInNullableRule.check(
+            ctxFor(
+              `SELECT id FROM users WHERE id NOT IN (SELECT ${aggregate}(b.id) FROM blocked_users b)`,
+              schema,
+              system
+            )
+          )
+        ).toHaveLength(0)
+      })
+    }
   }
+
+  test('marks CAST of a static NULL as not schema verified', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (CAST(NULL AS BIGINT))',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('marks CAST of a schema-nullable column as schema verified', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (CAST(nullable_number AS BIGINT))',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(true)
+  })
 
   for (const system of ['mysql', 'mariadb'] as const) {
     test(`recognizes structurally nullable CASE and SUM projections for ${system}`, () => {
@@ -879,6 +959,52 @@ describe('not-in-nullable', () => {
         ctxFor(
           'SELECT id FROM blocked_users WHERE id NOT IN (WITH users AS (SELECT 1 AS id) SELECT id FROM users)',
           { ...schema, users: nullableUsers }
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('flags an unambiguous CTE output that statically projects NULL', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM blocked_users WHERE id NOT IN (WITH users AS (SELECT NULL AS id) SELECT id FROM users)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('does not flag an unambiguous CTE output that projects a non-null literal', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM blocked_users WHERE id NOT IN (WITH users AS (SELECT 1 AS id) SELECT id FROM users)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('flags an unambiguous derived-table output that statically projects NULL', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM blocked_users WHERE id NOT IN (SELECT d.id FROM (SELECT NULL AS id) d)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('does not flag an unambiguous derived-table output that projects a non-null literal', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM blocked_users WHERE id NOT IN (SELECT d.id FROM (SELECT 1 AS id) d)',
+          schema
         )
       )
     ).toHaveLength(0)

@@ -13,6 +13,12 @@ interface NullHazard {
   kind: 'explicit-null' | 'nullable-expression' | 'nullable-subquery'
   expression?: string
   compoundProjection?: boolean
+  schemaVerified: boolean
+}
+
+interface NullableFact {
+  expression: string
+  schemaVerified: boolean
 }
 
 const NULL_PROPAGATING_BINARY = new Set([
@@ -45,7 +51,7 @@ const COMMON_NULL_ON_EMPTY_AGGREGATES = [
   'AVG',
   'SUM',
 ] as const
-const NULL_ON_EMPTY_AGGREGATES: Record<
+const NULL_ON_EMPTY_FUNCTION_AGGREGATES: Record<
   SqlDatabaseSystem,
   ReadonlySet<string>
 > = {
@@ -62,11 +68,33 @@ const NULL_ON_EMPTY_AGGREGATES: Record<
     'XMLAGG',
     'BIT_AND',
     'BIT_OR',
+    'BIT_XOR',
     'BOOL_AND',
     'BOOL_OR',
     'EVERY',
     'RANGE_AGG',
     'RANGE_INTERSECT_AGG',
+    'ANY_VALUE',
+    'CORR',
+    'COVAR_POP',
+    'COVAR_SAMP',
+    'REGR_AVGX',
+    'REGR_AVGY',
+    'REGR_INTERCEPT',
+    'REGR_R2',
+    'REGR_SLOPE',
+    'REGR_SXX',
+    'REGR_SXY',
+    'REGR_SYY',
+    'STDDEV',
+    'STDDEV_POP',
+    'STDDEV_SAMP',
+    'VARIANCE',
+    'VAR_POP',
+    'VAR_SAMP',
+    'MODE',
+    'PERCENTILE_CONT',
+    'PERCENTILE_DISC',
   ]),
   mysql: new Set([
     ...COMMON_NULL_ON_EMPTY_AGGREGATES,
@@ -94,6 +122,11 @@ const NULL_ON_EMPTY_AGGREGATES: Record<
     'VAR_POP',
     'VAR_SAMP',
   ]),
+}
+const NON_NULL_AGGREGATES: Record<SqlDatabaseSystem, ReadonlySet<string>> = {
+  postgresql: new Set(['COUNT', 'REGR_COUNT']),
+  mysql: new Set(['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR']),
+  mariadb: new Set(['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR']),
 }
 
 interface RelationBinding {
@@ -182,40 +215,148 @@ function aggregateName(node: AstNode): string | undefined {
   return undefined
 }
 
+function scopedProjectedExpression(
+  node: AstNode,
+  statement: AstNode
+): { expression: AstNode; statement: AstNode } | undefined {
+  const reference = columnRefParts(node)
+  const sources = Array.isArray(statement.from)
+    ? (statement.from as AstNode[])
+    : []
+  if (!reference || sources.length !== 1) return undefined
+
+  const source = sources[0]!
+  const sourceQualifier =
+    typeof source.as === 'string'
+      ? source.as
+      : typeof source.table === 'string'
+        ? source.table
+        : undefined
+  if (
+    reference.qualifier &&
+    sourceQualifier?.toLowerCase() !== reference.qualifier.toLowerCase()
+  ) {
+    return undefined
+  }
+
+  let scopedStatement: AstNode | undefined
+  const sourceTable = source.table
+  if (source.expr && typeof source.expr === 'object') {
+    const derived = source.expr as AstNode
+    if (derived.ast && typeof derived.ast === 'object') {
+      scopedStatement = derived.ast as AstNode
+    }
+  } else if (
+    typeof sourceTable === 'string' &&
+    (source.db === null || source.db === undefined) &&
+    Array.isArray(statement.with)
+  ) {
+    const matches = (statement.with as AstNode[]).filter((binding) => {
+      if (!binding.name || typeof binding.name !== 'object') return false
+      const value = (binding.name as AstNode).value
+      return (
+        typeof value === 'string' &&
+        value.toLowerCase() === sourceTable.toLowerCase()
+      )
+    })
+    if (matches.length !== 1) return undefined
+    const stmt = matches[0]!.stmt
+    if (stmt && typeof stmt === 'object') scopedStatement = stmt as AstNode
+  }
+
+  if (!scopedStatement || !Array.isArray(scopedStatement.columns)) {
+    return undefined
+  }
+  const outputs = (scopedStatement.columns as AstNode[]).filter(
+    (column) =>
+      typeof column.as === 'string' &&
+      column.as.toLowerCase() === reference.column.toLowerCase() &&
+      column.expr &&
+      typeof column.expr === 'object'
+  )
+  if (outputs.length !== 1) return undefined
+  return {
+    expression: outputs[0]!.expr as AstNode,
+    statement: scopedStatement,
+  }
+}
+
 function nullableExpression(
   node: AstNode,
   statement: AstNode,
   schema: Parameters<typeof resolveColumnRef>[0],
-  system: SqlDatabaseSystem
-): string | undefined {
-  if (node.type === 'null') return 'NULL'
+  system: SqlDatabaseSystem,
+  allowSchema = true
+): NullableFact | undefined {
+  if (node.type === 'null') {
+    return { expression: 'NULL', schemaVerified: false }
+  }
 
   if (node.type === 'column_ref') {
-    const resolved = resolveColumnRef(schema, statement, node)
-    return resolved?.column.nullable ||
-      (resolved !== undefined && columnIsNullExtended(node, statement, schema))
-      ? expressionName(node)
-      : undefined
+    if (allowSchema) {
+      const resolved = resolveColumnRef(schema, statement, node)
+      if (
+        resolved?.column.nullable ||
+        (resolved !== undefined &&
+          columnIsNullExtended(node, statement, schema))
+      ) {
+        return {
+          expression: expressionName(node) ?? 'column',
+          schemaVerified: true,
+        }
+      }
+    }
+
+    const scoped = scopedProjectedExpression(node, statement)
+    if (scoped) {
+      return nullableExpression(
+        scoped.expression,
+        scoped.statement,
+        schema,
+        system,
+        false
+      )
+    }
+    return undefined
   }
 
   if (node.type === 'case') {
     const args = Array.isArray(node.args) ? (node.args as AstNode[]) : []
     const otherwise = args.find((argument) => argument.type === 'else')
-    if (!otherwise) return 'CASE expression'
+    if (!otherwise) {
+      return { expression: 'CASE expression', schemaVerified: false }
+    }
 
     for (const argument of args) {
       const result = argument.result as AstNode | undefined
       if (!result) continue
-      const nullable = nullableExpression(result, statement, schema, system)
+      const nullable = nullableExpression(
+        result,
+        statement,
+        schema,
+        system,
+        allowSchema
+      )
       if (nullable) return nullable
     }
     return undefined
   }
 
-  if (node.type === 'aggr_func' || node.type === 'function') {
+  if (node.type === 'aggr_func') {
     const name = aggregateName(node)
-    if (name && NULL_ON_EMPTY_AGGREGATES[system].has(name)) {
-      return `${name} aggregate`
+    if (!name || !NON_NULL_AGGREGATES[system].has(name)) {
+      return {
+        expression: `${name ?? 'unknown'} aggregate`,
+        schemaVerified: false,
+      }
+    }
+    return undefined
+  }
+
+  if (node.type === 'function') {
+    const name = aggregateName(node)
+    if (name && NULL_ON_EMPTY_FUNCTION_AGGREGATES[system].has(name)) {
+      return { expression: `${name} aggregate`, schemaVerified: false }
     }
     return undefined
   }
@@ -223,7 +364,13 @@ function nullableExpression(
   if (node.type === 'cast') {
     const expression = node.expr as AstNode | undefined
     if (expression) {
-      return nullableExpression(expression, statement, schema, system)
+      return nullableExpression(
+        expression,
+        statement,
+        schema,
+        system,
+        allowSchema
+      )
     }
   }
 
@@ -235,7 +382,13 @@ function nullableExpression(
     const right = node.right as AstNode | undefined
     for (const candidate of [left, right]) {
       if (!candidate) continue
-      const nullable = nullableExpression(candidate, statement, schema, system)
+      const nullable = nullableExpression(
+        candidate,
+        statement,
+        schema,
+        system,
+        allowSchema
+      )
       if (nullable) return nullable
     }
   }
@@ -246,7 +399,13 @@ function nullableExpression(
   ) {
     const expression = node.expr as AstNode | undefined
     if (expression) {
-      return nullableExpression(expression, statement, schema, system)
+      return nullableExpression(
+        expression,
+        statement,
+        schema,
+        system,
+        allowSchema
+      )
     }
   }
 
@@ -436,7 +595,9 @@ function rhsHazard(
 
   for (const value of values) {
     const item = value as AstNode
-    if (item.type === 'null') return { kind: 'explicit-null' }
+    if (item.type === 'null') {
+      return { kind: 'explicit-null', schemaVerified: false }
+    }
 
     const subquery = item.ast
     if (subquery && typeof subquery === 'object') {
@@ -464,8 +625,9 @@ function rhsHazard(
       ) {
         return {
           kind: 'nullable-subquery',
-          expression: nullable,
+          expression: nullable.expression,
           compoundProjection: expression.type !== 'column_ref',
+          schemaVerified: nullable.schemaVerified,
         }
       }
       continue
@@ -473,7 +635,11 @@ function rhsHazard(
 
     const nullable = nullableExpression(item, statement, schema, system)
     if (nullable) {
-      return { kind: 'nullable-expression', expression: nullable }
+      return {
+        kind: 'nullable-expression',
+        expression: nullable.expression,
+        schemaVerified: nullable.schemaVerified,
+      }
     }
   }
 
@@ -490,7 +656,7 @@ function hazardMessage(hazard: NullHazard): string {
     }
     return `The NOT IN subquery projects nullable expression '${hazard.expression}', so a NULL can suppress every result. Filter the projected value in the subquery with WHERE ${hazard.expression} IS NOT NULL. Do not mechanically rewrite this predicate to NOT EXISTS unless correlation, types, and multiplicity semantics are proven equivalent.`
   }
-  return `The right-hand NOT IN expression '${hazard.expression}' is nullable according to schema, so it can suppress every result. Filter NULL values before applying NOT IN.`
+  return `The right-hand NOT IN expression '${hazard.expression}' can evaluate to NULL, so it can suppress every result. Filter NULL values before applying NOT IN.`
 }
 
 export const notInNullableRule: LintRule = {
@@ -540,7 +706,7 @@ export const notInNullableRule: LintRule = {
         severity: 'warn',
         message: hazardMessage(hazard),
         span: hasExactSpan ? candidateSpan : whereRange,
-        schemaVerified: ctx.schema.available,
+        schemaVerified: hazard.schemaVerified,
       })
     })
 

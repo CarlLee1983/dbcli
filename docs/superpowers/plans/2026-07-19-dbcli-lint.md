@@ -26,6 +26,7 @@
 - The design spec governs schema architecture: layered files under `.dbcli/schemas/` are loaded through `SchemaLayeredLoader`; references to `config.schema` in the original plan were an oversight.
 - The design spec governs the CLI surface: `--use <conn>` remains available as the existing global option and selects the named connection plus its isolated schema cache.
 - The grouped rule-test files in Tasks 3–5 are an approved plan-level organization choice, provided each rule retains clearly named, independently executable test cases.
+- The `not-in-nullable` rule detects the actual SQL NULL hazard on the right-hand side of `NOT IN`: explicit NULL list items, nullable subquery projections, and other RHS expressions known nullable from schema facts. Nullable left-hand columns are not findings for this rule. Subquery remediation prefers filtering the projection with `IS NOT NULL`; `NOT EXISTS` is suggested only when correlation and semantics are unambiguous, and is never auto-rewritten by this rule.
 
 ## File Structure (final state)
 
@@ -989,6 +990,14 @@ const schema = {
       { name: 'id', type: 'integer', nullable: false, primaryKey: true },
       { name: 'email', type: 'varchar(255)', nullable: true },
       { name: 'ref_code', type: 'varchar(32)', nullable: true },
+      { name: 'nullable_number', type: 'integer', nullable: true },
+    ],
+  },
+  blocked_users: {
+    name: 'blocked_users',
+    columns: [
+      { name: 'id', type: 'integer', nullable: false },
+      { name: 'email', type: 'varchar(255)', nullable: true },
     ],
   },
 } satisfies Record<string, import('@/adapters/types').TableSchema>
@@ -1027,19 +1036,53 @@ describe('implicit-cast', () => {
 })
 
 describe('not-in-nullable', () => {
-  test('flags NOT IN over a nullable column', () => {
+  test('flags an explicit NULL value in the NOT IN list', () => {
     const findings = notInNullableRule.check(
-      ctxFor("SELECT id FROM users WHERE email NOT IN ('a', 'b')", schema)
+      ctxFor('SELECT id FROM users WHERE id NOT IN (1, NULL, 2)', schema)
     )
     expect(findings).toHaveLength(1)
     expect(findings[0].severity).toBe('warn')
-    expect(findings[0].message).toContain('NOT EXISTS')
+    expect(findings[0].message).toContain('NULL')
     expect(findings[0].schemaVerified).toBe(true)
   })
 
-  test('does not flag NOT IN over a NOT NULL column', () => {
+  test('flags a subquery whose projected column is nullable', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE email NOT IN (SELECT email FROM blocked_users)',
+        schema
+      )
+    )
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('IS NOT NULL')
+    expect(findings[0].message).toContain('NOT EXISTS')
+    expect(findings[0].rewrite).toBeUndefined()
+  })
+
+  test('flags another RHS expression known nullable from schema', () => {
+    const findings = notInNullableRule.check(
+      ctxFor('SELECT id FROM users WHERE id NOT IN (1, nullable_number)', schema)
+    )
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('right-hand')
+  })
+
+  test('does not flag a non-null literal list or non-null subquery projection', () => {
     expect(
       notInNullableRule.check(ctxFor('SELECT id FROM users WHERE id NOT IN (1, 2)', schema))
+    ).toHaveLength(0)
+    expect(
+      notInNullableRule.check(
+        ctxFor('SELECT id FROM users WHERE id NOT IN (SELECT id FROM blocked_users)', schema)
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not confuse a nullable left-hand column with the RHS NULL hazard', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor("SELECT id FROM users WHERE email NOT IN ('a', 'b')", schema)
+      )
     ).toHaveLength(0)
   })
 })
@@ -1122,41 +1165,26 @@ export const implicitCastRule: LintRule = {
 
 ```ts
 // src/core/lint/rules/not-in-nullable.ts
-import type { LintRule, LintFinding, AstNode } from '../types'
-import { walkExpr, whereOf, collectTables, findingSpan } from '../ast-utils'
-
-export const notInNullableRule: LintRule = {
-  name: 'not-in-nullable',
-  requiresSchema: true,
-  check(ctx) {
-    const where = whereOf(ctx.ast)
-    if (!where) return []
-    const tables = collectTables(ctx.ast)
-    const findings: LintFinding[] = []
-    walkExpr(where, (n) => {
-      if (n.type !== 'binary_expr') return
-      if (String(n.operator).toUpperCase() !== 'NOT IN') return
-      const left = n.left as AstNode | undefined
-      if (left?.type !== 'column_ref') return
-      const resolved = ctx.schema.resolveColumn(tables, String(left.column))
-      if (!resolved || !resolved.column.nullable) return
-      findings.push({
-        rule: 'not-in-nullable',
-        severity: 'warn',
-        message: `NOT IN over nullable column '${resolved.column.name}': if the list (or a subquery result) contains NULL the predicate yields no rows. Prefer NOT EXISTS, or add an explicit IS NOT NULL guard.`,
-        span: findingSpan(ctx.sql, 'not in'),
-        schemaVerified: true,
-      })
-    })
-    return findings
-  },
-}
+// Required implementation behavior:
+// 1. Walk WHERE for binary_expr nodes whose operator is NOT IN.
+// 2. Inspect only n.right. A nullable n.left is not a finding.
+// 3. For expr_list values, flag explicit null nodes and column/expression nodes
+//    whose referenced schema column is nullable.
+// 4. For subquery wrappers (`value[i].ast`), inspect the SELECT projection in
+//    that subquery's own FROM/alias scope. Flag a direct nullable projected
+//    column; do not infer nullability from unrelated WHERE/JOIN expressions.
+// 5. Preserve table qualifiers/aliases when resolving columns. If a qualified
+//    reference cannot be resolved unambiguously, skip it.
+// 6. Emit a warn finding with schemaVerified true and no rewrite. For a
+//    subquery, prefer `WHERE projected_column IS NOT NULL`; mention NOT EXISTS
+//    only when correlation, type classification, and multiplicity semantics
+//    can be preserved. Never auto-rewrite to NOT EXISTS.
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/unit/core/lint/rules-schema-aware.test.ts`
-Expected: PASS (7 tests). If `NOT IN` surfaces differently in the AST (e.g. a unary `NOT` wrapping an `IN` binary_expr), adapt the operator check: also match `n.type === 'unary_expr' && n.operator === 'NOT'` wrapping an `IN` — log the ast to confirm, keep the behavioral assertions.
+Expected: PASS (10 tests before additional review regressions). If `NOT IN` surfaces differently in the AST (e.g. a unary `NOT` wrapping an `IN` binary_expr), adapt the operator check: also match `n.type === 'unary_expr' && n.operator === 'NOT'` wrapping an `IN` — log the ast to confirm, keep the behavioral assertions.
 
 - [ ] **Step 5: Commit**
 

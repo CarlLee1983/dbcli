@@ -21,14 +21,26 @@ const SCALAR_TYPES: Record<string, string> = {
   Bytes: 'bytea',
 }
 
-const NATIVE_TYPES: Record<string, string> = {
-  Text: 'text',
-  VarChar: 'varchar',
-  Uuid: 'uuid',
-  Timestamptz: 'timestamp with time zone',
-  Date: 'date',
-  SmallInt: 'smallint',
-  JsonB: 'jsonb',
+type NativeArgumentRule = 'none' | 'positive-integer' | 'optional-nonnegative-integer'
+
+interface NativeTypeRule {
+  type: string
+  prismaScalar: string
+  arguments: NativeArgumentRule
+}
+
+const NATIVE_TYPES: Record<string, NativeTypeRule> = {
+  Text: { type: 'text', prismaScalar: 'String', arguments: 'none' },
+  VarChar: { type: 'varchar', prismaScalar: 'String', arguments: 'positive-integer' },
+  Uuid: { type: 'uuid', prismaScalar: 'String', arguments: 'none' },
+  Timestamptz: {
+    type: 'timestamp with time zone',
+    prismaScalar: 'DateTime',
+    arguments: 'optional-nonnegative-integer',
+  },
+  Date: { type: 'date', prismaScalar: 'DateTime', arguments: 'none' },
+  SmallInt: { type: 'smallint', prismaScalar: 'Int', arguments: 'none' },
+  JsonB: { type: 'jsonb', prismaScalar: 'Json', arguments: 'none' },
 }
 
 interface SchemaBlock {
@@ -285,22 +297,57 @@ function parseField(
 }
 
 function buildColumns(model: ModelInfo, modelNames: Set<string>, unparsed: UnparsedEntry[]): void {
+  const duplicateFieldNames = findDuplicates(model.fields.map((field) => field.name))
+  for (const fieldName of duplicateFieldNames) {
+    addBlocked(unparsed, `${model.name}.${fieldName}`, `duplicate model field name '${fieldName}'`)
+  }
+
+  const mappedNames = new Map<RawField, string>()
+  for (const field of model.fields) {
+    if (duplicateFieldNames.has(field.name)) continue
+    const mappedName = getMappedFieldName(field, `${model.name}.${field.name}`, unparsed)
+    if (mappedName) mappedNames.set(field, mappedName)
+  }
+  const duplicateMappedNames = findDuplicates(
+    model.fields
+      .filter(
+        (field) =>
+          !duplicateFieldNames.has(field.name) &&
+          !field.isList &&
+          !modelNames.has(field.type) &&
+          Boolean(SCALAR_TYPES[field.type])
+      )
+      .map((field) => mappedNames.get(field))
+      .filter((name): name is string => name !== undefined)
+  )
+  for (const columnName of duplicateMappedNames) {
+    addBlocked(unparsed, model.name, `duplicate mapped column name '${columnName}'`)
+  }
+
   for (const field of model.fields) {
     const location = `${model.name}.${field.name}`
+    if (duplicateFieldNames.has(field.name)) continue
     if (hasDuplicateAttributes(field.attributes)) {
       addBlocked(unparsed, location, 'duplicate field attribute')
       continue
     }
 
-    const mappedName = getMappedFieldName(field, location, unparsed)
+    const mappedName = mappedNames.get(field)
     if (!mappedName) continue
 
     if (field.isList) {
       if (field.attributes.length > 0 || field.optional) {
         addBlocked(unparsed, location, 'unsupported attributes or optional marker on a list field')
+      } else if (!modelNames.has(field.type)) {
+        addBlocked(
+          unparsed,
+          location,
+          `unsupported list field type '${field.type}' (enum/scalar/composite/unknown)`
+        )
       }
       continue
     }
+    if (duplicateMappedNames.has(mappedName)) continue
     if (modelNames.has(field.type)) {
       const relation = getAttribute(field, 'relation')
       const incompatible = field.attributes.find((attribute) => attribute.name !== 'relation')
@@ -343,16 +390,25 @@ function buildColumns(model: ModelInfo, modelNames: Set<string>, unparsed: Unpar
     let type = neutralType
     if (native) {
       const nativeName = native.name.slice(3)
-      const mappedNative = NATIVE_TYPES[nativeName]
-      if (!mappedNative || nativeAttributes.length > 1) {
+      const nativeRule = NATIVE_TYPES[nativeName]
+      if (!nativeRule || nativeAttributes.length > 1) {
         addBlocked(unparsed, location, `unsupported native type '@db.${nativeName}'`)
         continue
       }
-      if (native.args !== undefined && !native.args.trim()) {
-        addBlocked(unparsed, location, `malformed native type '@db.${nativeName}'`)
+      const nativeArguments = native.args?.trim()
+      if (
+        nativeRule.prismaScalar !== field.type ||
+        !validNativeArguments(nativeRule.arguments, nativeArguments)
+      ) {
+        addBlocked(
+          unparsed,
+          location,
+          `malformed or incompatible native type '@db.${nativeName}' for '${field.type}'`
+        )
         continue
       }
-      type = native.args === undefined ? mappedNative : `${mappedNative}(${native.args.trim()})`
+      type =
+        nativeArguments === undefined ? nativeRule.type : `${nativeRule.type}(${nativeArguments})`
     }
 
     const defaultAttribute = getAttribute(field, 'default')
@@ -546,14 +602,17 @@ function parseFieldList(args: string | undefined): string[] | undefined {
   if (args === undefined) return undefined
   const match = args.trim().match(/^\[([^\]]*)\]$/)
   if (!match) return undefined
-  const fields = (match[1] ?? '')
-    .split(',')
-    .map((field) => field.trim())
-    .filter(Boolean)
+  const fields = (match[1] ?? '').split(',').map((field) => field.trim())
   if (fields.length === 0 || fields.some((field) => !/^[A-Za-z_]\w*$/.test(field))) {
     return undefined
   }
   return fields
+}
+
+function validNativeArguments(rule: NativeArgumentRule, args: string | undefined): boolean {
+  if (rule === 'none') return args === undefined
+  if (rule === 'positive-integer') return args !== undefined && /^[1-9]\d*$/.test(args)
+  return args === undefined || /^(?:0|[1-9]\d*)$/.test(args)
 }
 
 function parseRelationArguments(

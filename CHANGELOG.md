@@ -5,6 +5,25 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.41.0] - 2026-07-19 - ORM Drift 比對與無損 Schema Identity
+
+### Added
+
+- **`dbcli diff --against-orm` ORM drift 比對。** 可將 Prisma schema、DDL／migration SQL 或 normalized JSON 與既有 SQL schema cache 比對；支援多檔 DDL、filesystem glob、格式自動偵測、大小寫敏感的 `--ignore` pattern，以及 JSON、table、Markdown 輸出。比對只讀本地 cache，不連線、不更新 cache，也不執行提案。
+- **結構化 drift 分類與安全提案。** 報告區分 `missing_in_db`、`missing_in_orm`、`mismatch`、`unmanaged` 與 `unparsed`；只有計分後的 error 會使 drift exit code 為 `1`。可無損表達的缺漏欄位／index 會產生 shell-safe、預設 dry-run 的 `migrate` 提案，其餘情況升級至 `migration-review`。
+- **`orm-drift-review` agent task pack。** 工作流依序執行 blacklist 檢查、schema cache 更新與 ORM drift JSON 比對，並要求將 dry-run DDL 與精確目標交給獨立 migration review。
+
+### Changed
+
+- **Schema identity 改為精確保存。** PostgreSQL schema／table 名稱不再正規化為小寫；quoted 與 unquoted identifier 依 SQL 規則解析，qualified name、ignore pattern、foreign key 與 drift output 都保留大小寫與 schema identity。
+- **ORM drift 文件完整同步。** 英文／繁體中文的 Markdown 與 HTML 使用者文件、skill assets、各平台 plugin 副本及 reference 已補上格式、exit code、安全邊界與操作流程。
+- **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.41.0`。
+
+### Fixed
+
+- **Lossy ORM drift proposal 改為 fail closed。** Schema-qualified target、dash-leading positional、無法無損表達的 index column、identity collision 與不支援語法不再輸出可能損壞的指令，而是阻擋或升級人工審查。
+- **DDL／Prisma adapter identity 與語意硬化。** 多檔 DDL 共用 deterministic context，foreign key pairing、default schema resolution、table option／partition 阻擋、重複 index 去重與 Unicode code-point 穩定排序皆保留來源語意。
+
 ## [1.40.0] - 2026-07-19 - SQL Lint、安全強化與 Agent 工作流擴充
 
 ### Added

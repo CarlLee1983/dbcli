@@ -92,6 +92,38 @@ describe('select-star', () => {
     expect(findings[0].schemaVerified).toBe(true)
   })
 
+  test('withholds a PostgreSQL schema rewrite for a schema-qualified table', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [{ name: 'cached_only', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM archive.users', { users }, 'postgresql')
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].verifyCommand).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  for (const system of ['mysql', 'mariadb'] as const) {
+    test(`withholds a ${system} schema rewrite for a database-qualified table`, () => {
+      const users: TableSchema = {
+        name: 'users',
+        columns: [{ name: 'cached_only', type: 'integer', nullable: false }],
+      }
+      const findings = selectStarRule.check(
+        ctxFor('SELECT * FROM otherdb.users', { users }, system)
+      )
+
+      expect(findings).toHaveLength(1)
+      expect(findings[0].rewrite).toBeUndefined()
+      expect(findings[0].verifyCommand).toBeUndefined()
+      expect(findings[0].schemaVerified).toBe(false)
+    })
+  }
+
   test('withholds PostgreSQL select-star rewrite for a case-folded schema collision', () => {
     const lower: TableSchema = {
       name: 'foo',

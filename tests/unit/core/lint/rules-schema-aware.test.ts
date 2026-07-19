@@ -277,6 +277,54 @@ describe('implicit-cast', () => {
     expect(findings[0].message).toContain("'id'")
   })
 
+  test('does not resolve a CTE-shadowed name through the physical schema cache', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor(
+          "WITH users AS (SELECT '1' AS id) SELECT id FROM users WHERE id = '1'",
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not resolve a derived relation through the physical schema cache', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor(
+          "SELECT id FROM (SELECT '1' AS id) users WHERE id = '1'",
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not resolve a PostgreSQL schema-qualified relation through an unqualified cache entry', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor(
+          "SELECT id FROM archive.users WHERE id = '1'",
+          schema,
+          'postgresql'
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  for (const system of ['mysql', 'mariadb'] as const) {
+    test(`does not resolve a ${system} database-qualified relation through an unqualified cache entry`, () => {
+      expect(
+        implicitCastRule.check(
+          ctxFor(
+            "SELECT id FROM otherdb.users WHERE id = '1'",
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(0)
+    })
+  }
+
   test('does not recursively lint a nested predicate with the outer table scope', () => {
     expect(
       implicitCastRule.check(
@@ -817,6 +865,64 @@ describe('not-in-nullable', () => {
       )
     ).toHaveLength(0)
   })
+
+  test('does not use nullable physical-table facts for a CTE projection with the same name', () => {
+    const nullableUsers: TableSchema = {
+      ...schema.users,
+      columns: schema.users.columns.map((column) =>
+        column.name === 'id' ? { ...column, nullable: true } : column
+      ),
+    }
+
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM blocked_users WHERE id NOT IN (WITH users AS (SELECT 1 AS id) SELECT id FROM users)',
+          { ...schema, users: nullableUsers }
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not use nullable cache facts for a PostgreSQL schema-qualified NOT IN source', () => {
+    const nullableUsers: TableSchema = {
+      ...schema.users,
+      columns: schema.users.columns.map((column) =>
+        column.name === 'id' ? { ...column, nullable: true } : column
+      ),
+    }
+
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM blocked_users WHERE id NOT IN (SELECT id FROM archive.users)',
+          { ...schema, users: nullableUsers },
+          'postgresql'
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  for (const system of ['mysql', 'mariadb'] as const) {
+    test(`does not use nullable cache facts for a ${system} database-qualified NOT IN source`, () => {
+      const nullableUsers: TableSchema = {
+        ...schema.users,
+        columns: schema.users.columns.map((column) =>
+          column.name === 'id' ? { ...column, nullable: true } : column
+        ),
+      }
+
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM blocked_users WHERE id NOT IN (SELECT id FROM otherdb.users)',
+            { ...schema, users: nullableUsers },
+            system
+          )
+        )
+      ).toHaveLength(0)
+    })
+  }
 
   test('does not flag IS NULL because it always returns a non-null boolean', () => {
     expect(

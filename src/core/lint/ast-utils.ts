@@ -64,10 +64,30 @@ function cteName(binding: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function cteNames(ast: AstNode): Set<string> | undefined {
+  const withBindings = ast.with
+  if (!Array.isArray(withBindings) || withBindings.length === 0) {
+    return new Set()
+  }
+
+  const names = withBindings.map(cteName)
+  if (names.some((name) => name === undefined)) return undefined
+  return new Set(
+    names.flatMap((name) =>
+      typeof name === 'string' ? [name.toLowerCase()] : []
+    )
+  )
+}
+
+function hasRelationQualifier(source: AstNode): boolean {
+  return source.db !== null && source.db !== undefined
+}
+
 /**
  * Returns the table name only when the statement's FROM clause proves it is a
  * single physical relation. CTE and derived bindings are intentionally
- * excluded because the schema cache describes physical tables only.
+ * excluded because the schema cache describes unqualified physical tables
+ * only.
  */
 export function singlePhysicalTable(ast: AstNode): string | undefined {
   const from = ast.from
@@ -75,29 +95,12 @@ export function singlePhysicalTable(ast: AstNode): string | undefined {
 
   const source = from[0] as AstNode
   if (source.expr && typeof source.expr === 'object') return undefined
+  if (hasRelationQualifier(source)) return undefined
   const table = source.table
   if (typeof table !== 'string') return undefined
 
-  const withBindings = ast.with
-  if (!Array.isArray(withBindings) || withBindings.length === 0) {
-    return table
-  }
-
-  const names = withBindings.map(cteName)
-  if (names.some((name) => name === undefined)) return undefined
-
-  const isQualified =
-    typeof source.db === 'string' && source.db.trim().length > 0
-  if (
-    !isQualified &&
-    names.some(
-      (name) =>
-        typeof name === 'string' &&
-        name.toLowerCase() === table.toLowerCase()
-    )
-  ) {
-    return undefined
-  }
+  const scopedNames = cteNames(ast)
+  if (!scopedNames || scopedNames.has(table.toLowerCase())) return undefined
 
   return table
 }
@@ -134,29 +137,49 @@ export function resolveColumnRef(
   const reference = columnRefParts(node)
   if (!reference) return undefined
 
-  const tables = new Set(collectTables(ast).map((table) => table.toLowerCase()))
   const from = Array.isArray(ast.from) ? ast.from : []
-  const bindings = from.flatMap((item) => {
+  const scopedNames = cteNames(ast)
+  if (!scopedNames) return undefined
+
+  const bindings = from.map((item) => {
     const source = item as AstNode
     const table = source.table
-    if (typeof table !== 'string' || !tables.has(table.toLowerCase())) return []
     const alias =
       typeof source?.as === 'string' && source.as.length > 0
         ? source.as
         : undefined
-    return [{ table, alias }]
+    const physical =
+      typeof table === 'string' &&
+      !(source.expr && typeof source.expr === 'object') &&
+      !hasRelationQualifier(source) &&
+      !scopedNames.has(table.toLowerCase())
+    const qualifier = alias ?? (typeof table === 'string' ? table : undefined)
+    return {
+      table: typeof table === 'string' ? table : undefined,
+      qualifier,
+      physical,
+    }
   })
 
+  if (!reference.qualifier && bindings.some((binding) => !binding.physical)) {
+    return undefined
+  }
+
   const candidates = reference.qualifier
-    ? bindings.filter(({ table, alias }) => {
-        const qualifier = reference.qualifier?.toLowerCase()
-        return alias
-          ? alias.toLowerCase() === qualifier
-          : table.toLowerCase() === qualifier
-      })
+    ? bindings.filter(
+        ({ qualifier }) =>
+          qualifier?.toLowerCase() === reference.qualifier?.toLowerCase()
+      )
     : bindings
+  if (
+    candidates.length === 0 ||
+    candidates.some((candidate) => !candidate.physical || !candidate.table)
+  ) {
+    return undefined
+  }
 
   const resolved = candidates.flatMap(({ table }) => {
+    if (!table) return []
     const match = schema.resolveColumn([table], reference.column)
     return match ? [match] : []
   })

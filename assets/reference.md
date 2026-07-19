@@ -195,6 +195,25 @@ dbcli explain --bulk @analytics/*                     # glob over saved queries
 > - `--analyze` executes the statement — do not use against destructive SQL.
 > - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
 
+### lint
+
+Static SQL anti-pattern analysis for PostgreSQL, MySQL, and MariaDB. `lint`
+never connects to the database; schema-aware rules read only the layered cache
+under `.dbcli/schemas/`.
+
+```bash
+dbcli lint "SELECT * FROM users"
+dbcli --use staging lint @analytics/live-summary --format json
+dbcli lint --bulk @queries.sql --format markdown
+dbcli lint "SELECT id FROM users" --min-severity warn --no-schema
+```
+
+**Options:** `--format <text|json|markdown>` (default `text`),
+`--min-severity <info|warn|error>` (default `info`), `--no-schema`,
+`--bulk <input>`, and `--recovery`. Use the existing global
+`dbcli --use <connection>` option before `lint` to select a named connection
+and its isolated schema-cache directory.
+
 ### plan
 
 Static SQL risk analyzer. Classifies a statement into the same permission tiers

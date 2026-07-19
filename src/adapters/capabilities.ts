@@ -18,6 +18,7 @@ export type CommandCapabilityKey =
   | 'schemaSingle'
   | 'schemaFullScan'
   | 'query'
+  | 'lint'
   | 'queryOutput'
   | 'queryLimitGuard'
   | 'q'
@@ -61,6 +62,7 @@ export const COMMAND_CAPABILITY_KEYS = Object.freeze([
   'schemaSingle',
   'schemaFullScan',
   'query',
+  'lint',
   'queryOutput',
   'queryLimitGuard',
   'q',
@@ -142,6 +144,7 @@ const SQL_BASE = {
   schemaSingle: cap('supported', 'readonly', 'Reads a single table schema.'),
   schemaFullScan: cap('supported', 'readonly', 'Full scan, refresh, and reset are supported.'),
   query: cap('supported', 'readonly', 'Runs SQL through permission and blacklist guards.'),
+  lint: cap('supported', 'readonly', 'Statically analyzes SQL without connecting to the database.'),
   queryOutput: cap('supported', 'readonly', 'table/json/csv output is supported.'),
   queryLimitGuard: cap(
     'supported',
@@ -181,6 +184,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     mariadb: Object.freeze(SQL_BASE),
     mongodb: Object.freeze({
       ...SQL_BASE,
+      lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'MongoDB schema is sampled from documents.'),
       schemaFullScan: cap('limited', 'readonly', 'Full scan is sampled and document-oriented.'),
       query: cap('limited', 'readonly', 'Uses JSON filter or aggregation syntax, not SQL.'),
@@ -231,6 +235,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     }),
     redis: Object.freeze({
       ...SQL_BASE,
+      lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'Per-key synthetic schema only.'),
       schemaFullScan: cap('unsupported', 'none', 'Redis has no full schema cache scan.'),
       query: cap('limited', 'readonly', 'Runs allow-listed Redis commands.'),
@@ -273,6 +278,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     }),
     elasticsearch: Object.freeze({
       ...SQL_BASE,
+      lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'Schema flattens index mappings.'),
       schemaFullScan: cap('supported', 'readonly', 'Full scan iterates non-system indices.'),
       query: cap('limited', 'readonly', 'Uses JSON DSL or Lucene query strings with an index.'),

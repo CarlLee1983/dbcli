@@ -44,6 +44,17 @@ describe('engine capability registry', () => {
     expect(getEngineCapability('redis', 'completion').status).toBe('not-applicable')
   })
 
+  test('lint is readonly for SQL engines and unsupported elsewhere', () => {
+    for (const engine of ['postgresql', 'mysql', 'mariadb'] as const) {
+      expect(getEngineCapability(engine, 'lint')).toEqual(
+        expect.objectContaining({ status: 'supported', tier: 'readonly' })
+      )
+    }
+    for (const engine of ['mongodb', 'redis', 'elasticsearch'] as const) {
+      expect(getEngineCapability(engine, 'lint').status).toBe('unsupported')
+    }
+  })
+
   test('Redis parity pack (v1.21.0): shell / auto-limit / blacklist capabilities', () => {
     const shell = getEngineCapability('redis', 'shell')
     expect(shell.status).toBe('limited')

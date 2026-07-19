@@ -22,6 +22,7 @@ import { reportCommand } from './commands/report'
 import { guideCommand } from './commands/guide'
 import { registerMissingIndexCommand } from './commands/guide-missing-index'
 import { explainCommand } from './commands/explain'
+import { lintCommand } from './commands/lint'
 import { snapshotCommand } from './commands/snapshot'
 import { assertCommand } from './commands/assert'
 import { verificationCommand } from './commands/verification'
@@ -277,6 +278,7 @@ export function buildProgram(): Command {
   program.addCommand(useCommand)
   program.addCommand(queriesCommand)
   program.addCommand(explainCommand)
+  program.addCommand(lintCommand)
   program.addCommand(snapshotCommand)
   program.addCommand(assertCommand)
   program.addCommand(verificationCommand)

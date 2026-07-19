@@ -191,7 +191,11 @@ export const configModule = {
    * @returns DbcliConfig
    * @throws ConfigError if JSON is invalid or validation fails
    */
-  async read(path: string, connectionName?: string): Promise<DbcliConfig> {
+  async read(
+    path: string,
+    connectionName?: string,
+    options: { loadLayeredSchema?: boolean } = {}
+  ): Promise<DbcliConfig> {
     // 優先使用明確傳入的 connectionName，fallback 到全域 --use 值
     const effectiveConnectionName = connectionName ?? _globalConnectionName
 
@@ -259,31 +263,35 @@ export const configModule = {
               resolvedConnection.password = legacyPassword
             }
 
-            // Load schema from layered cache if it exists (Wave 1 integration)
             let schema = (v2Config.schemas ?? {})[resolved.name] ?? v2Config.schema
-            try {
-              const { SchemaLayeredLoader } = await import('./schema-loader')
-              const loader = new SchemaLayeredLoader(storagePath, { connectionName: resolved.name })
-              const { cache, index } = await loader.initialize()
+            if (options.loadLayeredSchema !== false) {
+              // Load schema from layered cache if it exists (Wave 1 integration)
+              try {
+                const { SchemaLayeredLoader } = await import('./schema-loader')
+                const loader = new SchemaLayeredLoader(storagePath, {
+                  connectionName: resolved.name,
+                })
+                const { cache, index } = await loader.initialize()
 
-              if (index && Object.keys(index.tables).length > 0) {
-                // If layered cache exists, we use it.
-                // For simplicity in this wave, we load all tables into the returned config object
-                // to maintain compatibility with existing commands.
-                const layeredSchema: Record<string, unknown> = {}
-                for (const tableName of Object.keys(index.tables)) {
-                  const s = await cache.getTableSchema(tableName)
-                  if (s) layeredSchema[tableName] = s
+                if (index && Object.keys(index.tables).length > 0) {
+                  // If layered cache exists, we use it.
+                  // For simplicity in this wave, we load all tables into the returned config object
+                  // to maintain compatibility with existing commands.
+                  const layeredSchema: Record<string, unknown> = {}
+                  for (const tableName of Object.keys(index.tables)) {
+                    const s = await cache.getTableSchema(tableName)
+                    if (s) layeredSchema[tableName] = s
+                  }
+                  if (Object.keys(layeredSchema).length > 0) {
+                    schema = layeredSchema
+                  }
                 }
-                if (Object.keys(layeredSchema).length > 0) {
-                  schema = layeredSchema
-                }
+              } catch {
+                // Graceful fallback to config.json schema
+                console.warn(
+                  'Warning: Failed to load layered schema cache, falling back to config.json'
+                )
               }
-            } catch {
-              // Graceful fallback to config.json schema
-              console.warn(
-                'Warning: Failed to load layered schema cache, falling back to config.json'
-              )
             }
 
             // Return v1-compatible shape

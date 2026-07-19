@@ -104,6 +104,7 @@
                     <li class="nav-item"><a href="#error-classification" class="nav-link">錯誤與 Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">文件維護</a></li>
                     <li class="nav-item"><a href="#explain-command" class="nav-link">查詢計畫 (explain)</a></li>
+                    <li class="nav-item"><a href="#lint-command" class="nav-link">靜態 SQL 顧問 (lint)</a></li>
                     <li class="nav-item"><a href="#guide-missing-index-for" class="nav-link">缺失索引建議</a></li>
                 </ul>
             </section>
@@ -219,6 +220,9 @@ dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code><
             <h3 id="query">查詢與資料操作</h3>
             <pre><code># 原生查詢
 dbcli query "SELECT * FROM users LIMIT 10"
+
+# 靜態 SQL 顧問 (不連線資料庫)
+dbcli lint "SELECT * FROM users" --format json
 
 # 執行 Snippet
 dbcli q @snippet --param id=1
@@ -717,7 +721,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>應用程式資料錯誤</strong>：分離資料庫事實與應用程式推論（<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → 最小查詢）。</li>
                 <li><strong>ORM 或 migration</strong>：用 live schema 證據支撐修改（<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>）。</li>
                 <li><strong>PR 資料庫風險審查</strong>：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。</li>
-                <li><strong>慢 endpoint 或查詢</strong>：在提出 index 前優先使用 read-only diagnostics（<code>report --section perf</code> → <code>guide missing-index-for</code>；有 proxy log 時用 <code>proxy analyze</code>）。</li>
+                <li><strong>慢 endpoint 或查詢</strong>：在提出 index 前優先使用 read-only diagnostics（<code>report --section perf</code> → <code>lint "&lt;query&gt;"</code> → <code>guide missing-index-for</code>；有 proxy log 時用 <code>proxy analyze</code>）。</li>
                 <li><strong>安全資料回填</strong>：先界定受影響資料範圍並預覽 mutation（<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back 或 snippet <code>--verify</code>）。</li>
                 <li><strong>環境設定驗證</strong>：不洩漏 secrets 地檢查 config 與 connectivity（<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>）。</li>
             </ul>
@@ -738,7 +742,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
                     <tr><th>情境（使用者怎麼說）</th><th>路徑</th><th>Pack</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>「這條 SQL 很慢」（已有語句）</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
+                    <tr><td>「這條 SQL 很慢」（已有語句）</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>lint "&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
                     <tr><td>「X 表很重/很熱」（已有表名）</td><td><code>skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code></td><td><code>analyze-table-perf</code></td></tr>
                     <tr><td>「這個 API 端點慢」</td><td><code>skill tasks plan slow-endpoint-investigation --param query="&lt;SQL&gt;"</code>（串接 <code>proxy</code> + <code>explain</code> + missing-index）</td><td><code>slow-endpoint-investigation</code></td></tr>
                     <tr><td>全環境效能掃描</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
@@ -772,7 +776,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
         <section id="agent-recovery" class="mt-20">
             <h2>🔁 Agent 修復工作流</h2>
             <p>此處只列三個最常見情境與通用流程。完整失敗代碼對照、Multi-turn <code>--next</code>、Risk gate 詳細語意與 Audit ↔ Envelope 反查請見 <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>。</p>
-            <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
+            <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
 
             <h3 class="mt-10">三個典型情境</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">
@@ -950,6 +954,47 @@ dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
     <li><code>dbcli explain</code> 在 <code>query-only</code> permission 即可執行,不需升權。</li>
     <li>EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。</li>
   </ul>
+</section>
+
+<!-- doc-key: lint-command -->
+<section id="lint-command" class="mt-20">
+  <h2>靜態 SQL 顧問 — <code>dbcli lint</code></h2>
+  <p><code>lint</code> 可分析 PostgreSQL、MySQL 或 MariaDB SQL，不會開啟資料庫連線、執行查詢、更新 schema，也不會套用 rewrite。需要 schema 的規則只會讀取分層 <code>.dbcli/schemas/</code> 快取。</p>
+  <h3>輸入與選項</h3>
+  <pre><code>dbcli lint "SELECT * FROM users WHERE email LIKE '%@example.com'"  # inline SQL
+dbcli lint @analytics/live-summary                               # saved query
+dbcli lint @queries.sql                                          # SQL 檔案
+dbcli lint --bulk '@queries/**/*.sql'                            # 檔案系統 glob
+dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # 混合批次輸入
+dbcli --use staging lint @analytics/live-summary --format json   # 命名快取</code></pre>
+  <p>全域 selector 必須放在指令之前：<code>dbcli --use &lt;conn&gt; lint …</code>。它會選擇 <code>.dbcli/schemas/&lt;conn&gt;/</code>；預設連線則讀取 <code>.dbcli/schemas/</code>。<code>lint</code> 不會退回讀取 <code>config.schema</code>，也不會為了補齊缺少的 metadata 而連線。</p>
+  <table>
+    <thead><tr><th>選項</th><th>預設值</th><th>行為</th></tr></thead>
+    <tbody>
+      <tr><td><code>--format text|json|markdown</code></td><td><code>text</code></td><td>文字、機器可讀 JSON 或 Markdown 報告。</td></tr>
+      <tr><td><code>--min-severity info|warn|error</code></td><td><code>info</code></td><td>隱藏低於所選嚴重度的 findings。</td></tr>
+      <tr><td><code>--no-schema</code></td><td>關閉</td><td>不讀取 schema 快取路徑，並跳過 schema-aware 規則。</td></tr>
+      <tr><td><code>--bulk &lt;input&gt;</code></td><td>無</td><td>解析逗號分隔的 <code>@file</code>、<code>@glob</code> 與 <code>@saved-query</code> 混合輸入。</td></tr>
+      <tr><td><code>--recovery</code></td><td>關閉</td><td>失敗時輸出並儲存已連結的 recovery envelope。</td></tr>
+    </tbody>
+  </table>
+  <h3>規則</h3>
+  <table>
+    <thead><tr><th>規則</th><th>嚴重度</th><th>回報條件</th></tr></thead>
+    <tbody>
+      <tr><td><code>select-star</code></td><td>warn</td><td>頂層 <code>SELECT *</code>；若單一資料表與快取資訊明確，可提供欄位清單草稿。</td></tr>
+      <tr><td><code>unanchored-like</code></td><td>warn</td><td>以 <code>%</code> 開頭的 <code>LIKE</code> / <code>ILIKE</code> pattern。</td></tr>
+      <tr><td><code>missing-limit-offset</code></td><td>info</td><td>使用 <code>OFFSET &gt;= 1000</code> 的深度分頁；可考慮 keyset pagination。</td></tr>
+      <tr><td><code>non-sargable-where</code></td><td>warn</td><td>Predicate 的欄位側套用了函式或算術運算。</td></tr>
+      <tr><td><code>or-to-union</code></td><td>info</td><td>不同欄位之間的頂層 <code>OR</code>；替代方案必須保留 identity 與 multiplicity。</td></tr>
+      <tr><td><code>subquery-to-join</code></td><td>info</td><td><code>IN (SELECT …)</code> 可能適合語意等價的 <code>EXISTS</code>，或已證明唯一的 JOIN。</td></tr>
+      <tr><td><code>distinct-groupby-abuse</code></td><td>warn</td><td>簡單投影欄位完整涵蓋 <code>GROUP BY</code> 時，多餘的 <code>DISTINCT</code>。</td></tr>
+      <tr><td><code>implicit-cast</code></td><td>warn</td><td>經 schema 驗證的欄位/常值型別不符，可能讓索引失效。</td></tr>
+      <tr><td><code>not-in-nullable</code></td><td>warn</td><td><code>NOT IN</code> 右側為 NULL 或可能是 nullable：明確的 <code>NULL</code>、nullable subquery 投影，或已知可為 NULL 的 typed RHS 運算式。</td></tr>
+    </tbody>
+  </table>
+  <p><code>not-in-nullable</code> 專門描述 SQL 右側「NULL 污染 <code>NOT IN</code>」的風險；左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以 <code>IS NOT NULL</code> 過濾投影值；在 correlation 與語意合適時，也可考慮 <code>NOT EXISTS</code>。除非 correlation、型別、qualified-column 解析與 rewrite 目標都明確，dbcli 不會自動執行此 rewrite。</p>
+  <p>解析失敗時，九條規則都會列為 <code>blocked: parse failed</code>。<code>--no-schema</code> 會以 <code>blocked: --no-schema</code> 跳過 <code>implicit-cast</code> 與 <code>not-in-nullable</code>；分層快取不存在時則回報 <code>blocked: schema cache unavailable (run dbcli schema)</code>。有 confidence 標籤的草稿與 shell-safe <code>dbcli explain --analyze</code> 驗證指令都只供回報參考，絕不會自動執行。</p>
 </section>
 
 <section id="guide-missing-index-for" class="mt-20">

@@ -114,6 +114,7 @@ dbcli init
 | `delete` | 刪除資料，強制要求 `--where` 子句。支援 `--plan` 風險預檢（SQL、MongoDB、Redis、Elasticsearch）。 |
 | `blacklist` | 管理敏感資料屏蔽規則。 |
 | `plan "<sql>"` | **靜態分析器**：對 SQL 進行風險分級並給出優化建議。 |
+| `lint "<sql>"` | **靜態顧問**：不連線資料庫，回報 SQL 反模式與選用的 rewrite 草稿。 |
 
 #### DML `--plan` 預檢
 
@@ -167,7 +168,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
-| `--recovery`（所有指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
+| `--recovery`（支援的指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`、`lint` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
 
 <!-- doc-key: data-verification -->
 ### 資料驗證
@@ -688,7 +689,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 - **應用程式資料錯誤**：分離資料庫事實與應用程式推論（`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → 最小查詢）。
 - **ORM 或 migration**：用 live schema 證據支撐 model 與 migration 修改（`schema` → `diff --snapshot` → 用 `migrate add-index`/`add-column` 產生 DDL → `diff --against`）。
 - **PR 資料庫風險審查**：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。
-- **慢 endpoint 或查詢**：在提出 index 前優先使用 read-only diagnostics（`report --section perf` → `guide missing-index-for "<query>"`；有 proxy log 時用 `proxy analyze`）。
+- **慢 endpoint 或查詢**：在提出 index 前優先使用 read-only diagnostics（`report --section perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時用 `proxy analyze`）。
 - **安全資料回填**：先界定受影響資料範圍並預覽 mutation（`schema` → count/scope query → `update ... --dry-run` → read-back 或 snippet `--verify`）。
 - **環境設定驗證**：不洩漏 secrets 地檢查 config shape 與 connectivity（`status` → `doctor` → `inspect --for-agent --no-connect`）。
 
@@ -712,7 +713,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標�
 
 | 情境(使用者怎麼說) | 路徑 | Pack |
 | --- | --- | --- |
-| 「這條 SQL 很慢」(已有語句) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
+| 「這條 SQL 很慢」(已有語句) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | 「X 表很重/很熱」(已有表名) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
 | 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"`(串接 `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
 | 全環境效能掃描 | `report --section perf` → `guide slow-query` | _(report + guide,無 pack)_ |
@@ -744,7 +745,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 
 > 此處只列出最常見的三個情境與通用流程，完整失敗代碼對照、Multi-turn `--next`、Risk gate 詳細語意、Audit ↔ Envelope 反查請見 [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs)。
 
-當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
+當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
 
 ### 情境 1：連線失敗（`CONN_REFUSED`）
 
@@ -956,6 +957,64 @@ dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
 - `--analyze` 會實際執行 query,**不要**對 DML 用。
 - `dbcli explain` 在 `query-only` permission 即可執行,不需升權。
 - EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。
+
+<!-- doc-key: lint-command -->
+## 靜態 SQL 顧問 — `dbcli lint`
+
+`lint` 可分析 PostgreSQL、MySQL 或 MariaDB SQL，不會開啟資料庫連線、
+執行查詢、更新 schema，也不會套用 rewrite。需要 schema 的規則只會讀取
+分層 `.dbcli/schemas/` 快取。
+
+### 輸入與選項
+
+```bash
+dbcli lint "SELECT * FROM users WHERE email LIKE '%@example.com'"  # inline SQL
+dbcli lint @analytics/live-summary                               # saved query
+dbcli lint @queries.sql                                          # SQL 檔案
+dbcli lint --bulk '@queries/**/*.sql'                            # 檔案系統 glob
+dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # 混合批次輸入
+dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
+```
+
+全域 selector 必須放在指令之前：`dbcli --use <conn> lint …`。它會選擇
+`.dbcli/schemas/<conn>/` 中該命名連線的隔離快取；預設連線則讀取
+`.dbcli/schemas/`。`lint` 不會退回讀取 `config.schema`，也不會為了補齊
+缺少的 metadata 而連線。
+
+| 選項 | 預設值 | 行為 |
+| :--- | :--- | :--- |
+| `--format text\|json\|markdown` | `text` | 選擇文字、機器可讀 JSON 或 Markdown 報告。 |
+| `--min-severity info\|warn\|error` | `info` | 隱藏低於所選嚴重度的 findings。 |
+| `--no-schema` | 關閉 | 不讀取 schema 快取路徑，並跳過 schema-aware 規則。 |
+| `--bulk <input>` | 無 | 解析以逗號分隔的 `@file`、`@glob` 與 `@saved-query` 混合輸入。 |
+| `--recovery` | 關閉 | 指令失敗時輸出並儲存已連結的 recovery envelope。 |
+
+### 規則
+
+| 規則 | 嚴重度 | 回報條件 |
+| :--- | :--- | :--- |
+| `select-star` | warn | 頂層 `SELECT *`；若單一資料表與快取資訊明確，可提供欄位清單草稿。 |
+| `unanchored-like` | warn | 以 `%` 開頭的 `LIKE` / `ILIKE` pattern。 |
+| `missing-limit-offset` | info | 使用 `OFFSET >= 1000` 的深度分頁；可考慮 keyset pagination。 |
+| `non-sargable-where` | warn | Predicate 的欄位側套用了函式或算術運算。 |
+| `or-to-union` | info | 不同欄位之間的頂層 `OR`；任何 UNION 替代方案都必須保留 identity 與 multiplicity。 |
+| `subquery-to-join` | info | `IN (SELECT …)` 可能適合語意等價的 `EXISTS`，或已證明唯一的 JOIN。 |
+| `distinct-groupby-abuse` | warn | 簡單投影欄位完整涵蓋 `GROUP BY` 時，多餘的 `DISTINCT`。 |
+| `implicit-cast` | warn | 經 schema 驗證的欄位/常值型別不符，可能讓索引失效。 |
+| `not-in-nullable` | warn | `NOT IN` 右側為 NULL 或可能是 nullable：明確的 `NULL`、nullable 的 subquery 投影，或型別資訊已知且可為 NULL 的其他 RHS 運算式。 |
+
+`not-in-nullable` 專門描述 SQL 中右側「NULL 污染 `NOT IN`」的風險。
+左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以
+`IS NOT NULL` 過濾其投影值；在 correlation 與語意合適時，也可考慮
+`NOT EXISTS`。除非 correlation、型別、qualified-column 解析與 rewrite
+目標都明確，dbcli 不會自動執行此 rewrite。
+
+解析失敗時，九條規則都會列為 `blocked: parse failed`。使用
+`--no-schema` 時，`implicit-cast` 與 `not-in-nullable` 會列為
+`blocked: --no-schema`；分層快取不存在時則列為
+`blocked: schema cache unavailable (run dbcli schema)`。Finding 可包含
+有 confidence 標籤的 SQL 草稿與 shell-safe 的 `dbcli explain --analyze`
+驗證指令，但兩者都只供回報參考，絕不會自動執行。
 
 ## 缺失索引建議 — `dbcli guide missing-index-for`
 

@@ -40,13 +40,13 @@ description: Database CLI for AI agents with permission-based access control. Us
 
 慢查詢診斷有三條標準路徑（依已掌握的資訊選擇）：
 
-- 已知慢 SQL → `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"`
+- 已知慢 SQL → `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"`
 - 已知熱點資料表 → `skill tasks plan analyze-table-perf --param table=<table>`
 - 全環境掃描 → `report --section perf` → `guide slow-query`
 
 `report --section perf` 已涵蓋 slow-query、index-usage 與 cache-hit 診斷 — 之後只需補上它未涵蓋的 `@diag/*`（`missing-indexes`、`locks`、`connections`、`table-sizes`）。一旦鎖定特定慢語句，`explain --analyze "<SQL>"` 可顯示執行計畫。
 
-**失敗時：** 在 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` 加上 `--recovery`。指令會把 `RecoveryEnvelope` 輸出到 stdout 並儲存到 `.dbcli/last-recovery.json`；然後用 `dbcli recover` 檢視、`dbcli recover --apply` 在風險門控下執行儲存的計畫。Multi-turn `--next`、連線分支與 post-apply 驗證探針詳見 reference.md §Recovery Cookbook。
+**失敗時：** 在 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` 加上 `--recovery`。指令會把 `RecoveryEnvelope` 輸出到 stdout 並儲存到 `.dbcli/last-recovery.json`；然後用 `dbcli recover` 檢視、`dbcli recover --apply` 在風險門控下執行儲存的計畫。Multi-turn `--next`、連線分支與 post-apply 驗證探針詳見 reference.md §Recovery Cookbook。
 
 回報驗證結果時使用詞彙：`verified`（證據符合）/ `not_verified`（驗證執行但結果矛盾）/ `indeterminate`（執行但證據不明確）/ `blocked`（因 config、權限、schema、placeholder 或安全閘門導致無法執行）。
 
@@ -79,7 +79,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 | 應用程式資料錯誤 | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → 最小查詢 |
 | ORM 或 migration | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column`（預覽 SQL）→ `diff --against <snapshot>` |
 | PR 資料庫風險審查 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
-| 慢 endpoint 或查詢 | `report --section perf` → task pack `analyze-table-perf` → `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
+| 慢 endpoint 或查詢 | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
 | 安全資料回填 | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back 或 snippet `--verify`。 |
 | 環境設定驗證 | `status --format json` → `doctor --format json` → `inspect --for-agent --no-connect`。 |
 
@@ -98,6 +98,7 @@ dbcli diff --snapshot <name>
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
 dbcli guide missing-index-for "<query>" --format json
+dbcli lint "<SQL>" --format json
 dbcli update <object> --where "<bounded predicate>" --set '<json>' --dry-run --format json
 dbcli inspect --for-agent --no-connect --format json
 ```
@@ -232,6 +233,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `schema` | query-only+ | SQL：單表或全掃描存入 `.dbcli/schemas/`。MongoDB：sampled。ES：flattened mapping。Redis：僅單一 key（type / TTL / size）。支援 `--recovery`。 |
 | `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。支援 `--recovery`。 |
 | `explain` | query-only+ | **(v1.23)** 唯讀查詢計畫並附註解。僅 SQL。單一查詢、`@saved-query`、`@file.sql` 或 `--bulk @glob/*`。`--analyze`（EXPLAIN ANALYZE / MariaDB ANALYZE SELECT）、`--format markdown\|json\|table`。 |
+| `lint` | n/a | 靜態 SQL 反模式顧問（不連線 DB）。共 9 條規則，包含透過分層 `.dbcli/schemas/` 快取進行的 schema-aware implicit-cast / NOT IN-nullable 檢查；全域 `--use <conn>` 會選擇命名連線的快取。Finding 可附 rewrite 草稿與 `explain --analyze` 驗證指令，但只回報、絕不執行。`--format text\|json\|markdown`、`--min-severity`、`--no-schema`、`--bulk`。支援 `--recovery`。 |
 | `plan` | n/a | 靜態 SQL 風險分析器（`--format text\|json`）；不連線即可分類語句。 |
 | `q` | query-only+ | 以 `@name` 執行已儲存 snippet，搭配 `--param k=v`。支援 `--verify` 以執行斷言。 |
 | `queries` | n/a | 管理已儲存 snippet：`list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`。 |
@@ -258,7 +260,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷（用於注入其他 LLM，正常操作不需要）。 |
 | `migrate` | admin | 僅 SQL。**DDL；預設 dry-run** — 需 `--execute`。 |
 
-任何子指令上的 `--use <name>` 可在不改變預設值的情況下，把目標切到 v2 連線。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema` 與 `inspect` 支援（見上方**失敗時**）。
+任何子指令上的 `--use <name>` 可在不改變預設值的情況下，把目標切到 v2 連線。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect` 與 `lint` 支援（見上方**失敗時**）。
 
 **寫入與查詢旗標語意**（SQL / Mongo `insert`/`update`）：
 

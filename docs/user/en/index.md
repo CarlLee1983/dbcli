@@ -114,6 +114,7 @@ Both arrays are trimmed under `--for-agent` / `--brief` (≤ 3 hints, and a sing
 | `delete` | Deletes data with mandatory `--where` clause. Accepts `--plan` for risk preflight (SQL, MongoDB, Redis, Elasticsearch). |
 | `blacklist` | Manages the sensitive data redirection rules. |
 | `plan "<sql>"` | **Static analyzer**: Classifies SQL risk and gives recommendations. |
+| `lint "<sql>"` | **Static advisor**: Reports SQL anti-patterns and optional rewrite drafts without connecting to the database. |
 
 #### DML `--plan` preflight
 
@@ -167,7 +168,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
-| `--recovery` (all commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, and `schema` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
+| `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
 
 <!-- doc-key: data-verification -->
 ### Data Verification
@@ -756,7 +757,7 @@ Beyond ad-hoc queries, `dbcli` is built for the common development tasks where a
 - **Application data bug**: separate stored facts from application-code inference (`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → a narrow query).
 - **ORM or migration work**: ground model and migration edits in live schema evidence (`schema` → `diff --snapshot` → generate DDL via `migrate add-index`/`add-column` → `diff --against`).
 - **PR database review**: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.
-- **Slow endpoint or query**: prefer read-only diagnostics before proposing indexes (`report --section perf` → `guide missing-index-for "<query>"`; `proxy analyze` when logs exist).
+- **Slow endpoint or query**: prefer read-only diagnostics before proposing indexes (`report --section perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; `proxy analyze` when logs exist).
 - **Safe data backfill**: scope affected rows and preview mutations before execution (`schema` → count/scope query → `update ... --dry-run` → read-back or snippet `--verify`).
 - **Environment validation**: check config shape and connectivity without leaking secrets (`status` → `doctor` → `inspect --for-agent --no-connect`).
 
@@ -780,7 +781,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered
 
 | Situation (what the user says) | Path | Pack |
 | --- | --- | --- |
-| "This SQL is slow" (you have the statement) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
+| "This SQL is slow" (you have the statement) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | "Table X is hot / heavy" (you have the table) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
 | "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"` (pairs `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
 | Whole-environment perf scan | `report --section perf` → `guide slow-query` | _(report + guide, no pack)_ |
@@ -812,7 +813,7 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 
 > This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn `--next` semantics, risk-gate details, and the Audit ↔ Envelope pivot live in [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs).
 
-When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
+When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
 
 ### Scenario 1 — Connection refused (`CONN_REFUSED`)
 
@@ -1030,6 +1031,66 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries
 - `--analyze` runs the query for real; do not use against destructive statements.
 - `dbcli explain` is allowed in `query-only` permission — no permission upgrade required.
 - Auto-LIMIT is **not** applied to EXPLAIN statements (since v1.23 P1).
+
+<!-- doc-key: lint-command -->
+## Static SQL advisor — `dbcli lint`
+
+`lint` analyzes PostgreSQL, MySQL, or MariaDB SQL without opening a database
+connection, executing the query, refreshing schema, or applying a rewrite.
+Schema-aware rules read only the layered `.dbcli/schemas/` cache.
+
+### Inputs and options
+
+```bash
+dbcli lint "SELECT * FROM users WHERE email LIKE '%@example.com'"  # inline SQL
+dbcli lint @analytics/live-summary                               # saved query
+dbcli lint @queries.sql                                          # SQL file
+dbcli lint --bulk '@queries/**/*.sql'                            # filesystem glob
+dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # mixed bulk inputs
+dbcli --use staging lint @analytics/live-summary --format json   # named cache
+```
+
+The global selector must precede the command:
+`dbcli --use <conn> lint …`. It selects the named connection's isolated cache at
+`.dbcli/schemas/<conn>/`; the default connection reads `.dbcli/schemas/`.
+`lint` never falls back to `config.schema` and never connects to refresh missing
+metadata.
+
+| Option | Default | Behavior |
+| :--- | :--- | :--- |
+| `--format text\|json\|markdown` | `text` | Select human text, machine JSON, or Markdown reports. |
+| `--min-severity info\|warn\|error` | `info` | Hide findings below the selected severity. |
+| `--no-schema` | off | Do not read schema-cache paths; skip schema-aware rules. |
+| `--bulk <input>` | none | Resolve a comma-separated mix of `@file`, `@glob`, and `@saved-query` inputs. |
+| `--recovery` | off | On command failure, emit and save a linked recovery envelope. |
+
+### Rules
+
+| Rule | Severity | Reports |
+| :--- | :--- | :--- |
+| `select-star` | warn | Top-level `SELECT *`; an unambiguous single-table cache may supply a column-list draft. |
+| `unanchored-like` | warn | `LIKE` / `ILIKE` patterns beginning with `%`. |
+| `missing-limit-offset` | info | Deep pagination with `OFFSET >= 1000`; consider keyset pagination. |
+| `non-sargable-where` | warn | Functions or arithmetic applied to the column side of a predicate. |
+| `or-to-union` | info | Top-level `OR` across different columns; any UNION alternative must preserve identity and multiplicity. |
+| `subquery-to-join` | info | `IN (SELECT …)` that may benefit from a semantics-preserving `EXISTS` or proven-unique JOIN. |
+| `distinct-groupby-abuse` | warn | Redundant `DISTINCT` when projected simple columns exactly cover `GROUP BY`. |
+| `implicit-cast` | warn | A schema-verified column/literal type mismatch that can disable index use. |
+| `not-in-nullable` | warn | A right-hand `NOT IN` value that is NULL or may be nullable: an explicit `NULL`, a nullable subquery projection, or another RHS expression whose nullable type is known. |
+
+`not-in-nullable` is specifically the SQL “NULL poisons `NOT IN`” hazard on
+the right-hand side. A nullable left-hand column is not this rule. For a
+subquery, filter its projected value with `IS NOT NULL`, or consider
+`NOT EXISTS` when its correlation and semantics are appropriate. dbcli does
+not automatically perform that rewrite unless correlation, types,
+qualified-column resolution, and rewrite targeting are all unambiguous.
+
+Parse failures list all nine rules as `blocked: parse failed`. With
+`--no-schema`, `implicit-cast` and `not-in-nullable` are listed as
+`blocked: --no-schema`; when the layered cache is unavailable they are listed
+as `blocked: schema cache unavailable (run dbcli schema)`. Findings may include
+confidence-labelled SQL drafts and shell-safe `dbcli explain --analyze`
+verification commands, but both are report-only suggestions and are never run.
 
 ## Missing-index advisor — `dbcli guide missing-index-for`
 

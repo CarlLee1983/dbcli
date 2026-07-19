@@ -45,7 +45,7 @@ takes a full JSON filter and is exempt.)
 
 Slow-query diagnosis has three canonical paths (pick by what you already know):
 
-- Known slow SQL → `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `guide missing-index-for "<SQL>"`
+- Known slow SQL → `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"`
 - Known hot table → `skill tasks plan analyze-table-perf --param table=<table>`
 - Whole-environment scan → `report --section perf` → `guide slow-query`
 
@@ -54,7 +54,7 @@ afterwards add only the `@diag/*` it does not cover (`missing-indexes`, `locks`,
 `table-sizes`). Once you have a specific slow statement, `explain --analyze "<SQL>"` shows its plan.
 
 **On failure:** pass `--recovery` to `query` / `q` / `insert` / `update` / `delete` /
-`export` / `schema` / `inspect`. The command emits a `RecoveryEnvelope` to stdout and saves
+`export` / `schema` / `inspect` / `lint`. The command emits a `RecoveryEnvelope` to stdout and saves
 it to `.dbcli/last-recovery.json`; then `dbcli recover` inspects it and `dbcli recover --apply`
 runs the saved plan under risk gating. Multi-turn `--next`, connection branching, and the
 post-apply verify probe are documented in reference.md §Recovery Cookbook.
@@ -106,7 +106,7 @@ in **How to use dbcli** still applies.
 | Application data bug | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → narrow query |
 | ORM or migration work | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column` (preview SQL) → `diff --against <snapshot>` |
 | PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
-| Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
+| Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
 | Safe data backfill | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back or snippet `--verify`. |
 | Environment validation | `status --format json` → `doctor --format json` → `inspect --for-agent --no-connect`. |
 
@@ -127,6 +127,7 @@ dbcli diff --snapshot <name>
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
 dbcli guide missing-index-for "<query>" --format json
+dbcli lint "<SQL>" --format json
 dbcli update <object> --where "<bounded predicate>" --set '<json>' --dry-run --format json
 dbcli inspect --for-agent --no-connect --format json
 ```
@@ -293,6 +294,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
 | `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. Supports `--recovery`. |
 | `explain` | query-only+ | **(v1.23)** Read-only query plan with annotations. SQL only. Single query, `@saved-query`, `@file.sql`, or `--bulk @glob/*`. `--analyze` (EXPLAIN ANALYZE / MariaDB ANALYZE SELECT), `--format markdown\|json\|table`. |
+| `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + `explain --analyze` verify commands — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
 | `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. Supports `--verify` to run assertions. |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
@@ -321,7 +323,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 
 `--use <name>` on any subcommand (including `status` / `doctor`) targets a v2 connection
 without changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `update`,
-`delete`, `export`, `schema`, and `inspect` (see **On failure** above).
+`delete`, `export`, `schema`, `inspect`, and `lint` (see **On failure** above).
 
 **Write & query flag semantics** (SQL/Mongo `insert`/`update`):
 

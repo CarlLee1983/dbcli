@@ -195,6 +195,105 @@ dbcli explain --bulk @analytics/*                     # glob over saved queries
 > - `--analyze` executes the statement — do not use against destructive SQL.
 > - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
 
+### lint
+
+Static, report-only SQL anti-pattern analysis for PostgreSQL, MySQL, and
+MariaDB. `lint` never opens a database connection, never runs the SQL, and
+never applies a rewrite. Schema-aware findings use only the layered schema
+cache under `.dbcli/schemas/`.
+
+```text
+dbcli lint [queries...]
+dbcli lint --bulk <input>
+dbcli --use <conn> lint [queries...]
+```
+
+An input may be inline SQL, a saved query such as `@analytics/live-summary`, a
+SQL file such as `@queries.sql`, or a saved-query/filesystem glob such as
+`@analytics/*` or `@queries/**/*.sql`. `--bulk` accepts a comma-separated mix
+of those `@file`, `@glob`, and `@saved-query` inputs; quote a filesystem glob
+in a shell so the `@` reference reaches dbcli unchanged.
+
+```bash
+dbcli lint "SELECT * FROM users WHERE email LIKE '%@example.com'" --format json
+dbcli lint --bulk '@queries/**/*.sql' --format markdown
+dbcli --use staging lint @analytics/live-summary --min-severity warn
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--format <text\|json\|markdown>` | `text` | Render one report per resolved input. |
+| `--min-severity <info\|warn\|error>` | `info` | Omit findings below the selected severity. |
+| `--no-schema` | off | Skip all schema-aware rules without reading schema-cache paths. |
+| `--bulk <input>` | none | Resolve a comma-separated list of `@file`, `@glob`, or `@saved-query` inputs. |
+| `--recovery` | off | On command failure, emit and save a linked `RecoveryEnvelope`. |
+| global `--use <conn>` | configured default | Select a v2 named connection and its isolated cache; place it before `lint`: `dbcli --use <conn> lint …`. |
+
+**Rules:**
+
+| Rule | Severity | What it reports |
+|---|---|---|
+| `select-star` | warn | A top-level `SELECT *`; when one table and its cached columns are unambiguous, the finding may include a column-list rewrite draft. |
+| `unanchored-like` | warn | A `LIKE` / `ILIKE` pattern beginning with `%`, which a conventional B-tree index cannot anchor. |
+| `missing-limit-offset` | info | Deep pagination with `OFFSET >= 1000`; prefer keyset pagination. |
+| `non-sargable-where` | warn | A function or arithmetic expression applied to the column side of a predicate. |
+| `or-to-union` | info | A top-level `OR` across different columns that can complicate index selection; any UNION alternative must preserve identity and multiplicity. |
+| `subquery-to-join` | info | `IN (SELECT …)` where an equivalent `EXISTS`, or a JOIN with proven uniqueness/deduplication, may plan better. |
+| `distinct-groupby-abuse` | warn | Redundant `DISTINCT` when simple projected columns exactly cover the `GROUP BY` columns. |
+| `implicit-cast` | warn | A schema-verified column/literal type mismatch that can disable index use; safe, unambiguous numeric drafts may be included. |
+| `not-in-nullable` | warn | A right-hand `NOT IN` value that can be NULL: an explicit `NULL`, a nullable subquery projection, or another nullable RHS expression when type information is available. A nullable left-hand column is not this rule. |
+
+`implicit-cast` and `not-in-nullable` read the selected cache through the schema
+loader abstraction. The default connection uses `.dbcli/schemas/`; global
+`dbcli --use <conn> lint …` selects `.dbcli/schemas/<conn>/`. The command never
+refreshes the cache and never falls back to schema embedded in config.
+
+Skipped rules are returned with machine-readable `blocked:` reasons:
+
+- Invalid SQL blocks all nine rules with `blocked: parse failed` and includes
+  `parseError`.
+- `--no-schema` blocks both schema-aware rules with
+  `blocked: --no-schema`.
+- A missing layered cache blocks both schema-aware rules with
+  `blocked: schema cache unavailable (run dbcli schema)`.
+
+Every finding includes its rule, severity, source span, message, and
+`schemaVerified` state. Some findings also carry a confidence-labelled rewrite
+draft and a shell-safe `dbcli explain --analyze` verification command. These
+are suggestions only: `lint` neither executes the verification command nor
+changes the query.
+
+For `not-in-nullable`, remove or filter right-hand NULL values. In a subquery,
+filter the projected value with `IS NOT NULL`; `NOT EXISTS` may be a better
+semantic form when appropriate. dbcli does not automatically rewrite this case
+unless correlation, type classification, qualified-column resolution, and the
+rewrite target are all unambiguous.
+
+Trimmed JSON example:
+
+```json
+[
+  {
+    "sql": "SELECT * FROM users",
+    "dialect": "postgresql",
+    "findings": [
+      {
+        "rule": "select-star",
+        "severity": "warn",
+        "message": "SELECT * fetches every column; list the columns you need.",
+        "span": { "start": 0, "end": 8 },
+        "schemaVerified": false
+      }
+    ],
+    "skippedRules": [],
+    "relatedCommands": [
+      "dbcli guide missing-index-for \"SELECT * FROM users\"",
+      "dbcli explain --analyze \"SELECT * FROM users\""
+    ]
+  }
+]
+```
+
 ### plan
 
 Static SQL risk analyzer. Classifies a statement into the same permission tiers

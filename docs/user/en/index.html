@@ -104,6 +104,7 @@
                     <li class="nav-item"><a href="#error-classification" class="nav-link">Errors & Auto-LIMIT</a></li>
                     <li class="nav-item"><a href="#documentation-maintenance" class="nav-link">Doc Maintenance</a></li>
                     <li class="nav-item"><a href="#explain-command" class="nav-link">Query plan (explain)</a></li>
+                    <li class="nav-item"><a href="#lint-command" class="nav-link">Static SQL advisor (lint)</a></li>
                     <li class="nav-item"><a href="#guide-missing-index-for" class="nav-link">Missing-index advisor</a></li>
                 </ul>
             </section>
@@ -219,6 +220,9 @@ dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code><
             <h3 id="query">Querying & Data Operations</h3>
             <pre><code># Raw Query
 dbcli query "SELECT * FROM users LIMIT 10"
+
+# Static SQL advisor (no DB connection)
+dbcli lint "SELECT * FROM users" --format json
 
 # Run Snippet
 dbcli q @snippet --param id=1
@@ -717,7 +721,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>Application data bug</strong>: separate stored facts from application-code inference (<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → a narrow query).</li>
                 <li><strong>ORM or migration work</strong>: ground edits in live schema evidence (<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>).</li>
                 <li><strong>PR database review</strong>: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.</li>
-                <li><strong>Slow endpoint or query</strong>: read-only diagnostics before index proposals (<code>report --section perf</code> → <code>guide missing-index-for</code>; <code>proxy analyze</code> when logs exist).</li>
+                <li><strong>Slow endpoint or query</strong>: read-only diagnostics before index proposals (<code>report --section perf</code> → <code>lint "&lt;query&gt;"</code> → <code>guide missing-index-for</code>; <code>proxy analyze</code> when logs exist).</li>
                 <li><strong>Safe data backfill</strong>: scope affected rows and preview mutations (<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back or snippet <code>--verify</code>).</li>
                 <li><strong>Environment validation</strong>: check config and connectivity without leaking secrets (<code>status</code> → <code>doctor</code> → <code>inspect --for-agent --no-connect</code>).</li>
             </ul>
@@ -738,7 +742,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an o
                     <tr><th>Situation (what the user says)</th><th>Path</th><th>Pack</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>"This SQL is slow" (you have the statement)</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
+                    <tr><td>"This SQL is slow" (you have the statement)</td><td><code>skill tasks plan diagnose-slow-query --param query="&lt;SQL&gt;"</code> → <code>lint "&lt;SQL&gt;"</code> → <code>guide missing-index-for</code></td><td><code>diagnose-slow-query</code></td></tr>
                     <tr><td>"Table X is hot / heavy" (you have the table)</td><td><code>skill tasks plan analyze-table-perf --param table=&lt;table&gt;</code></td><td><code>analyze-table-perf</code></td></tr>
                     <tr><td>"This API endpoint is slow"</td><td><code>skill tasks plan slow-endpoint-investigation --param query="&lt;SQL&gt;"</code> (pairs <code>proxy</code> + <code>explain</code> + missing-index)</td><td><code>slow-endpoint-investigation</code></td></tr>
                     <tr><td>Whole-environment perf scan</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
@@ -772,7 +776,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an o
         <section id="agent-recovery" class="mt-20">
             <h2>🔁 Agent Recovery Workflow</h2>
             <p>This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn <code>--next</code> semantics, risk-gate details, and the Audit ↔ Envelope pivot live in <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>.</p>
-            <p>When any of <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> is invoked with <code>--recovery</code> and fails, a <code>RecoveryEnvelope</code> JSON is printed to stdout <strong>and atomically written</strong> to <code>.dbcli/last-recovery.json</code>. The agent then inspects it with <code>dbcli recover</code> or executes it with <code>dbcli recover --apply</code> (which by default only runs <code>readonly</code> + <code>dry-run</code> steps).</p>
+            <p>When any of <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> is invoked with <code>--recovery</code> and fails, a <code>RecoveryEnvelope</code> JSON is printed to stdout <strong>and atomically written</strong> to <code>.dbcli/last-recovery.json</code>. The agent then inspects it with <code>dbcli recover</code> or executes it with <code>dbcli recover --apply</code> (which by default only runs <code>readonly</code> + <code>dry-run</code> steps).</p>
 
             <h3 class="mt-10">Three typical scenarios</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">
@@ -950,6 +954,47 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries</
     <li><code>dbcli explain</code> is allowed in <code>query-only</code> permission — no permission upgrade required.</li>
     <li>Auto-LIMIT is <strong>not</strong> applied to EXPLAIN statements (since v1.23 P1).</li>
   </ul>
+</section>
+
+<!-- doc-key: lint-command -->
+<section id="lint-command" class="mt-20">
+  <h2>Static SQL advisor — <code>dbcli lint</code></h2>
+  <p><code>lint</code> analyzes PostgreSQL, MySQL, or MariaDB SQL without opening a database connection, executing the query, refreshing schema, or applying a rewrite. Schema-aware rules read only the layered <code>.dbcli/schemas/</code> cache.</p>
+  <h3>Inputs and options</h3>
+  <pre><code>dbcli lint "SELECT * FROM users WHERE email LIKE '%@example.com'"  # inline SQL
+dbcli lint @analytics/live-summary                               # saved query
+dbcli lint @queries.sql                                          # SQL file
+dbcli lint --bulk '@queries/**/*.sql'                            # filesystem glob
+dbcli lint --bulk '@analytics/*,@queries.sql' --format markdown  # mixed bulk inputs
+dbcli --use staging lint @analytics/live-summary --format json   # named cache</code></pre>
+  <p>The global selector must precede the command: <code>dbcli --use &lt;conn&gt; lint …</code>. It selects <code>.dbcli/schemas/&lt;conn&gt;/</code>; the default connection reads <code>.dbcli/schemas/</code>. <code>lint</code> never falls back to <code>config.schema</code> and never connects to refresh missing metadata.</p>
+  <table>
+    <thead><tr><th>Option</th><th>Default</th><th>Behavior</th></tr></thead>
+    <tbody>
+      <tr><td><code>--format text|json|markdown</code></td><td><code>text</code></td><td>Human text, machine JSON, or Markdown reports.</td></tr>
+      <tr><td><code>--min-severity info|warn|error</code></td><td><code>info</code></td><td>Hide findings below the selected severity.</td></tr>
+      <tr><td><code>--no-schema</code></td><td>off</td><td>Do not read schema-cache paths; skip schema-aware rules.</td></tr>
+      <tr><td><code>--bulk &lt;input&gt;</code></td><td>none</td><td>Resolve a comma-separated mix of <code>@file</code>, <code>@glob</code>, and <code>@saved-query</code>.</td></tr>
+      <tr><td><code>--recovery</code></td><td>off</td><td>On failure, emit and save a linked recovery envelope.</td></tr>
+    </tbody>
+  </table>
+  <h3>Rules</h3>
+  <table>
+    <thead><tr><th>Rule</th><th>Severity</th><th>Reports</th></tr></thead>
+    <tbody>
+      <tr><td><code>select-star</code></td><td>warn</td><td>Top-level <code>SELECT *</code>; an unambiguous single-table cache may supply a column-list draft.</td></tr>
+      <tr><td><code>unanchored-like</code></td><td>warn</td><td><code>LIKE</code> / <code>ILIKE</code> patterns beginning with <code>%</code>.</td></tr>
+      <tr><td><code>missing-limit-offset</code></td><td>info</td><td>Deep pagination with <code>OFFSET &gt;= 1000</code>; consider keyset pagination.</td></tr>
+      <tr><td><code>non-sargable-where</code></td><td>warn</td><td>Functions or arithmetic applied to the column side of a predicate.</td></tr>
+      <tr><td><code>or-to-union</code></td><td>info</td><td>Top-level <code>OR</code> across different columns; alternatives must preserve identity and multiplicity.</td></tr>
+      <tr><td><code>subquery-to-join</code></td><td>info</td><td><code>IN (SELECT …)</code> that may benefit from a semantics-preserving <code>EXISTS</code> or proven-unique JOIN.</td></tr>
+      <tr><td><code>distinct-groupby-abuse</code></td><td>warn</td><td>Redundant <code>DISTINCT</code> when projected simple columns exactly cover <code>GROUP BY</code>.</td></tr>
+      <tr><td><code>implicit-cast</code></td><td>warn</td><td>A schema-verified column/literal type mismatch that can disable index use.</td></tr>
+      <tr><td><code>not-in-nullable</code></td><td>warn</td><td>A right-hand <code>NOT IN</code> value that is NULL or may be nullable: explicit <code>NULL</code>, a nullable subquery projection, or another typed nullable RHS expression.</td></tr>
+    </tbody>
+  </table>
+  <p><code>not-in-nullable</code> is the SQL “NULL poisons <code>NOT IN</code>” hazard on the right-hand side; a nullable left-hand column is not this rule. For a subquery, filter its projected value with <code>IS NOT NULL</code>, or consider <code>NOT EXISTS</code> when correlation and semantics are appropriate. dbcli does not automatically perform that rewrite unless correlation, types, qualified-column resolution, and rewrite targeting are all unambiguous.</p>
+  <p>Parse failures block all nine rules with <code>blocked: parse failed</code>. <code>--no-schema</code> blocks <code>implicit-cast</code> and <code>not-in-nullable</code> with <code>blocked: --no-schema</code>; a missing layered cache reports <code>blocked: schema cache unavailable (run dbcli schema)</code>. Confidence-labelled drafts and shell-safe <code>dbcli explain --analyze</code> verification commands are report-only suggestions and are never run.</p>
 </section>
 
 <section id="guide-missing-index-for" class="mt-20">

@@ -8,7 +8,12 @@ import { getGlobalConnectionName } from '../config'
 import type { DbcliConfig } from '../../utils/validation'
 import type { DatabaseSystem } from '../../adapters/types'
 import { getEngineCapability } from '../../adapters/capabilities'
-import { redactArgv, redactSql, redactSensitive } from '../../utils/redaction'
+import {
+  redactArgv,
+  redactArgvSensitiveText,
+  redactSql,
+  redactSensitive,
+} from '../../utils/redaction'
 import { getOperationTarget } from '../../utils/engine-hints'
 import type { AuditEntry } from './types'
 
@@ -92,6 +97,7 @@ export async function writeAuditEntry(
     if (outcome.error) {
       errorMessage = outcome.error instanceof Error ? outcome.error.message : String(outcome.error)
       errorMessage = redactSensitive(errorMessage)
+      errorMessage = redactArgvSensitiveText(errorMessage, process.argv)
     }
 
     // 4. Build Entry

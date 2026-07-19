@@ -90,6 +90,106 @@ function projectedExpression(subquery: AstNode): AstNode | undefined {
   return projection.expr as AstNode | undefined
 }
 
+function equivalentExpression(
+  left: AstNode,
+  right: AstNode,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): boolean {
+  if (left.type !== right.type) return false
+
+  if (left.type === 'column_ref') {
+    const leftResolved = resolveColumnRef(schema, statement, left)
+    const rightResolved = resolveColumnRef(schema, statement, right)
+    return (
+      leftResolved !== undefined &&
+      rightResolved !== undefined &&
+      leftResolved.table === rightResolved.table &&
+      leftResolved.column.name === rightResolved.column.name
+    )
+  }
+
+  if (
+    left.type === 'number' ||
+    left.type === 'single_quote_string' ||
+    left.type === 'string' ||
+    left.type === 'null'
+  ) {
+    return left.value === right.value
+  }
+
+  if (left.type === 'binary_expr') {
+    const leftLeft = left.left as AstNode | undefined
+    const leftRight = left.right as AstNode | undefined
+    const rightLeft = right.left as AstNode | undefined
+    const rightRight = right.right as AstNode | undefined
+    return (
+      String(left.operator).toUpperCase() ===
+        String(right.operator).toUpperCase() &&
+      !!leftLeft &&
+      !!leftRight &&
+      !!rightLeft &&
+      !!rightRight &&
+      equivalentExpression(leftLeft, rightLeft, statement, schema) &&
+      equivalentExpression(leftRight, rightRight, statement, schema)
+    )
+  }
+
+  if (left.type === 'unary_expr') {
+    const leftExpr = left.expr as AstNode | undefined
+    const rightExpr = right.expr as AstNode | undefined
+    return (
+      String(left.operator).toUpperCase() ===
+        String(right.operator).toUpperCase() &&
+      !!leftExpr &&
+      !!rightExpr &&
+      equivalentExpression(leftExpr, rightExpr, statement, schema)
+    )
+  }
+
+  return false
+}
+
+function whereNullRejectsProjection(
+  where: AstNode | undefined,
+  projection: AstNode,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): boolean {
+  if (!where || where.type !== 'binary_expr') return false
+  const operator = String(where.operator).toUpperCase()
+  if (operator === 'OR') return false
+  if (operator === 'AND') {
+    return (
+      whereNullRejectsProjection(
+        where.left as AstNode | undefined,
+        projection,
+        statement,
+        schema
+      ) ||
+      whereNullRejectsProjection(
+        where.right as AstNode | undefined,
+        projection,
+        statement,
+        schema
+      )
+    )
+  }
+  if (operator !== 'IS NOT' && operator !== 'IS NOT NULL') return false
+
+  const testedExpression = where.left as AstNode | undefined
+  const right = where.right as AstNode | undefined
+  if (!testedExpression || (operator === 'IS NOT' && right?.type !== 'null')) {
+    return false
+  }
+  return equivalentExpression(
+    testedExpression,
+    projection,
+    statement,
+    schema
+  )
+}
+
 function rhsHazard(
   right: AstNode | undefined,
   statement: AstNode,
@@ -111,7 +211,15 @@ function rhsHazard(
         subquery as AstNode,
         schema
       )
-      if (nullable) {
+      if (
+        nullable &&
+        !whereNullRejectsProjection(
+          (subquery as AstNode).where as AstNode | undefined,
+          expression,
+          subquery as AstNode,
+          schema
+        )
+      ) {
         return {
           kind: 'nullable-subquery',
           expression: nullable,

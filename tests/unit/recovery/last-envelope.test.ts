@@ -134,6 +134,26 @@ describe('sanitizeCommandSummary', () => {
     ).toBe('dbcli export <sql> --format csv --recovery')
   })
 
+  test('uses the shared structural sanitizer for lint and global options', () => {
+    expect(
+      sanitizeCommandSummary([
+        'dbcli',
+        '--config',
+        '/secret/config',
+        '--use',
+        'secret-connection',
+        'lint',
+        "SELECT 'first-secret'",
+        "SELECT 'second-secret'",
+        '--bulk=@secret-bulk.sql',
+        '--format',
+        'json',
+      ])
+    ).toBe(
+      'dbcli --config <redacted> --use <redacted> lint <sql> <sql> --bulk <redacted> --format json'
+    )
+  })
+
   test('returns "<unknown>" for empty argv', () => {
     expect(sanitizeCommandSummary([])).toBe('<unknown>')
   })

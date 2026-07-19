@@ -50,3 +50,36 @@ test('runQueryExplain: no label → no queryLabel field', async () => {
   expect(plan.queryLabel).toBeUndefined()
   expect(plan.rows[0]?.queryLabel).toBeUndefined()
 })
+
+test.each([
+  'UPDATE users SET active = false',
+  'DELETE FROM users',
+  'INSERT INTO users (id) VALUES (1)',
+  'CREATE TABLE scratch (id integer)',
+  'WITH changed AS (UPDATE users SET active = false RETURNING id) SELECT id FROM changed',
+])('runQueryExplain: --analyze rejects write-capable SQL before adapter execution', async (sql) => {
+  let executions = 0
+  const adapter = mysqlAdapter()
+  adapter.execute = async () => {
+    executions++
+    throw new Error('adapter must not execute')
+  }
+
+  await expect(
+    runQueryExplain('postgresql', adapter, sql, { analyze: true })
+  ).rejects.toThrow('--analyze requires a proven read-only SELECT')
+  expect(executions).toBe(0)
+})
+
+test('runQueryExplain: --analyze preserves proven read-only SELECT execution', async () => {
+  let executions = 0
+  const adapter = mysqlAdapter()
+  const execute = adapter.execute
+  adapter.execute = async (...args) => {
+    executions++
+    return execute(...args)
+  }
+
+  await runQueryExplain('mariadb', adapter, 'SELECT 1', { analyze: true })
+  expect(executions).toBe(1)
+})

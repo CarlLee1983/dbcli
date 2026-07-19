@@ -80,28 +80,34 @@ function identifierPattern(value: string): string {
 function comparisonMatches(
   sql: string,
   range: { start: number; end: number },
-  left: AstNode,
+  columnNode: AstNode,
   operator: string,
-  right: AstNode
+  literalNode: AstNode,
+  literalOnLeft: boolean
 ): RegExpMatchArray[] {
-  const reference = columnRefParts(left)
+  const reference = columnRefParts(columnNode)
   if (!reference) return []
 
-  const leftPattern = reference.qualifier
+  const columnPattern = reference.qualifier
     ? `${identifierPattern(reference.qualifier)}\\s*\\.\\s*${identifierPattern(reference.column)}`
     : identifierPattern(reference.column)
 
-  let rightPattern: string
-  if (right.type === 'number') {
-    rightPattern = escapeRegex(String(right.value))
-  } else if (right.type === 'single_quote_string') {
-    const raw = String(right.value).replace(/'/g, "''")
-    rightPattern = `'${escapeRegex(raw)}'`
+  let literalPattern: string
+  if (literalNode.type === 'number') {
+    literalPattern = escapeRegex(String(literalNode.value))
+  } else if (
+    literalNode.type === 'single_quote_string' ||
+    literalNode.type === 'string'
+  ) {
+    const raw = String(literalNode.value).replace(/'/g, "''")
+    literalPattern = `'${escapeRegex(raw)}'`
   } else {
     return []
   }
 
-  const pattern = `${leftPattern}\\s*${escapeRegex(operator)}\\s*(${rightPattern})`
+  const pattern = literalOnLeft
+    ? `(${literalPattern})\\s*${escapeRegex(operator)}\\s*${columnPattern}`
+    : `${columnPattern}\\s*${escapeRegex(operator)}\\s*(${literalPattern})`
   const boundedPattern = `(?<![A-Za-z0-9_$])${pattern}(?![A-Za-z0-9_$])`
   const mask = sqlCodeMask(sql)
   const regex = new RegExp(boundedPattern, 'gi')
@@ -156,14 +162,30 @@ export const implicitCastRule: LintRule = {
       if (!COMPARISONS.has(String(node.operator).toUpperCase())) return
 
       const left = node.left as AstNode | undefined
-      if (left?.type !== 'column_ref') return
-
-      const reference = columnRefParts(left)
       const right = node.right as AstNode | undefined
-      const literal = literalKind(right)
-      if (!reference || !right || !literal) return
+      if (!left || !right) return
 
-      const resolved = resolveColumnRef(ctx.schema, ctx.ast, left)
+      const literalOnLeft =
+        literalKind(left) !== null && right.type === 'column_ref'
+      const columnNode = (
+        literalOnLeft
+          ? right
+          : left.type === 'column_ref' && literalKind(right) !== null
+            ? left
+            : undefined
+      ) as AstNode | undefined
+      const literalNode = (
+        literalOnLeft
+          ? left
+          : columnNode
+            ? right
+            : undefined
+      ) as AstNode | undefined
+      const reference = columnNode ? columnRefParts(columnNode) : null
+      const literal = literalKind(literalNode)
+      if (!reference || !columnNode || !literalNode || !literal) return
+
+      const resolved = resolveColumnRef(ctx.schema, ctx.ast, columnNode)
       if (!resolved) return
 
       const column = columnKind(resolved.column.type)
@@ -174,9 +196,10 @@ export const implicitCastRule: LintRule = {
         : comparisonMatches(
             ctx.sql,
             whereRange,
-            left,
+            columnNode,
             String(node.operator),
-            right
+            literalNode,
+            literalOnLeft
           )
       const match = matches.length === 1 ? matches[0] : undefined
       const matchIndex = match?.index
@@ -205,7 +228,7 @@ export const implicitCastRule: LintRule = {
         match &&
         matchIndex !== undefined
       ) {
-        const raw = String(right?.value)
+        const raw = String(literalNode.value)
         if (/^\d+(\.\d+)?$/.test(raw)) {
           const literalSource = match[1]
           const literalOffset = literalSource
@@ -221,7 +244,7 @@ export const implicitCastRule: LintRule = {
             raw +
             ctx.sql.slice(literalStart + literalSource.length)
           finding.rewrite = { sql: rewritten, confidence: 'high' }
-          finding.verifyCommand = verifyWith(rewritten)
+          finding.verifyCommand = verifyWith(rewritten, ctx.system)
         }
       }
 

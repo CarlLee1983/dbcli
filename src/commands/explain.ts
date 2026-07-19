@@ -11,7 +11,11 @@
  */
 
 import { Command } from 'commander'
-import { AdapterFactory, type SqlConnectionOptions } from '@/adapters'
+import {
+  AdapterFactory,
+  type SqlConnectionOptions,
+  type SqlDatabaseSystem,
+} from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { runQueryExplain } from '@/core/explain/runner'
@@ -19,6 +23,7 @@ import { resolveBulkInputs } from '@/core/explain/bulk-runner'
 import { formatExplain, type ExplainFormat } from '@/formatters/explain'
 import { loadSnippets, resolveSnippetDirs } from '@/core/saved-queries'
 import type { ExplainPlan } from '@/core/explain/types'
+import { assertAnalyzeReadOnlySql } from '@/core/explain/read-only'
 
 type GlobalOpts = {
   config?: string
@@ -44,29 +49,35 @@ export const explainCommand = new Command()
         `dbcli explain requires a SQL connection (postgresql/mysql/mariadb), got: ${connection.system}`
       )
     }
-    const system = connection.system
+    const system = connection.system as SqlDatabaseSystem
+
+    const savedQueryLoader = makeSavedQueryLoader()
+
+    const rawInputs =
+      options.bulk !== undefined
+        ? (options.bulk as string)
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : queries
+
+    const inputs = await resolveBulkInputs(rawInputs, {
+      loadFromSavedQueries: savedQueryLoader,
+    })
+
+    if (inputs.length === 0) {
+      throw new Error('No query provided. Pass a SQL string, @saved-query, or --bulk @file.sql.')
+    }
+
+    if (options.analyze === true) {
+      for (const input of inputs) {
+        assertAnalyzeReadOnlySql(input.sql, system)
+      }
+    }
 
     const adapter = AdapterFactory.createSqlAdapter(connection as SqlConnectionOptions)
     await adapter.connect()
     try {
-      const savedQueryLoader = makeSavedQueryLoader()
-
-      const rawInputs =
-        options.bulk !== undefined
-          ? (options.bulk as string)
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : queries
-
-      const inputs = await resolveBulkInputs(rawInputs, {
-        loadFromSavedQueries: savedQueryLoader,
-      })
-
-      if (inputs.length === 0) {
-        throw new Error('No query provided. Pass a SQL string, @saved-query, or --bulk @file.sql.')
-      }
-
       const plans: ExplainPlan[] = []
       for (const input of inputs) {
         const plan = await runQueryExplain(

@@ -18,6 +18,43 @@ describe('redaction utils', () => {
       expect(redactArgv(argv)).toBe('node list --config <redacted> --use <redacted>')
     })
 
+    test('structurally redacts every lint SQL input with global options before the command', () => {
+      expect(
+        redactArgv([
+          'bun',
+          '/workspace/src/cli.ts',
+          '--config',
+          '/secret/config',
+          '--use=secret-connection',
+          'lint',
+          "SELECT 'first-secret'",
+          "SELECT 'second-secret'",
+          '--format',
+          'json',
+          '--bulk',
+          '@/secret/bulk.sql',
+          '--no-schema',
+        ])
+      ).toBe(
+        'bun /workspace/src/cli.ts --config <redacted> --use <redacted> lint <sql> <sql> --format json --bulk <redacted> --no-schema'
+      )
+    })
+
+    test('redacts inline lint bulk values while preserving non-sensitive flags', () => {
+      expect(
+        redactArgv([
+          'dbcli',
+          'lint',
+          '--bulk=@queries/secret.sql',
+          '--min-severity',
+          'warn',
+          '--recovery',
+        ])
+      ).toBe(
+        'dbcli lint --bulk <redacted> --min-severity warn --recovery'
+      )
+    })
+
     test('keeps safe flags', () => {
       const argv = ['node', 'list', '--format=table', '--conn-name', 'my-db']
       expect(redactArgv(argv)).toBe('node list --format=table --conn-name my-db')

@@ -33,6 +33,37 @@ describe('buildSchemaContext', () => {
     expect(ctx.resolveColumn(['users'], 'nope')).toBeUndefined()
   })
 
+  test('preserves exact schema identifiers and withholds ambiguous folded table lookups', () => {
+    const lower: TableSchema = {
+      name: 'foo',
+      columns: [{ name: 'lower_id', type: 'integer', nullable: false }],
+    }
+    const quoted: TableSchema = {
+      name: 'Foo',
+      columns: [{ name: 'quoted_id', type: 'integer', nullable: false }],
+    }
+    const ctx = buildSchemaContext({ foo: lower, Foo: quoted })
+
+    expect(ctx.getTable('foo')?.name).toBe('foo')
+    expect(ctx.getTable('Foo')?.name).toBe('Foo')
+    expect(ctx.getTable('FOO')).toBeUndefined()
+  })
+
+  test('withholds ambiguous folded column lookups but preserves exact columns', () => {
+    const collision: TableSchema = {
+      name: 'collision',
+      columns: [
+        { name: 'code', type: 'integer', nullable: false },
+        { name: 'Code', type: 'text', nullable: true },
+      ],
+    }
+    const ctx = buildSchemaContext({ collision })
+
+    expect(ctx.resolveColumn(['collision'], 'code')?.column.type).toBe('integer')
+    expect(ctx.resolveColumn(['collision'], 'Code')?.column.type).toBe('text')
+    expect(ctx.resolveColumn(['collision'], 'CODE')).toBeUndefined()
+  })
+
   test('loads the named connection from the layered .dbcli/schemas cache', async () => {
     const dbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-lint-schema-'))
     try {

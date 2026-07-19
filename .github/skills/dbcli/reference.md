@@ -192,7 +192,10 @@ dbcli explain --bulk @analytics/*                     # glob over saved queries
 | `nested-loop-large` | yellow | PG `Nested Loop` with planner rows > 10,000 |
 
 > Notes:
-> - `--analyze` executes the statement — do not use against destructive SQL.
+> - `--analyze` executes the statement, so dbcli accepts it only for SQL that is
+>   structurally proven to be a read-only `SELECT` (including SELECT-only CTEs).
+>   DML, DDL, data-modifying CTEs, and unrecognized SQL are rejected before the
+>   adapter is invoked; use plain `dbcli explain` for those statements.
 > - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
 
 ### lint
@@ -262,15 +265,19 @@ Skipped rules are returned with machine-readable `blocked:` reasons:
 
 Every finding includes its rule, severity, source span, message, and
 `schemaVerified` state. Some findings also carry a confidence-labelled rewrite
-draft and a shell-safe `dbcli explain --analyze` verification command. These
-are suggestions only: `lint` neither executes the verification command nor
-changes the query.
+draft and a shell-safe verification command. It uses
+`dbcli explain --analyze` only when the statement is structurally proven read-only;
+otherwise it falls back to plain `dbcli explain`. These are
+suggestions only: `lint` neither executes the verification command nor changes
+the query.
 
 For `not-in-nullable`, remove or filter right-hand NULL values. In a subquery,
 filter the projected value with `IS NOT NULL`; `NOT EXISTS` may be a better
 semantic form when appropriate. dbcli does not automatically rewrite this case
 unless correlation, type classification, qualified-column resolution, and the
-rewrite target are all unambiguous.
+rewrite target are all unambiguous. A direct or `AND`-conjoined `IS NOT NULL`
+filter on the exact projected expression suppresses the finding; filters under
+`OR` or ambiguous expression matches do not.
 
 Trimmed JSON example:
 

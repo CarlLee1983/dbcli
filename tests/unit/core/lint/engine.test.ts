@@ -135,6 +135,27 @@ describe('lintSql', () => {
     ])
   })
 
+  test('relatedCommands use analyze only for a proven read-only statement', () => {
+    const safe = lintSql(
+      'WITH active AS (SELECT id FROM users) SELECT id FROM active',
+      { system: 'postgresql' }
+    )
+    const unsafeStatements = [
+      'UPDATE users SET id = 2',
+      'DELETE FROM users',
+      'INSERT INTO users (id) VALUES (2)',
+      'CREATE TABLE scratch (id integer)',
+      'WITH changed AS (UPDATE users SET id = 2 RETURNING id) SELECT id FROM changed',
+    ]
+
+    expect(safe.relatedCommands[1]).toStartWith('dbcli explain --analyze ')
+    for (const sql of unsafeStatements) {
+      expect(lintSql(sql, { system: 'postgresql' }).relatedCommands[1]).toStartWith(
+        'dbcli explain "'
+      )
+    }
+  })
+
   test('relatedCommands shell-escape SQL before embedding it', () => {
     const sql = 'SELECT \'$HOME\' AS "value" /* `whoami` \\\\ */'
     const report = lintSql(sql, { system: 'postgresql' })

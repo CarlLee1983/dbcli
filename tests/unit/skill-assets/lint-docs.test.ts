@@ -39,6 +39,10 @@ describe('lint documentation', () => {
     expect(reference).toContain('blocked: --no-schema')
     expect(reference).toContain('blocked: schema cache unavailable')
     expect(reference).toContain("@queries/**/*.sql")
+    expect(reference).toContain(
+      'only when the statement is structurally proven read-only'
+    )
+    expect(reference).toContain('falls back to plain `dbcli explain`')
     for (const rule of RULES) expect(reference).toContain(`\`${rule}\``)
   })
 
@@ -56,6 +60,8 @@ describe('lint documentation', () => {
       expect(doc).toContain('not-in-nullable')
       expect(doc).toContain('IS NOT NULL')
       expect(doc).toContain('NOT EXISTS')
+      expect(doc).toContain('plain')
+      expect(doc).toContain('read-only')
       for (const rule of RULES) expect(doc).toContain(rule)
     }
   })

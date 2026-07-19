@@ -1,4 +1,4 @@
-const SQL_SUBCOMMANDS = new Set(['query', 'export'])
+const SQL_SUBCOMMANDS = new Set(['query', 'export', 'lint'])
 const REDACTED_VALUE_FLAGS = new Set([
   '--where',
   '--set',
@@ -10,8 +10,93 @@ const REDACTED_VALUE_FLAGS = new Set([
   '--password',
   '--token',
   '--secret',
+  '--bulk',
 ])
-const KEEP_VALUE_FLAGS = new Set(['--format', '--conn-name'])
+const KEEP_VALUE_FLAGS = new Set([
+  '--format',
+  '--conn-name',
+  '--min-severity',
+  '--output',
+  '--limit',
+  '--collection',
+  '--index',
+])
+
+function optionParts(token: string): {
+  name: string
+  inlineValue: string | undefined
+} {
+  const equals = token.indexOf('=')
+  return equals === -1
+    ? { name: token, inlineValue: undefined }
+    : { name: token.slice(0, equals), inlineValue: token.slice(equals + 1) }
+}
+
+function findSensitiveSubcommand(argv: string[]): {
+  index: number
+  command: string
+} | null {
+  for (let index = 1; index < argv.length; index++) {
+    const token = argv[index]!
+    if (token.startsWith('--')) {
+      const { name, inlineValue } = optionParts(token)
+      if (
+        inlineValue === undefined &&
+        (REDACTED_VALUE_FLAGS.has(name) || KEEP_VALUE_FLAGS.has(name))
+      ) {
+        index++
+      }
+      continue
+    }
+    if (SQL_SUBCOMMANDS.has(token)) return { index, command: token }
+  }
+  return null
+}
+
+function sensitiveArgvValues(argv: string[]): string[] {
+  const sensitiveCommand = findSensitiveSubcommand(argv)
+  const values = new Set<string>()
+  let capturedSingleSql = false
+
+  for (let index = 0; index < argv.length; index++) {
+    const token = argv[index]!
+    if (token.startsWith('--')) {
+      const { name, inlineValue } = optionParts(token)
+      if (REDACTED_VALUE_FLAGS.has(name)) {
+        const value = inlineValue ?? argv[index + 1]
+        if (value) {
+          values.add(value)
+          if (name === '--bulk') {
+            for (const item of value.split(',')) {
+              values.add(item)
+              if (item.startsWith('@') && item.length > 1) {
+                values.add(item.slice(1))
+              }
+            }
+          }
+        }
+        if (inlineValue === undefined) index++
+      } else if (
+        inlineValue === undefined &&
+        KEEP_VALUE_FLAGS.has(name)
+      ) {
+        index++
+      }
+      continue
+    }
+
+    if (
+      sensitiveCommand &&
+      index > sensitiveCommand.index &&
+      (sensitiveCommand.command === 'lint' || !capturedSingleSql)
+    ) {
+      values.add(token)
+      capturedSingleSql = true
+    }
+  }
+
+  return Array.from(values).sort((left, right) => right.length - left.length)
+}
 
 /**
  * Sanitize argv into a stable summary suitable for audit logs or recovery envelopes.
@@ -19,16 +104,14 @@ const KEEP_VALUE_FLAGS = new Set(['--format', '--conn-name'])
  */
 export function redactArgv(argv: string[]): string {
   if (argv.length === 0) return '<unknown>'
-  const out: string[] = [argv[0]!]
-  if (argv.length === 1) return out.join(' ')
+  const sensitiveCommand = findSensitiveSubcommand(argv)
+  const out: string[] = []
+  let redactedSingleSql = false
 
-  const sub = argv[1]!
-  out.push(sub)
-
-  for (let i = 2; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const tok = argv[i]!
     if (tok.startsWith('--')) {
-      const [name, inlineValue] = tok.split('=') as [string, string | undefined]
+      const { name, inlineValue } = optionParts(tok)
       if (REDACTED_VALUE_FLAGS.has(name)) {
         out.push(`${name} <redacted>`)
         if (inlineValue === undefined) i++
@@ -48,13 +131,30 @@ export function redactArgv(argv: string[]): string {
       out.push(tok)
       continue
     }
-    if (i === 2 && SQL_SUBCOMMANDS.has(sub)) {
+    if (
+      sensitiveCommand &&
+      i > sensitiveCommand.index &&
+      (sensitiveCommand.command === 'lint' || !redactedSingleSql)
+    ) {
       out.push('<sql>')
+      redactedSingleSql = true
       continue
     }
     out.push(tok)
   }
   return out.join(' ')
+}
+
+/** Remove argv-derived sensitive values from an error or diagnostic string. */
+export function redactArgvSensitiveText(
+  text: string,
+  argv: string[]
+): string {
+  let redacted = text
+  for (const value of sensitiveArgvValues(argv)) {
+    redacted = redacted.split(value).join('<redacted>')
+  }
+  return redacted
 }
 
 /**

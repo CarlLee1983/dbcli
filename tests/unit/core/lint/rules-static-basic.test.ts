@@ -44,6 +44,37 @@ describe('select-star', () => {
     expect(findings[0].schemaVerified).toBe(true)
   })
 
+  test('withholds PostgreSQL select-star rewrite for a case-folded schema collision', () => {
+    const lower: TableSchema = {
+      name: 'foo',
+      columns: [{ name: 'lower_id', type: 'integer', nullable: false }],
+    }
+    const quoted: TableSchema = {
+      name: 'Foo',
+      columns: [{ name: 'quoted_id', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM FOO', { foo: lower, Foo: quoted }, 'postgresql')
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('keeps a unique case-insensitive select-star schema lookup', () => {
+    const users: TableSchema = {
+      name: 'users',
+      columns: [{ name: 'id', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM USERS', { users }, 'postgresql')
+    )
+
+    expect(findings[0].rewrite?.sql).toBe('SELECT id FROM USERS')
+    expect(findings[0].rewrite?.confidence).toBe('high')
+  })
+
   test('rewrites the projection wildcard instead of a star in a leading comment', () => {
     const users: TableSchema = {
       name: 'users',

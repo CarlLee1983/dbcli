@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { TableSchema } from '@/adapters/types'
+import type { SqlDatabaseSystem, TableSchema } from '@/adapters/types'
 import { buildSchemaContext } from '@/core/lint/context'
 import { parseSingleStatement } from '@/core/lint/parse'
 import { implicitCastRule } from '@/core/lint/rules/implicit-cast'
@@ -8,12 +8,13 @@ import type { LintRuleContext } from '@/core/lint/types'
 
 function ctxFor(
   sql: string,
-  schema: Record<string, TableSchema>
+  schema: Record<string, TableSchema>,
+  system: SqlDatabaseSystem = 'postgresql'
 ): LintRuleContext {
   return {
-    system: 'postgresql',
+    system,
     sql,
-    ast: parseSingleStatement(sql, 'postgresql'),
+    ast: parseSingleStatement(sql, system),
     schema: buildSchemaContext(schema),
   }
 }
@@ -77,6 +78,43 @@ describe('implicit-cast', () => {
 
     expect(findings).toHaveLength(1)
     expect(findings[0].message).toContain('ref_code')
+  })
+
+  for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
+    test(`flags and safely rewrites a literal-left comparison for ${system}`, () => {
+      const sql = "SELECT id FROM users WHERE '42' < id"
+      const findings = implicitCastRule.check(ctxFor(sql, schema, system))
+
+      expect(findings).toHaveLength(1)
+      expect(findings[0].rewrite?.sql).toBe('SELECT id FROM users WHERE 42 < id')
+      expect(findings[0].rewrite?.confidence).toBe('high')
+      expect(findings[0].message).toContain("'id'")
+      expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+        "'42' < id"
+      )
+    })
+  }
+
+  test('literal-left rewrite preserves the original comparison operator', () => {
+    const findings = implicitCastRule.check(
+      ctxFor("SELECT id FROM users WHERE '42' >= id", schema)
+    )
+
+    expect(findings[0].rewrite?.sql).toBe(
+      'SELECT id FROM users WHERE 42 >= id'
+    )
+  })
+
+  test('withholds literal-left rewrites when targeting is ambiguous', () => {
+    const findings = implicitCastRule.check(
+      ctxFor(
+        "SELECT id FROM users WHERE '42' < id OR '42' < id",
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(2)
+    expect(findings.every((finding) => finding.rewrite === undefined)).toBe(true)
   })
 
   test('does not flag number literal compared to numeric column', () => {
@@ -274,6 +312,50 @@ describe('not-in-nullable', () => {
     expect(findings[0].message).toContain('IS NOT NULL')
     expect(findings[0].message).toContain('NOT EXISTS')
     expect(findings[0].rewrite).toBeUndefined()
+  })
+
+  test('suppresses a nullable projected column null-rejected through a table alias', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.email AS blocked_email FROM blocked_users b WHERE b.email IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('suppresses a nullable projection null-rejected inside an AND conjunction', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.email FROM blocked_users b WHERE b.id > 0 AND b.email IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps a nullable projection finding when IS NOT NULL is under OR', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.email FROM blocked_users b WHERE b.email IS NOT NULL OR b.id > 0)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+  })
+
+  test('keeps a compound nullable projection finding when only one input is null-rejected', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (SELECT a + b FROM metrics WHERE a IS NOT NULL)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
   })
 
   test('flags another RHS column known nullable from schema', () => {

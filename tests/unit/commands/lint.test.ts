@@ -148,6 +148,41 @@ describe('runLint', () => {
     }
   })
 
+  test('lint file and glob inputs share quote-aware SQL statement splitting', async () => {
+    const dir = (await Bun.$`mktemp -d`.text()).trim()
+    const one = join(dir, 'a.sql')
+    const two = join(dir, 'b.sql')
+    await Bun.write(
+      one,
+      "SELECT ';' AS marker, id FROM users; SELECT $$semi;colon$$ AS marker;"
+    )
+    await Bun.write(
+      two,
+      "SELECT id FROM users /* ; retained */; -- trailing ; comment\n"
+    )
+    try {
+      const fileResult = await runLint([`@${one}`], {}, {
+        config: baseConfig,
+        schema,
+        loadSavedQuery: noSnippets,
+      })
+      const globResult = await runLint([], { bulk: `@${dir}/*.sql` }, {
+        config: baseConfig,
+        schema,
+        loadSavedQuery: noSnippets,
+      })
+
+      expect(fileResult.reports.map((report) => report.sql)).toEqual([
+        "SELECT ';' AS marker, id FROM users",
+        'SELECT $$semi;colon$$ AS marker',
+      ])
+      expect(globResult.reports).toHaveLength(3)
+      expect(globResult.reports[2]?.sql).toContain('/* ; retained */')
+    } finally {
+      await Bun.$`rm -rf ${dir}`
+    }
+  })
+
   test('validates output format', async () => {
     await expect(
       runLint(['SELECT 1'], { format: 'yaml' }, {

@@ -1,4 +1,5 @@
 import type { SqlDatabaseSystem, TableSchema, ColumnSchema } from '@/adapters/types'
+import { isProvenReadOnlySql } from '@/core/explain/read-only'
 
 export type LintSeverity = 'info' | 'warn' | 'error'
 export type AstNode = Record<string, unknown>
@@ -51,6 +52,17 @@ export function escapeDoubleQuotedShellArgument(value: string): string {
   return value.replace(/[\\$`"]/g, '\\$&')
 }
 
-export function verifyWith(sql: string): string {
-  return `dbcli explain --analyze "${escapeDoubleQuotedShellArgument(sql)}"`
+export function explainWith(
+  sql: string,
+  system: SqlDatabaseSystem = 'postgresql'
+): string {
+  const analyze = isProvenReadOnlySql(sql, system) ? ' --analyze' : ''
+  return `dbcli explain${analyze} "${escapeDoubleQuotedShellArgument(sql)}"`
+}
+
+export function verifyWith(
+  sql: string,
+  system: SqlDatabaseSystem = 'postgresql'
+): string {
+  return explainWith(sql, system)
 }

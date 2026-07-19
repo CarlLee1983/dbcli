@@ -87,15 +87,133 @@ function appendFileInputs(out: BulkInput[], filePath: string, text: string): voi
 }
 
 /**
- * Strip -- and block comments, then split on `;`. Ignores empty trailing.
- * Naive — does not handle `;` inside string literals. Acceptable for
- * EXPLAIN-only workflows where the SQL is read by a human, not generated.
+ * Split SQL files without treating semicolons in literals, quoted identifiers,
+ * comments, or PostgreSQL dollar-quoted bodies as statement boundaries.
+ * Comments remain attached to their statement so parser-relevant directives
+ * and source context are not discarded.
  */
-function splitSqlStatements(text: string): string[] {
-  const noLineComments = text.replace(/--[^\n]*\n?/g, '\n')
-  const noBlockComments = noLineComments.replace(/\/\*[\s\S]*?\*\//g, ' ')
-  return noBlockComments
-    .split(';')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+export function splitSqlStatements(text: string): string[] {
+  const statements: string[] = []
+  let current = ''
+  let hasCode = false
+  let mode:
+    | 'normal'
+    | 'single'
+    | 'double'
+    | 'backtick'
+    | 'line-comment'
+    | 'block-comment'
+    | 'dollar' = 'normal'
+  let blockDepth = 0
+  let dollarDelimiter = ''
+
+  const flush = () => {
+    const statement = current.trim()
+    if (hasCode && statement.length > 0) statements.push(statement)
+    current = ''
+    hasCode = false
+  }
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]!
+    const next = text[index + 1]
+
+    if (mode === 'line-comment') {
+      current += char
+      if (char === '\n' || char === '\r') mode = 'normal'
+      continue
+    }
+
+    if (mode === 'block-comment') {
+      if (char === '/' && next === '*') {
+        current += '/*'
+        blockDepth++
+        index++
+      } else if (char === '*' && next === '/') {
+        current += '*/'
+        blockDepth--
+        index++
+        if (blockDepth === 0) mode = 'normal'
+      } else {
+        current += char
+      }
+      continue
+    }
+
+    if (mode === 'dollar') {
+      if (text.startsWith(dollarDelimiter, index)) {
+        current += dollarDelimiter
+        index += dollarDelimiter.length - 1
+        mode = 'normal'
+      } else {
+        current += char
+      }
+      continue
+    }
+
+    if (mode !== 'normal') {
+      current += char
+      const quote =
+        mode === 'single' ? "'" : mode === 'double' ? '"' : '`'
+      if (char === '\\' && next !== undefined) {
+        current += next
+        index++
+      } else if (char === quote && next === quote) {
+        current += next
+        index++
+      } else if (char === quote) {
+        mode = 'normal'
+      }
+      continue
+    }
+
+    if (char === '-' && next === '-') {
+      current += '--'
+      mode = 'line-comment'
+      index++
+      continue
+    }
+    if (char === '#') {
+      current += char
+      mode = 'line-comment'
+      continue
+    }
+    if (char === '/' && next === '*') {
+      current += '/*'
+      mode = 'block-comment'
+      blockDepth = 1
+      index++
+      continue
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      current += char
+      hasCode = true
+      mode =
+        char === "'" ? 'single' : char === '"' ? 'double' : 'backtick'
+      continue
+    }
+    if (char === '$') {
+      const delimiter = text
+        .slice(index)
+        .match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      if (delimiter) {
+        current += delimiter
+        hasCode = true
+        dollarDelimiter = delimiter
+        mode = 'dollar'
+        index += delimiter.length - 1
+        continue
+      }
+    }
+    if (char === ';') {
+      flush()
+      continue
+    }
+
+    current += char
+    if (!/\s/.test(char)) hasCode = true
+  }
+
+  flush()
+  return statements
 }

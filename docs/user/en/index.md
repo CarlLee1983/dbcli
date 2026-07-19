@@ -1028,7 +1028,9 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries
 
 ### Notes
 
-- `--analyze` runs the query for real; do not use against destructive statements.
+- `--analyze` runs the query for real, so dbcli accepts it only for structurally
+  proven read-only `SELECT` / SELECT-only CTE statements. Write-capable or
+  uncertain SQL is rejected before adapter execution; use plain `dbcli explain`.
 - `dbcli explain` is allowed in `query-only` permission — no permission upgrade required.
 - Auto-LIMIT is **not** applied to EXPLAIN statements (since v1.23 P1).
 
@@ -1084,14 +1086,19 @@ the right-hand side. A nullable left-hand column is not this rule. For a
 subquery, filter its projected value with `IS NOT NULL`, or consider
 `NOT EXISTS` when its correlation and semantics are appropriate. dbcli does
 not automatically perform that rewrite unless correlation, types,
-qualified-column resolution, and rewrite targeting are all unambiguous.
+qualified-column resolution, and rewrite targeting are all unambiguous. A
+direct or `AND`-conjoined `IS NOT NULL` filter on the exact projected
+expression suppresses the finding; `OR` and ambiguous matches remain
+conservative findings.
 
 Parse failures list all nine rules as `blocked: parse failed`. With
 `--no-schema`, `implicit-cast` and `not-in-nullable` are listed as
 `blocked: --no-schema`; when the layered cache is unavailable they are listed
 as `blocked: schema cache unavailable (run dbcli schema)`. Findings may include
-confidence-labelled SQL drafts and shell-safe `dbcli explain --analyze`
-verification commands, but both are report-only suggestions and are never run.
+confidence-labelled SQL drafts and shell-safe verification commands.
+`dbcli explain --analyze` is emitted only for structurally proven read-only
+SQL; other statements fall back to plain `dbcli explain`. Both are report-only
+suggestions and are never run.
 
 ## Missing-index advisor — `dbcli guide missing-index-for`
 

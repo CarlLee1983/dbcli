@@ -204,7 +204,7 @@ export const selectStarRule: LintRule = {
           try {
             parseSingleStatement(rewritten, ctx.system)
             finding.rewrite = { sql: rewritten, confidence: 'high' }
-            finding.verifyCommand = verifyWith(rewritten)
+            finding.verifyCommand = verifyWith(rewritten, ctx.system)
             finding.schemaVerified = true
           } catch {
             // Invalid drafts are withheld rather than reported as high-confidence rewrites.

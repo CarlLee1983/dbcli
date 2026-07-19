@@ -12,6 +12,7 @@ import { subqueryToJoinRule } from '@/core/lint/rules/subquery-to-join'
 import { unanchoredLikeRule } from '@/core/lint/rules/unanchored-like'
 import {
   escapeDoubleQuotedShellArgument,
+  explainWith,
   type LintReport,
   type LintRule,
   type LintSeverity,
@@ -53,7 +54,7 @@ export function lintSql(sql: string, opts: LintSqlOptions, label?: string): Lint
     skippedRules: [],
     relatedCommands: [
       `dbcli guide missing-index-for "${escapedSql}"`,
-      `dbcli explain --analyze "${escapedSql}"`,
+      explainWith(sql, opts.system),
     ],
   }
 

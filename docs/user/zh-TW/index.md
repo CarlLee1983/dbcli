@@ -954,7 +954,9 @@ dbcli explain --bulk @analytics/*                     # 對 saved query 做 glob
 
 ### 注意
 
-- `--analyze` 會實際執行 query,**不要**對 DML 用。
+- `--analyze` 會實際執行 query，因此 dbcli 只接受結構上已證明唯讀的
+  `SELECT`／僅含 SELECT 的 CTE。可能寫入或無法確定的 SQL 會在 adapter
+  執行前被拒絕；這些語句請使用 plain `dbcli explain`。
 - `dbcli explain` 在 `query-only` permission 即可執行,不需升權。
 - EXPLAIN 不會被 auto-LIMIT(自 v1.23 P1)。
 
@@ -1008,14 +1010,17 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以
 `IS NOT NULL` 過濾其投影值；在 correlation 與語意合適時，也可考慮
 `NOT EXISTS`。除非 correlation、型別、qualified-column 解析與 rewrite
-目標都明確，dbcli 不會自動執行此 rewrite。
+目標都明確，dbcli 不會自動執行此 rewrite。若 subquery 以直接條件或
+`AND` 組合對完全相同的投影運算式套用 `IS NOT NULL`，則不會回報；
+位於 `OR` 下或運算式解析不明確時仍保守回報。
 
 解析失敗時，九條規則都會列為 `blocked: parse failed`。使用
 `--no-schema` 時，`implicit-cast` 與 `not-in-nullable` 會列為
 `blocked: --no-schema`；分層快取不存在時則列為
 `blocked: schema cache unavailable (run dbcli schema)`。Finding 可包含
-有 confidence 標籤的 SQL 草稿與 shell-safe 的 `dbcli explain --analyze`
-驗證指令，但兩者都只供回報參考，絕不會自動執行。
+有 confidence 標籤的 SQL 草稿與 shell-safe 驗證指令。只有結構上已證明
+唯讀的 SQL 才會使用 `dbcli explain --analyze`；其他語句會退回 plain
+`dbcli explain`。兩者都只供回報參考，絕不會自動執行。
 
 ## 缺失索引建議 — `dbcli guide missing-index-for`
 

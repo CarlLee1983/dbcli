@@ -14,7 +14,7 @@
 - SQL engines only: `postgresql` / `mysql` / `mariadb`. Other systems → error message `dbcli lint requires a SQL connection (postgresql/mysql/mariadb), got: <system>` and exit 1.
 - Never connect to the database. Schema data comes only from `.dbcli/schemas/` through `SchemaLayeredLoader`; `config.schema` is not a lint schema source.
 - Preserve the existing global `--use <conn>` option and use it to select `.dbcli/schemas/<conn>/` for v2 configurations.
-- Never execute or apply rewrites. `rewrite` is a draft; `verifyCommand` is always a `dbcli explain --analyze "<sql>"` string.
+- Never execute or apply rewrites. `rewrite` is a draft. A verify/related command uses `dbcli explain --analyze "<sql>"` only when parser-backed structural analysis proves the complete statement read-only; otherwise it falls back to plain `dbcli explain "<sql>"`. The `explain --analyze` command independently enforces the same fail-closed boundary before adapter execution.
 - Findings vocabulary: severity `info | warn | error`; skipped schema rules use reason strings starting with `blocked:`.
 - Imports use the `@/` alias (existing tsconfig paths). All files ESM, no default exports (match existing command/core modules).
 - Run `bun test <file>` after each RED/GREEN step; run `bun run lint` (eslint) before each commit if the repo script exists (`bun run --list` shows it) — fix warnings in touched files only.
@@ -26,7 +26,8 @@
 - The design spec governs schema architecture: layered files under `.dbcli/schemas/` are loaded through `SchemaLayeredLoader`; references to `config.schema` in the original plan were an oversight.
 - The design spec governs the CLI surface: `--use <conn>` remains available as the existing global option and selects the named connection plus its isolated schema cache.
 - The grouped rule-test files in Tasks 3–5 are an approved plan-level organization choice, provided each rule retains clearly named, independently executable test cases.
-- The `not-in-nullable` rule detects the actual SQL NULL hazard on the right-hand side of `NOT IN`: explicit NULL list items, nullable subquery projections, and other RHS expressions known nullable from schema facts. Nullable left-hand columns are not findings for this rule. Subquery remediation prefers filtering the projection with `IS NOT NULL`; `NOT EXISTS` is suggested only when correlation and semantics are unambiguous, and is never auto-rewritten by this rule.
+- The `not-in-nullable` rule detects the actual SQL NULL hazard on the right-hand side of `NOT IN`: explicit NULL list items, nullable subquery projections, and other RHS expressions known nullable from schema facts. Nullable left-hand columns are not findings for this rule. A nullable projection is not reported when the subquery `WHERE` provably null-rejects that exact expression with `IS NOT NULL` directly or under `AND`; `OR` and ambiguous expressions remain conservative findings. Subquery remediation prefers filtering the projection with `IS NOT NULL`; `NOT EXISTS` is suggested only when correlation and semantics are unambiguous, and is never auto-rewritten by this rule.
+- Safety refinement approved during final review: `--analyze` is suggested only for structurally proven read-only `SELECT` / SELECT-only CTE statements. DML, DDL, data-modifying CTEs, parse failures, and otherwise uncertain SQL receive plain `dbcli explain`; `explain --analyze` rejects them before any adapter call.
 
 ## File Structure (final state)
 
@@ -186,8 +187,9 @@ export interface LintRule {
   check(ctx: LintRuleContext): LintFinding[]
 }
 
-export function verifyWith(sql: string): string {
-  return `dbcli explain --analyze "${sql.replace(/"/g, '\\"')}"`
+export function verifyWith(sql: string, system: SqlDatabaseSystem): string {
+  const analyze = isProvenReadOnlySql(sql, system) ? ' --analyze' : ''
+  return `dbcli explain${analyze} "${sql.replace(/"/g, '\\"')}"`
 }
 ```
 
@@ -1211,7 +1213,7 @@ Behavior contract:
 - Parse failure → report with `parseError` set, empty `findings`, all rules listed in `skippedRules` with reason `blocked: parse failed`.
 - `requiresSchema` rules skipped when `noSchema` or schema unavailable, each recorded as `{ rule, reason: 'blocked: schema cache unavailable (run dbcli schema)' }` (or `'blocked: --no-schema'`).
 - `minSeverity` filters findings (`info` < `warn` < `error`).
-- `relatedCommands` always `['dbcli guide missing-index-for "<SQL>"', 'dbcli explain --analyze "<SQL>"']` with the actual SQL substituted.
+- `relatedCommands` always includes the guide command and an explain command with the actual SQL substituted. The explain command includes `--analyze` only for a structurally proven read-only statement; uncertain or write-capable SQL uses plain `dbcli explain`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1352,7 +1354,7 @@ export interface LintSqlOptions {
 export function lintSql(sql: string, opts: LintSqlOptions, label?: string): LintReport {
   const relatedCommands = [
     `dbcli guide missing-index-for "${sql}"`,
-    `dbcli explain --analyze "${sql}"`,
+    explainWith(sql, opts.system),
   ]
   const base: LintReport = {
     sql,
@@ -1686,7 +1688,7 @@ Expected: FAIL — module not found.
  * `dbcli lint` — static, schema-aware SQL anti-pattern advisor.
  * Never connects to the database; schema facts come from the layered local
  * cache under `.dbcli/schemas/`. Report-only: rewrites are
- * drafts to verify with `dbcli explain --analyze`, never executed here.
+ * drafts to verify with guarded `dbcli explain` commands, never executed here.
  */
 import { Command } from 'commander'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
@@ -1966,7 +1968,7 @@ git commit -m "feat: insert lint step into diagnose-slow-query pack and slow-que
 1. Command overview table — insert after the `explain` row:
 
 ```markdown
-| `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + `explain --analyze` verify commands — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
+| `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + guarded `explain` verify commands (`--analyze` only for proven read-only SQL) — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
 ```
 
 2. "Slow endpoint or query" row in **Developer workflows** — change the path to:

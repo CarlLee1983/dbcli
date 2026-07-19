@@ -23,7 +23,7 @@ test('resolveBulkInputs: raw SQL strings pass through with no label', async () =
   expect(inputs[0]?.label).toBeUndefined()
 })
 
-test('resolveBulkInputs: @file path is read and split on ; (comments ignored)', async () => {
+test('resolveBulkInputs: @file path is read and split on statement semicolons', async () => {
   setup()
   const sqlFile = path.join(tmp, 'queries.sql')
   writeFileSync(
@@ -39,9 +39,40 @@ SELECT count(*) FROM users;
     loadFromSavedQueries: async () => null,
   })
   expect(inputs).toHaveLength(2)
-  expect(inputs[0]?.sql).toBe('SELECT * FROM orders WHERE id = 1')
-  expect(inputs[1]?.sql).toBe('SELECT count(*) FROM users')
+  expect(inputs[0]?.sql).toBe(
+    '-- analytics queries\nSELECT * FROM orders WHERE id = 1'
+  )
+  expect(inputs[1]?.sql).toBe('-- next one\nSELECT count(*) FROM users')
   expect(inputs[0]?.label).toBe(`${path.basename(sqlFile)}#1`)
+  cleanup()
+})
+
+test('resolveBulkInputs: scanner preserves quoted and commented semicolons', async () => {
+  setup()
+  const sqlFile = path.join(tmp, 'complex.sql')
+  writeFileSync(
+    sqlFile,
+    [
+      "SELECT 'single;quote''still', \"double;identifier\", `backtick;identifier` FROM users;",
+      "SELECT 'backslash\\\\\\';still' FROM users /* block;comment */;",
+      'SELECT $$dollar;body$$, $tag$tagged;body$tag$ FROM users;',
+      '-- line;comment',
+      'SELECT 4;',
+      '/* trailing;comment only */',
+    ].join('\n')
+  )
+
+  const inputs = await resolveBulkInputs([`@${sqlFile}`], {
+    loadFromSavedQueries: async () => null,
+  })
+
+  expect(inputs).toHaveLength(4)
+  expect(inputs[0]?.sql).toContain("'single;quote''still'")
+  expect(inputs[0]?.sql).toContain('`backtick;identifier`')
+  expect(inputs[1]?.sql).toContain('/* block;comment */')
+  expect(inputs[2]?.sql).toContain('$$dollar;body$$')
+  expect(inputs[2]?.sql).toContain('$tag$tagged;body$tag$')
+  expect(inputs[3]?.sql).toBe('-- line;comment\nSELECT 4')
   cleanup()
 })
 

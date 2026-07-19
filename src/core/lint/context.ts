@@ -5,22 +5,56 @@ import type { SchemaContext } from '@/core/lint/types'
 export function buildSchemaContext(
   schema: Record<string, TableSchema> | undefined
 ): SchemaContext {
-  const tables = new Map<string, TableSchema>()
+  const exactTables = new Map<string, TableSchema[]>()
+  const foldedTables = new Map<string, TableSchema[]>()
+
+  const addTableAlias = (
+    index: Map<string, TableSchema[]>,
+    alias: string,
+    table: TableSchema
+  ) => {
+    const matches = index.get(alias) ?? []
+    if (!matches.includes(table)) matches.push(table)
+    index.set(alias, matches)
+  }
+
   for (const [name, table] of Object.entries(schema ?? {})) {
-    tables.set(name.toLowerCase(), table)
+    for (const alias of new Set([name, table.name])) {
+      addTableAlias(exactTables, alias, table)
+      addTableAlias(foldedTables, alias.toLowerCase(), table)
+    }
+  }
+
+  const resolveTable = (name: string): TableSchema | undefined => {
+    const exact = exactTables.get(name)
+    if (exact) return exact.length === 1 ? exact[0] : undefined
+    const folded = foldedTables.get(name.toLowerCase())
+    return folded?.length === 1 ? folded[0] : undefined
+  }
+
+  const resolveTableColumn = (
+    table: TableSchema,
+    name: string
+  ): TableSchema['columns'][number] | undefined => {
+    const exact = table.columns.filter((column) => column.name === name)
+    if (exact.length > 0) return exact.length === 1 ? exact[0] : undefined
+    const folded = table.columns.filter(
+      (column) => column.name.toLowerCase() === name.toLowerCase()
+    )
+    return folded.length === 1 ? folded[0] : undefined
   }
 
   return {
-    available: tables.size > 0,
+    available: exactTables.size > 0,
     getTable(name) {
-      return tables.get(name.toLowerCase())
+      return resolveTable(name)
     },
     resolveColumn(candidateTables, column) {
       for (const candidateTable of candidateTables) {
-        const table = tables.get(candidateTable.toLowerCase())
-        const resolvedColumn = table?.columns.find(
-          (candidateColumn) => candidateColumn.name.toLowerCase() === column.toLowerCase()
-        )
+        const table = resolveTable(candidateTable)
+        const resolvedColumn = table
+          ? resolveTableColumn(table, column)
+          : undefined
         if (table && resolvedColumn) {
           return { table: table.name, column: resolvedColumn }
         }

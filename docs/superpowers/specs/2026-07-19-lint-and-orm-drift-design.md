@@ -65,7 +65,7 @@ LintFinding {
   message: string
   span: { start: number; end: number }   // 原 SQL 位置
   rewrite?: { sql: string; confidence: 'high' | 'medium' | 'low' }  // 改寫草稿,不保證等價
-  verifyCommand?: string   // 固定給 dbcli explain --analyze "<改寫後SQL>"
+  verifyCommand?: string   // 已證明唯讀時用 explain --analyze；其餘保守使用 plain explain
   schemaVerified: boolean  // 是否經 schema cache 驗證
 }
 ```

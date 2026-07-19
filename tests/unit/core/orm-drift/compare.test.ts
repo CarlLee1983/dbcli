@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { compareNormalized, type DriftEntry } from '@/core/orm-drift/compare'
-import { addColumnProposal, proposalsFor, REVIEW_NOTE } from '@/core/orm-drift/proposals'
+import {
+  addColumnProposal,
+  addIndexProposal,
+  proposalsFor,
+  REVIEW_NOTE,
+} from '@/core/orm-drift/proposals'
 import type {
   NormalizedColumn,
   NormalizedSchema,
@@ -131,6 +136,25 @@ describe('compareNormalized', () => {
     ])
   })
 
+  test('schema-qualified column drift escalates instead of flattening the table identity', () => {
+    const orm = schemaWith([
+      table({ table: 'Users' }, { columns: [{ name: 'email', type: 'text', nullable: false }] }),
+    ])
+    const db = dbWith([table({ schema: 'public', table: 'Users' })], 'public')
+
+    const entry = compareNormalized(orm, db, { ignore: [] }).entries[0]
+
+    expect(entry).toMatchObject({
+      category: 'missing_in_db',
+      table: 'public.Users',
+      object: 'email',
+    })
+    expect(entry?.proposedCommands).toHaveLength(1)
+    expect(entry?.proposedCommands[0]).toStartWith('# escalate:')
+    expect(entry?.proposedCommands.join('\n')).not.toContain('migrate add-column')
+    expect(entry?.proposedCommands.join('\n')).not.toContain('"public.Users"')
+  })
+
   test('index missing in DB is an error with an exact dry-run add-index proposal', () => {
     const db = dbWith([{ ...users, indexes: [] }])
 
@@ -162,6 +186,62 @@ describe('compareNormalized', () => {
     expect(report.entries.filter((entry) => entry.object === 'index(email)')).toHaveLength(1)
   })
 
+  test('duplicate DB index signatures emit one drift entry', () => {
+    const dbTable = table(
+      { table: 'users' },
+      {
+        indexes: [
+          { columns: ['email'], unique: false },
+          { name: 'duplicate_name', columns: ['email'], unique: false },
+        ],
+      }
+    )
+    const report = compareNormalized(schemaWith([table({ table: 'users' })]), dbWith([dbTable]), {
+      ignore: [],
+    })
+
+    expect(report.entries.filter((entry) => entry.object === 'index(email)')).toHaveLength(1)
+  })
+
+  test('comma-bearing index columns cannot collide in comparison signatures', () => {
+    const ormTable = table(
+      { table: 'users' },
+      { indexes: [{ columns: ['a,b', 'c'], unique: false }] }
+    )
+    const dbTable = table(
+      { table: 'users' },
+      { indexes: [{ columns: ['a', 'b,c'], unique: false }] }
+    )
+
+    const entries = compareNormalized(schemaWith([ormTable]), dbWith([dbTable]), {
+      ignore: [],
+    }).entries
+
+    expect(entries).toHaveLength(2)
+    expect(entries.map((entry) => entry.category).sort()).toEqual([
+      'missing_in_db',
+      'missing_in_orm',
+    ])
+  })
+
+  test('uniqueness-only index drift emits both sides', () => {
+    const ormTable = table({ table: 'users' }, { indexes: [{ columns: ['email'], unique: true }] })
+    const dbTable = table({ table: 'users' }, { indexes: [{ columns: ['email'], unique: false }] })
+
+    const entries = compareNormalized(schemaWith([ormTable]), dbWith([dbTable]), {
+      ignore: [],
+    }).entries
+
+    expect(entries).toHaveLength(2)
+    expect(entries.map((entry) => entry.category).sort()).toEqual([
+      'missing_in_db',
+      'missing_in_orm',
+    ])
+    expect(entries.find((entry) => entry.category === 'missing_in_db')?.detail).toStartWith(
+      'unique index'
+    )
+  })
+
   test('entry ordering is stable across input insertion order', () => {
     const forward = compareNormalized(
       schemaWith([table({ table: 'z' }), table({ table: 'a' })]),
@@ -176,6 +256,51 @@ describe('compareNormalized', () => {
 
     expect(forward.entries).toEqual(reverse.entries)
     expect(forward.entries.map((entry) => entry.table)).toEqual(['a', 'z'])
+  })
+
+  test('entry ordering is stable across mixed column and index insertion order', () => {
+    const makeOrmTable = (reverse: boolean) =>
+      table(
+        { table: 'users' },
+        {
+          columns: (reverse
+            ? [
+                { name: 'beta', type: 'text', nullable: false },
+                { name: 'alpha', type: 'text', nullable: false },
+              ]
+            : [
+                { name: 'alpha', type: 'text', nullable: false },
+                { name: 'beta', type: 'text', nullable: false },
+              ]) satisfies NormalizedColumn[],
+          indexes: reverse
+            ? [
+                { columns: ['zeta'], unique: false },
+                { columns: ['alpha'], unique: false },
+              ]
+            : [
+                { columns: ['alpha'], unique: false },
+                { columns: ['zeta'], unique: false },
+              ],
+        }
+      )
+    const forward = compareNormalized(
+      schemaWith([makeOrmTable(false)]),
+      dbWith([table({ table: 'users' })]),
+      { ignore: [] }
+    )
+    const reverse = compareNormalized(
+      schemaWith([makeOrmTable(true)]),
+      dbWith([table({ table: 'users' })]),
+      { ignore: [] }
+    )
+
+    expect(forward.entries).toEqual(reverse.entries)
+    expect(forward.entries.map((entry) => entry.object)).toEqual([
+      'alpha',
+      'beta',
+      'index(alpha)',
+      'index(zeta)',
+    ])
   })
 
   test('index names are ignored while column order and uniqueness remain meaningful', () => {
@@ -282,6 +407,31 @@ describe('compareNormalized', () => {
       expect(entry).toMatchObject({ category: 'mismatch', severity: 'error' })
       expect(entry?.proposedCommands[0]).toStartWith('# escalate:')
     }
+  })
+
+  test('an error mismatch wins when the same column also has an info mismatch', () => {
+    const orm = schemaWith([
+      table(
+        { table: 'users' },
+        {
+          columns: [{ name: 'score', type: 'integer', nullable: false, default: '1' }],
+        }
+      ),
+    ])
+    const db = dbWith([
+      table(
+        { table: 'users' },
+        {
+          columns: [{ name: 'score', type: 'text', nullable: false, default: "'one'" }],
+        }
+      ),
+    ])
+
+    const entry = compareNormalized(orm, db, { ignore: [] }).entries[0]
+
+    expect(entry).toMatchObject({ object: 'score', category: 'mismatch', severity: 'error' })
+    expect(entry?.detail).toContain('type family differs')
+    expect(entry?.detail).toContain('default differs')
   })
 
   test('same-family spelling, default, and primary-key differences are info escalations', () => {
@@ -437,13 +587,20 @@ describe('proposalsFor', () => {
       detail: 'unique index on (email, age) is absent',
     }
 
-    expect(proposalsFor(missingColumn, { kind: 'column', column })).toEqual([
+    expect(
+      proposalsFor(missingColumn, {
+        kind: 'column',
+        table: { table: 'users' },
+        column,
+      })
+    ).toEqual([
       '# dry-run by default; review via migration-review before --execute',
       'dbcli migrate add-column users nickname text',
     ])
     expect(
       proposalsFor(missingIndex, {
         kind: 'index',
+        table: { table: 'users' },
         index: { columns: ['email', 'age'], unique: true },
       })
     ).toEqual([
@@ -461,9 +618,63 @@ describe('proposalsFor', () => {
     expect(
       proposalsFor(entry, {
         kind: 'index',
-        index: { columns: ['unique index', 'email,backup'], unique: false },
+        table: { table: 'users' },
+        index: { columns: ['unique index', 'backup email'], unique: false },
       })
-    ).toEqual([REVIEW_NOTE, `dbcli migrate add-index users --columns 'unique index,email,backup'`])
+    ).toEqual([REVIEW_NOTE, `dbcli migrate add-index users --columns 'unique index,backup email'`])
+  })
+
+  test('schema-qualified proposal subjects escalate without parsing the display name', () => {
+    const entry = driftEntry({ table: 'public.Users', object: 'email' })
+
+    const commands = proposalsFor(entry, {
+      kind: 'column',
+      table: { schema: 'public', table: 'Users' },
+      column: { name: 'email', type: 'text', nullable: false },
+    })
+
+    expect(commands).toHaveLength(1)
+    expect(commands[0]).toStartWith('# escalate:')
+    expect(commands.join('\n')).not.toContain('migrate add-column')
+    expect(commands.join('\n')).not.toContain('"public.Users"')
+  })
+
+  test('proposal helpers accept structural identities and reject qualified targets directly', () => {
+    const identity = { schema: 'public', table: 'Users' }
+    const columnCommands = addColumnProposal(identity, {
+      name: 'email',
+      type: 'text',
+      nullable: false,
+    })
+    const indexCommands = addIndexProposal(identity, {
+      columns: ['email'],
+      unique: false,
+    })
+
+    for (const commands of [columnCommands, indexCommands]) {
+      expect(commands).toHaveLength(1)
+      expect(commands[0]).toStartWith('# escalate:')
+      expect(commands.join('\n')).not.toContain('dbcli migrate add-')
+      expect(commands.join('\n')).not.toContain('"public.Users"')
+    }
+  })
+
+  test('index proposals escalate when comma splitting or trimming would lose column identity', () => {
+    for (const columns of [
+      ['a,b', 'c'],
+      [' leading', 'safe'],
+      ['trailing ', 'safe'],
+    ]) {
+      const commands = proposalsFor(driftEntry(), {
+        kind: 'index',
+        table: { table: 'users' },
+        index: { columns, unique: false },
+      })
+
+      expect(commands).toHaveLength(1)
+      expect(commands[0]).toStartWith('# escalate:')
+      expect(commands.join('\n')).not.toContain('migrate add-index')
+    }
   })
 
   test('does not parse an index proposal from display strings without a structural subject', () => {
@@ -479,21 +690,27 @@ describe('proposalsFor', () => {
 
   test('proposal arguments are shell-safe while simple tokens remain unchanged', () => {
     expect(
-      addColumnProposal('users', {
-        name: 'display name',
-        type: 'varchar(191)',
-        nullable: false,
-        default: `x'; $(touch /tmp/pwned)`,
-      })[1]
+      addColumnProposal(
+        { table: 'users' },
+        {
+          name: 'display name',
+          type: 'varchar(191)',
+          nullable: false,
+          default: `x'; $(touch /tmp/pwned)`,
+        }
+      )[1]
     ).toBe(
       `dbcli migrate add-column users 'display name' 'varchar(191)' --default 'x'"'"'; $(touch /tmp/pwned)'`
     )
     expect(
-      addColumnProposal('users', {
-        name: 'age',
-        type: 'integer',
-        nullable: true,
-      })[1]
+      addColumnProposal(
+        { table: 'users' },
+        {
+          name: 'age',
+          type: 'integer',
+          nullable: true,
+        }
+      )[1]
     ).toBe('dbcli migrate add-column users age integer --nullable')
   })
 
@@ -519,6 +736,7 @@ describe('proposalsFor', () => {
         },
         {
           kind: 'column',
+          table: { table: 'users' },
           column: { name: 'id', type: 'integer', nullable: false },
         }
       )

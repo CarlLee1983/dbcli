@@ -166,7 +166,7 @@ function compareTable(
             object: ormColumn.name,
             detail: `column '${ormColumn.name}' (${ormColumn.type}) is defined in ${ormSource} but absent in the database`,
           },
-          { kind: 'column', column: ormColumn }
+          { kind: 'column', table: ormTable.identity, column: ormColumn }
         )
       )
       continue
@@ -199,7 +199,7 @@ function compareTable(
     )
   }
 
-  compareIndexes(ormTable.indexes, dbTable.indexes, table, ormSource, entries)
+  compareIndexes(ormTable.indexes, dbTable.indexes, ormTable.identity, table, ormSource, entries)
 }
 
 function columnMismatch(
@@ -247,12 +247,13 @@ function displayOptional(value: string | undefined): string {
 function compareIndexes(
   ormIndexes: NormalizedIndex[],
   dbIndexes: NormalizedIndex[],
+  tableIdentity: NormalizedTableIdentity,
   table: string,
   ormSource: string,
   entries: DriftEntry[]
 ): void {
   const indexKey = (index: NormalizedIndex) =>
-    `${index.columns.map((column) => column.toLowerCase()).join(',')}|${index.unique}`
+    JSON.stringify([index.columns.map((column) => column.toLowerCase()), index.unique])
   const dbKeys = new Set(dbIndexes.map(indexKey))
   const ormKeys = new Set(ormIndexes.map(indexKey))
   const emittedOrmKeys = new Set<string>()
@@ -271,7 +272,7 @@ function compareIndexes(
           object: `index(${index.columns.join(',')})`,
           detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) is defined in ${ormSource} but absent in the database`,
         },
-        { kind: 'index', index }
+        { kind: 'index', table: tableIdentity, index }
       )
     )
   }
@@ -289,7 +290,7 @@ function compareIndexes(
           object: `index(${index.columns.join(',')})`,
           detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
         },
-        { kind: 'index', index }
+        { kind: 'index', table: tableIdentity, index }
       )
     )
   }

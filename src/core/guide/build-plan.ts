@@ -47,6 +47,23 @@ export function buildPlan(input: BuildPlanInput): GuideStep[] {
   const raw: Array<Omit<GuideStep, 'order'>> = []
   raw.push(ANCHOR_STEP)
 
+  if (input.goal === 'slow-query' && (input.engine === 'postgres' || input.engine === 'mysql')) {
+    raw.push({
+      command: 'dbcli lint "<SQL>" --format json',
+      rationale: 'Run local static analysis for SQL anti-patterns with no database round-trip.',
+      risk: 'readonly',
+      expects: 'JSON lint findings with severity, rule ID, source span, and remediation guidance.',
+      placeholders: ['<SQL>'],
+    })
+    raw.push({
+      command: 'dbcli explain "<SQL>" --format json',
+      rationale: 'Inspect the database query plan after resolving local lint findings.',
+      risk: 'readonly',
+      expects: 'JSON query-plan rows and severity-coded annotations.',
+      placeholders: ['<SQL>'],
+    })
+  }
+
   if (input.goal === 'permissions') {
     if (canRun(input.context, 'blacklist')) {
       raw.push({

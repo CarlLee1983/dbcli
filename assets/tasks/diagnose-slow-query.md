@@ -23,6 +23,14 @@ steps:
     reason: Analyze SQL risk without executing the query.
     risk: readonly
   - type: command
+    command: lint "{{query}}" --format json
+    reason: Run local static analysis for SQL anti-patterns with no database round-trip.
+    risk: readonly
+  - type: command
+    command: explain "{{query}}" --format json
+    reason: Inspect the database query plan after resolving local lint findings.
+    risk: readonly
+  - type: command
     command: q @diag/long-running --format json
     reason: Inspect active long-running queries through a saved diagnostic snippet.
     risk: readonly

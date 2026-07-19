@@ -94,7 +94,7 @@ describe('buildPlan', () => {
     ])
   })
 
-  test('slow-query on postgres expands to anchor + per-intent snippets + suggest + doctor', () => {
+  test('slow-query on postgres prioritizes lint and explain before diagnostics within the cap', () => {
     const map = asMap([
       snippet({ key: '@diag/long-running', engine: 'postgres', intent: 'perf.slow-query' }),
       snippet({ key: '@diag/locks', engine: 'postgres', intent: 'safety.locks' }),
@@ -110,17 +110,39 @@ describe('buildPlan', () => {
     const commands = plan.map((s) => s.command)
     expect(commands).toEqual([
       'dbcli inspect --for-agent',
+      'dbcli lint "<SQL>" --format json',
+      'dbcli explain "<SQL>" --format json',
       'dbcli q @diag/long-running --format json',
       'dbcli q @diag/locks --format json',
       'dbcli q @diag/cache-hit --format json',
       'dbcli q @diag/index-usage --format json',
       'dbcli queries suggest perf --format json',
-      'dbcli doctor --format json',
     ])
     expect(plan.every((s) => s.risk === 'readonly')).toBe(true)
-    expect(plan.map((s) => s.order)).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(plan[1]!.snippet).toBe('@diag/long-running')
-    expect(plan[1]!.intent).toBe('perf.slow-query')
+    expect(plan.map((s) => s.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(plan[3]!.snippet).toBe('@diag/long-running')
+    expect(plan[3]!.intent).toBe('perf.slow-query')
+  })
+
+  test('slow-query includes one local lint step before one explain step', () => {
+    const plan = buildPlan({
+      context: PG_CONTEXT,
+      snippets: new Map(),
+      engine: 'postgres',
+      goal: 'slow-query',
+    })
+    const lintSteps = plan.filter((step) => step.command.startsWith('dbcli lint '))
+    const explainSteps = plan.filter((step) => step.command.startsWith('dbcli explain '))
+
+    expect(lintSteps).toHaveLength(1)
+    expect(explainSteps).toHaveLength(1)
+    expect(plan.indexOf(lintSteps[0]!)).toBeLessThan(plan.indexOf(explainSteps[0]!))
+    expect(lintSteps[0]!.command).toBe('dbcli lint "<SQL>" --format json')
+    expect(lintSteps[0]!.rationale).toContain('local static analysis')
+    expect(lintSteps[0]!.rationale).toContain('no database round-trip')
+    expect(lintSteps[0]!.risk).toBe('readonly')
+    expect(lintSteps[0]!.placeholders).toEqual(['<SQL>'])
+    expect(explainSteps[0]!.placeholders).toEqual(['<SQL>'])
   })
 
   test('skips snippets with required-without-default params', () => {

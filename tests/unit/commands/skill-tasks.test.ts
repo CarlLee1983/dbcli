@@ -70,6 +70,38 @@ describe('skill tasks (CLI integration with built-in tasks)', () => {
     expect(logOut).toContain('"argv"')
   })
 
+  test('diagnose-slow-query includes one local lint step before one explain step', async () => {
+    const program = makeRoot()
+    await program.parseAsync(
+      [
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'diagnose-slow-query',
+        '--param',
+        'query=SELECT 1',
+        '--format',
+        'json',
+      ],
+      { from: 'node' }
+    )
+
+    const plan = JSON.parse(logOut) as {
+      steps: Array<{ command: string; reason?: string; risk?: string }>
+    }
+    const lintSteps = plan.steps.filter((step) => step.command.startsWith('lint '))
+    const explainSteps = plan.steps.filter((step) => step.command.startsWith('explain '))
+    expect(lintSteps).toHaveLength(1)
+    expect(explainSteps).toHaveLength(1)
+    expect(plan.steps.indexOf(lintSteps[0]!)).toBeLessThan(plan.steps.indexOf(explainSteps[0]!))
+    expect(lintSteps[0]!.command).toBe('lint "{{query}}" --format json')
+    expect(lintSteps[0]!.reason).toContain('local static analysis')
+    expect(lintSteps[0]!.reason).toContain('no database round-trip')
+    expect(lintSteps[0]!.risk).toBe('readonly')
+  })
+
   test('plan fails when required parameter is missing', async () => {
     const program = makeRoot()
     await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'plan', 'diagnose-slow-query'], {

@@ -2,9 +2,6 @@ import {
   columnRefParts,
   lexicalFindingSpan,
   resolveColumnRef,
-  topLevelWhereClauseRange,
-  walkExprInStatement,
-  whereOf,
 } from '@/core/lint/ast-utils'
 import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
@@ -130,7 +127,7 @@ const NON_NULL_AGGREGATES: Record<SqlDatabaseSystem, ReadonlySet<string>> = {
 }
 
 interface RelationBinding {
-  table: string
+  table?: string
   qualifier: string
   nullExtended: boolean
 }
@@ -161,13 +158,15 @@ function relationBindings(statement: AstNode): RelationBinding[] {
       for (const binding of bindings) binding.nullExtended = true
     }
 
-    if (typeof source.table !== 'string') continue
+    const table =
+      typeof source.table === 'string' ? source.table : undefined
     const qualifier =
       typeof source.as === 'string' && source.as.length > 0
         ? source.as
-        : source.table
+        : table
+    if (!qualifier) continue
     bindings.push({
-      table: source.table,
+      ...(table === undefined ? {} : { table }),
       qualifier,
       nullExtended: nullExtendsCurrent,
     })
@@ -176,13 +175,14 @@ function relationBindings(statement: AstNode): RelationBinding[] {
   return bindings
 }
 
-function columnIsNullExtended(
+function columnNullExtension(
   node: AstNode,
   statement: AstNode,
-  schema: Parameters<typeof resolveColumnRef>[0]
-): boolean {
+  schema: Parameters<typeof resolveColumnRef>[0],
+  allowSchema: boolean
+): { schemaVerified: boolean } | undefined {
   const reference = columnRefParts(node)
-  if (!reference) return false
+  if (!reference) return undefined
   const bindings = relationBindings(statement)
 
   if (reference.qualifier) {
@@ -191,11 +191,15 @@ function columnIsNullExtended(
         binding.qualifier.toLowerCase() === reference.qualifier?.toLowerCase()
     )
     return matches.length === 1 && matches[0]!.nullExtended
+      ? { schemaVerified: false }
+      : undefined
   }
 
+  if (!allowSchema) return undefined
   const resolved = resolveColumnRef(schema, statement, node)
-  if (!resolved) return false
+  if (!resolved) return undefined
   const matches = bindings.filter((binding) => {
+    if (!binding.table) return false
     const candidate = schema.resolveColumn([binding.table], reference.column)
     return (
       candidate?.table === resolved.table &&
@@ -203,6 +207,8 @@ function columnIsNullExtended(
     )
   })
   return matches.length === 1 && matches[0]!.nullExtended
+    ? { schemaVerified: true }
+    : undefined
 }
 
 function aggregateName(node: AstNode): string | undefined {
@@ -293,13 +299,22 @@ function nullableExpression(
   }
 
   if (node.type === 'column_ref') {
+    const nullExtension = columnNullExtension(
+      node,
+      statement,
+      schema,
+      allowSchema
+    )
+    if (nullExtension) {
+      return {
+        expression: expressionName(node) ?? 'column',
+        schemaVerified: nullExtension.schemaVerified,
+      }
+    }
+
     if (allowSchema) {
       const resolved = resolveColumnRef(schema, statement, node)
-      if (
-        resolved?.column.nullable ||
-        (resolved !== undefined &&
-          columnIsNullExtended(node, statement, schema))
-      ) {
+      if (resolved?.column.nullable) {
         return {
           expression: expressionName(node) ?? 'column',
           schemaVerified: true,
@@ -665,27 +680,81 @@ function hazardMessage(hazard: NullHazard): string {
   return `The right-hand NOT IN expression '${hazard.expression}' can evaluate to NULL, so it can suppress every result. Filter NULL values before applying NOT IN.`
 }
 
+type NotInVisitor = (node: AstNode, statement: AstNode) => void
+
+function visitExpression(
+  value: unknown,
+  statement: AstNode,
+  visitNotIn: NotInVisitor
+): void {
+  if (!value || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const item of value) visitExpression(item, statement, visitNotIn)
+    return
+  }
+
+  const node = value as AstNode
+  if (node.ast && typeof node.ast === 'object') {
+    visitStatement(node.ast as AstNode, visitNotIn)
+    return
+  }
+
+  if (
+    node.type === 'binary_expr' &&
+    String(node.operator).toUpperCase() === 'NOT IN'
+  ) {
+    visitNotIn(node, statement)
+  }
+
+  for (const key of ['left', 'right', 'args', 'value', 'expr', 'columns']) {
+    if (key in node) visitExpression(node[key], statement, visitNotIn)
+  }
+}
+
+function visitStatement(statement: AstNode, visitNotIn: NotInVisitor): void {
+  if (Array.isArray(statement.with)) {
+    for (const binding of statement.with as AstNode[]) {
+      const nested = binding.stmt
+      if (nested && typeof nested === 'object') {
+        visitStatement(nested as AstNode, visitNotIn)
+      }
+    }
+  }
+
+  if (Array.isArray(statement.columns)) {
+    for (const column of statement.columns as AstNode[]) {
+      visitExpression(column.expr, statement, visitNotIn)
+    }
+  }
+
+  if (Array.isArray(statement.from)) {
+    for (const source of statement.from as AstNode[]) {
+      visitExpression(source.expr, statement, visitNotIn)
+      visitExpression(source.on, statement, visitNotIn)
+    }
+  }
+
+  visitExpression(statement.where, statement, visitNotIn)
+  visitExpression(statement.groupby, statement, visitNotIn)
+  visitExpression(statement.having, statement, visitNotIn)
+  visitExpression(statement.window, statement, visitNotIn)
+  visitExpression(statement.orderby, statement, visitNotIn)
+  visitExpression(statement.limit, statement, visitNotIn)
+
+  if (statement._next && typeof statement._next === 'object') {
+    visitStatement(statement._next as AstNode, visitNotIn)
+  }
+}
+
 export const notInNullableRule: LintRule = {
   name: 'not-in-nullable',
   requiresSchema: false,
   usesOptionalSchema: true,
   check(ctx) {
-    const where = whereOf(ctx.ast)
-    if (!where) return []
-    const whereRange = topLevelWhereClauseRange(ctx.sql)
-    if (!whereRange) return []
-
     const findings: LintFinding[] = []
-    let notInSearchIndex = whereRange.start
+    let notInSearchIndex = 0
 
-    walkExprInStatement(where, (node) => {
-      if (
-        node.type !== 'binary_expr' ||
-        String(node.operator).toUpperCase() !== 'NOT IN'
-      ) {
-        return
-      }
-
+    visitStatement(ctx.ast, (node, statement) => {
       const candidateSpan = lexicalFindingSpan(
         ctx.sql,
         'not in',
@@ -693,7 +762,6 @@ export const notInNullableRule: LintRule = {
       )
       const hasExactSpan =
         candidateSpan.start >= notInSearchIndex &&
-        candidateSpan.end <= whereRange.end &&
         ctx.sql
           .slice(candidateSpan.start, candidateSpan.end)
           .toLowerCase() === 'not in'
@@ -701,7 +769,7 @@ export const notInNullableRule: LintRule = {
 
       const hazard = rhsHazard(
         node.right as AstNode | undefined,
-        ctx.ast,
+        statement,
         ctx.schema,
         ctx.system
       )
@@ -711,7 +779,9 @@ export const notInNullableRule: LintRule = {
         rule: 'not-in-nullable',
         severity: 'warn',
         message: hazardMessage(hazard),
-        span: hasExactSpan ? candidateSpan : whereRange,
+        span: hasExactSpan
+          ? candidateSpan
+          : { start: 0, end: ctx.sql.length },
         schemaVerified: hazard.schemaVerified,
       })
     })

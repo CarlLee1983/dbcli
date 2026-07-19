@@ -1009,7 +1009,9 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 | `not-in-nullable` | warn | `NOT IN` 右側為 NULL 或可能是 nullable：明確的 `NULL`、outer join 補出的 NULL、nullable subquery 投影，或已知可為 NULL 的 CASE／cast／aggregate 運算式。 |
 
 `not-in-nullable` 專門描述 SQL 中右側「NULL 污染 `NOT IN`」的風險。
-左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以
+它會遞迴檢查投影、JOIN `ON`、`WHERE` 與 `HAVING`，且每個巢狀
+SELECT／CTE／derived statement 都使用自己的 scope。左側欄位可為 NULL
+並不屬於這條規則。若右側是 subquery，應以
 `IS NOT NULL` 過濾其投影值；在 correlation 與語意合適時，也可考慮
 `NOT EXISTS`。除非 correlation、型別、qualified-column 解析與 rewrite
 目標都明確，dbcli 不會自動執行此 rewrite。若 subquery 以直接條件或

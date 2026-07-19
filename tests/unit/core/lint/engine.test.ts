@@ -113,6 +113,26 @@ describe('lintSql', () => {
     )
   })
 
+  test('--no-schema still detects qualified outer-join null extension', () => {
+    const report = lintSql(
+      'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id)',
+      {
+        system: 'postgresql',
+        schema,
+        noSchema: true,
+      }
+    )
+
+    const finding = report.findings.find(
+      (candidate) => candidate.rule === 'not-in-nullable'
+    )
+    expect(finding).toBeDefined()
+    expect(finding?.schemaVerified).toBe(false)
+    expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
+      'blocked: --no-schema'
+    )
+  })
+
   test('runs structurally nullable CASE checks without schema metadata', () => {
     const report = lintSql(
       'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN id > 0 THEN id END FROM blocked_users)',

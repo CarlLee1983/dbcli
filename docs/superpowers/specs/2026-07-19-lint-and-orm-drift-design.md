@@ -79,6 +79,9 @@ cache 跳過時,以 `blocked` 語意註明原因)、`relatedCommands[]`(指向
 - 有 schema cache → 型別/索引相關規則啟用,`schemaVerified: true`。
 - 無 cache 或 `--no-schema` → 純 schema 規則跳過；hybrid 規則仍跑靜態
   NULL/CASE/aggregate 檢查，並把無法執行的 schema 部分列入 `skippedRules`。
+- `not-in-nullable` 會以各 SELECT／CTE／derived statement 自己的 scope
+  遞迴檢查投影、JOIN `ON`、`WHERE` 與 `HAVING`；qualified outer-join
+  null extension 不需 schema cache 即可判定。
 - 不連 DB、只讀 `.dbcli/schemas/`;權限需求 `n/a`(同 `plan`)。
 - parser 無法可靠保留 identifier quote provenance 時，大小寫折疊後衝突的
   table/column 一律視為無法解析，不因字面 exact match 產生 schema-aware

@@ -1100,7 +1100,41 @@ describe('not-in-nullable', () => {
     expect(findings[0].message).not.toContain('WHERE a IS NOT NULL')
   })
 
-  test('does not recursively lint nested NOT IN with the outer table scope', () => {
+  test('recursively detects explicit NULL in a nested query predicate', () => {
+    const sql =
+      'SELECT id FROM users WHERE EXISTS (SELECT 1 FROM blocked_users WHERE id NOT IN (1, NULL))'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+      'NOT IN'
+    )
+  })
+
+  test('recursively analyzes HAVING predicates', () => {
+    const sql =
+      'SELECT id FROM users GROUP BY id HAVING id NOT IN (1, NULL)'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+      'NOT IN'
+    )
+  })
+
+  test('recursively analyzes JOIN predicates', () => {
+    const sql =
+      'SELECT u.id FROM users u JOIN blocked_users b ON u.id NOT IN (1, NULL)'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+      'NOT IN'
+    )
+  })
+
+  test('does not resolve a nested NOT IN expression with the outer table scope', () => {
     expect(
       notInNullableRule.check(
         ctxFor(
@@ -1109,6 +1143,61 @@ describe('not-in-nullable', () => {
         )
       )
     ).toHaveLength(0)
+  })
+
+  test('detects qualified outer-join null extension without schema metadata', () => {
+    const sql =
+      'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id)'
+    const findings = notInNullableRule.check(ctxFor(sql, {}))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0].message).toContain('WHERE b.id IS NOT NULL')
+  })
+
+  test('detects null extension from a qualified derived relation without schema metadata', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN (SELECT 1 AS id) b ON true)',
+        {}
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0].message).toContain('WHERE b.id IS NOT NULL')
+  })
+
+  test('does not treat a qualified INNER JOIN source as null-extended without schema metadata', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source JOIN blocked_users b ON b.id = source.id)',
+          {}
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps lexical spans aligned after a safe projected NOT IN expression', () => {
+    const sql =
+      'SELECT 1 NOT IN (1, 2) AS safe FROM users WHERE id NOT IN (1, NULL)'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].span.start).toBe(sql.lastIndexOf('NOT IN'))
+  })
+
+  test('recursively analyzes CTE predicates in lexical order', () => {
+    const sql =
+      'WITH x AS (SELECT 1 WHERE 1 NOT IN (NULL)) SELECT 2 WHERE 2 NOT IN (NULL)'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(2)
+    expect(findings.map((finding) => finding.span.start)).toEqual([
+      sql.indexOf('NOT IN'),
+      sql.lastIndexOf('NOT IN'),
+    ])
   })
 
   test('places the NOT IN span on the operator instead of marker text', () => {

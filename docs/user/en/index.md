@@ -1084,7 +1084,9 @@ never connects to refresh missing metadata.
 | `not-in-nullable` | warn | A right-hand `NOT IN` value that is NULL or may be nullable: explicit `NULL`, outer-join null extension, a nullable subquery projection, or a known nullable CASE/cast/aggregate expression. |
 
 `not-in-nullable` is specifically the SQL “NULL poisons `NOT IN`” hazard on
-the right-hand side. A nullable left-hand column is not this rule. For a
+the right-hand side. It checks projections, JOIN `ON`, `WHERE`, and `HAVING`
+recursively, with each nested SELECT/CTE/derived statement using its own scope.
+A nullable left-hand column is not this rule. For a
 subquery, filter its projected value with `IS NOT NULL`, or consider
 `NOT EXISTS` when its correlation and semantics are appropriate. dbcli does
 not automatically perform that rewrite unless correlation, types,

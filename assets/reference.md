@@ -289,7 +289,9 @@ unless correlation, type classification, qualified-column resolution, and the
 rewrite target are all unambiguous. A direct or `AND`-conjoined `IS NOT NULL`
 filter on the exact projected expression suppresses the finding; aggregates
 apply the same proof in `HAVING`. Filters under `OR` or ambiguous expression
-matches do not.
+matches do not. The rule recursively checks projection, JOIN `ON`, `WHERE`, and
+`HAVING` expressions, using each nested SELECT/CTE/derived statement's own
+scope. Qualified outer-join null extension remains detectable without a cache.
 
 Trimmed JSON example:
 

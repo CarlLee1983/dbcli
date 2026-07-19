@@ -144,6 +144,12 @@ export const implicitCastRule: LintRule = {
     if (!whereRange) return []
 
     const findings: LintFinding[] = []
+    let hasNestedStatement = false
+    walkExprInStatement(where, (node) => {
+      if (node.ast && typeof node.ast === 'object') {
+        hasNestedStatement = true
+      }
+    })
 
     walkExprInStatement(where, (node) => {
       if (node.type !== 'binary_expr') return
@@ -163,13 +169,15 @@ export const implicitCastRule: LintRule = {
       const column = columnKind(resolved.column.type)
       if (column === 'other' || column === literal) return
 
-      const matches = comparisonMatches(
-        ctx.sql,
-        whereRange,
-        left,
-        String(node.operator),
-        right
-      )
+      const matches = hasNestedStatement
+        ? []
+        : comparisonMatches(
+            ctx.sql,
+            whereRange,
+            left,
+            String(node.operator),
+            right
+          )
       const match = matches.length === 1 ? matches[0] : undefined
       const matchIndex = match?.index
       const whereIndex = ctx.sql.toLowerCase().indexOf('where')

@@ -197,6 +197,17 @@ describe('implicit-cast', () => {
     expect(findings[0].rewrite).toBeUndefined()
   })
 
+  test('withholds rewrites when the WHERE contains a correlated subquery', () => {
+    const sql =
+      "SELECT u.id FROM users u WHERE u.id /* target */ = '42' AND EXISTS (SELECT 1 FROM blocked_users b WHERE u.id = '42')"
+    const findings = implicitCastRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain("'id'")
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].verifyCommand).toBeUndefined()
+  })
+
   test('resolves a named table alias after a derived table without shifting scope', () => {
     const findings = implicitCastRule.check(
       ctxFor(

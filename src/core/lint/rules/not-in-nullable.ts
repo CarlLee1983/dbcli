@@ -734,9 +734,19 @@ function visitStatement(statement: AstNode, visitNotIn: NotInVisitor): void {
   }
 
   if (Array.isArray(statement.from)) {
-    for (const source of statement.from as AstNode[]) {
+    const sources = statement.from as AstNode[]
+    for (const [index, source] of sources.entries()) {
       visitExpression(source.expr, statement, visitNotIn)
-      visitExpression(source.on, statement, visitNotIn)
+      const currentSourceBeforeJoin = { ...source }
+      delete currentSourceBeforeJoin.join
+      const onStatement: AstNode = {
+        ...statement,
+        from: [
+          ...sources.slice(0, index),
+          currentSourceBeforeJoin,
+        ],
+      }
+      visitExpression(source.on, onStatement, visitNotIn)
     }
   }
 

@@ -1010,7 +1010,9 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 
 `not-in-nullable` 專門描述 SQL 中右側「NULL 污染 `NOT IN`」的風險。
 它會遞迴檢查投影、JOIN `ON`、`WHERE` 與 `HAVING`，且每個巢狀
-SELECT／CTE／derived statement 都使用自己的 scope。左側欄位可為 NULL
+SELECT／CTE／derived statement 都使用自己的 scope。當下 join 的
+synthetic NULL 只會在該 join 的 `ON` 評估後套用；schema 宣告的
+nullability 與更早完成的 join 仍會在 `ON` 內生效。左側欄位可為 NULL
 並不屬於這條規則。若右側是 subquery，應以
 `IS NOT NULL` 過濾其投影值；在 correlation 與語意合適時，也可考慮
 `NOT EXISTS`。除非 correlation、型別、qualified-column 解析與 rewrite

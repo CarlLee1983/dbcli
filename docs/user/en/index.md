@@ -1086,6 +1086,8 @@ never connects to refresh missing metadata.
 `not-in-nullable` is specifically the SQL “NULL poisons `NOT IN`” hazard on
 the right-hand side. It checks projections, JOIN `ON`, `WHERE`, and `HAVING`
 recursively, with each nested SELECT/CTE/derived statement using its own scope.
+A join's synthetic NULL extension is applied only after that join's own `ON`
+predicate; declared nullability and completed earlier joins still apply there.
 A nullable left-hand column is not this rule. For a
 subquery, filter its projected value with `IS NOT NULL`, or consider
 `NOT EXISTS` when its correlation and semantics are appropriate. dbcli does

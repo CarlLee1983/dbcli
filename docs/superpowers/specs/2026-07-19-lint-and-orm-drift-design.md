@@ -81,7 +81,9 @@ cache 跳過時,以 `blocked` 語意註明原因)、`relatedCommands[]`(指向
   NULL/CASE/aggregate 檢查，並把無法執行的 schema 部分列入 `skippedRules`。
 - `not-in-nullable` 會以各 SELECT／CTE／derived statement 自己的 scope
   遞迴檢查投影、JOIN `ON`、`WHERE` 與 `HAVING`；qualified outer-join
-  null extension 不需 schema cache 即可判定。
+  null extension 不需 schema cache 即可判定。當下 join 的 synthetic
+  NULL 只在該 join 的 `ON` 評估後才成立；`ON` 內僅採用 schema 宣告與
+  更早已完成 join 的 null extension。
 - 不連 DB、只讀 `.dbcli/schemas/`;權限需求 `n/a`(同 `plan`)。
 - parser 無法可靠保留 identifier quote provenance 時，大小寫折疊後衝突的
   table/column 一律視為無法解析，不因字面 exact match 產生 schema-aware

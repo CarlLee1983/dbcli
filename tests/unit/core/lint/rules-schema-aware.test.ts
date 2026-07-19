@@ -1179,6 +1179,63 @@ describe('not-in-nullable', () => {
     ).toHaveLength(0)
   })
 
+  test('does not apply a LEFT JOIN synthetic NULL row inside that join own ON predicate', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT source.id FROM users source LEFT JOIN blocked_users b ON source.id NOT IN (b.id)',
+          {}
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not apply a RIGHT JOIN synthetic NULL row inside that join own ON predicate', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT source.id FROM users source RIGHT JOIN blocked_users b ON b.id NOT IN (source.id)',
+          {}
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not apply either FULL JOIN synthetic NULL row inside that join own ON predicate', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT source.id FROM users source FULL JOIN blocked_users b ON source.id NOT IN (b.id)',
+          {}
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('still detects schema-declared nullability inside the current join ON predicate', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT source.id FROM users source LEFT JOIN blocked_users b ON source.email NOT IN (b.email)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(true)
+  })
+
+  test('applies null extension from a completed join inside a later join ON predicate', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT source.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id JOIN metrics m ON m.a NOT IN (b.id)',
+        {}
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
   test('keeps lexical spans aligned after a safe projected NOT IN expression', () => {
     const sql =
       'SELECT 1 NOT IN (1, 2) AS safe FROM users WHERE id NOT IN (1, NULL)'

@@ -291,7 +291,9 @@ filter on the exact projected expression suppresses the finding; aggregates
 apply the same proof in `HAVING`. Filters under `OR` or ambiguous expression
 matches do not. The rule recursively checks projection, JOIN `ON`, `WHERE`, and
 `HAVING` expressions, using each nested SELECT/CTE/derived statement's own
-scope. Qualified outer-join null extension remains detectable without a cache.
+scope. Qualified outer-join null extension remains detectable without a cache,
+but a join's synthetic NULL row is not applied inside that join's own `ON`;
+declared nullability and completed earlier joins still apply there.
 
 Trimmed JSON example:
 

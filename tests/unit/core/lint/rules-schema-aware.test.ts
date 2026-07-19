@@ -420,6 +420,149 @@ describe('not-in-nullable', () => {
     ).toHaveLength(0)
   })
 
+  test('flags a declared non-null column on the nullable side of a LEFT JOIN', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('b.id')
+    expect(findings[0].rewrite).toBeUndefined()
+  })
+
+  test('flags a declared non-null column on the nullable side of a RIGHT JOIN', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT source.id FROM users source RIGHT JOIN blocked_users b ON b.id = source.id)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('source.id')
+  })
+
+  test('flags a declared non-null column on either nullable side of a FULL JOIN', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source FULL JOIN blocked_users b ON b.id = source.id)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('b.id')
+  })
+
+  test('suppresses an outer-join null extension guarded directly with IS NOT NULL', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id WHERE b.id IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('suppresses an outer-join null extension guarded under AND', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id WHERE source.id > 0 AND b.id IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('keeps an outer-join null-extension finding when its guard is under OR', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT u.id FROM users u WHERE u.id NOT IN (SELECT b.id FROM users source LEFT JOIN blocked_users b ON b.id = source.id WHERE b.id IS NOT NULL OR source.id > 0)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+  })
+
+  test('flags a CASE projection without ELSE as structurally nullable', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id END FROM blocked_users b)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('nullable expression')
+    expect(findings[0].rewrite).toBeUndefined()
+  })
+
+  test('does not flag a CASE projection with non-null branches and ELSE', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id ELSE 0 END FROM blocked_users b)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  for (const aggregate of ['MIN', 'MAX', 'AVG', 'SUM'] as const) {
+    test(`flags ${aggregate} as nullable on empty input`, () => {
+      const findings = notInNullableRule.check(
+        ctxFor(
+          `SELECT id FROM users WHERE id NOT IN (SELECT ${aggregate}(b.id) FROM blocked_users b)`,
+          schema
+        )
+      )
+
+      expect(findings).toHaveLength(1)
+      expect(findings[0].message).toContain(aggregate)
+      expect(findings[0].rewrite).toBeUndefined()
+    })
+  }
+
+  test('does not flag COUNT because its result is non-null on empty input', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (SELECT COUNT(b.id) FROM blocked_users b)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  for (const system of ['mysql', 'mariadb'] as const) {
+    test(`recognizes structurally nullable CASE and SUM projections for ${system}`, () => {
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN b.id > 0 THEN b.id END FROM blocked_users b)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+      expect(
+        notInNullableRule.check(
+          ctxFor(
+            'SELECT id FROM users WHERE id NOT IN (SELECT SUM(b.id) FROM blocked_users b)',
+            schema,
+            system
+          )
+        )
+      ).toHaveLength(1)
+    })
+  }
+
   test('does not confuse a nullable left-hand column with the RHS NULL hazard', () => {
     expect(
       notInNullableRule.check(

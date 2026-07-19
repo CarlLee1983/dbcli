@@ -38,6 +38,13 @@ const NULL_PROPAGATING_BINARY = new Set([
   'OR',
 ])
 const NULL_PROPAGATING_UNARY = new Set(['+', '-', '~', 'NOT'])
+const NULL_ON_EMPTY_AGGREGATES = new Set(['MIN', 'MAX', 'AVG', 'SUM'])
+
+interface RelationBinding {
+  table: string
+  qualifier: string
+  nullExtended: boolean
+}
 
 function expressionName(node: AstNode): string | undefined {
   const reference = columnRefParts(node)
@@ -45,6 +52,73 @@ function expressionName(node: AstNode): string | undefined {
   return reference.qualifier
     ? `${reference.qualifier}.${reference.column}`
     : reference.column
+}
+
+function relationBindings(statement: AstNode): RelationBinding[] {
+  if (!Array.isArray(statement.from)) return []
+  const bindings: RelationBinding[] = []
+
+  for (const item of statement.from) {
+    const source = item as AstNode
+    const join = typeof source.join === 'string'
+      ? source.join.toUpperCase()
+      : ''
+    const nullExtendsPrevious =
+      join.startsWith('RIGHT') || join.startsWith('FULL')
+    const nullExtendsCurrent =
+      join.startsWith('LEFT') || join.startsWith('FULL')
+
+    if (nullExtendsPrevious) {
+      for (const binding of bindings) binding.nullExtended = true
+    }
+
+    if (typeof source.table !== 'string') continue
+    const qualifier =
+      typeof source.as === 'string' && source.as.length > 0
+        ? source.as
+        : source.table
+    bindings.push({
+      table: source.table,
+      qualifier,
+      nullExtended: nullExtendsCurrent,
+    })
+  }
+
+  return bindings
+}
+
+function columnIsNullExtended(
+  node: AstNode,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): boolean {
+  const reference = columnRefParts(node)
+  if (!reference) return false
+  const bindings = relationBindings(statement)
+
+  if (reference.qualifier) {
+    const matches = bindings.filter(
+      (binding) =>
+        binding.qualifier.toLowerCase() === reference.qualifier?.toLowerCase()
+    )
+    return matches.length === 1 && matches[0]!.nullExtended
+  }
+
+  const resolved = resolveColumnRef(schema, statement, node)
+  if (!resolved) return false
+  const matches = bindings.filter((binding) => {
+    const candidate = schema.resolveColumn([binding.table], reference.column)
+    return (
+      candidate?.table === resolved.table &&
+      candidate.column.name === resolved.column.name
+    )
+  })
+  return matches.length === 1 && matches[0]!.nullExtended
+}
+
+function aggregateName(node: AstNode): string | undefined {
+  if (typeof node.name === 'string') return node.name.toUpperCase()
+  return undefined
 }
 
 function nullableExpression(
@@ -56,7 +130,32 @@ function nullableExpression(
 
   if (node.type === 'column_ref') {
     const resolved = resolveColumnRef(schema, statement, node)
-    return resolved?.column.nullable ? expressionName(node) : undefined
+    return resolved?.column.nullable ||
+      (resolved !== undefined && columnIsNullExtended(node, statement, schema))
+      ? expressionName(node)
+      : undefined
+  }
+
+  if (node.type === 'case') {
+    const args = Array.isArray(node.args) ? (node.args as AstNode[]) : []
+    const otherwise = args.find((argument) => argument.type === 'else')
+    if (!otherwise) return 'CASE expression'
+
+    for (const argument of args) {
+      const result = argument.result as AstNode | undefined
+      if (!result) continue
+      const nullable = nullableExpression(result, statement, schema)
+      if (nullable) return nullable
+    }
+    return undefined
+  }
+
+  if (node.type === 'aggr_func') {
+    const name = aggregateName(node)
+    if (name && NULL_ON_EMPTY_AGGREGATES.has(name)) {
+      return `${name} aggregate`
+    }
+    return undefined
   }
 
   if (

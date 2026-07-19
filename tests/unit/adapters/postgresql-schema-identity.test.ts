@@ -28,7 +28,8 @@ function installForeignKeyCatalogFixture(
     oidKeyedRows: Record<string, ForeignKeyRow[]>
     nameJoinedRows: Record<string, ForeignKeyRow[]>
   }
-): void {
+): { foreignKeyQueries: string[] } {
+  const foreignKeyQueries: string[] = []
   adapter.execute = async (sql: string, params) => {
     const isForeignKeyQuery =
       sql.includes("constraint_type = 'FOREIGN KEY'") || sql.includes("contype = 'f'")
@@ -36,12 +37,53 @@ function installForeignKeyCatalogFixture(
       return { rows: [], affectedRows: 0 }
     }
 
+    foreignKeyQueries.push(sql)
     const tableName = String(params?.[0])
     const rows = sql.includes('pg_catalog.pg_constraint')
       ? fixture.oidKeyedRows[tableName]
       : fixture.nameJoinedRows[tableName]
     return { rows: rows ?? [], affectedRows: 0 }
   }
+  return { foreignKeyQueries }
+}
+
+function expectRelationallySafeForeignKeyQuery(sql: string): void {
+  const normalized = sql.replace(/\s+/g, ' ').trim()
+
+  expect(normalized).toContain('FROM pg_catalog.pg_constraint AS constraint_info')
+  expect(normalized).toContain(
+    'JOIN pg_catalog.pg_class AS source_table ON source_table.oid = constraint_info.conrelid'
+  )
+  expect(normalized).toContain(
+    'JOIN pg_catalog.pg_class AS referenced_table ON referenced_table.oid = constraint_info.confrelid'
+  )
+  expect(normalized).toContain(
+    'JOIN LATERAL unnest(constraint_info.conkey) WITH ORDINALITY AS source_key(attnum, ordinality) ON TRUE'
+  )
+  expect(normalized).toContain(
+    'JOIN LATERAL unnest(constraint_info.confkey) WITH ORDINALITY AS referenced_key(attnum, ordinality) ON referenced_key.ordinality = source_key.ordinality'
+  )
+  expect(normalized).toContain(
+    'JOIN pg_catalog.pg_attribute AS source_column ON source_column.attrelid = constraint_info.conrelid AND source_column.attnum = source_key.attnum'
+  )
+  expect(normalized).toContain(
+    'JOIN pg_catalog.pg_attribute AS referenced_column ON referenced_column.attrelid = constraint_info.confrelid AND referenced_column.attnum = referenced_key.attnum'
+  )
+  expect(normalized).toContain(
+    'array_agg(source_column.attname ORDER BY source_key.ordinality) as columns'
+  )
+  expect(normalized).toContain(
+    'array_agg(referenced_column.attname ORDER BY source_key.ordinality) as ref_columns'
+  )
+  expect(normalized).toContain("WHERE constraint_info.contype = 'f'")
+  expect(normalized).toContain('source_table.relname = $1')
+  expect(normalized).toContain("source_schema.nspname = 'public'")
+
+  const groupBy = normalized.match(/ GROUP BY (.+?) ORDER BY constraint_info\.oid$/)?.[1]
+  expect(groupBy).toBeDefined()
+  expect(groupBy!.split(',').map((column) => column.trim())[0]).toBe('constraint_info.oid')
+  expect(normalized).not.toContain('GROUP BY constraint_info.conname')
+  expect(normalized).toMatch(/ORDER BY constraint_info\.oid$/)
 }
 
 test('listTables preserves exact catalog schema and table names', async () => {
@@ -66,7 +108,7 @@ test('listTables preserves exact catalog schema and table names', async () => {
 
 test('getTableSchema preserves composite foreign-key column pairing and order', async () => {
   const adapter = createAdapter()
-  installForeignKeyCatalogFixture(adapter, {
+  const capture = installForeignKeyCatalogFixture(adapter, {
     oidKeyedRows: {
       memberships: [
         {
@@ -93,6 +135,8 @@ test('getTableSchema preserves composite foreign-key column pairing and order', 
 
   const schema = await adapter.getTableSchema('memberships')
 
+  expect(capture.foreignKeyQueries).toHaveLength(1)
+  expectRelationallySafeForeignKeyQuery(capture.foreignKeyQueries[0]!)
   expect(schema.foreignKeys).toEqual([
     {
       name: 'memberships_user_fk',
@@ -106,7 +150,7 @@ test('getTableSchema preserves composite foreign-key column pairing and order', 
 
 test('getTableSchema isolates reused constraint names by source table identity', async () => {
   const adapter = createAdapter()
-  installForeignKeyCatalogFixture(adapter, {
+  const capture = installForeignKeyCatalogFixture(adapter, {
     oidKeyedRows: {
       orders: [
         {
@@ -166,6 +210,10 @@ test('getTableSchema isolates reused constraint names by source table identity',
   const orders = await adapter.getTableSchema('orders')
   const auditOrders = await adapter.getTableSchema('audit_orders')
 
+  expect(capture.foreignKeyQueries).toHaveLength(2)
+  for (const query of capture.foreignKeyQueries) {
+    expectRelationallySafeForeignKeyQuery(query)
+  }
   expect(orders.foreignKeys).toEqual([
     {
       name: 'owner_fk',

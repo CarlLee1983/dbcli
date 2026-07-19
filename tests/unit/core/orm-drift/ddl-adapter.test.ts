@@ -351,4 +351,9 @@ describe('detectOrmFormat', () => {
     expect(detectOrmFormat('schema.txt', '{"tables":{}}')).toBe('json')
     expect(detectOrmFormat('schema.txt', '[]')).toBe('ddl')
   })
+
+  test('detects drizzle snapshots', () => {
+    const snapshot = '{"version":"7","dialect":"postgresql","tables":{}}'
+    expect(detectOrmFormat('drizzle/meta/0001_snapshot.json', snapshot)).toBe('drizzle')
+  })
 })

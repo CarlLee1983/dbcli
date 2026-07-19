@@ -101,6 +101,22 @@ describe('runDrift', () => {
     expect(report.entries.some((entry) => entry.category === 'missing_in_db')).toBe(true)
   })
 
+  test('drizzle snapshot path flows end-to-end', async () => {
+    const { report } = await runDrift(
+      ['tests/fixtures/orm-drift/drizzle-snapshot.json'],
+      {},
+      config as never
+    )
+
+    expect(report.ormSource).toBe('drizzle')
+  })
+
+  test('.ts schema file gets a drizzle-kit hint before attempting to read it', async () => {
+    await expect(
+      runDrift([join(tempDir, 'missing-schema.TS')], {}, config as never)
+    ).rejects.toThrow('drizzle-kit generate')
+  })
+
   test('honors the JSON format escape hatch', async () => {
     const path = await write(
       'schema.data',

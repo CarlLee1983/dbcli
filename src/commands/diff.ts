@@ -11,6 +11,7 @@ import { configModule } from '@/core/config'
 import type { ColumnSchema, SqlDatabaseSystem, TableSchema } from '@/adapters/types'
 import { detectOrmFormat, type OrmFormat } from '@/core/orm-drift/adapters/detect'
 import { parseDdl, parseDdlFiles } from '@/core/orm-drift/adapters/ddl'
+import { parseDrizzleSnapshot } from '@/core/orm-drift/adapters/drizzle'
 import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
 import { compareNormalized, type DriftReport } from '@/core/orm-drift/compare'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
@@ -27,7 +28,7 @@ function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptio
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 const DRIFT_FORMATS = ['json', 'table', 'markdown'] as const
-const ORM_FORMATS = ['prisma', 'ddl', 'json'] as const
+const ORM_FORMATS = ['prisma', 'ddl', 'json', 'drizzle'] as const
 
 export interface DriftOptions {
   ormFormat?: OrmFormat
@@ -127,6 +128,11 @@ export async function runDrift(
   const inputs: Array<{ path: string; content: string; format: OrmFormat }> = []
 
   for (const path of expandedPaths) {
+    if (path.toLowerCase().endsWith('.ts')) {
+      throw new Error(
+        "Drizzle/TypeORM TypeScript sources are not parsed directly. Run 'drizzle-kit generate' and pass drizzle/meta/<NNNN>_snapshot.json (or export DDL) instead."
+      )
+    }
     const file = Bun.file(path)
     if (!(await file.exists())) throw new Error(`ORM schema file not found: ${path}`)
     const content = await file.text()
@@ -154,6 +160,7 @@ export async function runDrift(
           inputs.map(({ content, format }) => {
             if (format === 'prisma') return parsePrismaSchema(content)
             if (format === 'ddl') return parseDdl(content, system as SqlDatabaseSystem)
+            if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
             const parsed = normalizedSchemaZod.parse(JSON.parse(content))
             return { ...parsed, source: 'json' as const }
           })
@@ -355,7 +362,7 @@ export const diffCommand = new Command()
     collectOption,
     []
   )
-  .option('--orm-format <fmt>', 'Force ORM input format: prisma | ddl | json')
+  .option('--orm-format <fmt>', 'Force ORM input format: prisma | ddl | json | drizzle')
   .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
   .option(
     '--format <format>',

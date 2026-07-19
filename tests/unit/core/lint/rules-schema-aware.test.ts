@@ -31,6 +31,11 @@ const schema = {
       { name: 'custom_value', type: 'my_int_domain', nullable: false },
       { name: 'shared_id', type: 'integer', nullable: false },
       { name: 'scoped_value', type: 'integer', nullable: false },
+      { name: 'order_id', type: 'varchar(32)', nullable: false },
+      { name: 'maybe', type: 'integer', nullable: true },
+      { name: 'other_maybe', type: 'integer', nullable: true },
+      { name: 'medium_id', type: 'mediumint', nullable: false },
+      { name: 'long_body', type: 'longtext', nullable: false },
     ],
   },
   blocked_users: {
@@ -40,6 +45,13 @@ const schema = {
       { name: 'email', type: 'varchar(255)', nullable: true },
       { name: 'shared_id', type: 'varchar(32)', nullable: false },
       { name: 'scoped_value', type: 'varchar(32)', nullable: true },
+    ],
+  },
+  metrics: {
+    name: 'metrics',
+    columns: [
+      { name: 'a', type: 'integer', nullable: true },
+      { name: 'b', type: 'integer', nullable: true },
     ],
   },
 } satisfies Record<string, TableSchema>
@@ -164,6 +176,55 @@ describe('implicit-cast', () => {
       )
     ).toHaveLength(0)
   })
+
+  test('never rewrites a longer identifier when comments prevent exact target matching', () => {
+    const sql =
+      "SELECT id FROM users WHERE order_id = '42' AND id /* target */ = '42'"
+    const findings = implicitCastRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain("'id'")
+    expect(findings[0].rewrite).toBeUndefined()
+  })
+
+  test('resolves a named table alias after a derived table without shifting scope', () => {
+    const findings = implicitCastRule.check(
+      ctxFor(
+        "SELECT u.id FROM (SELECT 1 AS id) d JOIN users u ON u.id = d.id WHERE u.id = '42'",
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain("'id'")
+  })
+
+  test('does not recursively lint a nested predicate with the outer table scope', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor(
+          "SELECT id FROM users WHERE id IN (SELECT id FROM blocked_users WHERE shared_id = '42')",
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('recognizes mediumint as an exact numeric family', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor("SELECT id FROM users WHERE medium_id = '42'", schema)
+      )
+    ).toHaveLength(1)
+  })
+
+  test('recognizes longtext as an exact textual family', () => {
+    expect(
+      implicitCastRule.check(
+        ctxFor('SELECT id FROM users WHERE long_body = 42', schema)
+      )
+    ).toHaveLength(1)
+  })
 })
 
 describe('not-in-nullable', () => {
@@ -266,5 +327,74 @@ describe('not-in-nullable', () => {
         )
       )
     ).toHaveLength(0)
+  })
+
+  test('does not flag IS NULL because it always returns a non-null boolean', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (1, maybe IS NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not flag IS NOT NULL because it always returns a non-null boolean', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (1, maybe IS NOT NULL)',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('does not flag dialect-supported IS DISTINCT FROM expressions', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id NOT IN (1, (maybe IS DISTINCT FROM other_maybe))',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('guards a nullable projected expression rather than only its first nullable leaf', () => {
+    const findings = notInNullableRule.check(
+      ctxFor(
+        'SELECT id FROM users WHERE id NOT IN (SELECT a + b FROM metrics)',
+        schema
+      )
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain('projected expression itself')
+    expect(findings[0].message).not.toContain('WHERE a IS NOT NULL')
+  })
+
+  test('does not recursively lint nested NOT IN with the outer table scope', () => {
+    expect(
+      notInNullableRule.check(
+        ctxFor(
+          'SELECT id FROM users WHERE id IN (SELECT id FROM blocked_users WHERE id NOT IN (1, nullable_number))',
+          schema
+        )
+      )
+    ).toHaveLength(0)
+  })
+
+  test('places the NOT IN span on the operator instead of marker text', () => {
+    const sql =
+      "SELECT id FROM users WHERE 'NOT IN marker' = 'x' OR id NOT IN (1, NULL)"
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].span.start).toBe(sql.lastIndexOf('NOT IN'))
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
+      'NOT IN'
+    )
   })
 })

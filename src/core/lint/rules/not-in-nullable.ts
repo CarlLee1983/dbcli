@@ -1,8 +1,8 @@
 import {
   columnRefParts,
-  findingSpan,
+  lexicalFindingSpan,
   resolveColumnRef,
-  walkExpr,
+  walkExprInStatement,
   whereOf,
 } from '@/core/lint/ast-utils'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
@@ -10,7 +10,33 @@ import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 interface NullHazard {
   kind: 'explicit-null' | 'nullable-expression' | 'nullable-subquery'
   expression?: string
+  compoundProjection?: boolean
 }
+
+const NULL_PROPAGATING_BINARY = new Set([
+  '+',
+  '-',
+  '*',
+  '/',
+  '%',
+  '||',
+  '=',
+  '!=',
+  '<>',
+  '>',
+  '>=',
+  '<',
+  '<=',
+  'LIKE',
+  'ILIKE',
+  'NOT LIKE',
+  'NOT ILIKE',
+  'IN',
+  'NOT IN',
+  'AND',
+  'OR',
+])
+const NULL_PROPAGATING_UNARY = new Set(['+', '-', '~', 'NOT'])
 
 function expressionName(node: AstNode): string | undefined {
   const reference = columnRefParts(node)
@@ -32,15 +58,25 @@ function nullableExpression(
     return resolved?.column.nullable ? expressionName(node) : undefined
   }
 
-  if (node.type === 'binary_expr' || node.type === 'unary_expr') {
+  if (
+    node.type === 'binary_expr' &&
+    NULL_PROPAGATING_BINARY.has(String(node.operator).toUpperCase())
+  ) {
     const left = node.left as AstNode | undefined
     const right = node.right as AstNode | undefined
-    const expr = node.expr as AstNode | undefined
-    for (const candidate of [left, right, expr]) {
+    for (const candidate of [left, right]) {
       if (!candidate) continue
       const nullable = nullableExpression(candidate, statement, schema)
       if (nullable) return nullable
     }
+  }
+
+  if (
+    node.type === 'unary_expr' &&
+    NULL_PROPAGATING_UNARY.has(String(node.operator).toUpperCase())
+  ) {
+    const expression = node.expr as AstNode | undefined
+    if (expression) return nullableExpression(expression, statement, schema)
   }
 
   return undefined
@@ -75,7 +111,11 @@ function rhsHazard(
         schema
       )
       if (nullable) {
-        return { kind: 'nullable-subquery', expression: nullable }
+        return {
+          kind: 'nullable-subquery',
+          expression: nullable,
+          compoundProjection: expression.type !== 'column_ref',
+        }
       }
       continue
     }
@@ -94,6 +134,9 @@ function hazardMessage(hazard: NullHazard): string {
     return 'The right-hand NOT IN list contains NULL, so the predicate cannot evaluate to true. Remove NULL or filter it before applying NOT IN.'
   }
   if (hazard.kind === 'nullable-subquery') {
+    if (hazard.compoundProjection) {
+      return `The NOT IN subquery projects a nullable expression involving '${hazard.expression}', so a NULL can suppress every result. Filter the projected expression itself with IS NOT NULL, or guard every nullable input. Do not mechanically rewrite this predicate to NOT EXISTS unless correlation, types, and multiplicity semantics are proven equivalent.`
+    }
     return `The NOT IN subquery projects nullable expression '${hazard.expression}', so a NULL can suppress every result. Filter the projected value in the subquery with WHERE ${hazard.expression} IS NOT NULL. Do not mechanically rewrite this predicate to NOT EXISTS unless correlation, types, and multiplicity semantics are proven equivalent.`
   }
   return `The right-hand NOT IN expression '${hazard.expression}' is nullable according to schema, so it can suppress every result. Filter NULL values before applying NOT IN.`
@@ -108,7 +151,7 @@ export const notInNullableRule: LintRule = {
 
     const findings: LintFinding[] = []
 
-    walkExpr(where, (node) => {
+    walkExprInStatement(where, (node) => {
       if (
         node.type !== 'binary_expr' ||
         String(node.operator).toUpperCase() !== 'NOT IN'
@@ -129,7 +172,7 @@ export const notInNullableRule: LintRule = {
         rule: 'not-in-nullable',
         severity: 'warn',
         message: hazardMessage(hazard),
-        span: findingSpan(
+        span: lexicalFindingSpan(
           ctx.sql,
           'not in',
           whereIndex === -1 ? 0 : whereIndex

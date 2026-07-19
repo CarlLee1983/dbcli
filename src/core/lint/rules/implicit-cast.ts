@@ -2,7 +2,8 @@ import {
   columnRefParts,
   findingSpan,
   resolveColumnRef,
-  walkExpr,
+  sqlCodeMask,
+  walkExprInStatement,
   whereOf,
 } from '@/core/lint/ast-utils'
 import { verifyWith } from '@/core/lint/types'
@@ -10,6 +11,8 @@ import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 
 const NUMERIC = new Set([
   'smallint',
+  'tinyint',
+  'mediumint',
   'integer',
   'int',
   'bigint',
@@ -34,6 +37,9 @@ const TEXTUAL = new Set([
   'varchar',
   'character varying',
   'text',
+  'tinytext',
+  'mediumtext',
+  'longtext',
   'uuid',
   'enum',
 ])
@@ -94,7 +100,15 @@ function comparisonMatches(
   }
 
   const pattern = `${leftPattern}\\s*${escapeRegex(operator)}\\s*(${rightPattern})`
-  return [...sql.matchAll(new RegExp(pattern, 'gi'))]
+  const boundedPattern = `(?<![A-Za-z0-9_$])${pattern}(?![A-Za-z0-9_$])`
+  const mask = sqlCodeMask(sql)
+  return [...sql.matchAll(new RegExp(boundedPattern, 'gi'))].filter((match) => {
+    if (match.index === undefined || !mask[match.index]) return false
+    const literal = match[1]
+    if (!literal) return false
+    const literalIndex = match.index + match[0].lastIndexOf(literal)
+    return mask[literalIndex] === true
+  })
 }
 
 export const implicitCastRule: LintRule = {
@@ -106,7 +120,7 @@ export const implicitCastRule: LintRule = {
 
     const findings: LintFinding[] = []
 
-    walkExpr(where, (node) => {
+    walkExprInStatement(where, (node) => {
       if (node.type !== 'binary_expr') return
       if (!COMPARISONS.has(String(node.operator).toUpperCase())) return
 

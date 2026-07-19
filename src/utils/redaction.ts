@@ -21,6 +21,7 @@ const KEEP_VALUE_FLAGS = new Set([
   '--collection',
   '--index',
 ])
+const LINT_BOOLEAN_FLAGS = new Set(['--no-schema', '--recovery'])
 
 function optionParts(token: string): {
   name: string
@@ -57,10 +58,15 @@ function sensitiveArgvValues(argv: string[]): string[] {
   const sensitiveCommand = findSensitiveSubcommand(argv)
   const values = new Set<string>()
   let capturedSingleSql = false
+  let afterEndOfOptions = false
 
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index]!
-    if (token.startsWith('--')) {
+    if (!afterEndOfOptions && token === '--') {
+      afterEndOfOptions = true
+      continue
+    }
+    if (!afterEndOfOptions && token.startsWith('--')) {
       const { name, inlineValue } = optionParts(token)
       if (REDACTED_VALUE_FLAGS.has(name)) {
         const value = inlineValue ?? argv[index + 1]
@@ -81,6 +87,18 @@ function sensitiveArgvValues(argv: string[]): string[] {
         KEEP_VALUE_FLAGS.has(name)
       ) {
         index++
+      } else if (
+        sensitiveCommand?.command === 'lint' &&
+        LINT_BOOLEAN_FLAGS.has(name)
+      ) {
+        continue
+      } else if (!sensitiveCommand || index < sensitiveCommand.index) {
+        continue
+      } else {
+        // Unknown option-shaped tokens after a sensitive command are
+        // positional input unless a known option definition proves otherwise.
+        values.add(token)
+        capturedSingleSql = true
       }
       continue
     }
@@ -107,10 +125,16 @@ export function redactArgv(argv: string[]): string {
   const sensitiveCommand = findSensitiveSubcommand(argv)
   const out: string[] = []
   let redactedSingleSql = false
+  let afterEndOfOptions = false
 
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i]!
-    if (tok.startsWith('--')) {
+    if (!afterEndOfOptions && tok === '--') {
+      out.push(tok)
+      afterEndOfOptions = true
+      continue
+    }
+    if (!afterEndOfOptions && tok.startsWith('--')) {
       const { name, inlineValue } = optionParts(tok)
       if (REDACTED_VALUE_FLAGS.has(name)) {
         out.push(`${name} <redacted>`)
@@ -122,14 +146,23 @@ export function redactArgv(argv: string[]): string {
           out.push(tok)
         } else {
           out.push(name)
-          if (i + 1 < argv.length && !argv[i + 1]!.startsWith('--')) {
+          if (i + 1 < argv.length) {
             out.push(argv[++i]!)
           }
         }
         continue
       }
-      out.push(tok)
-      continue
+      if (
+        sensitiveCommand?.command === 'lint' &&
+        LINT_BOOLEAN_FLAGS.has(name)
+      ) {
+        out.push(tok)
+        continue
+      }
+      if (!sensitiveCommand || i < sensitiveCommand.index) {
+        out.push(tok)
+        continue
+      }
     }
     if (
       sensitiveCommand &&

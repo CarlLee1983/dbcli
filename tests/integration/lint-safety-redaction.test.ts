@@ -153,6 +153,83 @@ describe('lint subprocess safety and redaction', () => {
     expect(recovery).toContain('--no-schema')
   })
 
+  test('success audit redacts leading-comment SQL after the end-of-options delimiter', async () => {
+    const configPath = join(root, 'DELIMITER_SUCCESS_CONFIG', '.dbcli')
+    await Bun.$`mkdir -p ${configPath}`
+    await writeConfig(configPath, 'primary')
+    const sql =
+      "-- SUCCESS_COMMENT_SENTINEL\nSELECT 'SUCCESS_VALUE_SENTINEL'"
+
+    const result = await run(
+      [
+        '--config',
+        configPath,
+        '--use',
+        'primary',
+        'lint',
+        '--format',
+        'json',
+        '--no-schema',
+        '--',
+        sql,
+      ],
+      root
+    )
+
+    expect(result.code).toBe(0)
+    const audit = await readFile(
+      join(configPath, '.dbcli', 'audit', 'primary.jsonl'),
+      'utf8'
+    )
+    expect(audit).not.toContain('SUCCESS_COMMENT_SENTINEL')
+    expect(audit).not.toContain('SUCCESS_VALUE_SENTINEL')
+    expect(audit).toContain('--format json --no-schema -- <sql>')
+  })
+
+  test('failure audit and recovery scrub leading-comment SQL after the delimiter', async () => {
+    const configPath = join(root, 'DELIMITER_FAILURE_CONFIG', '.dbcli')
+    await Bun.$`mkdir -p ${configPath}`
+    await writeConfig(configPath, 'primary')
+    const sql =
+      "-- FAILURE_COMMENT_SENTINEL\nSELECT 'FAILURE_VALUE_SENTINEL' FROM"
+
+    const result = await run(
+      [
+        '--config',
+        configPath,
+        '--use',
+        'primary',
+        'lint',
+        '--format',
+        'invalid',
+        '--recovery',
+        '--no-schema',
+        '--',
+        sql,
+      ],
+      root
+    )
+
+    expect(result.code).toBe(1)
+    const audit = await readFile(
+      join(configPath, '.dbcli', 'audit', 'primary.jsonl'),
+      'utf8'
+    )
+    const recovery = await readFile(
+      join(root, '.dbcli', 'last-recovery.json'),
+      'utf8'
+    )
+    for (const sentinel of [
+      'FAILURE_COMMENT_SENTINEL',
+      'FAILURE_VALUE_SENTINEL',
+    ]) {
+      expect(audit).not.toContain(sentinel)
+      expect(recovery).not.toContain(sentinel)
+    }
+    expect(audit).toContain('--recovery --no-schema -- <sql>')
+    expect(recovery).toContain('--recovery --no-schema -- <sql>')
+  })
+
   test('lint suggests analyze only for proven read-only SQL without creating an adapter', async () => {
     const configPath = join(root, '.dbcli')
     await Bun.$`mkdir -p ${configPath}`

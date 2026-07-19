@@ -1,5 +1,10 @@
 import { describe, test, expect } from 'bun:test'
-import { redactArgv, redactSql, redactParams } from '../../../src/utils/redaction'
+import {
+  redactArgv,
+  redactArgvSensitiveText,
+  redactSql,
+  redactParams,
+} from '../../../src/utils/redaction'
 
 describe('redaction utils', () => {
   describe('redactArgv', () => {
@@ -55,9 +60,53 @@ describe('redaction utils', () => {
       )
     })
 
+    test('redacts leading-comment lint SQL after the end-of-options delimiter', () => {
+      const sql = "-- SQL_SECRET_COMMENT\nSELECT 'SQL_SECRET_VALUE'"
+      expect(
+        redactArgv([
+          'dbcli',
+          'lint',
+          '--format',
+          'json',
+          '--no-schema',
+          '--',
+          sql,
+        ])
+      ).toBe('dbcli lint --format json --no-schema -- <sql>')
+    })
+
+    test('treats only known pre-delimiter options as options for lint redaction', () => {
+      expect(
+        redactArgv([
+          'dbcli',
+          'lint',
+          '--unknown-sql-prefix',
+          '--format',
+          'json',
+        ])
+      ).toBe('dbcli lint <sql> --format json')
+    })
+
     test('keeps safe flags', () => {
       const argv = ['node', 'list', '--format=table', '--conn-name', 'my-db']
       expect(redactArgv(argv)).toBe('node list --format=table --conn-name my-db')
+    })
+  })
+
+  describe('redactArgvSensitiveText', () => {
+    test('scrubs leading-comment lint SQL after the end-of-options delimiter', () => {
+      const sql = "-- SQL_SECRET_COMMENT\nSELECT 'SQL_SECRET_VALUE'"
+      const redacted = redactArgvSensitiveText(`failed to parse: ${sql}`, [
+        'dbcli',
+        'lint',
+        '--no-schema',
+        '--',
+        sql,
+      ])
+
+      expect(redacted).toBe('failed to parse: <redacted>')
+      expect(redacted).not.toContain('SQL_SECRET_COMMENT')
+      expect(redacted).not.toContain('SQL_SECRET_VALUE')
     })
   })
 

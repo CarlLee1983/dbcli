@@ -1,20 +1,102 @@
 import {
-  collectTables,
+  columnRefParts,
   findingSpan,
+  resolveColumnRef,
   walkExpr,
   whereOf,
 } from '@/core/lint/ast-utils'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 
-function columnName(node: AstNode): string | null {
-  if (typeof node.column === 'string') return node.column
-  if (!node.column || typeof node.column !== 'object') return null
+interface NullHazard {
+  kind: 'explicit-null' | 'nullable-expression' | 'nullable-subquery'
+  expression?: string
+}
 
-  const expression = (node.column as AstNode).expr
-  if (!expression || typeof expression !== 'object') return null
+function expressionName(node: AstNode): string | undefined {
+  const reference = columnRefParts(node)
+  if (!reference) return undefined
+  return reference.qualifier
+    ? `${reference.qualifier}.${reference.column}`
+    : reference.column
+}
 
-  const value = (expression as AstNode).value
-  return typeof value === 'string' ? value : null
+function nullableExpression(
+  node: AstNode,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): string | undefined {
+  if (node.type === 'null') return 'NULL'
+
+  if (node.type === 'column_ref') {
+    const resolved = resolveColumnRef(schema, statement, node)
+    return resolved?.column.nullable ? expressionName(node) : undefined
+  }
+
+  if (node.type === 'binary_expr' || node.type === 'unary_expr') {
+    const left = node.left as AstNode | undefined
+    const right = node.right as AstNode | undefined
+    const expr = node.expr as AstNode | undefined
+    for (const candidate of [left, right, expr]) {
+      if (!candidate) continue
+      const nullable = nullableExpression(candidate, statement, schema)
+      if (nullable) return nullable
+    }
+  }
+
+  return undefined
+}
+
+function projectedExpression(subquery: AstNode): AstNode | undefined {
+  const columns = subquery.columns
+  if (!Array.isArray(columns) || columns.length !== 1) return undefined
+  const projection = columns[0] as AstNode
+  return projection.expr as AstNode | undefined
+}
+
+function rhsHazard(
+  right: AstNode | undefined,
+  statement: AstNode,
+  schema: Parameters<typeof resolveColumnRef>[0]
+): NullHazard | undefined {
+  const values = right?.value
+  if (!Array.isArray(values)) return undefined
+
+  for (const value of values) {
+    const item = value as AstNode
+    if (item.type === 'null') return { kind: 'explicit-null' }
+
+    const subquery = item.ast
+    if (subquery && typeof subquery === 'object') {
+      const expression = projectedExpression(subquery as AstNode)
+      if (!expression) continue
+      const nullable = nullableExpression(
+        expression,
+        subquery as AstNode,
+        schema
+      )
+      if (nullable) {
+        return { kind: 'nullable-subquery', expression: nullable }
+      }
+      continue
+    }
+
+    const nullable = nullableExpression(item, statement, schema)
+    if (nullable) {
+      return { kind: 'nullable-expression', expression: nullable }
+    }
+  }
+
+  return undefined
+}
+
+function hazardMessage(hazard: NullHazard): string {
+  if (hazard.kind === 'explicit-null') {
+    return 'The right-hand NOT IN list contains NULL, so the predicate cannot evaluate to true. Remove NULL or filter it before applying NOT IN.'
+  }
+  if (hazard.kind === 'nullable-subquery') {
+    return `The NOT IN subquery projects nullable expression '${hazard.expression}', so a NULL can suppress every result. Filter the projected value in the subquery with WHERE ${hazard.expression} IS NOT NULL. Do not mechanically rewrite this predicate to NOT EXISTS unless correlation, types, and multiplicity semantics are proven equivalent.`
+  }
+  return `The right-hand NOT IN expression '${hazard.expression}' is nullable according to schema, so it can suppress every result. Filter NULL values before applying NOT IN.`
 }
 
 export const notInNullableRule: LintRule = {
@@ -24,7 +106,6 @@ export const notInNullableRule: LintRule = {
     const where = whereOf(ctx.ast)
     if (!where) return []
 
-    const tables = collectTables(ctx.ast)
     const findings: LintFinding[] = []
 
     walkExpr(where, (node) => {
@@ -35,20 +116,24 @@ export const notInNullableRule: LintRule = {
         return
       }
 
-      const left = node.left as AstNode | undefined
-      if (left?.type !== 'column_ref') return
+      const hazard = rhsHazard(
+        node.right as AstNode | undefined,
+        ctx.ast,
+        ctx.schema
+      )
+      if (!hazard) return
 
-      const name = columnName(left)
-      if (!name) return
-
-      const resolved = ctx.schema.resolveColumn(tables, name)
-      if (!resolved?.column.nullable) return
+      const whereIndex = ctx.sql.toLowerCase().indexOf('where')
 
       findings.push({
         rule: 'not-in-nullable',
         severity: 'warn',
-        message: `NOT IN over nullable column '${resolved.column.name}': if the list (or a subquery result) contains NULL the predicate yields no rows. Prefer NOT EXISTS, or add an explicit IS NOT NULL guard.`,
-        span: findingSpan(ctx.sql, 'not in'),
+        message: hazardMessage(hazard),
+        span: findingSpan(
+          ctx.sql,
+          'not in',
+          whereIndex === -1 ? 0 : whereIndex
+        ),
         schemaVerified: true,
       })
     })

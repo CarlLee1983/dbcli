@@ -1,19 +1,54 @@
 import {
-  collectTables,
+  columnRefParts,
   findingSpan,
+  resolveColumnRef,
   walkExpr,
   whereOf,
 } from '@/core/lint/ast-utils'
 import { verifyWith } from '@/core/lint/types'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 
-const NUMERIC = /int|serial|decimal|numeric|float|double|real|bigint|smallint/i
-const TEXTUAL = /char|text|uuid|enum/i
+const NUMERIC = new Set([
+  'smallint',
+  'integer',
+  'int',
+  'bigint',
+  'int2',
+  'int4',
+  'int8',
+  'smallserial',
+  'serial',
+  'bigserial',
+  'decimal',
+  'numeric',
+  'real',
+  'float',
+  'float4',
+  'float8',
+  'double',
+  'double precision',
+])
+const TEXTUAL = new Set([
+  'char',
+  'character',
+  'varchar',
+  'character varying',
+  'text',
+  'uuid',
+  'enum',
+])
 const COMPARISONS = new Set(['=', '!=', '<>', '>', '>=', '<', '<='])
 
 function columnKind(type: string): 'number' | 'string' | 'other' {
-  if (NUMERIC.test(type)) return 'number'
-  if (TEXTUAL.test(type)) return 'string'
+  const normalized = type
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+(unsigned|zerofill)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (NUMERIC.has(normalized)) return 'number'
+  if (TEXTUAL.has(normalized)) return 'string'
   return 'other'
 }
 
@@ -26,15 +61,40 @@ function literalKind(node: AstNode | undefined): 'number' | 'string' | null {
   return null
 }
 
-function columnName(node: AstNode): string | null {
-  if (typeof node.column === 'string') return node.column
-  if (!node.column || typeof node.column !== 'object') return null
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
-  const expression = (node.column as AstNode).expr
-  if (!expression || typeof expression !== 'object') return null
+function identifierPattern(value: string): string {
+  const escaped = escapeRegex(value)
+  return `(?:"${escaped}"|\`${escaped}\`|${escaped})`
+}
 
-  const value = (expression as AstNode).value
-  return typeof value === 'string' ? value : null
+function comparisonMatches(
+  sql: string,
+  left: AstNode,
+  operator: string,
+  right: AstNode
+): RegExpMatchArray[] {
+  const reference = columnRefParts(left)
+  if (!reference) return []
+
+  const leftPattern = reference.qualifier
+    ? `${identifierPattern(reference.qualifier)}\\s*\\.\\s*${identifierPattern(reference.column)}`
+    : identifierPattern(reference.column)
+
+  let rightPattern: string
+  if (right.type === 'number') {
+    rightPattern = escapeRegex(String(right.value))
+  } else if (right.type === 'single_quote_string') {
+    const raw = String(right.value).replace(/'/g, "''")
+    rightPattern = `'${escapeRegex(raw)}'`
+  } else {
+    return []
+  }
+
+  const pattern = `${leftPattern}\\s*${escapeRegex(operator)}\\s*(${rightPattern})`
+  return [...sql.matchAll(new RegExp(pattern, 'gi'))]
 }
 
 export const implicitCastRule: LintRule = {
@@ -44,7 +104,6 @@ export const implicitCastRule: LintRule = {
     const where = whereOf(ctx.ast)
     if (!where) return []
 
-    const tables = collectTables(ctx.ast)
     const findings: LintFinding[] = []
 
     walkExpr(where, (node) => {
@@ -54,31 +113,65 @@ export const implicitCastRule: LintRule = {
       const left = node.left as AstNode | undefined
       if (left?.type !== 'column_ref') return
 
-      const name = columnName(left)
+      const reference = columnRefParts(left)
       const right = node.right as AstNode | undefined
       const literal = literalKind(right)
-      if (!name || !literal) return
+      if (!reference || !right || !literal) return
 
-      const resolved = ctx.schema.resolveColumn(tables, name)
+      const resolved = resolveColumnRef(ctx.schema, ctx.ast, left)
       if (!resolved) return
 
       const column = columnKind(resolved.column.type)
       if (column === 'other' || column === literal) return
 
+      const matches = comparisonMatches(
+        ctx.sql,
+        left,
+        String(node.operator),
+        right
+      )
+      const match = matches.length === 1 ? matches[0] : undefined
+      const matchIndex = match?.index
+      const whereIndex = ctx.sql.toLowerCase().indexOf('where')
       const finding: LintFinding = {
         rule: 'implicit-cast',
         severity: 'warn',
         message: `Column '${resolved.column.name}' is ${resolved.column.type} but is compared to a ${literal} literal — the implicit cast can disable index use on '${resolved.column.name}'. Use a ${column} literal.`,
-        span: findingSpan(ctx.sql, name),
+        span:
+          match && matchIndex !== undefined
+            ? {
+                start: matchIndex,
+                end: matchIndex + match[0].length,
+              }
+            : findingSpan(
+                ctx.sql,
+                String(node.operator),
+                whereIndex === -1 ? 0 : whereIndex
+              ),
         schemaVerified: true,
       }
 
-      if (column === 'number' && literal === 'string') {
+      if (
+        column === 'number' &&
+        literal === 'string' &&
+        match &&
+        matchIndex !== undefined
+      ) {
         const raw = String(right?.value)
         if (/^\d+(\.\d+)?$/.test(raw)) {
-          const rewritten = ctx.sql
-            .replace(`'${raw}'`, raw)
-            .replace(`"${raw}"`, raw)
+          const literalSource = match[1]
+          const literalOffset = literalSource
+            ? match[0].lastIndexOf(literalSource)
+            : -1
+          if (literalOffset === -1 || !literalSource) {
+            findings.push(finding)
+            return
+          }
+          const literalStart = matchIndex + literalOffset
+          const rewritten =
+            ctx.sql.slice(0, literalStart) +
+            raw +
+            ctx.sql.slice(literalStart + literalSource.length)
           finding.rewrite = { sql: rewritten, confidence: 'high' }
           finding.verifyCommand = verifyWith(rewritten)
         }

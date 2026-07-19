@@ -31,7 +31,11 @@ function run(
   })
 }
 
-async function writeConfig(configPath: string, connectionName: string): Promise<void> {
+async function writeConfig(
+  configPath: string,
+  connectionName: string,
+  system: 'postgresql' | 'mysql' | 'mariadb' = 'postgresql'
+): Promise<void> {
   await Bun.write(
     join(configPath, 'config.json'),
     JSON.stringify({
@@ -39,7 +43,7 @@ async function writeConfig(configPath: string, connectionName: string): Promise<
       default: connectionName,
       connections: {
         [connectionName]: {
-          system: 'postgresql',
+          system,
           host: 'localhost',
           port: 1,
           user: 'test',
@@ -302,4 +306,34 @@ describe('lint subprocess safety and redaction', () => {
       expect(result.stderr).not.toContain('ECONNREFUSED')
     }
   })
+
+  test.each(['mysql', 'mariadb'] as const)(
+    'session assignment gets plain lint guidance and --analyze rejects before connecting (%s)',
+    async (system) => {
+      const configPath = join(root, `.dbcli-${system}`)
+      await Bun.$`mkdir -p ${configPath}`
+      await writeConfig(configPath, 'primary', system)
+      const sql = 'SELECT @session_value := 1'
+
+      const lintResult = await run(
+        ['--config', configPath, 'lint', sql, '--format', 'json', '--no-schema'],
+        root
+      )
+      expect(lintResult.code).toBe(0)
+      const report = JSON.parse(lintResult.stdout)[0] as {
+        relatedCommands: string[]
+      }
+      expect(report.relatedCommands[1]).toStartWith('dbcli explain "')
+
+      const explainResult = await run(
+        ['--config', configPath, 'explain', sql, '--analyze'],
+        root
+      )
+      expect(explainResult.code).toBe(1)
+      expect(explainResult.stderr).toContain(
+        '--analyze requires a proven read-only SELECT'
+      )
+      expect(explainResult.stderr).not.toContain('ECONNREFUSED')
+    }
+  )
 })

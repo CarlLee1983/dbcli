@@ -32,6 +32,35 @@ describe('isProvenReadOnlySql', () => {
   })
 
   test.each([
+    ['SELECT @session_value := 1', 'mysql'],
+    ['SELECT @session_value := id FROM users', 'mysql'],
+    ['SELECT @session_value := 1', 'mariadb'],
+    ['SELECT @session_value := id FROM users', 'mariadb'],
+  ] as const)(
+    'rejects session-variable assignment expressions: %s (%s)',
+    (sql, system) => {
+      expect(isProvenReadOnlySql(sql, system)).toBe(false)
+    }
+  )
+
+  test.each([
+    ['SELECT 1 INTO @session_value', 'mysql'],
+    ['SELECT 1 INTO @session_value', 'mariadb'],
+  ] as const)(
+    'rejects SELECT INTO session-variable mutation: %s (%s)',
+    (sql, system) => {
+      expect(isProvenReadOnlySql(sql, system)).toBe(false)
+    }
+  )
+
+  test.each(['mysql', 'mariadb'] as const)(
+    'keeps session-variable comparisons distinct from assignment (%s)',
+    (system) => {
+      expect(isProvenReadOnlySql('SELECT @session_value = 1', system)).toBe(true)
+    }
+  )
+
+  test.each([
     ['SELECT nextval(sequence_name)', 'postgresql'],
     ['SELECT setval(sequence_name, 1)', 'postgresql'],
     ['SELECT pg_advisory_lock(1)', 'postgresql'],

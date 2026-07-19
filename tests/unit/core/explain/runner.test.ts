@@ -71,6 +71,26 @@ test.each([
   expect(executions).toBe(0)
 })
 
+test.each([
+  ['mysql', 'SELECT @session_value := 1'],
+  ['mariadb', 'SELECT @session_value := 1'],
+] as const)(
+  'runQueryExplain: --analyze rejects session assignment before adapter execution (%s)',
+  async (system, sql) => {
+    let executions = 0
+    const adapter = mysqlAdapter()
+    adapter.execute = async () => {
+      executions++
+      throw new Error('adapter must not execute')
+    }
+
+    await expect(
+      runQueryExplain(system, adapter, sql, { analyze: true })
+    ).rejects.toThrow('--analyze requires a proven read-only SELECT')
+    expect(executions).toBe(0)
+  }
+)
+
 test('runQueryExplain: --analyze preserves proven read-only SELECT execution', async () => {
   let executions = 0
   const adapter = mysqlAdapter()

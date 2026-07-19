@@ -31,6 +31,7 @@ function containsAnalyzeUnsafeNode(node: unknown): boolean {
   const record = node as Record<string, unknown>
   const type = typeof record.type === 'string' ? record.type.toLowerCase() : ''
   if (WRITE_STATEMENT_TYPES.has(type)) return true
+  if (type === 'assign') return true
   if (type === 'function' || type === 'aggr_func' || type === 'window_func') {
     return true
   }

@@ -26,6 +26,61 @@ describe('parseDrizzleSnapshot', () => {
     expect(byName.bio).toMatchObject({ nullable: true, default: "''" })
   })
 
+  test('preserves supported primitive column defaults', () => {
+    const variants: Array<[string, string | boolean | number, string]> = [
+      ['string', "'active'", "'active'"],
+      ['true', true, 'true'],
+      ['false', false, 'false'],
+      ['finite number', 42, '42'],
+      ['zero', 0, '0'],
+    ]
+
+    for (const [label, value, expected] of variants) {
+      const withDefault = structuredClone(snapshot)
+      withDefault.tables['public.users'].columns.bio.default = value
+
+      const out = parseDrizzleSnapshot(withDefault)
+      expect(
+        tableNamed(out, 'users').columns.find((column) => column.name === 'bio')?.default,
+        label
+      ).toBe(expected)
+      expect(
+        out.unparsed.some((entry) => entry.location === 'public.users.columns.bio.default'),
+        label
+      ).toBe(false)
+    }
+  })
+
+  test('blocks unsupported column defaults and omits their columns', () => {
+    const variants: Array<[string, unknown]> = [
+      ['null', null],
+      ['object', { expression: 'now()' }],
+      ['array', ['now()']],
+      ['NaN', Number.NaN],
+      ['positive infinity', Number.POSITIVE_INFINITY],
+      ['negative infinity', Number.NEGATIVE_INFINITY],
+    ]
+
+    for (const [label, value] of variants) {
+      const withDefault = structuredClone(snapshot)
+      withDefault.tables['public.users'].columns.bio.default = value
+
+      const out = parseDrizzleSnapshot(withDefault)
+      expect(
+        tableNamed(out, 'users').columns.some((column) => column.name === 'bio'),
+        label
+      ).toBe(false)
+      expect(
+        out.unparsed.some(
+          (entry) =>
+            entry.location === 'public.users.columns.bio.default' &&
+            entry.reason.startsWith('blocked:')
+        ),
+        label
+      ).toBe(true)
+    }
+  })
+
   test('maps structured non-expression indexes and foreign keys', () => {
     const users = tableNamed(parseDrizzleSnapshot(snapshot), 'users')
     expect(users.indexes).toContainEqual({

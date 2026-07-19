@@ -204,15 +204,35 @@ function parseColumns(
       addBlocked(unparsed, location, 'column type is missing')
       continue
     }
+
+    let normalizedDefault: string | undefined
+    if (rawColumn.default !== undefined) {
+      normalizedDefault = normalizeColumnDefault(rawColumn.default)
+      if (normalizedDefault === undefined) {
+        addBlocked(
+          unparsed,
+          `${location}.default`,
+          'column default must be a string, boolean, or finite number'
+        )
+        continue
+      }
+    }
+
     table.columns.push({
       name,
       type: rawType.toLowerCase(),
       rawType,
       nullable: rawColumn.notNull !== true && rawColumn.primaryKey !== true,
       ...(rawColumn.primaryKey === true ? { primaryKey: true } : {}),
-      ...(rawColumn.default !== undefined ? { default: String(rawColumn.default) } : {}),
+      ...(normalizedDefault !== undefined ? { default: normalizedDefault } : {}),
     })
   }
+}
+
+function normalizeColumnDefault(value: unknown): string | undefined {
+  if (typeof value === 'string' || typeof value === 'boolean') return String(value)
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
 }
 
 function parseIndexes(

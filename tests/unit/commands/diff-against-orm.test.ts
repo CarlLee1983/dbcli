@@ -143,6 +143,15 @@ describe('runDrift', () => {
     )
   })
 
+  test('rejects DDL identities that collide after PostgreSQL default-schema resolution', async () => {
+    const first = await write('001.sql', ddl('users'))
+    const second = await write('002.sql', ddl('public.users'))
+
+    await expect(runDrift([first, second], {}, config as never)).rejects.toThrow(
+      "duplicate resolved table identity 'public.users' in ddl schema"
+    )
+  })
+
   test('restricts multi-file inputs to DDL', async () => {
     const first = await write('one.prisma', 'model One { id Int @id }')
     const second = await write('two.prisma', 'model Two { id Int @id }')

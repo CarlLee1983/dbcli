@@ -69,6 +69,26 @@ const users: NormalizedTable = {
 }
 
 describe('compareNormalized', () => {
+  test('rejects ORM identities that collide after applying the database default schema', () => {
+    const orm = schemaWith([table({ table: 'users' }), table({ schema: 'public', table: 'users' })])
+    const db = dbWith([table({ schema: 'public', table: 'users' })], 'public')
+
+    expect(() => compareNormalized(orm, db, { ignore: [] })).toThrow(
+      "duplicate resolved table identity 'public.users' in prisma schema"
+    )
+  })
+
+  test('rejects unexpected DB identities that collide after default-schema resolution', () => {
+    const db = dbWith(
+      [table({ table: 'users' }), table({ schema: 'public', table: 'users' })],
+      'public'
+    )
+
+    expect(() => compareNormalized(schemaWith([]), db, { ignore: [] })).toThrow(
+      "duplicate resolved table identity 'public.users' in db schema"
+    )
+  })
+
   test('case-distinct DB tables coexist and match exact ORM identities', () => {
     const db = dbWith(
       [

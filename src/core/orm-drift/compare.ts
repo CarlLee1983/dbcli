@@ -37,15 +37,21 @@ function globToRegex(glob: string): RegExp {
 }
 
 function tableMap(schema: NormalizedSchema, defaultSchema?: string): Map<string, NormalizedTable> {
-  return new Map(
-    schema.tables.map((table) => {
-      const identity: NormalizedTableIdentity =
-        table.identity.schema === undefined && defaultSchema !== undefined
-          ? { ...table.identity, schema: defaultSchema }
-          : table.identity
-      return [tableIdentityKey(identity), { ...table, identity }]
-    })
-  )
+  const tables = new Map<string, NormalizedTable>()
+  for (const table of schema.tables) {
+    const identity: NormalizedTableIdentity =
+      table.identity.schema === undefined && defaultSchema !== undefined
+        ? { ...table.identity, schema: defaultSchema }
+        : table.identity
+    const key = tableIdentityKey(identity)
+    if (tables.has(key)) {
+      throw new Error(
+        `duplicate resolved table identity '${qualifiedTableName(identity)}' in ${schema.source} schema`
+      )
+    }
+    tables.set(key, { ...table, identity })
+  }
+  return tables
 }
 
 function entryWithProposals(
@@ -67,7 +73,7 @@ export function compareNormalized(
   opts: { ignore: string[] }
 ): DriftReport {
   const ormTables = tableMap(orm, db.defaultSchema)
-  const dbTables = tableMap(db)
+  const dbTables = tableMap(db, db.defaultSchema)
   const tableKeys = new Set([...ormTables.keys(), ...dbTables.keys()])
   const ignorePatterns = opts.ignore.map(globToRegex)
   const entries: DriftEntry[] = []

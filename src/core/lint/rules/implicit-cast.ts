@@ -3,6 +3,7 @@ import {
   findingSpan,
   resolveColumnRef,
   sqlCodeMask,
+  topLevelWhereClauseRange,
   walkExprInStatement,
   whereOf,
 } from '@/core/lint/ast-utils'
@@ -78,6 +79,7 @@ function identifierPattern(value: string): string {
 
 function comparisonMatches(
   sql: string,
+  range: { start: number; end: number },
   left: AstNode,
   operator: string,
   right: AstNode
@@ -102,13 +104,34 @@ function comparisonMatches(
   const pattern = `${leftPattern}\\s*${escapeRegex(operator)}\\s*(${rightPattern})`
   const boundedPattern = `(?<![A-Za-z0-9_$])${pattern}(?![A-Za-z0-9_$])`
   const mask = sqlCodeMask(sql)
-  return [...sql.matchAll(new RegExp(boundedPattern, 'gi'))].filter((match) => {
-    if (match.index === undefined || !mask[match.index]) return false
+  const regex = new RegExp(boundedPattern, 'gi')
+  regex.lastIndex = range.start
+  const matches: RegExpMatchArray[] = []
+  let match = regex.exec(sql)
+
+  while (match && match.index < range.end) {
+    if (match.index === undefined || !mask[match.index]) {
+      match = regex.exec(sql)
+      continue
+    }
+    if (
+      match.index < range.start ||
+      match.index + match[0].length > range.end
+    ) {
+      match = regex.exec(sql)
+      continue
+    }
     const literal = match[1]
-    if (!literal) return false
+    if (!literal) {
+      match = regex.exec(sql)
+      continue
+    }
     const literalIndex = match.index + match[0].lastIndexOf(literal)
-    return mask[literalIndex] === true
-  })
+    if (mask[literalIndex] === true) matches.push(match)
+    match = regex.exec(sql)
+  }
+
+  return matches
 }
 
 export const implicitCastRule: LintRule = {
@@ -117,6 +140,8 @@ export const implicitCastRule: LintRule = {
   check(ctx) {
     const where = whereOf(ctx.ast)
     if (!where) return []
+    const whereRange = topLevelWhereClauseRange(ctx.sql)
+    if (!whereRange) return []
 
     const findings: LintFinding[] = []
 
@@ -140,6 +165,7 @@ export const implicitCastRule: LintRule = {
 
       const matches = comparisonMatches(
         ctx.sql,
+        whereRange,
         left,
         String(node.operator),
         right

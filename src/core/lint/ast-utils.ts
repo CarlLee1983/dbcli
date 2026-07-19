@@ -203,6 +203,65 @@ export function sqlCodeMask(sql: string): boolean[] {
   return mask
 }
 
+export function topLevelWhereClauseRange(
+  sql: string
+): { start: number; end: number } | undefined {
+  const mask = sqlCodeMask(sql)
+  const clauseBoundary = new Set([
+    'group',
+    'having',
+    'order',
+    'limit',
+    'offset',
+    'fetch',
+    'for',
+    'returning',
+    'union',
+    'intersect',
+    'except',
+    'window',
+    'qualify',
+  ])
+  let depth = 0
+  let whereStart: number | undefined
+
+  for (let index = 0; index < sql.length; index += 1) {
+    if (!mask[index]) continue
+    const char = sql[index]
+    if (char === undefined) continue
+    if (char === '(') {
+      depth += 1
+      continue
+    }
+    if (char === ')') {
+      depth = Math.max(0, depth - 1)
+      continue
+    }
+    if (whereStart !== undefined && depth === 0 && char === ';') {
+      return { start: whereStart, end: index }
+    }
+    if (!/[A-Za-z_]/.test(char)) continue
+
+    const word = sql.slice(index).match(/^[A-Za-z_][A-Za-z0-9_$]*/)?.[0]
+    if (!word) continue
+    const keyword = word.toLowerCase()
+    if (whereStart === undefined && depth === 0 && keyword === 'where') {
+      whereStart = index + word.length
+    } else if (
+      whereStart !== undefined &&
+      depth === 0 &&
+      clauseBoundary.has(keyword)
+    ) {
+      return { start: whereStart, end: index }
+    }
+    index += word.length - 1
+  }
+
+  return whereStart === undefined
+    ? undefined
+    : { start: whereStart, end: sql.length }
+}
+
 export function lexicalFindingSpan(
   sql: string,
   fragment: string,

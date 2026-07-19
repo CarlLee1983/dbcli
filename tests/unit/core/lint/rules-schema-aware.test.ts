@@ -187,6 +187,16 @@ describe('implicit-cast', () => {
     expect(findings[0].rewrite).toBeUndefined()
   })
 
+  test('never rewrites a matching JOIN comparison for a diagnosed WHERE node', () => {
+    const sql =
+      "SELECT u.id FROM users u JOIN users v ON u.id = '42' WHERE u.id /* target */ = '42'"
+    const findings = implicitCastRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain("'id'")
+    expect(findings[0].rewrite).toBeUndefined()
+  })
+
   test('resolves a named table alias after a derived table without shifting scope', () => {
     const findings = implicitCastRule.check(
       ctxFor(
@@ -396,5 +406,22 @@ describe('not-in-nullable', () => {
     expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
       'NOT IN'
     )
+  })
+
+  test('assigns successive spans to successive top-level NOT IN findings', () => {
+    const sql =
+      'SELECT id FROM users WHERE id NOT IN (1, NULL) OR id NOT IN (2, NULL)'
+    const findings = notInNullableRule.check(ctxFor(sql, schema))
+
+    expect(findings).toHaveLength(2)
+    expect(findings.map((finding) => finding.span.start)).toEqual([
+      sql.indexOf('NOT IN'),
+      sql.lastIndexOf('NOT IN'),
+    ])
+    expect(
+      findings.map((finding) =>
+        sql.slice(finding.span.start, finding.span.end)
+      )
+    ).toEqual(['NOT IN', 'NOT IN'])
   })
 })

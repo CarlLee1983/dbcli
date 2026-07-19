@@ -2,6 +2,7 @@ import {
   columnRefParts,
   lexicalFindingSpan,
   resolveColumnRef,
+  topLevelWhereClauseRange,
   walkExprInStatement,
   whereOf,
 } from '@/core/lint/ast-utils'
@@ -148,8 +149,11 @@ export const notInNullableRule: LintRule = {
   check(ctx) {
     const where = whereOf(ctx.ast)
     if (!where) return []
+    const whereRange = topLevelWhereClauseRange(ctx.sql)
+    if (!whereRange) return []
 
     const findings: LintFinding[] = []
+    let notInSearchIndex = whereRange.start
 
     walkExprInStatement(where, (node) => {
       if (
@@ -159,6 +163,19 @@ export const notInNullableRule: LintRule = {
         return
       }
 
+      const candidateSpan = lexicalFindingSpan(
+        ctx.sql,
+        'not in',
+        notInSearchIndex
+      )
+      const hasExactSpan =
+        candidateSpan.start >= notInSearchIndex &&
+        candidateSpan.end <= whereRange.end &&
+        ctx.sql
+          .slice(candidateSpan.start, candidateSpan.end)
+          .toLowerCase() === 'not in'
+      if (hasExactSpan) notInSearchIndex = candidateSpan.end
+
       const hazard = rhsHazard(
         node.right as AstNode | undefined,
         ctx.ast,
@@ -166,17 +183,11 @@ export const notInNullableRule: LintRule = {
       )
       if (!hazard) return
 
-      const whereIndex = ctx.sql.toLowerCase().indexOf('where')
-
       findings.push({
         rule: 'not-in-nullable',
         severity: 'warn',
         message: hazardMessage(hazard),
-        span: lexicalFindingSpan(
-          ctx.sql,
-          'not in',
-          whereIndex === -1 ? 0 : whereIndex
-        ),
+        span: hasExactSpan ? candidateSpan : whereRange,
         schemaVerified: true,
       })
     })

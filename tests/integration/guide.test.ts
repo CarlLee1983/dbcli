@@ -49,6 +49,19 @@ describe('dbcli guide (CLI)', () => {
     expect(j.steps.length).toBeGreaterThan(0)
     expect(j.steps[0].command).toBe('dbcli inspect --for-agent')
     expect(j.steps.every((s: { risk: string }) => s.risk === 'readonly')).toBe(true)
+    const lintSteps = j.steps.filter(
+      (step: { command: string }) => step.command === 'dbcli lint "<SQL>" --format json'
+    )
+    const explainSteps = j.steps.filter(
+      (step: { command: string }) => step.command === 'dbcli explain "<SQL>" --format json'
+    )
+    expect(lintSteps).toHaveLength(1)
+    expect(explainSteps).toHaveLength(1)
+    expect(j.steps.indexOf(explainSteps[0])).toBe(j.steps.indexOf(lintSteps[0]) + 1)
+    expect(lintSteps[0].risk).toBe('readonly')
+    expect(lintSteps[0].placeholders).toEqual(['<SQL>'])
+    expect(explainSteps[0].risk).toBe('readonly')
+    expect(explainSteps[0].placeholders).toEqual(['<SQL>'])
   })
 
   test('--for-agent collapses to brief json', async () => {
@@ -61,6 +74,19 @@ describe('dbcli guide (CLI)', () => {
       expect(typeof step.command).toBe('string')
       expect(step.risk).toBe('readonly')
     }
+    const lintSteps = j.steps.filter(
+      (step: { command: string }) => step.command === 'dbcli lint "<SQL>" --format json'
+    )
+    const explainSteps = j.steps.filter(
+      (step: { command: string }) => step.command === 'dbcli explain "<SQL>" --format json'
+    )
+    expect(lintSteps).toHaveLength(1)
+    expect(explainSteps).toHaveLength(1)
+    expect(j.steps.indexOf(explainSteps[0])).toBe(j.steps.indexOf(lintSteps[0]) + 1)
+    expect(lintSteps[0].risk).toBe('readonly')
+    expect(lintSteps[0].placeholders).toEqual(['<SQL>'])
+    expect(explainSteps[0].risk).toBe('readonly')
+    expect(explainSteps[0].placeholders).toEqual(['<SQL>'])
   })
 
   test('--list prints all six goals as JSON', async () => {

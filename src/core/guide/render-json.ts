@@ -15,12 +15,8 @@ function toBrief(snap: GuideSnapshot): GuideSnapshot {
 }
 
 function stripVerbose(step: GuideStep): GuideStep {
-  const compact: GuideStep = {
-    order: step.order,
-    command: step.command,
-    risk: step.risk,
-  } as GuideStep
-  if (step.snippet) compact.snippet = step.snippet
-  if (step.intent) compact.intent = step.intent
-  return compact
+  const compact: Partial<GuideStep> = { ...step }
+  delete compact.rationale
+  delete compact.expects
+  return compact as GuideStep
 }

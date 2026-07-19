@@ -96,6 +96,44 @@ describe('renderJson (guide)', () => {
     expect(j.steps[1].intent).toBe('perf.slow-query')
   })
 
+  test('brief drops only verbose fields and preserves safety and execution metadata', () => {
+    const j = JSON.parse(
+      renderJson(
+        {
+          ...SNAP,
+          steps: [
+            {
+              order: 1,
+              command: 'dbcli lint "<SQL>" --format json',
+              rationale: 'Run local static analysis.',
+              risk: 'readonly',
+              expects: 'JSON findings.',
+              snippet: '@diag/example',
+              intent: 'perf.slow-query',
+              interactive: false,
+              dbWrite: false,
+              placeholders: ['<SQL>'],
+              branchId: 'slow-query',
+            },
+          ],
+        },
+        { brief: true }
+      )
+    )
+
+    expect(j.steps[0]).toEqual({
+      order: 1,
+      command: 'dbcli lint "<SQL>" --format json',
+      risk: 'readonly',
+      snippet: '@diag/example',
+      intent: 'perf.slow-query',
+      interactive: false,
+      dbWrite: false,
+      placeholders: ['<SQL>'],
+      branchId: 'slow-query',
+    })
+  })
+
   test('never contains host/password fields from context', () => {
     const out = renderJson(SNAP, { brief: false })
     expectNoCredentialFieldNames(out)

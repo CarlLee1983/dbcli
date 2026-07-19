@@ -89,14 +89,26 @@ describe('skill tasks (CLI integration with built-in tasks)', () => {
     )
 
     const plan = JSON.parse(logOut) as {
-      steps: Array<{ command: string; reason?: string; risk?: string }>
+      steps: Array<{
+        command: string
+        resolvedCommand: string
+        argv: string[]
+        reason?: string
+        risk?: string
+      }>
     }
-    const lintSteps = plan.steps.filter((step) => step.command.startsWith('lint '))
-    const explainSteps = plan.steps.filter((step) => step.command.startsWith('explain '))
+    const lintSteps = plan.steps.filter(
+      (step) => step.resolvedCommand === 'lint "SELECT 1" --format json'
+    )
+    const explainSteps = plan.steps.filter(
+      (step) => step.resolvedCommand === 'explain "SELECT 1" --format json'
+    )
     expect(lintSteps).toHaveLength(1)
     expect(explainSteps).toHaveLength(1)
-    expect(plan.steps.indexOf(lintSteps[0]!)).toBeLessThan(plan.steps.indexOf(explainSteps[0]!))
+    expect(plan.steps.indexOf(explainSteps[0]!)).toBe(plan.steps.indexOf(lintSteps[0]!) + 1)
     expect(lintSteps[0]!.command).toBe('lint "{{query}}" --format json')
+    expect(lintSteps[0]!.argv).toEqual(['lint', 'SELECT 1', '--format', 'json'])
+    expect(explainSteps[0]!.argv).toEqual(['explain', 'SELECT 1', '--format', 'json'])
     expect(lintSteps[0]!.reason).toContain('local static analysis')
     expect(lintSteps[0]!.reason).toContain('no database round-trip')
     expect(lintSteps[0]!.risk).toBe('readonly')

@@ -193,6 +193,30 @@ describe('buildPlan', () => {
     expect(plan.map((s) => s.command)).toContain('dbcli doctor --format json')
   })
 
+  test('slow-query omits SQL lint and explain placeholders for non-SQL engines', () => {
+    for (const engine of ['mongodb', 'redis', 'elasticsearch'] as const) {
+      const context: InspectSnapshot = {
+        ...PG_CONTEXT,
+        system: engine,
+        objects:
+          engine === 'mongodb'
+            ? { kind: 'collections', count: 0, sample: [] }
+            : engine === 'redis'
+              ? { kind: 'keys', count: 0, sample: [] }
+              : { kind: 'indices', count: 0, sample: [] },
+      }
+      const plan = buildPlan({
+        context,
+        snippets: new Map(),
+        engine,
+        goal: 'slow-query',
+      })
+
+      expect(plan.some((s) => s.command.startsWith('dbcli lint '))).toBe(false)
+      expect(plan.some((s) => s.command.startsWith('dbcli explain '))).toBe(false)
+    }
+  })
+
   test('permissions goal emits the synthetic permissions plan', () => {
     const plan = buildPlan({
       context: PG_CONTEXT,

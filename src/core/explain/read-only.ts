@@ -24,13 +24,16 @@ const WRITE_STATEMENT_TYPES = new Set([
   'revoke',
 ])
 
-function containsWriteCapableNode(node: unknown): boolean {
+function containsAnalyzeUnsafeNode(node: unknown): boolean {
   if (!node || typeof node !== 'object') return false
-  if (Array.isArray(node)) return node.some(containsWriteCapableNode)
+  if (Array.isArray(node)) return node.some(containsAnalyzeUnsafeNode)
 
   const record = node as Record<string, unknown>
   const type = typeof record.type === 'string' ? record.type.toLowerCase() : ''
   if (WRITE_STATEMENT_TYPES.has(type)) return true
+  if (type === 'function' || type === 'aggr_func' || type === 'window_func') {
+    return true
+  }
 
   if (type === 'select') {
     const into = record.into
@@ -41,7 +44,7 @@ function containsWriteCapableNode(node: unknown): boolean {
     if (record.locking_read != null) return true
   }
 
-  return Object.values(record).some(containsWriteCapableNode)
+  return Object.values(record).some(containsAnalyzeUnsafeNode)
 }
 
 /**
@@ -69,7 +72,7 @@ export function isProvenReadOnlySql(
   return (
     typeof rootType === 'string' &&
     rootType.toLowerCase() === 'select' &&
-    !containsWriteCapableNode(ast)
+    !containsAnalyzeUnsafeNode(ast)
   )
 }
 

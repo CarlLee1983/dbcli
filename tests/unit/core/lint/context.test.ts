@@ -33,7 +33,7 @@ describe('buildSchemaContext', () => {
     expect(ctx.resolveColumn(['users'], 'nope')).toBeUndefined()
   })
 
-  test('preserves exact schema identifiers and withholds ambiguous folded table lookups', () => {
+  test('withholds every table lookup in a folded collision without quote provenance', () => {
     const lower: TableSchema = {
       name: 'foo',
       columns: [{ name: 'lower_id', type: 'integer', nullable: false }],
@@ -44,12 +44,12 @@ describe('buildSchemaContext', () => {
     }
     const ctx = buildSchemaContext({ foo: lower, Foo: quoted })
 
-    expect(ctx.getTable('foo')?.name).toBe('foo')
-    expect(ctx.getTable('Foo')?.name).toBe('Foo')
+    expect(ctx.getTable('foo')).toBeUndefined()
+    expect(ctx.getTable('Foo')).toBeUndefined()
     expect(ctx.getTable('FOO')).toBeUndefined()
   })
 
-  test('withholds ambiguous folded column lookups but preserves exact columns', () => {
+  test('withholds every column lookup in a folded collision without quote provenance', () => {
     const collision: TableSchema = {
       name: 'collision',
       columns: [
@@ -59,8 +59,8 @@ describe('buildSchemaContext', () => {
     }
     const ctx = buildSchemaContext({ collision })
 
-    expect(ctx.resolveColumn(['collision'], 'code')?.column.type).toBe('integer')
-    expect(ctx.resolveColumn(['collision'], 'Code')?.column.type).toBe('text')
+    expect(ctx.resolveColumn(['collision'], 'code')).toBeUndefined()
+    expect(ctx.resolveColumn(['collision'], 'Code')).toBeUndefined()
     expect(ctx.resolveColumn(['collision'], 'CODE')).toBeUndefined()
   })
 

@@ -117,6 +117,25 @@ describe('implicit-cast', () => {
     expect(findings.every((finding) => finding.rewrite === undefined)).toBe(true)
   })
 
+  test('withholds mixed-case column findings when the folded schema bucket collides', () => {
+    const collision: TableSchema = {
+      name: 'collision',
+      columns: [
+        { name: 'code', type: 'integer', nullable: false },
+        { name: 'Code', type: 'text', nullable: true },
+      ],
+    }
+    const findings = implicitCastRule.check(
+      ctxFor(
+        'SELECT id FROM collision WHERE Code = 123',
+        { collision },
+        'postgresql'
+      )
+    )
+
+    expect(findings).toHaveLength(0)
+  })
+
   test('does not flag number literal compared to numeric column', () => {
     expect(
       implicitCastRule.check(

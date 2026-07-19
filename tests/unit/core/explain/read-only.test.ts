@@ -30,4 +30,22 @@ describe('isProvenReadOnlySql', () => {
       isProvenReadOnlySql('SELECT id INTO archived_users FROM users', 'postgresql')
     ).toBe(false)
   })
+
+  test.each([
+    ['SELECT nextval(sequence_name)', 'postgresql'],
+    ['SELECT setval(sequence_name, 1)', 'postgresql'],
+    ['SELECT pg_advisory_lock(1)', 'postgresql'],
+    ["SELECT set_config('application_name', 'dbcli', false)", 'postgresql'],
+    ['SELECT COUNT(*) FROM users', 'postgresql'],
+    ['SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users', 'postgresql'],
+    ['SELECT arbitrary_udf(id) FROM users', 'postgresql'],
+    ['SELECT * FROM arbitrary_table_function(1)', 'postgresql'],
+    ['SELECT arbitrary_udf(id) FROM users', 'mysql'],
+    ['SELECT arbitrary_udf(id) FROM users', 'mariadb'],
+  ] as const)(
+    'rejects function-bearing SELECTs as unproven: %s',
+    (sql, system) => {
+      expect(isProvenReadOnlySql(sql, system)).toBe(false)
+    }
+  )
 })

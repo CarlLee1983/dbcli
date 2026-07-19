@@ -950,7 +950,7 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries</
   </table>
   <h3>Notes</h3>
   <ul>
-    <li><code>--analyze</code> runs the query for real, so dbcli accepts it only for structurally proven read-only <code>SELECT</code> / SELECT-only CTE statements. Write-capable or uncertain SQL is rejected before adapter execution; use plain <code>dbcli explain</code>.</li>
+    <li><code>--analyze</code> runs the query for real, so dbcli accepts it only for structurally proven read-only, function-free <code>SELECT</code> / SELECT-only CTE statements. Explicit function and table-function calls are unproven because functions may have side effects. Write-capable or uncertain SQL is rejected before adapter execution; use plain <code>dbcli explain</code>.</li>
     <li><code>dbcli explain</code> is allowed in <code>query-only</code> permission — no permission upgrade required.</li>
     <li>Auto-LIMIT is <strong>not</strong> applied to EXPLAIN statements (since v1.23 P1).</li>
   </ul>
@@ -994,7 +994,7 @@ dbcli --use staging lint @analytics/live-summary --format json   # named cache</
     </tbody>
   </table>
   <p><code>not-in-nullable</code> is the SQL “NULL poisons <code>NOT IN</code>” hazard on the right-hand side; a nullable left-hand column is not this rule. For a subquery, filter its projected value with <code>IS NOT NULL</code>, or consider <code>NOT EXISTS</code> when correlation and semantics are appropriate. dbcli does not automatically perform that rewrite unless correlation, types, qualified-column resolution, and rewrite targeting are all unambiguous. A direct or <code>AND</code>-conjoined <code>IS NOT NULL</code> filter on the exact projected expression suppresses the finding; <code>OR</code> and ambiguous matches remain conservative findings.</p>
-  <p>Parse failures block all nine rules with <code>blocked: parse failed</code>. <code>--no-schema</code> blocks <code>implicit-cast</code> and <code>not-in-nullable</code> with <code>blocked: --no-schema</code>; a missing layered cache reports <code>blocked: schema cache unavailable (run dbcli schema)</code>. Confidence-labelled drafts and shell-safe verification commands are report-only suggestions and are never run. <code>dbcli explain --analyze</code> is emitted only for structurally proven read-only SQL; other statements fall back to plain <code>dbcli explain</code>.</p>
+  <p>Parse failures block all nine rules with <code>blocked: parse failed</code>. <code>--no-schema</code> blocks <code>implicit-cast</code> and <code>not-in-nullable</code> with <code>blocked: --no-schema</code>; a missing layered cache reports <code>blocked: schema cache unavailable (run dbcli schema)</code>. Confidence-labelled drafts and shell-safe verification commands are report-only suggestions and are never run. <code>dbcli explain --analyze</code> is emitted only for structurally proven read-only SQL without explicit function or table-function calls; other statements fall back to plain <code>dbcli explain</code>. If cached table or column names collide after case folding, schema-aware findings and rewrites are withheld because parser quote provenance cannot disambiguate them.</p>
 </section>
 
 <section id="guide-missing-index-for" class="mt-20">

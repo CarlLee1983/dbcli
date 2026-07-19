@@ -79,6 +79,11 @@ cache 跳過時,以 `blocked` 語意註明原因)、`relatedCommands[]`(指向
 - 有 schema cache → 型別/索引相關規則啟用,`schemaVerified: true`。
 - 無 cache 或 `--no-schema` → 該類規則跳過並列入 `skippedRules`。
 - 不連 DB、只讀 `.dbcli/schemas/`;權限需求 `n/a`(同 `plan`)。
+- parser 無法可靠保留 identifier quote provenance 時，大小寫折疊後衝突的
+  table/column 一律視為無法解析，不因字面 exact match 產生 schema-aware
+  finding 或 rewrite。
+- `explain --analyze` 驗證只適用於結構上證明為唯讀且不含明確 function /
+  table-function call 的 `SELECT`；function-bearing SQL 保守使用 plain explain。
 
 ### 引擎範圍
 

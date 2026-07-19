@@ -1029,8 +1029,10 @@ dbcli explain --bulk @analytics/*                    # glob over saved queries
 ### Notes
 
 - `--analyze` runs the query for real, so dbcli accepts it only for structurally
-  proven read-only `SELECT` / SELECT-only CTE statements. Write-capable or
-  uncertain SQL is rejected before adapter execution; use plain `dbcli explain`.
+  proven read-only, function-free `SELECT` / SELECT-only CTE statements.
+  Explicit function and table-function calls are unproven because functions may
+  have side effects. Write-capable or uncertain SQL is rejected before adapter
+  execution; use plain `dbcli explain`.
 - `dbcli explain` is allowed in `query-only` permission — no permission upgrade required.
 - Auto-LIMIT is **not** applied to EXPLAIN statements (since v1.23 P1).
 
@@ -1097,7 +1099,10 @@ Parse failures list all nine rules as `blocked: parse failed`. With
 as `blocked: schema cache unavailable (run dbcli schema)`. Findings may include
 confidence-labelled SQL drafts and shell-safe verification commands.
 `dbcli explain --analyze` is emitted only for structurally proven read-only
-SQL; other statements fall back to plain `dbcli explain`. Both are report-only
+SQL without explicit function or table-function calls; other statements fall
+back to plain `dbcli explain`. If cached table or column names collide after
+case folding, schema-aware findings and rewrites are withheld because parser
+quote provenance cannot disambiguate them. Both command forms are report-only
 suggestions and are never run.
 
 ## Missing-index advisor — `dbcli guide missing-index-for`

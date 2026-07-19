@@ -26,22 +26,24 @@ export function buildSchemaContext(
   }
 
   const resolveTable = (name: string): TableSchema | undefined => {
-    const exact = exactTables.get(name)
-    if (exact) return exact.length === 1 ? exact[0] : undefined
     const folded = foldedTables.get(name.toLowerCase())
-    return folded?.length === 1 ? folded[0] : undefined
+    if (folded?.length !== 1) return undefined
+
+    const exact = exactTables.get(name)
+    return exact?.length === 1 ? exact[0] : folded[0]
   }
 
   const resolveTableColumn = (
     table: TableSchema,
     name: string
   ): TableSchema['columns'][number] | undefined => {
-    const exact = table.columns.filter((column) => column.name === name)
-    if (exact.length > 0) return exact.length === 1 ? exact[0] : undefined
     const folded = table.columns.filter(
       (column) => column.name.toLowerCase() === name.toLowerCase()
     )
-    return folded.length === 1 ? folded[0] : undefined
+    if (folded.length !== 1) return undefined
+
+    const exact = table.columns.filter((column) => column.name === name)
+    return exact.length === 1 ? exact[0] : folded[0]
   }
 
   return {

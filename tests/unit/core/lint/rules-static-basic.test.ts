@@ -62,6 +62,42 @@ describe('select-star', () => {
     expect(findings[0].schemaVerified).toBe(false)
   })
 
+  test('withholds an unquoted mixed-case table rewrite when its folded bucket collides', () => {
+    const lower: TableSchema = {
+      name: 'foo',
+      columns: [{ name: 'lower_id', type: 'integer', nullable: false }],
+    }
+    const mixed: TableSchema = {
+      name: 'Foo',
+      columns: [{ name: 'mixed_id', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM Foo', { foo: lower, Foo: mixed }, 'postgresql')
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
+  test('withholds a quoted mixed-case table rewrite when quote provenance is unavailable', () => {
+    const lower: TableSchema = {
+      name: 'foo',
+      columns: [{ name: 'lower_id', type: 'integer', nullable: false }],
+    }
+    const mixed: TableSchema = {
+      name: 'Foo',
+      columns: [{ name: 'mixed_id', type: 'integer', nullable: false }],
+    }
+    const findings = selectStarRule.check(
+      ctxFor('SELECT * FROM "Foo"', { foo: lower, Foo: mixed }, 'postgresql')
+    )
+
+    expect(findings).toHaveLength(1)
+    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0].schemaVerified).toBe(false)
+  })
+
   test('keeps a unique case-insensitive select-star schema lookup', () => {
     const users: TableSchema = {
       name: 'users',

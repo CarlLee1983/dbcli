@@ -163,6 +163,10 @@ describe('lint subprocess safety and redaction', () => {
       'INSERT INTO users (id) VALUES (1)',
       'CREATE TABLE scratch (id integer)',
       'WITH changed AS (UPDATE users SET active = false RETURNING id) SELECT id FROM changed',
+      'SELECT nextval(sequence_name)',
+      'SELECT pg_advisory_lock(1)',
+      'SELECT arbitrary_udf(id) FROM users',
+      'SELECT * FROM arbitrary_table_function(1)',
     ]
 
     for (const sql of unsafeStatements) {
@@ -194,7 +198,7 @@ describe('lint subprocess safety and redaction', () => {
     expect(report.relatedCommands[1]).toStartWith('dbcli explain --analyze "')
   })
 
-  test('explain --analyze rejects write-capable SQL before attempting a connection', async () => {
+  test('explain --analyze rejects unproven SQL before attempting a connection', async () => {
     const configPath = join(root, '.dbcli')
     await Bun.$`mkdir -p ${configPath}`
     await writeConfig(configPath, 'primary')
@@ -205,6 +209,10 @@ describe('lint subprocess safety and redaction', () => {
       'INSERT INTO users (id) VALUES (1)',
       'CREATE TABLE scratch (id integer)',
       'WITH changed AS (UPDATE users SET active = false RETURNING id) SELECT id FROM changed',
+      'SELECT nextval(sequence_name)',
+      'SELECT set_config(\'application_name\', \'dbcli\', false)',
+      'SELECT arbitrary_udf(id) FROM users',
+      'SELECT * FROM arbitrary_table_function(1)',
     ]) {
       const result = await run(
         ['--config', configPath, 'explain', sql, '--analyze'],

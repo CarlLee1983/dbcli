@@ -71,7 +71,7 @@ describe('builtin pack: orm-drift-review', () => {
     expect(plan.steps.map((step) => step.resolvedCommand)).toEqual([
       'blacklist list',
       'schema --format json',
-      'diff --against-orm migrations/*.sql --format json',
+      'diff --against-orm "migrations/*.sql" --format json',
     ])
     expect(plan.steps[2]?.argv).toEqual([
       'diff',
@@ -81,6 +81,50 @@ describe('builtin pack: orm-drift-review', () => {
       'json',
     ])
     expect(plan.steps.every((step) => step.risk === 'readonly')).toBe(true)
+  })
+
+  test('keeps a path containing spaces and an apostrophe in one argv value', async () => {
+    const program = makeRoot()
+    await program.parseAsync(
+      [
+        'node',
+        'dbcli',
+        'skill',
+        'tasks',
+        'plan',
+        'orm-drift-review',
+        '--param',
+        "orm_path=schemas/team's model.prisma",
+        '--format',
+        'json',
+      ],
+      { from: 'node' }
+    )
+
+    expect(exitCode).toBeUndefined()
+    const plan = JSON.parse(logOut) as {
+      steps: Array<{ resolvedCommand: string; argv: string[] }>
+    }
+    expect(plan.steps[2]?.resolvedCommand).toBe(
+      `diff --against-orm "schemas/team's model.prisma" --format json`
+    )
+    expect(plan.steps[2]?.argv).toEqual([
+      'diff',
+      '--against-orm',
+      "schemas/team's model.prisma",
+      '--format',
+      'json',
+    ])
+  })
+
+  test('agent notes require migration review of captured dry-run DDL', async () => {
+    const pack = await Bun.file('assets/tasks/orm-drift-review.md').text()
+
+    expect(pack).toContain('default dry-run mode')
+    expect(pack).toContain('--param "table=${exact_table}"')
+    expect(pack).toContain('--param "ddl=${captured_ddl}"')
+    expect(pack).toContain('one shell argument')
+    expect(pack).toContain('--execute')
   })
 
   void logSpy

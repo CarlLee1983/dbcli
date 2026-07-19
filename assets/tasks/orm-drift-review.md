@@ -23,7 +23,7 @@ steps:
     reason: Refresh the local schema cache so the drift comparison runs against current DB state.
     risk: readonly
   - type: command
-    command: diff --against-orm {{orm_path}} --format json
+    command: diff --against-orm "{{orm_path}}" --format json
     reason: Compare the ORM definition against the cached DB schema; error-level entries are app-breaking drift.
     risk: readonly
 ---
@@ -33,7 +33,23 @@ steps:
 Treat `missing_in_db` errors as release blockers: the application expects columns or
 indexes the database does not have. `missing_in_orm` warnings usually mean a manual
 hotfix was never backfilled into the ORM definition — backfill the definition rather
-than dropping the column. Never run the proposed `migrate` commands directly; route
-every proposal through `dbcli skill tasks plan migration-review` first. Same-family
-type-spelling differences are reported as `info` and are usually the ORM's default
-mapping, not real drift.
+than dropping the column. Same-family type-spelling differences are reported as
+`info` and are usually the ORM's default mapping, not real drift.
+
+Proposals are `dbcli migrate` commands that run in default dry-run mode. Run a
+proposed command only in that mode — do not add `--execute` — and capture the emitted
+DDL. Identify the exact target table from the drift entry and DDL, then confirm it
+against the refreshed schema output. Pass each value as one shell argument. Use the
+current shell's safe quoting or argument-array mechanism; never use `eval`. For a
+POSIX shell, bind the confirmed values to `exact_table` and `captured_ddl`, then keep
+both expansions quoted:
+
+```sh
+dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"
+```
+
+Both `--param` values are required: the bare `migration-review` pack command is not a
+review. Consider `--execute` only after the resulting migration-review plan and
+captured DDL have been checked.

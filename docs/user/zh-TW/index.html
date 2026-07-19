@@ -283,6 +283,31 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </div>
             </div>
 
+            <div class="paper-card p-6 border-l-4 border-l-primary mb-12">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">ORM 定義漂移</h4>
+                <p><code>diff --against-orm</code> 會將 Prisma、DDL 或 normalized JSON 與既有 SQL schema cache 比對。比對只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 <code>schema --format json</code>；cache 為空時會 exit <code>1</code> 並要求執行 <code>dbcli schema</code>。</p>
+                <pre><code>dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></pre>
+                <p><code>--against-orm</code> 可重複使用，也接受逗號分隔路徑。DDL 支援真實 filesystem glob 與多檔；Prisma 與 normalized JSON 只接受一個檔案。用 <code>--orm-format prisma|ddl|json</code> 覆寫偵測、<code>--ignore &lt;globs&gt;</code> 傳入大小寫敏感的 qualified table pattern，並以 <code>--format json|table|markdown</code> 選擇輸出。</p>
+                <table>
+                    <thead><tr><th>類別</th><th>意義</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>missing_in_db</code></td><td>Error：ORM 預期的 table、column 或 index 不在 DB cache。</td></tr>
+                        <tr><td><code>missing_in_orm</code></td><td>Warning：cached DB object 不在 ORM 定義。</td></tr>
+                        <tr><td><code>mismatch</code></td><td>型別 family 不相容或 nullability 不同為 error；同 family 拼字、default 或 primary-key 差異為 info。</td></tr>
+                        <tr><td><code>unmanaged</code></td><td>忽略的資料表；會列出但不計分。</td></tr>
+                    </tbody>
+                </table>
+                <p>Error-level drift 會 exit <code>1</code>；<code>--recovery</code> 會包裝操作失敗。PostgreSQL schema/table storage 會精確保留且大小寫敏感，因此 <code>users</code> 與 <code>"Users"</code> 可並存。解析 DDL 時，未引用的 <code>Users</code> 會折成 <code>users</code>，而引用的 <code>"Users"</code> 只會解析成 <code>Users</code>；quote state 來自 parsed identifier，絕不從顯示大小寫推測。重複 exact 或 resolved identity 會 fail closed。不支援語法會以 <code>blocked:</code> 原因保留在 <code>unparsed</code>。結構化 index 比對會去重，報告排序穩定。</p>
+                <p>提案是 shell-safe 文字，預設仍為 dry-run。安全且未 qualified 的新增可產生 <code>migrate</code>；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 <code>migration-review</code>，不會輸出損壞指令。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：</p>
+                <pre><code>dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"</code></pre>
+                <p class="m-0">完成審查前絕不加上 <code>--execute</code>。</p>
+            </div>
+
             <!-- doc-key: data-verification -->
             <h3 id="data-verification">資料驗證</h3>
             <p class="text-text-muted mb-4">驗證資料處理結果是否正確 — 擷取結果指紋,再針對指紋、第二個查詢或行內條件斷言不變量。僅支援 SQL 引擎(PostgreSQL / MySQL / MariaDB)。</p>
@@ -550,7 +575,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">內建任務包 <code>analyze-table-perf</code></h4>
-                <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code> 與 <code>connection-health</code>。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
+                <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code>、<code>orm-drift-review</code> 與 <code>connection-health</code>。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>
@@ -720,7 +745,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
             <ul>
                 <li><strong>DB-backed 功能</strong>：編輯程式碼前先把產品/程式語彙對應到真實資料物件（<code>inspect --for-agent</code> → <code>blacklist list</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>）。</li>
                 <li><strong>應用程式資料錯誤</strong>：分離資料庫事實與應用程式推論（<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → 最小查詢）。</li>
-                <li><strong>ORM 或 migration</strong>：用 live schema 證據支撐修改（<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>）。</li>
+                <li><strong>ORM 或 migration</strong>：用 cached schema 證據支撐修改（<code>schema --format json</code> → <code>diff --against-orm &lt;orm-schema&gt;</code> → 審查 error → dry-run <code>migrate</code> → 用擷取的 DDL 執行 <code>migration-review</code> → 套用後以 snapshot 驗證）。</li>
                 <li><strong>PR 資料庫風險審查</strong>：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。</li>
                 <li><strong>慢 endpoint 或查詢</strong>：在提出 index 前優先使用 read-only diagnostics（<code>report --section perf</code> → <code>lint "&lt;query&gt;"</code> → <code>guide missing-index-for</code>；有 proxy log 時用 <code>proxy analyze</code>）。</li>
                 <li><strong>安全資料回填</strong>：先界定受影響資料範圍並預覽 mutation（<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back 或 snippet <code>--verify</code>）。</li>
@@ -749,6 +774,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
                     <tr><td>全環境效能掃描</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
                     <tr><td>「給 agent 寫權限前先稽核」</td><td><code>skill tasks plan audit-permissions</code>（可選 <code>--param table=&lt;table&gt;</code>）</td><td><code>audit-permissions</code></td></tr>
                     <tr><td>「線上 schema 跟 committed cache 一致嗎？」</td><td><code>skill tasks plan schema-drift-review --param table=&lt;table&gt;</code></td><td><code>schema-drift-review</code></td></tr>
+                    <tr><td>「這份 ORM 定義跟 cached DB schema 一致嗎？」</td><td><code>skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma</code></td><td><code>orm-drift-review</code></td></tr>
                     <tr><td>「連線健康嗎？」</td><td><code>skill tasks plan connection-health</code></td><td><code>connection-health</code></td></tr>
                     <tr><td>「審這個動到 DB 的 PR」</td><td><code>skill tasks plan pr-database-review</code>；DDL/index 想法先過 <code>migration-review</code></td><td><code>pr-database-review</code> / <code>migration-review</code></td></tr>
                     <tr><td>「安全回填 X 欄位」</td><td><code>skill tasks plan safe-backfill-verify --param table=&lt;t&gt; --param query="&lt;UPDATE&gt;" --param verify_query="&lt;SELECT count(*)&gt;"</code></td><td><code>safe-backfill</code> / <code>safe-backfill-verify</code></td></tr>
@@ -777,7 +803,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
         <section id="agent-recovery" class="mt-20">
             <h2>🔁 Agent 修復工作流</h2>
             <p>此處只列三個最常見情境與通用流程。完整失敗代碼對照、Multi-turn <code>--next</code>、Risk gate 詳細語意與 Audit ↔ Envelope 反查請見 <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>。</p>
-            <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
+            <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> / <code>diff --against-orm</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
 
             <h3 class="mt-10">三個典型情境</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">

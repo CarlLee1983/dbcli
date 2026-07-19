@@ -165,12 +165,37 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | :--- | :--- |
 | `doctor` | Runs system and connection diagnostics. |
 | `check [table]` | Analyzes data health (orphans, nulls, duplicates). |
-| `diff` | Compares schema snapshots to detect changes. |
+| `diff` | Compares schema snapshots, or an ORM definition against the local SQL schema cache with `--against-orm`. |
 | `report` | Generates a comprehensive health/perf report. |
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
 | `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
+
+#### ORM definition drift
+
+`diff --against-orm` compares Prisma, DDL, or normalized JSON with the existing SQL schema cache. The comparison itself is cache-only: it does not connect to the database, refresh the cache, or execute proposals. Run `schema --format json` first when freshness matters; an empty cache exits `1` and asks you to run `dbcli schema`.
+
+```bash
+dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli diff --against-orm prisma/schema.prisma --recovery --format json
+```
+
+`--against-orm` is repeatable and accepts comma-separated paths. DDL inputs support real filesystem globs and multiple files; Prisma and normalized JSON accept exactly one file. Use `--orm-format prisma|ddl|json` to override detection, `--ignore <globs>` for comma-separated case-sensitive qualified table patterns, and `--format json|table|markdown` for output. Errors are `missing_in_db`; DB-only objects are `missing_in_orm` warnings; incompatible type families or nullability are error-level `mismatch`; same-family type spelling, default, and primary-key differences are informational. Ignored tables are listed as `unmanaged` but not scored. Error-level drift exits `1`; `--recovery` wraps operational failures.
+
+Schema and table storage is exact and case-sensitive. PostgreSQL `users` and `"Users"` coexist. In parsed DDL, unquoted `Users` folds to `users`, while quoted `"Users"` resolves only to `Users`; quote state comes from the parsed identifier, never display capitalization. Qualified names are shown and ignored case-sensitively. Duplicate exact or resolved identities fail closed. Unsupported Prisma/DDL syntax appears in `unparsed` with a `blocked:` reason. Indexes compare and deduplicate by structural columns plus uniqueness, and report ordering is stable.
+
+Proposals are shell-safe text and remain dry-run by default. Safe unqualified column/index additions may emit `migrate`; schema-qualified or CLI-lossy index targets escalate to `migration-review` rather than emit a corrupt command. Capture the dry-run DDL and pass both exact values as separate quoted parameters:
+
+```sh
+dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"
+```
+
+Never add `--execute` until that review is complete.
 
 <!-- doc-key: data-verification -->
 ### Data Verification
@@ -566,7 +591,7 @@ dispatch automatically.
 `dbcli completion --install` is marker-managed: it writes a single managed block to your
 shell rc file and re-running it replaces that block rather than duplicating it.
 
-> **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
+> **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 
 > **`safe-backfill-verify` task plan and the `verification` block.** Running `dbcli skill tasks plan safe-backfill-verify --format json` returns a plan JSON that includes a `verification` block with `status: "planned"`. This block describes the read-back assertion that will be run — it is the **planned** evidence definition, **not** a result. A `status` of `"planned"` does **not** mean verification has run or passed; it means the task plan knows which check to perform when the task executes.
 
@@ -757,7 +782,7 @@ Beyond ad-hoc queries, `dbcli` is built for the common development tasks where a
 
 - **DB-backed feature**: map product/code terms to real objects before editing code (`inspect --for-agent` → `blacklist list` → `schema <object>` → `queries suggest <intent>`).
 - **Application data bug**: separate stored facts from application-code inference (`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → a narrow query).
-- **ORM or migration work**: ground model and migration edits in live schema evidence (`schema` → `diff --snapshot` → generate DDL via `migrate add-index`/`add-column` → `diff --against`).
+- **ORM or migration work**: ground model and migration edits in cached schema evidence (`schema --format json` → `diff --against-orm <orm-schema>` → review errors → dry-run `migrate` proposal → `migration-review` with captured DDL → snapshot verification after applying).
 - **PR database review**: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.
 - **Slow endpoint or query**: prefer read-only diagnostics before proposing indexes (`report --section perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; `proxy analyze` when logs exist).
 - **Safe data backfill**: scope affected rows and preview mutations before execution (`schema` → count/scope query → `update ... --dry-run` → read-back or snippet `--verify`).
@@ -789,6 +814,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered
 | Whole-environment perf scan | `report --section perf` → `guide slow-query` | _(report + guide, no pack)_ |
 | "Audit access before granting writes" | `skill tasks plan audit-permissions` (optional `--param table=<table>` to spot-check column coverage) | `audit-permissions` |
 | "Does the live schema match the committed cache?" | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |
+| "Does this ORM definition match the cached DB schema?" | `skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma` | `orm-drift-review` |
 | "Is the connection healthy?" | `skill tasks plan connection-health` | `connection-health` |
 | "Review this DB-touching PR" | `skill tasks plan pr-database-review`; run any DDL/index idea through `migration-review` before writing | `pr-database-review` / `migration-review` |
 | "Backfill column X safely" | `skill tasks plan safe-backfill-verify --param table=<t> --param query="<UPDATE>" --param verify_query="<SELECT count(*)>"` | `safe-backfill` / `safe-backfill-verify` |
@@ -815,7 +841,7 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 
 > This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn `--next` semantics, risk-gate details, and the Audit ↔ Envelope pivot live in [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs).
 
-When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
+When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` / `diff --against-orm` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
 
 ### Scenario 1 — Connection refused (`CONN_REFUSED`)
 

@@ -708,6 +708,137 @@ dbcli diff --against before.json --format json
 **Options:** `--snapshot <path>`, `--against <path>`, `--format <json|table>`
 **Permission:** query-only+
 
+#### `diff --against-orm`
+
+Compare an ORM definition with the local SQL schema cache. This mode reads
+`config.schema`; it does not open a database connection, refresh the cache, or
+execute a proposal. An empty cache fails with
+`Schema cache is empty. Run 'dbcli schema' first.` Snapshot mode remains a
+separate `--snapshot` / `--against` workflow.
+
+```bash
+# Prisma and normalized JSON accept exactly one file
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm schema.normalized.json --orm-format json --format table
+
+# DDL accepts repeatable or comma-separated paths and real filesystem globs
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli diff --against-orm migrations/base.sql,migrations/accounts.sql \
+  --against-orm migrations/orders.sql --orm-format ddl --format json
+
+# Ignore patterns are comma-separated and match qualified table identity
+dbcli diff --against-orm prisma/schema.prisma --ignore 'public.audit_*,public.Legacy'
+```
+
+| Option | Behavior |
+| :--- | :--- |
+| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and sorted. Prisma and normalized JSON accept exactly one file, and globs are rejected for those formats. |
+| `--orm-format prisma\|ddl\|json` | Override extension/content detection. Without it, dbcli detects Prisma, DDL, or normalized JSON from the path and content. |
+| `--ignore <globs>` | Comma-separated, case-sensitive table globs. Patterns match the qualified display identity (for example `public.Users`). `_prisma_migrations` is always unmanaged. |
+| `--format json\|table\|markdown` | Select machine JSON, human table, or Markdown output. Markdown is available only in ORM drift mode. |
+| `--recovery` | On an I/O, configuration, empty-cache, invalid-format, or unsupported-engine failure, emit and save a structured recovery envelope. Invalid Prisma/DDL constructs normally become `unparsed` entries instead of throwing. |
+
+The command supports PostgreSQL, MySQL, and MariaDB configurations. It exits with
+code `1` when the report contains error-level scored drift, and `0` when it does
+not. Command/configuration failures also exit code `1`. The four drift categories
+and tolerance rules are:
+
+| Category | Severity and comparison rule |
+| :--- | :--- |
+| `missing_in_db` | `error` — a table, column, or index exists in the ORM definition but not in the cached DB schema. |
+| `missing_in_orm` | `warn` — a table, column, or index exists in the cached DB schema but not in the ORM definition. |
+| `mismatch` | `error` when the type family or nullability differs; `info` for same-family type spelling, default, or primary-key differences. |
+| `unmanaged` | `info`, excluded from error/warn scoring — the table matched the built-in or user `--ignore` patterns. |
+
+Type-family tolerance deliberately treats engine spellings such as `text` and
+`varchar(191)` as the same family: the spelling difference is still visible as
+`info`, while an integer/text family difference is an `error`. Indexes compare
+by structural index signatures — ordered, case-folded column names plus
+uniqueness — rather than by engine-specific index names. Duplicate signatures
+are emitted once, and drift entries use stable table/object/category/detail
+sorting.
+
+**Schema and table identity.** Storage preserves exact, case-sensitive schema
+and table names from the database catalog. Exact, case-sensitive `(schema, table)`
+tuples are the comparison key, so PostgreSQL `users` and `"Users"` can coexist.
+DDL resolution rules: unquoted SQL identifiers fold to lowercase; quoted identifiers match exactly.
+For example, unquoted `Users` resolves to `users`, and quoted
+`"Users"` resolves only to `Users`. Quote state comes from the parsed identifier representation;
+dbcli never infers it from display text, catalog spelling, or a
+Prisma mapping. Qualified components resolve independently, and unqualified ORM
+identities use the cached DB default schema when one is known. Qualified display
+names and `--ignore` matching remain case-sensitive. Duplicate exact or
+duplicate resolved table identities fail closed instead of overwriting one
+another.
+
+**Prisma subset.** The parser supports `model` blocks; scalar `String`, `Int`,
+`BigInt`, `Float`, `Decimal`, `Boolean`, `DateTime`, `Json`, and `Bytes` fields;
+`?`; relation-side `[]`; `@id`, `@unique`, `@default(...)`, `@map("...")`,
+`@@map("...")`, `@@index([...])`, `@@unique([...])`; relations with
+`fields` / `references`; and the validated native mappings `@db.Text`,
+`@db.VarChar(n)`, `@db.Uuid`, `@db.Timestamptz([precision])`, `@db.Date`,
+`@db.SmallInt`, and `@db.JsonB`. Views, composite types, enums used as scalar
+columns, multi-schema datasource configuration, malformed declarations, unknown
+attributes, and unsupported native mappings are never guessed.
+
+Prisma and DDL constructs outside the supported subset are retained in
+`unparsed` with a `blocked:` reason. These entries are separate from scored drift:
+inspect and resolve them before treating an otherwise clean summary as complete.
+The normalized JSON escape hatch is Zod-validated and uses an array of tables
+with explicit exact `identity` objects; optional parsed identifiers must include
+their `quoted` flags.
+
+```json
+{
+  "ormSource": "prisma",
+  "entries": [
+    {
+      "category": "missing_in_db",
+      "severity": "error",
+      "table": "public.users",
+      "object": "email",
+      "detail": "column 'email' (text) is defined in prisma but absent in the database",
+      "proposedCommands": [
+        "# escalate: schema-qualified table 'public.users' is not losslessly representable by dbcli migrate — run: dbcli skill tasks plan migration-review"
+      ]
+    }
+  ],
+  "unparsed": [],
+  "summary": { "errors": 1, "warns": 0, "infos": 0, "unmanaged": 0 }
+}
+```
+
+Missing unqualified columns and indexes may receive shell-safe, dry-run-by-default
+`dbcli migrate add-column` or `add-index` proposal strings. Simple arguments stay
+unquoted; unsafe shell characters are POSIX single-quoted. Table creation,
+removal, mismatch, and DB-only drift escalate to `migration-review`. A
+schema-qualified target, or index columns that the current `migrate --columns`
+CLI cannot represent losslessly, also escalates instead of emitting a corrupt
+command. Proposals are text only and never add `--execute`.
+
+For a guided, cache-refreshing review, use the built-in `orm-drift-review` pack:
+
+```bash
+dbcli skill tasks plan orm-drift-review \
+  --param orm_path=prisma/schema.prisma \
+  --format json
+```
+
+The plan is `blacklist list` → `schema --format json` →
+`diff --against-orm ... --format json`. Run any proposed `migrate` command in its
+default dry-run mode, capture the emitted DDL, confirm its exact target, and pass
+both values to the separate migration review:
+
+```sh
+dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"
+```
+
+Both parameters are required. Keep each expansion as one quoted shell argument;
+never use `eval`, and consider `--execute` only after the plan and captured DDL
+have been reviewed.
+
 ### snapshot
 
 Capture a **result fingerprint** of a query (not schema): `rowCount` plus per-column
@@ -1838,7 +1969,8 @@ a read-only (`plan-only`) pack taking a required `table` parameter that walks
 in recent audit activity. Additional read-only packs ship for common agent
 workflows: `audit-permissions` (permission/blacklist audit), `safe-backfill`
 (plan a write with blacklist+schema+risk checks), `schema-drift-review` (cached
-vs live schema diff), and `connection-health` (reachability/config/capacity
+vs live schema diff), `orm-drift-review` (ORM definition vs cached DB schema),
+and `connection-health` (reachability/config/capacity
 triage). **MongoDB packs:** `mongo-safe-backfill` (dry-run–previewed backfill)
 and `mongo-schema-drift-review` (sampled dot-path drift, with a `sample_size` knob
 to damp sampling noise); filter them with `dbcli skill tasks list --engine mongodb`.

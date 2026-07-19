@@ -283,6 +283,31 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
                 </div>
             </div>
 
+            <div class="paper-card p-6 border-l-4 border-l-primary mb-12">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">ORM definition drift</h4>
+                <p><code>diff --against-orm</code> compares Prisma, DDL, or normalized JSON with the existing SQL schema cache. The comparison is cache-only: it does not connect to the database, refresh the cache, or execute proposals. Run <code>schema --format json</code> first when freshness matters; an empty cache exits <code>1</code> and asks you to run <code>dbcli schema</code>.</p>
+                <pre><code>dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></pre>
+                <p><code>--against-orm</code> is repeatable and accepts comma-separated paths. DDL supports real filesystem globs and multiple files; Prisma and normalized JSON accept exactly one file. Use <code>--orm-format prisma|ddl|json</code> to override detection, <code>--ignore &lt;globs&gt;</code> for case-sensitive qualified table patterns, and <code>--format json|table|markdown</code> for output.</p>
+                <table>
+                    <thead><tr><th>Category</th><th>Meaning</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>missing_in_db</code></td><td>Error: the ORM expects a table, column, or index absent from the DB cache.</td></tr>
+                        <tr><td><code>missing_in_orm</code></td><td>Warning: a cached DB object is absent from the ORM definition.</td></tr>
+                        <tr><td><code>mismatch</code></td><td>Error for incompatible type families/nullability; info for same-family type spelling, default, or primary-key differences.</td></tr>
+                        <tr><td><code>unmanaged</code></td><td>Informational ignored table; listed but not scored.</td></tr>
+                    </tbody>
+                </table>
+                <p>Error-level drift exits <code>1</code>; <code>--recovery</code> wraps operational failures. PostgreSQL schema/table storage is exact and case-sensitive, so <code>users</code> and <code>"Users"</code> coexist. In parsed DDL, unquoted <code>Users</code> folds to <code>users</code>, while quoted <code>"Users"</code> resolves only to <code>Users</code>; quote state comes from the parsed identifier, never display capitalization. Duplicate exact or resolved identities fail closed. Unsupported syntax is retained in <code>unparsed</code> with a <code>blocked:</code> reason. Structural index comparison deduplicates signatures, and report sorting is stable.</p>
+                <p>Proposals are shell-safe text and remain dry-run by default. Safe unqualified additions may emit <code>migrate</code>; schema-qualified or CLI-lossy index targets escalate to <code>migration-review</code> rather than emit corrupt commands. Capture the dry-run DDL and pass both exact values as separate quoted parameters:</p>
+                <pre><code>dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"</code></pre>
+                <p class="m-0">Never add <code>--execute</code> until that review is complete.</p>
+            </div>
+
             <!-- doc-key: data-verification -->
             <h3 id="data-verification">Data Verification</h3>
             <p class="text-text-muted mb-4">Verify data-processing correctness — capture a result fingerprint, then assert invariants against it, a second query, or inline conditions. SQL engines only (PostgreSQL / MySQL / MariaDB).</p>
@@ -550,7 +575,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Builtin task pack <code>analyze-table-perf</code></h4>
-                <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — <code>audit-permissions</code>, <code>safe-backfill</code>, <code>schema-drift-review</code>, and <code>connection-health</code>. Browse all packs with <code>dbcli skill tasks list</code>.</p>
+                <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — <code>audit-permissions</code>, <code>safe-backfill</code>, <code>schema-drift-review</code>, <code>orm-drift-review</code>, and <code>connection-health</code>. Browse all packs with <code>dbcli skill tasks list</code>.</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> task plan and the <code>verification</code> block</h4>
@@ -720,7 +745,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
             <ul>
                 <li><strong>DB-backed feature</strong>: map product/code terms to real objects before editing code (<code>inspect --for-agent</code> → <code>blacklist list</code> → <code>schema &lt;object&gt;</code> → <code>queries suggest &lt;intent&gt;</code>).</li>
                 <li><strong>Application data bug</strong>: separate stored facts from application-code inference (<code>inspect --for-agent</code> → <code>audit tail --for-agent</code> → <code>schema</code> → a narrow query).</li>
-                <li><strong>ORM or migration work</strong>: ground edits in live schema evidence (<code>schema</code> → <code>diff --snapshot</code> → <code>migrate add-index</code>/<code>add-column</code> → <code>diff --against</code>).</li>
+                <li><strong>ORM or migration work</strong>: ground edits in cached schema evidence (<code>schema --format json</code> → <code>diff --against-orm &lt;orm-schema&gt;</code> → review errors → dry-run <code>migrate</code> → <code>migration-review</code> with captured DDL → snapshot verification after applying).</li>
                 <li><strong>PR database review</strong>: check query, write, migration, export, fixture, and blacklist risk in the changed persistence paths.</li>
                 <li><strong>Slow endpoint or query</strong>: read-only diagnostics before index proposals (<code>report --section perf</code> → <code>lint "&lt;query&gt;"</code> → <code>guide missing-index-for</code>; <code>proxy analyze</code> when logs exist).</li>
                 <li><strong>Safe data backfill</strong>: scope affected rows and preview mutations (<code>schema</code> → count/scope query → <code>update ... --dry-run</code> → read-back or snippet <code>--verify</code>).</li>
@@ -749,6 +774,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an o
                     <tr><td>Whole-environment perf scan</td><td><code>report --section perf</code> → <code>guide slow-query</code></td><td><em>report + guide</em></td></tr>
                     <tr><td>"Audit access before granting writes"</td><td><code>skill tasks plan audit-permissions</code> (optional <code>--param table=&lt;table&gt;</code>)</td><td><code>audit-permissions</code></td></tr>
                     <tr><td>"Does the live schema match the committed cache?"</td><td><code>skill tasks plan schema-drift-review --param table=&lt;table&gt;</code></td><td><code>schema-drift-review</code></td></tr>
+                    <tr><td>"Does this ORM definition match the cached DB schema?"</td><td><code>skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma</code></td><td><code>orm-drift-review</code></td></tr>
                     <tr><td>"Is the connection healthy?"</td><td><code>skill tasks plan connection-health</code></td><td><code>connection-health</code></td></tr>
                     <tr><td>"Review this DB-touching PR"</td><td><code>skill tasks plan pr-database-review</code>; run DDL/index ideas through <code>migration-review</code> first</td><td><code>pr-database-review</code> / <code>migration-review</code></td></tr>
                     <tr><td>"Backfill column X safely"</td><td><code>skill tasks plan safe-backfill-verify --param table=&lt;t&gt; --param query="&lt;UPDATE&gt;" --param verify_query="&lt;SELECT count(*)&gt;"</code></td><td><code>safe-backfill</code> / <code>safe-backfill-verify</code></td></tr>
@@ -777,7 +803,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # generate an o
         <section id="agent-recovery" class="mt-20">
             <h2>🔁 Agent Recovery Workflow</h2>
             <p>This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn <code>--next</code> semantics, risk-gate details, and the Audit ↔ Envelope pivot live in <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>.</p>
-            <p>When any of <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> is invoked with <code>--recovery</code> and fails, a <code>RecoveryEnvelope</code> JSON is printed to stdout <strong>and atomically written</strong> to <code>.dbcli/last-recovery.json</code>. The agent then inspects it with <code>dbcli recover</code> or executes it with <code>dbcli recover --apply</code> (which by default only runs <code>readonly</code> + <code>dry-run</code> steps).</p>
+            <p>When any of <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> / <code>diff --against-orm</code> is invoked with <code>--recovery</code> and fails, a <code>RecoveryEnvelope</code> JSON is printed to stdout <strong>and atomically written</strong> to <code>.dbcli/last-recovery.json</code>. The agent then inspects it with <code>dbcli recover</code> or executes it with <code>dbcli recover --apply</code> (which by default only runs <code>readonly</code> + <code>dry-run</code> steps).</p>
 
             <h3 class="mt-10">Three typical scenarios</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">

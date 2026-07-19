@@ -54,7 +54,7 @@ afterwards add only the `@diag/*` it does not cover (`missing-indexes`, `locks`,
 `table-sizes`). Once you have a specific slow statement, `explain --analyze "<SQL>"` shows its plan.
 
 **On failure:** pass `--recovery` to `query` / `q` / `insert` / `update` / `delete` /
-`export` / `schema` / `inspect` / `lint`. The command emits a `RecoveryEnvelope` to stdout and saves
+`export` / `schema` / `inspect` / `lint` / `diff --against-orm`. The command emits a `RecoveryEnvelope` to stdout and saves
 it to `.dbcli/last-recovery.json`; then `dbcli recover` inspects it and `dbcli recover --apply`
 runs the saved plan under risk gating. Multi-turn `--next`, connection branching, and the
 post-apply verify probe are documented in reference.md §Recovery Cookbook.
@@ -84,7 +84,8 @@ requirements.
 Builtin packs (SQL — postgres/mysql): `diagnose-slow-query` (targets a specific SQL),
 `analyze-table-perf` (targets a specific table; `dbcli inspect` auto-suggests it for the
 hottest table in recent audit activity), `audit-permissions`, `safe-backfill`,
-`schema-drift-review`, `connection-health`. Review/verify packs: `pr-database-review`,
+`schema-drift-review`, `orm-drift-review` (ORM definition vs cached DB schema),
+`connection-health`. Review/verify packs: `pr-database-review`,
 `migration-review`, `safe-backfill-verify`, `slow-endpoint-investigation`. MongoDB packs:
 `mongo-safe-backfill` (dry-run–previewed backfill), `mongo-schema-drift-review` (sampled
 dot-path drift). All are read-only `plan-only` — pick the pack matching the situation, and
@@ -104,7 +105,7 @@ in **How to use dbcli** still applies.
 | DB-backed feature | `blacklist list` → `schema <object>` → `queries suggest <intent>` |
 | DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` or `--format html` |
 | Application data bug | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → narrow query |
-| ORM or migration work | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column` (preview SQL) → `diff --against <snapshot>` |
+| ORM or migration work | `schema --format json` → `diff --against-orm <orm-schema>` → review error-level drift → proposals via `migrate` (dry-run) → `migration-review` task pack → `diff --against <snapshot>` after applying. |
 | PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
 | Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
 | Safe data backfill | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back or snippet `--verify`. |
@@ -124,6 +125,9 @@ dbcli q @<name> --param k=v --format html > report.html
 dbcli export "<SQL>" --format html --output report.html
 dbcli audit tail --for-agent --n 10
 dbcli diff --snapshot <name>
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
 dbcli guide missing-index-for "<query>" --format json
@@ -303,7 +307,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
-| `diff` | query-only+ | SQL only. Save/compare schema snapshots. |
+| `diff` | query-only+ | SQL only. Save/compare schema snapshots. **(P1b)** `--against-orm <path>` compares a Prisma schema / DDL file / normalized JSON against the local schema cache (no DB connection): categorized drift (`missing_in_db` = error, `missing_in_orm` = warn, `mismatch` per tolerance table, `unmanaged`) with dry-run `migrate` proposals; exit 1 on error-level drift. `--orm-format prisma\|ddl\|json`, `--ignore <globs>`, `--format json\|table\|markdown`. |
 | `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
 | `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `verification` | n/a | Inspect and manage local verification artifacts. `list` / `show <id-or-path>` / `summary` are read-only; `prune` is dry-run by default and deletes only with `--execute --force`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
@@ -323,7 +327,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 
 `--use <name>` on any subcommand (including `status` / `doctor`) targets a v2 connection
 without changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `update`,
-`delete`, `export`, `schema`, `inspect`, and `lint` (see **On failure** above).
+`delete`, `export`, `schema`, `inspect`, `lint`, and `diff --against-orm` (see **On failure** above).
 
 **Write & query flag semantics** (SQL/Mongo `insert`/`update`):
 

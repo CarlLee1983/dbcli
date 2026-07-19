@@ -46,7 +46,7 @@ description: Database CLI for AI agents with permission-based access control. Us
 
 `report --section perf` 已涵蓋 slow-query、index-usage 與 cache-hit 診斷 — 之後只需補上它未涵蓋的 `@diag/*`（`missing-indexes`、`locks`、`connections`、`table-sizes`）。一旦鎖定特定慢語句，`explain --analyze "<SQL>"` 可顯示執行計畫。
 
-**失敗時：** 在 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` 加上 `--recovery`。指令會把 `RecoveryEnvelope` 輸出到 stdout 並儲存到 `.dbcli/last-recovery.json`；然後用 `dbcli recover` 檢視、`dbcli recover --apply` 在風險門控下執行儲存的計畫。Multi-turn `--next`、連線分支與 post-apply 驗證探針詳見 reference.md §Recovery Cookbook。
+**失敗時：** 在 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` / `diff --against-orm` 加上 `--recovery`。指令會把 `RecoveryEnvelope` 輸出到 stdout 並儲存到 `.dbcli/last-recovery.json`；然後用 `dbcli recover` 檢視、`dbcli recover --apply` 在風險門控下執行儲存的計畫。Multi-turn `--next`、連線分支與 post-apply 驗證探針詳見 reference.md §Recovery Cookbook。
 
 回報驗證結果時使用詞彙：`verified`（證據符合）/ `not_verified`（驗證執行但結果矛盾）/ `indeterminate`（執行但證據不明確）/ `blocked`（因 config、權限、schema、placeholder 或安全閘門導致無法執行）。
 
@@ -64,7 +64,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 
 計畫輸出是一組附帶說明與風險標籤的 dbcli 指令序列。請逐一執行 — 任務計畫**不會**繞過 blacklist、schema、dry-run 或確認等要求。
 
-內建套件（SQL — postgres/mysql）：`diagnose-slow-query`（針對特定 SQL）、`analyze-table-perf`（針對特定資料表；`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議此套件）、`audit-permissions`、`safe-backfill`、`schema-drift-review`、`connection-health`。審查與驗證套件：`pr-database-review`、`migration-review`、`safe-backfill-verify`、`slow-endpoint-investigation`。MongoDB 套件：`mongo-safe-backfill`（以 dry-run 預覽的回填）、`mongo-schema-drift-review`（抽樣 dot-path 漂移）。全部為唯讀 `plan-only` — 選擇符合使用者情境的套件，任何索引 / DDL 提案都應先經 `migration-review` 再寫入。Redis/Elasticsearch 目前尚無套件——請改以 `guide` / `report` 為主。
+內建套件（SQL — postgres/mysql）：`diagnose-slow-query`（針對特定 SQL）、`analyze-table-perf`（針對特定資料表；`dbcli inspect` 會針對近期 audit 活動中最熱門的資料表自動建議此套件）、`audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`（ORM 定義與快取 DB schema 比對）、`connection-health`。審查與驗證套件：`pr-database-review`、`migration-review`、`safe-backfill-verify`、`slow-endpoint-investigation`。MongoDB 套件：`mongo-safe-backfill`（以 dry-run 預覽的回填）、`mongo-schema-drift-review`（抽樣 dot-path 漂移）。全部為唯讀 `plan-only` — 選擇符合使用者情境的套件，任何索引 / DDL 提案都應先經 `migration-review` 再寫入。Redis/Elasticsearch 目前尚無套件——請改以 `guide` / `report` 為主。
 
 任務檔放在 `assets/tasks/`（內建）、`.dbcli-shared/tasks/`（共享）與 `.dbcli/tasks/`（本地覆寫）。
 
@@ -77,7 +77,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 | DB-backed 功能 | `blacklist list` → `schema <object>` → `queries suggest <intent>` |
 | DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` 或 `--format html` |
 | 應用程式資料錯誤 | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → 最小查詢 |
-| ORM 或 migration | `schema --format json` → `diff --snapshot <name>` → `migrate add-index`/`add-column`（預覽 SQL）→ `diff --against <snapshot>` |
+| ORM 或 migration | `schema --format json` → `diff --against-orm <orm-schema>` → 審查 error-level drift → 透過 `migrate` 取得提案（dry-run）→ `migration-review` task pack → 套用後執行 `diff --against <snapshot>`。 |
 | PR 資料庫風險審查 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
 | 慢 endpoint 或查詢 | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
 | 安全資料回填 | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back 或 snippet `--verify`。 |
@@ -95,6 +95,9 @@ dbcli q @<name> --param k=v --format html > report.html
 dbcli export "<SQL>" --format html --output report.html
 dbcli audit tail --for-agent --n 10
 dbcli diff --snapshot <name>
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
 dbcli report --section perf --format json
 dbcli skill tasks plan analyze-table-perf --param table=<table> --format json
 dbcli guide missing-index-for "<query>" --format json
@@ -242,7 +245,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `export` | query-only+ | SQL、MongoDB 或 **(v1.22)** Elasticsearch（DSL `--index` 或全 index scroll）。Query → `--format json\|jsonl\|csv\|html` 檔案或 stdout。`html` 輸出獨立可互動 dashboard。支援 `--recovery`。 |
 | `blacklist` | n/a | `list` / `table` / `column` 子指令，從查詢結果中遮蔽敏感資料。 |
 | `check` | query-only+ | 僅 SQL（在 MySQL / MariaDB 最佳）。 |
-| `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。 |
+| `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。**(P1b)** `--against-orm <path>` 會將 Prisma schema / DDL 檔 / normalized JSON 與本地 schema cache 比對（不連線 DB）：分類為 `missing_in_db`（error）、`missing_in_orm`（warn）、依 tolerance 表判定的 `mismatch`、以及 `unmanaged`，並提供 dry-run `migrate` 提案；出現 error-level drift 時 exit 1。`--orm-format prisma\|ddl\|json`、`--ignore <globs>`、`--format json\|table\|markdown`。 |
 | `snapshot` | query-only+ | **(v1.25)** 僅 SQL。擷取結果指紋（`rowCount` + 每欄 null/distinct/min/max/sum + 順序無關 checksum）。`--out`（預設 `.dbcli/snapshots/snap-<ts>.json`）、`--rows`、`--stdout`、`--format`、`--no-limit`。作為 `assert --against` 的基準。 |
 | `assert` | query-only+ | **(v1.25)** 僅 SQL。驗證不變量；失敗時 exit 1，除非 `--no-fail`。`--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`、`--vs <query> --compare rows\|value`（對帳）、`--against <snapshot> --tolerance <pct>`。 |
 | `verification` | n/a | 檢視與管理本機驗證 artifact。`list` / `show <id-or-path>` / `summary` 為唯讀；`prune` 預設 dry-run，僅在 `--execute --force` 時刪除。讀取 `<cwd>/.dbcli/verification/`；不需 DB 連線，不寫入 audit log。 |
@@ -260,7 +263,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷（用於注入其他 LLM，正常操作不需要）。 |
 | `migrate` | admin | 僅 SQL。**DDL；預設 dry-run** — 需 `--execute`。 |
 
-任何子指令上的 `--use <name>` 可在不改變預設值的情況下，把目標切到 v2 連線。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect` 與 `lint` 支援（見上方**失敗時**）。
+任何子指令上的 `--use <name>` 可在不改變預設值的情況下，把目標切到 v2 連線。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect`、`lint` 與 `diff --against-orm` 支援（見上方**失敗時**）。
 
 **寫入與查詢旗標語意**（SQL / Mongo `insert`/`update`）：
 

@@ -165,12 +165,37 @@ dbcli delete 'user:42' --where '' --plan --format json
 | :--- | :--- |
 | `doctor` | 執行環境與連線診斷。 |
 | `check [table]` | 分析資料健康度（如孤兒資料、空值、重複項）。 |
-| `diff` | 比較 Schema 快照以偵測結構變動。 |
+| `diff` | 比較 Schema 快照，或透過 `--against-orm` 將 ORM 定義與本地 SQL schema cache 比對。 |
 | `report` | 產生完整的健康、容量與效能報告。 |
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
 | `--recovery`（支援的指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`、`lint` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
+
+#### ORM 定義漂移
+
+`diff --against-orm` 會將 Prisma、DDL 或 normalized JSON 與既有 SQL schema cache 比對。比對本身只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 `schema --format json`；cache 為空時會 exit `1` 並要求執行 `dbcli schema`。
+
+```bash
+dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm "migrations/*.sql" --format markdown
+dbcli diff --against-orm prisma/schema.prisma --recovery --format json
+```
+
+`--against-orm` 可重複使用，也接受逗號分隔路徑。DDL 輸入支援真實 filesystem glob 與多檔；Prisma 與 normalized JSON 只接受一個檔案。用 `--orm-format prisma|ddl|json` 覆寫偵測、`--ignore <globs>` 傳入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。error-level drift 會 exit `1`；`--recovery` 會包裝操作失敗。
+
+Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL 語法會以 `blocked:` 原因出現在 `unparsed`。Index 依結構化欄位與 uniqueness 比對、去重，報告排序穩定。
+
+提案是 shell-safe 文字，預設仍是 dry-run。安全且未 qualified 的欄位/index 新增可產生 `migrate`；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 `migration-review`，不會輸出損壞指令。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：
+
+```sh
+dbcli skill tasks plan migration-review \
+  --param "table=${exact_table}" \
+  --param "ddl=${captured_ddl}"
+```
+
+完成審查前絕不加上 `--execute`。
 
 <!-- doc-key: data-verification -->
 ### 資料驗證
@@ -498,7 +523,7 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 `dbcli completion --install` 採用標記區塊管理：它只會在 shell 設定檔寫入單一管理區塊，
 重新執行時會「取代」該區塊，而不會重複新增。
 
-> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
+> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
 > **`safe-backfill-verify` 任務計畫與 `verification` 區塊。** 執行 `dbcli skill tasks plan safe-backfill-verify --format json` 回傳的計畫 JSON 中包含一個 `verification` 區塊，其 `status` 為 `"planned"`。此區塊描述任務執行時將進行的回讀斷言 — 這是**計畫中**的佐證定義，**而非執行結果**。`status: "planned"` **不代表**驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。
 
@@ -689,7 +714,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 
 - **DB-backed 功能**：編輯程式碼前先把產品/程式語彙對應到真實資料物件（`inspect --for-agent` → `blacklist list` → `schema <object>` → `queries suggest <intent>`）。
 - **應用程式資料錯誤**：分離資料庫事實與應用程式推論（`inspect --for-agent` → `audit tail --for-agent` → `schema <object>` → 最小查詢）。
-- **ORM 或 migration**：用 live schema 證據支撐 model 與 migration 修改（`schema` → `diff --snapshot` → 用 `migrate add-index`/`add-column` 產生 DDL → `diff --against`）。
+- **ORM 或 migration**：用 cached schema 證據支撐 model 與 migration 修改（`schema --format json` → `diff --against-orm <orm-schema>` → 審查 error → dry-run `migrate` 提案 → 用擷取的 DDL 執行 `migration-review` → 套用後以 snapshot 驗證）。
 - **PR 資料庫風險審查**：檢查變更的 persistence path 中 query、write、migration、export、fixture 與 blacklist 風險。
 - **慢 endpoint 或查詢**：在提出 index 前優先使用 read-only diagnostics（`report --section perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時用 `proxy analyze`）。
 - **安全資料回填**：先界定受影響資料範圍並預覽 mutation（`schema` → count/scope query → `update ... --dry-run` → read-back 或 snippet `--verify`）。
@@ -721,6 +746,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標�
 | 全環境效能掃描 | `report --section perf` → `guide slow-query` | _(report + guide,無 pack)_ |
 | 「給 agent 寫權限前先稽核」 | `skill tasks plan audit-permissions`(可選 `--param table=<table>` 抽查欄位覆蓋) | `audit-permissions` |
 | 「線上 schema 跟 committed cache 一致嗎?」 | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |
+| 「這份 ORM 定義跟 cached DB schema 一致嗎？」 | `skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma` | `orm-drift-review` |
 | 「連線健康嗎?」 | `skill tasks plan connection-health` | `connection-health` |
 | 「審這個動到 DB 的 PR」 | `skill tasks plan pr-database-review`;任何 DDL/index 想法先過 `migration-review` 再寫 | `pr-database-review` / `migration-review` |
 | 「安全回填 X 欄位」 | `skill tasks plan safe-backfill-verify --param table=<t> --param query="<UPDATE>" --param verify_query="<SELECT count(*)>"` | `safe-backfill` / `safe-backfill-verify` |
@@ -747,7 +773,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 
 > 此處只列出最常見的三個情境與通用流程，完整失敗代碼對照、Multi-turn `--next`、Risk gate 詳細語意、Audit ↔ Envelope 反查請見 [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs)。
 
-當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
+當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` / `diff --against-orm` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
 
 ### 情境 1：連線失敗（`CONN_REFUSED`）
 

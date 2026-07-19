@@ -93,9 +93,7 @@ const UNSUPPORTED_TABLE_COLLECTIONS = [
 ] as const
 
 export function isDrizzleSnapshot(json: unknown): boolean {
-  return (
-    isObject(json) && json.version === '7' && json.dialect === 'postgresql' && isObject(json.tables)
-  )
+  return isObject(json) && 'version' in json && 'dialect' in json && isObject(json.tables)
 }
 
 export function parseDrizzleSnapshot(json: unknown): NormalizedSchema {
@@ -105,6 +103,24 @@ export function parseDrizzleSnapshot(json: unknown): NormalizedSchema {
 
   if (!isObject(json)) {
     addBlocked(unparsed, 'snapshot', 'drizzle snapshot must be a JSON object')
+    return { source: 'drizzle', tables, unparsed }
+  }
+
+  if (json.version !== '7') {
+    addBlocked(
+      unparsed,
+      'version',
+      `unsupported drizzle snapshot version '${String(json.version)}'; only version '7' is supported`
+    )
+  }
+  if (json.dialect !== 'postgresql') {
+    addBlocked(
+      unparsed,
+      'dialect',
+      `unsupported drizzle snapshot dialect '${String(json.dialect)}'; only 'postgresql' is supported`
+    )
+  }
+  if (unparsed.length > 0) {
     return { source: 'drizzle', tables, unparsed }
   }
 

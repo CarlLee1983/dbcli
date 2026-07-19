@@ -49,6 +49,33 @@ describe('parseDrizzleSnapshot', () => {
     ).toBe(true)
   })
 
+  test('unsupported snapshot version is blocked without producing managed tables', () => {
+    const unsupported = structuredClone(snapshot)
+    unsupported.version = '6'
+
+    const out = parseDrizzleSnapshot(unsupported)
+
+    expect(out.tables).toEqual([])
+    expect(out.unparsed).toContainEqual({
+      location: 'version',
+      reason: "blocked: unsupported drizzle snapshot version '6'; only version '7' is supported",
+    })
+  })
+
+  test('unsupported snapshot dialect is blocked without producing managed tables', () => {
+    const unsupported = structuredClone(snapshot)
+    unsupported.dialect = 'mysql'
+
+    const out = parseDrizzleSnapshot(unsupported)
+
+    expect(out.tables).toEqual([])
+    expect(out.unparsed).toContainEqual({
+      location: 'dialect',
+      reason:
+        "blocked: unsupported drizzle snapshot dialect 'mysql'; only 'postgresql' is supported",
+    })
+  })
+
   test('expression indexes are blocked instead of guessed as column indexes', () => {
     const withExpression = structuredClone(snapshot)
     withExpression.tables['public.users'].indexes.users_email_idx.columns = [
@@ -229,6 +256,8 @@ describe('parseDrizzleSnapshot', () => {
 
   test('isDrizzleSnapshot recognizes the shape', () => {
     expect(isDrizzleSnapshot(snapshot)).toBe(true)
+    expect(isDrizzleSnapshot({ version: '6', dialect: 'postgresql', tables: {} })).toBe(true)
+    expect(isDrizzleSnapshot({ version: '7', dialect: 'mysql', tables: {} })).toBe(true)
     expect(isDrizzleSnapshot({ tables: {} })).toBe(false)
     expect(isDrizzleSnapshot({ source: 'json', tables: {}, unparsed: [] })).toBe(false)
   })

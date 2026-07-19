@@ -8,6 +8,14 @@ const commandStrings = [
   'dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json',
 ] as const
 
+function sectionBetween(document: string, start: string, end: string): string {
+  const startIndex = document.indexOf(start)
+  expect(startIndex).toBeGreaterThanOrEqual(0)
+  const endIndex = document.indexOf(end, startIndex + start.length)
+  expect(endIndex).toBeGreaterThan(startIndex)
+  return document.slice(startIndex, endIndex)
+}
+
 describe('ORM drift documentation contract', () => {
   test('canonical English and Traditional Chinese skills expose the same commands and workflow', async () => {
     const [english, traditionalChinese] = await Promise.all([
@@ -77,33 +85,60 @@ describe('ORM drift documentation contract', () => {
   })
 
   test('user Markdown and polished HTML docs mirror the ORM drift workflow in both languages', async () => {
-    const paths = [
-      'docs/user/en/index.md',
-      'docs/user/zh-TW/index.md',
-      'docs/user/en/index.html',
-      'docs/user/zh-TW/index.html',
-    ]
+    const documents = [
+      {
+        path: 'docs/user/en/index.md',
+        start: '#### ORM definition drift',
+        snapshotPath: 'drizzle/meta/<NNNN>_snapshot.json',
+        typescriptGuidance:
+          'TypeScript ORM schema sources (`.ts` or `.TS`) are rejected with that hint and are not parsed directly.',
+      },
+      {
+        path: 'docs/user/zh-TW/index.md',
+        start: '#### ORM 定義漂移',
+        snapshotPath: 'drizzle/meta/<NNNN>_snapshot.json',
+        typescriptGuidance:
+          'TypeScript ORM schema source（`.ts` 或 `.TS`）不會被直接解析，而是會被拒絕並顯示上述提示。',
+      },
+      {
+        path: 'docs/user/en/index.html',
+        start: '<h4 class="mt-0 mb-3 font-bold text-text-main">ORM definition drift</h4>',
+        snapshotPath: 'drizzle/meta/&lt;NNNN&gt;_snapshot.json',
+        typescriptGuidance:
+          'TypeScript ORM schema sources (<code>.ts</code> or <code>.TS</code>) are rejected with that hint and are not parsed directly.',
+      },
+      {
+        path: 'docs/user/zh-TW/index.html',
+        start: '<h4 class="mt-0 mb-3 font-bold text-text-main">ORM 定義漂移</h4>',
+        snapshotPath: 'drizzle/meta/&lt;NNNN&gt;_snapshot.json',
+        typescriptGuidance:
+          'TypeScript ORM schema source（<code>.ts</code> 或 <code>.TS</code>）不會被直接解析，而是會被拒絕並顯示上述提示。',
+      },
+    ] as const
 
-    for (const path of paths) {
-      const document = await read(path)
-      expect(document).toContain('orm-drift-review')
-      expect(document).toContain('diff --against-orm')
-      expect(document).toContain('migration-review')
-      expect(document).toContain('missing_in_db')
-      expect(document).toContain('missing_in_orm')
-      expect(document).toContain('users')
-      expect(document).toContain('Users')
-      expect(document).toContain('--recovery')
-      expect(document).toContain('Drizzle')
-      expect(document).toContain('PostgreSQL drizzle-kit v7 snapshot')
-      expect(document).toContain('drizzle/meta/')
-      expect(document).toContain('_snapshot.json')
-      expect(document).toContain('drizzle-kit generate')
-      expect(document).toContain('--orm-format prisma|ddl|json|drizzle')
-      expect(document).toContain('.ts')
-      expect(document).toContain('enum')
-      expect(document).toContain('unparsed')
-      expect(document).toContain('blocked:')
+    for (const { path, start, snapshotPath, typescriptGuidance } of documents) {
+      const section = sectionBetween(await read(path), start, '<!-- doc-key: data-verification -->')
+      for (const text of [
+        'orm-drift-review',
+        'diff --against-orm',
+        'migration-review',
+        'missing_in_db',
+        'missing_in_orm',
+        'users',
+        'Users',
+        '--recovery',
+        'Drizzle',
+        'PostgreSQL drizzle-kit v7 snapshot',
+        snapshotPath,
+        'drizzle-kit generate',
+        '--orm-format prisma|ddl|json|drizzle',
+        typescriptGuidance,
+        'enum',
+        'unparsed',
+        'blocked:',
+      ]) {
+        expect(section).toContain(text)
+      }
     }
   })
 })

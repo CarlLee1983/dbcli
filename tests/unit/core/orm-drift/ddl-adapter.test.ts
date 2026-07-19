@@ -356,4 +356,22 @@ describe('detectOrmFormat', () => {
     const snapshot = '{"version":"7","dialect":"postgresql","tables":{}}'
     expect(detectOrmFormat('drizzle/meta/0001_snapshot.json', snapshot)).toBe('drizzle')
   })
+
+  test('routes unsupported drizzle snapshot shapes to the fail-closed drizzle parser', () => {
+    expect(
+      detectOrmFormat(
+        'drizzle/meta/0001_snapshot.json',
+        '{"version":"6","dialect":"postgresql","tables":{}}'
+      )
+    ).toBe('drizzle')
+    expect(
+      detectOrmFormat(
+        'drizzle/meta/0001_snapshot.json',
+        '{"version":"7","dialect":"mysql","tables":{}}'
+      )
+    ).toBe('drizzle')
+    expect(
+      detectOrmFormat('schema.normalized.json', '{"source":"json","tables":[],"unparsed":[]}')
+    ).toBe('json')
+  })
 })

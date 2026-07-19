@@ -111,6 +111,32 @@ describe('runDrift', () => {
     expect(report.ormSource).toBe('drizzle')
   })
 
+  test('forced unsupported drizzle snapshot fails closed with version and dialect guidance', async () => {
+    const unsupported = structuredClone(
+      JSON.parse(await Bun.file('tests/fixtures/orm-drift/drizzle-snapshot.json').text())
+    )
+    unsupported.version = '6'
+    unsupported.dialect = 'mysql'
+    const path = await write('unsupported-snapshot.json', JSON.stringify(unsupported))
+
+    const { report } = await runDrift([path], { ormFormat: 'drizzle' }, config as never)
+
+    expect(report.ormSource).toBe('drizzle')
+    expect(report.entries.some((entry) => entry.category === 'missing_in_db')).toBe(false)
+    expect(report.unparsed).toEqual(
+      expect.arrayContaining([
+        {
+          location: 'version',
+          reason: expect.stringMatching(/^blocked:.*version '6'.*version '7'/),
+        },
+        {
+          location: 'dialect',
+          reason: expect.stringMatching(/^blocked:.*dialect 'mysql'.*'postgresql'/),
+        },
+      ])
+    )
+  })
+
   test('.ts schema file gets a drizzle-kit hint before attempting to read it', async () => {
     await expect(
       runDrift([join(tempDir, 'missing-schema.TS')], {}, config as never)

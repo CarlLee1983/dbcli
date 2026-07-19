@@ -990,7 +990,7 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 | :--- | :--- | :--- |
 | `--format text\|json\|markdown` | `text` | 選擇文字、機器可讀 JSON 或 Markdown 報告。 |
 | `--min-severity info\|warn\|error` | `info` | 隱藏低於所選嚴重度的 findings。 |
-| `--no-schema` | 關閉 | 不讀取 schema 快取路徑，並跳過 schema-aware 規則。 |
+| `--no-schema` | 關閉 | 不讀取 schema 快取路徑；跳過純 schema 檢查，但保留靜態 `NOT IN` NULL 檢查。 |
 | `--bulk <input>` | 無 | 解析以逗號分隔的 `@file`、`@glob` 與 `@saved-query` 混合輸入。 |
 | `--recovery` | 關閉 | 指令失敗時輸出並儲存已連結的 recovery envelope。 |
 
@@ -1006,7 +1006,7 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 | `subquery-to-join` | info | `IN (SELECT …)` 可能適合語意等價的 `EXISTS`，或已證明唯一的 JOIN。 |
 | `distinct-groupby-abuse` | warn | 簡單投影欄位完整涵蓋 `GROUP BY` 時，多餘的 `DISTINCT`。 |
 | `implicit-cast` | warn | 經 schema 驗證的欄位/常值型別不符，可能讓索引失效。 |
-| `not-in-nullable` | warn | `NOT IN` 右側為 NULL 或可能是 nullable：明確的 `NULL`、nullable 的 subquery 投影，或型別資訊已知且可為 NULL 的其他 RHS 運算式。 |
+| `not-in-nullable` | warn | `NOT IN` 右側為 NULL 或可能是 nullable：明確的 `NULL`、outer join 補出的 NULL、nullable subquery 投影，或已知可為 NULL 的 CASE／cast／aggregate 運算式。 |
 
 `not-in-nullable` 專門描述 SQL 中右側「NULL 污染 `NOT IN`」的風險。
 左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以
@@ -1014,18 +1014,20 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取
 `NOT EXISTS`。除非 correlation、型別、qualified-column 解析與 rewrite
 目標都明確，dbcli 不會自動執行此 rewrite。若 subquery 以直接條件或
 `AND` 組合對完全相同的投影運算式套用 `IS NOT NULL`，則不會回報；
-位於 `OR` 下或運算式解析不明確時仍保守回報。
+aggregate 投影也會在 `HAVING` 套用同一證明。位於 `OR` 下或運算式
+解析不明確時仍保守回報。
 
 解析失敗時，九條規則都會列為 `blocked: parse failed`。使用
-`--no-schema` 時，`implicit-cast` 與 `not-in-nullable` 會列為
-`blocked: --no-schema`；分層快取不存在時則列為
+`--no-schema` 時會跳過 `implicit-cast`，並以 `blocked: --no-schema`
+標記 `not-in-nullable` 無法執行的 schema 部分；明確 NULL 與其他結構上
+已知的 RHS 風險仍會執行。分層快取不存在時，無法執行的 schema 檢查會列為
 `blocked: schema cache unavailable (run dbcli schema)`。Finding 可包含
 有 confidence 標籤的 SQL 草稿與 shell-safe 驗證指令。只有結構上已證明
-唯讀且不含明確 function／table-function call 的 SQL 才會使用
-`dbcli explain --analyze`；其他語句會退回 plain `dbcli explain`。若快取
-中的 table 或 column 名稱經大小寫折疊後衝突，由於 parser 無法提供可靠的
-quote provenance，schema-aware finding 與 rewrite 都會保守略過。兩種
-指令都只供回報參考，絕不會自動執行。
+唯讀且不含明確 function／table-function call 或 session assignment 的
+SQL 才會使用 `dbcli explain --analyze`；其他語句會退回 plain
+`dbcli explain`。若 identifier 經大小寫折疊後衝突，或 relation 是 CTE、
+derived、schema-qualified 或 database-qualified binding，則不會套用
+unqualified cache facts。兩種指令都只供回報參考，絕不會自動執行。
 
 ## 缺失索引建議 — `dbcli guide missing-index-for`
 

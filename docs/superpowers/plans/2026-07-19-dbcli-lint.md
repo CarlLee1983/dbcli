@@ -4,7 +4,7 @@
 
 **Goal:** Add `dbcli lint` — a static, schema-aware SQL anti-pattern advisor that reports findings with rewrite drafts and verify commands, never executing anything.
 
-**Architecture:** A rule engine in `src/core/lint/` parses SQL with `node-sql-parser` (existing dependency, same wrapper pattern as `src/core/guide/missing-index/parse-sql.ts`), runs one-file-per-rule checks, and enriches schema-aware rules from the layered local cache under `.dbcli/schemas/` through the existing `SchemaLayeredLoader` abstraction. The existing global `--use <conn>` option selects the per-connection cache directory. A thin command layer (`src/commands/lint.ts`) reuses `resolveBulkInputs` from the explain bulk-runner for `@snippet` / `@file` / `--bulk` inputs, and wires audit + `--recovery` following the existing `plan.ts` / `schema.ts` patterns.
+**Architecture:** A rule engine in `src/core/lint/` parses SQL with `node-sql-parser` (existing dependency, same wrapper pattern as `src/core/guide/missing-index/parse-sql.ts`), runs one module per rule, and enriches schema-aware rules from the layered local cache under `.dbcli/schemas/` through the existing `SchemaLayeredLoader` abstraction. The existing global `--use <conn>` option selects the per-connection cache directory. A thin command layer (`src/commands/lint.ts`) reuses `resolveBulkInputs` from the explain bulk-runner for `@snippet` / `@file` / `--bulk` inputs, and wires audit + `--recovery` following the existing `plan.ts` / `schema.ts` patterns.
 
 **Tech Stack:** Bun + TypeScript ESM, commander 13, node-sql-parser 5, zod (config already validated upstream), `bun test`.
 
@@ -26,9 +26,10 @@
 - The design spec governs schema architecture: layered files under `.dbcli/schemas/` are loaded through `SchemaLayeredLoader`; references to `config.schema` in the original plan were an oversight.
 - The design spec governs the CLI surface: `--use <conn>` remains available as the existing global option and selects the named connection plus its isolated schema cache.
 - The grouped rule-test files in Tasks 3–5 are an approved plan-level organization choice, provided each rule retains clearly named, independently executable test cases.
-- The `not-in-nullable` rule detects the actual SQL NULL hazard on the right-hand side of `NOT IN`: explicit NULL list items, nullable subquery projections, and other RHS expressions known nullable from schema facts. Nullable left-hand columns are not findings for this rule. A nullable projection is not reported when the subquery `WHERE` provably null-rejects that exact expression with `IS NOT NULL` directly or under `AND`; `OR` and ambiguous expressions remain conservative findings. Subquery remediation prefers filtering the projection with `IS NOT NULL`; `NOT EXISTS` is suggested only when correlation and semantics are unambiguous, and is never auto-rewritten by this rule.
-- Safety refinement approved during final review: `--analyze` is suggested only for structurally proven read-only, function-free `SELECT` / SELECT-only CTE statements. DML, DDL, data-modifying CTEs, any explicit function or table-function call (including unknown UDFs), parse failures, and otherwise uncertain SQL receive plain `dbcli explain`; `explain --analyze` rejects them before any adapter call.
+- The `not-in-nullable` rule detects the actual SQL NULL hazard on the right-hand side of `NOT IN`: explicit NULL list items, nullable subquery projections, outer-join null extension, and other RHS expressions known nullable from schema or structure (including null-propagating casts, missing-`ELSE` CASE expressions, and null-on-empty aggregates). Nullable left-hand columns are not findings for this rule. Static hazards still run without a cache; only schema-enriched checks are recorded as blocked. A nullable projection is not reported when the subquery `WHERE` or applicable aggregate `HAVING` clause provably null-rejects that exact expression with `IS NOT NULL` directly or under `AND`; `OR` and ambiguous expressions remain conservative findings. Subquery remediation prefers filtering the projection with `IS NOT NULL`; `NOT EXISTS` is suggested only when correlation and semantics are unambiguous, and is never auto-rewritten by this rule.
+- Safety refinement approved during final review: `--analyze` is suggested only for structurally proven read-only, function-free `SELECT` / SELECT-only CTE statements. DML, DDL, data-modifying CTEs, session-variable assignments, any explicit function or table-function call (including unknown UDFs), parse failures, and otherwise uncertain SQL receive plain `dbcli explain`; `explain --analyze` rejects them before any adapter call.
 - Identifier-resolution refinement approved during final review: because the current parser does not retain reliable quote provenance, any folded table or column collision is unresolved even when one spelling is an exact match. Schema-aware findings and rewrites must fail closed for that collision bucket; unique case-insensitive resolution remains supported.
+- Relation-resolution refinement approved during final review: the unqualified schema cache must not be used for CTE, derived, schema-qualified, or database-qualified relations. Schema-aware findings and high-confidence rewrites are withheld unless the binding is proven to be an unambiguous unqualified physical table.
 
 ## File Structure (final state)
 
@@ -79,7 +80,7 @@ tests/unit/formatters/lint.test.ts
   - `LintFinding { rule: string; severity: LintSeverity; message: string; span: { start: number; end: number }; rewrite?: { sql: string; confidence: 'high' | 'medium' | 'low' }; verifyCommand?: string; schemaVerified: boolean }`
   - `LintReport { sql: string; label?: string; dialect: SqlDatabaseSystem; findings: LintFinding[]; skippedRules: { rule: string; reason: string }[]; relatedCommands: string[]; parseError?: string }`
   - `LintRuleContext { system: SqlDatabaseSystem; sql: string; ast: AstNode; schema: SchemaContext }` (SchemaContext lands in Task 2; declare it here as an interface)
-  - `LintRule { name: string; requiresSchema: boolean; check(ctx: LintRuleContext): LintFinding[] }`
+  - `LintRule { name: string; requiresSchema: boolean; usesOptionalSchema?: boolean; check(ctx: LintRuleContext): LintFinding[] }`
   - `parseSingleStatement(sql: string, system: SqlDatabaseSystem): AstNode` (throws `ParseFailure`)
   - `walkExpr(node, visit)`, `whereOf(ast)`, `collectTables(ast)`, `findingSpan(sql, fragment)`
 
@@ -168,7 +169,7 @@ export interface LintReport {
 export interface SchemaContext {
   available: boolean
   getTable(name: string): TableSchema | undefined
-  /** Resolve a column across candidate tables; first match wins. */
+  /** Resolve a column across candidate tables only when the match is unambiguous. */
   resolveColumn(
     tables: string[],
     column: string
@@ -185,6 +186,7 @@ export interface LintRuleContext {
 export interface LintRule {
   name: string
   requiresSchema: boolean
+  usesOptionalSchema?: boolean
   check(ctx: LintRuleContext): LintFinding[]
 }
 
@@ -966,7 +968,7 @@ git commit -m "feat: add non-sargable, or-to-union, subquery, distinct-groupby l
 
 ---
 
-### Task 5: Schema-aware rules — implicit-cast, not-in-nullable
+### Task 5: Schema-enriched rules — implicit-cast, not-in-nullable
 
 **Files:**
 - Create: `src/core/lint/rules/implicit-cast.ts`
@@ -975,7 +977,13 @@ git commit -m "feat: add non-sargable, or-to-union, subquery, distinct-groupby l
 
 **Interfaces:**
 - Consumes: Tasks 1–2 (`SchemaContext.resolveColumn`, `collectTables`).
-- Produces: `implicitCastRule`, `notInNullableRule` — both with `requiresSchema: true`. The engine (Task 6) skips `requiresSchema` rules when `!schema.available` and records them in `skippedRules`; therefore these rules may assume `ctx.schema.available === true`.
+- Produces: `implicitCastRule` with `requiresSchema: true`, plus the hybrid
+  `notInNullableRule` with `requiresSchema: false` and `usesOptionalSchema: true`.
+  The latter always runs static RHS checks (for example, an explicit `NULL`,
+  missing-`ELSE` `CASE`, or a null-on-empty aggregate) and adds cache-backed
+  checks when schema data is available. When schema is unavailable or disabled,
+  the engine records the blocked schema-enrichment portion in `skippedRules`
+  without suppressing static findings.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1046,7 +1054,7 @@ describe('not-in-nullable', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0].severity).toBe('warn')
     expect(findings[0].message).toContain('NULL')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0].schemaVerified).toBe(false)
   })
 
   test('flags a subquery whose projected column is nullable', () => {
@@ -1171,17 +1179,22 @@ export const implicitCastRule: LintRule = {
 // Required implementation behavior:
 // 1. Walk WHERE for binary_expr nodes whose operator is NOT IN.
 // 2. Inspect only n.right. A nullable n.left is not a finding.
-// 3. For expr_list values, flag explicit null nodes and column/expression nodes
-//    whose referenced schema column is nullable.
+// 3. For expr_list values, flag explicit null nodes; statically nullable
+//    structures such as missing-ELSE CASE, null-propagating casts, and
+//    null-on-empty aggregates; and column/expression nodes whose referenced
+//    schema column is nullable.
 // 4. For subquery wrappers (`value[i].ast`), inspect the SELECT projection in
 //    that subquery's own FROM/alias scope. Flag a direct nullable projected
 //    column; do not infer nullability from unrelated WHERE/JOIN expressions.
 // 5. Preserve table qualifiers/aliases when resolving columns. If a qualified
 //    reference cannot be resolved unambiguously, skip it.
-// 6. Emit a warn finding with schemaVerified true and no rewrite. For a
-//    subquery, prefer `WHERE projected_column IS NOT NULL`; mention NOT EXISTS
-//    only when correlation, type classification, and multiplicity semantics
-//    can be preserved. Never auto-rewrite to NOT EXISTS.
+// 6. Treat an exact `IS NOT NULL` predicate directly or under AND in the
+//    subquery WHERE (or HAVING for aggregates) as a guard; OR is not proof.
+// 7. Emit a warn finding with schemaVerified reflecting the evidence source and
+//    no rewrite. For a subquery, prefer `WHERE projected_column IS NOT NULL`;
+//    mention NOT EXISTS only when correlation, type classification, qualified
+//    column resolution, rewrite targeting, and multiplicity semantics can be
+//    preserved. Never auto-rewrite to NOT EXISTS.
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1212,7 +1225,10 @@ git commit -m "feat: add schema-aware implicit-cast and not-in-nullable lint rul
 
 Behavior contract:
 - Parse failure → report with `parseError` set, empty `findings`, all rules listed in `skippedRules` with reason `blocked: parse failed`.
-- `requiresSchema` rules skipped when `noSchema` or schema unavailable, each recorded as `{ rule, reason: 'blocked: schema cache unavailable (run dbcli schema)' }` (or `'blocked: --no-schema'`).
+- `requiresSchema` rules are skipped when `noSchema` or schema is unavailable,
+  each recorded as `{ rule, reason: 'blocked: schema cache unavailable (run dbcli schema)' }`
+  (or `'blocked: --no-schema'`). Rules with `usesOptionalSchema` are also
+  recorded with that blocked reason, but still execute their static checks.
 - `minSeverity` filters findings (`info` < `warn` < `error`).
 - `relatedCommands` always includes the guide command and an explain command with the actual SQL substituted. The explain command includes `--analyze` only for a structurally proven read-only statement; uncertain or write-capable SQL uses plain `dbcli explain`.
 
@@ -1258,9 +1274,12 @@ describe('lintSql', () => {
     expect(report.parseError).toBeUndefined()
   })
 
-  test('skips schema rules without cache, with blocked reason', () => {
-    const report = lintSql("SELECT id FROM users WHERE id = '1'", { system: 'postgresql' })
+  test('skips required schema rules but retains hybrid static findings without cache', () => {
+    const report = lintSql('SELECT id FROM users WHERE id NOT IN (1, NULL)', {
+      system: 'postgresql',
+    })
     expect(report.findings.map((f) => f.rule)).not.toContain('implicit-cast')
+    expect(report.findings.map((f) => f.rule)).toContain('not-in-nullable')
     for (const rule of ['implicit-cast', 'not-in-nullable']) {
       const skipped = report.skippedRules.find((s) => s.rule === rule)
       expect(skipped?.reason).toBe('blocked: schema cache unavailable (run dbcli schema)')
@@ -1281,6 +1300,16 @@ describe('lintSql', () => {
     })
     expect(noSchema.findings.map((f) => f.rule)).not.toContain('implicit-cast')
     expect(noSchema.skippedRules.find((s) => s.rule === 'implicit-cast')?.reason).toBe(
+      'blocked: --no-schema'
+    )
+
+    const hybrid = lintSql('SELECT id FROM users WHERE id NOT IN (1, NULL)', {
+      system: 'postgresql',
+      schema,
+      noSchema: true,
+    })
+    expect(hybrid.findings.map((f) => f.rule)).toContain('not-in-nullable')
+    expect(hybrid.skippedRules.find((s) => s.rule === 'not-in-nullable')?.reason).toBe(
       'blocked: --no-schema'
     )
   })

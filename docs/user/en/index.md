@@ -1065,7 +1065,7 @@ never connects to refresh missing metadata.
 | :--- | :--- | :--- |
 | `--format text\|json\|markdown` | `text` | Select human text, machine JSON, or Markdown reports. |
 | `--min-severity info\|warn\|error` | `info` | Hide findings below the selected severity. |
-| `--no-schema` | off | Do not read schema-cache paths; skip schema-aware rules. |
+| `--no-schema` | off | Do not read schema-cache paths; skip schema-only checks while retaining static `NOT IN` NULL checks. |
 | `--bulk <input>` | none | Resolve a comma-separated mix of `@file`, `@glob`, and `@saved-query` inputs. |
 | `--recovery` | off | On command failure, emit and save a linked recovery envelope. |
 
@@ -1081,7 +1081,7 @@ never connects to refresh missing metadata.
 | `subquery-to-join` | info | `IN (SELECT …)` that may benefit from a semantics-preserving `EXISTS` or proven-unique JOIN. |
 | `distinct-groupby-abuse` | warn | Redundant `DISTINCT` when projected simple columns exactly cover `GROUP BY`. |
 | `implicit-cast` | warn | A schema-verified column/literal type mismatch that can disable index use. |
-| `not-in-nullable` | warn | A right-hand `NOT IN` value that is NULL or may be nullable: an explicit `NULL`, a nullable subquery projection, or another RHS expression whose nullable type is known. |
+| `not-in-nullable` | warn | A right-hand `NOT IN` value that is NULL or may be nullable: explicit `NULL`, outer-join null extension, a nullable subquery projection, or a known nullable CASE/cast/aggregate expression. |
 
 `not-in-nullable` is specifically the SQL “NULL poisons `NOT IN`” hazard on
 the right-hand side. A nullable left-hand column is not this rule. For a
@@ -1090,20 +1090,22 @@ subquery, filter its projected value with `IS NOT NULL`, or consider
 not automatically perform that rewrite unless correlation, types,
 qualified-column resolution, and rewrite targeting are all unambiguous. A
 direct or `AND`-conjoined `IS NOT NULL` filter on the exact projected
-expression suppresses the finding; `OR` and ambiguous matches remain
-conservative findings.
+expression suppresses the finding; aggregate projections also honor the same
+proof in `HAVING`. `OR` and ambiguous matches remain conservative findings.
 
 Parse failures list all nine rules as `blocked: parse failed`. With
-`--no-schema`, `implicit-cast` and `not-in-nullable` are listed as
-`blocked: --no-schema`; when the layered cache is unavailable they are listed
-as `blocked: schema cache unavailable (run dbcli schema)`. Findings may include
-confidence-labelled SQL drafts and shell-safe verification commands.
+`--no-schema`, `implicit-cast` is skipped and the schema-dependent portion of
+`not-in-nullable` is listed as `blocked: --no-schema`; explicit NULL and other
+structurally known RHS hazards still run. A missing layered cache reports
+`blocked: schema cache unavailable (run dbcli schema)` for the unavailable
+schema checks. Findings may include confidence-labelled SQL drafts and
+shell-safe verification commands.
 `dbcli explain --analyze` is emitted only for structurally proven read-only
-SQL without explicit function or table-function calls; other statements fall
-back to plain `dbcli explain`. If cached table or column names collide after
-case folding, schema-aware findings and rewrites are withheld because parser
-quote provenance cannot disambiguate them. Both command forms are report-only
-suggestions and are never run.
+SQL without explicit function calls, table-function calls, or session-variable
+assignments; other statements fall back to plain `dbcli explain`. If cached
+identifiers collide after case folding, or a relation is a CTE, derived,
+schema-qualified, or database-qualified binding, unqualified cache facts are
+withheld. Both command forms are report-only suggestions and are never run.
 
 ## Missing-index advisor — `dbcli guide missing-index-for`
 

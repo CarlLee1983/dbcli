@@ -45,7 +45,7 @@ src/core/lint/
     non-sargable-where.ts      # 函數包欄位、前綴 % LIKE、欄位參與運算
     implicit-cast.ts           # schema-aware:字面值型別 vs 欄位型別
     or-to-union.ts
-    not-in-nullable.ts         # schema-aware:NOT IN 對 nullable 欄位
+    not-in-nullable.ts         # hybrid:NOT IN 右側靜態 NULL + schema-aware nullable
     missing-limit-offset.ts    # 深分頁 OFFSET → keyset pagination 建議
     unanchored-like.ts
     subquery-to-join.ts
@@ -77,13 +77,18 @@ cache 跳過時,以 `blocked` 語意註明原因)、`relatedCommands[]`(指向
 ### Schema-aware 降級語意
 
 - 有 schema cache → 型別/索引相關規則啟用,`schemaVerified: true`。
-- 無 cache 或 `--no-schema` → 該類規則跳過並列入 `skippedRules`。
+- 無 cache 或 `--no-schema` → 純 schema 規則跳過；hybrid 規則仍跑靜態
+  NULL/CASE/aggregate 檢查，並把無法執行的 schema 部分列入 `skippedRules`。
 - 不連 DB、只讀 `.dbcli/schemas/`;權限需求 `n/a`(同 `plan`)。
 - parser 無法可靠保留 identifier quote provenance 時，大小寫折疊後衝突的
   table/column 一律視為無法解析，不因字面 exact match 產生 schema-aware
   finding 或 rewrite。
 - `explain --analyze` 驗證只適用於結構上證明為唯讀且不含明確 function /
-  table-function call 的 `SELECT`；function-bearing SQL 保守使用 plain explain。
+  table-function call 或 session assignment 的 `SELECT`；function-bearing 或
+  assignment SQL 保守使用 plain explain。
+- CTE、derived relation、schema/database-qualified relation 不得套用只含
+  unqualified table 名稱的 cache facts；無法證明 binding 時不產生
+  schema-aware finding 或 high-confidence rewrite。
 
 ### 引擎範圍
 

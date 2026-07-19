@@ -196,7 +196,7 @@ dbcli explain --bulk @analytics/*                     # glob over saved queries
 >   structurally proven to be a read-only, function-free `SELECT` (including
 >   SELECT-only CTEs). Explicit function and table-function calls are unproven
 >   because user-defined and built-in functions may have side effects. DML, DDL,
->   data-modifying CTEs, function-bearing SQL, and unrecognized SQL are rejected
+>   data-modifying CTEs, session assignments, function-bearing SQL, and unrecognized SQL are rejected
 >   before the adapter is invoked; use plain `dbcli explain` for those statements.
 > - Auto-`LIMIT` is **not** applied to EXPLAIN statements (since v1.23 P1).
 
@@ -229,7 +229,7 @@ dbcli --use staging lint @analytics/live-summary --min-severity warn
 |---|---|---|
 | `--format <text\|json\|markdown>` | `text` | Render one report per resolved input. |
 | `--min-severity <info\|warn\|error>` | `info` | Omit findings below the selected severity. |
-| `--no-schema` | off | Skip all schema-aware rules without reading schema-cache paths. |
+| `--no-schema` | off | Skip schema-only checks without reading schema-cache paths; static `NOT IN` NULL checks still run. |
 | `--bulk <input>` | none | Resolve a comma-separated list of `@file`, `@glob`, or `@saved-query` inputs. |
 | `--recovery` | off | On command failure, emit and save a linked `RecoveryEnvelope`. |
 | global `--use <conn>` | configured default | Select a v2 named connection and its isolated cache; place it before `lint`: `dbcli --use <conn> lint …`. |
@@ -246,10 +246,11 @@ dbcli --use staging lint @analytics/live-summary --min-severity warn
 | `subquery-to-join` | info | `IN (SELECT …)` where an equivalent `EXISTS`, or a JOIN with proven uniqueness/deduplication, may plan better. |
 | `distinct-groupby-abuse` | warn | Redundant `DISTINCT` when simple projected columns exactly cover the `GROUP BY` columns. |
 | `implicit-cast` | warn | A schema-verified column/literal type mismatch that can disable index use; safe, unambiguous numeric drafts may be included. |
-| `not-in-nullable` | warn | A right-hand `NOT IN` value that can be NULL: an explicit `NULL`, a nullable subquery projection, or another nullable RHS expression when type information is available. A nullable left-hand column is not this rule. |
+| `not-in-nullable` | warn | A right-hand `NOT IN` value that can be NULL: explicit `NULL`, outer-join null extension, a nullable subquery projection, or a known nullable CASE/cast/aggregate expression. A nullable left-hand column is not this rule. |
 
-`implicit-cast` and `not-in-nullable` read the selected cache through the schema
-loader abstraction. All schema caches live beneath `.dbcli/schemas/`. A v2
+`implicit-cast` and the schema-enriched portion of `not-in-nullable` read the
+selected cache through the schema loader abstraction. Static `not-in-nullable`
+checks still run without it. All schema caches live beneath `.dbcli/schemas/`. A v2
 configuration always uses `.dbcli/schemas/<resolved-connection>/`, including
 the configured default. The root `.dbcli/schemas/` directory is only the
 v1/legacy unnamed cache. Global `dbcli --use <conn> lint …` selects another
@@ -260,16 +261,18 @@ Skipped rules are returned with machine-readable `blocked:` reasons:
 
 - Invalid SQL blocks all nine rules with `blocked: parse failed` and includes
   `parseError`.
-- `--no-schema` blocks both schema-aware rules with
-  `blocked: --no-schema`.
-- A missing layered cache blocks both schema-aware rules with
-  `blocked: schema cache unavailable (run dbcli schema)`.
+- `--no-schema` blocks `implicit-cast` and the schema-dependent portion of
+  `not-in-nullable` with `blocked: --no-schema`; static RHS hazards still run.
+- A missing layered cache records
+  `blocked: schema cache unavailable (run dbcli schema)` for those unavailable
+  schema checks while retaining static RHS findings.
 
 Every finding includes its rule, severity, source span, message, and
 `schemaVerified` state. Some findings also carry a confidence-labelled rewrite
 draft and a shell-safe verification command. It uses
 `dbcli explain --analyze` only when the statement is structurally proven read-only;
-function-bearing statements are unproven, so lint falls back to plain `dbcli explain`.
+function-bearing and session-assignment statements are unproven, so lint falls back
+to plain `dbcli explain`.
 These are
 suggestions only: `lint` neither executes the verification command nor changes
 the query.
@@ -277,15 +280,17 @@ the query.
 When schema identifiers collide after case folding, schema-aware findings and
 rewrites are withheld. The SQL parser does not preserve reliable quote
 provenance, so an exact-looking mixed-case AST identifier cannot disambiguate
-that collision.
+that collision. CTE, derived, schema-qualified, and database-qualified
+relations also never borrow facts from the unqualified cache.
 
 For `not-in-nullable`, remove or filter right-hand NULL values. In a subquery,
 filter the projected value with `IS NOT NULL`; `NOT EXISTS` may be a better
 semantic form when appropriate. dbcli does not automatically rewrite this case
 unless correlation, type classification, qualified-column resolution, and the
 rewrite target are all unambiguous. A direct or `AND`-conjoined `IS NOT NULL`
-filter on the exact projected expression suppresses the finding; filters under
-`OR` or ambiguous expression matches do not.
+filter on the exact projected expression suppresses the finding; aggregates
+apply the same proof in `HAVING`. Filters under `OR` or ambiguous expression
+matches do not.
 
 Trimmed JSON example:
 

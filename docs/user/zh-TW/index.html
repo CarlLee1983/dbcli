@@ -973,7 +973,7 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取<
     <tbody>
       <tr><td><code>--format text|json|markdown</code></td><td><code>text</code></td><td>文字、機器可讀 JSON 或 Markdown 報告。</td></tr>
       <tr><td><code>--min-severity info|warn|error</code></td><td><code>info</code></td><td>隱藏低於所選嚴重度的 findings。</td></tr>
-      <tr><td><code>--no-schema</code></td><td>關閉</td><td>不讀取 schema 快取路徑，並跳過 schema-aware 規則。</td></tr>
+      <tr><td><code>--no-schema</code></td><td>關閉</td><td>不讀取 schema 快取路徑；跳過純 schema 檢查，但保留靜態 <code>NOT IN</code> NULL 檢查。</td></tr>
       <tr><td><code>--bulk &lt;input&gt;</code></td><td>無</td><td>解析逗號分隔的 <code>@file</code>、<code>@glob</code> 與 <code>@saved-query</code> 混合輸入。</td></tr>
       <tr><td><code>--recovery</code></td><td>關閉</td><td>失敗時輸出並儲存已連結的 recovery envelope。</td></tr>
     </tbody>
@@ -990,11 +990,11 @@ dbcli --use staging lint @analytics/live-summary --format json   # 命名快取<
       <tr><td><code>subquery-to-join</code></td><td>info</td><td><code>IN (SELECT …)</code> 可能適合語意等價的 <code>EXISTS</code>，或已證明唯一的 JOIN。</td></tr>
       <tr><td><code>distinct-groupby-abuse</code></td><td>warn</td><td>簡單投影欄位完整涵蓋 <code>GROUP BY</code> 時，多餘的 <code>DISTINCT</code>。</td></tr>
       <tr><td><code>implicit-cast</code></td><td>warn</td><td>經 schema 驗證的欄位/常值型別不符，可能讓索引失效。</td></tr>
-      <tr><td><code>not-in-nullable</code></td><td>warn</td><td><code>NOT IN</code> 右側為 NULL 或可能是 nullable：明確的 <code>NULL</code>、nullable subquery 投影，或已知可為 NULL 的 typed RHS 運算式。</td></tr>
+      <tr><td><code>not-in-nullable</code></td><td>warn</td><td><code>NOT IN</code> 右側為 NULL 或可能是 nullable：明確的 <code>NULL</code>、outer join 補出的 NULL、nullable subquery 投影，或已知可為 NULL 的 CASE／cast／aggregate 運算式。</td></tr>
     </tbody>
   </table>
-  <p><code>not-in-nullable</code> 專門描述 SQL 右側「NULL 污染 <code>NOT IN</code>」的風險；左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以 <code>IS NOT NULL</code> 過濾投影值；在 correlation 與語意合適時，也可考慮 <code>NOT EXISTS</code>。除非 correlation、型別、qualified-column 解析與 rewrite 目標都明確，dbcli 不會自動執行此 rewrite。若 subquery 以直接條件或 <code>AND</code> 組合對完全相同的投影運算式套用 <code>IS NOT NULL</code>，則不會回報；位於 <code>OR</code> 下或解析不明確時仍保守回報。</p>
-  <p>解析失敗時，九條規則都會列為 <code>blocked: parse failed</code>。<code>--no-schema</code> 會以 <code>blocked: --no-schema</code> 跳過 <code>implicit-cast</code> 與 <code>not-in-nullable</code>；分層快取不存在時則回報 <code>blocked: schema cache unavailable (run dbcli schema)</code>。有 confidence 標籤的草稿與 shell-safe 驗證指令都只供回報參考，絕不會自動執行。只有結構上已證明唯讀且不含明確 function／table-function call 的 SQL 才會使用 <code>dbcli explain --analyze</code>；其他語句會退回 plain <code>dbcli explain</code>。若快取中的 table 或 column 名稱經大小寫折疊後衝突，由於 parser 無法提供可靠的 quote provenance，schema-aware finding 與 rewrite 都會保守略過。</p>
+  <p><code>not-in-nullable</code> 專門描述 SQL 右側「NULL 污染 <code>NOT IN</code>」的風險；左側欄位可為 NULL 並不屬於這條規則。若右側是 subquery，應以 <code>IS NOT NULL</code> 過濾投影值；在 correlation 與語意合適時，也可考慮 <code>NOT EXISTS</code>。除非 correlation、型別、qualified-column 解析與 rewrite 目標都明確，dbcli 不會自動執行此 rewrite。若 subquery 以直接條件或 <code>AND</code> 組合對完全相同的投影運算式套用 <code>IS NOT NULL</code>，則不會回報；aggregate 投影也會在 <code>HAVING</code> 套用同一證明。位於 <code>OR</code> 下或解析不明確時仍保守回報。</p>
+  <p>解析失敗時，九條規則都會列為 <code>blocked: parse failed</code>。<code>--no-schema</code> 會跳過 <code>implicit-cast</code>，並以 <code>blocked: --no-schema</code> 標記 <code>not-in-nullable</code> 無法執行的 schema 部分；明確 NULL 與其他結構上已知的 RHS 風險仍會執行。分層快取不存在時，無法執行的 schema 檢查會回報 <code>blocked: schema cache unavailable (run dbcli schema)</code>。有 confidence 標籤的草稿與 shell-safe 驗證指令都只供回報參考，絕不會自動執行。只有結構上已證明唯讀且不含明確 function／table-function call 或 session assignment 的 SQL 才會使用 <code>dbcli explain --analyze</code>；其他語句會退回 plain <code>dbcli explain</code>。identifier 折疊衝突及 CTE、derived、schema-qualified 或 database-qualified binding 都不會借用 unqualified cache facts。</p>
 </section>
 
 <section id="guide-missing-index-for" class="mt-20">

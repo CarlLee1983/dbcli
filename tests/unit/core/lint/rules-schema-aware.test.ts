@@ -974,6 +974,8 @@ describe('not-in-nullable', () => {
 
     expect(findings).toHaveLength(1)
     expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0].message).toContain('WHERE id IS NOT NULL')
+    expect(findings[0].message).not.toContain('WHERE NULL IS NOT NULL')
   })
 
   test('does not flag an unambiguous CTE output that projects a non-null literal', () => {
@@ -997,6 +999,8 @@ describe('not-in-nullable', () => {
 
     expect(findings).toHaveLength(1)
     expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0].message).toContain('WHERE d.id IS NOT NULL')
+    expect(findings[0].message).not.toContain('WHERE NULL IS NOT NULL')
   })
 
   test('does not flag an unambiguous derived-table output that projects a non-null literal', () => {

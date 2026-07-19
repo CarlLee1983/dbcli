@@ -309,13 +309,19 @@ function nullableExpression(
 
     const scoped = scopedProjectedExpression(node, statement)
     if (scoped) {
-      return nullableExpression(
+      const nullable = nullableExpression(
         scoped.expression,
         scoped.statement,
         schema,
         system,
         false
       )
+      return nullable
+        ? {
+            ...nullable,
+            expression: expressionName(node) ?? nullable.expression,
+          }
+        : undefined
     }
     return undefined
   }

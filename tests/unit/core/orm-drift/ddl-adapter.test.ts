@@ -64,6 +64,9 @@ describe('parseDdl', () => {
     )
     expect(Object.keys(out.tables)).toEqual(['notes', 'tags'])
     expect(out.tables.notes.columns.map((column) => column.name)).toEqual(['id', 'body'])
+    expect(out.tables.notes.columns.find((column) => column.name === 'body')?.default).toBe(
+      "'keep;this'"
+    )
   })
 
   test('continues after an invalid statement', () => {
@@ -88,6 +91,101 @@ describe('parseDdl', () => {
     expect(out.tables.checked_table.columns.map((column) => column.name)).toEqual(['id'])
     expect(out.unparsed[0].reason).toContain('blocked: unsupported table definition')
   })
+
+  test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+    'preserves precision and scale for %s numeric types',
+    (system) => {
+      const out = parseDdl(
+        'CREATE TABLE amounts (numeric_value NUMERIC(10,2), decimal_value DECIMAL(12,4));',
+        system
+      )
+      expect(out.tables.amounts.columns).toMatchObject([
+        { name: 'numeric_value', type: 'numeric(10,2)', rawType: 'numeric(10,2)' },
+        { name: 'decimal_value', type: 'decimal(12,4)', rawType: 'decimal(12,4)' },
+      ])
+      expect(out.unparsed).toHaveLength(0)
+    }
+  )
+
+  test('preserves PostgreSQL timestamp timezone modifiers', () => {
+    const out = parseDdl(
+      'CREATE TABLE events (occurred_at TIMESTAMP WITH TIME ZONE);',
+      'postgresql'
+    )
+    expect(out.tables.events.columns[0].type).toBe('timestamp with time zone')
+    expect(out.unparsed).toHaveLength(0)
+  })
+
+  test.each(['mysql', 'mariadb'] as const)('preserves %s unsigned type modifiers', (system) => {
+    const out = parseDdl('CREATE TABLE counters (value INT UNSIGNED);', system)
+    expect(out.tables.counters.columns[0].type).toBe('int unsigned')
+    expect(out.unparsed).toHaveLength(0)
+  })
+
+  test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+    'maps scalar defaults and column UNIQUE for %s',
+    (system) => {
+      const out = parseDdl(
+        "CREATE TABLE settings (id INTEGER DEFAULT 42 UNIQUE, label VARCHAR(20) DEFAULT 'Hello');",
+        system
+      )
+      expect(out.tables.settings.columns).toMatchObject([
+        { name: 'id', default: '42' },
+        { name: 'label', default: "'Hello'" },
+      ])
+      expect(out.tables.settings.indexes).toContainEqual({
+        columns: ['id'],
+        unique: true,
+      })
+      expect(out.unparsed).toHaveLength(0)
+    }
+  )
+
+  test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+    'applies a %s table primary key declared before its column',
+    (system) => {
+      const out = parseDdl('CREATE TABLE reversed_pk (PRIMARY KEY (id), id INTEGER);', system)
+      expect(out.tables.reversed_pk.columns[0]).toMatchObject({
+        name: 'id',
+        nullable: false,
+        primaryKey: true,
+      })
+      expect(out.unparsed).toHaveLength(0)
+    }
+  )
+
+  test.each(['mysql', 'mariadb'] as const)(
+    'blocks %s enum expression types instead of emitting a lossy column',
+    (system) => {
+      const out = parseDdl("CREATE TABLE choices (id INTEGER, value ENUM('x','y'));", system)
+      expect(out.tables.choices.columns.map((column) => column.name)).toEqual(['id'])
+      expect(out.unparsed.some((entry) => entry.reason.includes('blocked:'))).toBe(true)
+    }
+  )
+
+  test.each(['mysql', 'mariadb'] as const)(
+    'blocks %s generated columns instead of emitting altered semantics',
+    (system) => {
+      const out = parseDdl(
+        'CREATE TABLE generated_values (source INT, derived INT GENERATED ALWAYS AS (source + 1) STORED);',
+        system
+      )
+      expect(out.tables.generated_values.columns.map((column) => column.name)).toEqual(['source'])
+      expect(out.unparsed.some((entry) => entry.reason.includes('generated'))).toBe(true)
+    }
+  )
+
+  test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+    'does not emit a %s partial index as an unconditional index',
+    (system) => {
+      const out = parseDdl(
+        'CREATE TABLE indexed_values (value INTEGER); CREATE INDEX positive_values ON indexed_values (value) WHERE value > 0;',
+        system
+      )
+      expect(out.tables.indexed_values.indexes).toHaveLength(0)
+      expect(out.unparsed.some((entry) => entry.reason.includes('blocked:'))).toBe(true)
+    }
+  )
 })
 
 describe('detectOrmFormat', () => {

@@ -19,6 +19,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
 
 const parser = new Parser()
 type Ast = Record<string, unknown>
+type Result<T> = { ok: true; value: T } | { ok: false; reason: string }
 
 export function parseDdl(sql: string, system: SqlDatabaseSystem): NormalizedSchema {
   const tables: Record<string, NormalizedTable> = {}
@@ -103,18 +104,23 @@ function consumeCreateTable(
     foreignKeys: [],
   }
 
+  const definitions: Ast[] = []
   for (const value of node.create_definitions) {
     if (!isAst(value)) {
       pushUnsupportedDefinition(tableName, 'malformed', unparsed)
       continue
     }
+    definitions.push(value)
+  }
 
-    const definition = value
+  for (const definition of definitions) {
     if (definition.resource === 'column') {
       consumeColumn(definition, table, unparsed)
-      continue
     }
+  }
 
+  for (const definition of definitions) {
+    if (definition.resource === 'column') continue
     if (
       definition.resource === 'constraint' &&
       normalizedString(definition.constraint_type) === 'primary key'
@@ -136,9 +142,8 @@ function consumeCreateTable(
 function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: UnparsedEntry[]): void {
   const columnName = identifierOf(definition.column)
   const dataType = isAst(definition.definition) ? definition.definition : null
-  const baseType = normalizedString(dataType?.dataType)
 
-  if (!columnName || !baseType) {
+  if (!columnName || !dataType) {
     pushUnsupportedDefinition(
       table.name,
       `malformed column${columnName ? ` '${columnName}'` : ''}`,
@@ -147,23 +152,98 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
     return
   }
 
-  const length = typeLength(dataType?.length)
-  const type = length === null ? baseType : `${baseType}(${length})`
+  const unsupportedField = firstMeaningfulUnsupportedField(definition, [
+    'column',
+    'definition',
+    'resource',
+    'primary_key',
+    'nullable',
+    'reference_definition',
+    'default_val',
+    'unique',
+    'generated',
+  ])
+  if (unsupportedField) {
+    pushUnsupportedDefinition(
+      table.name,
+      `column '${columnName}' uses unsupported ${unsupportedField}`,
+      unparsed
+    )
+    return
+  }
+
+  if (definition.generated !== undefined && definition.generated !== null) {
+    pushUnsupportedDefinition(table.name, `generated column '${columnName}'`, unparsed)
+    return
+  }
+
+  if (
+    isAst(definition.column) &&
+    definition.column.collate !== undefined &&
+    definition.column.collate !== null
+  ) {
+    pushUnsupportedDefinition(table.name, `collated column '${columnName}'`, unparsed)
+    return
+  }
+
+  const typeResult = reconstructType(dataType)
+  if (!typeResult.ok) {
+    pushUnsupportedDefinition(
+      table.name,
+      `${typeResult.reason} on column '${columnName}'`,
+      unparsed
+    )
+    return
+  }
+
+  const nullable = nullableOf(definition.nullable)
+  if (nullable === null) {
+    pushUnsupportedDefinition(
+      table.name,
+      `malformed nullability on column '${columnName}'`,
+      unparsed
+    )
+    return
+  }
+
+  const defaultResult = defaultOf(definition.default_val)
+  if (!defaultResult.ok) {
+    pushUnsupportedDefinition(table.name, `unsupported default on column '${columnName}'`, unparsed)
+    return
+  }
+
+  const unique =
+    definition.unique === undefined || definition.unique === null
+      ? false
+      : normalizedString(definition.unique) === 'unique'
+  if (
+    definition.unique !== undefined &&
+    definition.unique !== null &&
+    normalizedString(definition.unique) !== 'unique'
+  ) {
+    pushUnsupportedDefinition(table.name, `malformed unique column '${columnName}'`, unparsed)
+    return
+  }
+
+  const foreignKeyResult = inlineForeignKeyOf(definition.reference_definition, columnName)
+  if (!foreignKeyResult.ok) {
+    pushUnsupportedDefinition(table.name, foreignKeyResult.reason, unparsed)
+    return
+  }
+
   const primaryKey = normalizedString(definition.primary_key) === 'primary key'
-  const notNull =
-    isAst(definition.nullable) && normalizedString(definition.nullable.type) === 'not null'
 
   table.columns.push({
     name: columnName,
-    type,
-    rawType: type,
-    nullable: !primaryKey && !notNull,
+    type: typeResult.value,
+    rawType: typeResult.value,
+    nullable: primaryKey ? false : nullable,
+    ...(defaultResult.value === undefined ? {} : { default: defaultResult.value }),
     ...(primaryKey ? { primaryKey: true } : {}),
   })
 
-  if (definition.reference_definition !== undefined) {
-    consumeInlineForeignKey(definition.reference_definition, columnName, table, unparsed)
-  }
+  if (unique) table.indexes.push({ columns: [columnName], unique: true })
+  if (foreignKeyResult.value) table.foreignKeys.push(foreignKeyResult.value)
 }
 
 function consumeTablePrimaryKey(
@@ -191,25 +271,41 @@ function consumeTablePrimaryKey(
   }
 }
 
-function consumeInlineForeignKey(
+function inlineForeignKeyOf(
   value: unknown,
-  columnName: string,
-  table: NormalizedTable,
-  unparsed: UnparsedEntry[]
-): void {
+  columnName: string
+): Result<NormalizedTable['foreignKeys'][number] | undefined> {
+  if (value === undefined || value === null) return { ok: true, value: undefined }
   if (!isAst(value)) {
-    pushUnsupportedDefinition(table.name, `malformed foreign key on '${columnName}'`, unparsed)
-    return
+    return { ok: false, reason: `malformed foreign key on '${columnName}'` }
+  }
+  const unsupportedField = firstMeaningfulUnsupportedField(value, [
+    'definition',
+    'table',
+    'keyword',
+    'match',
+    'on_action',
+  ])
+  if (unsupportedField) {
+    return {
+      ok: false,
+      reason: `unsupported foreign key ${unsupportedField} on '${columnName}'`,
+    }
+  }
+  if (
+    (value.match !== undefined && value.match !== null) ||
+    (Array.isArray(value.on_action) && value.on_action.length > 0)
+  ) {
+    return { ok: false, reason: `unsupported foreign key action on '${columnName}'` }
   }
 
   const refTable = tableNameOf(value)
   const refColumns = identifierList(value.definition)
   if (!refTable || refColumns.length === 0) {
-    pushUnsupportedDefinition(table.name, `malformed foreign key on '${columnName}'`, unparsed)
-    return
+    return { ok: false, reason: `malformed foreign key on '${columnName}'` }
   }
 
-  table.foreignKeys.push({ columns: [columnName], refTable, refColumns })
+  return { ok: true, value: { columns: [columnName], refTable, refColumns } }
 }
 
 function consumeCreateIndex(
@@ -228,8 +324,36 @@ function consumeCreateIndex(
     return
   }
 
-  const columns = identifierList(node.index_columns)
-  if (columns.length === 0) {
+  const unsupportedIndexField = firstMeaningfulUnsupportedField(node, [
+    'type',
+    'index_type',
+    'keyword',
+    'index',
+    'table',
+    'index_columns',
+    'temporary',
+    'concurrently',
+    'if_not_exists',
+    'on_kw',
+    'with_before_where',
+  ])
+  if (unsupportedIndexField) {
+    pushUnsupportedIndex(indexName, `unsupported CREATE INDEX ${unsupportedIndexField}`, unparsed)
+    return
+  }
+
+  const indexType = normalizedString(node.index_type)
+  if (indexType !== null && indexType !== 'unique') {
+    pushUnsupportedIndex(indexName, `unsupported CREATE INDEX type '${indexType}'`, unparsed)
+    return
+  }
+
+  const columns = indexColumnList(node.index_columns)
+  if (!columns.ok) {
+    pushUnsupportedIndex(indexName, columns.reason, unparsed)
+    return
+  }
+  if (columns.value.length === 0) {
     unparsed.push({
       location: indexName ?? `${tableName} index`,
       reason: 'blocked: malformed CREATE INDEX without columns',
@@ -239,8 +363,8 @@ function consumeCreateIndex(
 
   target.indexes.push({
     ...(indexName ? { name: indexName } : {}),
-    columns,
-    unique: normalizedString(node.index_type) === 'unique',
+    columns: columns.value,
+    unique: indexType === 'unique',
   })
 }
 
@@ -369,6 +493,110 @@ function tableNameOf(node: Ast): string | null {
   return stringValue(value.table)
 }
 
+function reconstructType(dataType: Ast): Result<string> {
+  const baseType = normalizedString(dataType.dataType)
+  if (!baseType) return { ok: false, reason: 'malformed type' }
+
+  const unsupportedField = firstMeaningfulUnsupportedField(dataType, [
+    'dataType',
+    'length',
+    'scale',
+    'parentheses',
+    'suffix',
+  ])
+  if (unsupportedField) {
+    return { ok: false, reason: `unsupported type ${unsupportedField}` }
+  }
+
+  let type = baseType
+  if (dataType.length !== undefined && dataType.length !== null) {
+    const length = typeLength(dataType.length)
+    if (!length) return { ok: false, reason: 'malformed type length' }
+
+    let dimensions = length
+    if (dataType.scale !== undefined && dataType.scale !== null) {
+      const scale = scalarValue(dataType.scale)
+      if (scale === null) return { ok: false, reason: 'malformed type scale' }
+      dimensions += `,${scale}`
+    }
+    type += `(${dimensions})`
+  } else if (dataType.scale !== undefined && dataType.scale !== null) {
+    return { ok: false, reason: 'type scale without precision' }
+  }
+
+  if (dataType.suffix !== undefined && dataType.suffix !== null) {
+    if (
+      !Array.isArray(dataType.suffix) ||
+      !dataType.suffix.every((part) => typeof part === 'string')
+    ) {
+      return { ok: false, reason: 'malformed type suffix' }
+    }
+    if (dataType.suffix.length > 0) {
+      type += ` ${dataType.suffix.join(' ').toLowerCase()}`
+    }
+  }
+
+  return { ok: true, value: type }
+}
+
+function defaultOf(value: unknown): Result<string | undefined> {
+  if (value === undefined || value === null) return { ok: true, value: undefined }
+  if (!isAst(value) || value.type !== 'default' || !isAst(value.value)) {
+    return { ok: false, reason: 'malformed default' }
+  }
+
+  const expression = value.value
+  if (expression.type === 'number') {
+    const number = scalarValue(expression.value)
+    return number === null
+      ? { ok: false, reason: 'malformed numeric default' }
+      : { ok: true, value: number }
+  }
+  if (expression.type === 'single_quote_string' && typeof expression.value === 'string') {
+    return { ok: true, value: `'${expression.value.replaceAll("'", "''")}'` }
+  }
+  if (expression.type === 'bool' && typeof expression.value === 'boolean') {
+    return { ok: true, value: String(expression.value) }
+  }
+  if (expression.type === 'null') return { ok: true, value: 'null' }
+
+  return { ok: false, reason: `unsupported default expression '${expression.type ?? 'unknown'}'` }
+}
+
+function nullableOf(value: unknown): boolean | null {
+  if (value === undefined || value === null) return true
+  if (!isAst(value)) return null
+  const type = normalizedString(value.type)
+  if (type === 'not null') return false
+  if (type === 'null') return true
+  return null
+}
+
+function indexColumnList(value: unknown): Result<string[]> {
+  if (!Array.isArray(value)) {
+    return { ok: false, reason: 'blocked: malformed CREATE INDEX columns' }
+  }
+
+  const columns: string[] = []
+  for (const column of value) {
+    if (!isAst(column) || column.type !== 'column_ref') {
+      return { ok: false, reason: 'blocked: unsupported CREATE INDEX expression' }
+    }
+    const unsupportedField = firstMeaningfulUnsupportedField(column, ['type', 'table', 'column'])
+    if (unsupportedField) {
+      return {
+        ok: false,
+        reason: `blocked: unsupported CREATE INDEX column ${unsupportedField}`,
+      }
+    }
+    const identifier = identifierOf(column)
+    if (!identifier) return { ok: false, reason: 'blocked: malformed CREATE INDEX column' }
+    columns.push(identifier)
+  }
+
+  return { ok: true, value: columns }
+}
+
 function typeLength(value: unknown): string | null {
   if (value === undefined || value === null) return null
   if (Array.isArray(value)) {
@@ -384,6 +612,17 @@ function scalarValue(value: unknown): string | null {
   return scalarValue(value.value)
 }
 
+function firstMeaningfulUnsupportedField(value: Ast, allowed: string[]): string | null {
+  const allowedFields = new Set(allowed)
+  for (const [key, fieldValue] of Object.entries(value)) {
+    if (allowedFields.has(key)) continue
+    if (fieldValue === undefined || fieldValue === null) continue
+    if (Array.isArray(fieldValue) && fieldValue.length === 0) continue
+    return key
+  }
+  return null
+}
+
 function pushUnsupportedDefinition(
   tableName: string,
   definition: string,
@@ -392,6 +631,17 @@ function pushUnsupportedDefinition(
   unparsed.push({
     location: `${tableName} (${definition})`,
     reason: `blocked: unsupported table definition '${definition}'`,
+  })
+}
+
+function pushUnsupportedIndex(
+  indexName: string | null,
+  reason: string,
+  unparsed: UnparsedEntry[]
+): void {
+  unparsed.push({
+    location: indexName ?? 'index',
+    reason: reason.startsWith('blocked:') ? reason : `blocked: ${reason}`,
   })
 }
 

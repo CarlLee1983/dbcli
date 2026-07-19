@@ -1,21 +1,56 @@
 import { describe, expect, test } from 'bun:test'
 import { compareNormalized, type DriftEntry } from '@/core/orm-drift/compare'
-import { proposalsFor } from '@/core/orm-drift/proposals'
+import { addColumnProposal, proposalsFor, REVIEW_NOTE } from '@/core/orm-drift/proposals'
 import type {
   NormalizedColumn,
   NormalizedSchema,
   NormalizedTable,
+  NormalizedTableIdentity,
 } from '@/core/orm-drift/normalized-schema'
 
-function schemaWith(tables: NormalizedSchema['tables']): NormalizedSchema {
-  return { source: 'prisma', tables, unparsed: [] }
+function table(
+  identity: NormalizedTableIdentity,
+  overrides: Partial<Omit<NormalizedTable, 'identity'>> = {}
+): NormalizedTable {
+  return {
+    identity,
+    columns: [],
+    indexes: [],
+    foreignKeys: [],
+    ...overrides,
+  }
 }
 
-const dbWith = (tables: NormalizedSchema['tables']): NormalizedSchema => ({
-  source: 'db',
-  tables,
-  unparsed: [],
-})
+function schemaWith(tables: NormalizedTable[], defaultSchema?: string): NormalizedSchema {
+  return {
+    source: 'prisma',
+    ...(defaultSchema !== undefined && { defaultSchema }),
+    tables,
+    unparsed: [],
+  }
+}
+
+function dbWith(tables: NormalizedTable[], defaultSchema?: string): NormalizedSchema {
+  return {
+    source: 'db',
+    ...(defaultSchema !== undefined && { defaultSchema }),
+    tables,
+    unparsed: [],
+  }
+}
+
+function driftEntry(
+  overrides: Partial<Omit<DriftEntry, 'proposedCommands'>> = {}
+): Omit<DriftEntry, 'proposedCommands'> {
+  return {
+    category: 'missing_in_db',
+    severity: 'error',
+    table: 'users',
+    object: 'index(email)',
+    detail: 'index is absent',
+    ...overrides,
+  }
+}
 
 const users: NormalizedTable = {
   identity: { table: 'users' },
@@ -29,6 +64,52 @@ const users: NormalizedTable = {
 }
 
 describe('compareNormalized', () => {
+  test('case-distinct DB tables coexist and match exact ORM identities', () => {
+    const db = dbWith(
+      [
+        table(
+          { schema: 'public', table: 'users' },
+          { columns: [{ name: 'lowercase_only', type: 'text', nullable: false }] }
+        ),
+        table(
+          { schema: 'public', table: 'Users' },
+          { columns: [{ name: 'quoted_only', type: 'integer', nullable: false }] }
+        ),
+      ],
+      'public'
+    )
+    const orm = schemaWith([
+      table(
+        { table: 'Users' },
+        { columns: [{ name: 'quoted_only', type: 'integer', nullable: false }] }
+      ),
+      table(
+        { table: 'users' },
+        { columns: [{ name: 'lowercase_only', type: 'text', nullable: false }] }
+      ),
+    ])
+
+    expect(compareNormalized(orm, db, { ignore: [] }).entries).toEqual([])
+  })
+
+  test('case-sensitive ignore does not hide a distinct table', () => {
+    const report = compareNormalized(
+      schemaWith([]),
+      dbWith(
+        [table({ schema: 'public', table: 'users' }), table({ schema: 'public', table: 'Users' })],
+        'public'
+      ),
+      { ignore: ['public.Users'] }
+    )
+
+    expect(report.entries.find((entry) => entry.table === 'public.Users')?.category).toBe(
+      'unmanaged'
+    )
+    expect(report.entries.find((entry) => entry.table === 'public.users')?.category).toBe(
+      'missing_in_orm'
+    )
+  })
+
   test('column missing in DB is an error with an exact dry-run add-column proposal', () => {
     const ormColumn: NormalizedColumn = {
       name: 'age',
@@ -62,6 +143,39 @@ describe('compareNormalized', () => {
       '# dry-run by default; review via migration-review before --execute',
       'dbcli migrate add-index users --columns email --unique',
     ])
+  })
+
+  test('duplicate index signatures emit one drift entry', () => {
+    const ormTable = table(
+      { table: 'users' },
+      {
+        indexes: [
+          { columns: ['email'], unique: true },
+          { name: 'duplicate_name', columns: ['email'], unique: true },
+        ],
+      }
+    )
+    const report = compareNormalized(schemaWith([ormTable]), dbWith([table({ table: 'users' })]), {
+      ignore: [],
+    })
+
+    expect(report.entries.filter((entry) => entry.object === 'index(email)')).toHaveLength(1)
+  })
+
+  test('entry ordering is stable across input insertion order', () => {
+    const forward = compareNormalized(
+      schemaWith([table({ table: 'z' }), table({ table: 'a' })]),
+      dbWith([]),
+      { ignore: [] }
+    )
+    const reverse = compareNormalized(
+      schemaWith([table({ table: 'a' }), table({ table: 'z' })]),
+      dbWith([]),
+      { ignore: [] }
+    )
+
+    expect(forward.entries).toEqual(reverse.entries)
+    expect(forward.entries.map((entry) => entry.table)).toEqual(['a', 'z'])
   })
 
   test('index names are ignored while column order and uniqueness remain meaningful', () => {
@@ -106,7 +220,7 @@ describe('compareNormalized', () => {
       (entry) => entry.category === 'missing_in_orm'
     )
 
-    expect(entries.map((entry) => entry.object)).toEqual(['legacy_flag', 'index(legacy_flag)'])
+    expect(entries.map((entry) => entry.object)).toEqual(['index(legacy_flag)', 'legacy_flag'])
     for (const entry of entries) {
       expect(entry.severity).toBe('warn')
       expect(entry.proposedCommands[0]).toMatch(
@@ -323,14 +437,64 @@ describe('proposalsFor', () => {
       detail: 'unique index on (email, age) is absent',
     }
 
-    expect(proposalsFor(missingColumn, column)).toEqual([
+    expect(proposalsFor(missingColumn, { kind: 'column', column })).toEqual([
       '# dry-run by default; review via migration-review before --execute',
       'dbcli migrate add-column users nickname text',
     ])
-    expect(proposalsFor(missingIndex)).toEqual([
+    expect(
+      proposalsFor(missingIndex, {
+        kind: 'index',
+        index: { columns: ['email', 'age'], unique: true },
+      })
+    ).toEqual([
       '# dry-run by default; review via migration-review before --execute',
       'dbcli migrate add-index users --columns email,age --unique',
     ])
+  })
+
+  test('index proposals use structural data, not display text', () => {
+    const entry = driftEntry({
+      object: 'index(unique index,email)',
+      detail: 'display prose says unique index but structure is authoritative',
+    })
+
+    expect(
+      proposalsFor(entry, {
+        kind: 'index',
+        index: { columns: ['unique index', 'email,backup'], unique: false },
+      })
+    ).toEqual([REVIEW_NOTE, `dbcli migrate add-index users --columns 'unique index,email,backup'`])
+  })
+
+  test('does not parse an index proposal from display strings without a structural subject', () => {
+    const entry = driftEntry({
+      object: 'index(email,age)',
+      detail: 'unique index on (email, age) is absent',
+    })
+
+    expect(proposalsFor(entry)).toEqual([
+      '# escalate: unique index on (email, age) is absent — run: dbcli skill tasks plan migration-review',
+    ])
+  })
+
+  test('proposal arguments are shell-safe while simple tokens remain unchanged', () => {
+    expect(
+      addColumnProposal('users', {
+        name: 'display name',
+        type: 'varchar(191)',
+        nullable: false,
+        default: `x'; $(touch /tmp/pwned)`,
+      })[1]
+    ).toBe(
+      `dbcli migrate add-column users 'display name' 'varchar(191)' --default 'x'"'"'; $(touch /tmp/pwned)'`
+    )
+    expect(
+      addColumnProposal('users', {
+        name: 'age',
+        type: 'integer',
+        nullable: true,
+      })[1]
+    ).toBe('dbcli migrate add-column users age integer --nullable')
   })
 
   test('returns no commands for unmanaged entries', () => {
@@ -353,7 +517,10 @@ describe('proposalsFor', () => {
           object: 'table',
           detail: "table 'users' is absent",
         },
-        { name: 'id', type: 'integer', nullable: false }
+        {
+          kind: 'column',
+          column: { name: 'id', type: 'integer', nullable: false },
+        }
       )
     ).toEqual([
       "# escalate: table 'users' is absent — run: dbcli skill tasks plan migration-review",

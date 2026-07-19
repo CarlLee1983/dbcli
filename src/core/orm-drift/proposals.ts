@@ -3,15 +3,30 @@ import type { NormalizedColumn, NormalizedIndex } from '@/core/orm-drift/normali
 
 export const REVIEW_NOTE = '# dry-run by default; review via migration-review before --execute'
 
+const SAFE_SHELL_ARG = /^[A-Za-z0-9_./:@%+=,-]+$/
+
+export type ProposalSubject =
+  | { kind: 'column'; column: NormalizedColumn }
+  | { kind: 'index'; index: NormalizedIndex }
+
+export function shellArg(value: string): string {
+  if (SAFE_SHELL_ARG.test(value)) return value
+  return `'${value.replace(/'/g, `'"'"'`)}'`
+}
+
 export function addColumnProposal(table: string, column: NormalizedColumn): string[] {
-  const command = [`dbcli migrate add-column ${table} ${column.name} ${column.type}`]
+  const command = [
+    `dbcli migrate add-column ${shellArg(table)} ${shellArg(column.name)} ${shellArg(column.type)}`,
+  ]
   if (column.nullable) command.push('--nullable')
-  if (column.default !== undefined) command.push(`--default ${column.default}`)
+  if (column.default !== undefined) command.push(`--default ${shellArg(column.default)}`)
   return [REVIEW_NOTE, command.join(' ')]
 }
 
 export function addIndexProposal(table: string, index: NormalizedIndex): string[] {
-  const command = [`dbcli migrate add-index ${table} --columns ${index.columns.join(',')}`]
+  const command = [
+    `dbcli migrate add-index ${shellArg(table)} --columns ${shellArg(index.columns.join(','))}`,
+  ]
   if (index.unique) command.push('--unique')
   return [REVIEW_NOTE, command.join(' ')]
 }
@@ -25,28 +40,13 @@ export function escalateProposal(reason: string): string[] {
 
 export function proposalsFor(
   entry: Omit<DriftEntry, 'proposedCommands'>,
-  column?: NormalizedColumn
+  subject?: ProposalSubject
 ): string[] {
   if (entry.category === 'unmanaged') return []
 
-  if (entry.category === 'missing_in_db') {
-    if (column && entry.object !== 'table' && !entry.object.startsWith('index(')) {
-      return addColumnProposal(entry.table, column)
-    }
-
-    const indexMatch = /^index\((.*)\)$/.exec(entry.object)
-    if (indexMatch) {
-      const columns = (indexMatch[1] ?? '')
-        .split(',')
-        .map((candidate) => candidate.trim())
-        .filter(Boolean)
-      if (columns.length > 0) {
-        return addIndexProposal(entry.table, {
-          columns,
-          unique: /\bunique index\b/i.test(entry.detail),
-        })
-      }
-    }
+  if (entry.category === 'missing_in_db' && entry.object !== 'table' && subject) {
+    if (subject.kind === 'column') return addColumnProposal(entry.table, subject.column)
+    return addIndexProposal(entry.table, subject.index)
   }
 
   return escalateProposal(entry.detail)

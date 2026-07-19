@@ -4,9 +4,11 @@ import type {
   NormalizedIndex,
   NormalizedSchema,
   NormalizedTable,
+  NormalizedTableIdentity,
   UnparsedEntry,
 } from '@/core/orm-drift/normalized-schema'
-import { proposalsFor } from '@/core/orm-drift/proposals'
+import { proposalsFor, type ProposalSubject } from '@/core/orm-drift/proposals'
+import { qualifiedTableName, tableIdentityKey } from '@/core/orm-drift/table-identity'
 
 export type DriftCategory = 'missing_in_db' | 'missing_in_orm' | 'mismatch' | 'unmanaged'
 export type DriftSeverity = 'info' | 'warn' | 'error'
@@ -31,40 +33,56 @@ const DEFAULT_IGNORE = ['_prisma_migrations']
 
 function globToRegex(glob: string): RegExp {
   const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-  return new RegExp(`^${escaped}$`, 'i')
+  return new RegExp(`^${escaped}$`)
 }
 
-function tableMap(schema: NormalizedSchema): Map<string, NormalizedTable> {
+function tableMap(schema: NormalizedSchema, defaultSchema?: string): Map<string, NormalizedTable> {
   return new Map(
-    Object.values(schema.tables).map((table) => [table.identity.table.toLowerCase(), table])
+    schema.tables.map((table) => {
+      const identity: NormalizedTableIdentity =
+        table.identity.schema === undefined && defaultSchema !== undefined
+          ? { ...table.identity, schema: defaultSchema }
+          : table.identity
+      return [tableIdentityKey(identity), { ...table, identity }]
+    })
   )
 }
 
 function entryWithProposals(
   entry: Omit<DriftEntry, 'proposedCommands'>,
-  column?: NormalizedColumn
+  subject?: ProposalSubject
 ): DriftEntry {
-  return { ...entry, proposedCommands: proposalsFor(entry, column) }
+  return { ...entry, proposedCommands: proposalsFor(entry, subject) }
 }
+
+const entryOrder = (left: DriftEntry, right: DriftEntry): number =>
+  left.table.localeCompare(right.table) ||
+  left.object.localeCompare(right.object) ||
+  left.category.localeCompare(right.category) ||
+  left.detail.localeCompare(right.detail)
 
 export function compareNormalized(
   orm: NormalizedSchema,
   db: NormalizedSchema,
   opts: { ignore: string[] }
 ): DriftReport {
-  const ormTables = tableMap(orm)
+  const ormTables = tableMap(orm, db.defaultSchema)
   const dbTables = tableMap(db)
   const tableKeys = new Set([...ormTables.keys(), ...dbTables.keys()])
-  const ignorePatterns = [...DEFAULT_IGNORE, ...opts.ignore].map(globToRegex)
+  const ignorePatterns = opts.ignore.map(globToRegex)
   const entries: DriftEntry[] = []
 
   for (const tableKey of tableKeys) {
     const ormTable = ormTables.get(tableKey)
     const dbTable = dbTables.get(tableKey)
-    const table = (ormTable ?? dbTable)?.identity.table
-    if (!table) continue
+    const normalizedTable = ormTable ?? dbTable
+    if (!normalizedTable) continue
+    const table = qualifiedTableName(normalizedTable.identity)
 
-    if (ignorePatterns.some((pattern) => pattern.test(table))) {
+    if (
+      DEFAULT_IGNORE.includes(normalizedTable.identity.table) ||
+      ignorePatterns.some((pattern) => pattern.test(table))
+    ) {
       entries.push(
         entryWithProposals({
           category: 'unmanaged',
@@ -103,8 +121,10 @@ export function compareNormalized(
       continue
     }
 
-    if (ormTable && dbTable) compareTable(ormTable, dbTable, orm.source, entries)
+    if (ormTable && dbTable) compareTable(ormTable, dbTable, table, orm.source, entries)
   }
+
+  entries.sort(entryOrder)
 
   const summary = {
     errors: entries.filter((entry) => entry.category !== 'unmanaged' && entry.severity === 'error')
@@ -127,10 +147,10 @@ export function compareNormalized(
 function compareTable(
   ormTable: NormalizedTable,
   dbTable: NormalizedTable,
+  table: string,
   ormSource: string,
   entries: DriftEntry[]
 ): void {
-  const table = ormTable.identity.table
   const ormColumns = new Map(ormTable.columns.map((column) => [column.name.toLowerCase(), column]))
   const dbColumns = new Map(dbTable.columns.map((column) => [column.name.toLowerCase(), column]))
 
@@ -146,7 +166,7 @@ function compareTable(
             object: ormColumn.name,
             detail: `column '${ormColumn.name}' (${ormColumn.type}) is defined in ${ormSource} but absent in the database`,
           },
-          ormColumn
+          { kind: 'column', column: ormColumn }
         )
       )
       continue
@@ -235,30 +255,42 @@ function compareIndexes(
     `${index.columns.map((column) => column.toLowerCase()).join(',')}|${index.unique}`
   const dbKeys = new Set(dbIndexes.map(indexKey))
   const ormKeys = new Set(ormIndexes.map(indexKey))
+  const emittedOrmKeys = new Set<string>()
+  const emittedDbKeys = new Set<string>()
 
   for (const index of ormIndexes) {
-    if (dbKeys.has(indexKey(index))) continue
+    const key = indexKey(index)
+    if (dbKeys.has(key) || emittedOrmKeys.has(key)) continue
+    emittedOrmKeys.add(key)
     entries.push(
-      entryWithProposals({
-        category: 'missing_in_db',
-        severity: 'error',
-        table,
-        object: `index(${index.columns.join(',')})`,
-        detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) is defined in ${ormSource} but absent in the database`,
-      })
+      entryWithProposals(
+        {
+          category: 'missing_in_db',
+          severity: 'error',
+          table,
+          object: `index(${index.columns.join(',')})`,
+          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) is defined in ${ormSource} but absent in the database`,
+        },
+        { kind: 'index', index }
+      )
     )
   }
 
   for (const index of dbIndexes) {
-    if (ormKeys.has(indexKey(index))) continue
+    const key = indexKey(index)
+    if (ormKeys.has(key) || emittedDbKeys.has(key)) continue
+    emittedDbKeys.add(key)
     entries.push(
-      entryWithProposals({
-        category: 'missing_in_orm',
-        severity: 'warn',
-        table,
-        object: `index(${index.columns.join(',')})`,
-        detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
-      })
+      entryWithProposals(
+        {
+          category: 'missing_in_orm',
+          severity: 'warn',
+          table,
+          object: `index(${index.columns.join(',')})`,
+          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
+        },
+        { kind: 'index', index }
+      )
     )
   }
 }

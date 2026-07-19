@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { join } from 'path'
+import { Command } from 'commander'
 import type { TableSchema } from '@/adapters/types'
 import {
+  createLintCommand,
   executeLintCommand,
   loadLintCommandDeps,
   lintCommand,
@@ -119,6 +121,30 @@ describe('runLint', () => {
       expect(reports[0].label).toBe('queries.sql#1')
     } finally {
       await Bun.$`rm -rf ${dir.trim()}`
+    }
+  })
+
+  test('resolves filesystem globs in deterministic filename order', async () => {
+    const dir = (await Bun.$`mktemp -d`.text()).trim()
+    await Bun.write(join(dir, 'z-last.sql'), 'SELECT id FROM users;')
+    await Bun.write(join(dir, 'a-first.sql'), 'SELECT * FROM users;')
+    try {
+      const { reports } = await runLint([], { bulk: `@${dir}/*.sql` }, {
+        config: baseConfig,
+        schema,
+        loadSavedQuery: noSnippets,
+      })
+
+      expect(reports.map((report) => report.label)).toEqual([
+        'a-first.sql#1',
+        'z-last.sql#1',
+      ])
+      expect(reports.map((report) => report.sql)).toEqual([
+        'SELECT * FROM users',
+        'SELECT id FROM users',
+      ])
+    } finally {
+      await Bun.$`rm -rf ${dir}`
     }
   })
 
@@ -333,6 +359,70 @@ describe('lint command registration surface', () => {
 
     expect(program.commands.filter((command) => command.name() === 'lint')).toHaveLength(1)
     expect(program.options.map((option) => option.long)).toContain('--use')
+  })
+
+  test('real Commander --no-schema bypasses schema IO and blocks both schema rules', async () => {
+    const tempRoot = (await Bun.$`mktemp -d`.text()).trim()
+    const configPath = join(tempRoot, '.dbcli')
+    await Bun.$`mkdir -p ${configPath}`
+    await Bun.write(
+      join(configPath, 'config.json'),
+      JSON.stringify({
+        version: 2,
+        default: 'primary',
+        connections: {
+          primary: {
+            system: 'postgresql',
+            host: 'primary.db',
+            port: 5432,
+            user: 'primary',
+            password: '',
+            database: 'app',
+          },
+        },
+      })
+    )
+
+    let reports: Awaited<ReturnType<typeof executeLintCommand>>['reports'] = []
+    const command = createLintCommand({
+      execute: async (queries, options, path) => {
+        const result = await executeLintCommand(queries, options, path, {
+          loadSavedQuery: noSnippets,
+          writeAudit: async () => null,
+        })
+        reports = result.reports
+        return result
+      },
+      writeOutput: () => undefined,
+    })
+    const program = new Command()
+      .name('dbcli')
+      .option('--config <path>', 'config path', '.dbcli')
+      .addCommand(command)
+
+    try {
+      await program.parseAsync(
+        [
+          '--config',
+          configPath,
+          'lint',
+          "SELECT id FROM users WHERE id = '1' AND id NOT IN (1, NULL)",
+          '--no-schema',
+        ],
+        { from: 'user' }
+      )
+
+      expect(await Bun.file(join(configPath, 'schemas')).exists()).toBe(false)
+      expect(reports).toHaveLength(1)
+      expect(reports[0].skippedRules).toEqual(
+        expect.arrayContaining([
+          { rule: 'implicit-cast', reason: 'blocked: --no-schema' },
+          { rule: 'not-in-nullable', reason: 'blocked: --no-schema' },
+        ])
+      )
+    } finally {
+      await Bun.$`rm -rf ${tempRoot}`
+    }
   })
 })
 

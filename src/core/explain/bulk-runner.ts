@@ -4,7 +4,7 @@
  * Input forms (in this order of resolution):
  *   @file/path.sql        → read file, split on `;`, strip comments
  *   @name (no `*`)        → saved-query lookup; falls back to file path
- *   @glob/* (contains *)  → saved-query glob expansion
+ *   @glob/* (contains *)  → saved-query glob, then filesystem-glob expansion
  *   anything else         → raw SQL string
  *
  * IO/store access is injected so the runner stays unit-testable.
@@ -37,13 +37,27 @@ export async function resolveBulkInputs(inputs: string[], deps: BulkDeps): Promi
     }
     const ref = raw.slice(1) // strip leading @
     if (ref.includes('*')) {
-      // Glob → saved queries
+      // Preserve saved-query glob precedence, then fall back to filesystem
+      // globs such as @queries/*.sql.
       const hits = await deps.loadFromSavedQueries(ref)
-      if (hits === null) {
-        throw new Error(`No saved queries match glob '${ref}'`)
+      if (hits !== null) {
+        for (const h of hits) {
+          out.push({ label: h.name, sql: h.sql })
+        }
+        continue
       }
-      for (const h of hits) {
-        out.push({ label: h.name, sql: h.sql })
+
+      const glob = new Bun.Glob(ref)
+      const filePaths: string[] = []
+      for await (const filePath of glob.scan({ absolute: true, onlyFiles: true })) {
+        filePaths.push(filePath)
+      }
+      filePaths.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+      if (filePaths.length === 0) {
+        throw new Error(`No saved queries or files match glob '${ref}'`)
+      }
+      for (const filePath of filePaths) {
+        appendFileInputs(out, filePath, await Bun.file(filePath).text())
       }
       continue
     }
@@ -59,14 +73,17 @@ export async function resolveBulkInputs(inputs: string[], deps: BulkDeps): Promi
     if (!existsSync(ref)) {
       throw new Error(`No such file or saved query: '${ref}'`)
     }
-    const text = await readFile(ref, 'utf-8')
-    const statements = splitSqlStatements(text)
-    const base = path.basename(ref)
-    statements.forEach((sql, i) => {
-      out.push({ label: `${base}#${i + 1}`, sql })
-    })
+    appendFileInputs(out, ref, await readFile(ref, 'utf-8'))
   }
   return out
+}
+
+function appendFileInputs(out: BulkInput[], filePath: string, text: string): void {
+  const statements = splitSqlStatements(text)
+  const base = path.basename(filePath)
+  statements.forEach((sql, index) => {
+    out.push({ label: `${base}#${index + 1}`, sql })
+  })
 }
 
 /**

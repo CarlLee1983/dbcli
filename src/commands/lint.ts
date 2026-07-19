@@ -33,6 +33,12 @@ export interface LintCommandOptions {
   recovery?: boolean
 }
 
+interface CommanderLintOptions extends Omit<LintCommandOptions, 'noSchema'> {
+  /** Commander represents the negated `--no-schema` option as `schema=false`. */
+  schema?: boolean
+  noSchema?: boolean
+}
+
 type SavedQueryLoader = (
   nameOrGlob: string
 ) => Promise<{ name: string; sql: string }[] | null>
@@ -232,6 +238,16 @@ export async function executeLintCommand(
   }
 }
 
+export function normalizeLintCommandOptions(
+  options: CommanderLintOptions
+): LintCommandOptions {
+  const { schema, ...rest } = options
+  return {
+    ...rest,
+    noSchema: rest.noSchema === true || schema === false,
+  }
+}
+
 function makeSavedQueryLoader(): SavedQueryLoader {
   return async (nameOrGlob) => {
     const snippetMap = await loadSnippets(resolveSnippetDirs(process.cwd()))
@@ -257,23 +273,45 @@ function makeSavedQueryLoader(): SavedQueryLoader {
   }
 }
 
-export const lintCommand = new Command()
-  .name('lint')
-  .description('Static SQL anti-pattern advisor with rewrite drafts (no DB connection)')
-  .argument('[queries...]', 'one or more SQL strings or @saved-query/@file references')
-  .option('--format <fmt>', `output format: ${FORMATS.join(' | ')}`, 'text')
-  .option('--min-severity <level>', `drop findings below: ${SEVERITIES.join(' | ')}`, 'info')
-  .option('--no-schema', 'skip schema-aware rules even when the cache exists')
-  .option('--bulk <input>', 'comma-separated list of @file / @glob / @saved-query inputs')
-  .option('--recovery', 'on failure, emit a structured recovery envelope')
-  .action(async (queries: string[], options: LintCommandOptions, command: Command) => {
-    const configPath = resolveConfigPath(command)
+interface LintCommandActionDeps {
+  execute: typeof executeLintCommand
+  writeOutput: (output: string) => void
+  writeError: (error: string) => void
+  exit: (code: number) => void
+}
 
-    try {
-      const { output } = await executeLintCommand(queries, options, configPath)
-      console.log(output)
-    } catch (error) {
-      console.error((error as Error).message)
-      process.exit(1)
-    }
-  })
+const defaultActionDeps: LintCommandActionDeps = {
+  execute: executeLintCommand,
+  writeOutput: (output) => console.log(output),
+  writeError: (error) => console.error(error),
+  exit: (code) => process.exit(code),
+}
+
+export function createLintCommand(
+  actionOverrides: Partial<LintCommandActionDeps> = {}
+): Command {
+  const actionDeps = { ...defaultActionDeps, ...actionOverrides }
+  return new Command()
+    .name('lint')
+    .description('Static SQL anti-pattern advisor with rewrite drafts (no DB connection)')
+    .argument('[queries...]', 'one or more SQL strings or @saved-query/@file references')
+    .option('--format <fmt>', `output format: ${FORMATS.join(' | ')}`, 'text')
+    .option('--min-severity <level>', `drop findings below: ${SEVERITIES.join(' | ')}`, 'info')
+    .option('--no-schema', 'skip schema-aware rules even when the cache exists')
+    .option('--bulk <input>', 'comma-separated list of @file / @glob / @saved-query inputs')
+    .option('--recovery', 'on failure, emit a structured recovery envelope')
+    .action(async (queries: string[], rawOptions: CommanderLintOptions, command: Command) => {
+      const configPath = resolveConfigPath(command)
+      const options = normalizeLintCommandOptions(rawOptions)
+
+      try {
+        const { output } = await actionDeps.execute(queries, options, configPath)
+        actionDeps.writeOutput(output)
+      } catch (error) {
+        actionDeps.writeError((error as Error).message)
+        actionDeps.exit(1)
+      }
+    })
+}
+
+export const lintCommand = createLintCommand()

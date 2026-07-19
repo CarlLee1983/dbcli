@@ -11,11 +11,7 @@
  */
 
 import { Command } from 'commander'
-import {
-  AdapterFactory,
-  type SqlConnectionOptions,
-  type SqlDatabaseSystem,
-} from '@/adapters'
+import { AdapterFactory, type SqlConnectionOptions, type SqlDatabaseSystem } from '@/adapters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { runQueryExplain } from '@/core/explain/runner'

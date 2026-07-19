@@ -153,8 +153,7 @@ export function splitSqlStatements(text: string): string[] {
 
     if (mode !== 'normal') {
       current += char
-      const quote =
-        mode === 'single' ? "'" : mode === 'double' ? '"' : '`'
+      const quote = mode === 'single' ? "'" : mode === 'double' ? '"' : '`'
       if (char === '\\' && next !== undefined) {
         current += next
         index++
@@ -188,14 +187,11 @@ export function splitSqlStatements(text: string): string[] {
     if (char === "'" || char === '"' || char === '`') {
       current += char
       hasCode = true
-      mode =
-        char === "'" ? 'single' : char === '"' ? 'double' : 'backtick'
+      mode = char === "'" ? 'single' : char === '"' ? 'double' : 'backtick'
       continue
     }
     if (char === '$') {
-      const delimiter = text
-        .slice(index)
-        .match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      const delimiter = text.slice(index).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
       if (delimiter) {
         current += delimiter
         hasCode = true

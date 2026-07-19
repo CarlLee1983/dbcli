@@ -83,9 +83,7 @@ describe('select-star', () => {
       name: 'x',
       columns: [{ name: 'physical_only', type: 'integer', nullable: false }],
     }
-    const findings = selectStarRule.check(
-      ctxFor('SELECT * FROM x', { x: physicalX })
-    )
+    const findings = selectStarRule.check(ctxFor('SELECT * FROM x', { x: physicalX }))
 
     expect(findings[0].rewrite?.sql).toBe('SELECT physical_only FROM x')
     expect(findings[0].rewrite?.confidence).toBe('high')
@@ -183,9 +181,7 @@ describe('select-star', () => {
       name: 'users',
       columns: [{ name: 'id', type: 'integer', nullable: false }],
     }
-    const findings = selectStarRule.check(
-      ctxFor('SELECT * FROM USERS', { users }, 'postgresql')
-    )
+    const findings = selectStarRule.check(ctxFor('SELECT * FROM USERS', { users }, 'postgresql'))
 
     expect(findings[0].rewrite?.sql).toBe('SELECT id FROM USERS')
     expect(findings[0].rewrite?.confidence).toBe('high')
@@ -203,9 +199,7 @@ describe('select-star', () => {
       ctxFor('/* retain * marker */ SELECT * FROM users', { users })
     )
 
-    expect(findings[0].rewrite?.sql).toBe(
-      '/* retain * marker */ SELECT id, email FROM users'
-    )
+    expect(findings[0].rewrite?.sql).toBe('/* retain * marker */ SELECT id, email FROM users')
     expect(findings[0].rewrite?.confidence).toBe('high')
     expect(findings[0].schemaVerified).toBe(true)
   })
@@ -254,20 +248,16 @@ describe('select-star', () => {
         { name: 'tick`name', type: 'text', nullable: false },
       ],
     }
-    const findings = selectStarRule.check(
-      ctxFor('SELECT * FROM users', { users }, 'mysql')
-    )
+    const findings = selectStarRule.check(ctxFor('SELECT * FROM users', { users }, 'mysql'))
 
-    expect(findings[0].rewrite?.sql).toBe(
-      'SELECT `select`, `full name`, `tick``name` FROM users'
-    )
+    expect(findings[0].rewrite?.sql).toBe('SELECT `select`, `full name`, `tick``name` FROM users')
     expect(findings[0].schemaVerified).toBe(true)
   })
 
   test('does not flag a backtick-quoted asterisk column in MySQL', () => {
-    expect(
-      selectStarRule.check(ctxFor('SELECT `*` FROM users', undefined, 'mysql'))
-    ).toHaveLength(0)
+    expect(selectStarRule.check(ctxFor('SELECT `*` FROM users', undefined, 'mysql'))).toHaveLength(
+      0
+    )
   })
 
   test('does not flag a backtick-quoted asterisk column in MariaDB', () => {
@@ -281,9 +271,7 @@ describe('select-star', () => {
   })
 
   test('no-ops on non-SELECT', () => {
-    expect(
-      selectStarRule.check(ctxFor("UPDATE users SET name = 'x' WHERE id = 1"))
-    ).toHaveLength(0)
+    expect(selectStarRule.check(ctxFor("UPDATE users SET name = 'x' WHERE id = 1"))).toHaveLength(0)
   })
 })
 

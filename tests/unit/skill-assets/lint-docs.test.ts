@@ -38,10 +38,8 @@ describe('lint documentation', () => {
     expect(reference).toContain('blocked: parse failed')
     expect(reference).toContain('blocked: --no-schema')
     expect(reference).toContain('blocked: schema cache unavailable')
-    expect(reference).toContain("@queries/**/*.sql")
-    expect(reference).toContain(
-      'only when the statement is structurally proven read-only'
-    )
+    expect(reference).toContain('@queries/**/*.sql')
+    expect(reference).toContain('only when the statement is structurally proven read-only')
     expect(reference).toContain('falls back to plain `dbcli explain`')
     for (const rule of RULES) expect(reference).toContain(`\`${rule}\``)
   })
@@ -77,19 +75,15 @@ describe('lint documentation', () => {
       ])
     const compactReference = reference.replace(/\s+/g, ' ')
 
-    expect(compactReference).toContain(
-      'All schema caches live beneath `.dbcli/schemas/`.',
-    )
+    expect(compactReference).toContain('All schema caches live beneath `.dbcli/schemas/`.')
     expect(compactReference).toContain('including the configured default')
     expect(compactReference).toContain(
-      'root `.dbcli/schemas/` directory is only the v1/legacy unnamed cache',
+      'root `.dbcli/schemas/` directory is only the v1/legacy unnamed cache'
     )
     expect(compactReference).toContain(
-      'Global `dbcli --use <conn> lint …` selects another named v2 slot.',
+      'Global `dbcli --use <conn> lint …` selects another named v2 slot.'
     )
-    expect(reference).not.toContain(
-      'The default connection uses `.dbcli/schemas/`',
-    )
+    expect(reference).not.toContain('The default connection uses `.dbcli/schemas/`')
 
     for (const doc of [englishMarkdown, englishHtml]) {
       expect(doc).toContain('including the configured default')

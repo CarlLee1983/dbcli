@@ -39,9 +39,7 @@ interface CommanderLintOptions extends Omit<LintCommandOptions, 'noSchema'> {
   noSchema?: boolean
 }
 
-type SavedQueryLoader = (
-  nameOrGlob: string
-) => Promise<{ name: string; sql: string }[] | null>
+type SavedQueryLoader = (nameOrGlob: string) => Promise<{ name: string; sql: string }[] | null>
 
 interface LintDeps {
   config: DbcliConfig
@@ -110,9 +108,7 @@ export async function runLint(
 
   const minSeverity = (options.minSeverity ?? 'info') as LintSeverity
   if (!SEVERITIES.includes(minSeverity)) {
-    throw new Error(
-      `Unknown --min-severity '${minSeverity}'. Allowed: ${SEVERITIES.join(', ')}`
-    )
+    throw new Error(`Unknown --min-severity '${minSeverity}'. Allowed: ${SEVERITIES.join(', ')}`)
   }
 
   const system = assertSqlSystem(deps.config)
@@ -156,11 +152,7 @@ export interface ExecuteLintRuntime {
   loadSavedQuery: SavedQueryLoader
   writeAudit: AuditWriter
   randomUUID: () => string
-  emitRecovery?: (
-    error: unknown,
-    context: RecoveryContext,
-    options: EmitOptions
-  ) => Promise<void>
+  emitRecovery?: (error: unknown, context: RecoveryContext, options: EmitOptions) => Promise<void>
 }
 
 const defaultExecuteRuntime: ExecuteLintRuntime = {
@@ -189,17 +181,19 @@ export async function executeLintCommand(
       ...loaded,
       loadSavedQuery: runtime.loadSavedQuery,
     })
-    await runtime.writeAudit(config, 'lint', { ...options, config: configPath }, {
-      success: true,
-      target: '*',
-      metadata: {
-        queries: result.reports.length,
-        findings: result.reports.reduce(
-          (total, report) => total + report.findings.length,
-          0
-        ),
-      },
-    })
+    await runtime.writeAudit(
+      config,
+      'lint',
+      { ...options, config: configPath },
+      {
+        success: true,
+        target: '*',
+        metadata: {
+          queries: result.reports.length,
+          findings: result.reports.reduce((total, report) => total + report.findings.length, 0),
+        },
+      }
+    )
     return result
   } catch (error) {
     const envelopeId = options.recovery === true ? runtime.randomUUID() : undefined
@@ -238,9 +232,7 @@ export async function executeLintCommand(
   }
 }
 
-export function normalizeLintCommandOptions(
-  options: CommanderLintOptions
-): LintCommandOptions {
+export function normalizeLintCommandOptions(options: CommanderLintOptions): LintCommandOptions {
   const { schema, ...rest } = options
   return {
     ...rest,
@@ -287,9 +279,7 @@ const defaultActionDeps: LintCommandActionDeps = {
   exit: (code) => process.exit(code),
 }
 
-export function createLintCommand(
-  actionOverrides: Partial<LintCommandActionDeps> = {}
-): Command {
+export function createLintCommand(actionOverrides: Partial<LintCommandActionDeps> = {}): Command {
   const actionDeps = { ...defaultActionDeps, ...actionOverrides }
   return new Command()
     .name('lint')

@@ -65,9 +65,9 @@ test.each([
     throw new Error('adapter must not execute')
   }
 
-  await expect(
-    runQueryExplain('postgresql', adapter, sql, { analyze: true })
-  ).rejects.toThrow('--analyze requires a proven read-only SELECT')
+  await expect(runQueryExplain('postgresql', adapter, sql, { analyze: true })).rejects.toThrow(
+    '--analyze requires a proven read-only SELECT'
+  )
   expect(executions).toBe(0)
 })
 
@@ -84,9 +84,9 @@ test.each([
       throw new Error('adapter must not execute')
     }
 
-    await expect(
-      runQueryExplain(system, adapter, sql, { analyze: true })
-    ).rejects.toThrow('--analyze requires a proven read-only SELECT')
+    await expect(runQueryExplain(system, adapter, sql, { analyze: true })).rejects.toThrow(
+      '--analyze requires a proven read-only SELECT'
+    )
     expect(executions).toBe(0)
   }
 )

@@ -32,11 +32,15 @@ afterEach(() => {
 
 describe('runLint', () => {
   test('lints an inline query and returns reports', async () => {
-    const { reports } = await runLint(['SELECT * FROM users'], { format: 'json' }, {
-      config: baseConfig,
-      schema,
-      loadSavedQuery: noSnippets,
-    })
+    const { reports } = await runLint(
+      ['SELECT * FROM users'],
+      { format: 'json' },
+      {
+        config: baseConfig,
+        schema,
+        loadSavedQuery: noSnippets,
+      }
+    )
 
     expect(reports).toHaveLength(1)
     expect(reports[0].findings.map((finding) => finding.rule)).toContain('select-star')
@@ -44,14 +48,18 @@ describe('runLint', () => {
 
   for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
     test(`routes ${system} to the matching parser dialect`, async () => {
-      const { reports } = await runLint(['SELECT id FROM users'], {}, {
-        config: {
-          ...baseConfig,
-          connection: { ...baseConfig.connection, system },
-        },
-        schema,
-        loadSavedQuery: noSnippets,
-      })
+      const { reports } = await runLint(
+        ['SELECT id FROM users'],
+        {},
+        {
+          config: {
+            ...baseConfig,
+            connection: { ...baseConfig.connection, system },
+          },
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
 
       expect(reports[0].dialect).toBe(system)
     })
@@ -59,17 +67,19 @@ describe('runLint', () => {
 
   test('rejects non-SQL systems', async () => {
     await expect(
-      runLint(['SELECT 1'], {}, {
-        config: {
-          ...baseConfig,
-          connection: { ...baseConfig.connection, system: 'redis' },
-        } as DbcliConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
-    ).rejects.toThrow(
-      'dbcli lint requires a SQL connection (postgresql/mysql/mariadb), got: redis'
-    )
+      runLint(
+        ['SELECT 1'],
+        {},
+        {
+          config: {
+            ...baseConfig,
+            connection: { ...baseConfig.connection, system: 'redis' },
+          } as DbcliConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
+    ).rejects.toThrow('dbcli lint requires a SQL connection (postgresql/mysql/mariadb), got: redis')
   })
 
   test('errors when no query is given', async () => {
@@ -96,11 +106,15 @@ describe('runLint', () => {
   test('resolves saved-query inputs through the injected loader', async () => {
     const loader = async (name: string) =>
       name === 'perf/top' ? [{ name: 'perf/top', sql: 'SELECT * FROM users' }] : null
-    const { reports } = await runLint(['@perf/top'], {}, {
-      config: baseConfig,
-      schema,
-      loadSavedQuery: loader,
-    })
+    const { reports } = await runLint(
+      ['@perf/top'],
+      {},
+      {
+        config: baseConfig,
+        schema,
+        loadSavedQuery: loader,
+      }
+    )
 
     expect(reports[0].label).toBe('perf/top')
     expect(reports[0].findings.map((finding) => finding.rule)).toContain('select-star')
@@ -111,11 +125,15 @@ describe('runLint', () => {
     const sqlPath = join(dir.trim(), 'queries.sql')
     await Bun.write(sqlPath, 'SELECT * FROM users; SELECT id FROM users;')
     try {
-      const { reports } = await runLint([], { bulk: `@${sqlPath},SELECT * FROM users` }, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
+      const { reports } = await runLint(
+        [],
+        { bulk: `@${sqlPath},SELECT * FROM users` },
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
 
       expect(reports).toHaveLength(3)
       expect(reports[0].label).toBe('queries.sql#1')
@@ -129,16 +147,17 @@ describe('runLint', () => {
     await Bun.write(join(dir, 'z-last.sql'), 'SELECT id FROM users;')
     await Bun.write(join(dir, 'a-first.sql'), 'SELECT * FROM users;')
     try {
-      const { reports } = await runLint([], { bulk: `@${dir}/*.sql` }, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
+      const { reports } = await runLint(
+        [],
+        { bulk: `@${dir}/*.sql` },
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
 
-      expect(reports.map((report) => report.label)).toEqual([
-        'a-first.sql#1',
-        'z-last.sql#1',
-      ])
+      expect(reports.map((report) => report.label)).toEqual(['a-first.sql#1', 'z-last.sql#1'])
       expect(reports.map((report) => report.sql)).toEqual([
         'SELECT * FROM users',
         'SELECT id FROM users',
@@ -152,25 +171,27 @@ describe('runLint', () => {
     const dir = (await Bun.$`mktemp -d`.text()).trim()
     const one = join(dir, 'a.sql')
     const two = join(dir, 'b.sql')
-    await Bun.write(
-      one,
-      "SELECT ';' AS marker, id FROM users; SELECT $$semi;colon$$ AS marker;"
-    )
-    await Bun.write(
-      two,
-      "SELECT id FROM users /* ; retained */; -- trailing ; comment\n"
-    )
+    await Bun.write(one, "SELECT ';' AS marker, id FROM users; SELECT $$semi;colon$$ AS marker;")
+    await Bun.write(two, 'SELECT id FROM users /* ; retained */; -- trailing ; comment\n')
     try {
-      const fileResult = await runLint([`@${one}`], {}, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
-      const globResult = await runLint([], { bulk: `@${dir}/*.sql` }, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
+      const fileResult = await runLint(
+        [`@${one}`],
+        {},
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
+      const globResult = await runLint(
+        [],
+        { bulk: `@${dir}/*.sql` },
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
 
       expect(fileResult.reports.map((report) => report.sql)).toEqual([
         "SELECT ';' AS marker, id FROM users",
@@ -185,24 +206,30 @@ describe('runLint', () => {
 
   test('validates output format', async () => {
     await expect(
-      runLint(['SELECT 1'], { format: 'yaml' }, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
+      runLint(
+        ['SELECT 1'],
+        { format: 'yaml' },
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
     ).rejects.toThrow("Unknown format 'yaml'. Allowed: text, json, markdown")
   })
 
   test('validates minimum severity', async () => {
     await expect(
-      runLint(['SELECT 1'], { minSeverity: 'critical' }, {
-        config: baseConfig,
-        schema,
-        loadSavedQuery: noSnippets,
-      })
-    ).rejects.toThrow(
-      "Unknown --min-severity 'critical'. Allowed: info, warn, error"
-    )
+      runLint(
+        ['SELECT 1'],
+        { minSeverity: 'critical' },
+        {
+          config: baseConfig,
+          schema,
+          loadSavedQuery: noSnippets,
+        }
+      )
+    ).rejects.toThrow("Unknown --min-severity 'critical'. Allowed: info, warn, error")
   })
 })
 
@@ -230,7 +257,11 @@ describe('loadLintCommandDeps', () => {
     } as DbcliConfig
 
     await expect(
-      loadLintCommandDeps('.dbcli', {}, loaders(redisConfig, () => schemaLoads++))
+      loadLintCommandDeps(
+        '.dbcli',
+        {},
+        loaders(redisConfig, () => schemaLoads++)
+      )
     ).rejects.toThrow('dbcli lint requires a SQL connection')
     expect(schemaLoads).toBe(0)
   })
@@ -353,18 +384,22 @@ describe('loadLintCommandDeps', () => {
     setGlobalConnectionName('staging')
     let selectedSlot: string | undefined
     try {
-      await loadLintCommandDeps(configPath, {}, {
-        readConfig: async () => baseConfig,
-        resolveStoragePath: async (path) => path,
-        resolveConnectionName: async (path) => {
-          const { getSchemaIsolationConnectionName } = await import('@/core/config')
-          return getSchemaIsolationConnectionName(path)
-        },
-        loadSchema: async (_path, connectionName) => {
-          selectedSlot = connectionName
-          return schema
-        },
-      })
+      await loadLintCommandDeps(
+        configPath,
+        {},
+        {
+          readConfig: async () => baseConfig,
+          resolveStoragePath: async (path) => path,
+          resolveConnectionName: async (path) => {
+            const { getSchemaIsolationConnectionName } = await import('@/core/config')
+            return getSchemaIsolationConnectionName(path)
+          },
+          loadSchema: async (_path, connectionName) => {
+            selectedSlot = connectionName
+            return schema
+          },
+        }
+      )
     } finally {
       await Bun.$`rm -rf ${tempRoot}`
     }
@@ -377,13 +412,7 @@ describe('lint command registration surface', () => {
   test('exports the lint command with static-analysis options', () => {
     expect(lintCommand.name()).toBe('lint')
     expect(lintCommand.options.map((option) => option.long)).toEqual(
-      expect.arrayContaining([
-        '--format',
-        '--min-severity',
-        '--no-schema',
-        '--bulk',
-        '--recovery',
-      ])
+      expect.arrayContaining(['--format', '--min-severity', '--no-schema', '--bulk', '--recovery'])
     )
     expect(lintCommand.options.map((option) => option.long)).not.toContain('--use')
   })
@@ -486,9 +515,7 @@ describe('executeLintCommand audit and recovery wiring', () => {
     expect(result.reports).toHaveLength(1)
     expect(auditCalls).toHaveLength(1)
     expect(auditCalls[0][1]).toBe('lint')
-    expect(auditCalls[0][2]).toEqual(
-      expect.objectContaining({ config: '/project/.dbcli' })
-    )
+    expect(auditCalls[0][2]).toEqual(expect.objectContaining({ config: '/project/.dbcli' }))
     expect(auditCalls[0][3]).toEqual({
       success: true,
       target: '*',

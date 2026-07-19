@@ -5,6 +5,26 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.40.0] - 2026-07-19 - SQL Lint、安全強化與 Agent 工作流擴充
+
+### Added
+
+- **新增唯讀 `dbcli lint` 靜態 SQL 顧問。** 支援 inline SQL、saved query、SQL 檔案與 glob／混合批次輸入，提供 text、JSON、Markdown 輸出、最低嚴重度篩選、`--no-schema` 與 `--recovery`；指令不連線、不執行 SQL，也不會自動套用 rewrite。
+- **九條結構與 schema-aware lint 規則。** 涵蓋 `SELECT *`、未錨定 `LIKE`、深度 `OFFSET`、non-sargable predicate、`OR`／subquery 改寫機會、重複 `DISTINCT` + `GROUP BY`、implicit cast，以及 `NOT IN` 右側 NULL 風險；finding 可附 confidence 標籤的草稿與 shell-safe 驗證指令。
+- **MongoDB agent task packs。** 新增 `mongo-safe-backfill` 與 `mongo-schema-drift-review`，補上 MongoDB 安全回填與 schema drift 檢視工作流。
+
+### Changed
+
+- **Slow-query guide 納入 lint。** `guide slow-query` 現在會先安排本機靜態分析，再銜接 explain 與診斷 snippets，brief plan 也保留執行 metadata。
+- **Agent 與使用者文件完整同步。** `lint` 已寫入 skill assets、platform plugin 副本及英文／繁體中文 Markdown 與 HTML 文件；GitHub Pages 產品介紹頁同步完成雙語、可及性與行動裝置導覽重構。
+- **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.40.0`。
+
+### Fixed
+
+- **Lint 採 fail-closed 安全邊界。** 解析失敗、schema binding 不明、identifier 大小寫碰撞、CTE／derived／qualified relation 與不安全 rewrite proof 會阻擋對應建議，不再借用不可靠的 cache facts。
+- **`NOT IN` NULL 分析補齊 scope 與 provenance。** 遞迴處理巢狀 SELECT、CTE、derived statement、JOIN `ON`、`WHERE`、`HAVING`、outer-join null extension、nullable 投影與 CASE／cast／aggregate，並保留正確 traversal order。
+- **Lint audit／recovery 遮蔽與驗證指令硬化。** positional、global、bulk 與 `--` 後的 SQL 都會遮蔽；只有結構上已證明唯讀的 SQL 才建議 `explain --analyze`，session assignment 與 function-bearing statement 會保守退回 plain explain。
+
 ## [1.39.2] - 2026-07-03 - Windows 跨平台、skill 安裝安全與 plugin 版本對齊
 
 > npm `1.39.1` 已於 2026-06-30 發布；本批修復在其後累積於同一版號下（npm 版本不可覆蓋），故獨立為 1.39.2 以便日後發布。

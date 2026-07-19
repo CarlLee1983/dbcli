@@ -2,17 +2,11 @@ import type { TableSchema } from '@/adapters/types'
 import { SchemaLayeredLoader } from '@/core/schema-loader'
 import type { SchemaContext } from '@/core/lint/types'
 
-export function buildSchemaContext(
-  schema: Record<string, TableSchema> | undefined
-): SchemaContext {
+export function buildSchemaContext(schema: Record<string, TableSchema> | undefined): SchemaContext {
   const exactTables = new Map<string, TableSchema[]>()
   const foldedTables = new Map<string, TableSchema[]>()
 
-  const addTableAlias = (
-    index: Map<string, TableSchema[]>,
-    alias: string,
-    table: TableSchema
-  ) => {
+  const addTableAlias = (index: Map<string, TableSchema[]>, alias: string, table: TableSchema) => {
     const matches = index.get(alias) ?? []
     if (!matches.includes(table)) matches.push(table)
     index.set(alias, matches)
@@ -54,9 +48,7 @@ export function buildSchemaContext(
     resolveColumn(candidateTables, column) {
       for (const candidateTable of candidateTables) {
         const table = resolveTable(candidateTable)
-        const resolvedColumn = table
-          ? resolveTableColumn(table, column)
-          : undefined
+        const resolvedColumn = table ? resolveTableColumn(table, column) : undefined
         if (table && resolvedColumn) {
           return { table: table.name, column: resolvedColumn }
         }

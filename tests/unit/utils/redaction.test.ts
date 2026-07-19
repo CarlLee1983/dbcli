@@ -55,36 +55,20 @@ describe('redaction utils', () => {
           'warn',
           '--recovery',
         ])
-      ).toBe(
-        'dbcli lint --bulk <redacted> --min-severity warn --recovery'
-      )
+      ).toBe('dbcli lint --bulk <redacted> --min-severity warn --recovery')
     })
 
     test('redacts leading-comment lint SQL after the end-of-options delimiter', () => {
       const sql = "-- SQL_SECRET_COMMENT\nSELECT 'SQL_SECRET_VALUE'"
-      expect(
-        redactArgv([
-          'dbcli',
-          'lint',
-          '--format',
-          'json',
-          '--no-schema',
-          '--',
-          sql,
-        ])
-      ).toBe('dbcli lint --format json --no-schema -- <sql>')
+      expect(redactArgv(['dbcli', 'lint', '--format', 'json', '--no-schema', '--', sql])).toBe(
+        'dbcli lint --format json --no-schema -- <sql>'
+      )
     })
 
     test('treats only known pre-delimiter options as options for lint redaction', () => {
-      expect(
-        redactArgv([
-          'dbcli',
-          'lint',
-          '--unknown-sql-prefix',
-          '--format',
-          'json',
-        ])
-      ).toBe('dbcli lint <sql> --format json')
+      expect(redactArgv(['dbcli', 'lint', '--unknown-sql-prefix', '--format', 'json'])).toBe(
+        'dbcli lint <sql> --format json'
+      )
     })
 
     test('keeps safe flags', () => {

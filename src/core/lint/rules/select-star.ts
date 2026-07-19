@@ -123,10 +123,7 @@ function unquotedStarIndexes(sql: string): number[] {
   return indexes
 }
 
-function projectionWildcardIndexes(
-  sql: string,
-  system: SqlDatabaseSystem
-): number[] {
+function projectionWildcardIndexes(sql: string, system: SqlDatabaseSystem): number[] {
   const matches: number[] = []
   for (const index of unquotedStarIndexes(sql)) {
     const candidate = `${sql.slice(0, index)}${PROJECTION_MARKER}${sql.slice(index + 1)}`
@@ -144,10 +141,7 @@ function projectionWildcardIndexes(
 function canUseBareIdentifier(name: string, system: SqlDatabaseSystem): boolean {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) return false
   try {
-    const ast = parseSingleStatement(
-      `SELECT ${name} FROM __dbcli_lint_identifier_probe`,
-      system
-    )
+    const ast = parseSingleStatement(`SELECT ${name} FROM __dbcli_lint_identifier_probe`, system)
     if (!Array.isArray(ast.columns) || ast.columns.length !== 1) return false
     const column = ast.columns[0] as AstNode
     const expr = columnExpr(column)
@@ -186,11 +180,7 @@ export const selectStarRule: LintRule = {
     }
     const tableName = singlePhysicalTable(ctx.ast)
 
-    if (
-      ctx.schema.available &&
-      tableName &&
-      isSoleUnqualifiedStar(ctx.ast)
-    ) {
+    if (ctx.schema.available && tableName && isSoleUnqualifiedStar(ctx.ast)) {
       const table = ctx.schema.getTable(tableName)
       if (table && table.columns.length > 0) {
         if (wildcardIndexes.length === 1) {

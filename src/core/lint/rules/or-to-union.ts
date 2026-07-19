@@ -41,11 +41,7 @@ export const orToUnionRule: LintRule = {
   requiresSchema: false,
   check(ctx) {
     const where = whereOf(ctx.ast)
-    if (
-      !where ||
-      where.type !== 'binary_expr' ||
-      String(where.operator).toUpperCase() !== 'OR'
-    ) {
+    if (!where || where.type !== 'binary_expr' || String(where.operator).toUpperCase() !== 'OR') {
       return []
     }
 

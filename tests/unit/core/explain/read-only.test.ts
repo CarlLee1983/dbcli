@@ -26,9 +26,9 @@ describe('isProvenReadOnlySql', () => {
   })
 
   test('rejects SELECT INTO because it creates a table', () => {
-    expect(
-      isProvenReadOnlySql('SELECT id INTO archived_users FROM users', 'postgresql')
-    ).toBe(false)
+    expect(isProvenReadOnlySql('SELECT id INTO archived_users FROM users', 'postgresql')).toBe(
+      false
+    )
   })
 
   test.each([
@@ -36,22 +36,16 @@ describe('isProvenReadOnlySql', () => {
     ['SELECT @session_value := id FROM users', 'mysql'],
     ['SELECT @session_value := 1', 'mariadb'],
     ['SELECT @session_value := id FROM users', 'mariadb'],
-  ] as const)(
-    'rejects session-variable assignment expressions: %s (%s)',
-    (sql, system) => {
-      expect(isProvenReadOnlySql(sql, system)).toBe(false)
-    }
-  )
+  ] as const)('rejects session-variable assignment expressions: %s (%s)', (sql, system) => {
+    expect(isProvenReadOnlySql(sql, system)).toBe(false)
+  })
 
   test.each([
     ['SELECT 1 INTO @session_value', 'mysql'],
     ['SELECT 1 INTO @session_value', 'mariadb'],
-  ] as const)(
-    'rejects SELECT INTO session-variable mutation: %s (%s)',
-    (sql, system) => {
-      expect(isProvenReadOnlySql(sql, system)).toBe(false)
-    }
-  )
+  ] as const)('rejects SELECT INTO session-variable mutation: %s (%s)', (sql, system) => {
+    expect(isProvenReadOnlySql(sql, system)).toBe(false)
+  })
 
   test.each(['mysql', 'mariadb'] as const)(
     'keeps session-variable comparisons distinct from assignment (%s)',
@@ -71,10 +65,7 @@ describe('isProvenReadOnlySql', () => {
     ['SELECT * FROM arbitrary_table_function(1)', 'postgresql'],
     ['SELECT arbitrary_udf(id) FROM users', 'mysql'],
     ['SELECT arbitrary_udf(id) FROM users', 'mariadb'],
-  ] as const)(
-    'rejects function-bearing SELECTs as unproven: %s',
-    (sql, system) => {
-      expect(isProvenReadOnlySql(sql, system)).toBe(false)
-    }
-  )
+  ] as const)('rejects function-bearing SELECTs as unproven: %s', (sql, system) => {
+    expect(isProvenReadOnlySql(sql, system)).toBe(false)
+  })
 })

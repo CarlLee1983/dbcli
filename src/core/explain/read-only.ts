@@ -53,10 +53,7 @@ function containsAnalyzeUnsafeNode(node: unknown): boolean {
  * execute the supplied statement. Parse failures and unsupported constructs
  * are deliberately treated as unproven.
  */
-export function isProvenReadOnlySql(
-  sql: string,
-  system: SqlDatabaseSystem
-): boolean {
+export function isProvenReadOnlySql(sql: string, system: SqlDatabaseSystem): boolean {
   let ast: unknown
   try {
     ast = parser.astify(sql, { database: DIALECT[system] })
@@ -77,10 +74,7 @@ export function isProvenReadOnlySql(
   )
 }
 
-export function assertAnalyzeReadOnlySql(
-  sql: string,
-  system: SqlDatabaseSystem
-): void {
+export function assertAnalyzeReadOnlySql(sql: string, system: SqlDatabaseSystem): void {
   if (!isProvenReadOnlySql(sql, system)) {
     throw new Error(
       'dbcli explain --analyze requires a proven read-only SELECT; use plain dbcli explain for write-capable or unrecognized SQL'

@@ -53,17 +53,11 @@ export function escapeDoubleQuotedShellArgument(value: string): string {
   return value.replace(/[\\$`"]/g, '\\$&')
 }
 
-export function explainWith(
-  sql: string,
-  system: SqlDatabaseSystem = 'postgresql'
-): string {
+export function explainWith(sql: string, system: SqlDatabaseSystem = 'postgresql'): string {
   const analyze = isProvenReadOnlySql(sql, system) ? ' --analyze' : ''
   return `dbcli explain${analyze} "${escapeDoubleQuotedShellArgument(sql)}"`
 }
 
-export function verifyWith(
-  sql: string,
-  system: SqlDatabaseSystem = 'postgresql'
-): string {
+export function verifyWith(sql: string, system: SqlDatabaseSystem = 'postgresql'): string {
   return explainWith(sql, system)
 }

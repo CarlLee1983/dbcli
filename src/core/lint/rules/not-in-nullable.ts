@@ -1,8 +1,4 @@
-import {
-  columnRefParts,
-  lexicalFindingSpan,
-  resolveColumnRef,
-} from '@/core/lint/ast-utils'
+import { columnRefParts, lexicalFindingSpan, resolveColumnRef } from '@/core/lint/ast-utils'
 import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { AstNode, LintFinding, LintRule } from '@/core/lint/types'
 
@@ -42,16 +38,8 @@ const NULL_PROPAGATING_BINARY = new Set([
   'OR',
 ])
 const NULL_PROPAGATING_UNARY = new Set(['+', '-', '~', 'NOT'])
-const COMMON_NULL_ON_EMPTY_AGGREGATES = [
-  'MIN',
-  'MAX',
-  'AVG',
-  'SUM',
-] as const
-const NULL_ON_EMPTY_FUNCTION_AGGREGATES: Record<
-  SqlDatabaseSystem,
-  ReadonlySet<string>
-> = {
+const COMMON_NULL_ON_EMPTY_AGGREGATES = ['MIN', 'MAX', 'AVG', 'SUM'] as const
+const NULL_ON_EMPTY_FUNCTION_AGGREGATES: Record<SqlDatabaseSystem, ReadonlySet<string>> = {
   postgresql: new Set([
     ...COMMON_NULL_ON_EMPTY_AGGREGATES,
     'ARRAY_AGG',
@@ -135,9 +123,7 @@ interface RelationBinding {
 function expressionName(node: AstNode): string | undefined {
   const reference = columnRefParts(node)
   if (!reference) return undefined
-  return reference.qualifier
-    ? `${reference.qualifier}.${reference.column}`
-    : reference.column
+  return reference.qualifier ? `${reference.qualifier}.${reference.column}` : reference.column
 }
 
 function relationBindings(statement: AstNode): RelationBinding[] {
@@ -146,24 +132,16 @@ function relationBindings(statement: AstNode): RelationBinding[] {
 
   for (const item of statement.from) {
     const source = item as AstNode
-    const join = typeof source.join === 'string'
-      ? source.join.toUpperCase()
-      : ''
-    const nullExtendsPrevious =
-      join.startsWith('RIGHT') || join.startsWith('FULL')
-    const nullExtendsCurrent =
-      join.startsWith('LEFT') || join.startsWith('FULL')
+    const join = typeof source.join === 'string' ? source.join.toUpperCase() : ''
+    const nullExtendsPrevious = join.startsWith('RIGHT') || join.startsWith('FULL')
+    const nullExtendsCurrent = join.startsWith('LEFT') || join.startsWith('FULL')
 
     if (nullExtendsPrevious) {
       for (const binding of bindings) binding.nullExtended = true
     }
 
-    const table =
-      typeof source.table === 'string' ? source.table : undefined
-    const qualifier =
-      typeof source.as === 'string' && source.as.length > 0
-        ? source.as
-        : table
+    const table = typeof source.table === 'string' ? source.table : undefined
+    const qualifier = typeof source.as === 'string' && source.as.length > 0 ? source.as : table
     if (!qualifier) continue
     bindings.push({
       ...(table === undefined ? {} : { table }),
@@ -187,12 +165,9 @@ function columnNullExtension(
 
   if (reference.qualifier) {
     const matches = bindings.filter(
-      (binding) =>
-        binding.qualifier.toLowerCase() === reference.qualifier?.toLowerCase()
+      (binding) => binding.qualifier.toLowerCase() === reference.qualifier?.toLowerCase()
     )
-    return matches.length === 1 && matches[0]!.nullExtended
-      ? { schemaVerified: false }
-      : undefined
+    return matches.length === 1 && matches[0]!.nullExtended ? { schemaVerified: false } : undefined
   }
 
   if (!allowSchema) return undefined
@@ -201,14 +176,9 @@ function columnNullExtension(
   const matches = bindings.filter((binding) => {
     if (!binding.table) return false
     const candidate = schema.resolveColumn([binding.table], reference.column)
-    return (
-      candidate?.table === resolved.table &&
-      candidate.column.name === resolved.column.name
-    )
+    return candidate?.table === resolved.table && candidate.column.name === resolved.column.name
   })
-  return matches.length === 1 && matches[0]!.nullExtended
-    ? { schemaVerified: true }
-    : undefined
+  return matches.length === 1 && matches[0]!.nullExtended ? { schemaVerified: true } : undefined
 }
 
 function aggregateName(node: AstNode): string | undefined {
@@ -226,9 +196,7 @@ function scopedProjectedExpression(
   statement: AstNode
 ): { expression: AstNode; statement: AstNode } | undefined {
   const reference = columnRefParts(node)
-  const sources = Array.isArray(statement.from)
-    ? (statement.from as AstNode[])
-    : []
+  const sources = Array.isArray(statement.from) ? (statement.from as AstNode[]) : []
   if (!reference || sources.length !== 1) return undefined
 
   const source = sources[0]!
@@ -238,10 +206,7 @@ function scopedProjectedExpression(
       : typeof source.table === 'string'
         ? source.table
         : undefined
-  if (
-    reference.qualifier &&
-    sourceQualifier?.toLowerCase() !== reference.qualifier.toLowerCase()
-  ) {
+  if (reference.qualifier && sourceQualifier?.toLowerCase() !== reference.qualifier.toLowerCase()) {
     return undefined
   }
 
@@ -260,10 +225,7 @@ function scopedProjectedExpression(
     const matches = (statement.with as AstNode[]).filter((binding) => {
       if (!binding.name || typeof binding.name !== 'object') return false
       const value = (binding.name as AstNode).value
-      return (
-        typeof value === 'string' &&
-        value.toLowerCase() === sourceTable.toLowerCase()
-      )
+      return typeof value === 'string' && value.toLowerCase() === sourceTable.toLowerCase()
     })
     if (matches.length !== 1) return undefined
     const stmt = matches[0]!.stmt
@@ -299,12 +261,7 @@ function nullableExpression(
   }
 
   if (node.type === 'column_ref') {
-    const nullExtension = columnNullExtension(
-      node,
-      statement,
-      schema,
-      allowSchema
-    )
+    const nullExtension = columnNullExtension(node, statement, schema, allowSchema)
     if (nullExtension) {
       return {
         expression: expressionName(node) ?? 'column',
@@ -351,13 +308,7 @@ function nullableExpression(
     for (const argument of args) {
       const result = argument.result as AstNode | undefined
       if (!result) continue
-      const nullable = nullableExpression(
-        result,
-        statement,
-        schema,
-        system,
-        allowSchema
-      )
+      const nullable = nullableExpression(result, statement, schema, system, allowSchema)
       if (nullable) return nullable
     }
     return undefined
@@ -385,13 +336,7 @@ function nullableExpression(
   if (node.type === 'cast') {
     const expression = node.expr as AstNode | undefined
     if (expression) {
-      return nullableExpression(
-        expression,
-        statement,
-        schema,
-        system,
-        allowSchema
-      )
+      return nullableExpression(expression, statement, schema, system, allowSchema)
     }
   }
 
@@ -403,13 +348,7 @@ function nullableExpression(
     const right = node.right as AstNode | undefined
     for (const candidate of [left, right]) {
       if (!candidate) continue
-      const nullable = nullableExpression(
-        candidate,
-        statement,
-        schema,
-        system,
-        allowSchema
-      )
+      const nullable = nullableExpression(candidate, statement, schema, system, allowSchema)
       if (nullable) return nullable
     }
   }
@@ -420,13 +359,7 @@ function nullableExpression(
   ) {
     const expression = node.expr as AstNode | undefined
     if (expression) {
-      return nullableExpression(
-        expression,
-        statement,
-        schema,
-        system,
-        allowSchema
-      )
+      return nullableExpression(expression, statement, schema, system, allowSchema)
     }
   }
 
@@ -466,8 +399,7 @@ function equivalentExpression(
     return (
       leftReference !== null &&
       rightReference !== null &&
-      leftReference.qualifier?.toLowerCase() ===
-        rightReference.qualifier?.toLowerCase() &&
+      leftReference.qualifier?.toLowerCase() === rightReference.qualifier?.toLowerCase() &&
       leftReference.column.toLowerCase() === rightReference.column.toLowerCase()
     )
   }
@@ -487,8 +419,7 @@ function equivalentExpression(
     const rightLeft = right.left as AstNode | undefined
     const rightRight = right.right as AstNode | undefined
     return (
-      String(left.operator).toUpperCase() ===
-        String(right.operator).toUpperCase() &&
+      String(left.operator).toUpperCase() === String(right.operator).toUpperCase() &&
       !!leftLeft &&
       !!leftRight &&
       !!rightLeft &&
@@ -502,8 +433,7 @@ function equivalentExpression(
     const leftExpr = left.expr as AstNode | undefined
     const rightExpr = right.expr as AstNode | undefined
     return (
-      String(left.operator).toUpperCase() ===
-        String(right.operator).toUpperCase() &&
+      String(left.operator).toUpperCase() === String(right.operator).toUpperCase() &&
       !!leftExpr &&
       !!rightExpr &&
       equivalentExpression(leftExpr, rightExpr, statement, schema)
@@ -534,17 +464,10 @@ function equivalentStructure(
       Array.isArray(left) &&
       Array.isArray(right) &&
       left.length === right.length &&
-      left.every((value, index) =>
-        equivalentStructure(value, right[index], statement, schema)
-      )
+      left.every((value, index) => equivalentStructure(value, right[index], statement, schema))
     )
   }
-  if (
-    !left ||
-    typeof left !== 'object' ||
-    !right ||
-    typeof right !== 'object'
-  ) {
+  if (!left || typeof left !== 'object' || !right || typeof right !== 'object') {
     return false
   }
 
@@ -559,9 +482,7 @@ function equivalentStructure(
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every((key, index) => key === rightKeys[index]) &&
-    leftKeys.every((key) =>
-      equivalentStructure(leftNode[key], rightNode[key], statement, schema)
-    )
+    leftKeys.every((key) => equivalentStructure(leftNode[key], rightNode[key], statement, schema))
   )
 }
 
@@ -597,12 +518,7 @@ function predicateNullRejectsProjection(
   if (!testedExpression || (operator === 'IS NOT' && right?.type !== 'null')) {
     return false
   }
-  return equivalentExpression(
-    testedExpression,
-    projection,
-    statement,
-    schema
-  )
+  return equivalentExpression(testedExpression, projection, statement, schema)
 }
 
 function rhsHazard(
@@ -624,18 +540,10 @@ function rhsHazard(
     if (subquery && typeof subquery === 'object') {
       const expression = projectedExpression(subquery as AstNode)
       if (!expression) continue
-      const nullable = nullableExpression(
-        expression,
-        subquery as AstNode,
-        schema,
-        system
-      )
+      const nullable = nullableExpression(expression, subquery as AstNode, schema, system)
       if (
         nullable &&
-        ![
-          (subquery as AstNode).where,
-          (subquery as AstNode).having,
-        ].some((predicate) =>
+        ![(subquery as AstNode).where, (subquery as AstNode).having].some((predicate) =>
           predicateNullRejectsProjection(
             predicate as AstNode | undefined,
             expression,
@@ -682,11 +590,7 @@ function hazardMessage(hazard: NullHazard): string {
 
 type NotInVisitor = (node: AstNode, statement: AstNode) => void
 
-function visitExpression(
-  value: unknown,
-  statement: AstNode,
-  visitNotIn: NotInVisitor
-): void {
+function visitExpression(value: unknown, statement: AstNode, visitNotIn: NotInVisitor): void {
   if (!value || typeof value !== 'object') return
   if (Array.isArray(value)) {
     for (const item of value) visitExpression(item, statement, visitNotIn)
@@ -741,10 +645,7 @@ function visitStatement(statement: AstNode, visitNotIn: NotInVisitor): void {
       delete currentSourceBeforeJoin.join
       const onStatement: AstNode = {
         ...statement,
-        from: [
-          ...sources.slice(0, index),
-          currentSourceBeforeJoin,
-        ],
+        from: [...sources.slice(0, index), currentSourceBeforeJoin],
       }
       visitExpression(source.on, onStatement, visitNotIn)
     }
@@ -771,33 +672,20 @@ export const notInNullableRule: LintRule = {
     let notInSearchIndex = 0
 
     visitStatement(ctx.ast, (node, statement) => {
-      const candidateSpan = lexicalFindingSpan(
-        ctx.sql,
-        'not in',
-        notInSearchIndex
-      )
+      const candidateSpan = lexicalFindingSpan(ctx.sql, 'not in', notInSearchIndex)
       const hasExactSpan =
         candidateSpan.start >= notInSearchIndex &&
-        ctx.sql
-          .slice(candidateSpan.start, candidateSpan.end)
-          .toLowerCase() === 'not in'
+        ctx.sql.slice(candidateSpan.start, candidateSpan.end).toLowerCase() === 'not in'
       if (hasExactSpan) notInSearchIndex = candidateSpan.end
 
-      const hazard = rhsHazard(
-        node.right as AstNode | undefined,
-        statement,
-        ctx.schema,
-        ctx.system
-      )
+      const hazard = rhsHazard(node.right as AstNode | undefined, statement, ctx.schema, ctx.system)
       if (!hazard) return
 
       findings.push({
         rule: 'not-in-nullable',
         severity: 'warn',
         message: hazardMessage(hazard),
-        span: hasExactSpan
-          ? candidateSpan
-          : { start: 0, end: ctx.sql.length },
+        span: hasExactSpan ? candidateSpan : { start: 0, end: ctx.sql.length },
         schemaVerified: hazard.schemaVerified,
       })
     })

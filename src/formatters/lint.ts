@@ -34,9 +34,7 @@ function formatTextReport(report: LintReport): string {
       lines.push(`  ${finding.message}`)
       lines.push(`  Span: ${finding.span.start}..${finding.span.end}`)
       if (finding.rewrite) {
-        lines.push(
-          `  Rewrite (${finding.rewrite.confidence}): ${finding.rewrite.sql}`
-        )
+        lines.push(`  Rewrite (${finding.rewrite.confidence}): ${finding.rewrite.sql}`)
       }
       if (finding.verifyCommand) lines.push(`  Verify: ${finding.verifyCommand}`)
     }
@@ -94,9 +92,7 @@ function formatMarkdownReport(report: LintReport): string {
   if (report.skippedRules.length > 0) {
     lines.push('', '**Skipped rules:**')
     for (const skipped of report.skippedRules) {
-      lines.push(
-        `- ${escapeMarkdown(skipped.rule)} — ${escapeMarkdown(skipped.reason)}`
-      )
+      lines.push(`- ${escapeMarkdown(skipped.rule)} — ${escapeMarkdown(skipped.reason)}`)
     }
   }
 
@@ -132,10 +128,7 @@ function escapeMarkdown(value: string): string {
 }
 
 function fencedCode(value: string, language: string): string {
-  const longestRun = Math.max(
-    0,
-    ...Array.from(value.matchAll(/`+/g), (match) => match[0].length)
-  )
+  const longestRun = Math.max(0, ...Array.from(value.matchAll(/`+/g), (match) => match[0].length))
   const fence = '`'.repeat(Math.max(3, longestRun + 1))
   return `${fence}${language}\n${value}\n${fence}`
 }

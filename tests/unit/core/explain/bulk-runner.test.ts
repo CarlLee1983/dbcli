@@ -39,9 +39,7 @@ SELECT count(*) FROM users;
     loadFromSavedQueries: async () => null,
   })
   expect(inputs).toHaveLength(2)
-  expect(inputs[0]?.sql).toBe(
-    '-- analytics queries\nSELECT * FROM orders WHERE id = 1'
-  )
+  expect(inputs[0]?.sql).toBe('-- analytics queries\nSELECT * FROM orders WHERE id = 1')
   expect(inputs[1]?.sql).toBe('-- next one\nSELECT count(*) FROM users')
   expect(inputs[0]?.label).toBe(`${path.basename(sqlFile)}#1`)
   cleanup()

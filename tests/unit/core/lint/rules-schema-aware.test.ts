@@ -66,9 +66,7 @@ describe('implicit-cast', () => {
     expect(findings[0].severity).toBe('warn')
     expect(findings[0].schemaVerified).toBe(true)
     expect(findings[0].rewrite?.sql).toContain('id = 42')
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      "id = '42'"
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe("id = '42'")
   })
 
   test('flags number literal compared to string column', () => {
@@ -89,28 +87,19 @@ describe('implicit-cast', () => {
       expect(findings[0].rewrite?.sql).toBe('SELECT id FROM users WHERE 42 < id')
       expect(findings[0].rewrite?.confidence).toBe('high')
       expect(findings[0].message).toContain("'id'")
-      expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-        "'42' < id"
-      )
+      expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe("'42' < id")
     })
   }
 
   test('literal-left rewrite preserves the original comparison operator', () => {
-    const findings = implicitCastRule.check(
-      ctxFor("SELECT id FROM users WHERE '42' >= id", schema)
-    )
+    const findings = implicitCastRule.check(ctxFor("SELECT id FROM users WHERE '42' >= id", schema))
 
-    expect(findings[0].rewrite?.sql).toBe(
-      'SELECT id FROM users WHERE 42 >= id'
-    )
+    expect(findings[0].rewrite?.sql).toBe('SELECT id FROM users WHERE 42 >= id')
   })
 
   test('withholds literal-left rewrites when targeting is ambiguous', () => {
     const findings = implicitCastRule.check(
-      ctxFor(
-        "SELECT id FROM users WHERE '42' < id OR '42' < id",
-        schema
-      )
+      ctxFor("SELECT id FROM users WHERE '42' < id OR '42' < id", schema)
     )
 
     expect(findings).toHaveLength(2)
@@ -126,11 +115,7 @@ describe('implicit-cast', () => {
       ],
     }
     const findings = implicitCastRule.check(
-      ctxFor(
-        'SELECT id FROM collision WHERE Code = 123',
-        { collision },
-        'postgresql'
-      )
+      ctxFor('SELECT id FROM collision WHERE Code = 123', { collision }, 'postgresql')
     )
 
     expect(findings).toHaveLength(0)
@@ -138,72 +123,52 @@ describe('implicit-cast', () => {
 
   test('does not flag number literal compared to numeric column', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor('SELECT id FROM users WHERE id = 42', schema)
-      )
+      implicitCastRule.check(ctxFor('SELECT id FROM users WHERE id = 42', schema))
     ).toHaveLength(0)
   })
 
   test('does not flag string literal compared to string column', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE email = 'a@x.com'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE email = 'a@x.com'", schema))
     ).toHaveLength(0)
   })
 
   test('ignores columns not present in schema', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE ghost = '1'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE ghost = '1'", schema))
     ).toHaveLength(0)
   })
 
   test('does not classify interval as numeric from an internal int substring', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE interval_value = '1'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE interval_value = '1'", schema))
     ).toHaveLength(0)
   })
 
   test('does not classify point as a supported numeric type', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE point_value = '1'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE point_value = '1'", schema))
     ).toHaveLength(0)
   })
 
   test('does not classify a user-defined type by a numeric substring', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE custom_value = '1'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE custom_value = '1'", schema))
     ).toHaveLength(0)
   })
 
   test('rewrites the diagnosed RHS literal instead of an earlier identical literal', () => {
     const findings = implicitCastRule.check(
-      ctxFor(
-        "SELECT '42' AS marker, id FROM users WHERE id = '42'",
-        schema
-      )
+      ctxFor("SELECT '42' AS marker, id FROM users WHERE id = '42'", schema)
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite?.sql).toBe(
-      "SELECT '42' AS marker, id FROM users WHERE id = 42"
-    )
+    expect(findings[0].rewrite?.sql).toBe("SELECT '42' AS marker, id FROM users WHERE id = 42")
   })
 
   test('omits a rewrite when identical comparisons cannot be targeted unambiguously', () => {
     const findings = implicitCastRule.check(
-      ctxFor(
-        "SELECT id FROM users WHERE id = '42' OR id = '42'",
-        schema
-      )
+      ctxFor("SELECT id FROM users WHERE id = '42' OR id = '42'", schema)
     )
 
     expect(findings).toHaveLength(2)
@@ -235,8 +200,7 @@ describe('implicit-cast', () => {
   })
 
   test('never rewrites a longer identifier when comments prevent exact target matching', () => {
-    const sql =
-      "SELECT id FROM users WHERE order_id = '42' AND id /* target */ = '42'"
+    const sql = "SELECT id FROM users WHERE order_id = '42' AND id /* target */ = '42'"
     const findings = implicitCastRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
@@ -280,10 +244,7 @@ describe('implicit-cast', () => {
   test('does not resolve a CTE-shadowed name through the physical schema cache', () => {
     expect(
       implicitCastRule.check(
-        ctxFor(
-          "WITH users AS (SELECT '1' AS id) SELECT id FROM users WHERE id = '1'",
-          schema
-        )
+        ctxFor("WITH users AS (SELECT '1' AS id) SELECT id FROM users WHERE id = '1'", schema)
       )
     ).toHaveLength(0)
   })
@@ -291,10 +252,7 @@ describe('implicit-cast', () => {
   test('does not resolve a derived relation through the physical schema cache', () => {
     expect(
       implicitCastRule.check(
-        ctxFor(
-          "SELECT id FROM (SELECT '1' AS id) users WHERE id = '1'",
-          schema
-        )
+        ctxFor("SELECT id FROM (SELECT '1' AS id) users WHERE id = '1'", schema)
       )
     ).toHaveLength(0)
   })
@@ -302,11 +260,7 @@ describe('implicit-cast', () => {
   test('does not resolve a PostgreSQL schema-qualified relation through an unqualified cache entry', () => {
     expect(
       implicitCastRule.check(
-        ctxFor(
-          "SELECT id FROM archive.users WHERE id = '1'",
-          schema,
-          'postgresql'
-        )
+        ctxFor("SELECT id FROM archive.users WHERE id = '1'", schema, 'postgresql')
       )
     ).toHaveLength(0)
   })
@@ -315,11 +269,7 @@ describe('implicit-cast', () => {
     test(`does not resolve a ${system} database-qualified relation through an unqualified cache entry`, () => {
       expect(
         implicitCastRule.check(
-          ctxFor(
-            "SELECT id FROM otherdb.users WHERE id = '1'",
-            schema,
-            system
-          )
+          ctxFor("SELECT id FROM otherdb.users WHERE id = '1'", schema, system)
         )
       ).toHaveLength(0)
     })
@@ -338,17 +288,13 @@ describe('implicit-cast', () => {
 
   test('recognizes mediumint as an exact numeric family', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor("SELECT id FROM users WHERE medium_id = '42'", schema)
-      )
+      implicitCastRule.check(ctxFor("SELECT id FROM users WHERE medium_id = '42'", schema))
     ).toHaveLength(1)
   })
 
   test('recognizes longtext as an exact textual family', () => {
     expect(
-      implicitCastRule.check(
-        ctxFor('SELECT id FROM users WHERE long_body = 42', schema)
-      )
+      implicitCastRule.check(ctxFor('SELECT id FROM users WHERE long_body = 42', schema))
     ).toHaveLength(1)
   })
 })
@@ -362,9 +308,7 @@ describe('not-in-nullable', () => {
     expect(findings[0].severity).toBe('warn')
     expect(findings[0].message).toContain('NULL')
     expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('flags a subquery whose projected column is nullable in its own alias scope', () => {
@@ -428,10 +372,7 @@ describe('not-in-nullable', () => {
 
   test('flags another RHS column known nullable from schema', () => {
     const findings = notInNullableRule.check(
-      ctxFor(
-        'SELECT id FROM users WHERE id NOT IN (1, nullable_number)',
-        schema
-      )
+      ctxFor('SELECT id FROM users WHERE id NOT IN (1, nullable_number)', schema)
     )
 
     expect(findings).toHaveLength(1)
@@ -440,10 +381,7 @@ describe('not-in-nullable', () => {
 
   test('flags a null-propagating RHS expression over a nullable column', () => {
     const findings = notInNullableRule.check(
-      ctxFor(
-        'SELECT id FROM users WHERE id NOT IN (1, nullable_number + 1)',
-        schema
-      )
+      ctxFor('SELECT id FROM users WHERE id NOT IN (1, nullable_number + 1)', schema)
     )
 
     expect(findings).toHaveLength(1)
@@ -500,19 +438,14 @@ describe('not-in-nullable', () => {
 
   test('does not flag a non-null literal list', () => {
     expect(
-      notInNullableRule.check(
-        ctxFor('SELECT id FROM users WHERE id NOT IN (1, 2)', schema)
-      )
+      notInNullableRule.check(ctxFor('SELECT id FROM users WHERE id NOT IN (1, 2)', schema))
     ).toHaveLength(0)
   })
 
   test('does not flag a non-null subquery projection', () => {
     expect(
       notInNullableRule.check(
-        ctxFor(
-          'SELECT id FROM users WHERE id NOT IN (SELECT id FROM blocked_users)',
-          schema
-        )
+        ctxFor('SELECT id FROM users WHERE id NOT IN (SELECT id FROM blocked_users)', schema)
       )
     ).toHaveLength(0)
   })
@@ -870,10 +803,7 @@ describe('not-in-nullable', () => {
 
   test('marks CAST of a static NULL as not schema verified', () => {
     const findings = notInNullableRule.check(
-      ctxFor(
-        'SELECT id FROM users WHERE id NOT IN (CAST(NULL AS BIGINT))',
-        schema
-      )
+      ctxFor('SELECT id FROM users WHERE id NOT IN (CAST(NULL AS BIGINT))', schema)
     )
 
     expect(findings).toHaveLength(1)
@@ -882,10 +812,7 @@ describe('not-in-nullable', () => {
 
   test('marks CAST of a schema-nullable column as schema verified', () => {
     const findings = notInNullableRule.check(
-      ctxFor(
-        'SELECT id FROM users WHERE id NOT IN (CAST(nullable_number AS BIGINT))',
-        schema
-      )
+      ctxFor('SELECT id FROM users WHERE id NOT IN (CAST(nullable_number AS BIGINT))', schema)
     )
 
     expect(findings).toHaveLength(1)
@@ -917,9 +844,7 @@ describe('not-in-nullable', () => {
 
   test('does not confuse a nullable left-hand column with the RHS NULL hazard', () => {
     expect(
-      notInNullableRule.check(
-        ctxFor("SELECT id FROM users WHERE email NOT IN ('a', 'b')", schema)
-      )
+      notInNullableRule.check(ctxFor("SELECT id FROM users WHERE email NOT IN ('a', 'b')", schema))
     ).toHaveLength(0)
   })
 
@@ -1057,10 +982,7 @@ describe('not-in-nullable', () => {
   test('does not flag IS NULL because it always returns a non-null boolean', () => {
     expect(
       notInNullableRule.check(
-        ctxFor(
-          'SELECT id FROM users WHERE id NOT IN (1, maybe IS NULL)',
-          schema
-        )
+        ctxFor('SELECT id FROM users WHERE id NOT IN (1, maybe IS NULL)', schema)
       )
     ).toHaveLength(0)
   })
@@ -1068,10 +990,7 @@ describe('not-in-nullable', () => {
   test('does not flag IS NOT NULL because it always returns a non-null boolean', () => {
     expect(
       notInNullableRule.check(
-        ctxFor(
-          'SELECT id FROM users WHERE id NOT IN (1, maybe IS NOT NULL)',
-          schema
-        )
+        ctxFor('SELECT id FROM users WHERE id NOT IN (1, maybe IS NOT NULL)', schema)
       )
     ).toHaveLength(0)
   })
@@ -1089,10 +1008,7 @@ describe('not-in-nullable', () => {
 
   test('guards a nullable projected expression rather than only its first nullable leaf', () => {
     const findings = notInNullableRule.check(
-      ctxFor(
-        'SELECT id FROM users WHERE id NOT IN (SELECT a + b FROM metrics)',
-        schema
-      )
+      ctxFor('SELECT id FROM users WHERE id NOT IN (SELECT a + b FROM metrics)', schema)
     )
 
     expect(findings).toHaveLength(1)
@@ -1107,31 +1023,23 @@ describe('not-in-nullable', () => {
 
     expect(findings).toHaveLength(1)
     expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('recursively analyzes HAVING predicates', () => {
-    const sql =
-      'SELECT id FROM users GROUP BY id HAVING id NOT IN (1, NULL)'
+    const sql = 'SELECT id FROM users GROUP BY id HAVING id NOT IN (1, NULL)'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('recursively analyzes JOIN predicates', () => {
-    const sql =
-      'SELECT u.id FROM users u JOIN blocked_users b ON u.id NOT IN (1, NULL)'
+    const sql = 'SELECT u.id FROM users u JOIN blocked_users b ON u.id NOT IN (1, NULL)'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('does not resolve a nested NOT IN expression with the outer table scope', () => {
@@ -1237,8 +1145,7 @@ describe('not-in-nullable', () => {
   })
 
   test('keeps lexical spans aligned after a safe projected NOT IN expression', () => {
-    const sql =
-      'SELECT 1 NOT IN (1, 2) AS safe FROM users WHERE id NOT IN (1, NULL)'
+    const sql = 'SELECT 1 NOT IN (1, 2) AS safe FROM users WHERE id NOT IN (1, NULL)'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
@@ -1246,8 +1153,7 @@ describe('not-in-nullable', () => {
   })
 
   test('recursively analyzes CTE predicates in lexical order', () => {
-    const sql =
-      'WITH x AS (SELECT 1 WHERE 1 NOT IN (NULL)) SELECT 2 WHERE 2 NOT IN (NULL)'
+    const sql = 'WITH x AS (SELECT 1 WHERE 1 NOT IN (NULL)) SELECT 2 WHERE 2 NOT IN (NULL)'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(2)
@@ -1258,48 +1164,36 @@ describe('not-in-nullable', () => {
   })
 
   test('recursively analyzes inline window specification expressions', () => {
-    const sql =
-      'SELECT SUM(id) OVER (ORDER BY id NOT IN (1, NULL)) FROM users'
+    const sql = 'SELECT SUM(id) OVER (ORDER BY id NOT IN (1, NULL)) FROM users'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
     expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('maps nested infix findings to their own lexical NOT IN operators', () => {
-    const sql =
-      'SELECT (id NOT IN (1, NULL)) NOT IN (CASE WHEN id > 0 THEN 1 END) FROM users'
+    const sql = 'SELECT (id NOT IN (1, NULL)) NOT IN (CASE WHEN id > 0 THEN 1 END) FROM users'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(2)
-    const first = findings.find(
-      (finding) => finding.span.start === sql.indexOf('NOT IN')
-    )
-    const second = findings.find(
-      (finding) => finding.span.start === sql.lastIndexOf('NOT IN')
-    )
+    const first = findings.find((finding) => finding.span.start === sql.indexOf('NOT IN'))
+    const second = findings.find((finding) => finding.span.start === sql.lastIndexOf('NOT IN'))
     expect(first?.message).toContain('list contains NULL')
     expect(second?.message).toContain('CASE expression')
   })
 
   test('places the NOT IN span on the operator instead of marker text', () => {
-    const sql =
-      "SELECT id FROM users WHERE 'NOT IN marker' = 'x' OR id NOT IN (1, NULL)"
+    const sql = "SELECT id FROM users WHERE 'NOT IN marker' = 'x' OR id NOT IN (1, NULL)"
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
     expect(findings[0].span.start).toBe(sql.lastIndexOf('NOT IN'))
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe(
-      'NOT IN'
-    )
+    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
   })
 
   test('assigns successive spans to successive top-level NOT IN findings', () => {
-    const sql =
-      'SELECT id FROM users WHERE id NOT IN (1, NULL) OR id NOT IN (2, NULL)'
+    const sql = 'SELECT id FROM users WHERE id NOT IN (1, NULL) OR id NOT IN (2, NULL)'
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(2)
@@ -1307,10 +1201,9 @@ describe('not-in-nullable', () => {
       sql.indexOf('NOT IN'),
       sql.lastIndexOf('NOT IN'),
     ])
-    expect(
-      findings.map((finding) =>
-        sql.slice(finding.span.start, finding.span.end)
-      )
-    ).toEqual(['NOT IN', 'NOT IN'])
+    expect(findings.map((finding) => sql.slice(finding.span.start, finding.span.end))).toEqual([
+      'NOT IN',
+      'NOT IN',
+    ])
   })
 })

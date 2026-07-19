@@ -8,10 +8,7 @@ import { orToUnionRule } from '@/core/lint/rules/or-to-union'
 import { subqueryToJoinRule } from '@/core/lint/rules/subquery-to-join'
 import type { LintRuleContext } from '@/core/lint/types'
 
-function ctxFor(
-  sql: string,
-  system: SqlDatabaseSystem = 'postgresql'
-): LintRuleContext {
+function ctxFor(sql: string, system: SqlDatabaseSystem = 'postgresql'): LintRuleContext {
   return {
     system,
     sql,
@@ -29,9 +26,7 @@ describe('non-sargable-where', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0].severity).toBe('warn')
     expect(findings[0].message).toContain('LOWER')
-    expect(findings[0].message).toContain(
-      'may prevent use of a conventional index'
-    )
+    expect(findings[0].message).toContain('may prevent use of a conventional index')
     expect(findings[0].message).toContain('expression index')
   })
 
@@ -45,17 +40,13 @@ describe('non-sargable-where', () => {
 
   test('does not flag a bare column comparison', () => {
     expect(
-      nonSargableWhereRule.check(
-        ctxFor("SELECT id FROM users WHERE email = 'a@x.com'")
-      )
+      nonSargableWhereRule.check(ctxFor("SELECT id FROM users WHERE email = 'a@x.com'"))
     ).toHaveLength(0)
   })
 
   test('does not flag functions over literals on the value side', () => {
     expect(
-      nonSargableWhereRule.check(
-        ctxFor('SELECT id FROM users WHERE created_at > NOW()')
-      )
+      nonSargableWhereRule.check(ctxFor('SELECT id FROM users WHERE created_at > NOW()'))
     ).toHaveLength(0)
   })
 })
@@ -93,9 +84,7 @@ describe('or-to-union', () => {
 
   test('does not flag OR on the same column', () => {
     expect(
-      orToUnionRule.check(
-        ctxFor("SELECT id FROM users WHERE email = 'a' OR email = 'b'")
-      )
+      orToUnionRule.check(ctxFor("SELECT id FROM users WHERE email = 'a' OR email = 'b'"))
     ).toHaveLength(0)
   })
 
@@ -125,9 +114,7 @@ describe('subquery-to-join', () => {
 
   test('does not flag IN over a literal list', () => {
     expect(
-      subqueryToJoinRule.check(
-        ctxFor('SELECT id FROM users WHERE id IN (1, 2, 3)')
-      )
+      subqueryToJoinRule.check(ctxFor('SELECT id FROM users WHERE id IN (1, 2, 3)'))
     ).toHaveLength(0)
   })
 })
@@ -144,17 +131,13 @@ describe('distinct-groupby-abuse', () => {
 
   test('does not flag plain DISTINCT', () => {
     expect(
-      distinctGroupbyAbuseRule.check(
-        ctxFor('SELECT DISTINCT user_id FROM orders')
-      )
+      distinctGroupbyAbuseRule.check(ctxFor('SELECT DISTINCT user_id FROM orders'))
     ).toHaveLength(0)
   })
 
   test('does not flag plain GROUP BY', () => {
     expect(
-      distinctGroupbyAbuseRule.check(
-        ctxFor('SELECT user_id FROM orders GROUP BY user_id')
-      )
+      distinctGroupbyAbuseRule.check(ctxFor('SELECT user_id FROM orders GROUP BY user_id'))
     ).toHaveLength(0)
   })
 
@@ -169,9 +152,7 @@ describe('distinct-groupby-abuse', () => {
   test('does not flag mixed aggregate projection', () => {
     expect(
       distinctGroupbyAbuseRule.check(
-        ctxFor(
-          'SELECT DISTINCT user_id, COUNT(*) FROM orders GROUP BY user_id'
-        )
+        ctxFor('SELECT DISTINCT user_id, COUNT(*) FROM orders GROUP BY user_id')
       )
     ).toHaveLength(0)
   })
@@ -179,9 +160,7 @@ describe('distinct-groupby-abuse', () => {
   test('does not flag a projection that omits a grouping column', () => {
     expect(
       distinctGroupbyAbuseRule.check(
-        ctxFor(
-          'SELECT DISTINCT user_id FROM orders GROUP BY user_id, status'
-        )
+        ctxFor('SELECT DISTINCT user_id FROM orders GROUP BY user_id, status')
       )
     ).toHaveLength(0)
   })

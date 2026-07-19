@@ -53,9 +53,7 @@ describe('lintSql', () => {
       system: 'postgresql',
     })
 
-    const finding = report.findings.find(
-      (candidate) => candidate.rule === 'not-in-nullable'
-    )
+    const finding = report.findings.find((candidate) => candidate.rule === 'not-in-nullable')
     expect(finding).toBeDefined()
     expect(finding?.schemaVerified).toBe(false)
     expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
@@ -103,9 +101,7 @@ describe('lintSql', () => {
       noSchema: true,
     })
 
-    const finding = report.findings.find(
-      (candidate) => candidate.rule === 'not-in-nullable'
-    )
+    const finding = report.findings.find((candidate) => candidate.rule === 'not-in-nullable')
     expect(finding).toBeDefined()
     expect(finding?.schemaVerified).toBe(false)
     expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
@@ -123,9 +119,7 @@ describe('lintSql', () => {
       }
     )
 
-    const finding = report.findings.find(
-      (candidate) => candidate.rule === 'not-in-nullable'
-    )
+    const finding = report.findings.find((candidate) => candidate.rule === 'not-in-nullable')
     expect(finding).toBeDefined()
     expect(finding?.schemaVerified).toBe(false)
     expect(report.skippedRules.find((skipped) => skipped.rule === 'not-in-nullable')?.reason).toBe(
@@ -138,9 +132,7 @@ describe('lintSql', () => {
       'SELECT id FROM users WHERE id NOT IN (SELECT CASE WHEN id > 0 THEN id END FROM blocked_users)',
       { system: 'postgresql' }
     )
-    const finding = report.findings.find(
-      (candidate) => candidate.rule === 'not-in-nullable'
-    )
+    const finding = report.findings.find((candidate) => candidate.rule === 'not-in-nullable')
 
     expect(finding).toBeDefined()
     expect(finding?.schemaVerified).toBe(false)
@@ -151,9 +143,7 @@ describe('lintSql', () => {
       'SELECT id FROM users WHERE id NOT IN (SELECT ARRAY_AGG(id) FROM blocked_users)',
       { system: 'postgresql', schema, noSchema: true }
     )
-    const finding = report.findings.find(
-      (candidate) => candidate.rule === 'not-in-nullable'
-    )
+    const finding = report.findings.find((candidate) => candidate.rule === 'not-in-nullable')
 
     expect(finding).toBeDefined()
     expect(finding?.schemaVerified).toBe(false)
@@ -166,13 +156,9 @@ describe('lintSql', () => {
     )
 
     expect(
-      report.findings.filter(
-        (candidate) => candidate.rule === 'not-in-nullable'
-      )
+      report.findings.filter((candidate) => candidate.rule === 'not-in-nullable')
     ).toHaveLength(0)
-    expect(report.skippedRules.map((skipped) => skipped.rule)).toContain(
-      'not-in-nullable'
-    )
+    expect(report.skippedRules.map((skipped) => skipped.rule)).toContain('not-in-nullable')
   })
 
   test('minSeverity filters lower-severity findings', () => {
@@ -206,10 +192,9 @@ describe('lintSql', () => {
   })
 
   test('relatedCommands use analyze only for a proven read-only statement', () => {
-    const safe = lintSql(
-      'WITH active AS (SELECT id FROM users) SELECT id FROM active',
-      { system: 'postgresql' }
-    )
+    const safe = lintSql('WITH active AS (SELECT id FROM users) SELECT id FROM active', {
+      system: 'postgresql',
+    })
     const unsafeStatements = [
       'UPDATE users SET id = 2',
       'DELETE FROM users',

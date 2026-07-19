@@ -95,10 +95,7 @@ function comparisonMatches(
   let literalPattern: string
   if (literalNode.type === 'number') {
     literalPattern = escapeRegex(String(literalNode.value))
-  } else if (
-    literalNode.type === 'single_quote_string' ||
-    literalNode.type === 'string'
-  ) {
+  } else if (literalNode.type === 'single_quote_string' || literalNode.type === 'string') {
     const raw = String(literalNode.value).replace(/'/g, "''")
     literalPattern = `'${escapeRegex(raw)}'`
   } else {
@@ -120,10 +117,7 @@ function comparisonMatches(
       match = regex.exec(sql)
       continue
     }
-    if (
-      match.index < range.start ||
-      match.index + match[0].length > range.end
-    ) {
+    if (match.index < range.start || match.index + match[0].length > range.end) {
       match = regex.exec(sql)
       continue
     }
@@ -165,8 +159,7 @@ export const implicitCastRule: LintRule = {
       const right = node.right as AstNode | undefined
       if (!left || !right) return
 
-      const literalOnLeft =
-        literalKind(left) !== null && right.type === 'column_ref'
+      const literalOnLeft = literalKind(left) !== null && right.type === 'column_ref'
       const columnNode = (
         literalOnLeft
           ? right
@@ -174,13 +167,9 @@ export const implicitCastRule: LintRule = {
             ? left
             : undefined
       ) as AstNode | undefined
-      const literalNode = (
-        literalOnLeft
-          ? left
-          : columnNode
-            ? right
-            : undefined
-      ) as AstNode | undefined
+      const literalNode = (literalOnLeft ? left : columnNode ? right : undefined) as
+        | AstNode
+        | undefined
       const reference = columnNode ? columnRefParts(columnNode) : null
       const literal = literalKind(literalNode)
       if (!reference || !columnNode || !literalNode || !literal) return
@@ -214,26 +203,15 @@ export const implicitCastRule: LintRule = {
                 start: matchIndex,
                 end: matchIndex + match[0].length,
               }
-            : findingSpan(
-                ctx.sql,
-                String(node.operator),
-                whereIndex === -1 ? 0 : whereIndex
-              ),
+            : findingSpan(ctx.sql, String(node.operator), whereIndex === -1 ? 0 : whereIndex),
         schemaVerified: true,
       }
 
-      if (
-        column === 'number' &&
-        literal === 'string' &&
-        match &&
-        matchIndex !== undefined
-      ) {
+      if (column === 'number' && literal === 'string' && match && matchIndex !== undefined) {
         const raw = String(literalNode.value)
         if (/^\d+(\.\d+)?$/.test(raw)) {
           const literalSource = match[1]
-          const literalOffset = literalSource
-            ? match[0].lastIndexOf(literalSource)
-            : -1
+          const literalOffset = literalSource ? match[0].lastIndexOf(literalSource) : -1
           if (literalOffset === -1 || !literalSource) {
             findings.push(finding)
             return

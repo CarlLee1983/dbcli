@@ -161,8 +161,7 @@ describe('lint subprocess safety and redaction', () => {
     const configPath = join(root, 'DELIMITER_SUCCESS_CONFIG', '.dbcli')
     await Bun.$`mkdir -p ${configPath}`
     await writeConfig(configPath, 'primary')
-    const sql =
-      "-- SUCCESS_COMMENT_SENTINEL\nSELECT 'SUCCESS_VALUE_SENTINEL'"
+    const sql = "-- SUCCESS_COMMENT_SENTINEL\nSELECT 'SUCCESS_VALUE_SENTINEL'"
 
     const result = await run(
       [
@@ -181,10 +180,7 @@ describe('lint subprocess safety and redaction', () => {
     )
 
     expect(result.code).toBe(0)
-    const audit = await readFile(
-      join(configPath, '.dbcli', 'audit', 'primary.jsonl'),
-      'utf8'
-    )
+    const audit = await readFile(join(configPath, '.dbcli', 'audit', 'primary.jsonl'), 'utf8')
     expect(audit).not.toContain('SUCCESS_COMMENT_SENTINEL')
     expect(audit).not.toContain('SUCCESS_VALUE_SENTINEL')
     expect(audit).toContain('--format json --no-schema -- <sql>')
@@ -194,8 +190,7 @@ describe('lint subprocess safety and redaction', () => {
     const configPath = join(root, 'DELIMITER_FAILURE_CONFIG', '.dbcli')
     await Bun.$`mkdir -p ${configPath}`
     await writeConfig(configPath, 'primary')
-    const sql =
-      "-- FAILURE_COMMENT_SENTINEL\nSELECT 'FAILURE_VALUE_SENTINEL' FROM"
+    const sql = "-- FAILURE_COMMENT_SENTINEL\nSELECT 'FAILURE_VALUE_SENTINEL' FROM"
 
     const result = await run(
       [
@@ -215,18 +210,9 @@ describe('lint subprocess safety and redaction', () => {
     )
 
     expect(result.code).toBe(1)
-    const audit = await readFile(
-      join(configPath, '.dbcli', 'audit', 'primary.jsonl'),
-      'utf8'
-    )
-    const recovery = await readFile(
-      join(root, '.dbcli', 'last-recovery.json'),
-      'utf8'
-    )
-    for (const sentinel of [
-      'FAILURE_COMMENT_SENTINEL',
-      'FAILURE_VALUE_SENTINEL',
-    ]) {
+    const audit = await readFile(join(configPath, '.dbcli', 'audit', 'primary.jsonl'), 'utf8')
+    const recovery = await readFile(join(root, '.dbcli', 'last-recovery.json'), 'utf8')
+    for (const sentinel of ['FAILURE_COMMENT_SENTINEL', 'FAILURE_VALUE_SENTINEL']) {
       expect(audit).not.toContain(sentinel)
       expect(recovery).not.toContain(sentinel)
     }
@@ -291,18 +277,13 @@ describe('lint subprocess safety and redaction', () => {
       'CREATE TABLE scratch (id integer)',
       'WITH changed AS (UPDATE users SET active = false RETURNING id) SELECT id FROM changed',
       'SELECT nextval(sequence_name)',
-      'SELECT set_config(\'application_name\', \'dbcli\', false)',
+      "SELECT set_config('application_name', 'dbcli', false)",
       'SELECT arbitrary_udf(id) FROM users',
       'SELECT * FROM arbitrary_table_function(1)',
     ]) {
-      const result = await run(
-        ['--config', configPath, 'explain', sql, '--analyze'],
-        root
-      )
+      const result = await run(['--config', configPath, 'explain', sql, '--analyze'], root)
       expect(result.code).toBe(1)
-      expect(result.stderr).toContain(
-        '--analyze requires a proven read-only SELECT'
-      )
+      expect(result.stderr).toContain('--analyze requires a proven read-only SELECT')
       expect(result.stderr).not.toContain('ECONNREFUSED')
     }
   })
@@ -325,14 +306,9 @@ describe('lint subprocess safety and redaction', () => {
       }
       expect(report.relatedCommands[1]).toStartWith('dbcli explain "')
 
-      const explainResult = await run(
-        ['--config', configPath, 'explain', sql, '--analyze'],
-        root
-      )
+      const explainResult = await run(['--config', configPath, 'explain', sql, '--analyze'], root)
       expect(explainResult.code).toBe(1)
-      expect(explainResult.stderr).toContain(
-        '--analyze requires a proven read-only SELECT'
-      )
+      expect(explainResult.stderr).toContain('--analyze requires a proven read-only SELECT')
       expect(explainResult.stderr).not.toContain('ECONNREFUSED')
     }
   )

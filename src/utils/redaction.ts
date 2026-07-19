@@ -82,15 +82,9 @@ function sensitiveArgvValues(argv: string[]): string[] {
           }
         }
         if (inlineValue === undefined) index++
-      } else if (
-        inlineValue === undefined &&
-        KEEP_VALUE_FLAGS.has(name)
-      ) {
+      } else if (inlineValue === undefined && KEEP_VALUE_FLAGS.has(name)) {
         index++
-      } else if (
-        sensitiveCommand?.command === 'lint' &&
-        LINT_BOOLEAN_FLAGS.has(name)
-      ) {
+      } else if (sensitiveCommand?.command === 'lint' && LINT_BOOLEAN_FLAGS.has(name)) {
         continue
       } else if (!sensitiveCommand || index < sensitiveCommand.index) {
         continue
@@ -152,10 +146,7 @@ export function redactArgv(argv: string[]): string {
         }
         continue
       }
-      if (
-        sensitiveCommand?.command === 'lint' &&
-        LINT_BOOLEAN_FLAGS.has(name)
-      ) {
+      if (sensitiveCommand?.command === 'lint' && LINT_BOOLEAN_FLAGS.has(name)) {
         out.push(tok)
         continue
       }
@@ -179,10 +170,7 @@ export function redactArgv(argv: string[]): string {
 }
 
 /** Remove argv-derived sensitive values from an error or diagnostic string. */
-export function redactArgvSensitiveText(
-  text: string,
-  argv: string[]
-): string {
+export function redactArgvSensitiveText(text: string, argv: string[]): string {
   let redacted = text
   for (const value of sensitiveArgvValues(argv)) {
     redacted = redacted.split(value).join('<redacted>')

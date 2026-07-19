@@ -15,10 +15,7 @@ export function walkExpr(node: unknown, visit: (n: AstNode) => void): void {
 }
 
 /** Walk expressions within one statement without descending into nested `.ast` statements. */
-export function walkExprInStatement(
-  node: unknown,
-  visit: (n: AstNode) => void
-): void {
+export function walkExprInStatement(node: unknown, visit: (n: AstNode) => void): void {
   if (!node || typeof node !== 'object') return
   if (Array.isArray(node)) {
     for (const item of node) walkExprInStatement(item, visit)
@@ -26,15 +23,7 @@ export function walkExprInStatement(
   }
   const n = node as AstNode
   visit(n)
-  for (const key of [
-    'left',
-    'right',
-    'args',
-    'value',
-    'expr',
-    'columns',
-    'where',
-  ]) {
+  for (const key of ['left', 'right', 'args', 'value', 'expr', 'columns', 'where']) {
     if (key in n) walkExprInStatement(n[key], visit)
   }
 }
@@ -72,11 +61,7 @@ function cteNames(ast: AstNode): Set<string> | undefined {
 
   const names = withBindings.map(cteName)
   if (names.some((name) => name === undefined)) return undefined
-  return new Set(
-    names.flatMap((name) =>
-      typeof name === 'string' ? [name.toLowerCase()] : []
-    )
-  )
+  return new Set(names.flatMap((name) => (typeof name === 'string' ? [name.toLowerCase()] : [])))
 }
 
 function hasRelationQualifier(source: AstNode): boolean {
@@ -105,9 +90,7 @@ export function singlePhysicalTable(ast: AstNode): string | undefined {
   return table
 }
 
-export function columnRefParts(
-  node: AstNode
-): { column: string; qualifier?: string } | null {
+export function columnRefParts(node: AstNode): { column: string; qualifier?: string } | null {
   if (node.type !== 'column_ref') return null
 
   let column: string | null = null
@@ -122,10 +105,7 @@ export function columnRefParts(
   }
   if (!column) return null
 
-  const qualifier =
-    typeof node.table === 'string' && node.table.length > 0
-      ? node.table
-      : undefined
+  const qualifier = typeof node.table === 'string' && node.table.length > 0 ? node.table : undefined
   return qualifier ? { column, qualifier } : { column }
 }
 
@@ -144,10 +124,7 @@ export function resolveColumnRef(
   const bindings = from.map((item) => {
     const source = item as AstNode
     const table = source.table
-    const alias =
-      typeof source?.as === 'string' && source.as.length > 0
-        ? source.as
-        : undefined
+    const alias = typeof source?.as === 'string' && source.as.length > 0 ? source.as : undefined
     const physical =
       typeof table === 'string' &&
       !(source.expr && typeof source.expr === 'object') &&
@@ -167,8 +144,7 @@ export function resolveColumnRef(
 
   const candidates = reference.qualifier
     ? bindings.filter(
-        ({ qualifier }) =>
-          qualifier?.toLowerCase() === reference.qualifier?.toLowerCase()
+        ({ qualifier }) => qualifier?.toLowerCase() === reference.qualifier?.toLowerCase()
       )
     : bindings
   if (
@@ -192,9 +168,7 @@ export function findingSpan(
   fragment: string,
   fromIndex = 0
 ): { start: number; end: number } {
-  const idx = sql
-    .toLowerCase()
-    .indexOf(fragment.toLowerCase(), Math.max(0, fromIndex))
+  const idx = sql.toLowerCase().indexOf(fragment.toLowerCase(), Math.max(0, fromIndex))
   if (idx === -1) return { start: 0, end: sql.length }
   return { start: idx, end: idx + fragment.length }
 }
@@ -219,10 +193,7 @@ export function sqlCodeMask(sql: string): boolean[] {
       mask[index] = false
       mask[index + 1] = false
       index += 2
-      while (
-        index < sql.length &&
-        !(sql[index] === '*' && sql[index + 1] === '/')
-      ) {
+      while (index < sql.length && !(sql[index] === '*' && sql[index + 1] === '/')) {
         mask[index] = false
         index += 1
       }
@@ -273,9 +244,7 @@ export function sqlCodeMask(sql: string): boolean[] {
   return mask
 }
 
-export function topLevelWhereClauseRange(
-  sql: string
-): { start: number; end: number } | undefined {
+export function topLevelWhereClauseRange(sql: string): { start: number; end: number } | undefined {
   const mask = sqlCodeMask(sql)
   const clauseBoundary = new Set([
     'group',
@@ -317,19 +286,13 @@ export function topLevelWhereClauseRange(
     const keyword = word.toLowerCase()
     if (whereStart === undefined && depth === 0 && keyword === 'where') {
       whereStart = index + word.length
-    } else if (
-      whereStart !== undefined &&
-      depth === 0 &&
-      clauseBoundary.has(keyword)
-    ) {
+    } else if (whereStart !== undefined && depth === 0 && clauseBoundary.has(keyword)) {
       return { start: whereStart, end: index }
     }
     index += word.length - 1
   }
 
-  return whereStart === undefined
-    ? undefined
-    : { start: whereStart, end: sql.length }
+  return whereStart === undefined ? undefined : { start: whereStart, end: sql.length }
 }
 
 export function lexicalFindingSpan(
@@ -342,10 +305,7 @@ export function lexicalFindingSpan(
     .split(/\s+/)
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('\\s+')
-  const pattern = new RegExp(
-    `(?<![A-Za-z0-9_$])${source}(?![A-Za-z0-9_$])`,
-    'gi'
-  )
+  const pattern = new RegExp(`(?<![A-Za-z0-9_$])${source}(?![A-Za-z0-9_$])`, 'gi')
   const mask = sqlCodeMask(sql)
 
   for (const match of sql.matchAll(pattern)) {

@@ -18,7 +18,7 @@ const dbWith = (tables: NormalizedSchema['tables']): NormalizedSchema => ({
 })
 
 const users: NormalizedTable = {
-  name: 'users',
+  identity: { table: 'users' },
   columns: [
     { name: 'id', type: 'integer', nullable: false, primaryKey: true },
     { name: 'email', type: 'text', nullable: false },
@@ -36,12 +36,8 @@ describe('compareNormalized', () => {
       nullable: true,
       default: '18',
     }
-    const orm = schemaWith({
-      users: { ...users, columns: [...users.columns.slice(0, 2), ormColumn] },
-    })
-    const db = dbWith({
-      users: { ...users, columns: users.columns.slice(0, 2) },
-    })
+    const orm = schemaWith([{ ...users, columns: [...users.columns.slice(0, 2), ormColumn] }])
+    const db = dbWith([{ ...users, columns: users.columns.slice(0, 2) }])
 
     const entry = compareNormalized(orm, db, { ignore: [] }).entries.find(
       (candidate) => candidate.object === 'age'
@@ -55,9 +51,9 @@ describe('compareNormalized', () => {
   })
 
   test('index missing in DB is an error with an exact dry-run add-index proposal', () => {
-    const db = dbWith({ users: { ...users, indexes: [] } })
+    const db = dbWith([{ ...users, indexes: [] }])
 
-    const entry = compareNormalized(schemaWith({ users }), db, { ignore: [] }).entries.find(
+    const entry = compareNormalized(schemaWith([users]), db, { ignore: [] }).entries.find(
       (candidate) => candidate.object === 'index(email)'
     )
 
@@ -82,18 +78,12 @@ describe('compareNormalized', () => {
       indexes: [{ name: 'db_name', columns: ['age', 'email'], unique: true }],
     }
 
-    const renamedReport = compareNormalized(
-      schemaWith({ users: ordered }),
-      dbWith({ users: renamed }),
-      {
-        ignore: [],
-      }
-    )
-    const reorderedReport = compareNormalized(
-      schemaWith({ users: ordered }),
-      dbWith({ users: reordered }),
-      { ignore: [] }
-    )
+    const renamedReport = compareNormalized(schemaWith([ordered]), dbWith([renamed]), {
+      ignore: [],
+    })
+    const reorderedReport = compareNormalized(schemaWith([ordered]), dbWith([reordered]), {
+      ignore: [],
+    })
 
     expect(renamedReport.entries.filter((entry) => entry.object.startsWith('index'))).toHaveLength(
       0
@@ -104,15 +94,15 @@ describe('compareNormalized', () => {
   })
 
   test('DB-only columns and indexes are warnings with escalation proposals', () => {
-    const db = dbWith({
-      users: {
+    const db = dbWith([
+      {
         ...users,
         columns: [...users.columns, { name: 'legacy_flag', type: 'boolean', nullable: true }],
         indexes: [...users.indexes, { columns: ['legacy_flag'], unique: false }],
       },
-    })
+    ])
 
-    const entries = compareNormalized(schemaWith({ users }), db, { ignore: [] }).entries.filter(
+    const entries = compareNormalized(schemaWith([users]), db, { ignore: [] }).entries.filter(
       (entry) => entry.category === 'missing_in_orm'
     )
 
@@ -127,25 +117,21 @@ describe('compareNormalized', () => {
 
   test('missing tables use the documented severities and escalation proposals', () => {
     const ormOnly: NormalizedTable = {
-      name: 'orm_only',
+      identity: { table: 'orm_only' },
       columns: [],
       indexes: [],
       foreignKeys: [],
     }
     const dbOnly: NormalizedTable = {
-      name: 'db_only',
+      identity: { table: 'db_only' },
       columns: [],
       indexes: [],
       foreignKeys: [],
     }
 
-    const report = compareNormalized(
-      schemaWith({ orm_only: ormOnly }),
-      dbWith({ db_only: dbOnly }),
-      {
-        ignore: [],
-      }
-    )
+    const report = compareNormalized(schemaWith([ormOnly]), dbWith([dbOnly]), {
+      ignore: [],
+    })
 
     expect(report.entries).toHaveLength(2)
     expect(report.entries.find((entry) => entry.table === 'orm_only')).toMatchObject({
@@ -164,8 +150,8 @@ describe('compareNormalized', () => {
   })
 
   test('type-family and nullable mismatches are errors with escalation proposals', () => {
-    const db = dbWith({
-      users: {
+    const db = dbWith([
+      {
         ...users,
         columns: [
           users.columns[0]!,
@@ -173,9 +159,9 @@ describe('compareNormalized', () => {
           { name: 'age', type: 'text', nullable: true },
         ],
       },
-    })
+    ])
 
-    const report = compareNormalized(schemaWith({ users }), db, { ignore: [] })
+    const report = compareNormalized(schemaWith([users]), db, { ignore: [] })
 
     for (const object of ['email', 'age']) {
       const entry = report.entries.find((candidate) => candidate.object === object)
@@ -185,8 +171,8 @@ describe('compareNormalized', () => {
   })
 
   test('same-family spelling, default, and primary-key differences are info escalations', () => {
-    const orm = schemaWith({
-      users: {
+    const orm = schemaWith([
+      {
         ...users,
         columns: [
           { name: 'id', type: 'integer', nullable: false, primaryKey: true },
@@ -194,9 +180,9 @@ describe('compareNormalized', () => {
           { name: 'age', type: 'integer', nullable: true },
         ],
       },
-    })
-    const db = dbWith({
-      users: {
+    ])
+    const db = dbWith([
+      {
         ...users,
         columns: [
           { name: 'id', type: 'integer', nullable: false, primaryKey: false },
@@ -204,7 +190,7 @@ describe('compareNormalized', () => {
           { name: 'age', type: 'integer', nullable: true },
         ],
       },
-    })
+    ])
 
     const report = compareNormalized(orm, db, { ignore: [] })
     const idEntry = report.entries.find((entry) => entry.object === 'id')
@@ -220,29 +206,29 @@ describe('compareNormalized', () => {
   })
 
   test('built-in and regex-safe user ignore globs create one uncounted unmanaged entry per table', () => {
-    const db = dbWith({
+    const db = dbWith([
       users,
-      _prisma_migrations: {
-        name: '_prisma_migrations',
+      {
+        identity: { table: '_prisma_migrations' },
         columns: [],
         indexes: [],
         foreignKeys: [],
       },
-      'audit.+[2026]': {
-        name: 'audit.+[2026]',
+      {
+        identity: { table: 'audit.+[2026]' },
         columns: [],
         indexes: [],
         foreignKeys: [],
       },
-      audit_other: {
-        name: 'audit_other',
+      {
+        identity: { table: 'audit_other' },
         columns: [],
         indexes: [],
         foreignKeys: [],
       },
-    })
+    ])
 
-    const report = compareNormalized(schemaWith({ users }), db, {
+    const report = compareNormalized(schemaWith([users]), db, {
       ignore: ['audit.+[202*]'],
     })
     const unmanaged = report.entries.filter((entry) => entry.category === 'unmanaged')
@@ -259,8 +245,8 @@ describe('compareNormalized', () => {
   })
 
   test('summary counts scored severities separately from unmanaged entries', () => {
-    const orm = schemaWith({
-      users: {
+    const orm = schemaWith([
+      {
         ...users,
         columns: [
           ...users.columns,
@@ -268,9 +254,9 @@ describe('compareNormalized', () => {
           { name: 'display', type: 'text', nullable: true },
         ],
       },
-    })
-    const db = dbWith({
-      users: {
+    ])
+    const db = dbWith([
+      {
         ...users,
         columns: [
           ...users.columns,
@@ -278,13 +264,13 @@ describe('compareNormalized', () => {
           { name: 'display', type: 'varchar(20)', nullable: true },
         ],
       },
-      _prisma_migrations: {
-        name: '_prisma_migrations',
+      {
+        identity: { table: '_prisma_migrations' },
         columns: [],
         indexes: [],
         foreignKeys: [],
       },
-    })
+    ])
 
     const report = compareNormalized(orm, db, { ignore: [] })
 
@@ -292,9 +278,9 @@ describe('compareNormalized', () => {
   })
 
   test('unparsed entries from the ORM and database are merged in source order', () => {
-    const orm = schemaWith({ users })
+    const orm = schemaWith([users])
     orm.unparsed.push({ location: 'schema.prisma:3', reason: 'unsupported attribute' })
-    const db = dbWith({ users })
+    const db = dbWith([users])
     db.unparsed.push({ location: 'users.generated', reason: 'unsupported expression' })
 
     expect(compareNormalized(orm, db, { ignore: [] }).unparsed).toEqual([

@@ -17,14 +17,31 @@ export interface NormalizedIndex {
   unique: boolean
 }
 
+export interface NormalizedTableIdentity {
+  schema?: string
+  table: string
+}
+
+export interface ParsedIdentifierPart {
+  value: string
+  quoted: boolean
+}
+
+export interface ParsedTableIdentifier {
+  schema?: ParsedIdentifierPart
+  table: ParsedIdentifierPart
+}
+
 export interface NormalizedForeignKey {
   columns: string[]
-  refTable: string
+  refTable: NormalizedTableIdentity
+  parsedRefIdentifier?: ParsedTableIdentifier
   refColumns: string[]
 }
 
 export interface NormalizedTable {
-  name: string
+  identity: NormalizedTableIdentity
+  parsedIdentifier?: ParsedTableIdentifier
   columns: NormalizedColumn[]
   indexes: NormalizedIndex[]
   foreignKeys: NormalizedForeignKey[]
@@ -37,7 +54,8 @@ export interface UnparsedEntry {
 
 export interface NormalizedSchema {
   source: OrmSource
-  tables: Record<string, NormalizedTable>
+  defaultSchema?: string
+  tables: NormalizedTable[]
   unparsed: UnparsedEntry[]
 }
 
@@ -51,19 +69,42 @@ const columnZod = z.object({
 })
 
 const tableZod = z.object({
-  name: z.string().min(1),
+  identity: z.object({
+    schema: z.string().min(1).optional(),
+    table: z.string().min(1),
+  }),
+  parsedIdentifier: z
+    .object({
+      schema: z.object({ value: z.string().min(1), quoted: z.boolean() }).optional(),
+      table: z.object({ value: z.string().min(1), quoted: z.boolean() }),
+    })
+    .optional(),
   columns: z.array(columnZod),
   indexes: z.array(
-    z.object({ name: z.string().optional(), columns: z.array(z.string()), unique: z.boolean() }),
+    z.object({ name: z.string().optional(), columns: z.array(z.string()), unique: z.boolean() })
   ),
   foreignKeys: z.array(
-    z.object({ columns: z.array(z.string()), refTable: z.string(), refColumns: z.array(z.string()) }),
+    z.object({
+      columns: z.array(z.string()),
+      refTable: z.object({
+        schema: z.string().min(1).optional(),
+        table: z.string().min(1),
+      }),
+      parsedRefIdentifier: z
+        .object({
+          schema: z.object({ value: z.string().min(1), quoted: z.boolean() }).optional(),
+          table: z.object({ value: z.string().min(1), quoted: z.boolean() }),
+        })
+        .optional(),
+      refColumns: z.array(z.string()),
+    })
   ),
 })
 
 export const normalizedSchemaZod = z.object({
   source: z.enum(['db', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
-  tables: z.record(tableZod),
+  defaultSchema: z.string().min(1).optional(),
+  tables: z.array(tableZod),
   unparsed: z.array(z.object({ location: z.string(), reason: z.string() })),
 }) satisfies z.ZodType<NormalizedSchema>
 

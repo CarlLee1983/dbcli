@@ -8,8 +8,16 @@ import type { SqlDatabaseSystem } from '@/adapters/types'
 import type {
   NormalizedSchema,
   NormalizedTable,
+  NormalizedTableIdentity,
+  ParsedIdentifierPart,
+  ParsedTableIdentifier,
   UnparsedEntry,
 } from '@/core/orm-drift/normalized-schema'
+import {
+  qualifiedTableName,
+  resolveTableIdentifier,
+  tableIdentityKey,
+} from '@/core/orm-drift/table-identity'
 
 const DIALECT: Record<SqlDatabaseSystem, string> = {
   mysql: 'MySQL',
@@ -21,16 +29,30 @@ const parser = new Parser()
 type Ast = Record<string, unknown>
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string }
 
+interface DdlContext {
+  tables: NormalizedTable[]
+  tablesByIdentity: Map<string, NormalizedTable>
+  unparsed: UnparsedEntry[]
+}
+
+interface IdentifierCursor {
+  identifier: ParsedTableIdentifier
+  end: number
+}
+
 export function parseDdl(sql: string, system: SqlDatabaseSystem): NormalizedSchema {
-  const tables: Record<string, NormalizedTable> = {}
-  const unparsed: UnparsedEntry[] = []
+  const context: DdlContext = {
+    tables: [],
+    tablesByIdentity: new Map(),
+    unparsed: [],
+  }
 
   for (const statement of splitSqlStatements(sql)) {
     let ast: unknown
     try {
       ast = parser.astify(statement, { database: DIALECT[system] })
     } catch (error) {
-      unparsed.push({
+      context.unparsed.push({
         location: statement.slice(0, 60),
         reason: `blocked: parse failed — ${firstErrorLine(error)}`,
       })
@@ -39,58 +61,57 @@ export function parseDdl(sql: string, system: SqlDatabaseSystem): NormalizedSche
 
     for (const node of Array.isArray(ast) ? ast : [ast]) {
       if (!isAst(node)) {
-        unparsed.push({
+        context.unparsed.push({
           location: statement.slice(0, 60),
           reason: 'blocked: parser produced a malformed statement',
         })
         continue
       }
-      consumeStatement(node, tables, unparsed)
+      consumeStatement(node, statement, context)
     }
   }
 
-  return { source: 'ddl', tables, unparsed }
+  return { source: 'ddl', tables: context.tables, unparsed: context.unparsed }
 }
 
-function consumeStatement(
-  node: Ast,
-  tables: Record<string, NormalizedTable>,
-  unparsed: UnparsedEntry[]
-): void {
+function consumeStatement(node: Ast, statement: string, context: DdlContext): void {
   if (node.type === 'create' && node.keyword === 'table') {
-    consumeCreateTable(node, tables, unparsed)
+    consumeCreateTable(node, statement, context)
     return
   }
   if (node.type === 'create' && node.keyword === 'index') {
-    consumeCreateIndex(node, tables, unparsed)
+    consumeCreateIndex(node, statement, context)
     return
   }
 
   const description = [stringValue(node.type), stringValue(node.keyword)]
     .filter((part): part is string => part !== null)
     .join(' ')
-  unparsed.push({
+  context.unparsed.push({
     location: description || 'unknown',
     reason: `blocked: unsupported DDL statement '${description || 'unknown'}'`,
   })
 }
 
-function consumeCreateTable(
-  node: Ast,
-  tables: Record<string, NormalizedTable>,
-  unparsed: UnparsedEntry[]
-): void {
-  const tableName = tableNameOf(node)
-  if (!tableName) {
-    unparsed.push({
+function consumeCreateTable(node: Ast, statement: string, context: DdlContext): void {
+  const parsedIdentifier = readCreateTableTarget(statement)
+  const astIdentity = astTableIdentityOf(node)
+  if (
+    !parsedIdentifier ||
+    !astIdentity ||
+    !parsedIdentifierMatchesAst(parsedIdentifier, astIdentity)
+  ) {
+    context.unparsed.push({
       location: 'create table',
-      reason: 'blocked: malformed CREATE TABLE missing table name',
+      reason: 'blocked: CREATE TABLE target cannot preserve exact schema and quote state',
     })
     return
   }
+  const identity = resolveTableIdentifier(parsedIdentifier)
+  const tableName = qualifiedTableName(identity)
 
   if (!Array.isArray(node.create_definitions)) {
-    unparsed.push({
+    context.unparsed.push({
       location: tableName,
       reason: 'blocked: unsupported CREATE TABLE without column definitions',
     })
@@ -98,7 +119,8 @@ function consumeCreateTable(
   }
 
   const table: NormalizedTable = {
-    name: tableName,
+    identity,
+    parsedIdentifier,
     columns: [],
     indexes: [],
     foreignKeys: [],
@@ -107,15 +129,25 @@ function consumeCreateTable(
   const definitions: Ast[] = []
   for (const value of node.create_definitions) {
     if (!isAst(value)) {
-      pushUnsupportedDefinition(tableName, 'malformed', unparsed)
+      pushUnsupportedDefinition(tableName, 'malformed', context.unparsed)
       continue
     }
     definitions.push(value)
   }
 
+  const parsedReferences = readReferenceTargets(statement)
+  const referenceByDefinition = new Map<Ast, ParsedTableIdentifier | null>()
+  let referenceIndex = 0
+  for (const definition of definitions) {
+    if (definition.reference_definition !== undefined && definition.reference_definition !== null) {
+      referenceByDefinition.set(definition, parsedReferences[referenceIndex] ?? null)
+      referenceIndex += 1
+    }
+  }
+
   for (const definition of definitions) {
     if (definition.resource === 'column') {
-      consumeColumn(definition, table, unparsed)
+      consumeColumn(definition, table, context.unparsed, referenceByDefinition.get(definition))
     }
   }
 
@@ -125,27 +157,41 @@ function consumeCreateTable(
       definition.resource === 'constraint' &&
       normalizedString(definition.constraint_type) === 'primary key'
     ) {
-      consumeTablePrimaryKey(definition, table, unparsed)
+      consumeTablePrimaryKey(definition, table, context.unparsed)
       continue
     }
 
     pushUnsupportedDefinition(
       tableName,
       stringValue(definition.constraint_type) ?? stringValue(definition.resource) ?? 'malformed',
-      unparsed
+      context.unparsed
     )
   }
 
-  tables[tableName.toLowerCase()] = table
+  const key = tableIdentityKey(identity)
+  if (context.tablesByIdentity.has(key)) {
+    context.unparsed.push({
+      location: tableName,
+      reason: `blocked: duplicate table identity '${tableName}'`,
+    })
+    return
+  }
+  context.tablesByIdentity.set(key, table)
+  context.tables.push(table)
 }
 
-function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: UnparsedEntry[]): void {
+function consumeColumn(
+  definition: Ast,
+  table: NormalizedTable,
+  unparsed: UnparsedEntry[],
+  parsedReference: ParsedTableIdentifier | null | undefined
+): void {
   const columnName = identifierOf(definition.column)
   const dataType = isAst(definition.definition) ? definition.definition : null
 
   if (!columnName || !dataType) {
     pushUnsupportedDefinition(
-      table.name,
+      qualifiedTableName(table.identity),
       `malformed column${columnName ? ` '${columnName}'` : ''}`,
       unparsed
     )
@@ -165,7 +211,7 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
   ])
   if (unsupportedField) {
     pushUnsupportedDefinition(
-      table.name,
+      qualifiedTableName(table.identity),
       `column '${columnName}' uses unsupported ${unsupportedField}`,
       unparsed
     )
@@ -173,7 +219,11 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
   }
 
   if (definition.generated !== undefined && definition.generated !== null) {
-    pushUnsupportedDefinition(table.name, `generated column '${columnName}'`, unparsed)
+    pushUnsupportedDefinition(
+      qualifiedTableName(table.identity),
+      `generated column '${columnName}'`,
+      unparsed
+    )
     return
   }
 
@@ -182,14 +232,18 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
     definition.column.collate !== undefined &&
     definition.column.collate !== null
   ) {
-    pushUnsupportedDefinition(table.name, `collated column '${columnName}'`, unparsed)
+    pushUnsupportedDefinition(
+      qualifiedTableName(table.identity),
+      `collated column '${columnName}'`,
+      unparsed
+    )
     return
   }
 
   const typeResult = reconstructType(dataType)
   if (!typeResult.ok) {
     pushUnsupportedDefinition(
-      table.name,
+      qualifiedTableName(table.identity),
       `${typeResult.reason} on column '${columnName}'`,
       unparsed
     )
@@ -199,7 +253,7 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
   const nullable = nullableOf(definition.nullable)
   if (nullable === null) {
     pushUnsupportedDefinition(
-      table.name,
+      qualifiedTableName(table.identity),
       `malformed nullability on column '${columnName}'`,
       unparsed
     )
@@ -208,7 +262,11 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
 
   const defaultResult = defaultOf(definition.default_val)
   if (!defaultResult.ok) {
-    pushUnsupportedDefinition(table.name, `unsupported default on column '${columnName}'`, unparsed)
+    pushUnsupportedDefinition(
+      qualifiedTableName(table.identity),
+      `unsupported default on column '${columnName}'`,
+      unparsed
+    )
     return
   }
 
@@ -221,13 +279,21 @@ function consumeColumn(definition: Ast, table: NormalizedTable, unparsed: Unpars
     definition.unique !== null &&
     normalizedString(definition.unique) !== 'unique'
   ) {
-    pushUnsupportedDefinition(table.name, `malformed unique column '${columnName}'`, unparsed)
+    pushUnsupportedDefinition(
+      qualifiedTableName(table.identity),
+      `malformed unique column '${columnName}'`,
+      unparsed
+    )
     return
   }
 
-  const foreignKeyResult = inlineForeignKeyOf(definition.reference_definition, columnName)
+  const foreignKeyResult = inlineForeignKeyOf(
+    definition.reference_definition,
+    columnName,
+    parsedReference
+  )
   if (!foreignKeyResult.ok) {
-    pushUnsupportedDefinition(table.name, foreignKeyResult.reason, unparsed)
+    pushUnsupportedDefinition(qualifiedTableName(table.identity), foreignKeyResult.reason, unparsed)
     return
   }
 
@@ -253,7 +319,7 @@ function consumeTablePrimaryKey(
 ): void {
   const columns = identifierList(definition.definition)
   if (columns.length === 0) {
-    pushUnsupportedDefinition(table.name, 'malformed primary key', unparsed)
+    pushUnsupportedDefinition(qualifiedTableName(table.identity), 'malformed primary key', unparsed)
     return
   }
 
@@ -267,13 +333,18 @@ function consumeTablePrimaryKey(
   }
 
   if (found.size !== columns.length) {
-    pushUnsupportedDefinition(table.name, 'primary key references an unknown column', unparsed)
+    pushUnsupportedDefinition(
+      qualifiedTableName(table.identity),
+      'primary key references an unknown column',
+      unparsed
+    )
   }
 }
 
 function inlineForeignKeyOf(
   value: unknown,
-  columnName: string
+  columnName: string,
+  parsedReference: ParsedTableIdentifier | null | undefined
 ): Result<NormalizedTable['foreignKeys'][number] | undefined> {
   if (value === undefined || value === null) return { ok: true, value: undefined }
   if (!isAst(value)) {
@@ -299,27 +370,50 @@ function inlineForeignKeyOf(
     return { ok: false, reason: `unsupported foreign key action on '${columnName}'` }
   }
 
-  const refTable = tableNameOf(value)
+  const astIdentity = astTableIdentityOf(value)
   const refColumns = identifierList(value.definition)
-  if (!refTable || refColumns.length === 0) {
+  if (
+    !parsedReference ||
+    !astIdentity ||
+    !parsedIdentifierMatchesAst(parsedReference, astIdentity) ||
+    refColumns.length === 0
+  ) {
     return { ok: false, reason: `malformed foreign key on '${columnName}'` }
   }
 
-  return { ok: true, value: { columns: [columnName], refTable, refColumns } }
+  return {
+    ok: true,
+    value: {
+      columns: [columnName],
+      refTable: resolveTableIdentifier(parsedReference),
+      parsedRefIdentifier: parsedReference,
+      refColumns,
+    },
+  }
 }
 
-function consumeCreateIndex(
-  node: Ast,
-  tables: Record<string, NormalizedTable>,
-  unparsed: UnparsedEntry[]
-): void {
-  const tableName = tableNameOf(node)
+function consumeCreateIndex(node: Ast, statement: string, context: DdlContext): void {
+  const parsedIdentifier = readCreateIndexTarget(statement)
+  const astIdentity = astTableIdentityOf(node)
   const indexName = stringValue(node.index)
-  const target = tableName ? tables[tableName.toLowerCase()] : undefined
-  if (!target) {
-    unparsed.push({
+  if (
+    !parsedIdentifier ||
+    !astIdentity ||
+    !parsedIdentifierMatchesAst(parsedIdentifier, astIdentity)
+  ) {
+    context.unparsed.push({
       location: indexName ?? 'index',
-      reason: `blocked: CREATE INDEX targets unknown table '${tableName ?? '?'}'`,
+      reason: 'blocked: CREATE INDEX target cannot preserve exact schema and quote state',
+    })
+    return
+  }
+  const identity = resolveTableIdentifier(parsedIdentifier)
+  const tableName = qualifiedTableName(identity)
+  const target = context.tablesByIdentity.get(tableIdentityKey(identity))
+  if (!target) {
+    context.unparsed.push({
+      location: indexName ?? 'index',
+      reason: `blocked: CREATE INDEX targets unknown table '${tableName}'`,
     })
     return
   }
@@ -338,23 +432,31 @@ function consumeCreateIndex(
     'with_before_where',
   ])
   if (unsupportedIndexField) {
-    pushUnsupportedIndex(indexName, `unsupported CREATE INDEX ${unsupportedIndexField}`, unparsed)
+    pushUnsupportedIndex(
+      indexName,
+      `unsupported CREATE INDEX ${unsupportedIndexField}`,
+      context.unparsed
+    )
     return
   }
 
   const indexType = normalizedString(node.index_type)
   if (indexType !== null && indexType !== 'unique') {
-    pushUnsupportedIndex(indexName, `unsupported CREATE INDEX type '${indexType}'`, unparsed)
+    pushUnsupportedIndex(
+      indexName,
+      `unsupported CREATE INDEX type '${indexType}'`,
+      context.unparsed
+    )
     return
   }
 
   const columns = indexColumnList(node.index_columns)
   if (!columns.ok) {
-    pushUnsupportedIndex(indexName, columns.reason, unparsed)
+    pushUnsupportedIndex(indexName, columns.reason, context.unparsed)
     return
   }
   if (columns.value.length === 0) {
-    unparsed.push({
+    context.unparsed.push({
       location: indexName ?? `${tableName} index`,
       reason: 'blocked: malformed CREATE INDEX without columns',
     })
@@ -465,6 +567,213 @@ function splitSqlStatements(sql: string): string[] {
   return statements
 }
 
+function readCreateTableTarget(input: string): ParsedTableIdentifier | null {
+  let cursor = consumeKeyword(input, 0, 'create')
+  if (cursor === null) return null
+  cursor = consumeKeyword(input, cursor, 'table')
+  if (cursor === null) return null
+
+  const ifKeyword = consumeKeyword(input, cursor, 'if')
+  if (ifKeyword !== null) {
+    const notKeyword = consumeKeyword(input, ifKeyword, 'not')
+    if (notKeyword === null) return null
+    const existsKeyword = consumeKeyword(input, notKeyword, 'exists')
+    if (existsKeyword === null) return null
+    cursor = existsKeyword
+  }
+
+  return readTableIdentifier(input, cursor)?.identifier ?? null
+}
+
+function readCreateIndexTarget(input: string): ParsedTableIdentifier | null {
+  let cursor = consumeKeyword(input, 0, 'create')
+  if (cursor === null) return null
+
+  const uniqueKeyword = consumeKeyword(input, cursor, 'unique')
+  if (uniqueKeyword !== null) cursor = uniqueKeyword
+  cursor = consumeKeyword(input, cursor, 'index')
+  if (cursor === null) return null
+
+  const ifKeyword = consumeKeyword(input, cursor, 'if')
+  if (ifKeyword !== null) {
+    const notKeyword = consumeKeyword(input, ifKeyword, 'not')
+    if (notKeyword === null) return null
+    const existsKeyword = consumeKeyword(input, notKeyword, 'exists')
+    if (existsKeyword === null) return null
+    cursor = existsKeyword
+  }
+
+  const indexName = readIdentifierPart(input, cursor)
+  if (!indexName) return null
+  cursor = consumeKeyword(input, indexName.end, 'on')
+  if (cursor === null) return null
+  return readTableIdentifier(input, cursor)?.identifier ?? null
+}
+
+function readIdentifierPart(
+  input: string,
+  start: number
+): { part: ParsedIdentifierPart; end: number } | null {
+  let cursor = skipTrivia(input, start)
+  const quote = input[cursor]
+
+  if (quote === '"' || quote === '`') {
+    cursor += 1
+    let value = ''
+    while (cursor < input.length) {
+      const character = input[cursor]
+      if (character === quote && input[cursor + 1] === quote) {
+        value += quote
+        cursor += 2
+        continue
+      }
+      if (character === quote) {
+        return value.length > 0 ? { part: { value, quoted: true }, end: cursor + 1 } : null
+      }
+      value += character
+      cursor += 1
+    }
+    return null
+  }
+
+  const match = input.slice(cursor).match(/^[A-Za-z_][A-Za-z0-9_$]*/)
+  return match ? { part: { value: match[0], quoted: false }, end: cursor + match[0].length } : null
+}
+
+function readTableIdentifier(input: string, start: number): IdentifierCursor | null {
+  const first = readIdentifierPart(input, start)
+  if (!first) return null
+  const cursor = skipTrivia(input, first.end)
+  if (input[cursor] !== '.') return { identifier: { table: first.part }, end: cursor }
+  const second = readIdentifierPart(input, cursor + 1)
+  if (!second) return null
+  return {
+    identifier: { schema: first.part, table: second.part },
+    end: second.end,
+  }
+}
+
+function consumeKeyword(input: string, start: number, keyword: string): number | null {
+  const cursor = skipTrivia(input, start)
+  if (input.slice(cursor, cursor + keyword.length).toLowerCase() !== keyword) return null
+  const next = input[cursor + keyword.length]
+  return next !== undefined && /[A-Za-z0-9_$]/.test(next) ? null : cursor + keyword.length
+}
+
+function skipTrivia(input: string, start: number): number {
+  let cursor = start
+  while (cursor < input.length) {
+    if (/\s/.test(input[cursor] ?? '')) {
+      cursor += 1
+      continue
+    }
+    if (input.startsWith('--', cursor) || input[cursor] === '#') {
+      const newline = input.indexOf('\n', cursor + 1)
+      cursor = newline === -1 ? input.length : newline + 1
+      continue
+    }
+    if (input.startsWith('/*', cursor)) {
+      const end = input.indexOf('*/', cursor + 2)
+      cursor = end === -1 ? input.length : end + 2
+      continue
+    }
+    break
+  }
+  return cursor
+}
+
+function readReferenceTargets(input: string): Array<ParsedTableIdentifier | null> {
+  const targets: Array<ParsedTableIdentifier | null> = []
+  let cursor = 0
+  while (cursor < input.length) {
+    const keywordEnd = findKeywordToken(input, cursor, 'references')
+    if (keywordEnd === null) break
+    const parsed = readTableIdentifier(input, keywordEnd)
+    targets.push(parsed?.identifier ?? null)
+    cursor = parsed?.end ?? keywordEnd
+  }
+  return targets
+}
+
+function findKeywordToken(input: string, start: number, keyword: string): number | null {
+  let cursor = start
+  while (cursor < input.length) {
+    const triviaEnd = skipTrivia(input, cursor)
+    if (triviaEnd !== cursor) {
+      cursor = triviaEnd
+      continue
+    }
+
+    const quote = input[cursor]
+    if (quote === "'" || quote === '"' || quote === '`') {
+      cursor = skipQuotedToken(input, cursor, quote)
+      continue
+    }
+
+    if (quote === '$') {
+      const tag = input.slice(cursor).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      if (tag) {
+        const end = input.indexOf(tag, cursor + tag.length)
+        cursor = end === -1 ? input.length : end + tag.length
+        continue
+      }
+    }
+
+    const previous = cursor > 0 ? input[cursor - 1] : undefined
+    const end = cursor + keyword.length
+    const next = input[end]
+    if (
+      input.slice(cursor, end).toLowerCase() === keyword &&
+      (previous === undefined || !/[A-Za-z0-9_$]/.test(previous)) &&
+      (next === undefined || !/[A-Za-z0-9_$]/.test(next))
+    ) {
+      return end
+    }
+    cursor += 1
+  }
+  return null
+}
+
+function skipQuotedToken(input: string, start: number, quote: string): number {
+  let cursor = start + 1
+  while (cursor < input.length) {
+    if (input[cursor] === '\\' && input[cursor + 1] !== undefined) {
+      cursor += 2
+      continue
+    }
+    if (input[cursor] === quote && input[cursor + 1] === quote) {
+      cursor += 2
+      continue
+    }
+    if (input[cursor] === quote) return cursor + 1
+    cursor += 1
+  }
+  return input.length
+}
+
+function astTableIdentityOf(node: Ast): NormalizedTableIdentity | null {
+  const value = Array.isArray(node.table) ? node.table[0] : node.table
+  if (typeof value === 'string') return { table: value }
+  if (!isAst(value)) return null
+  const table = stringValue(value.table)
+  const schema = stringValue(value.db)
+  if (!table) return null
+  return {
+    ...(schema !== null && { schema }),
+    table,
+  }
+}
+
+function parsedIdentifierMatchesAst(
+  parsed: ParsedTableIdentifier,
+  astIdentity: NormalizedTableIdentity
+): boolean {
+  return (
+    parsed.table.value === astIdentity.table &&
+    (parsed.schema?.value ?? undefined) === astIdentity.schema
+  )
+}
+
 function identifierList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   const identifiers: string[] = []
@@ -484,13 +793,6 @@ function identifierOf(value: unknown): string | null {
     if (identifier) return identifier
   }
   return null
-}
-
-function tableNameOf(node: Ast): string | null {
-  const value = Array.isArray(node.table) ? node.table[0] : node.table
-  if (typeof value === 'string') return value
-  if (!isAst(value)) return null
-  return stringValue(value.table)
 }
 
 function reconstructType(dataType: Ast): Result<string> {

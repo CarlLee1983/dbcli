@@ -1,12 +1,12 @@
 {
   "source": "json",
-  "tables": {
-    "users": {
-      "name": "users",
+  "tables": [
+    {
+      "identity": { "table": "users" },
       "columns": [{ "name": "id", "type": "integer", "nullable": false, "primaryKey": true }],
       "indexes": [],
       "foreignKeys": []
     }
-  },
+  ],
   "unparsed": []
 }

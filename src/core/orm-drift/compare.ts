@@ -35,7 +35,9 @@ function globToRegex(glob: string): RegExp {
 }
 
 function tableMap(schema: NormalizedSchema): Map<string, NormalizedTable> {
-  return new Map(Object.values(schema.tables).map((table) => [table.name.toLowerCase(), table]))
+  return new Map(
+    Object.values(schema.tables).map((table) => [table.identity.table.toLowerCase(), table])
+  )
 }
 
 function entryWithProposals(
@@ -59,7 +61,7 @@ export function compareNormalized(
   for (const tableKey of tableKeys) {
     const ormTable = ormTables.get(tableKey)
     const dbTable = dbTables.get(tableKey)
-    const table = (ormTable ?? dbTable)?.name
+    const table = (ormTable ?? dbTable)?.identity.table
     if (!table) continue
 
     if (ignorePatterns.some((pattern) => pattern.test(table))) {
@@ -128,7 +130,7 @@ function compareTable(
   ormSource: string,
   entries: DriftEntry[]
 ): void {
-  const table = ormTable.name
+  const table = ormTable.identity.table
   const ormColumns = new Map(ormTable.columns.map((column) => [column.name.toLowerCase(), column]))
   const dbColumns = new Map(dbTable.columns.map((column) => [column.name.toLowerCase(), column]))
 

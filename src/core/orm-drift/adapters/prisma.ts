@@ -8,6 +8,7 @@ import type {
   NormalizedTable,
   UnparsedEntry,
 } from '@/core/orm-drift/normalized-schema'
+import { tableIdentityKey } from '@/core/orm-drift/table-identity'
 
 const SCALAR_TYPES: Record<string, string> = {
   String: 'text',
@@ -133,14 +134,20 @@ export function parsePrismaSchema(text: string): NormalizedSchema {
     resolveRelations(model, modelByName, unparsed)
   }
 
-  const tables: Record<string, NormalizedTable> = {}
+  const tables: NormalizedTable[] = []
+  const tableKeys = new Set<string>()
   for (const model of models) {
-    const key = model.tableName.toLowerCase()
-    if (tables[key]) {
-      addBlocked(unparsed, `model ${model.name}`, `duplicate normalized table key '${key}'`)
+    const key = tableIdentityKey(model.table.identity)
+    if (tableKeys.has(key)) {
+      addBlocked(
+        unparsed,
+        `model ${model.name}`,
+        `duplicate normalized table identity '${model.tableName}'`
+      )
       continue
     }
-    tables[key] = model.table
+    tableKeys.add(key)
+    tables.push(model.table)
   }
 
   return { source: 'prisma', tables, unparsed }
@@ -249,7 +256,7 @@ function parseModel(block: SchemaBlock, unparsed: UnparsedEntry[]): ModelInfo {
     pendingIndexes,
     pendingRelations: [],
     columnNames: new Map(),
-    table: { name: tableName, columns: [], indexes: [], foreignKeys: [] },
+    table: { identity: { table: tableName }, columns: [], indexes: [], foreignKeys: [] },
   }
 }
 
@@ -484,7 +491,7 @@ function resolveRelations(
     }
     model.table.foreignKeys.push({
       columns: localColumns as string[],
-      refTable: referencedModel.tableName,
+      refTable: { table: referencedModel.tableName },
       refColumns: refColumns as string[],
     })
   }

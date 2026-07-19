@@ -1,30 +1,41 @@
 import type { TableSchema } from '@/adapters/types'
-import type { NormalizedSchema, NormalizedTable } from './normalized-schema'
+import type { NormalizedSchema } from './normalized-schema'
 
-export function normalizeDbSchema(schema: Record<string, TableSchema>): NormalizedSchema {
-  const tables: Record<string, NormalizedTable> = {}
-  for (const table of Object.values(schema)) {
-    tables[table.name.toLowerCase()] = {
-      name: table.name,
-      columns: table.columns.map((c) => ({
-        name: c.name,
-        type: c.type.toLowerCase(),
-        rawType: c.type,
-        nullable: c.nullable,
-        ...(c.default !== undefined && c.default !== 'NULL' && { default: c.default }),
-        ...(c.primaryKey && { primaryKey: true }),
+export function normalizeDbSchema(
+  schema: Record<string, TableSchema>,
+  options: { defaultSchema?: string } = {}
+): NormalizedSchema {
+  return {
+    source: 'db',
+    ...(options.defaultSchema !== undefined && { defaultSchema: options.defaultSchema }),
+    tables: Object.values(schema).map((table) => ({
+      identity: {
+        ...(table.schema !== undefined && { schema: table.schema }),
+        table: table.name,
+      },
+      columns: table.columns.map((column) => ({
+        name: column.name,
+        type: column.type.toLowerCase(),
+        rawType: column.type,
+        nullable: column.nullable,
+        ...(column.default !== undefined &&
+          column.default !== 'NULL' && { default: column.default }),
+        ...(column.primaryKey && { primaryKey: true }),
       })),
-      indexes: (table.indexes ?? []).map((i) => ({
-        name: i.name,
-        columns: i.columns,
-        unique: Boolean(i.unique),
+      indexes: (table.indexes ?? []).map((index) => ({
+        name: index.name,
+        columns: index.columns,
+        unique: Boolean(index.unique),
       })),
-      foreignKeys: (table.foreignKeys ?? []).map((fk) => ({
-        columns: fk.columns,
-        refTable: fk.refTable,
-        refColumns: fk.refColumns,
+      foreignKeys: (table.foreignKeys ?? []).map((foreignKey) => ({
+        columns: foreignKey.columns,
+        refTable: {
+          ...(foreignKey.refSchema !== undefined && { schema: foreignKey.refSchema }),
+          table: foreignKey.refTable,
+        },
+        refColumns: foreignKey.refColumns,
       })),
-    }
+    })),
+    unparsed: [],
   }
-  return { source: 'db', tables, unparsed: [] }
 }

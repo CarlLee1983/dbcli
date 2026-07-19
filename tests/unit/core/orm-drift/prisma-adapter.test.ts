@@ -1,22 +1,29 @@
 import { describe, test, expect } from 'bun:test'
 import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
+import type { NormalizedSchema, NormalizedTable } from '@/core/orm-drift/normalized-schema'
 
 const full = await Bun.file('tests/fixtures/orm-drift/schema.prisma').text()
 const partial = await Bun.file('tests/fixtures/orm-drift/partial.prisma').text()
+
+function tableNamed(schema: NormalizedSchema, name: string): NormalizedTable {
+  const table = schema.tables.find((candidate) => candidate.identity.table === name)
+  expect(table).toBeDefined()
+  return table!
+}
 
 describe('parsePrismaSchema', () => {
   test('maps models to tables honoring @@map and @map', () => {
     const out = parsePrismaSchema(full)
     expect(out.source).toBe('prisma')
-    expect(Object.keys(out.tables).sort()).toEqual(['posts', 'users'])
+    expect(out.tables.map((table) => table.identity.table).sort()).toEqual(['posts', 'users'])
     expect(out.unparsed).toEqual([])
-    const users = out.tables.users
+    const users = tableNamed(out, 'users')
     const colNames = users.columns.map((c) => c.name)
     expect(colNames).toEqual(['id', 'email', 'name', 'bio', 'created_at'])
   })
 
   test('maps types, optionality, pk, unique, native types', () => {
-    const users = parsePrismaSchema(full).tables.users
+    const users = tableNamed(parsePrismaSchema(full), 'users')
     const byName = Object.fromEntries(users.columns.map((c) => [c.name, c]))
     expect(byName.id).toMatchObject({
       type: 'integer',
@@ -34,7 +41,7 @@ describe('parsePrismaSchema', () => {
   })
 
   test('@@index becomes a composite index with mapped column names', () => {
-    const users = parsePrismaSchema(full).tables.users
+    const users = tableNamed(parsePrismaSchema(full), 'users')
     expect(users.indexes).toContainEqual({
       name: undefined,
       columns: ['name', 'created_at'],
@@ -43,23 +50,23 @@ describe('parsePrismaSchema', () => {
   })
 
   test('relation fields become foreign keys, not columns', () => {
-    const posts = parsePrismaSchema(full).tables.posts
+    const posts = tableNamed(parsePrismaSchema(full), 'posts')
     expect(posts.columns.map((c) => c.name)).toEqual(['id', 'title', 'author_id'])
     expect(posts.foreignKeys).toEqual([
-      { columns: ['author_id'], refTable: 'users', refColumns: ['id'] },
+      { columns: ['author_id'], refTable: { table: 'users' }, refColumns: ['id'] },
     ])
   })
 
   test('list relation fields (Post[]) are skipped silently', () => {
     const out = parsePrismaSchema(full)
-    const users = out.tables.users
+    const users = tableNamed(out, 'users')
     expect(users.columns.map((c) => c.name)).not.toContain('posts')
     expect(out.unparsed.find((entry) => entry.location === 'User.posts')).toBeUndefined()
   })
 
   test('unknown field types and attributes land in unparsed, never guessed', () => {
     const out = parsePrismaSchema(partial)
-    expect(out.tables.widget.columns.map((c) => c.name)).toEqual(['id', 'meta'])
+    expect(tableNamed(out, 'Widget').columns.map((c) => c.name)).toEqual(['id', 'meta'])
     const reasons = out.unparsed.map((u) => u.reason)
     expect(out.unparsed.find((u) => u.location === 'Widget.status')?.reason).toContain('blocked:')
     expect(reasons.some((r) => r.includes('@@fulltext'))).toBe(true)
@@ -83,7 +90,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.user.columns.map((column) => column.name)).toEqual(['id'])
+    expect(tableNamed(out, 'User').columns.map((column) => column.name)).toEqual(['id'])
     expect(out.unparsed.map((entry) => entry.reason)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('blocked: multi-schema'),
@@ -103,7 +110,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.event.columns.map((column) => column.name)).toEqual(['id'])
+    expect(tableNamed(out, 'Event').columns.map((column) => column.name)).toEqual(['id'])
     expect(out.unparsed).toEqual(
       expect.arrayContaining([
         {
@@ -130,8 +137,8 @@ describe('parsePrismaSchema', () => {
         id Int
     `)
 
-    expect(out.tables.good.columns.map((column) => column.name)).toEqual(['id'])
-    expect(out.tables.unclosed).toBeUndefined()
+    expect(tableNamed(out, 'Good').columns.map((column) => column.name)).toEqual(['id'])
+    expect(out.tables.find((table) => table.identity.table === 'Unclosed')).toBeUndefined()
     expect(out.unparsed.length).toBeGreaterThanOrEqual(4)
     expect(out.unparsed.every((entry) => entry.reason.startsWith('blocked:'))).toBe(true)
   })
@@ -144,7 +151,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.invalid.columns).toEqual([])
+    expect(tableNamed(out, 'Invalid').columns).toEqual([])
     expect(out.unparsed).toHaveLength(2)
     expect(out.unparsed.every((entry) => entry.reason.startsWith('blocked:'))).toBe(true)
   })
@@ -166,7 +173,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.container.columns.map((column) => column.name)).toEqual(['id'])
+    expect(tableNamed(out, 'Container').columns.map((column) => column.name)).toEqual(['id'])
     expect(out.unparsed.find((entry) => entry.location === 'Container.related')).toBeUndefined()
     expect(out.unparsed).toEqual(
       expect.arrayContaining([
@@ -192,8 +199,8 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.child.indexes).toEqual([])
-    expect(out.tables.child.foreignKeys).toEqual([])
+    expect(tableNamed(out, 'Child').indexes).toEqual([])
+    expect(tableNamed(out, 'Child').foreignKeys).toEqual([])
     expect(out.unparsed).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ location: 'Child.parent' }),
@@ -223,7 +230,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
     const types = Object.fromEntries(
-      out.tables.nativetypes.columns.map((column) => [column.name, column.type])
+      tableNamed(out, 'NativeTypes').columns.map((column) => [column.name, column.type])
     )
 
     expect(types).toEqual({
@@ -254,7 +261,7 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.invalidnativetypes.columns).toEqual([])
+    expect(tableNamed(out, 'InvalidNativeTypes').columns).toEqual([])
     expect(out.unparsed).toHaveLength(9)
     expect(out.unparsed.every((entry) => entry.reason.startsWith('blocked:'))).toBe(true)
   })
@@ -276,9 +283,9 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.duplicate.columns).toEqual([])
-    expect(out.tables.duplicate.indexes).toEqual([])
-    expect(out.tables.duplicate.foreignKeys).toEqual([])
+    expect(tableNamed(out, 'Duplicate').columns).toEqual([])
+    expect(tableNamed(out, 'Duplicate').indexes).toEqual([])
+    expect(tableNamed(out, 'Duplicate').foreignKeys).toEqual([])
     expect(out.unparsed.map((entry) => entry.reason)).toEqual(
       expect.arrayContaining([
         expect.stringContaining("blocked: duplicate model field name 'repeated'"),
@@ -301,13 +308,13 @@ describe('parsePrismaSchema', () => {
       }
     `)
 
-    expect(out.tables.child.indexes).toContainEqual({
+    expect(tableNamed(out, 'Child').indexes).toContainEqual({
       name: undefined,
       columns: ['id', 'parent_id'],
       unique: true,
     })
-    expect(out.tables.child.foreignKeys).toEqual([
-      { columns: ['parent_id'], refTable: 'Parent', refColumns: ['parent_id'] },
+    expect(tableNamed(out, 'Child').foreignKeys).toEqual([
+      { columns: ['parent_id'], refTable: { table: 'Parent' }, refColumns: ['parent_id'] },
     ])
     expect(out.unparsed).toEqual([])
   })

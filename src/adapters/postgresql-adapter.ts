@@ -160,6 +160,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // Query pg_class to get tables and views with estimated row counts
       const query = `
         SELECT
+          n.nspname as schema_name,
           c.relname as table_name,
           c.reltuples::bigint as estimated_rows,
           CASE c.relkind
@@ -178,6 +179,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       `
 
       const result = await this.execute<{
+        schema_name: string
         table_name: string
         estimated_rows: number | null
         table_type: string
@@ -186,6 +188,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
       return result.rows.map((row) => ({
         name: row.table_name,
+        schema: row.schema_name,
         columns: [],
         columnCount: row.column_count,
         rowCount: Math.max(0, row.estimated_rows || 0),
@@ -283,6 +286,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         SELECT
           tc.constraint_name as name,
           array_agg(kcu.column_name) as columns,
+          ccu.table_schema as ref_schema,
           ccu.table_name as ref_table,
           array_agg(ccu.column_name) as ref_columns
         FROM information_schema.table_constraints AS tc
@@ -291,12 +295,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         JOIN information_schema.constraint_column_usage AS ccu
           ON ccu.constraint_name = tc.constraint_name
         WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
-        GROUP BY tc.constraint_name, ccu.table_name
+        GROUP BY tc.constraint_name, ccu.table_schema, ccu.table_name
       `
 
       const fkResult = await this.execute<{
         name: string
         columns: string[]
+        ref_schema: string
         ref_table: string
         ref_columns: string[]
       }>(fkQuery, [tableName])
@@ -372,12 +377,14 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const safeForeignKeys = fkResults.map((fk) => ({
         name: fk.name,
         columns: Array.isArray(fk.columns) ? fk.columns : [],
+        refSchema: fk.ref_schema,
         refTable: fk.ref_table,
         refColumns: Array.isArray(fk.ref_columns) ? fk.ref_columns : [],
       }))
 
       const schema: TableSchema = {
         name: tableName,
+        schema: 'public',
         columns: columns.map((col) => ({
           name: col.name,
           type: col.type,

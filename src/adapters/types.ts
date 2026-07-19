@@ -92,6 +92,8 @@ export interface ColumnSchema {
 export interface TableSchema {
   /** Table name */
   name: string
+  /** Exact database schema/catalog namespace, when reliably available */
+  schema?: string
   /** Array of columns in the table */
   columns: ColumnSchema[]
   /** Approximate row count (if available) */
@@ -104,6 +106,7 @@ export interface TableSchema {
   foreignKeys?: Array<{
     name: string
     columns: string[]
+    refSchema?: string
     refTable: string
     refColumns: string[]
   }>

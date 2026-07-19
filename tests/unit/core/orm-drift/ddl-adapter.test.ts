@@ -1,13 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import { detectOrmFormat } from '@/core/orm-drift/adapters/detect'
 import { parseDdl } from '@/core/orm-drift/adapters/ddl'
+import type { NormalizedSchema, NormalizedTable } from '@/core/orm-drift/normalized-schema'
 
 const sql = await Bun.file('tests/fixtures/orm-drift/create-tables.sql').text()
+
+function tableNamed(schema: NormalizedSchema, name: string): NormalizedTable {
+  const table = schema.tables.find((candidate) => candidate.identity.table === name)
+  expect(table).toBeDefined()
+  return table!
+}
 
 describe('parseDdl', () => {
   test('builds tables from CREATE TABLE with types, nullability, pk', () => {
     const out = parseDdl(sql, 'postgresql')
-    const users = out.tables.users
+    const users = tableNamed(out, 'users')
     const byName = Object.fromEntries(users.columns.map((column) => [column.name, column]))
     expect(byName.id).toMatchObject({ type: 'integer', nullable: false, primaryKey: true })
     expect(byName.email).toMatchObject({ type: 'varchar(255)', nullable: false })
@@ -15,7 +22,7 @@ describe('parseDdl', () => {
   })
 
   test('collects CREATE INDEX statements onto their table', () => {
-    const users = parseDdl(sql, 'postgresql').tables.users
+    const users = tableNamed(parseDdl(sql, 'postgresql'), 'users')
     expect(users.indexes).toContainEqual({
       name: 'users_email_idx',
       columns: ['email'],
@@ -29,9 +36,10 @@ describe('parseDdl', () => {
   })
 
   test('normalizes inline foreign keys', () => {
-    expect(parseDdl(sql, 'postgresql').tables.users.foreignKeys).toContainEqual({
+    expect(tableNamed(parseDdl(sql, 'postgresql'), 'users').foreignKeys).toContainEqual({
       columns: ['org_id'],
-      refTable: 'orgs',
+      refTable: { table: 'orgs' },
+      parsedRefIdentifier: { table: { value: 'orgs', quoted: false } },
       refColumns: ['id'],
     })
   })
@@ -43,13 +51,13 @@ describe('parseDdl', () => {
 
   test('unparseable SQL becomes one unparsed entry, not a throw', () => {
     const out = parseDdl('CREATE GIBBERISH', 'postgresql')
-    expect(Object.keys(out.tables)).toHaveLength(0)
+    expect(out.tables).toHaveLength(0)
     expect(out.unparsed[0].reason).toContain('blocked: parse failed')
   })
 
   test('preserves a CREATE TABLE after a leading comment', () => {
     const out = parseDdl('-- migration setup\nCREATE TABLE widgets (id INTEGER);', 'postgresql')
-    expect(out.tables.widgets.columns).toContainEqual({
+    expect(tableNamed(out, 'widgets').columns).toContainEqual({
       name: 'id',
       type: 'integer',
       rawType: 'integer',
@@ -62,9 +70,9 @@ describe('parseDdl', () => {
       "-- migration; setup\nCREATE TABLE notes (id INTEGER, body VARCHAR(50) DEFAULT 'keep;this'); CREATE TABLE tags (id INTEGER);",
       'postgresql'
     )
-    expect(Object.keys(out.tables)).toEqual(['notes', 'tags'])
-    expect(out.tables.notes.columns.map((column) => column.name)).toEqual(['id', 'body'])
-    expect(out.tables.notes.columns.find((column) => column.name === 'body')?.default).toBe(
+    expect(out.tables.map((table) => table.identity.table)).toEqual(['notes', 'tags'])
+    expect(tableNamed(out, 'notes').columns.map((column) => column.name)).toEqual(['id', 'body'])
+    expect(tableNamed(out, 'notes').columns.find((column) => column.name === 'body')?.default).toBe(
       "'keep;this'"
     )
   })
@@ -74,13 +82,13 @@ describe('parseDdl', () => {
       'CREATE TABLE first_table (id INTEGER); CREATE GIBBERISH; CREATE TABLE last_table (id INTEGER);',
       'postgresql'
     )
-    expect(Object.keys(out.tables)).toEqual(['first_table', 'last_table'])
+    expect(out.tables.map((table) => table.identity.table)).toEqual(['first_table', 'last_table'])
     expect(out.unparsed).toHaveLength(1)
   })
 
   test.each(['postgresql', 'mysql', 'mariadb'] as const)('uses the %s parser dialect', (system) => {
     const out = parseDdl('CREATE TABLE dialect_test (id INTEGER);', system)
-    expect(out.tables.dialect_test.columns[0].name).toBe('id')
+    expect(tableNamed(out, 'dialect_test').columns[0]?.name).toBe('id')
   })
 
   test('keeps supported columns and blocks unsupported table definitions', () => {
@@ -88,7 +96,7 @@ describe('parseDdl', () => {
       'CREATE TABLE checked_table (id INTEGER, CONSTRAINT positive_id CHECK (id > 0));',
       'postgresql'
     )
-    expect(out.tables.checked_table.columns.map((column) => column.name)).toEqual(['id'])
+    expect(tableNamed(out, 'checked_table').columns.map((column) => column.name)).toEqual(['id'])
     expect(out.unparsed[0].reason).toContain('blocked: unsupported table definition')
   })
 
@@ -99,7 +107,7 @@ describe('parseDdl', () => {
         'CREATE TABLE amounts (numeric_value NUMERIC(10,2), decimal_value DECIMAL(12,4));',
         system
       )
-      expect(out.tables.amounts.columns).toMatchObject([
+      expect(tableNamed(out, 'amounts').columns).toMatchObject([
         { name: 'numeric_value', type: 'numeric(10,2)', rawType: 'numeric(10,2)' },
         { name: 'decimal_value', type: 'decimal(12,4)', rawType: 'decimal(12,4)' },
       ])
@@ -112,13 +120,13 @@ describe('parseDdl', () => {
       'CREATE TABLE events (occurred_at TIMESTAMP WITH TIME ZONE);',
       'postgresql'
     )
-    expect(out.tables.events.columns[0].type).toBe('timestamp with time zone')
+    expect(tableNamed(out, 'events').columns[0]?.type).toBe('timestamp with time zone')
     expect(out.unparsed).toHaveLength(0)
   })
 
   test.each(['mysql', 'mariadb'] as const)('preserves %s unsigned type modifiers', (system) => {
     const out = parseDdl('CREATE TABLE counters (value INT UNSIGNED);', system)
-    expect(out.tables.counters.columns[0].type).toBe('int unsigned')
+    expect(tableNamed(out, 'counters').columns[0]?.type).toBe('int unsigned')
     expect(out.unparsed).toHaveLength(0)
   })
 
@@ -129,11 +137,11 @@ describe('parseDdl', () => {
         "CREATE TABLE settings (id INTEGER DEFAULT 42 UNIQUE, label VARCHAR(20) DEFAULT 'Hello');",
         system
       )
-      expect(out.tables.settings.columns).toMatchObject([
+      expect(tableNamed(out, 'settings').columns).toMatchObject([
         { name: 'id', default: '42' },
         { name: 'label', default: "'Hello'" },
       ])
-      expect(out.tables.settings.indexes).toContainEqual({
+      expect(tableNamed(out, 'settings').indexes).toContainEqual({
         columns: ['id'],
         unique: true,
       })
@@ -145,7 +153,7 @@ describe('parseDdl', () => {
     'applies a %s table primary key declared before its column',
     (system) => {
       const out = parseDdl('CREATE TABLE reversed_pk (PRIMARY KEY (id), id INTEGER);', system)
-      expect(out.tables.reversed_pk.columns[0]).toMatchObject({
+      expect(tableNamed(out, 'reversed_pk').columns[0]).toMatchObject({
         name: 'id',
         nullable: false,
         primaryKey: true,
@@ -158,7 +166,7 @@ describe('parseDdl', () => {
     'blocks %s enum expression types instead of emitting a lossy column',
     (system) => {
       const out = parseDdl("CREATE TABLE choices (id INTEGER, value ENUM('x','y'));", system)
-      expect(out.tables.choices.columns.map((column) => column.name)).toEqual(['id'])
+      expect(tableNamed(out, 'choices').columns.map((column) => column.name)).toEqual(['id'])
       expect(out.unparsed.some((entry) => entry.reason.includes('blocked:'))).toBe(true)
     }
   )
@@ -170,7 +178,9 @@ describe('parseDdl', () => {
         'CREATE TABLE generated_values (source INT, derived INT GENERATED ALWAYS AS (source + 1) STORED);',
         system
       )
-      expect(out.tables.generated_values.columns.map((column) => column.name)).toEqual(['source'])
+      expect(tableNamed(out, 'generated_values').columns.map((column) => column.name)).toEqual([
+        'source',
+      ])
       expect(out.unparsed.some((entry) => entry.reason.includes('generated'))).toBe(true)
     }
   )
@@ -182,10 +192,44 @@ describe('parseDdl', () => {
         'CREATE TABLE indexed_values (value INTEGER); CREATE INDEX positive_values ON indexed_values (value) WHERE value > 0;',
         system
       )
-      expect(out.tables.indexed_values.indexes).toHaveLength(0)
+      expect(tableNamed(out, 'indexed_values').indexes).toHaveLength(0)
       expect(out.unparsed.some((entry) => entry.reason.includes('blocked:'))).toBe(true)
     }
   )
+
+  test('preserves parsed quote state and keeps users and quoted Users distinct', () => {
+    const out = parseDdl(
+      'CREATE TABLE users (id INTEGER); CREATE TABLE "Users" (id INTEGER);',
+      'postgresql'
+    )
+    expect(out.tables.map((table) => table.identity)).toEqual([
+      { table: 'users' },
+      { table: 'Users' },
+    ])
+    expect(out.tables.map((table) => table.parsedIdentifier?.table)).toEqual([
+      { value: 'users', quoted: false },
+      { value: 'Users', quoted: true },
+    ])
+  })
+
+  test('resolves unquoted and quoted identifiers independently', () => {
+    const out = parseDdl(
+      'CREATE TABLE Users (id INTEGER); CREATE TABLE "Users" (id INTEGER);',
+      'postgresql'
+    )
+    expect(out.tables.map((table) => table.identity.table)).toEqual(['users', 'Users'])
+  })
+
+  test('preserves quote state for schema-qualified table identities', () => {
+    const out = parseDdl(
+      'CREATE TABLE Tenant.Users (id INTEGER); CREATE TABLE "Tenant"."Users" (id INTEGER);',
+      'postgresql'
+    )
+    expect(out.tables.map((table) => table.identity)).toEqual([
+      { schema: 'tenant', table: 'users' },
+      { schema: 'Tenant', table: 'Users' },
+    ])
+  })
 })
 
 describe('detectOrmFormat', () => {

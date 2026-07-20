@@ -15,7 +15,11 @@ import { parseDrizzleSnapshot } from '@/core/orm-drift/adapters/drizzle'
 import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
 import { compareNormalized, type DriftReport } from '@/core/orm-drift/compare'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
-import { normalizedSchemaZod, type NormalizedSchema } from '@/core/orm-drift/normalized-schema'
+import {
+  normalizedSchemaZod,
+  type NormalizedSchema,
+  type OrmSource,
+} from '@/core/orm-drift/normalized-schema'
 import { formatDrift, type DriftFormat } from '@/formatters/orm-drift'
 import { validateFormat, type DbcliConfig } from '@/utils/validation'
 
@@ -28,10 +32,17 @@ function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptio
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 const DRIFT_FORMATS = ['json', 'table', 'markdown'] as const
-const ORM_FORMATS = ['prisma', 'ddl', 'json', 'drizzle'] as const
+const ORM_FORMATS = ['prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize'] as const
+const ORM_ALIASES = {
+  typeorm: { defaultIgnore: ['typeorm_metadata', 'migrations'] },
+  sequelize: { defaultIgnore: ['SequelizeMeta'] },
+} as const satisfies Record<string, { defaultIgnore: readonly string[] }>
+
+type OrmAlias = keyof typeof ORM_ALIASES
+type DriftOrmFormat = OrmFormat | OrmAlias
 
 export interface DriftOptions {
-  ormFormat?: OrmFormat
+  ormFormat?: DriftOrmFormat
   ignore?: string
 }
 
@@ -89,10 +100,10 @@ export async function expandOrmPaths(inputs: string[] | string): Promise<string[
   return [...expanded].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
 }
 
-function parseOrmFormat(value: string | undefined): OrmFormat | undefined {
+function parseOrmFormat(value: string | undefined): DriftOrmFormat | undefined {
   if (value === undefined) return undefined
   validateFormat(value, ORM_FORMATS, 'diff --orm-format')
-  return value as OrmFormat
+  return value as DriftOrmFormat
 }
 
 function mergeNormalizedSchemas(schemas: NormalizedSchema[]): NormalizedSchema {
@@ -125,7 +136,7 @@ export async function runDrift(
   const ormFormat = parseOrmFormat(options.ormFormat)
   const includesGlob = parseAgainstOrmValues(paths).some(hasGlobMagic)
   const expandedPaths = await expandOrmPaths(paths)
-  const inputs: Array<{ path: string; content: string; format: OrmFormat }> = []
+  const inputs: Array<{ path: string; content: string; format: DriftOrmFormat }> = []
 
   for (const path of expandedPaths) {
     if (path.toLowerCase().endsWith('.ts')) {
@@ -150,7 +161,7 @@ export async function runDrift(
     throw new Error('Glob ORM schema inputs are supported only for DDL')
   }
 
-  const orm =
+  const merged =
     inputs[0]?.format === 'ddl'
       ? parseDdlFiles(
           inputs.map((input) => input.content),
@@ -159,12 +170,16 @@ export async function runDrift(
       : mergeNormalizedSchemas(
           inputs.map(({ content, format }) => {
             if (format === 'prisma') return parsePrismaSchema(content)
-            if (format === 'ddl') return parseDdl(content, system as SqlDatabaseSystem)
+            if (format === 'ddl' || format in ORM_ALIASES) {
+              return parseDdl(content, system as SqlDatabaseSystem)
+            }
             if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
             const parsed = normalizedSchemaZod.parse(JSON.parse(content))
             return { ...parsed, source: 'json' as const }
           })
         )
+  const alias = ormFormat && ormFormat in ORM_ALIASES ? (ormFormat as OrmAlias) : undefined
+  const orm = alias ? { ...merged, source: alias as OrmSource } : merged
   const ignore = (options.ignore ?? '')
     .split(',')
     .map((pattern) => pattern.trim())
@@ -174,7 +189,12 @@ export async function runDrift(
     system === 'postgresql' ? { defaultSchema: 'public' } : undefined
   )
 
-  return { report: compareNormalized(orm, db, { ignore }) }
+  return {
+    report: compareNormalized(orm, db, {
+      ignore,
+      extraDefaultIgnore: alias ? [...ORM_ALIASES[alias].defaultIgnore] : undefined,
+    }),
+  }
 }
 
 export function validateDiffModes(options: {

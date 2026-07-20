@@ -84,11 +84,13 @@ const entryOrder = (left: DriftEntry, right: DriftEntry): number =>
 export function compareNormalized(
   orm: NormalizedSchema,
   db: NormalizedSchema,
-  opts: { ignore: string[] }
+  opts: { ignore: string[]; extraDefaultIgnore?: string[] }
 ): DriftReport {
   const ormTables = tableMap(orm, db.defaultSchema)
   const dbTables = tableMap(db, db.defaultSchema)
   const tableKeys = new Set([...ormTables.keys(), ...dbTables.keys()])
+  const extraDefaultIgnore = opts.extraDefaultIgnore ?? []
+  const defaultIgnore = [...DEFAULT_IGNORE, ...extraDefaultIgnore]
   const ignorePatterns = opts.ignore.map(globToRegex)
   const entries: DriftEntry[] = []
 
@@ -98,16 +100,16 @@ export function compareNormalized(
     const normalizedTable = ormTable ?? dbTable
     if (!normalizedTable) continue
     const table = qualifiedTableName(normalizedTable.identity)
+    const isDefaultIgnored = defaultIgnore.includes(normalizedTable.identity.table)
 
-    if (
-      DEFAULT_IGNORE.includes(normalizedTable.identity.table) ||
-      ignorePatterns.some((pattern) => pattern.test(table))
-    ) {
+    if (isDefaultIgnored || ignorePatterns.some((pattern) => pattern.test(table))) {
       entries.push(
         entryWithProposals({
           category: 'unmanaged',
           severity: 'info',
-          table,
+          table: extraDefaultIgnore.includes(normalizedTable.identity.table)
+            ? normalizedTable.identity.table
+            : table,
           object: 'table',
           detail: 'matched ignore pattern; excluded from drift scoring',
         })

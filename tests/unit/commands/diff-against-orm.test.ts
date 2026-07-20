@@ -111,6 +111,48 @@ describe('runDrift', () => {
     expect(report.ormSource).toBe('drizzle')
   })
 
+  test('typeorm alias parses DDL and tags ormSource', async () => {
+    const { report } = await runDrift(
+      ['tests/fixtures/orm-drift/create-tables.sql'],
+      { ormFormat: 'typeorm' },
+      config as never
+    )
+    expect(report.ormSource).toBe('typeorm')
+  })
+
+  test('typeorm bookkeeping tables in DB are unmanaged by default', async () => {
+    const cfg = {
+      ...config,
+      schema: {
+        ...config.schema,
+        typeorm_metadata: { name: 'typeorm_metadata', columns: [], indexes: [] },
+      },
+    }
+    const { report } = await runDrift(
+      ['tests/fixtures/orm-drift/create-tables.sql'],
+      { ormFormat: 'typeorm' },
+      cfg as never
+    )
+    expect(report.entries.find((e) => e.table === 'typeorm_metadata')?.category).toBe('unmanaged')
+  })
+
+  test('sequelize alias ignores SequelizeMeta', async () => {
+    const cfg = {
+      ...config,
+      schema: {
+        ...config.schema,
+        SequelizeMeta: { name: 'SequelizeMeta', columns: [], indexes: [] },
+      },
+    }
+    const { report } = await runDrift(
+      ['tests/fixtures/orm-drift/create-tables.sql'],
+      { ormFormat: 'sequelize' },
+      cfg as never
+    )
+    expect(report.ormSource).toBe('sequelize')
+    expect(report.entries.find((e) => e.table === 'SequelizeMeta')?.category).toBe('unmanaged')
+  })
+
   test('forced unsupported drizzle snapshot fails closed with version and dialect guidance', async () => {
     const unsupported = structuredClone(
       JSON.parse(await Bun.file('tests/fixtures/orm-drift/drizzle-snapshot.json').text())

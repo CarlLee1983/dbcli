@@ -226,6 +226,18 @@ describe('runDrift', () => {
     ).rejects.toThrow('drizzle-kit generate')
   })
 
+  test('.ts input with typeorm alias explains schema:log', async () => {
+    await expect(
+      runDrift(['src/entity/User.ts'], { ormFormat: 'typeorm' }, config as never)
+    ).rejects.toThrow('typeorm schema:log')
+  })
+
+  test('.js input with sequelize alias explains schema-only dump', async () => {
+    await expect(
+      runDrift(['models/user.js'], { ormFormat: 'sequelize' }, config as never)
+    ).rejects.toThrow('--schema-only')
+  })
+
   test('honors the JSON format escape hatch', async () => {
     const path = await write(
       'schema.data',

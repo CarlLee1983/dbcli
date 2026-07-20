@@ -143,7 +143,17 @@ export async function runDrift(
   const inputs: Array<{ path: string; content: string; format: DriftOrmFormat }> = []
 
   for (const path of expandedPaths) {
-    if (path.toLowerCase().endsWith('.ts')) {
+    if (/\.(?:ts|js|mjs|cjs)$/i.test(path)) {
+      if (ormFormat === 'typeorm') {
+        throw new Error(
+          "TypeORM entities are not parsed directly. Generate DDL first: 'typeorm schema:log -d <datasource>' > schema.sql, then pass schema.sql."
+        )
+      }
+      if (ormFormat === 'sequelize') {
+        throw new Error(
+          "Sequelize models are not parsed directly. Apply migrations to a scratch DB and dump DDL ('pg_dump --schema-only' / 'mysqldump --no-data'), then pass the dump file."
+        )
+      }
       throw new Error(
         "Drizzle/TypeORM TypeScript sources are not parsed directly. Run 'drizzle-kit generate' and pass drizzle/meta/<NNNN>_snapshot.json (or export DDL) instead."
       )

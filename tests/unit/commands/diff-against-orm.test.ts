@@ -126,6 +126,7 @@ describe('runDrift', () => {
       schema: {
         ...config.schema,
         typeorm_metadata: { name: 'typeorm_metadata', columns: [], indexes: [] },
+        migrations: { name: 'migrations', columns: [], indexes: [] },
       },
     }
     const { report } = await runDrift(
@@ -134,6 +135,7 @@ describe('runDrift', () => {
       cfg as never
     )
     expect(report.entries.find((e) => e.table === 'typeorm_metadata')?.category).toBe('unmanaged')
+    expect(report.entries.find((e) => e.table === 'migrations')?.category).toBe('unmanaged')
   })
 
   test('sequelize alias ignores SequelizeMeta', async () => {
@@ -151,6 +153,45 @@ describe('runDrift', () => {
     )
     expect(report.ormSource).toBe('sequelize')
     expect(report.entries.find((e) => e.table === 'SequelizeMeta')?.category).toBe('unmanaged')
+  })
+
+  test('typeorm alias aggregates multiple DDL files', async () => {
+    const table = await write('001-typeorm-table.sql', ddl('users'))
+    const index = await write(
+      '002-typeorm-index.sql',
+      'CREATE INDEX users_id_idx ON users (id);'
+    )
+    const indexedConfig = {
+      ...config,
+      schema: {
+        users: {
+          ...usersTable,
+          indexes: [{ name: 'users_id_idx', columns: ['id'], unique: false }],
+        },
+      },
+    }
+
+    const { report } = await runDrift(
+      [table, index],
+      { ormFormat: 'typeorm' },
+      indexedConfig as never
+    )
+
+    expect(report.ormSource).toBe('typeorm')
+    expect(report.entries).toEqual([])
+    expect(report.unparsed).toEqual([])
+  })
+
+  test('sequelize alias accepts a matching DDL glob', async () => {
+    await write('sequelize-schema.sql', ddl('users'))
+
+    const { report } = await runDrift(
+      [join(tempDir, 'sequelize-*.sql')],
+      { ormFormat: 'sequelize' },
+      config as never
+    )
+
+    expect(report.ormSource).toBe('sequelize')
   })
 
   test('forced unsupported drizzle snapshot fails closed with version and dialect guidance', async () => {
@@ -368,6 +409,12 @@ describe('runDrift', () => {
 })
 
 describe('diff command drift mode', () => {
+  test('advertises typeorm and sequelize ORM formats in help', () => {
+    const help = diffCommand.helpInformation()
+    expect(help).toContain('Force ORM input format: prisma | ddl | json | drizzle |')
+    expect(help).toContain('typeorm | sequelize')
+  })
+
   test('rejects conflicting snapshot, against, and against-orm modes', () => {
     expect(() =>
       validateDiffModes({

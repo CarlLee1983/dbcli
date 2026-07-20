@@ -41,6 +41,10 @@ const ORM_ALIASES = {
 type OrmAlias = keyof typeof ORM_ALIASES
 type DriftOrmFormat = OrmFormat | OrmAlias
 
+function isDdlFormat(format: DriftOrmFormat): boolean {
+  return format === 'ddl' || format in ORM_ALIASES
+}
+
 export interface DriftOptions {
   ormFormat?: DriftOrmFormat
   ignore?: string
@@ -154,15 +158,15 @@ export async function runDrift(
     })
   }
 
-  if (inputs.length > 1 && inputs.some((input) => input.format !== 'ddl')) {
+  if (inputs.length > 1 && inputs.some((input) => !isDdlFormat(input.format))) {
     throw new Error('Multiple ORM schema files are supported only for DDL inputs')
   }
-  if (includesGlob && inputs.some((input) => input.format !== 'ddl')) {
+  if (includesGlob && inputs.some((input) => !isDdlFormat(input.format))) {
     throw new Error('Glob ORM schema inputs are supported only for DDL')
   }
 
   const merged =
-    inputs[0]?.format === 'ddl'
+    inputs.every((input) => isDdlFormat(input.format))
       ? parseDdlFiles(
           inputs.map((input) => input.content),
           system as SqlDatabaseSystem
@@ -382,7 +386,10 @@ export const diffCommand = new Command()
     collectOption,
     []
   )
-  .option('--orm-format <fmt>', 'Force ORM input format: prisma | ddl | json | drizzle')
+  .option(
+    '--orm-format <fmt>',
+    'Force ORM input format: prisma | ddl | json | drizzle | typeorm | sequelize'
+  )
   .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
   .option(
     '--format <format>',

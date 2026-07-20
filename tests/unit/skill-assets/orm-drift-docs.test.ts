@@ -31,9 +31,7 @@ describe('ORM drift documentation contract', () => {
     for (const skill of [english, traditionalChinese]) {
       expect(skill).toContain('`orm-drift-review`')
       expect(skill).toContain('`--against-orm <path>`')
-      expect(skill).toContain(
-        '`--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize`'
-      )
+      expect(skill).toContain('`--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize`')
       expect(skill).toContain('`--ignore <globs>`')
       expect(skill).toContain('`--format json\\|table\\|markdown`')
       expect(skill).toContain('`migration-review`')

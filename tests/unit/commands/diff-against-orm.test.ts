@@ -161,10 +161,7 @@ describe('runDrift', () => {
 
   test('typeorm alias aggregates multiple DDL files', async () => {
     const table = await write('001-typeorm-table.sql', ddl('users'))
-    const index = await write(
-      '002-typeorm-index.sql',
-      'CREATE INDEX users_id_idx ON users (id);'
-    )
+    const index = await write('002-typeorm-index.sql', 'CREATE INDEX users_id_idx ON users (id);')
     const indexedConfig = {
       ...config,
       schema: {
@@ -235,19 +232,13 @@ describe('runDrift', () => {
       name: '.ts input with typeorm alias gives the exact generated-DDL recipe',
       path: 'src/entity/User.ts',
       ormFormat: 'typeorm' as const,
-      expected: [
-        "'typeorm schema:log -d <datasource>' > schema.sql",
-        'then pass schema.sql',
-      ],
+      expected: ["'typeorm schema:log -d <datasource>' > schema.sql", 'then pass schema.sql'],
     },
     {
       name: '.mjs input with typeorm alias gives the exact generated-DDL recipe',
       path: 'src/entity/User.mjs',
       ormFormat: 'typeorm' as const,
-      expected: [
-        "'typeorm schema:log -d <datasource>' > schema.sql",
-        'then pass schema.sql',
-      ],
+      expected: ["'typeorm schema:log -d <datasource>' > schema.sql", 'then pass schema.sql'],
     },
     {
       name: '.js input with sequelize alias gives the complete scratch-DB recipe',

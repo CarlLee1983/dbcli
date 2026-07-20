@@ -5,6 +5,23 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.42.0] - 2026-07-20 - Drizzle Snapshot 與 ORM DDL 工作流擴充
+
+### Added
+
+- **Drizzle Kit snapshot 可直接用於 ORM drift 比對。** `dbcli diff --against-orm` 新增 Drizzle snapshot 格式偵測與 `NormalizedSchema` adapter，支援 PostgreSQL v7 snapshot 的 table、column、primary key、unique constraint、index 與 foreign key metadata。
+- **TypeORM／Sequelize DDL alias。** `--orm-format typeorm`、`typeorm-ddl`、`sequelize` 與 `sequelize-ddl` 可直接走既有 DDL adapter；自動忽略 `typeorm_metadata` 與 `SequelizeMeta` bookkeeping table，並補上 source-file 使用者的可執行匯出／比對指引。
+
+### Changed
+
+- **ORM drift 文件完整同步。** 英文／繁體中文的 Markdown 與 HTML 使用者文件、skill assets、各平台 plugin 副本及 reference 已補上 Drizzle snapshot、TypeORM／Sequelize DDL 的格式、限制與操作範例。
+- **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.42.0`。
+
+### Fixed
+
+- **不支援的 ORM 輸入改為 fail closed。** Drizzle snapshot 會拒絕不支援的版本／dialect、generated／identity／enum／composite primary key 等結構，以及無法無損轉換的 column default；TypeORM／Sequelize source file 則回報完整的匯出 DDL recipe，不再被 JSON／DDL fallback 誤解析。
+- **Qualified ignore identity 保留完整。** ORM drift 的 ignore 比對不再把 schema-qualified identity 降成 bare table name，避免同名 table 跨 schema 時被錯誤忽略；ORM DDL alias 也會正確沿用 DDL 輸入處理與 bookkeeping ignore。
+
 ## [1.41.0] - 2026-07-19 - ORM Drift 比對與無損 Schema Identity
 
 ### Added

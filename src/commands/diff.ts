@@ -175,23 +175,22 @@ export async function runDrift(
     throw new Error('Glob ORM schema inputs are supported only for DDL')
   }
 
-  const merged =
-    inputs.every((input) => isDdlFormat(input.format))
-      ? parseDdlFiles(
-          inputs.map((input) => input.content),
-          system as SqlDatabaseSystem
-        )
-      : mergeNormalizedSchemas(
-          inputs.map(({ content, format }) => {
-            if (format === 'prisma') return parsePrismaSchema(content)
-            if (format === 'ddl' || format in ORM_ALIASES) {
-              return parseDdl(content, system as SqlDatabaseSystem)
-            }
-            if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
-            const parsed = normalizedSchemaZod.parse(JSON.parse(content))
-            return { ...parsed, source: 'json' as const }
-          })
-        )
+  const merged = inputs.every((input) => isDdlFormat(input.format))
+    ? parseDdlFiles(
+        inputs.map((input) => input.content),
+        system as SqlDatabaseSystem
+      )
+    : mergeNormalizedSchemas(
+        inputs.map(({ content, format }) => {
+          if (format === 'prisma') return parsePrismaSchema(content)
+          if (format === 'ddl' || format in ORM_ALIASES) {
+            return parseDdl(content, system as SqlDatabaseSystem)
+          }
+          if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
+          const parsed = normalizedSchemaZod.parse(JSON.parse(content))
+          return { ...parsed, source: 'json' as const }
+        })
+      )
   const alias = ormFormat && ormFormat in ORM_ALIASES ? (ormFormat as OrmAlias) : undefined
   const orm = alias ? { ...merged, source: alias as OrmSource } : merged
   const ignore = (options.ignore ?? '')

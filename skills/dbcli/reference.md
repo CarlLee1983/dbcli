@@ -718,7 +718,7 @@ execute a proposal. An empty cache fails with
 separate `--snapshot` / `--against` workflow.
 
 ```bash
-# Prisma, normalized JSON, and Drizzle accept exactly one file
+# Prisma and normalized JSON accept exactly one file
 dbcli diff --against-orm prisma/schema.prisma --format json
 dbcli diff --against-orm schema.normalized.json --orm-format json --format table
 
@@ -735,12 +735,60 @@ dbcli diff --against-orm migrations/base.sql,migrations/accounts.sql \
 dbcli diff --against-orm prisma/schema.prisma --ignore 'public.audit_*,public.Legacy'
 ```
 
+##### TypeORM
+
+TypeORM entities are not parsed directly. `schema:log` prints the SQL that
+`schema:sync` would execute without applying it; `-d` is the required data-source
+path. Generate that DDL, then select the `typeorm` alias so the report is tagged
+`ormSource: typeorm`:
+
+```bash
+bunx typeorm schema:log -d <path/to/datasource> > schema.sql
+dbcli diff --against-orm schema.sql --orm-format typeorm --format table
+```
+
+With `--orm-format typeorm`, `typeorm_metadata` and `migrations` are
+default-ignored and appear as `unmanaged` rather than scored drift. Passing a
+TypeORM `.ts`, `.js`, `.mjs`, or `.cjs` source file is rejected with the
+`schema:log` command to run. See the
+[TypeORM CLI documentation](https://typeorm.io/docs/using-cli) and
+[`SchemaLogCommand`](https://github.com/typeorm/typeorm/blob/master/src/commands/SchemaLogCommand.ts).
+
+##### Sequelize
+
+Sequelize CLI does not provide a universal `db:migrate --dry-run`. Point the
+project's existing Sequelize configuration at an empty scratch database, apply
+the migrations there, and dump definitions without row data:
+
+```bash
+# Configure Sequelize for an empty scratch database first
+bunx sequelize-cli db:migrate
+
+# PostgreSQL scratch database
+pg_dump --schema-only <scratch-database> > schema.sql
+
+# MySQL scratch database
+mysqldump --no-data <database> > schema.sql
+
+dbcli diff --against-orm schema.sql --orm-format sequelize --format json
+```
+
+With `--orm-format sequelize`, `SequelizeMeta` is default-ignored and appears as
+`unmanaged` rather than scored drift. Passing a Sequelize `.ts`, `.js`, `.mjs`,
+or `.cjs` model file is rejected with the scratch-database and schema-only dump
+recipe. See the
+[Sequelize CLI migration command](https://github.com/sequelize/cli/blob/main/src/commands/migrate.js),
+[PostgreSQL `pg_dump`](https://www.postgresql.org/docs/current/app-pgdump.html),
+and [MySQL `mysqldump`](https://dev.mysql.com/doc/refman/8.4/en/mysqldump-definition-data-dumps.html)
+references.
+
 | Option | Behavior |
 | :--- | :--- |
-| `--against-orm <paths>` | Repeatable or comma-separated input. DDL inputs support real filesystem globs; matches are deduplicated and put in deterministic path order, then parsed as one shared ordered context so an index in a later file can attach to a table declared in an earlier file. Prisma, normalized JSON, and Drizzle accept exactly one file, and globs are rejected for those formats. |
+| `--against-orm <paths>` | Repeatable or comma-separated input. DDL-family inputs (raw DDL, TypeORM, and Sequelize) support real filesystem globs; matches are deduplicated and put in deterministic path order, then parsed as one shared ordered context so an index in a later file can attach to a table declared in an earlier file. Prisma, normalized JSON, and Drizzle accept exactly one file, and globs are rejected for those formats. |
 | Drizzle input | Run `drizzle-kit generate`, then pass the PostgreSQL drizzle-kit v7 snapshot at `drizzle/meta/<NNNN>_snapshot.json`. TypeScript ORM schema sources (`.ts` or `.TS`) are rejected with that snapshot-generation hint; dbcli does not parse them directly. |
-| `--orm-format prisma\|ddl\|json\|drizzle` | Override extension/content detection. Without it, dbcli detects Prisma, DDL, normalized JSON, or a Drizzle snapshot from the path and content. |
-| `--ignore <globs>` | Comma-separated, case-sensitive table globs. Patterns match the qualified display identity (for example `public.Users`). `_prisma_migrations` is always unmanaged. |
+| TypeORM / Sequelize input | Generate DDL with the ORM/database tooling, then pass the SQL file with the matching `typeorm` or `sequelize` alias. Entity/model source files are rejected rather than parsed. |
+| `--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize` | Override extension/content detection. The `typeorm` and `sequelize` aliases use the DDL adapter while preserving the source tag and ORM-specific default ignores. Without an override, dbcli detects Prisma, raw DDL, normalized JSON, or a Drizzle snapshot from the path and content. |
+| `--ignore <globs>` | Comma-separated, case-sensitive table globs. Patterns match the qualified display identity (for example `public.Users`). `_prisma_migrations` is always unmanaged; the TypeORM alias additionally ignores `typeorm_metadata` and `migrations`, and the Sequelize alias additionally ignores `SequelizeMeta`. |
 | `--format json\|table\|markdown` | Select machine JSON, human table, or Markdown output. Markdown is available only in ORM drift mode. |
 | `--recovery` | On an I/O, configuration, empty-cache, invalid-format, or unsupported-engine failure, emit and save a structured recovery envelope. Invalid Prisma/DDL constructs normally become `unparsed` entries instead of throwing. |
 

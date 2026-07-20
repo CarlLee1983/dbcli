@@ -31,13 +31,18 @@ describe('ORM drift documentation contract', () => {
     for (const skill of [english, traditionalChinese]) {
       expect(skill).toContain('`orm-drift-review`')
       expect(skill).toContain('`--against-orm <path>`')
-      expect(skill).toContain('`--orm-format prisma\\|ddl\\|json\\|drizzle`')
+      expect(skill).toContain(
+        '`--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize`'
+      )
       expect(skill).toContain('`--ignore <globs>`')
       expect(skill).toContain('`--format json\\|table\\|markdown`')
       expect(skill).toContain('`migration-review`')
       expect(skill).toContain('drizzle/meta/<NNNN>_snapshot.json')
       expect(skill).toContain('drizzle-kit generate')
       expect(skill).toContain('`.ts`')
+      expect(skill).toContain('TypeORM/Sequelize')
+      expect(skill).toContain('schema:log')
+      expect(skill).toContain('schema-only')
     }
   })
 
@@ -47,13 +52,22 @@ describe('ORM drift documentation contract', () => {
     for (const text of [
       '--against-orm <paths>',
       'repeatable or comma-separated',
-      'DDL inputs support real filesystem globs',
+      'DDL-family inputs (raw DDL, TypeORM, and Sequelize) support real filesystem globs',
       'Prisma, normalized JSON, and Drizzle accept exactly one file',
       'PostgreSQL drizzle-kit v7 snapshot',
       'drizzle/meta/<NNNN>_snapshot.json',
       'drizzle-kit generate',
       '(`.ts` or `.TS`)',
-      '--orm-format prisma\\|ddl\\|json\\|drizzle',
+      '--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize',
+      'bunx typeorm schema:log -d <path/to/datasource> > schema.sql',
+      'dbcli diff --against-orm schema.sql --orm-format typeorm --format table',
+      'bunx sequelize-cli db:migrate',
+      'pg_dump --schema-only <scratch-database> > schema.sql',
+      'mysqldump --no-data <database> > schema.sql',
+      'dbcli diff --against-orm schema.sql --orm-format sequelize --format json',
+      '`typeorm_metadata` and `migrations`',
+      '`SequelizeMeta`',
+      'does not provide a universal `db:migrate --dry-run`',
       'Drizzle enums',
       'blocked',
       'does not open a database connection',
@@ -90,33 +104,44 @@ describe('ORM drift documentation contract', () => {
         path: 'docs/user/en/index.md',
         start: '#### ORM definition drift',
         snapshotPath: 'drizzle/meta/<NNNN>_snapshot.json',
-        typescriptGuidance:
-          'TypeScript ORM schema sources (`.ts` or `.TS`) are rejected with that hint and are not parsed directly.',
+        typeormCommand: 'bunx typeorm schema:log -d <path/to/datasource> > schema.sql',
+        pgDumpCommand: 'pg_dump --schema-only <scratch-database> > schema.sql',
+        mysqlDumpCommand: 'mysqldump --no-data <database> > schema.sql',
       },
       {
         path: 'docs/user/zh-TW/index.md',
         start: '#### ORM 定義漂移',
         snapshotPath: 'drizzle/meta/<NNNN>_snapshot.json',
-        typescriptGuidance:
-          'TypeScript ORM schema source（`.ts` 或 `.TS`）不會被直接解析，而是會被拒絕並顯示上述提示。',
+        typeormCommand: 'bunx typeorm schema:log -d <path/to/datasource> > schema.sql',
+        pgDumpCommand: 'pg_dump --schema-only <scratch-database> > schema.sql',
+        mysqlDumpCommand: 'mysqldump --no-data <database> > schema.sql',
       },
       {
         path: 'docs/user/en/index.html',
         start: '<h4 class="mt-0 mb-3 font-bold text-text-main">ORM definition drift</h4>',
         snapshotPath: 'drizzle/meta/&lt;NNNN&gt;_snapshot.json',
-        typescriptGuidance:
-          'TypeScript ORM schema sources (<code>.ts</code> or <code>.TS</code>) are rejected with that hint and are not parsed directly.',
+        typeormCommand: 'bunx typeorm schema:log -d &lt;path/to/datasource&gt; &gt; schema.sql',
+        pgDumpCommand: 'pg_dump --schema-only &lt;scratch-database&gt; &gt; schema.sql',
+        mysqlDumpCommand: 'mysqldump --no-data &lt;database&gt; &gt; schema.sql',
       },
       {
         path: 'docs/user/zh-TW/index.html',
         start: '<h4 class="mt-0 mb-3 font-bold text-text-main">ORM 定義漂移</h4>',
         snapshotPath: 'drizzle/meta/&lt;NNNN&gt;_snapshot.json',
-        typescriptGuidance:
-          'TypeScript ORM schema source（<code>.ts</code> 或 <code>.TS</code>）不會被直接解析，而是會被拒絕並顯示上述提示。',
+        typeormCommand: 'bunx typeorm schema:log -d &lt;path/to/datasource&gt; &gt; schema.sql',
+        pgDumpCommand: 'pg_dump --schema-only &lt;scratch-database&gt; &gt; schema.sql',
+        mysqlDumpCommand: 'mysqldump --no-data &lt;database&gt; &gt; schema.sql',
       },
     ] as const
 
-    for (const { path, start, snapshotPath, typescriptGuidance } of documents) {
+    for (const {
+      path,
+      start,
+      snapshotPath,
+      typeormCommand,
+      pgDumpCommand,
+      mysqlDumpCommand,
+    } of documents) {
       const section = sectionBetween(await read(path), start, '<!-- doc-key: data-verification -->')
       for (const text of [
         'orm-drift-review',
@@ -131,8 +156,18 @@ describe('ORM drift documentation contract', () => {
         'PostgreSQL drizzle-kit v7 snapshot',
         snapshotPath,
         'drizzle-kit generate',
-        '--orm-format prisma|ddl|json|drizzle',
-        typescriptGuidance,
+        '--orm-format prisma|ddl|json|drizzle|typeorm|sequelize',
+        typeormCommand,
+        pgDumpCommand,
+        mysqlDumpCommand,
+        'bunx sequelize-cli db:migrate',
+        'dbcli diff --against-orm schema.sql --orm-format typeorm --format table',
+        'dbcli diff --against-orm schema.sql --orm-format sequelize --format json',
+        'typeorm_metadata',
+        'migrations',
+        'SequelizeMeta',
+        '.mjs',
+        '.cjs',
         'enum',
         'unparsed',
         'blocked:',

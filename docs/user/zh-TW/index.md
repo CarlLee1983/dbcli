@@ -174,18 +174,41 @@ dbcli delete 'user:42' --where '' --plan --format json
 
 #### ORM 定義漂移
 
-`diff --against-orm` 會將 Prisma、DDL、normalized JSON 或 PostgreSQL Drizzle snapshot 與既有 SQL schema cache 比對。比對本身只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 `schema --format json`；cache 為空時會 exit `1` 並要求執行 `dbcli schema`。
+`diff --against-orm` 會將應用程式 schema 與既有 SQL schema cache 比對。比對本身只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 `schema --format json`；cache 為空時會 exit `1` 並要求執行 `dbcli schema`。
+
+五種輸入路徑涵蓋所有支援的格式：
+
+| 輸入路徑 | 傳入內容 |
+| :--- | :--- |
+| Prisma | 一個 `schema.prisma` 檔。 |
+| Drizzle | 執行 `drizzle-kit generate` 產生的一個 PostgreSQL drizzle-kit v7 snapshot。 |
+| TypeORM | `schema:log` 產生的 DDL；不解析 entity source file。 |
+| Sequelize | 對 scratch database 套用 migration 後取得的 schema-only dump；不解析 model source file。 |
+| 可攜式 schema | Raw PostgreSQL/MySQL/MariaDB DDL（可多檔或 glob），或一個 normalized JSON 檔。 |
 
 ```bash
 dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
 dbcli diff --against-orm prisma/schema.prisma --format json
-dbcli diff --against-orm "migrations/*.sql" --format markdown
+
 drizzle-kit generate
 dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
+
+bunx typeorm schema:log -d <path/to/datasource> > schema.sql
+dbcli diff --against-orm schema.sql --orm-format typeorm --format table
+
+# 先將專案的 Sequelize config 指向空的 scratch database
+bunx sequelize-cli db:migrate
+pg_dump --schema-only <scratch-database> > schema.sql
+# MySQL 則改用：
+mysqldump --no-data <database> > schema.sql
+dbcli diff --against-orm schema.sql --orm-format sequelize --format json
+
+dbcli diff --against-orm "migrations/*.sql" --orm-format ddl --format markdown
+dbcli diff --against-orm schema.normalized.json --orm-format json --format table
 dbcli diff --against-orm prisma/schema.prisma --recovery --format json
 ```
 
-`--against-orm` 可重複使用，也接受逗號分隔路徑。DDL 輸入支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 `drizzle/meta/<NNNN>_snapshot.json` 的 PostgreSQL drizzle-kit v7 snapshot；請先執行 `drizzle-kit generate`。TypeScript ORM schema source（`.ts` 或 `.TS`）不會被直接解析，而是會被拒絕並顯示上述提示。用 `--orm-format prisma|ddl|json|drizzle` 覆寫偵測、`--ignore <globs>` 傳入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。只有計分後的 error 會決定 drift exit code：有 error 時 exit `1`，只有 warning、info、`unmanaged` 或 `unparsed` 時 exit `0`；操作失敗仍會 exit `1`，並可由 `--recovery` 包裝。
+`--against-orm` 可重複使用，也接受逗號分隔路徑。DDL family 輸入（raw DDL 加上 `typeorm`、`sequelize` alias）支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 `drizzle/meta/<NNNN>_snapshot.json` 的 PostgreSQL drizzle-kit v7 snapshot。TypeORM `schema:log` 會輸出 `schema:sync` 將執行但不會實際套用的 SQL。Sequelize CLI 沒有通用的 `db:migrate --dry-run`，因此必須先對 scratch database 執行 migration，再用 `pg_dump --schema-only` 或 `mysqldump --no-data` 匯出。TypeORM entity 與 Sequelize model（`.ts`、`.js`、`.mjs` 或 `.cjs`）不會被解析；dbcli 會拒絕它們，並顯示精確的產生步驟。用 `--orm-format prisma|ddl|json|drizzle|typeorm|sequelize` 覆寫偵測；TypeORM alias 預設忽略 `typeorm_metadata` 與 `migrations`，Sequelize alias 預設忽略 `SequelizeMeta`。`--ignore <globs>` 可加入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。只有計分後的 error 會決定 drift exit code：有 error 時 exit `1`，只有 warning、info、`unmanaged` 或 `unparsed` 時 exit `0`；操作失敗仍會 exit `1`，並可由 `--recovery` 包裝。
 
 Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL/Drizzle construct 會以 `blocked:` 原因出現在 `unparsed`，包含 Drizzle enum 與其他不支援的 snapshot construct。Drizzle column default 只接受 snapshot 中的 string、boolean 或有限 number；不支援的 default 會阻擋並省略該 column。PostgreSQL `PARTITION BY` 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 都不支援：它們會產生 `blocked:` 項目，且不建立 managed table。Normalized JSON 也要求每個 `unparsed.reason` 都以 `blocked:` 開頭。Index 依結構化欄位與 uniqueness 比對、去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。
 

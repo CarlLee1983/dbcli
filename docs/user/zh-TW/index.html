@@ -285,14 +285,38 @@ dbcli delete 'user:42' --where '' --plan --format json</code></pre>
 
             <div class="paper-card p-6 border-l-4 border-l-primary mb-12">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">ORM 定義漂移</h4>
-                <p><code>diff --against-orm</code> 會將 Prisma、DDL、normalized JSON 或 PostgreSQL Drizzle snapshot 與既有 SQL schema cache 比對。比對只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 <code>schema --format json</code>；cache 為空時會 exit <code>1</code> 並要求執行 <code>dbcli schema</code>。</p>
+                <p><code>diff --against-orm</code> 會將應用程式 schema 與既有 SQL schema cache 比對。比對只讀 cache：不連線資料庫、不更新 cache，也不執行提案。若在意資料新鮮度，先執行 <code>schema --format json</code>；cache 為空時會 exit <code>1</code> 並要求執行 <code>dbcli schema</code>。</p>
+                <p>五種輸入路徑涵蓋所有支援的格式：</p>
+                <table>
+                    <thead><tr><th>輸入路徑</th><th>傳入內容</th></tr></thead>
+                    <tbody>
+                        <tr><td>Prisma</td><td>一個 <code>schema.prisma</code> 檔。</td></tr>
+                        <tr><td>Drizzle</td><td>執行 <code>drizzle-kit generate</code> 產生的一個 PostgreSQL drizzle-kit v7 snapshot。</td></tr>
+                        <tr><td>TypeORM</td><td><code>schema:log</code> 產生的 DDL；不解析 entity source file。</td></tr>
+                        <tr><td>Sequelize</td><td>對 scratch database 套用 migration 後取得的 schema-only dump；不解析 model source file。</td></tr>
+                        <tr><td>可攜式 schema</td><td>Raw PostgreSQL/MySQL/MariaDB DDL（可多檔或 glob），或一個 normalized JSON 檔。</td></tr>
+                    </tbody>
+                </table>
                 <pre><code>dbcli skill tasks plan orm-drift-review --param orm_path=prisma/schema.prisma --format json
 dbcli diff --against-orm prisma/schema.prisma --format json
-dbcli diff --against-orm "migrations/*.sql" --format markdown
+
 drizzle-kit generate
 dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
+
+bunx typeorm schema:log -d &lt;path/to/datasource&gt; &gt; schema.sql
+dbcli diff --against-orm schema.sql --orm-format typeorm --format table
+
+# 先將專案的 Sequelize config 指向空的 scratch database
+bunx sequelize-cli db:migrate
+pg_dump --schema-only &lt;scratch-database&gt; &gt; schema.sql
+# MySQL 則改用：
+mysqldump --no-data &lt;database&gt; &gt; schema.sql
+dbcli diff --against-orm schema.sql --orm-format sequelize --format json
+
+dbcli diff --against-orm "migrations/*.sql" --orm-format ddl --format markdown
+dbcli diff --against-orm schema.normalized.json --orm-format json --format table
 dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></pre>
-                <p><code>--against-orm</code> 可重複使用，也接受逗號分隔路徑。DDL 支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 <code>drizzle/meta/&lt;NNNN&gt;_snapshot.json</code> 的 PostgreSQL drizzle-kit v7 snapshot；請先執行 <code>drizzle-kit generate</code>。TypeScript ORM schema source（<code>.ts</code> 或 <code>.TS</code>）不會被直接解析，而是會被拒絕並顯示上述提示。用 <code>--orm-format prisma|ddl|json|drizzle</code> 覆寫偵測、<code>--ignore &lt;globs&gt;</code> 傳入大小寫敏感的 qualified table pattern，並以 <code>--format json|table|markdown</code> 選擇輸出。</p>
+                <p><code>--against-orm</code> 可重複使用，也接受逗號分隔路徑。DDL family 輸入（raw DDL 加上 <code>typeorm</code>、<code>sequelize</code> alias）支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 <code>drizzle/meta/&lt;NNNN&gt;_snapshot.json</code> 的 PostgreSQL drizzle-kit v7 snapshot。TypeORM <code>schema:log</code> 會輸出 <code>schema:sync</code> 將執行但不會實際套用的 SQL。Sequelize CLI 沒有通用的 <code>db:migrate --dry-run</code>，因此必須先對 scratch database 執行 migration，再用 <code>pg_dump --schema-only</code> 或 <code>mysqldump --no-data</code> 匯出。TypeORM entity 與 Sequelize model（<code>.ts</code>、<code>.js</code>、<code>.mjs</code> 或 <code>.cjs</code>）不會被解析；dbcli 會拒絕它們，並顯示精確的產生步驟。用 <code>--orm-format prisma|ddl|json|drizzle|typeorm|sequelize</code> 覆寫偵測；TypeORM alias 預設忽略 <code>typeorm_metadata</code> 與 <code>migrations</code>，Sequelize alias 預設忽略 <code>SequelizeMeta</code>。<code>--ignore &lt;globs&gt;</code> 可加入逗號分隔且大小寫敏感的 qualified table pattern，並以 <code>--format json|table|markdown</code> 選擇輸出。</p>
                 <table>
                     <thead><tr><th>類別</th><th>意義</th></tr></thead>
                     <tbody>

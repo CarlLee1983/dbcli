@@ -151,7 +151,7 @@ export async function runDrift(
       }
       if (ormFormat === 'sequelize') {
         throw new Error(
-          "Sequelize models are not parsed directly. Apply migrations to a scratch DB and dump DDL ('pg_dump --schema-only' / 'mysqldump --no-data'), then pass the dump file."
+          "Sequelize models are not parsed directly. Configure a scratch DB, then run 'sequelize db:migrate' against it. Dump DDL with 'pg_dump --schema-only <scratch-db> > schema.sql' or 'mysqldump --no-data <scratch-db> > schema.sql', then pass schema.sql to dbcli."
         )
       }
       throw new Error(

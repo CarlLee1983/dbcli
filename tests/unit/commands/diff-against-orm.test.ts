@@ -226,17 +226,61 @@ describe('runDrift', () => {
     ).rejects.toThrow('drizzle-kit generate')
   })
 
-  test('.ts input with typeorm alias explains schema:log', async () => {
-    await expect(
-      runDrift(['src/entity/User.ts'], { ormFormat: 'typeorm' }, config as never)
-    ).rejects.toThrow('typeorm schema:log')
-  })
+  for (const scenario of [
+    {
+      name: '.ts input with typeorm alias gives the exact generated-DDL recipe',
+      path: 'src/entity/User.ts',
+      ormFormat: 'typeorm' as const,
+      expected: [
+        "'typeorm schema:log -d <datasource>' > schema.sql",
+        'then pass schema.sql',
+      ],
+    },
+    {
+      name: '.mjs input with typeorm alias gives the exact generated-DDL recipe',
+      path: 'src/entity/User.mjs',
+      ormFormat: 'typeorm' as const,
+      expected: [
+        "'typeorm schema:log -d <datasource>' > schema.sql",
+        'then pass schema.sql',
+      ],
+    },
+    {
+      name: '.js input with sequelize alias gives the complete scratch-DB recipe',
+      path: 'models/user.js',
+      ormFormat: 'sequelize' as const,
+      expected: [
+        'sequelize db:migrate',
+        'pg_dump --schema-only <scratch-db> > schema.sql',
+        'mysqldump --no-data <scratch-db> > schema.sql',
+        'pass schema.sql to dbcli',
+      ],
+    },
+    {
+      name: '.cjs input with sequelize alias gives the complete scratch-DB recipe',
+      path: 'models/user.cjs',
+      ormFormat: 'sequelize' as const,
+      expected: [
+        'sequelize db:migrate',
+        'pg_dump --schema-only <scratch-db> > schema.sql',
+        'mysqldump --no-data <scratch-db> > schema.sql',
+        'pass schema.sql to dbcli',
+      ],
+    },
+  ]) {
+    test(scenario.name, async () => {
+      const error = await runDrift(
+        [scenario.path],
+        { ormFormat: scenario.ormFormat },
+        config as never
+      ).catch((caught: unknown) => caught)
 
-  test('.js input with sequelize alias explains schema-only dump', async () => {
-    await expect(
-      runDrift(['models/user.js'], { ormFormat: 'sequelize' }, config as never)
-    ).rejects.toThrow('--schema-only')
-  })
+      expect(error).toBeInstanceOf(Error)
+      for (const text of scenario.expected) {
+        expect((error as Error).message).toContain(text)
+      }
+    })
+  }
 
   test('honors the JSON format escape hatch', async () => {
     const path = await write(

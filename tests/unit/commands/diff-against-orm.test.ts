@@ -134,8 +134,10 @@ describe('runDrift', () => {
       { ormFormat: 'typeorm' },
       cfg as never
     )
-    expect(report.entries.find((e) => e.table === 'typeorm_metadata')?.category).toBe('unmanaged')
-    expect(report.entries.find((e) => e.table === 'migrations')?.category).toBe('unmanaged')
+    expect(report.entries.find((e) => e.table === 'public.typeorm_metadata')?.category).toBe(
+      'unmanaged'
+    )
+    expect(report.entries.find((e) => e.table === 'public.migrations')?.category).toBe('unmanaged')
   })
 
   test('sequelize alias ignores SequelizeMeta', async () => {
@@ -152,7 +154,9 @@ describe('runDrift', () => {
       cfg as never
     )
     expect(report.ormSource).toBe('sequelize')
-    expect(report.entries.find((e) => e.table === 'SequelizeMeta')?.category).toBe('unmanaged')
+    expect(report.entries.find((e) => e.table === 'public.SequelizeMeta')?.category).toBe(
+      'unmanaged'
+    )
   })
 
   test('typeorm alias aggregates multiple DDL files', async () => {

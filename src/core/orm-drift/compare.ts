@@ -107,9 +107,7 @@ export function compareNormalized(
         entryWithProposals({
           category: 'unmanaged',
           severity: 'info',
-          table: extraDefaultIgnore.includes(normalizedTable.identity.table)
-            ? normalizedTable.identity.table
-            : table,
+          table,
           object: 'table',
           detail: 'matched ignore pattern; excluded from drift scoring',
         })

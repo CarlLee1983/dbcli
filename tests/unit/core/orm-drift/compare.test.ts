@@ -543,6 +543,28 @@ describe('compareNormalized', () => {
     expect(report.summary).toEqual({ errors: 0, warns: 1, infos: 0, unmanaged: 2 })
   })
 
+  test('extra default ignores preserve distinct qualified identities in deterministic order', () => {
+    const db = dbWith(
+      [
+        table({ schema: 'public', table: 'migrations' }),
+        table({ schema: 'audit', table: 'migrations' }),
+      ],
+      'public'
+    )
+
+    const report = compareNormalized(schemaWith([]), db, {
+      ignore: [],
+      extraDefaultIgnore: ['migrations'],
+    })
+
+    expect(report.entries.map((entry) => entry.table)).toEqual([
+      'audit.migrations',
+      'public.migrations',
+    ])
+    expect(report.entries.every((entry) => entry.category === 'unmanaged')).toBe(true)
+    expect(report.summary).toEqual({ errors: 0, warns: 0, infos: 0, unmanaged: 2 })
+  })
+
   test('summary counts scored severities separately from unmanaged entries', () => {
     const orm = schemaWith([
       {

@@ -80,7 +80,9 @@ dbcli init
 
 選擇優先序為明確的 `--use`、`DBCLI_CONNECTION`、最後才是設定檔預設連線。
 單次 selector 不會修改持久化的預設連線。如果 root 與指令層級的 `--use` 值不同，
-dbcli 會直接回報衝突，不會靜默挑選其中一個。
+dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v2 設定：單連線
+（v1）專案沒有具名連線可選，因此在 v1 下給 `--use` 或 `DBCLI_CONNECTION` 會被
+拒絕，而不是靜默改跑那唯一的連線。
 
 ### 唯讀 query fan-out
 
@@ -162,7 +164,7 @@ table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功
 *   UTF-8 檔案，例如 `dbcli query --query-file ./queries/active-users.sql`。
 *   以 `--query-file -` 從 stdin 讀取。
 
-未提供來源，或同時提供 positional 文字與 `--query-file` 都會報錯。dbcli 讀取來源後會移除一個開頭的 UTF-8 BOM 與前後空白；處理後若為空內容，則會拒絕執行。
+未提供來源，或同時提供 positional 文字與 `--query-file` 都會報錯。dbcli 讀取來源後會移除一個開頭的 UTF-8 BOM 與前後空白；處理後若為空內容，則會拒絕執行。`--query-file -` 需要 piped input：當 stdin 是互動式終端時，dbcli 會立即拒絕，而不是無提示地空等輸入。
 
 透過 stdin 傳入多行 SQL，就不需要把整段內容 escape 成單一 shell argument：
 
@@ -205,7 +207,7 @@ dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
 dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload
 ```
 
-每次執行只能使用 inclusion 或 exclusion 其中一種語法，不可混用。空白 list、空白項目與重複 path 都會被拒絕。支援 `profile.name` 這類 dotted path；inclusion 輸出會遵循指定順序。MongoDB inclusion 預設排除 `_id`，只有明確指定 `_id` 時才會保留。
+每次執行只能使用 inclusion 或 exclusion 其中一種語法，不可混用。空白 list、空白項目與重複 path 都會被拒絕。支援 `profile.name` 這類 dotted path；inclusion 輸出會遵循指定順序。MongoDB inclusion 預設排除 `_id`，只有明確指定 `_id` 時才會保留。結果中不存在的欄位會回傳 `null` 而非報錯，因此拼錯的欄位名會得到一整欄 null——在把「全 null」解讀成有意義之前，先用 `dbcli schema` 核對欄位名。
 
 SQL 會在 query 執行完畢後對回傳 rows 套用 projection。MongoDB 會將 projection 下推至 `find` 或 aggregation pipeline 以減少傳輸資料量，之後再於 blacklist masking 完成後正規化回傳 rows。Redis 與 Elasticsearch query 不支援 `--fields`。
 
@@ -731,7 +733,7 @@ Snippet 位置：`assets/snippets/`（內建）、`.dbcli-shared/queries/`（共
 - `LRANGE` / `ZRANGE` / `ZREVRANGE` 夾限 `stop`,使區間 ≤ 1000;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`。
 - `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` 在 1000 筆截斷。
 
-結果帶有 `warnings[]`:引數被改寫時為 `REDIS_SIZE_REWRITE`,回覆被截斷時為 `REDIS_SIZE_TRUNCATE`。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
+結果帶有 `warnings[]`:引數被改寫時為 `REDIS_SIZE_REWRITE`,回覆被截斷時為 `REDIS_SIZE_TRUNCATE`。`dbcli query` 會把每一則 warning 印到 stderr,且被裁切的回覆同樣會回報 `truncated` / `limit_applied`,與其他引擎一致,因此被截斷的回覆不會被誤認為完整。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
 
 ```bash
 dbcli query "LRANGE jobs 0 -1"            # 夾限至 1000 → REDIS_SIZE_REWRITE
@@ -803,7 +805,7 @@ dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format jso
 dbcli export orders --format jsonl --output orders.jsonl
 ```
 
-- 預設**上限為 1000 筆**。加上 `--no-limit` 可匯出整個 index(整索引形式會以 scroll 分批串流)。
+- 預設**上限為 1000 筆**,而且撞到上限會讓**匯出失敗**,而不是寫出一份短少的檔案。加上 `--no-limit` 可匯出整個 index(整索引形式會以 scroll 分批串流),或加上 `--limit N` 刻意接受上限。
 - 在讀取任何文件前,目標 index 會先經過**索引層級黑名單**檢查。
 - 每次匯出都會寫入一筆**稽核紀錄**,記錄目標 index、筆數與輸出格式。
 
@@ -1013,8 +1015,11 @@ dbcli recover --apply --write-verification-artifact
 需要連線的探索與讀取指令失敗時會以 exit code `1` 結束，且錯誤只呈現一次。一般模式的 stderr
 會輸出可讀訊息，以及存在時的穩定錯誤碼與可執行 hint；不會包含 JavaScript
 stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，請在指令前加
-`-v`（或 `-vv`）以顯示 stack。支援 `--recovery` 的指令仍只在 stdout 輸出既有
-JSON recovery envelope，並抑制重複的人類可讀 stderr 訊息。
+`-v`（或 `-vv`）以顯示 stack——旗標必須放在子指令**之前**（`dbcli -v list`，
+而不是 `dbcli list -v`）。寫入類指令（`insert`、`update`、`delete`）與 `q`
+在連線失敗時保留自己的在地化措辭，但同樣遵守這個 stack 開關。支援
+`--recovery` 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制
+重複的人類可讀 stderr 訊息。
 
 ### Query-only auto-LIMIT 範圍
 
@@ -1031,7 +1036,26 @@ JSON recovery envelope，並抑制重複的人類可讀 stderr 訊息。
 dbcli 套用，JSON 一律包含 `metadata.truncated` 與
 `metadata.limit_applied`；只有 lookahead 證明還有下一筆時，`truncated`
 才是 `true`。使用 `--no-limit`，或 SQL、MongoDB pipeline、Elasticsearch
-request body 已自行指定上限時，這兩個欄位不會出現。
+request body 已自行指定上限時，這兩個欄位不會出現。CSV 會附加一行
+`# truncated; limit N` 的註解。
+
+透過 `dbcli q` 執行的已儲存 snippet 也用同樣方式回報。snippet 的 size
+guard 本身就有 1000 筆上限，現在這個上限會出現在 footer 與 `metadata`
+中，不再需要使用者從整數列數猜測。
+
+`dbcli export` 不回報截斷——而是直接**拒絕**執行。當匯出的資料被
+query-only auto-limit 截斷時，會以 exit code `1` 結束且不寫入檔案：
+
+```text
+Export would silently drop rows — 1000-row auto-limit reached.
+  Re-run with --no-limit to export everything,
+  or --limit 1000 to accept the cap explicitly.
+```
+
+匯出的檔案沒有地方能記錄資料被遺漏——`jsonl` 是一行一筆文件、MongoDB
+的 `--format json` 則是裸陣列——而 stderr 警告在重導向後就會消失。
+明確指定 `--no-limit` 或 `--limit N` 才能讓這個選擇變得明確，匯出才會
+繼續進行。
 
 ### 有界的 table cell
 

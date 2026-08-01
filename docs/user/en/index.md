@@ -82,7 +82,9 @@ Use `--use-env-refs` to keep secrets out of the config file and read them from e
 Selection precedence is explicit `--use`, then `DBCLI_CONNECTION`, then the
 configured default. A one-shot selector never changes the persistent default.
 If root-level and command-level `--use` values conflict, dbcli fails instead of
-choosing one silently.
+choosing one silently. Selectors require a v2 configuration: a single-connection
+(v1) project has no names to choose between, so `--use` or `DBCLI_CONNECTION`
+there is rejected rather than quietly running the only connection.
 
 ### Read-only query fan-out
 
@@ -168,7 +170,7 @@ Both arrays are trimmed under `--for-agent` / `--brief` (≤ 3 hints, and a sing
 *   A UTF-8 file, such as `dbcli query --query-file ./queries/active-users.sql`.
 *   Stdin via `--query-file -`.
 
-Providing no source or combining positional text with `--query-file` is an error. After reading the source, dbcli removes one leading UTF-8 BOM and surrounding whitespace; an input that is then empty is rejected.
+Providing no source or combining positional text with `--query-file` is an error. After reading the source, dbcli removes one leading UTF-8 BOM and surrounding whitespace; an input that is then empty is rejected. `--query-file -` requires piped input: when stdin is an interactive terminal dbcli refuses immediately instead of waiting for input with no prompt.
 
 Use stdin for multiline SQL without escaping it as one shell argument:
 
@@ -211,7 +213,7 @@ dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
 dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload
 ```
 
-An invocation must use either inclusion or exclusion syntax; the two modes cannot be mixed. Empty lists or entries and duplicate paths are rejected. Dotted paths such as `profile.name` are supported, and inclusion output follows the requested order. A MongoDB inclusion excludes `_id` unless `_id` is explicitly requested.
+An invocation must use either inclusion or exclusion syntax; the two modes cannot be mixed. Empty lists or entries and duplicate paths are rejected. Dotted paths such as `profile.name` are supported, and inclusion output follows the requested order. A MongoDB inclusion excludes `_id` unless `_id` is explicitly requested. A requested field that the result does not contain is reported as `null` rather than raising an error, so a misspelled field name yields a column of nulls — check the spelling against `dbcli schema` before reading meaning into an all-null column.
 
 SQL projection is applied to the returned rows after the query runs. MongoDB pushes the projection into `find` or the aggregation pipeline to reduce transferred data, then normalizes the returned rows again after blacklist masking. Redis and Elasticsearch queries do not support `--fields`.
 
@@ -805,7 +807,7 @@ Run with `dbcli q @<key>`.
 - `LRANGE` / `ZRANGE` / `ZREVRANGE` clamp the `stop` index so the span is ≤ 1000; `ZRANGEBYSCORE` gets `LIMIT 0 1000`.
 - `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` are truncated to 1000 entries.
 
-Results carry a `warnings[]` array: `REDIS_SIZE_REWRITE` when arguments were rewritten, `REDIS_SIZE_TRUNCATE` when the reply was trimmed. Pass `--no-limit` (CLI) or run `.no-limit on` (shell) to bypass.
+Results carry a `warnings[]` array: `REDIS_SIZE_REWRITE` when arguments were rewritten, `REDIS_SIZE_TRUNCATE` when the reply was trimmed. `dbcli query` prints each one on stderr, and a trimmed reply also reports `truncated` / `limit_applied` the same way every other engine does, so a capped reply is never mistaken for a complete one. Pass `--no-limit` (CLI) or run `.no-limit on` (shell) to bypass.
 
 ```bash
 dbcli query "LRANGE jobs 0 -1"          # capped to 1000 → REDIS_SIZE_REWRITE
@@ -877,7 +879,7 @@ dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format jso
 dbcli export orders --format jsonl --output orders.jsonl
 ```
 
-- **Capped at 1000 rows** by default. Pass `--no-limit` to export the full index (the full-index form streams in scroll batches).
+- **Capped at 1000 rows** by default, and hitting that cap **fails the export** rather than writing a short file. Pass `--no-limit` to export the full index (the full-index form streams in scroll batches) or `--limit N` to accept a cap deliberately.
 - The target index is checked against the **index-level blacklist** before any documents are read.
 - Each export writes an **audit entry** recording the target index, row count, and output format.
 
@@ -1091,7 +1093,10 @@ Connection-bearing discovery and read failures exit with code `1` and are presen
 stderr contains a readable message plus a stable error code and actionable hints
 when available; it does not contain a JavaScript stack, bundled source excerpt,
 or source-code frame. Add `-v` (or `-vv`) before the command to include the stack
-for diagnostics. When a supported command uses `--recovery`, the existing JSON
+for diagnostics — the flag must precede the subcommand (`dbcli -v list`, not
+`dbcli list -v`). The write commands (`insert`, `update`, `delete`) and `q` keep
+their own localized wording for connection failures and honour the same stack
+switch. When a supported command uses `--recovery`, the existing JSON
 recovery envelope remains the only failure output on stdout and the duplicate
 human stderr message is suppressed.
 
@@ -1111,8 +1116,27 @@ result from a larger result. Truncated table output ends with
 `Rows: N (truncated; limit N)`. JSON always includes
 `metadata.truncated` and `metadata.limit_applied` when dbcli applied the limit;
 `truncated` is `true` only when the lookahead proved that another row existed.
-These fields are omitted for `--no-limit` and for a limit already written in
-the SQL, MongoDB pipeline, or Elasticsearch request body.
+CSV appends a `# truncated; limit N` comment line. These fields are omitted for
+`--no-limit` and for a limit already written in the SQL, MongoDB pipeline, or
+Elasticsearch request body.
+
+Saved snippets run through `dbcli q` report the same way. The snippet size
+guard wraps the body in its own 1000-row cap, and that cap is now stated in the
+footer and in `metadata` instead of leaving a round row count to be guessed at.
+
+`dbcli export` does not report truncation — it refuses it. An export whose rows
+were capped by the query-only auto-limit exits `1` without writing a file:
+
+```text
+Export would silently drop rows — 1000-row auto-limit reached.
+  Re-run with --no-limit to export everything,
+  or --limit 1000 to accept the cap explicitly.
+```
+
+An exported file has nowhere to record that rows are missing — `jsonl` is one
+document per line and MongoDB's `--format json` is a bare array — and a stderr
+warning does not survive redirection. Naming `--no-limit` or `--limit N` makes
+the choice explicit, and only then does the export proceed.
 
 ### Bounded table cells
 

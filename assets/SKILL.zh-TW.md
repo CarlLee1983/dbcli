@@ -192,8 +192,10 @@ dbcli init --system elasticsearch \
 dbcli init --conn-name staging --env-file .env.staging --permission query-only
 dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
 dbcli use --list                          # show all, * marks default
-dbcli use prod                            # switch default
+dbcli use prod                            # switch default（會持久化 — 單次查詢別用）
 dbcli query --use staging "SELECT 1"      # one-shot override on any subcommand
+DBCLI_CONNECTION=staging dbcli query "SELECT 1"   # 單次指定，env 版；平行安全
+dbcli --use staging,prod query "SELECT count(*) FROM users"   # 唯讀扇出
 dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
@@ -234,7 +236,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `use` | n/a | 顯示 / 切換預設命名連線（僅 v2）。 |
 | `list` | query-only+ | 資料表（SQL）、collections（MongoDB）、keys（Redis）或 indices（Elasticsearch）。 |
 | `schema` | query-only+ | SQL：單表或全掃描存入 `.dbcli/schemas/`。MongoDB：sampled。ES：flattened mapping。Redis：僅單一 key（type / TTL / size）。支援 `--recovery`。 |
-| `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。支援 `--recovery`。 |
+| `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。`--fields`（欄位投影）、`--truncate`（欄位值寬度）、`-f/--query-file`（從檔案或 stdin 讀查詢）、`--use a,b`（唯讀扇出）。支援 `--recovery`。見 **查詢工作流程旗標**。 |
 | `explain` | query-only+ | **(v1.23)** 唯讀查詢計畫並附註解。僅 SQL。單一查詢、`@saved-query`、`@file.sql` 或 `--bulk @glob/*`。`--analyze`（EXPLAIN ANALYZE / MariaDB ANALYZE SELECT）、`--format markdown\|json\|table`。 |
 | `lint` | n/a | 靜態 SQL 反模式顧問（不連線 DB）。共 9 條規則，包含透過分層 `.dbcli/schemas/` 快取進行的 schema-aware implicit-cast / NOT IN-nullable 檢查；全域 `--use <conn>` 會選擇命名連線的快取。Finding 可附 rewrite 草稿與受保護的 `explain` 驗證指令；只有已證明唯讀的 SQL 才會加上 `--analyze`，且只回報、絕不執行。`--format text\|json\|markdown`、`--min-severity`、`--no-schema`、`--bulk`。支援 `--recovery`。 |
 | `plan` | n/a | 靜態 SQL 風險分析器（`--format text\|json`）；不連線即可分類語句。 |
@@ -242,7 +244,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `queries` | n/a | 管理已儲存 snippet：`list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`。 |
 | `insert` / `update` | read-write+ | 僅 SQL 與 MongoDB。JSON `--data` / `--set`；`update` 必填 `--where`；先 `--dry-run`。Redis 寫入透過 `query`。支援 `--recovery`。 |
 | `delete` | data-admin+ | 僅 SQL 與 MongoDB；Redis 有基本實作（見 Redis 段落）。必填 `--where`；先 `--dry-run`。支援 `--recovery`。 |
-| `export` | query-only+ | SQL、MongoDB 或 **(v1.22)** Elasticsearch（DSL `--index` 或全 index scroll）。Query → `--format json\|jsonl\|csv\|html` 檔案或 stdout。`html` 輸出獨立可互動 dashboard。支援 `--recovery`。 |
+| `export` | query-only+ | SQL、MongoDB 或 **(v1.22)** Elasticsearch（DSL `--index` 或全 index scroll）。Query → `--format json\|jsonl\|csv\|html` 檔案或 stdout。`html` 輸出獨立可互動 dashboard。**寧可失敗也不靜默截斷**：若 auto-limit 會砍掉資料列，匯出直接報錯，必須改用 `--no-limit` 或 `--limit N`。支援 `--recovery`。 |
 | `blacklist` | n/a | `list` / `table` / `column` 子指令，從查詢結果中遮蔽敏感資料。 |
 | `check` | query-only+ | 僅 SQL（在 MySQL / MariaDB 最佳）。 |
 | `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。**(P1b)** `--against-orm <path>` 會將 Prisma schema / DDL 檔 / normalized JSON 與本地 schema cache 比對（不連線 DB）：分類為 `missing_in_db`（error）、`missing_in_orm`（warn）、依 tolerance 表判定的 `mismatch`、以及 `unmanaged`，並提供 dry-run `migrate` 提案；出現 error-level drift 時 exit 1。`--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`、`--ignore <globs>`、`--format json\|table\|markdown`。Drizzle：請指向 `drizzle/meta/<NNNN>_snapshot.json`（先執行 `drizzle-kit generate`；`.ts` source 會被拒絕並顯示提示）。TypeORM/Sequelize：傳入工具產生的 DDL（`schema:log` / schema-only dump）；source file 會被拒絕，並顯示要執行的精確產生指令。 |
@@ -271,6 +273,27 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 - `--where`（SQL）僅接受 `col=val` 或 `col1=val1 AND col2=val2` — **不**支援完整 SQL（不支援 `>=`、`!=`、`LIKE`、`OR`）。MongoDB 的 `--where` 接受完整 JSON filter（`'{"status":"pending"}'`），若不是合法 JSON 則 fallback 為 `col=val`。
 - `--dry-run` 輸出參數化 SQL（使用 `$1` / `?` 佔位符，非真實值）與 `rows_affected: 0`；確認 `status:"success"` 且 SQL 形狀符合預期的 `--where` / `--set` 後再執行。MongoDB 輸出 shell 風格預覽。
 - `--recovery` 建議用於自動化 agent pipeline（讓失敗後可執行 `dbcli recover --apply`）；手動一次性寫入可選用。
+
+## 查詢工作流程旗標 (Query workflow flags)
+
+這些旗標的存在，就是為了讓你不必再把輸出 pipe 給 `head` / `jq` / `python3`
+才能用。優先用它們，不要事後加工。
+
+| 需求 | 旗標 | 說明 |
+|------|------|------|
+| 只要某幾個欄位 | `--fields sn,bet,created_at` | SQL 與 MongoDB 皆可。Mongo 會把真正的 `projection` / `$project` 下推給 driver；除非明確指定，否則不回傳 `_id`。結果中不存在的欄位會回傳 `null`，所以看到整欄 null 時先用 `schema` 核對欄位名。 |
+| 除了某個巨大欄位以外都要 | `--fields=-raw_response` | 排除形式。include 與 exclude 不能混用。 |
+| 某欄位是一大包 JSON | `--truncate 120` | table 輸出**預設**就在 120 字截斷，並標記 `…(+3412 chars)`。`--no-truncate` 可關閉。`--format json/csv` 會拒絕此旗標（那兩種是給程式解析的）。 |
+| 查詢含引號 / 換行 / `$regex` | `-f pipeline.json` 或 `-f -` | 從檔案或 stdin 讀查詢；Mongo pipeline 建議用 heredoc。同時給檔案與位置參數會直接報錯，不會靜默擇一。`-f -` 需要 piped input——遇到互動式終端會直接拒絕而不是空等。 |
+| 同一查詢跨多個連線 | `--use hub-prod,site-a` | 唯讀扇出。各連線各自出結果，其中一個失敗不會取消其他。exit `0` 全成功、`2` 部分失敗、`1` 全失敗。拒絕寫入、`--recovery`、`--ui`、CSV/HTML。 |
+| 單次指定連線 | `DBCLI_CONNECTION=hub-prod dbcli query …` | 環境變數，或在子指令上加 `--use`。優先序：`--use` > `DBCLI_CONNECTION` > 已存的預設值。兩者都不會把預設值寫回磁碟，所以平行的 shell 不會互相干擾。需要 v2 設定——單一連線 (v1) 專案會直接拒絕，而不是靜默改跑那唯一的連線。**不要**為了單次查詢去跑 `dbcli use <name>`。 |
+
+**截斷一律明說，絕不靠推測。** query-only 的 auto-limit 砍掉結果時，table footer
+會顯示 `Rows: 1000 (truncated; limit 1000)`，`--format json` 會帶
+`metadata.truncated` / `metadata.limit_applied`，CSV 則附加 `#` 註解行。
+`Rows: 1000` 沒有標記就代表資料**剛好**是 1000 筆——不要因為數字是整數就推論它被截斷。
+`query` 與 `q` snippet（其自身的 1000 筆 guard 也用同樣方式回報）皆適用。
+`export` 則是根本拒絕截斷。Redis 被 size guard 裁切的回覆同樣依此回報，每則 size-guard warning 也會印到 stderr。
 
 ## 權限等級 (Permission levels)
 

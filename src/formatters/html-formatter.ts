@@ -1,9 +1,12 @@
 import { packageAssetPath } from '../utils/package-root'
 import type { SavedQueryMeta } from '../core/saved-queries/types'
+import type { AppliedLimitMetadata } from '../types/query'
 
 export interface HtmlPayload {
   meta: SavedQueryMeta
   rows: Record<string, unknown>[]
+  appliedLimit?: AppliedLimitMetadata
+  securityNotification?: string
 }
 
 /**

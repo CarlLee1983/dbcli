@@ -58,7 +58,7 @@ bun install -g @carllee1983/dbcli
 dbcli init
 ```
 
-使用 `--use-env-refs` 可把機密留在環境變數，不寫進設定檔；CI/CD 環境尤其適用。
+使用 `--use-env-refs` 可把機密留在環境變數，不寫進設定檔；CI/CD 環境尤其適用。執行時若被引用的變數不存在，dbcli 會 fail closed，並在錯誤中指出變數與設定欄位；空字串仍與變數不存在有所區別。
 
 ---
 
@@ -660,6 +660,8 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 **KPI 與圖表**：在 Snippet 的 Frontmatter 中加入 `visual:` 區塊，即可直接在儀表板中呈現自定義圖表與 KPI。支援的圖表類型為 `line`（折線圖）、`bar`（長條圖）、`area`（區域圖）、`pie`（圓餅圖）四種；指定其他類型會在解析時報錯。
 
+當 dbcli 的 lookahead 證明結果遭截斷時，dashboard 會在所有 KPI、圖表與 table **之前**顯示警示並標出實際上限；blacklist 的遮蔽／省略通知也會顯示在同一區域。query HTML/UI、saved-query HTML/UI 與 HTML export 只要執行路徑有產生對應 metadata，都會沿用此行為。
+
 ---
 
 <!-- doc-key: engine-support -->
@@ -824,6 +826,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 6.  **AI 協作提示注入**：`dbcli skill context` 將連線資訊、schema 快取和儲存查詢元資料序列化為高度壓縮、針對 token 優化的 XML、Markdown 或 JSON 結構，專門設計用於 AI 提示詞注入。
 7.  **自我驗證循環**：Snippet 可以定義 `verify` frontmatter 元資料（指定 `query` 與 LHS-運算子-RHS 的 `expects` 斷言）。使用 `dbcli q @name --verify` 執行查詢時，會自動執行主要指令、執行驗證查詢，並驗證傳回資料集的斷言。
 8.  **Agent Plugin**：repo root 採用 Ponytail-style plugin layout，包含 `.agents/plugins/marketplace.json`、`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.cursor-plugin/plugin.json`、`.github/skills/dbcli/` 與 `skills/dbcli/`。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`，其中包含提交 Cursor marketplace 審核/索引的步驟。
+9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit` 與公開型別。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
 ---
 
@@ -1009,6 +1012,8 @@ dbcli recover --apply --write-verification-artifact
 - 具體問題(不再印 "Connection failed")
 - 指向正確下一步的 hint(`dbcli list`、`dbcli schema <table>`、`--no-limit`)
 - 對 table 不存在,附上 top-3 fuzzy 候選
+
+已分類的錯誤在巢狀 adapter 呼叫間會保留原始 code、message 與 hints，不再重複加上前綴。MySQL 8 的 schema introspection 也相容預設的 `ONLY_FULL_GROUP_BY` 模式。
 
 ### 有界的 CLI 錯誤輸出
 

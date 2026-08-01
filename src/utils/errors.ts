@@ -21,13 +21,4 @@ export class EnvParseError extends Error {
  * Thrown when .dbcli configuration read/write or validation fails
  * Used for: .dbcli read/write failures, validation errors, configuration mismatches
  */
-export class ConfigError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'ConfigError'
-    // Maintain stack trace for debugging
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ConfigError)
-    }
-  }
-}
+export { ConfigError } from '@/agent-core/errors'

@@ -1,6 +1,6 @@
 {
   "name": "dbcli-agent",
-  "version": "1.42.0",
+  "version": "1.43.0",
   "description": "Database CLI skill and command reference for AI agents.",
   "author": {
     "name": "Carl Lee",

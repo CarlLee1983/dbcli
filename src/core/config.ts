@@ -16,6 +16,7 @@ import { detectConfigVersion, resolveConnection, loadConnectionEnv } from '@/cor
 import { readProjectBinding, resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
 import { mkdir } from 'node:fs/promises'
+import { resolveEnvRef } from '@/agent-core/public'
 
 /**
  * 全域 --use 連線名稱，由 CLI preAction hook 設定
@@ -132,30 +133,17 @@ function isEnvReference(value: unknown): value is EnvReference {
  * @param config - Config object to resolve
  * @param env - Environment variable object (usually process.env)
  * @param parentKey - Key name of the parent object (used for type inference)
- * @param strict - If true, throw on missing env vars; if false, preserve the reference
  * @returns Resolved config
- * @throws ConfigError if an environment variable is not found in strict mode
+ * @throws ConfigError if an environment variable is not found
  */
 function resolveEnvReferences(
   config: unknown,
   env: Record<string, string | undefined>,
-  parentKey?: string,
-  strict: boolean = false
+  parentKey?: string
 ): unknown {
   if (isEnvReference(config)) {
     const envKey = config.$env
-    const value = env[envKey]
-    if (!value) {
-      // In non-strict mode, preserve the env var reference instead of throwing
-      if (!strict) {
-        return config
-      }
-      throw new ConfigError(
-        `Environment variable not defined: ${envKey}\n` +
-          `Please set ${envKey} in .env or your environment.\n` +
-          `Hint: check your .env file or run 'export ${envKey}=<value>'`
-      )
-    }
+    const value = resolveEnvRef(config, parentKey ?? '<root>', env)
 
     // Type conversion based on key name
     if (parentKey === 'port') {
@@ -170,13 +158,13 @@ function resolveEnvReferences(
   }
 
   if (Array.isArray(config)) {
-    return config.map((item) => resolveEnvReferences(item, env, parentKey, strict))
+    return config.map((item) => resolveEnvReferences(item, env, parentKey))
   }
 
   if (typeof config === 'object' && config !== null) {
     const resolved: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(config)) {
-      resolved[key] = resolveEnvReferences(value, env, key, strict)
+      resolved[key] = resolveEnvReferences(value, env, key)
     }
     return resolved
   }
@@ -268,9 +256,7 @@ export const configModule = {
             // Resolve $env references after loading env files
             const resolvedConnection = resolveEnvReferences(
               resolved.connection,
-              process.env,
-              undefined,
-              false
+              process.env
             ) as Record<string, unknown>
 
             // Apply legacy password if connection password is still empty
@@ -326,9 +312,7 @@ export const configModule = {
           // letting the caller believe it switched.
           assertNoConnectionSelectorOnV1(effectiveConnectionName)
 
-          // Use non-strict mode when reading config, preserving missing env var references
-          // This prevents errors even when env vars are not defined
-          const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false) as {
+          const resolvedConfig = resolveEnvReferences(config, process.env) as {
             connection: { password?: string }
           }
 
@@ -355,8 +339,7 @@ export const configModule = {
         assertNoConnectionSelectorOnV1(effectiveConnectionName)
         const content = await file.text()
         const raw = JSON.parse(content)
-        // Use non-strict mode when reading config, preserving missing env var references
-        const resolved = resolveEnvReferences(raw, process.env, undefined, false)
+        const resolved = resolveEnvReferences(raw, process.env)
         return DbcliConfigSchema.parse(resolved)
       }
 

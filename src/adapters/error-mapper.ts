@@ -18,6 +18,8 @@ export function mapError(
   system: 'postgresql' | 'mysql' | 'mariadb' | 'redis',
   options: ConnectionOptions
 ): ConnectionError {
+  if (error instanceof ConnectionError) return error
+
   const err = error as Record<string, unknown>
   const errMsg = String(err?.message || String(error))
   const errCode = String(err?.code || '')

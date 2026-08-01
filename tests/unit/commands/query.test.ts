@@ -140,9 +140,9 @@ describe('Query Command', () => {
     })
 
     test('should reject positional and file sources before config access', async () => {
-      await expect(
-        queryCommand('SELECT 1', { queryFile: 'query.sql' })
-      ).rejects.toThrow('Query source conflict')
+      await expect(queryCommand('SELECT 1', { queryFile: 'query.sql' })).rejects.toThrow(
+        'Query source conflict'
+      )
       expect(configReadSpy).not.toHaveBeenCalled()
       expect(createAdapterSpy).not.toHaveBeenCalled()
     })
@@ -155,9 +155,7 @@ describe('Query Command', () => {
     })
 
     test('should reject invalid field selection before config access', async () => {
-      await expect(queryCommand('SELECT 1', { fields: 'id,-secret' })).rejects.toThrow(
-        'cannot mix'
-      )
+      await expect(queryCommand('SELECT 1', { fields: 'id,-secret' })).rejects.toThrow('cannot mix')
       expect(configReadSpy).not.toHaveBeenCalled()
       expect(createAdapterSpy).not.toHaveBeenCalled()
     })
@@ -292,6 +290,16 @@ describe('Query Command', () => {
 
       const calls = logSpy.mock.calls.flat().join('\n')
       expect(calls).toMatch(/id.*name.*email/)
+      logSpy.mockRestore()
+    })
+
+    test('HTML output carries proven truncation into the dashboard payload', async () => {
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+
+      await queryCommand('SELECT * FROM users', { format: 'html', limit: 1 })
+
+      const html = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+      expect(html).toContain('"appliedLimit":{"truncated":true,"limitApplied":1}')
       logSpy.mockRestore()
     })
   })

@@ -275,7 +275,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         JOIN information_schema.KEY_COLUMN_USAGE kcu
           ON rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND rc.TABLE_NAME = kcu.TABLE_NAME
         WHERE kcu.TABLE_NAME = ? AND rc.CONSTRAINT_SCHEMA = DATABASE()
-        GROUP BY rc.CONSTRAINT_NAME
+        GROUP BY rc.CONSTRAINT_NAME, rc.REFERENCED_TABLE_NAME
       `
 
       const fkResult = await this.execute<{

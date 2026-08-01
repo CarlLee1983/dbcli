@@ -58,7 +58,7 @@ Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/
 dbcli init
 ```
 
-Use `--use-env-refs` to keep secrets out of the config file and read them from environment variables instead.
+Use `--use-env-refs` to keep secrets out of the config file and read them from environment variables instead. At runtime, a missing referenced variable fails closed with an error that identifies both the variable and config field; an empty value remains distinct from a missing variable.
 
 ---
 
@@ -734,6 +734,8 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 **KPIs & Charts**: Add a `visual:` block to your snippet's frontmatter to render custom charts and KPIs directly in the dashboard. Supported chart types are `line`, `bar`, `area`, and `pie`; any other type is rejected at parse time.
 
+When dbcli's lookahead proves that rows were truncated, the dashboard shows a warning **before** every KPI, chart, and table and names the applied limit. Blacklist redaction/omission notices appear there as well. This applies to query HTML/UI, saved-query HTML/UI, and HTML exports whenever that execution path produces the corresponding metadata.
+
 ---
 
 <!-- doc-key: engine-support -->
@@ -898,6 +900,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 6.  **AI Collaboration Prompting**: `dbcli skill context` serializes connection, schema cache, and saved query metadata into a highly-compressed, token-optimized XML, Markdown, or JSON structure designed specifically for AI prompt insertion.
 7.  **Self-Verification Loops**: Snippets can define `verify` frontmatter metadata (specifying a `query` and LHS-Operator-RHS `expects` assertions). Running a query with `dbcli q @name --verify` automatically executes the primary command, runs the verification query, and validates assertions against the returned dataset.
 8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.
+9.  **Shared agent CLI interface**: package consumers can import `@carllee1983/dbcli/agent-core` for `loadEnvFile`, `resolveEnvRef`, `resolveConnectionSelector`, `parseConnectionNames`, and `trimAppliedLimit` plus their public types. This small interface is framework- and database-independent and follows semver. The broader `./core` product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside `agent-core`.
 
 ---
 
@@ -1086,6 +1089,8 @@ dbcli recover --apply --write-verification-artifact
 - The specific problem (not "Connection failed")
 - A hint pointing to the right next command (`dbcli list`, `dbcli schema <table>`, `--no-limit`)
 - For missing tables, top-3 fuzzy-match candidates
+
+Already-categorized errors keep their original code, message, and hints across nested adapter calls, so messages are not prefixed twice. MySQL 8 schema introspection is compatible with the default `ONLY_FULL_GROUP_BY` mode.
 
 ### Bounded CLI error output
 

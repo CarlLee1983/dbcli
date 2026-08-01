@@ -48,9 +48,17 @@ export async function qMongoBranch(
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
     const masked = maskMongoRows(result.rows, collection, blacklistCfg)
+    const securityNotification =
+      (blacklistCfg.columns[collection] ?? []).length > 0
+        ? 'Some fields may have been redacted as [REDACTED] per .dbcli blacklist.'
+        : undefined
 
     if (options.ui || options.format === 'html') {
-      const html = await generateHtmlReport({ meta: snippet.query.meta, rows: masked })
+      const html = await generateHtmlReport({
+        meta: snippet.query.meta,
+        rows: masked,
+        ...(securityNotification ? { securityNotification } : {}),
+      })
       if (options.ui) {
         const tempPath = join(tmpdir(), `dbcli-report-${Date.now()}.html`)
         await Bun.write(tempPath, html)

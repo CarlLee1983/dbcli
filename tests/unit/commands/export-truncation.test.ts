@@ -31,6 +31,15 @@ const mongoConnection = {
   database: 'testdb',
 }
 
+const elasticsearchConnection = {
+  system: 'elasticsearch' as const,
+  host: 'localhost',
+  port: 9200,
+  user: '',
+  password: '',
+  database: '',
+}
+
 function rowsOf(n: number) {
   return Array.from({ length: n }, (_, i) => ({ id: i }))
 }
@@ -59,6 +68,7 @@ describe('export fails closed on dbcli-owned truncation', () => {
   let configSpy: any
   let sqlSpy: any
   let mongoSpy: any
+  let elasticsearchSpy: any
   let logSpy: any
   let errSpy: any
   let stdout: string[]
@@ -75,6 +85,7 @@ describe('export fails closed on dbcli-owned truncation', () => {
     configSpy?.mockRestore()
     sqlSpy?.mockRestore()
     mongoSpy?.mockRestore()
+    elasticsearchSpy?.mockRestore()
     logSpy.mockRestore()
     errSpy.mockRestore()
   })
@@ -141,6 +152,15 @@ describe('export fails closed on dbcli-owned truncation', () => {
       await exportCommand('SELECT * FROM bet_log', { format: 'csv', limit: 500 })
       expect(stdout.join('\n')).toContain('# truncated; limit 500')
     })
+
+    test('HTML records the accepted cap in the dashboard payload', async () => {
+      mockConfig(sqlConnection)
+      const adapter = makeAdapter(1500)
+      sqlSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(adapter as any)
+
+      await exportCommand('SELECT * FROM bet_log', { format: 'html', limit: 500 })
+      expect(stdout.join('\n')).toContain('"appliedLimit":{"truncated":true,"limitApplied":500}')
+    })
   })
 
   describe('MongoDB export', () => {
@@ -188,6 +208,36 @@ describe('export fails closed on dbcli-owned truncation', () => {
         limit: 500,
       })
       expect(JSON.parse(stdout.join('\n'))).toHaveLength(500)
+    })
+
+    test('HTML records the accepted cap in the dashboard payload', async () => {
+      mockConfig(mongoConnection)
+      const adapter = makeAdapter(1500)
+      mongoSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
+
+      await exportCommand('{"station_code":"x"}', {
+        format: 'html',
+        collection: 'raw_bet_log',
+        limit: 500,
+      })
+      expect(stdout.join('\n')).toContain('"appliedLimit":{"truncated":true,"limitApplied":500}')
+    })
+  })
+
+  describe('Elasticsearch export', () => {
+    test('HTML records the accepted cap in the dashboard payload', async () => {
+      mockConfig(elasticsearchConnection)
+      const adapter = makeAdapter(1500)
+      elasticsearchSpy = spyOn(AdapterFactory, 'createElasticsearchAdapter').mockReturnValue(
+        adapter as any
+      )
+
+      await exportCommand('{"query":{"match_all":{}}}', {
+        format: 'html',
+        index: 'events',
+        limit: 500,
+      })
+      expect(stdout.join('\n')).toContain('"appliedLimit":{"truncated":true,"limitApplied":500}')
     })
   })
 })

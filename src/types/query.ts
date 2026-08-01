@@ -8,13 +8,8 @@
  */
 export type SqlStatementType = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'UNKNOWN'
 
-/** Metadata proven by the one-row lookahead for a dbcli-owned row limit. */
-export interface AppliedLimitMetadata {
-  /** True only when dbcli fetched and removed an additional row. */
-  truncated: boolean
-  /** User-facing row limit (never the internal N+1 fetch size). */
-  limitApplied: number
-}
+import type { AppliedLimitMetadata } from '@/agent-core/applied-limit'
+export type { AppliedLimitMetadata } from '@/agent-core/applied-limit'
 
 /**
  * Metadata about query execution and result characteristics

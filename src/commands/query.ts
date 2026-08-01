@@ -414,8 +414,7 @@ async function executeConnectionQuery(
       target: queryAuditTarget(system, query, options),
       metadata: {
         rows_affected: execution.result.rowCount,
-        execution_ms:
-          execution.result.executionTimeMs ?? Math.round(performance.now() - start),
+        execution_ms: execution.result.executionTimeMs ?? Math.round(performance.now() - start),
       },
     })
     return execution
@@ -496,6 +495,10 @@ async function presentSingleResult(
   execution: QueryExecutionOutput,
   tableCellLimit: number | false
 ): Promise<void> {
+  const noticeText = execution.notices
+    .map((notice) => notice.trim().replace(/^ℹ\s*/, ''))
+    .filter(Boolean)
+    .join('\n')
   if (options.ui || options.format === 'html') {
     const html = await generateHtmlReport({
       meta: {
@@ -506,6 +509,12 @@ async function presentSingleResult(
         description: query.length > 100 ? query.slice(0, 97) + '...' : query,
       },
       rows: execution.result.rows,
+      ...(execution.result.appliedLimit ? { appliedLimit: execution.result.appliedLimit } : {}),
+      ...(execution.result.metadata?.securityNotification || noticeText
+        ? {
+            securityNotification: execution.result.metadata?.securityNotification ?? noticeText,
+          }
+        : {}),
     })
     if (options.ui) {
       const tempPath = join(tmpdir(), `dbcli-query-${Date.now()}.html`)
@@ -525,7 +534,9 @@ async function presentSingleResult(
     )
   }
 
-  for (const notice of execution.notices) console.log(notice)
+  if (!options.ui && options.format !== 'html') {
+    for (const notice of execution.notices) console.log(notice)
+  }
   if (options.recovery !== true) {
     for (const diagnostic of execution.diagnostics) console.error(diagnostic)
   }

@@ -73,6 +73,23 @@ test('ConnectionError extends Error and has required properties', () => {
   expect(error.name).toBe('ConnectionError')
 })
 
+test('mapError preserves an already categorized ConnectionError', () => {
+  const original = new ConnectionError('SQL_SYNTAX_ERROR', 'SQL syntax error: sentinel', [
+    'original hint',
+  ])
+
+  const result = mapError(original, 'mysql', {
+    ...mockOptions,
+    system: 'mysql',
+    port: 3306,
+  })
+
+  expect(result).toBe(original)
+  expect(result.code).toBe('SQL_SYNTAX_ERROR')
+  expect(result.message).toBe('SQL syntax error: sentinel')
+  expect(result.hints).toEqual(['original hint'])
+})
+
 test('mapError works for all database systems', () => {
   const error = { code: 'ECONNREFUSED' }
 

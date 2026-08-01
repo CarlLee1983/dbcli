@@ -19,6 +19,7 @@ jobs:
       - name: Required validation (bun run typecheck && bun test)
         run: |
           bun run build
+          bun run agent-core:check
           bun run typecheck
           bun test
         env:

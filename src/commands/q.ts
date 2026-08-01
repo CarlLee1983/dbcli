@@ -175,11 +175,17 @@ export async function qCommand(
         family === 'redis'
           ? { filteredRows: resultRows, omittedColumns: [] as string[] }
           : blacklistValidator.filterColumns(targetName, resultRows, columnNames)
+      const securityNotification =
+        family === 'redis' || filtered.omittedColumns.length === 0
+          ? undefined
+          : blacklistValidator.buildSecurityNotification(targetName, filtered.omittedColumns)
 
       if (options.ui || options.format === 'html') {
         const html = await generateHtmlReport({
           meta: snippet.query.meta,
           rows: filtered.filteredRows as Record<string, unknown>[],
+          ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
+          ...(securityNotification ? { securityNotification } : {}),
         })
 
         if (options.ui) {
@@ -212,14 +218,7 @@ export async function qCommand(
           metadata: {
             statement: 'SELECT',
             affectedRows: 0,
-            ...(filtered.omittedColumns.length > 0
-              ? {
-                  securityNotification: blacklistValidator.buildSecurityNotification(
-                    targetName,
-                    filtered.omittedColumns
-                  ),
-                }
-              : {}),
+            ...(securityNotification ? { securityNotification } : {}),
           },
           ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
         },

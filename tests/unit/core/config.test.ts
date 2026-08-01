@@ -81,6 +81,28 @@ describe('configModule', () => {
 
       await expect(configModule.read(TEST_CONFIG_PATH)).rejects.toThrow(ConfigError)
     })
+
+    test('missing environment references use the shared field-specific resolver', async () => {
+      const envName = `DBCLI_TEST_MISSING_${crypto.randomUUID().replaceAll('-', '')}`
+      const config = {
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: { $env: envName },
+          database: 'db',
+        },
+        permission: 'query-only',
+        schema: {},
+        metadata: { version: '1.0' },
+      }
+      await Bun.write(TEST_CONFIG_PATH, JSON.stringify(config))
+
+      await expect(configModule.read(TEST_CONFIG_PATH)).rejects.toThrow(
+        new RegExp(`${envName}.*password`, 's')
+      )
+    })
   })
 
   describe('validate', () => {
@@ -244,6 +266,31 @@ describe('configModule', () => {
       expect(result.connection.system).toBe('postgresql')
       expect(result.connection.host).toBe('localhost')
       expect(result.permission).toBe('read-write')
+    })
+
+    test('v2 missing environment references identify the variable and field', async () => {
+      const envName = `DBCLI_TEST_V2_MISSING_${crypto.randomUUID().replaceAll('-', '')}`
+      const v2Config = {
+        version: 2,
+        default: 'local',
+        connections: {
+          local: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'dev',
+            password: { $env: envName },
+            database: 'myapp',
+          },
+        },
+        schema: {},
+        metadata: { version: '1.0' },
+      }
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      await expect(configModule.read(V2_CONFIG_PATH)).rejects.toThrow(
+        new RegExp(`${envName}.*password`, 's')
+      )
     })
 
     test('should read v2 config with connectionName parameter', async () => {

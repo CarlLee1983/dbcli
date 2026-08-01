@@ -5,33 +5,36 @@ cd "$(dirname "$0")/.."
 
 step() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 
-step '1/8 bun audit'
+step '1/9 bun audit'
 bun audit
 
-step '2/8 prettier --check'
+step '2/9 prettier --check'
 bunx prettier --check "src/**/*.ts" "tests/**/*.ts" "scripts/**/*.ts"
 
-step '3/8 typecheck'
+step '3/9 agent-core purity'
+bun run agent-core:check
+
+step '4/9 typecheck'
 bun run typecheck
 
-step '4/8 lint'
+step '5/9 lint'
 bun run lint
 
-step '5/8 test'
+step '6/9 test'
 bun test
 
-step '6/8 build'
+step '7/9 build'
 bun run build
 
-step '7/8 dist smoke'
+step '8/9 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
 
-step '8/8 doc-presence'
+step '9/9 doc-presence'
 bun run skill:check
 bun run platform:check
 bun run plugin:check
 bun run docs:check
-PKG_VERSION=$(node -p "require('./package.json').version")
+PKG_VERSION=$(bun -p "require('./package.json').version")
 if ! grep -qE '^\| `audit` ' docs/feature-matrix.md; then
   echo "  ✗ docs/feature-matrix.md missing 'audit' row" >&2
   exit 1

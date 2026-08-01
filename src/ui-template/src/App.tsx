@@ -16,7 +16,16 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { Database, Table, Info, Download, Clock, Rows } from 'lucide-react'
+import {
+  Database,
+  Table,
+  Info,
+  Download,
+  Clock,
+  Rows,
+  TriangleAlert,
+  ShieldAlert,
+} from 'lucide-react'
 import { formatValue, type ValueFormat } from './lib/format-value'
 import { resolveKpi } from './lib/resolve-kpi'
 import { deriveColumns } from './lib/derive-columns'
@@ -47,6 +56,8 @@ declare global {
         }
       }
       rows: Array<Record<string, unknown>>
+      appliedLimit?: { truncated: boolean; limitApplied: number }
+      securityNotification?: string
     }
   }
 }
@@ -89,6 +100,7 @@ export default function App() {
   const meta = payload.meta || { name: 'Database Report', key: 'default' }
   const rows = payload.rows || []
   const visual = meta.visual || {}
+  const appliedLimit = payload.appliedLimit
 
   return (
     <div className="min-h-screen bg-slate-50/50">
@@ -123,6 +135,29 @@ export default function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto p-6 lg:p-8 space-y-8">
+        {appliedLimit?.truncated && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-950"
+          >
+            <TriangleAlert className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" />
+            <p className="text-sm leading-relaxed font-medium">
+              Result truncated at {appliedLimit.limitApplied} records. Charts, KPIs, and the raw
+              table below use incomplete data; rerun with --no-limit or an explicit --limit.
+            </p>
+          </div>
+        )}
+
+        {payload.securityNotification && (
+          <div
+            role="status"
+            className="flex items-start gap-3 p-4 bg-sky-50 border border-sky-200 rounded-xl text-sky-950"
+          >
+            <ShieldAlert className="w-5 h-5 mt-0.5 flex-shrink-0 text-sky-600" />
+            <p className="text-sm leading-relaxed">{payload.securityNotification}</p>
+          </div>
+        )}
+
         {/* Description Header */}
         {meta.description && (
           <div className="flex items-start gap-3 p-4 bg-primary-50 border border-primary-100 rounded-xl text-primary-900">
@@ -169,156 +204,156 @@ export default function App() {
                 </div>
                 <div className="flex-1 min-h-0">
                   {RENDERABLE_CHART_TYPES.includes(chart.type) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    {chart.type === 'line' ? (
-                      <LineChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis
-                          dataKey={chart.x}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                          dy={10}
-                        />
-                        <YAxis
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                        />
-                        <Tooltip
-                          content={<CustomTooltip />}
-                          cursor={{ stroke: '#e2e8f0', strokeWidth: 2 }}
-                        />
-                        <Legend
-                          verticalAlign="top"
-                          align="right"
-                          iconType="circle"
-                          wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
-                        />
-                        {chart.y.map((y: string, i: number) => (
-                          <Line
-                            key={y}
-                            type="monotone"
-                            dataKey={y}
-                            stroke={COLORS[i % COLORS.length]}
-                            strokeWidth={3}
-                            dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                            activeDot={{ r: 6, strokeWidth: 0 }}
-                            animationDuration={1000}
+                    <ResponsiveContainer width="100%" height="100%">
+                      {chart.type === 'line' ? (
+                        <LineChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey={chart.x}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                            dy={10}
                           />
-                        ))}
-                      </LineChart>
-                    ) : chart.type === 'bar' ? (
-                      <BarChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis
-                          dataKey={chart.x}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                          dy={10}
-                        />
-                        <YAxis
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                        />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                        <Legend
-                          verticalAlign="top"
-                          align="right"
-                          iconType="circle"
-                          wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
-                        />
-                        {chart.y.map((y: string, i: number) => (
-                          <Bar
-                            key={y}
-                            dataKey={y}
-                            fill={COLORS[i % COLORS.length]}
-                            radius={[4, 4, 0, 0]}
-                            barSize={32}
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
                           />
-                        ))}
-                      </BarChart>
-                    ) : chart.type === 'area' ? (
-                      <AreaChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <defs>
+                          <Tooltip
+                            content={<CustomTooltip />}
+                            cursor={{ stroke: '#e2e8f0', strokeWidth: 2 }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            iconType="circle"
+                            wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
+                          />
                           {chart.y.map((y: string, i: number) => (
-                            <linearGradient
-                              key={`grad-${y}`}
-                              id={`color-${y}`}
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor={COLORS[i % COLORS.length]}
-                                stopOpacity={0.3}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor={COLORS[i % COLORS.length]}
-                                stopOpacity={0}
-                              />
-                            </linearGradient>
+                            <Line
+                              key={y}
+                              type="monotone"
+                              dataKey={y}
+                              stroke={COLORS[i % COLORS.length]}
+                              strokeWidth={3}
+                              dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                              activeDot={{ r: 6, strokeWidth: 0 }}
+                              animationDuration={1000}
+                            />
                           ))}
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis
-                          dataKey={chart.x}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                          dy={10}
-                        />
-                        <YAxis
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
-                        />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend
-                          verticalAlign="top"
-                          align="right"
-                          iconType="circle"
-                          wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
-                        />
-                        {chart.y.map((y: string, i: number) => (
-                          <Area
-                            key={y}
-                            type="monotone"
-                            dataKey={y}
-                            stroke={COLORS[i % COLORS.length]}
-                            strokeWidth={3}
-                            fillOpacity={1}
-                            fill={`url(#color-${y})`}
+                        </LineChart>
+                      ) : chart.type === 'bar' ? (
+                        <BarChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey={chart.x}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                            dy={10}
                           />
-                        ))}
-                      </AreaChart>
-                    ) : (
-                      <PieChart>
-                        <Pie
-                          data={rows}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={80}
-                          outerRadius={120}
-                          paddingAngle={8}
-                          dataKey={chart.y[0]}
-                          nameKey={chart.x}
-                          stroke="none"
-                        >
-                          {rows.map((_: unknown, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                          />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            iconType="circle"
+                            wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
+                          />
+                          {chart.y.map((y: string, i: number) => (
+                            <Bar
+                              key={y}
+                              dataKey={y}
+                              fill={COLORS[i % COLORS.length]}
+                              radius={[4, 4, 0, 0]}
+                              barSize={32}
+                            />
                           ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend iconType="circle" verticalAlign="bottom" />
-                      </PieChart>
-                    )}
-                  </ResponsiveContainer>
+                        </BarChart>
+                      ) : chart.type === 'area' ? (
+                        <AreaChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <defs>
+                            {chart.y.map((y: string, i: number) => (
+                              <linearGradient
+                                key={`grad-${y}`}
+                                id={`color-${y}`}
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop
+                                  offset="5%"
+                                  stopColor={COLORS[i % COLORS.length]}
+                                  stopOpacity={0.3}
+                                />
+                                <stop
+                                  offset="95%"
+                                  stopColor={COLORS[i % COLORS.length]}
+                                  stopOpacity={0}
+                                />
+                              </linearGradient>
+                            ))}
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey={chart.x}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            iconType="circle"
+                            wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
+                          />
+                          {chart.y.map((y: string, i: number) => (
+                            <Area
+                              key={y}
+                              type="monotone"
+                              dataKey={y}
+                              stroke={COLORS[i % COLORS.length]}
+                              strokeWidth={3}
+                              fillOpacity={1}
+                              fill={`url(#color-${y})`}
+                            />
+                          ))}
+                        </AreaChart>
+                      ) : (
+                        <PieChart>
+                          <Pie
+                            data={rows}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={80}
+                            outerRadius={120}
+                            paddingAngle={8}
+                            dataKey={chart.y[0]}
+                            nameKey={chart.x}
+                            stroke="none"
+                          >
+                            {rows.map((_: unknown, index: number) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend iconType="circle" verticalAlign="bottom" />
+                        </PieChart>
+                      )}
+                    </ResponsiveContainer>
                   ) : (
                     <div className="h-full flex items-center justify-center text-sm text-slate-400">
                       Unsupported chart type: {chart.type}

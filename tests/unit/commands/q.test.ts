@@ -150,6 +150,12 @@ describe('dbcli q', () => {
       expect(lastPrinted()).toContain('Rows: 1000 (truncated; limit 1000)')
     })
 
+    test('HTML carries snippet-guard truncation into the dashboard payload', async () => {
+      mock.rowsToReturn = 1001
+      await qCommand('@dau', { format: 'html' })
+      expect(lastPrinted()).toContain('"appliedLimit":{"truncated":true,"limitApplied":1000}')
+    })
+
     test('--no-limit leaves rows untouched and reports no truncation', async () => {
       mock.rowsToReturn = 1500
       await qCommand('@dau', { format: 'json', noLimit: true })

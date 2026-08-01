@@ -7,7 +7,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { setGlobalConnectionName, getGlobalConnectionName, configModule } from '@/core/config'
-import { parseConnectionNames, resolveConnectionSelector } from '@/core/connection-selector'
+import { parseConnectionNames, resolveConnectionSelector } from '@/agent-core/public'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

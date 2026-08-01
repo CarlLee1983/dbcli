@@ -52,3 +52,15 @@ test('generateHtmlReport handles empty rows', async () => {
   const html = await generateHtmlReport(payload)
   expect(html).toContain('"rows":[]')
 })
+
+test('generateHtmlReport serializes truncation and security metadata', async () => {
+  const html = await generateHtmlReport({
+    meta: { name: 'Bounded Report', key: '@bounded', params: [], tags: [] },
+    rows: [{ id: 1 }],
+    appliedLimit: { truncated: true, limitApplied: 1 },
+    securityNotification: 'Security: secret omitted',
+  })
+
+  expect(html).toContain('"appliedLimit":{"truncated":true,"limitApplied":1}')
+  expect(html).toContain('"securityNotification":"Security: secret omitted"')
+})

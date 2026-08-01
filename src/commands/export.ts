@@ -123,6 +123,10 @@ export async function exportCommand(
             description: sql,
           },
           rows: result.rows as Record<string, unknown>[],
+          ...(result.appliedLimit ? { appliedLimit: result.appliedLimit } : {}),
+          ...(result.metadata?.securityNotification
+            ? { securityNotification: result.metadata.securityNotification }
+            : {}),
         })
       } else {
         const formatter = new QueryResultFormatter()
@@ -319,12 +323,26 @@ async function esExportBranch(
     rowCount = rows.length
 
     const columns = collectColumnUnion(rows)
-    formatted = formatMongoRows(
-      rows,
-      columns,
-      options.format,
-      options.recovery === true ? undefined : diagnostics
-    )
+    if (options.format === 'html') {
+      formatted = await generateHtmlReport({
+        meta: {
+          name: 'Exported Report',
+          key: 'export',
+          params: [],
+          tags: [],
+          description: query,
+        },
+        rows,
+        ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
+      })
+    } else {
+      formatted = formatMongoRows(
+        rows,
+        columns,
+        options.format,
+        options.recovery === true ? undefined : diagnostics
+      )
+    }
 
     await writeAuditEntry(config, 'export', options, {
       success: true,
@@ -406,12 +424,32 @@ async function mongoExportBranch(
     hasBlacklistedColumns = (blacklistCfg.columns[collection] ?? []).length > 0
     const visibleColumns = collectColumnUnion(maskedRows)
 
-    formatted = formatMongoRows(
-      maskedRows,
-      visibleColumns,
-      options.format,
-      options.recovery === true ? undefined : diagnostics
-    )
+    if (options.format === 'html') {
+      formatted = await generateHtmlReport({
+        meta: {
+          name: 'Exported Report',
+          key: 'export',
+          params: [],
+          tags: [],
+          description: query,
+        },
+        rows: maskedRows,
+        ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
+        ...(hasBlacklistedColumns
+          ? {
+              securityNotification:
+                'Some fields may have been redacted as [REDACTED] per .dbcli blacklist.',
+            }
+          : {}),
+      })
+    } else {
+      formatted = formatMongoRows(
+        maskedRows,
+        visibleColumns,
+        options.format,
+        options.recovery === true ? undefined : diagnostics
+      )
+    }
 
     await writeAuditEntry(config, 'export', options, {
       success: true,

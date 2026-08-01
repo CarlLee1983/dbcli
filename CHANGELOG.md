@@ -5,10 +5,11 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 查詢工作流程（GitHub issues #4–#10）
+## [1.43.0] - 2026-08-02 - Agent Core、查詢完整性與跨平台修復
 
 ### Added
 
+- **穩定的 `./agent-core` 子路徑匯出。** 以五個 runtime functions（env 載入、env reference、連線選取、名稱解析、lookahead 截斷）與三個型別形成 agent CLI 共用的 semver interface；`./core` 仍是 dbcli 專用介面。建置同時產出 ESM 與型別宣告，CI purity gate 禁止資料庫、adapter 或 CLI framework 相依滲入。
 - **欄位投影 `--fields`。** SQL 與 MongoDB 通用；`--fields a,b` 取用、`--fields=-raw_response` 排除，兩種形式不可混用。MongoDB 會把 `projection`（find）或 `$project`（aggregate）下推給 driver，未明確指定時不回傳 `_id`。黑名單欄位不會因為被 `--fields` 點名而洩漏。
 - **欄位值截斷 `--truncate`。** table 輸出預設在 120 個 Unicode code point 截斷並標記 `…(+N chars)`，以 code point 計數所以不會切壞中文與 emoji；`--no-truncate` 可關閉。`--format json` / `csv` 會拒絕此旗標而非靜默忽略。
 - **從檔案或 stdin 讀查詢 `-f, --query-file`。** `-f -` 讀 stdin，可用 heredoc 傳含 `$regex`、巢狀日期物件的 MongoDB pipeline，完全避開 shell 引號問題。同時給檔案與位置參數會明確報錯。
@@ -17,12 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **HTML dashboard 明示不完整與遮蔽結果。** `query`、`q` 與 HTML export 會把既有的截斷與 security metadata 傳入 dashboard；在 KPI、圖表與 raw table 之前顯示醒目提示，避免使用不完整資料得出結論。
 - **截斷改為出現在結果本身。** dbcli 擁有的 row cap 會多取一列前瞻，因此能區分「剛好 N 筆」與「被砍到 N 筆」：table footer 顯示 `Rows: N (truncated; limit N)`、`--format json` 帶 `metadata.truncated` 與 `metadata.limit_applied`、CSV 附加 `# truncated; limit N` 註解行。`dbcli q` 的 snippet size guard 同樣依此回報，不再讓整數列數被誤讀為全集。
 - **`dbcli export` 撞到 auto-limit 改為 fail closed。** 匯出檔沒有地方記錄資料被丟掉（jsonl 是一行一筆、MongoDB `--format json` 是裸陣列），stderr 警告又會在重導向後消失，因此改為 exit `1` 且不寫檔，要求以 `--no-limit` 或 `--limit N` 明確表態。Elasticsearch 匯出的 1000 筆上限同此處理。
 - **CLI 錯誤輸出收斂。** 連線類錯誤在所有指令路徑都會被頂層 handler 攔截並格式化，stderr 首行即為人類可讀訊息，不再由 Bun 印出打包後的 code frame 與未解碼的中文跳脫序列。stack 改掛在 `-v` / `-vv` 之下，預設不輸出。
 
 ### Fixed
 
+- **MySQL 8 schema introspection 相容預設 `ONLY_FULL_GROUP_BY`。** 外鍵查詢現在完整分組 referenced table，不再讓 `dbcli schema <table>` 在原廠預設設定下失敗。
+- **已分類的連線錯誤不再被巢狀 adapter catch 重包。** `mapError` 直接保留既有 `ConnectionError` 的 identity、code、message 與 hints，消除 `Connection failed: Connection failed:` 重複前綴與分類退化。
+- **stdout 管線與 Windows CI 修復。** redirected stdout 以完整同步寫入避免 64KB 截斷；測試 filesystem 與換行處理改為跨平台實作，Windows matrix 恢復全綠。
 - **`--no-limit` 過去被靜默忽略。** Commander 會把 `--no-limit` 折進 `limit` 屬性（設為 `false`）而不會產生 `noLimit`，但 `query` / `q` / `export` 都讀 `options.noLimit`，導致這個旗標自始無效——`query` 仍套用 1000 筆上限，`q` 仍包 size guard。CLI 邊界現在會把 Commander 的否定形式轉回指令實際讀取的形狀。
 - **`dbcli export` 的 SQL 路徑忽略 `--limit` 與 `--no-limit`。** 該分支未把選項傳給 QueryExecutor，任何 `--limit N` 都不生效。
 - **`-v` / `-vv` 的 stack 開關過去對 `q` / `insert` / `update` / `delete` 無效。** 這四個指令自行輸出在地化訊息、繞過共用的錯誤呈現層，因此 verbose 對它們不會多印任何東西。改為共用同一個呈現函式：措辭維持不變，但 verbose 下會補上 stack。

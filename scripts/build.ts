@@ -32,6 +32,10 @@ await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --ex
 //     Zod-inferred type in src/utils/validation.ts that the barrel re-exports.
 await $`bunx dts-bundle-generator -o dist/core.d.ts --project tsconfig.json --no-check --export-referenced-types false src/core/public.ts`
 
+// 3d. Build the small, framework-free interface shared by agent tools.
+await $`bun build ./src/agent-core/public.ts --outfile dist/agent-core.mjs --target bun`
+await $`bunx dts-bundle-generator -o dist/agent-core.d.ts --project tsconfig.json --no-check --export-referenced-types false src/agent-core/public.ts`
+
 // 4. UI Template Build & Inlining
 console.log('Building UI template...')
 

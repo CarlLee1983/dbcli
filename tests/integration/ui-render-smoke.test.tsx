@@ -64,6 +64,24 @@ test('App renders gracefully when rows is empty', () => {
   expect(() => render(<App />)).not.toThrow()
 })
 
+test('App warns before presenting charts when the HTML result is truncated', () => {
+  setPayload({
+    meta: {
+      name: 'Truncated Report',
+      visual: { charts: [{ type: 'bar', title: 'Partial Data', x: 'day', y: ['value'] }] },
+    },
+    rows: [{ day: 'Mon', value: 1 }],
+    appliedLimit: { truncated: true, limitApplied: 1000 },
+    securityNotification: 'Security: 1 column was omitted',
+  })
+
+  render(<App />)
+
+  expect(screen.getByRole('alert').textContent).toContain('truncated')
+  expect(screen.getByRole('alert').textContent).toContain('1000')
+  expect(screen.getByRole('status').textContent).toContain('1 column was omitted')
+})
+
 test('App shows an unsupported-chart placeholder instead of a pie chart for unknown types', () => {
   setPayload({
     meta: {

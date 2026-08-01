@@ -650,6 +650,7 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p>在指令後加上 <code>--ui</code> 旗標，即可產生獨立的 React 報表並自動開啟。</p>
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
             <p>豐富的視覺化組件（圖表、KPI）可透過 Snippet frontmatter 中的 <code>visual:</code> 區塊進行設定。支援的圖表類型為 <code>line</code>、<code>bar</code>、<code>area</code>、<code>pie</code> 四種；指定其他類型會在解析時報錯。</p>
+            <p>當 dbcli 的 lookahead 證明結果遭截斷時，dashboard 會在所有 KPI、圖表與 table <strong>之前</strong>顯示警示並標出實際上限；blacklist 的遮蔽／省略通知也會顯示在同一區域。query HTML/UI、saved-query HTML/UI 與 HTML export 只要執行路徑有產生對應 metadata，都會沿用此行為。</p>
         </section>
 
         <!-- doc-key: engine-support -->
@@ -796,6 +797,7 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>AI 協作提示注入</strong>：<code>dbcli skill context</code> 將連線資訊、schema 快取和儲存查詢序列化為高度壓縮且專門設計用於 AI 提示詞注入的 XML/Markdown/JSON 格式。</li>
                 <li><strong>自我驗證循環</strong>：儲存的查詢片段支援定義 <code>verify</code> 斷言；在 <code>q</code> 執行時加上 <code>--verify</code> 即可自動化驗證。</li>
                 <li><strong>Agent Plugin</strong>：repo root 採用 Ponytail-style plugin layout，包含 <code>.agents/plugins/marketplace.json</code>、<code>.codex-plugin/plugin.json</code>、<code>.claude-plugin/plugin.json</code>、<code>.cursor-plugin/plugin.json</code>、<code>.github/skills/dbcli/</code> 與 <code>skills/dbcli/</code>；若未全域安裝 <code>dbcli</code>，skill 會 fallback 到 <code>bunx @carllee1983/dbcli &lt;command&gt;</code>。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 <code>plugins/dbcli-agent/INSTALL.md</code>，其中包含提交 Cursor marketplace 審核/索引的步驟。</li>
+                <li><strong>共用 agent CLI interface</strong>：套件使用者可從 <code>@carllee1983/dbcli/agent-core</code> 匯入 <code>loadEnvFile</code>、<code>resolveEnvRef</code>、<code>resolveConnectionSelector</code>、<code>parseConnectionNames</code>、<code>trimAppliedLimit</code> 與公開型別。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 <code>./core</code> 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 <code>agent-core</code>。</li>
             </ul>
         </section>
 
@@ -846,7 +848,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
             <h3 class="mt-10">B. 跨領域情境</h3>
             <ul>
                 <li><strong>多環境切換（v2）</strong>：<code>dbcli use prod</code> 切換預設；<code>dbcli query --use staging "&lt;SQL&gt;"</code> 只覆寫單次呼叫。每個具名連線有<strong>獨立的 schema cache</strong>（<code>.dbcli/schemas/&lt;conn&gt;/</code>）——切換後先跑一次 <code>dbcli schema --use &lt;name&gt;</code>，否則可能讀到別的連線的欄位。見 <a href="#connections" class="text-primary font-bold underline">連線管理</a>。</li>
-                <li><strong>CI 中用環境變數參照密鑰</strong>：連線設定本來就存放在 home storage（<code>~/.config/dbcli/…</code>），不會寫進專案 <code>.dbcli/</code>。<code>dbcli init --use-env-refs</code> 更進一步，把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照而非明文。非互動式執行時<strong>必須</strong>傳入全部五個 <code>--env-*</code> 旗標，否則 <code>init</code> 會直接報錯——絕不會默默退回明文。</li>
+                <li><strong>CI 中用環境變數參照密鑰</strong>：連線設定本來就存放在 home storage（<code>~/.config/dbcli/…</code>），不會寫進專案 <code>.dbcli/</code>。<code>dbcli init --use-env-refs</code> 更進一步，把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照而非明文。非互動式執行時<strong>必須</strong>傳入全部五個 <code>--env-*</code> 旗標，否則 <code>init</code> 會直接報錯——絕不會默默退回明文。執行時若參照的變數不存在，dbcli 會 fail closed，錯誤會指出變數與設定欄位；空字串不會被視為變數不存在。</li>
                 <li><strong>驗證不變式或寫入結果</strong>：<code>snapshot</code> 建基準 → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> 比對；<code>q @name --verify</code> 跑 snippet 斷言；<code>recover --apply --write-verification-artifact</code> 留下不含機密的證據。見 <a href="#data-verification" class="text-primary font-bold underline">資料驗證</a>。</li>
                 <li><strong>本地開發抓 N+1 / 慢查詢</strong>：讓應用程式走 <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> 收集事件，再用 <code>dbcli proxy analyze</code> 離線聚合出 N+1、最慢查詢與熱表發現。見 <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>。</li>
             </ul>
@@ -951,6 +953,7 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li>指向正確下一步的 hint（<code>dbcli list</code>、<code>dbcli schema &lt;table&gt;</code>、<code>--no-limit</code>）</li>
                 <li>對 table 不存在，附上 top-3 fuzzy 候選</li>
             </ul>
+            <p>已分類的錯誤在巢狀 adapter 呼叫間會保留原始 code、message 與 hints，不再重複加上前綴。MySQL 8 的 schema introspection 也相容預設的 <code>ONLY_FULL_GROUP_BY</code> 模式。</p>
 
             <h3>有界的 CLI 錯誤輸出</h3>
             <p>需要連線的探索與讀取指令失敗時會以 exit code <code>1</code> 結束，且錯誤只呈現一次。一般模式的 stderr 會輸出可讀訊息，以及存在時的穩定錯誤碼與可執行 hint；不會包含 JavaScript stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，請在指令前加 <code>-v</code>（或 <code>-vv</code>）以顯示 stack——旗標必須放在子指令之前（<code>dbcli -v list</code>，而不是 <code>dbcli list -v</code>）。寫入類指令（<code>insert</code>、<code>update</code>、<code>delete</code>）與 <code>q</code> 在連線失敗時保留自己的在地化措辭，但同樣遵守這個 stack 開關。支援 <code>--recovery</code> 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制重複的人類可讀 stderr 訊息。</p>

@@ -13,6 +13,9 @@ function readers(overrides: Partial<QueryInputReaders> = {}) {
       stdinReads++
       return overrides.readStdin ? overrides.readStdin() : 'SELECT 1'
     },
+    ...(overrides.stdinIsInteractive
+      ? { stdinIsInteractive: overrides.stdinIsInteractive }
+      : {}),
   }
   return { value, fileReads: () => fileReads, stdinReads: () => stdinReads }
 }
@@ -94,5 +97,27 @@ describe('resolveQueryInput', () => {
     await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe(pipeline)
     expect(inputReaders.stdinReads()).toBe(1)
     expect(inputReaders.fileReads()).toBe(0)
+  })
+
+  // Reading an interactive terminal blocks with no prompt: the command looks
+  // hung rather than wrong. Every other stdin consumer in the CLI checks first.
+  test('refuses to read stdin when it is an interactive terminal', async () => {
+    const inputReaders = readers({ stdinIsInteractive: () => true })
+    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).rejects.toThrow(
+      'requires piped input'
+    )
+    expect(inputReaders.stdinReads()).toBe(0)
+  })
+
+  test('reads stdin when it is piped', async () => {
+    const inputReaders = readers({ stdinIsInteractive: () => false })
+    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe('SELECT 1')
+    expect(inputReaders.stdinReads()).toBe(1)
+  })
+
+  test('a reader without the probe is treated as piped, not interactive', async () => {
+    const inputReaders = readers()
+    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe('SELECT 1')
+    expect(inputReaders.stdinReads()).toBe(1)
   })
 })

@@ -41,6 +41,7 @@ import {
   createConnectionSelectorOption,
   resolveConnectionSelector,
 } from './core/connection-selector'
+import { printLocalizedCliError } from './utils/cli-error'
 import pkg from '../package.json'
 
 function parsePositiveInteger(value: string): number {
@@ -52,6 +53,20 @@ function parsePositiveInteger(value: string): number {
     throw new InvalidArgumentError('must be a positive integer')
   }
   return parsed
+}
+
+/**
+ * Commander folds a `--no-limit` flag into the `limit` attribute — `false` when
+ * passed, `true` when the flag stands alone and is omitted — and never produces
+ * `noLimit`. Commands read `noLimit`, so restore that shape here and keep
+ * `limit` holding only a real row count.
+ */
+export function normalizeLimitFlags<T extends Record<string, unknown>>(options: T): T {
+  const limit = options.limit
+  if (typeof limit === 'boolean') {
+    return { ...options, limit: undefined, noLimit: limit === false }
+  }
+  return { ...options, noLimit: false }
 }
 
 function findLongOptionValue(rawArgs: readonly string[], option: string): string | undefined {
@@ -138,7 +153,7 @@ export function buildProgram(): Command {
       await queryCommand(
         sql,
         {
-          ...options,
+          ...normalizeLimitFlags(options),
           connectionSelector,
           truncate: rawTruncate === undefined ? undefined : parsePositiveInteger(rawTruncate),
           noTruncate: hasLongOption(rawArgs, '--no-truncate'),
@@ -178,7 +193,7 @@ export function buildProgram(): Command {
     )
     .option('--verify', 'Run verification check after execution if defined', false)
     .action(async (name: string, options: Record<string, unknown>, command) => {
-      await qCommand(name, options as any, command)
+      await qCommand(name, normalizeLimitFlags(options) as any, command)
     })
 
   // Register insert command
@@ -203,7 +218,7 @@ export function buildProgram(): Command {
           const { emitRecoveryEnvelope } = await import('./core/recovery')
           emitRecoveryEnvelope(error, { operation: 'insert', table, writeOperation: 'INSERT' })
         }
-        console.error((error as Error).message)
+        printLocalizedCliError((error as Error).message, error)
         process.exit(1)
       }
     })
@@ -231,7 +246,7 @@ export function buildProgram(): Command {
           const { emitRecoveryEnvelope } = await import('./core/recovery')
           emitRecoveryEnvelope(error, { operation: 'update', table, writeOperation: 'UPDATE' })
         }
-        console.error((error as Error).message)
+        printLocalizedCliError((error as Error).message, error)
         process.exit(1)
       }
     })
@@ -258,7 +273,7 @@ export function buildProgram(): Command {
           const { emitRecoveryEnvelope } = await import('./core/recovery')
           emitRecoveryEnvelope(error, { operation: 'delete', table, writeOperation: 'DELETE' })
         }
-        console.error((error as Error).message)
+        printLocalizedCliError((error as Error).message, error)
         process.exit(1)
       }
     })
@@ -283,7 +298,7 @@ export function buildProgram(): Command {
       false
     )
     .action(async (sql: string, options: Record<string, unknown>, command) => {
-      return await exportCommand(sql, options as never, command)
+      return await exportCommand(sql, normalizeLimitFlags(options) as never, command)
     })
 
   // Register skill command + skill tasks sub-tree

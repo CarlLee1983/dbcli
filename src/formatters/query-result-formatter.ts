@@ -183,12 +183,17 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
    * Handles proper escaping of commas, quotes, and newlines
    */
   private formatCSV(result: QueryResult<Record<string, unknown>>): string {
+    const truncationNotice = result.appliedLimit?.truncated
+      ? `# truncated; limit ${result.appliedLimit.limitApplied} — rerun with --no-limit or --limit N for the full result`
+      : undefined
+
     if (result.rows.length === 0) {
       // Headers only for empty result
       let csvOutput = result.columnNames.map((name) => this.escapeCSVField(name)).join(',')
       if (result.metadata?.securityNotification) {
         csvOutput += '\n# ' + result.metadata.securityNotification
       }
+      if (truncationNotice) csvOutput += '\n' + truncationNotice
       return csvOutput
     }
 
@@ -207,6 +212,7 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
     if (result.metadata?.securityNotification) {
       lines.push(`# ${result.metadata.securityNotification}`)
     }
+    if (truncationNotice) lines.push(truncationNotice)
 
     return lines.join('\n')
   }

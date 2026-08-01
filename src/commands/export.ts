@@ -16,6 +16,8 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import { trimAppliedLimit } from '@/core/applied-limit'
+import type { AppliedLimitMetadata } from '@/types/query'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { extractTableName } from '@/utils/engine-hints'
 import { maskMongoRows } from '@/core/mongo/field-masker'
@@ -103,7 +105,12 @@ export async function exportCommand(
     let formatted: string
     let rowCount: number
     try {
-      const result = await executor.execute(sql, { autoLimit: true })
+      const result = await executor.execute(sql, {
+        autoLimit: options.noLimit !== true,
+        ...(typeof options.limit === 'number' ? { limitValue: options.limit } : {}),
+        detectTruncation: true,
+      })
+      assertExportNotSilentlyTruncated(result.appliedLimit, options)
       rowCount = result.rowCount
 
       if (options.format === 'html') {
@@ -233,13 +240,40 @@ interface EsExportAdapter {
   ): Promise<{ rows: T[]; rowCount: number; columnNames: string[] }>
 }
 
-/** Testable core: resolve rows + target index from a DSL query or a bare index name. */
+/**
+ * An export that hit a cap dbcli chose for the caller writes an incomplete file
+ * with nowhere to record that fact — jsonl and mongo json are bare shapes, and a
+ * stderr line does not survive redirection. Fail closed instead and make the
+ * caller state the intent. An explicit --limit or --no-limit is that statement.
+ */
+function assertExportNotSilentlyTruncated(
+  appliedLimit: AppliedLimitMetadata | undefined,
+  options: { limit?: number; noLimit?: boolean }
+): void {
+  if (!appliedLimit?.truncated) return
+  if (options.noLimit === true || typeof options.limit === 'number') return
+
+  throw new Error(
+    `Export would silently drop rows — ${appliedLimit.limitApplied}-row auto-limit reached.\n` +
+      `  Re-run with --no-limit to export everything,\n` +
+      `  or --limit ${appliedLimit.limitApplied} to accept the cap explicitly.`
+  )
+}
+
+/**
+ * Testable core: resolve rows + target index from a DSL query or a bare index name.
+ *
+ * When a finite cap applies, one extra document is fetched so the caller can
+ * tell a full result from a capped one; `cap` reports the real ceiling and the
+ * caller trims the lookahead.
+ */
 export async function buildEsExportRows(
   query: string,
   options: { index?: string; collection?: string; noLimit?: boolean; limit?: number },
   adapter: EsExportAdapter
-): Promise<{ rows: Record<string, unknown>[]; target: string }> {
+): Promise<{ rows: Record<string, unknown>[]; target: string; cap?: number }> {
   const cap = options.noLimit ? Number.POSITIVE_INFINITY : (options.limit ?? ES_EXPORT_CAP)
+  const capped = Number.isFinite(cap)
   const isDsl = query.trim().startsWith('{')
 
   if (isDsl) {
@@ -248,18 +282,14 @@ export async function buildEsExportRows(
       throw new Error('Elasticsearch DSL export requires --index <name>')
     }
     const res = await adapter.execute<Record<string, unknown>>(query, [index], {
-      limit: cap === Number.POSITIVE_INFINITY ? 10000 : cap,
+      limit: capped ? cap + 1 : 10000,
     })
-    return { rows: res.rows, target: index }
+    return { rows: res.rows, target: index, ...(capped ? { cap } : {}) }
   }
 
   const index = query.trim()
-  const rows = await scrollAll(
-    adapter as never,
-    index,
-    cap === Number.POSITIVE_INFINITY ? 1_000_000 : cap
-  )
-  return { rows, target: index }
+  const rows = await scrollAll(adapter as never, index, capped ? cap + 1 : 1_000_000)
+  return { rows, target: index, ...(capped ? { cap } : {}) }
 }
 
 async function esExportBranch(
@@ -272,19 +302,20 @@ async function esExportBranch(
 
   const adapter = AdapterFactory.createElasticsearchAdapter(config.connection as ConnectionOptions)
   await adapter.connect()
-  let resultCapped = false
   let formatted: string
   let rowCount: number
   const diagnostics: string[] = []
   try {
-    const { rows, target } = await buildEsExportRows(
-      query,
-      options,
-      adapter as unknown as EsExportAdapter
-    )
+    const {
+      rows: fetched,
+      target,
+      cap,
+    } = await buildEsExportRows(query, options, adapter as unknown as EsExportAdapter)
 
     blacklistValidator.checkTableBlacklist('SELECT', target, [])
-    resultCapped = !options.noLimit && rows.length >= ES_EXPORT_CAP
+    const limitedResult = cap === undefined ? undefined : trimAppliedLimit(fetched, cap)
+    assertExportNotSilentlyTruncated(limitedResult?.metadata, options)
+    const rows = limitedResult?.rows ?? fetched
     rowCount = rows.length
 
     const columns = collectColumnUnion(rows)
@@ -310,11 +341,6 @@ async function esExportBranch(
   const emitted = await emitExportOutput(formatted, rowCount, options)
   if (emitted && options.recovery !== true) {
     for (const diagnostic of diagnostics) console.error(diagnostic)
-    if (resultCapped) {
-      console.error(
-        `Warning: result capped at ${ES_EXPORT_CAP} rows. Use --no-limit to export the full index.`
-      )
-    }
   }
 }
 
@@ -365,13 +391,17 @@ async function mongoExportBranch(
     const result = await adapter.execute<Record<string, unknown>>(
       query,
       [collection],
-      effectiveLimit !== undefined ? { limit: effectiveLimit } : undefined
+      // Fetch one row past the cap so truncation is observed, not inferred.
+      effectiveLimit !== undefined ? { limit: effectiveLimit + 1 } : undefined
     )
+    const limitedResult =
+      effectiveLimit === undefined ? undefined : trimAppliedLimit(result.rows, effectiveLimit)
+    assertExportNotSilentlyTruncated(limitedResult?.metadata, options)
 
     const blacklistCfg = (
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
-    const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
+    const maskedRows = maskMongoRows(limitedResult?.rows ?? result.rows, collection, blacklistCfg)
     rowCount = maskedRows.length
     hasBlacklistedColumns = (blacklistCfg.columns[collection] ?? []).length > 0
     const visibleColumns = collectColumnUnion(maskedRows)

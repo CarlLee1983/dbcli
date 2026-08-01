@@ -630,6 +630,18 @@ async function mongoQueryBranch(
   }
 }
 
+/** Render a Redis size-guard/blacklist warning as one human-readable stderr line. */
+function describeRedisWarning(warning: import('@/adapters/types').RedisWarning): string {
+  switch (warning.code) {
+    case 'REDIS_SIZE_TRUNCATE':
+      return `⚠ REDIS_SIZE_TRUNCATE: ${warning.command} reply kept ${warning.kept} entries and dropped at least ${warning.droppedAtLeast}. Use --no-limit for the full reply.`
+    case 'REDIS_SIZE_REWRITE':
+      return `⚠ REDIS_SIZE_REWRITE: ${warning.command} was rewritten to bound the reply (${warning.original.join(' ')} → ${warning.rewritten.join(' ')}). Use --no-limit to run it as written.`
+    case 'REDIS_BLACKLIST_FILTERED':
+      return `⚠ REDIS_BLACKLIST_FILTERED: ${warning.count} key(s) were withheld by the blacklist.`
+  }
+}
+
 async function redisQueryBranch(
   command: string,
   options: QueryCommandOptions,
@@ -649,17 +661,30 @@ async function redisQueryBranch(
       noLimit: options.noLimit ?? false,
     })
     const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : ['value']
+    // The adapter's size guard already knows whether the reply was trimmed.
+    // Report it through the same appliedLimit contract as every other engine
+    // instead of leaving a full-looking result behind.
+    const sizeTruncation = result.warnings?.find((w) => w.code === 'REDIS_SIZE_TRUNCATE')
     const queryResult = {
       rows: result.rows,
       rowCount: result.rows.length,
       columnNames,
+      ...(sizeTruncation
+        ? { appliedLimit: { truncated: true, limitApplied: sizeTruncation.kept } }
+        : {}),
     }
+    const diagnostics =
+      options.recovery === true
+        ? []
+        : [
+            ...(head === 'KEYS'
+              ? ['\u26A0 Warning: "KEYS" command is dangerous on production servers.']
+              : []),
+            ...(result.warnings ?? []).map(describeRedisWarning),
+          ]
     return {
       result: queryResult as QueryResult<Record<string, unknown>>,
-      diagnostics:
-        head === 'KEYS' && options.recovery !== true
-          ? ['\u26A0 Warning: "KEYS" command is dangerous on production servers.']
-          : [],
+      diagnostics,
       notices: [],
     }
   } catch (error) {

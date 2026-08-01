@@ -55,3 +55,16 @@ export function presentCliError(error: unknown): void {
   const includeStack = getLogger().level >= LogLevel.VERBOSE
   process.stderr.write(`${formatCliError(mapCliError(error, includeStack))}\n`)
 }
+
+/**
+ * Present an error whose wording the command already localized, keeping that
+ * wording as the first line and attaching the stack only in verbose mode.
+ *
+ * Commands that format their own message would otherwise drop the stack
+ * entirely, leaving `-v` / `-vv` with nothing extra to show.
+ */
+export function printLocalizedCliError(message: string, error: unknown): void {
+  console.error(message)
+  const stack = mapCliError(error, getLogger().level >= LogLevel.VERBOSE).stack
+  if (stack) console.error(`Stack:\n${stack}`)
+}

@@ -5,6 +5,7 @@
 
 import crypto from 'node:crypto'
 import { t, t_vars } from '@/i18n/message-loader'
+import { printLocalizedCliError } from '@/utils/cli-error'
 import {
   AdapterFactory,
   ConnectionError,
@@ -367,7 +368,7 @@ export async function deleteCommand(
 
     // Connection error
     if (error instanceof ConnectionError) {
-      console.error(t_vars('errors.connection_failed', { message: error.message }))
+      printLocalizedCliError(t_vars('errors.connection_failed', { message: error.message }), error)
       process.exit(1)
     }
 

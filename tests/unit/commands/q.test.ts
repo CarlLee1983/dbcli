@@ -19,11 +19,17 @@ import { qCommand } from '@/commands/q'
 class MockAdapter implements DatabaseAdapter {
   public lastSql = ''
   public lastParams: any[] = []
+  /** When set, execute() returns this many synthetic rows instead of the default single row. */
+  public rowsToReturn: number | undefined
   async connect() {}
   async disconnect() {}
   async execute<T>(sql: string, params?: any[]): Promise<ExecutionResult<T>> {
     this.lastSql = sql
     this.lastParams = params ?? []
+    if (this.rowsToReturn !== undefined) {
+      const rows = Array.from({ length: this.rowsToReturn }, (_, i) => ({ dau: i }))
+      return { rows: rows as T[], affectedRows: rows.length }
+    }
     return { rows: [{ dau: 42 }] as T[], affectedRows: 1 }
   }
   async listTables() {
@@ -112,5 +118,44 @@ describe('dbcli q', () => {
   test('unknown @name → exits 1', async () => {
     await qCommand('@missing', {})
     expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
+  describe('snippet guard truncation is reported in the result itself', () => {
+    // console.log spy call history accumulates across tests in this file, so
+    // always read the output this test produced rather than joining them all.
+    const lastPrinted = () => String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+
+    test('json marks truncated and trims the lookahead row', async () => {
+      // Guard fetches 1001; the extra row proves the snippet had more to give.
+      mock.rowsToReturn = 1001
+      await qCommand('@dau', { format: 'json' })
+      const payload = JSON.parse(lastPrinted())
+      expect(payload.rowCount).toBe(1000)
+      expect(payload.rows).toHaveLength(1000)
+      expect(payload.metadata.truncated).toBe(true)
+      expect(payload.metadata.limit_applied).toBe(1000)
+    })
+
+    test('exactly 1000 rows is not reported as truncated', async () => {
+      mock.rowsToReturn = 1000
+      await qCommand('@dau', { format: 'json' })
+      const payload = JSON.parse(lastPrinted())
+      expect(payload.rowCount).toBe(1000)
+      expect(payload.metadata.truncated).toBe(false)
+    })
+
+    test('table footer states the truncation', async () => {
+      mock.rowsToReturn = 1001
+      await qCommand('@dau', { format: 'table' })
+      expect(lastPrinted()).toContain('Rows: 1000 (truncated; limit 1000)')
+    })
+
+    test('--no-limit leaves rows untouched and reports no truncation', async () => {
+      mock.rowsToReturn = 1500
+      await qCommand('@dau', { format: 'json', noLimit: true })
+      const payload = JSON.parse(lastPrinted())
+      expect(payload.rowCount).toBe(1500)
+      expect(payload.metadata.truncated).toBeUndefined()
+    })
   })
 })

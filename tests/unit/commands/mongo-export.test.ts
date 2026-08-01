@@ -211,8 +211,11 @@ describe('MongoDB export', () => {
     expect(adapter.state.executeCalled).toBe(false)
   })
 
-  test('--limit forwarded to mongo adapter execute', async () => {
-    const adapter = makeMockAdapter([{ _id: '1', name: 'Alice' }])
+  test('--limit forwarded to mongo adapter execute with a one-row lookahead', async () => {
+    // The driver fetches limit + 1 so dbcli can tell a full page from a capped
+    // one; the extra document is trimmed before anything is written out.
+    const docs = Array.from({ length: 9 }, (_, i) => ({ _id: String(i), name: `n${i}` }))
+    const adapter = makeMockAdapter(docs)
     adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
     configSpy = spyOn(configModule, 'read').mockResolvedValue({
       connection: baseMongoConnection,
@@ -222,7 +225,8 @@ describe('MongoDB export', () => {
     const { exportCommand } = await import('@/commands/export')
     await exportCommand('{}', { format: 'jsonl', collection: 'users', limit: 7 } as any)
 
-    expect(adapter.state.lastLimit).toBe(7)
+    expect(adapter.state.lastLimit).toBe(8)
+    expect(stdout.join('\n').trim().split('\n')).toHaveLength(7)
   })
 
   test('does not print the auto-limit warning before an adapter failure', async () => {

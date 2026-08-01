@@ -1,6 +1,11 @@
 export interface QueryInputReaders {
   readFile(path: string): Promise<string>
   readStdin(): Promise<string>
+  /**
+   * True when stdin is an interactive terminal rather than piped input.
+   * Optional so injected test doubles default to the piped (safe) case.
+   */
+  stdinIsInteractive?(): boolean
 }
 
 export interface QueryInputSources {
@@ -11,6 +16,13 @@ export interface QueryInputSources {
 const defaultReaders: QueryInputReaders = {
   readFile: (path) => Bun.file(path).text(),
   readStdin: () => Bun.stdin.text(),
+  stdinIsInteractive: () => {
+    try {
+      return process.stdin.isTTY === true
+    } catch {
+      return false
+    }
+  },
 }
 
 const WHITESPACE = /\s/u
@@ -61,6 +73,13 @@ export async function resolveQueryInput(
   if (hasPositional) {
     input = sources.positional!
   } else if (sources.queryFile === '-') {
+    // Reading an interactive terminal would block with no prompt and no hint
+    // that dbcli is waiting. Refuse instead, matching the rest of the CLI.
+    if (readers.stdinIsInteractive?.() === true) {
+      throw new Error(
+        'Reading the query from stdin requires piped input; pipe the query in or use --query-file <path>'
+      )
+    }
     try {
       input = await readers.readStdin()
     } catch (error) {

@@ -41,7 +41,9 @@ describe('sqlStrategy', () => {
       { id: 42 },
       { engine: 'postgres', noLimit: false }
     )
-    expect(prepared.driver.sql).toContain('LIMIT 1000')
+    // Guard caps at 1000 but fetches one extra row so truncation is detectable.
+    expect(prepared.driver.sql).toContain('LIMIT 1001')
+    expect(prepared.guardLimit).toBe(1000)
     expect(prepared.driver.sql).toContain('$1')
     expect(prepared.driver.values).toEqual([42])
   })
@@ -69,7 +71,8 @@ describe('runner.prepareExecution dispatches to sql strategy', () => {
 
   test('still produces SQL with size guard for postgres', () => {
     const out = prepareExecution(resolved, { engine: 'postgres', noLimit: false }, {}, {})
-    expect(out.driver.sql).toContain('LIMIT 1000')
+    expect(out.driver.sql).toContain('LIMIT 1001')
+    expect(out.guardLimit).toBe(1000)
   })
 
   test('mongodb connection throws clear error', () => {

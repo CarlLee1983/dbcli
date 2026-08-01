@@ -26,6 +26,21 @@ let _globalConnectionName: string | undefined
 /**
  * 設定全域連線名稱（由 cli.ts preAction hook 呼叫）
  */
+/**
+ * Reject a named-connection selector against a single-connection (v1) config.
+ *
+ * A v1 config has no names to select from, so honouring the request is
+ * impossible; running the only connection anyway would look like a successful
+ * switch and send the query to the wrong database.
+ */
+function assertNoConnectionSelectorOnV1(connectionName: string | undefined): void {
+  if (connectionName === undefined) return
+  throw new ConfigError(
+    `連線 '${connectionName}' 不存在：此專案使用單一連線 (v1) 設定，沒有具名連線。` +
+      ` 移除 --use / DBCLI_CONNECTION，或改用 'dbcli init --conn-name <name>' 升級為多連線 (v2) 設定。`
+  )
+}
+
 export function setGlobalConnectionName(name: string | undefined): void {
   _globalConnectionName = name
 }
@@ -306,6 +321,11 @@ export const configModule = {
             })
           }
 
+          // A v1 config has exactly one unnamed connection, so a selector cannot
+          // be honoured. Say so rather than running the default connection and
+          // letting the caller believe it switched.
+          assertNoConnectionSelectorOnV1(effectiveConnectionName)
+
           // Use non-strict mode when reading config, preserving missing env var references
           // This prevents errors even when env vars are not defined
           const resolvedConfig = resolveEnvReferences(config, process.env, undefined, false) as {
@@ -332,6 +352,7 @@ export const configModule = {
       const exists = await file.exists()
 
       if (exists) {
+        assertNoConnectionSelectorOnV1(effectiveConnectionName)
         const content = await file.text()
         const raw = JSON.parse(content)
         // Use non-strict mode when reading config, preserving missing env var references

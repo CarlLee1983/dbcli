@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  parseFieldSelection,
-  projectRows,
-  toMongoProjection,
-} from '@/core/field-projection'
+import { parseFieldSelection, projectRows, toMongoProjection } from '@/core/field-projection'
 
 describe('field projection parser', () => {
   test('parses include and exclude lists in requested order', () => {
@@ -46,24 +42,20 @@ describe('projectRows', () => {
       [{ profile: { email: 'a@example.com' }, items: [{ sku: 'a' }, { sku: 'b' }] }],
       { mode: 'include', paths: ['profile.email', 'items.sku'] }
     )
-    expect(projected.rows).toEqual([
-      { 'profile.email': 'a@example.com', 'items.sku': ['a', 'b'] },
-    ])
+    expect(projected.rows).toEqual([{ 'profile.email': 'a@example.com', 'items.sku': ['a', 'b'] }])
     expect(projected.columnNames).toEqual(['profile.email', 'items.sku'])
   })
 
   test('prefers an exact dotted row key over nested traversal', () => {
-    const projected = projectRows(
-      [{ 'profile.email': 'alias', profile: { email: 'nested' } }],
-      { mode: 'include', paths: ['profile.email'] }
-    )
+    const projected = projectRows([{ 'profile.email': 'alias', profile: { email: 'nested' } }], {
+      mode: 'include',
+      paths: ['profile.email'],
+    })
     expect(projected.rows).toEqual([{ 'profile.email': 'alias' }])
   })
 
   test('excludes top-level and dotted nested fields immutably', () => {
-    const rows = [
-      { id: 1, secret: 'x', profile: { email: 'a@example.com', name: 'Ada' } },
-    ]
+    const rows = [{ id: 1, secret: 'x', profile: { email: 'a@example.com', name: 'Ada' } }]
     const projected = projectRows(rows, {
       mode: 'exclude',
       paths: ['secret', 'profile.email'],
@@ -114,7 +106,10 @@ describe('projectRows', () => {
 
   test('normalizes sparse exclusion rows to the projected column union', () => {
     const projected = projectRows(
-      [{ id: 1, secret: 'x' }, { id: 2, name: 'Ada', secret: 'y' }],
+      [
+        { id: 1, secret: 'x' },
+        { id: 2, name: 'Ada', secret: 'y' },
+      ],
       { mode: 'exclude', paths: ['secret'] }
     )
 

@@ -57,8 +57,7 @@ export function assertFanOutReadOnlySql(
     throw new Error('Multi-connection SQL must contain exactly one read-only statement')
   }
   const containsWrite = SQL_WRITE_OR_DDL_KEYWORDS.test(executableSql)
-  const explainExecutes =
-    classification.type === 'EXPLAIN' && /\bANALYZE\b/i.test(executableSql)
+  const explainExecutes = classification.type === 'EXPLAIN' && /\bANALYZE\b/i.test(executableSql)
 
   if ((classification.type === 'SELECT' && containsWrite) || (explainExecutes && containsWrite)) {
     throw new Error('Multi-connection SQL must be proven read-only before any connection executes')

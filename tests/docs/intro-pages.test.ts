@@ -19,11 +19,7 @@ function cssText(document: Document) {
 
 function quickstartCommands(document: Document): string[] {
   return [...document.querySelectorAll('#quickstart .command-box code')]
-    .flatMap((code) =>
-      (code.textContent ?? '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-    )
+    .flatMap((code) => (code.textContent ?? '').split(/\r?\n/).map((line) => line.trim()))
     .filter(Boolean)
 }
 

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MySQL 8 schema introspection 相容預設 `ONLY_FULL_GROUP_BY`。** 外鍵查詢現在完整分組 referenced table，不再讓 `dbcli schema <table>` 在原廠預設設定下失敗。
 - **已分類的連線錯誤不再被巢狀 adapter catch 重包。** `mapError` 直接保留既有 `ConnectionError` 的 identity、code、message 與 hints，消除 `Connection failed: Connection failed:` 重複前綴與分類退化。
 - **stdout 管線與 Windows CI 修復。** redirected stdout 以完整同步寫入避免 64KB 截斷；測試 filesystem 與換行處理改為跨平台實作，Windows matrix 恢復全綠。
+- **發布依賴安全更新。** 將 PostCSS 鎖定至 `8.5.25`、`brace-expansion` 鎖定至 `5.0.9`，清除 release gate 回報的 3 個 high-severity advisories；並統一 Prettier 格式，讓完整 9 階段發布檢查恢復全綠。
 - **`--no-limit` 過去被靜默忽略。** Commander 會把 `--no-limit` 折進 `limit` 屬性（設為 `false`）而不會產生 `noLimit`，但 `query` / `q` / `export` 都讀 `options.noLimit`，導致這個旗標自始無效——`query` 仍套用 1000 筆上限，`q` 仍包 size guard。CLI 邊界現在會把 Commander 的否定形式轉回指令實際讀取的形狀。
 - **`dbcli export` 的 SQL 路徑忽略 `--limit` 與 `--no-limit`。** 該分支未把選項傳給 QueryExecutor，任何 `--limit N` 都不生效。
 - **`-v` / `-vv` 的 stack 開關過去對 `q` / `insert` / `update` / `delete` 無效。** 這四個指令自行輸出在地化訊息、繞過共用的錯誤呈現層，因此 verbose 對它們不會多印任何東西。改為共用同一個呈現函式：措辭維持不變，但 verbose 下會補上 stack。

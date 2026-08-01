@@ -184,24 +184,14 @@ describe('stateless single-connection selection', () => {
 
   test('explicit fan-out selectors reject empty and duplicate names before execution', async () => {
     for (const selector of ['primary,,staging', 'primary, primary']) {
-      const result = await run([
-        '--config',
-        configDir,
-        'query',
-        '--use',
-        selector,
-        'SELECT 1',
-      ])
+      const result = await run(['--config', configDir, 'query', '--use', selector, 'SELECT 1'])
       expect(result.code).toBe(1)
       expect(result.stderr).toMatch(/empty|duplicate/i)
     }
   })
 
   test('DBCLI_CONNECTION remains a single literal connection selector', async () => {
-    const result = await run(
-      ['--config', configDir, 'query', 'SELECT 1'],
-      'primary,staging'
-    )
+    const result = await run(['--config', configDir, 'query', 'SELECT 1'], 'primary,staging')
 
     expect(result.code).toBe(1)
     expect(result.stderr).toContain("'primary,staging'")

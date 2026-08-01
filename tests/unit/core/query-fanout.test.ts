@@ -36,7 +36,8 @@ describe('query fan-out orchestration', () => {
 
   test('keeps successful and failed outcomes without cancelling siblings', async () => {
     const outcomes = await runQueryFanOut(['ok', 'broken'], async (connection) => {
-      if (connection === 'broken') throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+      if (connection === 'broken')
+        throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
       return result(connection)
     })
 
@@ -101,10 +102,7 @@ describe('query fan-out orchestration', () => {
   test('rejects MySQL and MariaDB SELECT INTO file writes', () => {
     for (const dialect of ['mysql', 'mariadb'] as const) {
       expect(() =>
-        assertFanOutReadOnlySql(
-          "SELECT secret INTO OUTFILE '/tmp/dbcli-leak' FROM users",
-          dialect
-        )
+        assertFanOutReadOnlySql("SELECT secret INTO OUTFILE '/tmp/dbcli-leak' FROM users", dialect)
       ).toThrow(/read-only/i)
     }
   })
@@ -128,12 +126,12 @@ describe('query fan-out orchestration', () => {
         )
       }
     }
-    expect(() =>
-      assertFanOutReadOnlySql('SELECT 1; /*! DELETE FROM users */', 'mysql')
-    ).toThrow(/one read-only statement|read-only/i)
-    expect(() =>
-      assertFanOutReadOnlySql('SELECT 1; /*M! DELETE FROM users */', 'mariadb')
-    ).toThrow(/one read-only statement|read-only/i)
+    expect(() => assertFanOutReadOnlySql('SELECT 1; /*! DELETE FROM users */', 'mysql')).toThrow(
+      /one read-only statement|read-only/i
+    )
+    expect(() => assertFanOutReadOnlySql('SELECT 1; /*M! DELETE FROM users */', 'mariadb')).toThrow(
+      /one read-only statement|read-only/i
+    )
     expect(() =>
       assertFanOutReadOnlySql(
         "SELECT secret /*!50000INTO OUTFILE '/tmp/dbcli-leak' */ FROM users",

@@ -12,14 +12,24 @@ class IntegrationAdapter implements DatabaseAdapter {
   constructor(private readonly connection: string) {}
 
   async connect() {}
-  async disconnect() { this.disconnected = true }
+  async disconnect() {
+    this.disconnected = true
+  }
   async execute<T>(): Promise<ExecutionResult<T>> {
     return { rows: [{ connection: this.connection }] as T[], affectedRows: 1 }
   }
-  async listTables() { return [] }
-  async getTableSchema() { return { name: 'result', columns: [] } }
-  async testConnection() { return true }
-  async getServerVersion() { return 'test' }
+  async listTables() {
+    return []
+  }
+  async getTableSchema() {
+    return { name: 'result', columns: [] }
+  }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return 'test'
+  }
 }
 
 describe('multi-connection query integration', () => {
@@ -77,8 +87,8 @@ describe('multi-connection query integration', () => {
       primary: new IntegrationAdapter('primary'),
       staging: new IntegrationAdapter('staging'),
     }
-    createAdapterSpy.mockImplementation((options: SqlConnectionOptions) =>
-      adapters[options.host as keyof typeof adapters]
+    createAdapterSpy.mockImplementation(
+      (options: SqlConnectionOptions) => adapters[options.host as keyof typeof adapters]
     )
     const before = await Bun.file(join(configPath, 'config.json')).text()
 

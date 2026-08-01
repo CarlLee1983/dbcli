@@ -114,12 +114,7 @@ describe('redaction utils', () => {
     test('scrubs query-file paths from diagnostics', () => {
       const path = '/secret/customer.sql'
       expect(
-        redactArgvSensitiveText(`Failed to read query file ${path}`, [
-          'dbcli',
-          'query',
-          '-f',
-          path,
-        ])
+        redactArgvSensitiveText(`Failed to read query file ${path}`, ['dbcli', 'query', '-f', path])
       ).toBe('Failed to read query file <redacted>')
 
       expect(

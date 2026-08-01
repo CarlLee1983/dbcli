@@ -133,7 +133,11 @@ export function buildProgram(): Command {
     .option('--collection <name>', 'MongoDB collection name; Elasticsearch index name')
     .option('--index <name>', 'Elasticsearch index name (alias for --collection)')
     .option('--fields <list>', 'Include fields, or exclude them with --fields=-field_a,-field_b')
-    .option('--truncate <number>', 'Limit serialized table cells to N Unicode characters', parsePositiveInteger)
+    .option(
+      '--truncate <number>',
+      'Limit serialized table cells to N Unicode characters',
+      parsePositiveInteger
+    )
     .option('--no-truncate', 'Disable the default table-cell truncation')
     .addOption(createConnectionSelectorOption())
     .option(

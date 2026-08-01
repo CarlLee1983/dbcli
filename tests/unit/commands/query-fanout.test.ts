@@ -35,10 +35,18 @@ class FanOutAdapter implements DatabaseAdapter {
     return { rows: rows as T[], affectedRows: rows.length }
   }
 
-  async listTables() { return [] }
-  async getTableSchema() { return { name: 'result', columns: [] } }
-  async testConnection() { return true }
-  async getServerVersion() { return 'test' }
+  async listTables() {
+    return []
+  }
+  async getTableSchema() {
+    return { name: 'result', columns: [] }
+  }
+  async testConnection() {
+    return true
+  }
+  async getServerVersion() {
+    return 'test'
+  }
 }
 
 function sqlConfig(name: string) {
@@ -72,8 +80,8 @@ describe('query command fan-out', () => {
   beforeEach(() => {
     originalExitCode = process.exitCode
     process.exitCode = undefined
-    configReadSpy = spyOn(configModule, 'read').mockImplementation(async (_path, name) =>
-      sqlConfig(name ?? 'default') as never
+    configReadSpy = spyOn(configModule, 'read').mockImplementation(
+      async (_path, name) => sqlConfig(name ?? 'default') as never
     )
     createAdapterSpy = spyOn(AdapterFactory, 'createSqlAdapter')
     createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter')
@@ -96,7 +104,9 @@ describe('query command fan-out', () => {
 
   test('runs two explicit connections concurrently and presents successes in selector order', async () => {
     let releasePrimary!: () => void
-    const primaryGate = new Promise<void>((resolve) => { releasePrimary = resolve })
+    const primaryGate = new Promise<void>((resolve) => {
+      releasePrimary = resolve
+    })
     const adapters = {
       primary: new FanOutAdapter('primary', primaryGate),
       staging: new FanOutAdapter('staging'),
@@ -137,8 +147,8 @@ describe('query command fan-out', () => {
       primary: new FanOutAdapter('primary'),
       broken: new FanOutAdapter('broken', undefined, timeout),
     }
-    createAdapterSpy.mockImplementation((options: SqlConnectionOptions) =>
-      adapters[options.host as keyof typeof adapters]
+    createAdapterSpy.mockImplementation(
+      (options: SqlConnectionOptions) => adapters[options.host as keyof typeof adapters]
     )
 
     await queryCommand('SELECT 1', {
@@ -187,10 +197,13 @@ describe('query command fan-out', () => {
   })
 
   test('rejects SQL mutation for admin connections before creating any adapter', async () => {
-    configReadSpy.mockImplementation(async (_path, name) => ({
-      ...sqlConfig(name ?? 'default'),
-      permission: 'admin',
-    }) as never)
+    configReadSpy.mockImplementation(
+      async (_path, name) =>
+        ({
+          ...sqlConfig(name ?? 'default'),
+          permission: 'admin',
+        }) as never
+    )
 
     for (const query of [
       'DELETE FROM users',
@@ -220,15 +233,18 @@ describe('query command fan-out', () => {
       ['mysql', "SELECT secret /*!50000INTO OUTFILE '/tmp/dbcli-leak' */ FROM users"],
       ['mariadb', "SELECT secret /*M!100100INTO OUTFILE '/tmp/dbcli-leak' */ FROM users"],
     ] as const) {
-      configReadSpy.mockImplementation(async (_path, name) => ({
-        ...sqlConfig(name ?? 'default'),
-        connection: {
-          ...sqlConfig(name ?? 'default').connection,
-          system,
-          port: 3306,
-        },
-        permission: 'admin',
-      }) as never)
+      configReadSpy.mockImplementation(
+        async (_path, name) =>
+          ({
+            ...sqlConfig(name ?? 'default'),
+            connection: {
+              ...sqlConfig(name ?? 'default').connection,
+              system,
+              port: 3306,
+            },
+            permission: 'admin',
+          }) as never
+      )
 
       await expect(
         queryCommand(query, { connectionSelector: 'primary,staging' } as never)
@@ -248,8 +264,8 @@ describe('query command fan-out', () => {
         Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' })
       ),
     }
-    createAdapterSpy.mockImplementation((options: SqlConnectionOptions) =>
-      adapters[options.host as keyof typeof adapters]
+    createAdapterSpy.mockImplementation(
+      (options: SqlConnectionOptions) => adapters[options.host as keyof typeof adapters]
     )
 
     await queryCommand('SELECT 1', {
@@ -275,8 +291,8 @@ describe('query command fan-out', () => {
       one: new FanOutAdapter('one', undefined, undefined, undefined, new Error('one refused')),
       two: new FanOutAdapter('two', undefined, undefined, undefined, new Error('two refused')),
     }
-    createAdapterSpy.mockImplementation((options: SqlConnectionOptions) =>
-      adapters[options.host as keyof typeof adapters]
+    createAdapterSpy.mockImplementation(
+      (options: SqlConnectionOptions) => adapters[options.host as keyof typeof adapters]
     )
 
     await queryCommand('SELECT 1', {
@@ -290,20 +306,23 @@ describe('query command fan-out', () => {
   })
 
   test('rejects MongoDB output pipelines before creating any adapter', async () => {
-    configReadSpy.mockImplementation(async () => ({
-      connection: {
-        system: 'mongodb',
-        host: 'localhost',
-        port: 27017,
-        user: '',
-        password: '',
-        database: 'db',
-      },
-      permission: 'admin',
-      schema: {},
-      metadata: { version: '2.0' },
-      blacklist: { tables: [], columns: {} },
-    }) as never)
+    configReadSpy.mockImplementation(
+      async () =>
+        ({
+          connection: {
+            system: 'mongodb',
+            host: 'localhost',
+            port: 27017,
+            user: '',
+            password: '',
+            database: 'db',
+          },
+          permission: 'admin',
+          schema: {},
+          metadata: { version: '2.0' },
+          blacklist: { tables: [], columns: {} },
+        }) as never
+    )
 
     for (const pipeline of ['[{"$out":"archive"}]', '[{"$merge":"archive"}]']) {
       await expect(
@@ -365,10 +384,13 @@ describe('query command fan-out', () => {
 
   test('writes one audit file per explicit connection and never a comma-list file', async () => {
     const workDir = await mkdtemp(join(tmpdir(), 'dbcli-query-fanout-audit-'))
-    configReadSpy.mockImplementation(async (_path, name) => ({
-      ...sqlConfig(name ?? 'default'),
-      audit: { enabled: true, rotation: { max_bytes: 1024 * 1024, max_entries: 100 } },
-    }) as never)
+    configReadSpy.mockImplementation(
+      async (_path, name) =>
+        ({
+          ...sqlConfig(name ?? 'default'),
+          audit: { enabled: true, rotation: { max_bytes: 1024 * 1024, max_entries: 100 } },
+        }) as never
+    )
     createAdapterSpy.mockImplementation((options: SqlConnectionOptions) =>
       options.host === 'staging'
         ? new FanOutAdapter(
@@ -425,13 +447,16 @@ describe('query command fan-out', () => {
   })
 
   test('applies blacklist filtering independently to every successful result', async () => {
-    configReadSpy.mockImplementation(async (_path, name) => ({
-      ...sqlConfig(name ?? 'default'),
-      blacklist:
-        name === 'primary'
-          ? { tables: [], columns: { users: ['secret'] } }
-          : { tables: [], columns: {} },
-    }) as never)
+    configReadSpy.mockImplementation(
+      async (_path, name) =>
+        ({
+          ...sqlConfig(name ?? 'default'),
+          blacklist:
+            name === 'primary'
+              ? { tables: [], columns: { users: ['secret'] } }
+              : { tables: [], columns: {} },
+        }) as never
+    )
     createAdapterSpy.mockImplementation(
       (options: SqlConnectionOptions) =>
         new FanOutAdapter(String(options.host), undefined, undefined, [
@@ -454,21 +479,24 @@ describe('query command fan-out', () => {
   })
 
   test('keeps MongoDB security notices scoped inside one valid JSON document', async () => {
-    configReadSpy.mockImplementation(async () => ({
-      connection: {
-        system: 'mongodb',
-        host: 'localhost',
-        port: 27017,
-        user: '',
-        password: '',
-        database: 'db',
-      },
-      permission: 'query-only',
-      schema: {},
-      metadata: { version: '2.0' },
-      blacklist: { tables: [], columns: { users: ['secret'] } },
-      audit: { enabled: false, rotation: { max_bytes: 1024, max_entries: 10 } },
-    }) as never)
+    configReadSpy.mockImplementation(
+      async () =>
+        ({
+          connection: {
+            system: 'mongodb',
+            host: 'localhost',
+            port: 27017,
+            user: '',
+            password: '',
+            database: 'db',
+          },
+          permission: 'query-only',
+          schema: {},
+          metadata: { version: '2.0' },
+          blacklist: { tables: [], columns: { users: ['secret'] } },
+          audit: { enabled: false, rotation: { max_bytes: 1024, max_entries: 10 } },
+        }) as never
+    )
     createMongoAdapterSpy.mockImplementation(
       () => new FanOutAdapter('mongo', undefined, undefined, [{ id: 1, secret: 'hidden' }])
     )
@@ -481,7 +509,10 @@ describe('query command fan-out', () => {
 
     const stdout = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     const output = JSON.parse(stdout) as {
-      results: Array<{ rows: Record<string, unknown>[]; metadata: { securityNotification: string } }>
+      results: Array<{
+        rows: Record<string, unknown>[]
+        metadata: { securityNotification: string }
+      }>
     }
     expect(logSpy).toHaveBeenCalledTimes(1)
     expect(output.results).toHaveLength(2)
@@ -491,21 +522,24 @@ describe('query command fan-out', () => {
   })
 
   test('keeps Elasticsearch security notices scoped inside one valid JSON document', async () => {
-    configReadSpy.mockImplementation(async () => ({
-      connection: {
-        system: 'elasticsearch',
-        host: 'localhost',
-        port: 9200,
-        user: '',
-        password: '',
-        database: '',
-      },
-      permission: 'query-only',
-      schema: {},
-      metadata: { version: '2.0' },
-      blacklist: { tables: [], columns: { users: ['secret'] } },
-      audit: { enabled: false, rotation: { max_bytes: 1024, max_entries: 10 } },
-    }) as never)
+    configReadSpy.mockImplementation(
+      async () =>
+        ({
+          connection: {
+            system: 'elasticsearch',
+            host: 'localhost',
+            port: 9200,
+            user: '',
+            password: '',
+            database: '',
+          },
+          permission: 'query-only',
+          schema: {},
+          metadata: { version: '2.0' },
+          blacklist: { tables: [], columns: { users: ['secret'] } },
+          audit: { enabled: false, rotation: { max_bytes: 1024, max_entries: 10 } },
+        }) as never
+    )
     createElasticsearchAdapterSpy.mockImplementation(
       () => new FanOutAdapter('elasticsearch', undefined, undefined, [{ id: 1, secret: 'hidden' }])
     )
@@ -518,7 +552,10 @@ describe('query command fan-out', () => {
 
     const stdout = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     const output = JSON.parse(stdout) as {
-      results: Array<{ rows: Record<string, unknown>[]; metadata: { securityNotification: string } }>
+      results: Array<{
+        rows: Record<string, unknown>[]
+        metadata: { securityNotification: string }
+      }>
     }
     expect(logSpy).toHaveBeenCalledTimes(1)
     expect(output.results).toHaveLength(2)

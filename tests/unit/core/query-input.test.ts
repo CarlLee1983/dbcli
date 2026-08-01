@@ -13,9 +13,7 @@ function readers(overrides: Partial<QueryInputReaders> = {}) {
       stdinReads++
       return overrides.readStdin ? overrides.readStdin() : 'SELECT 1'
     },
-    ...(overrides.stdinIsInteractive
-      ? { stdinIsInteractive: overrides.stdinIsInteractive }
-      : {}),
+    ...(overrides.stdinIsInteractive ? { stdinIsInteractive: overrides.stdinIsInteractive } : {}),
   }
   return { value, fileReads: () => fileReads, stdinReads: () => stdinReads }
 }
@@ -111,13 +109,17 @@ describe('resolveQueryInput', () => {
 
   test('reads stdin when it is piped', async () => {
     const inputReaders = readers({ stdinIsInteractive: () => false })
-    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe('SELECT 1')
+    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe(
+      'SELECT 1'
+    )
     expect(inputReaders.stdinReads()).toBe(1)
   })
 
   test('a reader without the probe is treated as piped, not interactive', async () => {
     const inputReaders = readers()
-    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe('SELECT 1')
+    await expect(resolveQueryInput({ queryFile: '-' }, inputReaders.value)).resolves.toBe(
+      'SELECT 1'
+    )
     expect(inputReaders.stdinReads()).toBe(1)
   })
 })

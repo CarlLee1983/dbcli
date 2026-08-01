@@ -22,7 +22,9 @@ const outcomes: ConnectionQueryOutcome[] = [
 
 describe('multi-query result formatter', () => {
   test('renders ordered JSON outcomes with public limit metadata', () => {
-    expect(JSON.parse(new MultiQueryResultFormatter().format(outcomes, { format: 'json' }))).toEqual({
+    expect(
+      JSON.parse(new MultiQueryResultFormatter().format(outcomes, { format: 'json' }))
+    ).toEqual({
       results: [
         {
           connection: 'primary',
@@ -62,7 +64,9 @@ describe('multi-query result formatter', () => {
 
     expect(output).toContain('Connection: primary [ok]')
     expect(output).toContain('Connection: analytics [ok]')
-    expect(output.indexOf('Connection: primary')).toBeLessThan(output.indexOf('Connection: analytics'))
+    expect(output.indexOf('Connection: primary')).toBeLessThan(
+      output.indexOf('Connection: analytics')
+    )
     expect(output).toContain(' id ')
     expect(output).toContain(' event ')
   })

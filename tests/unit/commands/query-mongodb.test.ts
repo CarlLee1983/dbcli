@@ -9,9 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 class MockMongoAdapter implements QueryableAdapter {
-  lastExecuteOptions:
-    | { limit?: number; projection?: Record<string, 0 | 1> }
-    | undefined
+  lastExecuteOptions: { limit?: number; projection?: Record<string, 0 | 1> } | undefined
   rows: Record<string, unknown>[] = [{ _id: '1', name: 'Alice', city: 'Taipei' }]
   executeError?: Error
   disconnectError?: Error
@@ -165,9 +163,7 @@ describe('Query Command - MongoDB', () => {
       ...mongoConfig,
       blacklist: { tables: [], columns: { users: ['profile.email'] } },
     } as any)
-    mockAdapter.rows = [
-      { _id: '1', profile: { email: 'alice@example.com', city: 'Taipei' } },
-    ]
+    mockAdapter.rows = [{ _id: '1', profile: { email: 'alice@example.com', city: 'Taipei' } }]
     const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
     await queryCommand('{}', {
@@ -177,9 +173,7 @@ describe('Query Command - MongoDB', () => {
     })
 
     const formatted = formatterSpy.mock.calls[0]![0] as any
-    expect(formatted.rows).toEqual([
-      { profile: { email: '[REDACTED]', city: 'Taipei' } },
-    ])
+    expect(formatted.rows).toEqual([{ profile: { email: '[REDACTED]', city: 'Taipei' } }])
     logSpy.mockRestore()
   })
 

@@ -46,8 +46,7 @@ function installSynchronousRedirectedStdout(): void {
     callback?: (error?: Error | null) => void
   ): boolean => {
     const encoding = typeof encodingOrCallback === 'string' ? encodingOrCallback : undefined
-    const onComplete =
-      typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
+    const onComplete = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk, encoding) : Buffer.from(chunk)
     writeAll(bytes)
     onComplete?.()

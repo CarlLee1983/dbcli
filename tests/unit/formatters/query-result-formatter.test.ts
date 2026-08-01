@@ -146,9 +146,7 @@ describe('QueryResultFormatter - Table Format', () => {
     expect(formatter.format(truncated, { format: 'table' })).toContain(
       'Rows: 2 (truncated; limit 2) | Execution time: 42ms'
     )
-    expect(formatter.format(exact, { format: 'table' })).toContain(
-      'Rows: 2 | Execution time: 42ms'
-    )
+    expect(formatter.format(exact, { format: 'table' })).toContain('Rows: 2 | Execution time: 42ms')
   })
 
   test('truncates serialized nested objects without mutating result rows', () => {

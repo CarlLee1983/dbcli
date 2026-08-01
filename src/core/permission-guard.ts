@@ -145,10 +145,7 @@ export function stripCommentsAndStrings(
           // MySQL/MariaDB consume an immediately adjacent leading version
           // number as comment metadata, even when the payload has no space.
           .replace(/^\d+/, ' ')
-        result +=
-          ' ' +
-          stripCommentsAndStrings(executableBody, options) +
-          ' '
+        result += ' ' + stripCommentsAndStrings(executableBody, options) + ' '
         i = closingIndex === -1 ? sql.length : closingIndex + 2
         continue
       }

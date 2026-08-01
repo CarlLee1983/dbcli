@@ -257,8 +257,6 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
       serialized = String(value)
     }
 
-    return typeof truncate === 'number'
-      ? truncateSerializedCell(serialized, truncate)
-      : serialized
+    return typeof truncate === 'number' ? truncateSerializedCell(serialized, truncate) : serialized
   }
 }

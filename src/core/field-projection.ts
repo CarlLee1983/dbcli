@@ -132,10 +132,7 @@ function omitPath(value: unknown, segments: readonly string[]): unknown {
   return out
 }
 
-function cloneRecord(
-  value: Record<string, unknown>,
-  omittedKey?: string
-): Record<string, unknown> {
+function cloneRecord(value: Record<string, unknown>, omittedKey?: string): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(value)) {
     if (key !== omittedKey) defineData(out, key, child)

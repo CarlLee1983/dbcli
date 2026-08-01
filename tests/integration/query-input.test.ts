@@ -157,39 +157,23 @@ describe('query file and stdin CLI input', () => {
     expect(result.stderr).not.toContain('Query input is empty')
   })
 
-  test(
-    'stdin is consumed through EOF and then follows the normal config path',
-    async () => {
-      const result = await run(queryArgs(['-f', '-']), 'SELECT 1\n')
-      expect(result.code).toBe(1)
-      expect(result.stderr).toContain('missing')
-      expect(result.stderr).toContain('primary')
-      expect(result.stderr).not.toContain('Failed to read query from stdin')
-    },
-    5_000
-  )
+  test('stdin is consumed through EOF and then follows the normal config path', async () => {
+    const result = await run(queryArgs(['-f', '-']), 'SELECT 1\n')
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('missing')
+    expect(result.stderr).toContain('primary')
+    expect(result.stderr).not.toContain('Failed to read query from stdin')
+  }, 5_000)
 
-  test(
-    'MongoDB aggregation from stdin reaches the Mongo execution route unchanged',
-    async () => {
-      const pipeline = `[{"$match":{"message":{"$regex":"user's event"}}}]\n`
-      const result = await run(
-        [
-          '--config',
-          failingMongoConfigFile,
-          'query',
-          '--collection',
-          'raw_logs',
-          '-f',
-          '-',
-        ],
-        pipeline
-      )
-      expect(result.code).toBe(1)
-      expect(result.stderr).toMatch(/connect|invalid|parse|address|MongoDB/i)
-      expect(result.stderr).not.toContain('MongoDB 查詢必須是有效的 JSON')
-      expect(result.stderr).not.toContain('Query input is empty')
-    },
-    5_000
-  )
+  test('MongoDB aggregation from stdin reaches the Mongo execution route unchanged', async () => {
+    const pipeline = `[{"$match":{"message":{"$regex":"user's event"}}}]\n`
+    const result = await run(
+      ['--config', failingMongoConfigFile, 'query', '--collection', 'raw_logs', '-f', '-'],
+      pipeline
+    )
+    expect(result.code).toBe(1)
+    expect(result.stderr).toMatch(/connect|invalid|parse|address|MongoDB/i)
+    expect(result.stderr).not.toContain('MongoDB 查詢必須是有效的 JSON')
+    expect(result.stderr).not.toContain('Query input is empty')
+  }, 5_000)
 })

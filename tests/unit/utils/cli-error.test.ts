@@ -54,7 +54,11 @@ describe('CLI error presentation', () => {
 
   test('formats each hint on its own bounded line', () => {
     expect(
-      formatCliError({ message: 'Failed', code: 'E_TEST', hints: ['First action', 'Second action'] })
+      formatCliError({
+        message: 'Failed',
+        code: 'E_TEST',
+        hints: ['First action', 'Second action'],
+      })
     ).toBe('Failed\nCode: E_TEST\nHint: First action\nHint: Second action')
   })
 })

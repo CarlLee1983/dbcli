@@ -55,13 +55,18 @@ afterAll(async () => {
 describe('CLI stdout piping', () => {
   test('flushes JSON output larger than the pipe buffer before exiting', async () => {
     const pipeline =
-      process.platform === 'win32'
-        ? '""%DBCLI_TEST_BUN%" run "%DBCLI_TEST_CLI%" queries list --format json | "%DBCLI_TEST_BUN%" "%DBCLI_TEST_CONSUMER%""'
-        : '"$DBCLI_TEST_BUN" run "$DBCLI_TEST_CLI" queries list --format json | "$DBCLI_TEST_BUN" "$DBCLI_TEST_CONSUMER"'
+      '"$DBCLI_TEST_BUN" run "$DBCLI_TEST_CLI" queries list --format json | "$DBCLI_TEST_BUN" "$DBCLI_TEST_CONSUMER"'
+    const windowsPipelinePath = join(workspace, 'stdout-pipeline.cmd')
+    if (process.platform === 'win32') {
+      await Bun.write(
+        windowsPipelinePath,
+        '@echo off\r\n"%DBCLI_TEST_BUN%" run "%DBCLI_TEST_CLI%" queries list --format json | "%DBCLI_TEST_BUN%" "%DBCLI_TEST_CONSUMER%"\r\n'
+      )
+    }
     const child = Bun.spawn({
       cmd:
         process.platform === 'win32'
-          ? ['cmd.exe', '/d', '/s', '/c', pipeline]
+          ? ['cmd.exe', '/d', '/s', '/c', windowsPipelinePath]
           : ['/bin/sh', '-c', pipeline],
       cwd: workspace,
       env: {

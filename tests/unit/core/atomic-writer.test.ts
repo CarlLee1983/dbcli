@@ -2,18 +2,26 @@
  * Atomic File Writer - Unit Tests
  */
 
-import { test, expect } from 'bun:test'
-import { mkdir, rm } from 'node:fs/promises'
+import { afterEach, beforeEach, test, expect } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { AtomicFileWriter } from '@/core/atomic-writer'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+let testDirectory: string
+
+beforeEach(async () => {
+  testDirectory = await mkdtemp(join(tmpdir(), 'atomic-writer-test-'))
+})
+
+afterEach(async () => {
+  await rm(testDirectory, { recursive: true, force: true })
+})
 
 test('AtomicFileWriter - writes file successfully', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-test-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'test.json')
+  const filePath = join(testDirectory, 'test.json')
   const content = JSON.stringify({ test: 'data' })
 
   const result = await writer.write(filePath, content)
@@ -26,17 +34,12 @@ test('AtomicFileWriter - writes file successfully', async () => {
   // Verify file exists
   const file = Bun.file(filePath)
   expect(await file.exists()).toBe(true)
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - creates backup before overwrite', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-backup-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'test.txt')
+  const filePath = join(testDirectory, 'test.txt')
 
   // Write initial content
   await writer.write(filePath, 'original content', { createBackup: false })
@@ -54,17 +57,12 @@ test('AtomicFileWriter - creates backup before overwrite', async () => {
   // Verify backup contains original content
   const backupContent = await backupFile.text()
   expect(backupContent).toBe('original content')
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - writeJSON convenience method', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-json-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'data.json')
+  const filePath = join(testDirectory, 'data.json')
   const data = { name: 'test', value: 42 }
 
   const result = await writer.writeJSON(filePath, data)
@@ -77,17 +75,12 @@ test('AtomicFileWriter - writeJSON convenience method', async () => {
   const content = await file.json()
   expect(content.name).toBe('test')
   expect(content.value).toBe(42)
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - read method works', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-read-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'read-test.txt')
+  const filePath = join(testDirectory, 'read-test.txt')
   const content = 'test content for reading'
 
   // Write file first
@@ -96,14 +89,11 @@ test('AtomicFileWriter - read method works', async () => {
   // Read it back
   const readContent = await writer.read(filePath)
   expect(readContent).toBe(content)
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - read throws on missing file', async () => {
   const writer = new AtomicFileWriter()
-  const nonexistentPath = '/tmp/nonexistent-file-12345.txt'
+  const nonexistentPath = join(testDirectory, 'nonexistent-file.txt')
 
   try {
     await writer.read(nonexistentPath)
@@ -116,10 +106,8 @@ test('AtomicFileWriter - read throws on missing file', async () => {
 
 test('AtomicFileWriter - backup method works', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-backup-method-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'original.txt')
+  const filePath = join(testDirectory, 'original.txt')
   await writer.write(filePath, 'original', { createBackup: false })
 
   const backupPath = await writer.backup(filePath)
@@ -132,18 +120,13 @@ test('AtomicFileWriter - backup method works', async () => {
 
   const backupContent = await backupFile.text()
   expect(backupContent).toBe('original')
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - restore method works', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-restore-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const originalPath = join(testDir, 'original.txt')
-  const _backupPath = join(testDir, 'backup.txt')
+  const originalPath = join(testDirectory, 'original.txt')
+  const _backupPath = join(testDirectory, 'backup.txt')
 
   // Create original and backup
   await writer.write(originalPath, 'original content', { createBackup: false })
@@ -161,33 +144,23 @@ test('AtomicFileWriter - restore method works', async () => {
   // Verify restoration
   const content = await writer.read(originalPath)
   expect(content).toBe('original content')
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - no backup when disabled', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-no-backup-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'test.txt')
+  const filePath = join(testDirectory, 'test.txt')
 
   const result = await writer.write(filePath, 'content', { createBackup: false })
 
   expect(result.backupCreated).toBe(false)
   expect(result.backupPath).toBeUndefined()
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })
 
 test('AtomicFileWriter - handles Buffer content', async () => {
   const writer = new AtomicFileWriter()
-  const testDir = join(tmpdir(), `atomic-buffer-${Date.now()}`)
-  await mkdir(testDir, { recursive: true })
 
-  const filePath = join(testDir, 'buffer.bin')
+  const filePath = join(testDirectory, 'buffer.bin')
   const buffer = Buffer.from('binary content')
 
   const result = await writer.write(filePath, buffer, { createBackup: false })
@@ -197,7 +170,4 @@ test('AtomicFileWriter - handles Buffer content', async () => {
   const file = Bun.file(filePath)
   const content = await file.text()
   expect(content).toBe('binary content')
-
-  // Cleanup
-  await rm(testDir, { recursive: true, force: true })
 })

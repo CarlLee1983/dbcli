@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { writeV2Config, readV2Config, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
 import {
@@ -11,8 +13,8 @@ import {
 } from '@/core/config-v2-mutations'
 import type { DbcliConfigV2 } from '@/utils/validation'
 
-const TMP_DIR = '/tmp/dbcli-mutations-test'
-const PROJECT = join(TMP_DIR, '.dbcli')
+let tempDirectory: string
+let projectPath: string
 
 function baseConfig(): DbcliConfigV2 {
   return {
@@ -47,36 +49,38 @@ describe('envVarNameFor', () => {
 
 describe('writeConnectionSecret round-trip', () => {
   beforeEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
-    await Bun.$`mkdir -p ${PROJECT}`
-    await writeProjectBinding(PROJECT, getProjectStoragePath(PROJECT))
-    await writeV2Config(PROJECT, baseConfig())
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-mutations-test-'))
+    projectPath = join(tempDirectory, '.dbcli')
+    await mkdir(projectPath, { recursive: true })
+    await writeProjectBinding(projectPath, getProjectStoragePath(projectPath))
+    await writeV2Config(projectPath, baseConfig())
   })
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
+    await rm(tempDirectory, { recursive: true, force: true })
     delete process.env.DBCLI_PRIMARY_PASSWORD
   })
 
   test('secret written under connection envFile resolves back through reader', async () => {
-    await writeConnectionSecret(PROJECT, 'primary', 'password', 's3cret!')
-    const cfg = await readV2Config(PROJECT)
+    await writeConnectionSecret(projectPath, 'primary', 'password', 's3cret!')
+    const cfg = await readV2Config(projectPath)
     const resolved = resolveConnection(cfg, 'primary')
-    const storagePath = getProjectStoragePath(PROJECT)
+    const storagePath = getProjectStoragePath(projectPath)
     await loadConnectionEnv(resolved, storagePath)
     expect(process.env.DBCLI_PRIMARY_PASSWORD).toBe('s3cret!')
   })
 
   test('rewrites existing var in place (no duplicate lines)', async () => {
-    await writeConnectionSecret(PROJECT, 'primary', 'password', 'first')
-    await writeConnectionSecret(PROJECT, 'primary', 'password', 'second')
-    const envPath = join(getProjectStoragePath(PROJECT), '.env.primary')
+    await writeConnectionSecret(projectPath, 'primary', 'password', 'first')
+    await writeConnectionSecret(projectPath, 'primary', 'password', 'second')
+    const envPath = join(getProjectStoragePath(projectPath), '.env.primary')
     const text = await Bun.file(envPath).text()
     const lines = text.split('\n').filter((l) => l.startsWith('DBCLI_PRIMARY_PASSWORD='))
     expect(lines).toEqual(['DBCLI_PRIMARY_PASSWORD=second'])
   })
 
   test('throws on unknown connection', async () => {
-    await expect(writeConnectionSecret(PROJECT, 'nope', 'password', 'x')).rejects.toThrow(
+    await expect(writeConnectionSecret(projectPath, 'nope', 'password', 'x')).rejects.toThrow(
       "連線 'nope' 不存在"
     )
   })

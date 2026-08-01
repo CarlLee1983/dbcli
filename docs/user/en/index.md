@@ -1100,6 +1100,14 @@ switch. When a supported command uses `--recovery`, the existing JSON
 recovery envelope remains the only failure output on stdout and the duplicate
 human stderr message is suppressed.
 
+### Complete redirected stdout
+
+When stdout is piped or redirected, `dbcli` completes the entire write before
+exiting. Large JSON, CSV, and HTML results therefore remain intact through
+commands such as `dbcli query --format json | jq ...` and
+`dbcli export ... | cat > result.json`; a successful exit never represents a
+partially written stdout buffer.
+
 ### Query-only mode auto-LIMIT
 
 `dbcli` auto-appends `LIMIT 1000` to `SELECT` queries in `query-only` mode. This

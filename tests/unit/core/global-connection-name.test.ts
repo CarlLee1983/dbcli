@@ -8,9 +8,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { setGlobalConnectionName, getGlobalConnectionName, configModule } from '@/core/config'
 import { parseConnectionNames, resolveConnectionSelector } from '@/core/connection-selector'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TMP_DIR = '/tmp/dbcli-global-conn-test'
+let tempDirectory: string
+let configPath: string
 
 // V2 config fixture，含兩個 named connection
 const V2_CONFIG = {
@@ -42,12 +45,14 @@ describe('全域連線名稱（--use 串接）', () => {
   beforeEach(async () => {
     // 重設全域狀態
     setGlobalConnectionName(undefined)
-    await Bun.$`mkdir -p ${TMP_DIR}/.dbcli`
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-global-conn-test-'))
+    configPath = join(tempDirectory, '.dbcli')
+    await mkdir(configPath, { recursive: true })
   })
 
   afterEach(async () => {
     setGlobalConnectionName(undefined)
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   describe('setGlobalConnectionName / getGlobalConnectionName', () => {
@@ -68,8 +73,6 @@ describe('全域連線名稱（--use 串接）', () => {
   })
 
   describe('configModule.read() 使用全域連線名稱', () => {
-    const configPath = join(TMP_DIR, '.dbcli')
-
     beforeEach(async () => {
       await Bun.file(join(configPath, 'config.json')).write(JSON.stringify(V2_CONFIG, null, 2))
     })

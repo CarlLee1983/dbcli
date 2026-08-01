@@ -1,5 +1,8 @@
 // tests/core/repl/repl-engine-redis.test.ts
-import { test, expect } from 'bun:test'
+import { afterEach, beforeEach, test, expect } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ReplEngine } from '../../../src/core/repl/repl-engine'
 import type { ReplContext } from '../../../src/core/repl/types'
 import type { DatabaseAdapter } from '../../../src/adapters/types'
@@ -21,17 +24,29 @@ function stubAdapter(rows: Record<string, unknown>[]): DatabaseAdapter {
   } as unknown as DatabaseAdapter
 }
 
-const redisContext: ReplContext = {
-  configPath: '/tmp/.dbcli',
-  permission: 'query-only',
-  system: 'redis',
-  tableNames: [],
-  columnsByTable: {},
-  commandNames: [],
-}
+let tempDirectory: string
+let historyPath: string
+let redisContext: ReplContext
+
+beforeEach(async () => {
+  tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-repl-redis-test-'))
+  historyPath = join(tempDirectory, 'history')
+  redisContext = {
+    configPath: join(tempDirectory, '.dbcli'),
+    permission: 'query-only',
+    system: 'redis',
+    tableNames: [],
+    columnsByTable: {},
+    commandNames: [],
+  }
+})
+
+afterEach(async () => {
+  await rm(tempDirectory, { recursive: true, force: true })
+})
 
 test('Redis: bare single-line GET executes (no semicolon)', async () => {
-  const engine = new ReplEngine(stubAdapter([{ value: 'OK' }]), redisContext, '/tmp/.hist', null)
+  const engine = new ReplEngine(stubAdapter([{ value: 'OK' }]), redisContext, historyPath, null)
   const result = await engine.processInput('GET mykey')
   expect(result.action).toBe('continue')
   expect(result.output).toContain('OK')
@@ -41,7 +56,7 @@ test('Redis: SCAN 0 executes (no semicolon)', async () => {
   const engine = new ReplEngine(
     stubAdapter([{ index: 0, value: 'k1' }]),
     redisContext,
-    '/tmp/.hist',
+    historyPath,
     null
   )
   const result = await engine.processInput('SCAN 0')
@@ -54,7 +69,7 @@ test('SQL: a non-keyword line without ; does NOT execute (regression guard)', as
   const engine = new ReplEngine(
     stubAdapter([{ value: 'should-not-run' }]),
     sqlContext,
-    '/tmp/.hist',
+    historyPath,
     null
   )
   // "foo bar" is not a SQL keyword and has no ; → must be treated as unknown command, not executed.
@@ -64,7 +79,7 @@ test('SQL: a non-keyword line without ; does NOT execute (regression guard)', as
 
 test('SQL: incomplete statement without ; stays in multiline mode', async () => {
   const sqlContext: ReplContext = { ...redisContext, system: 'postgresql' }
-  const engine = new ReplEngine(stubAdapter([]), sqlContext, '/tmp/.hist', null)
+  const engine = new ReplEngine(stubAdapter([]), sqlContext, historyPath, null)
   const result = await engine.processInput('SELECT * FROM users')
   expect(result.action).toBe('multiline')
 })

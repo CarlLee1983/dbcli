@@ -8,8 +8,9 @@ import { test, expect, describe, beforeAll, afterAll } from 'bun:test'
 import { SchemaLayeredLoader } from '@/core/schema-loader'
 import { SchemaIndexBuilder } from '@/core/schema-index'
 import type { DbcliConfig } from '@/types'
-import { join } from 'path'
-import { mkdir, rm } from 'fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Mock config
 const mockConfig: DbcliConfig = {
@@ -46,7 +47,7 @@ describe('SchemaLayeredLoader', () => {
   let testDbcliPath: string
 
   beforeAll(async () => {
-    testDbcliPath = join('/tmp', `dbcli-loader-test-${Date.now()}`)
+    testDbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-loader-test-'))
     await mkdir(join(testDbcliPath, 'schemas', 'cold'), { recursive: true })
 
     // Create index and hot schemas
@@ -142,17 +143,18 @@ describe('SchemaLayeredLoader', () => {
   })
 
   test('initialize: graceful degradation on missing files', async () => {
-    const emptyPath = join('/tmp', `dbcli-empty-loader-${Date.now()}`)
+    const emptyPath = await mkdtemp(join(tmpdir(), 'dbcli-empty-loader-'))
     await mkdir(join(emptyPath, 'schemas'), { recursive: true })
 
-    const loader = new SchemaLayeredLoader(emptyPath)
-    const result = await loader.initialize()
+    try {
+      const loader = new SchemaLayeredLoader(emptyPath)
+      const result = await loader.initialize()
 
-    expect(result.cache).toBeDefined()
-    expect(result.loadTime).toBeGreaterThan(0)
-
-    // Cleanup
-    await rm(emptyPath, { recursive: true, force: true })
+      expect(result.cache).toBeDefined()
+      expect(result.loadTime).toBeGreaterThan(0)
+    } finally {
+      await rm(emptyPath, { recursive: true, force: true })
+    }
   })
 
   test('getBenchmark: returns zeros when uninitialized', () => {
@@ -183,22 +185,21 @@ describe('SchemaLayeredLoader', () => {
   })
 
   test('initialize: creates directories if missing', async () => {
-    const newPath = join('/tmp', `dbcli-new-loader-${Date.now()}`)
+    // mkdtemp creates only the base directory, not schemas/.
+    const newPath = await mkdtemp(join(tmpdir(), 'dbcli-new-loader-'))
 
-    // Only create base directory, not schemas/
-    await mkdir(newPath, { recursive: true })
+    try {
+      const loader = new SchemaLayeredLoader(newPath)
+      const result = await loader.initialize()
 
-    const loader = new SchemaLayeredLoader(newPath)
-    const result = await loader.initialize()
+      expect(result.cache).toBeDefined()
 
-    expect(result.cache).toBeDefined()
-
-    // Verify directories were created
-    const _schemasDir = Bun.file(join(newPath, 'schemas'))
-    const _coldDir = Bun.file(join(newPath, 'schemas', 'cold'))
-
-    // Cleanup
-    await rm(newPath, { recursive: true, force: true })
+      // Verify directories were created
+      const _schemasDir = Bun.file(join(newPath, 'schemas'))
+      const _coldDir = Bun.file(join(newPath, 'schemas', 'cold'))
+    } finally {
+      await rm(newPath, { recursive: true, force: true })
+    }
   })
 
   test('multiple initialize calls are safe', async () => {

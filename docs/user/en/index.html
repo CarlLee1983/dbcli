@@ -955,6 +955,9 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
             <h3>Bounded CLI error output</h3>
             <p>Connection-bearing discovery and read failures exit with code <code>1</code> and are presented once. In normal mode, stderr contains a readable message plus a stable error code and actionable hints when available; it does not contain a JavaScript stack, bundled source excerpt, or source-code frame. Add <code>-v</code> (or <code>-vv</code>) before the command to include the stack for diagnostics — the flag must precede the subcommand (<code>dbcli -v list</code>, not <code>dbcli list -v</code>). The write commands (<code>insert</code>, <code>update</code>, <code>delete</code>) and <code>q</code> keep their own localized wording for connection failures and honour the same stack switch. When a supported command uses <code>--recovery</code>, the existing JSON recovery envelope remains the only failure output on stdout and the duplicate human stderr message is suppressed.</p>
 
+            <h3>Complete redirected stdout</h3>
+            <p>When stdout is piped or redirected, <code>dbcli</code> completes the entire write before exiting. Large JSON, CSV, and HTML results therefore remain intact through commands such as <code>dbcli query --format json | jq ...</code> and <code>dbcli export ... | cat &gt; result.json</code>; a successful exit never represents a partially written stdout buffer.</p>
+
             <h3>Query-only mode auto-LIMIT</h3>
             <p><code>dbcli</code> auto-appends <code>LIMIT 1000</code> to <code>SELECT</code> queries in <code>query-only</code> mode. This <strong>does not</strong> apply to:</p>
             <ul>

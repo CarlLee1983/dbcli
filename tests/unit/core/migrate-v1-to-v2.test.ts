@@ -1,12 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrateV1ToV2 } from '@/core/config-v2-mutations'
 import { writeV2Config, readV2Config, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
 import type { DbcliConfig } from '@/utils/validation'
 
-const TMP_DIR = '/tmp/dbcli-migrate-test'
-const PROJECT = join(TMP_DIR, '.dbcli')
+let tempDirectory: string
+let projectPath: string
 
 function v1(): DbcliConfig {
   return {
@@ -46,15 +48,13 @@ describe('migrateV1ToV2', () => {
   })
 
   test('migrated config + legacy .env.local round-trips the password', async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
-    await Bun.$`mkdir -p ${PROJECT}`
-    const storagePath = getProjectStoragePath(PROJECT)
-    await writeProjectBinding(PROJECT, storagePath)
+    const storagePath = getProjectStoragePath(projectPath)
+    await writeProjectBinding(projectPath, storagePath)
     await Bun.write(join(storagePath, '.env.local'), 'DB_PASSWORD=legacy-pw\n')
 
-    await writeV2Config(PROJECT, migrateV1ToV2(v1()))
+    await writeV2Config(projectPath, migrateV1ToV2(v1()))
 
-    const cfg = await readV2Config(PROJECT)
+    const cfg = await readV2Config(projectPath)
     const resolved = resolveConnection(cfg, 'default')
     await loadConnectionEnv(resolved, storagePath)
     expect(process.env.DB_PASSWORD).toBe('legacy-pw')
@@ -76,10 +76,14 @@ describe('migrateV1ToV2', () => {
   })
 
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
+    await rm(tempDirectory, { recursive: true, force: true })
     delete process.env.DB_PASSWORD
   })
   beforeEach(async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-migrate-test-'))
+    projectPath = join(tempDirectory, '.dbcli')
+    await mkdir(projectPath, { recursive: true })
     delete process.env.DB_PASSWORD
   })
 })

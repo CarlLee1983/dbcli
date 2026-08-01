@@ -1,11 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { writeV2Config, readV2Config } from '@/core/config-v2'
 import { writeProjectBinding, getProjectStoragePath } from '@/core/config-binding'
 import type { DbcliConfigV2 } from '@/utils/validation'
 
-const TMP = '/tmp/dbcli-atomic-test'
-const PROJECT = join(TMP, '.dbcli')
+let tempDirectory: string
+let projectPath: string
 
 function cfg(defaultName: string): DbcliConfigV2 {
   return {
@@ -32,24 +34,26 @@ function cfg(defaultName: string): DbcliConfigV2 {
 
 describe('writeV2Config atomic write', () => {
   beforeEach(async () => {
-    await Bun.$`rm -rf ${TMP}`
-    await Bun.$`mkdir -p ${PROJECT}`
-    await writeProjectBinding(PROJECT, getProjectStoragePath(PROJECT))
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-atomic-test-'))
+    projectPath = join(tempDirectory, '.dbcli')
+    await mkdir(projectPath, { recursive: true })
+    await writeProjectBinding(projectPath, getProjectStoragePath(projectPath))
   })
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP}`
+    await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   test('writes config readable back; leaves no .tmp behind', async () => {
-    await writeV2Config(PROJECT, cfg('primary'))
-    expect((await readV2Config(PROJECT)).default).toBe('primary')
-    const storage = getProjectStoragePath(PROJECT)
+    await writeV2Config(projectPath, cfg('primary'))
+    expect((await readV2Config(projectPath)).default).toBe('primary')
+    const storage = getProjectStoragePath(projectPath)
     expect(await Bun.file(join(storage, 'config.json.tmp')).exists()).toBe(false)
   })
 
   test('overwriting keeps the file valid (no partial state)', async () => {
-    await writeV2Config(PROJECT, cfg('primary'))
-    await writeV2Config(PROJECT, cfg('secondary'))
-    expect((await readV2Config(PROJECT)).default).toBe('secondary')
+    await writeV2Config(projectPath, cfg('primary'))
+    await writeV2Config(projectPath, cfg('secondary'))
+    expect((await readV2Config(projectPath)).default).toBe('secondary')
   })
 })

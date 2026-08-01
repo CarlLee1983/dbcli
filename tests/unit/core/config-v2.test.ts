@@ -7,17 +7,20 @@ import {
   patchConnectionSchema,
 } from '@/core/config-v2'
 import { DbcliConfigV2Schema } from '@/utils/validation'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TMP_DIR = '/tmp/dbcli-config-v2-test'
+let tempDirectory: string
 
 describe('config-v2', () => {
   beforeEach(async () => {
-    await Bun.$`mkdir -p ${TMP_DIR}/.dbcli`
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-config-v2-test-'))
+    await mkdir(join(tempDirectory, '.dbcli'), { recursive: true })
   })
 
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   describe('detectConfigVersion', () => {
@@ -101,7 +104,7 @@ describe('config-v2', () => {
 
   describe('readV2Config / writeV2Config', () => {
     test('should round-trip a v2 config', async () => {
-      const configPath = join(TMP_DIR, '.dbcli')
+      const configPath = join(tempDirectory, '.dbcli')
       const config = {
         version: 2 as const,
         default: 'local',
@@ -162,7 +165,7 @@ describe('config-v2', () => {
     }
 
     test('writes schema to correct connection slot', async () => {
-      const configPath = join(TMP_DIR, '.dbcli')
+      const configPath = join(tempDirectory, '.dbcli')
       await writeV2Config(configPath, BASE_CONFIG)
 
       const stagingSchema = { users: { name: 'users', columns: [{ name: 'id' }] } }
@@ -174,7 +177,7 @@ describe('config-v2', () => {
     })
 
     test('two connections stay isolated', async () => {
-      const configPath = join(TMP_DIR, '.dbcli')
+      const configPath = join(tempDirectory, '.dbcli')
       await writeV2Config(configPath, BASE_CONFIG)
 
       const stagingSchema = { users: { name: 'users' } }
@@ -189,7 +192,7 @@ describe('config-v2', () => {
     })
 
     test('updates metadata without touching connections', async () => {
-      const configPath = join(TMP_DIR, '.dbcli')
+      const configPath = join(tempDirectory, '.dbcli')
       await writeV2Config(configPath, BASE_CONFIG)
 
       const ts = '2026-04-21T10:00:00.000Z'
@@ -208,7 +211,7 @@ describe('config-v2', () => {
     })
 
     test('second patch replaces first for same connection', async () => {
-      const configPath = join(TMP_DIR, '.dbcli')
+      const configPath = join(tempDirectory, '.dbcli')
       await writeV2Config(configPath, BASE_CONFIG)
 
       await patchConnectionSchema(configPath, 'staging', { users: { name: 'users' } })

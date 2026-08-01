@@ -6,8 +6,9 @@
 
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test'
 import { SchemaCacheManager } from '@/core/schema-cache'
-import { join } from 'path'
-import { mkdir, rm } from 'fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Mock data
 const mockTableSchema = {
@@ -35,7 +36,7 @@ describe('SchemaCacheManager', () => {
 
   beforeAll(async () => {
     // Create temporary test directory
-    testDbcliPath = join('/tmp', `dbcli-test-${Date.now()}`)
+    testDbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-test-'))
     const schemasDir = join(testDbcliPath, 'schemas', 'cold')
     await mkdir(schemasDir, { recursive: true })
 
@@ -153,17 +154,18 @@ describe('SchemaCacheManager', () => {
   })
 
   test('getTableSchema: returns null when index missing', async () => {
-    const emptyPath = join('/tmp', `dbcli-empty-${Date.now()}`)
+    const emptyPath = await mkdtemp(join(tmpdir(), 'dbcli-empty-'))
     await mkdir(join(emptyPath, 'schemas'), { recursive: true })
 
-    const manager = new SchemaCacheManager(emptyPath)
-    await manager.initialize()
+    try {
+      const manager = new SchemaCacheManager(emptyPath)
+      await manager.initialize()
 
-    const schema = await manager.getTableSchema('users')
-    expect(schema).toBeNull()
-
-    // Cleanup
-    await rm(emptyPath, { recursive: true, force: true })
+      const schema = await manager.getTableSchema('users')
+      expect(schema).toBeNull()
+    } finally {
+      await rm(emptyPath, { recursive: true, force: true })
+    }
   })
 
   test('findFieldsByName: finds field in hot table', async () => {
@@ -242,40 +244,38 @@ describe('SchemaCacheManager', () => {
 
 describe('SchemaCacheManager connectionName isolation', () => {
   test('reads layered files from schemas/<name>/', async () => {
-    const testDbcliPath = join('/tmp', `dbcli-cache-conn-${Date.now()}`)
+    const testDbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-cache-conn-'))
     const root = join(testDbcliPath, 'schemas', 'staging')
     await mkdir(join(root, 'cold'), { recursive: true })
 
-    const indexData = {
-      tables: {
-        users: {
-          location: 'hot',
-          file: 'hot-schemas.json',
-          estimatedSize: 1,
-          lastModified: new Date().toISOString(),
-        },
-      },
-      hotTables: ['users'],
-      metadata: {
-        version: '1.0',
-        lastRefreshed: new Date().toISOString(),
-        totalTables: 1,
-      },
-    }
-    await Bun.file(join(root, 'index.json')).write(JSON.stringify(indexData, null, 2))
-    await Bun.file(join(root, 'hot-schemas.json')).write(
-      JSON.stringify({ schemas: { users: mockTableSchema } }, null, 2)
-    )
-
-    const manager = new SchemaCacheManager(testDbcliPath, { connectionName: 'staging' })
-    await manager.initialize()
-    const schema = await manager.getTableSchema('users')
-    expect(schema?.name).toBe('users')
-
     try {
+      const indexData = {
+        tables: {
+          users: {
+            location: 'hot',
+            file: 'hot-schemas.json',
+            estimatedSize: 1,
+            lastModified: new Date().toISOString(),
+          },
+        },
+        hotTables: ['users'],
+        metadata: {
+          version: '1.0',
+          lastRefreshed: new Date().toISOString(),
+          totalTables: 1,
+        },
+      }
+      await Bun.file(join(root, 'index.json')).write(JSON.stringify(indexData, null, 2))
+      await Bun.file(join(root, 'hot-schemas.json')).write(
+        JSON.stringify({ schemas: { users: mockTableSchema } }, null, 2)
+      )
+
+      const manager = new SchemaCacheManager(testDbcliPath, { connectionName: 'staging' })
+      await manager.initialize()
+      const schema = await manager.getTableSchema('users')
+      expect(schema?.name).toBe('users')
+    } finally {
       await rm(testDbcliPath, { recursive: true, force: true })
-    } catch {
-      /* ignore */
     }
   })
 })

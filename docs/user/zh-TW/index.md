@@ -1021,6 +1021,13 @@ stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，�
 `--recovery` 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制
 重複的人類可讀 stderr 訊息。
 
+### 完整的 stdout 管線輸出
+
+stdout 經過管線或重新導向時，`dbcli` 會在完整寫入後才結束。大型 JSON、
+CSV 與 HTML 結果經過 `dbcli query --format json | jq ...` 或
+`dbcli export ... | cat > result.json` 等指令時仍會保持完整；成功的退出狀態
+不會代表只寫入部分 stdout buffer。
+
 ### Query-only auto-LIMIT 範圍
 
 `dbcli` 會在 `query-only` 模式對 `SELECT` 自動加 `LIMIT 1000`。**不**套用於:

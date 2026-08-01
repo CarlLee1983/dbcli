@@ -1,10 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from 'bun:test'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getProjectStoragePath, writeProjectBinding } from '@/core/config-binding'
 import { writeV2Config } from '@/core/config-v2'
 
-const TMP_DIR = '/tmp/dbcli-multi-conn-integration'
-const CONFIG_DIR = join(TMP_DIR, '.dbcli')
+let tempDirectory: string
+let configDirectory: string
 
 const CLI = join(import.meta.dir, '../../src/cli.ts')
 
@@ -33,21 +35,21 @@ const v2ConfigBase = {
 
 describe('multi-connection integration', () => {
   beforeEach(async () => {
-    await Bun.$`rm -rf ${getProjectStoragePath(CONFIG_DIR)}`
-    await Bun.$`rm -rf ${CONFIG_DIR}`
-    await Bun.$`mkdir -p ${CONFIG_DIR}`
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-multi-conn-integration-'))
+    configDirectory = join(tempDirectory, '.dbcli')
+    await mkdir(configDirectory, { recursive: true })
   })
 
   afterEach(async () => {
-    await Bun.$`rm -rf ${getProjectStoragePath(CONFIG_DIR)}`
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(getProjectStoragePath(configDirectory), { recursive: true, force: true })
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   test('init --conn-name 建立 binding 並將 v2 設定寫入 home storage', async () => {
-    await Bun.$`bun run ${CLI} --config ${CONFIG_DIR} init --conn-name local --system postgresql --host localhost --port 5432 --user test --password test --name testdb --skip-test --no-interactive --force`
+    await Bun.$`bun run ${CLI} --config ${configDirectory} init --conn-name local --system postgresql --host localhost --port 5432 --user test --password test --name testdb --skip-test --no-interactive --force`
 
-    const projectConfig = JSON.parse(await Bun.file(join(CONFIG_DIR, 'config.json')).text())
-    const storagePath = getProjectStoragePath(CONFIG_DIR)
+    const projectConfig = JSON.parse(await Bun.file(join(configDirectory, 'config.json')).text())
+    const storagePath = getProjectStoragePath(configDirectory)
     const storedConfig = JSON.parse(await Bun.file(join(storagePath, 'config.json')).text())
 
     expect(projectConfig.version).toBe(3)
@@ -59,7 +61,7 @@ describe('multi-connection integration', () => {
   })
 
   test('use 指令切換預設連線', async () => {
-    const storagePath = getProjectStoragePath(CONFIG_DIR)
+    const storagePath = getProjectStoragePath(configDirectory)
     const v2Config = {
       ...v2ConfigBase,
       connections: {
@@ -76,26 +78,26 @@ describe('multi-connection integration', () => {
       },
     }
     await writeV2Config(storagePath, v2Config)
-    await writeProjectBinding(CONFIG_DIR, storagePath)
+    await writeProjectBinding(configDirectory, storagePath)
 
-    await Bun.$`bun run ${CLI} --config ${CONFIG_DIR} use staging`
+    await Bun.$`bun run ${CLI} --config ${configDirectory} use staging`
 
     const updated = JSON.parse(await Bun.file(join(storagePath, 'config.json')).text())
     expect(updated.default).toBe('staging')
   })
 
   test('use --list 顯示所有連線', async () => {
-    const storagePath = getProjectStoragePath(CONFIG_DIR)
+    const storagePath = getProjectStoragePath(configDirectory)
     await writeV2Config(storagePath, v2ConfigBase)
-    await writeProjectBinding(CONFIG_DIR, storagePath)
+    await writeProjectBinding(configDirectory, storagePath)
 
-    const output = await Bun.$`bun run ${CLI} --config ${CONFIG_DIR} use --list`.text()
+    const output = await Bun.$`bun run ${CLI} --config ${configDirectory} use --list`.text()
     expect(output).toContain('local')
     expect(output).toContain('postgresql')
   })
 
   test('init --remove 移除連線', async () => {
-    const storagePath = getProjectStoragePath(CONFIG_DIR)
+    const storagePath = getProjectStoragePath(configDirectory)
     const v2Config = {
       ...v2ConfigBase,
       connections: {
@@ -112,9 +114,9 @@ describe('multi-connection integration', () => {
       },
     }
     await writeV2Config(storagePath, v2Config)
-    await writeProjectBinding(CONFIG_DIR, storagePath)
+    await writeProjectBinding(configDirectory, storagePath)
 
-    await Bun.$`bun run ${CLI} --config ${CONFIG_DIR} init --remove staging`
+    await Bun.$`bun run ${CLI} --config ${configDirectory} init --remove staging`
 
     const updated = JSON.parse(await Bun.file(join(storagePath, 'config.json')).text())
     expect(updated.connections.staging).toBeUndefined()
@@ -122,11 +124,11 @@ describe('multi-connection integration', () => {
   })
 
   test('init --rename 重新命名連線', async () => {
-    const storagePath = getProjectStoragePath(CONFIG_DIR)
+    const storagePath = getProjectStoragePath(configDirectory)
     await writeV2Config(storagePath, v2ConfigBase)
-    await writeProjectBinding(CONFIG_DIR, storagePath)
+    await writeProjectBinding(configDirectory, storagePath)
 
-    await Bun.$`bun run ${CLI} --config ${CONFIG_DIR} init --rename local:production`
+    await Bun.$`bun run ${CLI} --config ${configDirectory} init --rename local:production`
 
     const updated = JSON.parse(await Bun.file(join(storagePath, 'config.json')).text())
     expect(updated.connections.local).toBeUndefined()

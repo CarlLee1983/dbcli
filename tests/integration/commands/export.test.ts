@@ -3,6 +3,9 @@
  */
 
 import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { exportCommand } from '@/commands/export'
 
 describe('dbcli export command', () => {
@@ -71,14 +74,24 @@ describe('dbcli export command', () => {
   })
 
   test('export command accepts optional output path', async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-export-test-'))
+
     try {
-      await exportCommand('SELECT 1', { format: 'json', output: '/tmp/test.json', force: true })
-    } catch {
-      // Expected: process.exit(1) via mock (no config)
+      try {
+        await exportCommand('SELECT 1', {
+          format: 'json',
+          output: join(tempDirectory, 'test.json'),
+          force: true,
+        })
+      } catch {
+        // Expected: process.exit(1) via mock (no config)
+      }
+      // Should fail on database, not on output parameter
+      const errorCalls = (errorSpy as any).mock.calls.flat().join(' ')
+      expect(errorCalls).not.toContain('output')
+    } finally {
+      await rm(tempDirectory, { recursive: true, force: true })
     }
-    // Should fail on database, not on output parameter
-    const errorCalls = (errorSpy as any).mock.calls.flat().join(' ')
-    expect(errorCalls).not.toContain('output')
   })
 
   test('export command handles no config gracefully', async () => {

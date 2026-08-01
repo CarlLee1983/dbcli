@@ -7,6 +7,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { setGlobalConnectionName, getGlobalConnectionName, configModule } from '@/core/config'
+import { parseConnectionNames, resolveConnectionSelector } from '@/core/connection-selector'
 import { join } from 'path'
 
 const TMP_DIR = '/tmp/dbcli-global-conn-test'
@@ -104,5 +105,45 @@ describe('全域連線名稱（--use 串接）', () => {
       const config2 = await configModule.read(configPath)
       expect(config2.connection.host).toBe('staging.db.local')
     })
+  })
+})
+
+describe('invocation connection selector precedence', () => {
+  test('command and root selectors accept the same explicit value', () => {
+    expect(resolveConnectionSelector({ root: 'staging', command: 'staging' })).toBe('staging')
+  })
+
+  test('different root and command selectors fail clearly', () => {
+    expect(() => resolveConnectionSelector({ root: 'primary', command: 'staging' })).toThrow(
+      /Conflicting connection selectors.*primary.*staging/
+    )
+  })
+
+  test('an explicit selector wins over DBCLI_CONNECTION', () => {
+    expect(resolveConnectionSelector({ command: 'staging', environment: 'dev' })).toBe('staging')
+    expect(resolveConnectionSelector({ root: 'staging', environment: 'dev' })).toBe('staging')
+  })
+
+  test('DBCLI_CONNECTION is trimmed and an empty value is unset', () => {
+    expect(resolveConnectionSelector({ environment: '  staging  ' })).toBe('staging')
+    expect(resolveConnectionSelector({ environment: '   ' })).toBeUndefined()
+  })
+
+  test('no selector preserves configured-default fallback', () => {
+    expect(resolveConnectionSelector({})).toBeUndefined()
+  })
+
+  test('explicit fan-out names are trimmed and preserve input order', () => {
+    expect(parseConnectionNames(' primary, staging ,analytics ')).toEqual([
+      'primary',
+      'staging',
+      'analytics',
+    ])
+  })
+
+  test('explicit fan-out rejects empty and duplicate names', () => {
+    for (const selector of ['primary,,staging', ',primary', 'primary,', 'primary, primary']) {
+      expect(() => parseConnectionNames(selector)).toThrow(/empty|duplicate/i)
+    }
   })
 })

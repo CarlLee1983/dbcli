@@ -35,21 +35,13 @@ describe('dbcli export command', () => {
   })
 
   test('export command requires SQL argument', async () => {
-    try {
-      await exportCommand('', { format: 'json' })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('', { format: 'json' })).rejects.toThrow('Query required')
   })
 
   test('export command requires format option', async () => {
-    try {
-      await exportCommand('SELECT 1', { format: undefined as any })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('SELECT 1', { format: undefined as any })).rejects.toThrow(
+      '--format'
+    )
   })
 
   test('export command accepts json format', async () => {
@@ -75,12 +67,7 @@ describe('dbcli export command', () => {
   })
 
   test('export command rejects invalid format', async () => {
-    try {
-      await exportCommand('SELECT 1', { format: 'xml' as any })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('SELECT 1', { format: 'xml' as any })).rejects.toThrow('--format')
   })
 
   test('export command accepts optional output path', async () => {
@@ -107,11 +94,6 @@ describe('dbcli export command', () => {
   })
 
   test('export command requires non-empty SQL', async () => {
-    try {
-      await exportCommand('   ', { format: 'json' })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('   ', { format: 'json' })).rejects.toThrow('Query required')
   })
 })

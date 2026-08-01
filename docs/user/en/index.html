@@ -181,7 +181,17 @@ bun install -g @carllee1983/dbcli</code></pre>
             <p>Switch between Production, Staging, and Local environments:</p>
             <pre><code>dbcli use --list         # List all connection names
 dbcli use staging        # Switch your default connection
-dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code></pre>
+dbcli --use prod query "SELECT count(*) FROM users" # Global one-shot selector
+dbcli query --use prod "SELECT count(*) FROM users" # Supported command-level form
+DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # Environment selector</code></pre>
+            <p>Selection precedence is explicit <code>--use</code>, then <code>DBCLI_CONNECTION</code>, then the configured default. Environment values are trimmed and empty values are ignored. One-shot selectors never change the persistent default. The command-level form is supported by <code>query</code>, <code>schema</code>, <code>list</code>, <code>export</code>, and <code>check</code>; use the global form before other commands. Conflicting root-level and command-level values fail clearly.</p>
+            <h3>Read-only query fan-out</h3>
+            <p>An explicit comma-separated <code>--use</code> runs one read-only query against several named connections. The root-level and command-level forms are equivalent:</p>
+            <pre><code>dbcli --use primary,staging query "SELECT count(*) FROM users" --format json
+dbcli query --use primary,staging "SELECT count(*) FROM users"</code></pre>
+            <p>Names are trimmed and results preserve selector order. Empty or duplicate names are rejected. A selector containing one name follows the existing single-connection path. Fan-out is explicit-only: <code>DBCLI_CONNECTION</code> remains one literal connection name and is never split on commas. Neither form changes the persistent default connection.</p>
+            <p>Before any adapter connects, dbcli loads and validates every selected configuration. SQL fan-out permits only read-only classifications (<code>SELECT</code>, <code>SHOW</code>, <code>DESCRIBE</code>, and <code>EXPLAIN</code>); MongoDB permits filter objects and read-only aggregation pipelines but rejects top-level <code>$out</code> or <code>$merge</code> stages; Elasticsearch permits searches only. Redis fan-out is not supported. A multi-connection query also rejects <code>--recovery</code>, <code>--ui</code>, and CSV or HTML output; use <code>--format table</code> (default) or <code>--format json</code>.</p>
+            <p>Each connection runs independently with its own adapter, blacklist filtering, row-limit/truncation metadata, audit entry, timing, and disconnect. A failure on one connection does not cancel or hide the others. JSON returns an ordered <code>results</code> array with a labeled <code>ok</code> or <code>error</code> outcome per connection; table output renders a separate labeled section for each schema. The aggregate exit code is <code>0</code> when all succeed, <code>2</code> for mixed success and failure, and <code>1</code> when all fail or the request is rejected before execution.</p>
         </section>
 
         <!-- doc-key: command-reference -->
@@ -239,6 +249,31 @@ dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format j
 dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
 dbcli delete products --where '{"_id":"abc"}' --plan --format json
 dbcli delete 'user:42' --where '' --plan --format json</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">Query input from positional text, files, or stdin</h4>
+            <p><code>dbcli query [sql] [-f, --query-file &lt;path&gt;]</code> requires exactly one query source: positional query text, a UTF-8 file named by <code>--query-file</code>, or stdin via <code>--query-file -</code>. Providing no source or combining positional text with <code>--query-file</code> is an error. After reading the source, dbcli removes one leading UTF-8 BOM and surrounding whitespace; an input that is then empty is rejected.</p>
+            <p>Use stdin for multiline SQL without escaping it as one shell argument:</p>
+            <pre><code>dbcli query --query-file - &lt;&lt;'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active'
+ORDER BY id;
+SQL</code></pre>
+            <p>MongoDB filters and aggregation pipelines use the same file/stdin sources. If <code>pipeline.json</code> contains <code>[{"$match":{"message":{"$regex":"user's event"}}}]</code>, either form below avoids having to shell-escape the apostrophe:</p>
+            <pre><code>dbcli query --collection raw_logs --query-file ./pipeline.json
+
+dbcli query --collection raw_logs --query-file - &lt;&lt;'JSON'
+[{"$match":{"message":{"$regex":"user's event"}}}]
+JSON</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">Field projection with <code>--fields</code></h4>
+            <p><code>--fields</code> reduces SQL or MongoDB query results to the fields you need. Use an inclusion list to keep fields in the requested order:</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields id,name,created_at
+dbcli query '{}' --collection raw_logs --fields station_code,bet,win,created_at</code></pre>
+            <p>Prefix every field with <code>-</code> to exclude it. The portable spelling uses <code>=</code> so the leading hyphens are unambiguously part of the option value:</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
+dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</code></pre>
+            <p>An invocation must use either inclusion or exclusion syntax; the two modes cannot be mixed. Empty lists or entries and duplicate paths are rejected. Dotted paths such as <code>profile.name</code> are supported, and inclusion output follows the requested order. A MongoDB inclusion excludes <code>_id</code> unless <code>_id</code> is explicitly requested.</p>
+            <p>SQL projection is applied to the returned rows after the query runs. MongoDB pushes the projection into <code>find</code> or the aggregation pipeline to reduce transferred data, then normalizes the returned rows again after blacklist masking. Redis and Elasticsearch queries do not support <code>--fields</code>.</p>
+            <p>The blacklist remains the final authority: <code>--fields</code> cannot reveal a protected field, and field projection is a result-shaping convenience, not a security boundary.</p>
             <p><code>insert</code>, <code>update</code>, and <code>delete</code> accept <code>--plan</code> to run a static risk analyzer against the planned write without connecting to the database. The planner now supports SQL (<code>postgresql</code>, <code>mysql</code>, <code>mariadb</code>), MongoDB, Redis, and Elasticsearch. It honors the connection's <code>permission</code>, <code>blacklist</code>, and the cached <code>schema</code> for the selected engine. <code>--format text</code> (default) prints a human verdict, <code>--format json</code> prints the full <code>QueryRiskResult</code>. Analyzer <code>BLOCK</code> decisions exit <code>0</code>; configuration / engine / invalid-DSL errors exit <code>1</code>. <code>--plan</code> is mutually exclusive with <code>--dry-run</code>.</p>
             <p>Conservative MVP restrictions per engine:</p>
             <table>
@@ -543,7 +578,7 @@ dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
 
 # Infer engine + target from a named connection
-dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
+dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p class="mb-4">Change your application's DB host/port to the <code>--listen</code> address and leave credentials unchanged. The proxy is fully transparent — the application behaves identically.</p>
 
             <h4 class="mt-6 mb-2 font-bold">Options</h4>
@@ -917,6 +952,9 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li>For missing tables, top-3 fuzzy-match candidates</li>
             </ul>
 
+            <h3>Bounded CLI error output</h3>
+            <p>Connection-bearing discovery and read failures exit with code <code>1</code> and are presented once. In normal mode, stderr contains a readable message plus a stable error code and actionable hints when available; it does not contain a JavaScript stack, bundled source excerpt, or source-code frame. Add <code>-v</code> (or <code>-vv</code>) before the command to include the stack for diagnostics. When a supported command uses <code>--recovery</code>, the existing JSON recovery envelope remains the only failure output on stdout and the duplicate human stderr message is suppressed.</p>
+
             <h3>Query-only mode auto-LIMIT</h3>
             <p><code>dbcli</code> auto-appends <code>LIMIT 1000</code> to <code>SELECT</code> queries in <code>query-only</code> mode. This <strong>does not</strong> apply to:</p>
             <ul>
@@ -924,6 +962,12 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li><code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code> / MariaDB <code>ANALYZE SELECT</code></li>
             </ul>
             <p>Use <code>--no-limit</code> on <code>SELECT</code> to disable when querying <code>information_schema</code>.</p>
+            <p>For a dbcli-owned limit (the query-only default or an explicit <code>--limit N</code>), dbcli fetches one lookahead row so output can distinguish an exact N-row result from a larger result. Truncated table output ends with <code>Rows: N (truncated; limit N)</code>. JSON always includes <code>metadata.truncated</code> and <code>metadata.limit_applied</code> when dbcli applied the limit; <code>truncated</code> is true only when the lookahead proved that another row existed. These fields are omitted for <code>--no-limit</code> and for a limit already written in the SQL, MongoDB pipeline, or Elasticsearch request body.</p>
+
+            <h3>Bounded table cells</h3>
+            <p><code>dbcli query</code> table output limits each serialized cell to 120 Unicode code points by default. Use <code>--truncate N</code> to set a different positive-integer limit, or <code>--no-truncate</code> to show complete table cells. The two flags are mutually exclusive.</p>
+            <p>Cells keep their existing serialization rules before the limit is measured: null and undefined values become empty text, objects are serialized as JSON, and primitives use their string representation. If a serialized value exceeds the limit, dbcli retains the first N code points and appends a marker such as <code>…(+3412 chars)</code>. The marker is outside the retained N-character budget, and its count is the number of omitted Unicode code points.</p>
+            <p>This behavior belongs only to table formatting and never mutates the query rows. JSON and CSV output therefore remain lossless. An explicit <code>--truncate</code> used with JSON, CSV, or HTML output (including <code>--ui</code>) is rejected instead of being silently ignored.</p>
 
             <h3>Schema cache bootstrap</h3>
             <p>The first <code>dbcli schema --refresh</code> after init writes the cache without <code>--force</code>. Subsequent refreshes that detect changes against an existing cache still require <code>--force</code> to overwrite.</p>

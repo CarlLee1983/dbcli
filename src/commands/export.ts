@@ -6,22 +6,15 @@
 
 import crypto from 'node:crypto'
 import { t_vars } from '@/i18n/message-loader'
-import {
-  AdapterFactory,
-  ConnectionError,
-  type ConnectionOptions,
-  type SqlConnectionOptions,
-} from '@/adapters'
+import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
-import { PermissionError } from '@/core/permission-guard'
 import { promptUser } from '@/utils/prompts'
 import { resolveConfigPath } from '@/utils/config-path'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
-import { BlacklistError } from '@/types/blacklist'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { extractTableName } from '@/utils/engine-hints'
@@ -103,11 +96,16 @@ export async function exportCommand(
     )
     await adapter.connect()
 
+    const executor = new QueryExecutor(adapter, config.permission, undefined, undefined, {
+      recovery: options.recovery,
+      deferDiagnostics: true,
+    })
+    let formatted: string
+    let rowCount: number
     try {
-      const executor = new QueryExecutor(adapter, config.permission)
       const result = await executor.execute(sql, { autoLimit: true })
+      rowCount = result.rowCount
 
-      let formatted: string
       if (options.format === 'html') {
         formatted = await generateHtmlReport({
           meta: {
@@ -126,26 +124,6 @@ export async function exportCommand(
         })
       }
 
-      if (options.output) {
-        const file = Bun.file(options.output)
-        const exists = await file.exists()
-
-        if (exists && !options.force) {
-          const confirmed = await promptUser.confirm(
-            t_vars('export.overwrite_confirmation', { file: options.output })
-          )
-          if (!confirmed) {
-            console.error('Operation cancelled by user')
-            return
-          }
-        }
-
-        await file.write(formatted)
-        console.error(t_vars('export.exported', { count: result.rowCount, file: options.output }))
-      } else {
-        console.log(formatted)
-      }
-
       await writeAuditEntry(config, 'export', options, {
         success: true,
         target: extractTableName(sql) ?? '*',
@@ -158,6 +136,10 @@ export async function exportCommand(
       })
     } finally {
       await adapter.disconnect()
+    }
+    const emitted = await emitExportOutput(formatted, rowCount, options)
+    if (emitted && options.recovery !== true) {
+      for (const diagnostic of executor.takeDiagnostics()) console.error(diagnostic)
     }
   } catch (error) {
     let auditId: string | null = null
@@ -185,25 +167,7 @@ export async function exportCommand(
       )
     }
 
-    if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
-      console.error(`   Operation: ${error.classification.type}`)
-      console.error(`   Message: ${error.message}`)
-      process.exit(1)
-    }
-
-    if (error instanceof ConnectionError) {
-      console.error(t_vars('errors.connection_failed', { message: error.message }))
-      process.exit(1)
-    }
-
-    if (error instanceof BlacklistError) {
-      console.error(error.message)
-      process.exit(1)
-    }
-
-    console.error(t_vars('errors.message', { message: (error as Error).message }))
-    process.exit(1)
+    throw error
   }
 }
 
@@ -221,6 +185,8 @@ async function redisExportBranch(
     (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis?.mask ?? []
   )
   await redisAdapter.connect()
+  let formatted: string
+  let rowCount: number
   try {
     const result = await redisAdapter.execute<Record<string, unknown>>(command)
 
@@ -232,42 +198,18 @@ async function redisExportBranch(
     }
 
     const formatter = new QueryResultFormatter()
-    const formatted = formatter.format(
+    formatted = formatter.format(
       queryResult as unknown as import('@/types/query').QueryResult<Record<string, unknown>>,
       { format: options.format as 'json' | 'csv' }
     )
-
-    if (options.output) {
-      const file = Bun.file(options.output)
-      const exists = await file.exists()
-
-      if (exists && !options.force) {
-        const confirmed = await promptUser.confirm(
-          t_vars('export.overwrite_confirmation', { file: options.output })
-        )
-        if (!confirmed) {
-          console.error('Operation cancelled by user')
-          return
-        }
-      }
-
-      await file.write(formatted)
-      console.error(
-        t_vars('export.exported', {
-          count: result.rowCount ?? result.rows.length ?? 0,
-          file: options.output,
-        })
-      )
-    } else {
-      console.log(formatted)
-    }
+    rowCount = result.rowCount ?? result.rows.length ?? 0
 
     const target = command.trim().split(/\s+/)[1] || '<unknown-key>'
     await writeAuditEntry(config, 'export', options, {
       success: true,
       target,
       metadata: {
-        rows_affected: result.rowCount ?? result.rows.length ?? 0,
+        rows_affected: rowCount,
         output_format: options.format,
         ...(options.output && { output_file: options.output }),
       },
@@ -275,6 +217,7 @@ async function redisExportBranch(
   } finally {
     await redisAdapter.disconnect()
   }
+  await emitExportOutput(formatted, rowCount, options)
 }
 
 const ES_EXPORT_CAP = 1000
@@ -329,6 +272,10 @@ async function esExportBranch(
 
   const adapter = AdapterFactory.createElasticsearchAdapter(config.connection as ConnectionOptions)
   await adapter.connect()
+  let resultCapped = false
+  let formatted: string
+  let rowCount: number
+  const diagnostics: string[] = []
   try {
     const { rows, target } = await buildEsExportRows(
       query,
@@ -337,45 +284,37 @@ async function esExportBranch(
     )
 
     blacklistValidator.checkTableBlacklist('SELECT', target, [])
-
-    if (!options.noLimit && rows.length >= ES_EXPORT_CAP) {
-      console.error(
-        `Warning: result capped at ${ES_EXPORT_CAP} rows. Use --no-limit to export the full index.`
-      )
-    }
+    resultCapped = !options.noLimit && rows.length >= ES_EXPORT_CAP
+    rowCount = rows.length
 
     const columns = collectColumnUnion(rows)
-    const formatted = formatMongoRows(rows, columns, options.format)
-
-    if (options.output) {
-      const file = Bun.file(options.output)
-      const exists = await file.exists()
-      if (exists && !options.force) {
-        const confirmed = await promptUser.confirm(
-          t_vars('export.overwrite_confirmation', { file: options.output })
-        )
-        if (!confirmed) {
-          console.error('Operation cancelled by user')
-          return
-        }
-      }
-      await file.write(formatted)
-      console.error(t_vars('export.exported', { count: rows.length, file: options.output }))
-    } else {
-      console.log(formatted)
-    }
+    formatted = formatMongoRows(
+      rows,
+      columns,
+      options.format,
+      options.recovery === true ? undefined : diagnostics
+    )
 
     await writeAuditEntry(config, 'export', options, {
       success: true,
       target,
       metadata: {
-        rows_affected: rows.length,
+        rows_affected: rowCount,
         output_format: options.format,
         ...(options.output && { output_file: options.output }),
       },
     })
   } finally {
     await adapter.disconnect()
+  }
+  const emitted = await emitExportOutput(formatted, rowCount, options)
+  if (emitted && options.recovery !== true) {
+    for (const diagnostic of diagnostics) console.error(diagnostic)
+    if (resultCapped) {
+      console.error(
+        `Warning: result capped at ${ES_EXPORT_CAP} rows. Use --no-limit to export the full index.`
+      )
+    }
   }
 }
 
@@ -385,21 +324,20 @@ async function mongoExportBranch(
   config: DbcliConfig
 ): Promise<void> {
   if (SQL_PATTERN.test(query)) {
-    console.error('這是 MongoDB 連線，請使用 JSON filter 或 aggregation pipeline。')
-    console.error(`範例：dbcli export '{"status":"open"}' --collection orders --format jsonl`)
-    process.exit(1)
+    throw new Error(
+      '這是 MongoDB 連線，請使用 JSON filter 或 aggregation pipeline。' +
+        ` 範例：dbcli export '{"status":"open"}' --collection orders --format jsonl`
+    )
   }
 
   if (!options.collection) {
-    console.error('MongoDB export 需要指定 --collection <name>')
-    process.exit(1)
+    throw new Error('MongoDB export 需要指定 --collection <name>')
   }
 
   try {
     JSON.parse(query)
   } catch {
-    console.error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
-    process.exit(1)
+    throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
   }
 
   const collection = options.collection
@@ -415,11 +353,14 @@ async function mongoExportBranch(
     effectiveLimit = options.limit
   } else if (config.permission === 'query-only') {
     effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
-    console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
   }
 
   const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
   await adapter.connect()
+  let formatted: string
+  let rowCount: number
+  let hasBlacklistedColumns = false
+  const diagnostics: string[] = []
   try {
     const result = await adapter.execute<Record<string, unknown>>(
       query,
@@ -431,50 +372,44 @@ async function mongoExportBranch(
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
     const maskedRows = maskMongoRows(result.rows, collection, blacklistCfg)
+    rowCount = maskedRows.length
+    hasBlacklistedColumns = (blacklistCfg.columns[collection] ?? []).length > 0
     const visibleColumns = collectColumnUnion(maskedRows)
 
-    const formatted = formatMongoRows(maskedRows, visibleColumns, options.format)
-
-    if (options.output) {
-      const file = Bun.file(options.output)
-      const exists = await file.exists()
-
-      if (exists && !options.force) {
-        const confirmed = await promptUser.confirm(
-          t_vars('export.overwrite_confirmation', { file: options.output })
-        )
-        if (!confirmed) {
-          console.error('Operation cancelled by user')
-          return
-        }
-      }
-
-      await file.write(formatted)
-      console.error(
-        t_vars('export.exported', {
-          count: maskedRows.length,
-          file: options.output,
-        })
-      )
-    } else {
-      console.log(formatted)
-    }
-
-    if ((blacklistCfg.columns[collection] ?? []).length > 0) {
-      console.error(`ℹ Some fields may have been redacted as [REDACTED] per .dbcli blacklist.`)
-    }
+    formatted = formatMongoRows(
+      maskedRows,
+      visibleColumns,
+      options.format,
+      options.recovery === true ? undefined : diagnostics
+    )
 
     await writeAuditEntry(config, 'export', options, {
       success: true,
       target: collection,
       metadata: {
-        rows_affected: maskedRows.length,
+        rows_affected: rowCount,
         output_format: options.format,
         ...(options.output && { output_file: options.output }),
       },
     })
   } finally {
     await adapter.disconnect()
+  }
+  const emitted = await emitExportOutput(formatted, rowCount, options)
+  if (!emitted) return
+  if (options.recovery !== true) {
+    for (const diagnostic of diagnostics) console.error(diagnostic)
+  }
+  if (hasBlacklistedColumns) {
+    console.error(`ℹ Some fields may have been redacted as [REDACTED] per .dbcli blacklist.`)
+  }
+  if (
+    options.recovery !== true &&
+    options.limit === undefined &&
+    !options.noLimit &&
+    config.permission === 'query-only'
+  ) {
+    console.error(`Query-only mode: auto-limiting to ${effectiveLimit} rows`)
   }
 }
 
@@ -495,7 +430,8 @@ function collectColumnUnion(rows: Record<string, unknown>[]): string[] {
 function formatMongoRows(
   rows: Record<string, unknown>[],
   columns: string[],
-  format: ExportFormat
+  format: ExportFormat,
+  diagnostics?: string[]
 ): string {
   if (format === 'jsonl') {
     return rows.map((row) => JSON.stringify(row)).join('\n')
@@ -520,13 +456,39 @@ function formatMongoRows(
       .join(',')
   })
 
-  if (nestedSeen) {
-    console.error(
+  if (nestedSeen && diagnostics) {
+    diagnostics.push(
       'Warning: nested object/array fields were JSON-stringified for CSV. Use --format jsonl to preserve structure.'
     )
   }
 
   return [headerLine, ...dataLines].join('\n')
+}
+
+async function emitExportOutput(
+  formatted: string,
+  rowCount: number,
+  options: ExportOptions
+): Promise<boolean> {
+  if (!options.output) {
+    console.log(formatted)
+    return true
+  }
+
+  const file = Bun.file(options.output)
+  if ((await file.exists()) && !options.force) {
+    const confirmed = await promptUser.confirm(
+      t_vars('export.overwrite_confirmation', { file: options.output })
+    )
+    if (!confirmed) {
+      console.error('Operation cancelled by user')
+      return false
+    }
+  }
+
+  await file.write(formatted)
+  console.error(t_vars('export.exported', { count: rowCount, file: options.output }))
+  return true
 }
 
 function escapeCsvField(value: unknown): string {

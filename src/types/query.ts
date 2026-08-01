@@ -8,6 +8,14 @@
  */
 export type SqlStatementType = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'UNKNOWN'
 
+/** Metadata proven by the one-row lookahead for a dbcli-owned row limit. */
+export interface AppliedLimitMetadata {
+  /** True only when dbcli fetched and removed an additional row. */
+  truncated: boolean
+  /** User-facing row limit (never the internal N+1 fetch size). */
+  limitApplied: number
+}
+
 /**
  * Metadata about query execution and result characteristics
  */
@@ -57,4 +65,7 @@ export interface QueryResult<T> {
 
   /** Optional: metadata about query type and affected rows */
   metadata?: QueryMetadata
+
+  /** Internal row-limit proof, mapped into public JSON metadata by the formatter. */
+  appliedLimit?: AppliedLimitMetadata
 }

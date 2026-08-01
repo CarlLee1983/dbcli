@@ -24,7 +24,11 @@ const baseMongoConnection = {
   database: 'testdb',
 }
 
-function makeMockAdapter(rows: Record<string, unknown>[]) {
+function makeMockAdapter(
+  rows: Record<string, unknown>[],
+  executeError?: Error,
+  disconnectError?: Error
+) {
   const state = {
     connectCalled: false,
     executeCalled: false,
@@ -35,10 +39,13 @@ function makeMockAdapter(rows: Record<string, unknown>[]) {
     async connect() {
       state.connectCalled = true
     },
-    async disconnect() {},
+    async disconnect() {
+      if (disconnectError) throw disconnectError
+    },
     async execute(_q: string, _params: unknown[], opts?: { limit?: number }) {
       state.executeCalled = true
       state.lastLimit = opts?.limit ?? null
+      if (executeError) throw executeError
       return { rows, affectedRows: rows.length }
     },
   }
@@ -144,14 +151,11 @@ describe('MongoDB export', () => {
     } as any)
 
     const { exportCommand } = await import('@/commands/export')
-    try {
-      await exportCommand('{}', { format: 'jsonl', collection: 'secrets' } as any)
-    } catch {
-      /* exit */
-    }
+    await expect(
+      exportCommand('{}', { format: 'jsonl', collection: 'secrets' } as any)
+    ).rejects.toThrow('secrets')
 
     expect(adapter.state.connectCalled).toBe(false)
-    expect(stderr.join('\n')).toContain('secrets')
   })
 
   test('blacklisted columns redacted from emitted documents', async () => {
@@ -181,20 +185,17 @@ describe('MongoDB export', () => {
     } as any)
 
     const { exportCommand } = await import('@/commands/export')
-    try {
-      await exportCommand('SELECT * FROM users', {
+    await expect(
+      exportCommand('SELECT * FROM users', {
         format: 'jsonl',
         collection: 'users',
       } as any)
-    } catch {
-      /* exit */
-    }
+    ).rejects.toThrow(/JSON|filter|MongoDB/i)
 
     expect(adapter.state.executeCalled).toBe(false)
-    expect(stderr.join('\n')).toMatch(/JSON|filter|MongoDB/i)
   })
 
-  test('missing --collection exits with helpful error', async () => {
+  test('missing --collection rejects with a helpful error', async () => {
     const adapter = makeMockAdapter([])
     adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
     configSpy = spyOn(configModule, 'read').mockResolvedValue({
@@ -203,14 +204,11 @@ describe('MongoDB export', () => {
     } as any)
 
     const { exportCommand } = await import('@/commands/export')
-    try {
-      await exportCommand('{}', { format: 'jsonl' } as any)
-    } catch {
-      /* exit */
-    }
+    await expect(exportCommand('{}', { format: 'jsonl' } as any)).rejects.toThrow(
+      /--collection|collection/i
+    )
 
     expect(adapter.state.executeCalled).toBe(false)
-    expect(stderr.join('\n')).toMatch(/--collection|collection/i)
   })
 
   test('--limit forwarded to mongo adapter execute', async () => {
@@ -225,5 +223,42 @@ describe('MongoDB export', () => {
     await exportCommand('{}', { format: 'jsonl', collection: 'users', limit: 7 } as any)
 
     expect(adapter.state.lastLimit).toBe(7)
+  })
+
+  test('does not print the auto-limit warning before an adapter failure', async () => {
+    const adapter = makeMockAdapter([], new Error('mongo export failed'))
+    adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
+    configSpy = spyOn(configModule, 'read').mockResolvedValue({
+      connection: baseMongoConnection,
+      permission: 'query-only',
+    } as any)
+
+    const { exportCommand } = await import('@/commands/export')
+    await expect(
+      exportCommand('{}', { format: 'jsonl', collection: 'users' } as any)
+    ).rejects.toThrow('mongo export failed')
+
+    expect(stderr.join('\n')).not.toContain('auto-limiting')
+  })
+
+  test('does not print the auto-limit warning before a disconnect failure', async () => {
+    const adapter = makeMockAdapter(
+      [{ id: 1, nested: { value: true } }],
+      undefined,
+      new Error('mongo export disconnect failed')
+    )
+    adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
+    configSpy = spyOn(configModule, 'read').mockResolvedValue({
+      connection: baseMongoConnection,
+      permission: 'query-only',
+    } as any)
+
+    const { exportCommand } = await import('@/commands/export')
+    await expect(
+      exportCommand('{}', { format: 'csv', collection: 'users' } as any)
+    ).rejects.toThrow('mongo export disconnect failed')
+
+    expect(stdout).toEqual([])
+    expect(stderr).toEqual([])
   })
 })

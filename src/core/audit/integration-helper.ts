@@ -25,10 +25,12 @@ const _loggers = new Map<string, AuditLogger>()
  */
 export async function getAuditLogger(
   config: DbcliConfig,
-  configPath: string
+  configPath: string,
+  connectionName?: string
 ): Promise<AuditLogger> {
   const storagePath = await resolveConfigStoragePath(configPath)
   const connName =
+    connectionName ||
     (config as { effectiveConnectionName?: string }).effectiveConnectionName ||
     getGlobalConnectionName() ||
     'default'
@@ -80,7 +82,11 @@ export async function writeAuditEntry(
   outcome: AuditOutcome
 ): Promise<string | null> {
   try {
-    const logger = await getAuditLogger(config, options.config || '.dbcli')
+    const logger = await getAuditLogger(
+      config,
+      options.config || '.dbcli',
+      typeof options.connectionName === 'string' ? options.connectionName : undefined
+    )
     const engine = (config.connection?.system as DatabaseSystem) || 'postgresql'
 
     // 1. Resolve Target

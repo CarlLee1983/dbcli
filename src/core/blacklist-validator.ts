@@ -8,6 +8,7 @@
 import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
+import { hasFieldPath, omitFieldPaths } from './field-projection'
 
 /**
  * Result of column filtering operation
@@ -115,23 +116,19 @@ export class BlacklistValidator {
       return { filteredRows: rows, omittedColumns: [] }
     }
 
-    // Find which columns from the result set are actually blacklisted
-    const omittedColumns = columnList.filter((col) => blacklistedColumns.includes(col))
+    // SQL adapters normally return a uniform top-level column set, but JSON
+    // columns can contain nested records. Treat an exact dotted path as
+    // protected too, so projecting its parent cannot recover the child.
+    const omittedColumns = blacklistedColumns.filter(
+      (path) => columnList.includes(path) || rows.some((row) => hasFieldPath(row, path))
+    )
 
     if (omittedColumns.length === 0) {
       return { filteredRows: rows, omittedColumns: [] }
     }
 
-    // Create new row objects without blacklisted columns (immutable)
-    const filteredRows = rows.map((row) => {
-      const newRow: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(row)) {
-        if (!omittedColumns.includes(key)) {
-          newRow[key] = value
-        }
-      }
-      return newRow
-    })
+    // Create new row objects without blacklisted top-level or dotted fields.
+    const filteredRows = omitFieldPaths(rows, omittedColumns)
 
     return { filteredRows, omittedColumns }
   }

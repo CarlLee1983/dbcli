@@ -181,7 +181,17 @@ bun install -g @carllee1983/dbcli</code></pre>
             <p>在正式 (Prod)、測試 (Staging) 及本地 (Local) 環境間切換：</p>
             <pre><code>dbcli use --list         # 列出所有連線名稱
 dbcli use staging        # 切換預設連線
-dbcli query --use prod "SELECT count(*) FROM users" # 單次覆蓋執行</code></pre>
+dbcli --use prod query "SELECT count(*) FROM users" # 全域單次 selector
+dbcli query --use prod "SELECT count(*) FROM users" # 支援的指令層級寫法
+DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # 環境變數 selector</code></pre>
+            <p>選擇優先序為明確的 <code>--use</code>、<code>DBCLI_CONNECTION</code>、最後才是設定檔預設連線。環境變數值會移除前後空白，空值則視為未設定。單次 selector 不會修改持久化預設值。<code>query</code>、<code>schema</code>、<code>list</code>、<code>export</code>、<code>check</code> 支援指令層級寫法；其他指令請把全域 selector 放在指令之前。root 與指令層級值衝突時會清楚失敗。</p>
+            <h3>唯讀 query fan-out</h3>
+            <p>明確指定逗號分隔的 <code>--use</code>，即可對多個具名連線執行同一個唯讀 query。Root 層級與指令層級寫法效果相同：</p>
+            <pre><code>dbcli --use primary,staging query "SELECT count(*) FROM users" --format json
+dbcli query --use primary,staging "SELECT count(*) FROM users"</code></pre>
+            <p>連線名稱會移除前後空白，結果則維持 selector 的順序；空白或重複名稱會被拒絕。只指定一個名稱時仍走既有的單連線路徑。Fan-out 只會由明確的 <code>--use</code> 啟用：<code>DBCLI_CONNECTION</code> 仍代表一個完整的連線名稱，不會依逗號拆分。兩種 <code>--use</code> 寫法都不會修改持久化的預設連線。</p>
+            <p>在任何 adapter 建立連線前，dbcli 會先載入並驗證所有選定的連線配置。SQL fan-out 只允許唯讀分類（<code>SELECT</code>、<code>SHOW</code>、<code>DESCRIBE</code>、<code>EXPLAIN</code>）；MongoDB 允許 filter object 與唯讀 aggregation pipeline，但拒絕頂層 <code>$out</code> 或 <code>$merge</code> stage；Elasticsearch 只允許 search。Redis 不支援 fan-out。多連線 query 也會拒絕 <code>--recovery</code>、<code>--ui</code>、CSV 與 HTML 輸出；請使用 <code>--format table</code>（預設）或 <code>--format json</code>。</p>
+            <p>每個連線都會獨立使用自己的 adapter、blacklist 過濾、row-limit／截斷 metadata、audit entry、計時與 disconnect；其中一個連線失敗不會取消或隱藏其他結果。JSON 會依序回傳 <code>results</code> array，每個連線都有標示清楚的 <code>ok</code> 或 <code>error</code> outcome；table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功時 aggregate exit code 為 <code>0</code>，成功與失敗混合時為 <code>2</code>，全部失敗或執行前拒絕請求時為 <code>1</code>。</p>
         </section>
 
         <!-- doc-key: command-reference -->
@@ -239,6 +249,31 @@ dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format j
 dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
 dbcli delete products --where '{"_id":"abc"}' --plan --format json
 dbcli delete 'user:42' --where '' --plan --format json</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">從 positional、檔案或 stdin 讀取 query</h4>
+            <p><code>dbcli query [sql] [-f, --query-file &lt;path&gt;]</code> 必須且只能指定一個 query 來源：positional query 文字、<code>--query-file</code> 指定的 UTF-8 檔案，或以 <code>--query-file -</code> 從 stdin 讀取。未提供來源，或同時提供 positional 文字與 <code>--query-file</code> 都會報錯。dbcli 讀取來源後會移除一個開頭的 UTF-8 BOM 與前後空白；處理後若為空內容，則會拒絕執行。</p>
+            <p>透過 stdin 傳入多行 SQL，就不需要把整段內容 escape 成單一 shell argument：</p>
+            <pre><code>dbcli query --query-file - &lt;&lt;'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active'
+ORDER BY id;
+SQL</code></pre>
+            <p>MongoDB filter 與 aggregation pipeline 也使用相同的檔案／stdin 來源。如果 <code>pipeline.json</code> 包含 <code>[{"$match":{"message":{"$regex":"user's event"}}}]</code>，下列兩種寫法都不必處理其中對 shell 不友善的 apostrophe：</p>
+            <pre><code>dbcli query --collection raw_logs --query-file ./pipeline.json
+
+dbcli query --collection raw_logs --query-file - &lt;&lt;'JSON'
+[{"$match":{"message":{"$regex":"user's event"}}}]
+JSON</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">使用 <code>--fields</code> 投影欄位</h4>
+            <p><code>--fields</code> 可將 SQL 或 MongoDB query 結果縮減為需要的欄位。使用 inclusion list 保留欄位，輸出順序會依照指定順序：</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields id,name,created_at
+dbcli query '{}' --collection raw_logs --fields station_code,bet,win,created_at</code></pre>
+            <p>在每個欄位前加上 <code>-</code> 即可排除欄位。為了讓開頭的 hyphen 明確屬於 option value，請使用可攜的 <code>=</code> 寫法：</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
+dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</code></pre>
+            <p>每次執行只能使用 inclusion 或 exclusion 其中一種語法，不可混用。空白 list、空白項目與重複 path 都會被拒絕。支援 <code>profile.name</code> 這類 dotted path；inclusion 輸出會遵循指定順序。MongoDB inclusion 預設排除 <code>_id</code>，只有明確指定 <code>_id</code> 時才會保留。</p>
+            <p>SQL 會在 query 執行完畢後對回傳 rows 套用 projection。MongoDB 會將 projection 下推至 <code>find</code> 或 aggregation pipeline 以減少傳輸資料量，之後再於 blacklist masking 完成後正規化回傳 rows。Redis 與 Elasticsearch query 不支援 <code>--fields</code>。</p>
+            <p>Blacklist 仍是最終權限邊界：<code>--fields</code> 無法顯示受保護欄位；field projection 只是調整結果形狀的便利功能，不是 security boundary。</p>
             <p><code>insert</code>、<code>update</code>、<code>delete</code> 支援 <code>--plan</code>，可在不連線資料庫的情況下對即將執行的寫入操作執行靜態風險分析。此預檢現已支援 SQL（<code>postgresql</code>、<code>mysql</code>、<code>mariadb</code>）、MongoDB、Redis 與 Elasticsearch。預檢會套用該連線的 <code>permission</code>、<code>blacklist</code> 與該引擎的 <code>schema</code> 快取。<code>--format text</code>（預設）輸出人類可讀結論，<code>--format json</code> 輸出完整 <code>QueryRiskResult</code>。分析器回傳 <code>BLOCK</code> 時 exit code 仍為 <code>0</code>；設定 / 連線系統 / 無效 DSL 等錯誤才會 exit <code>1</code>。<code>--plan</code> 與 <code>--dry-run</code> 互斥。</p>
             <p>各引擎在 MVP 中的保守限制：</p>
             <table>
@@ -543,7 +578,7 @@ dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
 
 # 從具名連線推斷引擎與目標
-dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
+dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p class="mb-4">將應用程式的 DB host/port 改為 <code>--listen</code> 位址，憑證維持不變。Proxy 完全透明 — 應用程式的行為與直連相同。</p>
 
             <h4 class="mt-6 mb-2 font-bold">選項</h4>
@@ -917,6 +952,9 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li>對 table 不存在，附上 top-3 fuzzy 候選</li>
             </ul>
 
+            <h3>有界的 CLI 錯誤輸出</h3>
+            <p>需要連線的探索與讀取指令失敗時會以 exit code <code>1</code> 結束，且錯誤只呈現一次。一般模式的 stderr 會輸出可讀訊息，以及存在時的穩定錯誤碼與可執行 hint；不會包含 JavaScript stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，請在指令前加 <code>-v</code>（或 <code>-vv</code>）以顯示 stack。支援 <code>--recovery</code> 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制重複的人類可讀 stderr 訊息。</p>
+
             <h3>Query-only auto-LIMIT 範圍</h3>
             <p><code>dbcli</code> 會在 <code>query-only</code> 模式對 <code>SELECT</code> 自動加 <code>LIMIT 1000</code>。<strong>不</strong>套用於：</p>
             <ul>
@@ -924,6 +962,12 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li><code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code> / MariaDB <code>ANALYZE SELECT</code></li>
             </ul>
             <p>查 <code>information_schema</code> 時用 <code>--no-limit</code> 關閉。</p>
+            <p>當上限由 dbcli 套用（query-only 預設值或明確的 <code>--limit N</code>）時，dbcli 會多取一筆作為 lookahead，藉此區分結果剛好 N 筆與實際還有更多資料。被截斷的 table 輸出會以 <code>Rows: N (truncated; limit N)</code> 結尾。只要上限由 dbcli 套用，JSON 一律包含 <code>metadata.truncated</code> 與 <code>metadata.limit_applied</code>；只有 lookahead 證明還有下一筆時，<code>truncated</code> 才是 true。使用 <code>--no-limit</code>，或 SQL、MongoDB pipeline、Elasticsearch request body 已自行指定上限時，這兩個欄位不會出現。</p>
+
+            <h3>有界的 table cell</h3>
+            <p><code>dbcli query</code> 的 table 輸出預設會將每個序列化後的 cell 限制為 120 個 Unicode code point。可用 <code>--truncate N</code> 設定其他正整數上限，或用 <code>--no-truncate</code> 顯示完整的 table cell；兩個旗標不可同時使用。</p>
+            <p>計算上限前會沿用既有的 cell 序列化規則：null 與 undefined 轉成空字串，object 以 JSON 序列化，primitive 則使用其字串表示。序列化後的值超過上限時，dbcli 會保留前 N 個 code point，並附加例如 <code>…(+3412 chars)</code> 的標記。標記不計入保留值的 N 字元預算，數字則代表從序列化值省略的 Unicode code point 數量。</p>
+            <p>此行為只屬於 table formatting，絕不修改查詢結果中的 rows，因此 JSON 與 CSV 輸出仍保持無損。若在 JSON、CSV 或 HTML 輸出（包含 <code>--ui</code>）明確傳入 <code>--truncate</code>，dbcli 會回報錯誤，而不會靜默忽略。</p>
 
             <h3>Schema cache bootstrap</h3>
             <p>第一次 <code>dbcli schema --refresh</code> 不需 <code>--force</code> 即會寫入 cache。後續 refresh 偵測到既有 cache 有 diff 才會要求 <code>--force</code>。</p>

@@ -89,15 +89,29 @@ export function normalizeSQL(sql: string): string {
  * Strip comments AND string literals using character-by-character state machine
  * More reliable than regex for handling escape sequences
  */
-export function stripCommentsAndStrings(sql: string): string {
+export function stripCommentsAndStrings(
+  sql: string,
+  options: { dialect?: 'postgresql' | 'mysql' | 'mariadb' } = {}
+): string {
   let result = ''
   let i = 0
 
   while (i < sql.length) {
     const char = sql[i]
 
-    // Line comment: -- until newline
-    if (char === '-' && sql[i + 1] === '-') {
+    // Line comment: -- until newline. MySQL/MariaDB require whitespace or a
+    // control character after the second dash; without it, the text remains
+    // executable and must stay visible to permission analysis.
+    const mysqlDialect = options.dialect === 'mysql' || options.dialect === 'mariadb'
+    const dashFollowerCode = sql.charCodeAt(i + 2)
+    const dashStartsComment =
+      char === '-' &&
+      sql[i + 1] === '-' &&
+      (!mysqlDialect ||
+        sql[i + 2] === undefined ||
+        dashFollowerCode <= 0x20 ||
+        dashFollowerCode === 0x7f)
+    if (dashStartsComment) {
       while (i < sql.length && sql[i] !== '\n') {
         i++
       }
@@ -108,8 +122,36 @@ export function stripCommentsAndStrings(sql: string): string {
       continue
     }
 
+    // MySQL/MariaDB also use # for line comments.
+    if (mysqlDialect && char === '#') {
+      while (i < sql.length && sql[i] !== '\n') i++
+      if (i < sql.length) {
+        result += '\n'
+        i++
+      }
+      continue
+    }
+
     // Block comment: /* ... */
     if (char === '/' && sql[i + 1] === '*') {
+      const executableMysqlComment =
+        mysqlDialect && (sql.startsWith('/*!', i) || sql.startsWith('/*M!', i))
+      if (executableMysqlComment) {
+        const prefixLength = sql.startsWith('/*M!', i) ? 4 : 3
+        const closingIndex = sql.indexOf('*/', i + prefixLength)
+        const bodyEnd = closingIndex === -1 ? sql.length : closingIndex
+        const executableBody = sql
+          .slice(i + prefixLength, bodyEnd)
+          // MySQL/MariaDB consume an immediately adjacent leading version
+          // number as comment metadata, even when the payload has no space.
+          .replace(/^\d+/, ' ')
+        result +=
+          ' ' +
+          stripCommentsAndStrings(executableBody, options) +
+          ' '
+        i = closingIndex === -1 ? sql.length : closingIndex + 2
+        continue
+      }
       i += 2
       while (i < sql.length) {
         if (sql[i] === '*' && sql[i + 1] === '/') {
@@ -122,19 +164,67 @@ export function stripCommentsAndStrings(sql: string): string {
       continue
     }
 
-    // String literal: 'string' or "string" with escape handling
-    if (char === "'" || char === '"') {
-      const quote = char
+    // PostgreSQL dollar-quoted string: $$...$$ or $tag$...$tag$.
+    // The closing delimiter is case-sensitive and may contain SQL-looking
+    // text or semicolons that must not participate in permission analysis.
+    if (options.dialect === 'postgresql' && char === '$') {
+      const delimiter = sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      if (delimiter) {
+        i += delimiter.length
+        const closingIndex = sql.indexOf(delimiter, i)
+        i = closingIndex === -1 ? sql.length : closingIndex + delimiter.length
+        result += ' '
+        continue
+      }
+    }
+
+    // MySQL/MariaDB backtick-quoted identifier. Doubled backticks escape a
+    // literal backtick; SQL-looking text inside remains non-executable.
+    if (mysqlDialect && char === '`') {
       i++
-      while (i < sql.length && sql[i] !== quote) {
-        // Handle escaped quotes (backslash escapes)
-        if (sql[i] === '\\') {
-          i++ // Skip escape character
+      while (i < sql.length) {
+        if (sql[i] === '`') {
+          if (sql[i + 1] === '`') {
+            i += 2
+            continue
+          }
+          i++
+          break
         }
         i++
       }
-      if (i < sql.length) {
-        i++ // Skip closing quote
+      result += ' '
+      continue
+    }
+
+    // String literal or quoted identifier. Doubled quotes are unambiguous in
+    // every supported dialect. Backslash-quote is mode-dependent, so fan-out
+    // treats it as an escape only for PostgreSQL's explicit E'...' syntax;
+    // callers without a dialect retain the historical generic behavior.
+    if (char === "'" || char === '"') {
+      const quote = char
+      const quoteIndex = i
+      const postgresEscapeString =
+        options.dialect === 'postgresql' &&
+        quote === "'" &&
+        /[eE]/.test(sql[quoteIndex - 1] ?? '') &&
+        !/[A-Za-z0-9_$]/.test(sql[quoteIndex - 2] ?? '')
+      const backslashEscapes = options.dialect === undefined || postgresEscapeString
+      i++
+      while (i < sql.length) {
+        if (sql[i] === quote) {
+          if (sql[i + 1] === quote) {
+            i += 2
+            continue
+          }
+          i++
+          break
+        }
+        if (backslashEscapes && sql[i] === '\\') {
+          i += 2
+          continue
+        }
+        i++
       }
       result += ' ' // Replace string with space to preserve structure
       continue

@@ -11,6 +11,8 @@ const REDACTED_VALUE_FLAGS = new Set([
   '--token',
   '--secret',
   '--bulk',
+  '--query-file',
+  '-f',
 ])
 const KEEP_VALUE_FLAGS = new Set([
   '--format',
@@ -20,17 +22,33 @@ const KEEP_VALUE_FLAGS = new Set([
   '--limit',
   '--collection',
   '--index',
+  '--fields',
+  '--truncate',
 ])
 const LINT_BOOLEAN_FLAGS = new Set(['--no-schema', '--recovery'])
+const QUERY_BOOLEAN_FLAGS = new Set(['--ui', '--no-limit', '--no-truncate', '--recovery'])
 
 function optionParts(token: string): {
   name: string
   inlineValue: string | undefined
 } {
+  if (token.startsWith('-f') && !token.startsWith('--') && token.length > 2) {
+    return { name: '-f', inlineValue: token.slice(2) }
+  }
   const equals = token.indexOf('=')
   return equals === -1
     ? { name: token, inlineValue: undefined }
     : { name: token.slice(0, equals), inlineValue: token.slice(equals + 1) }
+}
+
+function isOptionToken(token: string): boolean {
+  return token.startsWith('--') || token.startsWith('-f')
+}
+
+function isKnownBooleanFlag(command: string | undefined, name: string): boolean {
+  if (command === 'lint') return LINT_BOOLEAN_FLAGS.has(name)
+  if (command === 'query') return QUERY_BOOLEAN_FLAGS.has(name)
+  return false
 }
 
 function findSensitiveSubcommand(argv: string[]): {
@@ -39,7 +57,7 @@ function findSensitiveSubcommand(argv: string[]): {
 } | null {
   for (let index = 1; index < argv.length; index++) {
     const token = argv[index]!
-    if (token.startsWith('--')) {
+    if (isOptionToken(token)) {
       const { name, inlineValue } = optionParts(token)
       if (
         inlineValue === undefined &&
@@ -66,7 +84,7 @@ function sensitiveArgvValues(argv: string[]): string[] {
       afterEndOfOptions = true
       continue
     }
-    if (!afterEndOfOptions && token.startsWith('--')) {
+    if (!afterEndOfOptions && isOptionToken(token)) {
       const { name, inlineValue } = optionParts(token)
       if (REDACTED_VALUE_FLAGS.has(name)) {
         const value = inlineValue ?? argv[index + 1]
@@ -84,7 +102,7 @@ function sensitiveArgvValues(argv: string[]): string[] {
         if (inlineValue === undefined) index++
       } else if (inlineValue === undefined && KEEP_VALUE_FLAGS.has(name)) {
         index++
-      } else if (sensitiveCommand?.command === 'lint' && LINT_BOOLEAN_FLAGS.has(name)) {
+      } else if (isKnownBooleanFlag(sensitiveCommand?.command, name)) {
         continue
       } else if (!sensitiveCommand || index < sensitiveCommand.index) {
         continue
@@ -128,7 +146,7 @@ export function redactArgv(argv: string[]): string {
       afterEndOfOptions = true
       continue
     }
-    if (!afterEndOfOptions && tok.startsWith('--')) {
+    if (!afterEndOfOptions && isOptionToken(tok)) {
       const { name, inlineValue } = optionParts(tok)
       if (REDACTED_VALUE_FLAGS.has(name)) {
         out.push(`${name} <redacted>`)
@@ -146,7 +164,7 @@ export function redactArgv(argv: string[]): string {
         }
         continue
       }
-      if (sensitiveCommand?.command === 'lint' && LINT_BOOLEAN_FLAGS.has(name)) {
+      if (isKnownBooleanFlag(sensitiveCommand?.command, name)) {
         out.push(tok)
         continue
       }

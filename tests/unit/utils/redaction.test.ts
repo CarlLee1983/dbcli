@@ -18,6 +18,21 @@ describe('redaction utils', () => {
       expect(redactArgv(argv)).toBe('node query <sql> --format json')
     })
 
+    test('redacts long and short query-file paths', () => {
+      expect(redactArgv(['dbcli', 'query', '--query-file', '/secret/customer.sql'])).toBe(
+        'dbcli query --query-file <redacted>'
+      )
+      expect(redactArgv(['dbcli', 'query', '-f', '/secret/customer.sql'])).toBe(
+        'dbcli query -f <redacted>'
+      )
+      expect(
+        redactArgv(['dbcli', 'query', '-f', '/secret/customer.sql', '--no-limit', '--recovery'])
+      ).toBe('dbcli query -f <redacted> --no-limit --recovery')
+      expect(redactArgv(['dbcli', 'query', '-f/secret/customer.sql'])).toBe(
+        'dbcli query -f <redacted>'
+      )
+    })
+
     test('redacts --config and --use', () => {
       const argv = ['node', 'list', '--config', './my.env', '--use=prod']
       expect(redactArgv(argv)).toBe('node list --config <redacted> --use <redacted>')
@@ -75,9 +90,47 @@ describe('redaction utils', () => {
       const argv = ['node', 'list', '--format=table', '--conn-name', 'my-db']
       expect(redactArgv(argv)).toBe('node list --format=table --conn-name my-db')
     })
+
+    test('keeps field projection syntax without mistaking it for SQL', () => {
+      expect(
+        redactArgv(['dbcli', 'query', '-f', '/secret/query.sql', '--fields=-raw,-payload'])
+      ).toBe('dbcli query -f <redacted> --fields=-raw,-payload')
+      expect(redactArgv(['dbcli', 'query', 'SELECT 1', '--fields', 'id,name'])).toBe(
+        'dbcli query <sql> --fields id,name'
+      )
+    })
+
+    test('keeps table truncation options without mistaking values for SQL', () => {
+      expect(redactArgv(['dbcli', 'query', 'SELECT 1', '--truncate', '80'])).toBe(
+        'dbcli query <sql> --truncate 80'
+      )
+      expect(redactArgv(['dbcli', 'query', 'SELECT 1', '--no-truncate'])).toBe(
+        'dbcli query <sql> --no-truncate'
+      )
+    })
   })
 
   describe('redactArgvSensitiveText', () => {
+    test('scrubs query-file paths from diagnostics', () => {
+      const path = '/secret/customer.sql'
+      expect(
+        redactArgvSensitiveText(`Failed to read query file ${path}`, [
+          'dbcli',
+          'query',
+          '-f',
+          path,
+        ])
+      ).toBe('Failed to read query file <redacted>')
+
+      expect(
+        redactArgvSensitiveText(`Failed to read query file ${path}`, [
+          'dbcli',
+          'query',
+          `-f${path}`,
+        ])
+      ).toBe('Failed to read query file <redacted>')
+    })
+
     test('scrubs leading-comment lint SQL after the end-of-options delimiter', () => {
       const sql = "-- SQL_SECRET_COMMENT\nSELECT 'SQL_SECRET_VALUE'"
       const redacted = redactArgvSensitiveText(`failed to parse: ${sql}`, [

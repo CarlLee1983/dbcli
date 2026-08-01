@@ -4,8 +4,10 @@ import { formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
+import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
 import { buildProgram } from './program'
+import { presentCliError } from './utils/cli-error'
 import { join } from 'path'
 
 // Module-level state for background version check
@@ -28,8 +30,13 @@ const program = buildProgram()
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()
 
-  const useConnection = opts.use as string | undefined
-  setGlobalConnectionName(useConnection)
+  setGlobalConnectionName(
+    resolveConnectionSelector({
+      root: opts.use as string | undefined,
+      command: actionCommand.opts().use as string | undefined,
+      environment: process.env.DBCLI_CONNECTION,
+    })
+  )
 
   if (opts.color === false) {
     process.env.NO_COLOR = '1'
@@ -92,6 +99,11 @@ if (!process.argv.slice(2).length) {
   program.outputHelp()
 }
 
-program.parse(process.argv)
+try {
+  await program.parseAsync(process.argv)
+} catch (error) {
+  presentCliError(error)
+  process.exitCode = 1
+}
 
 export default program

@@ -18,6 +18,7 @@ import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { TableSchema, DatabaseAdapter, ColumnSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { validateFormat } from '@/utils/validation'
+import { createConnectionSelectorOption } from '@/core/connection-selector'
 import { suggestTableName } from '@/utils/error-suggester'
 import { compilePatterns, matchAny } from '@/core/mongo/path-matcher'
 import type { BlacklistConfig } from '@/types/blacklist'
@@ -88,6 +89,7 @@ export const schemaCommand = new Command()
   .argument('[table]', 'Optional: table name to inspect (if omitted, scans all tables)')
   .option('--format <format>', 'Output format: table (default) or json', 'table')
   .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+  .addOption(createConnectionSelectorOption())
   .option('--refresh', 'Refresh schema by detecting changes from database', false)
   .option('--reset', 'Clear all existing schema data and re-fetch from database', false)
   .option('--force', 'Skip confirmation when updating schema data', false)
@@ -137,16 +139,14 @@ async function schemaAction(
     config = await configModule.read(configPath)
 
     if (!config.connection) {
-      console.error('Database not configured. Run: dbcli init')
-      process.exit(1)
+      throw new Error('Database not configured. Run: dbcli init')
     }
 
     let inferenceOptions: { sampleSize?: number; sampleMethod?: 'random' | 'natural' } | undefined
     if (options.sampleSize !== undefined) {
       const parsed = Number(options.sampleSize)
       if (!Number.isFinite(parsed) || parsed < 1) {
-        console.error(`--sample-size must be a positive integer (received ${options.sampleSize})`)
-        process.exit(1)
+        throw new Error(`--sample-size must be a positive integer (received ${options.sampleSize})`)
       }
       if (config.connection.system === 'mongodb') {
         inferenceOptions = { sampleSize: Math.floor(parsed) }
@@ -156,10 +156,9 @@ async function schemaAction(
     }
     if (options.sampleMethod && options.sampleMethod !== 'random') {
       if (options.sampleMethod !== 'natural') {
-        console.error(
+        throw new Error(
           `--sample-method must be 'random' or 'natural' (received '${options.sampleMethod}')`
         )
-        process.exit(1)
       }
       if (config.connection.system === 'mongodb') {
         inferenceOptions = { ...(inferenceOptions ?? {}), sampleMethod: 'natural' }
@@ -187,12 +186,10 @@ async function schemaAction(
     // Redis: full-database scans aren't meaningful; only allow inspecting a single key.
     if (config.connection.system === 'redis') {
       if (options.reset || options.refresh) {
-        console.error('schema --reset/--refresh is not supported for Redis connections.')
-        process.exit(1)
+        throw new Error('schema --reset/--refresh is not supported for Redis connections.')
       }
       if (!table) {
-        console.error('Redis schema inspection requires a key name: dbcli schema <key>')
-        process.exit(1)
+        throw new Error('Redis schema inspection requires a key name: dbcli schema <key>')
       }
       const redisAdapter = AdapterFactory.createRedisAdapter(
         config.connection as ConnectionOptions,
@@ -352,13 +349,7 @@ async function schemaAction(
       )
     }
 
-    if (error instanceof Error) {
-      console.error(t_vars('errors.message', { message: error.message }))
-      if (error instanceof ConnectionError) {
-        error.hints.forEach((hint: string) => console.error(`   Hint: ${hint}`))
-      }
-    }
-    process.exit(1)
+    throw error
   }
 }
 

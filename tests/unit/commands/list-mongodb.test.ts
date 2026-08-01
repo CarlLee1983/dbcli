@@ -93,4 +93,32 @@ describe('List Command - MongoDB', () => {
     expect(output).toContain('3')
     logSpy.mockRestore()
   })
+
+  test('awaits a rejected MongoDB connection and propagates it to the CLI boundary', async () => {
+    createMongoAdapterSpy.mockReturnValue({
+      async connect() {
+        throw new Error('MongoDB unavailable')
+      },
+    } as any)
+
+    await expect(listCommand.parseAsync(['node', 'list'])).rejects.toThrow('MongoDB unavailable')
+  })
+
+  test('propagates a disconnect failure once the branch has completed', async () => {
+    createMongoAdapterSpy.mockReturnValue({
+      async connect() {},
+      async listCollections() {
+        return []
+      },
+      async disconnect() {
+        throw new Error('MongoDB disconnect failed')
+      },
+    } as any)
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(listCommand.parseAsync(['node', 'list'])).rejects.toThrow(
+      'MongoDB disconnect failed'
+    )
+    logSpy.mockRestore()
+  })
 })

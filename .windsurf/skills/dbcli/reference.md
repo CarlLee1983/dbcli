@@ -112,7 +112,7 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 
 ### query
 
-Execute SQL query (MySQL/PostgreSQL/MariaDB) or JSON filter/pipeline (MongoDB).
+Execute a SQL statement, MongoDB filter/pipeline, allow-listed Redis command, or Elasticsearch DSL/Lucene query.
 
 ```bash
 # SQL databases
@@ -173,8 +173,8 @@ dbcli query "SELECT sn, raw_response FROM bet_log" --no-truncate
 
 Table output truncates each serialized cell at 120 Unicode code points by default and
 appends `…(+N chars)`; counting by code point keeps multi-byte characters and emoji
-intact. `--truncate <n>` sets the width, `--no-truncate` disables it. Both are rejected
-with `--format json` / `csv`, which exist to be parsed downstream.
+intact. `--truncate <n>` sets the width, `--no-truncate` disables it. Explicit truncation
+flags are rejected with JSON, CSV, HTML, and `--ui` output.
 
 #### Query from a file or stdin (`-f`)
 
@@ -190,6 +190,23 @@ or nested date objects fails. Supplying both `--query-file` and positional query
 is an error rather than a silent choice, and an empty file or empty stdin is refused.
 `-f -` requires piped input: on an interactive terminal dbcli refuses immediately
 instead of waiting silently for input that is never coming.
+
+#### One-shot connection selection and read-only fan-out
+
+Selection precedence is explicit `--use`, then `DBCLI_CONNECTION`, then the saved default.
+`query`, `schema`, `list`, `export`, and `check` accept command-level `--use`; for other
+commands use root-level `dbcli --use <name> <command>`. One-shot selectors never update the
+saved default and require a v2 config. A legacy v1 single-connection config rejects them
+instead of silently running its only connection.
+
+An explicit comma-separated `--use primary,staging` fans one query out to several named
+connections. `DBCLI_CONNECTION` always names one literal connection and never enables
+fan-out. SQL permits `SELECT`, `SHOW`, `DESCRIBE`, and `EXPLAIN`; MongoDB permits filters and
+read-only pipelines without top-level `$out` / `$merge`; Elasticsearch permits searches.
+Redis, writes, `--recovery`, `--ui`, CSV, and HTML are rejected before execution. Each
+connection keeps its own blacklist, limit metadata, audit entry, and error. Aggregate exit
+codes are `0` when all succeed, `2` for mixed outcomes, and `1` when all fail or preflight
+rejects the request.
 
 #### Truncation is stated, not implied
 
@@ -715,9 +732,13 @@ dbcli export orders --no-limit --format jsonl             # scroll the whole ind
 **Options:** `--format <json|jsonl|csv|html>` (required), `--output <path>`, `--force`, `--recovery`, `--collection <name>` (MongoDB collection) / `--index <name>` (Elasticsearch index; alias for `--collection`), `--limit <number>` (overrides auto-limit), `--no-limit` (Elasticsearch full-index scroll)
 **Permission:** query-only+ — SQL, MongoDB, and **(v1.22)** Elasticsearch.
 
+If the query-only auto-limit would omit rows, export fails closed with exit code `1` and
+writes no partial file. Re-run with `--no-limit` to export everything, or `--limit N` to
+accept a bounded export explicitly. This applies to SQL, MongoDB, and Elasticsearch.
+
 The `html` format emits the same self-contained dashboard as `query --ui` (see [Interactive HTML dashboard](#interactive-html-dashboard)). Because `export` runs raw SQL (no snippet metadata), the HTML report is always rendered as a sortable / filterable table — no KPIs or charts. Use `dbcli q @<name> --format html` (or `--ui`) for the charted view.
 
-> **Elasticsearch export (v1.22):** pass a search DSL with `--index <index>` to export the hits, or pass an index name as the query to scroll the whole index via `match_all`. Default cap is 1000 rows; `--no-limit` streams the full index via scroll in batches. Index-level blacklist is checked before export and an audit record is written.
+> **Elasticsearch export (v1.22):** pass a search DSL with `--index <index>` to export the hits, or pass an index name as the query to scroll the whole index via `match_all`. Default cap is 1000 rows; reaching it fails closed unless the caller explicitly uses `--limit N`, while `--no-limit` streams the full index via scroll in batches. Index-level blacklist is checked before export and an audit record is written.
 
 ### blacklist
 

@@ -327,8 +327,9 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
-`--use <name>` on any subcommand (including `status` / `doctor`) targets a v2 connection
-without changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `update`,
+Use root-level `dbcli --use <name> <command>` for any command; `query`, `schema`, `list`,
+`export`, and `check` also accept command-level `--use`. Both target a v2 connection without
+changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `update`,
 `delete`, `export`, `schema`, `inspect`, `lint`, and `diff --against-orm` (see **On failure** above).
 
 **Write & query flag semantics** (SQL/Mongo `insert`/`update`):
@@ -355,7 +356,7 @@ to make it usable. Reach for them instead of post-processing.
 |------|------|-------|
 | Only some columns | `--fields sn,bet,created_at` | SQL and MongoDB. Mongo pushes a real `projection` / `$project` to the driver; `_id` is dropped unless you ask for it. A field the result lacks comes back as `null`, so verify spellings with `schema` before reading meaning into an all-null column. |
 | Everything except a huge column | `--fields=-raw_response` | Exclusion form. Include and exclude cannot be mixed. |
-| One field is a giant JSON blob | `--truncate 120` | Table output truncates cells at 120 chars **by default** and marks them `…(+3412 chars)`. `--no-truncate` disables it. Rejected on `--format json/csv` (those feed parsers). |
+| One field is a giant JSON blob | `--truncate 120` | Table output truncates cells at 120 chars **by default** and marks them `…(+3412 chars)`. `--no-truncate` disables it. Explicit truncation flags are rejected on JSON, CSV, HTML, and `--ui` output. |
 | Query has quotes / newlines / `$regex` | `-f pipeline.json` or `-f -` | Reads the query from a file or stdin; use a heredoc for Mongo pipelines. Passing both a file and positional query text is an error, never a silent pick. `-f -` needs piped input — it refuses an interactive terminal rather than hanging. |
 | Same query across connections | `--use hub-prod,site-a` | Read-only fan-out. Per-connection results, one failure does not cancel the others. Exit `0` all-ok, `2` mixed, `1` all-failed. Rejects writes, `--recovery`, `--ui`, CSV/HTML. |
 | Pick a connection for one call | `DBCLI_CONNECTION=hub-prod dbcli query …` | Env var, or `--use` on the subcommand. Priority: `--use` > `DBCLI_CONNECTION` > saved default. Neither writes the default back to disk, so parallel shells never fight. Requires a v2 config — a single-connection (v1) project rejects both rather than silently running its only connection. **Do not** use `dbcli use <name>` just to switch for one query. |

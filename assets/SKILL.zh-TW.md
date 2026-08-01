@@ -265,7 +265,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷（用於注入其他 LLM，正常操作不需要）。 |
 | `migrate` | admin | 僅 SQL。**DDL；預設 dry-run** — 需 `--execute`。 |
 
-任何子指令上的 `--use <name>` 可在不改變預設值的情況下，把目標切到 v2 連線。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect`、`lint` 與 `diff --against-orm` 支援（見上方**失敗時**）。
+任何指令都可使用 root 層級的 `dbcli --use <name> <command>`；`query`、`schema`、`list`、`export`、`check` 也接受指令層級的 `--use`。兩種寫法都只把本次目標切到 v2 連線，不改變預設值。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect`、`lint` 與 `diff --against-orm` 支援（見上方**失敗時**）。
 
 **寫入與查詢旗標語意**（SQL / Mongo `insert`/`update`）：
 
@@ -283,7 +283,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 |------|------|------|
 | 只要某幾個欄位 | `--fields sn,bet,created_at` | SQL 與 MongoDB 皆可。Mongo 會把真正的 `projection` / `$project` 下推給 driver；除非明確指定，否則不回傳 `_id`。結果中不存在的欄位會回傳 `null`，所以看到整欄 null 時先用 `schema` 核對欄位名。 |
 | 除了某個巨大欄位以外都要 | `--fields=-raw_response` | 排除形式。include 與 exclude 不能混用。 |
-| 某欄位是一大包 JSON | `--truncate 120` | table 輸出**預設**就在 120 字截斷，並標記 `…(+3412 chars)`。`--no-truncate` 可關閉。`--format json/csv` 會拒絕此旗標（那兩種是給程式解析的）。 |
+| 某欄位是一大包 JSON | `--truncate 120` | table 輸出**預設**就在 120 字截斷，並標記 `…(+3412 chars)`。`--no-truncate` 可關閉。JSON、CSV、HTML 與 `--ui` 輸出會拒絕明確的截斷旗標。 |
 | 查詢含引號 / 換行 / `$regex` | `-f pipeline.json` 或 `-f -` | 從檔案或 stdin 讀查詢；Mongo pipeline 建議用 heredoc。同時給檔案與位置參數會直接報錯，不會靜默擇一。`-f -` 需要 piped input——遇到互動式終端會直接拒絕而不是空等。 |
 | 同一查詢跨多個連線 | `--use hub-prod,site-a` | 唯讀扇出。各連線各自出結果，其中一個失敗不會取消其他。exit `0` 全成功、`2` 部分失敗、`1` 全失敗。拒絕寫入、`--recovery`、`--ui`、CSV/HTML。 |
 | 單次指定連線 | `DBCLI_CONNECTION=hub-prod dbcli query …` | 環境變數，或在子指令上加 `--use`。優先序：`--use` > `DBCLI_CONNECTION` > 已存的預設值。兩者都不會把預設值寫回磁碟，所以平行的 shell 不會互相干擾。需要 v2 設定——單一連線 (v1) 專案會直接拒絕，而不是靜默改跑那唯一的連線。**不要**為了單次查詢去跑 `dbcli use <name>`。 |

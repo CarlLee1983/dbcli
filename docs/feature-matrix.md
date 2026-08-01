@@ -15,18 +15,19 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB accepts URI or host/port. Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
 | Multi-connection `use` / `--use` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | v2 config isolates connections and schema caches. |
+| Read-only query fan-out (`--use a,b`) | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL read-only statements, Mongo filters/read-only pipelines, and ES search only. Rejects writes, recovery, UI, CSV, and HTML; mixed outcomes exit 2. |
 | `list` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | SQL: tables; Mongo: collections; Redis: keys (SCAN); ES: indices. |
 | `schema [table]` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Mongo: sampled; Redis: per-key only (type/TTL/size); ES: flattened mapping. |
 | `schema` full scan / `--refresh` / `--reset` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | Redis has no full scan/cache. ES iterates non-system indices. |
 | `query` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SQL; Mongo: JSON; Redis: commands; ES: DSL/Lucene. |
-| Query output `table` / `json` / `csv` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter. |
+| Query output `table` / `json` / `csv` / `html` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter; HTML and `--ui` show truncation/security warnings before KPIs, charts, and raw rows. |
 | Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL/Mongo/ES apply limits. Redis: SCAN/LRANGE/ZRANGE rewrite + HGETALL/SMEMBERS/KEYS truncate at 1000; `--no-limit` bypasses. |
 | `q` saved query execution | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Mongo: JSON `find` / `aggregate` body, requires `collection` frontmatter (CLI `--collection` overrides), parameter substitutions are JSON-encoded. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
 | `queries` snippet management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Management works regardless of active connection. |
 | `insert` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
 | `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
 | `delete` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
-| `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo plus ES. ES: exports DSL hits or a full index via scroll, capped at 1000 rows (`--no-limit` to bypass). Redis not supported. |
+| `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo plus ES. An auto-limit hit fails closed without writing a partial file; use `--no-limit` for all rows or `--limit N` to accept a bound. ES full-index export scrolls in batches. Redis not supported. |
 | `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob rejection (Redis-native pattern) plus value/hash-field masking (`[REDACTED]`) via the `redis.mask` config block. |
 | `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
 | `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
@@ -41,6 +42,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | `verify` | N/A | N/A | N/A | N/A | N/A | N/A | Runs non-executing verification scenarios: `safe-backfill` (analyzes UPDATE, never writes), `migration` (analyzes ALTER TABLE DDL, never executes DDL), `rollback` (analyzes a restore statement via `--kind ddl\|dml`, never executes it), and `constraint` (generates a read-only `COUNT(*)` violation query via `--check fk\|not-null\|unique\|custom`, never writes). All scenarios produce local `.dbcli/verification/` artifacts in `--after-write` mode. SQL engines only. |
 | `verification` | N/A | N/A | N/A | N/A | N/A | N/A | Inspects and manages local VerificationArtifact files. Subcommands: `list` / `show` / `summary` / `prune` (all `local-write` or `readonly`). `summary --latest-only` narrows to the latest matching artifact plus status counts. Never connects to a database. |
 | `audit` | N/A | N/A | N/A | N/A | N/A | N/A | Cross-engine local capability writing `.dbcli/audit/<conn>.jsonl`. Subcommands: `tail` / `show` / `health` (`readonly`), `clear` (`local-write`). See `assets/reference.md` §audit. |
+| Package `./agent-core` export | N/A | N/A | N/A | N/A | N/A | N/A | Semver-stable, database-independent agent CLI helpers: env loading/references, connection selection/name parsing, and applied-limit trimming plus public types. Purity is release-gated. |
 
 ## Side-effect tiers
 

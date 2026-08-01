@@ -149,8 +149,9 @@ dbcli export "SELECT * FROM users" --format html --output report.html
 `dbcli` can render query results as fully interactive, standalone HTML dashboards. These reports are powered by React + Recharts and are zero-dependency — the entire application and data are inlined into a single HTML file.
 
 - **`--ui` flag**: Automatically generates a temporary report and opens it in your default browser.
-- **`visual:` block**: Snippet frontmatter can define KPIs and charts (Line, Bar, Area, Pie, Scatter) to drive the dashboard.
+- **`visual:` block**: Snippet frontmatter can define KPIs and charts (Line, Bar, Area, Pie) to drive the dashboard.
 - **Security**: Result sets are redacted by the blacklist before injection, and data is safely escaped for HTML.
+- **Completeness warnings**: Truncation and security metadata are shown before KPIs, charts, and the raw table so incomplete or masked data is never presented as a complete result.
 
 ### Recovery & Guided Remediation
 
@@ -291,7 +292,7 @@ dbcli init --rename staging:production
 
 ### Using a Specific Connection Temporarily
 
-You can use the `--use <name>` global flag to execute any command against a specific connection without changing the default.
+You can use the `--use <name>` global flag, the supported command-level form, or `DBCLI_CONNECTION` to execute against a specific connection without changing the default. Selection precedence is explicit `--use`, then `DBCLI_CONNECTION`, then the configured default. A selector is rejected for legacy v1 single-connection configuration instead of being silently ignored.
 
 ```bash
 # Query the production database once
@@ -299,7 +300,20 @@ dbcli query "SELECT count(*) FROM users" --use prod
 
 # Check staging table health
 dbcli check users --use staging
+
+# Select one connection for this process
+DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users"
 ```
+
+`query`, `schema`, `list`, `export`, and `check` accept the command-level `--use` form shown above. Other commands use the global form before the subcommand.
+
+For read-only comparisons, an explicit comma-separated `--use` fans one query out to multiple named connections:
+
+```bash
+dbcli query --use primary,staging "SELECT count(*) FROM users" --format json
+```
+
+SQL fan-out permits `SELECT`, `SHOW`, `DESCRIBE`, and `EXPLAIN`; MongoDB permits filters and read-only pipelines; Elasticsearch permits search. Redis, writes, `--recovery`, `--ui`, CSV, and HTML are rejected. Connections run independently: JSON returns an ordered `results` array, table output labels each section, and one failure does not cancel the others. Exit codes are `0` for all success, `2` for mixed outcomes, and `1` for all failures or a preflight rejection. `DBCLI_CONNECTION` always names one literal connection and never enables fan-out.
 
 ---
 
@@ -453,24 +467,33 @@ dbcli schema
 
 ---
 
-#### `dbcli query "SQL"`
+#### `dbcli query [query]`
 
-Execute SQL query and return results.
+Execute a SQL statement, MongoDB filter/pipeline, allow-listed Redis command, or Elasticsearch DSL/Lucene query and return results.
 
 **Usage:**
 ```bash
 dbcli query "SELECT * FROM users"
+dbcli query --query-file ./queries/active-users.sql
 ```
 
 **Options:**
-- `--format json|table|csv` — Output format (default: table)
+- `--format json|table|csv|html` — Output format (default: table)
+- `--ui` — Render HTML to a temporary file and open it in the system browser
 - `--limit <number>` — Cap rows (overrides the automatic limit in query-only mode)
 - `--no-limit` — Disable the automatic 1000-row cap in query-only mode
+- `-f, --query-file <path>` — Read a UTF-8 query from a file; use `-` for piped stdin
+- `--fields <list>` — Include `a,b` or exclude `-a,-b` fields from SQL/MongoDB results
+- `--truncate <number>` — Set the table cell limit in Unicode code points (default: 120)
+- `--no-truncate` — Show complete table cells
 
 **Behavior:**
 - Enforces permission-based restrictions (Query-only mode blocks INSERT/UPDATE/DELETE)
-- Auto-limits results to 1000 rows in Query-only mode (notification shown), unless `--no-limit` or `--limit` applies
-- Returns structured results with metadata (row count, execution time)
+- Requires exactly one query source: positional text, `--query-file <path>`, or piped stdin through `--query-file -`
+- Auto-limits results to 1000 rows in Query-only mode, unless `--no-limit` or `--limit` applies
+- Uses a one-row lookahead for dbcli-owned limits. Truncated tables say so in the footer, JSON returns `metadata.truncated` and `metadata.limit_applied`, and CSV appends a truncation comment
+- Applies `--fields` after SQL execution and pushes it into MongoDB find/pipeline operations. Blacklist masking remains authoritative
+- Truncates table cells only; JSON and CSV rows remain lossless. Explicit truncation flags with JSON, CSV, HTML, or `--ui` are rejected
 - To write CSV/JSON to a file, use shell redirection or the `export` command
 
 **Examples:**
@@ -489,6 +512,17 @@ dbcli query "SELECT * FROM products" --format json | jq '.data[] | .name'
 
 # Large result sets (paginate with LIMIT/OFFSET)
 dbcli query "SELECT * FROM users LIMIT 100 OFFSET 0"
+
+# Multiline SQL from stdin
+dbcli query --query-file - <<'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active';
+SQL
+
+# Include or exclude fields (use = when the value starts with a hyphen)
+dbcli query "SELECT * FROM users" --fields id,email,status
+dbcli query "SELECT * FROM users" --fields=-password_hash,-raw_payload
 ```
 
 ---
@@ -598,9 +632,12 @@ dbcli export "SELECT * FROM users" --format json --output users.json
 **Options:**
 - `--format json|csv` — Output format
 - `--output file` — Write to file (default: stdout for piping)
+- `--limit <number>` — Deliberately accept a bounded export
+- `--no-limit` — Export the complete result
 
 **Behavior:**
-- Query-only permission limited to 1000 rows per export
+- Query-only mode still applies its automatic 1000-row limit, but reaching it fails closed with exit code `1` and writes no partial file
+- Re-run with `--no-limit` for the complete export or `--limit N` to accept a cap explicitly
 - Generates RFC 4180 compliant CSV
 - Creates well-formed JSON arrays
 
@@ -754,19 +791,24 @@ dbcli check --all --checks nulls,duplicates --format json
 
 #### `dbcli diff`
 
-Save a schema snapshot or compare the live database to a previous snapshot (tables, columns, indexes).
+Save a schema snapshot, compare the live database to a previous snapshot, or compare an ORM definition with the local SQL schema cache. ORM drift is cache-only: it does not connect, refresh the cache, or execute proposals.
 
 **Usage:**
 ```bash
 dbcli diff --snapshot ./schema-before.json
 dbcli diff --against ./schema-before.json
 dbcli diff --against ./schema-before.json --format table
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
+dbcli diff --against-orm schema.sql --orm-format typeorm --format table
 ```
 
 **Options:**
 - `--snapshot <path>` — Write the current schema to a JSON file
 - `--against <path>` — Diff live schema vs. the saved snapshot
-- `--format json|table` — Output format (default: `json`)
+- `--against-orm <path>` — Compare Prisma, Drizzle snapshot, TypeORM/Sequelize DDL, raw DDL, or normalized JSON with the cached SQL schema
+- `--orm-format prisma|drizzle|typeorm|sequelize|ddl|json` — Override ORM input detection
+- `--format json|table|markdown` — Output format (default: `json`)
 - `--config <path>` — Config path (default: `.dbcli`)
 
 ---
@@ -982,6 +1024,12 @@ dbcli migrate drop-enum status --execute --force
 ---
 
 ## Query Risk Planning
+
+Use `lint` for read-only static advice about SQL anti-patterns and optional rewrite drafts. It accepts inline SQL, saved queries, files, globs, and bulk input; it never connects or applies a rewrite:
+
+```bash
+dbcli lint "SELECT * FROM users WHERE LOWER(email) = 'a@example.com'" --format json
+```
 
 Use `plan` to inspect SQL safety before execution. It reads local dbcli config, permissions, blacklist rules, and cached schema metadata only; it does not connect to the database.
 
@@ -1595,6 +1643,20 @@ chmod +x dist/cli.mjs
 ---
 
 ## Development
+
+Package consumers building agent CLIs can import the semver-stable, database-independent interface from `@carllee1983/dbcli/agent-core`:
+
+```ts
+import {
+  loadEnvFile,
+  parseConnectionNames,
+  resolveConnectionSelector,
+  resolveEnvRef,
+  trimAppliedLimit,
+} from '@carllee1983/dbcli/agent-core'
+```
+
+The broader `@carllee1983/dbcli/core` interface remains dbcli-specific. CLI option factories, config-storage binding, and connection-string parsing are intentionally outside `agent-core`.
 
 ```bash
 bun test                  # full test suite (Bun test runner)

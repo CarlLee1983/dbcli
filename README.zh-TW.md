@@ -134,8 +134,9 @@ dbcli export "SELECT * FROM users" --format html --output report.html
 `dbcli` 可將查詢結果算繪為完全互動、獨立的 HTML 儀表板。這些報表由 React + Recharts 驅動且具備「零依賴」特性 — 整個應用程式與資料皆被內嵌於單一 HTML 檔案中。
 
 - **`--ui` 旗標**：自動產生暫時性報表並在預設瀏覽器中開啟。
-- **`visual:` 區塊**：可在查詢片段的 frontmatter 中定義 KPI 與圖表 (Line, Bar, Area, Pie, Scatter)。
+- **`visual:` 區塊**：可在查詢片段的 frontmatter 中定義 KPI 與圖表 (Line, Bar, Area, Pie)。
 - **安全性**：資料在注入前會先經過黑名單過濾，且針對 HTML 進行了安全跳脫處理。
+- **完整性警示**：KPI、圖表與 raw table 之前會先顯示截斷與 security metadata，避免把不完整或已遮蔽的資料誤認為完整結果。
 
 ---
 
@@ -189,13 +190,24 @@ dbcli init --rename staging:production    # 更名（格式：舊名:新名）
 
 ### 臨時指定連線（不改預設）
 
-任何子指令皆可加全域 **`--use <名稱>`**，僅本次使用該連線：
+可使用全域 **`--use <名稱>`**、支援的指令層級寫法或 `DBCLI_CONNECTION`，僅本次使用指定連線而不改預設。選擇優先序為明確的 `--use`、`DBCLI_CONNECTION`、最後才是設定檔預設連線。舊版 v1 單連線設定沒有具名連線可選，因此 selector 會被明確拒絕，不會遭到靜默忽略。
 
 ```bash
 dbcli query "SELECT count(*) FROM users" --use prod
 dbcli check users --use staging
 dbcli list --use prod
+DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users"
 ```
+
+`query`、`schema`、`list`、`export`、`check` 支援上面的指令層級 `--use`；其他指令請將全域 selector 放在子指令之前。
+
+若要比較多個環境，可透過明確的逗號分隔 `--use`，將同一個唯讀 query 扇出至多個具名連線：
+
+```bash
+dbcli query --use primary,staging "SELECT count(*) FROM users" --format json
+```
+
+SQL fan-out 允許 `SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`；MongoDB 允許 filter 與唯讀 pipeline；Elasticsearch 允許 search。Redis、寫入、`--recovery`、`--ui`、CSV 與 HTML 都會被拒絕。各連線獨立執行：JSON 依序回傳 `results` array，table 為每個連線標示區段，單一失敗不會取消其他連線。全部成功 exit `0`、混合結果 exit `2`、全部失敗或 preflight 拒絕 exit `1`。`DBCLI_CONNECTION` 永遠代表單一完整連線名稱，不會啟用 fan-out。
 
 若同時需要自訂設定路徑，可與 **`--config <路徑>`** 併用（仍指向含 `config.json` 的 `.dbcli` 目錄）。
 
@@ -351,24 +363,33 @@ dbcli schema
 
 ---
 
-#### `dbcli query "SQL"`
+#### `dbcli query [query]`
 
-執行 SQL 查詢並回傳結果。
+執行 SQL statement、MongoDB filter／pipeline、allow-listed Redis command 或 Elasticsearch DSL／Lucene query 並回傳結果。
 
 **用法：**
 ```bash
 dbcli query "SELECT * FROM users"
+dbcli query --query-file ./queries/active-users.sql
 ```
 
 **選項：**
-- `--format json|table|csv` — 輸出格式（預設：table）
+- `--format json|table|csv|html` — 輸出格式（預設：table）
+- `--ui` — 將 HTML 算繪至暫存檔並在系統瀏覽器開啟
 - `--limit <數字>` — 限制列數（覆寫 query-only 下的自動上限）
 - `--no-limit` — 在 query-only 模式下關閉自動 1000 列上限
+- `-f, --query-file <路徑>` — 從 UTF-8 檔案讀取 query；以 `-` 讀取 piped stdin
+- `--fields <清單>` — 在 SQL／MongoDB 結果中納入 `a,b` 或排除 `-a,-b` 欄位
+- `--truncate <數字>` — 設定 table cell 的 Unicode code point 上限（預設 120）
+- `--no-truncate` — 顯示完整 table cell
 
 **行為：**
 - 依權限限制操作（Query-only 會阻擋 INSERT/UPDATE/DELETE）
-- Query-only 模式預設自動限制最多 1000 列（並顯示提示），除非使用 `--no-limit` 或 `--limit`
-- 回傳含中繼資料的結構化結果（列數、執行時間等）
+- 必須且只能指定一種 query 來源：positional 文字、`--query-file <路徑>`，或透過 `--query-file -` 傳入 piped stdin
+- Query-only 模式預設自動限制最多 1000 列，除非使用 `--no-limit` 或 `--limit`
+- dbcli 自己套用上限時會多取一列 lookahead；截斷的 table footer 會明示，JSON 回傳 `metadata.truncated` 與 `metadata.limit_applied`，CSV 則附加截斷註解
+- SQL 執行後套用 `--fields`，MongoDB 則下推至 find／pipeline；blacklist masking 仍是最終權限邊界
+- 只截斷 table cell；JSON 與 CSV rows 維持無損。JSON、CSV、HTML 或 `--ui` 若明確給定截斷旗標會被拒絕
 - 若要將 CSV／JSON 寫入檔案，請用 shell 重新導向或 `export` 指令
 
 **範例：**
@@ -387,6 +408,17 @@ dbcli query "SELECT * FROM products" --format json | jq '.data[] | .name'
 
 # 大量結果（以 LIMIT/OFFSET 分頁）
 dbcli query "SELECT * FROM users LIMIT 100 OFFSET 0"
+
+# 從 stdin 傳入多行 SQL
+dbcli query --query-file - <<'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active';
+SQL
+
+# 納入或排除欄位（值以 hyphen 開頭時使用 =）
+dbcli query "SELECT * FROM users" --fields id,email,status
+dbcli query "SELECT * FROM users" --fields=-password_hash,-raw_payload
 ```
 
 ---
@@ -496,9 +528,12 @@ dbcli export "SELECT * FROM users" --format json --output users.json
 **選項：**
 - `--format json|csv` — 輸出格式
 - `--output file` — 寫入檔案（預設 stdout 供管道使用）
+- `--limit <數字>` — 明確接受有界匯出
+- `--no-limit` — 匯出完整結果
 
 **行為：**
-- Query-only 權限下每次匯出最多 1000 列
+- Query-only 模式仍會套用自動 1000 列上限，但真的撞到上限時會 fail closed，以 exit code `1` 結束且不寫入不完整檔案
+- 使用 `--no-limit` 匯出完整結果，或用 `--limit N` 明確接受上限
 - 產生符合 RFC 4180 的 CSV
 - 產生結構良好的 JSON 陣列
 
@@ -652,19 +687,24 @@ dbcli check --all --checks nulls,duplicates --format json
 
 #### `dbcli diff`
 
-儲存 schema 快照，或將目前資料庫與先前快照比對（表、欄位、索引）。
+儲存 schema 快照、將目前資料庫與先前快照比對，或把 ORM 定義與本地 SQL schema cache 比對。ORM drift 只讀 cache：不連線、不更新 cache，也不執行提案。
 
 **用法：**
 ```bash
 dbcli diff --snapshot ./schema-before.json
 dbcli diff --against ./schema-before.json
 dbcli diff --against ./schema-before.json --format table
+dbcli diff --against-orm prisma/schema.prisma --format json
+dbcli diff --against-orm drizzle/meta/0001_snapshot.json --orm-format drizzle --format table
+dbcli diff --against-orm schema.sql --orm-format typeorm --format table
 ```
 
 **選項：**
 - `--snapshot <path>` — 將目前 schema 寫入 JSON 檔
 - `--against <path>` — 與已存快照比對差異
-- `--format json|table` — 輸出格式（預設：`json`）
+- `--against-orm <path>` — 將 Prisma、Drizzle snapshot、TypeORM／Sequelize DDL、raw DDL 或 normalized JSON 與 SQL schema cache 比對
+- `--orm-format prisma|drizzle|typeorm|sequelize|ddl|json` — 覆寫 ORM 輸入格式偵測
+- `--format json|table|markdown` — 輸出格式（預設：`json`）
 - `--config <path>` — 設定路徑（預設：`.dbcli`）
 
 ---
@@ -880,6 +920,12 @@ dbcli migrate drop-enum status --execute --force
 ---
 
 ## 查詢風險規劃
+
+使用 `lint` 對 SQL anti-pattern 與可選 rewrite draft 做唯讀靜態分析。支援 inline SQL、saved query、檔案、glob 與 bulk input；不會連線，也不會套用 rewrite：
+
+```bash
+dbcli lint "SELECT * FROM users WHERE LOWER(email) = 'a@example.com'" --format json
+```
 
 使用 `plan` 在執行前檢查 SQL 安全性。它只讀取本機 dbcli 設定、權限、黑名單規則與已快取的 schema metadata；不會連線到資料庫。
 
@@ -1480,6 +1526,20 @@ chmod +x dist/cli.mjs
 ---
 
 ## 開發
+
+開發 agent CLI 的套件使用者，可從 `@carllee1983/dbcli/agent-core` 匯入遵循 semver、與資料庫無關的穩定介面：
+
+```ts
+import {
+  loadEnvFile,
+  parseConnectionNames,
+  resolveConnectionSelector,
+  resolveEnvRef,
+  trimAppliedLimit,
+} from '@carllee1983/dbcli/agent-core'
+```
+
+較廣的 `@carllee1983/dbcli/core` 仍是 dbcli 專用介面。CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
 ```bash
 bun test                  # 完整測試（Bun test runner）

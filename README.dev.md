@@ -42,7 +42,7 @@ Before running `npm publish`:
    ```bash
    npm pack --dry-run
    ```
-   Expect **`dist/`** (at least `cli.mjs`), **`assets/`** (e.g. `SKILL.md`, `reference.md` for `dbcli skill`), **`README.md`**, **`CHANGELOG.md`**, **`LICENSE`**, and **`package.json`**. There must be **no** `src/`, `tests/`, or `node_modules/`. The listing may also include other root `README*.md` files (npm can still pack them even when `files` is set); dev-only readmes are listed in **`.npmignore`** — re-check with dry-run if you add or remove docs.
+   Expect **`dist/`** (including `cli.mjs`, `core.mjs` / `core.d.ts`, and `agent-core.mjs` / `agent-core.d.ts`), **`assets/`** (e.g. `SKILL.md`, `reference.md` for `dbcli skill`), **`README.md`**, **`CHANGELOG.md`**, **`LICENSE`**, and **`package.json`**. There must be **no** `src/`, `tests/`, or `node_modules/`. The listing may also include other root `README*.md` files (npm can still pack them even when `files` is set); dev-only readmes are listed in **`.npmignore`** — re-check with dry-run if you add or remove docs.
 
 5. **Check package size:**
    ```bash

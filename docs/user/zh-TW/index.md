@@ -826,7 +826,7 @@ dbcli export orders --format jsonl --output orders.jsonl
 6.  **AI 協作提示注入**：`dbcli skill context` 將連線資訊、schema 快取和儲存查詢元資料序列化為高度壓縮、針對 token 優化的 XML、Markdown 或 JSON 結構，專門設計用於 AI 提示詞注入。
 7.  **自我驗證循環**：Snippet 可以定義 `verify` frontmatter 元資料（指定 `query` 與 LHS-運算子-RHS 的 `expects` 斷言）。使用 `dbcli q @name --verify` 執行查詢時，會自動執行主要指令、執行驗證查詢，並驗證傳回資料集的斷言。
 8.  **Agent Plugin**：repo root 採用 Ponytail-style plugin layout，包含 `.agents/plugins/marketplace.json`、`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.cursor-plugin/plugin.json`、`.github/skills/dbcli/` 與 `skills/dbcli/`。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`，其中包含提交 Cursor marketplace 審核/索引的步驟。
-9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit` 與公開型別。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
+9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit`，以及 `AppliedLimitMetadata`、`AppliedLimitResult`、`ConnectionSelectorInputs`。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
 ---
 

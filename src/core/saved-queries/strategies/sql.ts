@@ -37,11 +37,12 @@ export const sqlStrategy: EngineStrategy = {
     if (rewritten.undeclared.length > 0) {
       warnings.push(`SQL references undeclared params: ${rewritten.undeclared.join(', ')}`)
     }
-    const wrapped = applySnippetGuard(rewritten.sql, { noLimit: opts.noLimit })
+    const guarded = applySnippetGuard(rewritten.sql, { noLimit: opts.noLimit })
     return {
-      driver: { sql: wrapped, values: rewritten.values },
+      driver: { sql: guarded.sql, values: rewritten.values },
       rewrittenBody: rewritten.sql,
       warnings,
+      ...(guarded.guardLimit !== undefined ? { guardLimit: guarded.guardLimit } : {}),
     }
   },
 }

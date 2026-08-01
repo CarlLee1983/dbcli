@@ -7,8 +7,9 @@
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test'
 import { SchemaIndexBuilder } from '@/core/schema-index'
 import type { DbcliConfig } from '@/types'
-import { join } from 'path'
-import { mkdir, rm } from 'fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Mock config with sample schemas
 const mockConfig: DbcliConfig = {
@@ -62,7 +63,7 @@ describe('SchemaIndexBuilder', () => {
   let testDbcliPath: string
 
   beforeAll(async () => {
-    testDbcliPath = join('/tmp', `dbcli-index-test-${Date.now()}`)
+    testDbcliPath = await mkdtemp(join(tmpdir(), 'dbcli-index-test-'))
     await mkdir(join(testDbcliPath, 'schemas'), { recursive: true })
   })
 
@@ -157,14 +158,15 @@ describe('SchemaIndexBuilder', () => {
   })
 
   test('loadIndex: returns null for missing index', async () => {
-    const emptyPath = join('/tmp', `dbcli-empty-index-${Date.now()}`)
+    const emptyPath = await mkdtemp(join(tmpdir(), 'dbcli-empty-index-'))
     await mkdir(join(emptyPath, 'schemas'), { recursive: true })
 
-    const index = await SchemaIndexBuilder.loadIndex(emptyPath)
-    expect(index).toBeNull()
-
-    // Cleanup
-    await rm(emptyPath, { recursive: true, force: true })
+    try {
+      const index = await SchemaIndexBuilder.loadIndex(emptyPath)
+      expect(index).toBeNull()
+    } finally {
+      await rm(emptyPath, { recursive: true, force: true })
+    }
   })
 
   test('calculateFileMapping: generates correct hot/cold mapping', async () => {

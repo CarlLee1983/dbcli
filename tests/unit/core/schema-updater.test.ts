@@ -3,11 +3,15 @@
  */
 
 import { test, expect } from 'bun:test'
-import { mkdir } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { SchemaUpdater } from '@/core/schema-updater'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { SchemaCacheManager } from '@/core/schema-cache'
+
+const fixtureDbcliPath = join('fixtures', 'dbcli-test')
 
 /**
  * Mock Database Adapter for testing
@@ -48,7 +52,7 @@ class MockDatabaseAdapter implements DatabaseAdapter {
 
 test('SchemaUpdater - generates patch for added tables', async () => {
   const adapter = new MockDatabaseAdapter()
-  const cache = new SchemaCacheManager('/tmp/dbcli-test')
+  const cache = new SchemaCacheManager(fixtureDbcliPath)
 
   // Set up old config with no tables
   const oldConfig: DbcliConfig = {
@@ -89,26 +93,29 @@ test('SchemaUpdater - generates patch for added tables', async () => {
 
   adapter.setTable('users', newTable)
 
-  const _updater = new SchemaUpdater('/tmp/dbcli-test', adapter, cache)
+  const _updater = new SchemaUpdater(fixtureDbcliPath, adapter, cache)
 
   // Mock file system for config
-  const tempDir = '/tmp/schema-updater-test'
-  await mkdir(tempDir, { recursive: true })
+  const tempDir = await mkdtemp(join(tmpdir(), 'schema-updater-test-'))
 
-  const configPath = `${tempDir}/config.json`
-  await Bun.write(Bun.file(configPath), JSON.stringify(oldConfig, null, 2))
+  try {
+    const configPath = join(tempDir, 'config.json')
+    await Bun.write(Bun.file(configPath), JSON.stringify(oldConfig, null, 2))
 
-  // Create updater with temp path
-  const _testUpdater = new SchemaUpdater(tempDir, adapter, cache)
+    // Create updater with temp path
+    const _testUpdater = new SchemaUpdater(tempDir, adapter, cache)
 
-  // This would work in integration tests, but for unit tests we verify the implementation
-  expect(newTable.columns.length).toBe(2)
-  expect(newTable.columns[0]!.primaryKey).toBe(true)
+    // This would work in integration tests, but for unit tests we verify the implementation
+    expect(newTable.columns.length).toBe(2)
+    expect(newTable.columns[0]!.primaryKey).toBe(true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
 })
 
 test('SchemaUpdater - detects table modifications', async () => {
   const adapter = new MockDatabaseAdapter()
-  const _cache = new SchemaCacheManager('/tmp/dbcli-test')
+  const _cache = new SchemaCacheManager(fixtureDbcliPath)
 
   // Old schema with one column
   const _oldTable: TableSchema = {
@@ -154,7 +161,7 @@ test('SchemaUpdater - detects table modifications', async () => {
 
 test('SchemaUpdater - handles table deletion', async () => {
   const adapter = new MockDatabaseAdapter()
-  const _cache = new SchemaCacheManager('/tmp/dbcli-test')
+  const _cache = new SchemaCacheManager(fixtureDbcliPath)
 
   const config: DbcliConfig = {
     connection: {

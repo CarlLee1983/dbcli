@@ -3,6 +3,9 @@
  */
 
 import { test, expect, describe, spyOn, beforeEach, afterEach } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { exportCommand } from '@/commands/export'
 
 describe('dbcli export command', () => {
@@ -35,21 +38,13 @@ describe('dbcli export command', () => {
   })
 
   test('export command requires SQL argument', async () => {
-    try {
-      await exportCommand('', { format: 'json' })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('', { format: 'json' })).rejects.toThrow('Query required')
   })
 
   test('export command requires format option', async () => {
-    try {
-      await exportCommand('SELECT 1', { format: undefined as any })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('SELECT 1', { format: undefined as any })).rejects.toThrow(
+      '--format'
+    )
   })
 
   test('export command accepts json format', async () => {
@@ -75,23 +70,28 @@ describe('dbcli export command', () => {
   })
 
   test('export command rejects invalid format', async () => {
-    try {
-      await exportCommand('SELECT 1', { format: 'xml' as any })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('SELECT 1', { format: 'xml' as any })).rejects.toThrow('--format')
   })
 
   test('export command accepts optional output path', async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-export-test-'))
+
     try {
-      await exportCommand('SELECT 1', { format: 'json', output: '/tmp/test.json', force: true })
-    } catch {
-      // Expected: process.exit(1) via mock (no config)
+      try {
+        await exportCommand('SELECT 1', {
+          format: 'json',
+          output: join(tempDirectory, 'test.json'),
+          force: true,
+        })
+      } catch {
+        // Expected: process.exit(1) via mock (no config)
+      }
+      // Should fail on database, not on output parameter
+      const errorCalls = (errorSpy as any).mock.calls.flat().join(' ')
+      expect(errorCalls).not.toContain('output')
+    } finally {
+      await rm(tempDirectory, { recursive: true, force: true })
     }
-    // Should fail on database, not on output parameter
-    const errorCalls = (errorSpy as any).mock.calls.flat().join(' ')
-    expect(errorCalls).not.toContain('output')
   })
 
   test('export command handles no config gracefully', async () => {
@@ -107,11 +107,6 @@ describe('dbcli export command', () => {
   })
 
   test('export command requires non-empty SQL', async () => {
-    try {
-      await exportCommand('   ', { format: 'json' })
-    } catch {
-      // Expected: process.exit(1) via mock
-    }
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await expect(exportCommand('   ', { format: 'json' })).rejects.toThrow('Query required')
   })
 })

@@ -4,10 +4,31 @@
  */
 
 import { test, expect, describe } from 'bun:test'
-import { QueryResultFormatter } from '../../../src/formatters/query-result-formatter'
+import {
+  QueryResultFormatter,
+  truncateSerializedCell,
+} from '../../../src/formatters/query-result-formatter'
 import type { QueryResult } from '../../../src/types/query'
 
 describe('QueryResultFormatter - Table Format', () => {
+  test('keeps 120 code points and marks only the omitted suffix', () => {
+    const exact = 'x'.repeat(120)
+    const over = `${exact}y`
+
+    expect(truncateSerializedCell(exact, 120)).toBe(exact)
+    expect(truncateSerializedCell(over, 120)).toBe(`${exact}…(+1 chars)`)
+  })
+
+  test('counts Unicode code points rather than UTF-16 code units', () => {
+    expect(truncateSerializedCell('😀😀😀', 2)).toBe('😀😀…(+1 chars)')
+  })
+
+  test('rejects non-positive or non-integer helper limits', () => {
+    for (const limit of [0, -1, 1.5, Number.NaN]) {
+      expect(() => truncateSerializedCell('value', limit)).toThrow('positive integer')
+    }
+  })
+
   test('formats result as ASCII table with headers and data', () => {
     const formatter = new QueryResultFormatter()
     const result: QueryResult<{ id: number; name: string }> = {
@@ -105,9 +126,79 @@ describe('QueryResultFormatter - Table Format', () => {
     expect(output).toContain('Rows: 1')
     expect(output).not.toContain('Execution time')
   })
+
+  test('shows a truncation footer only when an additional row was proven', () => {
+    const formatter = new QueryResultFormatter()
+    const truncated: QueryResult<{ id: number }> = {
+      rows: [{ id: 1 }, { id: 2 }],
+      rowCount: 2,
+      columnNames: ['id'],
+      executionTimeMs: 42,
+      metadata: { statement: 'SELECT' },
+      appliedLimit: { truncated: true, limitApplied: 2 },
+    }
+    const exact = {
+      ...truncated,
+      metadata: { statement: 'SELECT' as const },
+      appliedLimit: { truncated: false, limitApplied: 2 },
+    }
+
+    expect(formatter.format(truncated, { format: 'table' })).toContain(
+      'Rows: 2 (truncated; limit 2) | Execution time: 42ms'
+    )
+    expect(formatter.format(exact, { format: 'table' })).toContain(
+      'Rows: 2 | Execution time: 42ms'
+    )
+  })
+
+  test('truncates serialized nested objects without mutating result rows', () => {
+    const formatter = new QueryResultFormatter()
+    const data = { nested: { message: 'a very long value' } }
+    const result: QueryResult<{ data: typeof data }> = {
+      rows: [{ data }],
+      rowCount: 1,
+      columnNames: ['data'],
+    }
+    const jsonBefore = formatter.format(result, { format: 'json' })
+
+    const table = formatter.format(result, { format: 'table', truncate: 8 })
+
+    expect(table).toContain('…(+34 chars)')
+    expect(result.rows[0]!.data).toBe(data)
+    expect(result.rows[0]!.data).toEqual({ nested: { message: 'a very long value' } })
+    expect(formatter.format(result, { format: 'json' })).toBe(jsonBefore)
+  })
+
+  test('disables table-cell truncation when truncate is false', () => {
+    const formatter = new QueryResultFormatter()
+    const value = 'x'.repeat(121)
+    const result: QueryResult<{ value: string }> = {
+      rows: [{ value }],
+      rowCount: 1,
+      columnNames: ['value'],
+    }
+
+    const output = formatter.format(result, { format: 'table', truncate: false })
+
+    expect(output).toContain(value)
+    expect(output).not.toContain('…(+')
+  })
 })
 
 describe('QueryResultFormatter - JSON Format', () => {
+  test('is byte-for-byte unchanged when a table truncation option is present', () => {
+    const formatter = new QueryResultFormatter()
+    const result: QueryResult<Record<string, unknown>> = {
+      rows: [{ value: 'x'.repeat(121), nested: { value: 'y'.repeat(20) } }],
+      rowCount: 1,
+      columnNames: ['value', 'nested'],
+    }
+
+    expect(formatter.format(result, { format: 'json', truncate: 5 })).toBe(
+      formatter.format(result, { format: 'json' })
+    )
+  })
+
   test('formats result as valid JSON with all metadata', () => {
     const formatter = new QueryResultFormatter()
     const result: QueryResult<{ id: number; name: string }> = {
@@ -197,9 +288,42 @@ describe('QueryResultFormatter - JSON Format', () => {
     expect(parsed).toHaveProperty('executionTimeMs')
     expect(parsed).toHaveProperty('metadata')
   })
+
+  test('maps internal applied-limit metadata to the public JSON contract', () => {
+    const formatter = new QueryResultFormatter()
+    const result: QueryResult<{ id: number }> = {
+      rows: [{ id: 1 }],
+      rowCount: 1,
+      columnNames: ['id'],
+      metadata: { statement: 'SELECT' },
+      appliedLimit: { truncated: false, limitApplied: 1 },
+    }
+
+    const parsed = JSON.parse(formatter.format(result, { format: 'json' }))
+
+    expect(parsed.metadata).toEqual({
+      statement: 'SELECT',
+      truncated: false,
+      limit_applied: 1,
+    })
+    expect(parsed.metadata.appliedLimit).toBeUndefined()
+  })
 })
 
 describe('QueryResultFormatter - CSV Format', () => {
+  test('is byte-for-byte unchanged when a table truncation option is present', () => {
+    const formatter = new QueryResultFormatter()
+    const result: QueryResult<{ value: string }> = {
+      rows: [{ value: 'x'.repeat(121) }],
+      rowCount: 1,
+      columnNames: ['value'],
+    }
+
+    expect(formatter.format(result, { format: 'csv', truncate: 5 })).toBe(
+      formatter.format(result, { format: 'csv' })
+    )
+  })
+
   test('formats result as CSV with headers and data rows', () => {
     const formatter = new QueryResultFormatter()
     const result: QueryResult<{ id: number; name: string }> = {

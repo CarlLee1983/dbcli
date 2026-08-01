@@ -136,4 +136,65 @@ describe('QueryExecutor with blacklist column filtering', () => {
     expect(result.columnNames).toContain('password')
     expect(result.metadata?.securityNotification).toBeUndefined()
   })
+
+  it('projects SQL inclusion after blacklist filtering and keeps types aligned', async () => {
+    const adapter = createMockAdapter(mockRows)
+    const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+    const executor = new QueryExecutor(adapter, 'admin', validator)
+
+    const result = await executor.execute('SELECT * FROM users', {
+      fieldSelection: { mode: 'include', paths: ['name', 'password', 'id'] },
+    })
+
+    expect(result.columnNames).toEqual(['name', 'id'])
+    expect(result.rows).toEqual([
+      { name: 'Alice', id: 1 },
+      { name: 'Bob', id: 2 },
+    ])
+    expect(result.columnTypes).toEqual(['varchar', 'integer'])
+    expect(result.metadata?.securityNotification).toBeDefined()
+  })
+
+  it('applies SQL exclusion after blacklist filtering', async () => {
+    const adapter = createMockAdapter(mockRows)
+    const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+    const executor = new QueryExecutor(adapter, 'admin', validator)
+
+    const result = await executor.execute('SELECT * FROM users', {
+      fieldSelection: { mode: 'exclude', paths: ['email'] },
+    })
+
+    expect(result.columnNames).toEqual(['id', 'name', 'api_key'])
+    expect(result.rows[0]).toEqual({ id: 1, name: 'Alice', api_key: 'key_abc' })
+    expect(result.columnTypes).toHaveLength(result.columnNames.length)
+  })
+
+  it('removes a blacklisted dotted child before projecting its SQL parent', async () => {
+    const rows = [
+      {
+        id: 1,
+        'profile.email': 'flattened-secret@example.com',
+        profile: { email: 'secret@example.com', city: 'Taipei' },
+      },
+    ]
+    const adapter = createMockAdapter(rows)
+    const validator = makeValidator({
+      tables: [],
+      columns: { users: ['profile.email'] },
+    })
+    const executor = new QueryExecutor(adapter, 'admin', validator)
+
+    const result = await executor.execute('SELECT * FROM users', {
+      fieldSelection: { mode: 'include', paths: ['profile'] },
+    })
+
+    expect(result.rows).toEqual([{ profile: { city: 'Taipei' } }])
+    expect(result.columnNames).toEqual(['profile'])
+    expect(result.metadata?.securityNotification).toBeDefined()
+    expect(rows[0]).toEqual({
+      id: 1,
+      'profile.email': 'flattened-secret@example.com',
+      profile: { email: 'secret@example.com', city: 'Taipei' },
+    })
+  })
 })

@@ -15,6 +15,12 @@ export interface PreparedExecution {
   rewrittenSql: string
   /** Per-family execution hints (e.g. ES index pattern, mongo collection/operation) */
   execHints?: { index?: string; collection?: string; mongoOperation?: 'find' | 'aggregate' }
+  /**
+   * Row cap dbcli imposed on the snippet. Present only when the guard wrapped
+   * the query; the driver SQL then fetches guardLimit + 1 rows so callers can
+   * report truncation truthfully instead of guessing from the row count.
+   */
+  guardLimit?: number
 }
 
 export function prepareExecution(
@@ -48,5 +54,6 @@ export function prepareExecution(
     warnings: prepared.warnings,
     rewrittenSql: prepared.rewrittenBody,
     execHints: prepared.execHints,
+    ...(prepared.guardLimit !== undefined ? { guardLimit: prepared.guardLimit } : {}),
   }
 }

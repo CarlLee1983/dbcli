@@ -3,9 +3,11 @@
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { setGlobalConnectionName, getSchemaIsolationConnectionName } from '@/core/config'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TMP_DIR = '/tmp/dbcli-schema-isolation-name-test'
+let tempDirectory: string
 
 const V2_CONFIG = {
   version: 2,
@@ -33,17 +35,19 @@ const V2_CONFIG = {
 }
 
 describe('getSchemaIsolationConnectionName', () => {
-  const configPath = join(TMP_DIR, '.dbcli')
+  let configPath: string
 
   beforeEach(async () => {
     setGlobalConnectionName(undefined)
-    await Bun.$`mkdir -p ${configPath}`
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-schema-isolation-name-test-'))
+    configPath = join(tempDirectory, '.dbcli')
+    await mkdir(configPath, { recursive: true })
     await Bun.file(join(configPath, 'config.json')).write(JSON.stringify(V2_CONFIG, null, 2))
   })
 
   afterEach(async () => {
     setGlobalConnectionName(undefined)
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   test('V2 + no --use → default connection name', async () => {

@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+setDefaultTimeout(15_000)
 
 function safeEnv(): NodeJS.ProcessEnv {
   return {
@@ -73,7 +75,7 @@ describe('lint subprocess safety and redaction', () => {
   test('success audit redacts multiple SQL inputs, global values, and bulk values', async () => {
     const configPath = join(root, 'CONFIG_SENTINEL', '.dbcli')
     const connectionName = 'USE_SENTINEL'
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, connectionName)
     const bulkPath = join(root, 'BULK_SENTINEL.sql')
     await writeFile(bulkPath, 'SELECT 1;', 'utf8')
@@ -117,7 +119,7 @@ describe('lint subprocess safety and redaction', () => {
   test('failure audit and last-recovery redact global, positional, and bulk values', async () => {
     const configPath = join(root, 'FAIL_CONFIG_SENTINEL', '.dbcli')
     const connectionName = 'FAIL_USE_SENTINEL'
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, connectionName)
 
     const result = await run(
@@ -159,7 +161,7 @@ describe('lint subprocess safety and redaction', () => {
 
   test('success audit redacts leading-comment SQL after the end-of-options delimiter', async () => {
     const configPath = join(root, 'DELIMITER_SUCCESS_CONFIG', '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, 'primary')
     const sql = "-- SUCCESS_COMMENT_SENTINEL\nSELECT 'SUCCESS_VALUE_SENTINEL'"
 
@@ -188,7 +190,7 @@ describe('lint subprocess safety and redaction', () => {
 
   test('failure audit and recovery scrub leading-comment SQL after the delimiter', async () => {
     const configPath = join(root, 'DELIMITER_FAILURE_CONFIG', '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, 'primary')
     const sql = "-- FAILURE_COMMENT_SENTINEL\nSELECT 'FAILURE_VALUE_SENTINEL' FROM"
 
@@ -222,7 +224,7 @@ describe('lint subprocess safety and redaction', () => {
 
   test('lint suggests analyze only for proven read-only SQL without creating an adapter', async () => {
     const configPath = join(root, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, 'primary')
     const unsafeStatements = [
       'UPDATE users SET active = false',
@@ -267,7 +269,7 @@ describe('lint subprocess safety and redaction', () => {
 
   test('explain --analyze rejects unproven SQL before attempting a connection', async () => {
     const configPath = join(root, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await writeConfig(configPath, 'primary')
 
     for (const sql of [
@@ -292,7 +294,7 @@ describe('lint subprocess safety and redaction', () => {
     'session assignment gets plain lint guidance and --analyze rejects before connecting (%s)',
     async (system) => {
       const configPath = join(root, `.dbcli-${system}`)
-      await Bun.$`mkdir -p ${configPath}`
+      await mkdir(configPath, { recursive: true })
       await writeConfig(configPath, 'primary', system)
       const sql = 'SELECT @session_value := 1'
 

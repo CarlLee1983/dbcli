@@ -3,18 +3,24 @@
  * Verifies LIMIT injection only happens for SELECT, not for SHOW/DESCRIBE/EXPLAIN.
  */
 
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, spyOn } from 'bun:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { QueryExecutor } from '@/core/query-executor'
 import type { DatabaseAdapter } from '@/adapters/types'
 
-function makeSpyAdapter(): { adapter: DatabaseAdapter; lastSql: () => string } {
+function makeSpyAdapter(rows: Record<string, unknown>[] = []): {
+  adapter: DatabaseAdapter
+  lastSql: () => string
+} {
   let captured = ''
   const adapter: DatabaseAdapter = {
     connect: async () => {},
     disconnect: async () => {},
     execute: async <T = Record<string, unknown>>(sql: string) => {
       captured = sql
-      return { rows: [] as T[], affectedRows: 0 }
+      return { rows: rows as T[], affectedRows: rows.length }
     },
     listTables: async () => [],
     getTableSchema: async () => ({
@@ -34,8 +40,8 @@ describe('QueryExecutor auto-LIMIT scope', () => {
   it('injects LIMIT for plain SELECT in query-only mode', async () => {
     const { adapter, lastSql } = makeSpyAdapter()
     const exec = new QueryExecutor(adapter, 'query-only')
-    await exec.execute('SELECT * FROM users')
-    expect(lastSql()).toMatch(/LIMIT\s+1000/i)
+    await exec.execute('SELECT * FROM users', { detectTruncation: true })
+    expect(lastSql()).toMatch(/LIMIT\s+1001/i)
   })
 
   it('does NOT inject LIMIT for SHOW INDEX in query-only mode', async () => {
@@ -71,5 +77,170 @@ describe('QueryExecutor auto-LIMIT scope', () => {
     const exec = new QueryExecutor(adapter, 'query-only')
     await exec.execute('SELECT * FROM users LIMIT 50')
     expect(lastSql()).toBe('SELECT * FROM users LIMIT 50')
+  })
+
+  it('does not mistake quoted identifiers, strings, or comments for a LIMIT clause', async () => {
+    for (const sql of [
+      'SELECT "limit" FROM users',
+      'SELECT `limit` FROM users',
+      "SELECT 'LIMIT 50' AS note FROM users",
+      'SELECT * FROM users /* LIMIT 50 */',
+    ]) {
+      const { adapter, lastSql } = makeSpyAdapter()
+      const exec = new QueryExecutor(adapter, 'query-only')
+      await exec.execute(sql, { detectTruncation: true })
+      expect(lastSql()).toMatch(/LIMIT\s+1001$/i)
+    }
+  })
+
+  it('preserves a parameterized user-authored LIMIT', async () => {
+    for (const sql of [
+      'SELECT * FROM users LIMIT ?',
+      'SELECT * FROM users LIMIT $1',
+      'SELECT * FROM users LIMIT :max_rows',
+      'SELECT * FROM users LIMIT ALL',
+    ]) {
+      const { adapter, lastSql } = makeSpyAdapter()
+      const exec = new QueryExecutor(adapter, 'query-only')
+      await exec.execute(sql, { detectTruncation: true })
+      expect(lastSql()).toBe(sql)
+    }
+  })
+
+  for (const [label, sourceRows, truncated, visibleRows] of [
+    ['N-1', 1, false, 1],
+    ['N', 2, false, 2],
+    ['N+1', 3, true, 2],
+    ['more than N+1', 4, true, 2],
+  ] as const) {
+    it(`reports truthful applied-limit metadata for ${label} rows`, async () => {
+      const rows = Array.from({ length: sourceRows }, (_, id) => ({ id }))
+      const { adapter, lastSql } = makeSpyAdapter(rows)
+      const exec = new QueryExecutor(adapter, 'query-only')
+
+      const result = await exec.execute('SELECT * FROM users', {
+        limitValue: 2,
+        detectTruncation: true,
+      })
+
+      expect(lastSql()).toMatch(/LIMIT\s+3/i)
+      expect(result.rows).toHaveLength(visibleRows)
+      expect(result.rowCount).toBe(visibleRows)
+      expect(result.appliedLimit).toEqual({ truncated, limitApplied: 2 })
+      expect(result.metadata?.affectedRows).toBe(visibleRows)
+    })
+  }
+
+  it('keeps QueryExecutor callers outside dbcli query on the previous limit contract', async () => {
+    const rows = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    const { adapter, lastSql } = makeSpyAdapter(rows)
+    const exec = new QueryExecutor(adapter, 'query-only')
+
+    const result = await exec.execute('SELECT * FROM users', { limitValue: 2 })
+
+    expect(lastSql()).toBe('SELECT * FROM users LIMIT 2')
+    expect(result.appliedLimit).toBeUndefined()
+    expect(result.rows).toEqual(rows)
+  })
+
+  it('records the visible SQL row count in audit metadata, not the N+1 lookahead', async () => {
+    const workDir = await mkdtemp(join(tmpdir(), 'dbcli-autolimit-audit-'))
+    try {
+      const { adapter } = makeSpyAdapter([{ id: 1 }, { id: 2 }, { id: 3 }])
+      const config = {
+        connection: { system: 'postgresql' },
+        permission: 'query-only',
+        audit: { enabled: true },
+        effectiveConnectionName: 'autolimit',
+      }
+      const exec = new QueryExecutor(adapter, 'query-only', undefined, config as any, {
+        config: workDir,
+      })
+
+      await exec.execute('SELECT * FROM users', {
+        limitValue: 2,
+        detectTruncation: true,
+      })
+
+      const log = await readFile(join(workDir, '.dbcli', 'audit', 'autolimit.jsonl'), 'utf8')
+      const entry = JSON.parse(log.trim())
+      expect(entry.metadata.rows_affected).toBe(2)
+    } finally {
+      await rm(workDir, { recursive: true, force: true })
+    }
+  })
+
+  it('applies an explicit CLI limit outside query-only mode', async () => {
+    const { adapter, lastSql } = makeSpyAdapter([{ id: 1 }, { id: 2 }])
+    const exec = new QueryExecutor(adapter, 'admin')
+
+    const result = await exec.execute('SELECT * FROM users;', {
+      limitValue: 1,
+      detectTruncation: true,
+    })
+
+    expect(lastSql()).toBe('SELECT * FROM users LIMIT 2')
+    expect(result.rows).toEqual([{ id: 1 }])
+    expect(result.appliedLimit).toEqual({ truncated: true, limitApplied: 1 })
+  })
+
+  it('omits applied-limit metadata for --no-limit', async () => {
+    const rows = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    const { adapter, lastSql } = makeSpyAdapter(rows)
+    const exec = new QueryExecutor(adapter, 'query-only')
+
+    const result = await exec.execute('SELECT * FROM users', {
+      autoLimit: false,
+      detectTruncation: true,
+    })
+
+    expect(lastSql()).toBe('SELECT * FROM users')
+    expect(result.rows).toEqual(rows)
+    expect(result.appliedLimit).toBeUndefined()
+  })
+
+  it('omits applied-limit metadata for a user-authored LIMIT', async () => {
+    const rows = [{ id: 1 }, { id: 2 }]
+    const { adapter, lastSql } = makeSpyAdapter(rows)
+    const exec = new QueryExecutor(adapter, 'query-only')
+
+    const result = await exec.execute('SELECT * FROM users LIMIT 2', {
+      detectTruncation: true,
+    })
+
+    expect(lastSql()).toBe('SELECT * FROM users LIMIT 2')
+    expect(result.rows).toEqual(rows)
+    expect(result.appliedLimit).toBeUndefined()
+  })
+
+  it('does not print the auto-limit warning before an adapter failure', async () => {
+    const { adapter } = makeSpyAdapter()
+    adapter.execute = async () => {
+      throw new Error('adapter exploded')
+    }
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const exec = new QueryExecutor(adapter, 'query-only')
+      await expect(exec.execute('SELECT * FROM users')).rejects.toThrow('adapter exploded')
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('suppresses success diagnostics in recovery mode', async () => {
+    const { adapter } = makeSpyAdapter()
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const exec = new QueryExecutor(adapter, 'query-only', undefined, undefined, {
+        recovery: true,
+      })
+      await exec.execute('SELECT * FROM users')
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })

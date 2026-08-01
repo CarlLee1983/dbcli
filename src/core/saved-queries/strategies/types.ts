@@ -9,6 +9,8 @@ export interface PreparedExecution {
   rewrittenBody: string
   warnings: string[]
   execHints?: { index?: string; collection?: string; mongoOperation?: 'find' | 'aggregate' }
+  /** Row cap dbcli imposed; driver SQL fetches one extra row to detect truncation. */
+  guardLimit?: number
 }
 
 export interface EngineStrategy {

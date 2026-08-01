@@ -5,6 +5,32 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 查詢工作流程（GitHub issues #4–#10）
+
+### Added
+
+- **欄位投影 `--fields`。** SQL 與 MongoDB 通用；`--fields a,b` 取用、`--fields=-raw_response` 排除，兩種形式不可混用。MongoDB 會把 `projection`（find）或 `$project`（aggregate）下推給 driver，未明確指定時不回傳 `_id`。黑名單欄位不會因為被 `--fields` 點名而洩漏。
+- **欄位值截斷 `--truncate`。** table 輸出預設在 120 個 Unicode code point 截斷並標記 `…(+N chars)`，以 code point 計數所以不會切壞中文與 emoji；`--no-truncate` 可關閉。`--format json` / `csv` 會拒絕此旗標而非靜默忽略。
+- **從檔案或 stdin 讀查詢 `-f, --query-file`。** `-f -` 讀 stdin，可用 heredoc 傳含 `$regex`、巢狀日期物件的 MongoDB pipeline，完全避開 shell 引號問題。同時給檔案與位置參數會明確報錯。
+- **單次連線指定。** 新增 `DBCLI_CONNECTION` 環境變數，`query` / `list` / `schema` / `export` / `check` 也接受子指令層級的 `--use`。優先序為 `--use` > `DBCLI_CONNECTION` > 儲存的預設值，兩者都不會改寫 `.dbcli/config.json`，因此平行執行不會互相污染。
+- **唯讀多連線扇出 `--use a,b`。** 同一查詢對多個連線執行，JSON 回傳 `results` 陣列並逐一標示 `ok` / `error`，table 則分段標註連線名。單一連線失敗不會取消其他連線。彙總 exit code：全成功 `0`、部分失敗 `2`、全失敗或執行前拒絕 `1`。寫入語句、`--recovery`、`--ui` 與 CSV/HTML 輸出在扇出下一律拒絕。
+
+### Changed
+
+- **截斷改為出現在結果本身。** dbcli 擁有的 row cap 會多取一列前瞻，因此能區分「剛好 N 筆」與「被砍到 N 筆」：table footer 顯示 `Rows: N (truncated; limit N)`、`--format json` 帶 `metadata.truncated` 與 `metadata.limit_applied`、CSV 附加 `# truncated; limit N` 註解行。`dbcli q` 的 snippet size guard 同樣依此回報，不再讓整數列數被誤讀為全集。
+- **`dbcli export` 撞到 auto-limit 改為 fail closed。** 匯出檔沒有地方記錄資料被丟掉（jsonl 是一行一筆、MongoDB `--format json` 是裸陣列），stderr 警告又會在重導向後消失，因此改為 exit `1` 且不寫檔，要求以 `--no-limit` 或 `--limit N` 明確表態。Elasticsearch 匯出的 1000 筆上限同此處理。
+- **CLI 錯誤輸出收斂。** 連線類錯誤在所有指令路徑都會被頂層 handler 攔截並格式化，stderr 首行即為人類可讀訊息，不再由 Bun 印出打包後的 code frame 與未解碼的中文跳脫序列。stack 改掛在 `-v` / `-vv` 之下，預設不輸出。
+
+### Fixed
+
+- **`--no-limit` 過去被靜默忽略。** Commander 會把 `--no-limit` 折進 `limit` 屬性（設為 `false`）而不會產生 `noLimit`，但 `query` / `q` / `export` 都讀 `options.noLimit`，導致這個旗標自始無效——`query` 仍套用 1000 筆上限，`q` 仍包 size guard。CLI 邊界現在會把 Commander 的否定形式轉回指令實際讀取的形狀。
+- **`dbcli export` 的 SQL 路徑忽略 `--limit` 與 `--no-limit`。** 該分支未把選項傳給 QueryExecutor，任何 `--limit N` 都不生效。
+- **`-v` / `-vv` 的 stack 開關過去對 `q` / `insert` / `update` / `delete` 無效。** 這四個指令自行輸出在地化訊息、繞過共用的錯誤呈現層，因此 verbose 對它們不會多印任何東西。改為共用同一個呈現函式：措辭維持不變，但 verbose 下會補上 stack。
+- **Redis 的 size-guard warning 在 `query` 被丟棄。** adapter 早已算出 `REDIS_SIZE_TRUNCATE` / `REDIS_SIZE_REWRITE` / `REDIS_BLACKLIST_FILTERED`，但 `query` 分支完全沒讀 `result.warnings`——文件卻聲稱結果會帶 `warnings[]`。現在每則 warning 都會印到 stderr，且被裁切的回覆會回報 `truncated` / `limit_applied`，與其他引擎一致。
+- **`--query-file -` 在互動式終端會無提示空等。** 改為立即拒絕並說明需要 piped input，與 repo 中其他 stdin 消費端（`insert`、`shell`、`audit`）既有的 TTY 檢查一致。
+- **單一連線 (v1) 設定會靜默忽略 `--use` / `DBCLI_CONNECTION`。** v1 沒有具名連線可選，過去卻照樣執行那唯一的連線，讓使用者以為切換成功——正是 issue #7 要避免的情境。現在會明確報錯並指出升級為 v2 的方式。
+- **skill assets 與 reference 補齊。** `assets/SKILL.md`、`SKILL.zh-TW.md` 與 `reference.md` 新增查詢工作流程旗標章節；`reference.md` 原本記載「MongoDB 不套用 auto-limit」與實際行為不符，已更正為套用於 filter 與未自帶 `$limit` 的 pipeline。
+
 ## [1.42.0] - 2026-07-20 - Drizzle Snapshot 與 ORM DDL 工作流擴充
 
 ### Added

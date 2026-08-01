@@ -102,4 +102,17 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     await writeAuditEntry(config, 'query', { config: workDir }, { success: true, target: 'users' })
     expect(true).toBe(true)
   })
+
+  test('explicit connection context selects the per-connection audit file', async () => {
+    const config = makeConfig(true)
+    await writeAuditEntry(
+      config,
+      'query',
+      { config: workDir, connectionName: 'staging' },
+      { success: true, target: 'users' }
+    )
+
+    expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'staging.jsonl')).exists()).toBe(true)
+    expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).exists()).toBe(false)
+  })
 })

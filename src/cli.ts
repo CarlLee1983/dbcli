@@ -4,9 +4,62 @@ import { formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
+import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
 import { buildProgram } from './program'
+import { presentCliError } from './utils/cli-error'
 import { join } from 'path'
+import { writeSync } from 'node:fs'
+import { format } from 'node:util'
+
+/**
+ * Bun versions supported by dbcli can exit before asynchronous pipe writes are
+ * drained. Use blocking fd writes whenever stdout is redirected so every CLI
+ * output path, including commands that call process.exit(), is complete.
+ */
+function installSynchronousRedirectedStdout(): void {
+  if (process.stdout.isTTY) return
+
+  const retrySignal = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
+  const writeAll = (bytes: Uint8Array): void => {
+    let offset = 0
+    while (offset < bytes.byteLength) {
+      let written: number
+      try {
+        written = writeSync(1, bytes, offset, bytes.byteLength - offset)
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'EAGAIN' || code === 'EWOULDBLOCK') {
+          Atomics.wait(retrySignal, 0, 0, 1)
+          continue
+        }
+        throw error
+      }
+      if (written === 0) throw new Error('Unable to write CLI output to stdout')
+      offset += written
+    }
+  }
+
+  process.stdout.write = ((
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void
+  ): boolean => {
+    const encoding = typeof encodingOrCallback === 'string' ? encodingOrCallback : undefined
+    const onComplete =
+      typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk, encoding) : Buffer.from(chunk)
+    writeAll(bytes)
+    onComplete?.()
+    return true
+  }) as typeof process.stdout.write
+
+  console.log = (...args: unknown[]) => {
+    writeAll(Buffer.from(`${format(...args)}\n`))
+  }
+}
+
+installSynchronousRedirectedStdout()
 
 // Module-level state for background version check
 let _bgVersionCheckResult: { hasUpdate: boolean; latestVersion: string } | null | undefined
@@ -28,8 +81,13 @@ const program = buildProgram()
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()
 
-  const useConnection = opts.use as string | undefined
-  setGlobalConnectionName(useConnection)
+  setGlobalConnectionName(
+    resolveConnectionSelector({
+      root: opts.use as string | undefined,
+      command: actionCommand.opts().use as string | undefined,
+      environment: process.env.DBCLI_CONNECTION,
+    })
+  )
 
   if (opts.color === false) {
     process.env.NO_COLOR = '1'
@@ -92,6 +150,11 @@ if (!process.argv.slice(2).length) {
   program.outputHelp()
 }
 
-program.parse(process.argv)
+try {
+  await program.parseAsync(process.argv)
+} catch (error) {
+  presentCliError(error)
+  process.exitCode = 1
+}
 
 export default program

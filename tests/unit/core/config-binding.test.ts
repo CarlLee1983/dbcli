@@ -7,9 +7,11 @@ import {
   resolveConfigStoragePath,
   writeProjectBinding,
 } from '@/core/config-binding'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TMP_DIR = '/tmp/dbcli-config-binding-test'
+let tempDirectory: string
 
 const SAMPLE_V2_CONFIG = {
   version: 2 as const,
@@ -32,15 +34,17 @@ const SAMPLE_V2_CONFIG = {
 }
 
 describe('config binding layout', () => {
-  const projectPath = join(TMP_DIR, '.dbcli')
+  let projectPath: string
 
   beforeEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
-    await Bun.$`mkdir -p ${projectPath}`
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-config-binding-test-'))
+    projectPath = join(tempDirectory, '.dbcli')
+    await mkdir(projectPath, { recursive: true })
   })
 
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   test('resolves an unbound project path to itself', async () => {

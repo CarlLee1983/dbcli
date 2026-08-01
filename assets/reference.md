@@ -143,13 +143,67 @@ dbcli query "SELECT day, dau FROM dau_daily" --ui                # open in brows
 dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdout
 ```
 
-**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--recovery`
+**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
+
+#### Field projection (`--fields`)
+
+```bash
+dbcli query "SELECT * FROM bet_log" --fields sn,currency,bet
+dbcli query "SELECT * FROM bet_log" --fields=-raw_response,-created_at   # exclusion
+dbcli query '{"station_code":"cmg9998"}' --collection raw_bet_log --fields sn,bet
+```
+
+Include and exclude forms cannot be mixed. Dotted paths (`user.email`) are supported.
+On MongoDB the selection becomes a driver-level `projection` (find) or a trailing
+`$project` stage (aggregate), so the omitted fields never leave the server; `_id` is
+excluded unless listed explicitly. On SQL the rows are projected after fetch — write
+an explicit column list in the `SELECT` when you also want to cut transfer cost.
+Blacklisted columns stay blacklisted: naming one in `--fields` yields no value and the
+result still carries the blacklist `securityNotification`. A requested field that does
+not exist in the result comes back as `null`.
+
+#### Cell truncation (`--truncate`)
+
+```bash
+dbcli query "SELECT sn, raw_response FROM bet_log"                 # table: 120-char default
+dbcli query "SELECT sn, raw_response FROM bet_log" --truncate 40
+dbcli query "SELECT sn, raw_response FROM bet_log" --no-truncate
+```
+
+Table output truncates each serialized cell at 120 Unicode code points by default and
+appends `…(+N chars)`; counting by code point keeps multi-byte characters and emoji
+intact. `--truncate <n>` sets the width, `--no-truncate` disables it. Both are rejected
+with `--format json` / `csv`, which exist to be parsed downstream.
+
+#### Query from a file or stdin (`-f`)
+
+```bash
+dbcli query -f report.sql
+dbcli query --collection raw_bet_log -f - <<'EOF'
+[{"$match": {"sn": {"$regex": "^SN0000"}}}, {"$group": {"_id": "$currency", "n": {"$sum": 1}}}]
+EOF
+```
+
+Avoids shell quoting entirely — the usual reason a Mongo pipeline containing `$regex`
+or nested date objects fails. Supplying both `--query-file` and positional query text
+is an error rather than a silent choice, and an empty file or empty stdin is refused.
+`-f -` requires piped input: on an interactive terminal dbcli refuses immediately
+instead of waiting silently for input that is never coming.
+
+#### Truncation is stated, not implied
+
+When the query-only auto-limit trims the result, the table footer reads
+`Rows: 1000 (truncated; limit 1000)`, `--format json` carries
+`metadata.truncated` and `metadata.limit_applied`, and CSV appends a `#` comment line.
+dbcli fetches one row past the cap to decide this, so a result of exactly 1000 rows is
+reported as `truncated: false` — never infer truncation from a round row count.
 
 > **MongoDB notes:**
 > - SQL syntax is rejected — use JSON object (filter) or JSON array (pipeline)
 > - `--collection <name>` is required
-> - Auto-limit does not apply; use `$limit` in your pipeline if needed
+> - Query-only auto-limit applies to filters and to pipelines without their own
+>   `$limit`; the applied cap and truncation are reported in the result metadata
 
 > **Redis notes:**
 > - The first token must be an allow-listed command (`GET`/`SET`/`HGET`/`HSET`/`DEL`/...). Unknown commands are refused.

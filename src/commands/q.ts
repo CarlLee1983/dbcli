@@ -24,6 +24,8 @@ import {
   SavedQueryError,
 } from '@/core/saved-queries'
 import { colors } from '@/utils/colors'
+import { trimAppliedLimit } from '@/core/applied-limit'
+import { printLocalizedCliError } from '@/utils/cli-error'
 import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
 
 export interface DryRunInput {
@@ -31,6 +33,8 @@ export interface DryRunInput {
   driverSql: string
   values: Array<string | number | boolean | null>
   execHints: { index?: string } | undefined
+  /** Row cap dbcli wrapped the snippet in; the SQL fetches one row past it. */
+  guardLimit?: number
 }
 
 export function formatDryRun(input: DryRunInput): string {
@@ -50,6 +54,11 @@ export function formatDryRun(input: DryRunInput): string {
   }
   lines.push(input.driverSql)
   lines.push('Bind values: ' + JSON.stringify(input.values))
+  if (input.guardLimit !== undefined) {
+    lines.push(
+      `Size guard: capped at ${input.guardLimit} rows; the extra row is fetched only to detect truncation and is discarded. Use --no-limit to remove the cap.`
+    )
+  }
   return lines.join('\n')
 }
 
@@ -106,6 +115,7 @@ export async function qCommand(
           driverSql: prepared.driver.sql,
           values: prepared.driver.values,
           execHints: prepared.execHints,
+          ...(prepared.guardLimit !== undefined ? { guardLimit: prepared.guardLimit } : {}),
         })
       )
       await writeAuditEntry(config, 'q', options, {
@@ -153,11 +163,18 @@ export async function qCommand(
         family === 'sql' ? prepared.driver.values : indexParams
       )
       const executionTimeMs = Math.round(performance.now() - start)
-      const columnNames = result.rows[0] ? Object.keys(result.rows[0]) : []
+      // Trim the guard's one-row lookahead before anything reads the rows, so
+      // row counts stay truthful and truncation is reported rather than guessed.
+      const limitedResult =
+        prepared.guardLimit === undefined
+          ? undefined
+          : trimAppliedLimit(result.rows, prepared.guardLimit)
+      const resultRows = limitedResult?.rows ?? result.rows
+      const columnNames = resultRows[0] ? Object.keys(resultRows[0]) : []
       const filtered =
         family === 'redis'
-          ? { filteredRows: result.rows, omittedColumns: [] as string[] }
-          : blacklistValidator.filterColumns(targetName, result.rows, columnNames)
+          ? { filteredRows: resultRows, omittedColumns: [] as string[] }
+          : blacklistValidator.filterColumns(targetName, resultRows, columnNames)
 
       if (options.ui || options.format === 'html') {
         const html = await generateHtmlReport({
@@ -204,6 +221,7 @@ export async function qCommand(
                 }
               : {}),
           },
+          ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
         },
         { format: (options.format as any) ?? 'table' }
       )
@@ -304,22 +322,25 @@ async function handleQError(
   }
 
   if (error instanceof SavedQueryError) {
-    console.error(error.message)
+    printLocalizedCliError(error.message, error)
     process.exit(1)
   }
   if (error instanceof BlacklistError) {
-    console.error(error.message)
+    printLocalizedCliError(error.message, error)
     process.exit(1)
   }
   if (error instanceof PermissionError) {
-    console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
+    printLocalizedCliError(
+      t_vars('errors.permission_denied', { required: error.requiredPermission }),
+      error
+    )
     process.exit(1)
   }
   if (error instanceof ConnectionError) {
-    console.error(t_vars('errors.connection_failed', { message: error.message }))
+    printLocalizedCliError(t_vars('errors.connection_failed', { message: error.message }), error)
     process.exit(1)
   }
-  console.error(t_vars('errors.message', { message: (error as Error).message }))
+  printLocalizedCliError(t_vars('errors.message', { message: (error as Error).message }), error)
   process.exit(1)
 }
 

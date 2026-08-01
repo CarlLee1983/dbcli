@@ -1,9 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { switchDefault, listConnectionsForDisplay } from '@/commands/use'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TMP_DIR = '/tmp/dbcli-use-test'
-const CONFIG_DIR = join(TMP_DIR, '.dbcli')
+let tempDirectory: string
+let configDirectory: string
 
 const baseV2Config = {
   version: 2,
@@ -35,23 +37,25 @@ const baseV2Config = {
 
 describe('use command', () => {
   beforeEach(async () => {
-    await Bun.$`mkdir -p ${CONFIG_DIR}`
-    await Bun.write(join(CONFIG_DIR, 'config.json'), JSON.stringify(baseV2Config, null, 2))
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-use-test-'))
+    configDirectory = join(tempDirectory, '.dbcli')
+    await mkdir(configDirectory, { recursive: true })
+    await Bun.write(join(configDirectory, 'config.json'), JSON.stringify(baseV2Config, null, 2))
   })
 
   afterEach(async () => {
-    await Bun.$`rm -rf ${TMP_DIR}`
+    await rm(tempDirectory, { recursive: true, force: true })
   })
 
   describe('switchDefault', () => {
     test('should switch default connection', async () => {
-      await switchDefault(CONFIG_DIR, 'staging', baseV2Config as any)
-      const updated = JSON.parse(await Bun.file(join(CONFIG_DIR, 'config.json')).text())
+      await switchDefault(configDirectory, 'staging', baseV2Config as any)
+      const updated = JSON.parse(await Bun.file(join(configDirectory, 'config.json')).text())
       expect(updated.default).toBe('staging')
     })
 
     test('should throw for non-existent connection', async () => {
-      expect(switchDefault(CONFIG_DIR, 'nonexistent', baseV2Config as any)).rejects.toThrow(
+      expect(switchDefault(configDirectory, 'nonexistent', baseV2Config as any)).rejects.toThrow(
         /nonexistent/
       )
     })

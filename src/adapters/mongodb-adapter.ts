@@ -196,7 +196,7 @@ export class MongoDBAdapter implements QueryableAdapter {
   async execute<T>(
     query: string,
     params?: unknown[],
-    options?: { limit?: number }
+    options?: { limit?: number; projection?: Record<string, 0 | 1> }
   ): Promise<ExecutionResult<T>> {
     const db = this.getDatabase()
     const collectionName = params?.[0] as string
@@ -213,20 +213,24 @@ export class MongoDBAdapter implements QueryableAdapter {
     let docs: T[]
     if (Array.isArray(parsed)) {
       const stages = parsed as Record<string, unknown>[]
-      const lastStage = stages[stages.length - 1]
-      const alreadyHasLimit = !!lastStage && typeof lastStage === 'object' && '$limit' in lastStage
-      const finalStages =
+      const alreadyHasLimit = stages.some(
+        (stage) => stage !== null && typeof stage === 'object' && '$limit' in stage
+      )
+      const limitedStages =
         typeof limit === 'number' && limit > 0 && !alreadyHasLimit
           ? [...stages, { $limit: limit }]
           : stages
+      const finalStages = options?.projection
+        ? [...limitedStages, { $project: options.projection }]
+        : limitedStages
       docs = (await collection.aggregate(finalStages).toArray()) as T[]
     } else {
       // mongo driver treats limit(0) as "no limit"
       const cap = typeof limit === 'number' && limit > 0 ? limit : 0
-      docs = (await collection
-        .find(parsed as object)
-        .limit(cap)
-        .toArray()) as T[]
+      const cursor = options?.projection
+        ? collection.find(parsed as object, { projection: options.projection })
+        : collection.find(parsed as object)
+      docs = (await cursor.limit(cap).toArray()) as T[]
     }
 
     return { rows: docs, affectedRows: docs.length }

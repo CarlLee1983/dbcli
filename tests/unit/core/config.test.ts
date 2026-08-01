@@ -2,17 +2,23 @@
  * 配置模組單元測試
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, afterAll } from 'bun:test'
 import { configModule } from '@/core/config'
 import { ConfigError } from '@/utils/errors'
 import type { DbcliConfig } from '@/utils/validation'
-import { existsSync, unlinkSync } from 'fs'
-import { $ } from 'bun'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // 用於測試的臨時路徑
-const TEST_CONFIG_PATH = '/tmp/test.dbcli.json'
+const TEST_ROOT = mkdtempSync(join(tmpdir(), 'dbcli-config-test-'))
+const TEST_CONFIG_PATH = join(TEST_ROOT, 'test.dbcli.json')
 
 describe('configModule', () => {
+  afterAll(() => {
+    rmSync(TEST_ROOT, { recursive: true, force: true })
+  })
+
   afterEach(() => {
     // 清理測試文件
     if (existsSync(TEST_CONFIG_PATH)) {
@@ -201,14 +207,14 @@ describe('configModule', () => {
   })
 
   describe('configModule v2 integration', () => {
-    const V2_CONFIG_PATH = '/tmp/test-v2-dbcli'
+    const V2_CONFIG_PATH = join(TEST_ROOT, 'v2-dbcli')
 
-    beforeEach(async () => {
-      await $`mkdir -p ${V2_CONFIG_PATH}`
+    beforeEach(() => {
+      mkdirSync(V2_CONFIG_PATH, { recursive: true })
     })
 
-    afterEach(async () => {
-      await $`rm -rf ${V2_CONFIG_PATH}`
+    afterEach(() => {
+      rmSync(V2_CONFIG_PATH, { recursive: true, force: true })
     })
 
     test('should read v2 config and return v1-compatible result', async () => {

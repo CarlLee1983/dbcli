@@ -239,8 +239,10 @@ dbcli init --system elasticsearch \
 dbcli init --conn-name staging --env-file .env.staging --permission query-only
 dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
 dbcli use --list                          # show all, * marks default
-dbcli use prod                            # switch default
+dbcli use prod                            # switch default (persists — avoid for one-off queries)
 dbcli query --use staging "SELECT 1"      # one-shot override on any subcommand
+DBCLI_CONNECTION=staging dbcli query "SELECT 1"   # one-shot via env; parallel-safe
+dbcli --use staging,prod query "SELECT count(*) FROM users"   # read-only fan-out
 dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
@@ -296,7 +298,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `use` | n/a | Show/switch default named connection (v2 only). |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
-| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. Supports `--recovery`. |
+| `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. `--fields` (projection), `--truncate` (cell width), `-f/--query-file` (read query from file or stdin), `--use a,b` (read-only fan-out). Supports `--recovery`. See **Query workflow flags**. |
 | `explain` | query-only+ | **(v1.23)** Read-only query plan with annotations. SQL only. Single query, `@saved-query`, `@file.sql`, or `--bulk @glob/*`. `--analyze` (EXPLAIN ANALYZE / MariaDB ANALYZE SELECT), `--format markdown\|json\|table`. |
 | `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + guarded `explain` verify commands (`--analyze` only for proven read-only SQL) — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
@@ -304,7 +306,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
 | `delete` | data-admin+ | SQL or MongoDB; Redis has a basic implementation (see Redis section). `--where` required; `--dry-run` first. Supports `--recovery`. |
-| `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. Supports `--recovery`. |
+| `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. **Fails closed rather than truncating silently**: if the auto-limit would drop rows, the export errors out and you must pass `--no-limit` or `--limit N`. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. **(P1b)** `--against-orm <path>` compares a Prisma schema / DDL file / normalized JSON against the local schema cache (no DB connection): categorized drift (`missing_in_db` = error, `missing_in_orm` = warn, `mismatch` per tolerance table, `unmanaged`) with dry-run `migrate` proposals; exit 1 on error-level drift. `--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`, `--ignore <globs>`, `--format json\|table\|markdown`. Drizzle: point at `drizzle/meta/<NNNN>_snapshot.json` (run `drizzle-kit generate` first; `.ts` sources are rejected with a hint). TypeORM/Sequelize: feed tool-generated DDL (`schema:log` / a schema-only dump); source files are rejected with the exact generation command to run. |
@@ -343,6 +345,27 @@ without changing the default. `--recovery` is honoured by `query`, `q`, `insert`
   intended `--where` / `--set`. MongoDB prints a shell-style preview.
 - `--recovery` is recommended for automated agent pipelines (enables `dbcli recover --apply`
   after a failure); optional for one-off manual writes.
+
+## Query workflow flags
+
+These exist so you do not have to pipe output through `head` / `jq` / `python3`
+to make it usable. Reach for them instead of post-processing.
+
+| Need | Flag | Notes |
+|------|------|-------|
+| Only some columns | `--fields sn,bet,created_at` | SQL and MongoDB. Mongo pushes a real `projection` / `$project` to the driver; `_id` is dropped unless you ask for it. A field the result lacks comes back as `null`, so verify spellings with `schema` before reading meaning into an all-null column. |
+| Everything except a huge column | `--fields=-raw_response` | Exclusion form. Include and exclude cannot be mixed. |
+| One field is a giant JSON blob | `--truncate 120` | Table output truncates cells at 120 chars **by default** and marks them `…(+3412 chars)`. `--no-truncate` disables it. Rejected on `--format json/csv` (those feed parsers). |
+| Query has quotes / newlines / `$regex` | `-f pipeline.json` or `-f -` | Reads the query from a file or stdin; use a heredoc for Mongo pipelines. Passing both a file and positional query text is an error, never a silent pick. `-f -` needs piped input — it refuses an interactive terminal rather than hanging. |
+| Same query across connections | `--use hub-prod,site-a` | Read-only fan-out. Per-connection results, one failure does not cancel the others. Exit `0` all-ok, `2` mixed, `1` all-failed. Rejects writes, `--recovery`, `--ui`, CSV/HTML. |
+| Pick a connection for one call | `DBCLI_CONNECTION=hub-prod dbcli query …` | Env var, or `--use` on the subcommand. Priority: `--use` > `DBCLI_CONNECTION` > saved default. Neither writes the default back to disk, so parallel shells never fight. Requires a v2 config — a single-connection (v1) project rejects both rather than silently running its only connection. **Do not** use `dbcli use <name>` just to switch for one query. |
+
+**Truncation is reported, never implied.** When the query-only auto-limit trims a
+result, the table footer reads `Rows: 1000 (truncated; limit 1000)`, `--format json`
+carries `metadata.truncated` / `metadata.limit_applied`, and CSV appends a `#`
+comment. `Rows: 1000` with no marker means exactly 1000 rows exist — do not infer
+truncation from a round number. This applies to `query` and to `q` snippets
+(whose own 1000-row guard reports the same way). `export` refuses to truncate at all. Redis replies trimmed by the size guard report the same way, and each size-guard warning is printed on stderr.
 
 ## Permission levels
 

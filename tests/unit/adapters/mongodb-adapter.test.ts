@@ -12,6 +12,7 @@ const mockCollectionDefs = [{ name: 'users' }, { name: 'orders' }]
 interface FindCall {
   filter: object
   limit: number
+  projection?: Record<string, 0 | 1>
 }
 interface AggregateCall {
   pipeline: object[]
@@ -34,8 +35,8 @@ class MockMongoClient {
     this.lastDbName = name
     return {
       collection: (_name: string) => ({
-        find: (filter: object) => {
-          const call: FindCall = { filter, limit: 0 }
+        find: (filter: object, options?: { projection?: Record<string, 0 | 1> }) => {
+          const call: FindCall = { filter, limit: 0, ...options }
           this.findCalls.push(call)
           return {
             limit(n: number) {
@@ -224,11 +225,22 @@ describe('MongoDBAdapter', () => {
       expect(client.findCalls[0]!.limit).toBe(7)
     })
 
+    test('pushes projection into find options', async () => {
+      const projection = { name: 1, age: 1 } as const
+
+      await adapter.execute('{}', ['users'], { projection })
+
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.findCalls).toHaveLength(1)
+      expect(client.findCalls[0]!.projection).toEqual(projection)
+    })
+
     test('passes limit 0 (no limit) when options.limit is omitted', async () => {
       await adapter.execute('{}', ['users'])
       const client = (adapter as any).client as MockMongoClient
       expect(client.findCalls).toHaveLength(1)
       expect(client.findCalls[0]!.limit).toBe(0)
+      expect(client.findCalls[0]!.projection).toBeUndefined()
     })
 
     test('appends $limit stage to aggregate pipeline when options.limit is set', async () => {
@@ -241,13 +253,38 @@ describe('MongoDBAdapter', () => {
       expect(stages[1]).toEqual({ $limit: 25 })
     })
 
-    test('does not append $limit when pipeline already ends with $limit', async () => {
-      const pipeline = '[{"$match":{"status":"active"}},{"$limit":3}]'
+    test('appends dbcli $limit before the final projection stage', async () => {
+      const pipeline = '[{"$match":{"status":"active"}}]'
+      const projection = { _id: 1, count: 1 } as const
+
+      await adapter.execute(pipeline, ['orders'], { limit: 25, projection })
+
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.aggregateCalls).toHaveLength(1)
+      expect(client.aggregateCalls[0]!.pipeline).toEqual([
+        { $match: { status: 'active' } },
+        { $limit: 25 },
+        { $project: projection },
+      ])
+    })
+
+    test('leaves aggregation pipeline unchanged when projection and limit are omitted', async () => {
+      const pipeline = '[{"$match":{"status":"active"}}]'
+
+      await adapter.execute(pipeline, ['orders'])
+
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.aggregateCalls).toHaveLength(1)
+      expect(client.aggregateCalls[0]!.pipeline).toEqual([{ $match: { status: 'active' } }])
+    })
+
+    test('does not append $limit when the pipeline already contains $limit', async () => {
+      const pipeline = '[{"$match":{"status":"active"}},{"$limit":3},{"$project":{"_id":1}}]'
       await adapter.execute(pipeline, ['orders'], { limit: 100 })
       const client = (adapter as any).client as MockMongoClient
       expect(client.aggregateCalls).toHaveLength(1)
       const stages = client.aggregateCalls[0]!.pipeline
-      expect(stages.length).toBe(2)
+      expect(stages.length).toBe(3)
       expect(stages[1]).toEqual({ $limit: 3 })
     })
   })

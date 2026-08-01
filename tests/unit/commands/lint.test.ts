@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'path'
 import { Command } from 'commander'
 import type { TableSchema } from '@/adapters/types'
@@ -121,8 +123,8 @@ describe('runLint', () => {
   })
 
   test('resolves SQL files and comma-separated bulk inputs', async () => {
-    const dir = await Bun.$`mktemp -d`.text()
-    const sqlPath = join(dir.trim(), 'queries.sql')
+    const dir = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
+    const sqlPath = join(dir, 'queries.sql')
     await Bun.write(sqlPath, 'SELECT * FROM users; SELECT id FROM users;')
     try {
       const { reports } = await runLint(
@@ -138,12 +140,12 @@ describe('runLint', () => {
       expect(reports).toHaveLength(3)
       expect(reports[0].label).toBe('queries.sql#1')
     } finally {
-      await Bun.$`rm -rf ${dir.trim()}`
+      await rm(dir, { recursive: true, force: true })
     }
   })
 
   test('resolves filesystem globs in deterministic filename order', async () => {
-    const dir = (await Bun.$`mktemp -d`.text()).trim()
+    const dir = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     await Bun.write(join(dir, 'z-last.sql'), 'SELECT id FROM users;')
     await Bun.write(join(dir, 'a-first.sql'), 'SELECT * FROM users;')
     try {
@@ -163,12 +165,12 @@ describe('runLint', () => {
         'SELECT id FROM users',
       ])
     } finally {
-      await Bun.$`rm -rf ${dir}`
+      await rm(dir, { recursive: true, force: true })
     }
   })
 
   test('lint file and glob inputs share quote-aware SQL statement splitting', async () => {
-    const dir = (await Bun.$`mktemp -d`.text()).trim()
+    const dir = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     const one = join(dir, 'a.sql')
     const two = join(dir, 'b.sql')
     await Bun.write(one, "SELECT ';' AS marker, id FROM users; SELECT $$semi;colon$$ AS marker;")
@@ -200,7 +202,7 @@ describe('runLint', () => {
       expect(globResult.reports).toHaveLength(3)
       expect(globResult.reports[2]?.sql).toContain('/* ; retained */')
     } finally {
-      await Bun.$`rm -rf ${dir}`
+      await rm(dir, { recursive: true, force: true })
     }
   })
 
@@ -291,9 +293,9 @@ describe('loadLintCommandDeps', () => {
   })
 
   test('--no-schema avoids SchemaLayeredLoader IO during the real config read', async () => {
-    const tempRoot = (await Bun.$`mktemp -d`.text()).trim()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     const configPath = join(tempRoot, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await Bun.write(
       join(configPath, 'config.json'),
       JSON.stringify({
@@ -317,14 +319,14 @@ describe('loadLintCommandDeps', () => {
       expect(deps.schema.available).toBe(false)
       expect(await Bun.file(join(configPath, 'schemas')).exists()).toBe(false)
     } finally {
-      await Bun.$`rm -rf ${tempRoot}`
+      await rm(tempRoot, { recursive: true, force: true })
     }
   })
 
   test('unsupported real config is rejected without SchemaLayeredLoader IO', async () => {
-    const tempRoot = (await Bun.$`mktemp -d`.text()).trim()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     const configPath = join(tempRoot, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await Bun.write(
       join(configPath, 'config.json'),
       JSON.stringify({
@@ -348,14 +350,14 @@ describe('loadLintCommandDeps', () => {
       )
       expect(await Bun.file(join(configPath, 'schemas')).exists()).toBe(false)
     } finally {
-      await Bun.$`rm -rf ${tempRoot}`
+      await rm(tempRoot, { recursive: true, force: true })
     }
   })
 
   test('global --use selects the isolated named schema-cache slot', async () => {
-    const tempRoot = (await Bun.$`mktemp -d`.text()).trim()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     const configPath = join(tempRoot, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await Bun.write(
       join(configPath, 'config.json'),
       JSON.stringify({
@@ -401,7 +403,7 @@ describe('loadLintCommandDeps', () => {
         }
       )
     } finally {
-      await Bun.$`rm -rf ${tempRoot}`
+      await rm(tempRoot, { recursive: true, force: true })
     }
 
     expect(selectedSlot).toBe('staging')
@@ -426,9 +428,9 @@ describe('lint command registration surface', () => {
   })
 
   test('real Commander --no-schema bypasses schema IO and blocks both schema rules', async () => {
-    const tempRoot = (await Bun.$`mktemp -d`.text()).trim()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'dbcli-lint-'))
     const configPath = join(tempRoot, '.dbcli')
-    await Bun.$`mkdir -p ${configPath}`
+    await mkdir(configPath, { recursive: true })
     await Bun.write(
       join(configPath, 'config.json'),
       JSON.stringify({
@@ -485,7 +487,7 @@ describe('lint command registration surface', () => {
         ])
       )
     } finally {
-      await Bun.$`rm -rf ${tempRoot}`
+      await rm(tempRoot, { recursive: true, force: true })
     }
   })
 })

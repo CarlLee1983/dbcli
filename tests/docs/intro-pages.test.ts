@@ -17,6 +17,16 @@ function cssText(document: Document) {
   return [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
 }
 
+function quickstartCommands(document: Document): string[] {
+  return [...document.querySelectorAll('#quickstart .command-box code')]
+    .flatMap((code) =>
+      (code.textContent ?? '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+    )
+    .filter(Boolean)
+}
+
 function hexToRgb(hex: string) {
   const value = hex.replace('#', '')
   return [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16))
@@ -141,19 +151,24 @@ test('locale pages expose the same section and component contract', async () => 
   )
   expect(zh.document.querySelectorAll('.faq-list details').length).toBe(9)
 
-  const commands = (document: Document) =>
-    [...document.querySelectorAll('#quickstart .command-box code')]
-      .flatMap((code) => (code.textContent ?? '').trim().split('\n'))
-      .filter(Boolean)
   const approvedCommands = [
     '/plugin marketplace add CarlLee1983/dbcli',
     '/plugin install dbcli@carllee1983-dbcli',
     'dbcli skill --install codex',
     'bunx @carllee1983/dbcli init',
   ]
-  expect(commands(zh.document)).toEqual(approvedCommands)
-  expect(commands(en.document)).toEqual(approvedCommands)
+  expect(quickstartCommands(zh.document)).toEqual(approvedCommands)
+  expect(quickstartCommands(en.document)).toEqual(approvedCommands)
   expect(cssText(zh.document)).toBe(cssText(en.document))
+})
+
+test('quickstart command extraction normalizes CRLF lines independently', () => {
+  const window = new Window()
+  window.document.write(
+    '<section id="quickstart"><div class="command-box"><code>\r\n  first  \r\nsecond\r\n</code></div></section>'
+  )
+
+  expect(quickstartCommands(window.document)).toEqual(['first', 'second'])
 })
 
 test.each(pages)('$locale uses the real interactive-report command labels', async ({ path }) => {

@@ -9,7 +9,7 @@
 
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -29,6 +29,7 @@ function run(args: string[], cwd: string) {
 
 describe('dist/packaged binary — runs from outside the dev tree', () => {
   let workdir = ''
+  let failingMongoConfig = ''
 
   beforeAll(() => {
     // Rebuild dist so we test the current source, not a stale artifact.
@@ -42,6 +43,24 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
     }
     workdir = mkdtempSync(join(tmpdir(), 'dbcli-dist-smoke-'))
     mkdirSync(workdir, { recursive: true })
+    failingMongoConfig = join(workdir, 'failing-mongo.json')
+    writeFileSync(
+      failingMongoConfig,
+      JSON.stringify({
+        connection: {
+          system: 'mongodb',
+          // A syntactically invalid host rejects inside MongoClient.connect()
+          // immediately, keeping this production-boundary regression deterministic.
+          uri: 'mongodb://[invalid/test',
+          database: 'test',
+        },
+        permission: 'query-only',
+        schema: {},
+        metadata: { version: '1.0' },
+        blacklist: { tables: [], columns: {} },
+        audit: { enabled: false },
+      })
+    )
   }, BUILD_TIMEOUT_MS)
 
   test('--version succeeds (sanity)', () => {
@@ -86,5 +105,57 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
     expect(Array.isArray(arr)).toBe(true)
     const sources = new Set(arr.map((t: { source: string }) => t.source))
     expect(sources.has('builtin')).toBe(true)
+  })
+
+  for (const [name, args] of [
+    ['list', ['list']],
+    ['schema', ['schema', 'users']],
+    ['query', ['query', '{}', '--collection', 'users']],
+  ] as const) {
+    test(`${name} MongoDB rejection has bounded normal stderr and exit 1`, () => {
+      const r = run(['--config', failingMongoConfig, ...args], workdir)
+      const firstLine = r.stderr.split('\n').find((line) => line.trim() !== '') ?? ''
+
+      expect(r.status).toBe(1)
+      expect(firstLine).toMatch(/connect|invalid|parse|address|MongoDB/i)
+      expect(firstLine).not.toMatch(/^\s*\d+\s*\|/)
+      expect(r.stderr).not.toMatch(/^\s*\d+\s*\|/m)
+      expect(r.stderr).not.toMatch(/\n\s+at\s+/)
+      expect(r.stderr).not.toMatch(/\\u[0-9a-f]{4}/i)
+      expect(r.stderr.split(firstLine)).toHaveLength(2)
+    })
+  }
+
+  test('verbose MongoDB rejection includes a stack', () => {
+    const r = run(['-v', '--config', failingMongoConfig, 'list'], workdir)
+
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('Stack:')
+    expect(r.stderr).toMatch(/\n\s+at\s+/)
+  })
+
+  test('query --recovery emits one envelope and no duplicate stderr', () => {
+    const r = run(
+      ['--config', failingMongoConfig, 'query', '{}', '--collection', 'users', '--recovery'],
+      workdir
+    )
+
+    expect(r.status).toBe(1)
+    expect(r.stderr).toBe('')
+    const envelope = JSON.parse(r.stdout)
+    expect(envelope.error).toBeDefined()
+    expect(r.stdout.trim()).toMatch(/^\{[\s\S]*\}$/)
+  })
+
+  test('missing query file has bounded packaged stderr', () => {
+    const path = join(workdir, 'missing-query.sql')
+    const r = run(['query', '-f', path], workdir)
+    const firstLine = r.stderr.split('\n').find((line) => line.trim() !== '') ?? ''
+
+    expect(r.status).toBe(1)
+    expect(firstLine).toContain(path)
+    expect(r.stdout).toBe('')
+    expect(r.stderr).not.toMatch(/^\s*\d+\s*\|/m)
+    expect(r.stderr).not.toMatch(/\n\s+at\s+/)
   })
 })

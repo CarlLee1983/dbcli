@@ -69,10 +69,48 @@ dbcli init
 
 *   **列出所有連線**：`dbcli use --list`
 *   **切換預設連線**：`dbcli use <name>`
-*   **單次執行覆蓋**：在任何指令後加上 `--use <name>` 參數。
+*   **單次執行覆蓋**：全域 selector 可放在任何指令之前；`query`、`schema`、
+    `list`、`export`、`check` 也支援放在指令之後。
     ```bash
+    dbcli --use staging query "SELECT 1"
     dbcli query --use staging "SELECT 1"
     ```
+*   **環境變數 selector**：單次 process 可設定 `DBCLI_CONNECTION`，例如
+    `DBCLI_CONNECTION=staging dbcli query "SELECT 1"`。前後空白會移除，空值則視為未設定。
+
+選擇優先序為明確的 `--use`、`DBCLI_CONNECTION`、最後才是設定檔預設連線。
+單次 selector 不會修改持久化的預設連線。如果 root 與指令層級的 `--use` 值不同，
+dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v2 設定：單連線
+（v1）專案沒有具名連線可選，因此在 v1 下給 `--use` 或 `DBCLI_CONNECTION` 會被
+拒絕，而不是靜默改跑那唯一的連線。
+
+### 唯讀 query fan-out
+
+明確指定逗號分隔的 `--use`，即可對多個具名連線執行同一個唯讀 query。
+Root 層級與指令層級寫法效果相同：
+
+```bash
+dbcli --use primary,staging query "SELECT count(*) FROM users" --format json
+dbcli query --use primary,staging "SELECT count(*) FROM users"
+```
+
+連線名稱會移除前後空白，結果則維持 selector 的順序；空白或重複名稱會被拒絕。
+只指定一個名稱時仍走既有的單連線路徑。Fan-out 只會由明確的 `--use` 啟用：
+`DBCLI_CONNECTION` 仍代表一個完整的連線名稱，不會依逗號拆分。兩種 `--use` 寫法
+都不會修改持久化的預設連線。
+
+在任何 adapter 建立連線前，dbcli 會先載入並驗證所有選定的連線配置。SQL fan-out
+只允許唯讀分類（`SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`）；MongoDB 允許 filter
+object 與唯讀 aggregation pipeline，但拒絕頂層 `$out` 或 `$merge` stage；
+Elasticsearch 只允許 search。Redis 不支援 fan-out。多連線 query 也會拒絕
+`--recovery`、`--ui`、CSV 與 HTML 輸出；請使用 `--format table`（預設）或
+`--format json`。
+
+每個連線都會獨立使用自己的 adapter、blacklist 過濾、row-limit／截斷 metadata、
+audit entry、計時與 disconnect；其中一個連線失敗不會取消或隱藏其他結果。JSON
+會依序回傳 `results` array，每個連線都有標示清楚的 `ok` 或 `error` outcome；
+table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功時 aggregate exit code
+為 `0`，成功與失敗混合時為 `2`，全部失敗或執行前拒絕請求時為 `1`。
 
 ---
 
@@ -108,7 +146,7 @@ dbcli init
 
 | 指令 | 說明 |
 | :--- | :--- |
-| `query "<cmd>"` | 執行原生 SQL、MongoDB JSON、Redis 指令或 ES DSL。 |
+| `query [sql] [-f, --query-file <path>] [--fields <list>]` | 執行 SQL、MongoDB JSON、Redis 指令或 ES DSL；SQL 與 MongoDB 可選擇投影結果欄位。 |
 | `q @snippet` | 執行帶有參數的儲存查詢片段。支援 `--verify` 以執行自動化斷言驗證。 |
 | `export` | 將結果匯出為 JSON, CSV, JSONL 或互動式 HTML。 |
 | `insert` | 從 JSON 插入資料 (支援 SQL & MongoDB)。支援 `--plan` 風險預檢（SQL、MongoDB、Redis、Elasticsearch）。 |
@@ -117,6 +155,63 @@ dbcli init
 | `blacklist` | 管理敏感資料屏蔽規則。 |
 | `plan "<sql>"` | **靜態分析器**：對 SQL 進行風險分級並給出優化建議。 |
 | `lint "<sql>"` | **靜態顧問**：不連線資料庫，回報 SQL 反模式與選用的 rewrite 草稿。 |
+
+#### 從 positional、檔案或 stdin 讀取 query
+
+`dbcli query [sql] [-f, --query-file <path>]` 必須且只能指定一個 query 來源：
+
+*   Positional query 文字，例如 `dbcli query "SELECT 1"`。
+*   UTF-8 檔案，例如 `dbcli query --query-file ./queries/active-users.sql`。
+*   以 `--query-file -` 從 stdin 讀取。
+
+未提供來源，或同時提供 positional 文字與 `--query-file` 都會報錯。dbcli 讀取來源後會移除一個開頭的 UTF-8 BOM 與前後空白；處理後若為空內容，則會拒絕執行。`--query-file -` 需要 piped input：當 stdin 是互動式終端時，dbcli 會立即拒絕，而不是無提示地空等輸入。
+
+透過 stdin 傳入多行 SQL，就不需要把整段內容 escape 成單一 shell argument：
+
+```bash
+dbcli query --query-file - <<'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active'
+ORDER BY id;
+SQL
+```
+
+MongoDB filter 與 aggregation pipeline 也使用相同的檔案／stdin 來源。如果 `pipeline.json` 包含下列 pipeline，兩種寫法都不必處理 `user's event` 中對 shell 不友善的 apostrophe：
+
+```json
+[{"$match":{"message":{"$regex":"user's event"}}}]
+```
+
+```bash
+dbcli query --collection raw_logs --query-file ./pipeline.json
+
+dbcli query --collection raw_logs --query-file - <<'JSON'
+[{"$match":{"message":{"$regex":"user's event"}}}]
+JSON
+```
+
+#### 使用 `--fields` 投影欄位
+
+`--fields` 可將 SQL 或 MongoDB query 結果縮減為需要的欄位。使用 inclusion list 保留欄位，輸出順序會依照指定順序：
+
+```bash
+dbcli query "SELECT * FROM events" --fields id,name,created_at
+dbcli query '{}' --collection raw_logs --fields station_code,bet,win,created_at
+```
+
+在每個欄位前加上 `-` 即可排除欄位。為了讓開頭的 hyphen 明確屬於 option value，請使用可攜的 `=` 寫法：
+
+```bash
+dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
+dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload
+```
+
+每次執行只能使用 inclusion 或 exclusion 其中一種語法，不可混用。空白 list、空白項目與重複 path 都會被拒絕。支援 `profile.name` 這類 dotted path；inclusion 輸出會遵循指定順序。MongoDB inclusion 預設排除 `_id`，只有明確指定 `_id` 時才會保留。結果中不存在的欄位會回傳 `null` 而非報錯，因此拼錯的欄位名會得到一整欄 null——在把「全 null」解讀成有意義之前，先用 `dbcli schema` 核對欄位名。
+
+SQL 會在 query 執行完畢後對回傳 rows 套用 projection。MongoDB 會將 projection 下推至 `find` 或 aggregation pipeline 以減少傳輸資料量，之後再於 blacklist masking 完成後正規化回傳 rows。Redis 與 Elasticsearch query 不支援 `--fields`。
+
+Blacklist 仍是最終權限邊界：`--fields` 無法顯示受保護欄位；field projection 只是調整結果形狀的便利功能，不是 security boundary。
 
 #### DML `--plan` 預檢
 
@@ -484,7 +579,7 @@ dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
 
 # 從具名連線推斷引擎與目標
-dbcli proxy --use local --listen 127.0.0.1:3307
+dbcli --use local proxy --listen 127.0.0.1:3307
 ```
 
 將應用程式的 DB host/port 改為 `--listen` 位址，憑證維持不變。Proxy 完全透明 — 應用程式的行為與直連相同。
@@ -638,7 +733,7 @@ Snippet 位置：`assets/snippets/`（內建）、`.dbcli-shared/queries/`（共
 - `LRANGE` / `ZRANGE` / `ZREVRANGE` 夾限 `stop`,使區間 ≤ 1000;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`。
 - `HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` 在 1000 筆截斷。
 
-結果帶有 `warnings[]`:引數被改寫時為 `REDIS_SIZE_REWRITE`,回覆被截斷時為 `REDIS_SIZE_TRUNCATE`。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
+結果帶有 `warnings[]`:引數被改寫時為 `REDIS_SIZE_REWRITE`,回覆被截斷時為 `REDIS_SIZE_TRUNCATE`。`dbcli query` 會把每一則 warning 印到 stderr,且被裁切的回覆同樣會回報 `truncated` / `limit_applied`,與其他引擎一致,因此被截斷的回覆不會被誤認為完整。以 `--no-limit`(CLI)或 `.no-limit on`(shell)略過。
 
 ```bash
 dbcli query "LRANGE jobs 0 -1"            # 夾限至 1000 → REDIS_SIZE_REWRITE
@@ -710,7 +805,7 @@ dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format jso
 dbcli export orders --format jsonl --output orders.jsonl
 ```
 
-- 預設**上限為 1000 筆**。加上 `--no-limit` 可匯出整個 index(整索引形式會以 scroll 分批串流)。
+- 預設**上限為 1000 筆**,而且撞到上限會讓**匯出失敗**,而不是寫出一份短少的檔案。加上 `--no-limit` 可匯出整個 index(整索引形式會以 scroll 分批串流),或加上 `--limit N` 刻意接受上限。
 - 在讀取任何文件前,目標 index 會先經過**索引層級黑名單**檢查。
 - 每次匯出都會寫入一筆**稽核紀錄**,記錄目標 index、筆數與輸出格式。
 
@@ -915,6 +1010,24 @@ dbcli recover --apply --write-verification-artifact
 - 指向正確下一步的 hint(`dbcli list`、`dbcli schema <table>`、`--no-limit`)
 - 對 table 不存在,附上 top-3 fuzzy 候選
 
+### 有界的 CLI 錯誤輸出
+
+需要連線的探索與讀取指令失敗時會以 exit code `1` 結束，且錯誤只呈現一次。一般模式的 stderr
+會輸出可讀訊息，以及存在時的穩定錯誤碼與可執行 hint；不會包含 JavaScript
+stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，請在指令前加
+`-v`（或 `-vv`）以顯示 stack——旗標必須放在子指令**之前**（`dbcli -v list`，
+而不是 `dbcli list -v`）。寫入類指令（`insert`、`update`、`delete`）與 `q`
+在連線失敗時保留自己的在地化措辭，但同樣遵守這個 stack 開關。支援
+`--recovery` 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制
+重複的人類可讀 stderr 訊息。
+
+### 完整的 stdout 管線輸出
+
+stdout 經過管線或重新導向時，`dbcli` 會在完整寫入後才結束。大型 JSON、
+CSV 與 HTML 結果經過 `dbcli query --format json | jq ...` 或
+`dbcli export ... | cat > result.json` 等指令時仍會保持完整；成功的退出狀態
+不會代表只寫入部分 stdout buffer。
+
 ### Query-only auto-LIMIT 範圍
 
 `dbcli` 會在 `query-only` 模式對 `SELECT` 自動加 `LIMIT 1000`。**不**套用於:
@@ -923,6 +1036,49 @@ dbcli recover --apply --write-verification-artifact
 - `EXPLAIN` / `EXPLAIN ANALYZE` / MariaDB `ANALYZE SELECT`
 
 查 `information_schema` 時用 `--no-limit` 關閉。
+
+當上限由 dbcli 套用（query-only 預設值或明確的 `--limit N`）時，dbcli
+會多取一筆作為 lookahead，藉此區分結果剛好 N 筆與實際還有更多資料。
+被截斷的 table 輸出會以 `Rows: N (truncated; limit N)` 結尾。只要上限由
+dbcli 套用，JSON 一律包含 `metadata.truncated` 與
+`metadata.limit_applied`；只有 lookahead 證明還有下一筆時，`truncated`
+才是 `true`。使用 `--no-limit`，或 SQL、MongoDB pipeline、Elasticsearch
+request body 已自行指定上限時，這兩個欄位不會出現。CSV 會附加一行
+`# truncated; limit N` 的註解。
+
+透過 `dbcli q` 執行的已儲存 snippet 也用同樣方式回報。snippet 的 size
+guard 本身就有 1000 筆上限，現在這個上限會出現在 footer 與 `metadata`
+中，不再需要使用者從整數列數猜測。
+
+`dbcli export` 不回報截斷——而是直接**拒絕**執行。當匯出的資料被
+query-only auto-limit 截斷時，會以 exit code `1` 結束且不寫入檔案：
+
+```text
+Export would silently drop rows — 1000-row auto-limit reached.
+  Re-run with --no-limit to export everything,
+  or --limit 1000 to accept the cap explicitly.
+```
+
+匯出的檔案沒有地方能記錄資料被遺漏——`jsonl` 是一行一筆文件、MongoDB
+的 `--format json` 則是裸陣列——而 stderr 警告在重導向後就會消失。
+明確指定 `--no-limit` 或 `--limit N` 才能讓這個選擇變得明確，匯出才會
+繼續進行。
+
+### 有界的 table cell
+
+`dbcli query` 的 table 輸出預設會將每個序列化後的 cell 限制為 120 個
+Unicode code point。可用 `--truncate N` 設定其他正整數上限，或用
+`--no-truncate` 顯示完整的 table cell；兩個旗標不可同時使用。
+
+計算上限前會沿用既有的 cell 序列化規則：null 與 undefined 轉成空字串，
+object 以 JSON 序列化，primitive 則使用其字串表示。序列化後的值超過上限
+時，dbcli 會保留前 N 個 code point，並附加例如 `…(+3412 chars)` 的標記。
+標記不計入保留值的 N 字元預算，數字則代表從序列化值省略的 Unicode code
+point 數量。
+
+此行為只屬於 table formatting，絕不修改查詢結果中的 rows，因此 JSON 與
+CSV 輸出仍保持無損。若在 JSON、CSV 或 HTML 輸出（包含 `--ui`）明確傳入
+`--truncate`，dbcli 會回報錯誤，而不會靜默忽略。
 
 ### Schema cache bootstrap
 

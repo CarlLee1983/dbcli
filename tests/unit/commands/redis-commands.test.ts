@@ -21,8 +21,11 @@ const redisConfig = {
 }
 
 class MockRedisAdapter {
+  disconnectError?: Error
   async connect() {}
-  async disconnect() {}
+  async disconnect() {
+    if (this.disconnectError) throw this.disconnectError
+  }
   async insert() {
     return { affectedRows: 1, rows: [] }
   }
@@ -140,6 +143,7 @@ describe('Redis CLI commands', () => {
 
   test('query command warns on KEYS command', async () => {
     const { queryCommand } = await import('@/commands/query')
+    configSpy.mockResolvedValue({ ...redisConfig, permission: 'admin' } as any)
     try {
       await queryCommand('KEYS *', {})
     } catch {
@@ -149,10 +153,19 @@ describe('Redis CLI commands', () => {
     expect(out).toContain('Warning: "KEYS" command is dangerous')
   })
 
+  test('query rejects --fields before creating a Redis adapter', async () => {
+    const { queryCommand } = await import('@/commands/query')
+    await expect(queryCommand('GET mykey', { fields: 'value' })).rejects.toThrow(
+      '--fields is not supported'
+    )
+    expect(adapterSpy).not.toHaveBeenCalled()
+  })
+
   test('query --recovery suppresses the human KEYS warning on stderr', async () => {
     // Regression: --recovery means stderr should stay clean for the agent;
     // the recovery envelope (on stdout) is the sole authoritative output.
     const { queryCommand } = await import('@/commands/query')
+    configSpy.mockResolvedValue({ ...redisConfig, permission: 'admin' } as any)
     try {
       await queryCommand('KEYS *', { recovery: true })
     } catch {
@@ -161,5 +174,17 @@ describe('Redis CLI commands', () => {
     const stderrOnly = errSpy.mock.calls.flat().join('\n')
     expect(stderrOnly).not.toContain('Warning: "KEYS" command is dangerous')
     expect(stderrOnly).not.toContain('Please use "SCAN"')
+  })
+
+  test('query does not print the KEYS warning before a disconnect failure', async () => {
+    const { queryCommand } = await import('@/commands/query')
+    configSpy.mockResolvedValue({ ...redisConfig, permission: 'admin' } as any)
+    mockAdapter.disconnectError = new Error('redis disconnect failed')
+
+    await expect(queryCommand('KEYS *', {})).rejects.toThrow('redis disconnect failed')
+    expect(logSpy).not.toHaveBeenCalled()
+    expect(errSpy.mock.calls.flat().join('\n')).not.toContain(
+      'Warning: "KEYS" command is dangerous'
+    )
   })
 })

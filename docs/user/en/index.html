@@ -181,7 +181,17 @@ bun install -g @carllee1983/dbcli</code></pre>
             <p>Switch between Production, Staging, and Local environments:</p>
             <pre><code>dbcli use --list         # List all connection names
 dbcli use staging        # Switch your default connection
-dbcli query --use prod "SELECT count(*) FROM users" # Temporary override</code></pre>
+dbcli --use prod query "SELECT count(*) FROM users" # Global one-shot selector
+dbcli query --use prod "SELECT count(*) FROM users" # Supported command-level form
+DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # Environment selector</code></pre>
+            <p>Selection precedence is explicit <code>--use</code>, then <code>DBCLI_CONNECTION</code>, then the configured default. Environment values are trimmed and empty values are ignored. One-shot selectors never change the persistent default. The command-level form is supported by <code>query</code>, <code>schema</code>, <code>list</code>, <code>export</code>, and <code>check</code>; use the global form before other commands. Conflicting root-level and command-level values fail clearly. Selectors require a v2 configuration: a single-connection (v1) project has no names to choose between, so <code>--use</code> or <code>DBCLI_CONNECTION</code> there is rejected rather than quietly running the only connection.</p>
+            <h3>Read-only query fan-out</h3>
+            <p>An explicit comma-separated <code>--use</code> runs one read-only query against several named connections. The root-level and command-level forms are equivalent:</p>
+            <pre><code>dbcli --use primary,staging query "SELECT count(*) FROM users" --format json
+dbcli query --use primary,staging "SELECT count(*) FROM users"</code></pre>
+            <p>Names are trimmed and results preserve selector order. Empty or duplicate names are rejected. A selector containing one name follows the existing single-connection path. Fan-out is explicit-only: <code>DBCLI_CONNECTION</code> remains one literal connection name and is never split on commas. Neither form changes the persistent default connection.</p>
+            <p>Before any adapter connects, dbcli loads and validates every selected configuration. SQL fan-out permits only read-only classifications (<code>SELECT</code>, <code>SHOW</code>, <code>DESCRIBE</code>, and <code>EXPLAIN</code>); MongoDB permits filter objects and read-only aggregation pipelines but rejects top-level <code>$out</code> or <code>$merge</code> stages; Elasticsearch permits searches only. Redis fan-out is not supported. A multi-connection query also rejects <code>--recovery</code>, <code>--ui</code>, and CSV or HTML output; use <code>--format table</code> (default) or <code>--format json</code>.</p>
+            <p>Each connection runs independently with its own adapter, blacklist filtering, row-limit/truncation metadata, audit entry, timing, and disconnect. A failure on one connection does not cancel or hide the others. JSON returns an ordered <code>results</code> array with a labeled <code>ok</code> or <code>error</code> outcome per connection; table output renders a separate labeled section for each schema. The aggregate exit code is <code>0</code> when all succeed, <code>2</code> for mixed success and failure, and <code>1</code> when all fail or the request is rejected before execution.</p>
         </section>
 
         <!-- doc-key: command-reference -->
@@ -239,6 +249,31 @@ dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format j
 dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
 dbcli delete products --where '{"_id":"abc"}' --plan --format json
 dbcli delete 'user:42' --where '' --plan --format json</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">Query input from positional text, files, or stdin</h4>
+            <p><code>dbcli query [sql] [-f, --query-file &lt;path&gt;]</code> requires exactly one query source: positional query text, a UTF-8 file named by <code>--query-file</code>, or stdin via <code>--query-file -</code>. Providing no source or combining positional text with <code>--query-file</code> is an error. After reading the source, dbcli removes one leading UTF-8 BOM and surrounding whitespace; an input that is then empty is rejected. <code>--query-file -</code> requires piped input: when stdin is an interactive terminal dbcli refuses immediately instead of waiting for input with no prompt.</p>
+            <p>Use stdin for multiline SQL without escaping it as one shell argument:</p>
+            <pre><code>dbcli query --query-file - &lt;&lt;'SQL'
+SELECT id, email
+FROM users
+WHERE status = 'active'
+ORDER BY id;
+SQL</code></pre>
+            <p>MongoDB filters and aggregation pipelines use the same file/stdin sources. If <code>pipeline.json</code> contains <code>[{"$match":{"message":{"$regex":"user's event"}}}]</code>, either form below avoids having to shell-escape the apostrophe:</p>
+            <pre><code>dbcli query --collection raw_logs --query-file ./pipeline.json
+
+dbcli query --collection raw_logs --query-file - &lt;&lt;'JSON'
+[{"$match":{"message":{"$regex":"user's event"}}}]
+JSON</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">Field projection with <code>--fields</code></h4>
+            <p><code>--fields</code> reduces SQL or MongoDB query results to the fields you need. Use an inclusion list to keep fields in the requested order:</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields id,name,created_at
+dbcli query '{}' --collection raw_logs --fields station_code,bet,win,created_at</code></pre>
+            <p>Prefix every field with <code>-</code> to exclude it. The portable spelling uses <code>=</code> so the leading hyphens are unambiguously part of the option value:</p>
+            <pre><code>dbcli query "SELECT * FROM events" --fields=-raw_response,-request_payload
+dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</code></pre>
+            <p>An invocation must use either inclusion or exclusion syntax; the two modes cannot be mixed. Empty lists or entries and duplicate paths are rejected. Dotted paths such as <code>profile.name</code> are supported, and inclusion output follows the requested order. A MongoDB inclusion excludes <code>_id</code> unless <code>_id</code> is explicitly requested. A requested field that the result does not contain is reported as <code>null</code> rather than raising an error, so a misspelled field name yields a column of nulls — check the spelling against <code>dbcli schema</code> before reading meaning into an all-null column.</p>
+            <p>SQL projection is applied to the returned rows after the query runs. MongoDB pushes the projection into <code>find</code> or the aggregation pipeline to reduce transferred data, then normalizes the returned rows again after blacklist masking. Redis and Elasticsearch queries do not support <code>--fields</code>.</p>
+            <p>The blacklist remains the final authority: <code>--fields</code> cannot reveal a protected field, and field projection is a result-shaping convenience, not a security boundary.</p>
             <p><code>insert</code>, <code>update</code>, and <code>delete</code> accept <code>--plan</code> to run a static risk analyzer against the planned write without connecting to the database. The planner now supports SQL (<code>postgresql</code>, <code>mysql</code>, <code>mariadb</code>), MongoDB, Redis, and Elasticsearch. It honors the connection's <code>permission</code>, <code>blacklist</code>, and the cached <code>schema</code> for the selected engine. <code>--format text</code> (default) prints a human verdict, <code>--format json</code> prints the full <code>QueryRiskResult</code>. Analyzer <code>BLOCK</code> decisions exit <code>0</code>; configuration / engine / invalid-DSL errors exit <code>1</code>. <code>--plan</code> is mutually exclusive with <code>--dry-run</code>.</p>
             <p>Conservative MVP restrictions per engine:</p>
             <table>
@@ -543,7 +578,7 @@ dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql --listen 127.0.0.1:5433 --target 127.0.0.1:5432
 
 # Infer engine + target from a named connection
-dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
+dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p class="mb-4">Change your application's DB host/port to the <code>--listen</code> address and leave credentials unchanged. The proxy is fully transparent — the application behaves identically.</p>
 
             <h4 class="mt-6 mb-2 font-bold">Options</h4>
@@ -719,7 +754,7 @@ dbcli proxy --use local --listen 127.0.0.1:3307</code></pre>
             <p>Mongo snippets end in <code>.mongodb.sql</code> and declare <code>engine: mongodb</code> with <code>operation: find</code> or <code>operation: aggregate</code>. Run with <code>dbcli q @&lt;key&gt;</code>; <code>{{param}}</code> placeholders are JSON-encoded so injected operator-shaped strings cannot escape into operator position.</p>
 
             <h3 class="mt-8">Redis: size guard, blacklist, and shell (v1.21.0)</h3>
-            <p><strong>Size guard</strong> — unbounded reads are bounded automatically: <code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> get <code>COUNT 1000</code> injected (or a larger value capped); <code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> clamp <code>stop</code> to a span of 1000; <code>ZRANGEBYSCORE</code> gets <code>LIMIT 0 1000</code>; <code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> truncate at 1000. Results carry <code>warnings[]</code> (<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>). Use <code>--no-limit</code> (CLI) or <code>.no-limit on</code> (shell) to bypass.</p>
+            <p><strong>Size guard</strong> — unbounded reads are bounded automatically: <code>SCAN</code>/<code>HSCAN</code>/<code>SSCAN</code>/<code>ZSCAN</code> get <code>COUNT 1000</code> injected (or a larger value capped); <code>LRANGE</code>/<code>ZRANGE</code>/<code>ZREVRANGE</code> clamp <code>stop</code> to a span of 1000; <code>ZRANGEBYSCORE</code> gets <code>LIMIT 0 1000</code>; <code>HGETALL</code>/<code>HKEYS</code>/<code>HVALS</code>/<code>SMEMBERS</code>/<code>KEYS</code> truncate at 1000. Results carry <code>warnings[]</code> (<code>REDIS_SIZE_REWRITE</code> / <code>REDIS_SIZE_TRUNCATE</code>). <code>dbcli query</code> prints each one on stderr, and a trimmed reply also reports <code>truncated</code> / <code>limit_applied</code> the same way every other engine does, so a capped reply is never mistaken for a complete one. Use <code>--no-limit</code> (CLI) or <code>.no-limit on</code> (shell) to bypass.</p>
             <p><strong>Blacklist</strong> — rules are enforced as Redis-native key globs (<code>*</code>, <code>?</code>, <code>[abc]</code>, <code>[a-z]</code>). <code>dbcli blacklist table add 'secrets:*'</code> then reads/writes whose keys match are rejected (<code>BlacklistRejection</code>, audited with <code>matched_pattern</code>); <code>KEYS</code>/<code>SCAN MATCH</code> overlapping a rule are rejected; <code>list</code> filters blacklisted keys.</p>
             <p><strong>Masking (v1.22)</strong> — where the key-glob blacklist <em>rejects</em>, masking <em>redacts</em>: matched reads return <code>[REDACTED]</code> so an agent can run the command without seeing the sensitive value. Add an optional <code>redis.mask</code> block to your dbcli config, e.g. <code>{ "redis": { "mask": [{ "keyPattern": "user:*", "fields": ["password", "token"] }, { "keyPattern": "secret:*" }] } }</code>. <code>fields</code> present → only those hash fields are redacted (<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>); <code>fields</code> absent → the whole value is redacted (<code>GET</code>/<code>GETRANGE</code> and every hash field). Masking covers <code>GET</code>/<code>GETRANGE</code>/<code>HGETALL</code>/<code>HGET</code>/<code>HMGET</code>/<code>HVALS</code>. <strong>Rejection wins over masking</strong> — a key matching both a <code>blacklist</code> and a <code>mask</code> rule is rejected outright and never reaches masking.</p>
             <p><strong>Shell</strong> — <code>dbcli shell</code> on a Redis connection opens a single-line REPL with history, tab completion (commands + key prefixes), and a <code>.no-limit on/off</code> toggle. Type commands directly, no trailing semicolon (e.g. <code>GET mykey</code>).</p>
@@ -742,7 +777,7 @@ dbcli export '{"query":{"match":{"status":"open"}}}' --index orders --format jso
 # 2. Export a whole index via match_all + scroll — pass the index name as the query
 dbcli export orders --format jsonl --output orders.jsonl</code></pre>
             <ul>
-                <li><strong>Capped at 1000 rows</strong> by default. Pass <code>--no-limit</code> to export the full index (the full-index form streams in scroll batches).</li>
+                <li><strong>Capped at 1000 rows</strong> by default, and hitting that cap <strong>fails the export</strong> rather than writing a short file. Pass <code>--no-limit</code> to export the full index (the full-index form streams in scroll batches) or <code>--limit N</code> to accept a cap deliberately.</li>
                 <li>The target index is checked against the <strong>index-level blacklist</strong> before any documents are read.</li>
                 <li>Each export writes an <strong>audit entry</strong> recording the target index, row count, and output format.</li>
             </ul>
@@ -917,6 +952,12 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li>For missing tables, top-3 fuzzy-match candidates</li>
             </ul>
 
+            <h3>Bounded CLI error output</h3>
+            <p>Connection-bearing discovery and read failures exit with code <code>1</code> and are presented once. In normal mode, stderr contains a readable message plus a stable error code and actionable hints when available; it does not contain a JavaScript stack, bundled source excerpt, or source-code frame. Add <code>-v</code> (or <code>-vv</code>) before the command to include the stack for diagnostics — the flag must precede the subcommand (<code>dbcli -v list</code>, not <code>dbcli list -v</code>). The write commands (<code>insert</code>, <code>update</code>, <code>delete</code>) and <code>q</code> keep their own localized wording for connection failures and honour the same stack switch. When a supported command uses <code>--recovery</code>, the existing JSON recovery envelope remains the only failure output on stdout and the duplicate human stderr message is suppressed.</p>
+
+            <h3>Complete redirected stdout</h3>
+            <p>When stdout is piped or redirected, <code>dbcli</code> completes the entire write before exiting. Large JSON, CSV, and HTML results therefore remain intact through commands such as <code>dbcli query --format json | jq ...</code> and <code>dbcli export ... | cat &gt; result.json</code>; a successful exit never represents a partially written stdout buffer.</p>
+
             <h3>Query-only mode auto-LIMIT</h3>
             <p><code>dbcli</code> auto-appends <code>LIMIT 1000</code> to <code>SELECT</code> queries in <code>query-only</code> mode. This <strong>does not</strong> apply to:</p>
             <ul>
@@ -924,6 +965,18 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 <li><code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code> / MariaDB <code>ANALYZE SELECT</code></li>
             </ul>
             <p>Use <code>--no-limit</code> on <code>SELECT</code> to disable when querying <code>information_schema</code>.</p>
+            <p>For a dbcli-owned limit (the query-only default or an explicit <code>--limit N</code>), dbcli fetches one lookahead row so output can distinguish an exact N-row result from a larger result. Truncated table output ends with <code>Rows: N (truncated; limit N)</code>. JSON always includes <code>metadata.truncated</code> and <code>metadata.limit_applied</code> when dbcli applied the limit; <code>truncated</code> is true only when the lookahead proved that another row existed. CSV appends a <code># truncated; limit N</code> comment line. These fields are omitted for <code>--no-limit</code> and for a limit already written in the SQL, MongoDB pipeline, or Elasticsearch request body.</p>
+            <p>Saved snippets run through <code>dbcli q</code> report the same way. The snippet size guard wraps the body in its own 1000-row cap, and that cap is now stated in the footer and in <code>metadata</code> instead of leaving a round row count to be guessed at.</p>
+            <p><code>dbcli export</code> does not report truncation — it refuses it. An export whose rows were capped by the query-only auto-limit exits <code>1</code> without writing a file:</p>
+            <pre><code>Export would silently drop rows — 1000-row auto-limit reached.
+  Re-run with --no-limit to export everything,
+  or --limit 1000 to accept the cap explicitly.</code></pre>
+            <p>An exported file has nowhere to record that rows are missing — <code>jsonl</code> is one document per line and MongoDB's <code>--format json</code> is a bare array — and a stderr warning does not survive redirection. Naming <code>--no-limit</code> or <code>--limit N</code> makes the choice explicit, and only then does the export proceed.</p>
+
+            <h3>Bounded table cells</h3>
+            <p><code>dbcli query</code> table output limits each serialized cell to 120 Unicode code points by default. Use <code>--truncate N</code> to set a different positive-integer limit, or <code>--no-truncate</code> to show complete table cells. The two flags are mutually exclusive.</p>
+            <p>Cells keep their existing serialization rules before the limit is measured: null and undefined values become empty text, objects are serialized as JSON, and primitives use their string representation. If a serialized value exceeds the limit, dbcli retains the first N code points and appends a marker such as <code>…(+3412 chars)</code>. The marker is outside the retained N-character budget, and its count is the number of omitted Unicode code points.</p>
+            <p>This behavior belongs only to table formatting and never mutates the query rows. JSON and CSV output therefore remain lossless. An explicit <code>--truncate</code> used with JSON, CSV, or HTML output (including <code>--ui</code>) is rejected instead of being silently ignored.</p>
 
             <h3>Schema cache bootstrap</h3>
             <p>The first <code>dbcli schema --refresh</code> after init writes the cache without <code>--force</code>. Subsequent refreshes that detect changes against an existing cache still require <code>--force</code> to overwrite.</p>

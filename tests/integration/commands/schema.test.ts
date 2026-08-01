@@ -2,25 +2,32 @@
  * dbcli schema 命令集成測試
  */
 
-import { test, expect, describe, beforeEach, afterEach, spyOn } from 'bun:test'
+import { test, expect, describe, beforeEach, afterEach, afterAll, spyOn } from 'bun:test'
 import { schemaCommand } from '@/commands/schema'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import { AdapterFactory } from '@/adapters'
-import { $ } from 'bun'
-import path from 'path'
+import { mkdtempSync } from 'node:fs'
+import { mkdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const TEST_CONFIG_DIR = '/tmp/test-dbcli-schema-refresh.dbcli'
-const TEST_CONFIG_PATH = path.join(TEST_CONFIG_DIR, 'config.json')
+const TEST_ROOT = mkdtempSync(join(tmpdir(), 'dbcli-schema-command-'))
+const TEST_CONFIG_DIR = join(TEST_ROOT, '.dbcli')
+const TEST_CONFIG_PATH = join(TEST_CONFIG_DIR, 'config.json')
 
 // 模擬適配器工廠以避免實際資料庫依賴
 describe('dbcli schema command', () => {
   beforeEach(async () => {
-    await $`rm -rf ${TEST_CONFIG_DIR}`
-    await $`mkdir -p ${TEST_CONFIG_DIR}`
+    await rm(TEST_CONFIG_DIR, { recursive: true, force: true })
+    await mkdir(TEST_CONFIG_DIR, { recursive: true })
   })
 
   afterEach(async () => {
-    await $`rm -rf ${TEST_CONFIG_DIR}`
+    await rm(TEST_CONFIG_DIR, { recursive: true, force: true })
+  })
+
+  afterAll(async () => {
+    await rm(TEST_ROOT, { recursive: true, force: true })
   })
 
   // 這些是集成測試，驗證命令結構和選項

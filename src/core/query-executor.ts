@@ -8,25 +8,44 @@
 import type { DatabaseAdapter } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { QueryResult } from '@/types/query'
-import { enforcePermission, PermissionError } from '@/core/permission-guard'
+import {
+  enforcePermission,
+  PermissionError,
+  stripCommentsAndStrings,
+} from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
 import { extractTableName } from '@/utils/engine-hints'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
+import { trimAppliedLimit } from '@/core/applied-limit'
 import { writeAuditEntry } from './audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
+import { projectRows, type FieldSelection } from '@/core/field-projection'
 
 /**
  * QueryExecutor class for executing SQL queries with permission checks
  */
 export class QueryExecutor {
+  private pendingDiagnostics: string[] = []
+
   constructor(
     private adapter: DatabaseAdapter,
     private permission: Permission,
     private blacklistValidator?: BlacklistValidator,
     private config?: DbcliConfig,
-    private options: { config?: string } = {}
+    private options: {
+      config?: string
+      connectionName?: string
+      recovery?: boolean
+      deferDiagnostics?: boolean
+    } = {}
   ) {}
+
+  takeDiagnostics(): string[] {
+    const diagnostics = this.pendingDiagnostics
+    this.pendingDiagnostics = []
+    return diagnostics
+  }
 
   /**
    * Execute a SQL query with permission enforcement and error handling
@@ -43,17 +62,21 @@ export class QueryExecutor {
     options?: {
       autoLimit?: boolean
       limitValue?: number
+      detectTruncation?: boolean
+      fieldSelection?: FieldSelection
     }
   ): Promise<QueryResult<Record<string, unknown>>> {
     const start = performance.now()
+    this.pendingDiagnostics = []
     try {
       // 1. Enforce permission before execution
       const classification = enforcePermission(sql, this.permission)
 
       // 1b. Warn on dangerous DDL operations even in admin mode
-      if (classification.isDangerous && this.permission === 'admin') {
-        console.error(`⚠ Warning: executing ${classification.type} operation (admin mode)`)
-      }
+      const dangerousOperationWarning =
+        classification.isDangerous && this.permission === 'admin'
+          ? `⚠ Warning: executing ${classification.type} operation (admin mode)`
+          : undefined
 
       // 2. Auto-limit in query-only mode (safety default).
       // Only applies to SELECT — SHOW/DESCRIBE/EXPLAIN do not accept LIMIT and
@@ -61,15 +84,24 @@ export class QueryExecutor {
       // by enforcePermission() above.
       const AUTO_LIMIT_TYPES = new Set(['SELECT'])
       let executeSql = sql
+      let appliedLimit: number | undefined
+      let autoLimitWarning: string | undefined
       if (
-        this.permission === 'query-only' &&
         AUTO_LIMIT_TYPES.has(classification.type) &&
-        !executeSql.match(/LIMIT\s+\d+/i) &&
+        !hasUserAuthoredLimit(executeSql) &&
         options?.autoLimit !== false
       ) {
-        const limitValue = options?.limitValue || DEFAULT_QUERY_ONLY_LIMIT
-        executeSql = `${executeSql} LIMIT ${limitValue}`
-        console.error(`Query-only mode: auto-limiting to ${limitValue} rows`)
+        const requestedLimit =
+          options?.limitValue ??
+          (this.permission === 'query-only' ? DEFAULT_QUERY_ONLY_LIMIT : undefined)
+        if (requestedLimit !== undefined) {
+          const fetchLimit = requestedLimit + (options?.detectTruncation === true ? 1 : 0)
+          appliedLimit = options?.detectTruncation === true ? requestedLimit : undefined
+          executeSql = `${executeSql.replace(/;\s*$/, '')} LIMIT ${fetchLimit}`
+          if (options?.limitValue === undefined && this.permission === 'query-only') {
+            autoLimitWarning = `Query-only mode: auto-limiting to ${requestedLimit} rows`
+          }
+        }
       }
 
       // 3. Check table blacklist before execution (for SELECT queries)
@@ -85,19 +117,19 @@ export class QueryExecutor {
       const resultData = await this.adapter.execute<Record<string, unknown>>(executeSql)
       const executionTimeMs = Math.round(performance.now() - start)
 
-      const rows = resultData.rows
+      const limitedResult =
+        appliedLimit === undefined ? undefined : trimAppliedLimit(resultData.rows, appliedLimit)
+      const rows = limitedResult?.rows ?? resultData.rows
       const affectedRows = resultData.affectedRows
+      const visibleAffectedRows = limitedResult ? rows.length : affectedRows
 
       // 5. Collect result metadata
       let columnNames = rows.length > 0 && rows[0] ? Object.keys(rows[0]) : []
-      const columnTypes = columnNames.map((col) => {
-        const value = rows[0]?.[col]
-        return inferColumnType(value)
-      })
 
       // 6. Apply blacklist column filtering if validator is present
       let filteredRows = rows
       let securityNotification: string | undefined
+      let omittedColumns: string[] = []
 
       if (this.blacklistValidator) {
         const tableName = extractTableName(sql)
@@ -105,6 +137,7 @@ export class QueryExecutor {
           const filterResult = this.blacklistValidator.filterColumns(tableName, rows, columnNames)
           filteredRows = filterResult.filteredRows
           if (filterResult.omittedColumns.length > 0) {
+            omittedColumns = filterResult.omittedColumns
             columnNames = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
             securityNotification = this.blacklistValidator.buildSecurityNotification(
               tableName,
@@ -113,6 +146,30 @@ export class QueryExecutor {
           }
         }
       }
+
+      // Blacklist filtering has final authority. Projection is applied only to
+      // the already-filtered rows and cannot recover an omitted column.
+      if (options?.fieldSelection) {
+        const fieldSelection =
+          options.fieldSelection.mode === 'include'
+            ? {
+                mode: 'include' as const,
+                paths: options.fieldSelection.paths.filter(
+                  (path) =>
+                    !omittedColumns.some(
+                      (omitted) => path === omitted || path.startsWith(`${omitted}.`)
+                    )
+                ),
+              }
+            : options.fieldSelection
+        const projection = projectRows(filteredRows, fieldSelection)
+        filteredRows = projection.rows
+        columnNames = projection.columnNames
+      }
+      const columnTypes = columnNames.map((column) => {
+        const value = filteredRows.find((row) => row[column] !== undefined)?.[column]
+        return inferColumnType(value)
+      })
 
       // 7. Build QueryResult object
       const result: QueryResult<Record<string, unknown>> = {
@@ -123,9 +180,10 @@ export class QueryExecutor {
         executionTimeMs,
         metadata: {
           statement: classification.type as import('@/types/query').SqlStatementType,
-          affectedRows: affectedRows,
+          affectedRows: visibleAffectedRows,
           ...(securityNotification ? { securityNotification } : {}),
         },
+        ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
       }
 
       // 8. Audit Success
@@ -134,10 +192,23 @@ export class QueryExecutor {
           success: true,
           sql,
           metadata: {
-            rows_affected: affectedRows,
+            rows_affected: visibleAffectedRows,
             execution_ms: executionTimeMs,
           },
         })
+      }
+
+      // Human diagnostics belong to the success path. Printing them before
+      // adapter execution would contaminate the CLI's single failure envelope.
+      if (this.options.recovery !== true) {
+        const diagnostics = [dangerousOperationWarning, autoLimitWarning].filter(
+          (diagnostic): diagnostic is string => diagnostic !== undefined
+        )
+        if (this.options.deferDiagnostics === true) {
+          this.pendingDiagnostics = diagnostics
+        } else {
+          for (const diagnostic of diagnostics) console.error(diagnostic)
+        }
       }
 
       return result
@@ -186,6 +257,11 @@ export class QueryExecutor {
       throw error
     }
   }
+}
+
+function hasUserAuthoredLimit(sql: string): boolean {
+  const executableSql = stripCommentsAndStrings(sql).replace(/`(?:``|[^`])*`/g, ' ')
+  return /\bLIMIT\s+(?:\(\s*)?(?:\d+|ALL\b|\?|\$\d+|:[A-Za-z_][A-Za-z0-9_]*)/i.test(executableSql)
 }
 
 /**

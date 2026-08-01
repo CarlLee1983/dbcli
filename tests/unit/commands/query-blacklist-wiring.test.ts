@@ -49,23 +49,12 @@ const mockAdapter = {
 }
 
 // No mock.module for @/formatters — it leaks globally on Windows and breaks formatter tests.
-// The real formatters work fine here since we only assert exitCode and capturedBlacklistValidator.
+// The real formatters work fine here since we only assert the command rejection and wiring.
 
 describe('queryCommand blacklist wiring', () => {
-  let exitCode: number | null = null
-  let originalExit: typeof process.exit
-
   beforeEach(() => {
     capturedBlacklistValidator = undefined
     mockExecuteError = null
-    exitCode = null
-    originalExit = process.exit
-
-    // Capture process.exit calls
-    process.exit = ((code?: number) => {
-      exitCode = code ?? 0
-      throw new Error(`process.exit(${code})`)
-    }) as any
 
     // spyOn AdapterFactory.createSqlAdapter to return mock adapter (no global leakage)
     createAdapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(mockAdapter as any)
@@ -86,13 +75,12 @@ describe('queryCommand blacklist wiring', () => {
   })
 
   afterEach(() => {
-    process.exit = originalExit
     executeSpy.mockRestore()
     createAdapterSpy.mockRestore()
     configReadSpy.mockRestore()
   })
 
-  test('Test 1: queryCommand with blacklisted table throws/exits with blacklist error message', async () => {
+  test('Test 1: queryCommand with blacklisted table rejects with blacklist error message', async () => {
     capturedConfig = {
       connection: {
         system: 'postgresql',
@@ -114,15 +102,7 @@ describe('queryCommand blacklist wiring', () => {
     )
 
     const { queryCommand } = await import('@/commands/query')
-
-    try {
-      await queryCommand('SELECT * FROM sensitive_logs', {})
-    } catch {
-      // swallow exit error
-    }
-
-    // Should have called process.exit(1)
-    expect(exitCode).toBe(1)
+    await expect(queryCommand('SELECT * FROM sensitive_logs', {})).rejects.toThrow('sensitive_logs')
   })
 
   test('Test 2: queryCommand with empty blacklist config allows operation', async () => {
@@ -153,8 +133,6 @@ describe('queryCommand blacklist wiring', () => {
     // Should NOT throw
     await queryCommand('SELECT * FROM sensitive_logs', {})
 
-    // Should have exited cleanly (no exit called)
-    expect(exitCode).toBeNull()
     // Validator should still be constructed (always)
     expect(capturedBlacklistValidator).toBeDefined()
   })
@@ -186,9 +164,6 @@ describe('queryCommand blacklist wiring', () => {
 
     // Should NOT throw even without blacklist config
     await queryCommand('SELECT * FROM any_table', {})
-
-    // Should have exited cleanly (no exit called)
-    expect(exitCode).toBeNull()
   })
 
   test('Test 4: queryCommand constructs validator and passes to QueryExecutor', async () => {

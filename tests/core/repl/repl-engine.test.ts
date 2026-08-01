@@ -1,5 +1,8 @@
 // tests/core/repl/repl-engine.test.ts
-import { describe, test, expect, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, test, expect, mock } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ReplEngine } from '../../../src/core/repl/repl-engine'
 import type { ReplContext } from '../../../src/core/repl/types'
 import type { DatabaseAdapter } from '../../../src/adapters/types'
@@ -30,9 +33,21 @@ const mockContext: ReplContext = {
 }
 
 describe('ReplEngine', () => {
+  let tempDirectory: string
+  let historyPath: string
+
+  beforeEach(async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-repl-engine-test-'))
+    historyPath = join(tempDirectory, 'history')
+  })
+
+  afterEach(async () => {
+    await rm(tempDirectory, { recursive: true, force: true })
+  })
+
   test('constructs with default state', () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const state = engine.getState()
     expect(state.format).toBe('table')
     expect(state.timing).toBe(false)
@@ -41,7 +56,7 @@ describe('ReplEngine', () => {
 
   test('processInput handles empty input', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('')
     expect(result.action).toBe('continue')
     expect(result.output).toBeUndefined()
@@ -49,21 +64,21 @@ describe('ReplEngine', () => {
 
   test('processInput handles meta quit', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('.quit')
     expect(result.action).toBe('quit')
   })
 
   test('processInput handles meta clear', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('.clear')
     expect(result.action).toBe('clear')
   })
 
   test('processInput handles SQL execution', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('SELECT * FROM users;')
     expect(result.action).toBe('continue')
     expect(result.output).toBeDefined()
@@ -72,7 +87,7 @@ describe('ReplEngine', () => {
 
   test('processInput accumulates multiline SQL', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
 
     const r1 = await engine.processInput('SELECT *')
     expect(r1.action).toBe('multiline')
@@ -87,7 +102,7 @@ describe('ReplEngine', () => {
     ;(adapter.execute as any).mockImplementation(() => {
       throw new Error('relation "foo" does not exist')
     })
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('SELECT * FROM foo;')
     expect(result.action).toBe('continue')
     expect(result.output).toContain('relation "foo" does not exist')
@@ -96,7 +111,7 @@ describe('ReplEngine', () => {
   test('processInput handles permission error', async () => {
     const ctx: ReplContext = { ...mockContext, permission: 'query-only' }
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, ctx, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, ctx, historyPath)
     const result = await engine.processInput('DELETE FROM users WHERE id = 1;')
     expect(result.action).toBe('continue')
     expect(result.output).toBeDefined()
@@ -104,7 +119,7 @@ describe('ReplEngine', () => {
 
   test('state updates from meta commands persist', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     await engine.processInput('.format json')
     expect(engine.getState().format).toBe('json')
 
@@ -114,7 +129,7 @@ describe('ReplEngine', () => {
 
   test('isMultiline returns true during multiline input', async () => {
     const adapter = createMockAdapter()
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     expect(engine.isMultiline()).toBe(false)
 
     await engine.processInput('SELECT *')
@@ -133,7 +148,7 @@ describe('ReplEngine', () => {
       }
       return Promise.resolve([{ id: 1 }])
     })
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history')
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
     const result = await engine.processInput('SELECT 1;')
     expect(result.action).toBe('continue')
     expect(adapter.connect).toHaveBeenCalledTimes(1) // reconnect call
@@ -156,7 +171,7 @@ describe('ReplEngine', () => {
       blacklist: { tables: ['secrets'], columns: {} },
       metadata: { version: '1.0' },
     }
-    const engine = new ReplEngine(adapter, mockContext, '/tmp/test_history', config)
+    const engine = new ReplEngine(adapter, mockContext, historyPath, config)
     const result = await engine.processInput("INSERT INTO secrets (key) VALUES ('x');")
     expect(result.action).toBe('continue')
     expect(result.output).toContain('secrets')

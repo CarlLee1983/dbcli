@@ -56,7 +56,7 @@ describe('CLI stdout piping', () => {
   test('flushes JSON output larger than the pipe buffer before exiting', async () => {
     const pipeline =
       process.platform === 'win32'
-        ? '"%DBCLI_TEST_BUN%" run "%DBCLI_TEST_CLI%" queries list --format json | "%DBCLI_TEST_BUN%" "%DBCLI_TEST_CONSUMER%"'
+        ? '""%DBCLI_TEST_BUN%" run "%DBCLI_TEST_CLI%" queries list --format json | "%DBCLI_TEST_BUN%" "%DBCLI_TEST_CONSUMER%""'
         : '"$DBCLI_TEST_BUN" run "$DBCLI_TEST_CLI" queries list --format json | "$DBCLI_TEST_BUN" "$DBCLI_TEST_CONSUMER"'
     const child = Bun.spawn({
       cmd:

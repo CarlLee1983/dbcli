@@ -1,13 +1,15 @@
-import { expect, test, beforeAll } from 'bun:test'
+import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
 const repoRoot = resolve(import.meta.dir, '..', '..')
-const distEntry = join(repoRoot, 'dist', 'agent-core.mjs')
+let buildDirectory = ''
+let distEntrySpecifier = ''
 
 /**
  * `agent-core` exists to be consumed by downstream agent-facing tools, and those
@@ -18,8 +20,28 @@ const distEntry = join(repoRoot, 'dist', 'agent-core.mjs')
  * the built bundle so that failure mode cannot ship again.
  */
 beforeAll(async () => {
-  await run('bun', ['run', 'build'], { cwd: repoRoot })
-}, 120_000)
+  // Use an isolated artifact. Other test files build into dist concurrently,
+  // so sharing that output would make this contract test race their full builds.
+  buildDirectory = await mkdtemp(join(tmpdir(), 'dbcli-agent-core-build-'))
+  const distEntry = join(buildDirectory, 'agent-core.mjs')
+  await run(
+    'bun',
+    [
+      'build',
+      './src/agent-core/public.ts',
+      '--outfile',
+      distEntry,
+      '--target',
+      'bun',
+    ],
+    { cwd: repoRoot }
+  )
+  distEntrySpecifier = pathToFileURL(distEntry).href
+}, 30_000)
+
+afterAll(async () => {
+  if (buildDirectory) await rm(buildDirectory, { recursive: true, force: true })
+})
 
 async function inNode(script: string): Promise<string> {
   // Deliberately `node`, not `process.execPath` — this suite runs under Bun and
@@ -30,7 +52,7 @@ async function inNode(script: string): Promise<string> {
 
 test('every agent-core export is callable from Node', async () => {
   const output = await inNode(`
-    import * as agentCore from ${JSON.stringify(distEntry)}
+    import * as agentCore from ${JSON.stringify(distEntrySpecifier)}
     const names = Object.keys(agentCore).sort()
     agentCore.resolveEnvRef({ $env: 'PATH' }, 'field')
     agentCore.trimAppliedLimit([1, 2, 3], 2)
@@ -52,7 +74,7 @@ test('loadEnvFile works under Node without overwriting existing values', async (
 
   try {
     const output = await inNode(`
-      import { loadEnvFile } from ${JSON.stringify(distEntry)}
+      import { loadEnvFile } from ${JSON.stringify(distEntrySpecifier)}
       process.env.DBCLI_NODE_EXISTING = 'from-environment'
       await loadEnvFile(${JSON.stringify(envFile)})
       console.log([process.env.DBCLI_NODE_FRESH, process.env.DBCLI_NODE_EXISTING].join('|'))
@@ -66,7 +88,7 @@ test('loadEnvFile works under Node without overwriting existing values', async (
 
 test('loadEnvFile reports a missing file as ConfigError under Node', async () => {
   const output = await inNode(`
-    import { loadEnvFile, ConfigError } from ${JSON.stringify(distEntry)}
+    import { loadEnvFile, ConfigError } from ${JSON.stringify(distEntrySpecifier)}
     try {
       await loadEnvFile('/definitely/not/here/.env')
       console.log('no-throw')

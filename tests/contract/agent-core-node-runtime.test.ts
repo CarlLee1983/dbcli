@@ -26,14 +26,7 @@ beforeAll(async () => {
   const distEntry = join(buildDirectory, 'agent-core.mjs')
   await run(
     'bun',
-    [
-      'build',
-      './src/agent-core/public.ts',
-      '--outfile',
-      distEntry,
-      '--target',
-      'bun',
-    ],
+    ['build', './src/agent-core/public.ts', '--outfile', distEntry, '--target', 'bun'],
     { cwd: repoRoot }
   )
   distEntrySpecifier = pathToFileURL(distEntry).href

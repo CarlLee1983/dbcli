@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Node runtime 契約測試。** 本 repo 的測試全部跑在 Bun 上，所以 agent-core 裡的 Bun-only 呼叫對它們是隱形的 —— 這正是這個 bug 得以發布的原因。新增的契約測試會 spawn 真正的 `node` 行程去 import 建置後的 `dist/agent-core.mjs`，逐一呼叫每個匯出。還原修正後此測試會失敗（已驗證），因此這個失敗模式不會再次出貨。
 
+### Changed
+
+- **同步跨平台發版 metadata。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.44.1`。
+
 ## [1.44.0] - 2026-08-02 - agent-core 補上錯誤型別與 env reference 型別
 
 ### Added

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { ConfigError } from './errors'
 
 function parseEnvContent(content: string): Array<[string, string]> {
@@ -24,12 +25,26 @@ function parseEnvContent(content: string): Array<[string, string]> {
   return entries
 }
 
-/** Load a file into process.env without overwriting existing values. */
+/**
+ * Load a file into process.env without overwriting existing values.
+ *
+ * Uses `node:fs` rather than `Bun.file` on purpose: `agent-core` is the public
+ * surface downstream tools consume, and those tools do not necessarily run on
+ * Bun. A Bun-only builtin here makes the whole export unusable for them.
+ */
 export async function loadEnvFile(filePath: string): Promise<void> {
-  const file = Bun.file(filePath)
-  if (!(await file.exists())) throw new ConfigError(`找不到 env 檔案：${filePath}`)
+  let content: string
+  try {
+    content = await readFile(filePath, 'utf8')
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'EISDIR') {
+      throw new ConfigError(`找不到 env 檔案：${filePath}`)
+    }
+    throw cause
+  }
 
-  for (const [key, value] of parseEnvContent(await file.text())) {
+  for (const [key, value] of parseEnvContent(content)) {
     if (process.env[key] === undefined) process.env[key] = value
   }
 }

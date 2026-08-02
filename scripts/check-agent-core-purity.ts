@@ -1,4 +1,8 @@
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 const root = new URL('../src/agent-core/', import.meta.url)
+const rootPath = fileURLToPath(root)
 const forbiddenSystem = /\b(postgresql|mysql|mariadb|mongodb|redis|elasticsearch)\b/i
 const violations: string[] = []
 
@@ -34,8 +38,8 @@ export function findAgentCorePurityViolations(source: string, relativePath: stri
 }
 
 if (import.meta.main) {
-  for await (const relativePath of new Bun.Glob('**/*.ts').scan({ cwd: root.pathname })) {
-    const source = await Bun.file(new URL(relativePath, root)).text()
+  for await (const relativePath of new Bun.Glob('**/*.ts').scan({ cwd: rootPath })) {
+    const source = await Bun.file(join(rootPath, relativePath)).text()
     violations.push(...findAgentCorePurityViolations(source, relativePath))
   }
 

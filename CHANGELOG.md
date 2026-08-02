@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.44.1] - 2026-08-02 - `agent-core` 的 `loadEnvFile` 改用 node:fs，可在 Node 執行
+
+### Fixed
+
+- **`loadEnvFile` 不再依賴 `Bun.file`。** `./agent-core` 存在的理由是給下游 agent CLI 共用，而那些工具不一定跑在 Bun 上；`loadEnvFile` 內部呼叫 `Bun.file()`，在 Node 下直接 `ReferenceError: Bun is not defined`，使整個匯出對第一個 Node 消費者（logq）不可用。改以 `node:fs/promises` 讀檔，解析與「不覆寫既有 `process.env`」的行為完全不變；檔案不存在仍拋 `ConfigError`。其餘五個匯出本來就沒有 runtime 相依，不受影響。
+
+### Added
+
+- **Node runtime 契約測試。** 本 repo 的測試全部跑在 Bun 上，所以 agent-core 裡的 Bun-only 呼叫對它們是隱形的 —— 這正是這個 bug 得以發布的原因。新增的契約測試會 spawn 真正的 `node` 行程去 import 建置後的 `dist/agent-core.mjs`，逐一呼叫每個匯出。還原修正後此測試會失敗（已驗證），因此這個失敗模式不會再次出貨。
+
+### Changed
+
+- **同步跨平台發版 metadata。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.44.1`。
+
 ## [1.44.0] - 2026-08-02 - agent-core 補上錯誤型別與 env reference 型別
 
 ### Added

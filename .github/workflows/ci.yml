@@ -16,12 +16,19 @@ jobs:
           bun-version: ${{ matrix.bun-version }}
       - run: bun install
 
-      - name: Required validation (bun run typecheck && bun test)
-        run: |
-          bun run build
-          bun run agent-core:check
-          bun run typecheck
-          bun test
+      # Keep these as separate steps: PowerShell can otherwise let a later
+      # successful native command mask an earlier non-zero exit code on Windows.
+      - name: Build
+        run: bun run build
+
+      - name: Agent core purity
+        run: bun run agent-core:check
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
         env:
           SKIP_INTEGRATION_TESTS: 'true'
 

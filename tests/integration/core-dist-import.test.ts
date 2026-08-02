@@ -36,6 +36,7 @@ test('dist/core.mjs 暴露 engine 進入點', async () => {
 test('dist/agent-core.mjs exposes only the stable agent interface', async () => {
   const agentCore = await import(join(ROOT, 'dist', 'agent-core.mjs'))
   expect(Object.keys(agentCore).sort()).toEqual([
+    'ConfigError',
     'loadEnvFile',
     'parseConnectionNames',
     'resolveConnectionSelector',

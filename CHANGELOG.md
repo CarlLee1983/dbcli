@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.44.0] - 2026-08-02 - agent-core 補上錯誤型別與 env reference 型別
+
+### Added
+
+- **`./agent-core` 匯出 `ConfigError` 與 `EnvReference`。** 下游工具原本無法用 `instanceof` 判別 env reference 解析失敗，只能比對錯誤訊息字串；也無法引用 `{ $env: string }` 的型別名稱，只能各自重複定義一個結構相同的介面。兩者都是既有模組早已匯出、只是沒有出現在 `public.ts` 的疏漏。runtime interface 因此從五項變六項，型別從三項變四項，皆為加法變更。
+
 ## [1.43.0] - 2026-08-02 - Agent Core、查詢完整性與跨平台修復
 
 ### Added

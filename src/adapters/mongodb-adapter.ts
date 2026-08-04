@@ -20,14 +20,56 @@ export class MongoDBAdapter implements QueryableAdapter {
     return MongoClient as unknown as MongoClientConstructor
   }
 
+  /**
+   * Build the canonical URI from the field-based config. The result may be a
+   * `mongodb+srv://` URI — SRV expansion is handled uniformly in
+   * buildResolvedUri(), so both this path and an explicit `uri` share it.
+   */
   private buildUri(): string {
     if (this.options.uri) return this.options.uri
-    const { user, password, host, port, database, authSource } = this.options
-    if (user && password) {
-      const auth = authSource ?? 'admin'
-      return `mongodb://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}?authSource=${auth}`
+    const { user, password, host, port, database, authSource, replicaSet, tls, srv } = this.options
+
+    // Reject anything that would move the authority boundary or silently turn
+    // into an unreadable driver error. `:` is included because the port belongs
+    // in its own field — an embedded one produces `host:1234:27017`.
+    if (!host) {
+      throw new ConnectionError('UNKNOWN', 'MongoDB host 未設定', [
+        '請填寫 host，或改用 uri 欄位指定完整連線字串',
+      ])
     }
-    return `mongodb://${host}:${port}/${database}`
+    // IPv6 literals carry colons and must be bracketed, exactly as the driver
+    // expects. Everything else may not contain a colon at all — an embedded
+    // port would otherwise produce `host:1234:27017`.
+    const isBracketedIpv6 = /^\[[0-9a-f:]+\]$/i.test(host)
+    if (!isBracketedIpv6 && /[/@?#:\s\\]/.test(host)) {
+      throw new ConnectionError('UNKNOWN', `MongoDB host 含有非法字元: ${host}`, [
+        'host 只應包含主機名稱或 IP，不要含 /、@、?、#、: 或空白',
+        '埠號請填在 port 欄位，不要併進 host',
+        'IPv6 位址請加方括號，例如 [::1]',
+        '若要指定完整連線字串，請改用 uri 欄位',
+      ])
+    }
+
+    if (user && !password) {
+      throw new ConnectionError('UNKNOWN', '已指定 user 但未提供 password', [
+        '請補上 password，或改用環境變數參照 {"$env": "..."}',
+        '若確定要以無認證方式連線，請一併清空 user',
+      ])
+    }
+
+    const userInfo = user ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@` : ''
+    const scheme = srv ? 'mongodb+srv://' : 'mongodb://'
+    const authority = srv ? host : `${host}:${port}`
+    const path = database ? `/${encodeURIComponent(database)}` : '/'
+
+    const query = new URLSearchParams()
+    // `||` not `??`: the schema allows an empty string, which must not become `authSource=`
+    if (user) query.set('authSource', authSource || 'admin')
+    if (replicaSet) query.set('replicaSet', replicaSet)
+    if (tls !== undefined) query.set('tls', String(tls))
+
+    const search = query.toString()
+    return `${scheme}${userInfo}${authority}${path}${search ? `?${search}` : ''}`
   }
 
   private parseTxtRecords(records: string[][]): Record<string, string> {
@@ -117,15 +159,15 @@ export class MongoDBAdapter implements QueryableAdapter {
   }
 
   private async buildResolvedUri(): Promise<string> {
-    if (!this.options.uri) {
-      return this.buildUri()
+    // Both an explicit `uri` and the field-based config funnel through the same
+    // SRV expansion — `srv: true` is just another way to produce mongodb+srv://.
+    const canonical = this.buildUri()
+
+    if (!canonical.startsWith('mongodb+srv://')) {
+      return canonical
     }
 
-    if (!this.options.uri.startsWith('mongodb+srv://')) {
-      return this.options.uri
-    }
-
-    const url = new URL(this.options.uri)
+    const url = new URL(canonical)
     const hosts = await this.resolveSrvHosts(url.hostname)
     const txtOptions = await this.resolveTxtOptions(url.hostname)
     const query = new URLSearchParams(url.searchParams)
@@ -158,6 +200,50 @@ export class MongoDBAdapter implements QueryableAdapter {
     return `mongodb://${userInfo}${hosts.join(',')}${path}${search ? `?${search}` : ''}`
   }
 
+  /**
+   * Map a driver error to actionable hints about the connection config.
+   *
+   * Driver messages routinely echo the original URI back, so bare tokens like
+   * `SRV`, `TLS` or `DNS` would match a connection string rather than the
+   * failure. Structured error codes come first; the message patterns that
+   * follow are phrases the driver actually emits, not substrings that can
+   * appear inside a URI.
+   */
+  private connectionHints(error: unknown, message: string): string[] {
+    const AUTH_HINTS = [
+      '認證失敗：請確認 user / password 正確',
+      '請確認 authSource 指向存放該帳號的資料庫（Atlas 與多數自架環境為 admin）',
+    ]
+    const DNS_HINTS = [
+      'DNS/SRV 解析失敗：請確認 host 為 SRV 網域，且 srv 設定與它一致',
+      '若該主機不是 SRV 網域，請關閉 srv 並改填 host 與 port',
+      '請確認本機 DNS 或網路（VPN、公司網路）允許 SRV 查詢',
+    ]
+    const TLS_HINTS = [
+      'TLS 握手失敗：請確認 tls 欄位設定與伺服器一致',
+      '自簽憑證環境需要在伺服器端或系統信任鏈中安裝 CA 憑證',
+    ]
+
+    const err = error as { code?: unknown; codeName?: string; cause?: { code?: string } }
+    const causeCode = String(err?.cause?.code ?? err?.code ?? '')
+
+    if (err?.code === 18 || err?.codeName === 'AuthenticationFailed') return AUTH_HINTS
+    if (['ENOTFOUND', 'EAI_AGAIN'].includes(causeCode)) return DNS_HINTS
+    if (causeCode.startsWith('ERR_TLS') || causeCode.startsWith('SELF_SIGNED')) return TLS_HINTS
+
+    if (/authentication failed|not authorized|bad auth/i.test(message)) return AUTH_HINTS
+    if (/querySrv|getaddrinfo (ENOTFOUND|EAI_AGAIN)/i.test(message)) return DNS_HINTS
+    if (
+      /unable to verify the first certificate|self.signed certificate|certificate has expired|ERR_TLS/i.test(
+        message
+      )
+    ) {
+      return TLS_HINTS
+    }
+
+    return ['請確認 MongoDB 服務正在執行', '請確認連線設定（URI 或 host/port）正確']
+  }
+
   private getDatabase(): Db {
     if (!this.client) {
       throw new ConnectionError('UNKNOWN', '尚未連線，請先呼叫 connect()', [])
@@ -179,10 +265,11 @@ export class MongoDBAdapter implements QueryableAdapter {
         : message.includes('ETIMEDOUT')
           ? 'ETIMEDOUT'
           : 'UNKNOWN'
-      throw new ConnectionError(code, `MongoDB 連線失敗: ${message}`, [
-        '請確認 MongoDB 服務正在執行',
-        '請確認連線設定（URI 或 host/port）正確',
-      ])
+      throw new ConnectionError(
+        code,
+        `MongoDB 連線失敗: ${message}`,
+        this.connectionHints(err, message)
+      )
     }
   }
 

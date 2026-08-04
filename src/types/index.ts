@@ -38,6 +38,12 @@ export interface MongoDBConnectionConfig {
   user: string | { $env: string }
   password: string | { $env: string }
   database: string | { $env: string }
+  /** Auth database; defaults to 'admin' when credentials are present */
+  authSource?: string | { $env: string }
+  replicaSet?: string | { $env: string }
+  tls?: boolean
+  /** Build a mongodb+srv:// URI from host and expand it via DNS SRV lookup */
+  srv?: boolean
 }
 
 /**

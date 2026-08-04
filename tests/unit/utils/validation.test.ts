@@ -192,6 +192,73 @@ describe('validation', () => {
     })
   })
 
+  describe('MongoDB 逐欄連線設定', () => {
+    test('應該保留 authSource（不再被靜默丟棄）', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        host: 'localhost',
+        port: 27017,
+        user: 'app',
+        password: 'secret',
+        database: 'shop',
+        authSource: 'admin',
+      })
+
+      expect(parsed).toMatchObject({ authSource: 'admin' })
+    })
+
+    test('應該接受 replicaSet / tls / srv', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        host: 'cluster.example.com',
+        user: 'app',
+        password: 'secret',
+        database: 'shop',
+        replicaSet: 'rs0',
+        tls: true,
+        srv: true,
+      })
+
+      expect(parsed).toMatchObject({ replicaSet: 'rs0', tls: true, srv: true })
+    })
+
+    test('srv 未指定時預設為 false', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        host: 'localhost',
+        database: 'shop',
+      })
+
+      expect(parsed).toMatchObject({ srv: false })
+    })
+
+    test('新欄位應該支援 env-ref 形式', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        host: 'localhost',
+        database: 'shop',
+        authSource: { $env: 'MONGO_AUTH_SOURCE' },
+        replicaSet: { $env: 'MONGO_REPLICA_SET' },
+      })
+
+      expect(parsed).toMatchObject({
+        authSource: { $env: 'MONGO_AUTH_SOURCE' },
+        replicaSet: { $env: 'MONGO_REPLICA_SET' },
+      })
+    })
+
+    test('tls 只接受布林值', () => {
+      expect(() =>
+        ConnectionConfigSchema.parse({
+          system: 'mongodb',
+          host: 'localhost',
+          database: 'shop',
+          tls: 'yes',
+        })
+      ).toThrow(ZodError)
+    })
+  })
+
   describe('PermissionSchema', () => {
     test('應該接受有效的權限值', () => {
       expect(PermissionSchema.parse('query-only')).toBe('query-only')

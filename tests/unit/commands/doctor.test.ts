@@ -373,6 +373,116 @@ describe('doctor checks', () => {
     srvSpy.mockRestore()
   })
 
+  test('collectMongoDoctorResults warns when uri and per-field config coexist', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listCollections: async () => [],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+
+    const results = await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        uri: 'mongodb://elsewhere.example.com:27017/other',
+        host: 'localhost',
+        port: 27017,
+        user: 'app',
+        password: 'secret',
+        database: 'testdb',
+      },
+      metadata: {},
+    })
+
+    const conflict = results.find((result) => result.label === 'MongoDB connection fields')
+    expect(conflict?.status).toBe('warn')
+    expect(conflict?.message).toContain('uri')
+
+    spy.mockRestore()
+    srvSpy.mockRestore()
+  })
+
+  test('collectMongoDoctorResults runs the SRV check for field-based srv:true config', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listCollections: async () => [],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+
+    await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        host: 'cluster.example.mongodb.net',
+        port: 27017,
+        user: 'app',
+        password: 'secret',
+        database: 'shop',
+        srv: true,
+      },
+      metadata: {},
+    })
+
+    // 逐欄的 srv:true 是新的主路徑（Atlas），最需要 SRV 診斷
+    expect(srvSpy.mock.calls[0]?.[0]).toContain('mongodb+srv://cluster.example.mongodb.net')
+
+    spy.mockRestore()
+    srvSpy.mockRestore()
+  })
+
+  test('checkMongoSrvConnectivity reports an unparsable host as an SRV error, not by throwing', async () => {
+    const result = await runDoctorChecks.checkMongoSrvConnectivity('mongodb+srv://my host/')
+
+    expect(result?.label).toBe('MongoDB SRV lookup')
+    expect(result?.status).toBe('error')
+  })
+
+  test('collectMongoDoctorResults warns when srv is enabled alongside an explicit non-default port', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listCollections: async () => [],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
+    )
+    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+
+    const results = await collectMongoDoctorResults({
+      connection: {
+        system: 'mongodb',
+        host: 'cluster.example.com',
+        port: 27018,
+        user: 'app',
+        password: 'secret',
+        database: 'testdb',
+        srv: true,
+      },
+      metadata: {},
+    })
+
+    const portWarn = results.find((result) => result.label === 'MongoDB SRV port')
+    expect(portWarn?.status).toBe('warn')
+
+    spy.mockRestore()
+    srvSpy.mockRestore()
+  })
+
   test('collectMongoDoctorResults reports schema cache freshness using standard rules when schemaLastUpdated is present', async () => {
     const adapter = {
       connect: async () => {},

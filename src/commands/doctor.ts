@@ -404,7 +404,21 @@ export const runDoctorChecks = {
       return null
     }
 
-    const url = new URL(uri)
+    // A malformed host must surface as an SRV finding. Throwing here would be
+    // caught by the caller's connection try/catch and reported as "connection
+    // failed", skipping this check and every config warning after it.
+    let url: URL
+    try {
+      url = new URL(uri)
+    } catch {
+      return {
+        group: 'Environment',
+        label: 'MongoDB SRV lookup',
+        status: 'error',
+        message: `Cannot parse ${uri} as a connection string — check the host value`,
+      }
+    }
+
     const srvName = `_mongodb._tcp.${url.hostname}`
     const resolveSrvFn = deps.resolveSrvFn ?? resolveSrv
     const fetchFn = deps.fetchFn ?? fetch
@@ -617,11 +631,42 @@ export async function collectMongoDoctorResults(config: {
 
   const mongoConn = config.connection.system === 'mongodb' ? config.connection : null
   const mongoUriString = mongoConn && typeof mongoConn.uri === 'string' ? mongoConn.uri : undefined
-  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(mongoUriString)
+  // Field-based `srv: true` needs the same SRV diagnosis as a mongodb+srv:// uri —
+  // it is the primary path for Atlas, where DNS is the usual failure point.
+  const srvProbeUri =
+    mongoUriString ??
+    (mongoConn?.srv === true && typeof mongoConn.host === 'string' && mongoConn.host
+      ? `mongodb+srv://${mongoConn.host}/`
+      : undefined)
+  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(srvProbeUri)
   if (srvCheck) {
     results.push(srvCheck)
     if (srvCheck.status === 'error') {
       return results
+    }
+  }
+
+  // Surface config shapes that silently do nothing, so "I edited the field and
+  // nothing changed" is diagnosable instead of mysterious.
+  if (mongoConn) {
+    const hasFieldConfig = Boolean(mongoConn.host) || Boolean(mongoConn.user)
+    if (mongoUriString && hasFieldConfig) {
+      results.push({
+        group: 'Connection & Data',
+        label: 'MongoDB connection fields',
+        status: 'warn',
+        message:
+          'Both uri and per-field settings (host/user) are present; uri takes precedence and the per-field values are ignored.',
+      })
+    }
+
+    if (mongoConn.srv === true && typeof mongoConn.port === 'number' && mongoConn.port !== 27017) {
+      results.push({
+        group: 'Connection & Data',
+        label: 'MongoDB SRV port',
+        status: 'warn',
+        message: `srv is enabled, so port ${mongoConn.port} is ignored — SRV records carry their own ports.`,
+      })
     }
   }
 

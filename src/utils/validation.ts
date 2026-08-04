@@ -34,6 +34,10 @@ const OptNumberOrEnvRef = z.union([z.number().int(), EnvRefSchema]).optional().d
 /**
  * MongoDB connection schema — all SQL fields optional (defaulted), uri optional.
  * After parse(), host/port/user/password/database are always strings (empty by default).
+ *
+ * authSource/replicaSet/tls/srv express the driver options that previously could
+ * only be reached by hand-writing a full `uri`; see
+ * docs/adr/0002-mongodb-connection-field-first-config.md.
  */
 export const MongoDBConnectionConfigSchema = z.object({
   system: z.literal('mongodb'),
@@ -43,6 +47,10 @@ export const MongoDBConnectionConfigSchema = z.object({
   user: OptStringOrEnvRef,
   password: OptStringOrEnvRef,
   database: OptStringOrEnvRef,
+  authSource: z.union([z.string(), EnvRefSchema]).optional(),
+  replicaSet: z.union([z.string(), EnvRefSchema]).optional(),
+  tls: z.boolean().optional(),
+  srv: z.boolean().optional().default(false),
 })
 
 /**

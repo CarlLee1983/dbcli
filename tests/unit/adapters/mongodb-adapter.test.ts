@@ -88,11 +88,171 @@ const hostOptions: ConnectionOptions = {
   database: 'testdb',
 }
 
+/** Connect with the given options and return the URI the driver actually received. */
+async function connectedUri(options: ConnectionOptions): Promise<string> {
+  const adapter = new MongoDBAdapter(options, MockMongoClient as any)
+  await adapter.connect()
+  return ((adapter as any).client as MockMongoClient).uri
+}
+
 describe('MongoDBAdapter', () => {
   let adapter: MongoDBAdapter
 
   beforeEach(() => {
     adapter = new MongoDBAdapter(uriOptions, MockMongoClient as any)
+  })
+
+  describe('逐欄設定組出的連線 URI', () => {
+    test('帶入 authSource / replicaSet / tls', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        authSource: 'appdb',
+        replicaSet: 'rs0',
+        tls: true,
+      })
+
+      const parsed = new URL(uri)
+      expect(parsed.protocol).toBe('mongodb:')
+      expect(parsed.host).toBe('localhost:27017')
+      expect(parsed.pathname).toBe('/testdb')
+      expect(parsed.searchParams.get('authSource')).toBe('appdb')
+      expect(parsed.searchParams.get('replicaSet')).toBe('rs0')
+      expect(parsed.searchParams.get('tls')).toBe('true')
+    })
+
+    test('未指定 authSource 時，有帳密則預設 admin', async () => {
+      const uri = await connectedUri(hostOptions)
+      expect(new URL(uri).searchParams.get('authSource')).toBe('admin')
+    })
+
+    test('無帳密時不帶 authSource', async () => {
+      const uri = await connectedUri({ ...hostOptions, user: '', password: '' })
+      const parsed = new URL(uri)
+      expect(parsed.username).toBe('')
+      expect(parsed.searchParams.get('authSource')).toBeNull()
+    })
+
+    test('帳號、密碼、資料庫名稱中的特殊字元都要跳脫', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        user: 'admin@corp',
+        password: 'p@ss:w/rd?#',
+        database: 'my db',
+      })
+
+      // driver 收到的是原始字串，斷言必須落在字串本身而非寬容的 URL 解析結果：
+      // 未跳脫的 @ / : / ? 會讓 driver 把 authority 切在錯的位置
+      const authority = uri.slice('mongodb://'.length, uri.indexOf('@localhost'))
+      expect(authority).toBe('admin%40corp:p%40ss%3Aw%2Frd%3F%23')
+      expect(uri).toContain('/my%20db')
+    })
+
+    test('srv:true 產出 mongodb+srv 且不帶 port', async () => {
+      const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
+        const url = String(input)
+        if (url.includes('type=SRV')) {
+          return new Response(
+            JSON.stringify({
+              Status: 0,
+              Answer: [{ data: '0 0 27017 a.example.com.' }],
+            })
+          )
+        }
+        return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
+      }) as unknown as typeof fetch)
+
+      try {
+        const uri = await connectedUri({
+          ...hostOptions,
+          host: 'cluster.example.com',
+          srv: true,
+        })
+
+        // SRV 展開後應為標準多主機形式，主機來自 SRV 記錄
+        expect(uri.startsWith('mongodb://')).toBe(true)
+        expect(uri).toContain('a.example.com:27017')
+        expect(uri).not.toContain('cluster.example.com:27017')
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
+    test('uri 與逐欄欄位並存時，uri 優先', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        uri: 'mongodb://explicit.example.com:27018/explicitdb',
+      })
+
+      expect(uri).toBe('mongodb://explicit.example.com:27018/explicitdb')
+    })
+  })
+
+  describe('逐欄設定的錯誤處理', () => {
+    test('只填 user 沒填 password 應該拋錯，而非靜默降級成無認證', async () => {
+      const adapter = new MongoDBAdapter({ ...hostOptions, password: '' }, MockMongoClient as any)
+
+      await expect(adapter.connect()).rejects.toThrow(ConnectionError)
+    })
+
+    test.each([
+      ['authority 改寫字元', 'localhost/evil?x=1'],
+      ['空字串', ''],
+      ['內嵌埠號', 'localhost:1234'],
+      ['空白', 'evil host'],
+    ])('host 為 %s 時應該拋錯', async (_label, host) => {
+      const adapter = new MongoDBAdapter({ ...hostOptions, host }, MockMongoClient as any)
+
+      await expect(adapter.connect()).rejects.toThrow(ConnectionError)
+    })
+
+    test('加了方括號的 IPv6 host 應該可用', async () => {
+      const uri = await connectedUri({ ...hostOptions, host: '[::1]', user: '', password: '' })
+      expect(uri).toBe('mongodb://[::1]:27017/testdb')
+    })
+
+    test('未加方括號的 IPv6 host 應該拋錯並提示加方括號', async () => {
+      const adapter = new MongoDBAdapter({ ...hostOptions, host: '::1' }, MockMongoClient as any)
+
+      await expect(adapter.connect()).rejects.toThrow(ConnectionError)
+    })
+
+    test('authSource 為空字串時退回 admin，而非送出空的 authSource=', async () => {
+      const uri = await connectedUri({ ...hostOptions, authSource: '' })
+      expect(new URL(uri).searchParams.get('authSource')).toBe('admin')
+    })
+  })
+
+  describe('錯誤分類不應誤命中', () => {
+    function clientFailingWith(message: string) {
+      return class {
+        async connect() {
+          throw new Error(message)
+        }
+        async close() {}
+        db() {
+          return {} as any
+        }
+      }
+    }
+
+    async function hintsFor(message: string): Promise<string> {
+      const a = new MongoDBAdapter(uriOptions, clientFailingWith(message) as any)
+      try {
+        await a.connect()
+      } catch (err) {
+        return (err as ConnectionError).hints.join('\n')
+      }
+      throw new Error('expected connect() to reject')
+    }
+
+    test('連線被拒但訊息含 srv URI 與 tls query 時，不應歸類為 DNS 或 TLS', async () => {
+      const hints = await hintsFor(
+        'connect ECONNREFUSED 127.0.0.1:27017 (mongodb+srv://c.example.com/?tls=true)'
+      )
+
+      expect(hints).not.toContain('DNS/SRV 解析失敗')
+      expect(hints).not.toContain('TLS 握手失敗')
+    })
   })
 
   describe('connect()', () => {
@@ -172,6 +332,46 @@ describe('MongoDBAdapter', () => {
     test('wraps connection failure as ConnectionError', async () => {
       const a = new MongoDBAdapter(uriOptions, FailingMongoClient as any)
       await expect(a.connect()).rejects.toBeInstanceOf(ConnectionError)
+    })
+  })
+
+  describe('連線失敗的分類與提示', () => {
+    /** A client whose connect() fails with the given driver message. */
+    function clientFailingWith(message: string) {
+      return class {
+        async connect() {
+          throw new Error(message)
+        }
+        async close() {}
+        db() {
+          return {} as any
+        }
+      }
+    }
+
+    async function connectError(message: string): Promise<ConnectionError> {
+      const a = new MongoDBAdapter(uriOptions, clientFailingWith(message) as any)
+      try {
+        await a.connect()
+      } catch (err) {
+        return err as ConnectionError
+      }
+      throw new Error('expected connect() to reject')
+    }
+
+    test('認證失敗時提示檢查 authSource', async () => {
+      const err = await connectError('Authentication failed.')
+      expect(err.hints.join('\n')).toContain('authSource')
+    })
+
+    test('SRV/DNS 解析失敗時提示檢查 srv 設定', async () => {
+      const err = await connectError('querySrv ENOTFOUND _mongodb._tcp.cluster.example.com')
+      expect(err.hints.join('\n')).toContain('srv')
+    })
+
+    test('TLS 握手失敗時提示 tls 欄位', async () => {
+      const err = await connectError('unable to verify the first certificate')
+      expect(err.hints.join('\n')).toContain('tls')
     })
   })
 

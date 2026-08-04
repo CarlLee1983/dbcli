@@ -35,6 +35,12 @@ export interface ConnectionOptions {
   uri?: string
   /** MongoDB auth database — used when building URI from host/port/user/password (default: 'admin') */
   authSource?: string
+  /** MongoDB replica set name (optional, field-based config) */
+  replicaSet?: string
+  /** MongoDB TLS switch (optional, field-based config; implied true when srv) */
+  tls?: boolean
+  /** MongoDB SRV lookup — build a mongodb+srv:// URI from host (optional, field-based config) */
+  srv?: boolean
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
   /** Elasticsearch protocol (http or https) */

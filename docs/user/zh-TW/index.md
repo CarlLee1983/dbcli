@@ -37,6 +37,10 @@
 *   **查詢風險分析器 (`plan`)**：在不連線資料庫的情況下分析 SQL 風險。
 *   **Antigravity 協議**：將工作流程拆分為 **Architect (架構師/規劃)** 與 **Builder (建設者/執行)**，確保行動前必有策略。
 
+`permission`、blacklist、dry-run 與 agent skill 是縱深防禦，不能取代資料庫授權。
+自主 agent 只能取得最小權限的資料庫憑證；若一個 process 能修改自己的設定，它也能提高
+dbcli 宣告的 permission，或改用其他 client。
+
 ---
 
 <!-- doc-key: getting-started -->

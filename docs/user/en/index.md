@@ -37,6 +37,11 @@
 *   **Query Risk Analyzer (`plan`)**: Analyzes SQL risk without connecting to the database.
 *   **Antigravity Protocol**: A workflow separation between **Architect** (Planning) and **Builder** (Execution) to ensure strategy precedes action.
 
+`permission`, blacklist, dry-run, and agent skills are defence in depth, not a
+replacement for database authorization. An autonomous agent must receive only a
+least-privilege database credential; a process that can edit its own config can
+otherwise raise dbcli's declared permission or use another client.
+
 ---
 
 <!-- doc-key: getting-started -->

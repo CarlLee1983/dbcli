@@ -55,7 +55,7 @@ bun install -g @carllee1983/dbcli
 ```
 
 ### Initializing a Connection
-The `init` command guides you through setting up your first connection. It can automatically parse existing `.env` files.
+The `init` command guides you through setting up your first connection. It can automatically parse existing `.env` files. For MongoDB, `init` walks through connection fields one at a time (Host, SRV, Port, User, Password, `authSource`, then optional `replicaSet` / `tls`) — see "MongoDB connection configuration" in the [Database Engine Support Matrix](#database-engine-support-matrix) section below for the full field list and the `--uri` advanced fallback.
 
 Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/config.json` in your project, while the real connection settings and any credentials are stored in your home directory at `~/.config/dbcli/projects/<project-name>-<sha1-12>/`. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project `.dbcli/` only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).
 
@@ -855,6 +855,27 @@ When dbcli's lookahead proves that rows were truncated, the dashboard shows a wa
 | Blacklist Enforcement | ✅ | ✅ | ⚠️ (key globs) | ⚠️ |
 | Interactive Shell (`shell`) | ✅ | ✅ | ✅ (single-line) | ⚠️ (Kibana-style) |
 
+### MongoDB connection configuration
+
+`dbcli init --system mongodb` defaults to a field-by-field wizard, matching the SQL engines: Host, whether it is an SRV domain, Port (skipped for SRV), User, and — only when a User is set — Password plus `authSource`, followed by an optional advanced step for `replicaSet` / `tls`. Pasting a full connection string is now the explicit second choice ("Paste a full connection string (advanced)"). Non-interactive usage is unchanged: passing `--uri` skips the mode prompt entirely and behaves exactly as before.
+
+Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `authSource` | string or `{"$env": "..."}` | Auth database; defaults to `admin` once a user is configured. |
+| `replicaSet` | string or `{"$env": "..."}` | Replica set name. |
+| `tls` | boolean | Enable TLS. |
+| `srv` | boolean (default `false`) | Build a `mongodb+srv://` URI and resolve hosts via DNS SRV; `port` is ignored when `true`. |
+
+`--auth-source <db>` is available as a non-interactive `init` flag. `replicaSet` and `tls` have no dedicated flag yet — set them through the interactive advanced step, or edit `.dbcli` directly afterward (the same pattern already used for Elasticsearch's `caPath` / `rejectUnauthorized`).
+
+If a config carries both `uri` and per-field values (`host` / `user`), `uri` wins and the per-field values are silently ignored, exactly as before — but `dbcli doctor` now reports this as a warning, so an edited field that "did nothing" is diagnosable instead of mysterious. `doctor` also warns when `srv: true` is combined with a non-default `port`, since SRV records carry their own ports.
+
+A field-mode `user` with no `password` now fails closed with an error instead of silently downgrading to an unauthenticated connection. `user`, `database`, and `password` values are consistently percent-encoded when the URI is assembled, so characters such as `@` or `/` in a username or database name no longer shift where the driver parses the authority.
+
+Connection failures are classified into actionable hints: authentication failures point at `user` / `password` / `authSource` (Atlas and most self-hosted setups use `admin`); DNS/SRV failures point at the `srv` setting and local network DNS restrictions; TLS/certificate failures point at the `tls` field and CA trust configuration.
+
 ### MongoDB write planner (operator tiers)
 
 | Tier | Operators | Plan outcome |
@@ -1055,7 +1076,7 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 ### B. Cross-cutting scenarios
 
 - **Switch between environments (v2)**: `dbcli use prod` changes the default; `dbcli query --use staging "<SQL>"` overrides for one call only. Each named connection has its **own schema cache** at `.dbcli/schemas/<conn>/` — run `dbcli schema --use <name>` once after switching, or you may read another connection's columns. (See **Connection Management**.)
-- **Reference env vars for secrets in CI**: connection settings already live in home storage (`~/.config/dbcli/…`), never in the project `.dbcli/`. `dbcli init --use-env-refs` goes further and stores `{ "$env": "VAR" }` references resolved at runtime instead of any plaintext. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext.
+- **Reference env vars for secrets in CI**: connection settings already live in home storage (`~/.config/dbcli/…`), never in the project `.dbcli/`. `dbcli init --use-env-refs` goes further and stores `{ "$env": "VAR" }` references resolved at runtime instead of any plaintext. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext. **MongoDB differs**: only `--env-host` is required; `--env-port` / `--env-user` / `--env-password` / `--env-database` are optional, and an omitted one is written as a literal value (empty string for `user` / `password`, the resolved value for `port` / `database`) rather than an `$env` reference that would later fail closed for a field the connection was never meant to have. `init` also skips the connection test in this mode — the `$env` references have no value to connect with yet — regardless of `--skip-test`.
 - **Verify an invariant or write outcome**: `snapshot` captures a baseline → `assert --against <snap> --tolerance <pct>` compares; `q @name --verify` runs snippet assertions; `recover --apply --write-verification-artifact` persists secret-free evidence. (See **Data Verification**.)
 - **Spot N+1 / slow queries in local dev**: run the app through `dbcli proxy <engine> --listen ... --target ...` to capture events, then `dbcli proxy analyze` aggregates them offline into N+1, slowest-query, and hot-table findings. (See **dbcli proxy**.)
 

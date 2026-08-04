@@ -32,10 +32,11 @@ dbcli init --system mysql --host localhost --port 3306 --user root --name mydb
 dbcli init --use-env-refs                               # Store env var references
 dbcli init --no-interactive --force                     # Non-interactive mode
 
-# MongoDB
-dbcli init --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
-dbcli init --system mongodb --host localhost --port 27017 --user admin --password secret --name mydb
+# MongoDB — field-by-field (primary path, same shape as SQL)
+dbcli init --system mongodb --host localhost --port 27017 --user admin --password secret --auth-source admin --name mydb
 dbcli init --system mongodb --host localhost --port 27017 --name mydb  # No auth
+# MongoDB — full URI (advanced fallback: multi-host, non-standard driver options)
+dbcli init --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
 
 # Redis (database = logical DB index)
 dbcli init --system redis --host localhost --port 6379
@@ -62,7 +63,7 @@ dbcli --global use --list
 
 **Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
 
-**MongoDB-specific options:** `--uri <uri>` (full connection URI), `--auth-source <db>` (auth database, default: `admin` when user/password set)
+**MongoDB-specific options:** `--uri <uri>` (full connection URI — advanced fallback), `--auth-source <db>` (auth database, default: `admin` when user/password set). Interactive `init` also asks for `replicaSet` and `tls` under an "advanced options?" prompt; there is no dedicated non-interactive flag for either yet — set them interactively or edit `.dbcli` afterward. `srv` (boolean, builds `mongodb+srv://` and resolves hosts via DNS SRV, ignoring `port`) is asked right after `host`, before `port`, since it decides whether `port` is even relevant.
 
 **Elasticsearch-specific options:** `--cloud-id <id>` (Elastic Cloud), `--api-key <key>` (ApiKey auth). Other ES fields (`nodes[]`, `protocol`, `caPath`, `rejectUnauthorized`) can be edited directly in `.dbcli`.
 
@@ -2025,7 +2026,9 @@ dbcli doctor --format json      # JSON output for AI agents
 - Configuration: config file exists/valid, permission level, blacklist completeness (detects unprotected sensitive columns)
 - Connection & Data: database connectivity, schema cache freshness (warns if > 7 days), large table warnings (> 1M rows)
 
-> **MongoDB SRV diagnostics:** When the active connection uses `mongodb+srv://`, `doctor` reports whether the current runtime can resolve SRV records directly or only through the DNS-over-HTTPS fallback used by dbcli. This helps spot execution-environment DNS restrictions even when Compass can connect.
+> **MongoDB SRV diagnostics:** When the active connection uses `mongodb+srv://` (via a full `uri` or the per-field `srv: true`), `doctor` reports whether the current runtime can resolve SRV records directly or only through the DNS-over-HTTPS fallback used by dbcli. This helps spot execution-environment DNS restrictions even when Compass can connect.
+
+> **MongoDB connection-field warnings:** `doctor` also warns when a config has both `uri` and per-field values (`host` / `user`) present — `uri` silently wins and the per-field values are ignored — and when `srv: true` is combined with a non-default `port`, since SRV records carry their own ports.
 
 **Exit code:** 0 if all pass or warnings only, 1 if any error
 **Options:** `--format <text|json>`, `--remediation`
@@ -2600,7 +2603,7 @@ Parser behaviour (`src/core/saved-queries/parser.ts::normaliseVisual`):
 
 MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB support as a narrower document-database path, not as a full SQL feature equivalent.
 
-Atlas-style `mongodb+srv://` URIs are supported. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
+`init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow and the unchanged non-interactive path via `--uri`. Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
 **Supported commands:** `init`, `use`, `list`, `schema`, `query`, `q`, `insert`, `update`, `delete`, `export`, `status`, `shell`, `doctor`, `upgrade`, `completion`
 
@@ -2623,7 +2626,10 @@ Atlas-style `mongodb+srv://` URIs are supported. `list` and `query` run against 
 ### MongoDB-specific workflow
 
 ```bash
-# 1. Initialize (URI or individual params)
+# 1. Initialize — field-by-field (primary path)
+dbcli init --system mongodb --host localhost --port 27017 \
+  --user admin --password '<secret>' --auth-source admin --name mydb
+# ...or a full URI (advanced fallback, e.g. Atlas SRV clusters)
 dbcli init --system mongodb --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
 
 # 2. List collections

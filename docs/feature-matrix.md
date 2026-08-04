@@ -13,7 +13,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 
 | Command / area | PostgreSQL | MySQL | MariaDB | MongoDB | Redis | Elasticsearch | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB accepts URI or host/port. Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
+| `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB defaults to a field-by-field wizard (host/port/user/password/`authSource`/`replicaSet`/`tls`/`srv`); a full `uri` remains an advanced fallback (`--uri` for non-interactive use). Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
 | Multi-connection `use` / `--use` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | v2 config isolates connections and schema caches. |
 | Read-only query fan-out (`--use a,b`) | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL read-only statements, Mongo filters/read-only pipelines, and ES search only. Rejects writes, recovery, UI, CSV, and HTML; mixed outcomes exit 2. |
 | `list` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | SQL: tables; Mongo: collections; Redis: keys (SCAN); ES: indices. |
@@ -86,6 +86,14 @@ See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) fo
 MongoDB support is intentionally narrower than SQL support. Treat it as a document-database path, not a full SQL equivalent.
 
 (See [SKILL.md](../assets/SKILL.md) or [reference.md](../assets/reference.md) for detailed MongoDB workflows.)
+
+### Connection and configuration
+
+- `init` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); pasting a full `uri` is an explicit advanced choice. `--uri` keeps its existing non-interactive behavior unchanged.
+- Optional per-field connection options: `authSource` (auth database; defaults to `admin` once a user is configured), `replicaSet`, `tls` (boolean), and `srv` (boolean, builds `mongodb+srv://` and resolves hosts via DNS SRV; ignores `port` when `true`). `authSource` and `replicaSet` accept `{"$env": "..."}` references.
+- If both `uri` and per-field values are present, `uri` wins and the per-field values are ignored; `dbcli doctor` reports this, and a `srv: true` connection with a non-default `port`, as warnings.
+- A field-mode `user` with no `password` fails closed with an error rather than connecting without authentication. `user` / `database` / `password` are percent-encoded when the URI is built.
+- Connection failures are classified into hints: authentication failures point at `authSource`, DNS/SRV failures point at `srv`, and TLS failures point at the `tls` field.
 
 ## Redis limitations summary
 

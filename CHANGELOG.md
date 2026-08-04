@@ -5,6 +5,29 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - MongoDB 逐欄連線設定
+
+決策記錄：`docs/adr/0002-mongodb-connection-field-first-config.md`；規格：`docs/specs/2026-08-04-mongodb-field-first-connection.md`。
+
+### Changed
+
+- **⚠️ BREAKING（互動流程）：`dbcli init` 對 MongoDB 改為先問「連線設定方式」。** 過去第一個提問是 MongoDB URI，留空才退回逐欄詢問 —— 於是逐欄路徑事實上沒人走，所有文件也只教「整條 URI 貼進去」。現在預設是「逐欄填寫」，貼 URI 降為明示的進階選項。**設定檔格式向下相容**，既有含 `uri` 的設定不需修改；`--uri`、`--no-interactive` 等非互動用法行為完全不變，只有互動提問的順序改變。
+- **逐欄模式在有帳號時會明確寫出 `authSource`。** 過去只有帶 `--auth-source` 才會（而且寫了也會被 schema 丟掉），現在未指定時會寫入 `admin`。連線結果與過去等價（adapter 本來就以 `admin` 為預設），但設定檔內容會多這一行 —— 包含 `--no-interactive` 的既有腳本。
+- **`uri` 與逐欄欄位仍是 `uri` 優先，但不再靜默。** 兩者同時存在時 `dbcli doctor` 會發出 warning 指出逐欄值被忽略；`srv: true` 又指定非預設 `port` 也會 warning。這兩種設定過去都是「改了欄位卻沒生效」而無從診斷。
+
+### Added
+
+- **MongoDB 連線設定新增 `authSource` / `replicaSet` / `tls` / `srv` 四個欄位。** 過去這些選項只能塞進 `uri` 的 query string —— 這正是逐欄路徑不堪用的根因。其中 `authSource` 更微妙：runtime 型別與 `init --auth-source` flag 都存在，但 zod schema 沒有此鍵，`z.object` 會 strip 掉未知欄位，於是它落盤即遺失，只有 init 當下那次連線測試吃得到，等同一個死 flag。`srv: true` 會組出 `mongodb+srv://` 並沿用既有的 DNS SRV 展開（含 DoH fallback），讓 Atlas 這類最常見的雲端場景也能逐欄設定。`authSource` 與 `replicaSet` 支援 `{"$env": "..."}` 參照。
+- **MongoDB 逐欄分支支援 `--use-env-refs`。** 過去 mongo 在 init 的 early-return 發生在 env-ref 分支之前，想用環境變數參照只能手改 `config.json`。現在五個 `--env-*` 旗標對 mongo 全部生效，密碼不必明文落盤。與 SQL 路徑的差異：mongo 只要求 `--env-host`，其餘留空即寫入字面值而不產生 `$env` —— 因為未定義的 `$env` 會讓之後每一個指令 fail closed，對無認證連線而言那是壞掉的設定。env-ref 模式同樣跳過連線測試（參照此時還沒有值可連），與 SQL 路徑一致。
+- **連線失敗訊息按成因分類。** 認證失敗提示檢查 `authSource`（並說明 Atlas 與多數自架環境為 `admin`）、DNS/SRV 解析失敗提示 `srv` 設定與網路 DNS、TLS 握手失敗提示 `tls` 欄位與自簽憑證情境。原本三種情況共用同兩條泛用訊息。
+
+### Fixed
+
+- **逐欄模式的連線字串跳脫不完整。** `buildUri()` 原本只對 `password` 做 `encodeURIComponent`，`user` 與 `database` 直接字串拼接 —— 帳號含 `@`、資料庫名含 `/` 都會讓 driver 把 authority 切在錯的位置。現在三者一致跳脫，`host` 則改為驗證不含 `/@?#` 並在違反時明確報錯。
+- **`host` 為空字串或含埠號、空白時會產出壞掉的連線字串。** `mongodb://:27017/db` 與 `mongodb://h:1234:27017/db` 過去都會被送進 driver，換來一個難懂的錯誤。現在在組字串前就擋下並說明埠號該填在 `port` 欄位。IPv6 位址需加方括號（`[::1]`），與 driver 的要求一致 —— 未加方括號的 `::1` 過去會組出 `mongodb://::1:27017/db`。同理 `authSource` 為空字串時會退回 `admin`，不再送出 `authSource=`。
+- **連線失敗分類會被連線字串本身誤導。** driver 的錯誤訊息經常回吐原始 URI，而 `mongodb+srv://` 與這次新增的 `?tls=true` 正好含有 `SRV` 與 `TLS` 字樣 —— 用裸字串比對會讓一個單純的連線被拒歸類成 DNS 或 TLS 問題。改為優先讀 driver 的結構化 error code，訊息比對則收斂成 driver 實際會產生的片語。
+- **只填 `user` 沒填 `password` 會靜默降級成無認證連線。** 原本的 `if (user && password)` 在密碼缺漏時直接落到無認證分支，錯誤會延後到伺服器端才浮現、且看起來像是權限問題。現在直接拋 `ConnectionError`，訊息說明補上密碼或一併清空 `user`。
+
 ## [1.45.1] - 2026-08-04 - Windows 上的 agent mode 修復
 
 ### Fixed

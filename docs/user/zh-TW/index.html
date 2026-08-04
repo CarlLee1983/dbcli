@@ -173,6 +173,7 @@ npm install -g @carllee1983/dbcli
 bun install -g @carllee1983/dbcli</code></pre>
             <p>透過互動式導覽初始化您的第一個連線：</p>
             <pre><code>dbcli init</code></pre>
+            <p>若是 MongoDB，<code>init</code> 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、<code>authSource</code>，最後是可選的 <code>replicaSet</code> / <code>tls</code>）——完整欄位列表與 <code>--uri</code> 進階備援請見下方「引擎支援矩陣」一節的「MongoDB 連線設定」。</p>
             <p>在幕後，<code>init</code> 會在專案的 <code>./.dbcli/config.json</code> 寫入一個 <code>version: 3</code> 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 <code>~/.config/dbcli/projects/&lt;project-name&gt;-&lt;sha1-12&gt;/</code>。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 <code>.dbcli/</code> 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。</p>
             <p>若要讓多個專案共用連線，請使用明確的全域 scope。它會把 v2 registry 儲存在 <code>~/.config/dbcli/config.json</code>，且不會建立專案 binding：</p>
             <pre><code>dbcli --global init --conn-name shared --system postgresql \
@@ -768,6 +769,20 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
                 </table>
             </div>
 
+            <h3 class="mt-12">MongoDB 連線設定</h3>
+            <p><code>dbcli init --system mongodb</code> 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 <code>authSource</code>，最後是可選的進階步驟（<code>replicaSet</code> / <code>tls</code>）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。非互動用法不受影響：傳入 <code>--uri</code> 會直接跳過連線方式提問，行為與過去完全相同。</p>
+            <p>逐欄連線欄位（<code>ConnectionConfig</code>，<code>src/types/index.ts</code>）：</p>
+            <ul>
+                <li><code>authSource</code>（字串或 <code>{"$env": "..."}</code>）— 認證資料庫；有帳密時預設為 <code>admin</code>。</li>
+                <li><code>replicaSet</code>（字串或 <code>{"$env": "..."}</code>）— 複本集名稱。</li>
+                <li><code>tls</code>（布林）— 是否啟用 TLS。</li>
+                <li><code>srv</code>（布林，預設 <code>false</code>）— 組出 <code>mongodb+srv://</code> 並透過 DNS SRV 展開 host；啟用時 <code>port</code> 會被忽略。</li>
+            </ul>
+            <p><code>--auth-source &lt;db&gt;</code> 已是非互動的 <code>init</code> flag。<code>replicaSet</code> 與 <code>tls</code> 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 <code>.dbcli</code>（與 Elasticsearch 的 <code>caPath</code> / <code>rejectUnauthorized</code> 是同一套模式）。</p>
+            <p>若設定同時存在 <code>uri</code> 與逐欄值（<code>host</code> / <code>user</code>），<code>uri</code> 仍會優先，逐欄值一樣被忽略——這點沒變，但 <code>dbcli doctor</code> 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。<code>doctor</code> 也會在 <code>srv: true</code> 又同時指定非預設 <code>port</code> 時發出警告，因為 SRV 記錄自帶埠號。</p>
+            <p>逐欄模式下只填 <code>user</code> 沒填 <code>password</code>，現在會直接拋出錯誤，不再靜默降級成無認證連線。<code>user</code>、<code>database</code>、<code>password</code> 中的值在組成 URI 時皆會一致跳脫，帳號或資料庫名稱中含 <code>@</code>、<code>/</code> 等字元不會再讓 driver 誤判 authority 的邊界。</p>
+            <p>連線失敗訊息依成因分類提示：認證失敗會提示檢查 <code>user</code> / <code>password</code> / <code>authSource</code>（Atlas 與多數自架環境為 <code>admin</code>）；DNS/SRV 失敗會提示檢查 <code>srv</code> 設定與本機網路的 DNS 限制；TLS/憑證失敗會提示 <code>tls</code> 欄位與 CA 信任鏈設定。</p>
+
             <h3 class="mt-12">MongoDB 寫入規劃器（運算子分層）</h3>
             <ul>
                 <li><strong>SAFE</strong>（<code>$set</code>、<code>$unset</code>）→ <code>ALLOW</code></li>
@@ -881,7 +896,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
             <h3 class="mt-10">B. 跨領域情境</h3>
             <ul>
                 <li><strong>多環境切換（v2）</strong>：<code>dbcli use prod</code> 切換預設；<code>dbcli query --use staging "&lt;SQL&gt;"</code> 只覆寫單次呼叫。每個具名連線有<strong>獨立的 schema cache</strong>（<code>.dbcli/schemas/&lt;conn&gt;/</code>）——切換後先跑一次 <code>dbcli schema --use &lt;name&gt;</code>，否則可能讀到別的連線的欄位。見 <a href="#connections" class="text-primary font-bold underline">連線管理</a>。</li>
-                <li><strong>CI 中用環境變數參照密鑰</strong>：連線設定本來就存放在 home storage（<code>~/.config/dbcli/…</code>），不會寫進專案 <code>.dbcli/</code>。<code>dbcli init --use-env-refs</code> 更進一步，把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照而非明文。非互動式執行時<strong>必須</strong>傳入全部五個 <code>--env-*</code> 旗標，否則 <code>init</code> 會直接報錯——絕不會默默退回明文。執行時若參照的變數不存在，dbcli 會 fail closed，錯誤會指出變數與設定欄位；空字串不會被視為變數不存在。</li>
+                <li><strong>CI 中用環境變數參照密鑰</strong>：連線設定本來就存放在 home storage（<code>~/.config/dbcli/…</code>），不會寫進專案 <code>.dbcli/</code>。<code>dbcli init --use-env-refs</code> 更進一步，把憑證存成執行期解析的 <code>{ "$env": "VAR" }</code> 參照而非明文。非互動式執行時<strong>必須</strong>傳入全部五個 <code>--env-*</code> 旗標，否則 <code>init</code> 會直接報錯——絕不會默默退回明文。執行時若參照的變數不存在，dbcli 會 fail closed，錯誤會指出變數與設定欄位；空字串不會被視為變數不存在。<strong>MongoDB 是例外</strong>：只有 <code>--env-host</code> 為必填，<code>--env-port</code> / <code>--env-user</code> / <code>--env-password</code> / <code>--env-database</code> 皆為選填，留空的欄位會寫入字面值（<code>user</code> / <code>password</code> 寫空字串，<code>port</code> / <code>database</code> 寫實際值）而非 <code>$env</code> 參照——避免一個使用者本來就不需要的欄位，日後因為指向未定義的環境變數而讓每個指令都 fail closed。此模式下 <code>init</code> 也不會執行連線測試（<code>$env</code> 參照此刻還沒有值可以連），無論是否帶 <code>--skip-test</code> 皆然。</li>
                 <li><strong>驗證不變式或寫入結果</strong>：<code>snapshot</code> 建基準 → <code>assert --against &lt;snap&gt; --tolerance &lt;pct&gt;</code> 比對；<code>q @name --verify</code> 跑 snippet 斷言；<code>recover --apply --write-verification-artifact</code> 留下不含機密的證據。見 <a href="#data-verification" class="text-primary font-bold underline">資料驗證</a>。</li>
                 <li><strong>本地開發抓 N+1 / 慢查詢</strong>：讓應用程式走 <code>dbcli proxy &lt;engine&gt; --listen ... --target ...</code> 收集事件，再用 <code>dbcli proxy analyze</code> 離線聚合出 N+1、最慢查詢與熱表發現。見 <a href="#proxy" class="text-primary font-bold underline">dbcli proxy</a>。</li>
             </ul>

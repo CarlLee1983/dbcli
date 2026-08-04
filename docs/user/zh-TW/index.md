@@ -54,7 +54,7 @@ bun install -g @carllee1983/dbcli
 ```
 
 ### 初始化連線
-`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。
+`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 進階備援請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
 
 在幕後，`init` 會在專案的 `./.dbcli/config.json` 寫入一個 `version: 3` 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 `~/.config/dbcli/projects/<project-name>-<sha1-12>/`。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 `.dbcli/` 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。
 
@@ -768,6 +768,27 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | 黑名單強制 | ✅ | ✅ | ⚠️（key glob） | ⚠️ |
 | 互動式 Shell（`shell`) | ✅ | ✅ | ✅（單行） | ⚠️（Kibana 風格） |
 
+### MongoDB 連線設定
+
+`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。非互動用法不受影響：傳入 `--uri` 會直接跳過連線方式提問，行為與過去完全相同。
+
+逐欄連線欄位（`ConnectionConfig`，`src/types/index.ts`）：
+
+| 欄位 | 型別 | 用途 |
+| --- | --- | --- |
+| `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫；有帳密時預設為 `admin`。 |
+| `replicaSet` | 字串或 `{"$env": "..."}` | 複本集名稱。 |
+| `tls` | 布林 | 是否啟用 TLS。 |
+| `srv` | 布林（預設 `false`） | 組出 `mongodb+srv://` 並透過 DNS SRV 展開 host；啟用時 `port` 會被忽略。 |
+
+`--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
+
+若設定同時存在 `uri` 與逐欄值（`host` / `user`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
+
+逐欄模式下只填 `user` 沒填 `password`，現在會直接拋出錯誤，不再靜默降級成無認證連線。`user`、`database`、`password` 中的值在組成 URI 時皆會一致跳脫，帳號或資料庫名稱中含 `@`、`/` 等字元不會再讓 driver 誤判 authority 的邊界。
+
+連線失敗訊息依成因分類提示：認證失敗會提示檢查 `user` / `password` / `authSource`（Atlas 與多數自架環境為 `admin`）；DNS/SRV 失敗會提示檢查 `srv` 設定與本機網路的 DNS 限制；TLS/憑證失敗會提示 `tls` 欄位與 CA 信任鏈設定。
+
 ### MongoDB 寫入規劃器（運算子分層）
 
 | 分層 | 運算子 | 計畫結果 |
@@ -968,7 +989,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 ### B. 跨領域情境
 
 - **多環境切換(v2)**:`dbcli use prod` 切換預設;`dbcli query --use staging "<SQL>"` 只覆寫單次呼叫。每個具名連線有**獨立的 schema cache**(`.dbcli/schemas/<conn>/`)——切換後先跑一次 `dbcli schema --use <name>`,否則可能讀到別的連線的欄位。(見 **連線管理**。)
-- **CI 中用環境變數參照密鑰**:連線設定本來就存放在 home storage(`~/.config/dbcli/…`),不會寫進專案 `.dbcli/`。`dbcli init --use-env-refs` 更進一步,把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照而非明文。非互動式執行時必須傳入全部五個 `--env-*` 旗標,否則 `init` 會直接報錯——絕不會默默退回明文。
+- **CI 中用環境變數參照密鑰**:連線設定本來就存放在 home storage(`~/.config/dbcli/…`),不會寫進專案 `.dbcli/`。`dbcli init --use-env-refs` 更進一步,把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照而非明文。非互動式執行時必須傳入全部五個 `--env-*` 旗標,否則 `init` 會直接報錯——絕不會默默退回明文。**MongoDB 是例外**:只有 `--env-host` 為必填,`--env-port` / `--env-user` / `--env-password` / `--env-database` 皆為選填,留空的欄位會寫入字面值(`user` / `password` 寫空字串,`port` / `database` 寫實際值)而非 `$env` 參照——避免一個使用者本來就不需要的欄位,日後因為指向未定義的環境變數而讓每個指令都 fail closed。此模式下 `init` 也不會執行連線測試(`$env` 參照此刻還沒有值可以連),無論是否帶 `--skip-test` 皆然。
 - **驗證不變式或寫入結果**:`snapshot` 建基準 → `assert --against <snap> --tolerance <pct>` 比對;`q @name --verify` 跑 snippet 斷言;`recover --apply --write-verification-artifact` 留下不含機密的證據。(見 **資料驗證**。)
 - **本地開發抓 N+1 / 慢查詢**:讓應用程式走 `dbcli proxy <engine> --listen ... --target ...` 收集事件,再用 `dbcli proxy analyze` 離線聚合出 N+1、最慢查詢與熱表發現。(見 **dbcli proxy**。)
 

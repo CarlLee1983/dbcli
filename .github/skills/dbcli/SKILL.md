@@ -229,11 +229,13 @@ dbcli init --system postgresql --host localhost --port 5432 \
 # Reuse an existing .env (DATABASE_URL=postgresql://user:pw@host:5432/db)
 dbcli init                                                # parses .env in cwd
 
-# MongoDB — full URI (Atlas / replica sets / authSource)
+# MongoDB — field-by-field (no auth = omit --user/--password)
+dbcli init --system mongodb --host localhost --port 27017 --name mydb
+dbcli init --system mongodb --host localhost --port 27017 \
+  --user admin --password '<secret>' --auth-source admin --name mydb
+# MongoDB — full URI (advanced escape hatch: multi-host, non-standard driver options)
 dbcli init --system mongodb \
   --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
-# MongoDB — discrete params (no auth = omit --user/--password)
-dbcli init --system mongodb --host localhost --port 27017 --name mydb
 
 # Redis — `--name` is the LOGICAL DB INDEX ("0".."15"), not a database name
 dbcli init --system redis --host localhost --port 6379 --password '<secret>' --name 0
@@ -301,10 +303,25 @@ as a `$env` ref. In a **non-interactive / CI** run you **must** pass all five `-
 flags; otherwise `init` exits with an error — it never silently falls back to plaintext.
 `--env-file <path>` is the path to the env file, independent of the `$env` key names.
 
+**MongoDB is the exception**: only `--env-host` is required non-interactively.
+`--env-port` / `--env-user` / `--env-password` / `--env-database` are optional — an
+omitted one is written as a literal value (empty string for `user` / `password`, the
+resolved value for `port` / `database`) instead of an `$env` ref, so a field the
+connection never needed doesn't later fail closed on an undefined variable. `init`
+also skips the connection test in this mode regardless of `--skip-test` — the `$env`
+refs have no value to connect with yet.
+
 ### Common gotchas
 
 - **MongoDB `mongodb+srv://`** — `dbcli doctor` reports whether SRV resolves
   natively or via the DoH fallback; useful when the runtime restricts DNS.
+- **MongoDB `authSource` / `replicaSet` / `tls` / `srv`** — `init` asks for
+  these interactively (`authSource` only when a user is set; `replicaSet` /
+  `tls` behind an "advanced options?" prompt); `--auth-source <db>` is the
+  only one with a dedicated non-interactive flag, so set `replicaSet` / `tls`
+  interactively or edit `.dbcli` afterward. If a config has both `uri` and
+  per-field values, `uri` wins silently — `dbcli doctor` flags this and also
+  warns when `srv: true` is combined with a non-default `port`.
 - **MySQL/Postgres password with `@` `:` `/`** — when using `DATABASE_URL`,
   percent-encode (`@` → `%40`); discrete `--password` flags do not need encoding.
 - **Redis `--name`** — accepts only the logical DB index string; non-numeric

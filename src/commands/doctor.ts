@@ -24,6 +24,7 @@ import { collectRuntimeInfo, type RuntimeInfo } from '@/utils/runtime-info'
 import { getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveSrv } from 'node:dns/promises'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { shellQuote } from '@/core/recovery/shell-quote'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -60,6 +61,49 @@ export interface DoctorRemediationStep {
   requiresHumanConfirmation: true
 }
 
+type LargeTableTarget = 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'elasticsearch'
+
+function safeSqlIdentifier(value: string): string | null {
+  return /^[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(value) ? value : null
+}
+
+function boundedSampleCommands(
+  system: LargeTableTarget,
+  table: string
+): { dryRun: string; apply?: string } {
+  if (system === 'mongodb') {
+    const collection = shellQuote(table)
+    const query = shellQuote('{}')
+    return {
+      dryRun: `dbcli schema ${collection} --format json`,
+      apply: `dbcli query ${query} --collection ${collection} --limit 100 --format json`,
+    }
+  }
+
+  if (system === 'elasticsearch') {
+    const index = shellQuote(table)
+    const query = shellQuote('{"query":{"match_all":{}}}')
+    return {
+      dryRun: `dbcli schema ${index} --format json`,
+      apply: `dbcli query ${query} --collection ${index} --limit 100 --format json`,
+    }
+  }
+
+  const identifier = safeSqlIdentifier(table)
+  if (!identifier) {
+    return {
+      dryRun: `dbcli schema ${shellQuote(table)} --format json`,
+    }
+  }
+
+  const sql = `SELECT * FROM ${identifier} LIMIT 100`
+  const command = shellQuote(sql)
+  return {
+    dryRun: `dbcli plan ${command} --format json`,
+    apply: `dbcli query ${command} --format json`,
+  }
+}
+
 /**
  * Turn diagnostic warnings into an explicitly non-mutating workflow.  The
  * commands are candidates only: doctor never changes a blacklist, refreshes a
@@ -80,8 +124,8 @@ export function buildDoctorRemediationPlan(results: DoctorResult[]): DoctorRemed
           kind: 'blacklist-candidate',
           status: 'candidate',
           rationale: `Sensitive-looking column '${candidate}' is not currently protected.`,
-          dryRun: `dbcli schema ${table} --format json`,
-          apply: `dbcli blacklist column add ${candidate}`,
+          dryRun: `dbcli schema ${shellQuote(table)} --format json`,
+          apply: `dbcli blacklist column add ${shellQuote(candidate)}`,
           requiresHumanConfirmation: true,
         })
       }
@@ -97,13 +141,37 @@ export function buildDoctorRemediationPlan(results: DoctorResult[]): DoctorRemed
       })
     }
     if (result.label === 'Large tables' && result.status === 'warn') {
-      steps.push({
-        kind: 'bounded-sample',
-        status: 'candidate',
-        rationale: `${result.message}. Review a bounded sample only after confirming blacklist coverage.`,
-        dryRun: 'dbcli blacklist list --format json',
-        requiresHumanConfirmation: true,
-      })
+      const target = (result.details?.system as LargeTableTarget | undefined) ?? 'postgresql'
+      const tables = Array.isArray(result.details?.largeTables)
+        ? result.details.largeTables.filter(
+            (table): table is { name: string; estimatedRowCount?: number } =>
+              typeof table === 'object' &&
+              table !== null &&
+              typeof (table as { name?: unknown }).name === 'string'
+          )
+        : []
+      const candidates =
+        tables.length > 0
+          ? tables
+          : result.message
+              .replace(/^Large tables:\s*/, '')
+              .split(/,\s+(?=[^,]+\s+\([\d.]+M rows\))/)
+              .map((entry) => ({ name: entry.replace(/\s+\([\d.]+M rows\)$/, '') }))
+
+      for (const table of candidates) {
+        const commands = boundedSampleCommands(target, table.name)
+        steps.push({
+          kind: 'bounded-sample',
+          status: 'candidate',
+          rationale: `${table.name} is large. Review a bounded sample only after confirming blacklist coverage.${
+            commands.apply
+              ? ''
+              : ' The identifier needs manual review before a sample query can be generated safely.'
+          }`,
+          ...commands,
+          requiresHumanConfirmation: true,
+        })
+      }
     }
   }
   return steps
@@ -419,7 +487,10 @@ export const runDoctorChecks = {
     }
   },
 
-  checkLargeTables(tables: Array<{ name: string; estimatedRowCount?: number }>): DoctorResult {
+  checkLargeTables(
+    tables: Array<{ name: string; estimatedRowCount?: number }>,
+    system: LargeTableTarget = 'postgresql'
+  ): DoctorResult {
     const large = tables.filter((t) => (t.estimatedRowCount ?? 0) > 1_000_000)
     if (large.length === 0) {
       return {
@@ -437,6 +508,10 @@ export const runDoctorChecks = {
       label: 'Large tables',
       status: 'warn',
       message: `Large tables: ${list}`,
+      details: {
+        system,
+        largeTables: large.map(({ name, estimatedRowCount }) => ({ name, estimatedRowCount })),
+      },
     }
   },
 
@@ -601,7 +676,8 @@ export async function collectMongoDoctorResults(config: {
         collections.map((coll) => ({
           name: coll.name,
           estimatedRowCount: coll.estimatedRowCount,
-        }))
+        })),
+        'mongodb'
       )
     )
 
@@ -679,7 +755,7 @@ export async function collectElasticsearchDoctorResults(config: {
       )
     }
 
-    results.push(runDoctorChecks.checkLargeTables(tables))
+    results.push(runDoctorChecks.checkLargeTables(tables, 'elasticsearch'))
 
     const lastUpdated = config.metadata?.schemaLastUpdated ?? null
     results.push(runDoctorChecks.checkSchemaCacheFreshness(lastUpdated))
@@ -800,7 +876,12 @@ export const doctorCommand = new Command('doctor')
               results.push(
                 runDoctorChecks.checkBlacklistCompleteness(tableColumns, blacklistedColumns)
               )
-              results.push(runDoctorChecks.checkLargeTables(tables))
+              results.push(
+                runDoctorChecks.checkLargeTables(
+                  tables,
+                  config.connection.system as 'postgresql' | 'mysql' | 'mariadb'
+                )
+              )
             } catch {
               logger.debug('Could not list tables for blacklist/large table check')
             }

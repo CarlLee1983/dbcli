@@ -335,7 +335,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. **(v1.23)** `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
 | `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
 | `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
-| `doctor` | n/a | Environment/runtime identity, config, connection, SRV diagnostics (Mongo), schema cache age. `--format json --remediation` emits candidate-only blacklist/schema/bounded-sample plans; it never applies them. |
+| `doctor` | n/a | Environment/runtime identity, config, connection, SRV diagnostics (Mongo), schema cache age. `--format json --remediation` emits candidate-only blacklist/schema/bounded-sample plans (SQL: `dbcli plan` → human-confirmed bounded `dbcli query`; MongoDB/Elasticsearch: `dbcli schema` preflight → human-confirmed bounded query); it never applies them. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
@@ -524,4 +524,4 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 - Blacklisted tables and columns are redacted from query output.
 - `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in reference.md.
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
-- **Global flags:** `--config <path>`, `--use <name>`, `-v` / `-vv` / `-q`, `--no-color` (also honours `NO_COLOR`).
+- **Global flags:** `--version`, `--config <path>`, `--use <name>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

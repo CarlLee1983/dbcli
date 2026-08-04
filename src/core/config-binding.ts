@@ -1,12 +1,12 @@
 import { createHash } from 'crypto'
-import { chmod, mkdir, unlink } from 'node:fs/promises'
+import { mkdir, unlink } from 'node:fs/promises'
 import { homedir } from 'os'
 import { basename, join, resolve } from 'path'
 import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
 import {
   assertAgentReadableFile,
   assertBindingIntegrity,
-  writeBindingIntegrity,
+  writeBindingWithIntegrity,
 } from '@/core/config-integrity'
 import { ConfigError } from '@/utils/errors'
 
@@ -96,14 +96,7 @@ export async function writeProjectBinding(
   await mkdir(projectPath, { recursive: true })
   await mkdir(storagePath, { recursive: true })
   const content = JSON.stringify(binding, null, 2)
-  await writeBindingIntegrity(projectPath, content)
-  const bindingPath = join(projectPath, BINDING_FILE_NAME)
-  await Bun.file(bindingPath).write(content)
-  try {
-    await chmod(bindingPath, 0o600)
-  } catch {
-    // Best effort on Windows and filesystems without POSIX mode bits.
-  }
+  await writeBindingWithIntegrity(projectPath, content)
 
   return binding
 }

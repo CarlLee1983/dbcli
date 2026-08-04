@@ -18,7 +18,7 @@ import { SchemaCacheManager } from './schema-cache'
 import { ConcurrentLockManager } from './concurrent-lock'
 import { ErrorRecoveryManager } from './error-recovery'
 import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
-import { writeConfigIntegrity } from '@/core/config-integrity'
+import { writeConfigWithIntegrity } from '@/core/config-integrity'
 
 /**
  * Schema Updater - Coordinates incremental schema updates
@@ -131,7 +131,9 @@ export class SchemaUpdater {
             }
           }, 'schema-refresh')
         },
-        configPath
+        configPath,
+        async (restored) =>
+          writeConfigWithIntegrity(this.dbcliPath, JSON.stringify(restored, null, 2))
       )
     } catch (error) {
       const totalTime = Date.now() - startTime
@@ -263,11 +265,8 @@ export class SchemaUpdater {
    * @param config Updated config to persist
    */
   private async persistConfig(config: DbcliConfig): Promise<void> {
-    const configPath = join(this.dbcliPath, 'config.json')
-    const configFile = Bun.file(configPath)
     const content = JSON.stringify(config, null, 2)
-    await Bun.write(configFile, content)
-    await writeConfigIntegrity(this.dbcliPath, content)
+    await writeConfigWithIntegrity(this.dbcliPath, content)
   }
 
   /**

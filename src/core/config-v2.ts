@@ -8,12 +8,15 @@
 import { type DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
-import { assertAgentReadableFile, assertConfigIntegrity, writeConfigIntegrity } from '@/core/config-integrity'
+import {
+  assertAgentReadableFile,
+  assertConfigIntegrity,
+  writeConfigWithIntegrity,
+} from '@/core/config-integrity'
 import { loadEnvFile } from '@/core/env-loader'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { levenshteinDistance } from '@/utils/levenshtein-distance'
 import { join } from 'path'
-import { chmod, mkdir, rename } from 'node:fs/promises'
 
 /**
  * Detect config version from raw parsed JSON
@@ -189,31 +192,15 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
 }
 
 /**
- * Write a v2 config to disk atomically (temp file + rename).
- * Writing to a temp file then renaming over the target is an atomic operation
- * on the same filesystem, so a crash mid-write can never leave a corrupt config.
+ * Write a v2 config and its integrity records as one recoverable publication.
  */
 export async function writeV2Config(path: string, config: DbcliConfigV2): Promise<void> {
   assertConfigMutationApproved()
   DbcliConfigV2Schema.parse(config)
 
   const storagePath = await resolveConfigStoragePath(path)
-  const configPath = join(storagePath, 'config.json')
-  const tmpPath = `${configPath}.tmp`
-  // Use node:fs APIs (not shelled-out mkdir/mv) so writes are portable: Bun's
-  // shell can't handle Windows drive-letter/backslash paths. node's rename
-  // replaces an existing target on every platform (atomic on the same fs).
-  await mkdir(storagePath, { recursive: true })
   const json = JSON.stringify(config, null, 2)
-  // Publish the expected hash before replacing config.json. If the process is
-  // interrupted between these operations, agent-mode reads fail closed rather
-  // than accepting an unverified new file.
-  await writeConfigIntegrity(storagePath, json)
-  await Bun.write(tmpPath, json)
-  await rename(tmpPath, configPath) // same-filesystem rename: atomic overwrite
-  // writeConfigIntegrity runs before the replacement so interrupted writes fail
-  // closed; apply the private mode again after the new file exists.
-  await chmod(configPath, 0o600).catch(() => undefined)
+  await writeConfigWithIntegrity(storagePath, json)
 }
 
 /**

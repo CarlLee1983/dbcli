@@ -56,9 +56,17 @@ function requireIdentifier(value: unknown, label: string): string {
   return value
 }
 
-function sqlLiteral(value: unknown): string {
+function sqlLiteral(value: unknown, targetSystem: string): string {
   if (value === null) return 'NULL'
-  if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`
+  if (typeof value === 'string') {
+    // MySQL's interpretation of backslash escapes depends on SQL mode.  A
+    // UTF-8 hex literal avoids that ambiguity and cannot terminate a string.
+    if (targetSystem === 'mysql' || targetSystem === 'mariadb') {
+      const hex = Buffer.from(value, 'utf8').toString('hex')
+      return `CONVERT(UNHEX('${hex}') USING utf8mb4)`
+    }
+    return `'${value.replaceAll("'", "''")}'`
+  }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new Error('Source rows cannot contain non-finite numbers')
     return String(value)
@@ -166,20 +174,25 @@ export function parseBackfillSourceManifest(raw: unknown): BackfillSourceManifes
   }
 }
 
-export function generateBackfillSql(manifest: BackfillSourceManifest): string[] {
+export function generateBackfillSql(
+  manifest: BackfillSourceManifest,
+  targetSystem = 'postgresql'
+): string[] {
   return manifest.rows.map((row, index) => {
     const setColumns = Object.keys(row).filter((column) => !manifest.keyColumns.includes(column))
     if (setColumns.length === 0) throw new Error(`rows[${index}] has no non-key columns to update`)
     const set = setColumns
       .map(
         (column) =>
-          `${requireIdentifier(column, `rows[${index}] column`)} = ${sqlLiteral(row[column])}`
+          `${requireIdentifier(column, `rows[${index}] column`)} = ${sqlLiteral(row[column], targetSystem)}`
       )
       .join(', ')
     const where = manifest.keyColumns
       .map((column) => {
         const value = row[column]
-        return value === null ? `${column} IS NULL` : `${column} = ${sqlLiteral(value)}`
+        return value === null
+          ? `${column} IS NULL`
+          : `${column} = ${sqlLiteral(value, targetSystem)}`
       })
       .join(' AND ')
     return `UPDATE ${manifest.table} SET ${set} WHERE ${where}`
@@ -216,11 +229,12 @@ export function buildBackfillArtifact(input: {
       `Source-to-SQL backfill artifacts require a SQL target connection; '${input.targetIdentity.system}' is not supported`
     )
   }
-  const statements = generateBackfillSql(input.manifest)
+  const statements = generateBackfillSql(input.manifest, input.targetIdentity.system)
   const target = input.targetIdentity.name
   const targetArg = shellQuote(target)
   const tableArg = shellQuote(input.manifest.table)
-  const planCommand = (sql: string) => `dbcli --use ${targetArg} plan ${shellQuote(sql)} --format json`
+  const planCommand = (sql: string) =>
+    `dbcli --use ${targetArg} plan ${shellQuote(sql)} --format json`
   const lastStatement = statements[statements.length - 1]!
   return {
     schemaVersion: BACKFILL_ARTIFACT_SCHEMA_VERSION,

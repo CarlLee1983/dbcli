@@ -314,7 +314,7 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
-                    <span class="text-text-muted font-medium">驗證執行環境、連線能力及配置完整性；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。<code>doctor --format json --remediation</code> 會為 blacklist 覆蓋、schema 更新與大型資料表提供僅供候選的計畫；不會變更設定、blacklist 規則或資料庫資料。</span>
+                    <span class="text-text-muted font-medium">驗證執行環境、連線能力及配置完整性；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。<code>doctor --format json --remediation</code> 會為 blacklist 覆蓋、schema 更新與大型資料表提供僅供候選的計畫。SQL 大型資料表候選會先執行 <code>dbcli plan</code>；MongoDB/Elasticsearch 候選先以 <code>dbcli schema</code> 預檢，再由人工確認 bounded <code>dbcli query</code>。Doctor 不會變更設定、blacklist 規則或資料庫資料。</span>
                 </div>
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>

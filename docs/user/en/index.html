@@ -314,7 +314,7 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
-                    <span class="text-text-muted font-medium">Validates environment, connectivity, and configuration integrity; JSON config-missing failures include a structured remediation command and risk level. <code>doctor --format json --remediation</code> adds candidate-only plans for blacklist coverage, schema refresh, and large tables; it never mutates config, blacklist rules, or database data.</span>
+                    <span class="text-text-muted font-medium">Validates environment, connectivity, and configuration integrity; JSON config-missing failures include a structured remediation command and risk level. <code>doctor --format json --remediation</code> adds candidate-only plans for blacklist coverage, schema refresh, and large tables. SQL large-table candidates run <code>dbcli plan</code>; MongoDB/Elasticsearch candidates run <code>dbcli schema</code> as preflight, then offer a human-confirmed bounded <code>dbcli query</code>. Doctor never mutates config, blacklist rules, or database data.</span>
                 </div>
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>

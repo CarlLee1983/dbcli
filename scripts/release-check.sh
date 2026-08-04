@@ -34,6 +34,7 @@ bun run skill:check
 bun run platform:check
 bun run plugin:check
 bun run docs:check
+bun run contract:check
 PKG_VERSION=$(bun -p "require('./package.json').version")
 if ! grep -qE '^\| `audit` ' docs/feature-matrix.md; then
   echo "  ✗ docs/feature-matrix.md missing 'audit' row" >&2

@@ -315,7 +315,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 
 | Command | Description |
 | :--- | :--- |
-| `doctor` | Runs system and connection diagnostics; JSON config-missing failures include a structured remediation command and risk level. `doctor --format json --remediation` adds candidate-only plans for blacklist coverage, schema refresh, and large tables; it never changes configuration, blacklist rules, or database data. |
+| `doctor` | Runs system and connection diagnostics; JSON config-missing failures include a structured remediation command and risk level. `doctor --format json --remediation` adds candidate-only plans for blacklist coverage, schema refresh, and large tables. SQL large-table candidates use `dbcli plan`; MongoDB/Elasticsearch candidates use `dbcli schema` as preflight, followed by a human-confirmed bounded `dbcli query`. Doctor never changes configuration, blacklist rules, or database data. |
 | `check [table]` | Analyzes data health (orphans, nulls, duplicates). |
 | `diff` | Compares schema snapshots, or an ORM definition against the local SQL schema cache with `--against-orm`. |
 | `report` | Generates a comprehensive health/perf report. |

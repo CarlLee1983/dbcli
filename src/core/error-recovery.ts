@@ -244,12 +244,14 @@ export class ErrorRecoveryManager {
    * @param currentConfig Current config before operation
    * @param operation Operation to execute
    * @param targetPath Path to config file to restore on failure
+   * @param restoreConfig Optional trusted writer for transactional restores
    * @returns Result of operation
    */
   async withRecovery<T>(
     currentConfig: DbcliConfig,
     operation: () => Promise<T>,
-    targetPath: string
+    targetPath: string,
+    restoreConfig?: (config: DbcliConfig) => Promise<void>
   ): Promise<T> {
     // Create backup before starting
     const recoveryPoint = await this.createRecoveryPoint(currentConfig, 'pre-operation-backup')
@@ -262,8 +264,12 @@ export class ErrorRecoveryManager {
       console.error('Operation failed, restoring from backup...')
       try {
         const restored = await this.restore(recoveryPoint.backupPath)
-        const targetFile = Bun.file(targetPath)
-        await Bun.write(targetFile, JSON.stringify(restored, null, 2))
+        if (restoreConfig) {
+          await restoreConfig(restored)
+        } else {
+          const targetFile = Bun.file(targetPath)
+          await Bun.write(targetFile, JSON.stringify(restored, null, 2))
+        }
         console.error('Successfully restored from backup')
       } catch (restoreError) {
         console.error('Restore failed:', restoreError)

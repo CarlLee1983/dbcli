@@ -88,6 +88,31 @@ describe('source-to-SQL backfill artifact', () => {
     expect(() => generateBackfillSql(manifest)).toThrow('no non-key columns')
   })
 
+  test('uses injection-safe string literals for MySQL-family artifacts', () => {
+    const manifest = parseBackfillSourceManifest({
+      table: 'accounts',
+      keyColumns: ['id'],
+      rows: [{ id: 7, tier: "\\\\'; DROP TABLE accounts; --" }],
+      verifyQuery: 'SELECT 1',
+      expect: 'value == 1',
+    })
+
+    for (const system of ['mysql', 'mariadb'] as const) {
+      expect(generateBackfillSql(manifest, system)).toEqual([
+        "UPDATE accounts SET tier = CONVERT(UNHEX('5c5c273b2044524f50205441424c45206163636f756e74733b202d2d') USING utf8mb4) WHERE id = 7",
+      ])
+    }
+
+    const artifact = buildBackfillArtifact({
+      manifest,
+      sourcePath: '/tmp/catalog.json',
+      sourceContent: '{}',
+      sourceIdentity: source,
+      targetIdentity: { ...target, system: 'mysql' },
+    })
+    expect(artifact.statements[0]?.sql).toContain("CONVERT(UNHEX('5c5c27")
+  })
+
   test('rejects a write-capable or multi-statement read-back query', () => {
     const base = {
       table: 'accounts',
@@ -111,7 +136,7 @@ describe('source-to-SQL backfill artifact', () => {
       verifyQuery: 'SELECT 1',
       expect: 'value == 1',
     })
-    const hostileTarget = { ...target, name: "prod; touch /tmp/dbcli-pwned" }
+    const hostileTarget = { ...target, name: 'prod; touch /tmp/dbcli-pwned' }
     const artifact = buildBackfillArtifact({
       manifest,
       sourcePath: '/tmp/catalog.json',
@@ -119,9 +144,7 @@ describe('source-to-SQL backfill artifact', () => {
       sourceIdentity: source,
       targetIdentity: hostileTarget,
     })
-    expect(artifact.statements[0]?.planCommand).toContain(
-      "--use 'prod; touch /tmp/dbcli-pwned'"
-    )
+    expect(artifact.statements[0]?.planCommand).toContain("--use 'prod; touch /tmp/dbcli-pwned'")
 
     expect(() =>
       buildBackfillArtifact({

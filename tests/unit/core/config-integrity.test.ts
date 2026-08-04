@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { chmod, mkdtemp, rm, symlink, unlink } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, rm, symlink, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { configModule } from '@/core/config'
@@ -47,17 +47,36 @@ describe('agent-mode config integrity boundary', () => {
     expect((await readV2Config(directory)).default).toBe('local')
   })
 
+  test('first trusted write publishes a detached anchor when the anchor path is new', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'dbcli-config-integrity-'))
+    const anchorDirectory = join(directory, 'host-anchor')
+    process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR = anchorDirectory
+    delete process.env.DBCLI_AGENT_MODE
+
+    await writeV2Config(directory, config as any)
+
+    expect(await readdir(anchorDirectory)).toHaveLength(1)
+    process.env.DBCLI_AGENT_MODE = '1'
+    expect((await readV2Config(directory)).default).toBe('local')
+  })
+
   test('agent reads reject direct config edits after a trusted write', async () => {
     directory = await mkdtemp(join(tmpdir(), 'dbcli-config-integrity-'))
     delete process.env.DBCLI_AGENT_MODE
     await writeV2Config(directory, config as any)
     await Bun.write(
       join(directory, 'config.json'),
-      JSON.stringify({ ...config, default: 'local', metadata: { version: '1.0', permission: 'admin' } })
+      JSON.stringify({
+        ...config,
+        default: 'local',
+        metadata: { version: '1.0', permission: 'admin' },
+      })
     )
 
     process.env.DBCLI_AGENT_MODE = '1'
-    await expect(readV2Config(directory)).rejects.toThrow(/direct config tampering|out-of-band edit/)
+    await expect(readV2Config(directory)).rejects.toThrow(
+      /direct config tampering|out-of-band edit/
+    )
   })
 
   test('agent reads reject a deleted or tampered local integrity record', async () => {
@@ -68,10 +87,16 @@ describe('agent-mode config integrity boundary', () => {
     const integrityPath = configIntegrityPathForTest(directory)
     await Bun.write(
       integrityPath,
-      JSON.stringify({ version: 1, configSha256: '0'.repeat(64), updatedAt: new Date().toISOString() })
+      JSON.stringify({
+        version: 1,
+        configSha256: '0'.repeat(64),
+        updatedAt: new Date().toISOString(),
+      })
     )
     process.env.DBCLI_AGENT_MODE = '1'
-    await expect(readV2Config(directory)).rejects.toThrow(/direct config tampering|out-of-band edit/)
+    await expect(readV2Config(directory)).rejects.toThrow(
+      /direct config tampering|out-of-band edit/
+    )
 
     delete process.env.DBCLI_AGENT_MODE
     await writeV2Config(directory, config as any)
@@ -94,7 +119,9 @@ describe('agent-mode config integrity boundary', () => {
     await Bun.write(configIntegrityPathForTest(directory), JSON.stringify(localRecord, null, 2))
 
     process.env.DBCLI_AGENT_MODE = '1'
-    await expect(readV2Config(directory)).rejects.toThrow(/direct config tampering|out-of-band edit/)
+    await expect(readV2Config(directory)).rejects.toThrow(
+      /direct config tampering|out-of-band edit/
+    )
   })
 
   test('agent mode refuses legacy single-file configs until human migration', async () => {
@@ -110,6 +137,39 @@ describe('agent-mode config integrity boundary', () => {
     )
     process.env.DBCLI_AGENT_MODE = '1'
     await expect(configModule.read(legacyPath)).rejects.toThrow(/legacy single-file config/)
+  })
+
+  test('agent mode refuses a missing config instead of returning defaults', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'dbcli-config-integrity-'))
+    process.env.DBCLI_AGENT_MODE = '1'
+
+    await expect(configModule.read(join(directory, '.dbcli'))).rejects.toThrow(
+      /Agent mode refuses a missing config/
+    )
+  })
+
+  test('a failed detached-anchor publish leaves the previous config and local record intact', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'dbcli-config-integrity-'))
+    delete process.env.DBCLI_AGENT_MODE
+    await writeV2Config(directory, config as any)
+    const configPath = join(directory, 'config.json')
+    const integrityPath = configIntegrityPathForTest(directory)
+    const previousConfig = await Bun.file(configPath).text()
+    const previousRecord = await Bun.file(integrityPath).text()
+
+    const blockedAnchorDirectory = join(directory, 'blocked-anchor')
+    await Bun.write(blockedAnchorDirectory, 'not a directory')
+    process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR = blockedAnchorDirectory
+
+    const replacement = {
+      ...config,
+      default: 'replacement',
+      connections: { ...config.connections, replacement: config.connections.local },
+    }
+    await expect(writeV2Config(directory, replacement as any)).rejects.toThrow()
+
+    expect(await Bun.file(configPath).text()).toBe(previousConfig)
+    expect(await Bun.file(integrityPath).text()).toBe(previousRecord)
   })
 
   test('agent reads reject group/world-writable config files', async () => {

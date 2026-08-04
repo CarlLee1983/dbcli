@@ -158,6 +158,32 @@ test('ErrorRecoveryManager - withRecovery restores on error', async () => {
   await rm(testDir, { recursive: true, force: true })
 })
 
+test('ErrorRecoveryManager - withRecovery can use a transactional restore writer', async () => {
+  const testDir = join(tmpdir(), `recovery-restore-writer-${Date.now()}`)
+  await mkdir(testDir, { recursive: true })
+
+  const manager = new ErrorRecoveryManager(testDir)
+  await manager.initialize()
+  const restoreCalls: DbcliConfig[] = []
+
+  await expect(
+    manager.withRecovery(
+      mockConfig,
+      async () => {
+        throw new Error('Operation failed')
+      },
+      join(testDir, 'config.json'),
+      async (restored) => {
+        restoreCalls.push(restored)
+      }
+    )
+  ).rejects.toThrow('Operation failed')
+
+  expect(restoreCalls).toHaveLength(1)
+  expect(restoreCalls[0]?.connection.system).toBe('postgresql')
+  await rm(testDir, { recursive: true, force: true })
+})
+
 test('ErrorRecoveryManager - withRecovery succeeds on success', async () => {
   const testDir = join(tmpdir(), `recovery-success-${Date.now()}`)
   await mkdir(testDir, { recursive: true })

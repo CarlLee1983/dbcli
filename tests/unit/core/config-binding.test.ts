@@ -35,6 +35,7 @@ const SAMPLE_V2_CONFIG = {
 
 describe('config binding layout', () => {
   const originalAgentMode = process.env.DBCLI_AGENT_MODE
+  const originalAnchorDirectory = process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR
   let projectPath: string
 
   beforeEach(async () => {
@@ -46,6 +47,8 @@ describe('config binding layout', () => {
   afterEach(async () => {
     if (originalAgentMode === undefined) delete process.env.DBCLI_AGENT_MODE
     else process.env.DBCLI_AGENT_MODE = originalAgentMode
+    if (originalAnchorDirectory === undefined) delete process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR
+    else process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR = originalAnchorDirectory
     await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
     await rm(tempDirectory, { recursive: true, force: true })
   })
@@ -115,5 +118,27 @@ describe('config binding layout', () => {
     await expect(resolveConfigStoragePath(projectPath)).rejects.toThrow(
       /missing config integrity record/
     )
+  })
+
+  test('failed detached-anchor publication preserves the project binding and record', async () => {
+    const storagePath = getProjectStoragePath(projectPath)
+    delete process.env.DBCLI_AGENT_MODE
+    await writeProjectBinding(projectPath, storagePath)
+
+    const bindingPath = join(projectPath, 'config.json')
+    const integrityPath = join(projectPath, '.binding-integrity.json')
+    const previousBinding = await Bun.file(bindingPath).text()
+    const previousRecord = await Bun.file(integrityPath).text()
+
+    const blockedAnchorDirectory = join(tempDirectory, 'blocked-anchor')
+    await Bun.write(blockedAnchorDirectory, 'not a directory')
+    process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR = blockedAnchorDirectory
+
+    await expect(
+      writeProjectBinding(projectPath, join(tempDirectory, 'replacement-storage'))
+    ).rejects.toThrow()
+
+    expect(await Bun.file(bindingPath).text()).toBe(previousBinding)
+    expect(await Bun.file(integrityPath).text()).toBe(previousRecord)
   })
 })

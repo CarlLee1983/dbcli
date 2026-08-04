@@ -269,7 +269,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `guide` | query-only+ | 針對固定目標產出確定性下一步指令計畫（`slow-query`、`capacity`、`health`、`index-usage`、`permissions`、`schema-overview`）。`--list` 列舉所有目標。**(v1.23)** `guide missing-index-for <query>` 為單一 SELECT 建議複合索引（`--format yaml\|json\|markdown`、`--min-confidence`）。 |
 | `recovery` | n/a | 對已知錯誤代碼查詢結構化 `RecoveryEnvelope`（`--code <CODE>` 或 `--list`）。獨立合成器；不需真實失敗。 |
 | `recover` | n/a | 檢視（預設）或 `--apply` 執行 `.dbcli/last-recovery.json` 中自動儲存的復原計畫。`--allow-write=readonly-cmd\|write-cmd`、`--no-verify`、`--from <file>`、`--next --after-step <n> --result <json\|@file>` 多輪逐步執行。 |
-| `doctor` | n/a | 環境/runtime identity、設定、連線、SRV 診斷（Mongo）、schema cache 年齡。`--format json --remediation` 僅輸出 blacklist/schema/bounded-sample 候選計畫，不會套用。 |
+| `doctor` | n/a | 環境/runtime identity、設定、連線、SRV 診斷（Mongo）、schema cache 年齡。`--format json --remediation` 僅輸出 blacklist/schema/bounded-sample 候選計畫（SQL：`dbcli plan` → 人工確認後的 bounded `dbcli query`；MongoDB/Elasticsearch：先以 `dbcli schema` 預檢，再由人工確認 bounded query），不會套用。 |
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新；每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。SQL 引擎、MongoDB 與 Redis（單行；`.no-limit on/off`）。**(v1.22)** Elasticsearch 開啟 Kibana Dev Tools 風格的 REPL（`<METHOD> /<path>` + 可選 JSON body，空白行送出）。 |
@@ -414,4 +414,4 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 - 被 blacklist 的 table / column 會從查詢輸出中遮蔽。
 - `schema` 回報 `estimatedRowCount` 與 `sizeCategory`（small / medium / large / huge）。大 / 巨大表要加 `WHERE` 或 `LIMIT` — 分界值見 reference.md。
 - 對 `mongodb+srv://` 連線，`doctor` 會回報 SRV 是用原生解析或走 DoH fallback — 在執行環境限制 DNS 時很有用。
-- **全域旗標：** `--config <path>`、`--use <name>`、`-v` / `-vv` / `-q`、`--no-color`（也尊重 `NO_COLOR`）。
+- **全域旗標：** `--version`、`--config <path>`、`--use <name>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。

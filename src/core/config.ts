@@ -23,7 +23,11 @@ import { join } from 'path'
 import { mkdir } from 'node:fs/promises'
 import { resolveEnvRef } from '@/agent-core/public'
 import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
-import { assertAgentReadableFile, assertConfigIntegrity, writeConfigIntegrity } from '@/core/config-integrity'
+import {
+  assertAgentReadableFile,
+  assertConfigIntegrity,
+  writeConfigWithIntegrity,
+} from '@/core/config-integrity'
 
 /**
  * 全域 --use 連線名稱，由 CLI preAction hook 設定
@@ -375,7 +379,13 @@ export const configModule = {
         return DbcliConfigSchema.parse(resolved)
       }
 
-      // Neither exists, return default config
+      if (process.env.DBCLI_AGENT_MODE === '1') {
+        throw new ConfigError(
+          `Agent mode refuses a missing config: ${path}. Run the human/admin setup workflow to provision it.`
+        )
+      }
+
+      // Neither exists, return default config for human-mode first-run setup.
       return { ...DEFAULT_CONFIG }
     } catch (error) {
       if (error instanceof ConfigError) throw error
@@ -486,9 +496,8 @@ export const configModule = {
 
         if (hasEnvReferences) {
           // New approach: using env var references, write directly to config.json
-          const configPath = join(storagePath, 'config.json')
           const configJson = JSON.stringify(config, null, 2)
-          await Bun.file(configPath).write(configJson)
+          await writeConfigWithIntegrity(storagePath, configJson)
         } else {
           // Legacy approach: password separated into .env.local
           const password = config.connection.password
@@ -502,9 +511,8 @@ export const configModule = {
           delete (configWithoutPassword.connection as { password?: unknown }).password
 
           // Write config.json (without password)
-          const configPath = join(storagePath, 'config.json')
           const configJson = JSON.stringify(configWithoutPassword, null, 2)
-          await Bun.file(configPath).write(configJson)
+          await writeConfigWithIntegrity(storagePath, configJson)
 
           // Write .env.local (password)
           if (password) {
@@ -517,15 +525,6 @@ export const configModule = {
         // Legacy file mode (backward compatible)
         const json = JSON.stringify(config, null, 2)
         await Bun.file(path).write(json)
-      }
-
-      const usesDirectoryStorage = isDirectory || path.endsWith('.dbcli')
-      const writtenConfigPath = usesDirectoryStorage ? join(storagePath, 'config.json') : path
-      if (usesDirectoryStorage && (await Bun.file(writtenConfigPath).exists())) {
-        await writeConfigIntegrity(
-          storagePath,
-          await Bun.file(writtenConfigPath).text()
-        )
       }
     } catch (error) {
       if (error instanceof ConfigError) {

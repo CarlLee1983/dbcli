@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
-import { chmod, lstat, mkdir, rename } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { chmod, lstat, mkdir, rename, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { ConfigError } from '@/utils/errors'
 
@@ -52,10 +52,7 @@ async function bestEffortSecureMode(path: string, mode: number): Promise<void> {
  * This keeps FIFOs, devices, symlinks, and broadly writable files outside the
  * trust boundary instead of reading them and validating only afterwards.
  */
-export async function assertAgentReadableFile(
-  path: string,
-  description = 'config'
-): Promise<void> {
+export async function assertAgentReadableFile(path: string, description = 'config'): Promise<void> {
   if (process.env.DBCLI_AGENT_MODE !== '1') return
   try {
     const fileStat = await lstat(path)
@@ -75,53 +72,138 @@ export async function assertAgentReadableFile(
   }
 }
 
-async function writeIntegrityRecord(
+async function writeProtectedFileWithIntegrity(
   storagePath: string,
-  configContent: string,
-  recordName: string,
-  protectedFileName: string
+  protectedFileName: string,
+  protectedContent: string,
+  recordName: string
 ): Promise<void> {
   await mkdir(storagePath, { recursive: true })
-  const path = integrityPath(storagePath, recordName)
+
   const protectedFilePath = protectedPath(storagePath, protectedFileName)
-  const temporary = `${path}.tmp-${process.pid}`
+  const localPath = integrityPath(storagePath, recordName)
+  const anchorPath = anchorPathFor(protectedFilePath)
   const record: ConfigIntegrityRecord = {
     version: 1,
-    configSha256: hash(configContent),
+    configSha256: hash(protectedContent),
     updatedAt: new Date().toISOString(),
     targetPath: protectedFilePath,
   }
-  await Bun.write(temporary, JSON.stringify(record, null, 2))
-  await rename(temporary, path)
+  const recordContent = JSON.stringify(record, null, 2)
+  const suffix = `${process.pid}-${randomUUID()}`
+  const protectedTemporary = `${protectedFilePath}.tmp-${suffix}`
+  const localTemporary = `${localPath}.tmp-${suffix}`
+  const anchorTemporary = anchorPath ? `${anchorPath}.tmp-${suffix}` : null
+  const published: FileSnapshot[] = []
 
-  const anchorPath = anchorPathFor(protectedFilePath)
+  try {
+    const [protectedSnapshot, localSnapshot, anchorSnapshot] = await Promise.all([
+      snapshot(protectedFilePath),
+      snapshot(localPath),
+      anchorPath ? snapshot(anchorPath) : Promise.resolve(null),
+    ])
+
+    await Bun.write(protectedTemporary, protectedContent)
+    await Bun.write(localTemporary, recordContent)
+    if (anchorPath && anchorTemporary) {
+      await mkdir(dirname(anchorPath), { recursive: true })
+      await Bun.write(anchorTemporary, recordContent)
+    }
+
+    const publish = async (temporary: string, previous: FileSnapshot): Promise<void> => {
+      await rename(temporary, previous.path)
+      published.push(previous)
+    }
+
+    // Publish the detached record first: an anchor staging/publish failure must
+    // leave the existing protected file and colocated record untouched.
+    if (anchorTemporary && anchorPath) {
+      await publish(anchorTemporary, anchorSnapshot ?? { path: anchorPath, content: null })
+    }
+    await publish(localTemporary, localSnapshot)
+    await publish(protectedTemporary, protectedSnapshot)
+  } catch (error) {
+    for (const publishedFile of published.reverse()) {
+      await restore(publishedFile).catch(() => undefined)
+    }
+    throw error
+  } finally {
+    await unlink(protectedTemporary).catch(() => undefined)
+    await unlink(localTemporary).catch(() => undefined)
+    if (anchorTemporary) await unlink(anchorTemporary).catch(() => undefined)
+  }
+
   if (anchorPath) {
-    await mkdir(dirname(anchorPath), { recursive: true })
-    const anchorTemporary = `${anchorPath}.tmp-${process.pid}`
-    await Bun.write(anchorTemporary, JSON.stringify(record, null, 2))
-    await rename(anchorTemporary, anchorPath)
     await bestEffortSecureMode(dirname(anchorPath), 0o700)
     await bestEffortSecureMode(anchorPath, 0o600)
   }
-
-  // Connection configuration and its integrity record contain security
-  // metadata. Keep them private on POSIX filesystems where possible.
+  // Connection configuration, project bindings, and their integrity records
+  // contain security metadata. Keep them private on POSIX filesystems where
+  // possible.
   await bestEffortSecureMode(storagePath, 0o700)
-  await bestEffortSecureMode(join(storagePath, protectedFileName), 0o600)
-  await bestEffortSecureMode(path, 0o600)
+  await bestEffortSecureMode(protectedFilePath, 0o600)
+  await bestEffortSecureMode(localPath, 0o600)
 }
 
-/** Persist a content hash alongside a config after a trusted CLI write. */
-export async function writeConfigIntegrity(storagePath: string, configContent: string): Promise<void> {
-  await writeIntegrityRecord(storagePath, configContent, INTEGRITY_FILE, 'config.json')
+/** Persist a config and its integrity records after a trusted CLI write. */
+export async function writeConfigIntegrity(
+  storagePath: string,
+  configContent: string
+): Promise<void> {
+  await writeConfigWithIntegrity(storagePath, configContent)
 }
 
-/** Persist a content hash alongside a project binding after a trusted CLI write. */
+interface FileSnapshot {
+  path: string
+  content: string | null
+}
+
+async function snapshot(path: string): Promise<FileSnapshot> {
+  const file = Bun.file(path)
+  return { path, content: (await file.exists()) ? await file.text() : null }
+}
+
+async function restore(snapshot: FileSnapshot): Promise<void> {
+  if (snapshot.content === null) {
+    await unlink(snapshot.path).catch(() => undefined)
+    return
+  }
+  const temporary = `${snapshot.path}.rollback-${process.pid}-${randomUUID()}`
+  await Bun.write(temporary, snapshot.content)
+  await rename(temporary, snapshot.path)
+}
+
+/**
+ * Publish config.json and its integrity records as one recoverable unit. All
+ * replacements are prepared before publication. If a later replacement fails,
+ * already-published files are restored to their prior versions.
+ */
+export async function writeConfigWithIntegrity(
+  storagePath: string,
+  configContent: string
+): Promise<void> {
+  await writeProtectedFileWithIntegrity(storagePath, 'config.json', configContent, INTEGRITY_FILE)
+}
+
+/** Persist a project binding and its integrity records after a trusted CLI write. */
+export async function writeBindingWithIntegrity(
+  projectPath: string,
+  bindingContent: string
+): Promise<void> {
+  await writeProtectedFileWithIntegrity(
+    projectPath,
+    'config.json',
+    bindingContent,
+    '.binding-integrity.json'
+  )
+}
+
+/** Backwards-compatible name for the binding writer. */
 export async function writeBindingIntegrity(
   projectPath: string,
   bindingContent: string
 ): Promise<void> {
-  await writeIntegrityRecord(projectPath, bindingContent, '.binding-integrity.json', 'config.json')
+  await writeBindingWithIntegrity(projectPath, bindingContent)
 }
 
 /**

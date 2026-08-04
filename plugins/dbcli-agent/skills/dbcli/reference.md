@@ -4,6 +4,21 @@ Companion to [SKILL.md](SKILL.md). Exhaustive flags, copy-paste examples, `shell
 
 For cross-engine support status, see `docs/feature-matrix.md` in the repository.
 
+## Global options and placement
+
+These options are available on the root `dbcli` command. Root-level options must
+appear before the command path (for example, `dbcli --use prod status`). A
+command-level option is only valid after the command that declares it.
+
+| Option | Purpose |
+|---|---|
+| `--version` | Print the installed dbcli version. |
+| `--no-color` | Disable colored output. |
+| `-v, --verbose` | Increase logging verbosity; repeat for debug output. |
+| `-q, --quiet` | Suppress non-essential output. |
+| `--config <path>` | Select the `.dbcli` configuration path. |
+| `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
+
 ## Commands
 
 ### init
@@ -37,6 +52,8 @@ dbcli init --rename staging:production                   # Rename a connection
 ```
 
 **Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
+
+**Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
 
 **MongoDB-specific options:** `--uri <uri>` (full connection URI), `--auth-source <db>` (auth database, default: `admin` when user/password set)
 
@@ -78,6 +95,8 @@ dbcli list --use prod
 ```
 
 **Requires v2 config** (created with `dbcli init --conn-name`).
+
+**Options:** `--list`, `--format <text|json>`, `--confirm-production <name>` (required when explicitly selecting a production connection as the default).
 
 ### Agent configuration trust boundary
 
@@ -1107,7 +1126,7 @@ dbcli proxy mysql       --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql  --listen 127.0.0.1:5434 --target 127.0.0.1:5432
 dbcli proxy mysql       --slow-ms 500 --redact literals   # redact SQL literals in events
 dbcli proxy mariadb     --events ./logs/proxy.jsonl        # custom event file
-dbcli proxy postgresql  --use prod                         # infer target from named connection
+dbcli --use prod proxy postgresql                         # infer target from named connection
 
 dbcli proxy analyze                               # analyze .dbcli/proxy/events.jsonl (JSON)
 dbcli proxy analyze --format text --top 10        # human-readable top-10 view
@@ -1517,6 +1536,7 @@ Audit entries are metadata-only by design — never raw SQL bodies, `--param` va
 | `--all` | Merge entries across all connections; output is an envelope array `[{ connection, entry }, ...]` (D-39). | off (current connection only) |
 | `--for-agent` | Shortcut for `--format json --brief`. Single-connection JSON is a flat array; `--all` JSON is an envelope array. | off |
 | `--brief` | Drop large redaction fields from the entry; keep `ts / command / target / success` (D-33). | off |
+| `--no-brief` | Disable brief mode when a higher-level default enables it. | off |
 | `--format <fmt>` | `table` \| `json`. | `table` |
 
 Reader behavior (D-41): tail merges `<conn>.jsonl.1` (rotated segment, if present) and `<conn>.jsonl`, sorts by `ts` ascending, then takes the last `--n` entries — so `--n 1000` can span a fresh rotation boundary.
@@ -1534,6 +1554,7 @@ Examples:
 | `<id-prefix>` | Positional. UUID or prefix ≥ 4 characters; ambiguous prefix exits 1 with disambiguation hint; prefix < 4 chars exits 1. | — |
 | `--recovery-ref <id>` | Find the audit entry whose `recovery_ref` field matches this id (exact, not prefix). Mutually exclusive with positional `<id-prefix>` (D-38). | — |
 | `--all` | Search across all connections. Output is an envelope `{ connection, entry }` (single-hit also envelope, for shape stability — D-36). | off |
+| `--no-brief` | Disable brief mode when a higher-level default enables it. | off |
 | `--format <fmt>` | `table` \| `json`. | `table` |
 
 Examples:
@@ -1560,6 +1581,7 @@ Examples:
 | Flag | Purpose | Default |
 |---|---|---|
 | `--format <fmt>` | `table` \| `json`. | `table` |
+| `--no-brief` | Disable brief mode when a higher-level default enables it. | off |
 
 Output reports: writer enabled/disabled, last write result, file-lock state, rotation cap usage (`max_bytes` / `max_entries`). When `audit.enabled = false` (D1 opt-out), `tail` / `show` / `health` still exit 0 and print `Audit is disabled (audit.enabled = false in .dbcli). Use 'dbcli audit health' for details.` (E note).
 
@@ -1997,7 +2019,13 @@ dbcli doctor --format json      # JSON output for AI agents
 > **MongoDB SRV diagnostics:** When the active connection uses `mongodb+srv://`, `doctor` reports whether the current runtime can resolve SRV records directly or only through the DNS-over-HTTPS fallback used by dbcli. This helps spot execution-environment DNS restrictions even when Compass can connect.
 
 **Exit code:** 0 if all pass or warnings only, 1 if any error
-**Options:** `--format <text|json>`
+**Options:** `--format <text|json>`, `--remediation`
+
+With `--format json --remediation`, large-table warnings include one bounded
+sample candidate per table. SQL candidates first run `dbcli plan` for a `LIMIT
+100` read; MongoDB and Elasticsearch candidates first run `dbcli schema` as a
+preflight. Each then offers a matching bounded `dbcli query` as the
+human-confirmed apply step; doctor never runs either command automatically.
 
 ### completion
 

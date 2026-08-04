@@ -116,6 +116,94 @@ describe('doctor checks', () => {
     ])
   })
 
+  test('shell-quotes DB-derived blacklist identifiers in remediation commands', () => {
+    const steps = buildDoctorRemediationPlan([
+      {
+        group: 'Configuration',
+        label: 'Blacklist completeness',
+        status: 'warn',
+        message: 'Consider protecting: users; touch /tmp/dbcli-pwned.password_hash',
+      },
+    ])
+
+    expect(steps).toEqual([
+      expect.objectContaining({
+        dryRun: "dbcli schema 'users; touch /tmp/dbcli-pwned' --format json",
+        apply: "dbcli blacklist column add 'users; touch /tmp/dbcli-pwned.password_hash'",
+      }),
+    ])
+  })
+
+  test('buildDoctorRemediationPlan emits bounded sample plan then query candidates', () => {
+    const steps = buildDoctorRemediationPlan([
+      {
+        group: 'Connection & Data',
+        label: 'Large tables',
+        status: 'warn',
+        message: 'Large tables: audit_log (5.0M rows)',
+        details: {
+          system: 'postgresql',
+          largeTables: [{ name: 'audit_log', estimatedRowCount: 5_000_000 }],
+        },
+      },
+    ])
+
+    expect(steps).toEqual([
+      expect.objectContaining({
+        kind: 'bounded-sample',
+        dryRun: "dbcli plan 'SELECT * FROM audit_log LIMIT 100' --format json",
+        apply: "dbcli query 'SELECT * FROM audit_log LIMIT 100' --format json",
+        requiresHumanConfirmation: true,
+      }),
+    ])
+  })
+
+  test('uses schema preflight for MongoDB and Elasticsearch bounded samples', () => {
+    const results = (system: 'mongodb' | 'elasticsearch') => [
+      {
+        group: 'Connection & Data',
+        label: 'Large tables',
+        status: 'warn' as const,
+        message: 'Large tables: events (2.0M rows)',
+        details: { system, largeTables: [{ name: 'events', estimatedRowCount: 2_000_000 }] },
+      },
+    ]
+
+    const mongoStep = buildDoctorRemediationPlan(results('mongodb'))[0]
+    expect(mongoStep?.dryRun).toBe('dbcli schema events --format json')
+    expect(mongoStep?.apply).toBe("dbcli query '{}' --collection events --limit 100 --format json")
+
+    const elasticsearchStep = buildDoctorRemediationPlan(results('elasticsearch'))[0]
+    expect(elasticsearchStep?.dryRun).toBe('dbcli schema events --format json')
+    expect(elasticsearchStep?.apply).toBe(
+      `dbcli query '{"query":{"match_all":{}}}' --collection events --limit 100 --format json`
+    )
+  })
+
+  test('does not generate executable SQL for hostile large-table identifiers', () => {
+    const steps = buildDoctorRemediationPlan([
+      {
+        group: 'Connection & Data',
+        label: 'Large tables',
+        status: 'warn',
+        message: 'Large tables: audit; DROP TABLE users (5.0M rows)',
+        details: {
+          system: 'postgresql',
+          largeTables: [{ name: 'audit; DROP TABLE users', estimatedRowCount: 5_000_000 }],
+        },
+      },
+    ])
+
+    expect(steps).toEqual([
+      expect.objectContaining({
+        kind: 'bounded-sample',
+        dryRun: "dbcli schema 'audit; DROP TABLE users' --format json",
+        requiresHumanConfirmation: true,
+      }),
+    ])
+    expect(steps[0]?.apply).toBeUndefined()
+  })
+
   test('checkSchemaCacheFreshness warns when cache is older than 7 days', () => {
     const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
     const result = runDoctorChecks.checkSchemaCacheFreshness(eightDaysAgo)

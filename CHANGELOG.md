@@ -5,6 +5,18 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.45.1] - 2026-08-04 - Windows 上的 agent mode 修復
+
+### Fixed
+
+- **agent mode 在 Windows 上拒讀自己寫出來的 config。** `assertAgentReadableFile` 以 `(mode & 0o022) !== 0` 判斷 group/world-writable，但 Windows 的 `stat()` 回的是合成 mode —— 一般可寫檔一律 `0o666`，設了 read-only 位元才 `0o444`，低位元沒有 group/world 語意，`chmod` 也只能切換 read-only。結果 `DBCLI_AGENT_MODE=1` 時，Windows 上連 dbcli 剛寫入的 config 都被拒絕，agent 模式實際不可用（1.45.0 已含此問題）。同檔的 `bestEffortSecureMode` 註解早已寫明「Windows 沒有 POSIX mode bits，靠 content hash 保護」，這次把 assert 端對齊該立場：mode 檢查抽成 `refusesGroupOrWorldWritable(mode, platform)`，win32 放行，POSIX 行為不變。竄改偵測比對的是寫入時記錄的 content hash，與 mode 無關，因此安全性不受影響。連帶修好 2 個 config-binding tampering 測試 —— 同一根因：binding 讀取前先過這道閘門，拋出的是 writable 錯誤而非預期的 tampering 錯誤。
+
+### Changed
+
+- **移除 schema loader 的牆鐘時間斷言。** `initialize` 的 `loadTime < 200ms` 跑在阻擋性的 `bun test` 裡，但共用 CI runner 不是量測儀器（Windows 冷啟動 270ms 就紅，程式本身無異常）。改為斷言合約（有量到並回報 loadTime），時間預算歸 `tests/perf/*.bench.ts` —— CI 對該套件本來就設 `continue-on-error`，正因為 timing 依環境而定。
+- **`docs/security-threat-model.md` 補上平台差異。** POSIX 用 `0o700`/`0o600` 保護設定，Windows 沒有等價 mode bits，機密性靠 profile ACL；竄改偵測兩邊一致。
+- 這兩項修復讓 `windows-latest` CI job 自 v1.40.0 以來首次通過（6 個 matrix job + docs-parity 全綠）。
+
 ## [1.45.0] - 2026-08-04 - root-level `--global`：跨專案共用的 user-global registry
 
 ### Added

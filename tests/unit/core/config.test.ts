@@ -349,7 +349,9 @@ describe('configModule', () => {
       }
       await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
 
-      await expect(configModule.read(V2_CONFIG_PATH)).rejects.toThrow(/必須明確使用 --use production/)
+      await expect(configModule.read(V2_CONFIG_PATH)).rejects.toThrow(
+        /必須明確使用 --use production/
+      )
 
       const explicit = await configModule.read(V2_CONFIG_PATH, 'production')
       expect(explicit.effectiveConnectionName).toBe('production')

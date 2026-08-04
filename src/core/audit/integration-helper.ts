@@ -87,11 +87,7 @@ export async function writeAuditEntry(
       (config as { effectiveConnectionName?: string }).effectiveConnectionName ||
       getGlobalConnectionName() ||
       'default'
-    const logger = await getAuditLogger(
-      config,
-      options.config || '.dbcli',
-      connectionName
-    )
+    const logger = await getAuditLogger(config, options.config || '.dbcli', connectionName)
     const engine = (config.connection?.system as DatabaseSystem) || 'postgresql'
 
     // 1. Resolve Target
@@ -128,8 +124,7 @@ export async function writeAuditEntry(
       metadata: {
         ...(outcome.metadata ?? {}),
         connection_name: connectionName,
-        environment:
-          (config as { effectiveEnvironment?: string }).effectiveEnvironment ?? null,
+        environment: (config as { effectiveEnvironment?: string }).effectiveEnvironment ?? null,
       },
     }
 

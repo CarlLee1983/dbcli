@@ -1,9 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import {
-  listConnectionIdentities,
-  listConnectionsForDisplay,
-  switchDefault,
-} from '@/commands/use'
+import { listConnectionIdentities, listConnectionsForDisplay, switchDefault } from '@/commands/use'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,9 +79,9 @@ describe('use command', () => {
     })
 
     test('fails closed when changing the persisted default to production without confirmation', async () => {
-      await expect(switchDefault(configDirectory, 'production', baseV2Config as any)).rejects.toThrow(
-        /confirm-production production/
-      )
+      await expect(
+        switchDefault(configDirectory, 'production', baseV2Config as any)
+      ).rejects.toThrow(/confirm-production production/)
 
       const unchanged = JSON.parse(await Bun.file(join(configDirectory, 'config.json')).text())
       expect(unchanged.default).toBe('local')

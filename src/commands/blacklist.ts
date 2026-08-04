@@ -8,9 +8,18 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { configModule } from '@/core/config'
 import type { BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns } from '@/core/mongo/path-matcher'
+import { validateFormat } from '@/utils/validation'
 
 export interface BlacklistAudit {
   warnings: Array<{ collection: string; raw: string; reason: string }>
+}
+
+export type BlacklistListFormat = 'text' | 'json'
+
+export interface BlacklistListJson {
+  tables: string[]
+  columns: Record<string, string[]>
+  warnings: BlacklistAudit['warnings']
 }
 
 export function auditBlacklistPatterns(cfg: BlacklistConfig): BlacklistAudit {
@@ -77,9 +86,23 @@ export function getOrInitBlacklist(config: {
  * blacklist list subcommand
  * Displays current blacklist configuration
  */
-export async function blacklistList(configPath: string): Promise<void> {
+export async function blacklistList(
+  configPath: string,
+  format: BlacklistListFormat = 'text'
+): Promise<void> {
   const config = await configModule.read(configPath)
   const blacklist = getOrInitBlacklist(config)
+  const audit = auditBlacklistPatterns(blacklist)
+
+  if (format === 'json') {
+    const result: BlacklistListJson = {
+      tables: blacklist.tables,
+      columns: blacklist.columns,
+      warnings: audit.warnings,
+    }
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
 
   console.log(t('blacklist.list_title'))
   console.log('─'.repeat(40))
@@ -103,7 +126,6 @@ export async function blacklistList(configPath: string): Promise<void> {
     console.log(`${t('blacklist.columns_label')}: {}`)
   }
 
-  const audit = auditBlacklistPatterns(blacklist)
   for (const w of audit.warnings) {
     console.error(
       `⚠  blacklist.columns["${w.collection}"]: '${w.raw}' is ignored on mongo connections (${w.reason}).`
@@ -238,9 +260,15 @@ blacklistCommand
   .command('list')
   .description(t('blacklist.list_title'))
   .option('--config <path>', 'Path to .dbcli config file', DEFAULT_CONFIG_PATH)
+  .option('--format <type>', 'Output format: text, json', 'text')
   .action(async (options: Record<string, unknown>) => {
     try {
-      await blacklistList((options.config as string) || DEFAULT_CONFIG_PATH)
+      const format = (options.format as string) || 'text'
+      validateFormat(format, ['text', 'json'], 'blacklist list')
+      await blacklistList(
+        (options.config as string) || DEFAULT_CONFIG_PATH,
+        format as BlacklistListFormat
+      )
     } catch (error) {
       console.error((error as Error).message)
       process.exit(1)

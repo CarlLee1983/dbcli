@@ -115,19 +115,51 @@ describe('stateless single-connection selection', () => {
     }
   })
 
-  test('commands outside the supported five require root-level --use', async () => {
-    const result = await run([
-      '--config',
-      configDir,
-      'proxy',
-      '--use',
-      'missing',
-      '--listen',
-      '127.0.0.1:3307',
-    ])
+  test('commands outside the supported five require root-level --use and provide a copyable hint', async () => {
+    const result = await run(['--config', configDir, 'status', '--use', 'missing'])
 
     expect(result.code).toBe(1)
     expect(result.stderr).toContain("unknown option '--use'")
+    expect(result.stderr).toContain('dbcli --use <connection> status')
+  })
+
+  test('the hint identifies the command, not a root option value', async () => {
+    const result = await run([
+      '--config',
+      join(workspace, 'status'),
+      'proxy',
+      'analyze',
+      '--use=missing',
+    ])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain("unknown option '--use=missing'")
+    expect(result.stderr).toContain('dbcli --use <connection> proxy analyze')
+    expect(result.stderr).not.toContain('dbcli --use <connection> status')
+  })
+
+  test('the hint preserves nested blacklist subcommands', async () => {
+    const result = await run(['--config', configDir, 'blacklist', 'list', '--use', 'missing'])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain("unknown option '--use'")
+    expect(result.stderr).toContain('dbcli --use <connection> blacklist list')
+  })
+
+  test('the hint never echoes query arguments', async () => {
+    const secret = 'sensitive-token'
+    const result = await run([
+      '--config',
+      configDir,
+      'lint',
+      `SELECT '${secret}'`,
+      '--use',
+      'missing',
+    ])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('dbcli --use <connection> lint')
+    expect(result.stderr).not.toContain(secret)
   })
 
   test('conflicting root and command selectors fail before command execution', async () => {

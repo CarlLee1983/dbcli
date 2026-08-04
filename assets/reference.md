@@ -746,6 +746,7 @@ Manage sensitive data blacklist to prevent AI access to restricted tables/column
 
 ```bash
 dbcli blacklist list                        # Show current blacklist
+dbcli blacklist list --format json          # Stable machine-readable result
 dbcli blacklist table add payments          # Block entire table
 dbcli blacklist table remove payments       # Unblock table
 dbcli blacklist column add users.password   # Block specific column
@@ -753,6 +754,11 @@ dbcli blacklist column remove users.password
 ```
 
 **Subcommands:** `list`, `table add <name>`, `table remove <name>`, `column add <table.column>`, `column remove <table.column>`
+
+**`list` options:** `--config <path>`, `--format <text|json>` (default: `text`). JSON writes one
+document to stdout: `{ "tables": string[], "columns": Record<string, string[]>, "warnings":
+[{ "collection", "raw", "reason" }] }`. Invalid MongoDB blacklist patterns appear in `warnings`;
+the JSON result is otherwise free of human headings and diagnostics.
 
 ### check
 

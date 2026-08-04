@@ -21,6 +21,7 @@ import {
 } from '../../../src/core/completion/command-tree'
 
 const REFERENCE_PATH = join(import.meta.dir, '../../../assets/reference.md')
+const SKILL_PATH = join(import.meta.dir, '../../../assets/SKILL.md')
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -57,5 +58,11 @@ describe('reference.md command coverage', () => {
 
   test('the heading matcher has teeth (a bogus command is NOT found)', () => {
     expect(hasCommandHeading(reference, 'nonexistent-command-xyz')).toBe(false)
+  })
+
+  test('documents the JSON blacklist safety check supported by the CLI', () => {
+    const skill = readFileSync(SKILL_PATH, 'utf8')
+    expect(skill).toContain('dbcli blacklist list --format json')
+    expect(reference).toContain('dbcli blacklist list --format json')
   })
 })

@@ -83,6 +83,8 @@ dbcli init
 dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v2 設定：單連線
 （v1）專案沒有具名連線可選，因此在 v1 下給 `--use` 或 `DBCLI_CONNECTION` 會被
 拒絕，而不是靜默改跑那唯一的連線。
+若把 `--use` 放在不支援指令層級寫法的指令後面，dbcli 會維持拒絕並印出可直接
+複製的 root-level 寫法，例如 `dbcli --use <connection> status`。
 
 ### 唯讀 query fan-out
 
@@ -126,6 +128,10 @@ table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功
 | `schema [table]` | 顯示特定物件的結構，或掃描整個資料庫並快取元資料。 |
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
+
+`dbcli blacklist list --format json` 會在 stdout 輸出一個 machine-readable 文件，包含
+`tables`、`columns` 與 `warnings`；不合法的 MongoDB blacklist path 會放進結構化的
+`warnings` 陣列，不會把人類可讀診斷混入 stdout。
 
 在 PostgreSQL 中，`schema` 全程使用精確的 `public` catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 `public` relation。Row count 會同時 qualify 並 quote `"public"` 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。
 

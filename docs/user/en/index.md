@@ -85,6 +85,9 @@ If root-level and command-level `--use` values conflict, dbcli fails instead of
 choosing one silently. Selectors require a v2 configuration: a single-connection
 (v1) project has no names to choose between, so `--use` or `DBCLI_CONNECTION`
 there is rejected rather than quietly running the only connection.
+When `--use` is placed after a command that does not support the command-level form,
+dbcli keeps the request rejected and prints the copyable root-level form, such as
+`dbcli --use <connection> status`.
 
 ### Read-only query fan-out
 
@@ -132,6 +135,10 @@ fail or the request is rejected before execution.
 | `schema [table]` | Displays schema details for a specific object or scans the entire database. |
 | `inspect` | Provides a read-only snapshot for AI agents (objects, permissions, suggestions). |
 | `status` | Shows a safe summary of the current configuration (no credentials). |
+
+`dbcli blacklist list --format json` emits one machine-readable document with
+`tables`, `columns`, and `warnings`; malformed MongoDB blacklist paths are reported in
+the structured `warnings` array rather than mixed into stdout as human diagnostics.
 
 For PostgreSQL, `schema` uses exact `public` catalog identity throughout: full catalog/schema/table joins prevent reused constraint names from contaminating another table, composite foreign-key columns remain in declaration order, composite primary-key order comes from the exact table OID and index ordinality, and estimates are scoped to the exact `public` relation. Row counts qualify and quote both `"public"` and the exact table name, escaping embedded quotes so mixed-case and punctuation-bearing identifiers remain distinct and safe. Referenced schema/table spelling is preserved from the catalog.
 

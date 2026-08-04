@@ -77,6 +77,60 @@ const QUIET_OUTPUT_COMMANDS = new Set(['upgrade', 'completion'])
 
 const program = buildProgram()
 
+function misplacedConnectionSelectorHint(): string | undefined {
+  const rawArgs = process.argv.slice(2)
+  let commandName: string | undefined
+  let commandIndex = -1
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const token = rawArgs[index]!
+    if (token === '--') break
+    if (token === '--config' || token === '--use') {
+      index += 1
+      continue
+    }
+    if (token.startsWith('--config=') || token.startsWith('--use=') || token.startsWith('-')) {
+      continue
+    }
+    commandName = token
+    commandIndex = index
+    break
+  }
+
+  const command = program.commands.find((candidate) => candidate.name() === commandName)
+  if (!command || command.options.some((option) => option.long === '--use')) return undefined
+
+  const misplacedOptionIndex = rawArgs.findIndex(
+    (token, index) => index > commandIndex && (token === '--use' || token.startsWith('--use='))
+  )
+  if (misplacedOptionIndex === -1) return undefined
+
+  const commandPath = [command.name()]
+  let currentCommand = command
+  for (const token of rawArgs.slice(commandIndex + 1, misplacedOptionIndex)) {
+    const child = currentCommand.commands.find((candidate) => candidate.name() === token)
+    if (!child) continue
+    commandPath.push(child.name())
+    currentCommand = child
+  }
+
+  return `Hint: Place --use before the command: dbcli --use <connection> ${commandPath.join(' ')}`
+}
+
+function configureConnectionSelectorHints(command: typeof program): void {
+  command.configureOutput({
+    outputError: (message, write) => {
+      const hint = /unknown option '--use(?:'|=)/.test(message)
+        ? misplacedConnectionSelectorHint()
+        : undefined
+      write(hint ? `${message}${hint}\n` : message)
+    },
+  })
+  for (const child of command.commands) configureConnectionSelectorHints(child as typeof program)
+}
+
+configureConnectionSelectorHints(program)
+
 program.hook('preAction', (thisCommand, actionCommand) => {
   const opts = thisCommand.opts()
 

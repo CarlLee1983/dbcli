@@ -95,6 +95,83 @@ describe('getOrInitBlacklist()', () => {
 })
 
 describe('blacklistList()', () => {
+  it('emits one machine-readable document with warnings in json mode', async () => {
+    const configPath = await createTempConfig({
+      tables: ['audit_logs'],
+      columns: { users: ['password'] },
+    })
+    const output: string[] = []
+    const errorOutput: string[] = []
+    const origLog = console.log
+    const origError = console.error
+    console.log = (...args: any[]) => output.push(args.join(' '))
+    console.error = (...args: any[]) => errorOutput.push(args.join(' '))
+
+    try {
+      await blacklistList(configPath, 'json')
+    } finally {
+      console.log = origLog
+      console.error = origError
+    }
+
+    expect(output).toHaveLength(1)
+    expect(JSON.parse(output[0]!)).toEqual({
+      tables: ['audit_logs'],
+      columns: { users: ['password'] },
+      warnings: [],
+    })
+    expect(errorOutput).toEqual([])
+  })
+
+  it('returns rejected Mongo patterns as structured JSON warnings', async () => {
+    const configPath = await createTempConfig({
+      tables: [],
+      columns: { events: ['profile.*.token'] },
+    })
+    const output: string[] = []
+    const errorOutput: string[] = []
+    const origLog = console.log
+    const origError = console.error
+    console.log = (...args: any[]) => output.push(args.join(' '))
+    console.error = (...args: any[]) => errorOutput.push(args.join(' '))
+
+    try {
+      await blacklistList(configPath, 'json')
+    } finally {
+      console.log = origLog
+      console.error = origError
+    }
+
+    expect(JSON.parse(output[0]!).warnings).toEqual([
+      {
+        collection: 'events',
+        raw: 'profile.*.token',
+        reason: 'wildcard must be the final segment',
+      },
+    ])
+    expect(errorOutput).toEqual([])
+  })
+
+  it('keeps rejected Mongo pattern warnings on stderr in text mode', async () => {
+    const configPath = await createTempConfig({
+      tables: [],
+      columns: { events: ['profile.*.token'] },
+    })
+    const errorOutput: string[] = []
+    const origError = console.error
+    console.error = (...args: any[]) => errorOutput.push(args.join(' '))
+
+    try {
+      await blacklistList(configPath)
+    } finally {
+      console.error = origError
+    }
+
+    expect(errorOutput).toEqual([
+      '⚠  blacklist.columns["events"]: \'profile.*.token\' is ignored on mongo connections (wildcard must be the final segment).',
+    ])
+  })
+
   it('shows "none" message when config is empty', async () => {
     const configPath = await createTempConfig()
     const output: string[] = []

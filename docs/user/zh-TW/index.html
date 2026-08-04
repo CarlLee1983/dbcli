@@ -184,7 +184,7 @@ dbcli use staging        # 切換預設連線
 dbcli --use prod query "SELECT count(*) FROM users" # 全域單次 selector
 dbcli query --use prod "SELECT count(*) FROM users" # 支援的指令層級寫法
 DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # 環境變數 selector</code></pre>
-            <p>選擇優先序為明確的 <code>--use</code>、<code>DBCLI_CONNECTION</code>、最後才是設定檔預設連線。環境變數值會移除前後空白，空值則視為未設定。單次 selector 不會修改持久化預設值。<code>query</code>、<code>schema</code>、<code>list</code>、<code>export</code>、<code>check</code> 支援指令層級寫法；其他指令請把全域 selector 放在指令之前。root 與指令層級值衝突時會清楚失敗。Selector 需要 v2 設定：單連線（v1）專案沒有具名連線可選，因此在 v1 下給 <code>--use</code> 或 <code>DBCLI_CONNECTION</code> 會被拒絕，而不是靜默改跑那唯一的連線。</p>
+            <p>選擇優先序為明確的 <code>--use</code>、<code>DBCLI_CONNECTION</code>、最後才是設定檔預設連線。環境變數值會移除前後空白，空值則視為未設定。單次 selector 不會修改持久化預設值。<code>query</code>、<code>schema</code>、<code>list</code>、<code>export</code>、<code>check</code> 支援指令層級寫法；其他指令請把全域 selector 放在指令之前。root 與指令層級值衝突時會清楚失敗。Selector 需要 v2 設定：單連線（v1）專案沒有具名連線可選，因此在 v1 下給 <code>--use</code> 或 <code>DBCLI_CONNECTION</code> 會被拒絕，而不是靜默改跑那唯一的連線。若把 <code>--use</code> 放在不支援的指令後面，dbcli 會維持拒絕並印出可直接複製的 root-level 寫法，例如 <code>dbcli --use &lt;connection&gt; status</code>。</p>
             <h3>唯讀 query fan-out</h3>
             <p>明確指定逗號分隔的 <code>--use</code>，即可對多個具名連線執行同一個唯讀 query。Root 層級與指令層級寫法效果相同：</p>
             <pre><code>dbcli --use primary,staging query "SELECT count(*) FROM users" --format json
@@ -211,6 +211,7 @@ dbcli query --use primary,staging "SELECT count(*) FROM users"</code></pre>
                     <tr><td><code>status</code></td><td>配置與連線健康度摘要。</td></tr>
                 </tbody>
             </table>
+            <p><code>dbcli blacklist list --format json</code> 會在 stdout 輸出一個 machine-readable 文件，包含 <code>tables</code>、<code>columns</code> 與 <code>warnings</code>；不合法的 MongoDB blacklist path 會放進結構化的 <code>warnings</code> 陣列，不會把人類可讀診斷混入 stdout。</p>
             <p>在 PostgreSQL 中，<code>schema</code> 全程使用精確的 <code>public</code> catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 <code>public</code> relation。Row count 會同時 qualify 並 quote <code>"public"</code> 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>

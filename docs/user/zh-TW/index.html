@@ -180,10 +180,12 @@ bun install -g @carllee1983/dbcli</code></pre>
             <h2>連線管理</h2>
             <p>在正式 (Prod)、測試 (Staging) 及本地 (Local) 環境間切換：</p>
             <pre><code>dbcli use --list         # 列出所有連線名稱
+dbcli use --list --format json # 不含憑證的 JSON 連線清單
 dbcli use staging        # 切換預設連線
 dbcli --use prod query "SELECT count(*) FROM users" # 全域單次 selector
 dbcli query --use prod "SELECT count(*) FROM users" # 支援的指令層級寫法
 DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # 環境變數 selector</code></pre>
+            <p>若要提供明確且不含機密的環境標籤，可在 v2 具名連線設定可選的 <code>environment</code> 欄位，例如 <code>"environment": "production"</code>。<code>dbcli use --list --format json</code> 會回傳每個連線的名稱、環境標籤（或 <code>null</code>）、權限、系統、伺服器／資料庫識別與預設標記；由環境變數提供的識別欄位會是 <code>null</code>，只有 URI 的 MongoDB 與只有 Cloud ID 的 Elasticsearch 也會以 <code>null</code> 取代預設占位值。它刻意不輸出 user、password、URI、Cloud ID、API key 或環境變數名稱。拼錯連線 selector 時，dbcli 會提示相近的既有名稱。</p>
             <p>選擇優先序為明確的 <code>--use</code>、<code>DBCLI_CONNECTION</code>、最後才是設定檔預設連線。環境變數值會移除前後空白，空值則視為未設定。單次 selector 不會修改持久化預設值。<code>query</code>、<code>schema</code>、<code>list</code>、<code>export</code>、<code>check</code> 支援指令層級寫法；其他指令請把全域 selector 放在指令之前。root 與指令層級值衝突時會清楚失敗。Selector 需要 v2 設定：單連線（v1）專案沒有具名連線可選，因此在 v1 下給 <code>--use</code> 或 <code>DBCLI_CONNECTION</code> 會被拒絕，而不是靜默改跑那唯一的連線。若把 <code>--use</code> 放在不支援的指令後面，dbcli 會維持拒絕並印出可直接複製的 root-level 寫法，例如 <code>dbcli --use &lt;connection&gt; status</code>。</p>
             <h3>唯讀 query fan-out</h3>
             <p>明確指定逗號分隔的 <code>--use</code>，即可對多個具名連線執行同一個唯讀 query。Root 層級與指令層級寫法效果相同：</p>

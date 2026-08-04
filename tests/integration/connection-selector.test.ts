@@ -16,6 +16,8 @@ const V2_CONFIG = {
       user: 'test',
       password: 'test',
       database: 'primary_db',
+      permission: 'query-only',
+      environment: 'production',
     },
     staging: {
       system: 'postgresql',
@@ -24,6 +26,8 @@ const V2_CONFIG = {
       user: 'test',
       password: 'test',
       database: 'staging_db',
+      permission: 'read-write',
+      environment: 'staging',
     },
   },
   schema: {},
@@ -85,6 +89,46 @@ afterAll(async () => {
 })
 
 describe('stateless single-connection selection', () => {
+  test('use --list --format json exposes only connection identity metadata', async () => {
+    const result = await run(['--config', configDir, 'use', '--list', '--format', 'json'])
+
+    expect(result.code).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toEqual({
+      connections: [
+        {
+          name: 'primary',
+          environment: 'production',
+          permission: 'query-only',
+          system: 'postgresql',
+          server: { host: 'primary.invalid', port: 5432 },
+          database: 'primary_db',
+          isDefault: true,
+        },
+        {
+          name: 'staging',
+          environment: 'staging',
+          permission: 'read-write',
+          system: 'postgresql',
+          server: { host: 'staging.invalid', port: 5432 },
+          database: 'staging_db',
+          isDefault: false,
+        },
+      ],
+    })
+    expect(result.stdout).not.toContain('"password"')
+    expect(result.stdout).not.toContain('"user"')
+  })
+
+  test('use refuses JSON output when switching to prevent a text-only write result', async () => {
+    const before = await Bun.file(configFile).text()
+    const result = await run(['--config', configDir, 'use', 'staging', '--format', 'json'])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('--format json is only supported with --list')
+    expect(await Bun.file(configFile).text()).toBe(before)
+  })
+
   test('root --use and DBCLI_CONNECTION select the same named connection', async () => {
     const rootSelected = await inspectWith(['--use', 'staging'])
     const environmentSelected = await inspectWith([], '  staging  ')

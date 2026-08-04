@@ -56,7 +56,19 @@ Switch or display the default database connection (v2 multi-connection config).
 dbcli use                   # Show current default connection
 dbcli use staging           # Switch default to 'staging'
 dbcli use --list            # List all connections (* marks default)
+dbcli use --list --format json # Credential-free connection identity inventory
 ```
+
+Each v2 named connection may include an optional non-secret `environment` label
+(for example, `"environment": "production"`). JSON output is an object with a
+`connections` array. Each item contains `name`, `environment` (a string or
+`null`),
+`permission`, `system`, `server` (`host` and `port`), `database`, and `isDefault`.
+Environment-backed server and database fields are `null`; URI-only MongoDB and
+Cloud ID-only Elasticsearch connections also return `null` instead of default
+placeholders. It deliberately excludes user names, passwords, URIs, Cloud IDs,
+API keys, and env variable names.
+Misspelled selectors suggest nearby configured connection names.
 
 Any command can also use `--use <name>` to temporarily select a connection without changing the default:
 

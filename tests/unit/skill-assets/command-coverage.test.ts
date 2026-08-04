@@ -65,4 +65,10 @@ describe('reference.md command coverage', () => {
     expect(skill).toContain('dbcli blacklist list --format json')
     expect(reference).toContain('dbcli blacklist list --format json')
   })
+
+  test('documents the credential-free JSON connection inventory', () => {
+    const skill = readFileSync(SKILL_PATH, 'utf8')
+    expect(skill).toContain('dbcli use --list --format json')
+    expect(reference).toContain('dbcli use --list --format json')
+  })
 })

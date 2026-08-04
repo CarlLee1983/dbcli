@@ -67,7 +67,8 @@ dbcli init
 
 `dbcli` 支援多連線配置 (v2)，讓你在開發 (Local)、測試 (Staging) 與正式 (Production) 環境間切換。
 
-*   **列出所有連線**：`dbcli use --list`
+*   **列出所有連線**：`dbcli use --list`；agent 與 script 可用
+    `dbcli use --list --format json` 取得不含憑證的連線清單。
 *   **切換預設連線**：`dbcli use <name>`
 *   **單次執行覆蓋**：全域 selector 可放在任何指令之前；`query`、`schema`、
     `list`、`export`、`check` 也支援放在指令之後。
@@ -85,6 +86,14 @@ dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v
 拒絕，而不是靜默改跑那唯一的連線。
 若把 `--use` 放在不支援指令層級寫法的指令後面，dbcli 會維持拒絕並印出可直接
 複製的 root-level 寫法，例如 `dbcli --use <connection> status`。
+
+若要提供明確且不含機密的環境標籤，可在 v2 的具名連線上設定可選的
+`environment` 欄位，例如 `"environment": "production"`。
+`dbcli use --list --format json` 會回傳每個連線的名稱、環境標籤（或 `null`）、權限、
+系統、伺服器／資料庫識別與預設標記；由環境變數提供的識別欄位會是 `null`，只有 URI
+的 MongoDB 與只有 Cloud ID 的 Elasticsearch 也會以 `null` 取代預設占位值。它刻意不
+輸出 user、password、URI、Cloud ID、API key 或環境變數名稱。拼錯連線 selector 時，
+dbcli 會提示相近的既有名稱。
 
 ### 唯讀 query fan-out
 

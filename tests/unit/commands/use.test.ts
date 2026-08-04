@@ -1,5 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { switchDefault, listConnectionsForDisplay } from '@/commands/use'
+import {
+  listConnectionIdentities,
+  listConnectionsForDisplay,
+  switchDefault,
+} from '@/commands/use'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +23,7 @@ const baseV2Config = {
       password: 'secret',
       database: 'myapp',
       permission: 'read-write',
+      environment: 'development',
     },
     staging: {
       system: 'postgresql',
@@ -28,6 +33,7 @@ const baseV2Config = {
       password: 'stagingpass',
       database: 'staging_db',
       permission: 'query-only',
+      environment: 'staging',
     },
   },
   schema: {},
@@ -59,6 +65,12 @@ describe('use command', () => {
         /nonexistent/
       )
     })
+
+    test('suggests a similarly named connection', async () => {
+      expect(switchDefault(configDirectory, 'stagng', baseV2Config as any)).rejects.toThrow(
+        /你是否要使用：staging/
+      )
+    })
   })
 
   describe('listConnectionsForDisplay', () => {
@@ -67,8 +79,120 @@ describe('use command', () => {
       expect(lines).toHaveLength(2)
       expect(lines[0]).toContain('*')
       expect(lines[0]).toContain('local')
+      expect(lines[0]).toContain('[development]')
       expect(lines[1]).not.toContain('*')
       expect(lines[1]).toContain('staging')
+    })
+  })
+
+  describe('listConnectionIdentities', () => {
+    test('returns non-secret identity fields for machine output', () => {
+      const connections = listConnectionIdentities(baseV2Config as any)
+
+      expect(connections).toEqual([
+        {
+          name: 'local',
+          environment: 'development',
+          permission: 'read-write',
+          system: 'postgresql',
+          server: { host: 'localhost', port: 5432 },
+          database: 'myapp',
+          isDefault: true,
+        },
+        {
+          name: 'staging',
+          environment: 'staging',
+          permission: 'query-only',
+          system: 'postgresql',
+          server: { host: 'staging.example.com', port: 5432 },
+          database: 'staging_db',
+          isDefault: false,
+        },
+      ])
+      expect(JSON.stringify(connections)).not.toContain('secret')
+      expect(JSON.stringify(connections)).not.toContain('stagingpass')
+    })
+
+    test('uses null when configured identity values are unavailable', () => {
+      const config = {
+        ...baseV2Config,
+        default: 'mongo',
+        connections: {
+          mongo: {
+            system: 'mongodb',
+            uri: 'mongodb://agent:secret@db.example.com/app',
+            host: '',
+            port: 27017,
+            user: 'agent',
+            password: 'secret',
+            database: '',
+            permission: 'query-only',
+          },
+          cloud: {
+            system: 'elasticsearch',
+            host: '',
+            port: 9200,
+            user: 'agent',
+            password: 'secret',
+            database: '',
+            apiKey: 'api-secret',
+            cloudId: 'cloud-secret',
+            permission: 'query-only',
+          },
+          environmental: {
+            system: 'postgresql',
+            host: { $env: 'DBCLI_ENV_HOST' },
+            port: { $env: 'DBCLI_ENV_PORT' },
+            user: 'agent',
+            password: 'secret',
+            database: { $env: 'DBCLI_ENV_DATABASE' },
+            permission: 'query-only',
+          },
+        },
+      }
+
+      const output = JSON.stringify(listConnectionIdentities(config as any))
+      expect(JSON.parse(output)).toEqual([
+        {
+          name: 'mongo',
+          environment: null,
+          permission: 'query-only',
+          system: 'mongodb',
+          server: { host: null, port: null },
+          database: null,
+          isDefault: true,
+        },
+        {
+          name: 'cloud',
+          environment: null,
+          permission: 'query-only',
+          system: 'elasticsearch',
+          server: { host: null, port: null },
+          database: null,
+          isDefault: false,
+        },
+        {
+          name: 'environmental',
+          environment: null,
+          permission: 'query-only',
+          system: 'postgresql',
+          server: { host: null, port: null },
+          database: null,
+          isDefault: false,
+        },
+      ])
+      for (const secret of [
+        'mongodb://agent:secret@db.example.com/app',
+        'DBCLI_ENV_HOST',
+        'DBCLI_ENV_PORT',
+        'DBCLI_ENV_DATABASE',
+        'agent',
+        'secret',
+        'api-secret',
+        'cloud-secret',
+      ]) {
+        expect(output).not.toContain(secret)
+      }
     })
   })
 })

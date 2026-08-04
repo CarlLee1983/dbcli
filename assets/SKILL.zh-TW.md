@@ -191,7 +191,7 @@ dbcli init --system elasticsearch \
 ```bash
 dbcli init --conn-name staging --env-file .env.staging --permission query-only
 dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
-dbcli use --list                          # show all, * marks default
+dbcli use --list --format json            # 安全列出 name/env/permission/server/database
 dbcli use prod                            # switch default（會持久化 — 單次查詢別用）
 dbcli query --use staging "SELECT 1"      # one-shot override on any subcommand
 DBCLI_CONNECTION=staging dbcli query "SELECT 1"   # 單次指定，env 版；平行安全

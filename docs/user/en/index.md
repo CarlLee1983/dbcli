@@ -67,7 +67,8 @@ Use `--use-env-refs` to keep secrets out of the config file and read them from e
 
 `dbcli` supports multi-connection configurations (v2) so you can switch between Local, Staging, and Production environments.
 
-*   **List all connections**: `dbcli use --list`
+*   **List all connections**: `dbcli use --list`; agents and scripts can use
+    `dbcli use --list --format json` for a credential-free connection inventory.
 *   **Switch default connection**: `dbcli use <name>`
 *   **One-shot override**: Put the global selector before any command. `query`,
     `schema`, `list`, `export`, and `check` also accept it after the command.
@@ -88,6 +89,15 @@ there is rejected rather than quietly running the only connection.
 When `--use` is placed after a command that does not support the command-level form,
 dbcli keeps the request rejected and prints the copyable root-level form, such as
 `dbcli --use <connection> status`.
+
+For an unambiguous, non-secret environment label, set the optional
+`environment` field on a v2 named connection (for example, `"environment":
+"production"`). `dbcli use --list --format json` returns each connection's
+name, environment label (or `null`), permission, system, server/database
+identity, and default marker. Environment-backed identity fields are `null`; so
+are URI-only MongoDB and Cloud ID-only Elasticsearch endpoint placeholders. It
+deliberately excludes users, passwords, URIs, Cloud IDs, API keys, and env
+variable names. A misspelled connection selector suggests nearby configured names.
 
 ### Read-only query fan-out
 

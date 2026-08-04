@@ -107,6 +107,12 @@ export const PermissionSchema = z
   .enum(['query-only', 'read-write', 'data-admin', 'admin'])
   .default('query-only')
 
+const EnvironmentLabelSchema = z
+  .string()
+  .trim()
+  .transform((value) => value || undefined)
+  .optional()
+
 /**
  * Metadata schema
  */
@@ -206,21 +212,25 @@ export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>
 const SqlNamedConnectionSchema = SqlConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
+  environment: EnvironmentLabelSchema,
 })
 
 const MongoDBNamedConnectionSchema = MongoDBConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
+  environment: EnvironmentLabelSchema,
 })
 
 const RedisNamedConnectionSchema = RedisConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
+  environment: EnvironmentLabelSchema,
 })
 
 const ElasticsearchNamedConnectionSchema = ElasticsearchConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
+  environment: EnvironmentLabelSchema,
 })
 
 export const NamedConnectionSchema = z.union([

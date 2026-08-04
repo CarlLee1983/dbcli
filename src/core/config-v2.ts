@@ -9,6 +9,7 @@ import { type DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { loadEnvFile } from '@/core/env-loader'
 import { resolveConfigStoragePath } from '@/core/config-binding'
+import { levenshteinDistance } from '@/utils/levenshtein-distance'
 import { join } from 'path'
 import { mkdir, rename } from 'node:fs/promises'
 
@@ -51,6 +52,46 @@ export interface ResolvedConnection {
   }
   permission: 'query-only' | 'read-write' | 'data-admin' | 'admin'
   envFile?: string
+  environment?: string
+}
+
+/**
+ * Return nearby configured connection names for a failed selector without
+ * exposing any connection credentials or endpoint values.
+ */
+export function findSimilarConnectionNames(
+  requestedName: string,
+  availableNames: readonly string[]
+): string[] {
+  const requested = requestedName.toLowerCase()
+  const distanceLimit = Math.max(2, Math.floor(requested.length / 3))
+
+  return availableNames
+    .map((name) => {
+      const candidate = name.toLowerCase()
+      const distance = levenshteinDistance(requested, candidate)
+      return {
+        name,
+        distance,
+        isSimilar:
+          candidate.includes(requested) ||
+          requested.includes(candidate) ||
+          distance <= distanceLimit,
+      }
+    })
+    .filter(({ isSimilar }) => isSimilar)
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
+    .slice(0, 3)
+    .map(({ name }) => name)
+}
+
+export function connectionNotFoundMessage(
+  requestedName: string,
+  availableNames: readonly string[]
+): string {
+  const suggestions = findSimilarConnectionNames(requestedName, availableNames)
+  const suggestion = suggestions.length > 0 ? ` 你是否要使用：${suggestions.join('、')}？` : ''
+  return `連線 '${requestedName}' 不存在。${suggestion} 可用連線：${availableNames.join(', ')}`
 }
 
 /**
@@ -64,17 +105,19 @@ export function resolveConnection(
   const conn = config.connections[connectionName]
 
   if (!conn) {
-    const available = Object.keys(config.connections).join(', ')
-    throw new ConfigError(`連線 '${connectionName}' 不存在。可用連線：${available}`)
+    throw new ConfigError(
+      connectionNotFoundMessage(connectionName, Object.keys(config.connections))
+    )
   }
 
-  const { permission, envFile, ...connectionFields } = conn
+  const { permission, envFile, environment, ...connectionFields } = conn
 
   return {
     name: connectionName,
     connection: connectionFields,
     permission,
     envFile,
+    environment,
   }
 }
 

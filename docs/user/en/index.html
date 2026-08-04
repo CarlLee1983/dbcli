@@ -180,10 +180,12 @@ bun install -g @carllee1983/dbcli</code></pre>
             <h2>Connection Management</h2>
             <p>Switch between Production, Staging, and Local environments:</p>
             <pre><code>dbcli use --list         # List all connection names
+dbcli use --list --format json # Credential-free JSON connection inventory
 dbcli use staging        # Switch your default connection
 dbcli --use prod query "SELECT count(*) FROM users" # Global one-shot selector
 dbcli query --use prod "SELECT count(*) FROM users" # Supported command-level form
 DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # Environment selector</code></pre>
+            <p>For an unambiguous, non-secret environment label, set the optional <code>environment</code> field on a v2 named connection, for example <code>"environment": "production"</code>. <code>dbcli use --list --format json</code> returns each connection's name, environment label (or <code>null</code>), permission, system, server/database identity, and default marker. Environment-backed identity fields are <code>null</code>; URI-only MongoDB and Cloud ID-only Elasticsearch placeholders are too. It deliberately excludes users, passwords, URIs, Cloud IDs, API keys, and env variable names. A misspelled connection selector suggests nearby configured names.</p>
             <p>Selection precedence is explicit <code>--use</code>, then <code>DBCLI_CONNECTION</code>, then the configured default. Environment values are trimmed and empty values are ignored. One-shot selectors never change the persistent default. The command-level form is supported by <code>query</code>, <code>schema</code>, <code>list</code>, <code>export</code>, and <code>check</code>; use the global form before other commands. Conflicting root-level and command-level values fail clearly. Selectors require a v2 configuration: a single-connection (v1) project has no names to choose between, so <code>--use</code> or <code>DBCLI_CONNECTION</code> there is rejected rather than quietly running the only connection. If <code>--use</code> is placed after an unsupported command, dbcli keeps the request rejected and prints the copyable root-level form, such as <code>dbcli --use &lt;connection&gt; status</code>.</p>
             <h3>Read-only query fan-out</h3>
             <p>An explicit comma-separated <code>--use</code> runs one read-only query against several named connections. The root-level and command-level forms are equivalent:</p>

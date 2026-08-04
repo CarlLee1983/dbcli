@@ -5,6 +5,7 @@ import {
   writeV2Config,
   resolveConnection,
   patchConnectionSchema,
+  findSimilarConnectionNames,
 } from '@/core/config-v2'
 import { DbcliConfigV2Schema } from '@/utils/validation'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -74,6 +75,7 @@ describe('config-v2', () => {
           database: 'myapp_staging',
           permission: 'query-only' as const,
           envFile: '.env.staging',
+          environment: 'staging',
         },
       },
       schema: {},
@@ -95,10 +97,34 @@ describe('config-v2', () => {
       expect(result.connection.host).toBe('staging.example.com')
       expect(result.permission).toBe('query-only')
       expect(result.envFile).toBe('.env.staging')
+      expect(result.environment).toBe('staging')
     })
 
     test('should throw for non-existent connection', () => {
       expect(() => resolveConnection(v2Config, 'nonexistent')).toThrow(/不存在/)
+    })
+
+    test('suggests a similar configured connection for a misspelled selector', () => {
+      expect(() => resolveConnection(v2Config, 'stagin')).toThrow(/你是否要使用：staging/)
+    })
+
+    test('ranks suggestions deterministically and limits them to three', () => {
+      expect(
+        findSimilarConnectionNames('prod', ['prod-c', 'prod-b', 'prod-a', 'unrelated'])
+      ).toEqual(['prod-a', 'prod-b', 'prod-c'])
+      expect(findSimilarConnectionNames('unmatched', ['local', 'staging'])).toEqual([])
+    })
+
+    test('normalizes an empty environment label to an absent label', () => {
+      const parsed = DbcliConfigV2Schema.parse({
+        ...v2Config,
+        connections: {
+          ...v2Config.connections,
+          local: { ...v2Config.connections.local, environment: '   ' },
+        },
+      })
+
+      expect(parsed.connections.local!.environment).toBeUndefined()
     })
   })
 

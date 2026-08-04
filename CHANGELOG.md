@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - MongoDB 逐欄連線設定
+## [1.46.0] - 2026-08-04 - MongoDB 逐欄連線設定
 
 決策記錄：`docs/adr/0002-mongodb-connection-field-first-config.md`；規格：`docs/specs/2026-08-04-mongodb-field-first-connection.md`。
 

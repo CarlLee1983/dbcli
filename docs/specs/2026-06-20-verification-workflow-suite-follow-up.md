@@ -1,7 +1,7 @@
 # Verification Workflow Suite Follow-up
 
 **Date:** 2026-06-20
-**Status:** Implemented 2026-06-22 (P0 scenario refactor, P1 `verify migration` MVP, P2 `summary --latest-only`, P3 docs — all landed in the local unreleased verify commits; identifier hardening tracked separately in `2026-06-20-verify-migration-identifier-contract.md`)
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.35.0 plus local `verify safe-backfill` hardening
 
 ## 1. Purpose
@@ -402,3 +402,14 @@ After two scenario runners exist, reconsider a small scenario registry:
 The registry should be introduced only when it removes duplication from real
 scenario modules. It should not become an external scenario DSL until the CLI
 contracts are stable across at least three scenarios.
+
+## Completion evidence
+
+- **Implemented:** P0 scenario helper refactor, P1 `verify migration` MVP,
+  P2 `summary --latest-only`, and P3 documentation/parity work.
+- **Verification:** the verification scenario and workflow-pack suites were
+  included in the full repository run (4,269 tests passed; 26 environment-gated
+  tests skipped).
+- **Known deviations:** the registry now includes rollback and constraint
+  scenarios; the external scenario DSL remains deferred by the separate
+  evaluation record.

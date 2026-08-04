@@ -2,7 +2,7 @@
 
 **日期**: 2026-05-06
 **目標版本**: v1.8.0
-**狀態**: 草案 (Draft)
+**狀態**: Implemented — retained as a design record
 
 ---
 
@@ -107,3 +107,30 @@ case 'redis':
 2. **內部一致性**：權限模型與 SQL/MongoDB 邏輯保持一致。
 3. **範疇檢查**：聚焦於基礎 Key-Value 與安全性，複雜的 Redis Module (如 RediSearch) 暫不納入首波。
 4. **歧義檢查**：明確了 `list` 與 `schema` 在 Redis 語境下的定義。
+
+## Lifecycle closeout
+
+### Current implementation
+
+Redis support is implemented in `src/adapters/redis-adapter.ts` and wired
+through `src/adapters/factory.ts` and the Redis-aware command paths. The
+adapter provides connection lifecycle, key discovery/schema inspection,
+command execution, DML guards, blacklist filtering, value masking, and bounded
+shell completion.
+
+### Completion evidence
+
+- Implementation: `bdc53bc`, `190234d`, `4ed89b2`, `1d78b1a`, `aba0719`,
+  `98050b4`, and `0b857d6`.
+- Verification: the Redis unit/parity suite passed 112 tests and the adapter
+  integration suite passed 10 tests during this audit.
+- Repository gates: typecheck, lint, user-doc parity, and CLI contract checks
+  passed during this audit.
+
+### Known deviations
+
+The implementation uses Bun's native Redis client rather than the original
+`ioredis` proposal. The original `docker-compose` integration-test idea was
+replaced by the repository's current adapter/integration test fixtures. These
+are deliberate implementation choices; the safety and command contracts above
+remain the design intent.

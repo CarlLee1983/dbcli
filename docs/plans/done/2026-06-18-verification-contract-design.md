@@ -8,11 +8,20 @@
 
 **Tech Stack:** Bun, TypeScript, `bun:test`, existing recovery verification (`src/core/recovery/apply-verify.ts`), existing task-pack planner (`src/core/agent-tasks/`), skill sync/parity scripts.
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
-## Source Of Truth
+## Historical source used during implementation
 
-Use [docs/specs/2026-06-18-agent-database-verification-workflow.md](../specs/2026-06-18-agent-database-verification-workflow.md) as the strategy source.
+Use [docs/specs/2026-06-18-agent-database-verification-workflow.md](../../specs/2026-06-18-agent-database-verification-workflow.md) as the strategy source.
+
+During implementation, this plan was the milestone acceptance source. Current
+behavior is defined by the verification code, tests, and synchronized docs;
+later artifact and scenario milestones extend this contract.
 
 This plan implements **Milestone 2 - Verification Contract Design** only:
 
@@ -849,3 +858,20 @@ After this lands, plan **Safe Backfill Verify MVP**:
 - Use `safe-backfill-verify` as the first workflow.
 - Generate or consume verification artifacts for read-back `assert` evidence.
 - Decide whether task-pack-only execution is enough or whether a narrow `dbcli verify <scenario>` command is justified.
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `ef89a6b` exposed the shared verification contract and
+  `32387cc` bridged recovery verification without removing legacy fields.
+  Later milestones added artifact writing, reading, retention, and scenario
+  runners without changing the contract's compatibility boundary.
+- **Verification:** Verification-focused tests passed 111 tests;
+  `bun run typecheck`, `bun run lint`, `bun run docs:check`, and
+  `bun run contract:check` passed.
+- **Documentation:** The contract vocabulary and planned-versus-result
+  distinction are present in the strategy, skill, and user documentation.
+- **Known deviations:** The plan's original non-goal of deferring artifact
+  writing was true for this milestone but was intentionally superseded by the
+  later artifact milestones. It is not a claim that those later milestones were
+  absent.

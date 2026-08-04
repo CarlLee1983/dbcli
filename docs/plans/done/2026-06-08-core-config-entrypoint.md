@@ -22,6 +22,11 @@
 
 No `package.json` `exports` change (the `./core` subpath already covers these).
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
 ## Task 1: Add config-read exports to the public barrel
@@ -203,3 +208,19 @@ After merge, the human runs `bun run release:check` then `npm publish` to make 1
 - **Placeholder scan:** every step has concrete code/commands + expected output. No TBD.
 - **Type/symbol consistency:** `readConfig(path, connectionName?): Promise<DbcliConfig>` matches `configModule.read`'s signature (`config.ts:193`); `resolveConfigStoragePath(path): Promise<string>` matches `config-binding.ts:64`; `DbcliConfigV2` matches `validation.ts:256`. Test/CHANGELOG names align with the exports.
 - **Scope:** minimal additive change in the dbcli repo; the sidecar build is a separate plan in the `dbcli-gui` repo.
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `359d921` exported `readConfig`,
+  `resolveConfigStoragePath`, and `DbcliConfigV2`; `01e7830` added built-artifact
+  assertions. The public core surface has since received additional additive
+  exports.
+- **Verification:** `bun test tests/unit/core-public.test.ts tests/integration/core-dist-import.test.ts`
+  passed 8 tests; `bun run typecheck`, `bun run lint`, and `bun run docs:check`
+  passed.
+- **Documentation:** The public core export and the separate `dbcli-gui`
+  follow-up boundary are documented in the package and design records.
+- **Known deviations:** The planned 1.29.0 release step is historical; the
+  current package is v1.44.1 and release publication remains a human-triggered
+  operation.

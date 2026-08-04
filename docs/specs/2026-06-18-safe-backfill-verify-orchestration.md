@@ -1,7 +1,7 @@
 # Safe Backfill Verification Orchestration Design Specification
 
 **Date:** 2026-06-18
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.34.0
 
 ## 1. Purpose
@@ -402,3 +402,31 @@ bun run release:check
 - If agents still confuse planned and result evidence, consider renaming the plan
   field from `verification` to `plannedVerification` in a future compatibility
   window.
+
+## Lifecycle closeout
+
+### Current implementation
+
+The planned/result bridge is implemented by the artifact builder and writer,
+`assert --write-verification-artifact`, the `safe-backfill-verify` task pack,
+and the `verify safe-backfill` scenario. Planned task metadata remains
+`status: "planned"`; result artifacts are explicit and bounded.
+
+### Completion evidence
+
+- Implementation: `a638131`, `4524d1a`, `53716a3`, `4485ecf`, `a71ea50`,
+  `f32d896`, `d0a65cc`, `a3aeb80`, and `22d14ba`.
+- Verification: the verification/core suite, recovery apply verification
+  tests, and `safe-backfill-verify` pack regression passed during this audit;
+  the relevant focused aggregate passed 111 tests.
+- Documentation: English and Traditional Chinese docs explain planned versus
+  result evidence and the no-write scenario contract.
+- Repository gates: typecheck, lint, docs parity, skill parity, and platform
+  parity passed during this audit.
+
+### Known deviations
+
+The original spec's task-pack-first path is now complemented by a narrow
+scenario command because later evidence justified it. Neither the task pack nor
+`verify safe-backfill` executes the supplied backfill write; after-write mode
+only verifies and records the result.

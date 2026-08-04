@@ -1,7 +1,7 @@
 # Verification Artifact Retention and Prune Design Specification
 
 **Date:** 2026-06-19
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.34.0 plus local verification artifact reader/summary
 
 ## 1. Purpose
@@ -409,3 +409,26 @@ Follow-ups:
   preservation outside `.dbcli/verification/`.
 - Re-evaluate `dbcli verify <scenario>` after at least two workflows need shared
   scenario execution semantics.
+
+## Lifecycle closeout
+
+### Current implementation
+
+`src/core/verification/retention.ts` and `src/commands/verification.ts`
+implement dry-run-first `verification prune`. Deletion requires explicit
+`--execute --force`, preserves the global keep-latest guard, rejects path
+escapes/non-regular files, and reports candidates, deletions, and skips in JSON
+and table output.
+
+### Completion evidence
+
+- Implementation: `44827b5`, `d2f864b`, `cec9ed6`, `49b655a`, and `857b4db`.
+- Verification: retention unit tests and verification command integration tests
+  passed in the focused verification run (111 tests in the aggregate).
+- Documentation and parity: docs, skill, and platform checks passed during this
+  audit.
+
+### Known deviations
+
+Prune remains local-file lifecycle management; it does not archive evidence or
+execute verification scenarios. Those are intentionally separate concerns.

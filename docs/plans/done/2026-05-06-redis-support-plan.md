@@ -8,6 +8,11 @@
 
 **Tech Stack:** TypeScript, `ioredis`, Vitest, Docker (for testing).
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
 ### Task 1: Dependencies & Environment
@@ -214,3 +219,21 @@ Run: `bun test tests/integration/adapters/redis.test.ts`
 git add tests/integration/adapters/redis.test.ts
 git commit -m "test: add Redis integration tests"
 ```
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `bdc53bc` added the adapter, `f4db63b` completed command
+  execution, `7d57ba7` integrated permissions and the factory, and
+  `190234d` switched the driver to Bun's native Redis client. Later
+  `98050b4` and `0b857d6` bounded Redis key completion.
+- **Verification:** Redis-focused unit and parity tests passed 112 tests, plus
+  10 Redis adapter integration tests;
+  `bun run typecheck`, `bun run lint`, `bun run docs:check`, and
+  `bun run contract:check` passed.
+- **Documentation:** Redis behavior is represented in the feature matrix,
+  user documentation, skill assets, and command capability metadata.
+- **Known deviations:** The implementation uses Bun's native Redis client,
+  not the plan's original `ioredis`/Vitest/Docker assumptions. The product
+  behavior and safety boundaries are implemented; those original technology
+  choices were superseded.

@@ -1,7 +1,7 @@
 # Verification Artifact Writer Design Specification
 
 **Date:** 2026-06-18
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.33.0 plus verification contract milestone
 
 ## 1. Purpose
@@ -318,3 +318,28 @@ Default recommendation:
   `VerificationArtifact`.
 - Keep artifact writing opt-in until at least one workflow validates the UX.
 - Keep v1 evidence refs small and pointer-oriented.
+
+## Lifecycle closeout
+
+### Current implementation
+
+The contract is implemented in `src/core/verification/artifact.ts`,
+`artifact-writer.ts`, `types.ts`, `evidence.ts`, and the assert/recovery bridges.
+Writes are bounded, atomic, path-safe, and opt-in under
+`.dbcli/verification/`; task plans expose planned metadata without claiming a
+terminal result.
+
+### Completion evidence
+
+- Implementation: `a638131`, `4524d1a`, `53716a3`, `4485ecf`, and
+  `a71ea50`.
+- Verification: artifact, evidence, writer, status, recovery, and task-pack
+  tests were included in the focused verification run (111 tests passed).
+- Documentation and parity: user docs, skill assets, and platform mirrors were
+  checked during this audit.
+
+### Deferred decisions
+
+Artifact writing remains opt-in, and v1 evidence refs remain pointer-oriented.
+Reopen either decision only after a concrete workflow demonstrates a stable
+need for default writes or bounded inline output.

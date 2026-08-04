@@ -8,6 +8,11 @@
 
 **Tech Stack:** TypeScript、Bun test、React + recharts（ui-template 為獨立 bundle）、`@testing-library/react` + happy-dom。
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ## Global Constraints
 
 - 預設使用 Bun：`bun test`、`bun run typecheck`、`bun run lint`（勿用 node/jest/vite）。
@@ -482,3 +487,18 @@ docs/user 四檔（en/zh-TW × md/html）列出 line/bar/area/pie 並說明未�
 **2. Placeholder 掃描：** 無 TBD/TODO；每個程式步驟含實際程式碼。版本號刻意不動（釋出時決策），以 `## [Unreleased]` 具體呈現，非佔位。✅
 
 **3. 型別一致性：** `SUPPORTED_CHART_TYPES` / `ChartType` 於 Task 1 定義並於 parser 使用；`RENDERABLE_CHART_TYPES`（renderer 自有副本）名稱於 Task 2 一致；`SavedQueryError(message, 'PARSE_ERROR', input.file)` 三參數與 `parser.ts:120` 既有用法一致；`normaliseVisual(value, input)` 簽章與 call site（Step 5）一致。✅
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `3d64d13` added parse-boundary validation,
+  `dfe5428` added renderer defense-in-depth, and `c623312` synchronized the
+  four user-document variants and changelog.
+- **Verification:** `bun test tests/unit/core/saved-queries/visual-parser.test.ts tests/integration/ui-render-smoke.test.tsx`
+  passed 12 tests; `bun run typecheck`, `bun run lint`, and
+  `bun run docs:check` passed.
+- **Documentation:** Supported chart types and parse-time rejection are
+  synchronized across English and Traditional Chinese Markdown and HTML.
+- **Known deviations:** The renderer intentionally keeps its own renderable
+  list as defense in depth; the parser's shared supported set remains the
+  contract source.

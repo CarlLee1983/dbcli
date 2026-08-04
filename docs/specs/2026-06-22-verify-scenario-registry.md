@@ -1,7 +1,7 @@
 # Verify Scenario Registry Design Specification
 
 **Date:** 2026-06-22  
-**Status:** Implemented (2026-06-22) — retained as a design record  
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.36.0 verify scenario runner suite
 
 > **Verification note (2026-06-22):** All goals and acceptance criteria below are
@@ -189,4 +189,3 @@ The implementation is accepted when:
 - Add a third scenario only after this registry proves stable.
 - Reconsider a public scenario/plugin contract only after at least three built-in scenarios share the same stable lifecycle.
 - Revisit `docs/user/` after implementation only if command behavior, help text, or user-facing examples change.
-

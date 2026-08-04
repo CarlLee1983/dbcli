@@ -8,11 +8,20 @@
 
 **Tech Stack:** Bun, `bun:test`, dbcli Agent Task Packs (`assets/tasks/*.md`), existing task parser/planner in `src/core/agent-tasks/`, skill sync/parity scripts.
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
-## Source Of Truth
+## Historical source used during implementation
 
-Use [docs/specs/2026-06-18-agent-database-verification-workflow.md](../specs/2026-06-18-agent-database-verification-workflow.md) as the strategy source.
+Use [docs/specs/2026-06-18-agent-database-verification-workflow.md](../../specs/2026-06-18-agent-database-verification-workflow.md) as the strategy source.
+
+During implementation, this plan was the milestone acceptance source. Current
+behavior is defined by the task-pack loader, pack tests, skill assets, and
+synchronized docs.
 
 This plan implements **Milestone 1 - Workflow Pack Expansion** only:
 
@@ -542,3 +551,18 @@ After this plan lands:
 2. **Safe Backfill Verify MVP:** make one workflow end-to-end verifiable.
 3. **Performance Evidence Loop:** connect proxy/explain/index guidance to migration review and before/after evidence.
 
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `2eda0cf` established the task-pack surface;
+  `ae24f62`, `f3abdc0`, `22d14ba`, and `43deea6` added the four plan-only
+  workflow packs and their tests. Subsequent packs, including MongoDB and ORM
+  drift workflows, extend the same routing model.
+- **Verification:** The four workflow-pack regression files passed 13 tests;
+  `bun run typecheck`, `bun run lint`, `bun run docs:check`, and the skill and
+  platform parity checks passed.
+- **Documentation:** Canonical and generated skill assets plus bilingual user
+  docs route agents to the packs and retain the plan-only safety boundary.
+- **Known deviations:** The implementation now contains more than the original
+  3–4 pack scope. The original follow-up list remains historical; later
+  milestones own verification artifacts and scenario execution.

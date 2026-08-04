@@ -1,7 +1,7 @@
 # verify migration Identifier Contract
 
 **Date:** 2026-06-20
-**Status:** Implemented 2026-06-22 (Option B)
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.35.0 plus local `verify migration` MVP
 
 ## 1. Purpose
@@ -308,3 +308,13 @@ Required wording:
 Stop when the identifier contract is implemented, documented, and verified with
 targeted tests plus parity checks. Do not proceed to a third verification
 scenario until this contract is explicit.
+
+## Completion evidence
+
+- **Implemented:** Option B local identifier parser and table-target guard in
+  `src/core/verify/migration.ts`, with CLI wiring in `src/commands/verify.ts`.
+- **Verification:** migration unit and integration tests passed in the full
+  repository run; typecheck, lint, docs, skill, platform, plugin, and CLI
+  contract checks passed during this audit.
+- **Known deviations:** the parser intentionally defines a bounded dbcli
+  identifier contract rather than promising a complete SQL dialect parser.

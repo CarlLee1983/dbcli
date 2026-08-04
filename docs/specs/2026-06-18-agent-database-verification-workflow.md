@@ -1,7 +1,7 @@
 # Agent Database Verification Workflow - Strategy Note
 
 **Date:** 2026-06-18
-**Status:** Strategy note for follow-up planning
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.32.0
 
 ## Purpose
@@ -297,3 +297,36 @@ Expansion. Keep it plan-only, add 3-4 task packs, update compact skill routing,
 and add tests/parity checks. Do not add a new CLI command yet.
 ```
 
+## Lifecycle closeout
+
+### Current implementation
+
+The strategy is now represented by the shipped task packs under `assets/tasks/`,
+the verification contract and artifact lifecycle under `src/core/verification/`,
+and the scenario runner under `src/core/verify/` and `src/commands/verify.ts`.
+The loop is exposed through synchronized skill/user documentation and remains
+plan-only for task packs; verification scenarios never execute the requested
+backfill write.
+
+### Completion evidence
+
+- Workflow-pack implementation: `2eda0cf`, `ae24f62`, `f3abdc0`, `22d14ba`,
+  and `43deea6`.
+- Verification implementation: `ef89a6b`, `4524d1a`, `fc3fb48`, `44827b5`,
+  `3ac63bc`, `a0d7395`, `3e30bb0`, and the subsequent scenario hardening
+  commits.
+- Verification: the focused verification/core and workflow-pack suites passed
+  111 and 13 tests respectively during this audit.
+- Documentation and distribution: `bun run skill:check`,
+  `bun run platform:check`, and `bun run docs:check` passed.
+
+### Deferred decisions
+
+The public scenario contract remains intentionally deferred. Reopen this
+decision when at least three built-in scenarios have stable production evidence
+for one release and their lifecycle/exit semantics remain compatible. Engine
+coverage and performance-evidence expansion remain follow-up work rather than
+claims of universal support.
+
+The planning prompt above is retained as historical context; it is not a
+current instruction or source-of-truth claim.

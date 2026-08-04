@@ -10,6 +10,11 @@
 
 **Scope note:** 本計畫只涵蓋階段一（本 repo 的 core 出口）。階段二（新 repo `dbcli-gui`：Tauri 殼 + Bun sidecar + React 前端）待新 repo 建立後，依其自身 spec→plan 循環另行規劃。對應設計：`docs/specs/2026-06-08-dbcli-gui-design.md`。
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
 ## File Structure
@@ -362,4 +367,19 @@ bun run release:check   # 既有發布前檢查
 - **Placeholder scan**：各 step 均含實際程式碼/指令與預期輸出，無 TBD/TODO。
 - **Type/symbol consistency**：barrel 匯出名稱（`AdapterFactory`、`QueryExecutor`、`SchemaLayeredLoader`、`resolveConnection`、`listConnections`、`readV2Config`、`loadConnectionEnv`、`detectConfigVersion`、`BlacklistManager`、`BlacklistValidator`、`BlacklistError`、型別 `ResolvedConnection`/`Permission`/`DbcliConfig`/`QueryResult`/adapter 型別）與 Task 1/4 測試、Task 6 CHANGELOG 文案一致；匯入路徑對齊真實來源（`@/adapters`、`@/core/query-executor`、`@/core/config-v2`、`@/types`、`@/utils/validation`、`@/types/query`）。
 - **Scope**：聚焦單一可交付（core 出口），階段二明確劃出另立計畫。
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `a8313c6` created the public core barrel; subsequent
+  `359d921`, `5e413e3`, `2a067a6`, and `c46b3b2` expanded the additive public
+  surface. Built-artifact coverage was added by `269560f` and `01e7830`.
+- **Verification:** `bun test tests/unit/core-public.test.ts tests/integration/core-dist-import.test.ts`
+  passed 8 tests; `bun run typecheck`, `bun run lint`, and `bun run docs:check`
+  passed.
+- **Documentation:** The package exports and the separate `dbcli-gui` phase
+  boundary remain documented.
+- **Known deviations:** The original 1.28.0 release checklist is historical;
+  the current package is v1.44.1 and the public surface is broader than the
+  initial minimal barrel.
 ```

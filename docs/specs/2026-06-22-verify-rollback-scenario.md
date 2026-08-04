@@ -1,7 +1,7 @@
 # Verify Rollback Scenario Design Specification
 
 **Date:** 2026-06-22  
-**Status:** Implemented & Accepted (commit `3e30bb0`) — see §14  
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.36.0 verify scenario runner suite + scenario registry
 (`docs/specs/2026-06-22-verify-scenario-registry.md`, Implemented)
 

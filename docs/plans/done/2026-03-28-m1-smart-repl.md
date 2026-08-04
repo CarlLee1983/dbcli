@@ -8,6 +8,11 @@
 
 **Tech Stack:** TypeScript, Node.js `readline` (Bun-compatible), existing `picocolors`, existing `sql-highlight.ts`, existing `QueryResultFormatter`
 
+**Status:** Implemented — retained as a design record
+
+Historical task checkboxes below describe the original execution plan. The
+completion state is established by the evidence at the end of this document.
+
 ---
 
 ## File Structure
@@ -2216,3 +2221,20 @@ git commit -m "chore: bump version to 0.6.0-beta 並更新文件"
 | 11 | Integration Test | smoke | fixes |
 | 12 | Version & Docs | — | changelog |
 | **Total** | | **~84 tests** | **~800 lines** |
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `519f9d4` added the shell command and REPL modules;
+  `324d72b` hardened the REPL types; later `02d0d91`, `3969d6d`, and `0b857d6`
+  kept command completion and bounded Redis completion aligned with the live
+  command surface.
+- **Verification:** `bun test tests/core/repl tests/unit/commands/shell.test.ts`
+  passed 114 tests; `bun run typecheck`, `bun run lint`, and
+  `bun run docs:check` passed.
+- **Documentation:** The bilingual user documentation describes the shell,
+  completion, and engine-specific shell behavior.
+- **Known deviations:** The implementation grew beyond the original SQL-first
+  sketch to route MongoDB, Redis, and Elasticsearch shells and to derive REPL
+  command completion from the shared command registry. The original checkboxes
+  remain historical planning artifacts.

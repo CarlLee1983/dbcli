@@ -1,7 +1,7 @@
 # dbcli Agent Developer Workflows Design Specification
 
 **Date:** 2026-06-18
-**Status:** Draft for skill implementation
+**Status:** Implemented — retained as a design record
 **Author:** AI Agent
 **Context:** The current `dbcli` agent skill is strong at safe database operation, but it mainly triggers when the user explicitly asks for database work. Developers also need the skill to help during normal feature implementation, debugging, review, migration, and performance work where database impact is implicit.
 
@@ -292,3 +292,28 @@ Forward-test prompts for manual or subagent validation:
 3. Run validation commands.
 4. Forward-test the seven prompts against the updated skill.
 5. Only after skill validation, consider turning selected workflows into task packs.
+
+## Lifecycle closeout
+
+### Current implementation
+
+The compact developer-workflow routing lives in `assets/SKILL.md` and
+`assets/SKILL.zh-TW.md`, with executable plan-only packs in `assets/tasks/` and
+generated plugin/platform mirrors kept in sync. The guidance preserves the
+blacklist, schema, dry-run, recovery, and read-back rules from this design.
+
+### Completion evidence
+
+- Implementation: `fe8f9d2`, `1c66ed8`, `2eda0cf`, `f3abdc0`, `ae24f62`,
+  `22d14ba`, and `43deea6`.
+- Verification: the four workflow-pack regression files passed 13 tests;
+  `bun run skill:check`, `bun run platform:check`, and `bun run docs:check`
+  passed during this audit.
+- No new production command was required for the first skill-routing slice;
+  later verification commands are recorded by their own specs.
+
+### Deferred decisions
+
+Future built-in task-pack expansion, inspect-time workflow suggestions, and
+specialized `skill context` modes remain deferred. Reopen when a concrete user
+workflow has a stable acceptance contract and an independent regression surface.

@@ -1,5 +1,7 @@
 # dbcli v1.0 Roadmap Design
 
+**Status:** Superseded by `CHANGELOG.md` and current release documentation
+
 **日期**: 2026-03-28
 **起始版本**: v0.5.3-beta
 **目標版本**: v1.0.0
@@ -350,3 +352,10 @@ dbcli> CREATE TABLE posts (id SERIAL PRIMARY KEY, title VARCHAR(200) NOT NULL);
 - `package.json` version → `1.0.0`
 - npm publish 驗證
 - GitHub Release + tag
+
+## Lifecycle note
+
+This document remains a historical roadmap. Smart REPL and the core DDL/migrate
+surface have since shipped, but the original v1.0 release checklist was not the
+source of truth for later releases. Current behavior is defined by code, tests,
+and user documentation; release history is recorded in `CHANGELOG.md`.

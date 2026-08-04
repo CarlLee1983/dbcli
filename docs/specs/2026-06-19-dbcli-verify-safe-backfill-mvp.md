@@ -1,7 +1,7 @@
 # dbcli verify safe-backfill MVP
 
 **Date:** 2026-06-19
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.35.0 plus local verification artifact hardening
 
 ## 1. Purpose
@@ -483,3 +483,32 @@ Follow-ups:
   same runner structure.
 - Consider optional audit correlation in a separate milestone without changing
   the v1 artifact schema.
+
+## Lifecycle closeout
+
+### Current implementation
+
+`src/commands/verify.ts` and `src/core/verify/safe-backfill.ts` implement the
+preflight and after-write scenario. The command validates the target and
+verification query, never executes the backfill write, and emits bounded
+artifact evidence when after-write verification runs. The companion
+`verification list|show|summary|prune` commands manage local evidence.
+
+### Completion evidence
+
+- Implementation: `f32d896`, `d0a65cc`, `a3aeb80`, `347733a`, and the later
+  scenario registry/constraint hardening commits.
+- Verification: safe-backfill, scenario, artifact, command, and task-pack
+  tests were included in the focused verification run; the aggregate passed
+  111 tests.
+- Documentation: both user-language docs, skill assets, and platform mirrors
+  describe preflight, after-write, statuses, and the no-write guarantee.
+- Repository gates: typecheck, lint, docs parity, skill parity, platform parity,
+  and CLI contract checks passed during this audit.
+
+### Known deviations
+
+The implementation has grown from one MVP scenario to a registry with
+additional migration, rollback, and constraint scenarios. This spec remains the
+safe-backfill contract; cross-scenario publication is tracked by the separate
+deferred evaluation spec.

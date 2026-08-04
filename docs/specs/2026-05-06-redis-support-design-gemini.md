@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-06
 **Target Version**: v1.8.0
-**Status**: Approved
+**Status**: Superseded by `2026-05-06-redis-support-design.md`
 
 ---
 
@@ -70,3 +70,11 @@ A new `RedisAdapter` will be implemented in `src/adapters/redis-adapter.ts`. It 
 4. Update `dbcli list` and `dbcli schema`.
 5. Implement Permission and Blacklist guards.
 6. Add unit and integration tests.
+
+## Lifecycle note
+
+This alternative design is retained for provenance, but its proposed `ioredis`
+driver and associated implementation shape were not adopted. The implemented
+Redis contract is recorded in
+[`2026-05-06-redis-support-design.md`](./2026-05-06-redis-support-design.md),
+which documents the Bun-native client decision and current evidence.

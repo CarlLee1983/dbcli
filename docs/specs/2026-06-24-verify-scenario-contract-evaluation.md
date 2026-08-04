@@ -1,7 +1,7 @@
 # Verify Scenario Contract — Publish Evaluation
 
 **Date:** 2026-06-24
-**Status:** Decision — **Defer** (do not publish a public scenario contract yet)
+**Status:** Deferred — reopen when at least three built-in scenarios have stable production evidence for one release
 **Baseline:** dbcli v1.38.1; four built-in verify scenarios
 (`safe-backfill`, `migration`, `rollback`, `constraint`)
 

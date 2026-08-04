@@ -1,7 +1,7 @@
 # Verification Artifact Reader and Summary
 
 **Date:** 2026-06-19
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.34.0 plus local assert artifact bridge
 
 ## 1. Purpose
@@ -425,3 +425,27 @@ Follow-ups:
   are clear.
 - Consider optional audit correlation in a separate milestone without changing
   the v1 artifact schema.
+
+## Lifecycle closeout
+
+### Current implementation
+
+`src/core/verification/reader.ts` and `src/commands/verification.ts` implement
+`verification list`, `show`, and `summary` with bounded validation, latest-first
+ordering, filters, malformed-file accounting, and path-safe lookup. The surface
+does not connect to a database or mutate artifacts.
+
+### Completion evidence
+
+- Implementation: `fc3fb48`, `015bb40`, `528b5bc`, and `4da55c8`.
+- Verification: reader unit tests and verification command integration tests
+  passed in the focused verification run (111 tests in the aggregate).
+- Documentation: English and Traditional Chinese docs cover the read-only
+  inspection surface and planned/result distinction.
+- Repository gates: typecheck, lint, docs parity, skill parity, platform parity,
+  and CLI contract checks passed during this audit.
+
+### Known deviations
+
+Retention and prune are now part of the same namespace, as described by the
+separate retention spec. The reader commands themselves remain read-only.

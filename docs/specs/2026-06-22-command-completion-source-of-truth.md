@@ -1,7 +1,7 @@
 # Command Completion Source of Truth Design Specification
 
 **Date:** 2026-06-22
-**Status:** Implemented (2026-06-22) — retained as a design record
+**Status:** Implemented — retained as a design record
 **Baseline:** Current `dbcli completion` and `dbcli shell` autocomplete implementation
 
 > **Verification note (2026-06-22):** All goals and acceptance criteria below are

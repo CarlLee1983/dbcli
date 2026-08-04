@@ -1,7 +1,7 @@
 # Dashboard Chart Type 邊界驗證設計規格
 
 **日期：** 2026-06-24
-**狀態：** 設計核准，待實作計畫
+**狀態：** Implemented — retained as a design record
 **Baseline：** dbcli v1.38.1；`--ui` / `--format html` 互動式 HTML dashboard
 
 > **一句話：** `--ui` dashboard 的 `visual.charts[].type` 目前有三個互相矛盾的真實來源，未支援的值（含打錯字）會被**無聲畫成圓餅圖**。本規格把合法 chart type 收斂成單一來源、在解析邊界驗證並報錯、並讓渲染端對未知型別做防禦縱深。
@@ -120,3 +120,26 @@ q @snippet --ui
 - 渲染端對未知 type 顯示佔位而非圓餅；`pie` 為顯式分支。
 - `bun test`（新增 parser + renderer 測試）、`bun run typecheck`、`bun run lint` 全綠。
 - `docs/user/` 四個檔（en/zh-TW × md/html）同步記載合法 chart type。
+
+## Lifecycle closeout
+
+### Current implementation
+
+`SUPPORTED_CHART_TYPES` in `src/core/saved-queries/types.ts` is the single
+allow-list. `normaliseVisual` rejects unknown chart types with `PARSE_ERROR`,
+while `src/ui-template/src/App.tsx` keeps an explicit `pie` branch and a
+defensive unsupported-type placeholder.
+
+### Completion evidence
+
+- Implementation: `dfe5428` and `c623312`.
+- Verification: parser and UI smoke tests passed 12 tests during this audit;
+  `bun run typecheck` and `bun run lint` also passed.
+- Documentation: English and Traditional Chinese Markdown/HTML docs list the
+  four supported types and the parse-time failure behavior.
+
+### Known deviations
+
+The renderer still accepts a broad `string` payload type internally so it can
+defend against hand-constructed or future payloads; the saved-query parser is
+the strict public boundary. This is deliberate defense in depth.

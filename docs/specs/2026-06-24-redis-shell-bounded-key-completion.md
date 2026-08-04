@@ -1,7 +1,7 @@
 # Redis Shell Bounded Key Completion Design Specification
 
 **Date:** 2026-06-24
-**Status:** Implemented (2026-06-24) — retained as a design record
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.38.1 Redis shell (`src/commands/shell.ts`,
 `src/adapters/redis-adapter.ts`)
 

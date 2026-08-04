@@ -1,7 +1,7 @@
 # Verification Contract
 
 **Date:** 2026-06-18
-**Status:** Contract for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.33.0
 
 ## Purpose
@@ -77,3 +77,27 @@ When artifact writing is implemented, write bounded JSON evidence under:
 ## First Implementation Target
 
 The first workflow to consume this contract should be `safe-backfill-verify`.
+
+## Lifecycle closeout
+
+### Current implementation
+
+The v1 vocabulary and artifact shape are implemented in
+`src/core/verification/`, re-exported from the core surface, and mapped from
+legacy recovery statuses without changing the existing `verifyStatus` field.
+Later writer, reader, retention, and scenario features consume this contract.
+
+### Completion evidence
+
+- Implementation: `ef89a6b` plus the follow-on artifact and recovery bridge
+  commits `a638131`, `4524d1a`, and `4485ecf`.
+- Verification: the verification/core and recovery apply suites passed during
+  this audit; the focused aggregate passed 111 tests.
+- Repository gates: typecheck, lint, docs parity, skill parity, platform parity,
+  and CLI contract checks passed during this audit.
+
+### Known deviations
+
+The original milestone described a schema before persistence. Persistence is
+now implemented by later opt-in writer/reader features, while the v1 schema and
+legacy recovery compatibility mapping remain unchanged.

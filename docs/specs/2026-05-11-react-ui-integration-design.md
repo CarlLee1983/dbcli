@@ -1,7 +1,7 @@
 # Dbcli Interactive UI Integration Design Specification (Refined)
 
 **Date:** 2026-05-11
-**Status:** Approved for Implementation Planning
+**Status:** Implemented — retained as a design record
 **Author:** AI Agent (with User input)
 **Context:** The current terminal-based table output is insufficient for complex data, trend analysis, and sharing. We need a way to present query results in an interactive, human-readable format (React-based dashboard) while keeping the CLI lightweight and dependency-minimal.
 
@@ -70,3 +70,31 @@ SELECT ...
 ## 5. Security & Redaction
 
 The HTML payload **MUST NOT** contain any columns redacted by the `BlacklistValidator`. The `QueryResult` passed to the HTML formatter must already be filtered. Tests must explicitly verify that sensitive fields are not found in the raw HTML output by grep-ing the generated payload string.
+
+## Lifecycle closeout
+
+### Current implementation
+
+The Bun-native dashboard is implemented by `src/ui-template/`,
+`src/formatters/html-formatter.ts`, and the `query`, `q`, and `export` command
+paths. `--ui` opens a self-contained report, `--format html` emits the same
+report, and saved-query metadata supplies optional KPIs and charts after
+redaction.
+
+### Completion evidence
+
+- Implementation: `22826cf`, `5bd575b`, `c01806b`, `c8727a6`, `9dad6a8`,
+  `dfe5428`, and `c623312`.
+- Verification: parser and UI smoke tests passed 12 tests during this audit;
+  the parser covers supported chart types and the renderer covers the
+  defensive fallback.
+- Documentation: English and Traditional Chinese user docs describe the
+  dashboard and remain Markdown/HTML-parity checked.
+- Repository gates: typecheck, lint, docs parity, and CLI contract checks
+  passed during this audit.
+
+### Known deviations
+
+Raw `query` and `export` calls intentionally render a sortable table without
+snippet chart metadata; charted dashboards require a saved query. This is the
+current public contract, not an unfinished implementation item.

@@ -1,7 +1,7 @@
 # dbcli-gui 設計文件
 
 - **日期**：2026-06-08
-- **狀態**：設計核准，待實作計畫
+- **狀態**：Deferred — reopen when the separate `dbcli-gui` repository is in scope
 - **工作代號**：`dbcli-gui`（獨立 repo，名稱可後續調整）
 
 ## 1. 目標與定位
@@ -188,3 +188,11 @@ dbcli-gui/
 ├── shared/schemas.ts   # zod，前後端共用
 └── tests/{sidecar,frontend,e2e}/
 ```
+
+## Lifecycle note
+
+This repository's phase-one core export is implemented and documented by the
+separate core-export plan. The GUI application, Tauri shell, sidecar, and
+phase-two repository described here are intentionally out of scope for this
+repository. Reopen this design when the separate `dbcli-gui` repository has an
+accepted implementation plan and an owner for its integration contract.

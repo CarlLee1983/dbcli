@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-01
 
-**Status:** Ready for implementation
+**Status:** Implemented — retained as a design record
 
 **Baseline:** dbcli v1.42.0 (`2c45177`)
 
@@ -14,8 +14,9 @@
 
 Resolve the seven open issues as independently reviewable vertical slices while
 preserving dbcli's permission, blacklist, audit, recovery, and machine-readable
-output contracts. This document is the implementation and acceptance source of
-truth for those issues.
+output contracts. During implementation, this document was the milestone
+acceptance source. Current behavior is defined by code, tests, and synchronized
+user documentation.
 
 ## Delivery Order
 
@@ -822,3 +823,18 @@ An issue is complete only when all of the following are true:
 - Compatibility, security, rollout, and remaining risks are recorded in the PR.
 - The GitHub issue is linked from the PR and closed only after the acceptance
   evidence is available.
+
+## Completion evidence
+
+- **Completed:** 2026-08-04 closeout.
+- **Implementation:** `ae54afd` delivered the main query workflow roadmap;
+  `6c0367f` closed the remaining gaps across #4–#10; `7b4f336` synchronized
+  the query workflow docs and skills.
+- **Verification:** The focused #4–#10 query, projection, truncation, file/stdin,
+  and fan-out tests passed 68 tests; `bun run typecheck`, `bun run lint`,
+  `bun run docs:check`, and `bun run contract:check` passed.
+- **Documentation:** All four user-document variants and the distributed skill
+  surfaces describe the shipped query contracts.
+- **Known deviations:** The historical checkboxes remain as planning artifacts;
+  this closeout uses outcome evidence instead. GitHub issue links are retained
+  for traceability, but this local record does not assert remote issue closure.

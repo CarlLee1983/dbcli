@@ -1,7 +1,7 @@
 # Verification Artifact Contract Hardening
 
 **Date:** 2026-06-19
-**Status:** Draft for implementation
+**Status:** Implemented — retained as a design record
 **Baseline:** dbcli v1.34.0 plus local verification artifact reader, summary, and prune
 
 ## 1. Purpose
@@ -392,3 +392,29 @@ Follow-ups:
   filter-scoped retention.
 - Consider a JSON schema or zod validator if v1 grows beyond the current small
   artifact shape.
+
+## Lifecycle closeout
+
+### Current implementation
+
+Reader validation, bounded malformed-file reporting, prune deletion guards,
+global keep-latest semantics, and execute-mode deletion/skipped details are
+implemented in `src/core/verification/reader.ts`, `retention.ts`, and
+`src/commands/verification.ts`. User-facing wording distinguishes read-only
+inspection from destructive prune.
+
+### Completion evidence
+
+- Implementation: `fc3fb48`, `cec9ed6`, `3ac63bc`, `49b655a`, `0b7ca7f`,
+  `857b4db`, and `49b655a`.
+- Verification: reader/retention unit tests and verification command
+  integration tests passed in the focused verification run (111 tests in the
+  aggregate).
+- Documentation and parity: `bun run docs:check`, `bun run skill:check`, and
+  `bun run platform:check` passed during this audit.
+
+### Deferred decisions
+
+`--keep-latest` remains global across valid artifacts. Reopen a filtered-scope
+variant only if users present a concrete retention workflow that needs the
+different safety trade-off.

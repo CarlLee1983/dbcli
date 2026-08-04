@@ -43,6 +43,10 @@ export interface DoctorResult {
   label: string
   status: 'pass' | 'warn' | 'error'
   message: string
+  remediation?: {
+    command: string
+    risk: 'interactive' | 'readonly' | 'local-write'
+  }
 }
 
 const SENSITIVE_PATTERNS = [
@@ -148,6 +152,12 @@ export const runDoctorChecks = {
       message: exists
         ? `Config found: ${configPath}`
         : `No config found at ${configPath}. Run "dbcli init" first.`,
+      ...(!exists && {
+        remediation: {
+          command: 'dbcli init',
+          risk: 'interactive' as const,
+        },
+      }),
     }
   },
 

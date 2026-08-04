@@ -279,7 +279,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 
 | 指令 | 說明 |
 | :--- | :--- |
-| `doctor` | 執行環境與連線診斷。 |
+| `doctor` | 執行環境與連線診斷；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。 |
 | `check [table]` | 分析資料健康度（如孤兒資料、空值、重複項）。 |
 | `diff` | 比較 Schema 快照，或透過 `--against-orm` 將 ORM 定義與本地 SQL schema cache 比對。 |
 | `report` | 產生完整的健康、容量與效能報告。 |

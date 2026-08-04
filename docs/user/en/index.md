@@ -288,7 +288,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 
 | Command | Description |
 | :--- | :--- |
-| `doctor` | Runs system and connection diagnostics. |
+| `doctor` | Runs system and connection diagnostics; JSON config-missing failures include a structured remediation command and risk level. |
 | `check [table]` | Analyzes data health (orphans, nulls, duplicates). |
 | `diff` | Compares schema snapshots, or an ORM definition against the local SQL schema cache with `--against-orm`. |
 | `report` | Generates a comprehensive health/perf report. |

@@ -41,6 +41,7 @@ describe('doctor checks', () => {
   test('checkConfigExists fails when config file missing', async () => {
     const result = await runDoctorChecks.checkConfigExists('.dbcli', async () => false)
     expect(result.status).toBe('error')
+    expect(result.remediation).toEqual({ command: 'dbcli init', risk: 'interactive' })
   })
 
   test('checkBlacklistCompleteness warns about sensitive column names', () => {

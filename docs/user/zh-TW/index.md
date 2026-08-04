@@ -94,6 +94,8 @@ dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v
 的 MongoDB 與只有 Cloud ID 的 Elasticsearch 也會以 `null` 取代預設占位值。它刻意不
 輸出 user、password、URI、Cloud ID、API key 或環境變數名稱。拼錯連線 selector 時，
 dbcli 會提示相近的既有名稱。
+在 v2 中，實際選取的連線名稱會保留到指令執行期間，因此 audit 記錄會路由到該連線
+自己的 audit stream。
 
 ### 唯讀 query fan-out
 

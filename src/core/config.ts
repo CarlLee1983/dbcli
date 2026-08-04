@@ -25,6 +25,16 @@ import { resolveEnvRef } from '@/agent-core/public'
 let _globalConnectionName: string | undefined
 
 /**
+ * The fully resolved config commands receive at runtime. V2 selection identity
+ * is intentionally separate from persisted connection fields and is used only
+ * for routing local artifacts such as audit logs.
+ */
+export type RuntimeDbcliConfig = DbcliConfig & {
+  effectiveConnectionName?: string
+  effectiveEnvironment?: string
+}
+
+/**
  * 設定全域連線名稱（由 cli.ts preAction hook 呼叫）
  */
 /**
@@ -198,7 +208,7 @@ export const configModule = {
     path: string,
     connectionName?: string,
     options: { loadLayeredSchema?: boolean } = {}
-  ): Promise<DbcliConfig> {
+  ): Promise<RuntimeDbcliConfig> {
     // 優先使用明確傳入的 connectionName，fallback 到全域 --use 值
     const effectiveConnectionName = connectionName ?? _globalConnectionName
 
@@ -295,8 +305,10 @@ export const configModule = {
               }
             }
 
-            // Return v1-compatible shape
-            return DbcliConfigSchema.parse({
+            // Return v1-compatible shape while preserving the selected V2 identity
+            // for audit routing and command-level metadata. This field is runtime-only:
+            // it is never written back to config.json or passed to database adapters.
+            const parsedConfig = DbcliConfigSchema.parse({
               connection: resolvedConnection,
               permission: resolved.permission,
               schema,
@@ -305,6 +317,11 @@ export const configModule = {
               audit: v2Config.audit,
               redis: v2Config.redis,
             })
+            return {
+              ...parsedConfig,
+              effectiveConnectionName: resolved.name,
+              ...(resolved.environment && { effectiveEnvironment: resolved.environment }),
+            }
           }
 
           // A v1 config has exactly one unnamed connection, so a selector cannot

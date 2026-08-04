@@ -115,4 +115,15 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'staging.jsonl')).exists()).toBe(true)
     expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).exists()).toBe(false)
   })
+
+  test('runtime resolved connection identity selects the per-connection audit file', async () => {
+    const config = {
+      ...makeConfig(true),
+      effectiveConnectionName: 'staging',
+    }
+    await writeAuditEntry(config, 'query', { config: workDir }, { success: true, target: 'users' })
+
+    expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'staging.jsonl')).exists()).toBe(true)
+    expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).exists()).toBe(false)
+  })
 })

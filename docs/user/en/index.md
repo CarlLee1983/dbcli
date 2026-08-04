@@ -98,6 +98,8 @@ identity, and default marker. Environment-backed identity fields are `null`; so
 are URI-only MongoDB and Cloud ID-only Elasticsearch endpoint placeholders. It
 deliberately excludes users, passwords, URIs, Cloud IDs, API keys, and env
 variable names. A misspelled connection selector suggests nearby configured names.
+The resolved v2 connection name is retained while commands run, so audit records
+are routed to that connection's own audit stream.
 
 ### Read-only query fan-out
 

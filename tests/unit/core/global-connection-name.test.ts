@@ -82,6 +82,7 @@ describe('全域連線名稱（--use 串接）', () => {
       const config = await configModule.read(configPath)
       expect(config.connection.host).toBe('primary.db.local')
       expect(config.connection.port).toBe(5432)
+      expect((config as { effectiveConnectionName?: string }).effectiveConnectionName).toBe('primary')
     })
 
     test('設定全域 --use staging 後應使用 staging connection', async () => {
@@ -90,6 +91,7 @@ describe('全域連線名稱（--use 串接）', () => {
       expect(config.connection.host).toBe('staging.db.local')
       expect(config.connection.port).toBe(5433)
       expect(config.connection.database).toBe('staging_db')
+      expect((config as { effectiveConnectionName?: string }).effectiveConnectionName).toBe('staging')
     })
 
     test('明確傳入 connectionName 應優先於全域設定', async () => {
@@ -97,6 +99,7 @@ describe('全域連線名稱（--use 串接）', () => {
       // 明確傳入 primary，應覆蓋全域的 staging
       const config = await configModule.read(configPath, 'primary')
       expect(config.connection.host).toBe('primary.db.local')
+      expect((config as { effectiveConnectionName?: string }).effectiveConnectionName).toBe('primary')
     })
 
     test('全域 --use 切換後再次呼叫應使用新值', async () => {

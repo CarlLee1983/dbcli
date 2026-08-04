@@ -48,6 +48,16 @@ and credentials must be protected from the agent's writable workspace.
 - Treat `permission: query-only` as a dbcli guard, not proof that the underlying
   database account is read-only.
 
+## Platform note
+
+On POSIX filesystems dbcli keeps stored configuration private (`0o700`
+directories, `0o600` files) and agent-mode reads refuse a group/world-writable
+config. Windows has no equivalent mode bits — `stat()` reports a synthetic mode
+and `chmod` only toggles the read-only flag — so confidentiality there rests on
+the ACL the OS applies to the user profile. Tamper detection is unaffected on
+either platform: it compares a content hash recorded at write time, not the
+file mode.
+
 ## Non-goals
 
 This model does not claim to sandbox a malicious process with the same OS

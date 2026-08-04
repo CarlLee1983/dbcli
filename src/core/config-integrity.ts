@@ -48,6 +48,25 @@ async function bestEffortSecureMode(path: string, mode: number): Promise<void> {
 }
 
 /**
+ * Whether a stat() mode should be refused as group/world-writable.
+ *
+ * The lower mode bits only mean anything where the filesystem actually stores
+ * them. Windows reports a synthetic 0o666 for every writable file (0o444 once
+ * the read-only bit is set), so an unconditional check refuses even the config
+ * dbcli has just written itself. Confidentiality there rests on the ACL the OS
+ * applies to the user profile; tamper detection is unaffected either way,
+ * because it is the content hash — not the mode — that the integrity record
+ * verifies.
+ */
+export function refusesGroupOrWorldWritable(
+  mode: number,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform === 'win32') return false
+  return (mode & 0o022) !== 0
+}
+
+/**
  * Check the file type and mode before an agent-mode caller reads its contents.
  * This keeps FIFOs, devices, symlinks, and broadly writable files outside the
  * trust boundary instead of reading them and validating only afterwards.
@@ -61,7 +80,7 @@ export async function assertAgentReadableFile(path: string, description = 'confi
         `Agent mode refuses a non-regular ${description} file: ${path}. Run the human/admin setup workflow to provision it.`
       )
     }
-    if ((fileStat.mode & 0o022) !== 0) {
+    if (refusesGroupOrWorldWritable(fileStat.mode)) {
       throw new ConfigError(
         `Agent mode refuses a group/world-writable config: ${path}. Run the human/admin setup workflow to secure it.`
       )

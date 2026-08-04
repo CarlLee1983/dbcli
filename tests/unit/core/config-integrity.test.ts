@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { configModule } from '@/core/config'
 import { readV2Config, writeV2Config } from '@/core/config-v2'
-import { configIntegrityPathForTest } from '@/core/config-integrity'
+import { configIntegrityPathForTest, refusesGroupOrWorldWritable } from '@/core/config-integrity'
 
 const config = {
   version: 2 as const,
@@ -181,6 +181,21 @@ describe('agent-mode config integrity boundary', () => {
 
     process.env.DBCLI_AGENT_MODE = '1'
     await expect(readV2Config(directory)).rejects.toThrow(/writable config/)
+  })
+
+  test('the writability gate is POSIX-only: Windows modes carry no group/world meaning', () => {
+    // A private POSIX file passes everywhere; a group/world-writable one is
+    // refused on POSIX platforms only.
+    expect(refusesGroupOrWorldWritable(0o600, 'linux')).toBe(false)
+    expect(refusesGroupOrWorldWritable(0o600, 'darwin')).toBe(false)
+    expect(refusesGroupOrWorldWritable(0o666, 'linux')).toBe(true)
+    expect(refusesGroupOrWorldWritable(0o620, 'darwin')).toBe(true)
+
+    // Windows reports 0o666 for every writable file and 0o444 when the
+    // read-only bit is set. Treating those as group/world-writable refused
+    // every config dbcli had just written itself.
+    expect(refusesGroupOrWorldWritable(0o666, 'win32')).toBe(false)
+    expect(refusesGroupOrWorldWritable(0o444, 'win32')).toBe(false)
   })
 
   test('agent mode checks regular-file safety before reading a symlinked config', async () => {

@@ -6,6 +6,8 @@ import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
 import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
+import { isMachineReadableCommand } from './utils/cli-output'
+import { claimUpdateHint, defaultCliSessionKey } from './utils/update-hint-state'
 import { buildProgram } from './program'
 import { presentCliError } from './utils/cli-error'
 import { join } from 'path'
@@ -62,6 +64,11 @@ installSynchronousRedirectedStdout()
 
 // Module-level state for background version check
 let _bgVersionCheckResult: { hasUpdate: boolean; latestVersion: string } | null | undefined
+let _bgVersionCheckContext: {
+  configPath: string
+  sessionKey: string
+  machineOutput: boolean
+} | null = null
 
 function shouldSkipBackgroundChecks(): boolean {
   return (
@@ -132,7 +139,14 @@ function configureConnectionSelectorHints(command: typeof program): void {
 configureConnectionSelectorHints(program)
 
 program.hook('preAction', (thisCommand, actionCommand) => {
+  // A program instance can be exercised more than once in tests or by an
+  // embedding caller. Never let a completed check from the previous action
+  // leak into the next command's stderr.
+  _bgVersionCheckResult = undefined
+  _bgVersionCheckContext = null
+
   const opts = thisCommand.opts()
+  const machineOutput = isMachineReadableCommand(actionCommand, thisCommand)
 
   setGlobalConnectionName(
     resolveConnectionSelector({
@@ -157,12 +171,19 @@ program.hook('preAction', (thisCommand, actionCommand) => {
 
   setGlobalLogger(createLogger(level))
 
+  const configPath = resolveConfigPath(actionCommand)
+  _bgVersionCheckContext = {
+    configPath,
+    sessionKey: defaultCliSessionKey(),
+    machineOutput,
+  }
+
   if (
     !opts.quiet &&
     !QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) &&
+    !machineOutput &&
     !shouldSkipBackgroundChecks()
   ) {
-    const configPath = resolveConfigPath(actionCommand)
     void (async () => {
       try {
         let cache: VersionCheckCache | null = null
@@ -184,15 +205,42 @@ program.hook('preAction', (thisCommand, actionCommand) => {
 })
 
 program.hook('postAction', async (thisCommand, actionCommand) => {
-  if (_bgVersionCheckResult?.hasUpdate) {
+  const context = _bgVersionCheckContext
+  if (
+    _bgVersionCheckResult?.hasUpdate &&
+    context &&
+    !context.machineOutput &&
+    !thisCommand.opts().quiet &&
+    !QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) &&
+    (await claimUpdateHint(
+      context.configPath,
+      'update',
+      context.sessionKey,
+      _bgVersionCheckResult.latestVersion
+    ))
+  ) {
     process.stderr.write(formatUpdateHint(_bgVersionCheckResult.latestVersion) + '\n')
   }
 
   const isQuietOutput =
     QUIET_OUTPUT_COMMANDS.has(actionCommand.name()) || actionCommand.name() === 'skill'
-  if (!thisCommand.opts().quiet && !isQuietOutput && !shouldSkipBackgroundChecks()) {
+  if (
+    !thisCommand.opts().quiet &&
+    !isQuietOutput &&
+    !context?.machineOutput &&
+    !shouldSkipBackgroundChecks()
+  ) {
     const outdatedSkills = await checkSkillUpdates()
-    if (outdatedSkills.length > 0) {
+    if (
+      outdatedSkills.length > 0 &&
+      context &&
+      (await claimUpdateHint(
+        context.configPath,
+        'skill',
+        context.sessionKey,
+        outdatedSkills.slice().sort().join(',')
+      ))
+    ) {
       process.stderr.write(formatSkillUpdateReminder(outdatedSkills) + '\n')
     }
   }

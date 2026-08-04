@@ -82,10 +82,15 @@ export async function writeAuditEntry(
   outcome: AuditOutcome
 ): Promise<string | null> {
   try {
+    const connectionName =
+      (typeof options.connectionName === 'string' && options.connectionName) ||
+      (config as { effectiveConnectionName?: string }).effectiveConnectionName ||
+      getGlobalConnectionName() ||
+      'default'
     const logger = await getAuditLogger(
       config,
       options.config || '.dbcli',
-      typeof options.connectionName === 'string' ? options.connectionName : undefined
+      connectionName
     )
     const engine = (config.connection?.system as DatabaseSystem) || 'postgresql'
 
@@ -117,7 +122,15 @@ export async function writeAuditEntry(
       ...(outcome.sql && { redacted_sql: redactSql(outcome.sql) }),
       ...(errorMessage && { error: errorMessage }),
       ...(outcome.recovery_ref && { recovery_ref: outcome.recovery_ref }),
-      metadata: outcome.metadata,
+      // The resolved runtime identity is authoritative.  Keep it in every
+      // entry so audit consumers can distinguish otherwise identical commands
+      // across environments without reading endpoint or credential fields.
+      metadata: {
+        ...(outcome.metadata ?? {}),
+        connection_name: connectionName,
+        environment:
+          (config as { effectiveEnvironment?: string }).effectiveEnvironment ?? null,
+      },
     }
 
     const result = await logger.write(entry)

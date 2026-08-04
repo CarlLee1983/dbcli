@@ -3,11 +3,38 @@ import {
   runDoctorChecks,
   resolveSchemaLastUpdated,
   collectMongoDoctorResults,
+  buildDoctorRemediationPlan,
   type DoctorResult,
 } from '../../../src/commands/doctor'
+import type { RuntimeInfo } from '@/utils/runtime-info'
 import { AdapterFactory } from '@/adapters'
 
 describe('doctor checks', () => {
+  test('checkRuntime reports executable provenance and package mismatch remediation', () => {
+    const info: RuntimeInfo = {
+      executablePath: '/usr/local/bin/bun',
+      launcherPath: '/opt/dbcli/dist/cli.mjs',
+      packageRoot: '/opt/dbcli',
+      packageVersion: '1.44.0',
+      packageFileVersion: '1.44.1',
+      runtimeName: 'bun',
+      runtimeVersion: '1.3.10',
+      source: 'installed',
+      versionMismatch: true,
+    }
+    const result = runDoctorChecks.checkRuntime(info)
+    expect(result.status).toBe('warn')
+    expect(result.message).toContain('bundle/package mismatch')
+    expect(result.details).toMatchObject({
+      source: 'installed',
+      executablePath: '/usr/local/bin/bun',
+      packageVersion: '1.44.0',
+      packageFileVersion: '1.44.1',
+      versionMismatch: true,
+    })
+    expect(result.remediation).toEqual({ command: 'dbcli upgrade', risk: 'interactive' })
+  })
+
   test('resolveSchemaLastUpdated prefers index metadata.lastRefreshed', () => {
     const ts = '2026-04-01T12:00:00.000Z'
     expect(
@@ -57,6 +84,36 @@ describe('doctor checks', () => {
     const blacklistedColumns = new Map<string, Set<string>>([['users', new Set(['password_hash'])]])
     const result = runDoctorChecks.checkBlacklistCompleteness(columns, blacklistedColumns)
     expect(result.status).toBe('pass')
+  })
+
+  test('buildDoctorRemediationPlan emits review-before-apply candidates', () => {
+    const steps = buildDoctorRemediationPlan([
+      {
+        group: 'Configuration',
+        label: 'Blacklist completeness',
+        status: 'warn',
+        message: 'Consider protecting: users.password_hash',
+      },
+      {
+        group: 'Connection & Data',
+        label: 'Schema cache',
+        status: 'warn',
+        message: 'No schema cache found — run "dbcli schema --refresh"',
+      },
+    ])
+    expect(steps).toEqual([
+      expect.objectContaining({
+        kind: 'blacklist-candidate',
+        dryRun: 'dbcli schema users --format json',
+        apply: 'dbcli blacklist column add users.password_hash',
+        requiresHumanConfirmation: true,
+      }),
+      expect.objectContaining({
+        kind: 'schema-refresh',
+        apply: 'dbcli schema --refresh',
+        requiresHumanConfirmation: true,
+      }),
+    ])
   })
 
   test('checkSchemaCacheFreshness warns when cache is older than 7 days', () => {

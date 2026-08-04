@@ -37,6 +37,7 @@ import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
 import { useCommand } from './commands/use'
 import { proxyCommand } from './commands/proxy'
+import { backfillCommand } from './commands/backfill'
 import {
   createConnectionSelectorOption,
   resolveConnectionSelector,
@@ -341,6 +342,7 @@ export function buildProgram(): Command {
   program.addCommand(verificationCommand)
   program.addCommand(verifyCommand)
   program.addCommand(proxyCommand)
+  program.addCommand(backfillCommand)
 
   return program
 }

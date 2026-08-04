@@ -20,6 +20,7 @@ import { resolveConfigStoragePath } from '@/core/config-binding'
 import pkg from '../../package.json'
 import { join } from 'path'
 import { resolveSchemaPath } from '@/utils/schema-path'
+import { collectRuntimeInfo, type RuntimeInfo } from '@/utils/runtime-info'
 import { getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveSrv } from 'node:dns/promises'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
@@ -43,10 +44,69 @@ export interface DoctorResult {
   label: string
   status: 'pass' | 'warn' | 'error'
   message: string
+  details?: Record<string, unknown>
   remediation?: {
     command: string
     risk: 'interactive' | 'readonly' | 'local-write'
   }
+}
+
+export interface DoctorRemediationStep {
+  kind: 'blacklist-candidate' | 'schema-refresh' | 'bounded-sample'
+  status: 'candidate'
+  rationale: string
+  dryRun: string
+  apply?: string
+  requiresHumanConfirmation: true
+}
+
+/**
+ * Turn diagnostic warnings into an explicitly non-mutating workflow.  The
+ * commands are candidates only: doctor never changes a blacklist, refreshes a
+ * cache, or reads sample rows on the user's behalf.
+ */
+export function buildDoctorRemediationPlan(results: DoctorResult[]): DoctorRemediationStep[] {
+  const steps: DoctorRemediationStep[] = []
+  for (const result of results) {
+    if (result.label === 'Blacklist completeness' && result.status === 'warn') {
+      const prefix = 'Consider protecting: '
+      const candidates = result.message.startsWith(prefix)
+        ? result.message.slice(prefix.length).split(', ').filter(Boolean)
+        : []
+      for (const candidate of candidates) {
+        const [table, column] = candidate.split('.')
+        if (!table || !column) continue
+        steps.push({
+          kind: 'blacklist-candidate',
+          status: 'candidate',
+          rationale: `Sensitive-looking column '${candidate}' is not currently protected.`,
+          dryRun: `dbcli schema ${table} --format json`,
+          apply: `dbcli blacklist column add ${candidate}`,
+          requiresHumanConfirmation: true,
+        })
+      }
+    }
+    if (result.label === 'Schema cache' && result.status === 'warn') {
+      steps.push({
+        kind: 'schema-refresh',
+        status: 'candidate',
+        rationale: result.message,
+        dryRun: 'dbcli schema --format json',
+        apply: 'dbcli schema --refresh',
+        requiresHumanConfirmation: true,
+      })
+    }
+    if (result.label === 'Large tables' && result.status === 'warn') {
+      steps.push({
+        kind: 'bounded-sample',
+        status: 'candidate',
+        rationale: `${result.message}. Review a bounded sample only after confirming blacklist coverage.`,
+        dryRun: 'dbcli blacklist list --format json',
+        requiresHumanConfirmation: true,
+      })
+    }
+  }
+  return steps
 }
 
 const SENSITIVE_PATTERNS = [
@@ -98,6 +158,39 @@ function compareSemver(a: string, b: string): number {
 }
 
 export const runDoctorChecks = {
+  checkRuntime(info: RuntimeInfo): DoctorResult {
+    const fileVersion = info.packageFileVersion ?? 'unavailable'
+    const versionMismatch = info.versionMismatch
+      ? ` (bundle/package mismatch: runtime=${info.packageVersion}, package.json=${fileVersion})`
+      : ''
+    return {
+      group: 'Environment',
+      label: 'Runtime identity',
+      status: info.versionMismatch ? 'warn' : 'pass',
+      message:
+        `source=${info.source}; runtime=${info.runtimeName} ${info.runtimeVersion}; ` +
+        `executable=${info.executablePath}; launcher=${info.launcherPath}; ` +
+        `package=${info.packageVersion}${versionMismatch}`,
+      details: {
+        source: info.source,
+        runtimeName: info.runtimeName,
+        runtimeVersion: info.runtimeVersion,
+        executablePath: info.executablePath,
+        launcherPath: info.launcherPath,
+        packageRoot: info.packageRoot,
+        packageVersion: info.packageVersion,
+        packageFileVersion: info.packageFileVersion,
+        versionMismatch: info.versionMismatch,
+      },
+      ...(info.versionMismatch && {
+        remediation: {
+          command: 'dbcli upgrade',
+          risk: 'interactive' as const,
+        },
+      }),
+    }
+  },
+
   checkBunVersion(current: string, required: string): DoctorResult {
     const passes = compareSemver(current, required) >= 0
     return {
@@ -607,6 +700,7 @@ export async function collectElasticsearchDoctorResults(config: {
 export const doctorCommand = new Command('doctor')
   .description('Run diagnostic checks on dbcli configuration, environment, and connection')
   .option('--format <type>', 'Output format: text, json', 'text')
+  .option('--remediation', 'Include a non-mutating, human-confirmed remediation plan', false)
   .action(async (options) => {
     validateFormat(options.format, ALLOWED_FORMATS, 'doctor')
 
@@ -618,6 +712,7 @@ export const doctorCommand = new Command('doctor')
     // --- Environment ---
     const bunVersion = (process.versions as Record<string, string>).bun ?? 'unknown'
     const requiredBun = (pkg.engines as Record<string, string>)?.bun?.replace('>=', '') ?? '1.3.3'
+    results.push(runDoctorChecks.checkRuntime(await collectRuntimeInfo(pkg.version)))
     results.push(runDoctorChecks.checkBunVersion(bunVersion, requiredBun))
     results.push(await runDoctorChecks.checkLatestVersion(pkg.version))
 
@@ -765,7 +860,10 @@ export const doctorCommand = new Command('doctor')
     }
 
     if (options.format === 'json') {
-      console.log(JSON.stringify({ results, hasError }, null, 2))
+      const remediation = options.remediation ? buildDoctorRemediationPlan(results) : undefined
+      console.log(
+        JSON.stringify({ results, hasError, ...(remediation && { remediation }) }, null, 2)
+      )
     } else {
       console.log(runDoctorChecks.formatTextOutput(results, pkg.version))
     }

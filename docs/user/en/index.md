@@ -106,6 +106,33 @@ variable names. A misspelled connection selector suggests nearby configured name
 The resolved v2 connection name is retained while commands run, so audit records
 are routed to that connection's own audit stream.
 
+#### Production and automation safeguards
+
+Connections labelled `environment: "production"` fail closed when you try to
+make one the persistent default. Repeat the exact name to make that intentional:
+
+```bash
+dbcli use production --confirm-production production
+```
+
+This confirmation applies only to changing the persisted default; one-shot
+`--use production` selection remains explicit and does not alter configuration.
+In agent mode (`DBCLI_AGENT_MODE=1`), configuration, permission, and credential
+mutations are always rejected. A human or administrator must run the approved
+change workflow in a separate process with agent mode disabled; dbcli does not
+accept a same-process environment variable as approval. Trusted writes maintain
+a config integrity record and secure file modes where the operating system
+supports them; agent reads fail closed on a missing, replaced, non-regular, or
+tampered record. Agent mode also refuses legacy single-file `.dbcli` configs;
+migrate them to V2 home storage through the human/admin workflow first. For a
+same-user hostile process, set `DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` to a
+host-protected or read-only directory so the detached digest cannot be replaced
+alongside the workspace files.
+
+Every audit entry includes non-secret `metadata.connection_name` and
+`metadata.environment` from the resolved connection. It never records connection
+credentials or endpoint secrets.
+
 ### Read-only query fan-out
 
 An explicit comma-separated `--use` can run one read-only query against several
@@ -288,7 +315,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 
 | Command | Description |
 | :--- | :--- |
-| `doctor` | Runs system and connection diagnostics; JSON config-missing failures include a structured remediation command and risk level. |
+| `doctor` | Runs system and connection diagnostics; JSON config-missing failures include a structured remediation command and risk level. `doctor --format json --remediation` adds candidate-only plans for blacklist coverage, schema refresh, and large tables; it never changes configuration, blacklist rules, or database data. |
 | `check [table]` | Analyzes data health (orphans, nulls, duplicates). |
 | `diff` | Compares schema snapshots, or an ORM definition against the local SQL schema cache with `--against-orm`. |
 | `report` | Generates a comprehensive health/perf report. |
@@ -296,6 +323,35 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
 | `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
+
+`doctor` also reports runtime identity (launcher/source, runtime and package
+versions) and flags a bundled-runtime/package version mismatch with the explicit
+`dbcli upgrade` remediation. Machine-readable commands (`--format json` and other
+non-human formats, `--for-agent`, or `--recovery`) keep stdout payload-only: update
+and skill-update notices are suppressed. Human-facing notices are written to stderr
+and deduplicated once per CLI session.
+
+#### Source-to-SQL backfill artifacts
+
+`backfill artifact` converts a deliberately bounded JSON source catalog into a
+reviewable, dry-run-only artifact; it does not connect to or write either database.
+The catalog requires `table`, non-empty `keyColumns`, `rows`, `verifyQuery`, and
+`expect`; it accepts at most 1,000 rows. Use named v2 connections so the artifact
+captures non-secret source/target identities and their differences:
+
+The target connection must be PostgreSQL, MySQL, or MariaDB; the source identity
+may describe another engine.
+
+```bash
+dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production
+```
+
+The artifact contains generated `UPDATE` statements, per-statement `plan`
+commands, blacklist/schema preflight commands, a read-back `verify safe-backfill`
+command, and a rollback hint. Review it first; applying any SQL is a separate,
+explicitly human-confirmed workflow. Use `--stdout` to print JSON or `--out <path>`
+to choose the artifact path.
 
 #### ORM definition drift
 

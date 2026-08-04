@@ -18,6 +18,16 @@ description: Database CLI for AI agents with permission-based access control. Us
 3. 所有寫入：`--dry-run`（SQL / Mongo）→ 實際執行 → `query` 回讀確認。Redis 的 `query`
    **沒有 `--dry-run`**（見 **Redis** 節）；Elasticsearch 為**唯讀**。
 
+**環境與變更邊界：** 在 v2 中，選取具名連線前先執行 `dbcli use --list --format json`。
+標示 `environment: "production"` 的連線不得透過儲存的預設值靜默選取，必須明確指定；若要
+持久化 production 預設值，人類需以 `--confirm-production` 重複完全相同的名稱。當
+`DBCLI_AGENT_MODE=1` 時，設定、權限與憑證變更一律封鎖。人類／管理員變更必須在關閉 agent
+mode 的獨立 process 執行；不要把同一 process 的環境變數當作核准。受信任設定寫入會維護
+integrity record，並在支援時設定安全檔案權限；agent 讀取遇到缺失、替換、非一般檔案或竄改的
+record 時會 fail closed；agent mode 在完成 human/admin 遷移到 V2 home storage 前也會拒絕
+legacy 單檔 `.dbcli`。若要防護同一 OS 使用者的惡意 process，host 可將
+`DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` 設為受保護或唯讀掛載的 detached digest 目錄。
+
 **`update` / `delete` 的 `--where` 僅支援等式（SQL）。** 只接受 `col=val` 或
 `col1=v1 AND col2=v2`。比較 / 模式運算子（`>`、`>=`、`<`、`!=`、`LIKE`、`IN`）會直接
 **報錯**；更危險的是，`OR` 會被**靜默當成值的一部分** — `a=1 OR b=2` 會被解析成
@@ -251,6 +261,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `snapshot` | query-only+ | **(v1.25)** 僅 SQL。擷取結果指紋（`rowCount` + 每欄 null/distinct/min/max/sum + 順序無關 checksum）。`--out`（預設 `.dbcli/snapshots/snap-<ts>.json`）、`--rows`、`--stdout`、`--format`、`--no-limit`。作為 `assert --against` 的基準。 |
 | `assert` | query-only+ | **(v1.25)** 僅 SQL。驗證不變量；失敗時 exit 1，除非 `--no-fail`。`--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`、`--vs <query> --compare rows\|value`（對帳）、`--against <snapshot> --tolerance <pct>`。 |
 | `verification` | n/a | 檢視與管理本機驗證 artifact。`list` / `show <id-or-path>` / `summary` 為唯讀；`prune` 預設 dry-run，僅在 `--execute --force` 時刪除。讀取 `<cwd>/.dbcli/verification/`；不需 DB 連線，不寫入 audit log。 |
+| `backfill artifact` | n/a | 將受限 JSON source catalog 產生可檢閱的 source-to-SQL 回填 artifact，包含 source/target identity、blacklist/schema preflight、read-back 驗證與 rollback hint；只產生 dry-run，絕不執行寫入。 |
 | `proxy` | n/a | **(v1.26)** 僅 MySQL/MariaDB/PostgreSQL。本地端開發觀測代理 — 中繼應用程式流量至真實資料庫，並將查詢 / 延遲 / 位元組 / 錯誤事件附加到 `.dbcli/proxy/events.jsonl`。子指令：`mysql` \| `mariadb` \| `postgresql`。`--listen`、`--target`、`--events`、`--slow-ms`（預設 `1000`）、`--redact none\|literals`。僅作觀測。**(v1.27)** `proxy analyze` 離線彙整事件 log 為 JSON / 文字報表（summary、byFingerprint 含 suggestedCommands、slowest、errors、hotTables、N+1）— 若無事件則報錯。 |
 | `status` | query-only+ | 安全 JSON / 文字摘要（不含憑證）。 |
 | `inspect` | query-only+ | 唯讀脈絡快照（連線、權限、blacklist、物件、snippets、建議指令，以及 **(v1.23)** 人類可讀 `hints`）。`--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`。支援 `--recovery`。 |
@@ -258,7 +269,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `guide` | query-only+ | 針對固定目標產出確定性下一步指令計畫（`slow-query`、`capacity`、`health`、`index-usage`、`permissions`、`schema-overview`）。`--list` 列舉所有目標。**(v1.23)** `guide missing-index-for <query>` 為單一 SELECT 建議複合索引（`--format yaml\|json\|markdown`、`--min-confidence`）。 |
 | `recovery` | n/a | 對已知錯誤代碼查詢結構化 `RecoveryEnvelope`（`--code <CODE>` 或 `--list`）。獨立合成器；不需真實失敗。 |
 | `recover` | n/a | 檢視（預設）或 `--apply` 執行 `.dbcli/last-recovery.json` 中自動儲存的復原計畫。`--allow-write=readonly-cmd\|write-cmd`、`--no-verify`、`--from <file>`、`--next --after-step <n> --result <json\|@file>` 多輪逐步執行。 |
-| `doctor` | n/a | 環境、設定、連線、SRV 診斷（Mongo）、schema cache 年齡。 |
+| `doctor` | n/a | 環境/runtime identity、設定、連線、SRV 診斷（Mongo）、schema cache 年齡。`--format json --remediation` 僅輸出 blacklist/schema/bounded-sample 候選計畫，不會套用。 |
 | `completion` | n/a | bash / zsh / fish 腳本。 |
 | `upgrade` | n/a | 從 npm 自我更新；每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。SQL 引擎、MongoDB 與 Redis（單行；`.no-limit on/off`）。**(v1.22)** Elasticsearch 開啟 Kibana Dev Tools 風格的 REPL（`<METHOD> /<path>` + 可選 JSON body，空白行送出）。 |

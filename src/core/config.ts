@@ -12,11 +12,18 @@
 
 import { type DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
-import { detectConfigVersion, resolveConnection, loadConnectionEnv } from '@/core/config-v2'
+import {
+  assertExplicitProductionSelection,
+  detectConfigVersion,
+  resolveConnection,
+  loadConnectionEnv,
+} from '@/core/config-v2'
 import { readProjectBinding, resolveConfigStoragePath } from '@/core/config-binding'
 import { join } from 'path'
 import { mkdir } from 'node:fs/promises'
 import { resolveEnvRef } from '@/agent-core/public'
+import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
+import { assertAgentReadableFile, assertConfigIntegrity, writeConfigIntegrity } from '@/core/config-integrity'
 
 /**
  * 全域 --use 連線名稱，由 CLI preAction hook 設定
@@ -239,13 +246,16 @@ export const configModule = {
         const configExists = await configFile.exists()
 
         if (configExists) {
+          await assertAgentReadableFile(configPath)
           const content = await configFile.text()
+          await assertConfigIntegrity(storagePath, content, { requireRecord: true })
           const config = JSON.parse(content)
 
           // V2 detection: handle multi-connection format
           if (detectConfigVersion(config) === 2) {
             const v2Config = DbcliConfigV2Schema.parse(config)
             const resolved = resolveConnection(v2Config, effectiveConnectionName)
+            assertExplicitProductionSelection(resolved, effectiveConnectionName)
 
             // Load env file for the connection
             await loadConnectionEnv(resolved, storagePath)
@@ -353,6 +363,11 @@ export const configModule = {
       const exists = await file.exists()
 
       if (exists) {
+        if (process.env.DBCLI_AGENT_MODE === '1') {
+          throw new ConfigError(
+            `Agent mode refuses legacy single-file config: ${path}. Run the human/admin migration workflow to move it to V2 home storage first.`
+          )
+        }
         assertNoConnectionSelectorOnV1(effectiveConnectionName)
         const content = await file.text()
         const raw = JSON.parse(content)
@@ -447,6 +462,7 @@ export const configModule = {
    */
   async write(path: string, config: DbcliConfig): Promise<void> {
     try {
+      assertConfigMutationApproved()
       // Validate first to ensure we never write invalid config
       this.validate(config)
 
@@ -501,6 +517,15 @@ export const configModule = {
         // Legacy file mode (backward compatible)
         const json = JSON.stringify(config, null, 2)
         await Bun.file(path).write(json)
+      }
+
+      const usesDirectoryStorage = isDirectory || path.endsWith('.dbcli')
+      const writtenConfigPath = usesDirectoryStorage ? join(storagePath, 'config.json') : path
+      if (usesDirectoryStorage && (await Bun.file(writtenConfigPath).exists())) {
+        await writeConfigIntegrity(
+          storagePath,
+          await Bun.file(writtenConfigPath).text()
+        )
       }
     } catch (error) {
       if (error instanceof ConfigError) {

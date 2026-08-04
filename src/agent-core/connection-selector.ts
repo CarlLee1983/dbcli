@@ -4,19 +4,33 @@ export interface ConnectionSelectorInputs {
   environment?: string
 }
 
+function normalizeSelector(value: string | undefined, source: string): string | undefined {
+  if (value === undefined) return undefined
+  const normalized = value.trim()
+  if (normalized === '') {
+    throw new Error(`${source} connection selector cannot be empty`)
+  }
+  return normalized
+}
+
 /** Resolve one invocation-scoped selector without changing persisted state. */
 export function resolveConnectionSelector(inputs: ConnectionSelectorInputs): string | undefined {
-  if (inputs.root !== undefined && inputs.command !== undefined && inputs.root !== inputs.command) {
+  const root = normalizeSelector(inputs.root, 'Root')
+  const command = normalizeSelector(inputs.command, 'Command')
+
+  if (root !== undefined && command !== undefined && root !== command) {
     throw new Error(
-      `Conflicting connection selectors: root value '${inputs.root}' does not match command value '${inputs.command}'`
+      `Conflicting connection selectors: root value '${root}' does not match command value '${command}'`
     )
   }
 
-  const explicit = inputs.command ?? inputs.root
+  const explicit = command ?? root
   if (explicit !== undefined) return explicit
 
+  // An unset/blank ambient environment variable is equivalent to no selector;
+  // explicit CLI flags, by contrast, must never degrade into a default choice.
   const environment = inputs.environment?.trim()
-  return environment ? environment : undefined
+  return environment || undefined
 }
 
 /** Parse a comma-separated selector into ordered, unique names. */

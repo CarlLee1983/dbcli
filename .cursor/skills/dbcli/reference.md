@@ -79,6 +79,16 @@ dbcli list --use prod
 
 **Requires v2 config** (created with `dbcli init --conn-name`).
 
+### Agent configuration trust boundary
+
+When `DBCLI_AGENT_MODE=1`, configuration, permission, and credential mutations
+are rejected. Agent reads require the V2 directory config and its integrity
+record; missing, replaced, non-regular, or tampered records fail closed. Legacy
+single-file `.dbcli` configs must be migrated by a human/admin process with
+agent mode disabled. A host that needs protection from a same-user hostile
+process can set `DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` to a protected or read-only
+directory; trusted writes publish detached digests there.
+
 ### list
 
 List all tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch).
@@ -1936,6 +1946,39 @@ includes `storageDir`, `dryRun`, `cutoff`, `criteria`, `protected`, `candidates`
 **Storage root:** `<cwd>/.dbcli/verification/` (cwd-relative; independent of `--config`).
 
 **Permission:** n/a
+
+### backfill
+
+Generate a bounded, reviewable source-to-SQL backfill artifact. The command is
+strictly dry-run: it reads a local JSON source catalog, records non-secret
+source/target connection identity, and never opens a database connection or
+executes generated SQL.
+
+```bash
+dbcli backfill artifact \
+  --source ./backfill.json \
+  --source-use staging \
+  --target-use production
+dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production --stdout
+dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production --out .dbcli/backfills/review.json
+```
+
+The source catalog must contain `table`, non-empty `keyColumns`, `rows`, a
+read-only `verifyQuery`, and `expect`; no more than 1,000 rows are accepted.
+Identifiers are validated and row values are limited to JSON scalars. The
+target connection must be PostgreSQL, MySQL, or MariaDB (the source identity
+may describe another engine); target selectors in generated commands are
+shell-quoted. The artifact includes a SHA-256 source fingerprint, generated parameterized
+`UPDATE` statements with per-statement `plan` commands, blacklist/schema
+preflight commands, a `verify safe-backfill` read-back command, identity
+differences, and a rollback hint. `execution.mode` is always `dry-run` and
+`requiresHumanConfirmation` is always true; applying SQL is a separate,
+explicit human-reviewed workflow.
+
+**Options:** `--source <path>` (required), `--source-use <name>` (required),
+`--target-use <name>` (required), `--stdout`, `--out <path>`
 
 ### doctor
 

@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { readV2Config } from '@/core/config-v2'
+import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
 import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
 export type SqlSystem = 'postgresql' | 'mysql' | 'mariadb'
@@ -26,6 +27,7 @@ export async function writeConnectionSecret(
   field: 'password',
   value: string
 ): Promise<void> {
+  assertConfigMutationApproved()
   if (value.includes('\n') || value.includes('\r')) {
     throw new Error('secret value 不可包含換行字元')
   }

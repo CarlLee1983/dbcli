@@ -35,6 +35,16 @@ const baseV2Config = {
       permission: 'query-only',
       environment: 'staging',
     },
+    production: {
+      system: 'postgresql',
+      host: 'production.example.com',
+      port: 5432,
+      user: 'admin',
+      password: 'productionpass',
+      database: 'production_db',
+      permission: 'query-only',
+      environment: 'production',
+    },
   },
   schema: {},
   metadata: { version: '1.0' },
@@ -71,12 +81,29 @@ describe('use command', () => {
         /你是否要使用：staging/
       )
     })
+
+    test('fails closed when changing the persisted default to production without confirmation', async () => {
+      await expect(switchDefault(configDirectory, 'production', baseV2Config as any)).rejects.toThrow(
+        /confirm-production production/
+      )
+
+      const unchanged = JSON.parse(await Bun.file(join(configDirectory, 'config.json')).text())
+      expect(unchanged.default).toBe('local')
+    })
+
+    test('allows a production default only after repeating the exact connection name', async () => {
+      await switchDefault(configDirectory, 'production', baseV2Config as any, {
+        confirmProduction: 'production',
+      })
+      const updated = JSON.parse(await Bun.file(join(configDirectory, 'config.json')).text())
+      expect(updated.default).toBe('production')
+    })
   })
 
   describe('listConnectionsForDisplay', () => {
     test('should list all connections with default marker', () => {
       const lines = listConnectionsForDisplay(baseV2Config as any)
-      expect(lines).toHaveLength(2)
+      expect(lines).toHaveLength(3)
       expect(lines[0]).toContain('*')
       expect(lines[0]).toContain('local')
       expect(lines[0]).toContain('[development]')
@@ -106,6 +133,15 @@ describe('use command', () => {
           system: 'postgresql',
           server: { host: 'staging.example.com', port: 5432 },
           database: 'staging_db',
+          isDefault: false,
+        },
+        {
+          name: 'production',
+          environment: 'production',
+          permission: 'query-only',
+          system: 'postgresql',
+          server: { host: 'production.example.com', port: 5432 },
+          database: 'production_db',
           isDefault: false,
         },
       ])

@@ -21,6 +21,20 @@ the CLI package has not been installed globally.
 3. All writes: `--dry-run` (SQL/Mongo) → run → `query` read-back to confirm. Redis
    `query` has **no `--dry-run`** (see **Redis**); Elasticsearch is **read-only**.
 
+**Environment and mutation boundary:** In v2, inspect `dbcli use --list --format json`
+before selecting a named connection. A connection labelled `environment: "production"`
+must be explicitly selected; it is never silently used through the saved default. To
+persist a production default, a human must repeat the exact name with
+`--confirm-production`. When `DBCLI_AGENT_MODE=1`, configuration, permission, and
+credential mutations are blocked unconditionally. Run human/admin changes in a separate
+process with agent mode disabled; do not treat a same-process environment variable as
+approval. Trusted config writes maintain an integrity record and secure file modes where
+supported, and agent reads fail closed on missing, replaced, non-regular, or tampered
+records. Agent mode refuses legacy single-file `.dbcli` configs until a human/admin
+migration to V2 home storage. For a same-user hostile process, a host can set
+`DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` to a protected or read-only directory containing
+detached digests.
+
 **`update` / `delete` `--where` is equality-only (SQL).** It accepts **only** `col=val` or
 `col1=v1 AND col2=v2`. A comparison / pattern operator (`>`, `>=`, `<`, `!=`, `LIKE`, `IN`)
 is a **parse error**; worse, `OR` is **silently swallowed into the value** — `a=1 OR b=2`
@@ -313,6 +327,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
 | `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `verification` | n/a | Inspect and manage local verification artifacts. `list` / `show <id-or-path>` / `summary` are read-only; `prune` is dry-run by default and deletes only with `--execute --force`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
+| `backfill artifact` | n/a | Build a bounded, reviewable source-to-SQL backfill artifact from JSON. Includes source/target identity, blacklist/schema preflight, read-back verification, and rollback hints; dry-run only and never executes writes. |
 | `proxy` | n/a | **(v1.26)** MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Subcommands: `mysql` \| `mariadb` \| `postgresql`. `--listen`, `--target`, `--events`, `--slow-ms` (default `1000`), `--redact none\|literals`. Observe-only. **(v1.27)** `proxy analyze` aggregates the event log offline into a JSON/text report (summary, byFingerprint with suggestedCommands, slowest, errors, hotTables, N+1) — errors out if no events exist yet. |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
 | `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
@@ -320,7 +335,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. **(v1.23)** `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
 | `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
 | `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
-| `doctor` | n/a | Environment, config, connection, SRV diagnostics (Mongo), schema cache age. |
+| `doctor` | n/a | Environment/runtime identity, config, connection, SRV diagnostics (Mongo), schema cache age. `--format json --remediation` emits candidate-only blacklist/schema/bounded-sample plans; it never applies them. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |

@@ -129,6 +129,22 @@ describe('stateless single-connection selection', () => {
     expect(await Bun.file(configFile).text()).toBe(before)
   })
 
+  test('use requires an explicit production confirmation before persisting a production default', async () => {
+    const rejected = await run(['--config', configDir, 'use', 'primary'])
+    expect(rejected.code).toBe(1)
+    expect(rejected.stderr).toContain('--confirm-production primary')
+
+    const confirmed = await run([
+      '--config',
+      configDir,
+      'use',
+      'primary',
+      '--confirm-production',
+      'primary',
+    ])
+    expect(confirmed.code).toBe(0)
+  })
+
   test('root --use and DBCLI_CONNECTION select the same named connection', async () => {
     const rootSelected = await inspectWith(['--use', 'staging'])
     const environmentSelected = await inspectWith([], '  staging  ')
@@ -137,9 +153,13 @@ describe('stateless single-connection selection', () => {
     expect(environmentSelected.connection).toEqual(rootSelected.connection)
   })
 
-  test('empty DBCLI_CONNECTION falls back to the configured default', async () => {
-    const selected = await inspectWith([], '   ')
-    expect(selected.connection.database).toBe('primary_db')
+  test('empty DBCLI_CONNECTION cannot silently fall back to a production default', async () => {
+    const result = await run(
+      ['--config', configDir, 'inspect', '--no-connect', '--format', 'json'],
+      '   '
+    )
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('必須明確使用 --use primary')
   })
 
   test('all five supported commands parse post-subcommand --use', async () => {

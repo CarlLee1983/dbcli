@@ -3,7 +3,12 @@
  */
 
 import { Command } from 'commander'
-import { connectionNotFoundMessage, readV2Config, writeV2Config } from '@/core/config-v2'
+import {
+  assertProductionDefaultConfirmation,
+  connectionNotFoundMessage,
+  readV2Config,
+  writeV2Config,
+} from '@/core/config-v2'
 import { configModule } from '@/core/config'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
@@ -35,11 +40,14 @@ type ConnectionIdentity = {
 export async function switchDefault(
   configPath: string,
   name: string,
-  config: DbcliConfigV2
+  config: DbcliConfigV2,
+  options: { confirmProduction?: string } = {}
 ): Promise<void> {
-  if (!config.connections[name]) {
+  const connection = config.connections[name]
+  if (!connection) {
     throw new ConfigError(connectionNotFoundMessage(name, Object.keys(config.connections)))
   }
+  assertProductionDefaultConfirmation(name, connection.environment, options.confirmProduction)
 
   const updated: DbcliConfigV2 = {
     ...config,
@@ -146,6 +154,10 @@ export const useCommand = new Command('use')
   .argument('[name]', 'Connection name to switch to')
   .option('--list', 'List all connections')
   .option('--format <format>', 'Output format: text (default) or json', 'text')
+  .option(
+    '--confirm-production <name>',
+    'Confirm changing the persisted default to this production connection by repeating its name'
+  )
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       validateFormat(String(options.format), ALLOWED_FORMATS, 'use')
@@ -174,7 +186,10 @@ export const useCommand = new Command('use')
       }
 
       // Switch default
-      await switchDefault(configPath, name, config)
+      await switchDefault(configPath, name, config, {
+        confirmProduction:
+          typeof options.confirmProduction === 'string' ? options.confirmProduction : undefined,
+      })
       console.log(t_vars('use.switched', { name }))
     } catch (error) {
       if (error instanceof Error) {

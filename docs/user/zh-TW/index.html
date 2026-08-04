@@ -188,6 +188,13 @@ dbcli query --use prod "SELECT count(*) FROM users" # 支援的指令層級寫�
 DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # 環境變數 selector</code></pre>
             <p>若要提供明確且不含機密的環境標籤，可在 v2 具名連線設定可選的 <code>environment</code> 欄位，例如 <code>"environment": "production"</code>。<code>dbcli use --list --format json</code> 會回傳每個連線的名稱、環境標籤（或 <code>null</code>）、權限、系統、伺服器／資料庫識別與預設標記；由環境變數提供的識別欄位會是 <code>null</code>，只有 URI 的 MongoDB 與只有 Cloud ID 的 Elasticsearch 也會以 <code>null</code> 取代預設占位值。它刻意不輸出 user、password、URI、Cloud ID、API key 或環境變數名稱。拼錯連線 selector 時，dbcli 會提示相近的既有名稱。</p>
             <p>在 v2 中，實際選取的連線名稱會保留到指令執行期間，因此 audit 記錄會路由到該連線自己的 audit stream。</p>
+            <div class="paper-card p-6 border-l-4 border-l-secondary mb-8">
+                <h3 class="mt-0 mb-3 font-bold">正式環境與自動化防護</h3>
+                <p>標示為 <code>environment: "production"</code> 的連線，若要設成持久化預設值會預設拒絕；必須重複輸入完全相同的名稱明確確認：</p>
+                <pre><code>dbcli use production --confirm-production production</code></pre>
+                <p>此確認只適用於持久化預設值的變更：單次 <code>--use production</code> 仍是明確選取，且不會修改設定。在 agent mode（<code>DBCLI_AGENT_MODE=1</code>）中，設定、權限與憑證變更一律被拒絕。人類或管理員必須在關閉 agent mode 的獨立 process 執行核准流程；dbcli 不接受同一個 process 的環境變數作為核准。受信任的寫入會維護 config integrity record，並在支援時設定安全檔案權限；agent 讀取遇到缺失、替換、非一般檔案或竄改的 record 時會 fail closed。agent mode 也會拒絕 legacy 單檔 <code>.dbcli</code> 設定，必須先由人類／管理員流程遷移到 V2 home storage。若要防護同一 OS 使用者的惡意 process，請將 <code>DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR</code> 設為由 host 保護或唯讀掛載的目錄，讓 detached digest 不會和工作區檔案一起被替換。</p>
+                <p class="mb-0">每筆 audit entry 都會從解析後的連線寫入非機密的 <code>metadata.connection_name</code> 與 <code>metadata.environment</code>，絕不記錄憑證或 endpoint secret。</p>
+            </div>
             <p>選擇優先序為明確的 <code>--use</code>、<code>DBCLI_CONNECTION</code>、最後才是設定檔預設連線。環境變數值會移除前後空白，空值則視為未設定。單次 selector 不會修改持久化預設值。<code>query</code>、<code>schema</code>、<code>list</code>、<code>export</code>、<code>check</code> 支援指令層級寫法；其他指令請把全域 selector 放在指令之前。root 與指令層級值衝突時會清楚失敗。Selector 需要 v2 設定：單連線（v1）專案沒有具名連線可選，因此在 v1 下給 <code>--use</code> 或 <code>DBCLI_CONNECTION</code> 會被拒絕，而不是靜默改跑那唯一的連線。若把 <code>--use</code> 放在不支援的指令後面，dbcli 會維持拒絕並印出可直接複製的 root-level 寫法，例如 <code>dbcli --use &lt;connection&gt; status</code>。</p>
             <h3>唯讀 query fan-out</h3>
             <p>明確指定逗號分隔的 <code>--use</code>，即可對多個具名連線執行同一個唯讀 query。Root 層級與指令層級寫法效果相同：</p>
@@ -307,7 +314,7 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
-                    <span class="text-text-muted font-medium">驗證執行環境、連線能力及配置完整性；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。</span>
+                    <span class="text-text-muted font-medium">驗證執行環境、連線能力及配置完整性；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。<code>doctor --format json --remediation</code> 會為 blacklist 覆蓋、schema 更新與大型資料表提供僅供候選的計畫；不會變更設定、blacklist 規則或資料庫資料。</span>
                 </div>
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>
@@ -321,6 +328,15 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">audit</div>
                     <span class="text-text-muted font-medium">讀取每連線的 audit log（<code>.dbcli/audit/&lt;conn&gt;.jsonl</code>）；使用 <code>--for-agent</code> 取得 handoff JSON。</span>
                 </div>
+            </div>
+
+            <div class="paper-card p-6 border-l-4 border-l-secondary mb-12">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">Runtime、machine output 與 backfill artifact</h4>
+                <p><code>doctor</code> 會回報 runtime identity（launcher/source、runtime 與 package version），並在 bundled runtime 與 package version 不一致時標示，提供明確的 <code>dbcli upgrade</code> remediation。機器可讀指令（<code>--format json</code> 與其他非人類格式、<code>--for-agent</code> 或 <code>--recovery</code>）保持 stdout 僅含 payload：update 與 skill-update notice 都會被抑制。人類可讀 notice 寫到 stderr，且每個 CLI session 同類提示只會出現一次。</p>
+                <p><code>backfill artifact</code> 將刻意受限的 JSON source catalog 轉為可檢閱、僅 dry-run 的 artifact；它不會連線或寫入任一資料庫。Catalog 必須有 <code>table</code>、非空的 <code>keyColumns</code>、<code>rows</code>、<code>verifyQuery</code> 與 <code>expect</code>，且最多 1,000 筆 row。Target 必須是 PostgreSQL、MySQL 或 MariaDB；source identity 可以描述其他引擎。具名 v2 連線會記錄不含機密的 source/target identity 與兩者差異：</p>
+                <pre><code>dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production</code></pre>
+                <p class="mb-0">Artifact 包含產生的 <code>UPDATE</code>、每個 statement 的 <code>plan</code> 指令、blacklist/schema preflight、read-back 的 <code>verify safe-backfill</code> 指令與 rollback hint。請先檢閱；套用 SQL 是另一個需要明確人工確認的流程。以 <code>--stdout</code> 輸出 JSON，或使用 <code>--out &lt;path&gt;</code> 指定路徑。</p>
             </div>
 
             <div class="paper-card p-6 border-l-4 border-l-primary mb-12">

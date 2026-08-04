@@ -17,6 +17,8 @@ import { SchemaDiffEngine } from './schema-diff'
 import { SchemaCacheManager } from './schema-cache'
 import { ConcurrentLockManager } from './concurrent-lock'
 import { ErrorRecoveryManager } from './error-recovery'
+import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
+import { writeConfigIntegrity } from '@/core/config-integrity'
 
 /**
  * Schema Updater - Coordinates incremental schema updates
@@ -60,6 +62,10 @@ export class SchemaUpdater {
    * @returns SchemaRefreshResult with detailed changes
    */
   async refreshSchema(options?: RefreshOptions): Promise<SchemaRefreshResult> {
+    // Refresh persists the discovered schema into config.json. Keep this
+    // legacy writer behind the same agent-mode mutation boundary as the
+    // primary config writers.
+    assertConfigMutationApproved()
     const startTime = Date.now()
     const configPath = join(this.dbcliPath, 'config.json')
 
@@ -259,7 +265,9 @@ export class SchemaUpdater {
   private async persistConfig(config: DbcliConfig): Promise<void> {
     const configPath = join(this.dbcliPath, 'config.json')
     const configFile = Bun.file(configPath)
-    await Bun.write(configFile, JSON.stringify(config, null, 2))
+    const content = JSON.stringify(config, null, 2)
+    await Bun.write(configFile, content)
+    await writeConfigIntegrity(this.dbcliPath, content)
   }
 
   /**

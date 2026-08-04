@@ -105,13 +105,15 @@ describe('lint subprocess safety and redaction', () => {
     )
     for (const sentinel of [
       'CONFIG_SENTINEL',
-      'USE_SENTINEL',
       'BULK_SENTINEL',
       'POSITIONAL_SENTINEL_ONE',
       'POSITIONAL_SENTINEL_TWO',
     ]) {
       expect(audit).not.toContain(sentinel)
     }
+    // The selected connection is intentionally retained as non-secret audit
+    // metadata; SQL, paths, and argument values remain redacted.
+    expect(audit).toContain('"connection_name":"USE_SENTINEL"')
     expect(audit).toContain('--format json')
     expect(audit).toContain('--no-schema')
   })
@@ -147,7 +149,6 @@ describe('lint subprocess safety and redaction', () => {
     const recovery = await readFile(join(root, '.dbcli', 'last-recovery.json'), 'utf8')
     for (const sentinel of [
       'FAIL_CONFIG_SENTINEL',
-      'FAIL_USE_SENTINEL',
       'FAIL_BULK_SENTINEL',
       'FAIL_POSITIONAL_SENTINEL_ONE',
       'FAIL_POSITIONAL_SENTINEL_TWO',
@@ -155,6 +156,10 @@ describe('lint subprocess safety and redaction', () => {
       expect(audit).not.toContain(sentinel)
       expect(recovery).not.toContain(sentinel)
     }
+    // Audit metadata identifies the selected connection; the recovery envelope
+    // continues to redact it because it is a command input, not identity.
+    expect(audit).toContain('"connection_name":"FAIL_USE_SENTINEL"')
+    expect(recovery).not.toContain('FAIL_USE_SENTINEL')
     expect(recovery).toContain('--recovery')
     expect(recovery).toContain('--no-schema')
   })

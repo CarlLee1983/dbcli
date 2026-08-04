@@ -7,11 +7,13 @@
 
 import { type DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
+import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
+import { assertAgentReadableFile, assertConfigIntegrity, writeConfigIntegrity } from '@/core/config-integrity'
 import { loadEnvFile } from '@/core/env-loader'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { levenshteinDistance } from '@/utils/levenshtein-distance'
 import { join } from 'path'
-import { mkdir, rename } from 'node:fs/promises'
+import { chmod, mkdir, rename } from 'node:fs/promises'
 
 /**
  * Detect config version from raw parsed JSON
@@ -53,6 +55,38 @@ export interface ResolvedConnection {
   permission: 'query-only' | 'read-write' | 'data-admin' | 'admin'
   envFile?: string
   environment?: string
+}
+
+/**
+ * Production is an execution boundary, not merely a display label.  A caller
+ * must name a production connection explicitly; falling through to a stored
+ * default is too easy to mistake for a local or staging operation.
+ */
+export function assertExplicitProductionSelection(
+  resolved: Pick<ResolvedConnection, 'name' | 'environment'>,
+  requestedName: string | undefined
+): void {
+  if (resolved.environment !== 'production') return
+
+  if (requestedName?.trim() === resolved.name) return
+
+  throw new ConfigError(
+    `連線 '${resolved.name}' 標記為 production，必須明確使用 --use ${resolved.name}（或設定 DBCLI_CONNECTION=${resolved.name}）才能執行。`
+  )
+}
+
+/** Require a deliberate, non-interactive confirmation before changing the persisted default to production. */
+export function assertProductionDefaultConfirmation(
+  name: string,
+  environment: string | undefined,
+  confirmation: string | undefined
+): void {
+  if (environment !== 'production') return
+  if (confirmation === name) return
+
+  throw new ConfigError(
+    `連線 '${name}' 標記為 production。若要變更預設連線，請加入 --confirm-production ${name}。`
+  )
 }
 
 /**
@@ -146,7 +180,9 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
     throw new ConfigError(`找不到 V2 設定檔：${configPath}`)
   }
 
+  await assertAgentReadableFile(configPath)
   const content = await file.text()
+  await assertConfigIntegrity(storagePath, content, { requireRecord: true })
   const raw = JSON.parse(content)
 
   return DbcliConfigV2Schema.parse(raw)
@@ -158,6 +194,7 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
  * on the same filesystem, so a crash mid-write can never leave a corrupt config.
  */
 export async function writeV2Config(path: string, config: DbcliConfigV2): Promise<void> {
+  assertConfigMutationApproved()
   DbcliConfigV2Schema.parse(config)
 
   const storagePath = await resolveConfigStoragePath(path)
@@ -168,8 +205,15 @@ export async function writeV2Config(path: string, config: DbcliConfigV2): Promis
   // replaces an existing target on every platform (atomic on the same fs).
   await mkdir(storagePath, { recursive: true })
   const json = JSON.stringify(config, null, 2)
+  // Publish the expected hash before replacing config.json. If the process is
+  // interrupted between these operations, agent-mode reads fail closed rather
+  // than accepting an unverified new file.
+  await writeConfigIntegrity(storagePath, json)
   await Bun.write(tmpPath, json)
   await rename(tmpPath, configPath) // same-filesystem rename: atomic overwrite
+  // writeConfigIntegrity runs before the replacement so interrupted writes fail
+  // closed; apply the private mode again after the new file exists.
+  await chmod(configPath, 0o600).catch(() => undefined)
 }
 
 /**

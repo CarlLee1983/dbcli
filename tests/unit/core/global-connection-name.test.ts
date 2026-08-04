@@ -135,6 +135,11 @@ describe('invocation connection selector precedence', () => {
     expect(resolveConnectionSelector({ environment: '   ' })).toBeUndefined()
   })
 
+  test('rejects an empty explicit selector rather than falling back to the default', () => {
+    expect(() => resolveConnectionSelector({ root: '   ' })).toThrow(/cannot be empty/)
+    expect(() => resolveConnectionSelector({ command: '' })).toThrow(/cannot be empty/)
+  })
+
   test('no selector preserves configured-default fallback', () => {
     expect(resolveConnectionSelector({})).toBeUndefined()
   })

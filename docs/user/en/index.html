@@ -188,6 +188,13 @@ dbcli query --use prod "SELECT count(*) FROM users" # Supported command-level fo
 DBCLI_CONNECTION=prod dbcli query "SELECT count(*) FROM users" # Environment selector</code></pre>
             <p>For an unambiguous, non-secret environment label, set the optional <code>environment</code> field on a v2 named connection, for example <code>"environment": "production"</code>. <code>dbcli use --list --format json</code> returns each connection's name, environment label (or <code>null</code>), permission, system, server/database identity, and default marker. Environment-backed identity fields are <code>null</code>; URI-only MongoDB and Cloud ID-only Elasticsearch placeholders are too. It deliberately excludes users, passwords, URIs, Cloud IDs, API keys, and env variable names. A misspelled connection selector suggests nearby configured names.</p>
             <p>The resolved v2 connection name is retained while commands run, so audit records are routed to that connection's own audit stream.</p>
+            <div class="paper-card p-6 border-l-4 border-l-secondary mb-8">
+                <h3 class="mt-0 mb-3 font-bold">Production and automation safeguards</h3>
+                <p>Connections labelled <code>environment: "production"</code> fail closed when you make one the persistent default. Repeat the exact name to make that intent explicit:</p>
+                <pre><code>dbcli use production --confirm-production production</code></pre>
+                <p>It only confirms a persistent-default change: one-shot <code>--use production</code> remains explicit and never alters configuration. In agent mode (<code>DBCLI_AGENT_MODE=1</code>), configuration, permission, and credential mutations are always rejected. A human or administrator must run the approved change workflow in a separate process with agent mode disabled; dbcli does not accept a same-process environment variable as approval. Trusted writes maintain a config integrity record and secure file modes where supported; agent reads fail closed on missing, replaced, non-regular, or tampered records. Agent mode also refuses legacy single-file <code>.dbcli</code> configs until a human/admin migration to V2 home storage. For a same-user hostile process, set <code>DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR</code> to a host-protected or read-only directory so the detached digest cannot be replaced alongside workspace files.</p>
+                <p class="mb-0">Every audit entry includes non-secret <code>metadata.connection_name</code> and <code>metadata.environment</code> from the resolved connection, never credentials or endpoint secrets.</p>
+            </div>
             <p>Selection precedence is explicit <code>--use</code>, then <code>DBCLI_CONNECTION</code>, then the configured default. Environment values are trimmed and empty values are ignored. One-shot selectors never change the persistent default. The command-level form is supported by <code>query</code>, <code>schema</code>, <code>list</code>, <code>export</code>, and <code>check</code>; use the global form before other commands. Conflicting root-level and command-level values fail clearly. Selectors require a v2 configuration: a single-connection (v1) project has no names to choose between, so <code>--use</code> or <code>DBCLI_CONNECTION</code> there is rejected rather than quietly running the only connection. If <code>--use</code> is placed after an unsupported command, dbcli keeps the request rejected and prints the copyable root-level form, such as <code>dbcli --use &lt;connection&gt; status</code>.</p>
             <h3>Read-only query fan-out</h3>
             <p>An explicit comma-separated <code>--use</code> runs one read-only query against several named connections. The root-level and command-level forms are equivalent:</p>
@@ -307,7 +314,7 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
             <div class="grid grid-cols-1 gap-4 mb-12">
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-primary">
                     <div class="px-4 py-2 bg-primary/10 text-primary rounded-md font-black text-xs uppercase tracking-widest">doctor</div>
-                    <span class="text-text-muted font-medium">Validates environment, connectivity, and configuration integrity; JSON config-missing failures include a structured remediation command and risk level.</span>
+                    <span class="text-text-muted font-medium">Validates environment, connectivity, and configuration integrity; JSON config-missing failures include a structured remediation command and risk level. <code>doctor --format json --remediation</code> adds candidate-only plans for blacklist coverage, schema refresh, and large tables; it never mutates config, blacklist rules, or database data.</span>
                 </div>
                 <div class="flex items-center gap-6 p-6 paper-card border-l-4 border-l-secondary">
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">report</div>
@@ -321,6 +328,15 @@ dbcli query '{}' --collection raw_logs --fields=-raw_response,-request_payload</
                     <div class="px-4 py-2 bg-secondary/10 text-secondary rounded-md font-black text-xs uppercase tracking-widest">audit</div>
                     <span class="text-text-muted font-medium">Tails the per-connection audit log (<code>.dbcli/audit/&lt;conn&gt;.jsonl</code>); use <code>--for-agent</code> for handoff JSON.</span>
                 </div>
+            </div>
+
+            <div class="paper-card p-6 border-l-4 border-l-secondary mb-12">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">Runtime, machine output, and backfill artifacts</h4>
+                <p><code>doctor</code> reports runtime identity (launcher/source, runtime and package versions) and flags a bundled-runtime/package mismatch with explicit <code>dbcli upgrade</code> remediation. Machine-readable commands (<code>--format json</code> and other non-human formats, <code>--for-agent</code>, or <code>--recovery</code>) keep stdout payload-only: update and skill-update notices are suppressed. Human-facing notices go to stderr and are deduplicated once per CLI session.</p>
+                <p><code>backfill artifact</code> converts a deliberately bounded JSON source catalog into a reviewable, dry-run-only artifact; it never connects to or writes either database. The catalog requires <code>table</code>, non-empty <code>keyColumns</code>, <code>rows</code>, <code>verifyQuery</code>, and <code>expect</code>, with at most 1,000 rows. The target must be PostgreSQL, MySQL, or MariaDB; the source identity may describe another engine. Named v2 connections capture non-secret source/target identities and their differences:</p>
+                <pre><code>dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production</code></pre>
+                <p class="mb-0">The artifact includes generated <code>UPDATE</code>s, per-statement <code>plan</code> commands, blacklist/schema preflight, a read-back <code>verify safe-backfill</code> command, and a rollback hint. Review it before any separate, explicitly human-confirmed SQL workflow. Use <code>--stdout</code> for JSON or <code>--out &lt;path&gt;</code> to select a path.</p>
             </div>
 
             <div class="paper-card p-6 border-l-4 border-l-primary mb-12">

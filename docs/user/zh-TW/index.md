@@ -101,6 +101,27 @@ dbcli 會提示相近的既有名稱。
 在 v2 中，實際選取的連線名稱會保留到指令執行期間，因此 audit 記錄會路由到該連線
 自己的 audit stream。
 
+#### 正式環境與自動化防護
+
+標示為 `environment: "production"` 的連線，若要設成持久化預設值會預設拒絕，必須重複
+輸入完全相同的名稱明確確認：
+
+```bash
+dbcli use production --confirm-production production
+```
+
+此確認只適用於變更持久化預設值；單次的 `--use production` 仍是明確選取，且不會修改
+設定。在 agent mode（`DBCLI_AGENT_MODE=1`）中，設定、權限與憑證的變更一律被拒絕。人類或
+管理員必須在關閉 agent mode 的獨立 process 執行核准流程；dbcli 不接受同一個 process 的
+環境變數作為核准。受信任的寫入會維護 config integrity record，並在作業系統支援時設定
+安全檔案權限；agent 讀取遇到缺失、替換、非一般檔案或竄改的 record 時會 fail closed。
+agent mode 也會拒絕 legacy 單檔 `.dbcli` 設定；請先由人類／管理員流程遷移到 V2 home storage。
+若要防護同一 OS 使用者的惡意 process，請將 `DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` 設為由 host
+保護或唯讀掛載的目錄，讓 detached digest 不會和工作區檔案一起被替換。
+
+每筆 audit entry 都會從解析後的連線寫入非機密的 `metadata.connection_name` 與
+`metadata.environment`，絕不記錄連線憑證或 endpoint secret。
+
 ### 唯讀 query fan-out
 
 明確指定逗號分隔的 `--use`，即可對多個具名連線執行同一個唯讀 query。
@@ -279,7 +300,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 
 | 指令 | 說明 |
 | :--- | :--- |
-| `doctor` | 執行環境與連線診斷；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。 |
+| `doctor` | 執行環境與連線診斷；JSON 的設定缺失錯誤會包含結構化 remediation 指令與風險等級。`doctor --format json --remediation` 會為 blacklist 覆蓋、schema 更新與大型資料表提供僅供候選的計畫；它不會自動變更設定、blacklist 規則或資料庫資料。 |
 | `check [table]` | 分析資料健康度（如孤兒資料、空值、重複項）。 |
 | `diff` | 比較 Schema 快照，或透過 `--against-orm` 將 ORM 定義與本地 SQL schema cache 比對。 |
 | `report` | 產生完整的健康、容量與效能報告。 |
@@ -287,6 +308,31 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
 | `--recovery`（支援的指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`、`lint` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit tail --recovery-ref <id>` 從 envelope 反查 audit entry。|
+
+`doctor` 也會回報 runtime identity（launcher/source、runtime 與 package version），並在
+bundled runtime 與 package version 不一致時標示，提供明確的 `dbcli upgrade` remediation。
+機器可讀指令（`--format json` 與其他非人類格式、`--for-agent` 或 `--recovery`）會保持
+stdout 僅含 payload：update 與 skill-update notice 都會被抑制。人類可讀 notice 則寫到
+stderr，且每個 CLI session 同類提示只會出現一次。
+
+#### Source-to-SQL backfill artifact
+
+`backfill artifact` 將刻意受限的 JSON source catalog 轉為可檢閱、僅 dry-run 的 artifact；
+它不會連線或寫入任一資料庫。Catalog 必須有 `table`、非空的 `keyColumns`、`rows`、
+`verifyQuery` 與 `expect`，且最多只接受 1,000 筆 row。使用具名 v2 連線，讓 artifact
+記錄不含機密的 source/target identity 與兩者差異：
+
+Target connection 必須是 PostgreSQL、MySQL 或 MariaDB；source identity 可以描述其他引擎。
+
+```bash
+dbcli backfill artifact --source ./backfill.json \
+  --source-use staging --target-use production
+```
+
+Artifact 會包含產生的 `UPDATE`、每個 statement 的 `plan` 指令、blacklist/schema preflight
+指令、read-back 的 `verify safe-backfill` 指令與 rollback hint。請先檢閱；套用任何 SQL
+是另一個需要明確人工確認的流程。使用 `--stdout` 輸出 JSON，或以 `--out <path>` 指定
+artifact 路徑。
 
 #### ORM 定義漂移
 

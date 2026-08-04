@@ -1,7 +1,14 @@
 import { createHash } from 'crypto'
-import { mkdir, unlink } from 'node:fs/promises'
+import { chmod, mkdir, unlink } from 'node:fs/promises'
 import { homedir } from 'os'
 import { basename, join, resolve } from 'path'
+import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
+import {
+  assertAgentReadableFile,
+  assertBindingIntegrity,
+  writeBindingIntegrity,
+} from '@/core/config-integrity'
+import { ConfigError } from '@/utils/errors'
 
 const BINDING_FILE_NAME = 'config.json'
 const DBCLI_HOME_ROOT = join(homedir(), '.config', 'dbcli')
@@ -54,9 +61,14 @@ export async function readProjectBinding(
   if (!(await configFile.exists())) return null
 
   try {
-    const raw = JSON.parse(await configFile.text())
-    return isProjectConfigBinding(raw) ? raw : null
-  } catch {
+    await assertAgentReadableFile(join(projectPath, BINDING_FILE_NAME), 'project binding')
+    const content = await configFile.text()
+    const raw = JSON.parse(content)
+    if (!isProjectConfigBinding(raw)) return null
+    await assertBindingIntegrity(projectPath, content, { requireRecord: true })
+    return raw
+  } catch (error) {
+    if (error instanceof ConfigError) throw error
     return null
   }
 }
@@ -70,6 +82,7 @@ export async function writeProjectBinding(
   projectPath: string,
   storagePath: string = getProjectStoragePath(projectPath)
 ): Promise<ProjectConfigBinding> {
+  assertConfigMutationApproved()
   const binding: ProjectConfigBinding = {
     version: 3,
     binding: {
@@ -82,7 +95,15 @@ export async function writeProjectBinding(
 
   await mkdir(projectPath, { recursive: true })
   await mkdir(storagePath, { recursive: true })
-  await Bun.file(join(projectPath, BINDING_FILE_NAME)).write(JSON.stringify(binding, null, 2))
+  const content = JSON.stringify(binding, null, 2)
+  await writeBindingIntegrity(projectPath, content)
+  const bindingPath = join(projectPath, BINDING_FILE_NAME)
+  await Bun.file(bindingPath).write(content)
+  try {
+    await chmod(bindingPath, 0o600)
+  } catch {
+    // Best effort on Windows and filesystems without POSIX mode bits.
+  }
 
   return binding
 }
@@ -91,6 +112,7 @@ export async function migrateLegacyProjectEnvLocal(
   projectPath: string,
   storagePath: string = getProjectStoragePath(projectPath)
 ): Promise<void> {
+  assertConfigMutationApproved()
   const projectEnvPath = join(projectPath, '.env.local')
   const projectEnvFile = Bun.file(projectEnvPath)
   if (!(await projectEnvFile.exists())) return

@@ -330,6 +330,32 @@ describe('configModule', () => {
       expect(result.permission).toBe('query-only')
     })
 
+    test('refuses an implicit production default but permits an explicit selector', async () => {
+      const v2Config = {
+        version: 2,
+        default: 'production',
+        connections: {
+          production: {
+            system: 'postgresql',
+            host: 'prod.example.com',
+            port: 5432,
+            user: 'admin',
+            password: 'secret',
+            database: 'app',
+            permission: 'query-only',
+            environment: 'production',
+          },
+        },
+      }
+      await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
+
+      await expect(configModule.read(V2_CONFIG_PATH)).rejects.toThrow(/必須明確使用 --use production/)
+
+      const explicit = await configModule.read(V2_CONFIG_PATH, 'production')
+      expect(explicit.effectiveConnectionName).toBe('production')
+      expect(explicit.effectiveEnvironment).toBe('production')
+    })
+
     test('should return per-connection schema from schemas dict (V2)', async () => {
       const v2Config = {
         version: 2,

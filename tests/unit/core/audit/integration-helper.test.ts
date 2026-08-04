@@ -126,4 +126,22 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'staging.jsonl')).exists()).toBe(true)
     expect(await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).exists()).toBe(false)
   })
+
+  test('persists resolved connection and environment identity without credentials', async () => {
+    const config = {
+      ...makeConfig(true),
+      effectiveConnectionName: 'production',
+      effectiveEnvironment: 'production',
+    }
+    await writeAuditEntry(config, 'query', { config: workDir }, { success: true, target: 'users' })
+
+    const raw = await Bun.file(join(workDir, '.dbcli', 'audit', 'production.jsonl')).text()
+    const last = JSON.parse(raw.trim().split('\n').pop()!)
+    expect(last.metadata).toMatchObject({
+      connection_name: 'production',
+      environment: 'production',
+    })
+    expect(JSON.stringify(last.metadata)).not.toContain('localhost')
+    expect(JSON.stringify(last.metadata)).not.toContain('password')
+  })
 })

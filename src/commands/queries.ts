@@ -21,9 +21,9 @@ import { foldVariants, type FoldedRow } from '@/core/saved-queries/fold'
 import { searchSnippets, type SearchInput, type SearchHit } from '@/core/saved-queries/search'
 import { suggestSnippets, type SuggestInput, type SuggestHit } from '@/core/saved-queries/suggest'
 
-async function deriveEngine(): Promise<EngineTag> {
+async function deriveEngine(command?: Command): Promise<EngineTag> {
   try {
-    const cfg = await configModule.read(resolveConfigPath(undefined, {}))
+    const cfg = await configModule.read(resolveConfigPath(command))
     if (cfg.connection) {
       return mapSystemToEngine(cfg.connection.system)
     }
@@ -117,10 +117,14 @@ export interface ShowOptions {
   format?: 'table' | 'json' | 'csv'
 }
 
-export async function queriesShow(name: string, options: ShowOptions): Promise<void> {
+export async function queriesShow(
+  name: string,
+  options: ShowOptions,
+  command?: Command
+): Promise<void> {
   const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
   try {
-    const engine = await deriveEngine()
+    const engine = await deriveEngine(command)
     const snippet = resolveByName(map, name, engine)
     if (options.format === 'json') {
       console.log(
@@ -247,7 +251,11 @@ export interface SearchOptions {
   includeInternal?: boolean
 }
 
-export async function queriesSearch(keywords: string[], options: SearchOptions): Promise<void> {
+export async function queriesSearch(
+  keywords: string[],
+  options: SearchOptions,
+  command?: Command
+): Promise<void> {
   const query = keywords.join(' ').trim()
   if (!query) {
     console.error(t('queries.search_no_keywords'))
@@ -274,7 +282,7 @@ export async function queriesSearch(keywords: string[], options: SearchOptions):
   if (options.engine && options.engine !== 'all') {
     engineFilter = options.engine as EngineTag
   } else if (!options.engine) {
-    const inferred = await deriveEngineOrNull()
+    const inferred = await deriveEngineOrNull(command)
     if (inferred) engineFilter = inferred
     else console.error(t('queries.no_active_connection_hint'))
   }
@@ -298,9 +306,9 @@ export async function queriesSearch(keywords: string[], options: SearchOptions):
   renderSearchTable(hits, options.includeInternal === true)
 }
 
-async function deriveEngineOrNull(): Promise<EngineTag | null> {
+async function deriveEngineOrNull(command?: Command): Promise<EngineTag | null> {
   try {
-    const cfg = await configModule.read(resolveConfigPath(undefined, {}))
+    const cfg = await configModule.read(resolveConfigPath(command))
     if (cfg.connection) {
       return mapSystemToEngine(cfg.connection.system)
     }
@@ -348,7 +356,8 @@ export interface SuggestOptions {
 
 export async function queriesSuggest(
   intent: string | undefined,
-  options: SuggestOptions
+  options: SuggestOptions,
+  command?: Command
 ): Promise<void> {
   const map = await loadSnippets(resolveSnippetDirs(process.cwd()))
   const folded = [...map.entries()].map(([key, variants]) => foldVariants(key, variants))
@@ -379,7 +388,7 @@ export async function queriesSuggest(
   if (options.engine && options.engine !== 'all') {
     engineFilter = options.engine as EngineTag
   } else if (!options.engine) {
-    const inferred = await deriveEngineOrNull()
+    const inferred = await deriveEngineOrNull(command)
     if (inferred) engineFilter = inferred
     else console.error(t('queries.no_active_connection_hint'))
   }
@@ -476,8 +485,8 @@ queriesCommand
   .command('show <name>')
   .description(t('queries.show_description'))
   .option('--format <type>', 'Output format: table, json, csv', 'table')
-  .action(async (name, options) => {
-    await queriesShow(name, options)
+  .action(async (name, options, command) => {
+    await queriesShow(name, options, command)
   })
 
 queriesCommand
@@ -585,8 +594,8 @@ queriesCommand
   .option('--source <source>', 'Filter: local | shared | builtin | all')
   .option('--limit <n>', 'Max results (default 10)')
   .option('--include-internal', 'Show ranking score')
-  .action(async (keywords: string[], options: SearchOptions) => {
-    await queriesSearch(keywords, options)
+  .action(async (keywords: string[], options: SearchOptions, command) => {
+    await queriesSearch(keywords, options, command)
   })
 
 queriesCommand
@@ -595,6 +604,6 @@ queriesCommand
   .option('--format <type>', 'Output format: table, json', 'table')
   .option('--engine <engine>', 'Filter: postgres | mysql | redis | elasticsearch | all')
   .option('--source <source>', 'Filter: local | shared | builtin | all')
-  .action(async (intent: string | undefined, options: SuggestOptions) => {
-    await queriesSuggest(intent, options)
+  .action(async (intent: string | undefined, options: SuggestOptions, command) => {
+    await queriesSuggest(intent, options, command)
   })

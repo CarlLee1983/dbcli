@@ -174,12 +174,24 @@ bun install -g @carllee1983/dbcli</code></pre>
             <p>Initialize your first connection with the interactive wizard:</p>
             <pre><code>dbcli init</code></pre>
             <p>Behind the scenes, <code>init</code> writes a small <code>version: 3</code> binding stub to <code>./.dbcli/config.json</code> in your project, while the real connection settings and any credentials are stored in your home directory at <code>~/.config/dbcli/projects/&lt;project-name&gt;-&lt;sha1-12&gt;/</code>. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project <code>.dbcli/</code> only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).</p>
+            <p>For a connection shared by several projects, use the explicit global scope. It stores a v2 registry in <code>~/.config/dbcli/config.json</code> and never creates a project binding:</p>
+            <pre><code>dbcli --global init --conn-name shared --system postgresql \
+  --host db.example.com --port 5432 --user app --password '&lt;secret&gt;' \
+  --name appdb --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global status --format json</code></pre>
+            <p>Root-level <code>--global</code> must appear before the command. Global and project registries are independent; commands continue to use the project registry unless <code>--global</code> is supplied. The global file is protected with the same integrity record and private file mode as home-stored project settings.</p>
         </section>
 
         <!-- doc-key: connection-management -->
         <section id="connections">
             <h2>Connection Management</h2>
             <p>Switch between Production, Staging, and Local environments:</p>
+            <p>Use <code>--global</code> to manage or run a named connection from the user-level registry, independent of the current project:</p>
+            <pre><code>dbcli --global use --list
+dbcli --global use shared
+dbcli --global query "SELECT 1"</code></pre>
+            <p>Without <code>--global</code>, <code>dbcli</code> continues to resolve the current project's <code>.dbcli</code> binding. This explicit scope prevents a global connection from being selected accidentally in an unrelated project.</p>
             <pre><code>dbcli use --list         # List all connection names
 dbcli use --list --format json # Credential-free JSON connection inventory
 dbcli use staging        # Switch your default connection

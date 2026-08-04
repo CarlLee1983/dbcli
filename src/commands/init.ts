@@ -25,6 +25,7 @@ import type { DbcliConfigV2 } from '@/utils/validation'
 import { resolveConfigPath } from '@/utils/config-path'
 import {
   getProjectStoragePath,
+  isGlobalConfigPath,
   migrateLegacyProjectEnvLocal,
   resolveConfigStoragePath,
   writeProjectBinding,
@@ -148,7 +149,8 @@ async function writeV2InitConfig(
   permission: string,
   envFile?: string
 ): Promise<void> {
-  const storagePath = getProjectStoragePath(configPath)
+  const globalConfig = isGlobalConfigPath(configPath)
+  const storagePath = globalConfig ? configPath : getProjectStoragePath(configPath)
   const configJsonPath = join(storagePath, 'config.json')
   const configFile = Bun.file(configJsonPath)
   const projectConfigFile = Bun.file(join(configPath, 'config.json'))
@@ -282,9 +284,15 @@ async function writeV2InitConfig(
       }
 
   await writeV2Config(storagePath, v2Config)
-  await migrateLegacyProjectEnvLocal(configPath, storagePath)
-  await writeProjectBinding(configPath, storagePath)
-  console.log(t('init.config_saved'))
+  if (!globalConfig) {
+    await migrateLegacyProjectEnvLocal(configPath, storagePath)
+    await writeProjectBinding(configPath, storagePath)
+  }
+  console.log(
+    globalConfig
+      ? t_vars('init.config_saved_global', { path: join(configPath, 'config.json') })
+      : t('init.config_saved')
+  )
 }
 
 /**
@@ -369,7 +377,8 @@ async function initCommandHandler(
   }
 
   // Determine if this is a v2 init
-  const isV2Init = !!(options.connName || options.envFile)
+  const isGlobalConfig = isGlobalConfigPath(configPath)
+  const isV2Init = !!(options.connName || options.envFile || isGlobalConfig)
   const connectionName = (options.connName as string) || 'default'
 
   // 1. Load existing config
@@ -523,11 +532,13 @@ async function initCommandHandler(
     }
 
     // Write config
-    const storagePath = getProjectStoragePath(configPath)
+    const storagePath = isGlobalConfig ? configPath : getProjectStoragePath(configPath)
     await mkdir(storagePath, { recursive: true })
     await configModule.write(storagePath, newConfig)
-    await migrateLegacyProjectEnvLocal(configPath, storagePath)
-    await writeProjectBinding(configPath, storagePath)
+    if (!isGlobalConfig) {
+      await migrateLegacyProjectEnvLocal(configPath, storagePath)
+      await writeProjectBinding(configPath, storagePath)
+    }
     console.log(t('init.config_saved'))
     return
   }
@@ -707,11 +718,13 @@ async function initCommandHandler(
     return
   }
 
-  const storagePath = getProjectStoragePath(configPath)
+  const storagePath = isGlobalConfig ? configPath : getProjectStoragePath(configPath)
   await mkdir(storagePath, { recursive: true })
   await configModule.write(storagePath, newConfig)
-  await migrateLegacyProjectEnvLocal(configPath, storagePath)
-  await writeProjectBinding(configPath, storagePath)
+  if (!isGlobalConfig) {
+    await migrateLegacyProjectEnvLocal(configPath, storagePath)
+    await writeProjectBinding(configPath, storagePath)
+  }
   console.log(t('init.config_saved'))
 }
 
@@ -830,10 +843,13 @@ async function handleMongoDBInit(ctx: {
     connection: mongoConfig as any,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
   })
-  const storagePath = getProjectStoragePath(configPath)
+  const globalConfig = isGlobalConfigPath(configPath)
+  const storagePath = globalConfig ? configPath : getProjectStoragePath(configPath)
   await mkdir(storagePath, { recursive: true })
   await configModule.write(storagePath, newConfig)
-  await migrateLegacyProjectEnvLocal(configPath, storagePath)
-  await writeProjectBinding(configPath, storagePath)
+  if (!globalConfig) {
+    await migrateLegacyProjectEnvLocal(configPath, storagePath)
+    await writeProjectBinding(configPath, storagePath)
+  }
   console.log(t('init.config_saved'))
 }

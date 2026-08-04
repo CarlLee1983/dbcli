@@ -14,6 +14,7 @@
     "connection_success": "✓ Database connection successful",
     "connection_failed": "✗ Database connection failed",
     "config_saved": "Configuration saved to .dbcli",
+    "config_saved_global": "Global configuration saved to {path}",
     "config_exists_overwrite": "Configuration file .dbcli already exists. Overwrite? (y/n): ",
     "cancelled": "Cancelled. Configuration not changed.",
     "skip_test_env_ref": "Skipping connection test in env-ref mode",

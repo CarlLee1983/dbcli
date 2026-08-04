@@ -52,6 +52,9 @@ export {
   resolveConfigStoragePath,
   writeProjectBinding,
   getProjectStoragePath,
+  getDbcliConfigHome,
+  getGlobalConfigPath,
+  isGlobalConfigPath,
 } from '@/core/config-binding'
 export type { DbcliConfigV2 } from '@/utils/validation'
 

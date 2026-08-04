@@ -17,6 +17,7 @@ command-level option is only valid after the command that declares it.
 | `-v, --verbose` | Increase logging verbosity; repeat for debug output. |
 | `-q, --quiet` | Suppress non-essential output. |
 | `--config <path>` | Select the `.dbcli` configuration path. |
+| `--global` | Select the user-global registry at `~/.config/dbcli/config.json` instead of the current project's `.dbcli` config. Place it before the command path. |
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
 
 ## Commands
@@ -49,6 +50,12 @@ dbcli init --conn-name staging --env-file .env.staging   # Named connection with
 dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-test
 dbcli init --remove staging                              # Remove a named connection
 dbcli init --rename staging:production                   # Rename a connection
+
+# User-global registry (shared by projects; --global must precede the command)
+dbcli --global init --conn-name shared --system postgresql --host db.example.com \
+  --port 5432 --user app --password '<secret>' --name appdb \
+  --skip-test --no-interactive --force
+dbcli --global use --list
 ```
 
 **Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
@@ -62,6 +69,8 @@ dbcli init --rename staging:production                   # Rename a connection
 **Redis note:** the `database` (or `--name`) field is the logical DB index (`"0"` … `"15"`), not a database name.
 
 **Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
+
+Use root-level `--global` with `init`, `use`, `status`, `query`, or any other command to read or mutate the user-global v2 registry at `~/.config/dbcli/config.json`. Without it, the current project binding remains the source of truth. The global registry uses the same private file mode and integrity record as project home storage.
 
 > **AI agent note on `--use-env-refs`:** If an existing `.dbcli` config contains `{"$env": "DB_HOST"}` style references, the connection values are read from environment variables at runtime. Do NOT re-run `init` to replace these references with actual values — the env-ref format is intentional for CI/CD and multi-environment setups.
 

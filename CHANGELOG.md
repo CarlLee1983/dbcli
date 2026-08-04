@@ -5,6 +5,18 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.45.0] - 2026-08-04 - root-level `--global`：跨專案共用的 user-global registry
+
+### Added
+
+- **root-level `--global` 旗標。** 原本每條連線都綁在專案上：`init` 會在 `./.dbcli/config.json` 寫 binding stub，真正的設定落在 `~/.config/dbcli/projects/<project-id>/`。要在多個專案共用同一條連線，只能在每個 repo 重跑一次 `init`，或手動複製設定。`--global` 讓 `~/.config/dbcli/config.json` 成為一個獨立的 v2 registry：`dbcli --global init --conn-name shared ...` 直接寫進去、不建立也不修改專案 binding，`dbcli --global use --list` / `--global query` 則在不依賴當前目錄的情況下操作它。scope 必須明確選取 —— 未帶 `--global` 時一切照舊走專案 binding，避免在不相關的專案裡誤用全域連線。全域檔案沿用與 home storage 專案設定相同的私有檔案權限與 integrity record。
+- **`getDbcliConfigHome()` / `getGlobalConfigPath()` / `isGlobalConfigPath()` 加入 `public.ts`。** 前者把 per-user root 改為延遲解析並支援 `DBCLI_CONFIG_HOME` 覆寫，測試與 embedder 不必 reload module 就能隔離 config home。
+
+### Changed
+
+- **`migrate` 與 `queries` 子指令補上 Commander `command` 傳遞。** 這兩處原本以 `resolveConfigPath(undefined, opts)` 解析設定路徑，看不到 ancestor 的 root-level 旗標 —— 沒有 `--global` 時症狀被 `.dbcli` 預設值蓋掉，加上 `--global` 後就會靜默讀錯 registry。現在 36 個 `resolveConfigPath` 呼叫點全部傳入 command。
+- **`resolveConfigPath` 的優先序明確化。** 顯式 `--config` 仍最優先（`--global --config <path>` 因此是確定的），其次是顯式 `--global`，最後才是 `.dbcli` 預設值。
+
 ## [1.44.1] - 2026-08-02 - `agent-core` 的 `loadEnvFile` 改用 node:fs，可在 Node 執行
 
 ### Fixed

@@ -172,6 +172,18 @@ dbcli init --conn-name staging --env-file .env.staging
 dbcli init --conn-name prod --env-file .env.production --use-env-refs
 ```
 
+若要讓多個專案共用連線，請使用 user-global scope。它會把 v2 registry 儲存在 `~/.config/dbcli/config.json`，且不會修改目前專案的 `.dbcli` binding：
+
+```bash
+dbcli --global init --conn-name shared --system postgresql --host db.example.com \
+  --port 5432 --user app --password '<secret>' --name appdb \
+  --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global query "SELECT 1"
+```
+
+Root 層級的 `--global` 必須放在指令之前。未帶它時，指令仍會使用專案設定。
+
 每一條具名連線可以設定不同的 **`--permission`**（例如正式環境只給 `query-only`）。現在專案內的 `.dbcli` 主要扮演**綁定 + 快取層**；真正的連線設定會存到使用者家目錄下的 `~/.config/dbcli/projects/<project-id>/`，避免敏感設定留在工作區。
 
 ### 管理連線（`use` / 移除 / 更名）
@@ -969,6 +981,7 @@ dbcli plan "SELECT id FROM users WHERE id = 1 LIMIT 1" --format json
 | 旗標 | 說明 |
 |------|------|
 | `--config <path>` | `.dbcli` 設定檔路徑（預設：`.dbcli`） |
+| `--global` | 使用 `~/.config/dbcli/config.json` 的 user-global registry |
 | `--use <connection>` | 僅本次指令使用具名的 v2 連線（不變更預設連線） |
 | `-v, --verbose` | 提高詳細度（`-v` 詳細、`-vv` 除錯） |
 | `-q, --quiet` | 抑制非必要輸出 |

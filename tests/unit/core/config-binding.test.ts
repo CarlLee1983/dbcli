@@ -2,7 +2,10 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { configModule } from '@/core/config'
 import { readV2Config, writeV2Config } from '@/core/config-v2'
 import {
+  getGlobalConfigPath,
+  getDbcliConfigHome,
   getProjectStoragePath,
+  isGlobalConfigPath,
   migrateLegacyProjectEnvLocal,
   resolveConfigStoragePath,
   writeProjectBinding,
@@ -36,6 +39,7 @@ const SAMPLE_V2_CONFIG = {
 describe('config binding layout', () => {
   const originalAgentMode = process.env.DBCLI_AGENT_MODE
   const originalAnchorDirectory = process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR
+  const originalConfigHome = process.env.DBCLI_CONFIG_HOME
   let projectPath: string
 
   beforeEach(async () => {
@@ -49,8 +53,21 @@ describe('config binding layout', () => {
     else process.env.DBCLI_AGENT_MODE = originalAgentMode
     if (originalAnchorDirectory === undefined) delete process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR
     else process.env.DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR = originalAnchorDirectory
-    await rm(getProjectStoragePath(projectPath), { recursive: true, force: true })
+    const projectStoragePath = getProjectStoragePath(projectPath)
+    await rm(projectStoragePath, { recursive: true, force: true })
     await rm(tempDirectory, { recursive: true, force: true })
+    if (originalConfigHome === undefined) delete process.env.DBCLI_CONFIG_HOME
+    else process.env.DBCLI_CONFIG_HOME = originalConfigHome
+  })
+
+  test('resolves a configurable user-global root without reloading the module', () => {
+    const globalRoot = join(tempDirectory, 'global-config')
+    process.env.DBCLI_CONFIG_HOME = globalRoot
+
+    expect(getDbcliConfigHome()).toBe(globalRoot)
+    expect(getGlobalConfigPath()).toBe(globalRoot)
+    expect(isGlobalConfigPath(globalRoot)).toBe(true)
+    expect(isGlobalConfigPath(join(globalRoot, 'projects'))).toBe(false)
   })
 
   test('resolves an unbound project path to itself', async () => {

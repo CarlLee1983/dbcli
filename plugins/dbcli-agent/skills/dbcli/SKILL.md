@@ -261,6 +261,18 @@ dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
 
+For a connection shared across projects, use the explicit root-level `--global` scope. It stores a v2 registry at `~/.config/dbcli/config.json`; it does not create or modify a project binding:
+
+```bash
+dbcli --global init --conn-name shared --system postgresql --host db.example.com \
+  --port 5432 --user app --password '<secret>' --name appdb \
+  --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global query "SELECT 1"
+```
+
+`--global` must appear before the command. Without it, commands continue to use the current project's `.dbcli` binding; global and project registries are independent.
+
 Each named connection has its own schema cache at `.dbcli/schemas/<connection>/`. Run
 `dbcli schema --use <name>` once per connection **before** `schema <table>` — otherwise the
 cache may serve another connection's columns. `schema --refresh` / `--reset` manage the cache
@@ -524,4 +536,4 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 - Blacklisted tables and columns are redacted from query output.
 - `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in reference.md.
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
-- **Global flags:** `--version`, `--config <path>`, `--use <name>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.
+- **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

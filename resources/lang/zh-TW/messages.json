@@ -14,6 +14,7 @@
     "connection_success": "✓ 資料庫連接成功",
     "connection_failed": "✗ 資料庫連接失敗",
     "config_saved": "配置已保存至 .dbcli",
+    "config_saved_global": "全域設定已儲存至 {path}",
     "config_exists_overwrite": "配置檔案 .dbcli 已存在。是否覆蓋？ (y/n)：",
     "cancelled": "已取消。配置未更改。",
     "skip_test_env_ref": "跳過連線測試（環境變數參照模式）",

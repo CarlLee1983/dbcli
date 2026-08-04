@@ -74,9 +74,9 @@
 `configModule.read()` 應維持向後相容，但優先遵循以下邏輯：
 
 1. 讀取專案綁定
-2. 解析全域設定位置
+2. 若呼叫端明確使用 root-level `--global`，改讀 user-global registry
 3. 只把非敏感內容回傳給命令層
-4. 若 binding 缺失，回退到 legacy `.dbcli` 路徑
+4. 若 binding 缺失且未選取 `--global`，回退到 legacy `.dbcli` 路徑
 
 ### 4.3 write 的語意
 
@@ -111,7 +111,7 @@
 
 ### 5.2 全域設定
 
-`~/.config/dbcli/projects/<project-id>/config.json` 保留真正的使用者層級設定，例如：
+專案 binding 指向的 `~/.config/dbcli/projects/<project-id>/config.json` 保留該專案真正的連線設定，例如：
 
 ```json
 {
@@ -131,14 +131,37 @@
 }
 ```
 
+跨專案共用的 user-global registry 則固定放在 `~/.config/dbcli/config.json`，格式同樣是 v2：
+
+```json
+{
+  "version": 2,
+  "default": "shared",
+  "connections": {
+    "shared": {
+      "system": "postgresql",
+      "host": "db.example.com",
+      "port": 5432,
+      "user": "app",
+      "password": { "$env": "DBCLI_SHARED_PASSWORD" },
+      "database": "appdb",
+      "permission": "query-only"
+    }
+  }
+}
+```
+
+以 `dbcli --global ...` 明確選取這個 registry；未帶 `--global` 時仍使用目前專案的 binding。這個 scope 邊界避免在不相關的專案中意外執行全域連線。
+
 ## 6. 路徑解析規則
 
 目前的優先序如下：
 
 1. 明確指定的 `--config`
-2. 專案綁定檔所指向的 home storage
-3. 使用者家目錄下的 legacy / 相容路徑
-4. 舊版 `.dbcli` 相容路徑
+2. 明確指定的 `--global`（`~/.config/dbcli/config.json`）
+3. 專案綁定檔所指向的 home storage
+4. 使用者家目錄下的 legacy / 相容路徑
+5. 舊版 `.dbcli` 相容路徑
 
 這樣可確保：
 
@@ -152,6 +175,7 @@
 
 - 建立專案綁定
 - 產生或更新全域設定
+- `dbcli --global init` 時，直接更新 `~/.config/dbcli/config.json`，不建立專案 binding
 - 不在專案目錄留下明文秘密
 
 ### 7.2 use
@@ -197,9 +221,10 @@
 ## 10. 已落地的決策
 
 1. 全域設定根目錄採用 `~/.config/dbcli/`
-2. 專案綁定檔沿用 `config.json`
-3. schema cache 與 blacklist 保留在專案層，敏感連線資料保留在 home storage
-4. 舊版 `.dbcli/.env.local` 會在可行時遷移到 home storage
+2. user-global registry 沿用 `config.json`，以 root-level `--global` 明確選取
+3. 專案綁定檔沿用 `config.json`
+4. schema cache 與 blacklist 保留在專案層，敏感連線資料保留在 home storage
+5. 舊版 `.dbcli/.env.local` 會在可行時遷移到 home storage
 
 ## 11. 後續維護原則
 

@@ -13,6 +13,9 @@ describe('public core barrel exposes the connection writer surface', () => {
       'migrateV1ToV2',
       'writeProjectBinding',
       'getProjectStoragePath',
+      'getDbcliConfigHome',
+      'getGlobalConfigPath',
+      'isGlobalConfigPath',
     ]) {
       expect(typeof (core as Record<string, unknown>)[name]).toBe('function')
     }

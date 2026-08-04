@@ -2,11 +2,16 @@ import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getProjectStoragePath, writeProjectBinding } from '@/core/config-binding'
+import {
+  getGlobalConfigPath,
+  getProjectStoragePath,
+  writeProjectBinding,
+} from '@/core/config-binding'
 import { writeV2Config } from '@/core/config-v2'
 
 let tempDirectory: string
 let configDirectory: string
+let originalConfigHome: string | undefined
 
 const CLI = join(import.meta.dir, '../../src/cli.ts')
 
@@ -38,11 +43,40 @@ describe('multi-connection integration', () => {
     tempDirectory = await mkdtemp(join(tmpdir(), 'dbcli-multi-conn-integration-'))
     configDirectory = join(tempDirectory, '.dbcli')
     await mkdir(configDirectory, { recursive: true })
+    originalConfigHome = process.env.DBCLI_CONFIG_HOME
+    process.env.DBCLI_CONFIG_HOME = join(tempDirectory, 'global-config')
   })
 
   afterEach(async () => {
     await rm(getProjectStoragePath(configDirectory), { recursive: true, force: true })
+    await rm(getGlobalConfigPath(), { recursive: true, force: true })
     await rm(tempDirectory, { recursive: true, force: true })
+    if (originalConfigHome === undefined) delete process.env.DBCLI_CONFIG_HOME
+    else process.env.DBCLI_CONFIG_HOME = originalConfigHome
+  })
+
+  test('--global init stores a reusable v2 registry outside any project', async () => {
+    await Bun.$`bun run ${CLI} --global init --conn-name shared --system postgresql --host global.example.com --port 5432 --user shared --password secret --name shared_db --permission admin --skip-test --no-interactive --force`
+
+    const globalConfig = JSON.parse(
+      await Bun.file(join(getGlobalConfigPath(), 'config.json')).text()
+    )
+    expect(globalConfig.version).toBe(2)
+    expect(globalConfig.default).toBe('shared')
+    expect(globalConfig.connections.shared.host).toBe('global.example.com')
+    expect(await Bun.file(join(configDirectory, 'config.json')).exists()).toBe(false)
+
+    const inventory = await Bun.$`bun run ${CLI} --global use --list --format json`.json()
+    expect(inventory.connections[0].name).toBe('shared')
+
+    const status = await Bun.$`bun run ${CLI} --global status --format json`.json()
+    expect(status.system).toBe('postgresql')
+
+    const migration =
+      await Bun.$`bun run ${CLI} --global migrate create users --column id:serial`.json()
+    expect(migration.status).toBe('success')
+    expect(migration.dryRun).toBe(true)
+    expect(migration.sql).toContain('CREATE TABLE')
   })
 
   test('init --conn-name 建立 binding 並將 v2 設定寫入 home storage', async () => {

@@ -210,6 +210,18 @@ dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
 
+若要讓多個專案共用連線，請使用明確的 root-level `--global` scope。它會把 v2 registry 儲存在 `~/.config/dbcli/config.json`，不會建立或修改專案 binding：
+
+```bash
+dbcli --global init --conn-name shared --system postgresql --host db.example.com \
+  --port 5432 --user app --password '<secret>' --name appdb \
+  --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global query "SELECT 1"
+```
+
+`--global` 必須放在指令之前。未帶它時，指令仍使用目前專案的 `.dbcli` binding；全域與專案 registry 彼此獨立。
+
 每個命名連線的 schema cache 存於 `.dbcli/schemas/<connection>/`。在 `schema <table>` 前，每個連線都先跑一次 `dbcli schema --use <name>` — 否則 cache 可能回傳到別的連線欄位。`schema --refresh` / `--reset` 管理 cache（reference.md）。`--skip-test` 跳過 init 時的 TCP 連線測試；使用 `--use-env-refs` 時會自動隱含（`$env` refs 尚無值可連線）。`--system` 在 v2 中為選填 — 若省略，引擎會從 `--env-file` / `.env`（`DATABASE_URL` scheme）推斷，預設為 `postgresql`。
 
 ### env-refs（把機密排除在 `.dbcli` 之外）
@@ -414,4 +426,4 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 - 被 blacklist 的 table / column 會從查詢輸出中遮蔽。
 - `schema` 回報 `estimatedRowCount` 與 `sizeCategory`（small / medium / large / huge）。大 / 巨大表要加 `WHERE` 或 `LIMIT` — 分界值見 reference.md。
 - 對 `mongodb+srv://` 連線，`doctor` 會回報 SRV 是用原生解析或走 DoH fallback — 在執行環境限制 DNS 時很有用。
-- **全域旗標：** `--version`、`--config <path>`、`--use <name>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。
+- **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。

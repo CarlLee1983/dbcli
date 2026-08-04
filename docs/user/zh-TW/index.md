@@ -58,6 +58,18 @@ bun install -g @carllee1983/dbcli
 
 在幕後，`init` 會在專案的 `./.dbcli/config.json` 寫入一個 `version: 3` 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 `~/.config/dbcli/projects/<project-name>-<sha1-12>/`。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 `.dbcli/` 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。
 
+若要讓多個專案共用連線，請使用明確的全域 scope。它會把 v2 registry 儲存在 `~/.config/dbcli/config.json`，且不會建立專案 binding：
+
+```bash
+dbcli --global init --conn-name shared --system postgresql \
+  --host db.example.com --port 5432 --user app --password '<secret>' \
+  --name appdb --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global status --format json
+```
+
+Root 層級的 `--global` 必須放在指令之前。全域 registry 與專案 registry 彼此獨立；未帶 `--global` 時仍使用目前專案的 registry。全域檔案與 home storage 的專案設定一樣，會使用 integrity record 與私有檔案權限保護。
+
 ```bash
 dbcli init
 ```
@@ -70,6 +82,16 @@ dbcli init
 ## 連線管理
 
 `dbcli` 支援多連線配置 (v2)，讓你在開發 (Local)、測試 (Staging) 與正式 (Production) 環境間切換。
+
+使用 `--global` 可在不依賴目前專案的情況下管理或執行 user-level registry 的具名連線：
+
+```bash
+dbcli --global use --list
+dbcli --global use shared
+dbcli --global query "SELECT 1"
+```
+
+未帶 `--global` 時，`dbcli` 仍會解析目前專案的 `.dbcli` binding。明確指定 scope 可避免在不相關的專案中意外選到全域連線。
 
 *   **列出所有連線**：`dbcli use --list`；agent 與 script 可用
     `dbcli use --list --format json` 取得不含憑證的連線清單。

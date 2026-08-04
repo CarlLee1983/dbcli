@@ -59,6 +59,18 @@ The `init` command guides you through setting up your first connection. It can a
 
 Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/config.json` in your project, while the real connection settings and any credentials are stored in your home directory at `~/.config/dbcli/projects/<project-name>-<sha1-12>/`. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project `.dbcli/` only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).
 
+For a connection shared by several projects, use the explicit global scope. It stores a v2 registry in `~/.config/dbcli/config.json` and never creates a project binding:
+
+```bash
+dbcli --global init --conn-name shared --system postgresql \
+  --host db.example.com --port 5432 --user app --password '<secret>' \
+  --name appdb --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global status --format json
+```
+
+Root-level `--global` must appear before the command. Global and project registries are independent; commands continue to use the project registry unless `--global` is supplied. The global file is protected with the same integrity record and private file mode as home-stored project settings.
+
 ```bash
 dbcli init
 ```
@@ -71,6 +83,16 @@ Use `--use-env-refs` to keep secrets out of the config file and read them from e
 ## Connection Management
 
 `dbcli` supports multi-connection configurations (v2) so you can switch between Local, Staging, and Production environments.
+
+Use `--global` to manage or run a named connection from the user-level registry, independent of the current project:
+
+```bash
+dbcli --global use --list
+dbcli --global use shared
+dbcli --global query "SELECT 1"
+```
+
+Without `--global`, `dbcli` continues to resolve the current project's `.dbcli` binding. This explicit scope prevents a global connection from being selected accidentally in an unrelated project.
 
 *   **List all connections**: `dbcli use --list`; agents and scripts can use
     `dbcli use --list --format json` for a credential-free connection inventory.

@@ -111,6 +111,7 @@ export function buildProgram(): Command {
     .option('-v, --verbose', 'Increase verbosity (-v verbose, -vv debug)', (_, prev) => prev + 1, 0)
     .option('-q, --quiet', 'Suppress non-essential output')
     .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
+    .option('--global', 'Use the user-global connection registry (~/.config/dbcli)', false)
     .addOption(createConnectionSelectorOption())
     // Required so options after a sub-subcommand (e.g. `dbcli proxy analyze --events ...`)
     // bind to the leaf command instead of being absorbed by an ancestor that shares the

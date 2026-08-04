@@ -269,6 +269,18 @@ dbcli init --conn-name staging --env-file .env.staging
 dbcli init --conn-name prod --env-file .env.production --use-env-refs
 ```
 
+For connections shared across projects, use the user-global scope. It stores a v2 registry at `~/.config/dbcli/config.json` and leaves the current project's `.dbcli` binding untouched:
+
+```bash
+dbcli --global init --conn-name shared --system postgresql --host db.example.com \
+  --port 5432 --user app --password '<secret>' --name appdb \
+  --skip-test --no-interactive --force
+dbcli --global use --list --format json
+dbcli --global query "SELECT 1"
+```
+
+Root-level `--global` must precede the command. Without it, commands continue to use the project configuration.
+
 ### Managing Connections
 
 Use the `dbcli use` command to switch between connections or list them.
@@ -1073,6 +1085,7 @@ All commands support these global options:
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | Path to .dbcli config file (default: `.dbcli`) |
+| `--global` | Use the user-global registry at `~/.config/dbcli/config.json` |
 | `--use <connection>` | Use a named v2 connection for this invocation only (does not change the default) |
 | `-v, --verbose` | Increase verbosity (`-v` verbose, `-vv` debug) |
 | `-q, --quiet` | Suppress non-essential output |

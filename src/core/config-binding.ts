@@ -11,7 +11,18 @@ import {
 import { ConfigError } from '@/utils/errors'
 
 const BINDING_FILE_NAME = 'config.json'
-const DBCLI_HOME_ROOT = join(homedir(), '.config', 'dbcli')
+
+/**
+ * Resolve the per-user dbcli root lazily so embedders and tests can provide an
+ * isolated config home without reloading the module. `DBCLI_CONFIG_HOME` is a
+ * dbcli-specific override; otherwise preserve the existing `~/.config` path.
+ */
+export function getDbcliConfigHome(): string {
+  const configuredHome = process.env.DBCLI_CONFIG_HOME?.trim()
+  if (configuredHome) return configuredHome
+
+  return join(process.env.HOME?.trim() || homedir(), '.config', 'dbcli')
+}
 
 export interface ProjectConfigBinding {
   version: 3
@@ -44,7 +55,17 @@ function isProjectConfigBinding(raw: unknown): raw is ProjectConfigBinding {
 }
 
 export function getDbcliHomeRoot(): string {
-  return DBCLI_HOME_ROOT
+  return getDbcliConfigHome()
+}
+
+/** Canonical user-global configuration directory (`~/.config/dbcli`). */
+export function getGlobalConfigPath(): string {
+  return getDbcliHomeRoot()
+}
+
+/** Whether a path points at the canonical user-global configuration directory. */
+export function isGlobalConfigPath(path: string): boolean {
+  return resolve(path) === resolve(getGlobalConfigPath())
 }
 
 export function getProjectStoragePath(projectPath: string): string {

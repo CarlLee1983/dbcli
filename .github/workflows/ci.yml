@@ -74,3 +74,4 @@ jobs:
           bun run platform:check
           bun run plugin:check
           bun run docs:check
+          bun run contract:check

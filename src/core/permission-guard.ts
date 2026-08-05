@@ -36,6 +36,12 @@ export interface StatementClassification {
   keywords: string[]
   isComposite: boolean
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  /**
+   * Set when a read-looking statement was re-classified because it contains an
+   * executable write. Holds that keyword, so a refusal can say what was found
+   * rather than reporting the statement as unrecognised.
+   */
+  escalatedFrom?: string
 }
 
 /**
@@ -598,6 +604,7 @@ function escalateHiddenWrite(
     type: 'UNKNOWN',
     isDangerous: true,
     confidence: 'HIGH',
+    escalatedFrom: hidden,
   }
 }
 
@@ -627,6 +634,20 @@ export function checkPermission(
       reason:
         'SQL containing multiple statements is refused below admin permission, because only ' +
         'the first statement determines the permission check. Run each statement separately.',
+      classification,
+    }
+  }
+
+  // A statement re-classified because it hides a write is refused with what was
+  // actually found. The generic messages below name the next tier up, which is
+  // wrong here: every tier short of admin refuses it.
+  if (permission !== 'admin' && classification.escalatedFrom) {
+    return {
+      allowed: false,
+      reason:
+        `This statement opens as a read but contains an executable ` +
+        `${classification.escalatedFrom}. A write hidden inside a read statement ` +
+        `requires admin permission (current level: ${permission}).`,
       classification,
     }
   }

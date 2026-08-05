@@ -163,3 +163,29 @@ describe('a hidden write cannot be spelled away', () => {
     })
   }
 })
+
+describe('the refusal says what actually happened', () => {
+  const sql = 'WITH x AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * FROM x'
+
+  for (const permission of ['query-only', 'read-write', 'data-admin'] as const) {
+    test(`${permission} names the hidden write and the tier that would allow it`, () => {
+      const { allowed, reason } = checkPermission(sql, permission, 'postgresql')
+      expect(allowed).toBe(false)
+      // The keyword that was found, so the user can see what triggered it.
+      expect(reason).toMatch(/INSERT/)
+      // The tier that actually allows it — earlier messages pointed at tiers
+      // that refuse the statement too.
+      expect(reason).toMatch(/admin/)
+      expect(reason).not.toMatch(/requires read-write/)
+      expect(reason).not.toMatch(/requires data-admin or admin/)
+      // It is recognised; telling the user to report it as unrecognised is wrong.
+      expect(reason).not.toMatch(/Unrecognised|open an issue/i)
+    })
+  }
+
+  test('a genuinely unrecognised statement still reads as unrecognised', () => {
+    const { allowed, reason } = checkPermission('VACUUM FULL users', 'query-only', 'postgresql')
+    expect(allowed).toBe(false)
+    expect(reason).toMatch(/Unrecognised/i)
+  })
+})

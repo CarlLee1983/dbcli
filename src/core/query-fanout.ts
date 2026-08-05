@@ -1,6 +1,10 @@
 import type { QueryResult } from '@/types/query'
 import { mapCliError, type CliErrorPresentation } from '@/utils/cli-error'
-import { enforcePermission, stripCommentsAndStrings } from '@/core/permission-guard'
+import {
+  enforcePermission,
+  stripCommentsAndStrings,
+  SQL_WRITE_OR_DDL_KEYWORDS,
+} from '@/core/permission-guard'
 
 export type ConnectionQueryOutcome =
   | {
@@ -36,9 +40,6 @@ export function aggregateFanOutExitCode(outcomes: readonly ConnectionQueryOutcom
   return 2
 }
 
-const SQL_WRITE_OR_DDL_KEYWORDS =
-  /\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i
-
 /**
  * Fail closed around SQL shapes whose leading keyword looks read-only but can
  * execute writes, notably data-modifying CTEs and EXPLAIN ANALYZE writes.
@@ -47,7 +48,8 @@ export function assertFanOutReadOnlySql(
   sql: string,
   dialect: 'postgresql' | 'mysql' | 'mariadb'
 ): void {
-  const classification = enforcePermission(sql, 'query-only')
+  // The dialect is known here, so the statement count is checked first and
+  // reports the fan-out contract rather than the generic stacking message.
   const executableSql = stripCommentsAndStrings(sql, { dialect })
   const statements = executableSql
     .split(';')
@@ -56,6 +58,7 @@ export function assertFanOutReadOnlySql(
   if (statements.length !== 1) {
     throw new Error('Multi-connection SQL must contain exactly one read-only statement')
   }
+  const classification = enforcePermission(sql, 'query-only')
   const containsWrite = SQL_WRITE_OR_DDL_KEYWORDS.test(executableSql)
   const explainExecutes = classification.type === 'EXPLAIN' && /\bANALYZE\b/i.test(executableSql)
 

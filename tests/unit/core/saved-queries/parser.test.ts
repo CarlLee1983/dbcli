@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { parseSavedQuery } from '@/core/saved-queries/parser'
+import { parseSavedQuery, validateBody } from '@/core/saved-queries/parser'
 import { SavedQueryError } from '@/core/saved-queries/types'
 
 const wrap = (sql: string, fm = ''): string => (fm ? `-- ---\n${fm}\n-- ---\n\n${sql}` : sql)
@@ -183,5 +183,37 @@ describe('parseSavedQuery — intent', () => {
     expect(() => parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })).toThrow(
       /invalid intent/
     )
+  })
+})
+
+describe('validateBody — data-modifying CTEs', () => {
+  const input = { key: '@t', file: '/tmp/t.sql' } as any
+
+  test('rejects a WITH clause whose CTE deletes rows', () => {
+    expect(() =>
+      validateBody('WITH gone AS (DELETE FROM users WHERE id = 1 RETURNING *) SELECT * FROM gone', input)
+    ).toThrow(/read-only|DELETE/i)
+  })
+
+  test('rejects a WITH clause whose CTE updates rows', () => {
+    expect(() =>
+      validateBody('WITH bumped AS (UPDATE users SET n = n + 1 RETURNING *) SELECT * FROM bumped', input)
+    ).toThrow(/read-only|UPDATE/i)
+  })
+
+  test('rejects a WITH clause whose CTE inserts rows', () => {
+    expect(() =>
+      validateBody('WITH added AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM added', input)
+    ).toThrow(/read-only|INSERT/i)
+  })
+
+  test('still accepts an ordinary read-only CTE', () => {
+    expect(() =>
+      validateBody('WITH recent AS (SELECT * FROM users ORDER BY created_at DESC) SELECT * FROM recent', input)
+    ).not.toThrow()
+  })
+
+  test('does not reject a literal that merely mentions delete', () => {
+    expect(() => validateBody("SELECT * FROM logs WHERE action = 'DELETE'", input)).not.toThrow()
   })
 })

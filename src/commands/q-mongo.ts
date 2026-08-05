@@ -25,6 +25,21 @@ export async function qMongoBranch(
       `MongoDB snippet '${snippet.query.meta.key}' resolved without a target collection`
     )
   }
+  // Saved snippets are read-only by contract, so a write stage is refused at
+  // every permission level — including inside --dry-run, which would otherwise
+  // present a writing pipeline as a safe preview.
+  const { assertNoMongoWriteStages } = await import('@/core/mongo/write-stage-guard')
+  let parsedBody: unknown
+  try {
+    parsedBody = JSON.parse(prepared.driver.sql)
+  } catch {
+    parsedBody = undefined
+  }
+  assertNoMongoWriteStages(parsedBody, config.permission, {
+    allowWithPermission: false,
+    context: `MongoDB snippet '${snippet.query.meta.key}'`,
+  })
+
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
   blacklistValidator.checkTableBlacklist('SELECT', collection)

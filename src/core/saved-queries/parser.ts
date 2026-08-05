@@ -12,6 +12,7 @@
 
 import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
+import { SQL_WRITE_OR_DDL_KEYWORDS } from '@/core/permission-guard'
 import {
   SavedQueryError,
   SUPPORTED_CHART_TYPES,
@@ -334,6 +335,18 @@ export function validateBody(body: string, input: ParseInput): void {
   if (firstKeyword !== 'SELECT' && firstKeyword !== 'WITH') {
     throw new SavedQueryError(
       `Snippet '${input.key}' must start with SELECT or WITH (got '${firstKeyword || '<empty>'}')`,
+      'NOT_SELECT',
+      input.file
+    )
+  }
+
+  // A read-looking leading keyword does not prove the statement reads: a CTE can
+  // carry DELETE/UPDATE/INSERT … RETURNING, and `SELECT … INTO` creates a table.
+  // Snippets are read-only by contract, so refuse them at parse time.
+  const write = trimmed.match(SQL_WRITE_OR_DDL_KEYWORDS)
+  if (write) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' must be read-only, but contains '${write[0].toUpperCase()}'`,
       'NOT_SELECT',
       input.file
     )

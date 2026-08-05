@@ -461,10 +461,53 @@ export function classifyStatement(sql: string): StatementClassification {
 }
 
 /**
+ * Keywords that write or change schema. Used by every path that has to prove a
+ * statement is read-only despite a read-looking leading keyword — data-modifying
+ * CTEs, `SELECT … INTO`, and `EXPLAIN ANALYZE` of a write.
+ */
+export const SQL_WRITE_OR_DDL_KEYWORDS =
+  /\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i
+
+/**
+ * True when the SQL holds more than one statement, ignoring semicolons inside
+ * comments and string literals and a single trailing separator.
+ */
+export function containsMultipleStatements(sql: string): boolean {
+  const normalized = normalizeSQL(sql)
+  const dialects = ['postgresql', 'mysql', 'mariadb'] as const
+
+  // Quoting differs per dialect ($$…$$, `identifiers`, # comments), and this
+  // check runs where the dialect is not always known. Only treat the SQL as
+  // stacked when every dialect reads it that way: a separator that one dialect
+  // hides inside a literal is not executable in the dialect that does not.
+  return dialects.every(
+    (dialect) =>
+      stripCommentsAndStrings(normalized, { dialect })
+        .split(';')
+        .filter((part) => part.trim().length > 0).length > 1
+  )
+}
+
+/**
  * Check if statement is allowed under given permission level
  */
 export function checkPermission(sql: string, permission: Permission): PermissionCheckResult {
   const classification = classifyStatement(sql)
+
+  // Classification describes one statement, but drivers using the simple query
+  // protocol (PostgreSQL) execute every semicolon-separated statement in the
+  // string. A stacked statement would therefore be judged by its first keyword
+  // alone and smuggle a trailing write past the permission level. Admin already
+  // permits every statement type, so stacking grants it nothing.
+  if (permission !== 'admin' && containsMultipleStatements(sql)) {
+    return {
+      allowed: false,
+      reason:
+        'SQL containing multiple statements is refused below admin permission, because only ' +
+        'the first statement determines the permission check. Run each statement separately.',
+      classification,
+    }
+  }
 
   // Admin allows everything
   if (permission === 'admin') {

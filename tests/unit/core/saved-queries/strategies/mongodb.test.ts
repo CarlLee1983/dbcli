@@ -149,3 +149,35 @@ describe('mongoStrategy.prepare', () => {
     ).toThrow(SavedQueryError)
   })
 })
+
+describe('mongoStrategy.validateBody — write stages', () => {
+  test('rejects an aggregate pipeline containing $out', () => {
+    expect(() =>
+      mongoStrategy.validateBody(
+        '[{"$match":{}},{"$out":"users_copy"}]',
+        meta({ operation: 'aggregate' }),
+        '/tmp/t.mongodb.sql'
+      )
+    ).toThrow(SavedQueryError)
+  })
+
+  test('rejects an aggregate pipeline containing $merge', () => {
+    expect(() =>
+      mongoStrategy.validateBody(
+        '[{"$merge":{"into":"users_copy"}}]',
+        meta({ operation: 'aggregate' }),
+        '/tmp/t.mongodb.sql'
+      )
+    ).toThrow(/\$merge/)
+  })
+
+  test('still accepts a read-only aggregate pipeline', () => {
+    expect(() =>
+      mongoStrategy.validateBody(
+        '[{"$match":{"status":"active"}},{"$group":{"_id":"$city"}}]',
+        meta({ operation: 'aggregate' }),
+        '/tmp/t.mongodb.sql'
+      )
+    ).not.toThrow()
+  })
+})

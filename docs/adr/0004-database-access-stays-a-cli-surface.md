@@ -34,34 +34,35 @@ server is still not the operator.
 ## Evidence: coverage is the property that matters, and only the surface owner can audit it
 
 A safety mechanism is worth what its path coverage is worth, and this project
-demonstrated the point against itself. An audit of the five positioning claims
-below found five ways a read-looking operation executed a write while bypassing
-the configured permission level: MongoDB `$out` / `$merge` on the single-connection
-`query` path and in saved snippets, PostgreSQL statement stacking through the
-simple query protocol, a data-modifying CTE and `SELECT … INTO` in a snippet
-body, a `verify.query` in snippet frontmatter executed verbatim, and the MongoDB
-branch of `export`.
+demonstrated the point against itself. An audit of the claims below, and the
+adversarial review of its own fixes that followed, found six shipped ways a
+read-looking operation executed a write while bypassing the configured
+permission level: MongoDB `$out` / `$merge` on the single-connection `query`
+path, in saved snippets, and in `export`; PostgreSQL statement stacking through
+the simple query protocol; a data-modifying CTE and `SELECT … INTO` in a snippet
+body; a `verify.query` in snippet frontmatter executed verbatim; a `$` inside an
+identifier read as the start of a dollar-quoted string, which hid the rest of a
+statement from analysis; and — the plainest of them — the read-only proof itself,
+which existed but ran only for multi-connection fan-out, so `dbcli query` accepted
+`WITH gone AS (DELETE …) SELECT …` under `permission: query-only`.
 
-The last two were not found by auditing commands. Four independent audits of the
-individual commands missed them. They were found by enumerating every call site
-that reaches an adapter — an audit that is possible only for the party that owns
-the whole surface. An operator of an MCP database server cannot perform it: the
-paths are inside the server process.
+Not one of them is a missing mechanism. Every one is a mechanism that did not
+reach a path.
 
-A sixth was found by an adversarial review of the fixes themselves: PostgreSQL
-allows `$` inside an identifier after its first character, so `a$q$` is one
-identifier, and reading it as the start of a dollar-quoted string hid everything
-up to the next `$q$` from analysis while the server still executed it. That one
-predates this work — it defeated the fan-out read-only assertion in 1.47.0, which
-was the only statement-splitting guard that existed then.
+Two of them were not found by auditing commands at all. Four independent audits
+of the individual commands missed them; they surfaced only when every call site
+reaching an adapter was enumerated — an audit available only to the party that
+owns the whole surface. An operator of an MCP database server cannot perform it:
+the paths are inside the server process.
 
-Two rounds of adversarial review were needed, and the second round found a
-bypass in the fix for the first. That is the argument, not a caveat to it: this
-class of defect is found by attacking a surface repeatedly, which requires
-holding the surface.
+Seven rounds of adversarial review were needed. Rounds two through six each
+found a defect in the fix produced by the round before it, twice in exceptions
+added only to stop a guard from rejecting legitimate queries. The seventh was
+the first with nothing to report. That history is the argument, not a caveat to
+it: this class of defect is found by attacking a surface repeatedly, and only
+the party that holds the surface can do that.
 
-The fixes are commits `fcf3502`, `92114d2`, `ee0ed5a` and their successor, and
-the enumeration is now a structural contract
+The fixes ship in 1.47.1, and the enumeration is now a structural contract
 (`tests/unit/core/execution-path-contract.test.ts`): a new path to an adapter
 fails the suite until it is registered with the gate that proves what it may
 execute. The contract does not forbid a new path; it prevents one from being

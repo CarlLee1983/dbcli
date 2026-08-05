@@ -8,7 +8,7 @@
 
 import { describe, test, expect } from 'bun:test'
 import { QueryExecutor } from '@/core/query-executor'
-import { checkPermission } from '@/core/permission-guard'
+import { checkPermission, containsMultipleStatements } from '@/core/permission-guard'
 import type { DatabaseAdapter } from '@/adapters/types'
 
 function makeSpyAdapter(): { adapter: DatabaseAdapter; calls: () => string[] } {
@@ -74,5 +74,43 @@ describe('stacked statements are refused before reaching the adapter', () => {
   test('classification refuses to label a stacked statement as a plain SELECT', () => {
     const result = checkPermission('SELECT 1; DELETE FROM users', 'query-only')
     expect(result.allowed).toBe(false)
+  })
+})
+
+/**
+ * The first version of this guard stripped comments with a string-blind regex
+ * before the dialect-aware pass, and treated "every dialect agrees" as the test
+ * for a separator. Both were fail-open: a `--` inside a literal deleted the rest
+ * of the string before it was examined, and `#` is a comment in MySQL but an
+ * operator in PostgreSQL, so one `#` silenced the check for a Postgres query.
+ */
+describe('stacking cannot be hidden from the guard', () => {
+  const stacked = [
+    ['a dash-dash sequence inside a string literal', "SELECT 'x--' AS a LIMIT 1;\nDELETE FROM users;\n"],
+    ['a block-comment opener inside a string literal', "SELECT 'a/*' AS a LIMIT 1; DELETE FROM users; SELECT '*/' AS b"],
+    ['a # operator that only MySQL reads as a comment', "SELECT data #> '{a}' FROM t LIMIT 1; DELETE FROM users"],
+  ] as const
+
+  for (const [description, sql] of stacked) {
+    test(`refuses ${description}`, async () => {
+      const { adapter, calls } = makeSpyAdapter()
+      const executor = new QueryExecutor(adapter, 'query-only', undefined, undefined, {
+        dialect: 'postgresql',
+      })
+
+      await expect(executor.execute(sql)).rejects.toThrow(/multiple statements|multi-statement/i)
+      expect(calls()).toEqual([])
+    })
+  }
+
+  test('a dialect-specific literal is still not a separator', () => {
+    // $$…$$ is a string in PostgreSQL; backticks quote an identifier in MySQL.
+    expect(containsMultipleStatements('SELECT $$a;b$$ AS v', 'postgresql')).toBe(false)
+    expect(containsMultipleStatements('SELECT 1 AS `a;DELETE`', 'mysql')).toBe(false)
+  })
+
+  test('an unknown dialect fails closed', () => {
+    // With no dialect to judge by, any reading that sees a separator wins.
+    expect(containsMultipleStatements('SELECT data #> \'{a}\' FROM t; DELETE FROM users')).toBe(true)
   })
 })

@@ -12,6 +12,8 @@ import {
   enforcePermission,
   PermissionError,
   stripCommentsAndStrings,
+  SQL_DIALECTS,
+  type SqlDialect,
 } from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
 import { extractTableName } from '@/utils/engine-hints'
@@ -38,8 +40,24 @@ export class QueryExecutor {
       connectionName?: string
       recovery?: boolean
       deferDiagnostics?: boolean
+      /**
+       * Quoting rules that decide what counts as a statement separator differ
+       * per dialect. Without this, the stacking check has to fail closed.
+       */
+      dialect?: SqlDialect
     } = {}
   ) {}
+
+  /**
+   * The dialect the statement will actually run under. Falls back to the
+   * connection config, then to undefined — where the stacking check fails
+   * closed rather than guessing.
+   */
+  private resolveDialect(): SqlDialect | undefined {
+    if (this.options.dialect) return this.options.dialect
+    const system = this.config?.connection?.system
+    return SQL_DIALECTS.find((dialect) => dialect === system)
+  }
 
   takeDiagnostics(): string[] {
     const diagnostics = this.pendingDiagnostics
@@ -70,7 +88,7 @@ export class QueryExecutor {
     this.pendingDiagnostics = []
     try {
       // 1. Enforce permission before execution
-      const classification = enforcePermission(sql, this.permission)
+      const classification = enforcePermission(sql, this.permission, this.resolveDialect())
 
       // 1b. Warn on dangerous DDL operations even in admin mode
       const dangerousOperationWarning =

@@ -17,7 +17,18 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const SRC = join(import.meta.dir, '../../../src')
-const EXECUTE_CALL = /\w*[Aa]dapter\.execute\s*[<(]/g
+
+/**
+ * Adapter entry points that reach the database. `execute` carries user SQL;
+ * `insert` / `update` / `delete` are the typed write paths, which an earlier
+ * version of this contract did not count at all.
+ *
+ * This is a heuristic over source text, not a type-level guarantee: a receiver
+ * not named `*adapter`, a call split across lines, or `adapter['execute']`
+ * would evade it. It is a tripwire for the ordinary case, and the registry
+ * below is the actual record.
+ */
+const EXECUTE_CALL = /\w*[Aa]dapter\.(?:execute|insert|update|delete)\s*[<(]/g
 
 /**
  * Registered execution paths and the gate each relies on. Update this table in
@@ -46,7 +57,21 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
   },
   'core/report/run-diagnostic.ts': {
     calls: 1,
-    gate: 'built-in diagnostic snippets only, parsed under the snippet read-only contract',
+    gate:
+      'snippet read-only contract at parse time ONLY — no permission tier is applied here, ' +
+      'and the collector loads shared/local user snippets, not just built-ins',
+  },
+  'commands/insert.ts': {
+    calls: 2,
+    gate: 'enforcePermission() — requires data-admin before the typed insert',
+  },
+  'commands/update.ts': {
+    calls: 2,
+    gate: 'enforcePermission() — requires data-admin before the typed update',
+  },
+  'commands/delete.ts': {
+    calls: 2,
+    gate: 'explicit data-admin check in the command before the typed delete',
   },
   'commands/query.ts': {
     calls: 3,

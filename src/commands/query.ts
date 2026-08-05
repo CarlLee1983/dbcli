@@ -464,7 +464,7 @@ async function sqlQueryBranch(
   try {
     await adapter.connect()
     const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, undefined, {
+    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, {
       ...options,
       deferDiagnostics: true,
     })

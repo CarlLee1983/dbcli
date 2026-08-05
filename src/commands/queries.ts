@@ -207,7 +207,16 @@ export async function queriesCheck(options: CheckOptions): Promise<void> {
   let failed = 0
   let total = 0
   try {
-    const map = await loadSnippets(dirs)
+    // A file that fails to parse is skipped by the loader so it cannot break
+    // every other command; `check` exists to report exactly those.
+    const map = await loadSnippets({
+      ...dirs,
+      onError: ({ key, error }) => {
+        total++
+        failed++
+        console.error(`✗ ${key}: ${error.message}`)
+      },
+    })
     for (const variants of map.values()) {
       for (const snippet of variants) {
         total++

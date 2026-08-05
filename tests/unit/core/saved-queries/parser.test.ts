@@ -244,3 +244,53 @@ describe('verify.query must be read-only', () => {
     expect(() => withVerify('SELECT count(*) AS count FROM users')).not.toThrow()
   })
 })
+
+describe('validateBody — read-only proof does not over-block', () => {
+  const input = (engine?: string) =>
+    ({ key: '@t', file: 't.sql', engine: engine ? [engine] : undefined }) as any
+
+  test('accepts a locking read (FOR UPDATE takes a lock, it does not write)', () => {
+    expect(() =>
+      validateBody('SELECT * FROM users WHERE id = :id FOR UPDATE', input('postgres'))
+    ).not.toThrow()
+  })
+
+  test('accepts FOR NO KEY UPDATE and FOR SHARE', () => {
+    expect(() =>
+      validateBody('SELECT * FROM users FOR NO KEY UPDATE', input('postgres'))
+    ).not.toThrow()
+    expect(() => validateBody('SELECT * FROM users FOR SHARE', input('postgres'))).not.toThrow()
+  })
+
+  test('accepts backtick-quoted identifiers that spell keywords', () => {
+    expect(() =>
+      validateBody('SELECT `update`, `create` FROM `orders`', input('mysql'))
+    ).not.toThrow()
+  })
+
+  test('accepts a MySQL # comment mentioning a keyword', () => {
+    expect(() =>
+      validateBody('SELECT id FROM users # drop this column later\n', input('mysql'))
+    ).not.toThrow()
+  })
+
+  test('accepts a dotted column whose name spells a keyword', () => {
+    expect(() => validateBody('SELECT a.create FROM a', input('postgres'))).not.toThrow()
+  })
+
+  test('still rejects a real write hiding behind a lock clause', () => {
+    expect(() =>
+      validateBody(
+        'WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone FOR UPDATE',
+        input('postgres')
+      )
+    ).toThrow(/read-only|DELETE/i)
+  })
+
+  test('still rejects a write keyword that a different dialect would execute', () => {
+    // Backticks are not string quoting in PostgreSQL, so this is executable there.
+    expect(() => validateBody('SELECT `x`; DROP TABLE t', input('postgres'))).toThrow(
+      /read-only|DROP/i
+    )
+  })
+})

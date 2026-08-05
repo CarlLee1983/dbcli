@@ -465,33 +465,72 @@ export function classifyStatement(sql: string): StatementClassification {
  * statement is read-only despite a read-looking leading keyword — data-modifying
  * CTEs, `SELECT … INTO`, and `EXPLAIN ANALYZE` of a write.
  */
+/** SQL dialects whose quoting rules differ in ways that affect statement splitting. */
+export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
+export type SqlDialect = (typeof SQL_DIALECTS)[number]
+
 export const SQL_WRITE_OR_DDL_KEYWORDS =
-  /\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i
+  /(?<![.\w])(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i
+
+/**
+ * `FOR UPDATE` and `FOR SHARE` take row locks. They read, and the `UPDATE`
+ * inside them must not be mistaken for a write.
+ */
+const SQL_LOCK_CLAUSE = /\bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b|\bFOR\s+(?:KEY\s+)?SHARE\b/gi
+
+/**
+ * The write or DDL keyword a statement would actually execute, or undefined if
+ * it proves read-only. Comments, string literals and quoted identifiers are
+ * removed per dialect first, so `SELECT \`update\` FROM t` and `# drop this`
+ * are reads while `WITH x AS (DELETE …)` is not.
+ *
+ * With several candidate dialects the check fails closed: a keyword executable
+ * under any of them counts, since the body may run under any of them.
+ */
+export function findWriteKeyword(
+  sql: string,
+  dialects?: readonly SqlDialect[]
+): string | undefined {
+  const candidates = dialects && dialects.length > 0 ? dialects : SQL_DIALECTS
+  for (const dialect of candidates) {
+    const executable = stripCommentsAndStrings(sql, { dialect }).replace(SQL_LOCK_CLAUSE, ' ')
+    const match = executable.match(SQL_WRITE_OR_DDL_KEYWORDS)
+    if (match?.[1]) return match[1].toUpperCase()
+  }
+  return undefined
+}
 
 /**
  * True when the SQL holds more than one statement, ignoring semicolons inside
  * comments and string literals and a single trailing separator.
  */
-export function containsMultipleStatements(sql: string): boolean {
-  const normalized = normalizeSQL(sql)
-  const dialects = ['postgresql', 'mysql', 'mariadb'] as const
+export function containsMultipleStatements(sql: string, dialect?: SqlDialect): boolean {
+  // Strip the raw SQL. Running a string-blind comment pass first (normalizeSQL)
+  // would let `SELECT 'x--' ; DELETE …` lose its tail before it is counted.
+  const statementCount = (candidate: SqlDialect): number =>
+    stripCommentsAndStrings(sql, { dialect: candidate })
+      .split(';')
+      .filter((part) => part.trim().length > 0).length
 
-  // Quoting differs per dialect ($$…$$, `identifiers`, # comments), and this
-  // check runs where the dialect is not always known. Only treat the SQL as
-  // stacked when every dialect reads it that way: a separator that one dialect
-  // hides inside a literal is not executable in the dialect that does not.
-  return dialects.every(
-    (dialect) =>
-      stripCommentsAndStrings(normalized, { dialect })
-        .split(';')
-        .filter((part) => part.trim().length > 0).length > 1
-  )
+  if (dialect) return statementCount(dialect) > 1
+
+  // Quoting differs per dialect: $$…$$ and $tag$…$tag$ are strings only in
+  // PostgreSQL, backticks quote identifiers only in MySQL/MariaDB, and `#`
+  // starts a comment in MySQL/MariaDB while PostgreSQL reads it as an operator.
+  // Without a dialect to judge by, fail closed — any reading that finds a
+  // separator wins, because the alternative hides a separator the real dialect
+  // would execute.
+  return SQL_DIALECTS.some((candidate) => statementCount(candidate) > 1)
 }
 
 /**
  * Check if statement is allowed under given permission level
  */
-export function checkPermission(sql: string, permission: Permission): PermissionCheckResult {
+export function checkPermission(
+  sql: string,
+  permission: Permission,
+  dialect?: SqlDialect
+): PermissionCheckResult {
   const classification = classifyStatement(sql)
 
   // Classification describes one statement, but drivers using the simple query
@@ -499,7 +538,7 @@ export function checkPermission(sql: string, permission: Permission): Permission
   // string. A stacked statement would therefore be judged by its first keyword
   // alone and smuggle a trailing write past the permission level. Admin already
   // permits every statement type, so stacking grants it nothing.
-  if (permission !== 'admin' && containsMultipleStatements(sql)) {
+  if (permission !== 'admin' && containsMultipleStatements(sql, dialect)) {
     return {
       allowed: false,
       reason:
@@ -584,8 +623,12 @@ export function checkPermission(sql: string, permission: Permission): Permission
  * Throws PermissionError if statement not allowed, otherwise returns classification
  * Use in command handlers before execution
  */
-export function enforcePermission(sql: string, permission: Permission): StatementClassification {
-  const result = checkPermission(sql, permission)
+export function enforcePermission(
+  sql: string,
+  permission: Permission,
+  dialect?: SqlDialect
+): StatementClassification {
+  const result = checkPermission(sql, permission, dialect)
 
   if (!result.allowed) {
     throw new PermissionError(result.reason, result.classification, permission)

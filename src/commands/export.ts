@@ -98,7 +98,7 @@ export async function exportCommand(
     )
     await adapter.connect()
 
-    const executor = new QueryExecutor(adapter, config.permission, undefined, undefined, {
+    const executor = new QueryExecutor(adapter, config.permission, undefined, config, {
       recovery: options.recovery,
       deferDiagnostics: true,
     })

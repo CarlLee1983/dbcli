@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+決策記錄：`docs/adr/0003-connection-timeout-override-resolved-at-adapter-construction.md`。
+
+### Added
+
+- **新的 root-level 全域旗標 `--timeout <ms>`。** 覆寫連線設定中的 `timeout`；兩者都沒有時沿用各 adapter 內建的 5000ms。合法值為 100～600000 的整數，須放在子指令之前（和 `--global` / `--use` 一樣是 root-level flag）。對所有引擎有效，典型用途是 MongoDB 跨 VPN 或連 Atlas 時，預設 5 秒的 server selection timeout 太緊：`dbcli --timeout 20000 --use <conn> list`。這個覆寫只在建立連線時套用，不會寫回設定檔；要永久生效請在連線設定裡寫 `timeout` 欄位。
+- **連線設定檔新增 `timeout` 欄位。** 四種連線 schema 皆支援，毫秒、100～600000 整數、可省略。
+
+### Changed
+
+- **設定檔驗證失敗的錯誤訊息改為可讀格式。** 過去會吐出整包 Zod `unionErrors` 巢狀 JSON；現在只列出與該連線 `system` 相符的分支問題，逐欄列出欄位路徑。
+- **文件明確禁止 `2>&1`。** 診斷訊息走 stderr、結果走 stdout，合併兩者會讓 `--format json` 的輸出無法解析；SKILL 與 reference 都補上導管寫法。
+
 ## [1.46.0] - 2026-08-04 - MongoDB 逐欄連線設定
 
 決策記錄：`docs/adr/0002-mongodb-connection-field-first-config.md`；規格：`docs/specs/2026-08-04-mongodb-field-first-connection.md`。

@@ -12,6 +12,7 @@
 
 import { type DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
+import { formatConfigValidationError, isZodError } from '@/utils/config-error-format'
 import {
   assertExplicitProductionSelection,
   detectConfigVersion,
@@ -223,6 +224,9 @@ export const configModule = {
     // 優先使用明確傳入的 connectionName，fallback 到全域 --use 值
     const effectiveConnectionName = connectionName ?? _globalConnectionName
 
+    // 保留原始設定內容，驗證失敗時用來挑出正確的 union 分支
+    let rawForDiagnostics: unknown
+
     try {
       const binding = await readProjectBinding(path)
       const storagePath = await resolveConfigStoragePath(path)
@@ -254,6 +258,7 @@ export const configModule = {
           const content = await configFile.text()
           await assertConfigIntegrity(storagePath, content, { requireRecord: true })
           const config = JSON.parse(content)
+          rawForDiagnostics = config
 
           // V2 detection: handle multi-connection format
           if (detectConfigVersion(config) === 2) {
@@ -375,6 +380,7 @@ export const configModule = {
         assertNoConnectionSelectorOnV1(effectiveConnectionName)
         const content = await file.text()
         const raw = JSON.parse(content)
+        rawForDiagnostics = raw
         const resolved = resolveEnvReferences(raw, process.env)
         return DbcliConfigSchema.parse(resolved)
       }
@@ -389,6 +395,11 @@ export const configModule = {
       return { ...DEFAULT_CONFIG }
     } catch (error) {
       if (error instanceof ConfigError) throw error
+      if (isZodError(error)) {
+        throw new ConfigError(
+          `Failed to read .dbcli config: 設定內容不符合結構\n${formatConfigValidationError(error, rawForDiagnostics)}`
+        )
+      }
       if (error instanceof Error && error.message.includes('JSON')) {
         throw new ConfigError(`Failed to parse .dbcli file: ${error.message}`)
       }
@@ -409,6 +420,11 @@ export const configModule = {
     try {
       return DbcliConfigSchema.parse(raw)
     } catch (error) {
+      if (isZodError(error)) {
+        throw new ConfigError(
+          `Invalid .dbcli config structure:\n${formatConfigValidationError(error, raw)}`
+        )
+      }
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new ConfigError(`Invalid .dbcli config structure: ${errorMessage}`)
     }

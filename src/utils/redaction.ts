@@ -20,6 +20,7 @@ const KEEP_VALUE_FLAGS = new Set([
   '--min-severity',
   '--output',
   '--limit',
+  '--timeout',
   '--collection',
   '--index',
   '--fields',

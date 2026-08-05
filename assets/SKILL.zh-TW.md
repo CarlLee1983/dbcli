@@ -60,7 +60,9 @@ legacy 單檔 `.dbcli`。若要防護同一 OS 使用者的惡意 process，host
 
 回報驗證結果時使用詞彙：`verified`（證據符合）/ `not_verified`（驗證執行但結果矛盾）/ `indeterminate`（執行但證據不明確）/ `blocked`（因 config、權限、schema、placeholder 或安全閘門導致無法執行）。
 
-優先用 `--format json` 取得代理友善的輸出。
+優先用 `--format json` 取得代理友善的輸出。診斷訊息（auto-limit 提示、警告）一律走 stderr，
+stdout 保持可解析——把 JSON 導進 parser 時請用 `2>/dev/null` 或不要動 stderr。
+**絕對不要用 `2>&1`**：那會把那些訊息併回 stdout，解析必定失敗。
 
 ## Agent Task Packs
 
@@ -426,4 +428,4 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 - 被 blacklist 的 table / column 會從查詢輸出中遮蔽。
 - `schema` 回報 `estimatedRowCount` 與 `sizeCategory`（small / medium / large / huge）。大 / 巨大表要加 `WHERE` 或 `LIMIT` — 分界值見 reference.md。
 - 對 `mongodb+srv://` 連線，`doctor` 會回報 SRV 是用原生解析或走 DoH fallback — 在執行環境限制 DNS 時很有用。
-- **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。
+- **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`--timeout <ms>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。

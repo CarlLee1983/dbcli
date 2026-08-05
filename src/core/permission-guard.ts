@@ -503,7 +503,7 @@ export function toSqlDialect(system: string | undefined): SqlDialect | undefined
 }
 
 export const SQL_WRITE_OR_DDL_KEYWORDS =
-  /(?<![.\w])(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i
+  /(?<![.\w])(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b(?!\s*\()/i
 
 /**
  * `FOR UPDATE` and `FOR SHARE` take row locks. They read, and the `UPDATE`
@@ -525,12 +525,36 @@ export function findWriteKeyword(
   dialects?: readonly SqlDialect[]
 ): string | undefined {
   const candidates = dialects && dialects.length > 0 ? dialects : SQL_DIALECTS
+  const global = new RegExp(SQL_WRITE_OR_DDL_KEYWORDS.source, 'gi')
+  let strictest: string | undefined
   for (const dialect of candidates) {
-    const executable = stripCommentsAndStrings(sql, { dialect }).replace(SQL_LOCK_CLAUSE, ' ')
-    const match = executable.match(SQL_WRITE_OR_DDL_KEYWORDS)
-    if (match?.[1]) return match[1].toUpperCase()
+    const executable = stripCommentsAndStrings(sql, { dialect })
+      .replace(SQL_LOCK_CLAUSE, ' ')
+      // `INTO` marks a table creation only in `SELECT … INTO`. In
+      // `INSERT INTO` / `REPLACE INTO` / `MERGE INTO` it belongs to the verb
+      // already counted, and counting it again would push every insert to the
+      // admin tier.
+      .replace(/\b(INSERT|REPLACE|MERGE)\s+INTO\b/gi, '$1 ')
+    for (const match of executable.matchAll(global)) {
+      const keyword = match[1]?.toUpperCase()
+      if (!keyword) continue
+      // The strictest keyword decides, not the leftmost one: a statement that
+      // opens with an INSERT CTE and then deletes must be judged as the delete,
+      // or a harmless leading write would launder a stricter one past its tier.
+      if (strictest === undefined || tierRank(keyword) > tierRank(strictest)) {
+        strictest = keyword
+      }
+    }
   }
-  return undefined
+  return strictest
+}
+
+/** How restrictive the permission tier for a write keyword is. Higher is stricter. */
+function tierRank(keyword: string): number {
+  const type = mapKeywordToType(keyword)
+  if (type === 'INSERT' || type === 'UPDATE') return 1
+  if (type === 'DELETE') return 2
+  return 3 // DDL and anything unrecognised — admin only
 }
 
 /**
@@ -562,7 +586,7 @@ export function containsMultipleStatements(sql: string, dialect?: SqlDialect): b
  * `DESCRIBE` take no subquery, so `SHOW CREATE TABLE users` is a read whose text
  * merely contains a keyword.
  */
-const ESCALATABLE_READ_TYPES = new Set<StatementType>(['SELECT', 'EXPLAIN'])
+const ESCALATABLE_READ_TYPES = new Set<StatementType>(['SELECT', 'EXPLAIN', 'DESCRIBE'])
 
 /**
  * Re-classify a read-looking statement by the write it actually performs, so the
@@ -577,8 +601,11 @@ function escalateHiddenWrite(
   if (!ESCALATABLE_READ_TYPES.has(classification.type)) return classification
 
   // `EXPLAIN` without `ANALYZE` only plans; it never runs the statement it
-  // describes, so a write keyword inside it is not executed either.
-  if (classification.type === 'EXPLAIN' && !/\bANALYZE\b/i.test(sql)) return classification
+  // describes, so a write keyword inside it is not executed either. `DESCRIBE`
+  // and `DESC` are synonyms for `EXPLAIN` on MySQL and MariaDB and take the same
+  // `ANALYZE` form.
+  const plansOnly = classification.type === 'EXPLAIN' || classification.type === 'DESCRIBE'
+  if (plansOnly && !/\bANALYZE\b/i.test(sql)) return classification
 
   const hidden = findWriteKeyword(sql, dialect ? [dialect] : undefined)
   if (!hidden) return classification

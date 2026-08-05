@@ -81,3 +81,58 @@ describe('a single connection proves statements read-only too', () => {
     }
   })
 })
+
+describe('the escalated tier is the strictest write present', () => {
+  test('a harmless leading write does not launder a stricter one', () => {
+    // Taking the leftmost keyword let read-write run a DELETE by putting an
+    // INSERT in front of it.
+    const smuggled =
+      'WITH a AS (INSERT INTO t VALUES (1) RETURNING *), b AS (DELETE FROM users RETURNING *) SELECT 1'
+    expect(checkPermission(smuggled, 'read-write', 'postgresql').allowed).toBe(false)
+    expect(checkPermission(smuggled, 'data-admin', 'postgresql').allowed).toBe(true)
+  })
+
+  test('a leading write does not launder a table creation', () => {
+    const smuggled =
+      'WITH a AS (INSERT INTO t VALUES (1) RETURNING *) SELECT * INTO evil_copy FROM users'
+    expect(checkPermission(smuggled, 'read-write', 'postgresql').allowed).toBe(false)
+    expect(checkPermission(smuggled, 'data-admin', 'postgresql').allowed).toBe(false)
+    expect(checkPermission(smuggled, 'admin', 'postgresql').allowed).toBe(true)
+  })
+})
+
+describe('a function is not a statement', () => {
+  const reads = [
+    ["SELECT replace(name, 'a', 'b') FROM users", 'postgresql'],
+    ['SELECT TRUNCATE(1.234, 2) AS t', 'mysql'],
+    ["SELECT INSERT('abcd', 2, 1, 'X') AS s", 'mysql'],
+    ["SELECT regexp_replace(name, 'a', 'b') FROM users", 'postgresql'],
+    ['SELECT replace (name, 1, 2) FROM users', 'postgresql'],
+  ] as const
+
+  for (const [sql, dialect] of reads) {
+    test(`query-only allows ${sql}`, () => {
+      expect(checkPermission(sql, 'query-only', dialect).allowed).toBe(true)
+    })
+  }
+
+  test('the statement forms are still writes', () => {
+    expect(checkPermission('INSERT INTO t (a) VALUES (1)', 'query-only', 'postgresql').allowed).toBe(
+      false
+    )
+    expect(checkPermission("REPLACE INTO t VALUES (1)", 'query-only', 'mysql').allowed).toBe(false)
+    expect(checkPermission('TRUNCATE TABLE users', 'query-only', 'postgresql').allowed).toBe(false)
+  })
+})
+
+describe('DESCRIBE is EXPLAIN on MySQL and MariaDB', () => {
+  test('DESCRIBE ANALYZE of a write is refused', () => {
+    expect(checkPermission('DESCRIBE ANALYZE DELETE FROM users', 'query-only', 'mysql').allowed).toBe(
+      false
+    )
+  })
+
+  test('a plain DESCRIBE is still a read', () => {
+    expect(checkPermission('DESCRIBE users', 'query-only', 'mysql').allowed).toBe(true)
+  })
+})

@@ -5,6 +5,7 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
+import { toSqlDialect } from '@/core/permission-guard'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -38,6 +39,7 @@ export async function planCommand(
     const result = analyzeQueryRisk({
       sql: sql.trim(),
       permission: config.permission,
+      dialect: toSqlDialect(config.connection?.system),
       blacklist: config.blacklist ?? { tables: [], columns: {} },
       schemaLookup: {
         tables: schema as never,

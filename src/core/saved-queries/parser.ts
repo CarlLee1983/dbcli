@@ -13,6 +13,11 @@
 import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
 import {
+  findWriteKeyword,
+  SQL_DIALECTS,
+  type SqlDialect,
+} from '@/core/permission-guard'
+import {
   SavedQueryError,
   SUPPORTED_CHART_TYPES,
   type ChartType,
@@ -44,6 +49,23 @@ export interface ParseInput {
   text: string
 }
 
+const ENGINE_DIALECT: Record<string, SqlDialect> = {
+  postgres: 'postgresql',
+  postgresql: 'postgresql',
+  mysql: 'mysql',
+  mariadb: 'mariadb',
+}
+
+/**
+ * SQL dialects a snippet may run under. An undeclared engine leaves every
+ * dialect a candidate, which makes the read-only proof stricter rather than
+ * weaker.
+ */
+function dialectsFor(engines: readonly string[] | undefined): readonly SqlDialect[] {
+  const mapped = (engines ?? []).map((engine) => ENGINE_DIALECT[engine]).filter(Boolean)
+  return mapped.length > 0 ? (mapped as SqlDialect[]) : SQL_DIALECTS
+}
+
 export interface ParseOutput {
   query: SavedQuery
   warnings: string[]
@@ -67,7 +89,7 @@ export function parseSavedQuery(input: ParseInput): ParseOutput {
   if (meta.engine && meta.engine.length > 0) {
     const family = engineFamily(meta.engine[0]!)
     if (family === 'sql') {
-      validateBody(body, input)
+      validateBody(body, { ...input, engine: meta.engine })
     } else {
       try {
         getStrategy(family).validateBody(body, meta, input.file)
@@ -80,7 +102,7 @@ export function parseSavedQuery(input: ParseInput): ParseOutput {
       }
     }
   } else {
-    validateBody(body, input)
+    validateBody(body, { ...input, engine: meta.engine })
   }
 
   if (meta.engine?.includes('elasticsearch') && !meta.index) {
@@ -229,6 +251,17 @@ function normaliseVerify(value: unknown, input: ParseInput): SavedQueryVerify | 
       input.file
     )
   }
+  // The verification query is executed verbatim by `q --verify`, so it carries
+  // the same read-only contract as the snippet body.
+  const verifyWrite = findWriteKeyword(raw.query)
+  if (verifyWrite) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has a 'verify.query' that must be read-only, ` +
+        `but contains '${verifyWrite}'`,
+      'NOT_SELECT',
+      input.file
+    )
+  }
   if (typeof raw.expects !== 'string' || !raw.expects.trim()) {
     throw new SavedQueryError(
       `Snippet '${input.key}' has invalid 'verify.expects' (must be a non-empty string)`,
@@ -319,7 +352,10 @@ function normaliseParams(value: unknown, input: ParseInput): ParamSpec[] {
   )
 }
 
-export function validateBody(body: string, input: ParseInput): void {
+export function validateBody(
+  body: string,
+  input: ParseInput & { engine?: readonly string[] }
+): void {
   const stripped = stripCommentsAndStrings(body)
   const trimmed = stripped.trim()
   if (!trimmed) {
@@ -334,6 +370,20 @@ export function validateBody(body: string, input: ParseInput): void {
   if (firstKeyword !== 'SELECT' && firstKeyword !== 'WITH') {
     throw new SavedQueryError(
       `Snippet '${input.key}' must start with SELECT or WITH (got '${firstKeyword || '<empty>'}')`,
+      'NOT_SELECT',
+      input.file
+    )
+  }
+
+  // A read-looking leading keyword does not prove the statement reads: a CTE can
+  // carry DELETE/UPDATE/INSERT … RETURNING, and `SELECT … INTO` creates a table.
+  // Snippets are read-only by contract, so refuse them at parse time. The check
+  // runs on the original body under the declared engines' quoting rules, so a
+  // quoted identifier or a dialect comment is not mistaken for a write.
+  const write = findWriteKeyword(body, dialectsFor(input.engine))
+  if (write) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' must be read-only, but contains '${write}'`,
       'NOT_SELECT',
       input.file
     )

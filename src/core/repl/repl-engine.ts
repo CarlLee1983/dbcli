@@ -7,7 +7,12 @@ import { MultilineBuffer } from './multiline-buffer'
 import { handleMetaCommand } from './meta-commands'
 import { parseCommandLine, isKnownCommand } from './command-dispatcher'
 import { HistoryManager } from './history-manager'
-import { checkPermission, classifyRedisCommand, permissionAtLeast } from '../permission-guard'
+import {
+  checkPermission,
+  classifyRedisCommand,
+  permissionAtLeast,
+  SQL_DIALECTS,
+} from '../permission-guard'
 import { QueryResultFormatter } from '../../formatters/query-result-formatter'
 import type { QueryResult } from '../../types/query'
 import { t_vars, t } from '../../i18n/message-loader'
@@ -175,7 +180,11 @@ export class ReplEngine {
       const denied = this.checkRedisPermission(sql)
       if (denied) return denied
     } else {
-      const permResult = checkPermission(sql, this.context.permission)
+      const permResult = checkPermission(
+        sql,
+        this.context.permission,
+        SQL_DIALECTS.find((dialect) => dialect === this.context.system)
+      )
       if (!permResult.allowed) {
         return {
           action: 'continue',

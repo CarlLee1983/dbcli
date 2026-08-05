@@ -223,6 +223,13 @@ dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdou
 **Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
 
+Below `admin`, SQL holding more than one statement is rejected, because only the
+first statement would decide the permission check while a driver on the simple
+query protocol executes them all. Semicolons inside string literals, backtick
+identifiers, and `#` comments are not separators. A MongoDB pipeline containing
+`$out` or `$merge` requires `data-admin`, and is rejected outright on `export`,
+in snippets, and in multi-connection fan-out.
+
 #### Field projection (`--fields`)
 
 ```bash
@@ -279,7 +286,7 @@ instead of silently running its only connection.
 An explicit comma-separated `--use primary,staging` fans one query out to several named
 connections. `DBCLI_CONNECTION` always names one literal connection and never enables
 fan-out. SQL permits `SELECT`, `SHOW`, `DESCRIBE`, and `EXPLAIN`; MongoDB permits filters and
-read-only pipelines without top-level `$out` / `$merge`; Elasticsearch permits searches.
+read-only pipelines without `$out` / `$merge`; Elasticsearch permits searches.
 Redis, writes, `--recovery`, `--ui`, CSV, and HTML are rejected before execution. Each
 connection keeps its own blacklist, limit metadata, audit entry, and error. Aggregate exit
 codes are `0` when all succeed, `2` for mixed outcomes, and `1` when all fail or preflight
@@ -530,6 +537,13 @@ dbcli q @analytics/revenue --param days=30 --format html > report.html
 #### Snippet file format
 
 Each `.sql` file is plain SQL with optional YAML frontmatter inside a leading `-- ---` block. Lines outside frontmatter form the SQL body.
+
+Snippets are read-only by contract, at every permission level including `admin`.
+A body must be a single statement opening with `SELECT` or `WITH` **and** free of
+write or DDL keywords, so a data-modifying CTE (`WITH x AS (DELETE … RETURNING *)
+SELECT * FROM x`) and `SELECT … INTO` are rejected at parse time rather than at
+execution. A MongoDB body may not contain `$out` or `$merge`. The same rule
+applies to `verify.query` in frontmatter, which `q --verify` executes verbatim.
 
 ```sql
 -- ---

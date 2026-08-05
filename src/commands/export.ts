@@ -98,7 +98,7 @@ export async function exportCommand(
     )
     await adapter.connect()
 
-    const executor = new QueryExecutor(adapter, config.permission, undefined, undefined, {
+    const executor = new QueryExecutor(adapter, config.permission, undefined, config, {
       recovery: options.recovery,
       deferDiagnostics: true,
     })
@@ -385,6 +385,13 @@ async function mongoExportBranch(
   }
 
   const collection = options.collection
+
+  // `$out` / `$merge` write to a collection; export is a read operation.
+  const { assertNoMongoWriteStages } = await import('@/core/mongo/write-stage-guard')
+  assertNoMongoWriteStages(JSON.parse(query), config.permission, {
+    allowWithPermission: false,
+    context: 'MongoDB export',
+  })
 
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)

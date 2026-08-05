@@ -36,6 +36,12 @@ export interface StatementClassification {
   keywords: string[]
   isComposite: boolean
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  /**
+   * Set when a read-looking statement was re-classified because it contains an
+   * executable write. Holds that keyword, so a refusal can say what was found
+   * rather than reporting the statement as unrecognised.
+   */
+  escalatedFrom?: string
 }
 
 /**
@@ -84,6 +90,15 @@ export function normalizeSQL(sql: string): string {
       .replace(/\s+/g, ' ')
   )
 }
+
+/**
+ * A character that can continue a PostgreSQL identifier. Its lexer accepts any
+ * high byte (`ident_cont` is `[A-Za-z\200-\377_0-9$]`), so accented and
+ * non-Latin letters count — `café$q$` is one identifier, not `café` followed by
+ * a dollar-quote. Treating a character as part of an identifier only ever makes
+ * the analysis stricter, since fewer regions get stripped from view.
+ */
+const IDENTIFIER_CONTINUATION = /[A-Za-z0-9_$]|[\u0080-\uFFFF]/
 
 /**
  * Strip comments AND string literals using character-by-character state machine
@@ -149,11 +164,22 @@ export function stripCommentsAndStrings(
         i = closingIndex === -1 ? sql.length : closingIndex + 2
         continue
       }
+      // PostgreSQL block comments nest: `/* a /* b */ still comment */`.
+      // Stopping at the first `*/` would leave the tail of the comment visible
+      // and its semicolons counted as separators.
+      const nests = options.dialect === 'postgresql'
+      let depth = 1
       i += 2
-      while (i < sql.length) {
-        if (sql[i] === '*' && sql[i + 1] === '/') {
+      while (i < sql.length && depth > 0) {
+        if (nests && sql[i] === '/' && sql[i + 1] === '*') {
+          depth++
           i += 2
-          break
+          continue
+        }
+        if (sql[i] === '*' && sql[i + 1] === '/') {
+          depth--
+          i += 2
+          continue
         }
         i++
       }
@@ -165,7 +191,15 @@ export function stripCommentsAndStrings(
     // The closing delimiter is case-sensitive and may contain SQL-looking
     // text or semicolons that must not participate in permission analysis.
     if (options.dialect === 'postgresql' && char === '$') {
-      const delimiter = sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      // A dollar-quote only opens at a token boundary. PostgreSQL identifiers
+      // may contain `$` from the second character on, so in `SELECT 1 AS a$q$`
+      // the `$q$` belongs to the identifier `a$q$` and quotes nothing — reading
+      // it as a quote would hide everything up to the next `$q$` from analysis
+      // while the server still executes it.
+      const opensToken = !IDENTIFIER_CONTINUATION.test(sql[i - 1] ?? '')
+      const delimiter = opensToken
+        ? sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+        : undefined
       if (delimiter) {
         i += delimiter.length
         const closingIndex = sql.indexOf(delimiter, i)
@@ -205,7 +239,7 @@ export function stripCommentsAndStrings(
         options.dialect === 'postgresql' &&
         quote === "'" &&
         /[eE]/.test(sql[quoteIndex - 1] ?? '') &&
-        !/[A-Za-z0-9_$]/.test(sql[quoteIndex - 2] ?? '')
+        !IDENTIFIER_CONTINUATION.test(sql[quoteIndex - 2] ?? '')
       const backslashEscapes = options.dialect === undefined || postgresEscapeString
       i++
       while (i < sql.length) {
@@ -461,10 +495,162 @@ export function classifyStatement(sql: string): StatementClassification {
 }
 
 /**
+ * Keywords that write or change schema. Used by every path that has to prove a
+ * statement is read-only despite a read-looking leading keyword — data-modifying
+ * CTEs, `SELECT … INTO`, and `EXPLAIN ANALYZE` of a write.
+ */
+/** SQL dialects whose quoting rules differ in ways that affect statement splitting. */
+export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
+export type SqlDialect = (typeof SQL_DIALECTS)[number]
+
+/** The SQL dialect of a connection system, or undefined for a non-SQL engine. */
+export function toSqlDialect(system: string | undefined): SqlDialect | undefined {
+  return SQL_DIALECTS.find((dialect) => dialect === system)
+}
+
+export const SQL_WRITE_OR_DDL_KEYWORDS =
+  /(?<![.\w])(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b(?!\s*\()/i
+
+/**
+ * `FOR UPDATE` and `FOR SHARE` take row locks. They read, and the `UPDATE`
+ * inside them must not be mistaken for a write.
+ */
+const SQL_LOCK_CLAUSE = /\bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b|\bFOR\s+(?:KEY\s+)?SHARE\b/gi
+
+/**
+ * The write or DDL keyword a statement would actually execute, or undefined if
+ * it proves read-only. Comments, string literals and quoted identifiers are
+ * removed per dialect first, so `SELECT \`update\` FROM t` and `# drop this`
+ * are reads while `WITH x AS (DELETE …)` is not.
+ *
+ * With several candidate dialects the check fails closed: a keyword executable
+ * under any of them counts, since the body may run under any of them.
+ */
+export function findWriteKeyword(
+  sql: string,
+  dialects?: readonly SqlDialect[]
+): string | undefined {
+  const candidates = dialects && dialects.length > 0 ? dialects : SQL_DIALECTS
+  for (const dialect of candidates) {
+    const executable = stripCommentsAndStrings(sql, { dialect }).replace(SQL_LOCK_CLAUSE, ' ')
+    const match = executable.match(SQL_WRITE_OR_DDL_KEYWORDS)
+    if (match?.[1]) return match[1].toUpperCase()
+  }
+  return undefined
+}
+
+/**
+ * True when the SQL holds more than one statement, ignoring semicolons inside
+ * comments and string literals and a single trailing separator.
+ */
+export function containsMultipleStatements(sql: string, dialect?: SqlDialect): boolean {
+  // Strip the raw SQL. Running a string-blind comment pass first (normalizeSQL)
+  // would let `SELECT 'x--' ; DELETE …` lose its tail before it is counted.
+  const statementCount = (candidate: SqlDialect): number =>
+    stripCommentsAndStrings(sql, { dialect: candidate })
+      .split(';')
+      .filter((part) => part.trim().length > 0).length
+
+  if (dialect) return statementCount(dialect) > 1
+
+  // Quoting differs per dialect: $$…$$ and $tag$…$tag$ are strings only in
+  // PostgreSQL, backticks quote identifiers only in MySQL/MariaDB, and `#`
+  // starts a comment in MySQL/MariaDB while PostgreSQL reads it as an operator.
+  // Without a dialect to judge by, fail closed — any reading that finds a
+  // separator wins, because the alternative hides a separator the real dialect
+  // would execute.
+  return SQL_DIALECTS.some((candidate) => statementCount(candidate) > 1)
+}
+
+/**
+ * Read-looking statement types that can nevertheless carry an executable write:
+ * a `SELECT` through a CTE or `INTO`, an `EXPLAIN` through `ANALYZE`. `SHOW` and
+ * `DESCRIBE` take no subquery, so `SHOW CREATE TABLE users` is a read whose text
+ * merely contains a keyword.
+ */
+const ESCALATABLE_READ_TYPES = new Set<StatementType>(['SELECT', 'EXPLAIN', 'DESCRIBE'])
+
+/**
+ * Re-classify a read-looking statement by the write it actually performs, so the
+ * permission tiers judge what runs rather than what the statement opens with.
+ * Returns the classification unchanged when the statement really is a read.
+ */
+function escalateHiddenWrite(
+  sql: string,
+  classification: StatementClassification,
+  dialect: SqlDialect | undefined
+): StatementClassification {
+  if (!ESCALATABLE_READ_TYPES.has(classification.type)) return classification
+
+  // `EXPLAIN` without `ANALYZE` only plans; it never runs the statement it
+  // describes, so a write keyword inside it is not executed either. `DESCRIBE`
+  // and `DESC` are synonyms for `EXPLAIN` on MySQL and MariaDB and take the same
+  // `ANALYZE` form.
+  const plansOnly = classification.type === 'EXPLAIN' || classification.type === 'DESCRIBE'
+  if (plansOnly && !/\bANALYZE\b/i.test(sql)) return classification
+
+  const hidden = findWriteKeyword(sql, dialect ? [dialect] : undefined)
+  if (!hidden) return classification
+
+  // A statement that claims to read and does not is judged admin-only, rather
+  // than by the tier of the keyword found. Ranking the keyword invited two
+  // rounds of defects: the leftmost write laundered a stricter one, and the
+  // textual exceptions needed to rank `INTO` correctly interacted with each
+  // other to erase the write completely. A writable CTE below admin is a rare
+  // shape; treating every one of them as admin-only costs little and removes
+  // the whole class.
+  return {
+    ...classification,
+    type: 'UNKNOWN',
+    isDangerous: true,
+    confidence: 'HIGH',
+    escalatedFrom: hidden,
+  }
+}
+
+/**
  * Check if statement is allowed under given permission level
  */
-export function checkPermission(sql: string, permission: Permission): PermissionCheckResult {
-  const classification = classifyStatement(sql)
+export function checkPermission(
+  sql: string,
+  permission: Permission,
+  dialect?: SqlDialect
+): PermissionCheckResult {
+  // A read-looking leading keyword does not make a statement a read: a CTE can
+  // carry DELETE/UPDATE/INSERT … RETURNING, `SELECT … INTO` creates a table, and
+  // `EXPLAIN ANALYZE <write>` executes the write it explains. Judging the
+  // statement by the write it performs lets the ordinary tiers decide, instead
+  // of this proof living only on the multi-connection path as it used to.
+  const classification = escalateHiddenWrite(sql, classifyStatement(sql), dialect)
+
+  // Classification describes one statement, but drivers using the simple query
+  // protocol (PostgreSQL) execute every semicolon-separated statement in the
+  // string. A stacked statement would therefore be judged by its first keyword
+  // alone and smuggle a trailing write past the permission level. Admin already
+  // permits every statement type, so stacking grants it nothing.
+  if (permission !== 'admin' && containsMultipleStatements(sql, dialect)) {
+    return {
+      allowed: false,
+      reason:
+        'SQL containing multiple statements is refused below admin permission, because only ' +
+        'the first statement determines the permission check. Run each statement separately.',
+      classification,
+    }
+  }
+
+  // A statement re-classified because it hides a write is refused with what was
+  // actually found. The generic messages below name the next tier up, which is
+  // wrong here: every tier short of admin refuses it.
+  if (permission !== 'admin' && classification.escalatedFrom) {
+    return {
+      allowed: false,
+      reason:
+        `This statement opens as a read but contains an executable ` +
+        `${classification.escalatedFrom}. A write hidden inside a read statement ` +
+        `requires admin permission (current level: ${permission}).`,
+      classification,
+    }
+  }
 
   // Admin allows everything
   if (permission === 'admin') {
@@ -541,8 +727,12 @@ export function checkPermission(sql: string, permission: Permission): Permission
  * Throws PermissionError if statement not allowed, otherwise returns classification
  * Use in command handlers before execution
  */
-export function enforcePermission(sql: string, permission: Permission): StatementClassification {
-  const result = checkPermission(sql, permission)
+export function enforcePermission(
+  sql: string,
+  permission: Permission,
+  dialect?: SqlDialect
+): StatementClassification {
+  const result = checkPermission(sql, permission, dialect)
 
   if (!result.allowed) {
     throw new PermissionError(result.reason, result.classification, permission)

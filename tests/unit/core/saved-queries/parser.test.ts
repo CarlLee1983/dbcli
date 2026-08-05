@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { parseSavedQuery } from '@/core/saved-queries/parser'
+import { parseSavedQuery, validateBody } from '@/core/saved-queries/parser'
 import { SavedQueryError } from '@/core/saved-queries/types'
 
 const wrap = (sql: string, fm = ''): string => (fm ? `-- ---\n${fm}\n-- ---\n\n${sql}` : sql)
@@ -182,6 +182,115 @@ describe('parseSavedQuery — intent', () => {
     const text = wrap('SELECT 1;', 'name: x\nengine: postgres\nintent: ""')
     expect(() => parseSavedQuery({ key: '@x', file: 'x.sql', source: 'builtin', text })).toThrow(
       /invalid intent/
+    )
+  })
+})
+
+describe('validateBody — data-modifying CTEs', () => {
+  const input = { key: '@t', file: '/tmp/t.sql' } as any
+
+  test('rejects a WITH clause whose CTE deletes rows', () => {
+    expect(() =>
+      validateBody('WITH gone AS (DELETE FROM users WHERE id = 1 RETURNING *) SELECT * FROM gone', input)
+    ).toThrow(/read-only|DELETE/i)
+  })
+
+  test('rejects a WITH clause whose CTE updates rows', () => {
+    expect(() =>
+      validateBody('WITH bumped AS (UPDATE users SET n = n + 1 RETURNING *) SELECT * FROM bumped', input)
+    ).toThrow(/read-only|UPDATE/i)
+  })
+
+  test('rejects a WITH clause whose CTE inserts rows', () => {
+    expect(() =>
+      validateBody('WITH added AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM added', input)
+    ).toThrow(/read-only|INSERT/i)
+  })
+
+  test('still accepts an ordinary read-only CTE', () => {
+    expect(() =>
+      validateBody('WITH recent AS (SELECT * FROM users ORDER BY created_at DESC) SELECT * FROM recent', input)
+    ).not.toThrow()
+  })
+
+  test('does not reject a literal that merely mentions delete', () => {
+    expect(() => validateBody("SELECT * FROM logs WHERE action = 'DELETE'", input)).not.toThrow()
+  })
+})
+
+describe('verify.query must be read-only', () => {
+  const withVerify = (verifyQuery: string) =>
+    parseSavedQuery({
+      key: '@t',
+      file: 't.sql',
+      source: 'shared',
+      text: wrap(
+        'SELECT * FROM users',
+        [
+          '-- name: t',
+          '-- engine: postgres',
+          '-- verify:',
+          `--   query: "${verifyQuery}"`,
+          '--   expects: "count > 0"',
+        ].join('\n')
+      ),
+    })
+
+  test('rejects a verification query that deletes rows', () => {
+    expect(() => withVerify('DELETE FROM users')).toThrow(/read-only|DELETE/i)
+  })
+
+  test('accepts an ordinary verification count', () => {
+    expect(() => withVerify('SELECT count(*) AS count FROM users')).not.toThrow()
+  })
+})
+
+describe('validateBody — read-only proof does not over-block', () => {
+  const input = (engine?: string) =>
+    ({ key: '@t', file: 't.sql', engine: engine ? [engine] : undefined }) as any
+
+  test('accepts a locking read (FOR UPDATE takes a lock, it does not write)', () => {
+    expect(() =>
+      validateBody('SELECT * FROM users WHERE id = :id FOR UPDATE', input('postgres'))
+    ).not.toThrow()
+  })
+
+  test('accepts FOR NO KEY UPDATE and FOR SHARE', () => {
+    expect(() =>
+      validateBody('SELECT * FROM users FOR NO KEY UPDATE', input('postgres'))
+    ).not.toThrow()
+    expect(() => validateBody('SELECT * FROM users FOR SHARE', input('postgres'))).not.toThrow()
+  })
+
+  test('accepts backtick-quoted identifiers that spell keywords', () => {
+    expect(() =>
+      validateBody('SELECT `update`, `create` FROM `orders`', input('mysql'))
+    ).not.toThrow()
+  })
+
+  test('accepts a MySQL # comment mentioning a keyword', () => {
+    expect(() =>
+      validateBody('SELECT id FROM users # drop this column later\n', input('mysql'))
+    ).not.toThrow()
+  })
+
+  test('accepts a dotted column whose name spells a keyword', () => {
+    expect(() => validateBody('SELECT a.create FROM a', input('postgres'))).not.toThrow()
+  })
+
+  test('still rejects a real write hiding behind a lock clause', () => {
+    expect(() =>
+      validateBody(
+        'WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone FOR UPDATE',
+        input('postgres')
+      )
+    ).toThrow(/read-only|DELETE/i)
+  })
+
+  test('still rejects a write keyword that a different dialect would execute', () => {
+    // Backticks are not string quoting in PostgreSQL, so this is executable there.
+    expect(() => validateBody('SELECT `x`; DROP TABLE t', input('postgres'))).toThrow(
+      /read-only|DROP/i
     )
   })
 })

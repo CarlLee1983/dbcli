@@ -32,7 +32,7 @@
 
 `dbcli` is built with a "Security-First" mindset, particularly focused on preventing AI agents from accidentally leaking or corrupting sensitive data.
 
-*   **Permission Guard**: Four tiers of access control (`query-only`, `read-write`, `data-admin`, `admin`).
+*   **Permission Guard**: Four tiers of access control (`query-only`, `read-write`, `data-admin`, `admin`). A statement is judged by what it does, not by its leading keyword: SQL holding multiple statements is refused below `admin` because only the first one would determine the check, saved snippets are refused if they contain any write or DDL keyword (so a data-modifying CTE or `SELECT … INTO` cannot hide behind a `SELECT`/`WITH` opening), and MongoDB `$out` / `$merge` require `data-admin` on `query` and are refused outright in snippets and `export`.
 *   **Blacklist Manager**: Redacts sensitive tables and columns from all query results.
 *   **Query Risk Analyzer (`plan`)**: Analyzes SQL risk without connecting to the database.
 *   **Antigravity Protocol**: A workflow separation between **Architect** (Planning) and **Builder** (Execution) to ensure strategy precedes action.

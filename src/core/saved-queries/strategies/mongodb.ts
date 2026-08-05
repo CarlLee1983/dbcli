@@ -2,6 +2,7 @@ import type { ParamMap } from '../binder'
 import type { RunOptions } from '../runner'
 import { SavedQueryError, type SavedQuery, type SavedQueryMeta } from '../types'
 import type { EngineStrategy, PreparedExecution } from './types'
+import { findMongoWriteStages } from '@/core/mongo/write-stage-guard'
 
 const TEMPLATE_RE = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g
 
@@ -40,6 +41,17 @@ export const mongoStrategy: EngineStrategy = {
     if (meta.operation === 'aggregate' && !Array.isArray(parsed)) {
       throw new SavedQueryError(
         `MongoDB aggregate snippet '${meta.key}' body must be a JSON array (got ${describe(parsed)})`,
+        'MONGO_INVALID_BODY',
+        file
+      )
+    }
+    // Snippets are read-only by contract: refuse writing stages at load time so
+    // a pipeline that writes cannot be saved, shared, or reviewed as a read.
+    const writeStages = findMongoWriteStages(parsed)
+    if (writeStages.length > 0) {
+      throw new SavedQueryError(
+        `MongoDB snippet '${meta.key}' cannot contain ${writeStages.join(' / ')}: ` +
+          `the stage writes to a collection and snippets are read-only`,
         'MONGO_INVALID_BODY',
         file
       )

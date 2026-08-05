@@ -14,6 +14,12 @@ export interface LoadOptions {
   builtinDir: string
   sharedDir: string
   localDir: string
+  /**
+   * Called for a snippet file that cannot be parsed. Loading continues either
+   * way, so one bad file never hides the rest of the directory; commands that
+   * must fail on a bad snippet (`queries check`) collect them here.
+   */
+  onError?: (failure: { file: string; key: string; error: Error }) => void
 }
 
 const ENGINE_SUFFIXES: ReadonlyArray<EngineTag> = [
@@ -30,9 +36,9 @@ const ENGINE_SUFFIXES: ReadonlyArray<EngineTag> = [
  * 會根據目前連線的 engine 挑選對應變體。
  */
 export async function loadSnippets(opts: LoadOptions): Promise<Map<string, ResolvedSnippet[]>> {
-  const builtin = await walkAndParse(opts.builtinDir, 'builtin')
-  const shared = await walkAndParse(opts.sharedDir, 'shared')
-  const local = await walkAndParse(opts.localDir, 'local')
+  const builtin = await walkAndParse(opts.builtinDir, 'builtin', opts.onError)
+  const shared = await walkAndParse(opts.sharedDir, 'shared', opts.onError)
+  const local = await walkAndParse(opts.localDir, 'local', opts.onError)
 
   const merged = new Map<string, ResolvedSnippet[]>()
   pushTier(merged, builtin)
@@ -58,7 +64,11 @@ function sameEngineSet(a: SavedQuery, b: SavedQuery): boolean {
   return ae === be
 }
 
-async function walkAndParse(root: string, source: SnippetSource): Promise<SavedQuery[]> {
+async function walkAndParse(
+  root: string,
+  source: SnippetSource,
+  onError?: LoadOptions['onError']
+): Promise<SavedQuery[]> {
   const out: SavedQuery[] = []
   let entries: string[]
   try {
@@ -71,9 +81,17 @@ async function walkAndParse(root: string, source: SnippetSource): Promise<SavedQ
     const rel = relative(root, file).replace(new RegExp(`\\${sep}`, 'g'), '/')
     const { logicalKey, suffixEngine } = parseFilename(rel)
     const text = await Bun.file(file).text()
-    const { query } = parseSavedQuery({ key: logicalKey, file, source, text })
-    enforceSuffixEngineConsistency(query, suffixEngine)
-    out.push(query)
+    // One unparseable file must not take the whole directory with it: a single
+    // rejected snippet would otherwise break `q list`, every `q @name`, and
+    // `report`, since they all load through here.
+    try {
+      const { query } = parseSavedQuery({ key: logicalKey, file, source, text })
+      enforceSuffixEngineConsistency(query, suffixEngine)
+      out.push(query)
+    } catch (error) {
+      if (onError) onError({ file, key: logicalKey, error: error as Error })
+      else console.error(`⚠ Skipping snippet ${logicalKey}: ${(error as Error).message}`)
+    }
   }
   return out
 }

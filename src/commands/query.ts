@@ -335,19 +335,13 @@ async function preflightMongoQuery(
   ) {
     throw new Error('MongoDB multi-connection query must be an object filter or array pipeline')
   }
-  if (
-    multiConnection &&
-    Array.isArray(parsedQuery) &&
-    parsedQuery.some(
-      (stage) =>
-        stage !== null &&
-        typeof stage === 'object' &&
-        (Object.prototype.hasOwnProperty.call(stage, '$out') ||
-          Object.prototype.hasOwnProperty.call(stage, '$merge'))
-    )
-  ) {
-    throw new Error('MongoDB multi-connection pipelines cannot contain $out or $merge')
-  }
+  // `$out` / `$merge` write to a collection. Fan-out is read-only by contract;
+  // a single connection may write only at data-admin or above.
+  const { assertNoMongoWriteStages } = await import('@/core/mongo/write-stage-guard')
+  assertNoMongoWriteStages(parsedQuery, config.permission, {
+    allowWithPermission: !multiConnection,
+    context: 'MongoDB multi-connection pipelines',
+  })
 
   const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
   blacklistValidator.checkTableBlacklist('SELECT', collection, [])
@@ -470,7 +464,7 @@ async function sqlQueryBranch(
   try {
     await adapter.connect()
     const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, undefined, {
+    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, {
       ...options,
       deferDiagnostics: true,
     })

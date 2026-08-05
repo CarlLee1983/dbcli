@@ -5,6 +5,36 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.47.1] - 2026-08-05 - 唯讀保證涵蓋所有執行路徑（安全性修復）
+
+決策記錄：`docs/adr/0004-database-access-stays-a-cli-surface.md`。
+
+### Security
+
+修復五個「看起來是讀、實際會寫」的繞過，它們都能在設定為 `permission: query-only` 的連線上寫入資料。**建議所有把資料庫交給 AI agent 操作的使用者升級。**
+
+- **MongoDB `$out` / `$merge` 未被擋下（`query`、`q`、`export`）。** 這兩個 aggregation stage 只在多連線 fan-out 路徑被檢查，單連線 `dbcli query`、saved snippet、以及 `dbcli export` 全都會執行它們，不論 permission 等級。`$out` 可覆寫任意 collection。`--dry-run` 會把這種 pipeline 預覽成安全操作。影響 MongoDB 連線。
+- **PostgreSQL 多語句堆疊。** 權限分類只讀第一個關鍵字，而 PostgreSQL 的 simple query protocol 會執行字串裡每一個以分號分隔的語句，因此 `SELECT 1 LIMIT 1; DELETE FROM users` 會以 SELECT 的身分通過 `query-only`。影響 PostgreSQL；MySQL / MariaDB 走 prepared statement，不受影響。
+- **snippet 的偽唯讀語句。** snippet 只要求開頭是 `SELECT` 或 `WITH`，因此 `WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x` 與 `SELECT … INTO` 都能通過。一個 commit 進 repo、看起來是唯讀報表的 `.sql` 檔可以寫入資料庫。影響 PostgreSQL / MariaDB。
+- **snippet frontmatter 的 `verify.query` 未經驗證。** 過去只檢查它是非空字串，然後由 `dbcli q <name> --verify` 原封執行。
+- **唯讀證明只接在多連線 fan-out 上，單連線 `query` / `export` / REPL 沒有。** 權限判定只看第一個關鍵字，因此 `query-only` 連線接受並執行下列語句：`WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone`（data-modifying CTE）、`SELECT * INTO evil_copy FROM users`（建表）、`EXPLAIN ANALYZE DELETE FROM users`（`EXPLAIN ANALYZE` 會真的執行該語句）。同一句 SQL 加上 `--use a,b` 會被擋，不加就執行。auto-limit 補的 `LIMIT 1000` 對 CTE 無效，整張表仍會被刪。**這條在 1.47.0 以前就存在**，且不需要任何特殊語法。影響 PostgreSQL 與 MariaDB。
+- **PostgreSQL 識別字中的 `$` 被誤判為 dollar-quote 起點。** PostgreSQL 的識別字從第二個字元起允許 `$`，因此 `a$q$` 是**一個識別字**；但語句剖析器把它讀成字串起點，於是 `SELECT 1 AS a$q$ LIMIT 1; DELETE FROM users; SELECT 1 AS b$q$` 中間整段對所有安全檢查隱形，資料庫卻照常執行三段。**這條在 1.47.0 以前就存在**：多連線 fan-out 的唯讀斷言（`dbcli query --use a,b`）用的正是同一個剖析器，因此可被此手法繞過。影響 PostgreSQL。
+
+利用這些繞過需要能下達指令的一方送出 payload，也就是 agent 本身 —— 而 dbcli 的威脅模型前提正是 agent 不完全可信，因此這些屬於權限繞過，不以「使用者自己下的指令」論。
+
+### Changed
+
+- **⚠️ 行為收緊：開頭讀取但夾帶寫入的語句一律需要 `admin`。** 例如 `WITH x AS (INSERT … RETURNING *) SELECT …`、`SELECT … INTO`、`EXPLAIN ANALYZE <寫入>`、`DESCRIBE ANALYZE <寫入>`（`DESCRIBE` 在 MySQL/MariaDB 是 `EXPLAIN` 的同義字）。過去這些一律不檢查；中間曾嘗試「比照該寫入的等級」，但那需要為 `INSERT INTO` 的 `INTO` 加文字例外，而例外之間會互相作用出新的繞過，因此改為單一規則。**升級後需要改用 `admin` 的用法有三類**：`data-admin` 連線上的可寫 CTE；對寫入語句做 `EXPLAIN ANALYZE` / `DESCRIBE ANALYZE` 效能分析（它會真的執行該語句）；以及 MySQL/MariaDB 的 `SELECT … INTO @variable`——後者其實是純讀取，只是與 PostgreSQL 會建表的 `SELECT … INTO <table>` 共用關鍵字，為它加例外正是本次反覆出問題的來源，因此選擇留下這個誤擋。被擋時的錯誤訊息會指出是哪一個關鍵字觸發的。 不含 `ANALYZE` 的 `EXPLAIN` 只做計畫、不執行，維持唯讀；`SHOW` / `DESCRIBE` 不接受子查詢，因此 `SHOW CREATE TABLE users` 仍是讀取；`replace()` / `TRUNCATE()` / `INSERT()` 是函式不是語句，維持唯讀。
+- **admin 以下的權限等級拒絕多語句 SQL。** 因為只有第一個語句會決定權限判定。`admin` 不受影響（它本來就允許所有語句類型）。分隔符依**該連線實際的方言**判定：`$$…$$` 只在 PostgreSQL 是字串、反引號只在 MySQL/MariaDB 引號化識別字、`#` 只在 MySQL/MariaDB 起始註解（在 PostgreSQL 是運算子）。方言未知時從嚴。
+- **snippet 的唯讀證明依 `engine` 宣告的方言判定。** 因此 `SELECT \`update\` FROM t`（MySQL 反引號識別字）、`# drop …` 註解、`a.create` 這類欄位名不再被誤判為寫入；`FOR UPDATE` / `FOR SHARE` 是取鎖的讀取，同樣不算寫入。
+- **無法解析的 snippet 只跳過該檔並發出警告，不再讓整個 snippet 目錄失效。** `queries check` 仍會回報它們並以 exit 1 結束。
+- **snippet 一律拒絕寫入關鍵字。** snippet 依合約唯讀，這條規則不看 permission 等級，`admin` 連線亦然。
+- **MongoDB 寫入 stage 在單連線 `query` 需要 `data-admin` 以上；在 snippet 與 `export` 一律拒絕。**
+
+### Added
+
+- **執行路徑契約測試。** `src/adapters/` 以外每一處 `<x>Adapter.execute(...)` 都必須登記它倚賴的 gate，未登記的新路徑會讓測試失敗。這五個洞裡有兩個正是靠列舉全部路徑才發現的 —— 逐一稽核指令找不到它們。
+
 ## [1.47.0] - 2026-08-05 - 連線逾時可設定
 
 決策記錄：`docs/adr/0003-connection-timeout-override-resolved-at-adapter-construction.md`。

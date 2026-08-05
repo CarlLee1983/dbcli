@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - blacklist 涵蓋語句中的每一張表，以及所有執行路徑（安全性修復）
+## [1.48.0] - 2026-08-05 - blacklist 涵蓋語句中的每一張表，以及所有執行路徑（安全性修復）
 
 對應 issue [#23](https://github.com/CarlLee1983/dbcli/issues/23)。與 1.47.1 修掉的六個繞過不同，這一批洩漏的是**讀取內容**，不是寫入能力。
 

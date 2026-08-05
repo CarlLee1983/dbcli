@@ -203,7 +203,12 @@ test('redacts blacklisted fields from the response', async () => {
 
 test('leaves the response alone when no column rules exist', async () => {
   const adapter = { request: async () => ({ hits: { hits: [{ _source: { a: 1 } }] } }) }
-  const res = await runEsRequest({ method: 'GET', path: '/users/_search' }, adapter as never, [], {})
+  const res = await runEsRequest(
+    { method: 'GET', path: '/users/_search' },
+    adapter as never,
+    [],
+    {}
+  )
   expect(JSON.stringify(res)).toContain('"a":1')
 })
 
@@ -223,9 +228,14 @@ for (const body of requestsNamingAProtectedField) {
   test(`refuses a request naming a protected field: ${JSON.stringify(body).slice(0, 40)}`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'POST', path: '/users/_search', body }, fakeAdapter(captured) as never, [], {
-        users: ['password'],
-      })
+      runEsRequest(
+        { method: 'POST', path: '/users/_search', body },
+        fakeAdapter(captured) as never,
+        [],
+        {
+          users: ['password'],
+        }
+      )
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -250,9 +260,11 @@ test('refuses an array-valued index naming a blacklisted index', async () => {
   ]) {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'POST', path: '/public/_search', body }, fakeAdapter(captured) as never, [
-        'secrets',
-      ])
+      runEsRequest(
+        { method: 'POST', path: '/public/_search', body },
+        fakeAdapter(captured) as never,
+        ['secrets']
+      )
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   }
@@ -270,9 +282,10 @@ test('refuses a data-stream backing index and a rollover index', async () => {
 
 test('does not refuse an unrelated index that merely shares a prefix', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest({ method: 'GET', path: '/secrets-archive/_search' }, fakeAdapter(captured) as never, [
-    'secrets',
-  ])
+  await runEsRequest(
+    { method: 'GET', path: '/secrets-archive/_search' },
+    fakeAdapter(captured) as never,
+    ['secrets']
+  )
   expect(captured.path).toBe('/secrets-archive/_search')
 })
-

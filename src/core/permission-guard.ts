@@ -92,8 +92,6 @@ export function normalizeSQL(sql: string): string {
   )
 }
 
-
-
 /**
  * Strip comments AND string literals using character-by-character state machine
  * More reliable than regex for handling escape sequences

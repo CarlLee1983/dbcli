@@ -191,25 +191,37 @@ describe('validateBody — data-modifying CTEs', () => {
 
   test('rejects a WITH clause whose CTE deletes rows', () => {
     expect(() =>
-      validateBody('WITH gone AS (DELETE FROM users WHERE id = 1 RETURNING *) SELECT * FROM gone', input)
+      validateBody(
+        'WITH gone AS (DELETE FROM users WHERE id = 1 RETURNING *) SELECT * FROM gone',
+        input
+      )
     ).toThrow(/read-only|DELETE/i)
   })
 
   test('rejects a WITH clause whose CTE updates rows', () => {
     expect(() =>
-      validateBody('WITH bumped AS (UPDATE users SET n = n + 1 RETURNING *) SELECT * FROM bumped', input)
+      validateBody(
+        'WITH bumped AS (UPDATE users SET n = n + 1 RETURNING *) SELECT * FROM bumped',
+        input
+      )
     ).toThrow(/read-only|UPDATE/i)
   })
 
   test('rejects a WITH clause whose CTE inserts rows', () => {
     expect(() =>
-      validateBody('WITH added AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM added', input)
+      validateBody(
+        'WITH added AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM added',
+        input
+      )
     ).toThrow(/read-only|INSERT/i)
   })
 
   test('still accepts an ordinary read-only CTE', () => {
     expect(() =>
-      validateBody('WITH recent AS (SELECT * FROM users ORDER BY created_at DESC) SELECT * FROM recent', input)
+      validateBody(
+        'WITH recent AS (SELECT * FROM users ORDER BY created_at DESC) SELECT * FROM recent',
+        input
+      )
     ).not.toThrow()
   })
 

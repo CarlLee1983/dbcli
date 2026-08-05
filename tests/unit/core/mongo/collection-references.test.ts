@@ -20,7 +20,9 @@ describe('findMongoCollectionReferences', () => {
 
   it('finds a $unionWith source in both spellings', () => {
     expect(findMongoCollectionReferences([{ $unionWith: 'secrets' }])).toEqual(['secrets'])
-    expect(findMongoCollectionReferences([{ $unionWith: { coll: 'secrets' } }])).toEqual(['secrets'])
+    expect(findMongoCollectionReferences([{ $unionWith: { coll: 'secrets' } }])).toEqual([
+      'secrets',
+    ])
   })
 
   it('finds a $graphLookup source', () => {
@@ -45,7 +47,9 @@ describe('findMongoCollectionReferences', () => {
 
   it('finds a collection inside a $facet branch', () => {
     expect(
-      findMongoCollectionReferences([{ $facet: { a: [{ $lookup: { from: 'secrets', as: 'x' } }] } }])
+      findMongoCollectionReferences([
+        { $facet: { a: [{ $lookup: { from: 'secrets', as: 'x' } }] } },
+      ])
     ).toEqual(['secrets'])
   })
 
@@ -53,9 +57,9 @@ describe('findMongoCollectionReferences', () => {
     expect(findMongoCollectionReferences([{ $out: 'dump' }])).toEqual(['dump'])
     expect(findMongoCollectionReferences([{ $out: { db: 'd', coll: 'dump' } }])).toEqual(['dump'])
     expect(findMongoCollectionReferences([{ $merge: { into: 'dump' } }])).toEqual(['dump'])
-    expect(findMongoCollectionReferences([{ $merge: { into: { db: 'd', coll: 'dump' } } }])).toEqual(
-      ['dump']
-    )
+    expect(
+      findMongoCollectionReferences([{ $merge: { into: { db: 'd', coll: 'dump' } } }])
+    ).toEqual(['dump'])
   })
 
   it('accumulates the embedding prefix through $facet and nested pipelines', () => {

@@ -86,9 +86,7 @@ export const snapshotCommand = new Command()
       try {
         const blacklistManager = new BlacklistManager(config)
         const blacklistValidator = new BlacklistValidator(blacklistManager)
-        const sqlDialect = SQL_DIALECTS.find(
-          (dialect) => dialect === config.connection?.system
-        )
+        const sqlDialect = SQL_DIALECTS.find((dialect) => dialect === config.connection?.system)
         const executor = new QueryExecutor(
           adapter,
           config.permission,

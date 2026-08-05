@@ -28,7 +28,6 @@ function dedupe(values: string[]): string[] {
   return result
 }
 
-
 /**
  * Result of column filtering operation
  */

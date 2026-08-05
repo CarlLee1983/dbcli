@@ -43,9 +43,9 @@ describe('stacked statements are refused before reaching the adapter', () => {
     const { adapter, calls } = makeSpyAdapter()
     const executor = new QueryExecutor(adapter, 'query-only')
 
-    await expect(
-      executor.execute('SELECT 1 LIMIT 1; DELETE FROM users')
-    ).rejects.toThrow(/multiple statements|multi-statement/i)
+    await expect(executor.execute('SELECT 1 LIMIT 1; DELETE FROM users')).rejects.toThrow(
+      /multiple statements|multi-statement/i
+    )
     expect(calls()).toEqual([])
   })
 
@@ -53,9 +53,9 @@ describe('stacked statements are refused before reaching the adapter', () => {
     const { adapter, calls } = makeSpyAdapter()
     const executor = new QueryExecutor(adapter, 'data-admin')
 
-    await expect(
-      executor.execute('SELECT 1 LIMIT 1; DROP TABLE users')
-    ).rejects.toThrow(/multiple statements|multi-statement/i)
+    await expect(executor.execute('SELECT 1 LIMIT 1; DROP TABLE users')).rejects.toThrow(
+      /multiple statements|multi-statement/i
+    )
     expect(calls()).toEqual([])
   })
 
@@ -90,9 +90,18 @@ describe('stacked statements are refused before reaching the adapter', () => {
  */
 describe('stacking cannot be hidden from the guard', () => {
   const stacked = [
-    ['a dash-dash sequence inside a string literal', "SELECT 'x--' AS a LIMIT 1;\nDELETE FROM users;\n"],
-    ['a block-comment opener inside a string literal', "SELECT 'a/*' AS a LIMIT 1; DELETE FROM users; SELECT '*/' AS b"],
-    ['a # operator that only MySQL reads as a comment', "SELECT data #> '{a}' FROM t LIMIT 1; DELETE FROM users"],
+    [
+      'a dash-dash sequence inside a string literal',
+      "SELECT 'x--' AS a LIMIT 1;\nDELETE FROM users;\n",
+    ],
+    [
+      'a block-comment opener inside a string literal',
+      "SELECT 'a/*' AS a LIMIT 1; DELETE FROM users; SELECT '*/' AS b",
+    ],
+    [
+      'a # operator that only MySQL reads as a comment',
+      "SELECT data #> '{a}' FROM t LIMIT 1; DELETE FROM users",
+    ],
   ] as const
 
   for (const [description, sql] of stacked) {
@@ -115,7 +124,7 @@ describe('stacking cannot be hidden from the guard', () => {
 
   test('an unknown dialect fails closed', () => {
     // With no dialect to judge by, any reading that sees a separator wins.
-    expect(containsMultipleStatements('SELECT data #> \'{a}\' FROM t; DELETE FROM users')).toBe(true)
+    expect(containsMultipleStatements("SELECT data #> '{a}' FROM t; DELETE FROM users")).toBe(true)
   })
 })
 
@@ -159,7 +168,10 @@ describe('a $ inside an identifier does not open a dollar-quoted string', () => 
 describe('PostgreSQL block comments nest', () => {
   test('a nested comment containing a semicolon is one statement', () => {
     expect(
-      containsMultipleStatements('SELECT 1 /* outer /* inner */ ; still comment */ FROM t', 'postgresql')
+      containsMultipleStatements(
+        'SELECT 1 /* outer /* inner */ ; still comment */ FROM t',
+        'postgresql'
+      )
     ).toBe(false)
   })
 })
@@ -278,4 +290,3 @@ describe('a number adjacent to an identifier does not open a dollar quote', () =
     expect(containsMultipleStatements('SELECT 1$q$a;b$q$ AS v', 'postgresql')).toBe(false)
   })
 })
-

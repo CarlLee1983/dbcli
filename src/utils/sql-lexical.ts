@@ -33,8 +33,7 @@ export const IDENTIFIER_START = /[A-Za-z_]|[\u0080-\uFFFF]/
  * including a stacked `DELETE`. Failing to recognise a quote is not the safe
  * direction here; it desynchronises the scan.
  */
-export const DOLLAR_QUOTE_DELIMITER =
-  /^\$(?:(?:[A-Za-z_]|[-￿])(?:[A-Za-z0-9_]|[-￿])*)?\$/
+export const DOLLAR_QUOTE_DELIMITER = /^\$(?:(?:[A-Za-z_]|[-￿])(?:[A-Za-z0-9_]|[-￿])*)?\$/
 
 /**
  * The dollar-quote delimiter opening at `index`, or undefined.

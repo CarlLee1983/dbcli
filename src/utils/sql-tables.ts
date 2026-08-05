@@ -116,13 +116,47 @@ const POST_TABLE_KEYWORDS = new Set([
  * never filtered, so `FROM "select"` is reported whatever this set says.
  */
 const RESERVED_KEYWORDS = new Set([
-  'ALL', 'AND', 'AS', 'ASC', 'CASE', 'CROSS', 'DESC', 'DISTINCT', 'ELSE',
-  'FALSE', 'FOR', 'FROM', 'GROUP', 'HAVING', 'IN', 'INNER', 'INTO',
-  'IS', 'JOIN', 'LEFT', 'LIKE', 'LIMIT', 'NOT', 'NULL', 'ON', 'OR', 'ORDER', 'OUTER',
+  'ALL',
+  'AND',
+  'AS',
+  'ASC',
+  'CASE',
+  'CROSS',
+  'DESC',
+  'DISTINCT',
+  'ELSE',
+  'FALSE',
+  'FOR',
+  'FROM',
+  'GROUP',
+  'HAVING',
+  'IN',
+  'INNER',
+  'INTO',
+  'IS',
+  'JOIN',
+  'LEFT',
+  'LIKE',
+  'LIMIT',
+  'NOT',
+  'NULL',
+  'ON',
+  'OR',
+  'ORDER',
+  'OUTER',
   // BETWEEN is a col_name_keyword in PostgreSQL, which ColId admits;
   // EXCEPT/INTERSECT became reserved in MySQL only at 8.0.31 and MariaDB 10.3.
   // All three are therefore legal unquoted table names somewhere.
-  'RIGHT', 'SELECT', 'THEN', 'TRUE', 'UNION', 'USING', 'VALUES', 'WHEN', 'WHERE', 'WITH',
+  'RIGHT',
+  'SELECT',
+  'THEN',
+  'TRUE',
+  'UNION',
+  'USING',
+  'VALUES',
+  'WHEN',
+  'WHERE',
+  'WITH',
 ])
 
 interface Token {
@@ -460,7 +494,10 @@ function collectReferences(tokens: Token[], record: (name: string) => void): voi
       // Skip an alias, with or without AS, before deciding whether the list
       // continues. A keyword in that position ends the list instead.
       if (isKeyword(tokens[cursor], AS_KEYWORD)) cursor++
-      if (tokens[cursor]?.kind === 'identifier' && !isKeyword(tokens[cursor], POST_TABLE_KEYWORDS)) {
+      if (
+        tokens[cursor]?.kind === 'identifier' &&
+        !isKeyword(tokens[cursor], POST_TABLE_KEYWORDS)
+      ) {
         cursor++
       }
 
@@ -478,7 +515,10 @@ function collectReferences(tokens: Token[], record: (name: string) => void): voi
           cursor++
         } while (depth > 0 && cursor < tokens.length)
         // A hint may be followed by another identifier before the comma.
-        if (tokens[cursor]?.kind === 'identifier' && !isKeyword(tokens[cursor], POST_TABLE_KEYWORDS))
+        if (
+          tokens[cursor]?.kind === 'identifier' &&
+          !isKeyword(tokens[cursor], POST_TABLE_KEYWORDS)
+        )
           cursor++
       }
 

@@ -171,9 +171,9 @@ describe('extractTableReferences', () => {
     })
 
     it('sees a PostgreSQL COPY source', () => {
-      expect(
-        extractTableReferences('COPY users TO STDOUT', { dialect: 'postgresql' })
-      ).toContain('users')
+      expect(extractTableReferences('COPY users TO STDOUT', { dialect: 'postgresql' })).toContain(
+        'users'
+      )
     })
 
     it('sees a parenthesised join', () => {
@@ -205,9 +205,7 @@ describe('extractTableReferences', () => {
     })
 
     it('still skips an ordinary block comment', () => {
-      expect(
-        extractTableReferences('SELECT 1 /* FROM users */', { dialect: 'mysql' })
-      ).toEqual([])
+      expect(extractTableReferences('SELECT 1 /* FROM users */', { dialect: 'mysql' })).toEqual([])
     })
 
     it('skips a MySQL # comment only in MySQL', () => {
@@ -324,9 +322,11 @@ describe('extractTableReferences', () => {
       // `filter`, `partition`, `set`, `current` and `update` are all legal
       // unquoted table names somewhere, so none may be filtered out.
       for (const name of ['filter', 'partition', 'set', 'current', 'update', 'nulls', 'over']) {
-        expect(extractTableReferences(`SELECT * FROM pub STRAIGHT_JOIN ${name} ON 1 = 1`, {
-          dialect: 'mysql',
-        })).toContain(name)
+        expect(
+          extractTableReferences(`SELECT * FROM pub STRAIGHT_JOIN ${name} ON 1 = 1`, {
+            dialect: 'mysql',
+          })
+        ).toContain(name)
       }
     })
 

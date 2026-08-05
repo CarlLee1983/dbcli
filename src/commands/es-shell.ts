@@ -41,7 +41,6 @@ export function extractIndexFromPath(path: string): string | undefined {
   return seg.split('?')[0]
 }
 
-
 /**
  * Paths that return cluster or index *metadata* and never document contents.
  * An allow-list, not a deny-list: a request that cannot be scoped to an index
@@ -53,7 +52,6 @@ function isUnscopedMetadataPath(path: string): boolean {
   const first = path.replace(/^\//, '').split('/')[0]?.split('?')[0] ?? ''
   return UNSCOPED_METADATA_PREFIXES.includes(first)
 }
-
 
 /**
  * Index names carried in a request *body*.

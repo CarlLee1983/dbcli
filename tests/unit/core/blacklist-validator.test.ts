@@ -278,11 +278,10 @@ describe('BlacklistValidator', () => {
     it('omits a column blacklisted on any referenced table', () => {
       const validator = makeValidator({ tables: [], columns: { users: ['password_hash'] } })
       const rows = [{ id: 1, password_hash: 'secret' }]
-      const result = validator.filterColumnsForTables(
-        ['orders', 'users'],
-        rows,
-        ['id', 'password_hash']
-      )
+      const result = validator.filterColumnsForTables(['orders', 'users'], rows, [
+        'id',
+        'password_hash',
+      ])
 
       expect(result.omittedColumns).toEqual(['password_hash'])
       expect(result.filteredRows[0]).not.toHaveProperty('password_hash')

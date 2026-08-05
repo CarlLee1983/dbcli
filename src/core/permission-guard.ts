@@ -9,6 +9,7 @@
  */
 
 import type { Permission } from '@/types'
+import { IDENTIFIER_CONTINUATION, dollarQuoteDelimiterAt } from '@/utils/sql-lexical'
 
 /**
  * SQL statement type enumeration
@@ -91,14 +92,7 @@ export function normalizeSQL(sql: string): string {
   )
 }
 
-/**
- * A character that can continue a PostgreSQL identifier. Its lexer accepts any
- * high byte (`ident_cont` is `[A-Za-z\200-\377_0-9$]`), so accented and
- * non-Latin letters count — `café$q$` is one identifier, not `café` followed by
- * a dollar-quote. Treating a character as part of an identifier only ever makes
- * the analysis stricter, since fewer regions get stripped from view.
- */
-const IDENTIFIER_CONTINUATION = /[A-Za-z0-9_$]|[\u0080-\uFFFF]/
+
 
 /**
  * Strip comments AND string literals using character-by-character state machine
@@ -196,10 +190,10 @@ export function stripCommentsAndStrings(
       // the `$q$` belongs to the identifier `a$q$` and quotes nothing — reading
       // it as a quote would hide everything up to the next `$q$` from analysis
       // while the server still executes it.
-      const opensToken = !IDENTIFIER_CONTINUATION.test(sql[i - 1] ?? '')
-      const delimiter = opensToken
-        ? sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
-        : undefined
+      // The tag itself follows identifier rules too, so `$é$` is a real quote;
+      // an ASCII-only tag pattern left its body visible and let a `'` inside it
+      // desynchronise the scan.
+      const delimiter = dollarQuoteDelimiterAt(sql, i)
       if (delimiter) {
         i += delimiter.length
         const closingIndex = sql.indexOf(delimiter, i)

@@ -217,7 +217,10 @@ or `doctor` / `status` reports a missing or invalid config, follow this flow.
      `--password` / `--name` (and `--system`).
 3. **What permission tier?** Default to the **lowest** that satisfies the task:
    `query-only` → `read-write` → `data-admin` → `admin`. Set with `--permission`
-   (defaults to `query-only`).
+   (defaults to `query-only`). Tiers judge what a statement does, not how it
+   opens: below `admin`, multi-statement SQL is rejected; snippets must be free
+   of write and DDL keywords; MongoDB `$out` / `$merge` need `data-admin` and are
+   refused entirely in snippets and `export`.
 4. **Verify, never assume.** After init: `dbcli status` (system + permission +
    blacklist summary, no creds) and `dbcli doctor --format json` (env, config
    shape, connectivity, schema-cache age, Mongo SRV path).

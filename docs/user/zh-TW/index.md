@@ -32,7 +32,7 @@
 
 `dbcli` 的設計初衷是「安全第一」，特別專注於防止 AI 代理在操作過程中意外洩漏或損壞敏感資料。
 
-*   **權限守衛 (Permission Guard)**：提供四層存取控制（`query-only`、`read-write`、`data-admin`、`admin`）。
+*   **權限守衛 (Permission Guard)**：提供四層存取控制（`query-only`、`read-write`、`data-admin`、`admin`）。語句以「實際會做什麼」判定，而非開頭關鍵字：`admin` 以下拒絕多語句 SQL（因為只有第一句會決定權限判定）；saved snippet 只要含任何寫入或 DDL 關鍵字即拒絕，因此 data-modifying CTE 與 `SELECT … INTO` 無法躲在 `SELECT`／`WITH` 開頭後面；MongoDB `$out`／`$merge` 在 `query` 需要 `data-admin`，在 snippet 與 `export` 一律拒絕。
 *   **黑名單管理器 (Blacklist Manager)**：從所有查詢結果中自動屏蔽敏感資料表與欄位。
 *   **查詢風險分析器 (`plan`)**：在不連線資料庫的情況下分析 SQL 風險。
 *   **Antigravity 協議**：將工作流程拆分為 **Architect (架構師/規劃)** 與 **Builder (建設者/執行)**，確保行動前必有策略。

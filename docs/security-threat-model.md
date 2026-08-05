@@ -38,6 +38,15 @@ and credentials must be protected from the agent's writable workspace.
 4. **Secret disclosure through machine output** — Mitigation: safe inventory,
    status, and audit projections exclude credentials, URIs, Cloud IDs, API keys,
    and environment-variable names.
+5. **Read-looking statements that write** — A statement can pass a guard that
+   judges it by its leading keyword and still write: stacked statements on
+   drivers using the simple query protocol, data-modifying CTEs, `SELECT … INTO`,
+   and MongoDB `$out` / `$merge` stages. Mitigation: statements are proven
+   read-only rather than assumed, and every path from a command to an adapter is
+   registered against the gate it relies on
+   (`tests/unit/core/execution-path-contract.test.ts`), because this class of
+   defect appears as an unguarded *path*, not as a missing mechanism. See
+   [ADR-0004](adr/0004-database-access-stays-a-cli-surface.md).
 
 ## Operator contract
 

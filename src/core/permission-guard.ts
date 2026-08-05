@@ -557,6 +557,41 @@ export function containsMultipleStatements(sql: string, dialect?: SqlDialect): b
 }
 
 /**
+ * Read-looking statement types that can nevertheless carry an executable write:
+ * a `SELECT` through a CTE or `INTO`, an `EXPLAIN` through `ANALYZE`. `SHOW` and
+ * `DESCRIBE` take no subquery, so `SHOW CREATE TABLE users` is a read whose text
+ * merely contains a keyword.
+ */
+const ESCALATABLE_READ_TYPES = new Set<StatementType>(['SELECT', 'EXPLAIN'])
+
+/**
+ * Re-classify a read-looking statement by the write it actually performs, so the
+ * permission tiers judge what runs rather than what the statement opens with.
+ * Returns the classification unchanged when the statement really is a read.
+ */
+function escalateHiddenWrite(
+  sql: string,
+  classification: StatementClassification,
+  dialect: SqlDialect | undefined
+): StatementClassification {
+  if (!ESCALATABLE_READ_TYPES.has(classification.type)) return classification
+
+  // `EXPLAIN` without `ANALYZE` only plans; it never runs the statement it
+  // describes, so a write keyword inside it is not executed either.
+  if (classification.type === 'EXPLAIN' && !/\bANALYZE\b/i.test(sql)) return classification
+
+  const hidden = findWriteKeyword(sql, dialect ? [dialect] : undefined)
+  if (!hidden) return classification
+
+  return {
+    ...classification,
+    type: mapKeywordToType(hidden),
+    isDangerous: true,
+    confidence: 'HIGH',
+  }
+}
+
+/**
  * Check if statement is allowed under given permission level
  */
 export function checkPermission(
@@ -564,7 +599,12 @@ export function checkPermission(
   permission: Permission,
   dialect?: SqlDialect
 ): PermissionCheckResult {
-  const classification = classifyStatement(sql)
+  // A read-looking leading keyword does not make a statement a read: a CTE can
+  // carry DELETE/UPDATE/INSERT … RETURNING, `SELECT … INTO` creates a table, and
+  // `EXPLAIN ANALYZE <write>` executes the write it explains. Judging the
+  // statement by the write it performs lets the ordinary tiers decide, instead
+  // of this proof living only on the multi-connection path as it used to.
+  const classification = escalateHiddenWrite(sql, classifyStatement(sql), dialect)
 
   // Classification describes one statement, but drivers using the simple query
   // protocol (PostgreSQL) execute every semicolon-separated statement in the

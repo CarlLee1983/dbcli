@@ -1,6 +1,7 @@
 import type { QueryResult } from '@/types/query'
 import { mapCliError, type CliErrorPresentation } from '@/utils/cli-error'
 import {
+  classifyStatement,
   enforcePermission,
   stripCommentsAndStrings,
   SQL_WRITE_OR_DDL_KEYWORDS,
@@ -58,11 +59,16 @@ export function assertFanOutReadOnlySql(
   if (statements.length !== 1) {
     throw new Error('Multi-connection SQL must contain exactly one read-only statement')
   }
-  const classification = enforcePermission(sql, 'query-only', dialect)
+  // Prove read-only first, so the fan-out contract is what the caller is told;
+  // the permission check would otherwise report the same rejection as a tier
+  // error, which is true but says nothing about why fan-out is stricter.
   const containsWrite = SQL_WRITE_OR_DDL_KEYWORDS.test(executableSql)
+  const classification = classifyStatement(sql)
   const explainExecutes = classification.type === 'EXPLAIN' && /\bANALYZE\b/i.test(executableSql)
 
   if ((classification.type === 'SELECT' && containsWrite) || (explainExecutes && containsWrite)) {
     throw new Error('Multi-connection SQL must be proven read-only before any connection executes')
   }
+
+  enforcePermission(sql, 'query-only', dialect)
 }

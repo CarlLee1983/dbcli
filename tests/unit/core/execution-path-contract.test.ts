@@ -14,7 +14,7 @@
 
 import { describe, test, expect } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 
 const SRC = join(import.meta.dir, '../../../src')
 
@@ -106,7 +106,10 @@ function walk(dir: string, out: string[] = []): string[] {
 function findExecutionPaths(): Record<string, number> {
   const found: Record<string, number> = {}
   for (const file of walk(SRC)) {
-    const rel = relative(SRC, file)
+    // Keys in REGISTERED_PATHS are POSIX-style, so the walk must be too —
+    // otherwise Windows both mismatches every key and, worse, silently loses
+    // the `adapters/` exclusion below.
+    const rel = relative(SRC, file).split(sep).join('/')
     if (rel.startsWith('adapters/')) continue
     const matches = readFileSync(file, 'utf8').match(EXECUTE_CALL)
     if (matches && matches.length > 0) found[rel] = matches.length

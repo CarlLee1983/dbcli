@@ -16,6 +16,7 @@ import { MongoDBAdapter } from './mongodb-adapter'
 import { RedisAdapter } from './redis-adapter'
 import { ElasticsearchAdapter } from './elasticsearch-adapter'
 import type { RedisMaskRule } from '@/types/blacklist'
+import { withResolvedTimeout } from '@/utils/connection-timeout'
 
 /**
  * Factory for creating database adapters
@@ -23,7 +24,11 @@ import type { RedisMaskRule } from '@/types/blacklist'
  * Enables system-aware instantiation without coupling CLI commands to specific drivers
  */
 export class AdapterFactory {
-  static createSqlAdapter(options: SqlConnectionOptions): DatabaseAdapter {
+  static createSqlAdapter(rawOptions: SqlConnectionOptions): DatabaseAdapter {
+    // Adapter construction is the single place the per-invocation --timeout
+    // override is applied: resolving it any earlier would let a read → mutate →
+    // write command persist a one-shot flag into config.json.
+    const options = withResolvedTimeout(rawOptions)
     switch (options.system) {
       case 'postgresql':
         return new PostgreSQLAdapter(options)
@@ -37,7 +42,8 @@ export class AdapterFactory {
     }
   }
 
-  static createQueryableAdapter(options: QueryableConnectionOptions): QueryableAdapter {
+  static createQueryableAdapter(rawOptions: QueryableConnectionOptions): QueryableAdapter {
+    const options = withResolvedTimeout(rawOptions)
     switch (options.system) {
       case 'mongodb':
         return new MongoDBAdapter(options)
@@ -78,13 +84,14 @@ export class AdapterFactory {
   }
 
   static createRedisAdapter(
-    options: ConnectionOptions,
+    rawOptions: ConnectionOptions,
     blacklistRules: string[] = [],
     maskRules: RedisMaskRule[] = []
   ): QueryableAdapter {
-    if (options.system !== 'redis') {
+    if (rawOptions.system !== 'redis') {
       throw new Error('createRedisAdapter requires system: redis')
     }
+    const options = withResolvedTimeout(rawOptions)
     const adapter = new RedisAdapter(options as QueryableConnectionOptions)
     adapter.setBlacklistRules(blacklistRules)
     adapter.setMaskRules(maskRules)

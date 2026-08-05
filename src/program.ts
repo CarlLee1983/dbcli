@@ -43,7 +43,26 @@ import {
   resolveConnectionSelector,
 } from './core/connection-selector'
 import { printLocalizedCliError } from './utils/cli-error'
+import {
+  parseTimeoutOption,
+  MIN_CONNECTION_TIMEOUT_MS,
+  MAX_CONNECTION_TIMEOUT_MS,
+} from './utils/validation'
 import pkg from '../package.json'
+
+/**
+ * Commander-facing wrapper: same rule as the config schema, but reported the way
+ * Commander reports every other bad option value.
+ */
+function parseConnectionTimeout(value: string): number {
+  try {
+    return parseTimeoutOption(value)
+  } catch {
+    throw new InvalidArgumentError(
+      `must be an integer between ${MIN_CONNECTION_TIMEOUT_MS} and ${MAX_CONNECTION_TIMEOUT_MS} milliseconds`
+    )
+  }
+}
 
 function parsePositiveInteger(value: string): number {
   if (!/^\d+$/.test(value)) {
@@ -112,6 +131,11 @@ export function buildProgram(): Command {
     .option('-q, --quiet', 'Suppress non-essential output')
     .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
     .option('--global', 'Use the user-global connection registry (~/.config/dbcli)', false)
+    .option(
+      '--timeout <ms>',
+      'Connection timeout in milliseconds (overrides the connection config; default 5000)',
+      parseConnectionTimeout
+    )
     .addOption(createConnectionSelectorOption())
     // Required so options after a sub-subcommand (e.g. `dbcli proxy analyze --events ...`)
     // bind to the leaf command instead of being absorbed by an ancestor that shares the

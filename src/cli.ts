@@ -4,6 +4,7 @@ import { formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
+import { setGlobalConnectionTimeout } from './utils/connection-timeout'
 import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
 import { isMachineReadableCommand } from './utils/cli-output'
@@ -155,6 +156,8 @@ program.hook('preAction', (thisCommand, actionCommand) => {
       environment: process.env.DBCLI_CONNECTION,
     })
   )
+
+  setGlobalConnectionTimeout(opts.timeout as number | undefined)
 
   if (opts.color === false) {
     process.env.NO_COLOR = '1'

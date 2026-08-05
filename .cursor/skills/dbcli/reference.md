@@ -19,6 +19,28 @@ command-level option is only valid after the command that declares it.
 | `--config <path>` | Select the `.dbcli` configuration path. |
 | `--global` | Select the user-global registry at `~/.config/dbcli/config.json` instead of the current project's `.dbcli` config. Place it before the command path. |
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
+| `--timeout <ms>` | Connection timeout in milliseconds (integer, 100–600000), overriding the connection config's `timeout` field for this invocation. Applies to every engine adapter. Without either the flag or the config field, adapters fall back to their built-in 5000ms default. |
+
+`--timeout` is applied only when the adapter is constructed for this invocation — it is
+never written back to `config.json`. Set the connection's `timeout` field instead for a
+value that persists across runs. On PostgreSQL, the same value is also used as the
+session's `statement_timeout` (not just the connection timeout), so a low value can cut
+off a long-running query with an error that looks like a connection timeout; the 100ms
+floor exists specifically to keep that failure mode from being too easy to trigger.
+Elasticsearch applies its timeout per request rather than once for the whole connection.
+The `timeout` field itself always takes a literal number — unlike other connection
+fields, it does not accept an `{"$env": "..."}` reference.
+
+### Redirecting output
+
+Results go to stdout; diagnostics (auto-limit notices, warnings, update hints) go to
+stderr. That split is what keeps `--format json` machine-parseable, so do not collapse
+it with `2>&1` — the diagnostic lines land in front of the JSON document and the parse
+fails. Pipe stdout alone, or add `2>/dev/null` when the diagnostics are not wanted:
+
+```bash
+dbcli query '{}' --collection events --format json 2>/dev/null | jq '.rows | length'
+```
 
 ## Commands
 
@@ -117,6 +139,10 @@ single-file `.dbcli` configs must be migrated by a human/admin process with
 agent mode disabled. A host that needs protection from a same-user hostile
 process can set `DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` to a protected or read-only
 directory; trusted writes publish detached digests there.
+
+When a connection's config fails schema validation, dbcli reports the specific field
+path(s) that are wrong for that connection's declared `system` — not the raw Zod union
+error tree — so a broken `.dbcli` can be fixed without guessing which branch applies.
 
 ### list
 
@@ -2605,6 +2631,8 @@ MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB s
 
 `init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow and the unchanged non-interactive path via `--uri`. Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
+The 5000ms default server-selection timeout is often too tight for a connection over a VPN or to Atlas. Set a `timeout` field (ms) in the connection config, or override it per invocation with root-level `--timeout`, e.g. `dbcli --timeout 20000 --use <conn> list`.
+
 **Supported commands:** `init`, `use`, `list`, `schema`, `query`, `q`, `insert`, `update`, `delete`, `export`, `status`, `shell`, `doctor`, `upgrade`, `completion`
 
 **Limited support:**
@@ -2669,7 +2697,7 @@ Redis connections speak Redis commands rather than SQL. The adapter uses Bun's n
 
 - Required fields: `system: redis`, `host`, `port`. `password` and `database` are optional.
 - `database` is the **logical DB index** (`"0"` … `"15"`), kept as a string to play nicely with env-ref bindings. `list` and the connection metadata both label it as the active DB.
-- `connection.timeout` (ms, default 5000) maps to the client's `connectionTimeout`.
+- `connection.timeout` (ms, default 5000) maps to the client's `connectionTimeout`; root-level `--timeout <ms>` overrides it for a single invocation.
 
 ### Permission classification
 
@@ -2799,7 +2827,7 @@ Elasticsearch connections speak the REST API. The adapter is fetch-based (no SDK
 - Either `host` + `port` (default `https://localhost:9200`) or `nodes: [...]` (first node is used) or `cloudId`.
 - Auth precedence: `apiKey` → `user`/`password` (HTTP Basic). Leave both unset for an open cluster.
 - `protocol` defaults to `https`. For TLS quirks: `caPath` (path to a PEM bundle) and `rejectUnauthorized: false` (last resort).
-- `connection.timeout` (ms, default 5000) is wired to `AbortController` on every request.
+- `connection.timeout` (ms, default 5000) is wired to `AbortController` on every request; root-level `--timeout <ms>` overrides it for a single invocation.
 
 ### Permission classification
 

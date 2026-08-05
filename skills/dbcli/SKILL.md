@@ -77,7 +77,10 @@ When reporting a check's outcome use the vocabulary `verified` (evidence matched
 `not_verified` (check ran and contradicted) / `indeterminate` (ran but ambiguous) /
 `blocked` (could not run due to config, permission, schema, placeholder, or safety gate).
 
-Prefer `--format json` for agent-friendly output.
+Prefer `--format json` for agent-friendly output. Diagnostics (auto-limit notices,
+warnings) go to stderr so stdout stays parseable — when piping JSON into a parser,
+use `2>/dev/null` or leave stderr alone. **Never `2>&1`**: it merges those lines back
+into stdout and the parse fails.
 
 ## Agent Task Packs
 
@@ -553,4 +556,4 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 - Blacklisted tables and columns are redacted from query output.
 - `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in reference.md.
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
-- **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.
+- **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `--timeout <ms>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

@@ -94,6 +94,21 @@ dbcli --global query "SELECT 1"
 
 Without `--global`, `dbcli` continues to resolve the current project's `.dbcli` binding. This explicit scope prevents a global connection from being selected accidentally in an unrelated project.
 
+Root-level `--timeout <ms>` overrides the connection timeout for one invocation (integer,
+100–600000; must precede the command, like `--global` and `--use`). It overrides the
+connection config's `timeout` field; without either, adapters fall back to a built-in
+5000ms default. The override applies only when the adapter is created for this
+invocation and is never written back to `config.json` — set the connection's `timeout`
+field instead for a value that persists across runs. On PostgreSQL the same value also
+becomes the session's `statement_timeout`, so a low value can cut off a long-running
+query with an error that looks like a connection timeout; Elasticsearch applies its
+timeout per request rather than once for the whole connection. This is useful when the
+default is too tight, such as a MongoDB connection over a VPN or to Atlas:
+
+```bash
+dbcli --timeout 20000 --use <conn> list
+```
+
 *   **List all connections**: `dbcli use --list`; agents and scripts can use
     `dbcli use --list --format json` for a credential-free connection inventory.
 *   **Switch default connection**: `dbcli use <name>`
@@ -867,6 +882,7 @@ Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
 | `replicaSet` | string or `{"$env": "..."}` | Replica set name. |
 | `tls` | boolean | Enable TLS. |
 | `srv` | boolean (default `false`) | Build a `mongodb+srv://` URI and resolve hosts via DNS SRV; `port` is ignored when `true`. |
+| `timeout` | number (ms, 100–600000) | Connection timeout; overridable per invocation with root-level `--timeout <ms>`. Defaults to the adapter's built-in 5000ms when neither is set. Unlike the other fields in this table, it does not accept an `{"$env": "..."}` reference — only a literal number. |
 
 `--auth-source <db>` is available as a non-interactive `init` flag. `replicaSet` and `tls` have no dedicated flag yet — set them through the interactive advanced step, or edit `.dbcli` directly afterward (the same pattern already used for Elasticsearch's `caPath` / `rejectUnauthorized`).
 
@@ -1214,6 +1230,11 @@ dbcli recover --apply --write-verification-artifact
 - For missing tables, top-3 fuzzy-match candidates
 
 Already-categorized errors keep their original code, message, and hints across nested adapter calls, so messages are not prefixed twice. MySQL 8 schema introspection is compatible with the default `ONLY_FULL_GROUP_BY` mode.
+
+When a connection's config fails schema validation, dbcli reports one line per invalid
+field path (resolved against that connection's declared `system`) instead of the raw
+nested union-error tree, so a broken `.dbcli` can be fixed without guessing which engine
+branch applies.
 
 ### Bounded CLI error output
 

@@ -32,6 +32,49 @@ const OptStringOrEnvRef = z.union([z.string(), EnvRefSchema]).optional().default
 const OptNumberOrEnvRef = z.union([z.number().int(), EnvRefSchema]).optional().default(27017)
 
 /**
+ * Connection timeout bounds (milliseconds).
+ *
+ * Every adapter honours ConnectionOptions.timeout; without a config field or a
+ * CLI flag the built-in 5000ms was unreachable, which is too tight for MongoDB
+ * over a VPN or against Atlas.
+ *
+ * Lower bound is not 1: PostgreSQL maps this value onto `statement_timeout` as
+ * well as the connect timeout, so a tiny value fails every query with what reads
+ * like a connection error. Upper bound keeps a typo from hanging the CLI.
+ */
+export const MIN_CONNECTION_TIMEOUT_MS = 100
+export const MAX_CONNECTION_TIMEOUT_MS = 600_000
+
+const TimeoutField = {
+  timeout: z
+    .number()
+    .int()
+    .min(MIN_CONNECTION_TIMEOUT_MS)
+    .max(MAX_CONNECTION_TIMEOUT_MS)
+    .optional(),
+}
+
+/**
+ * Parse a --timeout CLI value into milliseconds
+ *
+ * @throws Error with the accepted range when the value is not a positive integer
+ */
+export function parseTimeoutOption(value: string): number {
+  const parsed = Number(value)
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < MIN_CONNECTION_TIMEOUT_MS ||
+    parsed > MAX_CONNECTION_TIMEOUT_MS
+  ) {
+    throw new Error(
+      `Invalid --timeout '${value}': expected an integer between ` +
+        `${MIN_CONNECTION_TIMEOUT_MS} and ${MAX_CONNECTION_TIMEOUT_MS} milliseconds`
+    )
+  }
+  return parsed
+}
+
+/**
  * MongoDB connection schema — all SQL fields optional (defaulted), uri optional.
  * After parse(), host/port/user/password/database are always strings (empty by default).
  *
@@ -51,6 +94,7 @@ export const MongoDBConnectionConfigSchema = z.object({
   replicaSet: z.union([z.string(), EnvRefSchema]).optional(),
   tls: z.boolean().optional(),
   srv: z.boolean().optional().default(false),
+  ...TimeoutField,
 })
 
 /**
@@ -65,6 +109,7 @@ const SqlConnectionConfigSchema = z.object({
   user: StringOrEnvRef,
   password: z.union([z.string(), EnvRefSchema]).default(''),
   database: StringOrEnvRef,
+  ...TimeoutField,
 })
 
 /**
@@ -78,6 +123,7 @@ export const RedisConnectionConfigSchema = z.object({
   user: OptStringOrEnvRef,
   password: z.union([z.string(), EnvRefSchema]).optional().default(''),
   database: OptStringOrEnvRef,
+  ...TimeoutField,
 })
 
 /**
@@ -96,6 +142,7 @@ export const ElasticsearchConnectionConfigSchema = z.object({
   apiKey: z.union([z.string(), EnvRefSchema]).optional(),
   caPath: z.string().optional(),
   rejectUnauthorized: z.boolean().optional().default(true),
+  ...TimeoutField,
 })
 
 /**

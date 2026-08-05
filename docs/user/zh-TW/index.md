@@ -93,6 +93,18 @@ dbcli --global query "SELECT 1"
 
 未帶 `--global` 時，`dbcli` 仍會解析目前專案的 `.dbcli` binding。明確指定 scope 可避免在不相關的專案中意外選到全域連線。
 
+Root-level `--timeout <ms>` 可針對單次執行覆寫連線 timeout（整數，100～600000；必須放在指令之前，
+與 `--global`、`--use` 同樣是 root-level flag）。它會覆寫連線設定中的 `timeout` 欄位；兩者都沒設定
+時，各 adapter 沿用內建的 5000ms 預設值。這個覆寫只在本次建立連線時套用，不會寫回 `config.json`；
+要永久生效請在連線設定裡寫 `timeout` 欄位。PostgreSQL 會把同一個值同時當作該 session 的
+`statement_timeout`，設太低可能讓長查詢被中斷、且錯誤訊息看起來像連線逾時；Elasticsearch 則是
+把 timeout 套用在每個 request 上，而不是整條連線一次性生效。當預設值太緊時很實用，例如 MongoDB
+跨 VPN 或連 Atlas：
+
+```bash
+dbcli --timeout 20000 --use <conn> list
+```
+
 *   **列出所有連線**：`dbcli use --list`；agent 與 script 可用
     `dbcli use --list --format json` 取得不含憑證的連線清單。
 *   **切換預設連線**：`dbcli use <name>`
@@ -780,6 +792,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | `replicaSet` | 字串或 `{"$env": "..."}` | 複本集名稱。 |
 | `tls` | 布林 | 是否啟用 TLS。 |
 | `srv` | 布林（預設 `false`） | 組出 `mongodb+srv://` 並透過 DNS SRV 展開 host；啟用時 `port` 會被忽略。 |
+| `timeout` | 數字（毫秒，100～600000） | 連線 timeout；可用 root-level `--timeout <ms>` 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與本表其他欄位不同，它不接受 `{"$env": "..."}` 參照，只接受字面數字。 |
 
 `--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
 
@@ -1124,6 +1137,9 @@ dbcli recover --apply --write-verification-artifact
 - 對 table 不存在,附上 top-3 fuzzy 候選
 
 已分類的錯誤在巢狀 adapter 呼叫間會保留原始 code、message 與 hints，不再重複加上前綴。MySQL 8 的 schema introspection 也相容預設的 `ONLY_FULL_GROUP_BY` 模式。
+
+當連線設定驗證失敗時，dbcli 會依該連線宣告的 `system` 對應到正確分支，逐一列出有問題的欄位路徑，
+而不是丟出整包巢狀的 union error tree —— 讓壞掉的 `.dbcli` 可以直接照欄位修，不必猜是哪個引擎分支。
 
 ### 有界的 CLI 錯誤輸出
 

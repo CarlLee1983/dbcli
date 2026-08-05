@@ -107,7 +107,12 @@ async function runBashCompletion(script: string, words: readonly string[]): Prom
     '_dbcli_completions',
     'printf "%s\\n" "${COMPREPLY[@]}"',
   ].join('; ')
-  const output = await Bun.$`bash -lc ${command}`.text()
+  // Not a login shell: `command` only sources the script under test and calls bash
+  // builtins, so profile startup buys nothing — and on Windows, Git Bash's
+  // /etc/profile is expensive enough that these three tests were the slowest in the
+  // suite (2.5s+, one of them tipping past the old 5s budget). It also makes the
+  // result independent of whatever a machine's profile puts in the environment.
+  const output = await Bun.$`bash -c ${command}`.text()
   return output.trim().split('\n').filter(Boolean)
 }
 

@@ -144,6 +144,23 @@ export class BlacklistManager {
   }
 
   /**
+   * Every blacklisted column name, across all tables.
+   *
+   * Used when a statement's tables could not be identified: applying every
+   * rule is the reading of "I do not know which table this came from" that
+   * does not disclose data.
+   *
+   * @returns Array of blacklisted column names, deduplicated
+   */
+  getAllBlacklistedColumns(): string[] {
+    const all = new Set<string>()
+    for (const columnSet of this.state.columns.values()) {
+      for (const column of columnSet) all.add(column)
+    }
+    return Array.from(all)
+  }
+
+  /**
    * Check if the blacklist override is enabled via environment variable.
    * When true, all blacklist checks are bypassed.
    *

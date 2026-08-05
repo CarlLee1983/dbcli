@@ -177,4 +177,65 @@ describe('ReplEngine', () => {
     expect(result.output).toContain('secrets')
     expect(adapter.execute).not.toHaveBeenCalled()
   })
+
+  // Issue #23: the shell's own blacklist check also read only the first table,
+  // so a JOIN / comma / UNION reached a blacklisted table unblocked.
+  const blacklistConfig: DbcliConfig = {
+    connection: {
+      system: 'postgresql' as const,
+      host: 'localhost',
+      port: 5432,
+      user: 'test',
+      password: '',
+      database: 'test',
+    },
+    permission: 'admin' as const,
+    blacklist: { tables: ['secrets'], columns: {} },
+    metadata: { version: '1.0' },
+  }
+
+  const joinedStatements: [string, string][] = [
+    ['JOIN', 'SELECT * FROM users u JOIN secrets s ON s.user_id = u.id;'],
+    ['comma', 'SELECT * FROM users, secrets;'],
+    ['UNION', 'SELECT id FROM users UNION ALL SELECT id FROM secrets;'],
+    ['subquery', 'SELECT * FROM users WHERE id IN (SELECT user_id FROM secrets);'],
+  ]
+
+  for (const [label, sql] of joinedStatements) {
+    test(`blocks a blacklisted table reached through ${label}`, async () => {
+      const adapter = createMockAdapter()
+      const engine = new ReplEngine(adapter, mockContext, historyPath, blacklistConfig)
+      const result = await engine.processInput(sql)
+
+      expect(result.output).toContain('secrets')
+      expect(adapter.execute).not.toHaveBeenCalled()
+    })
+  }
+
+  // The shell formatted rows straight from the adapter, so `blacklist.columns`
+  // was never consulted on this path at all.
+  test('masks blacklisted columns in shell output', async () => {
+    const adapter = createMockAdapter()
+    adapter.execute = mock(() =>
+      Promise.resolve({ rows: [{ id: 1, password_hash: 'SECRET' }], affectedRows: 1 })
+    ) as unknown as DatabaseAdapter['execute']
+    const config: DbcliConfig = {
+      ...blacklistConfig,
+      blacklist: { tables: [], columns: { users: ['password_hash'] } },
+    }
+    const engine = new ReplEngine(adapter, mockContext, historyPath, config)
+    const result = await engine.processInput('SELECT id, password_hash FROM users;')
+
+    expect(result.output).not.toContain('SECRET')
+    expect(result.output).not.toContain('password_hash')
+    expect(result.output).toContain('id')
+  })
+
+  test('still runs a statement that touches no blacklisted table', async () => {
+    const adapter = createMockAdapter()
+    const engine = new ReplEngine(adapter, mockContext, historyPath, blacklistConfig)
+    await engine.processInput('SELECT * FROM users u JOIN orders o ON o.user_id = u.id;')
+
+    expect(adapter.execute).toHaveBeenCalled()
+  })
 })

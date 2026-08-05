@@ -57,6 +57,66 @@ and credentials must be protected from the agent's writable workspace.
    effect. Treat a database account that can execute such functions as able to
    write, and grant accordingly.
 
+6. **Blacklisted data reached through an unnamed table** — A guard that judges
+   a statement by its first table name misses everything a `JOIN`, a comma, a
+   `UNION` branch, or a subquery brings in. Mitigation: every table a statement
+   references is enumerated (`src/utils/sql-tables.ts`), a statement is refused
+   if *any* of them is blacklisted, and masking applies the union of their
+   column rules. Enumeration reports every non-keyword identifier, not only the
+   positions the grammar walk models, because successive adversarial review
+   rounds each found new grammar corners in the positional version. Over-reporting blocks
+   more; under-reporting discloses.
+
+   Elasticsearch `--index` is an *expression*, not a name: it accepts comma
+   lists, wildcards, `_all`, percent-encoding, date math and a remote-cluster
+   qualifier. Concrete names are checked individually; a wildcard is refused
+   when it could match a blacklisted index, and column rules are applied for
+   every index the expression could reach, since which indices exist is
+   server-side knowledge dbcli does not have. A shell request is checked on the
+   path the server will actually route — percent-encoding decoded and `..`
+   resolved, and refused outright when the two differ — segment by segment; on
+   the index names its *body* carries (`_mget`'s `docs[]._index`, `_bulk`'s
+   `_index`, a `terms` lookup's `index`); and its response has protected field
+   names removed. A request that names no index at all (`GET /_search`,
+   `/_msearch`, `/_sql`) cannot be scoped, so it is refused whenever a blacklist
+   is configured; cluster-metadata endpoints (`_cat`, `_cluster`, `_nodes`,
+   `_tasks`, `_ingest`, `_license`) are allowed by name rather than by guessing
+   which endpoints return documents.
+
+   For MongoDB the same rule reads `$lookup.from`, `$unionWith.coll`,
+   `$graphLookup.from`, `$out` and `$merge.into`, including inside sub-pipelines,
+   and re-anchors a looked-up collection's field rules under the `as` path its
+   documents arrive at.
+
+   **Known ceilings**, all of which return blacklisted *values* without naming
+   the blacklisted object:
+
+   - **Renaming or transforming.** Masking matches result column names, so
+     `SELECT password_hash AS x FROM users`, `SELECT substr(password_hash,1,10) …`,
+     `SELECT to_json(u) FROM users u` and MongoDB's
+     `$project: { stolen: '$sec.token' }` return the value under a name no rule
+     covers. Table-level entries are enforceable; **column-level entries are a
+     display filter, not an access control**.
+   - **Indirection through a view or a function.** `SELECT * FROM v_users`
+     references `v_users`; that a view reads `users` is server-side knowledge
+     dbcli does not have. The same holds for a set-returning function.
+   - **Server-side statement text.** `PREPARE s FROM 'SELECT * FROM secrets'`
+     followed by `EXECUTE s` passes the statement as a *string*. This is the
+     ceiling already recorded above for the read-only proof, and it applies here
+     for the same reason. Both statements classify as `UNKNOWN`, so permissions
+     below `admin` refuse them; at `admin` in the shell, where one session
+     persists across prompts, they run.
+
+   - **An Elasticsearch alias or a differently-named backing index.** dbcli
+     matches index *names*: `.ds-<name>-*` and `<name>-<nnn>` are covered by
+     convention, but an alias pointing at a blacklisted index is server-side
+     knowledge dbcli does not have, and `GET /_cat/aliases` reveals the mapping.
+     Blacklist the alias as well, or rely on the Elasticsearch role.
+
+   The blacklist withholds objects and columns from ordinary reads. It is not a
+   proof that a value cannot be reconstructed. An account that must not read a
+   column needs a database grant that says so.
+
 ## Operator contract
 
 - Give autonomous agents only database credentials that are safe for their task.

@@ -12,11 +12,7 @@
 
 import { engineFamily, getStrategy } from './strategies'
 import { parseYamlMini } from './yaml-mini'
-import {
-  findWriteKeyword,
-  SQL_DIALECTS,
-  type SqlDialect,
-} from '@/core/permission-guard'
+import { findWriteKeyword, SQL_DIALECTS, type SqlDialect } from '@/core/permission-guard'
 import {
   SavedQueryError,
   SUPPORTED_CHART_TYPES,

@@ -1,7 +1,41 @@
 import type { BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import type { MongoCollectionScope } from './collection-references'
 
 const REDACTED = '[REDACTED]'
+
+/**
+ * Apply the rules of every collection a pipeline touches.
+ *
+ * A `$lookup` embeds documents from another collection under its `as` name, so
+ * that collection's rules have to be matched at `<as>.<field>` as well as at
+ * the top level — a rule written `secrets: ['token']` protects `sec.token` in
+ * the joined result. Masking is immutable, so the rules are folded one scope at
+ * a time.
+ */
+export function maskMongoRowsForCollections(
+  rows: Record<string, unknown>[],
+  collections: (string | MongoCollectionScope)[],
+  blacklist: BlacklistConfig
+): Record<string, unknown>[] {
+  const columns = blacklist.columns ?? {}
+  return collections.reduce((masked, entry) => {
+    const scope: MongoCollectionScope = typeof entry === 'string' ? { collection: entry } : entry
+    const atTopLevel = maskMongoRows(masked, scope.collection, blacklist)
+    if (!scope.prefix) return atTopLevel
+
+    const rules = columns[scope.collection] ?? findCaseInsensitive(columns, scope.collection)
+    if (!rules || rules.length === 0) return atTopLevel
+
+    // Same rules, re-anchored under the embedding path. Keyed by a name that
+    // cannot collide with a real collection.
+    const prefixKey = `\u0000${scope.collection}@${scope.prefix}`
+    return maskMongoRows(atTopLevel, prefixKey, {
+      ...blacklist,
+      columns: { ...columns, [prefixKey]: rules.map((rule) => `${scope.prefix}.${rule}`) },
+    })
+  }, rows)
+}
 
 export function maskMongoRows(
   rows: Record<string, unknown>[],

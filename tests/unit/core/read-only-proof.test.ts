@@ -37,7 +37,10 @@ function makeSpyAdapter(): { adapter: DatabaseAdapter; calls: () => string[] } {
 const WRITES_BEHIND_A_READ = [
   ['a CTE that deletes', 'WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone'],
   ['a CTE that updates', 'WITH b AS (UPDATE users SET n = n + 1 RETURNING *) SELECT * FROM b'],
-  ['a CTE that inserts', 'WITH a AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM a'],
+  [
+    'a CTE that inserts',
+    'WITH a AS (INSERT INTO users (n) VALUES (1) RETURNING *) SELECT * FROM a',
+  ],
   ['SELECT … INTO', 'SELECT * INTO evil_copy FROM users'],
   ['EXPLAIN ANALYZE of a delete', 'EXPLAIN ANALYZE DELETE FROM users'],
   ['EXPLAIN ANALYZE of an insert', 'EXPLAIN ANALYZE INSERT INTO users (a) VALUES (1)'],
@@ -119,19 +122,19 @@ describe('a function is not a statement', () => {
   }
 
   test('the statement forms are still writes', () => {
-    expect(checkPermission('INSERT INTO t (a) VALUES (1)', 'query-only', 'postgresql').allowed).toBe(
-      false
-    )
-    expect(checkPermission("REPLACE INTO t VALUES (1)", 'query-only', 'mysql').allowed).toBe(false)
+    expect(
+      checkPermission('INSERT INTO t (a) VALUES (1)', 'query-only', 'postgresql').allowed
+    ).toBe(false)
+    expect(checkPermission('REPLACE INTO t VALUES (1)', 'query-only', 'mysql').allowed).toBe(false)
     expect(checkPermission('TRUNCATE TABLE users', 'query-only', 'postgresql').allowed).toBe(false)
   })
 })
 
 describe('DESCRIBE is EXPLAIN on MySQL and MariaDB', () => {
   test('DESCRIBE ANALYZE of a write is refused', () => {
-    expect(checkPermission('DESCRIBE ANALYZE DELETE FROM users', 'query-only', 'mysql').allowed).toBe(
-      false
-    )
+    expect(
+      checkPermission('DESCRIBE ANALYZE DELETE FROM users', 'query-only', 'mysql').allowed
+    ).toBe(false)
   })
 
   test('a plain DESCRIBE is still a read', () => {
@@ -147,9 +150,21 @@ describe('DESCRIBE is EXPLAIN on MySQL and MariaDB', () => {
  */
 describe('a hidden write cannot be spelled away', () => {
   const hidden = [
-    ['a quoted target table', `WITH x AS (INSERT INTO "users" (name) VALUES ('evil') RETURNING *) SELECT * FROM x`, 'postgresql'],
-    ['a backtick target table', 'WITH x AS (INSERT INTO `users` (name) VALUES (1) RETURNING *) SELECT * FROM x', 'mysql'],
-    ['no space before the column list', `WITH x AS (INSERT INTO "users"(name) VALUES ('e') RETURNING *) SELECT * FROM x`, 'postgresql'],
+    [
+      'a quoted target table',
+      `WITH x AS (INSERT INTO "users" (name) VALUES ('evil') RETURNING *) SELECT * FROM x`,
+      'postgresql',
+    ],
+    [
+      'a backtick target table',
+      'WITH x AS (INSERT INTO `users` (name) VALUES (1) RETURNING *) SELECT * FROM x',
+      'mysql',
+    ],
+    [
+      'no space before the column list',
+      `WITH x AS (INSERT INTO "users"(name) VALUES ('e') RETURNING *) SELECT * FROM x`,
+      'postgresql',
+    ],
     ['an alias that spells a verb', 'SELECT 1 AS insert INTO evil_copy FROM users', 'postgresql'],
   ] as const
 

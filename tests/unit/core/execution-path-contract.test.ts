@@ -28,7 +28,7 @@ const SRC = join(import.meta.dir, '../../../src')
  * would evade it. It is a tripwire for the ordinary case, and the registry
  * below is the actual record.
  */
-const EXECUTE_CALL = /\w*[Aa]dapter\.(?:execute|insert|update|delete)\s*[<(]/g
+const EXECUTE_CALL = /\w*[Aa]dapter\.(?:execute|insert|update|delete|request)\s*[<(]/g
 
 /**
  * Registered execution paths and the gate each relies on. Update this table in
@@ -53,13 +53,16 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
   },
   'core/repl/repl-engine.ts': {
     calls: 1,
-    gate: 'checkPermission() before execution in the interactive shell',
+    gate:
+      'checkPermission() before execution in the interactive shell, plus its own ' +
+      'blacklist table check and column masking — the shell does not use QueryExecutor',
   },
   'core/report/run-diagnostic.ts': {
     calls: 1,
     gate:
-      'snippet read-only contract at parse time ONLY — no permission tier is applied here, ' +
-      'and the collector loads shared/local user snippets, not just built-ins',
+      'snippet read-only contract at parse time — no permission tier is applied here, ' +
+      'and the collector loads shared/local user snippets, not just built-ins; ' +
+      'blacklist table check and column masking applied around this call',
   },
   'commands/insert.ts': {
     calls: 2,
@@ -75,19 +78,34 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
   },
   'commands/query.ts': {
     calls: 3,
-    gate: 'preflightQuery() — Redis/Elasticsearch permission, MongoDB write-stage guard',
+    gate:
+      'preflightQuery() — Redis/Elasticsearch permission, MongoDB write-stage guard, ' +
+      'and blacklist over every referenced table/collection including $lookup / $unionWith',
   },
   'commands/export.ts': {
     calls: 3,
-    gate: 'QueryExecutor for SQL; Redis permission; MongoDB write-stage guard',
+    gate:
+      'QueryExecutor (with blacklist validator) for SQL; Redis permission; ' +
+      'MongoDB write-stage guard; Elasticsearch index check and column masking',
   },
   'commands/q.ts': {
     calls: 2,
-    gate: 'snippet body and verify.query proven read-only at parse time; blacklist at run time',
+    gate:
+      'snippet body and verify.query proven read-only at parse time; blacklist checked at ' +
+      'run time against every table referenced by the body AND by verify.query',
+  },
+  'commands/es-shell.ts': {
+    calls: 1,
+    gate:
+      'runEsRequest() — the resolved path is checked segment by segment against the index ' +
+      'blacklist, unscoped non-metadata paths are refused, index names in the request body ' +
+      'are checked, and blacklisted fields are removed from the response',
   },
   'commands/q-mongo.ts': {
     calls: 1,
-    gate: 'MongoDB write-stage guard — snippets refuse $out/$merge at every permission level',
+    gate:
+      'MongoDB write-stage guard — snippets refuse $out/$merge at every permission level; ' +
+      'blacklist over the named collection and every $lookup / $unionWith source',
   },
 }
 

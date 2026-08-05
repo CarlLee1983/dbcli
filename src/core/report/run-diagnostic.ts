@@ -6,6 +6,16 @@ import {
   type ResolvedSnippet,
 } from '@/core/saved-queries'
 import { engineFamily } from '@/core/saved-queries/strategies'
+import { extractTableReferences, type SqlTablesDialect } from '@/utils/sql-tables'
+
+/** Snippet engine tag to the SQL dialect it runs under. */
+const ENGINE_DIALECT: Record<string, SqlTablesDialect | undefined> = {
+  postgres: 'postgresql',
+  mysql: 'mysql',
+  mariadb: 'mariadb',
+}
+import type { BlacklistValidator } from '@/core/blacklist-validator'
+import { BlacklistError } from '@/types/blacklist'
 import type { EvidenceItem } from './types'
 
 export interface RunDiagnosticInput {
@@ -14,6 +24,12 @@ export interface RunDiagnosticInput {
   engine: EngineTag
   timeoutMs: number
   maxRows: number
+  /**
+   * Blacklist rules for the connection. Evidence rows are embedded in the
+   * report, and the collector loads user-writable snippet directories, so an
+   * unenforced rule here leaves a durable copy of the withheld data.
+   */
+  blacklistValidator?: BlacklistValidator
 }
 
 /**
@@ -39,6 +55,34 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<Evidence
   }
 
   const family = engineFamily(input.engine)
+
+  // Refuse before executing when the snippet reads a blacklisted table.
+  const referencedTables =
+    family === 'sql'
+      ? extractTableReferences(prepared.rewrittenSql, {
+          // Without the dialect the scan has to consider every reading; the
+          // engine tag names the one this snippet will actually run under.
+          ...(ENGINE_DIALECT[input.engine] ? { dialect: ENGINE_DIALECT[input.engine] } : {}),
+        })
+      : family === 'es' && prepared.execHints?.index
+        ? [prepared.execHints.index]
+        : []
+  if (input.blacklistValidator && referencedTables.length > 0) {
+    try {
+      input.blacklistValidator.checkTablesBlacklist('SELECT', referencedTables)
+    } catch (err) {
+      if (!(err instanceof BlacklistError)) throw err
+      return {
+        ...base,
+        rowCount: 0,
+        rows: [],
+        status: 'skipped',
+        reason: err.message,
+        durationMs: 0,
+      }
+    }
+  }
+
   const start = performance.now()
   const exec = (async () => {
     const indexParams =
@@ -86,7 +130,15 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<Evidence
       durationMs,
     }
   }
-  const rows = outcome.rows ?? []
+  const fetched = outcome.rows ?? []
+  // Mask before truncation and before anything renders the evidence.
+  const rows = input.blacklistValidator
+    ? input.blacklistValidator.filterColumnsForTables(
+        referencedTables,
+        fetched,
+        fetched[0] ? Object.keys(fetched[0]) : []
+      ).filteredRows
+    : fetched
   if (rows.length === 0) {
     return { ...base, rowCount: 0, rows: [], status: 'no-data', durationMs }
   }

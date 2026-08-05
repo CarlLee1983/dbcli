@@ -5,6 +5,71 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.48.0] - 2026-08-05 - blacklist 涵蓋語句中的每一張表，以及所有執行路徑（安全性修復）
+
+對應 issue [#23](https://github.com/CarlLee1983/dbcli/issues/23)。與 1.47.1 修掉的六個繞過不同，這一批洩漏的是**讀取內容**，不是寫入能力。
+
+### Security
+
+- **blacklist 只檢查 SQL 的第一張表。** 擋下與遮罩都以單次 regex match 取得的單一表名為準，因此只要敏感表是經由 `JOIN`、逗號、`UNION` 或子查詢進入查詢，它既不會被擋、欄位也不會被遮罩。在 `users` 已列入 blacklist 的設定下，`SELECT * FROM users` 會被擋，但 `SELECT o.id, u.password_hash FROM orders o JOIN users u ON u.id = o.user_id` 會照常回傳 `users` 的敏感欄位。繞過不需要任何特殊語法，一個 `JOIN` 就夠，且在 `query-only` 權限下即可利用。影響 `query` / `export` / `q` / REPL 等所有 SQL 路徑。
+- **`export` 的 SQL 路徑完全沒有套用 blacklist。** 該路徑建立 `QueryExecutor` 時把 validator 傳成 `undefined`，因此連單表的情況都不擋、不遮罩：`dbcli export "SELECT * FROM users" --format json` 會把已宣告為敏感的欄位原樣寫進檔案。
+- **`export` 的 Elasticsearch 路徑檢查 index 但不遮罩欄位。** 同一個 index 上 `dbcli query` 會遮蔽的欄位，`dbcli export` 會寫進檔案。
+- **`dbcli report` 完全沒有套用 blacklist。** 它直接呼叫 adapter 執行 snippet，而 collector 會載入使用者可寫的 snippet 目錄（不只內建），回傳的 rows 會被嵌進報告。既不擋黑名單資料表，也不遮罩欄位。
+- **`dbcli q --verify` 的第二段查詢未經檢查。** blacklist 只套用在 snippet 本體，frontmatter 的 `verify.query` 是另一段直接送到 adapter 的 SQL。
+- **互動式 shell 從未套用 `blacklist.columns`。** REPL 不走 `QueryExecutor`，它把 adapter 回傳的 rows 直接格式化輸出，因此 `dbcli shell` 裡的 `SELECT * FROM users` 會完整回傳 `dbcli query` 會遮蔽的欄位。
+- **MongoDB 的 `$lookup` / `$unionWith` 從未被檢查。** 這是 #23 的 MongoDB 寫法：指令指定一個 collection，pipeline 卻讀另一個。`query` / `export` / `q` 三條路徑都只檢查被指名的那個 collection，因此 `$lookup: { from: 'secrets' }` 既不被擋，嵌入的欄位也不被遮罩。現在會遞迴讀取 `$lookup.from`、`$unionWith.coll`、`$graphLookup.from`、`$out`、`$merge.into`（含 sub-pipeline），並把來源 collection 的欄位規則重新錨定到 `as` 指定的巢狀路徑。
+- **字串常值的反斜線解讀會讓掃描器失步。** 表名列舉先前假定反斜線不轉義引號，理由是「提早結束字串只會讓更多文字可見」—— 這個推理是錯的：提早結束會翻轉引號奇偶性，於是下一個引號開啟一段直到輸入結尾的偽字串，把整個 `FROM` 子句藏起來。`SELECT E'\'' AS x, * FROM secrets` 在 `query-only` 下即可取回整張黑名單資料表。現在兩種解讀都掃描並取聯集。
+- **PostgreSQL 的 `U&"\0073ecrets"` 未解碼。** 回報的是原始文字，而伺服器解析出的是 `secrets`，因此擋下與遮罩都被繞過。`UESCAPE` 允許以幾乎任何字元代替反斜線（只要不是十六進位數字、`+`、引號或空白），包含一般字母，因此 `U&"x0073ecrets" UESCAPE 'x'` 是純英數字串；現在會對每個合法的 escape 字元各解碼一次。
+- **⚠️ 非 ASCII 的 dollar-quote 標籤造成權限繞過（不只 blacklist）。** dollar-quote 的標籤依「未加引號的識別字」規則，而 PostgreSQL 識別字接受高位元組，因此 `$é$ … $é$` 是真正的字串；但語句剖析器的標籤樣式只接受 ASCII，於是該區段被當成一般文字，裡面的 `'` 開啟一段直到輸入結尾的字串，把後面整批語句藏起來。**在 `permission: query-only` 下，`SELECT $é$ ' $é$ ; DROP TABLE users; -- ` 會通過權限判定並送到資料庫。** 這條在 1.47.0 以前就存在，與 1.47.1 修掉的 `a$q$` 是同一族 —— 當時修了識別字延續字元的判定，沒有修標籤本身。詞法邊界規則已抽到 `src/utils/sql-lexical.ts` 由兩個掃描器共用，因為同一條規則已經三次在一個檔案修、另一個沒修。
+- **Elasticsearch 的 `--index` 是運算式而非名稱。** 它接受逗號清單、萬用字元、`_all`、百分比編碼（`%2A`）、date math（`<logs-{now/d}>`）與跨叢集限定（`cluster:index`），因此 `--index "secrets,orders"`、`"*"`、`"sec*"`、`"_all"`、`"<secrets>"`、`"*:secrets"`、`"%2A"` 全都能讀取黑名單 index 而不與任何黑名單項目相等。`query` / `export` / `q` / ES shell **四條**路徑皆受影響。現在會正規化運算式後逐一檢查具名 index，萬用字元則在「可能匹配到黑名單 index」時拒絕。
+- **同一個問題也讓欄位遮罩整個失效。** 遮罩仍以原始運算式做等值查表，因此 `--index "us*"` 或 `"users,orders"` 匹配不到任何欄位規則 —— 在只設定欄位黑名單（資料表本身未列入）時，`checkIndexBlacklist` 會放行，然後所有受保護欄位原樣回傳，`export` 更會寫進檔案。現在改以「該運算式可能觸及的所有 index 的規則聯集」遮罩。
+- **ES 目標的比對讀的是原始文字，不是伺服器實際路由的路徑。** `%5F` 是 `_`、`%2F` 是 `/`、`..` 會退一層，因此 `GET /%5Fsearch`（實為 `/_search`）、`/secrets%2F_search`（實為 `/secrets/_search`）、`/_cat/../secrets/_search` 全都通過檢查。另有 `_ALL` 大小寫、`%252A` 雙重編碼、`<<secrets>>`、`c:d:secrets`、`secrets:` 等拼法在 `--index` 上同樣繞過。現在路徑會先解碼並解析（重複至穩定）再檢查，且**任何一段**命中黑名單 index 就拒絕 —— `/_cat/indices/secrets` 不讀文件，但黑名單保護的是物件本身。正規化規則抽到 `src/utils/es-index-target.ts` 由 validator 與 shell 共用。
+- **ES shell 只看路徑，request body 指名的 index 完全未檢查。** `_mget` 的 `docs[]._index`、`_bulk` action 的 `_index`、`terms` lookup 的 `index` 都能指向黑名單 index —— 把路徑指向無害的 index，正好讓這些端點重新打開。
+- **ES shell 的「未指名 index 即拒絕」讀的是原始路徑，其餘檢查讀的是解析後路徑。** 因此 `GET /_cat/../_search`、`/_ingest/../_sql`、`/_license/../_msearch` 只要前綴在允許清單內就放行，而 HTTP 客戶端會把 `..` 解掉，實際送出的是未界定的 `_search`。現在檢查與送出的是同一個字串，且路徑的文字與路由結果不一致時直接拒絕。
+- **ES shell 的欄位遮罩保護的是鍵名，不是值。** Elasticsearch 會把欄位值放在**請求指定**的鍵底下回傳：`{"sort":["password"]}` 一個請求就能依序取回整欄，`aggs.*.field`、`script_fields`、`docvalue_fields`、runtime field 同理，都不需要 scripting 權限。現在請求本體中只要出現受保護欄位名（含字串內以非識別字切出的片段）即拒絕，遮罩回應則作為第二道。
+- **Elasticsearch data stream 與 rollover 的支撐 index 名稱不同，等值比對蓋不到。** `.ds-secrets-2026.08.05-000001`、`secrets-000001` 都能讀到 `secrets` 的資料。現在依命名慣例一併涵蓋。**alias 仍是天花板** —— alias 指向哪個 index 是伺服器端知識，且 `GET /_cat/aliases` 會揭露對應關係；已記入威脅模型。
+- **request body 中陣列型的 `index` / `_index` 未被檢查**（`_msearch` 標頭、`_reindex` 的 `source.index` 都接受陣列）。
+- **`globToRegex` 的字元類別掃描不理會轉義**，`[a\]b]` 被讀成字面字串而非「a、]、b 三選一」的類別。
+- **ES shell 完全沒有欄位遮罩。** `dbcli query --index users` 會遮蔽的欄位，ES shell 原樣回傳。現在回應中任何名稱命中欄位黑名單的鍵一律移除（不論深度）—— ES 回應是任意文件結構，與其為 `hits.hits` 等各種外層建模，不如從嚴。
+- **ES shell 對任何未指名 index 的路徑完全跳過檢查。** 路徑第一段以 `_` 開頭時取不到 index，於是 `GET /_all/_search`、`/_search`、`/_msearch`、`/_mget`、`/_sql` 全都放行 —— 它們都會讀到黑名單 index 的文件。現在：有設定黑名單時，無法界定 index 的請求一律拒絕，僅以**允許清單**放行純叢集中繼資料端點（`_cat`、`_cluster`、`_nodes`、`_tasks`、`_ingest`、`_license`），因為改用拒絕清單就得窮舉現在與未來所有會回傳文件的端點。
+- **`export` 的 ES 路徑先取資料才檢查 blacklist。** 雖然不會寫出檔案，但黑名單 index 已被查詢、scroll context 已被開啟。檢查已移到抓取之前。
+- **MongoDB 巢狀 `$lookup` 的遮罩前綴不含巢狀層級。** `$facet` 分支或 `$lookup.pipeline` 內的 `$lookup`，文件實際落在 `fb.sec.*` / `outer.sec.*`，規則卻被錨定在 `sec.*`，因此不會遮罩。
+- **同一個 collection 被 join 兩次時只有第一次被遮罩。** 前綴是以「尚未見過的 collection」為單位記錄的，因此 `$lookup ... as: 'first'` 與 `$lookup ... as: 'second'` 只產生一組前綴，`second.token` 外洩。
+- **⚠️ 修復本身引入的回歸（已修）：dollar-quote 判定改為「必須以可起始識別字的字元開頭」之後，數字後接識別字的情況被誤判。** `1a$q$` 在 PostgreSQL 是數值常值 `1` 加上識別字 `a$q$`（`$` 被吸收、不開引號），但新規則只看第一個字元、把整串當成數字，於是**憑空造出一個 dollar-quote**，`SELECT 1a$q$ ; DELETE FROM secrets ; SELECT 1 AS z$q$` 在 `query-only` 下通過。判定改為：以識別字字元開頭則吸收；`$` 開頭是位置參數；數字開頭則先吃掉數值前綴，若其後仍有識別字字元就吸收。
+- **PostgreSQL 中 dollar-quote 接在位置參數之後未被識別。** `$1$q$` 裡的 `$1` 是參數而非識別字，但判定只排除「以數字開頭」的字元串，`$` 開頭的被當成識別字，於是 `$q$` 未被識別、裡面的 `'` 再次讓掃描失步。判定改為「該字元串必須以可*起始*識別字的字元開頭」。目前不可利用（`query.ts` 一律傳空參數，`$1` 在伺服器端是語法錯誤），支援參數綁定後即會成為實洞。
+- **`globToRegex` 對轉義的字面量比對過少。** `sec\*` 應保護鍵 `sec*`，卻編譯成可比對 `sec\x` 而比不到 `sec*` —— Redis key 黑名單的樣式在這個方向上是會洩漏的。
+- **PostgreSQL 中 dollar-quote 接在數字之後未被識別。** 只有*識別字*會吸收後面的 `$`：`1$q$` 是數值常值加上真正的 dollar-quote，`a1$q$` 則是單一識別字。原本只看前一個字元，兩者分不開，於是該引號未被識別、裡面的 `'` 再次讓掃描失步。
+
+除前兩條外，其餘皆是在修 #23 的過程中、經由列舉「哪些路徑直接呼叫 adapter」與七輪對抗性審查找出來的 —— 與 1.47.1 的教訓相同：這類缺陷表現為**未設防的路徑**，不是缺少機制。
+
+### Changed
+
+- **⚠️ 行為收緊：語句只要參照到任何一張黑名單資料表就會被擋下。** 過去只有排在最前面的那張表算數。升級後，先前能執行的跨表查詢（JOIN / 逗號 / UNION / 子查詢帶進黑名單表）會開始被拒絕 —— 那正是原本應該被擋的行為。
+- **⚠️ 遮罩改以「所有被參照的表」的欄位規則聯集計算。** JOIN 結果的欄位名不帶表限定（`u.password_hash` 回傳成 `password_hash`），無法從結果反推欄位屬於哪張表，因此只要**任何一張**被參照的表把該欄位列入黑名單就遮蔽。
+- **⚠️ 表名列舉刻意過度回報，可能誤擋。** 新的 `src/utils/sql-tables.ts` 除了走訪 `FROM` / `JOIN` / `INTO` / `UPDATE` / `USING` / `TRUNCATE` / `COPY` / `STRAIGHT_JOIN` 等位置，**還會把語句中每一個非保留字的識別字都列為候選表名**。這表示：若某個欄位名、別名或函式名剛好等於一張黑名單資料表的名稱，該語句會被擋下。這是刻意的取捨 —— 歷次對抗性審查各自都在「精確走訪」版本裡找到新的文法角落（`{ oj … }`、`STRAIGHT_JOIN`、`FROM a USE INDEX (i), secrets`、`ANALYZE t`、`U&"t"`），與 1.47.1 記錄的天花板是同一個模式，因此保證不建立在走訪完整之上，而建立在「表名是識別字，而每個識別字都會被回報」。被擋時錯誤訊息會指出是哪個名稱命中 —— 實務上會遇到的情形是：黑名單有一張叫 `token` 的資料表時，`SELECT t.token FROM api_keys t` 會被拒絕。
+- **保留字清單只留三種方言都保留的字**（38 個）。 這是列舉唯一會 fail-open 的地方：清單裡的字若在某個方言其實可當未加引號的表名，那張表就隱形。`FILTER` / `PARTITION` / `SET` / `CURRENT` / `UPDATE` / `DELETE` / `INSERT` / `NULLS` / `OVER` / `EXISTS`、`RLIKE` / `XOR` / `ILIKE` / `STRAIGHT_JOIN`，以及 `BETWEEN`（PostgreSQL 的 `col_name_keyword`，`ColId` 接受）與 `EXCEPT` / `INTERSECT`（MySQL 8.0.31、MariaDB 10.3 才成為保留字）皆已移除 —— 每一個都在某個支援的方言裡是合法表名。
+- **語句在所有歧義解讀下各掃描一次並取聯集。** 反斜線是否轉義引號取決於伺服器模式，未宣告方言時註解規則也不同。挑一種解讀正是失步繞過的成因。
+- **無法辨識出資料表時，遮罩套用全部欄位規則而非不套用。** 過去（以及本次修復的第一版）在表名解析不出來時直接跳過遮罩，等於把任何解析缺口變成洩漏。
+- **`query` 的大小防護不再對 schema 限定名靜默失效。** 舊的單次比對對 `FROM public.users` 回傳 `public`，那不是 schema 快取的鍵，於是防護整段被跳過。
+
+### Fixed
+
+- **`snapshot` 記錄的 redacted 欄位清單過去只取第一張表**，與實際遮罩的範圍不一致。
+- **表名列舉在長 dotted chain 上是二次成長**（16 KB 的 `a.a.a…` 要 320ms，125 KB 要 22 秒）。改為單趟走訪後同一輸入為 2ms。
+- **`decodedVariants` 對「相異字元數」是二次成長**（40 KB 的識別字要 3.4 秒）。改為單趟同時解碼所有合法 escape 字元後，同一輸入為 4ms。
+- **`globToRegex` 遇到無法解析的字元類別（`[\]*`）會拋 `SyntaxError`**，從安全檢查裡竄出去而不是回答它。
+- **識別字中超出 Unicode 上限的 escape 會讓掃描整個拋例外。** `\+FFFFFF` 是 16777215，`String.fromCodePoint` 會丟 `RangeError`；而 `"` 在所有方言都被當識別字引號，因此任何含該樣式的 MySQL 字串（例如 Windows 路徑）都會讓指令中斷。
+
+### Known limits
+
+以下三類都會取回黑名單保護的**值**，但不會提到黑名單物件的名字，因此列舉表名的作法看不到它們。已記入 `docs/security-threat-model.md`：
+
+- 改名或轉換：`SELECT password_hash AS x FROM users`、`substr(password_hash,1,10)`、`to_json(u)`、MongoDB 的 `$project: { stolen: '$sec.token' }`。**資料表層級的項目可強制執行；欄位層級的項目是顯示過濾，不是存取控制。**
+- 經由 view 或函式間接：`SELECT * FROM v_users` 只提到 `v_users`，那個 view 讀的是 `users` 屬於伺服器端知識。
+- 伺服器端語句文字：`PREPARE s FROM 'SELECT * FROM secrets'` + `EXECUTE s`。兩者都分類為 `UNKNOWN`，`admin` 以下會被權限擋掉；`admin` 在 shell（單一 session 跨提示存活）可以執行。這與 1.47.1 已記錄的「字串傳遞的 SQL」是同一個天花板。
+
+黑名單擋的是一般讀取，不是「值無法被重建」的證明。真的不該讀某欄位的帳號，需要資料庫授權來說這件事。
+
 ## [1.47.1] - 2026-08-05 - 唯讀保證涵蓋所有執行路徑（安全性修復）
 
 決策記錄：`docs/adr/0004-database-access-stays-a-cli-surface.md`。

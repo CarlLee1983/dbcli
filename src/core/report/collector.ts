@@ -10,6 +10,8 @@ import {
 } from '@/core/saved-queries'
 import { selectSnippets } from './select-snippets'
 import { runDiagnostic } from './run-diagnostic'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { BlacklistValidator } from '@/core/blacklist-validator'
 import { sectionForIntent } from './section-map'
 import {
   ALLOWED_SECTIONS,
@@ -84,6 +86,10 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
     config.connection as ConnectionOptions
   ) as DatabaseAdapter
 
+  // Report evidence is rendered into the output and the snippets come from
+  // user-writable directories, so the blacklist has to reach this path.
+  const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
+
   const sectionEvidence = new Map<ReportSectionId, EvidenceItem[]>()
   for (const id of sections) sectionEvidence.set(id, [])
 
@@ -98,6 +104,7 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
         engine,
         timeoutMs: timeout,
         maxRows,
+        blacklistValidator,
       })
       const sectionId = sectionForIntent(ev.intent)
       if (sectionId && sectionEvidence.has(sectionId)) {

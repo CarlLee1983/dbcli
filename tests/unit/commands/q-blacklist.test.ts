@@ -111,6 +111,38 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     expect(printed).toMatch(/a@b\.c/)
   })
 
+  // Issue #23 — a snippet reaches a blacklisted table through a JOIN.
+  test('blocks snippet whose JOINed table is blacklisted', async () => {
+    writeSnippet('orders-join', 'SELECT o.id, u.email FROM orders o JOIN users u ON u.id = o.uid')
+    setConfig({ tables: ['users'] })
+    mock = new MockAdapter([{ id: 1, email: 'a@b.c' }])
+    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+
+    await qCommand('@orders-join', { format: 'json', noLimit: true })
+
+    expect(exitSpy).toHaveBeenCalledWith(1)
+    expect(mock.lastSql).toBe('') // never executed
+    const errors = errSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(errors).toMatch(/users/)
+  })
+
+  test('redacts blacklisted columns of a JOINed table', async () => {
+    writeSnippet(
+      'orders-detail',
+      'SELECT o.id, u.password_hash FROM orders o JOIN users u ON u.id = o.uid'
+    )
+    setConfig({ columns: { users: ['password_hash'] } })
+    mock = new MockAdapter([{ id: 1, password_hash: 'SECRET' }])
+    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+
+    await qCommand('@orders-detail', { format: 'json', noLimit: true })
+
+    expect(exitSpy).not.toHaveBeenCalled()
+    const printed = logSpy.mock.calls.map((c: any[]) => c.join(' ')).join('\n')
+    expect(printed).not.toMatch(/SECRET/)
+    expect(printed).not.toMatch(/password_hash/)
+  })
+
   test('allows snippet when target table is not blacklisted', async () => {
     writeSnippet('events-count', 'SELECT COUNT(*) AS n FROM events')
     setConfig({ tables: ['users'] })

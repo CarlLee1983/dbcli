@@ -1,29 +1,8 @@
 import { getCommandSpec } from './command-metadata'
 import type { KeyArity } from './types'
+import { globToRegex } from '@/utils/glob'
 
-/** Convert Redis-native glob (* ? [abc] [a-z]) to a JS RegExp anchored on the whole string. */
-export function globToRegex(glob: string): RegExp {
-  let out = '^'
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]!
-    if (c === '*') out += '.*'
-    else if (c === '?') out += '.'
-    else if (c === '[') {
-      const end = glob.indexOf(']', i)
-      if (end === -1) out += '\\['
-      else {
-        out += glob.slice(i, end + 1)
-        i = end
-      }
-    } else if ('.^$+(){}|\\'.includes(c)) {
-      out += '\\' + c
-    } else {
-      out += c
-    }
-  }
-  out += '$'
-  return new RegExp(out)
-}
+export { globToRegex }
 
 /** Heuristic intersection probe — sound for `prefix:*`, literals, and most agent-written rules. */
 export function patternsOverlap(a: string, b: string): boolean {

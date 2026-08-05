@@ -525,36 +525,12 @@ export function findWriteKeyword(
   dialects?: readonly SqlDialect[]
 ): string | undefined {
   const candidates = dialects && dialects.length > 0 ? dialects : SQL_DIALECTS
-  const global = new RegExp(SQL_WRITE_OR_DDL_KEYWORDS.source, 'gi')
-  let strictest: string | undefined
   for (const dialect of candidates) {
-    const executable = stripCommentsAndStrings(sql, { dialect })
-      .replace(SQL_LOCK_CLAUSE, ' ')
-      // `INTO` marks a table creation only in `SELECT … INTO`. In
-      // `INSERT INTO` / `REPLACE INTO` / `MERGE INTO` it belongs to the verb
-      // already counted, and counting it again would push every insert to the
-      // admin tier.
-      .replace(/\b(INSERT|REPLACE|MERGE)\s+INTO\b/gi, '$1 ')
-    for (const match of executable.matchAll(global)) {
-      const keyword = match[1]?.toUpperCase()
-      if (!keyword) continue
-      // The strictest keyword decides, not the leftmost one: a statement that
-      // opens with an INSERT CTE and then deletes must be judged as the delete,
-      // or a harmless leading write would launder a stricter one past its tier.
-      if (strictest === undefined || tierRank(keyword) > tierRank(strictest)) {
-        strictest = keyword
-      }
-    }
+    const executable = stripCommentsAndStrings(sql, { dialect }).replace(SQL_LOCK_CLAUSE, ' ')
+    const match = executable.match(SQL_WRITE_OR_DDL_KEYWORDS)
+    if (match?.[1]) return match[1].toUpperCase()
   }
-  return strictest
-}
-
-/** How restrictive the permission tier for a write keyword is. Higher is stricter. */
-function tierRank(keyword: string): number {
-  const type = mapKeywordToType(keyword)
-  if (type === 'INSERT' || type === 'UPDATE') return 1
-  if (type === 'DELETE') return 2
-  return 3 // DDL and anything unrecognised — admin only
+  return undefined
 }
 
 /**
@@ -610,9 +586,16 @@ function escalateHiddenWrite(
   const hidden = findWriteKeyword(sql, dialect ? [dialect] : undefined)
   if (!hidden) return classification
 
+  // A statement that claims to read and does not is judged admin-only, rather
+  // than by the tier of the keyword found. Ranking the keyword invited two
+  // rounds of defects: the leftmost write laundered a stricter one, and the
+  // textual exceptions needed to rank `INTO` correctly interacted with each
+  // other to erase the write completely. A writable CTE below admin is a rare
+  // shape; treating every one of them as admin-only costs little and removes
+  // the whole class.
   return {
     ...classification,
-    type: mapKeywordToType(hidden),
+    type: 'UNKNOWN',
     isDangerous: true,
     confidence: 'HIGH',
   }

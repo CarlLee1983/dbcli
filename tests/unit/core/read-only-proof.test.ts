@@ -59,11 +59,12 @@ describe('a single connection proves statements read-only too', () => {
     })
   }
 
-  test('the permission tier of the hidden write still applies', () => {
+  test('a statement that claims to read and does not is admin-only', () => {
     const deleting = 'WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone'
-    // DELETE needs data-admin, so read-write is not enough and admin is.
+    // Judged by the tier of the keyword found, this was laundered twice: by a
+    // harmless leading write, and by the exceptions needed to rank `INTO`.
     expect(checkPermission(deleting, 'read-write', 'postgresql').allowed).toBe(false)
-    expect(checkPermission(deleting, 'data-admin', 'postgresql').allowed).toBe(true)
+    expect(checkPermission(deleting, 'data-admin', 'postgresql').allowed).toBe(false)
     expect(checkPermission(deleting, 'admin', 'postgresql').allowed).toBe(true)
   })
 
@@ -82,14 +83,15 @@ describe('a single connection proves statements read-only too', () => {
   })
 })
 
-describe('the escalated tier is the strictest write present', () => {
+describe('no ordering of keywords launders a hidden write', () => {
   test('a harmless leading write does not launder a stricter one', () => {
     // Taking the leftmost keyword let read-write run a DELETE by putting an
     // INSERT in front of it.
     const smuggled =
       'WITH a AS (INSERT INTO t VALUES (1) RETURNING *), b AS (DELETE FROM users RETURNING *) SELECT 1'
     expect(checkPermission(smuggled, 'read-write', 'postgresql').allowed).toBe(false)
-    expect(checkPermission(smuggled, 'data-admin', 'postgresql').allowed).toBe(true)
+    expect(checkPermission(smuggled, 'data-admin', 'postgresql').allowed).toBe(false)
+    expect(checkPermission(smuggled, 'admin', 'postgresql').allowed).toBe(true)
   })
 
   test('a leading write does not launder a table creation', () => {
@@ -135,4 +137,29 @@ describe('DESCRIBE is EXPLAIN on MySQL and MariaDB', () => {
   test('a plain DESCRIBE is still a read', () => {
     expect(checkPermission('DESCRIBE users', 'query-only', 'mysql').allowed).toBe(true)
   })
+})
+
+/**
+ * Two textual exceptions — rewriting `INSERT INTO` to drop the `INTO`, and
+ * treating a keyword followed by whitespace and `(` as a function call —
+ * combined to erase the write entirely: stripping a quoted identifier leaves
+ * `INSERT` next to `(`.
+ */
+describe('a hidden write cannot be spelled away', () => {
+  const hidden = [
+    ['a quoted target table', `WITH x AS (INSERT INTO "users" (name) VALUES ('evil') RETURNING *) SELECT * FROM x`, 'postgresql'],
+    ['a backtick target table', 'WITH x AS (INSERT INTO `users` (name) VALUES (1) RETURNING *) SELECT * FROM x', 'mysql'],
+    ['no space before the column list', `WITH x AS (INSERT INTO "users"(name) VALUES ('e') RETURNING *) SELECT * FROM x`, 'postgresql'],
+    ['an alias that spells a verb', 'SELECT 1 AS insert INTO evil_copy FROM users', 'postgresql'],
+  ] as const
+
+  for (const [description, sql, dialect] of hidden) {
+    test(`query-only refuses ${description}`, () => {
+      expect(checkPermission(sql, 'query-only', dialect).allowed).toBe(false)
+    })
+
+    test(`read-write refuses ${description}`, () => {
+      expect(checkPermission(sql, 'read-write', dialect).allowed).toBe(false)
+    })
+  }
 })

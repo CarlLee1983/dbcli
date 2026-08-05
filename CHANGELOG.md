@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **語句以它實際執行的寫入來判定權限等級。** 開頭是 `SELECT` 但夾帶 data-modifying CTE 或 `INTO` 的語句，比照該寫入的等級（`DELETE` 需要 `data-admin`）；`EXPLAIN ANALYZE <寫入>` 亦然。不含 `ANALYZE` 的 `EXPLAIN` 只做計畫、不執行，維持唯讀；`SHOW` / `DESCRIBE` 不接受子查詢，因此 `SHOW CREATE TABLE users` 仍是讀取。
+- **⚠️ 行為收緊：開頭讀取但夾帶寫入的語句一律需要 `admin`。** 例如 `WITH x AS (INSERT … RETURNING *) SELECT …`、`SELECT … INTO`、`EXPLAIN ANALYZE <寫入>`、`DESCRIBE ANALYZE <寫入>`（`DESCRIBE` 在 MySQL/MariaDB 是 `EXPLAIN` 的同義字）。過去這些一律不檢查；中間曾嘗試「比照該寫入的等級」，但那需要為 `INSERT INTO` 的 `INTO` 加文字例外，而例外之間會互相作用出新的繞過，因此改為單一規則。**若你在 `data-admin` 連線上使用可寫的 CTE，升級後需要改用 `admin`。** 不含 `ANALYZE` 的 `EXPLAIN` 只做計畫、不執行，維持唯讀；`SHOW` / `DESCRIBE` 不接受子查詢，因此 `SHOW CREATE TABLE users` 仍是讀取；`replace()` / `TRUNCATE()` / `INSERT()` 是函式不是語句，維持唯讀。
 - **admin 以下的權限等級拒絕多語句 SQL。** 因為只有第一個語句會決定權限判定。`admin` 不受影響（它本來就允許所有語句類型）。分隔符依**該連線實際的方言**判定：`$$…$$` 只在 PostgreSQL 是字串、反引號只在 MySQL/MariaDB 引號化識別字、`#` 只在 MySQL/MariaDB 起始註解（在 PostgreSQL 是運算子）。方言未知時從嚴。
 - **snippet 的唯讀證明依 `engine` 宣告的方言判定。** 因此 `SELECT \`update\` FROM t`（MySQL 反引號識別字）、`# drop …` 註解、`a.create` 這類欄位名不再被誤判為寫入；`FOR UPDATE` / `FOR SHARE` 是取鎖的讀取，同樣不算寫入。
 - **無法解析的 snippet 只跳過該檔並發出警告，不再讓整個 snippet 目錄失效。** `queries check` 仍會回報它們並以 exit 1 結束。

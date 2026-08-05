@@ -217,3 +217,30 @@ describe('validateBody — data-modifying CTEs', () => {
     expect(() => validateBody("SELECT * FROM logs WHERE action = 'DELETE'", input)).not.toThrow()
   })
 })
+
+describe('verify.query must be read-only', () => {
+  const withVerify = (verifyQuery: string) =>
+    parseSavedQuery({
+      key: '@t',
+      file: 't.sql',
+      source: 'shared',
+      text: wrap(
+        'SELECT * FROM users',
+        [
+          '-- name: t',
+          '-- engine: postgres',
+          '-- verify:',
+          `--   query: "${verifyQuery}"`,
+          '--   expects: "count > 0"',
+        ].join('\n')
+      ),
+    })
+
+  test('rejects a verification query that deletes rows', () => {
+    expect(() => withVerify('DELETE FROM users')).toThrow(/read-only|DELETE/i)
+  })
+
+  test('accepts an ordinary verification count', () => {
+    expect(() => withVerify('SELECT count(*) AS count FROM users')).not.toThrow()
+  })
+})

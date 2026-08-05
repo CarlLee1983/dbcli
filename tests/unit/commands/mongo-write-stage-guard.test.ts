@@ -193,3 +193,30 @@ describe('MongoDB write-stage guard on saved snippets', () => {
     }
   })
 })
+
+describe('MongoDB write-stage guard on export', () => {
+  beforeEach(() => {
+    mockAdapter = new MockMongoAdapter()
+    createMongoAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
+      mockAdapter
+    )
+    useConfig('query-only')
+  })
+
+  afterEach(() => {
+    configReadSpy.mockRestore()
+    createMongoAdapterSpy.mockRestore()
+  })
+
+  test('rejects a $out pipeline under query-only permission', async () => {
+    const { exportCommand } = await import('@/commands/export')
+
+    await expect(
+      exportCommand('[{"$match":{}},{"$out":"users_copy"}]', {
+        collection: 'users',
+        format: 'jsonl',
+      } as any)
+    ).rejects.toThrow(/\$out/)
+    expect(mockAdapter.lastQuery).toBeUndefined()
+  })
+})

@@ -230,6 +230,17 @@ function normaliseVerify(value: unknown, input: ParseInput): SavedQueryVerify | 
       input.file
     )
   }
+  // The verification query is executed verbatim by `q --verify`, so it carries
+  // the same read-only contract as the snippet body.
+  const verifyWrite = stripCommentsAndStrings(raw.query).match(SQL_WRITE_OR_DDL_KEYWORDS)
+  if (verifyWrite) {
+    throw new SavedQueryError(
+      `Snippet '${input.key}' has a 'verify.query' that must be read-only, ` +
+        `but contains '${verifyWrite[0].toUpperCase()}'`,
+      'NOT_SELECT',
+      input.file
+    )
+  }
   if (typeof raw.expects !== 'string' || !raw.expects.trim()) {
     throw new SavedQueryError(
       `Snippet '${input.key}' has invalid 'verify.expects' (must be a non-empty string)`,

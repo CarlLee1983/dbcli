@@ -163,3 +163,39 @@ describe('PostgreSQL block comments nest', () => {
     ).toBe(false)
   })
 })
+
+/**
+ * PostgreSQL identifiers are not ASCII-only: its lexer accepts any high byte as
+ * an identifier character, so `café$q$` and `名前$q$` are single identifiers.
+ * An ASCII-only token-boundary test reopened the bypass above for them.
+ */
+describe('a non-ASCII identifier is still an identifier', () => {
+  const payloads = [
+    'SELECT 1 AS café$q$ LIMIT 1; DELETE FROM users; SELECT 1 AS b$q$',
+    'SELECT 1 AS 名前$q$ LIMIT 1; DROP TABLE users; SELECT 1 AS b$q$',
+  ]
+
+  for (const payload of payloads) {
+    test(`refuses ${payload.slice(0, 28)}…`, async () => {
+      expect(containsMultipleStatements(payload, 'postgresql')).toBe(true)
+
+      const { adapter, calls } = makeSpyAdapter()
+      const executor = new QueryExecutor(adapter, 'query-only', undefined, undefined, {
+        dialect: 'postgresql',
+      })
+      await expect(executor.execute(payload)).rejects.toThrow(/multiple statements/i)
+      expect(calls()).toEqual([])
+    })
+  }
+
+  test('a write hidden behind a non-ASCII identifier is still found in a snippet', () => {
+    const body =
+      'WITH t AS (SELECT 1 AS café$q$), d AS (DELETE FROM users RETURNING 1 AS b$q$) SELECT * FROM d'
+    expect(findWriteKeyword(body, ['postgresql'])).toBe('DELETE')
+  })
+
+  test('a dollar-quote still opens after a non-identifier character', () => {
+    expect(containsMultipleStatements('SELECT ($$a;b$$) AS v', 'postgresql')).toBe(false)
+    expect(containsMultipleStatements('SELECT $$a;b$$ AS v', 'postgresql')).toBe(false)
+  })
+})

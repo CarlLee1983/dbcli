@@ -86,6 +86,15 @@ export function normalizeSQL(sql: string): string {
 }
 
 /**
+ * A character that can continue a PostgreSQL identifier. Its lexer accepts any
+ * high byte (`ident_cont` is `[A-Za-z\200-\377_0-9$]`), so accented and
+ * non-Latin letters count — `café$q$` is one identifier, not `café` followed by
+ * a dollar-quote. Treating a character as part of an identifier only ever makes
+ * the analysis stricter, since fewer regions get stripped from view.
+ */
+const IDENTIFIER_CONTINUATION = /[A-Za-z0-9_$]|[\u0080-\uFFFF]/
+
+/**
  * Strip comments AND string literals using character-by-character state machine
  * More reliable than regex for handling escape sequences
  */
@@ -181,7 +190,7 @@ export function stripCommentsAndStrings(
       // the `$q$` belongs to the identifier `a$q$` and quotes nothing — reading
       // it as a quote would hide everything up to the next `$q$` from analysis
       // while the server still executes it.
-      const opensToken = !/[A-Za-z0-9_$]/.test(sql[i - 1] ?? '')
+      const opensToken = !IDENTIFIER_CONTINUATION.test(sql[i - 1] ?? '')
       const delimiter = opensToken
         ? sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
         : undefined
@@ -224,7 +233,7 @@ export function stripCommentsAndStrings(
         options.dialect === 'postgresql' &&
         quote === "'" &&
         /[eE]/.test(sql[quoteIndex - 1] ?? '') &&
-        !/[A-Za-z0-9_$]/.test(sql[quoteIndex - 2] ?? '')
+        !IDENTIFIER_CONTINUATION.test(sql[quoteIndex - 2] ?? '')
       const backslashEscapes = options.dialect === undefined || postgresEscapeString
       i++
       while (i < sql.length) {
@@ -487,6 +496,11 @@ export function classifyStatement(sql: string): StatementClassification {
 /** SQL dialects whose quoting rules differ in ways that affect statement splitting. */
 export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
 export type SqlDialect = (typeof SQL_DIALECTS)[number]
+
+/** The SQL dialect of a connection system, or undefined for a non-SQL engine. */
+export function toSqlDialect(system: string | undefined): SqlDialect | undefined {
+  return SQL_DIALECTS.find((dialect) => dialect === system)
+}
 
 export const SQL_WRITE_OR_DDL_KEYWORDS =
   /(?<![.\w])(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|RENAME|INTO)\b/i

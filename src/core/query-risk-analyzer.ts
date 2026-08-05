@@ -99,7 +99,7 @@ export function analyzeQueryRisk(input: AnalyzeQueryRiskInput): QueryRiskResult 
   const facts = collectSqlFacts(input.sql)
   const factors: QueryRiskFactor[] = []
 
-  applyPermissionRules(input.sql, input.permission, factors)
+  applyPermissionRules(input.sql, input.permission, factors, input.dialect)
   applyWriteWhereRules(facts, factors)
   applyDdlAndUnknownRules(facts, factors)
   applySelectPatternRules(facts, factors)
@@ -249,9 +249,10 @@ function extractReferencedColumns(sql: string, operation: QueryRiskOperation): s
 function applyPermissionRules(
   sql: string,
   permission: AnalyzeQueryRiskInput['permission'],
-  factors: QueryRiskFactor[]
+  factors: QueryRiskFactor[],
+  dialect: AnalyzeQueryRiskInput['dialect']
 ): void {
-  const permissionResult = checkPermission(sql, permission)
+  const permissionResult = checkPermission(sql, permission, dialect)
   if (!permissionResult.allowed) {
     pushFactor(factors, 'permission_denied', 'block', permissionResult.reason)
   }

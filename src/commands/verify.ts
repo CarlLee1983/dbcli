@@ -18,6 +18,7 @@ import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { writeVerificationArtifact } from '@/core/verification'
 import type { BlacklistConfig } from '@/types/blacklist'
 import type { TableSchema } from '@/adapters/types'
+import { toSqlDialect } from '@/core/permission-guard'
 import {
   normalizeSafeBackfillInput,
   runSafeBackfillPreflight,
@@ -93,14 +94,14 @@ function buildRealRunners(ctx: RealRunnerContext): SafeBackfillRunners {
 
   // analyze with the live connection permission (used for verify-query readonly check)
   const analyze = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
 
   // analyzePlan uses read-write permission so the plan guard can approve a valid UPDATE
   // even when the connection is query-only. The plan guard validates structural safety
   // (UPDATE with WHERE, no mass-delete risk, etc.); connection permission is enforced
   // separately by the execution layer — which never actually runs the backfill write.
   const analyzePlan = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
 
   return {
     blacklistGuard: async (table): Promise<GuardOutcome> => {
@@ -190,7 +191,7 @@ function buildMigrationRunners(ctx: RealRunnerContext): MigrationRunners {
   const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
 
   const analyze = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
 
   return {
     blacklistGuard: async (table): Promise<GuardOutcome> => {
@@ -279,11 +280,11 @@ function buildRollbackRunners(ctx: RealRunnerContext, input: RollbackInput): Rol
   const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
 
   const analyze = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
   // read-write so the plan guard can approve a valid reverting UPDATE even on a
   // query-only connection; the reverting write is never executed here.
   const analyzePlan = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: 'read-write', blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
 
   const ddlStatementGuard = async (statement: string, table: string): Promise<GuardOutcome> => {
     if (!isSingleStatement(statement)) {
@@ -421,7 +422,7 @@ function buildConstraintRunners(ctx: RealRunnerContext, input: ConstraintInput):
   const schema = (config.schema ?? {}) as Record<string, TableSchema>
   const schemaLookup = { tables: schema, cacheAvailable: Object.keys(schema).length > 0 }
   const analyze = (sql: string) =>
-    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup })
+    analyzeQueryRisk({ sql: sql.trim(), permission: config.permission, blacklist, schemaLookup, dialect: toSqlDialect(config.connection?.system) })
 
   const engine = constraintEngineOf((config.connection as ConnectionOptions).system)
   const violationSql = buildViolationQuery(input, engine)

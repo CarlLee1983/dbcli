@@ -8,6 +8,7 @@ import { buildDeletePlanSql, buildInsertPlanSql, buildUpdatePlanSql } from '@/co
 import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
 import { analyzeRedisDmlRisk } from '@/core/redis/dml-plan'
 import { analyzeElasticsearchDmlRisk } from '@/core/elasticsearch/dml-plan'
+import { toSqlDialect } from '@/core/permission-guard'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 const SQL_SYSTEMS = new Set(['postgresql', 'mysql', 'mariadb'])
@@ -60,6 +61,7 @@ export async function runDmlPlanAnalysis(
       const result = analyzeQueryRisk({
         sql: planSql,
         permission: config.permission,
+        dialect: toSqlDialect(config.connection?.system),
         blacklist,
         schemaLookup: {
           tables: schema as never,

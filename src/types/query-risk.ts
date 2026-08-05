@@ -1,7 +1,7 @@
 import type { TableSchema } from '@/adapters/types'
 import type { BlacklistConfig } from '@/types/blacklist'
 import type { Permission } from '@/types'
-import type { StatementType } from '@/core/permission-guard'
+import type { SqlDialect, StatementType } from '@/core/permission-guard'
 
 export type QueryRiskDecision = 'ALLOW' | 'WARN' | 'BLOCK'
 export type QueryRiskSeverity = 'warn' | 'block'
@@ -70,6 +70,12 @@ export interface AnalyzeQueryRiskInput {
   permission: Permission
   blacklist: BlacklistConfig
   schemaLookup: SchemaLookup
+  /**
+   * The connection's SQL dialect. Without it the permission check falls back to
+   * judging every dialect at once, which reports a legitimate MySQL query as
+   * multi-statement when a `#` comment or backtick identifier holds a semicolon.
+   */
+  dialect?: SqlDialect
 }
 
 export interface QueryRiskFormatOptions {

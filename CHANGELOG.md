@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PostgreSQL 多語句堆疊。** 權限分類只讀第一個關鍵字，而 PostgreSQL 的 simple query protocol 會執行字串裡每一個以分號分隔的語句，因此 `SELECT 1 LIMIT 1; DELETE FROM users` 會以 SELECT 的身分通過 `query-only`。影響 PostgreSQL；MySQL / MariaDB 走 prepared statement，不受影響。
 - **snippet 的偽唯讀語句。** snippet 只要求開頭是 `SELECT` 或 `WITH`，因此 `WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x` 與 `SELECT … INTO` 都能通過。一個 commit 進 repo、看起來是唯讀報表的 `.sql` 檔可以寫入資料庫。影響 PostgreSQL / MariaDB。
 - **snippet frontmatter 的 `verify.query` 未經驗證。** 過去只檢查它是非空字串，然後由 `dbcli q <name> --verify` 原封執行。
+- **PostgreSQL 識別字中的 `$` 被誤判為 dollar-quote 起點。** PostgreSQL 的識別字從第二個字元起允許 `$`，因此 `a$q$` 是**一個識別字**；但語句剖析器把它讀成字串起點，於是 `SELECT 1 AS a$q$ LIMIT 1; DELETE FROM users; SELECT 1 AS b$q$` 中間整段對所有安全檢查隱形，資料庫卻照常執行三段。**這條在 1.47.0 以前就存在**：多連線 fan-out 的唯讀斷言（`dbcli query --use a,b`）用的正是同一個剖析器，因此可被此手法繞過。影響 PostgreSQL。
 
 利用這些繞過需要能下達指令的一方送出 payload，也就是 agent 本身 —— 而 dbcli 的威脅模型前提正是 agent 不完全可信，因此這些屬於權限繞過，不以「使用者自己下的指令」論。
 

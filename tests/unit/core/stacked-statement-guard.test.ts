@@ -8,7 +8,11 @@
 
 import { describe, test, expect } from 'bun:test'
 import { QueryExecutor } from '@/core/query-executor'
-import { checkPermission, containsMultipleStatements } from '@/core/permission-guard'
+import {
+  checkPermission,
+  containsMultipleStatements,
+  findWriteKeyword,
+} from '@/core/permission-guard'
 import type { DatabaseAdapter } from '@/adapters/types'
 
 function makeSpyAdapter(): { adapter: DatabaseAdapter; calls: () => string[] } {
@@ -112,5 +116,50 @@ describe('stacking cannot be hidden from the guard', () => {
   test('an unknown dialect fails closed', () => {
     // With no dialect to judge by, any reading that sees a separator wins.
     expect(containsMultipleStatements('SELECT data #> \'{a}\' FROM t; DELETE FROM users')).toBe(true)
+  })
+})
+
+/**
+ * PostgreSQL identifiers may contain `$` after the first character, so `a$q$`
+ * is one identifier — not `a` followed by a dollar-quoted string. Reading it as
+ * a quote let everything up to the next `$q$` disappear from the guard while
+ * the server still executed it.
+ */
+describe('a $ inside an identifier does not open a dollar-quoted string', () => {
+  const payload = 'SELECT 1 AS a$q$ LIMIT 1; DELETE FROM users; SELECT 1 AS b$q$'
+
+  test('the statement is still seen as stacked under PostgreSQL', () => {
+    expect(containsMultipleStatements(payload, 'postgresql')).toBe(true)
+    expect(checkPermission(payload, 'query-only', 'postgresql').allowed).toBe(false)
+  })
+
+  test('nothing reaches the adapter', async () => {
+    const { adapter, calls } = makeSpyAdapter()
+    const executor = new QueryExecutor(adapter, 'query-only', undefined, undefined, {
+      dialect: 'postgresql',
+    })
+    await expect(executor.execute(payload)).rejects.toThrow(/multiple statements/i)
+    expect(calls()).toEqual([])
+  })
+
+  test('a genuine dollar-quoted string is still a string', () => {
+    expect(containsMultipleStatements('SELECT $q$a;b$q$ AS v', 'postgresql')).toBe(false)
+    expect(containsMultipleStatements('SELECT $$a;b$$ AS v', 'postgresql')).toBe(false)
+    // A dollar-quote may follow an operator or an open paren, not only whitespace.
+    expect(containsMultipleStatements('SELECT ($$a;b$$) AS v', 'postgresql')).toBe(false)
+  })
+
+  test('a write hidden the same way is still found in a snippet', () => {
+    const body =
+      'WITH t AS (SELECT 1 AS a$q$), d AS (DELETE FROM users RETURNING 1 AS b$q$) SELECT * FROM d'
+    expect(findWriteKeyword(body, ['postgresql'])).toBe('DELETE')
+  })
+})
+
+describe('PostgreSQL block comments nest', () => {
+  test('a nested comment containing a semicolon is one statement', () => {
+    expect(
+      containsMultipleStatements('SELECT 1 /* outer /* inner */ ; still comment */ FROM t', 'postgresql')
+    ).toBe(false)
   })
 })

@@ -48,11 +48,28 @@ that reaches an adapter — an audit that is possible only for the party that ow
 the whole surface. An operator of an MCP database server cannot perform it: the
 paths are inside the server process.
 
-The fixes are commits `fcf3502` and `92114d2`, and the enumeration is now a
-structural contract (`tests/unit/core/execution-path-contract.test.ts`): a new
-path to an adapter fails the suite until it is registered with the gate that
-proves what it may execute. The contract does not forbid a new path; it prevents
-one from being added silently.
+A sixth was found by an adversarial review of the fixes themselves: PostgreSQL
+allows `$` inside an identifier after its first character, so `a$q$` is one
+identifier, and reading it as the start of a dollar-quoted string hid everything
+up to the next `$q$` from analysis while the server still executed it. That one
+predates this work — it defeated the fan-out read-only assertion in 1.47.0, which
+was the only statement-splitting guard that existed then.
+
+Two rounds of adversarial review were needed, and the second round found a
+bypass in the fix for the first. That is the argument, not a caveat to it: this
+class of defect is found by attacking a surface repeatedly, which requires
+holding the surface.
+
+The fixes are commits `fcf3502`, `92114d2`, `ee0ed5a` and their successor, and
+the enumeration is now a structural contract
+(`tests/unit/core/execution-path-contract.test.ts`): a new path to an adapter
+fails the suite until it is registered with the gate that proves what it may
+execute. The contract does not forbid a new path; it prevents one from being
+added silently.
+
+The read-only proof is keyword-based, and its ceiling is recorded in the threat
+model: SQL passed as a string to a function (`query_to_xml('DELETE …')`,
+`dblink_exec`) or a volatile UDF cannot be detected this way.
 
 ## What the CLI surface leaves behind
 

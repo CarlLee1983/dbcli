@@ -149,11 +149,22 @@ export function stripCommentsAndStrings(
         i = closingIndex === -1 ? sql.length : closingIndex + 2
         continue
       }
+      // PostgreSQL block comments nest: `/* a /* b */ still comment */`.
+      // Stopping at the first `*/` would leave the tail of the comment visible
+      // and its semicolons counted as separators.
+      const nests = options.dialect === 'postgresql'
+      let depth = 1
       i += 2
-      while (i < sql.length) {
-        if (sql[i] === '*' && sql[i + 1] === '/') {
+      while (i < sql.length && depth > 0) {
+        if (nests && sql[i] === '/' && sql[i + 1] === '*') {
+          depth++
           i += 2
-          break
+          continue
+        }
+        if (sql[i] === '*' && sql[i + 1] === '/') {
+          depth--
+          i += 2
+          continue
         }
         i++
       }
@@ -165,7 +176,15 @@ export function stripCommentsAndStrings(
     // The closing delimiter is case-sensitive and may contain SQL-looking
     // text or semicolons that must not participate in permission analysis.
     if (options.dialect === 'postgresql' && char === '$') {
-      const delimiter = sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+      // A dollar-quote only opens at a token boundary. PostgreSQL identifiers
+      // may contain `$` from the second character on, so in `SELECT 1 AS a$q$`
+      // the `$q$` belongs to the identifier `a$q$` and quotes nothing — reading
+      // it as a quote would hide everything up to the next `$q$` from analysis
+      // while the server still executes it.
+      const opensToken = !/[A-Za-z0-9_$]/.test(sql[i - 1] ?? '')
+      const delimiter = opensToken
+        ? sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0]
+        : undefined
       if (delimiter) {
         i += delimiter.length
         const closingIndex = sql.indexOf(delimiter, i)

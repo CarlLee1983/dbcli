@@ -48,6 +48,15 @@ and credentials must be protected from the agent's writable workspace.
    defect appears as an unguarded *path*, not as a missing mechanism. See
    [ADR-0004](adr/0004-database-access-stays-a-cli-surface.md).
 
+   **Known ceiling:** the read-only proof classifies keywords, so it cannot see
+   SQL that is passed as a *string* to something that executes it —
+   `query_to_xml('DELETE …')`, `dblink_exec(…)`, or any volatile user-defined
+   function. String literals must be stripped before classification, or ordinary
+   queries would be rejected for mentioning a keyword. Saved snippets are
+   therefore read-only *by contract and by keyword proof*, not by proof of
+   effect. Treat a database account that can execute such functions as able to
+   write, and grant accordingly.
+
 ## Operator contract
 
 - Give autonomous agents only database credentials that are safe for their task.

@@ -28,9 +28,33 @@ src/commands/
 - Override support via `DBCLI_OVERRIDE_BLACKLIST=true` env var
 
 **BlacklistValidator** — enforces rules at execution points:
-- `checkTableBlacklist()` called by `QueryExecutor` and `DataExecutor`
-- `filterColumns()` removes blacklisted columns from query results (immutable)
+- `checkTablesBlacklist(operation, tables)` blocks when *any* referenced table is
+  blacklisted. `checkTableBlacklist()` is the single-table form and delegates to it.
+- `filterColumnsForTables(tables, rows, columns)` removes the union of the column
+  rules of every referenced table (immutable). `filterColumns()` is the
+  single-table form. An **empty** table list means "the tables could not be
+  identified", and applies *every* column rule rather than none.
 - `buildSecurityNotification()` creates footer messages for filtered queries
+
+**Which tables count** — `extractTableReferences()` (`src/utils/sql-tables.ts`)
+enumerates them. It reports every positional table reference *and* every
+identifier that is not a known SQL keyword, so a table reached through a JOIN,
+a comma, a UNION branch, a subquery, or a grammar corner the positional walk
+does not model is still reported. It over-reports by design: an extra name
+blocks more, a missing name discloses data (issue #23).
+
+**Consequence you will meet in practice:** a statement can be refused naming a
+table you did not query. `SELECT t.token FROM api_keys t` is refused when a
+table named `token` is blacklisted, because `token` appears as an identifier.
+The error names the match, so the diagnosis is in the message. This is the price
+of the guarantee, and it fails in the safe direction.
+
+**Table entries are enforceable; column entries are a display filter.** Masking
+matches the name a column arrives under, so `SELECT password_hash AS x FROM
+users`, `substr(password_hash, 1, 10)`, `to_json(u)`, and MongoDB's
+`$project: { stolen: '$sec.token' }` all return the value under a name no rule
+covers. A column that genuinely must not be readable needs a database grant.
+See `docs/security-threat-model.md`.
 
 ## Configuration
 
@@ -120,16 +144,36 @@ All lookups are O(1) using Set/Map data structures:
 
 ## Integration Points
 
-The blacklist is integrated at two execution points:
+Not every command runs through `QueryExecutor`, so each path that reaches an
+adapter directly carries its own enforcement. `tests/unit/core/execution-path-contract.test.ts`
+registers them all.
 
-1. **QueryExecutor** (`src/core/query-executor.ts`):
-   - Before execution: `checkTableBlacklist()` for all SQL operations
-   - After execution: `filterColumns()` for SELECT results
+1. **QueryExecutor** (`src/core/query-executor.ts`) — used by `query`, `export`
+   (SQL), `snapshot`:
+   - Before execution: `checkTablesBlacklist()` over every referenced table
+   - After execution: `filterColumnsForTables()` for result rows
    - `securityNotification` stored in `QueryResult.metadata`
 
 2. **DataExecutor** (`src/core/data-executor.ts`):
    - Before SQL building: `checkTableBlacklist()` for INSERT/UPDATE/DELETE
    - `BlacklistError` is re-thrown (not swallowed)
+
+3. **Saved snippets** (`src/commands/q.ts`) — checks the snippet body, and for
+   SQL also `verify.query`, then masks the result rows. Elasticsearch snippets
+   are checked as index *expressions*; Redis is enforced inside its adapter.
+
+4. **Interactive shell** (`src/core/repl/repl-engine.ts`) — talks to the adapter
+   directly; blocks and masks with the same validator.
+
+5. **Reports** (`src/core/report/run-diagnostic.ts`) — evidence rows are rendered
+   into the report and snippets come from user-writable directories, so a
+   blacklisted table skips the snippet and the rows are masked.
+
+6. **Elasticsearch / MongoDB / Redis** — `export` and `query` check the index or
+   collection and mask fields on each engine's own path. The Elasticsearch shell
+   (`src/commands/es-shell.ts`) carries its own equivalent, since it calls
+   `adapter.request` rather than `execute`; that call site is registered in the
+   contract test like any other.
 
 ## Error Messages
 

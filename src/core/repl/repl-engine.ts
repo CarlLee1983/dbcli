@@ -17,6 +17,10 @@ import { QueryResultFormatter } from '../../formatters/query-result-formatter'
 import type { QueryResult } from '../../types/query'
 import { t_vars, t } from '../../i18n/message-loader'
 import pc from 'picocolors'
+import { extractTableReferences } from '../../utils/sql-tables'
+import { BlacklistManager } from '../blacklist-manager'
+import { BlacklistValidator } from '../blacklist-validator'
+import { BlacklistError } from '../../types/blacklist'
 
 export interface ProcessResult {
   readonly action: 'continue' | 'quit' | 'clear' | 'multiline'
@@ -198,19 +202,24 @@ export class ReplEngine {
       }
     }
 
-    // Blacklist check — Issue 1 fix: also check INSERT INTO and UPDATE tablename
-    if (this.config?.blacklist) {
-      const tableName = this.extractTableName(sql)
-      if (tableName) {
-        const blacklistedTables: string[] = this.config.blacklist.tables ?? []
-        const isBlacklisted = blacklistedTables.some(
-          (t) => t.toLowerCase() === tableName.toLowerCase()
-        )
-        if (isBlacklisted) {
-          return {
-            action: 'continue',
-            output: pc.red(t_vars('shell.error_blacklisted', { table: tableName })),
-          }
+    // Blacklist check. The shell talks to the adapter directly rather than
+    // through QueryExecutor, so this is the only table check on this path, and
+    // it has to see every referenced table — a JOIN, a comma, or a UNION branch
+    // reaches a table the leading FROM never names (issue #23).
+    const referencedTables = extractTableReferences(sql, {
+      dialect: SQL_DIALECTS.find((dialect) => dialect === this.context.system),
+    })
+    const blacklistValidator = this.config?.blacklist
+      ? new BlacklistValidator(new BlacklistManager(this.config))
+      : undefined
+    if (blacklistValidator && referencedTables.length > 0) {
+      try {
+        blacklistValidator.checkTablesBlacklist('SELECT', referencedTables)
+      } catch (error) {
+        if (!(error instanceof BlacklistError)) throw error
+        return {
+          action: 'continue',
+          output: pc.red(t_vars('shell.error_blacklisted', { table: error.message })),
         }
       }
     }
@@ -222,9 +231,17 @@ export class ReplEngine {
         noLimit: this.state.noLimit,
       })
       const elapsed = Date.now() - startTime
-      const rows = result.rows
+      const fetched = result.rows
 
-      const columnNames = rows.length > 0 && rows[0] ? Object.keys(rows[0]) : []
+      const fetchedColumns = fetched.length > 0 && fetched[0] ? Object.keys(fetched[0]) : []
+      // The shell used to format adapter rows directly, so `blacklist.columns`
+      // was never applied here — `SELECT * FROM users` returned every protected
+      // column that `dbcli query` hides.
+      const filtered = blacklistValidator
+        ? blacklistValidator.filterColumnsForTables(referencedTables, fetched, fetchedColumns)
+        : { filteredRows: fetched, omittedColumns: [] as string[] }
+      const rows = filtered.filteredRows
+      const columnNames = fetchedColumns.filter((col) => !filtered.omittedColumns.includes(col))
       const queryResult: QueryResult<Record<string, unknown>> = {
         rows,
         rowCount: rows.length,
@@ -294,12 +311,6 @@ export class ReplEngine {
       }
     }
     return null
-  }
-
-  // Issue 1 fix: Match FROM tablename, INTO tablename (INSERT INTO), UPDATE tablename
-  private extractTableName(sql: string): string | undefined {
-    const match = sql.match(/\b(?:FROM|INTO|UPDATE)\s+["'`]?(\w+)["'`]?/i)
-    return match?.[1]
   }
 
   private isConnectionError(error: unknown): boolean {

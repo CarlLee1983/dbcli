@@ -6,8 +6,8 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
-import { PermissionError } from '@/core/permission-guard'
-import { extractTableName } from '@/utils/engine-hints'
+import { PermissionError, SQL_DIALECTS } from '@/core/permission-guard'
+import { extractTableReferences } from '@/utils/sql-tables'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { openInBrowser } from '@/utils/opener'
@@ -91,7 +91,8 @@ export async function qCommand(
     config = await configModule.read(configPath)
     if (!config.connection) throw new Error('Run "dbcli init" first')
 
-    const engine = mapSystemToEngine(config.connection.system)
+    const connectionSystem = config.connection.system
+    const engine = mapSystemToEngine(connectionSystem)
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
     const snippet = resolveByName(map, name, engine)
@@ -136,17 +137,32 @@ export async function qCommand(
     const blacklistManager = new BlacklistManager(config)
     const blacklistValidator = new BlacklistValidator(blacklistManager)
     const family = engineFamily(engine)
-    const targetName: string =
+    const sqlDialect = SQL_DIALECTS.find((dialect) => dialect === connectionSystem)
+    // A snippet is checked against every table it references, not just the
+    // first one — a JOIN, a comma, or a UNION branch reaches a table the
+    // leading FROM never names (issue #23).
+    const targets: string[] =
       family === 'sql'
-        ? (extractTableName(prepared.rewrittenSql) ?? '')
+        ? extractTableReferences(prepared.rewrittenSql, {
+            // The dialect decides which comment and quoting forms are
+            // executable; without it the scan has to guess and can guess in the
+            // direction that hides a table. Take it from the connection, which
+            // is what the statement will actually run under.
+            ...(sqlDialect ? { dialect: sqlDialect } : {}),
+          })
         : family === 'es'
-          ? (prepared.execHints?.index ?? '')
-          : ''
+          ? [prepared.execHints?.index ?? '']
+          : []
+    const targetName: string = targets[0] ?? ''
 
     targetNameForAudit = targetName || name
 
-    if (family !== 'redis' && targetName) {
-      blacklistValidator.checkTableBlacklist('SELECT', targetName)
+    if (family === 'es') {
+      // `index:` in a snippet's frontmatter is an expression too — comma lists
+      // and wildcards reach an index that equality never matches.
+      blacklistValidator.checkIndexBlacklist('SELECT', targetName)
+    } else if (family !== 'redis' && targets.length > 0) {
+      blacklistValidator.checkTablesBlacklist('SELECT', targets)
     }
 
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
@@ -174,7 +190,13 @@ export async function qCommand(
       const filtered =
         family === 'redis'
           ? { filteredRows: resultRows, omittedColumns: [] as string[] }
-          : blacklistValidator.filterColumns(targetName, resultRows, columnNames)
+          : family === 'es'
+            ? blacklistValidator.filterColumnsForIndexExpression(
+                targetName,
+                resultRows,
+                columnNames
+              )
+            : blacklistValidator.filterColumnsForTables(targets, resultRows, columnNames)
       const securityNotification =
         family === 'redis' || filtered.omittedColumns.length === 0
           ? undefined
@@ -246,6 +268,16 @@ export async function qCommand(
         } else {
           try {
             console.error(colors.dim(`Executing verification query: ${verifySpec.query}`))
+            // The verify query is a second statement and needs its own check —
+            // the one above covered the snippet body only.
+            if (family === 'sql') {
+              blacklistValidator.checkTablesBlacklist(
+                'SELECT',
+                extractTableReferences(verifySpec.query, {
+                  ...(sqlDialect ? { dialect: sqlDialect } : {}),
+                })
+              )
+            }
             const verifyResult = await adapter.execute<Record<string, unknown>>(verifySpec.query)
             const firstRow = verifyResult.rows[0]
             const evalResult = evaluateExpectation(firstRow, verifySpec.expects)

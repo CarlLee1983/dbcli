@@ -13,7 +13,8 @@ import { validateFormat } from '@/utils/validation'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { QueryExecutor } from '@/core/query-executor'
-import { extractTableName } from '@/utils/engine-hints'
+import { SQL_DIALECTS } from '@/core/permission-guard'
+import { extractTableReferences } from '@/utils/sql-tables'
 import { buildFingerprint } from '@/core/result-snapshot/fingerprint'
 import { writeSnapshot } from '@/core/result-snapshot/serializer'
 import {
@@ -85,6 +86,9 @@ export const snapshotCommand = new Command()
       try {
         const blacklistManager = new BlacklistManager(config)
         const blacklistValidator = new BlacklistValidator(blacklistManager)
+        const sqlDialect = SQL_DIALECTS.find(
+          (dialect) => dialect === config.connection?.system
+        )
         const executor = new QueryExecutor(
           adapter,
           config.permission,
@@ -94,8 +98,16 @@ export const snapshotCommand = new Command()
         )
         const result = await executor.execute(sql, { autoLimit: options.limit !== false })
 
-        const table = extractTableName(sql)
-        const redactedColumns = table ? blacklistManager.getBlacklistedColumns(table) : []
+        // The executor redacted the union of the rules of every referenced
+        // table, so the snapshot's record of what was redacted has to be built
+        // from the same list or it understates itself.
+        const redactedColumns = Array.from(
+          new Set(
+            extractTableReferences(sql, {
+              ...(sqlDialect ? { dialect: sqlDialect } : {}),
+            }).flatMap((table) => blacklistManager.getBlacklistedColumns(table))
+          )
+        )
         const snap = buildFingerprint(result, {
           includeRows: options.rows === true,
           redactedColumns,

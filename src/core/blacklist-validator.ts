@@ -9,6 +9,25 @@ import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
 import { hasFieldPath, omitFieldPaths } from './field-projection'
+import { expandIndexTargets, matchesIndexGlob } from '@/utils/es-index-target'
+
+/**
+ * Deduplicate table names case-insensitively, keeping the first spelling.
+ * The manager looks tables up case-insensitively, so `Users` and `users` are
+ * one entry and must not produce two warnings or two error mentions.
+ */
+function dedupe(values: string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const key = value.toLowerCase()
+    if (value.length === 0 || seen.has(key)) continue
+    seen.add(key)
+    result.push(value)
+  }
+  return result
+}
+
 
 /**
  * Result of column filtering operation
@@ -31,27 +50,110 @@ export class BlacklistValidator {
    *
    * @param operation SQL operation type: SELECT, INSERT, UPDATE, DELETE
    * @param tableName Table name to check
-   * @param _tableList Unused (reserved for future multi-table validation)
-   * @throws BlacklistError if table is blacklisted
+   * @param tableList Further tables the same statement references
+   * @throws BlacklistError if any table is blacklisted
    */
-  checkTableBlacklist(operation: string, tableName: string, _tableList: string[] = []): void {
+  checkTableBlacklist(operation: string, tableName: string, tableList: string[] = []): void {
+    this.checkTablesBlacklist(operation, [tableName, ...tableList])
+  }
+
+  /**
+   * Check every table a statement references.
+   *
+   * A statement is blocked when *any* referenced table is blacklisted — the
+   * table reached through a JOIN, a comma, or a UNION branch is as sensitive as
+   * the one named first (issue #23).
+   *
+   * @param operation SQL operation type: SELECT, INSERT, UPDATE, DELETE
+   * @param tableNames Every table the statement references
+   * @throws BlacklistError if any table is blacklisted
+   */
+  checkTablesBlacklist(operation: string, tableNames: string[]): void {
+    const tables = dedupe(tableNames)
+    if (tables.length === 0) {
+      return
+    }
+
     if (this.manager.canOverrideBlacklist()) {
       // Log warning that override is active
       const message = t_vars('warnings.blacklist_override_used', {
         operation,
-        table: tableName,
+        table: tables.join(', '),
       })
       console.error(message)
       return
     }
 
-    if (this.manager.isTableBlacklisted(tableName)) {
-      const message = t_vars('errors.table_blacklisted', {
-        table: tableName,
-        operation,
-      })
-      throw new BlacklistError(message, tableName, operation)
+    const blocked = tables.filter((table) => this.manager.isTableBlacklisted(table))
+    if (blocked.length === 0) {
+      return
     }
+
+    const message = t_vars('errors.table_blacklisted', {
+      table: blocked.join(', '),
+      operation,
+    })
+    throw new BlacklistError(message, blocked[0] as string, operation)
+  }
+
+  /**
+   * Check an Elasticsearch index expression against the table blacklist.
+   *
+   * `--index` is not a name: Elasticsearch accepts a comma list and wildcards,
+   * so `secrets,orders`, `sec*`, `*` and `_all` all read a blacklisted index
+   * while matching no blacklist entry by equality. Concrete names are checked
+   * directly; a wildcard is refused when it *could* match a blacklisted index,
+   * since which indices exist is server-side knowledge.
+   *
+   * @param operation Operation label for the error message
+   * @param target Raw `--index` expression
+   * @throws BlacklistError if any named or matchable index is blacklisted
+   */
+  checkIndexBlacklist(operation: string, target: string): void {
+    const { concrete, wildcards } = expandIndexTargets(target)
+    this.checkTablesBlacklist(operation, concrete)
+
+    if (wildcards.length === 0 || this.manager.canOverrideBlacklist()) return
+
+    const blacklisted = Array.from(this.manager.getState().tables)
+    if (blacklisted.length === 0) return
+
+    const reachable = wildcards.filter((pattern) =>
+      blacklisted.some((entry) => matchesIndexGlob(pattern, entry))
+    )
+    if (reachable.length === 0) return
+
+    const message = t_vars('errors.table_blacklisted', {
+      table: reachable.join(', '),
+      operation,
+    })
+    throw new BlacklistError(message, reachable[0] as string, operation)
+  }
+
+  /**
+   * Mask result fields for an Elasticsearch index *expression*.
+   *
+   * `filterColumns` looks the name up by equality, so `--index 'us*'` or
+   * `--index 'users,orders'` matched no rule and returned every protected field
+   * — the table check passing is not enough when only columns are blacklisted.
+   * A wildcard is resolved server-side, so every rule it could reach is
+   * applied.
+   *
+   * @param target Raw `--index` expression
+   * @param rows Result documents
+   * @param columnList Field names in the result
+   */
+  filterColumnsForIndexExpression(
+    target: string,
+    rows: Record<string, unknown>[],
+    columnList: string[]
+  ): FilterColumnsResult {
+    const { concrete, wildcards } = expandIndexTargets(target)
+    const ruleKeys = Array.from(this.manager.getState().columns.keys())
+    const reachable = ruleKeys.filter((key) =>
+      wildcards.some((pattern) => matchesIndexGlob(pattern, key))
+    )
+    return this.filterColumnsForTables([...concrete, ...reachable], rows, columnList)
   }
 
   /**
@@ -110,7 +212,40 @@ export class BlacklistValidator {
     rows: Record<string, unknown>[],
     columnList: string[]
   ): FilterColumnsResult {
-    const blacklistedColumns = this.manager.getBlacklistedColumns(tableName)
+    return this.filterColumnsForTables([tableName], rows, columnList)
+  }
+
+  /**
+   * Filter blacklisted columns using the rules of every referenced table.
+   *
+   * A result set built from a JOIN carries columns from several tables, and the
+   * driver returns them unqualified — `u.password_hash` arrives as
+   * `password_hash`. Attribution is therefore not recoverable from the result,
+   * so a column blacklisted on *any* referenced table is omitted. That errs
+   * towards hiding a same-named column of an innocent table, which is the
+   * direction that does not disclose data.
+   *
+   * @param tableNames Every table the statement references
+   * @param rows Query result rows
+   * @param columnList Column names in result set
+   * @returns Filtered rows and list of omitted column names
+   */
+  filterColumnsForTables(
+    tableNames: string[],
+    rows: Record<string, unknown>[],
+    columnList: string[]
+  ): FilterColumnsResult {
+    // Column names are matched case-sensitively, so they are deduplicated
+    // exactly — unlike table names, which the manager looks up case-insensitively.
+    //
+    // An empty list means the scan could not name a table, which is not the
+    // same as "this statement has no rules". Treating it as the latter would
+    // turn any gap in the scan into a disclosure, so every rule is applied.
+    const tables = dedupe(tableNames)
+    const blacklistedColumns =
+      tables.length === 0
+        ? this.manager.getAllBlacklistedColumns()
+        : Array.from(new Set(tables.flatMap((table) => this.manager.getBlacklistedColumns(table))))
 
     if (blacklistedColumns.length === 0) {
       return { filteredRows: rows, omittedColumns: [] }

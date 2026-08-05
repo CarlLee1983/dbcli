@@ -20,8 +20,12 @@ import { trimAppliedLimit } from '@/core/applied-limit'
 import type { AppliedLimitMetadata } from '@/types/query'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { extractTableName } from '@/utils/engine-hints'
-import { maskMongoRows } from '@/core/mongo/field-masker'
+import { maskMongoRowsForCollections } from '@/core/mongo/field-masker'
 import { scrollAll } from '@/adapters/elasticsearch/scroll-reader'
+import {
+  findMongoCollectionReferences,
+  findMongoCollectionScopes,
+} from '@/core/mongo/collection-references'
 import type { DbcliConfig } from '@/utils/validation'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -98,7 +102,12 @@ export async function exportCommand(
     )
     await adapter.connect()
 
-    const executor = new QueryExecutor(adapter, config.permission, undefined, config, {
+    // The blacklist has to reach this path too. An export writes rows to a
+    // file, so an unenforced rule here leaves a durable copy of exactly the
+    // data the rule exists to withhold.
+    const blacklistValidator = new BlacklistValidator(new BlacklistManager(config as DbcliConfig))
+
+    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, {
       recovery: options.recovery,
       deferDiagnostics: true,
     })
@@ -310,16 +319,32 @@ async function esExportBranch(
   let rowCount: number
   const diagnostics: string[] = []
   try {
+    // Checked before the fetch: a blacklisted index must not be queried at all,
+    // not merely have its rows discarded afterwards.
+    const declaredTarget = query.trim().startsWith('{')
+      ? ((options.index as string | undefined) ?? options.collection)
+      : query.trim()
+    if (declaredTarget) blacklistValidator.checkIndexBlacklist('SELECT', declaredTarget)
+
     const {
       rows: fetched,
       target,
       cap,
     } = await buildEsExportRows(query, options, adapter as unknown as EsExportAdapter)
 
-    blacklistValidator.checkTableBlacklist('SELECT', target, [])
+    blacklistValidator.checkIndexBlacklist('SELECT', target)
     const limitedResult = cap === undefined ? undefined : trimAppliedLimit(fetched, cap)
     assertExportNotSilentlyTruncated(limitedResult?.metadata, options)
-    const rows = limitedResult?.rows ?? fetched
+    const visibleRows = limitedResult?.rows ?? fetched
+
+    // Mask before anything formats or writes the documents. `dbcli query` hides
+    // these fields on the same index; an export that did not would write them
+    // to a file instead.
+    const rows = blacklistValidator.filterColumnsForIndexExpression(
+      target,
+      visibleRows,
+      collectColumnUnion(visibleRows)
+    ).filteredRows
     rowCount = rows.length
 
     const columns = collectColumnUnion(rows)
@@ -395,7 +420,10 @@ async function mongoExportBranch(
 
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
-  blacklistValidator.checkTableBlacklist('SELECT', collection, [])
+  // `$lookup.from` / `$unionWith.coll` reach a second collection.
+  const mongoScopes = findMongoCollectionScopes(JSON.parse(query))
+  const mongoCollections = [collection, ...findMongoCollectionReferences(JSON.parse(query))]
+  blacklistValidator.checkTablesBlacklist('SELECT', mongoCollections)
 
   let effectiveLimit: number | undefined
   if (options.noLimit) {
@@ -426,7 +454,11 @@ async function mongoExportBranch(
     const blacklistCfg = (
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
-    const maskedRows = maskMongoRows(limitedResult?.rows ?? result.rows, collection, blacklistCfg)
+    const maskedRows = maskMongoRowsForCollections(
+      limitedResult?.rows ?? result.rows,
+      [collection, ...mongoScopes],
+      blacklistCfg
+    )
     rowCount = maskedRows.length
     hasBlacklistedColumns = (blacklistCfg.columns[collection] ?? []).length > 0
     const visibleColumns = collectColumnUnion(maskedRows)

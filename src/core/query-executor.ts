@@ -16,7 +16,7 @@ import {
   type SqlDialect,
 } from '@/core/permission-guard'
 import { suggestTableName } from '@/utils/error-suggester'
-import { extractTableName } from '@/utils/engine-hints'
+import { extractTableReferences } from '@/utils/sql-tables'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { trimAppliedLimit } from '@/core/applied-limit'
@@ -122,13 +122,16 @@ export class QueryExecutor {
         }
       }
 
-      // 3. Check table blacklist before execution (for SELECT queries)
-      if (this.blacklistValidator) {
-        const tableName = extractTableName(sql)
-        if (tableName) {
-          // checkTableBlacklist throws BlacklistError if blocked
-          this.blacklistValidator.checkTableBlacklist(classification.type, tableName, [])
-        }
+      // 3. Check table blacklist before execution.
+      // Every referenced table is checked, not just the first one: a JOIN, a
+      // comma, or a UNION branch reaches a table the leading FROM never names
+      // (issue #23).
+      const referencedTables = this.blacklistValidator
+        ? extractTableReferences(sql, { dialect: this.resolveDialect() })
+        : []
+      if (this.blacklistValidator && referencedTables.length > 0) {
+        // checkTablesBlacklist throws BlacklistError if any table is blocked
+        this.blacklistValidator.checkTablesBlacklist(classification.type, referencedTables)
       }
 
       // 4. Execute query and measure time
@@ -149,19 +152,23 @@ export class QueryExecutor {
       let securityNotification: string | undefined
       let omittedColumns: string[] = []
 
+      // No length check: an empty reference list is handled by the validator as
+      // "could not identify the tables", which applies every column rule rather
+      // than none. Gating on it here would restore the fail-open behaviour.
       if (this.blacklistValidator) {
-        const tableName = extractTableName(sql)
-        if (tableName) {
-          const filterResult = this.blacklistValidator.filterColumns(tableName, rows, columnNames)
-          filteredRows = filterResult.filteredRows
-          if (filterResult.omittedColumns.length > 0) {
-            omittedColumns = filterResult.omittedColumns
-            columnNames = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
-            securityNotification = this.blacklistValidator.buildSecurityNotification(
-              tableName,
-              filterResult.omittedColumns
-            )
-          }
+        const filterResult = this.blacklistValidator.filterColumnsForTables(
+          referencedTables,
+          rows,
+          columnNames
+        )
+        filteredRows = filterResult.filteredRows
+        if (filterResult.omittedColumns.length > 0) {
+          omittedColumns = filterResult.omittedColumns
+          columnNames = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
+          securityNotification = this.blacklistValidator.buildSecurityNotification(
+            referencedTables[0] ?? '',
+            filterResult.omittedColumns
+          )
         }
       }
 

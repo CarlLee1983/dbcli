@@ -1,7 +1,11 @@
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
-import { maskMongoRows } from '@/core/mongo/field-masker'
+import { maskMongoRowsForCollections } from '@/core/mongo/field-masker'
+import {
+  findMongoCollectionReferences,
+  findMongoCollectionScopes,
+} from '@/core/mongo/collection-references'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { openInBrowser } from '@/utils/opener'
@@ -47,7 +51,9 @@ export async function qMongoBranch(
 
   const blacklistManager = new BlacklistManager(config)
   const blacklistValidator = new BlacklistValidator(blacklistManager)
-  blacklistValidator.checkTableBlacklist('SELECT', collection)
+  // `$lookup.from` / `$unionWith.coll` reach a second collection.
+  const collections = [collection, ...findMongoCollectionReferences(parsedBody)]
+  blacklistValidator.checkTablesBlacklist('SELECT', collections)
 
   if (options.dryRun) {
     console.log(`Dry-run preview (no execution):`)
@@ -67,7 +73,11 @@ export async function qMongoBranch(
     const blacklistCfg = (
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
-    const masked = maskMongoRows(result.rows, collection, blacklistCfg)
+    const masked = maskMongoRowsForCollections(
+      result.rows,
+      [collection, ...findMongoCollectionScopes(parsedBody)],
+      blacklistCfg
+    )
     const securityNotification =
       (blacklistCfg.columns[collection] ?? []).length > 0
         ? 'Some fields may have been redacted as [REDACTED] per .dbcli blacklist.'

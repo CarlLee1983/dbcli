@@ -119,4 +119,84 @@ describe('runDiagnostic', () => {
     expect(ev.status).toBe('skipped')
     expect(ev.reason).toBeDefined()
   })
+  /**
+   * `dbcli report` embeds the returned rows in its output and loads
+   * user-writable snippet directories, so evidence is a durable copy of
+   * whatever the snippet selected. It ran with no blacklist at all.
+   */
+  test('masks blacklisted columns in the evidence rows', async () => {
+    const { BlacklistManager } = await import('@/core/blacklist-manager')
+    const { BlacklistValidator } = await import('@/core/blacklist-validator')
+    const manager = new BlacklistManager({
+      connection: {
+        system: 'postgresql',
+        host: 'h',
+        port: 5432,
+        user: 'u',
+        password: '',
+        database: 'd',
+      },
+      permission: 'query-only',
+      blacklist: { tables: [], columns: { users: ['password_hash'] } },
+    } as never)
+
+    const users = snippet({ name: '@diag/users', key: '@diag/users' })
+    const ev = await runDiagnostic({
+      snippet: {
+        ...users,
+        query: { ...users.query, sqlBody: 'SELECT id, password_hash FROM users' },
+      },
+      adapter: adapterReturning({
+        rows: [{ id: 1, password_hash: 'SECRET' }],
+        affectedRows: 1,
+      }),
+      engine: 'postgres',
+      timeoutMs: 1000,
+      maxRows: 10,
+      blacklistValidator: new BlacklistValidator(manager),
+    })
+
+    expect(JSON.stringify(ev.rows)).not.toContain('SECRET')
+    expect(JSON.stringify(ev.rows)).not.toContain('password_hash')
+  })
+
+  test('refuses a snippet that reads a blacklisted table', async () => {
+    const { BlacklistManager } = await import('@/core/blacklist-manager')
+    const { BlacklistValidator } = await import('@/core/blacklist-validator')
+    const manager = new BlacklistManager({
+      connection: {
+        system: 'postgresql',
+        host: 'h',
+        port: 5432,
+        user: 'u',
+        password: '',
+        database: 'd',
+      },
+      permission: 'query-only',
+      blacklist: { tables: ['secrets'], columns: {} },
+    } as never)
+
+    let executed = false
+    const ev = await runDiagnostic({
+      snippet: {
+        ...snippet(),
+        query: { ...snippet().query, sqlBody: 'SELECT * FROM secrets' },
+      },
+      adapter: {
+        ...adapterReturning({ rows: [{ a: 1 }], affectedRows: 1 }),
+        execute: async () => {
+          executed = true
+          return { rows: [{ a: 1 }], affectedRows: 1 } as never
+        },
+      },
+      engine: 'postgres',
+      timeoutMs: 1000,
+      maxRows: 10,
+      blacklistValidator: new BlacklistValidator(manager),
+    })
+
+    expect(executed).toBe(false)
+    expect(ev.status).toBe('skipped')
+    expect(ev.reason).toMatch(/secrets/)
+  })
 })

@@ -22,7 +22,25 @@ import { validateFormat, type DbcliConfig } from '@/utils/validation'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { trimAppliedLimit } from '@/core/applied-limit'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
-import { maskMongoRows } from '@/core/mongo/field-masker'
+import { maskMongoRowsForCollections } from '@/core/mongo/field-masker'
+import {
+  findMongoCollectionReferences,
+  findMongoCollectionScopes,
+  type MongoCollectionScope,
+} from '@/core/mongo/collection-references'
+
+/**
+ * Collections a MongoDB query body reaches beyond the one named by
+ * `--collection`. An unparseable body yields none; the preflight already
+ * rejected it in that case.
+ */
+function mongoCollectionRefs(query: string): MongoCollectionScope[] {
+  try {
+    return findMongoCollectionScopes(JSON.parse(query))
+  } catch {
+    return []
+  }
+}
 import { BlacklistRejection } from '@/adapters/redis/types'
 import { resolveQueryInput } from '@/core/query-input'
 import {
@@ -295,15 +313,23 @@ async function preflightSqlSizeGuard(
   options: QueryCommandOptions,
   config: DbcliConfig
 ): Promise<void> {
-  const { extractTableName } = await import('@/utils/engine-hints')
-  const mainTable = extractTableName(query)
-  if (!mainTable || !config.schema || options.noLimit) return
+  if (!config.schema || options.noLimit) return
+  const { extractTableReferences } = await import('@/utils/sql-tables')
+  const { SQL_DIALECTS } = await import('@/core/permission-guard')
+  const dialect = SQL_DIALECTS.find((candidate) => candidate === config.connection?.system)
+  // Every referenced table is considered. The previous single-match extraction
+  // returned `public` for `FROM public.users`, which is not a schema key, so
+  // the guard silently did nothing for every schema-qualified query.
+  const tables = extractTableReferences(query, { ...(dialect ? { dialect } : {}) })
+  const schema = config.schema as Record<string, unknown>
 
-  const tableSchema = (config.schema as Record<string, unknown>)[mainTable]
-  if (!tableSchema) return
   const { shouldBlockQuery } = await import('./query-size-guard')
-  const guard = shouldBlockQuery(query, tableSchema as { estimatedRowCount: number })
-  if (guard.blocked) throw new Error(`\u26A0 ${guard.reason}`)
+  for (const table of tables) {
+    const tableSchema = schema[table]
+    if (!tableSchema) continue
+    const guard = shouldBlockQuery(query, tableSchema as { estimatedRowCount: number })
+    if (guard.blocked) throw new Error(`\u26A0 ${guard.reason}`)
+  }
 }
 
 async function preflightMongoQuery(
@@ -344,7 +370,12 @@ async function preflightMongoQuery(
   })
 
   const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-  blacklistValidator.checkTableBlacklist('SELECT', collection, [])
+  // `$lookup.from` / `$unionWith.coll` name a second collection — the MongoDB
+  // spelling of the JOIN in issue #23.
+  blacklistValidator.checkTablesBlacklist('SELECT', [
+    collection,
+    ...findMongoCollectionReferences(parsedQuery),
+  ])
 
   if (!config.schema || options.noLimit) return
   const tableSchema = (config.schema as Record<string, unknown>)[collection]
@@ -376,7 +407,9 @@ function preflightElasticsearchQuery(
   )
 
   const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-  blacklistValidator.checkTableBlacklist('SELECT', indexName, [])
+  // `--index` accepts comma lists and wildcards, so equality against one name
+  // is not a check.
+  blacklistValidator.checkIndexBlacklist('SELECT', indexName)
 }
 
 async function executeConnectionQuery(
@@ -594,7 +627,11 @@ async function mongoQueryBranch(
     const blacklistCfg = (
       config as { blacklist?: { tables: string[]; columns: Record<string, string[]> } }
     ).blacklist ?? { tables: [], columns: {} }
-    const maskedRows = maskMongoRows(visibleRows, collection, blacklistCfg)
+    const maskedRows = maskMongoRowsForCollections(
+      visibleRows,
+      [collection, ...mongoCollectionRefs(queryStr)],
+      blacklistCfg
+    )
     const projected = fieldSelection ? projectRows(maskedRows, fieldSelection) : undefined
     const outputRows = projected?.rows ?? maskedRows
     const columnNames = projected?.columnNames ?? (outputRows[0] ? Object.keys(outputRows[0]) : [])
@@ -743,7 +780,11 @@ async function elasticsearchQueryBranch(
     const visibleRows = limitedResult?.rows ?? result.rows
 
     const columnNames = visibleRows[0] ? Object.keys(visibleRows[0]) : []
-    const filterResult = blacklistValidator.filterColumns(indexName!, visibleRows, columnNames)
+    const filterResult = blacklistValidator.filterColumnsForIndexExpression(
+      indexName!,
+      visibleRows,
+      columnNames
+    )
 
     const queryResult = {
       rows: filterResult.filteredRows,

@@ -3,8 +3,31 @@
  * Bundles src/cli.ts → dist/cli.mjs with shebang prepended.
  */
 import { $ } from 'bun'
+import { rmSync } from 'node:fs'
 
 const outfile = 'dist/cli.mjs'
+
+// 0. Build stamp: tests/helpers/ensure-dist.ts reads it to decide whether dist is
+// stale. `startedAt` is recorded *before* the first output is written, so a source
+// edited while the build runs reads as newer than the stamp and forces another
+// build. The stamp is removed up front and rewritten only on success, so a build
+// that dies partway (as the macOS CI runner did) leaves no stamp at all.
+const stampFile = 'dist/.build-stamp'
+const startedAt = Date.now()
+rmSync(stampFile, { force: true })
+
+// Every file this script produces. Their hashes go into the stamp because mtime
+// alone cannot see a git checkout rewriting a tracked output (assets/ui-template.html
+// is tracked) — a restore stamps mtime as "now" while changing the content.
+const artifacts = [
+  'dist/cli.mjs',
+  'dist/core.mjs',
+  'dist/core.d.ts',
+  'dist/agent-core.mjs',
+  'dist/agent-core.d.ts',
+  'dist/ui-style.css',
+  'assets/ui-template.html',
+]
 
 // 1. Bundle
 await $`bun build ./src/cli.ts --outfile ${outfile} --target bun --external pg --external mysql2 --external mongodb --external open`
@@ -73,3 +96,15 @@ html = html.replace('/*DBCLI_JS*/', () => jsCode.replace(/<\/script>/gi, '<\\/sc
 await Bun.write('assets/ui-template.html', html)
 
 console.log('UI template built successfully: assets/ui-template.html')
+
+// 5. Everything above succeeded — record when this build started, which Bun built
+// it (a toolchain upgrade changes the output with no input file changing), and what
+// each artifact hashes to.
+const outputs: Record<string, string> = {}
+for (const rel of artifacts) {
+  outputs[rel] = Bun.hash(await Bun.file(rel).bytes()).toString(16)
+}
+await Bun.write(
+  stampFile,
+  `${JSON.stringify({ startedAt, bunVersion: Bun.version, outputs }, null, 2)}\n`
+)

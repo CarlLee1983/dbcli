@@ -6,6 +6,9 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # One slow runner must not cancel the others: a macOS failure used to
+      # leave both Windows jobs "cancelled" with no result of their own.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         bun-version: ['1.3.3', 'latest']

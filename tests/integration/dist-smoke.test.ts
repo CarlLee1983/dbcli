@@ -13,11 +13,10 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
+
 const ROOT = resolve(import.meta.dir, '..', '..')
 const DIST = join(ROOT, 'dist', 'cli.mjs')
-
-// bun run build now runs dts-bundle-generator (~5–6s); raise the hook timeout well above Bun's 5s default.
-const BUILD_TIMEOUT_MS = 60_000
 
 function run(args: string[], cwd: string) {
   return spawnSync('bun', [DIST, ...args], {
@@ -32,15 +31,8 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
   let failingMongoConfig = ''
 
   beforeAll(() => {
-    // Rebuild dist so we test the current source, not a stale artifact.
-    const build = spawnSync('bun', ['run', 'build'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      timeout: BUILD_TIMEOUT_MS,
-    })
-    if (build.status !== 0) {
-      throw new Error(`bun run build failed:\n${build.stdout}\n${build.stderr}`)
-    }
+    // Test the current source, not a stale artifact — rebuilds only when dist is stale.
+    ensureDistBuilt(ROOT)
     workdir = mkdtempSync(join(tmpdir(), 'dbcli-dist-smoke-'))
     mkdirSync(workdir, { recursive: true })
     failingMongoConfig = join(workdir, 'failing-mongo.json')
@@ -61,7 +53,7 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
         audit: { enabled: false },
       })
     )
-  }, BUILD_TIMEOUT_MS)
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   test('--version succeeds (sanity)', () => {
     const r = run(['--version'], workdir)

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-修復五個「看起來是讀、實際會寫」的繞過，它們都能在設定為 `permission: query-only` 的連線上寫入資料。**建議所有把資料庫交給 AI agent 操作的使用者升級。**
+修復六個「看起來是讀、實際會寫」的繞過，它們都能在設定為 `permission: query-only` 的連線上寫入資料。**建議所有把資料庫交給 AI agent 操作的使用者升級。**
 
 - **MongoDB `$out` / `$merge` 未被擋下（`query`、`q`、`export`）。** 這兩個 aggregation stage 只在多連線 fan-out 路徑被檢查，單連線 `dbcli query`、saved snippet、以及 `dbcli export` 全都會執行它們，不論 permission 等級。`$out` 可覆寫任意 collection。`--dry-run` 會把這種 pipeline 預覽成安全操作。影響 MongoDB 連線。
 - **PostgreSQL 多語句堆疊。** 權限分類只讀第一個關鍵字，而 PostgreSQL 的 simple query protocol 會執行字串裡每一個以分號分隔的語句，因此 `SELECT 1 LIMIT 1; DELETE FROM users` 會以 SELECT 的身分通過 `query-only`。影響 PostgreSQL；MySQL / MariaDB 走 prepared statement，不受影響。
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **執行路徑契約測試。** `src/adapters/` 以外每一處 `<x>Adapter.execute(...)` 都必須登記它倚賴的 gate，未登記的新路徑會讓測試失敗。這五個洞裡有兩個正是靠列舉全部路徑才發現的 —— 逐一稽核指令找不到它們。
+- **執行路徑契約測試。** `src/adapters/` 以外每一處 `<x>Adapter.execute(...)` 都必須登記它倚賴的 gate，未登記的新路徑會讓測試失敗。這六個洞裡有兩個正是靠列舉全部路徑才發現的 —— 逐一稽核指令找不到它們。
 
 ## [1.47.0] - 2026-08-05 - 連線逾時可設定
 

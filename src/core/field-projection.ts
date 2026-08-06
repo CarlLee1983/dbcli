@@ -71,20 +71,38 @@ export function omitFieldPaths(
   // blacklist is overwhelmingly such names, so those are collected into one pass
   // and only genuinely nested paths still recurse. Same output, ~50x faster.
   //
-  // Ceiling: dotted paths keep the old cost. A blacklist of N dotted JSON paths is
-  // still N rebuilds per row — measured at 2.6ms for 5 paths over 100 rows, and it
-  // grows linearly in N. `blacklist-validator.ts` admits dotted paths deliberately,
-  // so if a config ever carries dozens of them, this branch is what to optimise next.
-  const topLevel = new Set<string>()
-  const nested: string[] = []
-  for (const path of paths) {
-    if (path.includes('.')) nested.push(path)
-    else topLevel.add(path)
-  }
+  // A dotted path has two jobs: delete a literal key of that exact name, and walk
+  // into a nested record of the same head. The first is what `omitPath`'s
+  // `key === exactPath` branch does, and the skip-set does it just as well — so
+  // every path joins the skip-set, and the expensive recursion is reserved for the
+  // rows that actually hold an object at the head. That distinction matters because
+  // the Elasticsearch adapter flattens `_source`: its rows are *all* dotted keys and
+  // no nested records, so masking them used to pay a full rebuild per path for
+  // traversal that could never match. Measured on 1000 flattened docs with 6
+  // protected fields: 10.9ms with the recursion, 2.0ms without.
+  //
+  // The decision is per row, not per result set. A single document whose `profile`
+  // is an array (Elasticsearch does not flatten arrays) would otherwise put all
+  // thousand rows back on the slow path — measured at 8.4ms for one nested row in
+  // a thousand, over the benchmark's budget, for traversal 999 rows cannot use.
+  //
+  // Ceiling: a genuinely nested row still costs one rebuild per path that reaches it.
+  const topLevel = new Set<string>(paths)
+  const dotted = paths
+    .filter((path) => path.includes('.'))
+    .map((path) => ({ head: path.slice(0, path.indexOf('.')), segments: path.split('.') }))
 
   return rows.map((row) => {
+    // A null/non-record row carries no field to mask. Returning it untouched only
+    // moved the throw downstream (`query-executor` indexes into every row), and the
+    // declared return type says these are records — so it becomes an empty one. Row
+    // count and ordering are preserved, which is what callers actually index by.
+    if (row === null || typeof row !== 'object') return {}
     let projected: unknown = cloneRecord(row, topLevel)
-    for (const path of nested) projected = omitPath(projected, path.split('.'))
+    for (const { head, segments } of dotted) {
+      const value = row[head]
+      if (value !== null && typeof value === 'object') projected = omitPath(projected, segments)
+    }
     return projected as Record<string, unknown>
   })
 }

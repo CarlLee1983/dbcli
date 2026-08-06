@@ -194,6 +194,49 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed).toBeLessThan(10)
   })
 
+  it('Column filtering (1000 flattened docs, 3 parent rules): < 8ms per call', () => {
+    // The shape the Elasticsearch adapter actually produces: `_source` flattened
+    // into dotted top-level keys with no nested records anywhere. Nothing here
+    // covered it, which is how a 70x masking regression on real ES results passed
+    // CI once — the other cases mask by plain column name and never exercise the
+    // dotted branch on a wide result set.
+    const docs = Array.from({ length: 1000 }, (_, i) => {
+      const row: Record<string, unknown> = { id: i }
+      for (let j = 0; j < 16; j++) row[`f${j}`] = j
+      row['profile.email'] = `e${i}`
+      row['profile.ssn'] = `s${i}`
+      row['payment.card'] = `c${i}`
+      row['payment.cvv'] = '123'
+      row['meta.a'] = 1
+      row['meta.b'] = 2
+      return row
+    })
+    // Elasticsearch does not flatten arrays, so one document out of a thousand can
+    // legitimately carry a nested `profile`. When the recursion decision was made
+    // once for the whole result set instead of per row, this single document put the
+    // other 999 back on the slow path and pushed this case over budget.
+    docs[500] = { id: 500, profile: [{ email: 'nested' }], 'payment.card': 'c' }
+    const config = {
+      ...baseConfig,
+      blacklist: { tables: [], columns: { logs: ['profile', 'payment', 'meta'] } },
+    }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+    const columnList = Object.keys(docs[0] ?? {})
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('logs', docs, columnList).filteredRows
+    )
+
+    // PROVISIONAL budget. Locally this measures ~1.8ms and the regression it guards
+    // against (deciding the nested recursion per result set instead of per row)
+    // measures ~8.7ms, so the discriminating ceiling is around 4ms — but the ratio
+    // between this machine and a CI runner is not known for this shape yet, and the
+    // sibling case scales 0.65ms → 3.66ms on windows-latest. Tightened from the CI
+    // numbers this benchmark prints, not from a dev machine.
+    report('Column filtering (1000 flattened docs)', elapsed, 16)
+    expect(elapsed).toBeLessThan(16)
+  })
+
   it('Config loading - typical blacklist: < 5ms', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 

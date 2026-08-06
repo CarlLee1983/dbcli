@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.50.0] - 2026-08-06 - QueryLens proxy query analysis
+
+### Added
+
+- **QueryLens Markdown report for `dbcli proxy analyze`.** `dbcli proxy analyze --format markdown` now produces a shareable report covering query volume, latency percentiles, expensive fingerprints, slowest queries, errors, and N+1 suspects. It reads the proxy JSONL log offline and includes its rotated segment unless `--no-include-rotated` is supplied.
+
+### Security
+
+- **QueryLens redacts report literals independently of capture configuration.** The Markdown path analyzes an in-memory redacted copy of SQL-bearing events, including error messages, so a legacy log captured without `--redact literals` does not expose those values in the report. Use `dbcli proxy <engine> --redact literals` as well to protect the event log itself.
+
 ## [1.49.0] - 2026-08-06 - 欄位遮罩涵蓋攤平與陣列列，且不再為每條規則掃過整個結果集
 
 延續 1.48.0 的 blacklist 主題：那一版修的是「哪些物件受保護」，這一版修的是「受保護的欄位到底有沒有真的被遮掉」，以及遮罩本身的成本。兩條安全性修復都屬於 fail-open —— 資料原樣回傳，其中一條連安全通知都不會發。

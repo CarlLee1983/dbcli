@@ -95,6 +95,7 @@
                     <li class="nav-item"><a href="#snippets" class="nav-link">Snippets</a></li>
                     <li class="nav-item"><a href="#diagnostics" class="nav-link">Diagnostics</a></li>
                     <li class="nav-item"><a href="#proxy" class="nav-link">Observability Proxy</a></li>
+                    <li class="nav-item"><a href="#querylens" class="nav-link">QueryLens</a></li>
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML Dashboards <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">Engine Support</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI Integration</a></li>
@@ -655,6 +656,39 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
                 <li><strong>MySQL prepared/binary protocol</strong>: Best-effort parsing; tagged <code>prepared_statement</code>.</li>
                 <li><strong>PostgreSQL extended query protocol</strong>: Best-effort parsing; tagged <code>extended_protocol</code> or <code>parse_partial</code>.</li>
             </ul>
+
+            <!-- doc-key: querylens -->
+            <h3 id="querylens">QueryLens — Proxy Query Analysis</h3>
+            <p class="text-text-muted mb-4">QueryLens is the shareable Markdown report format of <code>dbcli proxy analyze</code>. It turns a proxy event log into a local query-analysis report; it is not a complete database-protocol analyzer.</p>
+            <p class="mb-4">It needs neither a database connection nor a dbcli connection configuration when analyzing: it reads the JSONL file on disk only. The QueryLens Markdown report redacts SQL literals before analysis. Capture with literal redaction as well, so the event file itself does not retain application values.</p>
+
+            <h4 class="mt-6 mb-2 font-bold">Quick Start</h4>
+            <pre><code># 1. Capture local development traffic in a redacted JSONL log.
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306 \
+  --events .dbcli/proxy/events.jsonl --redact literals
+
+# 2. Produce the QueryLens Markdown report locally; no database is contacted.
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format markdown
+
+# The existing proxy JSON report remains available for machine consumption.
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format json</code></pre>
+            <p class="mb-4">Point the application at the proxy's <code>--listen</code> address while it runs. After stopping the proxy, run the analysis command against the resulting log from the repository root.</p>
+
+            <h4 class="mt-6 mb-2 font-bold">Analysis Options</h4>
+            <table>
+                <thead><tr><th>Option</th><th>Description</th></tr></thead>
+                <tbody>
+                        <tr><td><code>--events &lt;path&gt;</code></td><td>Path to the proxy JSONL event log.</td></tr>
+                        <tr><td><code>--format markdown|json|text</code></td><td><code>markdown</code> produces the redacted QueryLens report; JSON and text keep the standard proxy analysis output.</td></tr>
+                    <tr><td><code>--top &lt;n&gt;</code></td><td>Limit ranked findings to the top <em>n</em> entries.</td></tr>
+                    <tr><td><code>--slow-ms &lt;ms&gt;</code></td><td>Threshold used to classify slow queries in the report.</td></tr>
+                    <tr><td><code>--n-plus-one &lt;n&gt;</code></td><td>Repetition threshold used to flag N+1 candidates.</td></tr>
+                    <tr><td><code>--no-include-rotated</code></td><td>Analyze only the specified log, excluding rotated sibling logs.</td></tr>
+                </tbody>
+            </table>
+            <p class="mb-4">QueryLens focuses on the proxy events it can read; do not rely on it as evidence that every database protocol or query form was captured. Treat its findings as investigation leads, then verify a query and its schema or plan before changing production code.</p>
 
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">Advanced Tools</h3>

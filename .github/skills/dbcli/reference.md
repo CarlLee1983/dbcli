@@ -1180,6 +1180,7 @@ dbcli --use prod proxy postgresql                         # infer target from na
 
 dbcli proxy analyze                               # analyze .dbcli/proxy/events.jsonl (JSON)
 dbcli proxy analyze --format text --top 10        # human-readable top-10 view
+dbcli proxy analyze --format markdown             # QueryLens shareable, redacted Markdown report
 dbcli proxy analyze --slow-ms 200 --n-plus-one 5  # custom thresholds
 ```
 
@@ -1200,7 +1201,7 @@ dbcli proxy analyze --slow-ms 200 --n-plus-one 5  # custom thresholds
 
 **Log rotation:** all writes are serialized through one in-process chain (concurrent sessions never interleave partial lines). The event log auto-rotates to keep one rolling segment — when the next line would reach ~50 MiB or 200,000 entries, the current file is renamed to `<events>.1` (overwriting any prior segment) and a fresh file starts. Worst-case on-disk footprint is ~2× the byte cap.
 
-**`proxy analyze`** — offline aggregation of the event log (no DB). Flags: `--events <path>` (default `.dbcli/proxy/events.jsonl`), `--format json|text` (default `json`), `--top <n>` (default 20; text rows + suggestedCommands depth), `--slow-ms <ms>` (default 1000; recomputes slowCount), `--n-plus-one <n>` (default 10), `--no-include-rotated`. JSON report blocks: `summary`, `byFingerprint` (sorted by total time; SELECT entries in the top-N carry `suggestedCommands` for `explain` / `guide missing-index-for`), `slowest`, `errors`, `hotTables`, `repetition` (N+1 suspects). Reads the current log plus the rotated `.1` segment by default.
+**`proxy analyze`** — offline aggregation of the event log (no DB). Flags: `--events <path>` (default `.dbcli/proxy/events.jsonl`), `--format json|text|markdown` (default `json`), `--top <n>` (default 20; text rows + suggestedCommands depth), `--slow-ms <ms>` (default 1000; recomputes slowCount), `--n-plus-one <n>` (default 10), `--no-include-rotated`. JSON report blocks: `summary`, `byFingerprint` (sorted by total time; SELECT entries in the top-N carry `suggestedCommands` for `explain` / `guide missing-index-for`), `slowest`, `errors`, `hotTables`, `repetition` (N+1 suspects). Reads the current log plus the rotated `.1` segment by default. `markdown` is the QueryLens report: it redacts SQL and error-message literals in an in-memory copy before analysis, while leaving the source log untouched.
 
 Every actionable block carries machine-readable next steps so an agent can move from "what is wrong" to "what to run":
 - `byFingerprint[]` — top-N SELECT entries get `suggestedCommands`: `dbcli explain "<sql>"` and `dbcli guide missing-index-for "<sql>"`.

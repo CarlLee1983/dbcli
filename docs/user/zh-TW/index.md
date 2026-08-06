@@ -18,6 +18,7 @@
     *   [資料驗證 (snapshot, assert)](#資料驗證)
     *   [驗證文物檢視器](#verification-inspect)
     *   [本機觀察型 Proxy](#proxy)
+    *   [QueryLens](#querylens)
     *   [進階工具 (DDL, Shell, AI Skills)](#進階工具)
 5.  [互動式 HTML 儀表板](#互動式-html-儀表板)
 6.  [資料庫引擎支援矩陣](#資料庫引擎支援矩陣)
@@ -725,6 +726,44 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 - **TLS**：v1 不會解密 TLS。加密連線仍會產生 session 與位元組統計事件，但不會解析或顯示 SQL — 若需要查詢可見度，請在本機分析時停用 SSL。
 - **MySQL prepared/binary 協議**：盡力解析；標記為 `prepared_statement`。
 - **PostgreSQL extended query 協議**：盡力解析；標記為 `extended_protocol` 或 `parse_partial`。
+
+<!-- doc-key: querylens -->
+### QueryLens — Proxy 查詢分析
+
+QueryLens 是 `dbcli proxy analyze` 的可分享 Markdown 報告格式，可將 proxy 事件日誌轉為本機查詢分析報告；它不是完整的資料庫協定分析器。
+
+分析時不需要資料庫連線，也不需要 dbcli connection 設定：它只讀取磁碟上的 JSONL 檔案。QueryLens Markdown 報告會在分析前遮罩 SQL literal；擷取時也請使用 literal 遮罩，避免事件檔本身保留應用程式的值。
+
+#### 快速開始
+
+```bash
+# 1. 擷取已遮罩的本機開發流量 JSONL 日誌。
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306 \
+  --events .dbcli/proxy/events.jsonl --redact literals
+
+# 2. 在本機產生 QueryLens Markdown 報告；不會連線至資料庫。
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format markdown
+
+# 若要供其他工具或 CI 步驟使用，保留既有 proxy JSON 報告。
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format json
+```
+
+執行應用程式時，將它指向 proxy 的 `--listen` 位址。停止 proxy 後，請在 repository root 對產生的日誌執行分析指令。
+
+#### 分析選項
+
+| 選項 | 說明 |
+| :--- | :--- |
+| `--events <path>` | proxy JSONL 事件日誌的路徑。 |
+| `--format markdown\|json\|text` | `markdown` 產生已遮罩的 QueryLens 報告；JSON 與 text 保持既有 proxy 分析輸出。 |
+| `--top <n>` | 將排名發現限制為前 *n* 項。 |
+| `--slow-ms <ms>` | 報告判定慢查詢使用的時間門檻。 |
+| `--n-plus-one <n>` | 判定 N+1 候選項目使用的重複次數門檻。 |
+| `--no-include-rotated` | 只分析指定日誌，不納入輪替後的同層日誌。 |
+
+QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完整擷取所有資料庫協定或查詢形式的證據。將發現當作調查線索，修改正式程式碼前仍應確認查詢、schema 或執行計畫。
 
 <!-- doc-key: advanced-tools -->
 ### 進階工具

@@ -880,6 +880,7 @@ dbcli proxy mysql      --listen 127.0.0.1:3307 --target 127.0.0.1:3306
 dbcli proxy postgresql --listen 127.0.0.1:5434 --target 127.0.0.1:5432
 dbcli proxy mysql      --slow-ms 500 --redact literals
 dbcli proxy mariadb    --events ./logs/proxy.jsonl
+dbcli proxy analyze --events ./logs/proxy.jsonl --format markdown  # QueryLens report
 ```
 
 **Options:**
@@ -889,6 +890,8 @@ dbcli proxy mariadb    --events ./logs/proxy.jsonl
 - `--slow-ms <ms>` — Flag events slower than this threshold as `slow: true` (default: `1000`)
 - `--redact none|literals` — Strip SQL literal values from event records (default: `none`)
 - `--format text|json` — Startup output format (default: `text`)
+
+**QueryLens:** `dbcli proxy analyze --format markdown` reads the event log offline and produces a shareable Markdown report. It redacts SQL and error-message literals in memory before analysis; use `--redact literals` while capturing as well to protect the log on disk.
 
 ---
 

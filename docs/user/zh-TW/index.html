@@ -95,6 +95,7 @@
                     <li class="nav-item"><a href="#snippets" class="nav-link">查詢片段</a></li>
                     <li class="nav-item"><a href="#diagnostics" class="nav-link">診斷修復</a></li>
                     <li class="nav-item"><a href="#proxy" class="nav-link">觀察型 Proxy</a></li>
+                    <li class="nav-item"><a href="#querylens" class="nav-link">QueryLens</a></li>
                     <li class="nav-item"><a href="#ui" class="nav-link flex items-center justify-between">HTML 儀表板 <span class="text-[0.6rem] bg-secondary text-white px-2 py-0.5 rounded-full font-bold">Pro</span></a></li>
                     <li class="nav-item"><a href="#engines" class="nav-link">引擎支援</a></li>
                     <li class="nav-item"><a href="#ai" class="nav-link">AI 代理整合</a></li>
@@ -655,6 +656,39 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
                 <li><strong>MySQL prepared/binary 協議</strong>：盡力解析；標記為 <code>prepared_statement</code>。</li>
                 <li><strong>PostgreSQL extended query 協議</strong>：盡力解析；標記為 <code>extended_protocol</code> 或 <code>parse_partial</code>。</li>
             </ul>
+
+            <!-- doc-key: querylens -->
+            <h3 id="querylens">QueryLens — Proxy 查詢分析</h3>
+            <p class="text-text-muted mb-4">QueryLens 是 <code>dbcli proxy analyze</code> 的可分享 Markdown 報告格式，可將 proxy 事件日誌轉為本機查詢分析報告；它不是完整的資料庫協定分析器。</p>
+            <p class="mb-4">分析時不需要資料庫連線，也不需要 dbcli connection 設定：它只讀取磁碟上的 JSONL 檔案。QueryLens Markdown 報告會在分析前遮罩 SQL literal；擷取時也請使用 literal 遮罩，避免事件檔本身保留應用程式的值。</p>
+
+            <h4 class="mt-6 mb-2 font-bold">快速開始</h4>
+            <pre><code># 1. 擷取已遮罩的本機開發流量 JSONL 日誌。
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306 \
+  --events .dbcli/proxy/events.jsonl --redact literals
+
+# 2. 在本機產生 QueryLens Markdown 報告；不會連線至資料庫。
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format markdown
+
+# 若要供其他工具或 CI 步驟使用，保留既有 proxy JSON 報告。
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format json</code></pre>
+            <p class="mb-4">執行應用程式時，將它指向 proxy 的 <code>--listen</code> 位址。停止 proxy 後，請在 repository root 對產生的日誌執行分析指令。</p>
+
+            <h4 class="mt-6 mb-2 font-bold">分析選項</h4>
+            <table>
+                <thead><tr><th>選項</th><th>說明</th></tr></thead>
+                <tbody>
+                        <tr><td><code>--events &lt;path&gt;</code></td><td>proxy JSONL 事件日誌的路徑。</td></tr>
+                        <tr><td><code>--format markdown|json|text</code></td><td><code>markdown</code> 產生已遮罩的 QueryLens 報告；JSON 與 text 保持既有 proxy 分析輸出。</td></tr>
+                    <tr><td><code>--top &lt;n&gt;</code></td><td>將排名發現限制為前 <em>n</em> 項。</td></tr>
+                    <tr><td><code>--slow-ms &lt;ms&gt;</code></td><td>報告判定慢查詢使用的時間門檻。</td></tr>
+                    <tr><td><code>--n-plus-one &lt;n&gt;</code></td><td>判定 N+1 候選項目使用的重複次數門檻。</td></tr>
+                    <tr><td><code>--no-include-rotated</code></td><td>只分析指定日誌，不納入輪替後的同層日誌。</td></tr>
+                </tbody>
+            </table>
+            <p class="mb-4">QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完整擷取所有資料庫協定或查詢形式的證據。將發現當作調查線索，修改正式程式碼前仍應確認查詢、schema 或執行計畫。</p>
 
             <!-- doc-key: advanced-tools -->
             <h3 id="advanced-tools">進階工具</h3>

@@ -99,4 +99,27 @@ describe('dbcli proxy analyze (CLI)', () => {
     expect(out).toContain('SUMMARY') // text format applied (not JSON)
     expect(out).toContain('slow=1') // --slow-ms 10 => the 50ms query is slow
   })
+
+  it('renders the redacted QueryLens Markdown report', () => {
+    const dir = tmp()
+    const path = join(dir, 'events.jsonl')
+    writeFileSync(path, evt("SELECT * FROM users WHERE email = 'secret@example.com'", 50) + '\n')
+
+    const proc = Bun.spawnSync([
+      'bun',
+      'run',
+      'src/cli.ts',
+      'proxy',
+      'analyze',
+      '--events',
+      path,
+      '--format',
+      'markdown',
+    ])
+    expect(proc.exitCode).toBe(0)
+    const out = proc.stdout.toString()
+    expect(out).toContain('# QueryLens report')
+    expect(out).toContain('email = ?')
+    expect(out).not.toContain('secret@example.com')
+  })
 })

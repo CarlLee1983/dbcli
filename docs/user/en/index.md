@@ -18,6 +18,7 @@
     *   [Data Verification (snapshot, assert)](#data-verification)
     *   [Verification Artifact Inspector](#verification-inspect)
     *   [Local Observability Proxy](#proxy)
+    *   [QueryLens](#querylens)
     *   [Advanced Tools (DDL, Shell, AI Skills)](#advanced-tools)
 5.  [Interactive HTML Dashboards](#interactive-html-dashboards)
 6.  [Database Engine Support Matrix](#database-engine-support-matrix)
@@ -814,6 +815,44 @@ The recommended loop: run `proxy analyze`, then for each finding read its `hints
 - **TLS**: TLS is relayed but not decrypted in v1. Encrypted sessions still produce session and byte-count events, but no SQL is parsed or visible — disable SSL for local analysis sessions when you need query visibility.
 - **MySQL prepared/binary protocol**: Best-effort parsing; tagged `prepared_statement`.
 - **PostgreSQL extended query protocol**: Best-effort parsing; tagged `extended_protocol` or `parse_partial`.
+
+<!-- doc-key: querylens -->
+### QueryLens — Proxy Query Analysis
+
+QueryLens is the shareable Markdown report format of `dbcli proxy analyze`. It turns a proxy event log into a local query-analysis report; it is not a complete database-protocol analyzer.
+
+It needs neither a database connection nor a dbcli connection configuration when analyzing: it reads the JSONL file on disk only. The QueryLens Markdown report redacts SQL literals before analysis. Capture with literal redaction as well, so the event file itself does not retain application values.
+
+#### Quick Start
+
+```bash
+# 1. Capture local development traffic in a redacted JSONL log.
+dbcli proxy mysql --listen 127.0.0.1:3307 --target 127.0.0.1:3306 \
+  --events .dbcli/proxy/events.jsonl --redact literals
+
+# 2. Produce the QueryLens Markdown report locally; no database is contacted.
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format markdown
+
+# The existing proxy JSON report remains available for machine consumption.
+dbcli proxy analyze \
+  --events .dbcli/proxy/events.jsonl --format json
+```
+
+Point the application at the proxy's `--listen` address while it runs. After stopping the proxy, run the analysis command against the resulting log from the repository root.
+
+#### Analysis Options
+
+| Option | Description |
+| :--- | :--- |
+| `--events <path>` | Path to the proxy JSONL event log. |
+| `--format markdown\|json\|text` | `markdown` produces the redacted QueryLens report; JSON and text keep the standard proxy analysis output. |
+| `--top <n>` | Limit ranked findings to the top *n* entries. |
+| `--slow-ms <ms>` | Threshold used to classify slow queries in the report. |
+| `--n-plus-one <n>` | Repetition threshold used to flag N+1 candidates. |
+| `--no-include-rotated` | Analyze only the specified log, excluding rotated sibling logs. |
+
+QueryLens focuses on the proxy events it can read; do not rely on it as evidence that every database protocol or query form was captured. Treat its findings as investigation leads, then verify a query and its schema or plan before changing production code.
 
 <!-- doc-key: advanced-tools -->
 ### Advanced Tools

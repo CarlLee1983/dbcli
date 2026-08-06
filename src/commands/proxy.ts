@@ -9,6 +9,8 @@ import type { ProxyEngine, RedactMode } from '@/proxy/events'
 import { readEvents } from '@/proxy/event-reader'
 import { analyzeEvents } from '@/proxy/analyze'
 import { renderAnalysisText } from '@/proxy/analyze-render'
+import { analyzeQuerylensEvents } from '@/querylens/analyze'
+import { renderQuerylensMarkdown } from '@/querylens/render'
 
 const SUPPORTED: ProxyEngine[] = ['mysql', 'mariadb', 'postgresql']
 const ALLOWED_FORMATS = ['text', 'json'] as const
@@ -207,7 +209,7 @@ for (const engine of SUPPORTED) {
   )
 }
 
-const ANALYZE_FORMATS = ['json', 'text'] as const
+const ANALYZE_FORMATS = ['json', 'text', 'markdown'] as const
 
 interface ProxyAnalyzeOptions {
   events?: string
@@ -243,18 +245,28 @@ async function runAnalyze(options: ProxyAnalyzeOptions): Promise<void> {
       throw new Error(`no events found at ${eventsPath}; run 'dbcli proxy <engine>' first`)
     }
 
-    const report = analyzeEvents(events, {
+    const analyzeOptions = {
       slowMs,
       top,
       nPlusOne,
       sourceFiles: files,
       malformedLines,
-    })
+    }
 
-    if (format === 'text') {
-      process.stdout.write(renderAnalysisText(report, top) + '\n')
+    if (format === 'markdown') {
+      // QueryLens is the shareable, privacy-preserving proxy report. It analyzes a
+      // redacted in-memory copy so a legacy proxy log captured without --redact
+      // cannot leak literals through the report.
+      process.stdout.write(
+        renderQuerylensMarkdown(analyzeQuerylensEvents(events, analyzeOptions), top)
+      )
     } else {
-      process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+      const report = analyzeEvents(events, analyzeOptions)
+      if (format === 'text') {
+        process.stdout.write(renderAnalysisText(report, top) + '\n')
+      } else {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+      }
     }
   } catch (error) {
     if (error instanceof Error) console.error(error.message)
@@ -266,7 +278,7 @@ proxyCommand
   .command('analyze')
   .description('Analyze a proxy event log offline (no DB connection)')
   .option('--events <path>', 'Event JSONL path', join('.dbcli', 'proxy', 'events.jsonl'))
-  .option('--format <format>', 'Output format: json | text', 'json')
+  .option('--format <format>', 'Output format: json | text | markdown (QueryLens)', 'json')
   .option('--top <number>', 'Rows shown in text + suggestedCommands depth', '20')
   .option('--slow-ms <number>', 'Slow-query threshold (ms) for slowCount', '1000')
   .option('--n-plus-one <number>', 'Min repeats per (session,fingerprint) to flag N+1', '10')

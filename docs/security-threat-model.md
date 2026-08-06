@@ -113,6 +113,18 @@ and credentials must be protected from the agent's writable workspace.
      knowledge dbcli does not have, and `GET /_cat/aliases` reveals the mapping.
      Blacklist the alias as well, or rely on the Elasticsearch role.
 
+   - **A column rule naming a leaf, against a flattened source.** The Elasticsearch
+     adapter flattens `_source`, so `{profile:{ssn}}` arrives as the single key
+     `profile.ssn` and there is no `profile` key at all. A rule for `profile` does
+     cover it — every column under a blacklisted ancestor is withheld — but a rule
+     for `ssn` alone does not, and neither does `profile` against
+     `data.profile.ssn`. Matching any segment would close this, at the price of a
+     rule for `id` hiding `user.id`, `order.id`, and every other qualified column;
+     the trade was made in favour of the narrower rule. `dbcli schema` reports
+     Elasticsearch fields under their dotted names, so blacklisting what `schema`
+     shows is the workflow that holds. Pinned by the `KNOWN CEILING` tests in
+     `tests/unit/core/blacklist-validator.test.ts`.
+
    The blacklist withholds objects and columns from ordinary reads. It is not a
    proof that a value cannot be reconstructed. An account that must not read a
    column needs a database grant that says so.

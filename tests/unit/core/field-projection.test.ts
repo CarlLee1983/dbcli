@@ -160,6 +160,18 @@ describe('projectRows', () => {
     expect(projected.rows).toEqual([{ id: 1 }])
   })
 
+  test('exclusion never emits a non-record row for callers to index into', () => {
+    // Include mode already coerces a null row into a normalised record; exclusion
+    // used to be the one path that leaked `null` into a Record<string, unknown>[].
+    const projected = projectRows([null as any, { a: 1, b: 2 }], {
+      mode: 'exclude',
+      paths: ['b'],
+    })
+
+    expect(projected.rows).toEqual([{ a: null }, { a: 1 }])
+    expect(projected.columnNames).toEqual(['a'])
+  })
+
   test('normalizes sparse inclusion keys for JSON and preserves non-plain values', () => {
     const date = new Date('2026-08-01T00:00:00Z')
     const projected = projectRows([{ id: 1, date }, { id: 2 }], {

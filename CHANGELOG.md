@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **黑名單指定父欄位時，攤平後的子欄位未被遮蔽，而且不發通知。** Elasticsearch adapter 會把 `_source` 遞迴攤平成帶點的頂層鍵（`{profile:{ssn}}` → 鍵 `profile.ssn`，文件裡根本沒有 `profile`），而遮蔽判斷是以欄位名等值比對，因此把 `profile` 列入欄位黑名單完全沒有作用：資料原樣回傳，且因為「已遮蔽欄位」清單是空的，連安全通知都不會發出 —— 使用者不會知道有東西本來該被藏起來。影響 `query` / `q` / `export` 三條 Elasticsearch 路徑。現在任何位於黑名單祖先之下的欄位都會被遮蔽（`profiles`、`profile_name` 這類僅前綴相似的欄位不受影響）。已知天花板（規則指定葉節點名、或祖先不從路徑開頭起算）記於 `docs/security-threat-model.md`。
+
 ### Performance
 
 - **欄位遮罩對每一列的每一個欄位各複製一次整列。** `omitFieldPaths` 逐一路徑呼叫 `omitPath`，而後者每次都重建整個 record，因此成本是 O(列數 × 遮罩欄位數) 次完整複製 —— 100 列對上 50 個遮罩欄位就是 5000 次。沒有點的路徑只會刪掉一個頂層鍵，而欄位黑名單絕大多數就是這種名稱，現在合併成一趟處理，只有真正的巢狀路徑才遞迴。輸出完全相同，實測 30.37ms → 1.73ms。任何回傳大量資料又設有欄位黑名單的查詢或匯出都會受益。

@@ -239,6 +239,153 @@ describe('BlacklistValidator', () => {
       expect(notification).not.toBe('security.columns_omitted')
     })
   })
+  describe('filterColumns() against a flattened result set', () => {
+    // The Elasticsearch adapter flattens `_source` recursively
+    // (`elasticsearch-adapter.ts:72`), so a document `{ profile: { email, ssn } }`
+    // reaches the validator as the keys `profile.email` and `profile.ssn` — there is
+    // no `profile` key at all. Blacklisting the parent has to still protect them.
+    const flattenedRows = [
+      { id: 1, 'profile.email': 'a@example.com', 'profile.ssn': '123', keep: 'ok' },
+    ]
+    const flattenedColumns = ['id', 'profile.email', 'profile.ssn', 'keep']
+
+    it('omits flattened children when the parent column is blacklisted', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+
+      const result = validator.filterColumns('logs', flattenedRows, flattenedColumns)
+
+      expect(result.omittedColumns.sort()).toEqual(['profile.email', 'profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ id: 1, keep: 'ok' })
+    })
+
+    it('reports the omission so the security notification is not silent', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+
+      const result = validator.filterColumns('logs', flattenedRows, flattenedColumns)
+
+      // An empty list means no notification is emitted — the data would leave
+      // without the caller ever being told something was supposed to be hidden.
+      expect(result.omittedColumns.length).toBeGreaterThan(0)
+      expect(validator.buildSecurityNotification('logs', result.omittedColumns)).not.toBe('')
+    })
+
+    it('does not treat a merely prefixed column name as a child', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+      const rows = [{ profileId: 7, profile_name: 'x', profiles: 'y' }]
+
+      const result = validator.filterColumns('logs', rows, [
+        'profileId',
+        'profile_name',
+        'profiles',
+      ])
+
+      expect(result.omittedColumns).toEqual([])
+      expect(result.filteredRows[0]).toEqual({ profileId: 7, profile_name: 'x', profiles: 'y' })
+    })
+
+    it('finds a protected field that appears only in a later row', () => {
+      // Elasticsearch documents are sparse and `columnList` is usually taken from
+      // the first row, so a field that shows up further down must still be caught.
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+      const rows = [{ id: 1 }, { id: 2 }, { id: 3, 'profile.ssn': '123' }]
+
+      const result = validator.filterColumns('logs', rows, ['id'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[2]).toEqual({ id: 3 })
+    })
+
+    it('works with an empty column list', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+
+      const result = validator.filterColumns('logs', [{ 'profile.ssn': '123' }], [])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({})
+    })
+
+    it('matches at every ancestor depth', () => {
+      const rows = [{ 'a.b.c': 'secret', 'a.x': 'also secret', keep: 1 }]
+      const columns = ['a.b.c', 'a.x', 'keep']
+
+      const byRoot = makeValidator({ tables: [], columns: { logs: ['a'] } })
+      expect(byRoot.filterColumns('logs', rows, columns).filteredRows[0]).toEqual({ keep: 1 })
+
+      const byMiddle = makeValidator({ tables: [], columns: { logs: ['a.b'] } })
+      expect(byMiddle.filterColumns('logs', rows, columns).filteredRows[0]).toEqual({
+        'a.x': 'also secret',
+        keep: 1,
+      })
+    })
+
+    it('normalises a null row instead of throwing or passing null downstream', () => {
+      // Passing the row through only moved the throw: callers index into every row.
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+      const rows = [null as any, { 'profile.ssn': '1', keep: 2 }]
+
+      const result = validator.filterColumns('logs', rows, [])
+
+      expect(result.filteredRows).toEqual([{}, { keep: 2 }])
+      expect(result.filteredRows[0]).not.toBeNull()
+    })
+
+    it('an empty blacklist entry does not swallow dot-prefixed columns', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['', 'a'] } })
+
+      const result = validator.filterColumns('logs', [{ '.x': 1, 'a.b': 2, keep: 3 }], [])
+
+      expect(result.omittedColumns).toEqual(['a.b'])
+      expect(result.filteredRows[0]).toEqual({ '.x': 1, keep: 3 })
+    })
+
+    it('matches ancestors of a column name that starts with a dot', () => {
+      // Elasticsearch permits a leading dot in a field name and `flattenSource`
+      // concatenates it verbatim, so `.profile.ssn` is a reachable column name.
+      const validator = makeValidator({ tables: [], columns: { logs: ['.profile'] } })
+
+      const result = validator.filterColumns('logs', [{ '.profile.ssn': 'S', keep: 1 }], [])
+
+      expect(result.omittedColumns).toEqual(['.profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ keep: 1 })
+    })
+
+    it('KNOWN CEILING: a rule naming a leaf does not match it inside a flattened path', () => {
+      // Blacklisting `ssn` does NOT protect a flattened `profile.ssn`. Matching any
+      // segment would close it, but it would also mean a rule for `id` hides
+      // `user.id`, `order.id`, and every other qualified column — over-blocking wide
+      // enough to make the feature unusable. `dbcli schema` reports Elasticsearch
+      // fields with their dotted names, so the documented workflow yields the path
+      // that does work. Pinned so the trade-off is a decision, not a surprise.
+      const validator = makeValidator({ tables: [], columns: { logs: ['ssn'] } })
+
+      const result = validator.filterColumns(
+        'logs',
+        [{ id: 1, 'profile.ssn': 'S' }],
+        ['id', 'profile.ssn']
+      )
+
+      expect(result.omittedColumns).toEqual([])
+    })
+
+    it('KNOWN CEILING: a rule matches ancestors only from the start of the path', () => {
+      // `profile` does not reach `data.profile.ssn` — same trade-off as above.
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+
+      const result = validator.filterColumns('logs', [{ 'data.profile.ssn': 'S' }], [])
+
+      expect(result.omittedColumns).toEqual([])
+    })
+
+    it('still omits the nested representation when both forms are present', () => {
+      const validator = makeValidator({ tables: [], columns: { logs: ['profile'] } })
+      const rows = [{ id: 1, 'profile.email': 'flat', profile: { email: 'nested' } }]
+
+      const result = validator.filterColumns('logs', rows, ['id', 'profile.email', 'profile'])
+
+      expect(result.filteredRows[0]).toEqual({ id: 1 })
+    })
+  })
+
   describe('checkTablesBlacklist / filterColumnsForTables (issue #23)', () => {
     it('blocks when any table in the list is blacklisted', () => {
       const validator = makeValidator({ tables: ['users'], columns: {} })

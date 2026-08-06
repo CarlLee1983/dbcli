@@ -3,6 +3,7 @@ import { Command } from 'commander'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AdapterFactory } from '@/adapters'
 import { semanticCommand } from '@/commands/semantic'
 
 const CONFIG = {
@@ -247,6 +248,44 @@ describe('semantic commands', () => {
       violations: [],
     })
     expect(output).not.toContain(sql)
+  })
+
+  test('draft validate does not construct a database adapter', async () => {
+    const draftPath = join(sandbox, 'draft.json')
+    writeFileSync(
+      draftPath,
+      JSON.stringify({
+        version: 1,
+        questionHash: 'd'.repeat(64),
+        candidate: { kind: 'sql', sql: 'SELECT created_at FROM orders' },
+        semanticReferences: ['model:orders', 'field:orders.created_at'],
+      })
+    )
+    const createAdapterSpy = spyOn(AdapterFactory, 'createAdapter')
+    const createSqlAdapterSpy = spyOn(AdapterFactory, 'createSqlAdapter')
+    const createQueryableAdapterSpy = spyOn(AdapterFactory, 'createQueryableAdapter')
+    const createMongoDBAdapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter')
+    const createRedisAdapterSpy = spyOn(AdapterFactory, 'createRedisAdapter')
+    const createElasticsearchAdapterSpy = spyOn(AdapterFactory, 'createElasticsearchAdapter')
+
+    try {
+      await run('draft', 'validate', '--input', draftPath, '--format', 'json')
+
+      expect(exitCode).toBeUndefined()
+      expect(createAdapterSpy).not.toHaveBeenCalled()
+      expect(createSqlAdapterSpy).not.toHaveBeenCalled()
+      expect(createQueryableAdapterSpy).not.toHaveBeenCalled()
+      expect(createMongoDBAdapterSpy).not.toHaveBeenCalled()
+      expect(createRedisAdapterSpy).not.toHaveBeenCalled()
+      expect(createElasticsearchAdapterSpy).not.toHaveBeenCalled()
+    } finally {
+      createAdapterSpy.mockRestore()
+      createSqlAdapterSpy.mockRestore()
+      createQueryableAdapterSpy.mockRestore()
+      createMongoDBAdapterSpy.mockRestore()
+      createRedisAdapterSpy.mockRestore()
+      createElasticsearchAdapterSpy.mockRestore()
+    }
   })
 
   test('draft validate rejects untrusted SQL without invoking an execution command', async () => {

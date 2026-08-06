@@ -726,7 +726,14 @@ dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
 dbcli skill context --format json</code></pre>
                 <p>v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 <code>query</code> 並非可用 <code>@saved-query</code> 的 metric。<code>semantic search &lt;terms...&gt;</code> 為離線且 deterministic 的搜尋；可用 <code>--kind</code> 與 <code>--limit 1-100</code>（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。<code>semantic drift</code> 在 <code>stale</code>、<code>invalid</code> 或 schema cache 不可用時以非零結束；<code>migrate --to 2</code> 只輸出 JSON，絕不寫回來源檔。</p>
-                <p class="m-0"><strong>Agent query draft。</strong> 外部 agent 可以寫出不受信任的 <code>QueryDraft</code> JSON，並只提交這個明確指定的檔案或 stdin 載荷：<code>dbcli semantic draft validate --input ./draft.json --format json</code>，或 <code>external-agent | dbcli semantic draft validate --input - --format json</code>。報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit <code>0</code> 代表有效、<code>1</code> 代表拒絕、<code>2</code> 代表本機 semantic 證據不可用。驗證不會保存輸入，也不會呼叫 <code>explain</code> 或 <code>query</code>；請先檢閱原始 draft，若確實要執行，再明確呼叫既有 <code>dbcli explain</code> 或 <code>dbcli query</code> 工作流。dbcli 不會取得 provider 憑證，也不會發出 provider 請求。</p>
+                <p><strong>Agent query draft。</strong> 先把已檢閱的 <code>dbcli semantic context --format json</code> 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 只能使用這些 model 與 field，回傳不受信任的 <code>QueryDraft</code>：</p>
+                <pre><code>{
+  "version": 1,
+  "questionHash": "&lt;原始問題的-sha256&gt;",
+  "candidate": { "kind": "sql", "sql": "&lt;已檢閱的唯讀-sql&gt;" },
+  "semanticReferences": ["model:&lt;model&gt;", "field:&lt;model&gt;.&lt;field&gt;"]
+}</code></pre>
+                <p class="m-0">再只提交這個明確指定的檔案或 stdin 載荷：<code>dbcli semantic draft validate --input ./draft.json --format json</code>，或 <code>external-agent | dbcli semantic draft validate --input - --format json</code>。報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit <code>0</code> 代表有效、<code>1</code> 代表拒絕、<code>2</code> 代表本機 semantic 證據不可用。有效結果不是執行授權：請先檢閱原始 draft，再視需要另行呼叫 <code>dbcli explain "&lt;已檢閱的唯讀-sql&gt;"</code> 或 <code>dbcli query "&lt;已檢閱的唯讀-sql&gt;"</code>。驗證不會保存輸入，也不會呼叫這兩個指令；dbcli 不會取得 provider 憑證，也不會發出 provider 請求。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

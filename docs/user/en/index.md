@@ -895,14 +895,25 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 >
 > Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic search <terms...>` is deterministic and offline; use `--kind` and `--limit 1-100` (default 20). It returns only governed metadata and removes blacklist names from free-text results. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file.
 >
-> **Agent query drafts.** An external agent may write an untrusted `QueryDraft` JSON document and submit only that explicit file or stdin payload for offline validation:
+> **Agent query drafts.** First give the external agent the reviewed output of `dbcli semantic context --format json`; keep its provider account, credentials, prompt, and any other agent context outside dbcli. The agent returns an untrusted `QueryDraft` file shaped like this (use only the models and fields from that semantic context):
+>
+> ```json
+> {
+>   "version": 1,
+>   "questionHash": "<sha256-of-the-original-question>",
+>   "candidate": { "kind": "sql", "sql": "<reviewed-read-only-sql>" },
+>   "semanticReferences": ["model:<model>", "field:<model>.<field>"]
+> }
+> ```
+>
+> Submit that explicit file or stdin payload for offline validation:
 >
 > ```bash
 > dbcli semantic draft validate --input ./draft.json --format json
 > # or: external-agent | dbcli semantic draft validate --input - --format json
 > ```
 >
-> The report contains only status, hashes, canonical references, and safe violation codes—never the candidate SQL. Exit `0` is valid, `1` is rejected, and `2` means required local semantic evidence is unavailable. Validation neither saves the input nor invokes `explain` or `query`; review the original draft separately, then explicitly invoke the existing `dbcli explain` or `dbcli query` workflow if execution is intended. dbcli does not receive agent provider credentials or make provider requests.
+> The report contains only status, hashes, canonical references, and safe violation codes—never the candidate SQL. Exit `0` is valid, `1` is rejected, and `2` means required local semantic evidence is unavailable. A valid result is not execution permission: review the original `draft.json`, then separately and explicitly invoke `dbcli explain "<reviewed-read-only-sql>"` or `dbcli query "<reviewed-read-only-sql>"` if execution is intended. Validation neither saves the input nor invokes either command; dbcli does not receive agent provider credentials or make provider requests.
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 

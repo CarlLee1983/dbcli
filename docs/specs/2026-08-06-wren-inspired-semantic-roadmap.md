@@ -49,8 +49,8 @@ v1 是永久相容的資料格式。後續格式必須以 `version` 明確區別
 | --- | --- | --- | --- | --- |
 | 1 | Semantic v2: relationships and drift | 把可驗證的模型關聯納入版本控制，及早發現 schema/config 漂移。 | Low; offline/read-only | Implemented |
 | 2 | Semantic catalog search | 讓人與 agent 以名稱、alias、description 找到已治理的模型、欄位與指標。 | Low; offline/read-only | Implemented |
-| 3a | Guarded query-draft contract and agent-driven validation | 讓 Codex、Claude 或其他外部 agent 產生待確認草稿，再由 dbcli 離線驗證；絕不直接執行。 | Medium; SQL safety | Planned; implementation not authorized |
-| 3b | Provider-driven query draft | 由 dbcli 明確 opt-in 呼叫已核准的 provider 產生相同草稿。 | High; egress/privacy/cost/provider reliability | Deferred pending policy approval |
+| 3a | Guarded query-draft contract and agent-driven validation | 讓 Codex、Claude 或其他外部 agent 產生待確認草稿，再由 dbcli 離線驗證；絕不直接執行。 | Medium; SQL safety | Implemented (SQD-01–03, 2026-08-06) |
+| 3b | Provider-driven query draft | 由 dbcli 明確 opt-in 呼叫已核准的 provider 產生相同草稿。 | High; egress/privacy/cost/provider reliability | Deferred by ADR-0005 |
 
 下列 WrenAI 能力不在目前 backlog：embedding/history memory、Wren connector
 runtime、瀏覽器 dashboard、Vercel/Cloudflare deploy、HTTP MCP。它們各自引入
@@ -252,7 +252,7 @@ report 不回顯 candidate；呼叫端保有它原先提交並供人 review 的 
 本身可作為使用者明確要求的 stdout/file artifact，同時避免它進入 CLI context、
 log、error 或 fixture。
 
-### Agent-driven interface (planned)
+### Agent-driven interface (delivered)
 
 唯一預定的第一個 command 是：
 
@@ -279,7 +279,18 @@ User -> external agent -> QueryDraft file/stdin
 此流程讓 agent 可以是 Codex、Claude 或其他相容工具，卻不要求 dbcli 知道或儲存
 其 provider、模型或 key。
 
-### Provider-driven interface (deferred)
+SQD-01 至 SQD-03 已於 2026-08-06 交付：包含 deterministic local validator、
+`semantic draft validate` CLI、英中使用文件與 generated skill guidance，以及不建立
+DB adapter 或 audit execution event 的 regression coverage。這不表示 provider-driven
+generation 已獲核准。
+
+### Provider-driven interface (deferred by ADR-0005)
+
+Provider-driven generation is explicitly deferred by
+[ADR-0005](../adr/0005-provider-driven-query-drafts-remain-deferred.md). No
+provider, model, credential source, sanitized payload, or outbound transport is
+approved. The following interface is therefore a future-only shape, not a
+shipped command:
 
 只有完成下列 policy decision 並取得獨立實作授權後，才可新增：
 
@@ -317,8 +328,9 @@ cache、saved-query SQL body、資料列、credentials、blacklist entries 或�
 
 可執行的相依 ticket、各自的 scope 與 acceptance criteria 定義於
 [`2026-08-06-semantic-query-draft-ticket-backlog.md`](../plans/2026-08-06-semantic-query-draft-ticket-backlog.md)。
-其中只有 agent-driven 的 SQD-01–SQD-03 可在取得實作指示後排程；provider 相關
-ticket 一律受 policy gate 阻擋。
+agent-driven 的 SQD-01–SQD-03 已交付；provider 相關 ticket 仍受
+[ADR-0005](../adr/0005-provider-driven-query-drafts-remain-deferred.md) 的 policy
+gate 阻擋。
 
 ## Cross-cutting verification
 

@@ -805,14 +805,25 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 >
 > v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 `query` 並非可用 `@saved-query` 的 metric。`semantic search <terms...>` 為離線且 deterministic 的搜尋；可用 `--kind` 與 `--limit 1-100`（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。`semantic drift` 在 `stale`、`invalid` 或 schema cache 不可用時以非零結束；`migrate --to 2` 只輸出 JSON，絕不寫回來源檔。
 >
-> **Agent query draft。** 外部 agent 可以寫出不受信任的 `QueryDraft` JSON，並只提交這個明確指定的檔案或 stdin 載荷供離線驗證：
+> **Agent query draft。** 先把已檢閱的 `dbcli semantic context --format json` 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 回傳不受信任的 `QueryDraft` 檔案，形狀如下（只能使用該 semantic context 中的 model 與 field）：
+>
+> ```json
+> {
+>   "version": 1,
+>   "questionHash": "<原始問題的-sha256>",
+>   "candidate": { "kind": "sql", "sql": "<已檢閱的唯讀-sql>" },
+>   "semanticReferences": ["model:<model>", "field:<model>.<field>"]
+> }
+> ```
+>
+> 再只提交這個明確指定的檔案或 stdin 載荷供離線驗證：
 >
 > ```bash
 > dbcli semantic draft validate --input ./draft.json --format json
 > # 或：external-agent | dbcli semantic draft validate --input - --format json
 > ```
 >
-> 報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit `0` 代表有效、`1` 代表拒絕、`2` 代表必要的本機 semantic 證據不可用。驗證不會保存輸入，也不會呼叫 `explain` 或 `query`；請先另外檢閱原始 draft，若確實要執行，再明確呼叫既有的 `dbcli explain` 或 `dbcli query` 工作流。dbcli 不會取得 agent 的 provider 憑證，也不會發出 provider 請求。
+> 報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit `0` 代表有效、`1` 代表拒絕、`2` 代表必要的本機 semantic 證據不可用。有效結果不是執行授權：先檢閱原始 `draft.json`，若確實要執行，再另行明確呼叫 `dbcli explain "<已檢閱的唯讀-sql>"` 或 `dbcli query "<已檢閱的唯讀-sql>"`。驗證不會保存輸入，也不會呼叫這兩個指令；dbcli 不會取得 agent 的 provider 憑證，也不會發出 provider 請求。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 

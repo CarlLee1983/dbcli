@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -80,6 +81,7 @@ describe('semantic draft validate stdin workflow', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ status: 'valid', violations: [] })
     expect(result.stdout).not.toContain(sql)
     expect(result.stderr).not.toContain('unreachable.invalid')
+    expect(existsSync(join(workspace, '.dbcli', 'audit'))).toBe(false)
   }, 5_000)
 
   test('rejects oversized stdin without reading it as a query draft', async () => {

@@ -2,7 +2,9 @@
 
 **Date:** 2026-08-06
 
-**Status:** Proposed — specification backlog, not implementation authorization
+**Status:** SQD-01 through SQD-04 completed; SQD-04 records a deferred policy
+decision. Provider-driven tickets remain deferred until the ADR reopen trigger
+is satisfied.
 
 **Specification:**
 [`semantic query-draft roadmap`](../specs/2026-08-06-wren-inspired-semantic-roadmap.md)
@@ -26,14 +28,16 @@ SQD-04 provider policy decision (separate approval)
 ```
 
 `SQD-04` does not depend on code completion, but it is a mandatory gate for
-every provider-driven ticket. `SQD-05` and `SQD-06` are deferred until its
-recorded decision and a separate implementation instruction.
+every provider-driven ticket. It currently records the deferred decision in
+[ADR-0005](../adr/0005-provider-driven-query-drafts-remain-deferred.md).
+`SQD-05` and `SQD-06` remain deferred until that ADR is superseded and a
+separate implementation instruction is approved.
 
 ---
 
 ## SQD-01 — Define `QueryDraft` and the offline validator
 
-**Status:** Planned
+**Status:** Completed (2026-08-06)
 
 **Depends on:** Slice 1 and Slice 2 semantic context contracts
 
@@ -74,7 +78,7 @@ automatic repair/rewrite of a draft.
 
 ## SQD-02 — Expose the agent-driven draft validation command
 
-**Status:** Planned
+**Status:** Completed (2026-08-06)
 
 **Depends on:** SQD-01
 
@@ -113,7 +117,7 @@ and `git diff --check`.
 
 ## SQD-03 — Publish agent-driven integration guidance and safety evidence
 
-**Status:** Planned
+**Status:** Completed (2026-08-06)
 
 **Depends on:** SQD-02
 
@@ -147,10 +151,13 @@ checks as SQD-02.
 
 ## SQD-04 — Record provider-driven policy decision
 
-**Status:** Blocked by product/security decision
+**Status:** Completed — deferred decision recorded 2026-08-07
 
-**Depends on:** Explicit product and security approval; not on an environment
-variable or an agent's logged-in state
+**Decision record:**
+[`ADR-0005: Provider-driven query drafts remain deferred`](../adr/0005-provider-driven-query-drafts-remain-deferred.md)
+
+**Depends on:** Explicit product and security approval to reopen; not on an
+environment variable or an agent's logged-in state
 
 **Outcome:** Produce a decision record that permits a bounded first provider or
 keeps provider-driven generation deferred.

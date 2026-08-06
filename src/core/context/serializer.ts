@@ -72,7 +72,7 @@ export function serializeXml(payload: ContextPayload): string {
   }
 
   if (payload.semantic) {
-    parts.push('  <semantic_context version="1">')
+    parts.push(`  <semantic_context version="${payload.semantic.version}">`)
     for (const model of payload.semantic.models) {
       parts.push(`    <model name="${escapeXml(model.name)}" table="${escapeXml(model.table)}">`)
       if (model.description)
@@ -92,6 +92,14 @@ export function serializeXml(payload: ContextPayload): string {
       if (metric.description)
         parts.push(`      <description>${escapeXml(metric.description)}</description>`)
       parts.push('    </metric>')
+    }
+    for (const relationship of payload.semantic.relationships) {
+      parts.push(
+        `    <relationship name="${escapeXml(relationship.name)}" from="${escapeXml(relationship.from.model)}.${escapeXml(relationship.from.field)}" to="${escapeXml(relationship.to.model)}.${escapeXml(relationship.to.field)}" cardinality="${escapeXml(relationship.cardinality)}">`
+      )
+      if (relationship.description)
+        parts.push(`      <description>${escapeXml(relationship.description)}</description>`)
+      parts.push('    </relationship>')
     }
     parts.push('  </semantic_context>')
   }
@@ -202,6 +210,13 @@ export function serializeMarkdown(payload: ContextPayload): string {
       parts.push(`- Metric \`${metric.name}\`: \`${metric.query}\`${description}`)
     }
     if (payload.semantic.metrics.length > 0) parts.push(``)
+    for (const relationship of payload.semantic.relationships) {
+      const description = relationship.description ? ` — ${relationship.description}` : ''
+      parts.push(
+        `- Relationship \`${relationship.name}\`: \`${relationship.from.model}.${relationship.from.field}\` → \`${relationship.to.model}.${relationship.to.field}\` (${relationship.cardinality})${description}`
+      )
+    }
+    if (payload.semantic.relationships.length > 0) parts.push(``)
   }
 
   return parts.join('\n')

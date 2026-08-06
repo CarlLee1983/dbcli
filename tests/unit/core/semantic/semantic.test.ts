@@ -3,13 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  inspectSemanticDrift,
   loadSemanticContext,
+  migrateSemanticContext,
   SemanticValidationError,
   type SemanticSchemaTable,
 } from '@/core/semantic'
 
 const schema: Record<string, SemanticSchemaTable> = {
   orders: { columns: [{ name: 'id' }, { name: 'total' }, { name: 'created_at' }] },
+  customers: { columns: [{ name: 'id' }, { name: 'email' }] },
 }
 const snippets = [{ key: '@analytics/revenue' }]
 const workspaces: string[] = []
@@ -60,10 +63,177 @@ describe('semantic context', () => {
           fields: [{ column: 'created_at', aliases: ['order date'] }],
         },
       ],
+      relationships: [],
       metrics: [
         { name: 'daily-revenue', description: 'Revenue by day.', query: '@analytics/revenue' },
       ],
     })
+  })
+
+  test('loads v2 relationships only through declared, visible model fields', async () => {
+    const root = workspace()
+    await writeSemantic(root, {
+      version: 2,
+      models: [
+        { name: 'orders', table: 'orders', fields: [{ column: 'id' }, { column: 'total' }] },
+        { name: 'customers', table: 'customers', fields: [{ column: 'id' }] },
+      ],
+      relationships: [
+        {
+          name: 'order-customer',
+          from: { model: 'orders', field: 'id' },
+          to: { model: 'customers', field: 'id' },
+          cardinality: 'many-to-one',
+          description: 'Each order belongs to one customer.',
+        },
+      ],
+      metrics: [],
+    })
+
+    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+      version: 2,
+      relationships: [
+        expect.objectContaining({
+          name: 'order-customer',
+          cardinality: 'many-to-one',
+          from: { model: 'orders', field: 'id' },
+          to: { model: 'customers', field: 'id' },
+        }),
+      ],
+    })
+  })
+
+  test('rejects duplicate relationships and endpoints outside a declared model field', async () => {
+    const root = workspace()
+    await writeSemantic(root, {
+      version: 2,
+      models: [
+        { name: 'orders', table: 'orders', fields: [{ column: 'id' }] },
+        { name: 'customers', table: 'customers', fields: [{ column: 'id' }] },
+      ],
+      relationships: [
+        {
+          name: 'order-customer',
+          from: { model: 'orders', field: 'total' },
+          to: { model: 'customers', field: 'id' },
+          cardinality: 'many-to-one',
+        },
+        {
+          name: 'order-customer-copy',
+          from: { model: 'orders', field: 'total' },
+          to: { model: 'customers', field: 'id' },
+          cardinality: 'many-to-one',
+        },
+      ],
+      metrics: [],
+    })
+
+    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: '$.relationships[0].from.field' }),
+        expect.objectContaining({ path: '$.relationships[1]' }),
+      ]),
+    })
+  })
+
+  test('requires reversed relationships to document distinct business meanings', async () => {
+    const root = workspace()
+    await writeSemantic(root, {
+      version: 2,
+      models: [
+        { name: 'orders', table: 'orders', fields: [{ column: 'id' }] },
+        { name: 'customers', table: 'customers', fields: [{ column: 'id' }] },
+      ],
+      relationships: [
+        {
+          name: 'order-customer',
+          from: { model: 'orders', field: 'id' },
+          to: { model: 'customers', field: 'id' },
+          cardinality: 'many-to-one',
+          description: 'An order belongs to a customer.',
+        },
+        {
+          name: 'customer-order',
+          from: { model: 'customers', field: 'id' },
+          to: { model: 'orders', field: 'id' },
+          cardinality: 'one-to-many',
+          description: 'An order belongs to a customer.',
+        },
+      ],
+      metrics: [],
+    })
+
+    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: '$.relationships[1]',
+          message: 'reverse relationships must have distinct descriptions',
+        }),
+      ]),
+    })
+  })
+
+  test('rejects SQL, join conditions, and connection data in relationship descriptions', async () => {
+    const root = workspace()
+    await writeSemantic(root, {
+      version: 2,
+      models: [
+        { name: 'orders', table: 'orders', fields: [{ column: 'id' }] },
+        { name: 'customers', table: 'customers', fields: [{ column: 'id' }] },
+      ],
+      relationships: [
+        {
+          name: 'order-customer',
+          from: { model: 'orders', field: 'id' },
+          to: { model: 'customers', field: 'id' },
+          cardinality: 'many-to-one',
+          description: 'SELECT * FROM orders',
+        },
+      ],
+      metrics: [],
+    })
+
+    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: '$.relationships[0].description',
+          message: 'must not contain SQL, a join condition, or connection data',
+        }),
+      ]),
+    })
+  })
+
+  test('reports invalid, stale, and unavailable drift without returning hidden identifiers', async () => {
+    const root = workspace()
+    await writeSemantic(root, {
+      version: 2,
+      models: [{ name: 'orders', table: 'orders', fields: [{ column: 'total' }] }],
+      relationships: [],
+      metrics: [{ name: 'daily-revenue', query: '@analytics/revenue' }],
+    })
+
+    await expect(
+      inspectSemanticDrift({ workspaceRoot: root, schema: { orders: { columns: [{ name: 'id' }] } }, snippets: [] })
+    ).resolves.toMatchObject({ status: 'stale', issues: expect.any(Array) })
+    await expect(
+      inspectSemanticDrift({ workspaceRoot: root, schema: {}, snippets: [], schemaAvailable: false })
+    ).resolves.toMatchObject({ status: 'unavailable' })
+
+    await writeSemantic(root, { version: 2, models: [], relationships: [{ name: 'bad' }], metrics: [] })
+    await expect(inspectSemanticDrift({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+      status: 'invalid',
+    })
+  })
+
+  test('migrates a valid v1 context deterministically to v2 without writing the source file', async () => {
+    const root = workspace()
+    const filePath = await writeSemantic(root, valid)
+
+    await expect(migrateSemanticContext({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+      version: 2,
+      relationships: [],
+    })
+    await expect(Bun.file(filePath).json()).resolves.toEqual(valid)
   })
 
   test('allows an absent default file only when requested', async () => {
@@ -129,7 +299,7 @@ describe('semantic context', () => {
       loadSemanticContext({ workspaceRoot: root, schema, snippets })
     ).rejects.toMatchObject({
       issues: expect.arrayContaining([
-        expect.objectContaining({ path: '$.unexpected' }),
+        expect.objectContaining({ path: '$', message: 'contains an unknown property' }),
         expect.objectContaining({
           path: '$.models[0].fields[1].column',
           message: 'must be unique',

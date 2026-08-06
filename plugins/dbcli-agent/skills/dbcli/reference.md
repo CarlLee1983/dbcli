@@ -2203,13 +2203,15 @@ dbcli semantic validate --format json
 dbcli semantic context
 dbcli semantic context --format markdown
 dbcli semantic context --file ./analytics.semantic.json
+dbcli semantic drift --format json
+dbcli semantic migrate --to 2 --format json
 ```
 
 The default file has this compact contract:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "models": [
     {
       "name": "orders",
@@ -2217,8 +2219,23 @@ The default file has this compact contract:
       "description": "Completed purchases.",
       "aliases": ["purchases"],
       "fields": [
-        { "column": "created_at", "aliases": ["order date"] }
+        { "column": "created_at", "aliases": ["order date"] },
+        { "column": "customer_id" }
       ]
+    },
+    {
+      "name": "customers",
+      "table": "customers",
+      "fields": [{ "column": "id" }]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "order-customer",
+      "from": { "model": "orders", "field": "customer_id" },
+      "to": { "model": "customers", "field": "id" },
+      "cardinality": "many-to-one",
+      "description": "Each order belongs to one customer."
     }
   ],
   "metrics": [
@@ -2227,6 +2244,10 @@ The default file has this compact contract:
 }
 ```
 
+Version 1 remains supported and is normalized with `relationships: []`.
+Version 2 relationships must reference a declared model and a declared field on
+that model; the field must also be visible in cached schema. Their `cardinality`
+is one of `one-to-one`, `one-to-many`, `many-to-one`, or `many-to-many`.
 `models[].table` and `models[].fields[].column` must name a visible cached
 schema object. Blacklisted tables and columns are not visible and are rejected.
 Each metric `query` must name an available saved query. Validation parses its
@@ -2234,9 +2255,13 @@ local file through the normal saved-query safety checks, but never executes or
 emits SQL. The semantic file cannot contain SQL, connection data, or
 credentials. `semantic validate` reports a
 deterministic success summary (`--format text|json`); `semantic context` prints
-the validated context (`--format json|markdown`). An absent default file is
-allowed for `skill context` and simply omits the semantic section; an invalid
-present file fails closed rather than being silently ignored.
+the validated context (`--format json|markdown`). `semantic drift` returns a
+stable `valid`, `stale`, `invalid`, or `unavailable` report and exits non-zero
+for every status except `valid`; it never connects to a database. `semantic
+migrate --to 2` prints a deterministic v2 JSON document to stdout and never
+writes the input file. An absent default file is allowed for `skill context`
+and simply omits the semantic section; a stale or invalid present file fails
+closed rather than being silently ignored.
 
 When valid, `dbcli skill context` includes the same bounded data in its JSON,
 XML, and Markdown output. To run a metric, an agent must still invoke the named

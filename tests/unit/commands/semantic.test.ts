@@ -70,7 +70,7 @@ describe('semantic commands', () => {
     writeFileSync(
       join(sandbox, 'dbcli.semantic.json'),
       JSON.stringify({
-        version: 1,
+        version: 2,
         models: [
           {
             name: 'orders',
@@ -79,6 +79,7 @@ describe('semantic commands', () => {
             fields: [{ column: 'created_at', aliases: ['order date'] }],
           },
         ],
+        relationships: [],
         metrics: [{ name: 'daily-revenue', query: '@revenue' }],
       })
     )
@@ -110,6 +111,58 @@ describe('semantic commands', () => {
     expect(JSON.parse(output)).toMatchObject({
       models: [expect.objectContaining({ name: 'orders', table: 'orders' })],
       metrics: [expect.objectContaining({ query: '@revenue' })],
+    })
+  })
+
+  test('drift reports stale references with a non-zero exit code and stable JSON', async () => {
+    writeFileSync(
+      join(sandbox, 'dbcli.semantic.json'),
+      JSON.stringify({
+        version: 2,
+        models: [{ name: 'orders', table: 'orders', fields: [{ column: 'missing', aliases: [] }] }],
+        relationships: [],
+        metrics: [],
+      })
+    )
+
+    await run('drift', '--format', 'json')
+
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output)).toMatchObject({ status: 'stale', issues: expect.any(Array) })
+  })
+
+  test('drift reports an unavailable schema cache distinctly from stale references', async () => {
+    writeFileSync(configPath, JSON.stringify({ ...CONFIG, schema: {} }))
+
+    await run('drift', '--format', 'json')
+
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output)).toMatchObject({ status: 'unavailable', issues: expect.any(Array) })
+  })
+
+  test('drift renders a deterministic text status', async () => {
+    await run('drift')
+
+    expect(exitCode).toBeUndefined()
+    expect(output).toBe('Semantic context is valid.\n')
+  })
+
+  test('migrate writes the v2 JSON only to stdout', async () => {
+    writeFileSync(
+      join(sandbox, 'dbcli.semantic.json'),
+      JSON.stringify({
+        version: 1,
+        models: [{ name: 'orders', table: 'orders', fields: [{ column: 'created_at', aliases: [] }] }],
+        metrics: [],
+      })
+    )
+
+    await run('migrate', '--to', '2', '--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(output)).toMatchObject({ version: 2, relationships: [] })
+    expect(await Bun.file(join(sandbox, 'dbcli.semantic.json')).json()).toMatchObject({
+      version: 1,
     })
   })
 

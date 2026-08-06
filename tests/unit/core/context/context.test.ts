@@ -199,6 +199,7 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
           fields: [{ column: 'created_at', aliases: ['order date'] }],
         },
       ],
+      relationships: [],
       metrics: [],
     })
     expect(JSON.parse(serializeJson(payload)).semantic.models[0].table).toBe('orders')
@@ -266,7 +267,7 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
       schema: {},
       snippets: [],
       semantic: {
-        version: 1 as const,
+        version: 2 as const,
         models: [
           {
             name: 'orders',
@@ -282,6 +283,15 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
             ],
           },
         ],
+        relationships: [
+          {
+            name: 'order-customer',
+            from: { model: 'orders', field: 'created_at' },
+            to: { model: 'orders', field: 'created_at' },
+            cardinality: 'many-to-one' as const,
+            description: 'Links an order to its customer.',
+          },
+        ],
         metrics: [{ name: 'daily-revenue', description: 'Revenue by day.', query: '@revenue' }],
       },
     }
@@ -292,9 +302,11 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     expect(xml).toContain('<alias>purchases</alias>')
     expect(xml).toContain('<description>Order creation time.</description>')
     expect(xml).toContain('<metric name="daily-revenue" query="@revenue">')
+    expect(xml).toContain('<relationship name="order-customer"')
     expect(markdown).toContain('Aliases: `purchases`')
     expect(markdown).toContain('Order creation time.')
     expect(markdown).toContain('Revenue by day.')
+    expect(markdown).toContain('Links an order to its customer.')
   })
 
   test('XML serializer formats correctly with escapes', () => {

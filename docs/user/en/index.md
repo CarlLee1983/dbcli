@@ -863,7 +863,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. |
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
-| `semantic validate` / `semantic context` | Validates and prints a version-controlled business vocabulary against the locally cached, blacklist-filtered schema and saved-query names. Offline and read-only. |
+| `semantic validate` / `semantic context` / `semantic drift` / `semantic migrate` | Validates, prints, checks drift, or stdout-migrates a version-controlled business vocabulary against locally cached, blacklist-filtered schema and saved-query names. Offline and read-only. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
@@ -882,15 +882,17 @@ dispatch automatically.
 `dbcli completion --install` is marker-managed: it writes a single managed block to your
 shell rc file and re-running it replaces that block rather than duplicating it.
 
-> **Business semantic context.** Put a reviewable `dbcli.semantic.json` at the project root to describe business models, visible fields, aliases, and metrics backed by saved queries. Validate it without connecting to a database:
+> **Business semantic context.** Put a reviewable `dbcli.semantic.json` at the project root to describe business models, visible fields, aliases, relationships, and metrics backed by saved queries. Validate it without connecting to a database:
 >
 > ```bash
 > dbcli semantic validate --format json
 > dbcli semantic context --format json
+> dbcli semantic drift --format json
+> dbcli semantic migrate --to 2 --format json
 > dbcli skill context --format json
 > ```
 >
-> The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. The file contains no SQL or credentials; normal `dbcli q` / `query` safeguards still govern execution.
+> Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file. The file contains no SQL or credentials; normal `dbcli q` / `query` safeguards still govern execution.
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 

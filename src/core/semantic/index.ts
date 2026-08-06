@@ -24,9 +24,29 @@ export interface SemanticMetric {
   query: string
 }
 
+export interface SemanticRelationshipEndpoint {
+  model: string
+  field: string
+}
+
+export type SemanticRelationshipCardinality =
+  | 'one-to-one'
+  | 'one-to-many'
+  | 'many-to-one'
+  | 'many-to-many'
+
+export interface SemanticRelationship {
+  name: string
+  from: SemanticRelationshipEndpoint
+  to: SemanticRelationshipEndpoint
+  cardinality: SemanticRelationshipCardinality
+  description?: string
+}
+
 export interface SemanticContext {
-  version: 1
+  version: 1 | 2
   models: SemanticModel[]
+  relationships: SemanticRelationship[]
   metrics: SemanticMetric[]
 }
 
@@ -57,99 +77,179 @@ export interface LoadSemanticContextInput {
   missingFile?: 'allow' | 'error'
 }
 
+export interface InspectSemanticDriftInput extends LoadSemanticContextInput {
+  /** False only when no cache is available to compare. */
+  schemaAvailable?: boolean
+}
+
+export interface SemanticDriftReport {
+  status: 'valid' | 'stale' | 'invalid' | 'unavailable'
+  issues: SemanticValidationIssue[]
+}
+
 const DEFAULT_FILE = 'dbcli.semantic.json'
 const MAX_FILE_BYTES = 256 * 1024
 const MAX_MODELS = 100
 const MAX_FIELDS_PER_MODEL = 100
 const MAX_METRICS = 100
+const MAX_RELATIONSHIPS = 100
 const MAX_ALIASES = 20
 const MAX_TEXT_LENGTH = 1_000
 const IDENTIFIER = /^[a-z][a-z0-9-]*$/
+const CARDINALITIES = new Set<SemanticRelationshipCardinality>([
+  'one-to-one',
+  'one-to-many',
+  'many-to-one',
+  'many-to-many',
+])
 
 export function defaultSemanticFile(workspaceRoot: string): string {
   return join(workspaceRoot, DEFAULT_FILE)
 }
 
 /**
- * Loads the small, declarative semantic context that an agent may receive.
- * This module never opens a database or reads saved-query bodies: callers hand
- * it only the already filtered schema and saved-query names.
+ * Loads declarative semantic context from a local file. Callers supply only
+ * already filtered schema and saved-query names; this module never reads SQL
+ * bodies, database rows, credentials, or opens a connection.
  */
 export async function loadSemanticContext(
   input: LoadSemanticContextInput
 ): Promise<SemanticContext | null> {
+  const loaded = await readSemanticFile(input)
+  if (!loaded) return null
+  const { filePath, raw } = loaded
+  const { context, issues } = parseContext(raw)
+  validateReferences(context, input.schema, new Set(input.snippets.map((snippet) => snippet.key)), issues)
+  if (issues.length > 0) throw new SemanticValidationError(filePath, issues)
+  return normalizeContext(context)
+}
+
+/**
+ * Separates a malformed semantic document from one whose formerly valid local
+ * references no longer appear in the cached schema or saved-query index.
+ */
+export async function inspectSemanticDrift(
+  input: InspectSemanticDriftInput
+): Promise<SemanticDriftReport> {
+  let loaded: { filePath: string; raw: unknown } | null
+  try {
+    loaded = await readSemanticFile({ ...input, missingFile: 'error' })
+  } catch (error) {
+    if (error instanceof SemanticValidationError) {
+      return { status: 'invalid', issues: error.issues }
+    }
+    throw error
+  }
+  if (!loaded) return { status: 'invalid', issues: [{ path: '$', message: 'file not found' }] }
+
+  const { context, issues } = parseContext(loaded.raw)
+  if (issues.length > 0) return { status: 'invalid', issues }
+  if (input.schemaAvailable === false) {
+    return { status: 'unavailable', issues: [{ path: '$', message: 'cached schema is unavailable' }] }
+  }
+
+  validateReferences(context, input.schema, new Set(input.snippets.map((snippet) => snippet.key)), issues)
+  return issues.length > 0 ? { status: 'stale', issues } : { status: 'valid', issues: [] }
+}
+
+/** Produces v2 JSON data only; callers decide whether any file write is allowed. */
+export async function migrateSemanticContext(input: LoadSemanticContextInput): Promise<SemanticContext> {
+  const context = await loadSemanticContext(input)
+  const filePath = input.filePath ?? defaultSemanticFile(input.workspaceRoot)
+  if (!context) throw new SemanticValidationError(filePath, [{ path: '$', message: 'file not found' }])
+  if (context.version !== 1) {
+    throw new SemanticValidationError(filePath, [
+      { path: '$.version', message: 'must equal 1 to migrate to version 2' },
+    ])
+  }
+  return { ...context, version: 2, relationships: [] }
+}
+
+async function readSemanticFile(
+  input: Pick<LoadSemanticContextInput, 'workspaceRoot' | 'filePath' | 'missingFile'>
+): Promise<{ filePath: string; raw: unknown } | null> {
   const filePath = input.filePath ?? defaultSemanticFile(input.workspaceRoot)
   const file = Bun.file(filePath)
-
   if (!(await file.exists())) {
     if (input.missingFile === 'allow') return null
     throw new SemanticValidationError(filePath, [{ path: '$', message: 'file not found' }])
   }
-
   if (file.size > MAX_FILE_BYTES) {
     throw new SemanticValidationError(filePath, [
       { path: '$', message: `file exceeds ${MAX_FILE_BYTES} bytes` },
     ])
   }
-
-  let raw: unknown
   try {
-    raw = JSON.parse(await file.text())
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'invalid JSON'
-    throw new SemanticValidationError(filePath, [{ path: '$', message }])
+    return { filePath, raw: JSON.parse(await file.text()) }
+  } catch {
+    throw new SemanticValidationError(filePath, [{ path: '$', message: 'invalid JSON' }])
   }
-
-  const issues: SemanticValidationIssue[] = []
-  const context = parseContext(
-    raw,
-    input.schema,
-    new Set(input.snippets.map((snippet) => snippet.key)),
-    issues
-  )
-  if (issues.length > 0) throw new SemanticValidationError(filePath, issues)
-  return context
 }
 
-function parseContext(
-  raw: unknown,
+function parseContext(raw: unknown): { context: SemanticContext; issues: SemanticValidationIssue[] } {
+  const issues: SemanticValidationIssue[] = []
+  const root = record(raw, '$', issues)
+  const rawVersion = root.version
+  const version: 1 | 2 = rawVersion === 2 ? 2 : 1
+  if (rawVersion !== 1 && rawVersion !== 2) issue(issues, '$.version', 'must equal 1 or 2')
+  rejectUnknownKeys(root, version === 2 ? ['version', 'models', 'relationships', 'metrics'] : ['version', 'models', 'metrics'], '$', issues)
+
+  const rawModels = array(root.models, '$.models', issues)
+  if (rawModels.length > MAX_MODELS) issue(issues, '$.models', `must contain at most ${MAX_MODELS} items`)
+  const modelNames = new Set<string>()
+  const models = rawModels.map((value, index) => parseModel(value, `$.models[${index}]`, modelNames, issues))
+
+  const rawRelationships = version === 2 ? array(root.relationships ?? [], '$.relationships', issues) : []
+  if (rawRelationships.length > MAX_RELATIONSHIPS) {
+    issue(issues, '$.relationships', `must contain at most ${MAX_RELATIONSHIPS} items`)
+  }
+  const relationships = rawRelationships.map((value, index) =>
+    parseRelationship(value, `$.relationships[${index}]`, models, issues)
+  )
+  validateRelationshipUniqueness(relationships, issues)
+
+  const rawMetrics = array(root.metrics, '$.metrics', issues)
+  if (rawMetrics.length > MAX_METRICS) issue(issues, '$.metrics', `must contain at most ${MAX_METRICS} items`)
+  const metricNames = new Set<string>()
+  const metrics = rawMetrics.map((value, index) => parseMetric(value, `$.metrics[${index}]`, metricNames, issues))
+
+  return {
+    context: {
+      version,
+      models,
+      relationships,
+      metrics,
+    },
+    issues,
+  }
+}
+
+function validateReferences(
+  context: SemanticContext,
   schema: Record<string, SemanticSchemaTable>,
   snippetKeys: Set<string>,
   issues: SemanticValidationIssue[]
-): SemanticContext {
-  const root = record(raw, '$', issues)
-  rejectUnknownKeys(root, ['version', 'models', 'metrics'], '$', issues)
-
-  const version = root.version
-  if (version !== 1) issue(issues, '$.version', 'must equal 1')
-
-  const rawModels = array(root.models, '$.models', issues)
-  if (rawModels.length > MAX_MODELS)
-    issue(issues, '$.models', `must contain at most ${MAX_MODELS} items`)
-  const modelNames = new Set<string>()
-  const models = rawModels.map((value, index) =>
-    parseModel(value, `$.models[${index}]`, schema, modelNames, issues)
-  )
-
-  const rawMetrics = array(root.metrics, '$.metrics', issues)
-  if (rawMetrics.length > MAX_METRICS)
-    issue(issues, '$.metrics', `must contain at most ${MAX_METRICS} items`)
-  const metricNames = new Set<string>()
-  const metrics = rawMetrics.map((value, index) =>
-    parseMetric(value, `$.metrics[${index}]`, snippetKeys, metricNames, issues)
-  )
-
-  return {
-    version: 1,
-    models: models.sort((a, b) => a.name.localeCompare(b.name)),
-    metrics: metrics.sort((a, b) => a.name.localeCompare(b.name)),
+): void {
+  for (const [modelIndex, model] of context.models.entries()) {
+    const path = `$.models[${modelIndex}]`
+    const table = schema[model.table]
+    if (!table) issue(issues, `${path}.table`, 'must reference a visible cached table')
+    for (const [fieldIndex, field] of model.fields.entries()) {
+      if (table && !table.columns.some((candidate) => candidate.name === field.column)) {
+        issue(issues, `${path}.fields[${fieldIndex}].column`, 'must reference a visible column on the model table')
+      }
+    }
+  }
+  for (const [metricIndex, metric] of context.metrics.entries()) {
+    if (!snippetKeys.has(metric.query)) {
+      issue(issues, `$.metrics[${metricIndex}].query`, 'must reference an available saved query')
+    }
   }
 }
 
 function parseModel(
   raw: unknown,
   path: string,
-  schema: Record<string, SemanticSchemaTable>,
   names: Set<string>,
   issues: SemanticValidationIssue[]
 ): SemanticModel {
@@ -160,65 +260,109 @@ function parseModel(
   const table = requiredText(value.table, `${path}.table`, issues)
   const description = optionalText(value.description, `${path}.description`, issues)
   const aliases = aliasesOf(value.aliases, `${path}.aliases`, issues)
-  const tableSchema = schema[table]
-  if (!tableSchema) issue(issues, `${path}.table`, 'must reference a visible cached table')
-
   const rawFields = array(value.fields, `${path}.fields`, issues)
-  if (rawFields.length > MAX_FIELDS_PER_MODEL) {
-    issue(issues, `${path}.fields`, `must contain at most ${MAX_FIELDS_PER_MODEL} items`)
-  }
+  if (rawFields.length > MAX_FIELDS_PER_MODEL) issue(issues, `${path}.fields`, `must contain at most ${MAX_FIELDS_PER_MODEL} items`)
   const fieldColumns = new Set<string>()
   const fields = rawFields.map((field, index) => {
-    const parsed = parseField(field, `${path}.fields[${index}]`, tableSchema, issues)
+    const parsed = parseField(field, `${path}.fields[${index}]`, issues)
     uniqueName(parsed.column, fieldColumns, `${path}.fields[${index}].column`, issues)
     return parsed
   })
-
   return { name, table, ...(description ? { description } : {}), aliases, fields }
 }
 
-function parseField(
-  raw: unknown,
-  path: string,
-  table: SemanticSchemaTable | undefined,
-  issues: SemanticValidationIssue[]
-): SemanticField {
+function parseField(raw: unknown, path: string, issues: SemanticValidationIssue[]): SemanticField {
   const value = record(raw, path, issues)
   rejectUnknownKeys(value, ['column', 'description', 'aliases'], path, issues)
   const column = requiredText(value.column, `${path}.column`, issues)
   const description = optionalText(value.description, `${path}.description`, issues)
   const aliases = aliasesOf(value.aliases, `${path}.aliases`, issues)
-  if (table && !table.columns.some((candidate) => candidate.name === column)) {
-    issue(issues, `${path}.column`, 'must reference a visible column on the model table')
-  }
   return { column, ...(description ? { description } : {}), aliases }
 }
 
-function parseMetric(
+function parseRelationship(
   raw: unknown,
   path: string,
-  snippetKeys: Set<string>,
-  names: Set<string>,
+  models: SemanticModel[],
   issues: SemanticValidationIssue[]
-): SemanticMetric {
+): SemanticRelationship {
+  const value = record(raw, path, issues)
+  rejectUnknownKeys(value, ['name', 'from', 'to', 'cardinality', 'description'], path, issues)
+  const name = namedString(value.name, `${path}.name`, issues)
+  const from = parseEndpoint(value.from, `${path}.from`, models, issues)
+  const to = parseEndpoint(value.to, `${path}.to`, models, issues)
+  const cardinality = requiredText(value.cardinality, `${path}.cardinality`, issues)
+  if (!CARDINALITIES.has(cardinality as SemanticRelationshipCardinality)) {
+    issue(issues, `${path}.cardinality`, 'must be one of one-to-one, one-to-many, many-to-one, many-to-many')
+  }
+  const description = relationshipDescription(value.description, `${path}.description`, issues)
+  return {
+    name,
+    from,
+    to,
+    cardinality: CARDINALITIES.has(cardinality as SemanticRelationshipCardinality)
+      ? (cardinality as SemanticRelationshipCardinality)
+      : 'one-to-one',
+    ...(description ? { description } : {}),
+  }
+}
+
+function parseEndpoint(
+  raw: unknown,
+  path: string,
+  models: SemanticModel[],
+  issues: SemanticValidationIssue[]
+): SemanticRelationshipEndpoint {
+  const value = record(raw, path, issues)
+  rejectUnknownKeys(value, ['model', 'field'], path, issues)
+  const model = namedString(value.model, `${path}.model`, issues)
+  const field = requiredText(value.field, `${path}.field`, issues)
+  const target = models.find((candidate) => candidate.name === model)
+  if (!target) issue(issues, `${path}.model`, 'must reference a declared model')
+  else if (!target.fields.some((candidate) => candidate.column === field)) {
+    issue(issues, `${path}.field`, 'must reference a declared field on the model')
+  }
+  return { model, field }
+}
+
+function validateRelationshipUniqueness(
+  relationships: SemanticRelationship[],
+  issues: SemanticValidationIssue[]
+): void {
+  const names = new Set<string>()
+  const endpoints = new Map<string, number>()
+  for (const [index, relationship] of relationships.entries()) {
+    const path = `$.relationships[${index}]`
+    uniqueName(relationship.name, names, `${path}.name`, issues)
+    const endpoint = `${relationship.from.model}\u0000${relationship.from.field}\u0000${relationship.to.model}\u0000${relationship.to.field}`
+    if (endpoints.has(endpoint)) issue(issues, path, 'must not repeat relationship endpoints')
+    const reverse = `${relationship.to.model}\u0000${relationship.to.field}\u0000${relationship.from.model}\u0000${relationship.from.field}`
+    const reverseIndex = endpoints.get(reverse)
+    const reverseRelationship = reverseIndex === undefined ? undefined : relationships[reverseIndex]
+    if (
+      reverseRelationship &&
+      (!relationship.description ||
+        !reverseRelationship.description ||
+        relationship.description === reverseRelationship.description)
+    ) {
+      issue(issues, path, 'reverse relationships must have distinct descriptions')
+    }
+    endpoints.set(endpoint, index)
+  }
+}
+
+function parseMetric(raw: unknown, path: string, names: Set<string>, issues: SemanticValidationIssue[]): SemanticMetric {
   const value = record(raw, path, issues)
   rejectUnknownKeys(value, ['name', 'description', 'query'], path, issues)
   const name = namedString(value.name, `${path}.name`, issues)
   uniqueName(name, names, `${path}.name`, issues)
   const description = optionalText(value.description, `${path}.description`, issues)
   const query = requiredText(value.query, `${path}.query`, issues)
-  if (!snippetKeys.has(query))
-    issue(issues, `${path}.query`, 'must reference an available saved query')
   return { name, ...(description ? { description } : {}), query }
 }
 
-function record(
-  raw: unknown,
-  path: string,
-  issues: SemanticValidationIssue[]
-): Record<string, unknown> {
-  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw))
-    return raw as Record<string, unknown>
+function record(raw: unknown, path: string, issues: SemanticValidationIssue[]): Record<string, unknown> {
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) return raw as Record<string, unknown>
   issue(issues, path, 'must be an object')
   return {}
 }
@@ -231,8 +375,7 @@ function array(raw: unknown, path: string, issues: SemanticValidationIssue[]): u
 
 function namedString(raw: unknown, path: string, issues: SemanticValidationIssue[]): string {
   const value = requiredText(raw, path, issues)
-  if (!IDENTIFIER.test(value))
-    issue(issues, path, 'must use lowercase letters, digits, and hyphens')
+  if (!IDENTIFIER.test(value)) issue(issues, path, 'must use lowercase letters, digits, and hyphens')
   return value
 }
 
@@ -242,18 +385,33 @@ function requiredText(raw: unknown, path: string, issues: SemanticValidationIssu
     return ''
   }
   const value = raw.trim()
-  if (value.length > MAX_TEXT_LENGTH)
-    issue(issues, path, `must be at most ${MAX_TEXT_LENGTH} characters`)
+  if (value.length > MAX_TEXT_LENGTH) issue(issues, path, `must be at most ${MAX_TEXT_LENGTH} characters`)
   return value
 }
 
-function optionalText(
+function optionalText(raw: unknown, path: string, issues: SemanticValidationIssue[]): string | undefined {
+  return raw === undefined ? undefined : requiredText(raw, path, issues)
+}
+
+function relationshipDescription(
   raw: unknown,
   path: string,
   issues: SemanticValidationIssue[]
 ): string | undefined {
-  if (raw === undefined) return undefined
-  return requiredText(raw, path, issues)
+  const description = optionalText(raw, path, issues)
+  if (
+    description &&
+    (/[a-z][a-z0-9+.-]*:\/\//i.test(description) ||
+      /\b(?:select|insert|update|delete|merge|alter|drop|create|truncate|grant|revoke)\b/i.test(
+        description
+      ) ||
+      /\b[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\s*=\s*[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*/i.test(
+        description
+      ))
+  ) {
+    issue(issues, path, 'must not contain SQL, a join condition, or connection data')
+  }
+  return description
 }
 
 function aliasesOf(raw: unknown, path: string, issues: SemanticValidationIssue[]): string[] {
@@ -269,25 +427,24 @@ function aliasesOf(raw: unknown, path: string, issues: SemanticValidationIssue[]
   return aliases
 }
 
-function uniqueName(
-  name: string,
-  names: Set<string>,
-  path: string,
-  issues: SemanticValidationIssue[]
-): void {
+function uniqueName(name: string, names: Set<string>, path: string, issues: SemanticValidationIssue[]): void {
   if (names.has(name)) issue(issues, path, 'must be unique')
   names.add(name)
 }
 
-function rejectUnknownKeys(
-  value: Record<string, unknown>,
-  allowed: string[],
-  path: string,
-  issues: SemanticValidationIssue[]
-): void {
+function rejectUnknownKeys(value: Record<string, unknown>, allowed: string[], path: string, issues: SemanticValidationIssue[]): void {
   const allowedKeys = new Set(allowed)
   for (const key of Object.keys(value)) {
-    if (!allowedKeys.has(key)) issue(issues, `${path}.${key}`, 'is not allowed')
+    if (!allowedKeys.has(key)) issue(issues, path, 'contains an unknown property')
+  }
+}
+
+function normalizeContext(context: SemanticContext): SemanticContext {
+  return {
+    ...context,
+    models: [...context.models].sort((a, b) => a.name.localeCompare(b.name)),
+    relationships: [...context.relationships].sort((a, b) => a.name.localeCompare(b.name)),
+    metrics: [...context.metrics].sort((a, b) => a.name.localeCompare(b.name)),
   }
 }
 

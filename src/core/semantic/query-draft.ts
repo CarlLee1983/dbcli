@@ -64,9 +64,14 @@ export interface QueryDraftViolation {
 export interface QueryDraftValidationReport {
   status: 'valid' | 'invalid'
   draftHash: string
-  questionHash?: string
+  questionHash: string | null
   canonicalReferences: string[]
   violations: QueryDraftViolation[]
+}
+
+export interface QueryDraftReportMetadata {
+  draftHash: string
+  questionHash: string | null
 }
 
 /**
@@ -89,7 +94,7 @@ export interface QueryDraftValidationInput {
  */
 export function validateQueryDraft(input: QueryDraftValidationInput): QueryDraftValidationReport {
   const violations = new Set<QueryDraftViolationCode>()
-  const draftHash = sha256(stableJson(canonicalDraftPayload(input.draft)))
+  const metadata = queryDraftReportMetadata(input.draft)
   const draft = parseDraft(input.draft, violations)
   const blockedTerms = normalizeBlockedTerms(input.blockedTerms ?? [])
   const safeReferences = draft
@@ -107,12 +112,26 @@ export function validateQueryDraft(input: QueryDraftValidationInput): QueryDraft
 
   const report: QueryDraftValidationReport = {
     status: violations.size === 0 ? 'valid' : 'invalid',
-    draftHash,
-    ...(draft && HASH.test(draft.questionHash) ? { questionHash: draft.questionHash } : {}),
+    ...metadata,
     canonicalReferences: safeReferences,
     violations: [...violations].sort().map((code) => ({ code })),
   }
   return report
+}
+
+/**
+ * Produces the safe metadata shared by every validation result. A hostile or
+ * deeply nested JSON value is still attributable without allowing it to turn
+ * validation into an exception path.
+ */
+export function queryDraftReportMetadata(draft: unknown): QueryDraftReportMetadata {
+  return {
+    draftHash: hashDraft(draft),
+    questionHash:
+      isRecord(draft) && typeof draft.questionHash === 'string' && HASH.test(draft.questionHash)
+        ? draft.questionHash
+        : null,
+  }
 }
 
 function parseDraft(
@@ -433,6 +452,14 @@ function stableJson(value: unknown, seen = new WeakSet<object>()): string {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${stableJson(record[key], seen)}`)
     .join(',')}}`
+}
+
+function hashDraft(draft: unknown): string {
+  try {
+    return sha256(stableJson(canonicalDraftPayload(draft)))
+  } catch {
+    return sha256('"[UnserializableDraft]"')
+  }
 }
 
 function canonicalDraftPayload(value: unknown): unknown {

@@ -863,7 +863,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. |
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
-| `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` | Validates, prints, searches, checks drift, or stdout-migrates a version-controlled business vocabulary against locally cached, blacklist-filtered schema and saved-query names. Offline and read-only. |
+| `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
@@ -893,7 +893,16 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > dbcli skill context --format json
 > ```
 >
-> Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic search <terms...>` is deterministic and offline; use `--kind` and `--limit 1-100` (default 20). It returns only governed metadata and removes blacklist names from free-text results. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file. The file contains no SQL or credentials; normal `dbcli q` / `query` safeguards still govern execution.
+> Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic search <terms...>` is deterministic and offline; use `--kind` and `--limit 1-100` (default 20). It returns only governed metadata and removes blacklist names from free-text results. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file.
+>
+> **Agent query drafts.** An external agent may write an untrusted `QueryDraft` JSON document and submit only that explicit file or stdin payload for offline validation:
+>
+> ```bash
+> dbcli semantic draft validate --input ./draft.json --format json
+> # or: external-agent | dbcli semantic draft validate --input - --format json
+> ```
+>
+> The report contains only status, hashes, canonical references, and safe violation codes—never the candidate SQL. Exit `0` is valid, `1` is rejected, and `2` means required local semantic evidence is unavailable. Validation neither saves the input nor invokes `explain` or `query`; review the original draft separately, then explicitly invoke the existing `dbcli explain` or `dbcli query` workflow if execution is intended. dbcli does not receive agent provider credentials or make provider requests.
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 

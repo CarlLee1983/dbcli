@@ -375,7 +375,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
-| `semantic` | n/a | Validate, search, inspect drift, migrate to v2, or print the optional project-root `dbcli.semantic.json`. It is offline/read-only; catalog search returns only governed semantic metadata, v2 relationships can use only declared fields visible in cached schema, and metrics can reference only saved-query names. It never executes SQL. |
+| `semantic` | n/a | Validate, search, inspect drift, migrate to v2, or print the optional project-root `dbcli.semantic.json`. `semantic draft validate --input <file|-> [--format text\|json]` validates an explicit untrusted `QueryDraft` offline against local semantic/schema/saved-query metadata; it returns only safe hashes/references/violation codes, never executes or echoes candidate SQL. Review the original draft, then invoke `explain` or `query` separately if intended. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 Use root-level `dbcli --use <name> <command>` for any command; `query`, `schema`, `list`,

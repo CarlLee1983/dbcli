@@ -2,12 +2,14 @@ import { join } from 'node:path'
 
 export {
   validateQueryDraft,
+  queryDraftReportMetadata,
   type QueryDraft,
   type QueryDraftCandidate,
   type QueryDraftSavedQueryCandidate,
   type QueryDraftSqlCandidate,
   type QueryDraftValidationInput,
   type QueryDraftValidationReport,
+  type QueryDraftReportMetadata,
   type QueryDraftViolation,
   type QueryDraftViolationCode,
 } from './query-draft'

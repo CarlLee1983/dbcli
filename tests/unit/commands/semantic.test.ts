@@ -225,6 +225,72 @@ describe('semantic commands', () => {
     expect(errors).toContain('must reference an available saved query')
   })
 
+  test('draft validate reads an explicit file and returns only a safe validation report', async () => {
+    const sql = 'SELECT created_at FROM orders'
+    const draftPath = join(sandbox, 'draft.json')
+    writeFileSync(
+      draftPath,
+      JSON.stringify({
+        version: 1,
+        questionHash: 'a'.repeat(64),
+        candidate: { kind: 'sql', sql },
+        semanticReferences: ['model:orders', 'field:orders.created_at'],
+      })
+    )
+
+    await run('draft', 'validate', '--input', draftPath, '--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(output)).toMatchObject({
+      status: 'valid',
+      canonicalReferences: ['field:orders.created_at', 'model:orders'],
+      violations: [],
+    })
+    expect(output).not.toContain(sql)
+  })
+
+  test('draft validate rejects untrusted SQL without invoking an execution command', async () => {
+    const sql = 'SELECT secret FROM orders'
+    const draftPath = join(sandbox, 'invalid-draft.json')
+    writeFileSync(
+      draftPath,
+      JSON.stringify({
+        version: 1,
+        questionHash: 'b'.repeat(64),
+        candidate: { kind: 'sql', sql },
+        semanticReferences: ['model:orders', 'field:orders.created_at'],
+      })
+    )
+
+    await run('draft', 'validate', '--input', draftPath, '--format', 'json')
+
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output)).toMatchObject({
+      status: 'invalid',
+      violations: expect.arrayContaining([{ code: 'BLACKLISTED_SQL_REFERENCE' }]),
+    })
+    expect(output).not.toContain(sql)
+    expect(errors).toBe('')
+  })
+
+  test('draft validate reports unavailable local semantic evidence with a distinct exit code', async () => {
+    const draftPath = join(sandbox, 'draft.json')
+    writeFileSync(draftPath, JSON.stringify({ version: 1 }))
+    writeFileSync(configPath, JSON.stringify({ ...CONFIG, schema: {} }))
+
+    await run('draft', 'validate', '--input', draftPath, '--format', 'json')
+
+    expect(exitCode).toBe(2)
+    expect(JSON.parse(output)).toEqual({
+      status: 'unavailable',
+      draftHash: expect.any(String),
+      questionHash: null,
+      canonicalReferences: [],
+      violations: [{ code: 'SEMANTIC_CONTEXT_UNAVAILABLE' }],
+    })
+    expect(errors).toBe('')
+  })
+
   void logSpy
   void errorSpy
   void exitSpy

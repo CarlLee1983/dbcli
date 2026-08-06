@@ -2206,6 +2206,8 @@ dbcli semantic context --file ./analytics.semantic.json
 dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
 dbcli semantic search purchases --kind model --format json
+dbcli semantic draft validate --input ./draft.json --format json
+external-agent | dbcli semantic draft validate --input - --format json
 ```
 
 The default file has this compact contract:
@@ -2272,6 +2274,18 @@ kind/name breaks ties. Use `--kind model|field|relationship|metric` and
 terms, aliases, descriptions, and necessary model paths—never SQL bodies,
 connection data, or blacklist names. No result is an empty array / text notice
 with exit 0.
+
+`semantic draft validate --input <file|-> [--format text|json]` accepts only an
+explicit untrusted `QueryDraft` JSON document from a file or stdin. It validates
+the contract, read-only single-statement SQL, canonical semantic references,
+saved-query names, and local filtered schema/blacklist compatibility without
+connecting to a database, reading query results, storing the draft, or calling a
+provider. JSON reports contain only status, hashes, canonical references, and
+safe violation codes; they never echo candidate SQL or protected names. Exit
+`0` means valid, `1` means rejected, and `2` means required local semantic
+evidence is unavailable. A valid report is not execution authorization: review
+the original draft, then explicitly invoke the normal `dbcli explain` or `dbcli
+query` workflow as a separate command when appropriate.
 
 When valid, `dbcli skill context` includes the same bounded data in its JSON,
 XML, and Markdown output. To run a metric, an agent must still invoke the named

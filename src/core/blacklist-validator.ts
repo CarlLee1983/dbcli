@@ -16,6 +16,23 @@ import { expandIndexTargets, matchesIndexGlob } from '@/utils/es-index-target'
  * The manager looks tables up case-insensitively, so `Users` and `users` are
  * one entry and must not produce two warnings or two error mentions.
  */
+/**
+ * The records reachable inside an array row, at any nesting depth.
+ *
+ * Mirrors how `readPath` descends: an array is a container, so its elements — not
+ * its indices — carry the column names. No adapter returns array rows today; this
+ * exists so the masker's "is this field present" answer cannot disagree with its
+ * "remove this field" behaviour if one ever does.
+ */
+function flattenArrayRow(row: readonly unknown[]): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = []
+  for (const item of row) {
+    if (Array.isArray(item)) records.push(...flattenArrayRow(item))
+    else if (item !== null && typeof item === 'object') records.push(item as Record<string, unknown>)
+  }
+  return records
+}
+
 function dedupe(values: string[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []
@@ -280,14 +297,25 @@ export class BlacklistValidator {
     const probeNested = blacklistedColumns.some((path) => path.includes('.'))
     const presentColumns = new Set(columnList)
     const nestedHeads = new Set<string>()
-    for (const row of rows) {
-      if (row === null || typeof row !== 'object') continue
-      for (const key of Object.getOwnPropertyNames(row)) {
+    const collect = (record: Record<string, unknown>): void => {
+      for (const key of Object.getOwnPropertyNames(record)) {
         presentColumns.add(key)
         if (!probeNested) continue
-        const value = (row as Record<string, unknown>)[key]
+        const value = record[key]
         if (value !== null && typeof value === 'object') nestedHeads.add(key)
       }
+    }
+    for (const row of rows) {
+      if (row === null || typeof row !== 'object') continue
+      // `readPath` treats an array as a transparent container — the fields it can
+      // find in an array row are the elements' fields, not `0` and `length`. Reading
+      // the indices as column names instead would leave a protected field inside an
+      // array row unreported, and an empty omitted list returns the rows untouched.
+      if (Array.isArray(row)) {
+        for (const item of flattenArrayRow(row)) collect(item)
+        continue
+      }
+      collect(row)
     }
 
     const protectedPaths = new Set(blacklistedColumns)

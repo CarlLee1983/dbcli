@@ -442,6 +442,35 @@ describe('BlacklistValidator', () => {
       expect(result.filteredRows[0]).toEqual({ id: 1 })
     })
 
+    it('actually removes a protected field from an array row it reports as masked', () => {
+      // `cloneRecord` treated an array row as a record, so the indices became keys
+      // and the protected field inside the element survived — the row was reported
+      // as masked and returned intact. No adapter produces array rows; this pins the
+      // two halves (is it present / remove it) to the same answer regardless.
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+      const rows = [[{ id: 1, password: 'SECRET' }]] as unknown as Record<string, unknown>[]
+
+      const result = validator.filterColumns('users', rows, ['id'])
+
+      expect(result.omittedColumns).toEqual(['password'])
+      expect(result.filteredRows[0]).toEqual({ 0: { id: 1 } })
+      expect(JSON.stringify(result.filteredRows)).not.toContain('SECRET')
+    })
+
+    it('sees through nested arrays and dotted rules in an array row', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['profile.ssn'] } })
+      const rows = [[[{ id: 1, profile: { ssn: 'SECRET', city: 'Taipei' } }]]] as unknown as Record<
+        string,
+        unknown
+      >[]
+
+      const result = validator.filterColumns('users', rows, ['id'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ 0: { 0: { id: 1, profile: { city: 'Taipei' } } } })
+      expect(JSON.stringify(result.filteredRows)).not.toContain('SECRET')
+    })
+
     it('decides exactly what a per-row probe of every rule would decide', () => {
       // The claim this fast path rests on is equivalence, not "these four cases pass":
       // a dotless rule is answered exactly by the column set, and a dotted rule can
@@ -459,6 +488,8 @@ describe('BlacklistValidator', () => {
         { '': { b: 7 } },
         { b: 8 },
         {},
+        [{ b: 9 }] as unknown as Record<string, unknown>,
+        [[{ a: { b: 10 } }]] as unknown as Record<string, unknown>,
       ]
       const paths = ['a', 'b', 'a.b', 'a.b.c', '.b', 'a.', 'a..b', '', 'missing.x']
 

@@ -1,5 +1,17 @@
 import { join } from 'node:path'
 
+export {
+  validateQueryDraft,
+  type QueryDraft,
+  type QueryDraftCandidate,
+  type QueryDraftSavedQueryCandidate,
+  type QueryDraftSqlCandidate,
+  type QueryDraftValidationInput,
+  type QueryDraftValidationReport,
+  type QueryDraftViolation,
+  type QueryDraftViolationCode,
+} from './query-draft'
+
 export interface SemanticSchemaTable {
   columns: Array<{ name: string }>
 }

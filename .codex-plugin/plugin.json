@@ -26,11 +26,7 @@
     "longDescription": "Installs the dbcli agent skill and reference guide so Codex can inspect schemas, query databases, respect blacklist boundaries, and recover from database errors through the dbcli command workflow.",
     "developerName": "Carl Lee",
     "category": "Productivity",
-    "capabilities": [
-      "Database",
-      "Local CLI",
-      "Agent Skill"
-    ],
+    "capabilities": ["Database", "Local CLI", "Agent Skill"],
     "websiteURL": "https://github.com/CarlLee1983/dbcli",
     "defaultPrompt": [
       "Inspect my database with dbcli.",

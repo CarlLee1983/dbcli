@@ -1,0 +1,25 @@
+# Build outputs — rewritten by `bun run build`, so formatting them here would only
+# be undone the next time the build runs and turn the format gate red.
+dist/
+assets/ui-template.html
+
+# Test fixtures are inputs: their exact bytes are what the tests assert against,
+# so a formatter must not be free to rewrite them.
+tests/fixtures/
+
+# Documentation shape is owned by the doc contract tests, not by the formatter.
+# `tests/unit/skill-assets/*` asserts exact rows such as "| `lint` | n/a |", and
+# prettier re-pads every Markdown table it touches — three of those contracts broke
+# the moment it did. The parity checks (skill:check / docs:check / contract:check)
+# are the gate for these files; prettier has nothing to add and something to break.
+**/*.md
+**/*.mdc
+docs/**/*.html
+.windsurfrules
+
+# Managed copies: `bun run plugin:sync` writes these byte-for-byte from `assets/`.
+skills/
+plugins/dbcli-agent/skills/
+.github/skills/
+.cursor/
+.windsurf/

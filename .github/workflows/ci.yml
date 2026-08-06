@@ -73,9 +73,10 @@ jobs:
     # Formatting is platform-independent, so this runs once rather than per matrix
     # entry. It exists because `release:check` was the only thing enforcing prettier:
     # four unformatted files reached main through green CI and were caught minutes
-    # before a release. Scope is deliberately the same TS glob release:check uses —
-    # a whole-repo check currently fails on 86 files (docs, generated HTML, fixtures)
-    # and reformatting those is its own change, not a side effect of adding a gate.
+    # before a release. Scope is now the whole repo minus `.prettierignore`, which
+    # is where the reasoning lives: build outputs, test fixtures, managed copies and
+    # documentation are excluded on purpose — Markdown tables are contract-tested by
+    # `tests/unit/skill-assets/*`, and prettier re-pads every table it touches.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

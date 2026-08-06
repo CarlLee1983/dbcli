@@ -517,10 +517,11 @@ describe('BlacklistValidator', () => {
     it('does not omit a dotted rule whose head is a scalar in every row', () => {
       const validator = makeValidator({ tables: [], columns: { orders: ['profile.ssn'] } })
 
-      const result = validator.filterColumns('orders', [{ id: 1, profile: 'plain' }], [
-        'id',
-        'profile',
-      ])
+      const result = validator.filterColumns(
+        'orders',
+        [{ id: 1, profile: 'plain' }],
+        ['id', 'profile']
+      )
 
       expect(result.omittedColumns).toEqual([])
       expect(result.filteredRows[0]).toEqual({ id: 1, profile: 'plain' })

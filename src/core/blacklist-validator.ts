@@ -28,7 +28,8 @@ function flattenArrayRow(row: readonly unknown[]): Record<string, unknown>[] {
   const records: Record<string, unknown>[] = []
   for (const item of row) {
     if (Array.isArray(item)) records.push(...flattenArrayRow(item))
-    else if (item !== null && typeof item === 'object') records.push(item as Record<string, unknown>)
+    else if (item !== null && typeof item === 'object')
+      records.push(item as Record<string, unknown>)
   }
   return records
 }

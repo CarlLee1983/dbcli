@@ -199,11 +199,7 @@ describe('buildErrors', () => {
       }),
     ])
     expect(g!.tables).toEqual(['a', 'b', 'c', 'd'])
-    expect(g!.suggestedCommands).toEqual([
-      'dbcli schema a',
-      'dbcli schema b',
-      'dbcli schema c',
-    ])
+    expect(g!.suggestedCommands).toEqual(['dbcli schema a', 'dbcli schema b', 'dbcli schema c'])
   })
 
   it('always emits a hint and omits suggestedCommands when no tables are known', () => {

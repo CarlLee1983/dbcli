@@ -60,10 +60,7 @@ export function projectRows(
 // for the same path pays `split` once instead of once per row: the masker's fail-safe
 // branch applies every rule in the config, so "many paths, almost no matches" is its
 // normal shape, and the splitting alone measured a third of that branch's cost.
-export function hasFieldPath(
-  row: Record<string, unknown>,
-  segments: readonly string[]
-): boolean {
+export function hasFieldPath(row: Record<string, unknown>, segments: readonly string[]): boolean {
   return readPath(row, segments).found
 }
 

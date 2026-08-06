@@ -227,14 +227,13 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('logs', docs, columnList).filteredRows
     )
 
-    // PROVISIONAL budget. Locally this measures ~1.8ms and the regression it guards
-    // against (deciding the nested recursion per result set instead of per row)
-    // measures ~8.7ms, so the discriminating ceiling is around 4ms — but the ratio
-    // between this machine and a CI runner is not known for this shape yet, and the
-    // sibling case scales 0.65ms → 3.66ms on windows-latest. Tightened from the CI
-    // numbers this benchmark prints, not from a dev machine.
-    report('Column filtering (1000 flattened docs)', elapsed, 16)
-    expect(elapsed).toBeLessThan(16)
+    // Budget set from CI, not from a dev machine: measured 2.59–5.53ms across the
+    // six matrix jobs (worst windows-latest, bun 1.3.3), against 1.83ms locally — so
+    // a runner costs about 3x here. The regression this guards against measures
+    // 8.7ms locally, i.e. roughly 26ms on that runner, so 12ms both clears the worst
+    // real measurement by 2.2x and fails loudly if the per-row decision is undone.
+    report('Column filtering (1000 flattened docs)', elapsed, 12)
+    expect(elapsed).toBeLessThan(12)
   })
 
   it('Config loading - typical blacklist: < 5ms', () => {

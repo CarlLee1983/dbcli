@@ -2205,6 +2205,7 @@ dbcli semantic context --format markdown
 dbcli semantic context --file ./analytics.semantic.json
 dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
+dbcli semantic search purchases --kind model --format json
 ```
 
 The default file has this compact contract:
@@ -2262,6 +2263,15 @@ migrate --to 2` prints a deterministic v2 JSON document to stdout and never
 writes the input file. An absent default file is allowed for `skill context`
 and simply omits the semantic section; a stale or invalid present file fails
 closed rather than being silently ignored.
+
+`semantic search <terms...>` performs deterministic, case-insensitive matching
+over canonical names, aliases, descriptions, and governed model paths. Results
+are ranked by exact canonical name, exact alias, prefix, then description token;
+kind/name breaks ties. Use `--kind model|field|relationship|metric` and
+`--limit <1-100>` (default `20`). It returns only canonical references, matched
+terms, aliases, descriptions, and necessary model paths—never SQL bodies,
+connection data, or blacklist names. No result is an empty array / text notice
+with exit 0.
 
 When valid, `dbcli skill context` includes the same bounded data in its JSON,
 XML, and Markdown output. To run a metric, an agent must still invoke the named

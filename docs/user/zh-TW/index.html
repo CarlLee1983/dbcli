@@ -701,7 +701,7 @@ dbcli proxy analyze \
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>執行 SQL 資料表與索引的建立、修改或刪除等 DDL 工作流。</td></tr>
                     <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Antigravity、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
                     <tr><td><code>skill context</code></td><td>將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。</td></tr>
-                    <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic drift</code> / <code>semantic migrate</code></td><td>驗證、輸出、檢查漂移或僅輸出遷移後的可版控業務語彙；只對照本機快取、已經 blacklist 過濾的 schema 與 saved-query 名稱。離線且唯讀。</td></tr>
+                    <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic search</code> / <code>semantic drift</code> / <code>semantic migrate</code></td><td>驗證、輸出、搜尋、檢查漂移或僅輸出遷移後的可版控業務語彙；只對照本機快取、已經 blacklist 過濾的 schema 與 saved-query 名稱。離線且唯讀。</td></tr>
                     <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
@@ -721,10 +721,11 @@ dbcli proxy analyze \
                 <p>在專案根目錄放置可檢閱的 <code>dbcli.semantic.json</code>，描述業務模型、可見欄位、別名、relationship 與由 saved query 支援的 metric。可在不連線資料庫的情況下驗證：</p>
                 <pre><code>dbcli semantic validate --format json
 dbcli semantic context --format json
+dbcli semantic search purchases --kind model --format json
 dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
 dbcli skill context --format json</code></pre>
-                <p class="m-0">v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 <code>query</code> 並非可用 <code>@saved-query</code> 的 metric。<code>semantic drift</code> 在 <code>stale</code>、<code>invalid</code> 或 schema cache 不可用時以非零結束；<code>migrate --to 2</code> 只輸出 JSON，絕不寫回來源檔。檔案不含 SQL 或憑證；實際執行仍必須通過既有 <code>dbcli q</code> / <code>query</code> 的安全閘門。</p>
+                <p class="m-0">v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 <code>query</code> 並非可用 <code>@saved-query</code> 的 metric。<code>semantic search &lt;terms...&gt;</code> 為離線且 deterministic 的搜尋；可用 <code>--kind</code> 與 <code>--limit 1-100</code>（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。<code>semantic drift</code> 在 <code>stale</code>、<code>invalid</code> 或 schema cache 不可用時以非零結束；<code>migrate --to 2</code> 只輸出 JSON，絕不寫回來源檔。檔案不含 SQL 或憑證；實際執行仍必須通過既有 <code>dbcli q</code> / <code>query</code> 的安全閘門。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

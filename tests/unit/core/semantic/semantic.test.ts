@@ -6,6 +6,8 @@ import {
   inspectSemanticDrift,
   loadSemanticContext,
   migrateSemanticContext,
+  searchSemanticContext,
+  SemanticSearchError,
   SemanticValidationError,
   type SemanticSchemaTable,
 } from '@/core/semantic'
@@ -90,7 +92,9 @@ describe('semantic context', () => {
       metrics: [],
     })
 
-    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+    await expect(
+      loadSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).resolves.toMatchObject({
       version: 2,
       relationships: [
         expect.objectContaining({
@@ -128,7 +132,9 @@ describe('semantic context', () => {
       metrics: [],
     })
 
-    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+    await expect(
+      loadSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).rejects.toMatchObject({
       issues: expect.arrayContaining([
         expect.objectContaining({ path: '$.relationships[0].from.field' }),
         expect.objectContaining({ path: '$.relationships[1]' }),
@@ -163,7 +169,9 @@ describe('semantic context', () => {
       metrics: [],
     })
 
-    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+    await expect(
+      loadSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).rejects.toMatchObject({
       issues: expect.arrayContaining([
         expect.objectContaining({
           path: '$.relationships[1]',
@@ -193,7 +201,9 @@ describe('semantic context', () => {
       metrics: [],
     })
 
-    await expect(loadSemanticContext({ workspaceRoot: root, schema, snippets })).rejects.toMatchObject({
+    await expect(
+      loadSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).rejects.toMatchObject({
       issues: expect.arrayContaining([
         expect.objectContaining({
           path: '$.relationships[0].description',
@@ -213,14 +223,30 @@ describe('semantic context', () => {
     })
 
     await expect(
-      inspectSemanticDrift({ workspaceRoot: root, schema: { orders: { columns: [{ name: 'id' }] } }, snippets: [] })
+      inspectSemanticDrift({
+        workspaceRoot: root,
+        schema: { orders: { columns: [{ name: 'id' }] } },
+        snippets: [],
+      })
     ).resolves.toMatchObject({ status: 'stale', issues: expect.any(Array) })
     await expect(
-      inspectSemanticDrift({ workspaceRoot: root, schema: {}, snippets: [], schemaAvailable: false })
+      inspectSemanticDrift({
+        workspaceRoot: root,
+        schema: {},
+        snippets: [],
+        schemaAvailable: false,
+      })
     ).resolves.toMatchObject({ status: 'unavailable' })
 
-    await writeSemantic(root, { version: 2, models: [], relationships: [{ name: 'bad' }], metrics: [] })
-    await expect(inspectSemanticDrift({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+    await writeSemantic(root, {
+      version: 2,
+      models: [],
+      relationships: [{ name: 'bad' }],
+      metrics: [],
+    })
+    await expect(
+      inspectSemanticDrift({ workspaceRoot: root, schema, snippets })
+    ).resolves.toMatchObject({
       status: 'invalid',
     })
   })
@@ -229,11 +255,144 @@ describe('semantic context', () => {
     const root = workspace()
     const filePath = await writeSemantic(root, valid)
 
-    await expect(migrateSemanticContext({ workspaceRoot: root, schema, snippets })).resolves.toMatchObject({
+    await expect(
+      migrateSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).resolves.toMatchObject({
       version: 2,
       relationships: [],
     })
     await expect(Bun.file(filePath).json()).resolves.toEqual(valid)
+  })
+
+  test('searches governed entities with deterministic relevance and safe result fields', () => {
+    const results = searchSemanticContext(
+      {
+        version: 2,
+        models: [
+          {
+            name: 'orders',
+            table: 'orders',
+            description: 'Completed purchases.',
+            aliases: ['purchases'],
+            fields: [
+              {
+                column: 'created_at',
+                description: 'Order creation time.',
+                aliases: ['order date'],
+              },
+            ],
+          },
+          {
+            name: 'customers',
+            table: 'customers',
+            aliases: [],
+            fields: [{ column: 'email', aliases: [] }],
+          },
+        ],
+        relationships: [
+          {
+            name: 'order-customer',
+            from: { model: 'orders', field: 'created_at' },
+            to: { model: 'customers', field: 'email' },
+            cardinality: 'many-to-one',
+            description: 'Each order belongs to a customer.',
+          },
+        ],
+        metrics: [
+          { name: 'daily-revenue', description: 'Revenue by day.', query: '@analytics/revenue' },
+        ],
+      },
+      ['orders']
+    )
+
+    expect(results).toEqual([
+      {
+        kind: 'model',
+        reference: 'orders',
+        matchedTerms: ['orders'],
+        description: 'Completed purchases.',
+        aliases: ['purchases'],
+      },
+    ])
+    expect(JSON.stringify(results)).not.toContain('@analytics/revenue')
+  })
+
+  test('search supports aliases, kind filtering, limits, and rejects invalid input', () => {
+    const context = {
+      version: 1 as const,
+      models: [
+        {
+          name: 'orders',
+          table: 'orders',
+          aliases: ['purchases'],
+          fields: [{ column: 'created_at', aliases: ['order date'] }],
+        },
+      ],
+      relationships: [],
+      metrics: [{ name: 'daily-revenue', query: '@analytics/revenue' }],
+    }
+
+    expect(searchSemanticContext(context, ['purchases'], { kind: 'model' })).toMatchObject([
+      { kind: 'model', reference: 'orders', matchedTerms: ['purchases'] },
+    ])
+    expect(searchSemanticContext(context, ['order'], { limit: 1 })).toHaveLength(1)
+    expect(() => searchSemanticContext(context, [])).toThrow(SemanticSearchError)
+    expect(() => searchSemanticContext(context, ['orders'], { limit: 101 })).toThrow(
+      SemanticSearchError
+    )
+  })
+
+  test('search omits descriptions and aliases containing blocked names', () => {
+    const results = searchSemanticContext(
+      {
+        version: 1,
+        models: [
+          {
+            name: 'orders',
+            table: 'orders',
+            description: 'Includes password recovery purchases.',
+            aliases: ['password orders', 'purchases'],
+            fields: [],
+          },
+        ],
+        relationships: [],
+        metrics: [],
+      },
+      ['orders'],
+      { blockedTerms: ['password'] }
+    )
+
+    expect(results).toEqual([
+      { kind: 'model', reference: 'orders', matchedTerms: ['orders'], aliases: ['purchases'] },
+    ])
+    expect(JSON.stringify(results)).not.toContain('password')
+  })
+
+  test('search tokenizes multiword aliases and suppresses blocked canonical paths', () => {
+    const context = {
+      version: 1 as const,
+      models: [
+        {
+          name: 'orders',
+          table: 'orders',
+          aliases: [],
+          fields: [{ column: 'created_at', aliases: ['order date'] }],
+        },
+        { name: 'user_accounts', table: 'user_accounts', aliases: [], fields: [] },
+      ],
+      relationships: [],
+      metrics: [],
+    }
+
+    expect(searchSemanticContext(context, ['date'])).toMatchObject([
+      { kind: 'field', reference: 'orders.created_at', matchedTerms: ['date'] },
+    ])
+    expect(
+      searchSemanticContext(context, ['user_accounts'], { blockedTerms: ['user_accounts'] })
+    ).toEqual([])
+    expect(searchSemanticContext(context, ['user'], { blockedTerms: ['user_accounts'] })).toEqual(
+      []
+    )
   })
 
   test('allows an absent default file only when requested', async () => {

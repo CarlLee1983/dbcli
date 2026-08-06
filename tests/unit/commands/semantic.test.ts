@@ -152,7 +152,9 @@ describe('semantic commands', () => {
       join(sandbox, 'dbcli.semantic.json'),
       JSON.stringify({
         version: 1,
-        models: [{ name: 'orders', table: 'orders', fields: [{ column: 'created_at', aliases: [] }] }],
+        models: [
+          { name: 'orders', table: 'orders', fields: [{ column: 'created_at', aliases: [] }] },
+        ],
         metrics: [],
       })
     )
@@ -164,6 +166,38 @@ describe('semantic commands', () => {
     expect(await Bun.file(join(sandbox, 'dbcli.semantic.json')).json()).toMatchObject({
       version: 1,
     })
+  })
+
+  test('search emits governed catalog results and validates options', async () => {
+    await run('search', 'purchases', '--kind', 'model', '--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(output)).toEqual([
+      expect.objectContaining({ kind: 'model', reference: 'orders', matchedTerms: ['purchases'] }),
+    ])
+
+    output = ''
+    await run('search', 'purchases', '--limit', '101')
+    expect(exitCode).toBe(1)
+    expect(errors).toContain('limit')
+  })
+
+  test('search returns an empty JSON array and success for no matches', async () => {
+    await run('search', 'nothing', '--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(output)).toEqual([])
+  })
+
+  test('search discovers metric keys without reading saved-query SQL bodies', async () => {
+    writeFileSync(join(sandbox, '.dbcli', 'queries', 'revenue.sql'), 'not valid SQL')
+
+    await run('search', 'daily-revenue', '--kind', 'metric', '--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(output)).toEqual([
+      expect.objectContaining({ kind: 'metric', reference: 'daily-revenue' }),
+    ])
   })
 
   test('context fails closed when a model names a blacklisted column', async () => {

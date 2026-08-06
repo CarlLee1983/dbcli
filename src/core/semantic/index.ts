@@ -87,6 +87,31 @@ export interface SemanticDriftReport {
   issues: SemanticValidationIssue[]
 }
 
+export type SemanticSearchKind = 'model' | 'field' | 'relationship' | 'metric'
+
+export interface SemanticSearchOptions {
+  kind?: SemanticSearchKind
+  limit?: number
+  /** Blacklist names to exclude from searchable or returned free text. */
+  blockedTerms?: string[]
+}
+
+export interface SemanticSearchResult {
+  kind: SemanticSearchKind
+  reference: string
+  matchedTerms: string[]
+  description?: string
+  aliases: string[]
+  models?: string[]
+}
+
+export class SemanticSearchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SemanticSearchError'
+  }
+}
+
 const DEFAULT_FILE = 'dbcli.semantic.json'
 const MAX_FILE_BYTES = 256 * 1024
 const MAX_MODELS = 100
@@ -95,6 +120,8 @@ const MAX_METRICS = 100
 const MAX_RELATIONSHIPS = 100
 const MAX_ALIASES = 20
 const MAX_TEXT_LENGTH = 1_000
+const DEFAULT_SEARCH_LIMIT = 20
+const MAX_SEARCH_LIMIT = 100
 const IDENTIFIER = /^[a-z][a-z0-9-]*$/
 const CARDINALITIES = new Set<SemanticRelationshipCardinality>([
   'one-to-one',
@@ -119,7 +146,12 @@ export async function loadSemanticContext(
   if (!loaded) return null
   const { filePath, raw } = loaded
   const { context, issues } = parseContext(raw)
-  validateReferences(context, input.schema, new Set(input.snippets.map((snippet) => snippet.key)), issues)
+  validateReferences(
+    context,
+    input.schema,
+    new Set(input.snippets.map((snippet) => snippet.key)),
+    issues
+  )
   if (issues.length > 0) throw new SemanticValidationError(filePath, issues)
   return normalizeContext(context)
 }
@@ -145,24 +177,239 @@ export async function inspectSemanticDrift(
   const { context, issues } = parseContext(loaded.raw)
   if (issues.length > 0) return { status: 'invalid', issues }
   if (input.schemaAvailable === false) {
-    return { status: 'unavailable', issues: [{ path: '$', message: 'cached schema is unavailable' }] }
+    return {
+      status: 'unavailable',
+      issues: [{ path: '$', message: 'cached schema is unavailable' }],
+    }
   }
 
-  validateReferences(context, input.schema, new Set(input.snippets.map((snippet) => snippet.key)), issues)
+  validateReferences(
+    context,
+    input.schema,
+    new Set(input.snippets.map((snippet) => snippet.key)),
+    issues
+  )
   return issues.length > 0 ? { status: 'stale', issues } : { status: 'valid', issues: [] }
 }
 
 /** Produces v2 JSON data only; callers decide whether any file write is allowed. */
-export async function migrateSemanticContext(input: LoadSemanticContextInput): Promise<SemanticContext> {
+export async function migrateSemanticContext(
+  input: LoadSemanticContextInput
+): Promise<SemanticContext> {
   const context = await loadSemanticContext(input)
   const filePath = input.filePath ?? defaultSemanticFile(input.workspaceRoot)
-  if (!context) throw new SemanticValidationError(filePath, [{ path: '$', message: 'file not found' }])
+  if (!context)
+    throw new SemanticValidationError(filePath, [{ path: '$', message: 'file not found' }])
   if (context.version !== 1) {
     throw new SemanticValidationError(filePath, [
       { path: '$.version', message: 'must equal 1 to migrate to version 2' },
     ])
   }
   return { ...context, version: 2, relationships: [] }
+}
+
+/**
+ * Searches only already validated semantic entities. Results never include a
+ * saved-query body, schema cache, connection data, or blacklist configuration.
+ */
+export function searchSemanticContext(
+  context: SemanticContext,
+  terms: string[],
+  options: SemanticSearchOptions = {}
+): SemanticSearchResult[] {
+  const normalizedTerms = normalizeSearchTerms(terms)
+  const limit = options.limit ?? DEFAULT_SEARCH_LIMIT
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_LIMIT) {
+    throw new SemanticSearchError(`limit must be an integer between 1 and ${MAX_SEARCH_LIMIT}`)
+  }
+  if (options.kind && !isSearchKind(options.kind)) {
+    throw new SemanticSearchError('kind must be model, field, relationship, or metric')
+  }
+
+  const blockedTerms = normalizeBlockedTerms(options.blockedTerms ?? [])
+  if (
+    normalizedTerms.some((term) =>
+      blockedTerms.some((blocked) => isBlockedIdentifier(term, blocked))
+    )
+  ) {
+    return []
+  }
+  const candidates = searchCandidates(context, blockedTerms)
+  return candidates
+    .filter((candidate) => !options.kind || candidate.result.kind === options.kind)
+    .map((candidate) => ({ ...candidate, match: matchSearchCandidate(candidate, normalizedTerms) }))
+    .filter(
+      (candidate): candidate is SearchCandidate & { match: SearchMatch } => candidate.match !== null
+    )
+    .sort(
+      (a, b) =>
+        a.match.rank - b.match.rank ||
+        compareKind(a.result.kind, b.result.kind) ||
+        compareCodeUnits(a.result.reference, b.result.reference)
+    )
+    .slice(0, limit)
+    .map(({ result, match }) => ({ ...result, matchedTerms: match.terms }))
+}
+
+interface SearchCandidate {
+  result: Omit<SemanticSearchResult, 'matchedTerms'>
+  canonical: string
+  aliases: string[]
+  description?: string
+}
+
+interface SearchMatch {
+  rank: number
+  terms: string[]
+}
+
+function searchCandidates(context: SemanticContext, blockedTerms: string[]): SearchCandidate[] {
+  const candidates: SearchCandidate[] = []
+  for (const model of context.models) {
+    const description = safeSearchText(model.description, blockedTerms)
+    const aliases = safeAliases(model.aliases, blockedTerms)
+    candidates.push({
+      result: withSearchDetails('model', model.name, description, aliases),
+      canonical: model.name,
+      aliases,
+      description,
+    })
+    for (const field of model.fields) {
+      const description = safeSearchText(field.description, blockedTerms)
+      const aliases = safeAliases(field.aliases, blockedTerms)
+      candidates.push({
+        result: {
+          ...withSearchDetails('field', `${model.name}.${field.column}`, description, aliases),
+          models: [model.name],
+        },
+        canonical: field.column,
+        aliases,
+        description,
+      })
+    }
+  }
+  for (const relationship of context.relationships) {
+    const models = [relationship.from.model, relationship.to.model]
+    candidates.push({
+      result: {
+        ...withSearchDetails(
+          'relationship',
+          relationship.name,
+          safeSearchText(relationship.description, blockedTerms),
+          []
+        ),
+        models,
+      },
+      canonical: relationship.name,
+      aliases: [],
+      description: safeSearchText(relationship.description, blockedTerms),
+    })
+  }
+  for (const metric of context.metrics) {
+    candidates.push({
+      result: withSearchDetails(
+        'metric',
+        metric.name,
+        safeSearchText(metric.description, blockedTerms),
+        []
+      ),
+      canonical: metric.name,
+      aliases: [],
+      description: safeSearchText(metric.description, blockedTerms),
+    })
+  }
+  return candidates.filter(
+    (candidate) => !candidateContainsBlockedIdentifier(candidate, blockedTerms)
+  )
+}
+
+function withSearchDetails(
+  kind: SemanticSearchKind,
+  reference: string,
+  description: string | undefined,
+  aliases: string[]
+): Omit<SemanticSearchResult, 'matchedTerms'> {
+  return { kind, reference, ...(description ? { description } : {}), aliases }
+}
+
+function matchSearchCandidate(candidate: SearchCandidate, terms: string[]): SearchMatch | null {
+  const canonical = candidate.canonical.toLowerCase()
+  const aliases = candidate.aliases.map((alias) => alias.toLowerCase())
+  const aliasTokens = aliases.flatMap((alias) => tokenize(alias))
+  const descriptionTokens = tokenize(candidate.description ?? '')
+  const matchedTerms: string[] = []
+  const phrase = terms.join(' ')
+  let rank = canonical === phrase ? 0 : aliases.includes(phrase) ? 1 : 3
+
+  for (const term of terms) {
+    const exactCanonical = canonical === term
+    const exactAlias = aliases.includes(phrase)
+    const prefix = [canonical, ...aliases, ...aliasTokens].some((value) => value.startsWith(term))
+    const descriptionToken = descriptionTokens.includes(term)
+    if (!exactCanonical && !exactAlias && !prefix && !descriptionToken) return null
+    if (exactCanonical) rank = Math.min(rank, 0)
+    else if (exactAlias) rank = Math.min(rank, 1)
+    else if (prefix) rank = Math.min(rank, 2)
+    matchedTerms.push(term)
+  }
+  return { rank, terms: matchedTerms }
+}
+
+function normalizeSearchTerms(terms: string[]): string[] {
+  const normalized = terms.flatMap((term) => term.trim().toLowerCase().split(/\s+/)).filter(Boolean)
+  if (normalized.length === 0)
+    throw new SemanticSearchError('at least one non-empty search term is required')
+  return [...new Set(normalized)]
+}
+
+function normalizeBlockedTerms(terms: string[]): string[] {
+  return [...new Set(terms.map((term) => term.trim().toLowerCase()).filter(Boolean))]
+}
+
+function safeSearchText(value: string | undefined, blockedTerms: string[]): string | undefined {
+  if (!value || blockedTerms.some((term) => isBlockedIdentifier(value, term))) return undefined
+  return value
+}
+
+function safeAliases(aliases: string[], blockedTerms: string[]): string[] {
+  return aliases.filter((alias) => safeSearchText(alias, blockedTerms) !== undefined)
+}
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+}
+
+function candidateContainsBlockedIdentifier(
+  candidate: SearchCandidate,
+  blockedTerms: string[]
+): boolean {
+  const exposedValues = [candidate.result.reference, ...(candidate.result.models ?? [])]
+  return exposedValues.some((value) =>
+    blockedTerms.some((term) => isBlockedIdentifier(value, term))
+  )
+}
+
+function isBlockedIdentifier(value: string, blocked: string): boolean {
+  const escaped = blocked.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`, 'iu').test(value)
+}
+
+function isSearchKind(value: string): value is SemanticSearchKind {
+  return value === 'model' || value === 'field' || value === 'relationship' || value === 'metric'
+}
+
+function compareKind(a: SemanticSearchKind, b: SemanticSearchKind): number {
+  return (
+    ['model', 'field', 'relationship', 'metric'].indexOf(a) -
+    ['model', 'field', 'relationship', 'metric'].indexOf(b)
+  )
+}
+
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }
 
 async function readSemanticFile(
@@ -186,20 +433,34 @@ async function readSemanticFile(
   }
 }
 
-function parseContext(raw: unknown): { context: SemanticContext; issues: SemanticValidationIssue[] } {
+function parseContext(raw: unknown): {
+  context: SemanticContext
+  issues: SemanticValidationIssue[]
+} {
   const issues: SemanticValidationIssue[] = []
   const root = record(raw, '$', issues)
   const rawVersion = root.version
   const version: 1 | 2 = rawVersion === 2 ? 2 : 1
   if (rawVersion !== 1 && rawVersion !== 2) issue(issues, '$.version', 'must equal 1 or 2')
-  rejectUnknownKeys(root, version === 2 ? ['version', 'models', 'relationships', 'metrics'] : ['version', 'models', 'metrics'], '$', issues)
+  rejectUnknownKeys(
+    root,
+    version === 2
+      ? ['version', 'models', 'relationships', 'metrics']
+      : ['version', 'models', 'metrics'],
+    '$',
+    issues
+  )
 
   const rawModels = array(root.models, '$.models', issues)
-  if (rawModels.length > MAX_MODELS) issue(issues, '$.models', `must contain at most ${MAX_MODELS} items`)
+  if (rawModels.length > MAX_MODELS)
+    issue(issues, '$.models', `must contain at most ${MAX_MODELS} items`)
   const modelNames = new Set<string>()
-  const models = rawModels.map((value, index) => parseModel(value, `$.models[${index}]`, modelNames, issues))
+  const models = rawModels.map((value, index) =>
+    parseModel(value, `$.models[${index}]`, modelNames, issues)
+  )
 
-  const rawRelationships = version === 2 ? array(root.relationships ?? [], '$.relationships', issues) : []
+  const rawRelationships =
+    version === 2 ? array(root.relationships ?? [], '$.relationships', issues) : []
   if (rawRelationships.length > MAX_RELATIONSHIPS) {
     issue(issues, '$.relationships', `must contain at most ${MAX_RELATIONSHIPS} items`)
   }
@@ -209,9 +470,12 @@ function parseContext(raw: unknown): { context: SemanticContext; issues: Semanti
   validateRelationshipUniqueness(relationships, issues)
 
   const rawMetrics = array(root.metrics, '$.metrics', issues)
-  if (rawMetrics.length > MAX_METRICS) issue(issues, '$.metrics', `must contain at most ${MAX_METRICS} items`)
+  if (rawMetrics.length > MAX_METRICS)
+    issue(issues, '$.metrics', `must contain at most ${MAX_METRICS} items`)
   const metricNames = new Set<string>()
-  const metrics = rawMetrics.map((value, index) => parseMetric(value, `$.metrics[${index}]`, metricNames, issues))
+  const metrics = rawMetrics.map((value, index) =>
+    parseMetric(value, `$.metrics[${index}]`, metricNames, issues)
+  )
 
   return {
     context: {
@@ -236,7 +500,11 @@ function validateReferences(
     if (!table) issue(issues, `${path}.table`, 'must reference a visible cached table')
     for (const [fieldIndex, field] of model.fields.entries()) {
       if (table && !table.columns.some((candidate) => candidate.name === field.column)) {
-        issue(issues, `${path}.fields[${fieldIndex}].column`, 'must reference a visible column on the model table')
+        issue(
+          issues,
+          `${path}.fields[${fieldIndex}].column`,
+          'must reference a visible column on the model table'
+        )
       }
     }
   }
@@ -261,7 +529,8 @@ function parseModel(
   const description = optionalText(value.description, `${path}.description`, issues)
   const aliases = aliasesOf(value.aliases, `${path}.aliases`, issues)
   const rawFields = array(value.fields, `${path}.fields`, issues)
-  if (rawFields.length > MAX_FIELDS_PER_MODEL) issue(issues, `${path}.fields`, `must contain at most ${MAX_FIELDS_PER_MODEL} items`)
+  if (rawFields.length > MAX_FIELDS_PER_MODEL)
+    issue(issues, `${path}.fields`, `must contain at most ${MAX_FIELDS_PER_MODEL} items`)
   const fieldColumns = new Set<string>()
   const fields = rawFields.map((field, index) => {
     const parsed = parseField(field, `${path}.fields[${index}]`, issues)
@@ -293,7 +562,11 @@ function parseRelationship(
   const to = parseEndpoint(value.to, `${path}.to`, models, issues)
   const cardinality = requiredText(value.cardinality, `${path}.cardinality`, issues)
   if (!CARDINALITIES.has(cardinality as SemanticRelationshipCardinality)) {
-    issue(issues, `${path}.cardinality`, 'must be one of one-to-one, one-to-many, many-to-one, many-to-many')
+    issue(
+      issues,
+      `${path}.cardinality`,
+      'must be one of one-to-one, one-to-many, many-to-one, many-to-many'
+    )
   }
   const description = relationshipDescription(value.description, `${path}.description`, issues)
   return {
@@ -351,7 +624,12 @@ function validateRelationshipUniqueness(
   }
 }
 
-function parseMetric(raw: unknown, path: string, names: Set<string>, issues: SemanticValidationIssue[]): SemanticMetric {
+function parseMetric(
+  raw: unknown,
+  path: string,
+  names: Set<string>,
+  issues: SemanticValidationIssue[]
+): SemanticMetric {
   const value = record(raw, path, issues)
   rejectUnknownKeys(value, ['name', 'description', 'query'], path, issues)
   const name = namedString(value.name, `${path}.name`, issues)
@@ -361,8 +639,13 @@ function parseMetric(raw: unknown, path: string, names: Set<string>, issues: Sem
   return { name, ...(description ? { description } : {}), query }
 }
 
-function record(raw: unknown, path: string, issues: SemanticValidationIssue[]): Record<string, unknown> {
-  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) return raw as Record<string, unknown>
+function record(
+  raw: unknown,
+  path: string,
+  issues: SemanticValidationIssue[]
+): Record<string, unknown> {
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw))
+    return raw as Record<string, unknown>
   issue(issues, path, 'must be an object')
   return {}
 }
@@ -375,7 +658,8 @@ function array(raw: unknown, path: string, issues: SemanticValidationIssue[]): u
 
 function namedString(raw: unknown, path: string, issues: SemanticValidationIssue[]): string {
   const value = requiredText(raw, path, issues)
-  if (!IDENTIFIER.test(value)) issue(issues, path, 'must use lowercase letters, digits, and hyphens')
+  if (!IDENTIFIER.test(value))
+    issue(issues, path, 'must use lowercase letters, digits, and hyphens')
   return value
 }
 
@@ -385,11 +669,16 @@ function requiredText(raw: unknown, path: string, issues: SemanticValidationIssu
     return ''
   }
   const value = raw.trim()
-  if (value.length > MAX_TEXT_LENGTH) issue(issues, path, `must be at most ${MAX_TEXT_LENGTH} characters`)
+  if (value.length > MAX_TEXT_LENGTH)
+    issue(issues, path, `must be at most ${MAX_TEXT_LENGTH} characters`)
   return value
 }
 
-function optionalText(raw: unknown, path: string, issues: SemanticValidationIssue[]): string | undefined {
+function optionalText(
+  raw: unknown,
+  path: string,
+  issues: SemanticValidationIssue[]
+): string | undefined {
   return raw === undefined ? undefined : requiredText(raw, path, issues)
 }
 
@@ -427,12 +716,22 @@ function aliasesOf(raw: unknown, path: string, issues: SemanticValidationIssue[]
   return aliases
 }
 
-function uniqueName(name: string, names: Set<string>, path: string, issues: SemanticValidationIssue[]): void {
+function uniqueName(
+  name: string,
+  names: Set<string>,
+  path: string,
+  issues: SemanticValidationIssue[]
+): void {
   if (names.has(name)) issue(issues, path, 'must be unique')
   names.add(name)
 }
 
-function rejectUnknownKeys(value: Record<string, unknown>, allowed: string[], path: string, issues: SemanticValidationIssue[]): void {
+function rejectUnknownKeys(
+  value: Record<string, unknown>,
+  allowed: string[],
+  path: string,
+  issues: SemanticValidationIssue[]
+): void {
   const allowedKeys = new Set(allowed)
   for (const key of Object.keys(value)) {
     if (!allowedKeys.has(key)) issue(issues, path, 'contains an unknown property')

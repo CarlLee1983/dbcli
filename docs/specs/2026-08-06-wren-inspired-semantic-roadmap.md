@@ -1,7 +1,7 @@
 # WrenAI 借鑑功能：語意層後續規格
 
 **Date:** 2026-08-06
-**Status:** Slice 1 implemented; Slice 2 remains planned
+**Status:** Slices 1–2 implemented; Slice 3 remains deferred
 **Depends on:**
 [`2026-08-06-semantic-context-mvp-design.md`](2026-08-06-semantic-context-mvp-design.md)
 and [`docs/adr/0004-database-access-stays-a-cli-surface.md`](../adr/0004-database-access-stays-a-cli-surface.md).
@@ -47,7 +47,7 @@ v1 是永久相容的資料格式。後續格式必須以 `version` 明確區別
 | Priority | Slice | Outcome | Risk | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Semantic v2: relationships and drift | 把可驗證的模型關聯納入版本控制，及早發現 schema/config 漂移。 | Low; offline/read-only | Implemented |
-| 2 | Semantic catalog search | 讓人與 agent 以名稱、alias、description 找到已治理的模型、欄位與指標。 | Low; offline/read-only | Planned |
+| 2 | Semantic catalog search | 讓人與 agent 以名稱、alias、description 找到已治理的模型、欄位與指標。 | Low; offline/read-only | Implemented |
 | 3 | Guarded NL query draft | 將自然語言轉為「待確認的查詢草稿」，絕不直接執行。 | High; LLM/privacy/SQL safety | Deferred pending separate approval |
 
 下列 WrenAI 能力不在目前 backlog：embedding/history memory、Wren connector
@@ -196,6 +196,15 @@ array / 明確空訊息且 exit 0。
 
 - 不建 embedding index、語意相似度、查詢歷史或本地個資快取。
 - 不讓搜尋結果自動組裝或執行 SQL。
+
+### Implemented scope
+
+`semantic search <terms...>` 使用 case-insensitive、空白分詞的 AND matching；
+結果依 exact canonical name、exact alias、prefix、description token、entity
+kind/name 固定排序。`--kind` 可限制 entity type，`--limit` 的預設為 20、最大為
+100。結果只含經驗證的 canonical reference、matched terms、safe description /
+alias 與必要 model path，不含 SQL body、connection data 或 blacklist name；無結果
+是 exit 0 的空 array / 明確文字訊息。
 
 ---
 

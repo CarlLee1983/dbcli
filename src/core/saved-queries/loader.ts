@@ -47,6 +47,31 @@ export async function loadSnippets(opts: LoadOptions): Promise<Map<string, Resol
   return merged
 }
 
+/**
+ * Lists saved-query keys from filenames without reading or parsing their SQL
+ * bodies. Consumers that only need stable references (such as semantic catalog
+ * search) must use this instead of `loadSnippets`.
+ */
+export async function listSnippetKeys(
+  opts: Pick<LoadOptions, 'builtinDir' | 'sharedDir' | 'localDir'>
+): Promise<string[]> {
+  const keys = new Set<string>()
+  for (const root of [opts.builtinDir, opts.sharedDir, opts.localDir]) {
+    let entries: string[]
+    try {
+      entries = await collectFiles(root)
+    } catch {
+      continue
+    }
+    for (const file of entries) {
+      if (!file.endsWith('.sql')) continue
+      const rel = relative(root, file).replace(new RegExp(`\\${sep}`, 'g'), '/')
+      keys.add(parseFilename(rel).logicalKey)
+    }
+  }
+  return [...keys].sort()
+}
+
 function pushTier(out: Map<string, ResolvedSnippet[]>, tier: SavedQuery[]): void {
   for (const q of tier) {
     const list = out.get(q.meta.key) ?? []

@@ -774,7 +774,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | `migrate <action>` | **DDL 引擎**：建立/修改/刪除資料表與索引。 |
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
-| `semantic validate` / `semantic context` / `semantic drift` / `semantic migrate` | 驗證、輸出、檢查漂移或僅輸出遷移後的可版控業務語彙；只對照本機快取、已經 blacklist 過濾的 schema 與 saved-query 名稱。離線且唯讀。 |
+| `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` | 驗證、輸出、搜尋、檢查漂移或僅輸出遷移後的可版控業務語彙；只對照本機快取、已經 blacklist 過濾的 schema 與 saved-query 名稱。離線且唯讀。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
@@ -797,12 +797,13 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > ```bash
 > dbcli semantic validate --format json
 > dbcli semantic context --format json
+> dbcli semantic search purchases --kind model --format json
 > dbcli semantic drift --format json
 > dbcli semantic migrate --to 2 --format json
 > dbcli skill context --format json
 > ```
 >
-> v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 `query` 並非可用 `@saved-query` 的 metric。`semantic drift` 在 `stale`、`invalid` 或 schema cache 不可用時以非零結束；`migrate --to 2` 只輸出 JSON，絕不寫回來源檔。檔案不含 SQL 或憑證；實際執行仍必須通過既有 `dbcli q` / `query` 的安全閘門。
+> v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 `query` 並非可用 `@saved-query` 的 metric。`semantic search <terms...>` 為離線且 deterministic 的搜尋；可用 `--kind` 與 `--limit 1-100`（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。`semantic drift` 在 `stale`、`invalid` 或 schema cache 不可用時以非零結束；`migrate --to 2` 只輸出 JSON，絕不寫回來源檔。檔案不含 SQL 或憑證；實際執行仍必須通過既有 `dbcli q` / `query` 的安全閘門。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 

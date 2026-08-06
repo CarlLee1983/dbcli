@@ -701,7 +701,7 @@ dbcli proxy analyze \
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>Run DDL workflows for creating, altering, or dropping SQL tables and indexes.</td></tr>
                     <tr><td><code>skill --install</code></td><td>Install compact AI-agent instructions for Claude, Gemini, Antigravity, Codex, and similar tools.</td></tr>
                     <tr><td><code>skill context</code></td><td>Serialize cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown structures for AI prompt injection.</td></tr>
-                    <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic drift</code> / <code>semantic migrate</code></td><td>Validate, print, check drift, or stdout-migrate a version-controlled business vocabulary against locally cached, blacklist-filtered schema and saved-query names. Offline and read-only.</td></tr>
+                    <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic search</code> / <code>semantic drift</code> / <code>semantic migrate</code></td><td>Validate, print, search, check drift, or stdout-migrate a version-controlled business vocabulary against locally cached, blacklist-filtered schema and saved-query names. Offline and read-only.</td></tr>
                     <tr><td><code>skill tasks</code></td><td>Manage repeatable expert task packs for diagnostics, audits, and database workflows.</td></tr>
                     <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
                 </tbody>
@@ -721,10 +721,11 @@ dbcli proxy analyze \
                 <p>Put a reviewable <code>dbcli.semantic.json</code> at the project root to describe business models, visible fields, aliases, relationships, and metrics backed by saved queries. Validate it without connecting to a database:</p>
                 <pre><code>dbcli semantic validate --format json
 dbcli semantic context --format json
+dbcli semantic search purchases --kind model --format json
 dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
 dbcli skill context --format json</code></pre>
-                <p class="m-0">Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose <code>query</code> is not an available <code>@saved-query</code>. <code>semantic drift</code> is non-zero for <code>stale</code>, <code>invalid</code>, or unavailable schema cache; <code>migrate --to 2</code> prints JSON but never writes the source file. The file contains no SQL or credentials; normal <code>dbcli q</code> / <code>query</code> safeguards still govern execution.</p>
+                <p class="m-0">Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose <code>query</code> is not an available <code>@saved-query</code>. <code>semantic search &lt;terms...&gt;</code> is deterministic and offline; use <code>--kind</code> and <code>--limit 1-100</code> (default 20). It returns only governed metadata and removes blacklist names from free-text results. <code>semantic drift</code> is non-zero for <code>stale</code>, <code>invalid</code>, or unavailable schema cache; <code>migrate --to 2</code> prints JSON but never writes the source file. The file contains no SQL or credentials; normal <code>dbcli q</code> / <code>query</code> safeguards still govern execution.</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> task plan and the <code>verification</code> block</h4>

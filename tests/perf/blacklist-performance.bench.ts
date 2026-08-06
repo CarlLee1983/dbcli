@@ -68,6 +68,36 @@ const typicalRows = Array.from({ length: 1000 }, (_, i) => ({
 }))
 const typicalColumnList = Object.keys(typicalRows[0] ?? {})
 
+/**
+ * Median of `sampleCount` runs, after one discarded warm-up run.
+ *
+ * A single `performance.now()` around one call is not a threshold a CI job can be
+ * held to: one GC pause or a descheduled slice and it reads several times high. On
+ * this machine the same masking call medians at ~1.3ms, yet three consecutive
+ * single-shot runs of the old benchmark produced one reading past the 5ms budget
+ * (n=3 — enough to show the gate was unreliable, not enough to put a rate on it).
+ * The median is what makes this assertion a gate rather than a coin flip.
+ */
+function medianElapsed(run: () => unknown, sampleCount = 9): number {
+  const samples: number[] = []
+  let sink = 0
+  for (let i = 0; i <= sampleCount; i++) {
+    const start = performance.now()
+    const result = run()
+    const elapsed = performance.now() - start
+    // Consume the result so the JIT cannot elide the call it is timing.
+    sink += Array.isArray(result) ? result.length : 1
+    if (i > 0) samples.push(elapsed)
+  }
+  if (samples.length === 0 || sink === 0) {
+    // Failing open here would let `expect(0).toBeLessThan(5)` certify a gate that
+    // measured nothing at all.
+    throw new Error('medianElapsed measured no samples')
+  }
+  samples.sort((a, b) => a - b)
+  return samples[Math.floor(samples.length / 2)]!
+}
+
 describe('Blacklist Performance Benchmarks', () => {
   it('Table lookup (1000 tables): 1000 lookups in < 10ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
@@ -96,27 +126,61 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed / 1000).toBeLessThan(1) // avg < 1ms
   })
 
-  it('Column filtering (100 rows x 50 cols, omit 5): < 5ms per call', () => {
+  it('Column filtering (100 rows x 50 cols, omits 50): < 5ms per call', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
     const largeValidator = new BlacklistValidator(largeManager)
     const columnList = Object.keys(largeRows[0] ?? {})
 
-    // Warm up JIT
-    largeValidator.filterColumns('table_0', largeRows.slice(0, 5), columnList)
+    const elapsed = medianElapsed(
+      () => largeValidator.filterColumns('table_0', largeRows, columnList).filteredRows
+    )
 
-    const start = performance.now()
-    largeValidator.filterColumns('table_0', largeRows, columnList)
-    const elapsed = performance.now() - start
-
-    expect(elapsed).toBeLessThan(5) // < 5ms for 100 rows (first call may include JIT warmup)
+    // Printed so a passing CI run still shows the margin — without it there is no
+    // way to tell whether this budget is comfortable on a runner or one GC away.
+    console.log(`Column filtering (100 rows x 50 cols) = ${elapsed.toFixed(2)}ms (budget 5ms)`)
+    expect(elapsed).toBeLessThan(5)
   })
 
-  it('Column filtering (1000 rows x 7 cols, omit 3): < 5ms per call', () => {
-    const start = performance.now()
-    typicalValidator.filterColumns('users', typicalRows, typicalColumnList)
-    const elapsed = performance.now() - start
+  it('Column filtering (1000 rows x 7 cols, omits 3): < 5ms per call', () => {
+    const elapsed = medianElapsed(
+      () => typicalValidator.filterColumns('users', typicalRows, typicalColumnList).filteredRows
+    )
 
-    expect(elapsed).toBeLessThan(5) // < 5ms for 1000 rows
+    console.log(`Column filtering (1000 rows x 7 cols) = ${elapsed.toFixed(2)}ms (budget 5ms)`)
+    expect(elapsed).toBeLessThan(5)
+  })
+
+  it('Column filtering (100 rows, 5 dotted JSON paths): < 10ms per call', () => {
+    // The single-pass optimisation covers dotless paths only; a dotted path still
+    // rebuilds the whole record once per path. Nothing guarded that half, so this
+    // pins it. The budget is deliberately looser than the dotless cases because
+    // this is the O(rows × paths) branch — it is a ceiling, not a target.
+    const jsonRows = Array.from({ length: 100 }, (_, i) => ({
+      id: i,
+      name: `n${i}`,
+      profile: { email: `e${i}`, ssn: `s${i}`, phone: `p${i}`, city: 'Taipei', note: 'x' },
+      payment: { card: `c${i}`, cvv: '123' },
+    }))
+    const jsonConfig = {
+      ...baseConfig,
+      blacklist: {
+        tables: [],
+        columns: {
+          orders: ['profile.email', 'profile.ssn', 'profile.phone', 'payment.card', 'payment.cvv'],
+        },
+      },
+    }
+    const validator = new BlacklistValidator(new BlacklistManager(jsonConfig as any))
+    const columnList = Object.keys(jsonRows[0] ?? {})
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('orders', jsonRows, columnList).filteredRows
+    )
+
+    console.log(
+      `Column filtering (100 rows, 5 dotted paths) = ${elapsed.toFixed(2)}ms (budget 10ms)`
+    )
+    expect(elapsed).toBeLessThan(10)
   })
 
   it('Config loading - typical blacklist: < 5ms', () => {

@@ -87,6 +87,79 @@ describe('projectRows', () => {
     ])
   })
 
+  test('excludes a mix of top-level, dotted, and array-nested paths in one pass', () => {
+    // omitFieldPaths splits paths into top-level and dotted so it can rebuild a row
+    // once instead of once per path. This pins the semantics that split must keep:
+    // plain names, a literal dotted key, traversal into a nested record, and
+    // traversal through an array all have to survive being handled together.
+    const rows = [
+      {
+        id: 1,
+        secret: 'top-level',
+        'profile.email': 'literal dotted key',
+        profile: { email: 'nested', city: 'Taipei' },
+        orders: [
+          { total: 10, card: 'a' },
+          { total: 20, card: 'b' },
+        ],
+      },
+    ]
+
+    const projected = projectRows(rows, {
+      mode: 'exclude',
+      paths: ['secret', 'profile.email', 'orders.card', 'absent', 'nope.here'],
+    })
+
+    expect(projected.rows).toEqual([
+      {
+        id: 1,
+        profile: { city: 'Taipei' },
+        orders: [{ total: 10 }, { total: 20 }],
+      },
+    ])
+    expect(projected.columnNames).toEqual(['id', 'profile', 'orders'])
+    // Input untouched — the projection must copy, never mutate.
+    expect(rows[0]!.secret).toBe('top-level')
+    expect(rows[0]!['profile.email']).toBe('literal dotted key')
+    expect(rows[0]!.orders).toEqual([
+      { total: 10, card: 'a' },
+      { total: 20, card: 'b' },
+    ])
+  })
+
+  test('excluding a parent and its child is order-independent across the split', () => {
+    // A top-level path and a dotted path sharing a head land in different buckets,
+    // so the split changes the order they are applied in. That is only safe because
+    // omission never creates a key; both orders must still collapse the whole parent.
+    const rows = [{ id: 1, profile: { email: 'a@example.com', city: 'Taipei' } }]
+
+    for (const paths of [
+      ['profile', 'profile.email'],
+      ['profile.email', 'profile'],
+    ]) {
+      const projected = projectRows(rows, { mode: 'exclude', paths })
+      expect(projected.rows).toEqual([{ id: 1 }])
+    }
+  })
+
+  test('excludes a prototype-polluting key without touching Object.prototype', () => {
+    const rows = [Object.assign(Object.create(null), { __proto__: 'x', safe: 1 })]
+
+    const projected = projectRows(rows, { mode: 'exclude', paths: ['__proto__'] })
+
+    expect(projected.rows).toEqual([{ safe: 1 }])
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype)
+    expect((Object.prototype as Record<string, unknown>).safe).toBeUndefined()
+  })
+
+  test('an empty-string path excludes the empty-string key and nothing else', () => {
+    const rows = [{ '': 'blank', id: 1 }]
+
+    const projected = projectRows(rows, { mode: 'exclude', paths: [''] })
+
+    expect(projected.rows).toEqual([{ id: 1 }])
+  })
+
   test('normalizes sparse inclusion keys for JSON and preserves non-plain values', () => {
     const date = new Date('2026-08-01T00:00:00Z')
     const projected = projectRows([{ id: 1, date }, { id: 2 }], {

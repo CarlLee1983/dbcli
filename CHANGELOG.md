@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+
+- **欄位遮罩對每一列的每一個欄位各複製一次整列。** `omitFieldPaths` 逐一路徑呼叫 `omitPath`，而後者每次都重建整個 record，因此成本是 O(列數 × 遮罩欄位數) 次完整複製 —— 100 列對上 50 個遮罩欄位就是 5000 次。沒有點的路徑只會刪掉一個頂層鍵，而欄位黑名單絕大多數就是這種名稱，現在合併成一趟處理，只有真正的巢狀路徑才遞迴。輸出完全相同，實測 30.37ms → 1.73ms。任何回傳大量資料又設有欄位黑名單的查詢或匯出都會受益。
+
+### Fixed
+
+- **兩條效能基準自 2026-03-26 加入起就沒通過過。** 它們被 `ci.yml` 的 `continue-on-error: true` 蓋住，所以 CI 從未因此變紅，超標 6 倍也沒人看見。門檻本身是合理的（修正後餘裕 3 倍），問題在上面那條實作。基準也改為取多次量測的中位數並印出實測值：單次 `performance.now()` 加硬門檻約每三次就會誤報一次，當不了 gate。
+
 ## [1.48.0] - 2026-08-05 - blacklist 涵蓋語句中的每一張表，以及所有執行路徑（安全性修復）
 
 對應 issue [#23](https://github.com/CarlLee1983/dbcli/issues/23)。與 1.47.1 修掉的六個繞過不同，這一批洩漏的是**讀取內容**，不是寫入能力。

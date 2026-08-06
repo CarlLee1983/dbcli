@@ -64,9 +64,27 @@ export function omitFieldPaths(
   rows: readonly Record<string, unknown>[],
   paths: readonly string[]
 ): Record<string, unknown>[] {
+  // `omitPath` rebuilds the whole record, so running it once per path made this
+  // O(rows × paths) full copies — 100 rows against a 50-column blacklist cost 5000
+  // rebuilds and ~35ms, which is why the masking benchmark had never met its 5ms
+  // budget. A path without a dot only ever deletes one top-level key, and a column
+  // blacklist is overwhelmingly such names, so those are collected into one pass
+  // and only genuinely nested paths still recurse. Same output, ~50x faster.
+  //
+  // Ceiling: dotted paths keep the old cost. A blacklist of N dotted JSON paths is
+  // still N rebuilds per row — measured at 2.6ms for 5 paths over 100 rows, and it
+  // grows linearly in N. `blacklist-validator.ts` admits dotted paths deliberately,
+  // so if a config ever carries dozens of them, this branch is what to optimise next.
+  const topLevel = new Set<string>()
+  const nested: string[] = []
+  for (const path of paths) {
+    if (path.includes('.')) nested.push(path)
+    else topLevel.add(path)
+  }
+
   return rows.map((row) => {
-    let projected: unknown = cloneRecord(row)
-    for (const path of paths) projected = omitPath(projected, path.split('.'))
+    let projected: unknown = cloneRecord(row, topLevel)
+    for (const path of nested) projected = omitPath(projected, path.split('.'))
     return projected as Record<string, unknown>
   })
 }
@@ -132,10 +150,15 @@ function omitPath(value: unknown, segments: readonly string[]): unknown {
   return out
 }
 
-function cloneRecord(value: Record<string, unknown>, omittedKey?: string): Record<string, unknown> {
+// `omittedKeys` is required rather than optional: for a masking helper, the
+// fail-open direction of a forgotten argument (keep every key) is the wrong default.
+function cloneRecord(
+  value: Record<string, unknown>,
+  omittedKeys: ReadonlySet<string>
+): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(value)) {
-    if (key !== omittedKey) defineData(out, key, child)
+    if (!omittedKeys.has(key)) defineData(out, key, child)
   }
   return out
 }

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="以真實資料庫任務為主的 dbcli 使用情境：先取得證據，再由人決定下一步。">
+  <title>dbcli 使用情境 — 安全完成資料庫工作</title>
+  <link rel="stylesheet" href="../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要內容</a>
+  <header class="site-header">
+    <nav class="nav container" aria-label="主要導覽">
+      <a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a>
+      <div class="nav-links">
+        <a class="nav-link" href="../dbcli-intro.html">產品介紹</a>
+        <a class="nav-link" href="./index.html" aria-current="page">使用情境</a>
+        <a class="nav-link" href="../user/zh-TW/">完整文件</a>
+      </div>
+      <a class="locale-link" href="./en/index.html" lang="en">EN</a>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container">
+        <p class="eyebrow">Agent database playbooks</p>
+        <h1>每個資料庫任務，<br>都先拿到足夠的證據。</h1>
+        <p class="lead">這不是指令百科，而是 dbcli 在真實工作裡如何讓 Agent 確認結構、遵守邊界，並交付可檢閱結果的情境指南。</p>
+        <div class="actions"><a class="button" href="#guides">瀏覽情境</a><a class="button button-secondary" href="../dbcli-intro.html">認識 dbcli</a></div>
+      </div>
+    </section>
+
+    <section class="section section-paper" id="guides">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow">已發布指南</p>
+          <h2>從任務開始，而不是從一條指令開始</h2>
+          <p>每篇都說明風險、可重現工作流、可交付的證據，以及 dbcli 不會替你跨越的界線。</p>
+        </div>
+        <div class="guide-grid">
+          <article class="guide-card"><span class="tag">資料修正</span><h2>安全規劃資料回填</h2><p>在任何 UPDATE 前先確認 schema、範圍與回讀斷言；寫入後留下可檢視的驗證文物。</p><a href="./safe-backfill.html">閱讀安全回填指南 →</a></article>
+          <article class="guide-card"><span class="tag">分析交付</span><h2>交付可分享的資料儀表板</h2><p>把一個業務問題轉成受限查詢與互動式 HTML 報表，而不讓 Agent 猜測欄位。</p><a href="./agent-dashboard.html">閱讀儀表板指南 →</a></article>
+          <article class="guide-card"><span class="tag">上線前檢查</span><h2>找出 ORM 與資料庫的 schema 漂移</h2><p>先將實際 schema 與 ORM 定義比對，再把 DDL 是否執行的決定交還給團隊。</p><a href="./orm-schema-drift.html">閱讀 schema 漂移指南 →</a></article>
+          <article class="guide-card"><span class="tag">效能調查</span><h2>用資料庫證據定位慢 API</h2><p>由觀測事件、查詢計畫與索引建議逐步縮小問題，不以直覺調整正式資料庫。</p><a href="./slow-endpoint.html">閱讀慢端點指南 →</a></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="https://github.com/CarlLee1983/dbcli">GitHub</a><a href="../user/zh-TW/">完整文件</a><a href="./en/index.html" lang="en">English</a></div></div></footer>
+</body>
+</html>

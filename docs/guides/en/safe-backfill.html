@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Use dbcli to collect schema, scope, and verification evidence before a data backfill. verify safe-backfill never executes the UPDATE.">
+  <title>Plan a safe data backfill | dbcli use case</title><link rel="stylesheet" href="../../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header"><nav class="nav container" aria-label="Primary navigation"><a class="brand" href="../../dbcli-intro.en.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../../dbcli-intro.en.html">Product</a><a class="nav-link" href="./index.html" aria-current="page">Use cases</a><a class="nav-link" href="../../user/en/">Documentation</a></div><a class="locale-link" href="../safe-backfill.html" lang="zh-Hant">Traditional Chinese</a></nav></header>
+  <main id="main-content">
+    <section class="hero"><div class="container article"><p class="eyebrow">Data correction · SQL</p><h1>Before a backfill, prove that it deserves to run.</h1><p class="lead">“Fill in the missing status” sounds simple, but it has a target, a scope, sensitive fields, and a condition that must be true afterward. dbcli lets an agent prepare reviewable evidence before returning the write decision to you.</p></div></section>
+    <section class="section section-paper"><div class="container article">
+      <div class="problem"><strong>Situation:</strong> You need to set the missing status in <code>customers</code> to <code>active</code>. The question is not whether an UPDATE can be written; it is whether the target is right, how much it touches, and how success will be proven.</div>
+      <h2>A safe workflow</h2>
+      <div class="workflow">
+        <article class="step"><h3>Check the protected surface first</h3><p>Start with the blacklist. If the table or a field is protected, resolve the access and data policy rather than rewriting SQL around it.</p><pre class="command"><code>dbcli blacklist list</code></pre></article>
+        <article class="step"><h3>Confirm the target from the real schema</h3><p>Have the agent read the live columns and types instead of mapping a natural-language request to an imagined structure.</p><pre class="command"><code>dbcli schema customers --format json</code></pre></article>
+        <article class="step"><h3>Preflight the UPDATE and its read-back assertion</h3><p>Preflight checks that the UPDATE target matches <code>--table</code>, contains a WHERE clause, and uses a plain SELECT for read-back. It prints a copyable after-write command.</p><pre class="command"><code>dbcli verify safe-backfill \
+  --table customers \
+  --query "UPDATE customers SET status = 'active' WHERE status IS NULL" \
+  --verify-query "SELECT count(*)::int AS n FROM customers WHERE status IS NULL" \
+  --expect "value == 0"</code></pre></article>
+        <article class="step"><h3>Write only after approval, then verify</h3><p>Review the preflight output and execute the approved write through your team’s established authorization flow. Then run the generated command with <code>--after-write</code> to read back the result and write an inspectable verification artifact.</p><pre class="command"><code>dbcli verify safe-backfill ... --after-write
+dbcli verification list</code></pre></article>
+      </div>
+      <aside class="boundary"><h2>What dbcli will not do for you</h2><p><code>verify safe-backfill</code> never executes an UPDATE. It only preflights, or verifies by reading back after a write. A <code>ready</code> preflight means the guards passed; it does not mean the data is verified.</p></aside>
+      <aside class="next-card"><h2>Next step</h2><p>For flags, result statuses, and SQL-engine limits, see the complete <a href="../../user/en/">verify safe-backfill</a> reference.</p></aside>
+    </div></section>
+  </main>
+  <footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">All use cases</a><a href="../../user/en/">Documentation</a><a href="../safe-backfill.html" lang="zh-Hant">Traditional Chinese</a></div></div></footer>
+</body>
+</html>

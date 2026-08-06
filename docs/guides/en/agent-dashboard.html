@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Let an AI agent safely deliver a shareable data dashboard with dbcli.">
+  <title>Deliver a shareable data dashboard | dbcli use case</title><link rel="stylesheet" href="../../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header"><nav class="nav container" aria-label="Primary navigation"><a class="brand" href="../../dbcli-intro.en.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../../dbcli-intro.en.html">Product</a><a class="nav-link" href="./index.html" aria-current="page">Use cases</a><a class="nav-link" href="../../user/en/">Documentation</a></div><a class="locale-link" href="../agent-dashboard.html" lang="zh-Hant">Traditional Chinese</a></nav></header>
+  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">Analytical delivery</p><h1>Turn one business question into a shareable data dashboard.</h1><p class="lead">A dashboard is not done when SQL finishes. A reliable delivery explains where the data came from, which limits applied, and how its readers should interpret the result.</p></div></section>
+    <section class="section section-paper"><div class="container article"><div class="problem"><strong>Situation:</strong> Operations asks, “Which plan saw the worst churn this month?” They need a result they can discuss, not an agent response with no trail back to the data.</div><h2>A safe workflow</h2><div class="workflow">
+      <article class="step"><h3>Confirm what may be seen</h3><p>Read the blacklist first so the report cannot include protected tables or fields.</p><pre class="command"><code>dbcli blacklist list</code></pre></article>
+      <article class="step"><h3>Use schema instead of guessing columns</h3><p>Inspect the actual table before asking the agent to write a bounded query.</p><pre class="command"><code>dbcli schema subscriptions --format json</code></pre></article>
+      <article class="step"><h3>Reuse team queries and deliver an interactive result</h3><p>Look for a saved snippet first; once confirmed, run it with the interactive UI. Existing permissions, blacklists, and row limits still protect the result.</p><pre class="command"><code>dbcli queries search churn
+dbcli q @monthly-churn --ui</code></pre></article>
+    </div><aside class="boundary"><h2>What dbcli will not do for you</h2><p>It will not claim causation for you, and it will not let a dashboard bypass data protection. The result is a reviewable delivery; people who know the business context still make the conclusion.</p></aside><aside class="next-card"><h2>Next step</h2><p>Read the full guide to <a href="../../user/en/">interactive HTML dashboards</a> and saved queries.</p></aside></div></section>
+  </main><footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">All use cases</a><a href="../agent-dashboard.html" lang="zh-Hant">Traditional Chinese</a></div></div></footer>
+</body></html>

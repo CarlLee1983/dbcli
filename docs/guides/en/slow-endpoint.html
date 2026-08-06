@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Use dbcli event observation, query plans, and index guidance to safely investigate a slow API.">
+  <title>Use database evidence to find a slow API | dbcli use case</title><link rel="stylesheet" href="../../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header"><nav class="nav container" aria-label="Primary navigation"><a class="brand" href="../../dbcli-intro.en.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../../dbcli-intro.en.html">Product</a><a class="nav-link" href="./index.html" aria-current="page">Use cases</a><a class="nav-link" href="../../user/en/">Documentation</a></div><a class="locale-link" href="../slow-endpoint.html" lang="zh-Hant">Traditional Chinese</a></nav></header>
+  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">Performance investigation · SQL</p><h1>The first step on a slow API is not guessing a missing index.</h1><p class="lead">Letting an agent tune production directly is a risky shortcut. Aggregate observed activity, inspect the query plan, and generate reviewable index guidance before narrowing the cause.</p></div></section>
+    <section class="section section-paper"><div class="container article"><div class="problem"><strong>Situation:</strong> An API slows down at peak time. You need to know whether the same SQL repeats, which tables the slowest queries touch, and what to check before changing anything.</div><h2>A safe workflow</h2><div class="workflow">
+      <article class="step"><h3>Find patterns from local observation events</h3><p>proxy analyze reads recorded events and aggregates fingerprints, durations, errors, and hot tables. It does not perform database writes.</p><pre class="command"><code>dbcli proxy analyze --format json --top 10</code></pre></article>
+      <article class="step"><h3>Confirm structure, then inspect the query plan</h3><p>Confirm the live schema of the affected table, then gather execution evidence with explain.</p><pre class="command"><code>dbcli schema orders --format json
+dbcli explain "@saved-query" --format markdown</code></pre></article>
+      <article class="step"><h3>Keep index proposals in review</h3><p>Get missing-index guidance for the confirmed query, then let migration review decide whether it should become DDL.</p><pre class="command"><code>dbcli guide missing-index-for "@saved-query" --format json
+dbcli skill tasks plan migration-review \
+  --param "table=&lt;exact table name&gt;" \
+  --param "ddl=&lt;captured dry-run DDL&gt;"</code></pre></article>
+    </div><aside class="boundary"><h2>What dbcli will not do for you</h2><p>It will not create an index from a single query, nor treat observation as a performance conclusion. Indexes affect write cost, locking, and deployment strategy, so people should review them.</p></aside><aside class="next-card"><h2>Next step</h2><p>Read the <a href="../../user/en/#proxy">dbcli proxy</a>, <a href="../../user/en/#explain-command">explain</a>, and index-guidance documentation.</p></aside></div></section>
+  </main><footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">All use cases</a><a href="../slow-endpoint.html" lang="zh-Hant">Traditional Chinese</a></div></div></footer>
+</body></html>

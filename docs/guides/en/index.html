@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="dbcli use cases for completing real database work with evidence, guardrails, and human review.">
+  <title>dbcli Use Cases — Complete database work safely</title>
+  <link rel="stylesheet" href="../../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header">
+    <nav class="nav container" aria-label="Primary navigation">
+      <a class="brand" href="../../dbcli-intro.en.html"><span class="brand-mark">d</span>dbcli</a>
+      <div class="nav-links">
+        <a class="nav-link" href="../../dbcli-intro.en.html">Product</a>
+        <a class="nav-link" href="./index.html" aria-current="page">Use cases</a>
+        <a class="nav-link" href="../../user/en/">Documentation</a>
+      </div>
+      <a class="locale-link" href="../index.html" lang="zh-Hant">Traditional Chinese</a>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container">
+        <p class="eyebrow">Agent database playbooks</p>
+        <h1>For every database task,<br>start with enough evidence.</h1>
+        <p class="lead">These are not command encyclopedias. They show how dbcli helps an agent confirm structure, respect boundaries, and deliver reviewable results in real work.</p>
+        <div class="actions"><a class="button" href="#guides">Browse use cases</a><a class="button button-secondary" href="../../dbcli-intro.en.html">Meet dbcli</a></div>
+      </div>
+    </section>
+
+    <section class="section section-paper" id="guides">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow">Published guides</p>
+          <h2>Start with the task, not a command</h2>
+          <p>Every guide covers the risk, a repeatable workflow, the evidence it delivers, and the boundary dbcli will not cross for you.</p>
+        </div>
+        <div class="guide-grid">
+          <article class="guide-card"><span class="tag">Data correction</span><h2>Plan a safe data backfill</h2><p>Confirm schema, scope, and a read-back assertion before any UPDATE; retain a verification artifact after the approved write.</p><a href="./safe-backfill.html">Read the safe-backfill guide →</a></article>
+          <article class="guide-card"><span class="tag">Analytical delivery</span><h2>Deliver a shareable data dashboard</h2><p>Turn a business question into a bounded query and interactive HTML report without asking an agent to guess the columns.</p><a href="./agent-dashboard.html">Read the dashboard guide →</a></article>
+          <article class="guide-card"><span class="tag">Pre-deploy review</span><h2>Find ORM-to-database schema drift</h2><p>Compare the live schema with ORM definitions before the team decides whether any DDL should run.</p><a href="./orm-schema-drift.html">Read the schema-drift guide →</a></article>
+          <article class="guide-card"><span class="tag">Performance investigation</span><h2>Use database evidence to find a slow API</h2><p>Narrow the problem through observed events, query plans, and index guidance instead of tuning production on instinct.</p><a href="./slow-endpoint.html">Read the slow-endpoint guide →</a></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="https://github.com/CarlLee1983/dbcli">GitHub</a><a href="../../user/en/">Documentation</a><a href="../index.html" lang="zh-Hant">Traditional Chinese</a></div></div></footer>
+</body>
+</html>

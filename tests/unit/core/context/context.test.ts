@@ -154,6 +154,94 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     expect(activeUsersSnippet?.params).toEqual([{ name: 'min_id', type: 'int', default: 1 }])
   })
 
+  test('gatherContext includes only a validated project semantic context', async () => {
+    await Bun.file(TEST_CONFIG_PATH).write(
+      JSON.stringify({
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: 'pass',
+          database: 'app',
+        },
+        schema: {
+          orders: {
+            name: 'orders',
+            columns: [{ name: 'created_at', type: 'timestamp', nullable: false }],
+          },
+        },
+      })
+    )
+    await Bun.file(join(TEST_WORKSPACE, 'dbcli.semantic.json')).write(
+      JSON.stringify({
+        version: 1,
+        models: [
+          {
+            name: 'orders',
+            table: 'orders',
+            fields: [{ column: 'created_at', aliases: ['order date'] }],
+          },
+        ],
+        metrics: [],
+      })
+    )
+
+    const payload = await gatherContext(TEST_WORKSPACE, TEST_CONFIG_PATH)
+
+    expect(payload.semantic).toEqual({
+      version: 1,
+      models: [
+        {
+          name: 'orders',
+          table: 'orders',
+          aliases: [],
+          fields: [{ column: 'created_at', aliases: ['order date'] }],
+        },
+      ],
+      metrics: [],
+    })
+    expect(JSON.parse(serializeJson(payload)).semantic.models[0].table).toBe('orders')
+    expect(serializeXml(payload)).toContain('<semantic_context version="1">')
+    expect(serializeMarkdown(payload)).toContain('## Business Semantic Context')
+  })
+
+  test('gatherContext fails closed when semantic context names a blacklisted column', async () => {
+    await Bun.file(TEST_CONFIG_PATH).write(
+      JSON.stringify({
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: 'pass',
+          database: 'app',
+        },
+        blacklist: { tables: [], columns: { orders: ['secret'] } },
+        schema: {
+          orders: {
+            name: 'orders',
+            columns: [
+              { name: 'id', type: 'integer', nullable: false },
+              { name: 'secret', type: 'text', nullable: true },
+            ],
+          },
+        },
+      })
+    )
+    await Bun.file(join(TEST_WORKSPACE, 'dbcli.semantic.json')).write(
+      JSON.stringify({
+        version: 1,
+        models: [{ name: 'orders', table: 'orders', fields: [{ column: 'secret', aliases: [] }] }],
+        metrics: [],
+      })
+    )
+
+    await expect(gatherContext(TEST_WORKSPACE, TEST_CONFIG_PATH)).rejects.toThrow(
+      'must reference a visible column'
+    )
+  })
+
   test('JSON serializer outputs correctly', () => {
     const samplePayload = {
       version: '1.0',
@@ -167,6 +255,46 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     const parsed = JSON.parse(json)
     expect(parsed.system).toBe('mysql')
     expect(parsed.permission).toBe('query-only')
+  })
+
+  test('XML and Markdown serializers preserve every validated semantic field', () => {
+    const payload = {
+      version: '1.0',
+      system: 'postgresql',
+      permission: 'query-only',
+      blacklist: { tables: [], columns: {} },
+      schema: {},
+      snippets: [],
+      semantic: {
+        version: 1 as const,
+        models: [
+          {
+            name: 'orders',
+            table: 'orders',
+            description: 'Completed purchases.',
+            aliases: ['purchases'],
+            fields: [
+              {
+                column: 'created_at',
+                description: 'Order creation time.',
+                aliases: ['order date'],
+              },
+            ],
+          },
+        ],
+        metrics: [{ name: 'daily-revenue', description: 'Revenue by day.', query: '@revenue' }],
+      },
+    }
+
+    const xml = serializeXml(payload)
+    const markdown = serializeMarkdown(payload)
+
+    expect(xml).toContain('<alias>purchases</alias>')
+    expect(xml).toContain('<description>Order creation time.</description>')
+    expect(xml).toContain('<metric name="daily-revenue" query="@revenue">')
+    expect(markdown).toContain('Aliases: `purchases`')
+    expect(markdown).toContain('Order creation time.')
+    expect(markdown).toContain('Revenue by day.')
   })
 
   test('XML serializer formats correctly with escapes', () => {

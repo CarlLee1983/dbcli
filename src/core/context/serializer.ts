@@ -71,6 +71,31 @@ export function serializeXml(payload: ContextPayload): string {
     parts.push('  </saved_queries>')
   }
 
+  if (payload.semantic) {
+    parts.push('  <semantic_context version="1">')
+    for (const model of payload.semantic.models) {
+      parts.push(`    <model name="${escapeXml(model.name)}" table="${escapeXml(model.table)}">`)
+      if (model.description)
+        parts.push(`      <description>${escapeXml(model.description)}</description>`)
+      for (const alias of model.aliases) parts.push(`      <alias>${escapeXml(alias)}</alias>`)
+      for (const field of model.fields) {
+        parts.push(`      <field column="${escapeXml(field.column)}">`)
+        if (field.description)
+          parts.push(`        <description>${escapeXml(field.description)}</description>`)
+        for (const alias of field.aliases) parts.push(`        <alias>${escapeXml(alias)}</alias>`)
+        parts.push('      </field>')
+      }
+      parts.push('    </model>')
+    }
+    for (const metric of payload.semantic.metrics) {
+      parts.push(`    <metric name="${escapeXml(metric.name)}" query="${escapeXml(metric.query)}">`)
+      if (metric.description)
+        parts.push(`      <description>${escapeXml(metric.description)}</description>`)
+      parts.push('    </metric>')
+    }
+    parts.push('  </semantic_context>')
+  }
+
   parts.push('</database_context>')
   return parts.join('\n')
 }
@@ -151,6 +176,32 @@ export function serializeMarkdown(payload: ContextPayload): string {
       }
       parts.push(``)
     }
+  }
+
+  if (payload.semantic) {
+    parts.push(`## Business Semantic Context`)
+    parts.push(``)
+    for (const model of payload.semantic.models) {
+      parts.push(`### \`${model.name}\` → \`${model.table}\``)
+      if (model.description) parts.push(model.description)
+      if (model.aliases.length > 0) {
+        parts.push(`- Aliases: ${model.aliases.map((alias) => `\`${alias}\``).join(', ')}`)
+      }
+      for (const field of model.fields) {
+        const description = field.description ? ` — ${field.description}` : ''
+        const aliases =
+          field.aliases.length > 0
+            ? ` (aliases: ${field.aliases.map((alias) => `\`${alias}\``).join(', ')})`
+            : ''
+        parts.push(`- Field: \`${field.column}\`${description}${aliases}`)
+      }
+      parts.push(``)
+    }
+    for (const metric of payload.semantic.metrics) {
+      const description = metric.description ? ` — ${metric.description}` : ''
+      parts.push(`- Metric \`${metric.name}\`: \`${metric.query}\`${description}`)
+    }
+    if (payload.semantic.metrics.length > 0) parts.push(``)
   }
 
   return parts.join('\n')

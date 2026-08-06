@@ -288,6 +288,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `upgrade` | n/a | 從 npm 自我更新；每個指令都帶 24h 快取的版本提示。 |
 | `shell` | (與 query 同) | 互動式 REPL。SQL 引擎、MongoDB 與 Redis（單行；`.no-limit on/off`）。**(v1.22)** Elasticsearch 開啟 Kibana Dev Tools 風格的 REPL（`<METHOD> /<path>` + 可選 JSON body，空白行送出）。 |
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷（用於注入其他 LLM，正常操作不需要）。 |
+| `semantic` | n/a | 驗證或輸出可選的專案根目錄 `dbcli.semantic.json`。離線／唯讀，只接受快取 schema 中可見的模型／欄位，以及指向 saved query 的指標；絕不執行 SQL。 |
 | `migrate` | admin | 僅 SQL。**DDL；預設 dry-run** — 需 `--execute`。 |
 
 任何指令都可使用 root 層級的 `dbcli --use <name> <command>`；`query`、`schema`、`list`、`export`、`check` 也接受指令層級的 `--use`。兩種寫法都只把本次目標切到 v2 連線，不改變預設值。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect`、`lint` 與 `diff --against-orm` 支援（見上方**失敗時**）。

@@ -111,6 +111,36 @@ describe('skill context (CLI entrypoint)', () => {
     expect(parsed.permission).toBe('read-write')
     expect(parsed.version).toBe('9.9.9')
     expect(parsed.schema.users).toBeDefined()
+    expect(parsed.semantic).toBeUndefined()
+  })
+
+  test('includes a valid project semantic context in the agent JSON payload', async () => {
+    writeFileSync(
+      join(sandbox, 'dbcli.semantic.json'),
+      JSON.stringify({
+        version: 1,
+        models: [
+          { name: 'users', table: 'users', fields: [{ column: 'email', aliases: ['contact'] }] },
+        ],
+        metrics: [],
+      })
+    )
+
+    await run('--format', 'json')
+
+    expect(exitCode).toBeUndefined()
+    expect(JSON.parse(logOut.trim()).semantic).toMatchObject({
+      models: [expect.objectContaining({ name: 'users', table: 'users' })],
+    })
+  })
+
+  test('fails closed when the default semantic file is malformed', async () => {
+    writeFileSync(join(sandbox, 'dbcli.semantic.json'), '{not-json')
+
+    await run('--format', 'json')
+
+    expect(exitCode).toBe(1)
+    expect(errOut).toMatch(/Invalid semantic context/i)
   })
 
   test('--format markdown emits the summary header', async () => {

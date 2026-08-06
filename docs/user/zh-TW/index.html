@@ -701,6 +701,7 @@ dbcli proxy analyze \
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>執行 SQL 資料表與索引的建立、修改或刪除等 DDL 工作流。</td></tr>
                     <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Antigravity、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
                     <tr><td><code>skill context</code></td><td>將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。</td></tr>
+                    <tr><td><code>semantic validate</code> / <code>semantic context</code></td><td>驗證並輸出可版控的業務語彙；只對照本機快取、已經 blacklist 過濾的 schema 與 saved-query 名稱。離線且唯讀。</td></tr>
                     <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
@@ -714,6 +715,14 @@ dbcli proxy analyze \
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">內建任務包 <code>analyze-table-perf</code></h4>
                 <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code>、<code>orm-drift-review</code> 與 <code>connection-health</code>。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
+            </div>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">業務語意脈絡</h4>
+                <p>在專案根目錄放置可檢閱的 <code>dbcli.semantic.json</code>，描述業務模型、可見欄位、別名與由 saved query 支援的指標。可在不連線資料庫的情況下驗證：</p>
+                <pre><code>dbcli semantic validate --format json
+dbcli semantic context --format json
+dbcli skill context --format json</code></pre>
+                <p class="m-0">驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 <code>query</code> 並非可用 <code>@saved-query</code> 的指標。檔案不含 SQL 或憑證；實際執行仍必須通過既有 <code>dbcli q</code> / <code>query</code> 的安全閘門。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

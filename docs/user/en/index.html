@@ -701,6 +701,7 @@ dbcli proxy analyze \
                     <tr><td><code>migrate &lt;action&gt;</code></td><td>Run DDL workflows for creating, altering, or dropping SQL tables and indexes.</td></tr>
                     <tr><td><code>skill --install</code></td><td>Install compact AI-agent instructions for Claude, Gemini, Antigravity, Codex, and similar tools.</td></tr>
                     <tr><td><code>skill context</code></td><td>Serialize cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown structures for AI prompt injection.</td></tr>
+                    <tr><td><code>semantic validate</code> / <code>semantic context</code></td><td>Validate and print a version-controlled business vocabulary against the locally cached, blacklist-filtered schema and saved-query names. Offline and read-only.</td></tr>
                     <tr><td><code>skill tasks</code></td><td>Manage repeatable expert task packs for diagnostics, audits, and database workflows.</td></tr>
                     <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
                 </tbody>
@@ -714,6 +715,14 @@ dbcli proxy analyze \
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">Builtin task pack <code>analyze-table-perf</code></h4>
                 <p class="m-0">A read-only (<code>plan-only</code>) pack that takes a required <code>table</code> parameter and walks <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>. <code>dbcli inspect</code> suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — <code>audit-permissions</code>, <code>safe-backfill</code>, <code>schema-drift-review</code>, <code>orm-drift-review</code>, and <code>connection-health</code>. Browse all packs with <code>dbcli skill tasks list</code>.</p>
+            </div>
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">Business semantic context</h4>
+                <p>Put a reviewable <code>dbcli.semantic.json</code> at the project root to describe business models, visible fields, aliases, and metrics backed by saved queries. Validate it without connecting to a database:</p>
+                <pre><code>dbcli semantic validate --format json
+dbcli semantic context --format json
+dbcli skill context --format json</code></pre>
+                <p class="m-0">The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose <code>query</code> is not an available <code>@saved-query</code>. The file contains no SQL or credentials; normal <code>dbcli q</code> / <code>query</code> safeguards still govern execution.</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> task plan and the <code>verification</code> block</h4>

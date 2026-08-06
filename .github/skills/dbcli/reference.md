@@ -2190,6 +2190,61 @@ dbcli migrate drop-enum status --execute --force
 
 **AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
 
+### semantic
+
+Validate or print the optional, version-controlled `dbcli.semantic.json` in the
+project root. It supplies business names and descriptions to an agent, but is
+not a query language: these commands are offline, read-only, and never execute
+SQL or contact an LLM.
+
+```bash
+dbcli semantic validate
+dbcli semantic validate --format json
+dbcli semantic context
+dbcli semantic context --format markdown
+dbcli semantic context --file ./analytics.semantic.json
+```
+
+The default file has this compact contract:
+
+```json
+{
+  "version": 1,
+  "models": [
+    {
+      "name": "orders",
+      "table": "orders",
+      "description": "Completed purchases.",
+      "aliases": ["purchases"],
+      "fields": [
+        { "column": "created_at", "aliases": ["order date"] }
+      ]
+    }
+  ],
+  "metrics": [
+    { "name": "daily-revenue", "query": "@analytics/revenue" }
+  ]
+}
+```
+
+`models[].table` and `models[].fields[].column` must name a visible cached
+schema object. Blacklisted tables and columns are not visible and are rejected.
+Each metric `query` must name an available saved query. Validation parses its
+local file through the normal saved-query safety checks, but never executes or
+emits SQL. The semantic file cannot contain SQL, connection data, or
+credentials. `semantic validate` reports a
+deterministic success summary (`--format text|json`); `semantic context` prints
+the validated context (`--format json|markdown`). An absent default file is
+allowed for `skill context` and simply omits the semantic section; an invalid
+present file fails closed rather than being silently ignored.
+
+When valid, `dbcli skill context` includes the same bounded data in its JSON,
+XML, and Markdown output. To run a metric, an agent must still invoke the named
+saved query through `dbcli q`; all ordinary permissions, blacklist masking,
+limits, audit, and recovery safeguards remain in force.
+
+**Permission:** n/a (local files only; no database connection).
+
 ### skill
 
 Emit `SKILL.md` (and the companion `reference.md`) to stdout, a file, or an

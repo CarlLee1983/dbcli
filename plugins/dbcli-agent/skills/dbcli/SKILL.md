@@ -375,6 +375,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
+| `semantic` | n/a | Validate or print the optional project-root `dbcli.semantic.json`. It is offline/read-only and accepts only models/fields visible in cached schema plus metrics that reference saved queries; it never executes SQL. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 Use root-level `dbcli --use <name> <command>` for any command; `query`, `schema`, `list`,

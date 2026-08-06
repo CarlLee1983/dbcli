@@ -4,6 +4,8 @@ import { loadSnippets } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import type { TableSchema } from '@/adapters/types'
 import type { ResolvedSnippet } from '@/core/saved-queries/types'
+import { loadSemanticContext, type SemanticContext } from '@/core/semantic'
+import type { DbcliConfig } from '@/utils/validation'
 
 export interface CompactColumn {
   name: string
@@ -51,49 +53,27 @@ export interface ContextPayload {
   }
   schema: Record<string, CompactTable>
   snippets: CompactSnippet[]
+  semantic?: SemanticContext
 }
 
-export async function gatherContext(
-  workspaceRoot: string,
-  configPath: string
-): Promise<ContextPayload> {
-  const config = await configModule.read(configPath)
-  const blacklistManager = new BlacklistManager(config)
-
-  // 1. Gather Connection & Permission Info
-  const system = config.connection?.system ?? 'unknown'
-  const permission = config.permission ?? 'query-only'
-  const version = config.metadata?.version ?? '1.0'
-
-  // 2. Gather Blacklist Configuration
-  const blacklistTables: string[] = []
-  const blacklistColumns: Record<string, string[]> = {}
-
-  if (config.blacklist?.tables) {
-    blacklistTables.push(...config.blacklist.tables)
-  }
-  if (config.blacklist?.columns) {
-    for (const [table, cols] of Object.entries(config.blacklist.columns)) {
-      blacklistColumns[table] = [...cols]
-    }
-  }
-
-  // 3. Process & Filter Schema Cache (respecting blacklists)
+/**
+ * Build the only schema view agent-facing context may consume. Blacklist
+ * filtering occurs before semantic validation, so hidden objects cannot be
+ * named by a semantic model.
+ */
+export function compactVisibleSchema(
+  config: Pick<DbcliConfig, 'schema' | 'blacklist'>
+): Record<string, CompactTable> {
+  const blacklistManager = new BlacklistManager(config as DbcliConfig)
   const compactSchema: Record<string, CompactTable> = {}
   const rawSchema = (config.schema ?? {}) as Record<string, TableSchema>
 
   for (const [tableName, tableSchema] of Object.entries(rawSchema)) {
-    // Skip entirely blacklisted tables
-    if (blacklistManager.isTableBlacklisted(tableName)) {
-      continue
-    }
+    if (blacklistManager.isTableBlacklisted(tableName)) continue
 
     const columns: CompactColumn[] = []
     for (const col of tableSchema.columns || []) {
-      // Skip blacklisted columns
-      if (blacklistManager.isColumnBlacklisted(tableName, col.name)) {
-        continue
-      }
+      if (blacklistManager.isColumnBlacklisted(tableName, col.name)) continue
 
       const compactCol: CompactColumn = {
         name: col.name,
@@ -115,11 +95,8 @@ export async function gatherContext(
       name: tableSchema.name || tableName,
       columns,
     }
-
     const rowCount = tableSchema.estimatedRowCount ?? tableSchema.rowCount
-    if (rowCount !== undefined) {
-      compactTable.rowCount = rowCount
-    }
+    if (rowCount !== undefined) compactTable.rowCount = rowCount
     if (tableSchema.primaryKey && tableSchema.primaryKey.length > 0) {
       compactTable.primaryKey = tableSchema.primaryKey
     }
@@ -130,9 +107,39 @@ export async function gatherContext(
         refColumns: fk.refColumns,
       }))
     }
-
     compactSchema[tableName] = compactTable
   }
+
+  return compactSchema
+}
+
+export async function gatherContext(
+  workspaceRoot: string,
+  configPath: string,
+  options: { includeSemantic?: boolean } = {}
+): Promise<ContextPayload> {
+  const config = await configModule.read(configPath)
+
+  // 1. Gather Connection & Permission Info
+  const system = config.connection?.system ?? 'unknown'
+  const permission = config.permission ?? 'query-only'
+  const version = config.metadata?.version ?? '1.0'
+
+  // 2. Gather Blacklist Configuration
+  const blacklistTables: string[] = []
+  const blacklistColumns: Record<string, string[]> = {}
+
+  if (config.blacklist?.tables) {
+    blacklistTables.push(...config.blacklist.tables)
+  }
+  if (config.blacklist?.columns) {
+    for (const [table, cols] of Object.entries(config.blacklist.columns)) {
+      blacklistColumns[table] = [...cols]
+    }
+  }
+
+  // 3. Process & filter schema cache before exposing it to agents.
+  const compactSchema = compactVisibleSchema(config)
 
   // 4. Gather Snippets
   const dirs = resolveSnippetDirs(workspaceRoot)
@@ -168,7 +175,7 @@ export async function gatherContext(
     }
   }
 
-  return {
+  const payload: ContextPayload = {
     version,
     system,
     permission,
@@ -179,4 +186,16 @@ export async function gatherContext(
     schema: compactSchema,
     snippets: compactSnippets.sort((a, b) => a.key.localeCompare(b.key)),
   }
+
+  if (options.includeSemantic !== false) {
+    const semantic = await loadSemanticContext({
+      workspaceRoot,
+      schema: compactSchema,
+      snippets: compactSnippets,
+      missingFile: 'allow',
+    })
+    if (semantic) payload.semantic = semantic
+  }
+
+  return payload
 }

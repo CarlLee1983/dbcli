@@ -98,35 +98,50 @@ function medianElapsed(run: () => unknown, sampleCount = 9): number {
   return samples[Math.floor(samples.length / 2)]!
 }
 
+/**
+ * Print every measurement, passing or failing.
+ *
+ * `test:perf` is a blocking CI step, so the number a budget was met by is the only
+ * way to tell "comfortable" from "one bad runner away" without waiting for a red
+ * build. The budgets themselves were chosen from real runner measurements, not
+ * from a dev machine — see the CHANGELOG entry.
+ */
+function report(label: string, elapsed: number, budget: number): void {
+  console.log(`${label} = ${elapsed.toFixed(2)}ms (budget ${budget}ms)`)
+}
+
 describe('Blacklist Performance Benchmarks', () => {
   it('Table lookup (1000 tables): 1000 lookups in < 10ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
 
-    const start = performance.now()
-    for (let i = 0; i < 1000; i++) {
-      largeManager.isTableBlacklisted(`table_${i}`)
-    }
-    const elapsed = performance.now() - start
+    const elapsed = medianElapsed(() => {
+      let hits = 0
+      for (let i = 0; i < 1000; i++) {
+        if (largeManager.isTableBlacklisted(`table_${i}`)) hits++
+      }
+      return hits
+    })
 
-    expect(elapsed).toBeLessThan(10) // 1000 lookups in < 10ms
-    // Individual lookup < 1µs (0.001ms)
-    expect(elapsed / 1000).toBeLessThan(1) // avg per lookup < 1ms
+    report('Table lookup (1000 tables)', elapsed, 10)
+    expect(elapsed).toBeLessThan(10)
   })
 
   it('Column lookup (100 cols blacklisted): 1000 lookups in < 10ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
 
-    const start = performance.now()
-    for (let i = 0; i < 1000; i++) {
-      largeManager.isColumnBlacklisted('table_50', `col_${i % 100}`)
-    }
-    const elapsed = performance.now() - start
+    const elapsed = medianElapsed(() => {
+      let hits = 0
+      for (let i = 0; i < 1000; i++) {
+        if (largeManager.isColumnBlacklisted('table_50', `col_${i % 100}`)) hits++
+      }
+      return hits
+    })
 
+    report('Column lookup (1000 lookups)', elapsed, 10)
     expect(elapsed).toBeLessThan(10)
-    expect(elapsed / 1000).toBeLessThan(1) // avg < 1ms
   })
 
-  it('Column filtering (100 rows x 50 cols, omits 50): < 5ms per call', () => {
+  it('Column filtering (100 rows x 50 cols, omits 50): < 8ms per call', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
     const largeValidator = new BlacklistValidator(largeManager)
     const columnList = Object.keys(largeRows[0] ?? {})
@@ -135,10 +150,8 @@ describe('Blacklist Performance Benchmarks', () => {
       () => largeValidator.filterColumns('table_0', largeRows, columnList).filteredRows
     )
 
-    // Printed so a passing CI run still shows the margin — without it there is no
-    // way to tell whether this budget is comfortable on a runner or one GC away.
-    console.log(`Column filtering (100 rows x 50 cols) = ${elapsed.toFixed(2)}ms (budget 5ms)`)
-    expect(elapsed).toBeLessThan(5)
+    report('Column filtering (100 rows x 50 cols)', elapsed, 8)
+    expect(elapsed).toBeLessThan(8)
   })
 
   it('Column filtering (1000 rows x 7 cols, omits 3): < 5ms per call', () => {
@@ -146,7 +159,7 @@ describe('Blacklist Performance Benchmarks', () => {
       () => typicalValidator.filterColumns('users', typicalRows, typicalColumnList).filteredRows
     )
 
-    console.log(`Column filtering (1000 rows x 7 cols) = ${elapsed.toFixed(2)}ms (budget 5ms)`)
+    report('Column filtering (1000 rows x 7 cols)', elapsed, 5)
     expect(elapsed).toBeLessThan(5)
   })
 
@@ -177,25 +190,21 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('orders', jsonRows, columnList).filteredRows
     )
 
-    console.log(
-      `Column filtering (100 rows, 5 dotted paths) = ${elapsed.toFixed(2)}ms (budget 10ms)`
-    )
+    report('Column filtering (100 rows, 5 dotted paths)', elapsed, 10)
     expect(elapsed).toBeLessThan(10)
   })
 
   it('Config loading - typical blacklist: < 5ms', () => {
-    const start = performance.now()
-    new BlacklistManager(typicalConfig as any)
-    const elapsed = performance.now() - start
+    const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 
+    report('Config loading (typical)', elapsed, 5)
     expect(elapsed).toBeLessThan(5)
   })
 
   it('Config loading - large blacklist (1000 tables): < 50ms', () => {
-    const start = performance.now()
-    new BlacklistManager(largeConfig as any)
-    const elapsed = performance.now() - start
+    const elapsed = medianElapsed(() => new BlacklistManager(largeConfig as any))
 
+    report('Config loading (1000 tables)', elapsed, 50)
     expect(elapsed).toBeLessThan(50)
   })
 
@@ -205,22 +214,23 @@ describe('Blacklist Performance Benchmarks', () => {
     const validator = new BlacklistValidator(manager)
 
     const ITERATIONS = 1000
-    const start = performance.now()
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      // Simulate what happens per query: table check + column filter
-      if (!manager.isTableBlacklisted('users')) {
-        validator.filterColumns(
-          'users',
-          [{ id: i, password: 'hash', email: 'e@e.com' }],
-          ['id', 'password', 'email']
-        )
+    const elapsed = medianElapsed(() => {
+      let masked = 0
+      for (let i = 0; i < ITERATIONS; i++) {
+        // Simulate what happens per query: table check + column filter
+        if (!manager.isTableBlacklisted('users')) {
+          masked += validator.filterColumns(
+            'users',
+            [{ id: i, password: 'hash', email: 'e@e.com' }],
+            ['id', 'password', 'email']
+          ).filteredRows.length
+        }
       }
-    }
-
-    const elapsed = performance.now() - start
+      return masked
+    })
     const perQuery = elapsed / ITERATIONS
 
-    expect(perQuery).toBeLessThan(1) // < 1ms overhead per query
+    report('Per-query overhead', perQuery, 1)
+    expect(perQuery).toBeLessThan(1)
   })
 })

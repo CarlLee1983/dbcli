@@ -61,9 +61,13 @@ jobs:
           & $exePath --help
           & $exePath --version
 
+      # Blocking. It was `continue-on-error: true`, and two blacklist benchmarks
+      # then failed unnoticed for four months (2026-03-26 → 2026-08-06) while the
+      # masking path ran 6x over budget. Every budget here is now set from a real
+      # runner measurement rather than a dev machine, and each one prints what it
+      # measured, so a tightening margin is visible before it turns the build red.
       - name: Run performance benchmarks
         run: bun run test:perf
-        continue-on-error: true
 
   docs-parity:
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed

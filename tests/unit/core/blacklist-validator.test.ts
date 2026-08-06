@@ -6,6 +6,7 @@ import { describe, it, expect, spyOn } from 'bun:test'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
+import { hasFieldPath } from '@/core/field-projection'
 import type { DbcliConfig } from '@/types'
 
 const baseConfig: DbcliConfig = {
@@ -374,6 +375,155 @@ describe('BlacklistValidator', () => {
       const result = validator.filterColumns('logs', [{ 'data.profile.ssn': 'S' }], [])
 
       expect(result.omittedColumns).toEqual([])
+    })
+
+    it('omits a dotted rule that only a nested record can satisfy', () => {
+      // The nested probe is skipped for any rule whose head never holds an object,
+      // which is the whole point of the fast path. This is the case where the head
+      // does hold one, so skipping it would silently stop masking a JSON column.
+      const validator = makeValidator({ tables: [], columns: { orders: ['profile.ssn'] } })
+      const rows = [{ id: 1, profile: { email: 'e', ssn: 'S' } }]
+
+      const result = validator.filterColumns('orders', rows, ['id', 'profile'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ id: 1, profile: { email: 'e' } })
+    })
+
+    it('omits a dotted rule reachable only through an array-valued column', () => {
+      // `readPath` walks arrays, so an array head has to keep the probe alive too.
+      const validator = makeValidator({ tables: [], columns: { orders: ['profile.ssn'] } })
+      const rows = [{ id: 1, profile: [{ ssn: 'S' }, { ssn: 'T' }] }]
+
+      const result = validator.filterColumns('orders', rows, ['id', 'profile'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ id: 1, profile: [{}, {}] })
+    })
+
+    it('omits a dotted rule whose nested record appears only in a later row', () => {
+      // The heads that can be descended into are collected across every row, not
+      // from the first one: a result set can be uniform for a hundred rows and then
+      // carry the JSON column that the rule is actually about.
+      const validator = makeValidator({ tables: [], columns: { orders: ['profile.ssn'] } })
+      const rows = [{ id: 1, profile: null }, { id: 2 }, { id: 3, profile: { ssn: 'S' } }]
+
+      const result = validator.filterColumns('orders', rows, ['id', 'profile'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[2]).toEqual({ id: 3, profile: {} })
+    })
+
+    it('omits a leading-dot rule whose head is the empty-string key', () => {
+      // `path.slice(0, dot)` has to yield `''` when the path starts with a dot, which
+      // is the head `readPath` would use. A refactor to `split('.')[0]` keeps working
+      // by accident, one to `slice(0, dot) || path` does not — and nothing else here
+      // would catch it, because Elasticsearch genuinely permits both names.
+      const validator = makeValidator({ tables: [], columns: { logs: ['.ssn'] } })
+      const rows = [{ id: 1, '': { ssn: 'S', keep: 'k' } }]
+
+      const result = validator.filterColumns('logs', rows, ['id', ''])
+
+      expect(result.omittedColumns).toEqual(['.ssn'])
+      expect(result.filteredRows[0]).toEqual({ id: 1, '': { keep: 'k' } })
+    })
+
+    it('omits a rule carried by a non-enumerable own property', () => {
+      // The probe decided membership with `hasOwnProperty`, so collecting the column
+      // set with `Object.keys` would quietly stop omitting such a field — and an empty
+      // omitted list returns the rows untouched, which is the fail-open direction.
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+      const row: Record<string, unknown> = { id: 1 }
+      Object.defineProperty(row, 'password', { value: 'SECRET', enumerable: false })
+
+      const result = validator.filterColumns('users', [row], ['id'])
+
+      expect(result.omittedColumns).toEqual(['password'])
+      expect(result.filteredRows[0]).toEqual({ id: 1 })
+    })
+
+    it('actually removes a protected field from an array row it reports as masked', () => {
+      // `cloneRecord` treated an array row as a record, so the indices became keys
+      // and the protected field inside the element survived — the row was reported
+      // as masked and returned intact. No adapter produces array rows; this pins the
+      // two halves (is it present / remove it) to the same answer regardless.
+      const validator = makeValidator({ tables: [], columns: { users: ['password'] } })
+      const rows = [[{ id: 1, password: 'SECRET' }]] as unknown as Record<string, unknown>[]
+
+      const result = validator.filterColumns('users', rows, ['id'])
+
+      expect(result.omittedColumns).toEqual(['password'])
+      expect(result.filteredRows[0]).toEqual({ 0: { id: 1 } })
+      expect(JSON.stringify(result.filteredRows)).not.toContain('SECRET')
+    })
+
+    it('sees through nested arrays and dotted rules in an array row', () => {
+      const validator = makeValidator({ tables: [], columns: { users: ['profile.ssn'] } })
+      const rows = [[[{ id: 1, profile: { ssn: 'SECRET', city: 'Taipei' } }]]] as unknown as Record<
+        string,
+        unknown
+      >[]
+
+      const result = validator.filterColumns('users', rows, ['id'])
+
+      expect(result.omittedColumns).toEqual(['profile.ssn'])
+      expect(result.filteredRows[0]).toEqual({ 0: { 0: { id: 1, profile: { city: 'Taipei' } } } })
+      expect(JSON.stringify(result.filteredRows)).not.toContain('SECRET')
+    })
+
+    it('decides exactly what a per-row probe of every rule would decide', () => {
+      // The claim this fast path rests on is equivalence, not "these four cases pass":
+      // a dotless rule is answered exactly by the column set, and a dotted rule can
+      // only match by descending from a head that holds an object. So compare against
+      // the naive predicate itself over the shapes that break the reasoning.
+      const rowShapes: Record<string, unknown>[] = [
+        { a: 1 },
+        { a: { b: 2 } },
+        { a: { b: { c: 3 } } },
+        { a: [{ b: 4 }] },
+        { a: [[{ b: 5 }]] },
+        { a: null },
+        { a: new Date() },
+        { 'a.b': 6 },
+        { '': { b: 7 } },
+        { b: 8 },
+        {},
+        [{ b: 9 }] as unknown as Record<string, unknown>,
+        [[{ a: { b: 10 } }]] as unknown as Record<string, unknown>,
+      ]
+      const paths = ['a', 'b', 'a.b', 'a.b.c', '.b', 'a.', 'a..b', '', 'missing.x']
+
+      for (const path of paths) {
+        for (const shape of rowShapes) {
+          // Sparse result sets are the shape the fast path summarises across rows, so
+          // the probe row is padded with unrelated rows on both sides.
+          const rows = [{ id: 1 }, shape, { id: 2 }]
+          const naive = rows.some((row) => hasFieldPath(row, path.split('.')))
+          const validator = makeValidator({ tables: [], columns: { logs: [path] } })
+
+          const omitted = validator.filterColumns('logs', rows, []).omittedColumns
+
+          // The rule itself is reported iff the naive probe would have found it. The
+          // ancestor walk can add *other* names (a flattened child), never this one.
+          expect({ path, shape, omitted: omitted.includes(path) }).toEqual({
+            path,
+            shape,
+            omitted: naive || Object.getOwnPropertyNames(shape).includes(path),
+          })
+        }
+      }
+    })
+
+    it('does not omit a dotted rule whose head is a scalar in every row', () => {
+      const validator = makeValidator({ tables: [], columns: { orders: ['profile.ssn'] } })
+
+      const result = validator.filterColumns('orders', [{ id: 1, profile: 'plain' }], [
+        'id',
+        'profile',
+      ])
+
+      expect(result.omittedColumns).toEqual([])
+      expect(result.filteredRows[0]).toEqual({ id: 1, profile: 'plain' })
     })
 
     it('still omits the nested representation when both forms are present', () => {

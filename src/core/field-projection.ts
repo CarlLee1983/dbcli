@@ -56,8 +56,15 @@ export function projectRows(
   return { rows: normalizeRows(projectedRows, columnNames), columnNames }
 }
 
-export function hasFieldPath(row: Record<string, unknown>, path: string): boolean {
-  return readPath(row, path.split('.')).found
+// Takes pre-split segments rather than a dotted string so a caller probing many rows
+// for the same path pays `split` once instead of once per row: the masker's fail-safe
+// branch applies every rule in the config, so "many paths, almost no matches" is its
+// normal shape, and the splitting alone measured a third of that branch's cost.
+export function hasFieldPath(
+  row: Record<string, unknown>,
+  segments: readonly string[]
+): boolean {
+  return readPath(row, segments).found
 }
 
 export function omitFieldPaths(
@@ -92,19 +99,46 @@ export function omitFieldPaths(
     .filter((path) => path.includes('.'))
     .map((path) => ({ head: path.slice(0, path.indexOf('.')), segments: path.split('.') }))
 
-  return rows.map((row) => {
-    // A null/non-record row carries no field to mask. Returning it untouched only
-    // moved the throw downstream (`query-executor` indexes into every row), and the
-    // declared return type says these are records — so it becomes an empty one. Row
-    // count and ordering are preserved, which is what callers actually index by.
-    if (row === null || typeof row !== 'object') return {}
+  const maskRecord = (row: Record<string, unknown>): Record<string, unknown> => {
     let projected: unknown = cloneRecord(row, topLevel)
     for (const { head, segments } of dotted) {
       const value = row[head]
       if (value !== null && typeof value === 'object') projected = omitPath(projected, segments)
     }
     return projected as Record<string, unknown>
+  }
+
+  return rows.map((row) => {
+    // A null/non-record row carries no field to mask. Returning it untouched only
+    // moved the throw downstream (`query-executor` indexes into every row), and the
+    // declared return type says these are records — so it becomes an empty one. Row
+    // count and ordering are preserved, which is what callers actually index by.
+    if (row === null || typeof row !== 'object') return {}
+    // An array row is not a record, but `cloneRecord` treated it as one: the indices
+    // became keys and every protected field inside the elements survived, so a row
+    // reported as masked was returned intact. `readPath` — which decides *whether* a
+    // field is there — walks arrays transparently, so masking has to see through them
+    // the same way or the two disagree in the fail-open direction. The record-of-
+    // indices shape is the one this already produced; only the leak is fixed.
+    if (Array.isArray(row)) return maskArrayRow(row, maskRecord)
+    return maskRecord(row)
   })
+}
+
+function maskArrayRow(
+  row: readonly unknown[],
+  maskRecord: (record: Record<string, unknown>) => Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  row.forEach((item, index) => {
+    const masked = Array.isArray(item)
+      ? maskArrayRow(item, maskRecord)
+      : item !== null && typeof item === 'object'
+        ? maskRecord(item as Record<string, unknown>)
+        : item
+    defineData(out, String(index), masked)
+  })
+  return out
 }
 
 export function toMongoProjection(selection: FieldSelection): Record<string, 0 | 1> {

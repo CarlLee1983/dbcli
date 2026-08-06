@@ -6,14 +6,14 @@ services:
   mysql:
     image: mysql:8.4
     ports:
-      - "3307:3306"
+      - '3307:3306'
     environment:
       MYSQL_ROOT_PASSWORD: testpass
       MYSQL_DATABASE: dbcli_test
       MYSQL_USER: dbcli
       MYSQL_PASSWORD: testpass
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ptestpass"]
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-ptestpass']
       interval: 3s
       timeout: 5s
       retries: 10
@@ -23,13 +23,13 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "5433:5432"
+      - '5433:5432'
     environment:
       POSTGRES_DB: dbcli_test
       POSTGRES_USER: dbcli
       POSTGRES_PASSWORD: testpass
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dbcli -d dbcli_test"]
+      test: ['CMD-SHELL', 'pg_isready -U dbcli -d dbcli_test']
       interval: 3s
       timeout: 5s
       retries: 10
@@ -39,9 +39,9 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 3s
       timeout: 5s
       retries: 10
@@ -51,13 +51,17 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
     ports:
-      - "9201:9200"
+      - '9201:9200'
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      test:
+        [
+          'CMD-SHELL',
+          "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'",
+        ]
       interval: 5s
       timeout: 5s
       retries: 20

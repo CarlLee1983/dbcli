@@ -81,8 +81,9 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
     "lint": "eslint src tests scripts --ext .ts --max-warnings=0",
-    "lint:fix": "eslint src tests scripts --ext .ts --fix --max-warnings=0",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint:fix": "eslint src tests scripts --ext .ts --fix --max-warnings=0"
   },
   "dependencies": {
     "cli-table3": "^0.6.5",

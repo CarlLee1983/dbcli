@@ -8,8 +8,11 @@ step() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 step '1/9 bun audit'
 bun audit
 
+# Via `bun run` so the glob lives in one place (package.json) and CI's `format`
+# job checks exactly what this checks — the two drifting apart is how unformatted
+# files reached main in the first place.
 step '2/9 prettier --check'
-bunx prettier --check "src/**/*.ts" "tests/**/*.ts" "scripts/**/*.ts"
+bun run format:check
 
 step '3/9 agent-core purity'
 bun run agent-core:check

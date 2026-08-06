@@ -69,6 +69,23 @@ jobs:
       - name: Run performance benchmarks
         run: bun run test:perf
 
+  format:
+    # Formatting is platform-independent, so this runs once rather than per matrix
+    # entry. It exists because `release:check` was the only thing enforcing prettier:
+    # four unformatted files reached main through green CI and were caught minutes
+    # before a release. Scope is deliberately the same TS glob release:check uses —
+    # a whole-repo check currently fails on 86 files (docs, generated HTML, fixtures)
+    # and reformatting those is its own change, not a side effect of adding a gate.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Prettier
+        run: bun run format:check
+
   docs-parity:
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
     # platform copies, or user docs fall out of sync. Runs once (not per matrix).

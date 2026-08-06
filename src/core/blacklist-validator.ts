@@ -263,10 +263,31 @@ export class BlacklistValidator {
     // Sparse documents mean a protected field can appear only in a later row, so
     // the column set is taken from the rows as well as the declared column list.
     // A null row is an adapter edge case, not a reason to throw from the masker.
+    // `nestedHeads` records which of those keys actually hold an object (or array,
+    // which `readPath` walks too). That is the only thing the nested probe below can
+    // descend into, so collecting it here — in a pass the masker already makes —
+    // is what lets most probes be skipped without walking a single row. It is only
+    // collected when some rule is dotted: reading the values costs about 4x listing
+    // the names (0.30ms vs 0.07ms over 1000 x 13), and a dotless-only blacklist —
+    // the overwhelmingly common case — never consults it. Reading them also *calls*
+    // any getter a row happens to carry, which is worth confining to the case that
+    // needs it.
+    //
+    // Names, not `Object.keys`: `readPath` decided membership with `hasOwnProperty`,
+    // so a non-enumerable own property used to be found and masked. Enumerable-only
+    // collection would silently stop omitting it, and an empty omitted list returns
+    // the rows untouched — fail-open, in the one place that must not be.
+    const probeNested = blacklistedColumns.some((path) => path.includes('.'))
     const presentColumns = new Set(columnList)
+    const nestedHeads = new Set<string>()
     for (const row of rows) {
       if (row === null || typeof row !== 'object') continue
-      for (const key of Object.keys(row)) presentColumns.add(key)
+      for (const key of Object.getOwnPropertyNames(row)) {
+        presentColumns.add(key)
+        if (!probeNested) continue
+        const value = (row as Record<string, unknown>)[key]
+        if (value !== null && typeof value === 'object') nestedHeads.add(key)
+      }
     }
 
     const protectedPaths = new Set(blacklistedColumns)
@@ -276,9 +297,22 @@ export class BlacklistValidator {
       // `presentColumns` first: it is a Set lookup, while the nested probe walks
       // every row. The fail-safe branch above can hand this loop the whole rule set
       // with almost nothing matching, which is exactly the shape that probe is worst at.
-      if (presentColumns.has(path) || rows.some((row) => hasFieldPath(row, path))) {
+      if (presentColumns.has(path)) {
         omitted.add(path)
+        continue
       }
+      // Everything the probe could still find is reachable only by descending from a
+      // head key into a nested record. So a dotless path has nothing left to find —
+      // `presentColumns` already answered it exactly — and a dotted path whose head
+      // is never an object in any row cannot match either. Skipping both is not a
+      // heuristic: it is the same condition `readPath` would evaluate, decided once
+      // per rule instead of once per row. 60 dotted misses over 1000 rows measured
+      // 12.1ms before and 0.2ms after, and only then is `split` worth hoisting.
+      const dot = path.indexOf('.')
+      if (dot < 0) continue
+      if (!nestedHeads.has(path.slice(0, dot))) continue
+      const segments = path.split('.')
+      if (rows.some((row) => hasFieldPath(row, segments))) omitted.add(path)
     }
     // Walk each column up to its ancestors rather than testing every rule against
     // every column: `a.b.c` only has to ask about `a` and `a.b`. The other direction

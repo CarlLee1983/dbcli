@@ -56,8 +56,15 @@ export function projectRows(
   return { rows: normalizeRows(projectedRows, columnNames), columnNames }
 }
 
-export function hasFieldPath(row: Record<string, unknown>, path: string): boolean {
-  return readPath(row, path.split('.')).found
+// Takes pre-split segments rather than a dotted string so a caller probing many rows
+// for the same path pays `split` once instead of once per row: the masker's fail-safe
+// branch applies every rule in the config, so "many paths, almost no matches" is its
+// normal shape, and the splitting alone measured a third of that branch's cost.
+export function hasFieldPath(
+  row: Record<string, unknown>,
+  segments: readonly string[]
+): boolean {
+  return readPath(row, segments).found
 }
 
 export function omitFieldPaths(

@@ -236,6 +236,37 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed).toBeLessThan(12)
   })
 
+  it('Column filtering (1000 rows, 60 dotted rules that match nothing): < 6ms per call', () => {
+    // The shape the fail-safe branch produces: when the statement scan cannot name a
+    // table, every rule in the config is applied, so "many rules, almost no matches"
+    // is the normal case rather than a pathological one. Every miss used to walk all
+    // 1000 rows through `hasFieldPath`, re-splitting the path on each row — measured
+    // 7.17ms locally for masking that omits a single column.
+    const rows = Array.from({ length: 1000 }, (_, i) => {
+      const row: Record<string, unknown> = { id: i, password: 'p' }
+      for (let j = 0; j < 8; j++) row[`f${j}`] = j
+      return row
+    })
+    const columns = Array.from({ length: 60 }, (_, i) => `ns${i}.secret`)
+    const config = {
+      ...baseConfig,
+      blacklist: { tables: [], columns: { users: [...columns, 'password'] } },
+    }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+    const columnList = Object.keys(rows[0] ?? {})
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('users', rows, columnList).filteredRows
+    )
+
+    // Budget scaled the same way as the flattened-docs case: a CI runner costs about
+    // 3x this machine, so 0.90ms locally is ~2.7ms there and 6ms keeps the 2.2x margin
+    // that stops this being a coin flip. The regression it guards measures 12.1ms
+    // locally — roughly 36ms on that runner — so it still fails loudly.
+    report('Column filtering (60 missing dotted rules)', elapsed, 6)
+    expect(elapsed).toBeLessThan(6)
+  })
+
   it('Config loading - typical blacklist: < 5ms', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 

@@ -101,7 +101,8 @@ async function collectDraftValidationContext(command: Command): Promise<{
   const workspaceRoot = process.cwd()
   const config = await configModule.read(resolveConfigPath(command))
   if (Object.keys(config.schema ?? {}).length === 0) throw new Error('cached schema is unavailable')
-  if (!isSqlDatabaseSystem(config.connection.system)) throw new Error('SQL semantic validation is unavailable')
+  if (!isSqlDatabaseSystem(config.connection.system))
+    throw new Error('SQL semantic validation is unavailable')
 
   const schema = compactVisibleSchema(config)
   const savedQueryNames = await listSnippetKeys(resolveSnippetDirs(workspaceRoot))

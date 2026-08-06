@@ -160,8 +160,14 @@ function parseDraft(
   const semanticReferences = stringArray(raw.semanticReferences, violations)
   validateOptionalText(raw.parameterRequests, violations)
   validateOptionalText(raw.risks, violations)
-  if (raw.rationale !== undefined && typeof raw.rationale !== 'string') violations.add('INVALID_DRAFT')
-  if (!candidate || !semanticReferences || typeof raw.questionHash !== 'string' || raw.version !== 1) {
+  if (raw.rationale !== undefined && typeof raw.rationale !== 'string')
+    violations.add('INVALID_DRAFT')
+  if (
+    !candidate ||
+    !semanticReferences ||
+    typeof raw.questionHash !== 'string' ||
+    raw.version !== 1
+  ) {
     return undefined
   }
   return {
@@ -192,10 +198,7 @@ function parseCandidate(
     : { kind: 'saved-query', name: value.trim() }
 }
 
-function stringArray(
-  raw: unknown,
-  violations: Set<QueryDraftViolationCode>
-): string[] | undefined {
+function stringArray(raw: unknown, violations: Set<QueryDraftViolationCode>): string[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0 || raw.some((item) => typeof item !== 'string')) {
     violations.add('INVALID_DRAFT')
     return undefined
@@ -259,7 +262,8 @@ function semanticReferenceRegistry(
   for (const relationship of context.relationships) {
     const from = `field:${relationship.from.model}.${relationship.from.field}`
     const to = `field:${relationship.to.model}.${relationship.to.field}`
-    if (references.has(from) && references.has(to)) references.add(`relationship:${relationship.name}`)
+    if (references.has(from) && references.has(to))
+      references.add(`relationship:${relationship.name}`)
   }
   for (const metric of context.metrics) {
     if (saved.has(metric.query)) references.add(`metric:${metric.name}`)
@@ -293,7 +297,10 @@ function validateSqlCandidate(
   validateSqlColumns(ast, input, references, modelTables, aliases, blockedTerms, violations)
 }
 
-function referencedModelTables(context: SemanticContext, references: string[]): Map<string, string> {
+function referencedModelTables(
+  context: SemanticContext,
+  references: string[]
+): Map<string, string> {
   return new Map(
     context.models
       .filter(
@@ -354,9 +361,9 @@ function validateSqlColumns(
       violations.add('BLACKLISTED_SQL_REFERENCE')
       continue
     }
-    const tableNames = (column.table ? [aliases.get(column.table)] : [...new Set(aliases.values())]).filter(
-      (table): table is string => typeof table === 'string'
-    )
+    const tableNames = (
+      column.table ? [aliases.get(column.table)] : [...new Set(aliases.values())]
+    ).filter((table): table is string => typeof table === 'string')
     const matches = tableNames.filter((table) =>
       input.schema[table]?.columns.some((candidate) => candidate.name === column.name)
     )
@@ -403,7 +410,8 @@ function sqlColumns(ast: unknown): Array<{ name: string; table?: string }> {
   visit(ast, (node) => {
     if (node.type !== 'column_ref') return
     const name = columnName(node.column)
-    if (name) columns.push({ name, ...(typeof node.table === 'string' ? { table: node.table } : {}) })
+    if (name)
+      columns.push({ name, ...(typeof node.table === 'string' ? { table: node.table } : {}) })
   })
   return columns
 }
@@ -481,8 +489,11 @@ function sha256(value: string): string {
 function isCanonicalSemanticReference(value: string): boolean {
   const [kind, target, extra] = value.split(':')
   if (extra !== undefined || !target) return false
-  if (kind === 'model' || kind === 'metric' || kind === 'relationship') return IDENTIFIER.test(target)
+  if (kind === 'model' || kind === 'metric' || kind === 'relationship')
+    return IDENTIFIER.test(target)
   if (kind !== 'field') return false
   const [model = '', field = '', fieldExtra] = target.split('.')
-  return fieldExtra === undefined && IDENTIFIER.test(model) && /^[A-Za-z_][A-Za-z0-9_$]*$/.test(field)
+  return (
+    fieldExtra === undefined && IDENTIFIER.test(model) && /^[A-Za-z_][A-Za-z0-9_$]*$/.test(field)
+  )
 }

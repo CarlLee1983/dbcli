@@ -5,6 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.51.0] - 2026-08-07 - Local semantic context and offline query-draft validation
+
+### Added
+
+- **Business semantic context commands.** Add the offline, read-only `dbcli semantic validate`, `context`, `search`, `drift`, and `migrate` commands for a reviewable `dbcli.semantic.json`. Semantic models, metrics, aliases, and v2 relationships are checked against the cached visible schema and saved-query names; v1 files remain supported and `migrate --to 2` writes only to stdout.
+- **Deterministic governed semantic search and relationship drift checks.** `semantic search` returns only reviewed metadata, removes blacklist names from free-text results, and supports bounded result counts. `semantic drift` identifies stale, invalid, or unavailable local semantic evidence, including relationship references that no longer match declared visible fields.
+- **Offline validation boundary for agent query drafts.** `dbcli semantic draft validate --input <file|->` accepts an explicit untrusted JSON draft and validates its references and read-only SQL without executing it, persisting it, or calling a provider. Reports contain hashes, canonical references, and safe violation codes rather than candidate SQL; a successful validation is explicitly not permission to execute.
+- **Semantic context in agent-facing skill context.** `dbcli skill context` includes the validated semantic context when present, after blacklist filtering, so agents receive only governed schema and semantic metadata.
+
 ## [1.50.0] - 2026-08-06 - QueryLens proxy query analysis
 
 ### Added

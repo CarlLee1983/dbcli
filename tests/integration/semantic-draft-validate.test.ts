@@ -10,7 +10,20 @@ let workspace: string
 
 async function run(stdin: string): Promise<{ stdout: string; stderr: string; code: number }> {
   const child = Bun.spawn({
-    cmd: ['bun', 'run', CLI, '--config', join(workspace, 'config.json'), 'semantic', 'draft', 'validate', '--input', '-', '--format', 'json'],
+    cmd: [
+      'bun',
+      'run',
+      CLI,
+      '--config',
+      join(workspace, 'config.json'),
+      'semantic',
+      'draft',
+      'validate',
+      '--input',
+      '-',
+      '--format',
+      'json',
+    ],
     cwd: workspace,
     env: { ...process.env, NODE_ENV: 'test', DBCLI_NO_UPDATE_CHECK: '1', HOME: workspace },
     stdin: 'pipe',
@@ -54,7 +67,9 @@ beforeAll(async () => {
     join(workspace, 'dbcli.semantic.json'),
     JSON.stringify({
       version: 1,
-      models: [{ name: 'orders', table: 'orders', fields: [{ column: 'created_at', aliases: [] }] }],
+      models: [
+        { name: 'orders', table: 'orders', fields: [{ column: 'created_at', aliases: [] }] },
+      ],
       metrics: [],
     })
   )

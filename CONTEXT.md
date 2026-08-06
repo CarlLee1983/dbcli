@@ -25,3 +25,25 @@ relevant changes, tests, documentation checks, and known risks.
 **Deferred decision**:
 An intentionally postponed choice with an explicit condition for reopening it;
 it is not an unspecified future TODO.
+
+## Semantic query-drafting language
+
+**QueryDraft**:
+An explicit, unexecuted candidate saved-query reference or read-only SQL
+artifact. It is untrusted input until the offline draft validator accepts it;
+acceptance never grants execution permission.
+
+**Draft validator**:
+The deterministic, local boundary that checks a `QueryDraft` against the
+governed semantic context and existing SQL safety rules. It neither calls a
+model nor executes SQL.
+
+**Agent-driven drafting**:
+An external agent creates a `QueryDraft` and submits it to dbcli for local
+validation. The agent's provider choice, credentials, and model context remain
+outside dbcli.
+
+**Provider-driven drafting**:
+dbcli explicitly calls an approved provider to create a `QueryDraft`. It is a
+separate, policy-gated transport concern and uses the same validator; it is not
+a different permission tier.

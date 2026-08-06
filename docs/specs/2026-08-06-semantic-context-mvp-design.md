@@ -1,7 +1,7 @@
 # Semantic Context MVP Design
 
 **Date:** 2026-08-06
-**Status:** Accepted for implementation
+**Status:** Implemented — retained as a design record
 **Source of inspiration:** WrenAI's version-controlled semantic context; see
 [`docs/research/wrenai-feature-analysis.md`](../research/wrenai-feature-analysis.md).
 

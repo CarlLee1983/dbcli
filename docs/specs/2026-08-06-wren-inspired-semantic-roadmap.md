@@ -1,7 +1,8 @@
 # WrenAI 借鑑功能：語意層後續規格
 
 **Date:** 2026-08-06
-**Status:** Slices 1–2 implemented; Slice 3 remains deferred
+**Status:** Slices 1–2 implemented; Slice 3 specification refined, with no
+implementation authorized yet
 **Depends on:**
 [`2026-08-06-semantic-context-mvp-design.md`](2026-08-06-semantic-context-mvp-design.md)
 and [`docs/adr/0004-database-access-stays-a-cli-surface.md`](../adr/0004-database-access-stays-a-cli-surface.md).
@@ -12,9 +13,9 @@ and [`docs/adr/0004-database-access-stays-a-cli-surface.md`](../adr/0004-databas
 semantic layer，而不將 dbcli 變成新的資料庫執行器、LLM gateway 或 MCP
 server。每一期都必須是獨立可用、可驗證且可回滾的垂直切片。
 
-本文件是後續工作的單一規格入口；只有標為「下一期」的項目可在取得實作
-指示後開始。其餘項目先保留設計決策與啟動條件，避免把高風險能力偷偷變成
-核心依賴。
+本文件是後續工作的單一規格入口。規格或 ticket 的存在不構成實作授權；只有
+取得實作指示的項目才能開始。其餘項目先保留設計決策與啟動條件，避免把
+高風險能力偷偷變成核心依賴。
 
 ## Non-negotiable constraints
 
@@ -48,7 +49,8 @@ v1 是永久相容的資料格式。後續格式必須以 `version` 明確區別
 | --- | --- | --- | --- | --- |
 | 1 | Semantic v2: relationships and drift | 把可驗證的模型關聯納入版本控制，及早發現 schema/config 漂移。 | Low; offline/read-only | Implemented |
 | 2 | Semantic catalog search | 讓人與 agent 以名稱、alias、description 找到已治理的模型、欄位與指標。 | Low; offline/read-only | Implemented |
-| 3 | Guarded NL query draft | 將自然語言轉為「待確認的查詢草稿」，絕不直接執行。 | High; LLM/privacy/SQL safety | Deferred pending separate approval |
+| 3a | Guarded query-draft contract and agent-driven validation | 讓 Codex、Claude 或其他外部 agent 產生待確認草稿，再由 dbcli 離線驗證；絕不直接執行。 | Medium; SQL safety | Planned; implementation not authorized |
+| 3b | Provider-driven query draft | 由 dbcli 明確 opt-in 呼叫已核准的 provider 產生相同草稿。 | High; egress/privacy/cost/provider reliability | Deferred pending policy approval |
 
 下列 WrenAI 能力不在目前 backlog：embedding/history memory、Wren connector
 runtime、瀏覽器 dashboard、Vercel/Cloudflare deploy、HTTP MCP。它們各自引入
@@ -208,42 +210,115 @@ alias 與必要 model path，不含 SQL body、connection data 或 blacklist nam
 
 ---
 
-## Slice 3 — Guarded natural-language query draft (deferred)
+## Slice 3 — Guarded query-draft contract
 
-### Why deferred
+### Outcome and delivery modes
 
-這是最接近 WrenAI GenBI 的能力，但它新增 prompt injection、資料外傳、成本、
-provider reliability 與 SQL correctness 的風險。Slice 1 和 2 必須先在至少一個
-真實專案中被採用，並有可 review 的 semantic context，才可開啟本 slice。
+本 slice 的產品能力是「產生後可離線驗證、可 review、但尚未執行的查詢草稿」，
+不是讓 dbcli 變成某個 LLM 的必經 gateway。所有模式共用一個 `QueryDraft`
+contract 與 validator；差別只在誰產生草稿。
 
-### Required separate approval and design decisions
+1. **Agent-driven（先交付）**：Codex、Claude 或其他外部 agent 讀取 skill
+   context、依既有 `schema` / `explain` / `query` workflow 產生 draft，並以
+   `dbcli semantic draft validate` 離線驗證。agent 自己持有模型選擇、帳號與
+   API key；dbcli 不持有 provider 設定，也不發出網路請求。
+2. **Provider-driven（後續 opt-in）**：dbcli 使用明確指定且已核准的 provider
+   產生同一種 draft。這會新增資料出境、retention、key 管理、成本與可靠性責任，
+   因此不得和 agent-driven 一起隱式啟用。
 
-開始前必須取得明確實作授權，並確認：LLM provider、資料出境與 retention、
-API key storage、可傳送的 context 範圍、成本上限、審計保留期、錯誤處理和
-offline fallback。這些不能由環境變數存在與否來推定同意。
+兩種模式都不能直接執行 SQL。通過 validator 也不是存取授權；已檢閱的候選仍須
+另行送至既有 `dbcli explain` 或 `dbcli query`，並完整經過 permission tier、
+schema/blacklist、row limit、dry-run 與 audit gate。
 
-若獲批准，唯一允許的初始 interface 為：
+### Shared terminology and contract
+
+- **QueryDraft**：一份明確要求輸出的、尚未執行的候選查詢 artifact。它可以引用
+  named saved query，或攜帶一段候選 read-only SQL；dbcli 不會自動保存、記錄或在
+  validation output 重送 SQL body。
+- **Draft validator**：在本機、離線執行的 deterministic validator。它檢查 draft
+  shape、canonical semantic references、候選查詢的 statement/read-only 規則與
+  filtered schema / blacklist 相容性；它不呼叫模型、不讀資料列、不執行 SQL。
+- **Agent-driven** 與 **provider-driven** 是 provenance 與 transport 的區別，
+  不是不同的安全權限。任何 draft 都是未受信任輸入，必須經同一 validator。
+
+v1 `QueryDraft` 的 canonical payload 至少包含：`version`、`questionHash`、一個
+`candidate`（`saved-query` name 或 SQL text）、`semanticReferences`（canonical
+references）與選用的 parameter requests / rationale / risks。這些可選文字欄位不
+是授權證據，validator 不可因其內容略過任何檢查。
+
+validator 的 JSON report 至少包含穩定的 `status`、`draftHash`、`questionHash`、
+已驗證的 canonical references 與不含敏感名稱或 SQL body 的 violations。成功
+report 不回顯 candidate；呼叫端保有它原先提交並供人 review 的 draft。這使草稿
+本身可作為使用者明確要求的 stdout/file artifact，同時避免它進入 CLI context、
+log、error 或 fixture。
+
+### Agent-driven interface (planned)
+
+唯一預定的第一個 command 是：
 
 ```text
-dbcli semantic draft "<question>" --provider <explicit-provider> --format json
+dbcli semantic draft validate --input <file|-> [--format text|json]
 ```
 
-它輸出 `QueryDraft`（候選 saved query 或 SQL text、使用的 canonical semantic
-references、理由、風險、需要使用者確認的參數），但不得執行任何 SQL。執行必須
-由使用者另行把已檢閱的輸出送到既有 `dbcli query` / `explain`，因此維持原有
-permission tier、row limit、dry-run 和 audit 行為。
+它只讀取呼叫端明確提供的 draft，載入既有受治理的 semantic context，並輸出
+validation report；不讀 provider config、credentials 或 network。缺少有效
+semantic context、saved-query name 不存在、candidate 是 multi-statement/write SQL，
+或引用 unknown / blacklisted table or column 時，必須 fail closed 並以 non-zero
+exit 結束。SQL parser/validator 是提早拒絕的保護層，不取代 `explain` / `query`
+在執行前的權威 gate。
 
-### Future acceptance criteria
+預期使用流程：
 
-1. provider adapter 是獨立 adapter；core semantic module 不含 provider SDK、
-   key 或 network client。
-2. 只傳送經 `semantic context` 淨化後的資料；不傳 schema cache、saved-query
-   SQL body、rows、credentials、blacklist entries 或本機路徑。
-3. 對模型輸出以 parser/validator 檢查，拒絕 multi-statement、write SQL、未知
-   或 blacklisted references；驗證失敗時不產生可執行 command。
-4. output 清楚標示為草稿，附帶輸入 hash、provider/model metadata、拒絕原因
-   與可重現的 deterministic validation evidence。
-5. 能在沒有 provider 設定或網路時明確失敗，不降級成秘密外傳或自動執行。
+```text
+User -> external agent -> QueryDraft file/stdin
+                         -> dbcli semantic draft validate
+                         -> human/agent review
+                         -> dbcli explain or query (separate invocation)
+```
+
+此流程讓 agent 可以是 Codex、Claude 或其他相容工具，卻不要求 dbcli 知道或儲存
+其 provider、模型或 key。
+
+### Provider-driven interface (deferred)
+
+只有完成下列 policy decision 並取得獨立實作授權後，才可新增：
+
+```text
+dbcli semantic draft generate "<question>" --provider <explicit-provider> --format json
+```
+
+`generate` 的唯一輸出仍是 `QueryDraft`；隨後必須透過同一個 draft validator，
+而非由 provider output 直接構造可執行 command。provider adapter 必須隔離在
+semantic core 之外；core 不含 provider SDK、key 或 network client。
+
+開始前必須明確決定並記錄：允許的 provider/model、可傳送的 sanitized context
+範圍、資料出境地與 retention、API key storage、成本上限、rate/error behavior、
+audit metadata、offline fallback 與撤銷方式。這些不能因為環境變數或某個 agent
+已登入而推定同意。可傳送資料只能來自已淨化的 semantic context；不得傳送 schema
+cache、saved-query SQL body、資料列、credentials、blacklist entries 或本機路徑。
+
+### Acceptance criteria
+
+1. Agent-driven validator 完全離線；它不需要 provider config、不能發 network
+   request，也不能執行或回顯 candidate SQL。
+2. 同一份 `QueryDraft` 在相同 semantic context 下得到相同 validation status、
+   hashes、references、JSON shape 與 exit semantics，無論它來自哪個 agent/provider。
+3. validator 拒絕 malformed draft、multi-statement、write SQL、unknown 或
+   blacklisted references；拒絕 report 不洩漏 SQL body 或受保護名稱。
+4. 有效 draft 仍不會產生自動 `query` / `explain` invocation；執行一定是人或
+   agent 明確發出的下一個既有 CLI command。
+5. provider-driven adapter 必須在 policy approval 後才實作，且需證明 sanitized
+   transport、explicit provider selection、cost/error boundary、metadata-only audit
+   與無 provider/network 時的明確失敗。
+6. 每張 implementation ticket 都更新英中 Markdown/HTML 使用者文件及 generated
+   skill 文件，並加入對應 unit/command/security regression tests。
+
+### Ticket breakdown
+
+可執行的相依 ticket、各自的 scope 與 acceptance criteria 定義於
+[`2026-08-06-semantic-query-draft-ticket-backlog.md`](../plans/2026-08-06-semantic-query-draft-ticket-backlog.md)。
+其中只有 agent-driven 的 SQD-01–SQD-03 可在取得實作指示後排程；provider 相關
+ticket 一律受 policy gate 阻擋。
 
 ## Cross-cutting verification
 

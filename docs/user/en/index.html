@@ -640,7 +640,14 @@ dbcli --use local proxy --listen 127.0.0.1:3307</code></pre>
             <p class="mb-4">SQL text is always stored in the event log. <strong>Result rows are never stored.</strong> Use <code>--redact literals</code> to mask string and number literals in SQL before logging (e.g. <code>WHERE id = ?</code> instead of <code>WHERE id = 42</code>).</p>
 
             <h4 class="mt-6 mb-2 font-bold">Analyze the event log offline</h4>
-            <p class="mb-4"><code>dbcli proxy analyze</code> — analyze the captured event log offline (no DB). <code>--format json|text</code>, <code>--top</code>, <code>--slow-ms</code>, <code>--n-plus-one</code>, <code>--no-include-rotated</code>. Produces summary, per-fingerprint stats (with suggested <code>explain</code> / <code>guide missing-index-for</code> commands), slowest queries, error groups, hot tables, and N+1 suspects.</p>
+            <p class="mb-4"><code>dbcli proxy analyze</code> — analyze the captured event log offline (no DB). <code>--format json|text</code>, <code>--top</code>, <code>--slow-ms</code>, <code>--n-plus-one</code>, <code>--no-include-rotated</code>. Produces summary, per-fingerprint stats, slowest queries, error groups, hot tables, and N+1 suspects.</p>
+            <p class="mb-4">Each actionable block carries machine-readable next steps so an AI agent can move from diagnosis to fix:</p>
+            <ul class="list-disc pl-6 mb-4">
+              <li><strong>SELECT hotspots / N+1</strong> — <code>suggestedCommands</code> with <code>dbcli explain "&lt;sql&gt;"</code> and <code>dbcli guide missing-index-for "&lt;sql&gt;"</code>.</li>
+              <li><strong>Errors</strong> — <code>suggestedCommands</code> with <code>dbcli schema &lt;table&gt;</code> (first 3 tables) plus a <code>hints</code> note to verify table/column names before fixing — never guess column names.</li>
+              <li><strong>N+1 suspects</strong> — a <code>hints</code> note suggesting you batch the repeated query (JOIN / <code>IN (...)</code>) or cache the result.</li>
+            </ul>
+            <p class="mb-4">The recommended loop: run <code>proxy analyze</code>, then for each finding read its <code>hints</code>, run its <code>suggestedCommands</code> to gather schema/plan evidence, and apply the fix. The text format aggregates these into <code>SUGGESTED COMMANDS</code> and <code>HINTS</code> sections; the JSON format keeps them attached to each finding. Suggestions are printed as strings only — <code>proxy analyze</code> never executes them. When the proxy ran with <code>--redact literals</code>, the example SQL contains <code>?</code> placeholders; fill in real values before running the commands.</p>
 
             <h4 class="mt-6 mb-2 font-bold">Limitations (v1)</h4>
             <ul>

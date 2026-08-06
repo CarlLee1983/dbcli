@@ -20,6 +20,31 @@ describe('renderAnalysisText', () => {
     expect(text).toContain('dbcli guide missing-index-for')
   })
 
+  it('aggregates suggested commands from errors and N+1 groups, and renders hints', () => {
+    const nPlusOne = (i: number) =>
+      completed({
+        sessionId: 'pxy_1',
+        sql: `SELECT * FROM items WHERE order_id = ${i}`,
+        statement: 'SELECT',
+        tables: ['items'],
+        durationMs: 2,
+        timestamp: `2026-06-04T12:00:0${i}.000Z`,
+      })
+    const report = analyzeEvents(
+      [
+        nPlusOne(1),
+        nPlusOne(2),
+        nPlusOne(3),
+        errored({ error: { code: '1054', message: 'unknown column' }, tables: ['missing'] }),
+      ],
+      { ...opts, nPlusOne: 3 }
+    )
+    const text = renderAnalysisText(report, 20)
+    expect(text).toContain('dbcli schema missing')
+    expect(text).toContain('HINTS')
+    expect(text).toContain('N+1')
+  })
+
   it('prints a friendly message when there is nothing to analyze', () => {
     const report = analyzeEvents([], opts)
     expect(renderAnalysisText(report, 20)).toBe('no events to analyze')

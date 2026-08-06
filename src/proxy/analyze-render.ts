@@ -50,10 +50,27 @@ export function renderAnalysisText(report: AnalysisReport, top: number): string 
     L.push(`  ${r.count}x in session ${r.sessionId} (${r.spanMs}ms)  ${r.fingerprint}`)
   }
 
-  const cmds = [...new Set(report.byFingerprint.flatMap((f) => f.suggestedCommands ?? []))]
+  const cmds = [
+    ...new Set([
+      ...report.byFingerprint.flatMap((f) => f.suggestedCommands ?? []),
+      ...report.errors.flatMap((e) => e.suggestedCommands ?? []),
+      ...report.repetition.flatMap((r) => r.suggestedCommands ?? []),
+    ]),
+  ]
   if (cmds.length) {
     L.push('', 'SUGGESTED COMMANDS')
     for (const c of cmds) L.push(`  ${c}`)
+  }
+
+  const hints = [
+    ...new Set([
+      ...report.errors.flatMap((e) => e.hints ?? []),
+      ...report.repetition.flatMap((r) => r.hints ?? []),
+    ]),
+  ]
+  if (hints.length) {
+    L.push('', 'HINTS')
+    for (const h of hints) L.push(`  ${h}`)
   }
 
   return L.join('\n')

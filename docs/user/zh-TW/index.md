@@ -710,7 +710,15 @@ SQL 文字一律儲存於事件日誌。**結果資料列永不儲存。** 使�
 
 #### 離線分析事件日誌
 
-`dbcli proxy analyze` — 離線分析擷取的事件日誌(不連 DB)。`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。輸出總覽、各查詢指紋統計(附 `explain` / `guide missing-index-for` 建議指令)、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。
+`dbcli proxy analyze` — 離線分析擷取的事件日誌(不連 DB)。`--format json|text`、`--top`、`--slow-ms`、`--n-plus-one`、`--no-include-rotated`。輸出總覽、各查詢指紋統計、最慢查詢、錯誤分群、熱點表、N+1 嫌疑。
+
+每個可行動的區塊都附帶機器可讀的後續步驟,讓 AI agent 能從「診斷」直接推進到「修正」:
+
+*   **SELECT 熱點 / N+1** — `suggestedCommands` 提供 `dbcli explain "<sql>"` 與 `dbcli guide missing-index-for "<sql>"`。
+*   **錯誤(errors)** — `suggestedCommands` 提供 `dbcli schema <table>`(最多前 3 個表),並附 `hints` 提醒先核對表名/欄名再修正——切勿臆測欄名。
+*   **N+1 嫌疑** — `hints` 建議將重複查詢批次化(JOIN / `IN (...)`)或快取結果。
+
+建議流程:跑 `proxy analyze` 後,逐一針對每個發現讀其 `hints`、執行其 `suggestedCommands` 蒐集 schema/查詢計畫證據,再套用修正。text 格式會把這些彙整成 `SUGGESTED COMMANDS` 與 `HINTS` 區段;JSON 格式則把建議附在各發現上。建議僅以字串輸出——`proxy analyze` 不會自動執行。若 proxy 啟動時帶了 `--redact literals`,範例 SQL 會含 `?` 佔位符;執行指令前請先填回真實值。
 
 #### 限制（v1）
 

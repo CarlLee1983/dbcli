@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`dbcli proxy analyze` — 各區塊行動化(commands + hints),銜接 AI agent 介入。** `errors[]` 新增 `tables`,並附 `suggestedCommands`(`dbcli schema <table>`,最多前 3 表)+ `hints`(先核對表名/欄名再修正,勿臆測欄名);`repetition[]` 新增 `statement` 與可執行的 `exampleSql`(取最慢一筆),SELECT 群組附 `explain` / `guide missing-index-for` 的 `suggestedCommands`,每組附 N+1 批次化/快取的 `hints`。text 輸出彙整為 `SUGGESTED COMMANDS` 與 `HINTS` 區段;JSON 將建議附在各發現上。沿用 inspect 的 `suggestedCommands` + `hints` 雙軌慣例。skill 與使用者文件同步說明「analyze 後的 agent 行動流程」。
+
 ### Security
 
 - **黑名單指定父欄位時，攤平後的子欄位未被遮蔽，而且不發通知。** Elasticsearch adapter 會把 `_source` 遞迴攤平成帶點的頂層鍵（`{profile:{ssn}}` → 鍵 `profile.ssn`，文件裡根本沒有 `profile`），而遮蔽判斷是以欄位名等值比對，因此把 `profile` 列入欄位黑名單完全沒有作用：資料原樣回傳，且因為「已遮蔽欄位」清單是空的，連安全通知都不會發出 —— 使用者不會知道有東西本來該被藏起來。影響 `query` / `q` / `export` 三條 Elasticsearch 路徑。現在任何位於黑名單祖先之下的欄位都會被遮蔽（`profiles`、`profile_name` 這類僅前綴相似的欄位不受影響）。已知天花板（規則指定葉節點名、或祖先不從路徑開頭起算）記於 `docs/security-threat-model.md`。

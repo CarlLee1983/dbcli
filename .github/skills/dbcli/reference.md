@@ -1202,6 +1202,15 @@ dbcli proxy analyze --slow-ms 200 --n-plus-one 5  # custom thresholds
 
 **`proxy analyze`** — offline aggregation of the event log (no DB). Flags: `--events <path>` (default `.dbcli/proxy/events.jsonl`), `--format json|text` (default `json`), `--top <n>` (default 20; text rows + suggestedCommands depth), `--slow-ms <ms>` (default 1000; recomputes slowCount), `--n-plus-one <n>` (default 10), `--no-include-rotated`. JSON report blocks: `summary`, `byFingerprint` (sorted by total time; SELECT entries in the top-N carry `suggestedCommands` for `explain` / `guide missing-index-for`), `slowest`, `errors`, `hotTables`, `repetition` (N+1 suspects). Reads the current log plus the rotated `.1` segment by default.
 
+Every actionable block carries machine-readable next steps so an agent can move from "what is wrong" to "what to run":
+- `byFingerprint[]` — top-N SELECT entries get `suggestedCommands`: `dbcli explain "<sql>"` and `dbcli guide missing-index-for "<sql>"`.
+- `errors[]` — carries `tables`; emits `suggestedCommands` of `dbcli schema <table>` (capped at the first 3 tables) plus a `hints` note to verify table/column names before fixing (never guess column names). No tables known (e.g. a syntax error) → no `suggestedCommands`, but the hint still appears.
+- `repetition[]` — carries `statement` and a runnable `exampleSql` (the slowest occurrence). SELECT N+1 groups get `explain` / `guide missing-index-for` `suggestedCommands`; every group carries a `hints` note suggesting batching (JOIN / `IN (...)`) or caching.
+
+`suggestedCommands` are emitted as strings only — `proxy analyze` never executes them. When the proxy ran with `--redact literals`, `exampleSql` (and therefore the suggested commands) contains `?` placeholders; fill in real values before running them.
+
+**Acting on the report (agent loop):** after `proxy analyze`, for each block read `hints` for the diagnosis, run the entry's `suggestedCommands` to gather schema/plan/index evidence, then propose a concrete fix — add an index (`guide missing-index-for`), rewrite a slow SELECT (`explain`), batch an N+1 (`repetition`), or correct a column/table name (`errors` → `schema`). The text format mirrors this with aggregated `SUGGESTED COMMANDS` and `HINTS` sections; JSON keeps the suggestions attached per-finding.
+
 **Engines:** MySQL / MariaDB / PostgreSQL
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
 

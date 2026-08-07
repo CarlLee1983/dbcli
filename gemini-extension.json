@@ -1,6 +1,6 @@
 {
   "name": "dbcli-agent",
-  "version": "1.51.1",
+  "version": "1.51.2",
   "description": "Database CLI skill and command reference for AI agents.",
   "contextFileName": "AGENTS.md"
 }

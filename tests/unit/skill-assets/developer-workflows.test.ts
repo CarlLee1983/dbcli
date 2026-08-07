@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-const read = async (path: string) => Bun.file(path).text()
+const read = async (path: string) => (await Bun.file(path).text()).replace(/\r\n/g, '\n')
 
 describe('developer workflow skill guidance', () => {
   test('English canonical skill includes compact developer workflow triggers', async () => {
@@ -60,6 +60,52 @@ describe('developer workflow skill guidance', () => {
       'Never create, update, or\nmigrate that file without an explicit human request'
     )
     expect(skill).toContain('schema confirmation or the normal query/write safety gates')
+  })
+
+  test('canonical skills define per-request intent confirmation without weakening safety gates', async () => {
+    const [english, chinese] = await Promise.all([
+      read('assets/SKILL.md'),
+      read('assets/SKILL.zh-TW.md'),
+    ])
+
+    expect(english).toContain('**Intent confirmation:**')
+    expect(english).toContain('`auto`, `confirm`, and `guided`')
+    expect(english).toContain('not as dbcli flags or persistent configuration')
+    expect(english).toContain('Do not ask the user a meta-question')
+    expect(english).toContain('one compact batch of\n  questions')
+    expect(english).toContain('This never bypasses blacklist, schema,')
+
+    expect(chinese).toContain('**意圖確認：**')
+    expect(chinese).toContain('`auto`、`confirm` 與 `guided`')
+    expect(chinese).toContain('而不是 dbcli\n旗標或持久化設定')
+    expect(chinese).toContain('不要先用後設問題詢問使用者')
+    expect(chinese).toContain('一小批精簡問題確認')
+    expect(chinese).toContain('這絕不繞過\nblacklist、schema')
+  })
+
+  test('user documentation explains intent confirmation in every language and format', async () => {
+    const [englishMarkdown, englishHtml, chineseMarkdown, chineseHtml] = await Promise.all([
+      read('docs/user/en/index.md'),
+      read('docs/user/en/index.html'),
+      read('docs/user/zh-TW/index.md'),
+      read('docs/user/zh-TW/index.html'),
+    ])
+
+    for (const doc of [englishMarkdown, englishHtml]) {
+      expect(doc).toContain('Intent confirmation for business requests')
+      expect(doc).toContain('auto')
+      expect(doc).toContain('confirm')
+      expect(doc).toContain('guided')
+      expect(doc).toContain('dry-run')
+    }
+
+    for (const doc of [chineseMarkdown, chineseHtml]) {
+      expect(doc).toContain('業務請求的意圖確認')
+      expect(doc).toContain('auto')
+      expect(doc).toContain('confirm')
+      expect(doc).toContain('guided')
+      expect(doc).toContain('dry-run')
+    }
   })
 
   test('Traditional Chinese canonical skill mirrors developer workflow guidance', async () => {

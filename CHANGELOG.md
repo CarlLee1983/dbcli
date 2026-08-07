@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.51.2] - 2026-08-07 - Intent confirmation for business requests
+
+### Added
+
+- **Per-request agent intent confirmation.** Installed dbcli skills now support `auto` (default), `confirm`, and `guided` conversational preferences for business-language database requests. Agents ask only result-changing questions, carry confirmed answers forward, and disclose material assumptions when explicitly asked to decide without further questions. These preferences are not persistent CLI configuration and never bypass schema, blacklist, permission, dry-run, production-selection, or write-confirmation gates.
+
 ## [1.51.1] - 2026-08-07 - Proactive semantic context discovery
 
 ### Changed

@@ -1124,6 +1124,26 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.
 9.  **Shared agent CLI interface**: package consumers can import `@carllee1983/dbcli/agent-core` for `loadEnvFile`, `resolveEnvRef`, `resolveConnectionSelector`, `parseConnectionNames`, and `trimAppliedLimit` plus `AppliedLimitMetadata`, `AppliedLimitResult`, and `ConnectionSelectorInputs`. This small interface is framework- and database-independent and follows semver. The broader `./core` product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside `agent-core`.
 
+### Intent confirmation for business requests
+
+The installed skill supports three **per-request conversational preferences**; they are
+not dbcli flags or saved configuration. An agent must not first ask the meta-question
+“do you want questions?”
+
+| Preference | Agent behavior |
+| --- | --- |
+| `auto` (default) | Resolve terms from governed semantic context and schema evidence. Ask one compact batch only when unresolved ambiguity would materially change the result; otherwise state assumptions and proceed. |
+| `confirm` | State the proposed interpretation and wait for approval before the task's data query. |
+| `guided` | Ask short, focused questions to establish the request, and retain the answers through the task. |
+
+For example, “show yesterday's sales” is ambiguous when its result shape (total or
+detail), metric definition, timezone, status/refund treatment, grouping, or connection
+is unknown. The agent should summarize its candidate interpretation and ask only the
+result-changing questions. If the user explicitly asks it to decide without more
+questions, it proceeds in `auto` mode and discloses its material assumptions. This
+preference never bypasses blacklist, schema, permission, dry-run, production-selection,
+or write-confirmation gates.
+
 ### When dbcli is a better fit than an MCP database server or a direct client
 
 There is no universal winner. A direct database client is the shortest path when a trusted human is working in a disposable local environment. An MCP database server is useful when an agent host needs a conversational, tool-shaped integration for low-risk exploration. `dbcli` is the better boundary when the same database task must be safe and repeatable for an agent, a human, CI, or an incident runbook.

@@ -1034,6 +1034,22 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**：repo root 採用 Ponytail-style plugin layout，包含 `.agents/plugins/marketplace.json`、`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.cursor-plugin/plugin.json`、`.github/skills/dbcli/` 與 `skills/dbcli/`。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`，其中包含提交 Cursor marketplace 審核/索引的步驟。
 9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit`，以及 `AppliedLimitMetadata`、`AppliedLimitResult`、`ConnectionSelectorInputs`。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
+### 業務請求的意圖確認
+
+已安裝的 skill 支援三種**當次請求的對話偏好**，它們不是 dbcli 旗標或儲存的設定。Agent
+不得先以「要不要讓我提問？」這類後設問題打斷使用者。
+
+| 偏好 | Agent 行為 |
+| --- | --- |
+| `auto`（預設） | 透過受治理的 semantic context 與 schema 證據釐清術語。僅在尚未解決的歧義會實質改變結果時，才用一小批精簡問題確認；否則說明假設後繼續。 |
+| `confirm` | 先說明預計採用的解讀，等待核准後才發出該任務的資料查詢。 |
+| `guided` | 以短而聚焦的問題建立請求內容，並在整個任務中保留已確認的答案。 |
+
+例如「查昨天的銷售資料」在結果形狀（總額或明細）、指標定義、時區、訂單狀態／退款處理、
+分組或連線未知時仍有歧義。Agent 應摘要候選解讀，只詢問會改變結果的問題。若使用者明確
+要求自行判斷、不要再問，agent 會以 `auto` 模式繼續並說明重要假設。這個偏好絕不繞過
+blacklist、schema、permission、dry-run、production 選取或寫入確認閘門。
+
 ### 何時 dbcli 比 MCP database server 或直接 DB client 更合適
 
 沒有任何一種工具永遠勝出。可信任的人員在可拋棄的本機環境做一次性變更時，直接使用資料庫 client 是最短路徑；Agent host 需要以工具形式進行低風險互動探索時，MCP database server 很有價值。當同一個資料庫任務必須讓 Agent、人員、CI 與 incident runbook 都能安全且可重現地執行時，`dbcli` 才是更合適的邊界。

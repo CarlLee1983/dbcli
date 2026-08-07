@@ -82,6 +82,30 @@ warnings) go to stderr so stdout stays parseable — when piping JSON into a par
 use `2>/dev/null` or leave stderr alone. **Never `2>&1`**: it merges those lines back
 into stdout and the parse fails.
 
+**Intent confirmation:** Treat `auto`, `confirm`, and `guided` as conversational
+preferences for the current request, not as dbcli flags or persistent configuration.
+Do not ask the user a meta-question about whether they want questions.
+
+- `auto` (default): autonomously use governed semantic context and schema discovery.
+  If unresolved ambiguity would materially change the result, ask one compact batch of
+  questions before querying; otherwise state the assumptions and proceed.
+- `confirm`: first state the proposed interpretation and wait for the user's approval
+  before issuing the task's data query.
+- `guided`: resolve the request through short, focused questions, carrying confirmed
+  answers forward rather than asking again.
+
+For business requests, material ambiguity includes the requested result shape or grain,
+metric definition, time boundary and timezone, inclusion/exclusion rules (such as order
+status or refunds), grouping, or selected connection. Example: for “yesterday's sales,”
+do not guess whether the user needs a total or detail, which timezone defines yesterday,
+or whether cancelled and refunded orders count. Summarize the candidate interpretation
+and ask only the unresolved, result-changing questions.
+
+When the user explicitly says to decide without further questions, proceed in `auto`
+mode and disclose the material assumptions. This never bypasses blacklist, schema,
+permission, dry-run, production-selection, or write-confirmation gates; an agent must
+still stop where those gates require human confirmation.
+
 **Business-language discovery:** When a user uses a business alias, metric, recurring
 term, or relationship/join intent instead of a physical table or field name, first run
 `dbcli skill context --format json`. If it includes `semantic`, treat that reviewed

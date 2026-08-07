@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
+import { resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const guideSlugs = [
   'safe-backfill',
@@ -27,7 +29,7 @@ const locales = [
 ] as const
 
 async function loadPage(path: string) {
-  const html = await Bun.file(path).text()
+  const html = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
   const window = new Window()
   window.document.write(html)
   return { html, document: window.document }
@@ -128,12 +130,11 @@ test('all local guide links and documentation fragments resolve', async () => {
     const { document } = await loadPage(path)
     for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       const href = link.getAttribute('href')!
-      const resolved = new URL(href, `file://${process.cwd()}/${path}`)
+      const resolved = new URL(href, pathToFileURL(resolve(path)))
       if (resolved.protocol !== 'file:') continue
 
-      const targetPath = decodeURIComponent(
-        resolved.pathname.endsWith('/') ? `${resolved.pathname}index.html` : resolved.pathname
-      )
+      const target = resolved.pathname.endsWith('/') ? new URL('index.html', resolved) : resolved
+      const targetPath = fileURLToPath(target)
       expect(await Bun.file(targetPath).exists()).toBe(true)
       if (resolved.hash) {
         const { document: target } = await loadPage(targetPath)

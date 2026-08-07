@@ -6,6 +6,7 @@ const guideSlugs = [
   'agent-dashboard',
   'orm-schema-drift',
   'slow-endpoint',
+  'why-dbcli',
 ] as const
 
 const locales = [
@@ -73,6 +74,34 @@ test('safe-backfill pages clearly state that verification never runs the update'
   const en = await loadPage('docs/guides/en/safe-backfill.html')
   expect(zh.document.querySelector('.boundary')?.textContent).toContain('永遠不會執行 UPDATE')
   expect(en.document.querySelector('.boundary')?.textContent).toContain('never executes an UPDATE')
+})
+
+test('why-dbcli uses its local illustration and a complete story arc in both languages', async () => {
+  expect(await Bun.file('docs/assets/why-dbcli-hero.png').exists()).toBe(true)
+
+  for (const [path, asset] of [
+    ['docs/guides/why-dbcli.html', '../assets/why-dbcli-hero.png'],
+    ['docs/guides/en/why-dbcli.html', '../../assets/why-dbcli-hero.png'],
+  ]) {
+    const { document } = await loadPage(path)
+    const image = document.querySelector<HTMLImageElement>('.story-hero-art img')
+    expect(image?.getAttribute('src')).toBe(asset)
+    expect(document.querySelectorAll('.story-timeline .story-moment').length).toBe(3)
+    expect(document.querySelectorAll('.contrast-grid .contrast-panel').length).toBe(2)
+  }
+})
+
+test('every guide inherits the elevated shared reading and interaction treatment', async () => {
+  const styles = await Bun.file('docs/assets/dbcli-guides.css').text()
+  expect(styles).toContain('.hero:not(.story-hero)')
+  expect(styles).toContain('.guide-card:focus-within')
+  expect(styles).toContain('.step:focus-within')
+  expect(styles).toContain('.article .boundary h2')
+  expect(styles).toContain('.next-card a')
+  expect(styles).toContain('.article > p')
+  expect(styles).toContain('max-inline-size: 66ch')
+  expect(styles).toContain('text-wrap: pretty')
+  expect(styles).toContain('@media (max-width: 720px)')
 })
 
 test('ORM drift pages bootstrap the complete schema cache before comparison', async () => {

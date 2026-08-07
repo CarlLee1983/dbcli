@@ -911,6 +911,65 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>Agent Plugin</strong>: the repo root follows the Ponytail-style plugin layout with <code>.agents/plugins/marketplace.json</code>, <code>.codex-plugin/plugin.json</code>, <code>.claude-plugin/plugin.json</code>, <code>.cursor-plugin/plugin.json</code>, <code>.github/skills/dbcli/</code>, and <code>skills/dbcli/</code>; when <code>dbcli</code> is not globally installed, the skill falls back to <code>bunx @carllee1983/dbcli &lt;command&gt;</code>. See <code>plugins/dbcli-agent/INSTALL.md</code> for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.</li>
                 <li><strong>Shared agent CLI interface</strong>: package consumers can import <code>@carllee1983/dbcli/agent-core</code> for <code>loadEnvFile</code>, <code>resolveEnvRef</code>, <code>resolveConnectionSelector</code>, <code>parseConnectionNames</code>, and <code>trimAppliedLimit</code> plus <code>AppliedLimitMetadata</code>, <code>AppliedLimitResult</code>, and <code>ConnectionSelectorInputs</code>. This small interface is framework- and database-independent and follows semver. The broader <code>./core</code> product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside <code>agent-core</code>.</li>
             </ul>
+            <h3>When dbcli is a better fit than an MCP database server or a direct client</h3>
+            <p>There is no universal winner. A direct database client is the shortest path when a trusted human is working in a disposable local environment. An MCP database server is useful when an agent host needs a conversational, tool-shaped integration for low-risk exploration. <code>dbcli</code> is the better boundary when the same database task must be safe and repeatable for an agent, a human, CI, or an incident runbook.</p>
+            <table>
+                <thead><tr><th>Choose</th><th>Best fit</th><th>Trade-off</th></tr></thead>
+                <tbody>
+                    <tr><td>A direct database client</td><td>A trusted operator is making a one-off change with a least-privilege credential</td><td>The safety, review, and evidence conventions must be rebuilt in every client and script.</td></tr>
+                    <tr><td>An MCP database server</td><td>An agent host needs interactive, low-risk discovery through its tool interface</td><td>The host and server define the authorization and audit surface; it is usually not the same surface used by CI or a terminal runbook.</td></tr>
+                    <tr><td><code>dbcli</code></td><td>A database operation must have one command contract across people, agents, automation, and recovery</td><td>It is deliberately a CLI surface, so an agent needs shell-command authorization rather than a native MCP tool.</td></tr>
+                </tbody>
+            </table>
+            <section id="tool-selection-guide" class="my-10 overflow-hidden rounded-2xl border border-border bg-background shadow-sm" aria-labelledby="tool-selection-guide-heading">
+                <div class="border-b border-border bg-surface px-6 py-5">
+                    <p class="mb-1 text-xs font-black uppercase tracking-[0.18em] text-primary">Quick visual decision guide</p>
+                    <p id="tool-selection-guide-heading" class="m-0 text-lg font-bold text-text-main">Choose the boundary that must survive the task.</p>
+                </div>
+                <div class="grid gap-4 p-5 md:grid-cols-3">
+                    <div class="rounded-xl border border-border bg-surface p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 font-black text-primary">01</span><span class="text-2xl" aria-hidden="true">⚡</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">Direct client</h4>
+                        <p class="m-0 text-sm">A throwaway local experiment, synthetic data, and a trusted developer watching every statement.</p>
+                    </div>
+                    <div class="rounded-xl border border-border bg-surface p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-secondary/10 font-black text-secondary">02</span><span class="text-2xl" aria-hidden="true">↔</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">MCP database server</h4>
+                        <p class="m-0 text-sm">Interactive, low-risk exploration whose authorization and audit live in the agent host and tool server.</p>
+                    </div>
+                    <div class="rounded-xl border-2 border-primary bg-primary/[0.04] p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-primary font-black text-white">03</span><span class="text-2xl" aria-hidden="true">⛨</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">dbcli</h4>
+                        <p class="m-0 text-sm">Realistic data, shared fixtures, migrations, CI, incident work, or any result another person must rerun.</p>
+                    </div>
+                </div>
+                <div class="mx-5 mb-5 grid items-center gap-3 rounded-xl border border-border bg-surface px-5 py-4 sm:grid-cols-[1fr_auto_1fr]">
+                    <div><span class="text-xs font-black uppercase tracking-[0.14em] text-text-muted">Local start</span><p class="m-0 text-sm font-semibold text-text-main">Synthetic scratch work</p></div>
+                    <span class="text-center text-xl font-bold text-primary" aria-hidden="true">→</span>
+                    <div><span class="text-xs font-black uppercase tracking-[0.14em] text-primary">Move to dbcli when</span><p class="m-0 text-sm font-semibold text-text-main">the result needs evidence, review, or a next environment</p></div>
+                </div>
+            </section>
+            <h3>Even for local vibe coding</h3>
+            <p>Local development changes the blast radius, not the basic failure modes. A direct client is perfectly reasonable for a throwaway database with synthetic data when you are watching every statement. It is faster because the agent can connect, inspect, and run ad-hoc SQL immediately.</p>
+            <p>The trade-off is that the client session becomes the entire safety contract. The agent can still guess a column name, query a local production dump, run an unbounded statement against fixtures worth keeping, or leave a change that nobody can replay when the task moves to CI. A database client may offer its own protections, but they are not automatically the same policy or workflow that the rest of the project uses.</p>
+            <p><code>dbcli</code> adds a small, deliberate pause before the agent acts: inspect the protected surface, read the real schema, and preview a write. The commands are also the handoff artifact. A developer can paste the same sequence into a terminal, a test script, or a PR description instead of reconstructing what happened in an agent-owned client session.</p>
+            <pre><code>dbcli blacklist list
+dbcli schema &lt;table&gt; --format json
+dbcli update &lt;table&gt; --where "&lt;predicate&gt;" --set '&lt;json&gt;' --dry-run</code></pre>
+            <p>That does not mean every local SELECT deserves ceremony. Use the direct client for a disposable experiment whose result has no operational life. Use dbcli as soon as the agent touches realistic data, modifies shared fixtures or migrations, needs a repeatable answer, or is likely to carry the work into CI, staging, or production. The value is not that the CLI makes local development magically safe; it makes the transition from a quick experiment to an accountable workflow explicit.</p>
+            <p><code>dbcli</code> is stronger in the last case for four practical reasons:</p>
+            <ol>
+                <li><strong>The operator can review and authorize the invocation.</strong> A command is a concrete artifact: a human can inspect the selected connection, operation, and flags before it runs. On hosts that authorize CLI arguments, such as Claude Code, this permits a useful gradient—safe discovery commands can be pre-authorized while queries or writes still require review. MCP permissions are commonly granted at the tool-name boundary; whether finer argument-level policy exists depends on the host and server.</li>
+                <li><strong>The same guardrails run outside the agent.</strong> Permission tiers, blacklist checks, result limits, schema discovery, dry-run preflights, and machine-readable output live on the CLI path. A CI job and an incident responder can use the same commands and receive the same enforcement instead of relying on a particular editor or agent session.</li>
+                <li><strong>The workflow leaves operational evidence.</strong> Use <code>--recovery</code> on supported commands to emit a structured failure envelope and link it to the audit record. Saved queries and task packs are files that a team can version, review, and reuse rather than instructions that exist only in a chat transcript.</li>
+                <li><strong>The tool still works when the agent is absent.</strong> A terminal, Makefile, CI job, or runbook can execute the command with meaningful exit codes. That makes dbcli a durable operational interface, not only an AI integration.</li>
+            </ol>
+            <p>For example, the safe baseline for an agent-assisted data change is still a sequence a person or CI can reproduce:</p>
+            <pre><code>dbcli blacklist list
+dbcli schema &lt;table&gt; --format json
+dbcli update &lt;table&gt; --where "&lt;predicate&gt;" --set '&lt;json&gt;' --dry-run</code></pre>
+            <p>Use an MCP server when its conversational interface is the main value and its authorization, logging, and execution model satisfy the environment's requirements. Use a direct client when its simplicity is appropriate for the risk. Choose dbcli when the important product is the governed, reviewable execution path—not merely the ability to send a query.</p>
+            <p><strong>Security boundary:</strong> dbcli is defence in depth, not a substitute for database authorization. Give the agent only a least-privilege database credential. A process that can change its own dbcli configuration can raise its declared permission or choose another client; blacklist and dry-run controls cannot make that credential safe by themselves.</p>
         </section>
 
         <!-- doc-key: developer-workflows -->

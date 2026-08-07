@@ -1122,6 +1122,61 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.
 9.  **Shared agent CLI interface**: package consumers can import `@carllee1983/dbcli/agent-core` for `loadEnvFile`, `resolveEnvRef`, `resolveConnectionSelector`, `parseConnectionNames`, and `trimAppliedLimit` plus `AppliedLimitMetadata`, `AppliedLimitResult`, and `ConnectionSelectorInputs`. This small interface is framework- and database-independent and follows semver. The broader `./core` product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside `agent-core`.
 
+### When dbcli is a better fit than an MCP database server or a direct client
+
+There is no universal winner. A direct database client is the shortest path when a trusted human is working in a disposable local environment. An MCP database server is useful when an agent host needs a conversational, tool-shaped integration for low-risk exploration. `dbcli` is the better boundary when the same database task must be safe and repeatable for an agent, a human, CI, or an incident runbook.
+
+| Choose | Best fit | Trade-off |
+| --- | --- | --- |
+| A direct database client | A trusted operator is making a one-off change with a least-privilege credential | The safety, review, and evidence conventions must be rebuilt in every client and script. |
+| An MCP database server | An agent host needs interactive, low-risk discovery through its tool interface | The host and server define the authorization and audit surface; it is usually not the same surface used by CI or a terminal runbook. |
+| `dbcli` | A database operation must have one command contract across people, agents, automation, and recovery | It is deliberately a CLI surface, so an agent needs shell-command authorization rather than a native MCP tool. |
+
+#### Quick visual decision guide
+
+```text
+Throwaway local experiment ───────────────────────→ Direct client
+Interactive, host-bound exploration ──────────────→ MCP database server
+Realistic data, shared fixtures, CI, or a runbook ─→ dbcli
+```
+
+The key question is not whether the database is local. It is whether the result must outlive the agent session. When a quick local experiment becomes a shared, repeatable, or reviewable operation, move it onto the dbcli command path.
+
+### Even for local vibe coding
+
+Local development changes the blast radius, not the basic failure modes. A direct client is perfectly reasonable for a throwaway database with synthetic data when you are watching every statement. It is faster because the agent can connect, inspect, and run ad-hoc SQL immediately.
+
+The trade-off is that the client session becomes the entire safety contract. The agent can still guess a column name, query a local production dump, run an unbounded statement against fixtures worth keeping, or leave a change that nobody can replay when the task moves to CI. A database client may offer its own protections, but they are not automatically the same policy or workflow that the rest of the project uses.
+
+`dbcli` adds a small, deliberate pause before the agent acts: inspect the protected surface, read the real schema, and preview a write. The commands are also the handoff artifact. A developer can paste the same sequence into a terminal, a test script, or a PR description instead of reconstructing what happened in an agent-owned client session.
+
+```bash
+dbcli blacklist list
+dbcli schema <table> --format json
+dbcli update <table> --where "<predicate>" --set '<json>' --dry-run
+```
+
+That does not mean every local SELECT deserves ceremony. Use the direct client for a disposable experiment whose result has no operational life. Use dbcli as soon as the agent touches realistic data, modifies shared fixtures or migrations, needs a repeatable answer, or is likely to carry the work into CI, staging, or production. The value is not that the CLI makes local development magically safe; it makes the transition from a quick experiment to an accountable workflow explicit.
+
+`dbcli` is stronger in the last case for four practical reasons:
+
+1. **The operator can review and authorize the invocation.** A command is a concrete artifact: a human can inspect the selected connection, operation, and flags before it runs. On hosts that authorize CLI arguments, such as Claude Code, this permits a useful gradient—safe discovery commands can be pre-authorized while queries or writes still require review. MCP permissions are commonly granted at the tool-name boundary; whether finer argument-level policy exists depends on the host and server.
+2. **The same guardrails run outside the agent.** Permission tiers, blacklist checks, result limits, schema discovery, dry-run preflights, and machine-readable output live on the CLI path. A CI job and an incident responder can use the same commands and receive the same enforcement instead of relying on a particular editor or agent session.
+3. **The workflow leaves operational evidence.** Use `--recovery` on supported commands to emit a structured failure envelope and link it to the audit record. Saved queries and task packs are files that a team can version, review, and reuse rather than instructions that exist only in a chat transcript.
+4. **The tool still works when the agent is absent.** A terminal, Makefile, CI job, or runbook can execute the command with meaningful exit codes. That makes dbcli a durable operational interface, not only an AI integration.
+
+For example, the safe baseline for an agent-assisted data change is still a sequence a person or CI can reproduce:
+
+```bash
+dbcli blacklist list
+dbcli schema <table> --format json
+dbcli update <table> --where "<predicate>" --set '<json>' --dry-run
+```
+
+Use an MCP server when its conversational interface is the main value and its authorization, logging, and execution model satisfy the environment's requirements. Use a direct client when its simplicity is appropriate for the risk. Choose dbcli when the important product is the governed, reviewable execution path—not merely the ability to send a query.
+
+> **Security boundary:** dbcli is defence in depth, not a substitute for database authorization. Give the agent only a least-privilege database credential. A process that can change its own dbcli configuration can raise its declared permission or choose another client; blacklist and dry-run controls cannot make that credential safe by themselves.
+
 ---
 
 <!-- doc-key: developer-workflows -->

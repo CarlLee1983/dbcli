@@ -911,6 +911,65 @@ dbcli export orders --format jsonl --output orders.jsonl</code></pre>
                 <li><strong>Agent Plugin</strong>：repo root 採用 Ponytail-style plugin layout，包含 <code>.agents/plugins/marketplace.json</code>、<code>.codex-plugin/plugin.json</code>、<code>.claude-plugin/plugin.json</code>、<code>.cursor-plugin/plugin.json</code>、<code>.github/skills/dbcli/</code> 與 <code>skills/dbcli/</code>；若未全域安裝 <code>dbcli</code>，skill 會 fallback 到 <code>bunx @carllee1983/dbcli &lt;command&gt;</code>。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 <code>plugins/dbcli-agent/INSTALL.md</code>，其中包含提交 Cursor marketplace 審核/索引的步驟。</li>
                 <li><strong>共用 agent CLI interface</strong>：套件使用者可從 <code>@carllee1983/dbcli/agent-core</code> 匯入 <code>loadEnvFile</code>、<code>resolveEnvRef</code>、<code>resolveConnectionSelector</code>、<code>parseConnectionNames</code>、<code>trimAppliedLimit</code>，以及 <code>AppliedLimitMetadata</code>、<code>AppliedLimitResult</code>、<code>ConnectionSelectorInputs</code>。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 <code>./core</code> 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 <code>agent-core</code>。</li>
             </ul>
+            <h3>何時 dbcli 比 MCP database server 或直接 DB client 更合適</h3>
+            <p>沒有任何一種工具永遠勝出。可信任的人員在可拋棄的本機環境做一次性變更時，直接使用資料庫 client 是最短路徑；Agent host 需要以工具形式進行低風險互動探索時，MCP database server 很有價值。當同一個資料庫任務必須讓 Agent、人員、CI 與 incident runbook 都能安全且可重現地執行時，<code>dbcli</code> 才是更合適的邊界。</p>
+            <table>
+                <thead><tr><th>選擇</th><th>最適合的情境</th><th>取捨</th></tr></thead>
+                <tbody>
+                    <tr><td>直接 DB client</td><td>可信任操作者以最小權限憑證進行一次性操作</td><td>每個 client 與 script 都要自行重建安全、審查與證據慣例。</td></tr>
+                    <tr><td>MCP database server</td><td>Agent host 需要透過 tool 介面進行低風險、互動式探索</td><td>授權與稽核邊界由 host 與 server 定義；它通常不是 CI 或終端 runbook 使用的同一個邊界。</td></tr>
+                    <tr><td><code>dbcli</code></td><td>人員、Agent、自動化與復原流程必須共用同一份指令契約</td><td>它刻意維持 CLI surface，因此 Agent 需要 shell command 授權，而非原生 MCP tool。</td></tr>
+                </tbody>
+            </table>
+            <section id="tool-selection-guide" class="my-10 overflow-hidden rounded-2xl border border-border bg-background shadow-sm" aria-labelledby="tool-selection-guide-heading">
+                <div class="border-b border-border bg-surface px-6 py-5">
+                    <p class="mb-1 text-xs font-black uppercase tracking-[0.18em] text-primary">快速圖解：怎麼選</p>
+                    <p id="tool-selection-guide-heading" class="m-0 text-lg font-bold text-text-main">選擇能陪任務走到最後的操作邊界。</p>
+                </div>
+                <div class="grid gap-4 p-5 md:grid-cols-3">
+                    <div class="rounded-xl border border-border bg-surface p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 font-black text-primary">01</span><span class="text-2xl" aria-hidden="true">⚡</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">直接 client</h4>
+                        <p class="m-0 text-sm">可拋棄的本機實驗、合成資料，以及可信任開發者逐條看著 SQL 執行。</p>
+                    </div>
+                    <div class="rounded-xl border border-border bg-surface p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-secondary/10 font-black text-secondary">02</span><span class="text-2xl" aria-hidden="true">↔</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">MCP database server</h4>
+                        <p class="m-0 text-sm">低風險的互動式探索；授權與稽核由 Agent host 和 tool server 所在邊界處理。</p>
+                    </div>
+                    <div class="rounded-xl border-2 border-primary bg-primary/[0.04] p-5">
+                        <div class="mb-4 flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-lg bg-primary font-black text-white">03</span><span class="text-2xl" aria-hidden="true">⛨</span></div>
+                        <h4 class="mb-2 font-bold text-text-main">dbcli</h4>
+                        <p class="m-0 text-sm">真實資料、共享 fixture、migration、CI、incident 工作，或任何必須由另一個人重跑的結果。</p>
+                    </div>
+                </div>
+                <div class="mx-5 mb-5 grid items-center gap-3 rounded-xl border border-border bg-surface px-5 py-4 sm:grid-cols-[1fr_auto_1fr]">
+                    <div><span class="text-xs font-black uppercase tracking-[0.14em] text-text-muted">本機起點</span><p class="m-0 text-sm font-semibold text-text-main">合成資料的快速實驗</p></div>
+                    <span class="text-center text-xl font-bold text-primary" aria-hidden="true">→</span>
+                    <div><span class="text-xs font-black uppercase tracking-[0.14em] text-primary">切換到 dbcli 的時機</span><p class="m-0 text-sm font-semibold text-text-main">結果需要證據、審查或進入下一個環境</p></div>
+                </div>
+            </section>
+            <h3>即使只是本機 vibe coding</h3>
+            <p>本機開發改變的是爆炸半徑，不是基本的失敗模式。在可隨時丟棄、只含合成資料的資料庫上，當你會逐條看著 SQL 執行時，直接使用 client 完全合理；它更快，因為 Agent 可以立刻連線、探索並執行臨時 SQL。</p>
+            <p>代價是 client session 本身成了完整的安全契約。Agent 仍可能猜錯欄位名稱、查詢到本機的 production dump、對仍要保留的 fixture 執行無範圍操作，或留下當工作移到 CI 時沒有人能重跑的變更。資料庫 client 可能有自己的保護功能，但它們不會自動成為專案其餘部分使用的同一份政策與工作流。</p>
+            <p><code>dbcli</code> 在 Agent 操作前加入一個很小、但刻意的停頓：先檢查保護範圍、讀取真實 schema，再預覽寫入。這些指令同時也是交接用的 artifact。開發者能把同一組步驟貼到 terminal、測試 script 或 PR 說明中，而不必重建 Agent 擁有的 client session 裡發生了什麼。</p>
+            <pre><code>dbcli blacklist list
+dbcli schema &lt;table&gt; --format json
+dbcli update &lt;table&gt; --where "&lt;predicate&gt;" --set '&lt;json&gt;' --dry-run</code></pre>
+            <p>這不代表每一條本機 SELECT 都值得一套儀式。結果不會進入任何操作流程的可拋棄實驗，就用直接 client。只要 Agent 會碰到接近真實的資料、修改共享 fixture 或 migration、需要可重跑的答案，或工作很可能進到 CI、staging、production，就使用 dbcli。它的價值不在於讓本機開發神奇地安全，而在於清楚地把快速實驗轉換成可負責工作流的時機標示出來。</p>
+            <p>在最後一種情境中，<code>dbcli</code> 有四個實際優勢：</p>
+            <ol>
+                <li><strong>操作者能審查並授權一次 invocation。</strong> 指令本身是具體交付物：執行前，人可以檢查選用連線、操作與 flags。像 Claude Code 這類可依 CLI 參數授權的 host，可形成實用的權限梯度——安全的探索指令能預先授權，查詢與寫入仍保留審查。MCP 權限通常以 tool 名稱為邊界；是否有更細的參數層級政策，取決於 host 與 server。</li>
+                <li><strong>相同 guardrail 不依賴 Agent 仍會執行。</strong> 權限分級、blacklist 檢查、結果筆數限制、schema 探索、dry-run 預檢與機器可讀輸出都在 CLI path 上。CI job 與 incident responder 可執行相同指令並得到同樣的防護，不必仰賴特定 editor 或 agent session。</li>
+                <li><strong>工作流會留下可操作的證據。</strong> 在支援的指令使用 <code>--recovery</code>，可產生結構化失敗封包並連結到 audit 紀錄。Saved queries 與 task packs 是團隊可 version、review、重用的檔案，而不是只存在聊天紀錄中的指示。</li>
+                <li><strong>沒有 Agent 時工具仍可使用。</strong> Terminal、Makefile、CI job 或 runbook 都能以有意義的 exit code 執行指令。因此 dbcli 是耐久的操作介面，而不只是 AI 整合。</li>
+            </ol>
+            <p>例如，Agent 協助資料變更的安全基線，仍是一組人員或 CI 可重跑的步驟：</p>
+            <pre><code>dbcli blacklist list
+dbcli schema &lt;table&gt; --format json
+dbcli update &lt;table&gt; --where "&lt;predicate&gt;" --set '&lt;json&gt;' --dry-run</code></pre>
+            <p>當 MCP server 的對話式介面是主要價值，且它的授權、日誌與執行模型滿足環境需求時，使用 MCP。當風險允許以簡單性為優先時，使用直接 client。真正重要的是受治理、可審查的執行路徑，而非僅僅送出一條 query 的能力時，選擇 dbcli。</p>
+            <p><strong>安全邊界：</strong>dbcli 是 defence in depth，不是資料庫授權的替代品。給 Agent 的資料庫憑證必須遵循最小權限。能修改自己 dbcli 設定的 process 可以提高宣告權限或改用其他 client；blacklist 與 dry-run 單獨無法讓該憑證變得安全。</p>
         </section>
 
         <!-- doc-key: developer-workflows -->

@@ -378,7 +378,7 @@ dbcli recover</code></pre>
           <details><summary>我不會寫 SQL，這工具跟我有關嗎？</summary><p>正是為你設計的。你用自然語言請 Agent 處理資料，dbcli 讓 Agent 先用 schema 確認真實結構，再重用 saved queries 與 task packs 的專家查詢；你不必讀懂中間的 SQL，只需要檢查結果。</p></details>
           <details><summary>Agent 會不會不小心刪掉我的資料？</summary><p>預設權限是 <code>query-only</code>，連 INSERT 都做不了。就算你開到 <code>data-admin</code>，DELETE 仍強制要求 WHERE 條件、建議先 dry-run，且等值限制讓「一句掃全表」在語法層就被擋下。DDL 更要 <code>admin</code> + <code>--execute</code> + DROP 加 <code>--force</code> 三重確認。</p></details>
           <details><summary>支援哪些資料庫？</summary><p>支援 MySQL、PostgreSQL、MariaDB、MongoDB、Redis 與 Elasticsearch。同一專案可設定多條具名連線（例如 staging、production 或不同租戶），各自使用獨立憑證、權限與 schema 快取。</p></details>
-          <details><summary>跟直接使用 MCP database server 有什麼不同？</summary><p>dbcli 把權限與資料防護內建在資料庫操作層：憑證隔離、blacklist 遮罩、權限分級、dry-run、audit 與 recovery 都可直接使用。它不綁定單一 Agent 協定或編輯器，人類也能在終端機使用同一套工作流。</p></details>
+          <details><summary>跟直接使用 MCP database server 有什麼不同？</summary><p>dbcli 把權限與資料防護內建在資料庫操作層：憑證隔離、blacklist 遮罩、權限分級、dry-run、audit 與 recovery 都可直接使用。它不綁定單一 Agent 協定或編輯器，人類也能在終端機使用同一套工作流。當 MCP server 的對話式介面與政策模型已滿足需求時，可直接使用 MCP；完整取捨請見<a href="./guides/why-dbcli.html">圖解工具選擇指南</a>。</p></details>
           <details><summary>團隊要怎麼協作？</summary><p>Saved queries 可放進 <code>.dbcli-shared/</code> 並透過 git 與團隊共享；憑證可使用 <code>--use-env-refs</code>，讓每位成員與每條 CI pipeline 使用自己的環境變數，repository 不必保存明文密碼。</p></details>
           <details><summary>dbcli 會把我的資料庫密碼交給 Agent 嗎？</summary><p>不會。dbcli 透過連線設定隔離憑證，Agent 使用固定的 dbcli 命令，不需要讀取或回傳密碼。</p></details>
           <details><summary>它只能讀取資料嗎？</summary><p>不是。可用操作取決於設定的權限層級；寫入工作流可先 dry-run 預覽，再由明確授權執行。</p></details>

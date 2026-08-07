@@ -95,7 +95,7 @@ export const schemaCommand = new Command()
   .option('--force', 'Skip confirmation when updating schema data', false)
   .option(
     '--sample-size <n>',
-    'MongoDB only: number of documents to sample for schema inference (default 50, max 1000). Ignored on SQL connections.'
+    'MongoDB only: number of documents to sample for schema inference (default 100, max 1000). Ignored on SQL connections.'
   )
   .option(
     '--sample-method <method>',

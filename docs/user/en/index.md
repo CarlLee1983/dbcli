@@ -374,7 +374,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
-| `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit tail --recovery-ref <id>` to jump from an envelope to its audit entry. |
+| `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit show --recovery-ref <id>` to jump from an envelope to its audit entry. |
 
 `doctor` also reports runtime identity (launcher/source, runtime and package
 versions) and flags a bundled-runtime/package version mismatch with the explicit

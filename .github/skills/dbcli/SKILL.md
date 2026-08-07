@@ -157,6 +157,8 @@ in **How to use dbcli** still applies.
 | DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` or `--format html` |
 | Application data bug | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → narrow query |
 | ORM or migration work | `schema --format json` → `diff --against-orm <orm-schema>` → review error-level drift → proposals via `migrate` (dry-run) → `migration-review` task pack → `diff --against <snapshot>` after applying. |
+| Schema design, no database yet | `design init --output ./dbcli.design.json` → edit → `design validate` → `design render --format mermaid`. With existing ORM models, reconcile via `design diff --against-orm <path>` first. |
+| Design drift on a live database | `blacklist list` → `schema --format json` → `design diff --against-cache` → `design propose --against-cache`, then hand the plan to a human before any migration. |
 | PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
 | Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
 | Safe data backfill | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back or snippet `--verify`. |
@@ -193,6 +195,8 @@ Guardrails:
 - Separate database facts from application-code inference. Report which dbcli output shaped the conclusion.
 - For writes and backfills, include scope count, dry-run preview, execution command, and read-back.
 - Do not create indexes directly from a performance suggestion; turn them into reviewed migrations.
+- Do not execute the `commands` in a `design propose` plan, and do not create or rewrite
+  `dbcli.design.json` unless a human asked for it.
 - Do not print credentials, copied connection strings, or blacklisted values.
 - Durable evidence: `assert … --write-verification-artifact --verification-subject <kind:name>`;
   inspect with `verification summary` / `list` / `show <id>`. The `verify safe-backfill` /
@@ -393,6 +397,7 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
 | `diff` | query-only+ | SQL only. Save/compare schema snapshots. **(P1b)** `--against-orm <path>` compares a Prisma schema / DDL file / normalized JSON against the local schema cache (no DB connection): categorized drift (`missing_in_db` = error, `missing_in_orm` = warn, `mismatch` per tolerance table, `unmanaged`) with dry-run `migrate` proposals; exit 1 on error-level drift. `--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`, `--ignore <globs>`, `--format json\|table\|markdown`. Drizzle: point at `drizzle/meta/<NNNN>_snapshot.json` (run `drizzle-kit generate` first; `.ts` sources are rejected with a hint). TypeORM/Sequelize: feed tool-generated DDL (`schema:log` / a schema-only dump); source files are rejected with the exact generation command to run. |
+| `design` | n/a | **(v1.52)** Offline SQL design assistant over a version-controlled `dbcli.design.json`: never connects, never runs DDL, never calls a provider. `init --output <path>` is the only writer and refuses to overwrite; `validate` is fail-closed, so `render` / `diff` / `propose` refuse to run while `error` findings remain. `diff` / `propose` need exactly one of `--against-cache` or `--against-orm <paths>`. **`propose` is review-only — it plans, it never writes.** Naming rules, finding codes, and the artifact shape are in reference.md. |
 | `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
 | `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `verification` | n/a | Inspect and manage local verification artifacts. `list` / `show <id-or-path>` / `summary` are read-only; `prune` is dry-run by default and deletes only with `--execute --force`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
@@ -505,10 +510,12 @@ dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
 
 - `query` takes a DSL (JSON body) or Lucene query string; `--collection <index>` is required.
 - **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping),
-  `query`, `export` (v1.22), `shell` (v1.22), `status`, `use`, `doctor`. **Not supported:**
+  `query`, `q` (snippets use the `.elasticsearch.sql` extension), `export` (v1.22),
+  `shell` (v1.22), `status`, `use`, `doctor`. **Not supported:**
   `insert`, `update`, `delete`, `check`, `diff`, `migrate`.
 - `export` takes a search DSL with `--index <index>`, or an index name as the query to scroll
-  the whole index via `match_all`. Query-only caps at 1000 hits; `--no-limit` is bounded at 10 000.
+  the whole index via `match_all`. Query-only caps at 1000 hits; `--no-limit` streams the whole
+  index via the scroll API. (The 10 000 bound belongs to `query`, not `export`.)
 - Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields. `shell` opens a
   Kibana Dev Tools-style REPL. Full syntax and examples: reference.md Elasticsearch section.
 

@@ -115,6 +115,8 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 | DB report / dashboard request | `blacklist list` → `queries search <keywords>` / `queries suggest <intent>` → `queries show @<name>` → `q @<name> --ui` 或 `--format html` |
 | 應用程式資料錯誤 | `audit tail --for-agent --n 10` → `blacklist list` → `schema <object>` → 最小查詢 |
 | ORM 或 migration | `schema --format json` → `diff --against-orm <orm-schema>` → 審查 error-level drift → 透過 `migrate` 取得提案（dry-run）→ `migration-review` task pack → 套用後執行 `diff --against <snapshot>`。 |
+| 資料庫設計（尚未有 DB） | `design init --output ./dbcli.design.json` → 編輯 → `design validate` → `design render --format mermaid`。已有 ORM 模型時，先用 `design diff --against-orm <path>` 對齊。 |
+| 既有資料庫的設計漂移 | `blacklist list` → `schema --format json` → `design diff --against-cache` → `design propose --against-cache`，計畫交人類審查後才執行 migration。 |
 | PR 資料庫風險審查 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
 | 慢 endpoint 或查詢 | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
 | 安全資料回填 | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back 或 snippet `--verify`。 |
@@ -149,6 +151,7 @@ dbcli inspect --for-agent --no-connect --format json
 - 分離資料庫事實與應用程式推論；回報是哪個 dbcli 輸出影響了結論。
 - 寫入與 backfill 必須包含 scope count、dry-run preview、execution command，以及 read-back。
 - 不要直接從 performance suggestion 建 index；應轉成經過 review 的 migration。
+- 不要執行 `design propose` 計畫裡的 `commands`；未經人類要求，也不要建立或改寫 `dbcli.design.json`。
 - 不要列印 credentials、複製的連線字串或 blacklisted 值。
 - 持久化佐證：`assert … --write-verification-artifact --verification-subject <kind:name>`；以 `verification summary` / `list` / `show <id>` 檢視。`verify safe-backfill` / `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>` 系列執行 preflight + `--after-write` 驗證，**永不執行寫入**。完整旗標與每個指令的區塊詳見 reference.md。
 
@@ -192,7 +195,9 @@ dbcli query "SELECT * FROM users"   # Execute SQL (auto LIMIT 1000)
      `--password` / `--name`（與 `--system`）。
 3. **要哪一個權限層？** 預設取**最低**夠用的：
    `query-only` → `read-write` → `data-admin` → `admin`。透過 `--permission` 設定
-   （預設 `query-only`）。
+   （預設 `query-only`）。權限層判斷的是「這條語句做什麼」，不是「它怎麼開啟連線」：
+   低於 `admin` 時多語句 SQL 一律被拒；snippet 不得含寫入與 DDL 關鍵字；
+   MongoDB 的 `$out` / `$merge` 需要 `data-admin`，且在 snippet 與 `export` 中一律拒絕。
 4. **驗證、不要假設。** init 結束後跑 `dbcli status`（系統 + 權限 + blacklist 摘要、不含憑證）與 `dbcli doctor --format json`（env、設定形狀、連線、schema-cache 年齡、Mongo SRV 路徑）。
 
 ### 每個引擎的必備指令
@@ -205,11 +210,13 @@ dbcli init --system postgresql --host localhost --port 5432 \
 # Reuse an existing .env (DATABASE_URL=postgresql://user:pw@host:5432/db)
 dbcli init                                                # parses .env in cwd
 
-# MongoDB — full URI (Atlas / replica sets / authSource)
+# MongoDB — 逐欄位指定（無驗證就省略 --user/--password）
+dbcli init --system mongodb --host localhost --port 27017 --name mydb
+dbcli init --system mongodb --host localhost --port 27017 \
+  --user admin --password '<secret>' --auth-source admin --name mydb
+# MongoDB — full URI（進階逃生口：多 host、非標準 driver 選項）
 dbcli init --system mongodb \
   --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
-# MongoDB — discrete params (no auth = omit --user/--password)
-dbcli init --system mongodb --host localhost --port 27017 --name mydb
 
 # Redis — `--name` is the LOGICAL DB INDEX ("0".."15"), not a database name
 dbcli init --system redis --host localhost --port 6379 --password '<secret>' --name 0
@@ -267,9 +274,16 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 
 在**互動式終端機**中，省略 `--env-*` 旗標會逐一提示輸入 key 名稱（預設如上）— 可輸入非預設名稱如 `PROD_DB_PASSWORD`，它會以 `$env` ref 形式儲存。在**非互動式 / CI** 環境中，**必須**傳齊全部五個 `--env-*` 旗標；否則 `init` 會以錯誤退出 — 不會靜默 fallback 為明文。`--env-file <path>` 是 env 檔路徑，與 `$env` key 名稱無關。
 
+**MongoDB 是例外**：非互動式下只有 `--env-host` 是必填。`--env-port` / `--env-user` /
+`--env-password` / `--env-database` 皆為選填——省略的欄位會寫成 literal 值（`user` /
+`password` 為空字串，`port` / `database` 為解析後的值）而非 `$env` ref，讓這條連線根本
+用不到的欄位不會日後因未定義變數而 fail closed。此模式下 `init` 也會無視 `--skip-test`
+一律跳過連線測試——`$env` ref 此時還沒有值可以用來連線。
+
 ### 常見陷阱
 
 - **MongoDB `mongodb+srv://`** — `dbcli doctor` 回報 SRV 是用原生方式解析還是走 DoH fallback；在執行環境限制 DNS 時很有用。
+- **MongoDB `authSource` / `replicaSet` / `tls` / `srv`** — `init` 會互動式詢問這些（`authSource` 只在有設 user 時問；`replicaSet` / `tls` 在「advanced options?」提示之後）；只有 `--auth-source <db>` 有對應的非互動旗標，所以 `replicaSet` / `tls` 要嘛互動式設定、要嘛事後編輯 `.dbcli`。若一份設定同時有 `uri` 與分項欄位，**`uri` 會靜默勝出** — `dbcli doctor` 會標記這點，也會在 `srv: true` 搭配非預設 `port` 時警告。
 - **MySQL/Postgres 密碼含 `@` `:` `/`** — 使用 `DATABASE_URL` 時要 percent-encode（`@` → `%40`）；分項的 `--password` 旗標不需編碼。
 - **Redis `--name`** — 僅接受 logical DB index 字串；非數字會被拒絕。
 - **Elasticsearch TLS** — `caPath` 與 `rejectUnauthorized` 沒有對應旗標；`init` 後直接編輯 `.dbcli` 加上。
@@ -285,11 +299,11 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `use` | n/a | 顯示 / 切換預設命名連線（僅 v2）。 |
 | `list` | query-only+ | 資料表（SQL）、collections（MongoDB）、keys（Redis）或 indices（Elasticsearch）。 |
 | `schema` | query-only+ | SQL：單表或全掃描存入 `.dbcli/schemas/`。MongoDB：sampled。ES：flattened mapping。Redis：僅單一 key（type / TTL / size）。支援 `--recovery`。 |
-| `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。`--fields`（欄位投影）、`--truncate`（欄位值寬度）、`-f/--query-file`（從檔案或 stdin 讀查詢）、`--use a,b`（唯讀扇出）。支援 `--recovery`。見 **查詢工作流程旗標**。 |
+| `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。`--fields`（欄位投影）、`--truncate`（欄位值寬度）、`-f/--query-file`（從檔案或 stdin 讀查詢）、`--use a,b`（唯讀扇出）。支援 `--recovery`。`--slow-ms <n>` 設定被動慢查詢提示的門檻（預設 1000，`0` 關閉）：達到門檻時 table 輸出多一行 `Performance hint` footer、JSON 多出 `metadata.performanceAdvisory`；它不執行任何額外診斷，且在 `--recovery` 下被抑制。與 `proxy` 的同名旗標不同。見 **查詢工作流程旗標**。 |
 | `explain` | query-only+ | **(v1.23)** 唯讀查詢計畫並附註解。僅 SQL。單一查詢、`@saved-query`、`@file.sql` 或 `--bulk @glob/*`。`--analyze`（EXPLAIN ANALYZE / MariaDB ANALYZE SELECT）、`--format markdown\|json\|table`。 |
 | `lint` | n/a | 靜態 SQL 反模式顧問（不連線 DB）。共 9 條規則，包含透過分層 `.dbcli/schemas/` 快取進行的 schema-aware implicit-cast / NOT IN-nullable 檢查；全域 `--use <conn>` 會選擇命名連線的快取。Finding 可附 rewrite 草稿與受保護的 `explain` 驗證指令；只有已證明唯讀的 SQL 才會加上 `--analyze`，且只回報、絕不執行。`--format text\|json\|markdown`、`--min-severity`、`--no-schema`、`--bulk`。支援 `--recovery`。 |
 | `plan` | n/a | 靜態 SQL 風險分析器（`--format text\|json`）；不連線即可分類語句。 |
-| `q` | query-only+ | 以 `@name` 執行已儲存 snippet，搭配 `--param k=v`。支援 `--verify` 以執行斷言。 |
+| `q` | query-only+ | 以 `@name` 執行已儲存 snippet，搭配 `--param k=v`。支援 `--verify` 以執行斷言，以及 `--slow-ms <n>`（與 `query` 相同的被動慢查詢提示）。 |
 | `queries` | n/a | 管理已儲存 snippet：`list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`。 |
 | `insert` / `update` | read-write+ | 僅 SQL 與 MongoDB。JSON `--data` / `--set`；`update` 必填 `--where`；先 `--dry-run`。Redis 寫入透過 `query`。支援 `--recovery`。 |
 | `delete` | data-admin+ | 僅 SQL 與 MongoDB；Redis 有基本實作（見 Redis 段落）。必填 `--where`；先 `--dry-run`。支援 `--recovery`。 |
@@ -297,11 +311,12 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `blacklist` | n/a | `list` / `table` / `column` 子指令，從查詢結果中遮蔽敏感資料。 |
 | `check` | query-only+ | 僅 SQL（在 MySQL / MariaDB 最佳）。 |
 | `diff` | query-only+ | 僅 SQL。儲存 / 比較 schema snapshot。**(P1b)** `--against-orm <path>` 會將 Prisma schema / DDL 檔 / normalized JSON 與本地 schema cache 比對（不連線 DB）：分類為 `missing_in_db`（error）、`missing_in_orm`（warn）、依 tolerance 表判定的 `mismatch`、以及 `unmanaged`，並提供 dry-run `migrate` 提案；出現 error-level drift 時 exit 1。`--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`、`--ignore <globs>`、`--format json\|table\|markdown`。Drizzle：請指向 `drizzle/meta/<NNNN>_snapshot.json`（先執行 `drizzle-kit generate`；`.ts` source 會被拒絕並顯示提示）。TypeORM/Sequelize：傳入工具產生的 DDL（`schema:log` / schema-only dump）；source file 會被拒絕，並顯示要執行的精確產生指令。 |
+| `design` | n/a | **(v1.52)** 離線 SQL 設計助手，操作版本控管的 `dbcli.design.json`：不連線、不執行 DDL、不呼叫 provider。`init --output <path>` 是唯一的寫入者且拒絕覆寫；`validate` 為 fail-closed，只要還有 `error` finding，`render` / `diff` / `propose` 一律拒絕執行。`diff` / `propose` 必須且只能給 `--against-cache` 或 `--against-orm <paths>` 其中一個。**`propose` 只做審查用的計畫，永不寫入。** 命名規則、finding code 與 artifact 結構見 reference.md。 |
 | `snapshot` | query-only+ | **(v1.25)** 僅 SQL。擷取結果指紋（`rowCount` + 每欄 null/distinct/min/max/sum + 順序無關 checksum）。`--out`（預設 `.dbcli/snapshots/snap-<ts>.json`）、`--rows`、`--stdout`、`--format`、`--no-limit`。作為 `assert --against` 的基準。 |
 | `assert` | query-only+ | **(v1.25)** 僅 SQL。驗證不變量；失敗時 exit 1，除非 `--no-fail`。`--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`、`--vs <query> --compare rows\|value`（對帳）、`--against <snapshot> --tolerance <pct>`。 |
 | `verification` | n/a | 檢視與管理本機驗證 artifact。`list` / `show <id-or-path>` / `summary` 為唯讀；`prune` 預設 dry-run，僅在 `--execute --force` 時刪除。讀取 `<cwd>/.dbcli/verification/`；不需 DB 連線，不寫入 audit log。 |
 | `backfill artifact` | n/a | 將受限 JSON source catalog 產生可檢閱的 source-to-SQL 回填 artifact，包含 source/target identity、blacklist/schema preflight、read-back 驗證與 rollback hint；只產生 dry-run，絕不執行寫入。 |
-| `proxy` | n/a | **(v1.26)** 僅 MySQL/MariaDB/PostgreSQL。本地端開發觀測代理 — 中繼應用程式流量至真實資料庫，並將查詢 / 延遲 / 位元組 / 錯誤事件附加到 `.dbcli/proxy/events.jsonl`。子指令：`mysql` \| `mariadb` \| `postgresql`。`--listen`、`--target`、`--events`、`--slow-ms`（預設 `1000`）、`--redact none\|literals`。僅作觀測。**(v1.27)** `proxy analyze` 離線彙整事件 log 為 JSON / 文字報表（summary、byFingerprint 含 suggestedCommands、slowest、errors、hotTables、N+1）— 若無事件則報錯。**(v1.50)** `proxy analyze --format markdown` 產生 QueryLens 報告，分析前會在記憶體中遮罩 SQL／錯誤 literal；仍應以 `proxy <engine> --redact literals` 保護事件日誌本身。 |
+| `proxy` | n/a | **(v1.26)** 僅 MySQL/MariaDB/PostgreSQL。本地端開發觀測代理 — 中繼應用程式流量至真實資料庫，並將查詢 / 延遲 / 位元組 / 錯誤事件附加到 `.dbcli/proxy/events.jsonl`。子指令：`mysql` \| `mariadb` \| `postgresql`。`--listen`、`--target`、`--events`、`--slow-ms`（預設 `1000`）、`--redact none\|literals`。僅作觀測。**(v1.27)** `proxy analyze` 離線彙整事件 log 為 JSON / 文字報表（summary、byFingerprint、slowest、errors、hotTables、N+1）：`--format`、`--top`、`--slow-ms`、`--n-plus-one`；若尚無事件則報錯。**(v1.50)** `proxy analyze --format markdown` 產生 QueryLens 報告，分析前會在記憶體中遮罩 SQL／錯誤 literal；仍應以 `proxy <engine> --redact literals` 保護事件日誌本身。可行動的區塊會附帶 `suggestedCommands` 與 `hints` 讓 agent 據以行動：SELECT 熱點 / N+1 → `explain` / `guide missing-index-for`，錯誤 → `schema <table>`（確認名稱，絕不用猜的），N+1 → 改成批次（JOIN / `IN (...)`）。分析後請執行每個 finding 的 `suggestedCommands`、讀它的 `hints`，再提出修正方案。 |
 | `status` | query-only+ | 安全 JSON / 文字摘要（不含憑證）。 |
 | `inspect` | query-only+ | 唯讀脈絡快照（連線、權限、blacklist、物件、snippets、建議指令，以及 **(v1.23)** 人類可讀 `hints`）。`--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`。支援 `--recovery`。 |
 | `report` | query-only+ | 以 `@diag/*` snippet 組成的診斷報告。`--section <health\|capacity\|perf>`（可用逗號組合）、`--brief`、`--for-agent`、`--no-connect`。 |
@@ -379,8 +394,8 @@ dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
 ```
 
 - `query` 接受 DSL（JSON body）或 Lucene query string；`--collection <index>` 為必填。
-- **支援：** `init`、`list`（含文件數的索引清單）、`schema [index]`（flattened mapping）、`query`、`export`（v1.22）、`shell`（v1.22）、`status`、`use`、`doctor`。**不支援：** `insert`、`update`、`delete`、`check`、`diff`、`migrate`。
-- `export` 接受含 `--index <index>` 的 search DSL，或以 index 名稱作為查詢來透過 `match_all` scroll 整個 index。Query-only 上限 1000 hits；`--no-limit` 放寬至 10,000。
+- **支援：** `init`、`list`（含文件數的索引清單）、`schema [index]`（flattened mapping）、`query`、`q`（snippet 使用 `.elasticsearch.sql` 副檔名）、`export`（v1.22）、`shell`（v1.22）、`status`、`use`、`doctor`。**不支援：** `insert`、`update`、`delete`、`check`、`diff`、`migrate`。
+- `export` 接受含 `--index <index>` 的 search DSL，或以 index 名稱作為查詢來透過 `match_all` scroll 整個 index。Query-only 上限 1000 hits；`--no-limit` 會透過 scroll API 取出整個 index。（10,000 那個上限屬於 `query`，不是 `export`。）
 - Schema 會 flatten 巢狀欄位（`a.b.c`），並列出 `.fields` multi-fields。`shell` 開啟 Kibana Dev Tools 風格的 REPL。完整語法與範例：reference.md Elasticsearch 段落。
 
 ## Saved queries

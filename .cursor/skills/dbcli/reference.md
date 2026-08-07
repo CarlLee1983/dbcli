@@ -561,12 +561,14 @@ dbcli q @analytics/revenue --param days=30 --format html > report.html
 - `--ui` — open the rendered HTML dashboard in the system browser (implies `--format html`; writes to a temp file then invokes `open` / `xdg-open` / `start`)
 - `--param <key=value>` — pass a parameter (repeatable)
 - `--param-file <path>` — JSON object whose keys are param names
-- `--no-limit` — skip the `SELECT * FROM (…) AS _dbcli_guard LIMIT 1000` wrap
+- `--no-limit` — skip the `SELECT * FROM (…) AS _dbcli_guard LIMIT 1001` wrap (the effective cap is 1000; one extra row is fetched to detect truncation)
 - `--dry-run` — print the bound SQL + values without executing
-- `--use <name>` — pick a v2 named connection
 - `--slow-ms <number>` — passive slow-query hint threshold (default `1000`; `0` disables). Same contract as `query` — see "Passive slow-query hint" there
 - `--recovery` — emit a `RecoveryEnvelope` on failure (see `recover`)
 - `--verify` — run the snippet's verification assertions after execution (only if the snippet defines them)
+
+`q` has no command-level `--use`. To run a snippet against a v2 named connection,
+use the global form: `dbcli --use <name> q @<snippet>`.
 
 **Permission:** query-only+
 
@@ -691,8 +693,9 @@ Size guard: `LRANGE` / `ZRANGE` stop overridden when `< 0` or `> 1000`; `SCAN` /
 ##### MongoDB snippets
 
 File extension: `.mongodb.sql`. Frontmatter must declare `engine: mongodb` and
-`operation: find` or `operation: aggregate`. `target: <collection>` provides a default
-collection that `dbcli q --collection <name>` can override. The body is JSON: an object
+`operation: find` or `operation: aggregate`. `target: <collection>` declares the
+collection the snippet runs against; the CLI has no flag to override it, so a different
+collection means a different snippet. The body is JSON: an object
 for `find` and an array for `aggregate`. Each `{{param}}` placeholder is JSON-encoded
 at substitution time — strings are quoted and escaped, so an attacker-supplied string
 cannot escape into operator position.
@@ -1155,6 +1158,8 @@ neither is an error.
 
 #### Artifact shape
 
+This example validates clean (0 errors, 0 warnings):
+
 ```json
 {
   "version": 1,
@@ -1166,14 +1171,24 @@ neither is an error.
       "description": "Completed purchases.",
       "fields": [
         { "name": "id", "type": "bigint", "nullable": false, "primaryKey": true, "unique": true },
-        { "name": "customer_id", "type": "bigint", "nullable": false, "primaryKey": false, "unique": false }
+        { "name": "customer_id", "type": "bigint", "nullable": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false }
       ],
-      "indexes": [{ "name": "orders_customer_idx", "columns": ["customer_id"], "unique": false }]
+      "indexes": [
+        { "name": "orders_customer_idx", "columns": ["customer_id", "created_at"], "unique": false }
+      ]
+    },
+    {
+      "name": "customers",
+      "table": "customers",
+      "fields": [
+        { "name": "id", "type": "bigint", "nullable": false, "primaryKey": true, "unique": true }
+      ]
     }
   ],
   "relationships": [
     {
-      "name": "orders_customer",
+      "name": "orders-customer",
       "from": { "model": "orders", "field": "customer_id" },
       "to": { "model": "customers", "field": "id" },
       "cardinality": "many-to-one"
@@ -1188,10 +1203,37 @@ It holds no SQL, credentials, rows, or provider configuration. `design init`
 emits this envelope with empty `models`, `relationships`, `accessPatterns`, and
 `decisions`.
 
+#### Naming and limits
+
+Two different naming rules apply, and mixing them up is the most common way an
+artifact fails before any review rule runs.
+
+| Applies to | Rule |
+|---|---|
+| `models[].name`, `relationships[].name`, `relationships[].from/to.model`, `accessPatterns[].model`, `decisions[].name` | lowercase kebab-case, `^[a-z][a-z0-9-]*$` — underscores are rejected |
+| `models[].table`, `fields[].name`, `indexes[].name`, `indexes[].columns[]`, `filters[]`, `sort[]` | SQL identifier, `^[A-Za-z_][A-Za-z0-9_]*$` |
+
+Relationship endpoints reference a **model name**, not a table name. Every object
+is strict: an unknown key is an error, not ignored. `description` and `rationale`
+are 1–1000 characters and must not contain SQL keywords or a connection string —
+"rows we delete after 30 days" is rejected for the word `delete`. `fields[].type`
+is at most 100 characters with no `;` or newline. `primaryKey`, `unique`,
+`indexes`, `filters`, `sort`, `relationships`, `accessPatterns`, and `decisions`
+may all be omitted.
+
+Limits: file 256 KiB, 100 models, 100 fields per model, 200 relationships,
+200 access patterns, 100 decisions, 1–16 columns per index, ≤16 entries in
+`filters` and `sort`.
+
 #### Review findings
 
 `validate` is fail-closed: any `error` finding exits `1`, and `render`, `diff`,
 and `propose` refuse to do their work while errors remain.
+
+Structural problems — malformed JSON, an unknown key, a naming or type violation,
+a missing file, or a file over 256 KiB — are rejected before review runs and are
+reported as a single `INVALID_ARTIFACT` finding (`error`) whose `path` points at
+the offending JSON location. None of the codes below appear in that case.
 
 | Severity | Codes |
 |---|---|
@@ -1297,7 +1339,7 @@ Opt-in flag trio that persists a **VerificationArtifact JSON** (schema v1) under
 | Flag | Required | Description |
 | :--- | :--- | :--- |
 | `--write-verification-artifact` | opt-in | Trigger artifact write. No-op when no verdict has been produced. |
-| `--verification-subject <kind:name>` | yes (when flag is set) | Subject identifier. Format: `<kind>:<name>`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
+| `--verification-subject <kind:name>` | yes (when flag is set) | Subject identifier. Format: `<kind>:<name>`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `table`, `manual`. |
 | `--verification-summary <text>` | no | Free-text summary line stored in the artifact. Default when pass: "Assertion verified the expected state." Default when fail: "Assertion did not verify the expected state." |
 
 **Output contract:**
@@ -1559,7 +1601,7 @@ Examples:
 
 Boundaries:
 - Recovery only **suggests** commands; agents (or humans) execute them. No automatic remediation in v1.15.0.
-- As of v1.16.0, `--recovery` is honored on `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, and `inspect`. Other commands (`report`, `guide`, `doctor`, `migrate`, `init`, `use`, `status`, `list`, `check`, `diff`, `plan`, `shell`, `blacklist`, `completion`, `upgrade`, `skill`) keep their existing error behavior.
+- `--recovery` is honored on `query`, `q`, `insert`, `update`, `delete`, `export`, `schema`, `inspect`, `lint`, and `diff`. Other commands (`report`, `guide`, `doctor`, `migrate`, `init`, `use`, `status`, `list`, `check`, `plan`, `shell`, `blacklist`, `completion`, `upgrade`, `skill`) keep their existing error behavior.
 - `dbcli inspect --require-schema-cache` throws `SCHEMA_CACHE_MISSING` when the active SQL connection has no usable schema cache. Combine with `--recovery` for the structured envelope.
 - `BLACKLIST_COLUMN_WRITE` and `PERMISSION_DENIED` envelopes prepend a `risk: 'dry-run'` step (e.g. `dbcli insert <table> --dry-run`) when the failing operation was an INSERT / UPDATE / DELETE.
 - Recovery steps reuse the v1.14.0 `GuideStep` shape, including the full `risk` enum (`readonly` / `dry-run` / `write` / `unknown`).
@@ -1593,7 +1635,7 @@ Boundaries:
 |---|---|---|
 | `readonly` | local read-only | `dbcli inspect`, `dbcli doctor`, `dbcli blacklist list`, `dbcli schema <table>` |
 | `dry-run` | write subcommand invoked with `--dry-run` | `dbcli update orders --where id=1 --dry-run`, `dbcli q @x --dry-run` |
-| `local-write` | writes local config / cache / blacklist | `dbcli blacklist remove <table>`, `dbcli use <name>`, `dbcli schema --refresh` |
+| `local-write` | writes local config / cache / blacklist | `dbcli blacklist table remove <table>`, `dbcli use <name>`, `dbcli schema --refresh` |
 | `db-write` | mutates the connected database | `dbcli update orders --where id=1 --set …` (no `--dry-run`), `dbcli q @x` (no `--dry-run`) |
 | `interactive` | requires TTY | `dbcli init`, `dbcli init --force` |
 
@@ -1746,7 +1788,7 @@ dbcli recover --next --after-step 1 --result '{"status":"ok"}' --format markdown
 
 (v1.20.0+) Inspect, query, and manage the per-connection audit log written to `.dbcli/audit/<connection>.jsonl`.
 
-Audit entries are metadata-only by design — never raw SQL bodies, `--param` values, or result cell contents (D3 lock). Redaction is sourced from `tests/helpers/sensitive-output.ts` (same source as `inspect` / `guide` / `recover` agent contracts).
+Audit entries are metadata-only by design — never raw SQL bodies, `--param` values, or result cell contents (D3 lock). Redaction is sourced from `src/utils/redaction.ts` (same source as `inspect` / `guide` / `recover` agent contracts).
 
 #### Subcommands
 
@@ -1783,7 +1825,9 @@ Examples:
 | `<id-prefix>` | Positional. UUID or prefix ≥ 4 characters; ambiguous prefix exits 1 with disambiguation hint; prefix < 4 chars exits 1. | — |
 | `--recovery-ref <id>` | Find the audit entry whose `recovery_ref` field matches this id (exact, not prefix). Mutually exclusive with positional `<id-prefix>` (D-38). | — |
 | `--all` | Search across all connections. Output is an envelope `{ connection, entry }` (single-hit also envelope, for shape stability — D-36). | off |
-| `--no-brief` | Disable brief mode when a higher-level default enables it. | off |
+| `--brief` | Trim `metadata` and `redacted_query` from the entry. | off |
+| `--for-agent` | Shortcut for `--format json --brief`. | off |
+| `--no-brief` | Disable brief mode when a higher-level default enables it (e.g. `--for-agent`). | off |
 | `--format <fmt>` | `table` \| `json`. | `table` |
 
 Examples:
@@ -1817,7 +1861,7 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 #### Boundaries
 
 - Entries are append-only JSONL; rotation triggers at `~10 MB` or `~1000` entries (whichever first). Previous segment is preserved as `.jsonl.1`.
-- Bi-directional `recovery_ref` / `audit_ref` linkage is wired on every command that accepts `--recovery`: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, and `schema`. Use `audit tail --recovery-ref <id>` to find the audit entry an envelope was emitted alongside.
+- Bi-directional `recovery_ref` / `audit_ref` linkage is wired on every command that accepts `--recovery`: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, and `schema`. Use `audit show --recovery-ref <id>` to find the audit entry an envelope was emitted alongside.
 - Audit writer failures are non-fatal (D6): main command result and exit code are preserved; a stderr warning is emitted. `audit health` surfaces the failure reason.
 - Reader truncation tolerance: a crash-truncated last line is skipped with a stderr warn `[dbcli audit] skipping truncated last line in <file>`; a mid-file non-JSON line is treated as corruption, exits 1, and points at `dbcli audit clear`.
 
@@ -2078,7 +2122,7 @@ dbcli verification list --include-invalid --format json
 | `--format <json\|table>` | Output format. | `json` |
 | `--limit <n>` | Maximum number of entries to return. | `20` |
 | `--status <status>` | Filter by status. One of: `verified`, `not_verified`, `indeterminate`, `blocked`. | all |
-| `--subject <kind[:name]>` | Filter by subject kind or exact `kind:name`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. | all |
+| `--subject <kind[:name]>` | Filter by subject kind or exact `kind:name`. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `table`, `manual`. | all |
 | `--include-invalid` | Surface malformed artifact files (normally skipped silently). Invalid files are returned as a separate top-level `invalid` array in JSON output, each entry shaped `{ "path": "...", "filename": "...", "error": "..." }`. When off, `invalid` is `[]`. | off |
 
 **Missing directory:** if `.dbcli/verification/` does not exist, exits `0` with an
@@ -2192,6 +2236,7 @@ includes `storageDir`, `dryRun`, `cutoff`, `criteria`, `protected`, `candidates`
 | `assertion` | General-purpose inline assertions. |
 | `migration` | Schema migration pre/post checks. |
 | `backfill` | Data backfill verification assertions. |
+| `table` | `verify constraint` artifacts — the subject name is the table checked. |
 | `manual` | Manually triggered or ad-hoc verification runs. |
 
 **Storage root:** `<cwd>/.dbcli/verification/` (cwd-relative; independent of `--config`).
@@ -3024,9 +3069,9 @@ Permission is derived from the command's first token (case-insensitive). Unknown
 
 | Tier | Commands |
 |------|----------|
-| `query-only` | `GET`, `MGET`, `STRLEN`, `EXISTS`, `TTL`, `PTTL`, `TYPE`, `SCAN`, `HGET`, `HGETALL`, `HKEYS`, `HVALS`, `HLEN`, `HEXISTS`, `HMGET`, `LRANGE`, `LLEN`, `LINDEX`, `SMEMBERS`, `SCARD`, `SISMEMBER`, `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZCARD`, `ZSCORE`, `PING`, `ECHO` |
-| `read-write` | `SET`, `SETEX`, `SETNX`, `PSETEX`, `MSET`, `MSETNX`, `APPEND`, `INCR`/`INCRBY`, `DECR`/`DECRBY`, `HSET`/`HSETNX`/`HMSET`/`HINCRBY`, `LPUSH`/`RPUSH`/`LPOP`/`RPOP`/`LSET`, `SADD`/`SREM`, `ZADD`/`ZREM`, `EXPIRE`/`EXPIREAT`/`PEXPIRE`/`PERSIST`, `RENAME` |
-| `data-admin` | `DEL`, `UNLINK`, `HDEL` |
+| `query-only` | `GET`, `MGET`, `STRLEN`, `EXISTS`, `TTL`, `PTTL`, `TYPE`, `SCAN`, `HGET`, `HGETALL`, `HKEYS`, `HVALS`, `HLEN`, `HEXISTS`, `HMGET`, `LRANGE`, `LLEN`, `LINDEX`, `SMEMBERS`, `SCARD`, `SISMEMBER`, `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZCARD`, `ZSCORE`, `XLEN`, `XREAD`, `XRANGE`, `XREVRANGE`, `PING`, `ECHO` |
+| `read-write` | `SET`, `SETEX`, `SETNX`, `PSETEX`, `MSET`, `MSETNX`, `APPEND`, `INCR`/`INCRBY`, `DECR`/`DECRBY`, `HSET`/`HSETNX`/`HMSET`/`HINCRBY`, `LPUSH`/`RPUSH`/`LPOP`/`RPOP`/`LSET`/`LREM`, `SADD`/`SREM`, `ZADD`/`ZREM`, `XADD`, `EXPIRE`/`EXPIREAT`/`PEXPIRE`/`PERSIST`, `RENAME` |
+| `data-admin` | `DEL`, `UNLINK`, `HDEL`, `XDEL` |
 | `admin` | `FLUSHDB`, `FLUSHALL`, `CONFIG`, `INFO`, `CLIENT`, `DEBUG`, `SHUTDOWN`, `KEYS`, `MONITOR`, `SAVE`, `BGSAVE`, `BGREWRITEAOF`, `REPLICAOF`, `SLAVEOF`, `ACL` |
 
 ### Schema inspection
@@ -3237,5 +3282,5 @@ GET /orders/_search
 
 - Writes (`insert`/`update`/`delete`) are not exposed yet — the adapter implements them, but the CLI currently only routes them for SQL and MongoDB. Read-only `export` (v1.22) and the interactive `shell` (v1.22) are available.
 - No `_search/scroll` or PIT pagination at the CLI layer; large pulls need a saved external script.
-- `check`, `diff`, `migrate`, and `q` are SQL-only and exit with errors (or fall through to a generic "unsupported" path).
+- `check`, `diff`, and `migrate` are SQL-only and exit with errors (or fall through to a generic "unsupported" path). `q` **is** supported — Elasticsearch snippets use the `.elasticsearch.sql` extension (see `@diag/es-cluster-health`).
 - Blacklist column rules are applied to flattened hit rows on `query`; table-level blacklist rejects an index up front.

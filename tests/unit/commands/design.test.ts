@@ -153,6 +153,58 @@ describe('design commands', () => {
     expect(JSON.parse(output)).toMatchObject({ entries: [], summary: { errors: 0 } })
   })
 
+  test('compares a valid design with a local ORM DDL definition without config or connection', async () => {
+    const designFile = join(sandbox, 'dbcli.design.json')
+    const ddlFile = join(sandbox, 'schema.sql')
+    writeFileSync(designFile, JSON.stringify(valid))
+    writeFileSync(
+      ddlFile,
+      [
+        'CREATE TABLE customers (id UUID PRIMARY KEY);',
+        'CREATE TABLE orders (id UUID PRIMARY KEY, customer_id UUID NOT NULL REFERENCES customers(id));',
+        'CREATE INDEX orders_customer_id_idx ON orders (customer_id);',
+      ].join('\n')
+    )
+
+    await root().parseAsync(
+      ['bun', 'dbcli', 'design', 'diff', '--against-orm', ddlFile, '--format', 'json'],
+      { from: 'node' }
+    )
+
+    expect(JSON.parse(output)).toMatchObject({ ormSource: 'design', entries: [], summary: { errors: 0 } })
+  })
+
+  test('produces a review-only dry-run proposal with preflight and verification steps', async () => {
+    const designFile = join(sandbox, 'dbcli.design.json')
+    const ddlFile = join(sandbox, 'schema.sql')
+    writeFileSync(designFile, JSON.stringify(valid))
+    writeFileSync(
+      ddlFile,
+      [
+        'CREATE TABLE customers (id UUID PRIMARY KEY);',
+        'CREATE TABLE orders (id UUID PRIMARY KEY, customer_id UUID NOT NULL REFERENCES customers(id));',
+      ].join('\n')
+    )
+
+    await root().parseAsync(
+      ['bun', 'dbcli', 'design', 'propose', '--against-orm', ddlFile, '--format', 'json'],
+      { from: 'node' }
+    )
+
+    expect(JSON.parse(output)).toMatchObject({
+      proposals: [
+        expect.objectContaining({
+          safety: 'dry-run',
+          preflight: expect.arrayContaining(['dbcli blacklist list']),
+          verification: expect.arrayContaining([
+            'After an approved write, run: dbcli schema <exact-table> --format json',
+          ]),
+          commands: expect.arrayContaining([expect.stringContaining('dbcli migrate add-index orders')]),
+        }),
+      ],
+    })
+  })
+
   test('keeps console spies alive for the shared command singleton', () => {
     expect(logSpy).toBeDefined()
     expect(errorSpy).toBeDefined()

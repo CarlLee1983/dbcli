@@ -85,7 +85,7 @@ const entryOrder = (left: DriftEntry, right: DriftEntry): number =>
 export function compareNormalized(
   orm: NormalizedSchema,
   db: NormalizedSchema,
-  opts: { ignore: string[]; extraDefaultIgnore?: string[] }
+  opts: { ignore: string[]; extraDefaultIgnore?: string[]; targetLabel?: string }
 ): DriftReport {
   const ormTables = tableMap(orm, db.defaultSchema)
   const dbTables = tableMap(db, db.defaultSchema)
@@ -93,6 +93,7 @@ export function compareNormalized(
   const extraDefaultIgnore = opts.extraDefaultIgnore ?? []
   const defaultIgnore = [...DEFAULT_IGNORE, ...extraDefaultIgnore]
   const ignorePatterns = opts.ignore.map(globToRegex)
+  const targetLabel = opts.targetLabel ?? 'database'
   const entries: DriftEntry[] = []
 
   for (const tableKey of tableKeys) {
@@ -123,7 +124,7 @@ export function compareNormalized(
           severity: 'error',
           table,
           object: 'table',
-          detail: `table '${table}' is defined in ${orm.source} but absent in the database`,
+          detail: `table '${table}' is defined in ${orm.source} but absent in the ${targetLabel}`,
         })
       )
       continue
@@ -136,13 +137,13 @@ export function compareNormalized(
           severity: 'warn',
           table,
           object: 'table',
-          detail: `table '${table}' exists in the database but is not defined in ${orm.source}`,
+          detail: `table '${table}' exists in the ${targetLabel} but is not defined in ${orm.source}`,
         })
       )
       continue
     }
 
-    if (ormTable && dbTable) compareTable(ormTable, dbTable, table, orm.source, entries)
+    if (ormTable && dbTable) compareTable(ormTable, dbTable, table, orm.source, targetLabel, entries)
   }
 
   entries.sort(entryOrder)
@@ -170,6 +171,7 @@ function compareTable(
   dbTable: NormalizedTable,
   table: string,
   ormSource: string,
+  targetLabel: string,
   entries: DriftEntry[]
 ): void {
   const ormColumns = new Map(ormTable.columns.map((column) => [column.name.toLowerCase(), column]))
@@ -185,7 +187,7 @@ function compareTable(
             severity: 'error',
             table,
             object: ormColumn.name,
-            detail: `column '${ormColumn.name}' (${ormColumn.type}) is defined in ${ormSource} but absent in the database`,
+            detail: `column '${ormColumn.name}' (${ormColumn.type}) is defined in ${ormSource} but absent in the ${targetLabel}`,
           },
           { kind: 'column', table: ormTable.identity, column: ormColumn }
         )
@@ -215,13 +217,13 @@ function compareTable(
         severity: 'warn',
         table,
         object: dbColumn.name,
-        detail: `column '${dbColumn.name}' (${dbColumn.type}) exists in the database but is not defined in ${ormSource}`,
+        detail: `column '${dbColumn.name}' (${dbColumn.type}) exists in the ${targetLabel} but is not defined in ${ormSource}`,
       })
     )
   }
 
-  compareIndexes(ormTable.indexes, dbTable.indexes, ormTable.identity, table, ormSource, entries)
-  compareForeignKeys(ormTable.foreignKeys, dbTable.foreignKeys, table, ormSource, entries)
+  compareIndexes(ormTable.indexes, dbTable.indexes, ormTable.identity, table, ormSource, targetLabel, entries)
+  compareForeignKeys(ormTable.foreignKeys, dbTable.foreignKeys, table, ormSource, targetLabel, entries)
 }
 
 function compareForeignKeys(
@@ -229,6 +231,7 @@ function compareForeignKeys(
   dbForeignKeys: NormalizedForeignKey[],
   table: string,
   ormSource: string,
+  targetLabel: string,
   entries: DriftEntry[]
 ): void {
   const ormByKey = new Map(ormForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey]))
@@ -242,7 +245,7 @@ function compareForeignKeys(
         severity: 'error',
         table,
         object: `foreign key (${foreignKey.columns.join(', ')})`,
-        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) is defined in ${ormSource} but absent in the database`,
+        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) is defined in ${ormSource} but absent in the ${targetLabel}`,
       })
     )
   }
@@ -254,7 +257,7 @@ function compareForeignKeys(
         severity: 'warn',
         table,
         object: `foreign key (${foreignKey.columns.join(', ')})`,
-        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
+        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) exists in the ${targetLabel} but is not defined in ${ormSource}`,
       })
     )
   }
@@ -316,6 +319,7 @@ function compareIndexes(
   tableIdentity: NormalizedTableIdentity,
   table: string,
   ormSource: string,
+  targetLabel: string,
   entries: DriftEntry[]
 ): void {
   const indexKey = (index: NormalizedIndex) =>
@@ -336,7 +340,7 @@ function compareIndexes(
           severity: 'error',
           table,
           object: `index(${index.columns.join(',')})`,
-          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) is defined in ${ormSource} but absent in the database`,
+          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) is defined in ${ormSource} but absent in the ${targetLabel}`,
         },
         { kind: 'index', table: tableIdentity, index }
       )
@@ -354,7 +358,7 @@ function compareIndexes(
           severity: 'warn',
           table,
           object: `index(${index.columns.join(',')})`,
-          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
+          detail: `${index.unique ? 'unique ' : ''}index on (${index.columns.join(', ')}) exists in the ${targetLabel} but is not defined in ${ormSource}`,
         },
         { kind: 'index', table: tableIdentity, index }
       )

@@ -1,13 +1,18 @@
 ---
 name: design-review
-description: Validate and render a version-controlled SQL database design before comparing it with the local schema cache.
+description: Validate and render a version-controlled SQL database design before comparing it with the local schema cache and preparing review-only proposals.
 tags: [design, schema, readonly]
 engines: [postgres, mysql]
 safety:
   mode: plan-only
   requires:
+    - blacklist-list
     - schema-check
 steps:
+  - type: command
+    command: blacklist list
+    reason: Confirm sensitive-data boundaries before reading cached schema details or preparing migration review.
+    risk: readonly
   - type: command
     command: design validate --format json
     reason: Fail closed on incomplete keys, invalid relationships, and unsafe indexes before the design is used.
@@ -23,6 +28,10 @@ steps:
   - type: command
     command: design diff --against-cache --format markdown
     reason: Report columns, indexes, and foreign keys that differ without opening a new connection or executing DDL.
+    risk: readonly
+  - type: command
+    command: design propose --against-cache --format markdown
+    reason: Prepare only dry-run proposals or migration-review escalations with preflight, rollback, and verification reminders.
     risk: readonly
 ---
 # Agent Notes

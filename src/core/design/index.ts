@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { z } from 'zod'
 import { typeFamily, type NormalizedSchema } from '@/core/orm-drift/normalized-schema'
+import type { DriftReport } from '@/core/orm-drift/compare'
 
 export type DesignDialect = 'postgresql' | 'mysql' | 'mariadb'
 export type DesignFindingSeverity = 'error' | 'warn' | 'info'
@@ -77,6 +78,21 @@ export interface DesignFinding extends DesignIssue {
 export interface DesignReviewReport {
   findings: DesignFinding[]
   summary: { errors: number; warns: number; infos: number }
+}
+
+export interface DesignProposal {
+  table: string
+  object: string
+  safety: 'dry-run' | 'migration-review'
+  commands: string[]
+  preflight: string[]
+  rollback: string
+  verification: string[]
+}
+
+export interface DesignProposalPlan {
+  report: DriftReport
+  proposals: DesignProposal[]
 }
 
 export class DesignValidationError extends Error {
@@ -248,7 +264,7 @@ export function reviewDesign(spec: DesignSpec): DesignReviewReport {
 export function compileDesignSchema(spec: DesignSpec): NormalizedSchema {
   const models = new Map(spec.models.map((model) => [model.name, model]))
   return {
-    source: 'json',
+    source: 'design',
     ...(spec.dialect === 'postgresql' ? { defaultSchema: 'public' } : {}),
     tables: spec.models.map((model) => ({
       identity: { table: model.table },
@@ -272,6 +288,36 @@ export function compileDesignSchema(spec: DesignSpec): NormalizedSchema {
       }),
     })),
     unparsed: [],
+  }
+}
+
+/**
+ * Turns drift entries into review-only implementation plans. It intentionally
+ * preserves existing safe dry-run proposals and escalates every other change.
+ */
+export function planDesignProposals(report: DriftReport): DesignProposalPlan {
+  return {
+    report,
+    proposals: report.entries
+      .filter((entry) => entry.category !== 'unmanaged')
+      .map((entry) => ({
+        table: entry.table,
+        object: entry.object,
+        safety: entry.proposedCommands.some((command) => command.startsWith('# dry-run'))
+          ? 'dry-run'
+          : 'migration-review',
+        commands: entry.proposedCommands,
+        preflight: [
+          'dbcli blacklist list',
+          'Confirm the exact affected table with: dbcli schema <exact-table> --format json',
+        ],
+        rollback:
+          'Capture the current schema and generated DDL before any approved write; define the inverse migration before execution.',
+        verification: [
+          'After an approved write, run: dbcli schema <exact-table> --format json',
+          'Re-run this same design diff command and review the remaining drift.',
+        ],
+      })),
   }
 }
 

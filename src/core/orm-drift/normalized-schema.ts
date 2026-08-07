@@ -1,7 +1,15 @@
 import { z } from 'zod'
 import { qualifiedTableName, tableIdentityKey } from '@/core/orm-drift/table-identity'
 
-export type OrmSource = 'db' | 'prisma' | 'ddl' | 'json' | 'drizzle' | 'typeorm' | 'sequelize'
+export type OrmSource =
+  | 'db'
+  | 'design'
+  | 'prisma'
+  | 'ddl'
+  | 'json'
+  | 'drizzle'
+  | 'typeorm'
+  | 'sequelize'
 
 export interface NormalizedColumn {
   name: string
@@ -104,7 +112,7 @@ const tableZod = z.object({
 
 export const normalizedSchemaZod = z
   .object({
-    source: z.enum(['db', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
+    source: z.enum(['db', 'design', 'prisma', 'ddl', 'json', 'drizzle', 'typeorm', 'sequelize']),
     defaultSchema: z.string().min(1).optional(),
     tables: z.array(tableZod),
     unparsed: z.array(

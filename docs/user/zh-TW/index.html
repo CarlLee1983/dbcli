@@ -715,7 +715,7 @@ dbcli proxy analyze \
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">內建任務包 <code>analyze-table-perf</code></h4>
-                <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code>、<code>orm-drift-review</code> 與 <code>connection-health</code>。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
+                <p class="m-0">唯讀（<code>plan-only</code>）的 task pack，吃必填的 <code>table</code> 參數，依序執行 <code>blacklist list</code> → <code>schema &lt;table&gt; --format json</code> → <code>guide index-usage --format json</code>。<code>dbcli inspect</code> 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — <code>audit-permissions</code>、<code>safe-backfill</code>、<code>schema-drift-review</code>、<code>orm-drift-review</code>、<code>design-review</code> 與 <code>connection-health</code>。<code>design-review</code> 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。用 <code>dbcli skill tasks list</code> 瀏覽所有 task pack。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">業務語意脈絡</h4>
@@ -747,8 +747,10 @@ dbcli design init --output ./dbcli.design.json --dialect postgresql
 # 兩個指令都離線且唯讀。
 dbcli design validate --format json
 dbcli design render --format mermaid
-dbcli design diff --against-cache --format markdown</code></pre>
-                <p class="m-0"><code>validate</code> 對格式錯誤、缺少 primary key、無效 relationship endpoint/cardinality、relation type 不相容與不安全 index 採 fail-closed；access-pattern index 缺口屬建議性。<code>render</code> 只在驗證沒有 error 時輸出 JSON、Markdown 或 Mermaid。<code>diff --against-cache</code> 讀取既有的本機 cache（先執行 <code>schema</code>），不會開啟連線，並回報不同的 column、index 與 foreign key。<code>init</code> 是唯一的寫入指令，必須指定 <code>--output</code>，且拒絕覆寫。這些指令不會呼叫 LLM、查詢資料或執行 migration。外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。</p>
+dbcli design diff --against-cache --format markdown
+dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
+dbcli design propose --against-orm ./prisma/schema.prisma --format markdown</code></pre>
+                <p class="m-0"><code>validate</code> 對格式錯誤、缺少 primary key、無效 relationship endpoint/cardinality、relation type 不相容與不安全 index 採 fail-closed；access-pattern index 缺口屬建議性。<code>render</code> 只在驗證沒有 error 時輸出 JSON、Markdown 或 Mermaid。<code>diff --against-cache</code> 讀取既有的本機 cache（先執行 <code>schema</code>），不會開啟連線，並回報不同的 column、index 與 foreign key。<code>diff --against-orm</code> 完全在本機執行：可對照明確指定的 Prisma、DDL、Drizzle snapshot 或 normalized JSON artifact，不需要設定或資料庫連線；DDL 可使用 glob。兩種模式都唯讀，而且必須剛好選擇一個比較目標。<code>propose</code> 會為每一項變更加上 blacklist/schema 預檢、僅在既有 migration 能無損表示時才提供 dry-run 指令、回滾提醒與寫入後的唯讀驗證計畫；其他變更一律升級為 <code>migration-review</code>。它不會套用任何寫入。<code>init</code> 是唯一的寫入指令，必須指定 <code>--output</code>，且拒絕覆寫。這些指令不會呼叫 LLM 或查詢資料。外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

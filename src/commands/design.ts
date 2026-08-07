@@ -4,15 +4,17 @@ import {
   defaultDesignFile,
   DesignValidationError,
   loadDesignSpec,
+  planDesignProposals,
   reviewDesign,
   type DesignDialect,
 } from '@/core/design'
 import { configModule } from '@/core/config'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
 import { compareNormalized } from '@/core/orm-drift/compare'
+import { loadOrmSchema, parseAgainstOrmValues } from '@/commands/diff'
 import { formatDrift, type DriftFormat } from '@/formatters/orm-drift'
 import { resolveConfigPath } from '@/utils/config-path'
-import { formatDesign, formatDesignReview } from '@/formatters/design'
+import { formatDesign, formatDesignProposal, formatDesignReview } from '@/formatters/design'
 
 const VALIDATE_FORMATS = ['json', 'markdown'] as const
 const RENDER_FORMATS = ['json', 'markdown', 'mermaid'] as const
@@ -20,6 +22,17 @@ const DIFF_FORMATS = ['json', 'table', 'markdown'] as const
 
 function defaultFile(file?: string): string {
   return file ?? defaultDesignFile(process.cwd())
+}
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value]
+}
+
+function parseIgnore(value?: string): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
 }
 
 function template(dialect: DesignDialect): string {
@@ -76,11 +89,29 @@ designCommand
 
 designCommand
   .command('diff')
-  .description('Compare a valid design against the local SQL schema cache without connecting')
+  .description('Compare a valid design against the local schema cache or local ORM definition without connecting')
   .option('--file <path>', 'Design JSON file (default: dbcli.design.json)')
-  .requiredOption('--against-cache', 'Compare against the configured local schema cache')
+  .option('--against-cache', 'Compare against the configured local schema cache')
+  .option(
+    '--against-orm <paths>',
+    'Compare against ORM definition(s), repeatable or comma-separated; DDL supports globs',
+    collectOption,
+    []
+  )
+  .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
+  .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
   .option('--format <format>', 'Output format: json, table, or markdown', 'json')
-  .action(async (options: { file?: string; againstCache?: boolean; format?: string }, command: Command) => {
+  .action(async (
+    options: {
+      file?: string
+      againstCache?: boolean
+      againstOrm?: string[]
+      ormFormat?: string
+      ignore?: string
+      format?: string
+    },
+    command: Command
+  ) => {
     const format = options.format
     if (!isFormat(format, DIFF_FORMATS)) throw new Error('format must be json, table, or markdown')
     try {
@@ -91,25 +122,113 @@ designCommand
         process.exitCode = 1
         return
       }
-      const config = await configModule.read(resolveConfigPath(command))
-      const system = config.connection?.system
-      if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
-        throw new Error('design diff --against-cache requires a configured PostgreSQL, MySQL, or MariaDB connection')
+      const modeCount = Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
+      if (modeCount !== 1) {
+        throw new Error('Choose exactly one of --against-cache or --against-orm')
       }
-      if (system !== spec.dialect) {
-        throw new Error(`design dialect '${spec.dialect}' does not match configured connection '${system}'`)
-      }
-      if (Object.keys(config.schema ?? {}).length === 0) {
-        throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
-      }
-      const actual = normalizeDbSchema(config.schema!, system === 'postgresql' ? { defaultSchema: 'public' } : {})
-      const report = compareNormalized(compileDesignSchema(spec), actual, { ignore: [] })
+
+      const desired = compileDesignSchema(spec)
+      const ignore = parseIgnore(options.ignore)
+      const report = options.againstCache
+        ? await compareAgainstCache(desired, spec.dialect, ignore, command)
+        : await compareAgainstOrm(desired, spec.dialect, options.againstOrm ?? [], options.ormFormat, ignore)
       console.log(formatDrift(report, format as DriftFormat))
       process.exitCode = report.summary.errors > 0 ? 1 : 0
     } catch (error) {
       fail(error, format === 'table' ? 'markdown' : format)
     }
   })
+
+designCommand
+  .command('propose')
+  .description('Produce a review-only migration proposal from design drift; never executes DDL')
+  .option('--file <path>', 'Design JSON file (default: dbcli.design.json)')
+  .option('--against-cache', 'Compare against the configured local schema cache')
+  .option(
+    '--against-orm <paths>',
+    'Compare against ORM definition(s), repeatable or comma-separated; DDL supports globs',
+    collectOption,
+    []
+  )
+  .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
+  .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
+  .option('--format <format>', 'Output format: json or markdown', 'markdown')
+  .action(async (
+    options: {
+      file?: string
+      againstCache?: boolean
+      againstOrm?: string[]
+      ormFormat?: string
+      ignore?: string
+      format?: string
+    },
+    command: Command
+  ) => {
+    const format = options.format
+    if (!isFormat(format, VALIDATE_FORMATS)) throw new Error('format must be json or markdown')
+    try {
+      const spec = await loadDesignSpec(defaultFile(options.file))
+      const review = reviewDesign(spec)
+      if (review.summary.errors > 0) {
+        console.log(formatDesignReview(review, format))
+        process.exitCode = 1
+        return
+      }
+      const modeCount = Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
+      if (modeCount !== 1) {
+        throw new Error('Choose exactly one of --against-cache or --against-orm')
+      }
+
+      const desired = compileDesignSchema(spec)
+      const ignore = parseIgnore(options.ignore)
+      const report = options.againstCache
+        ? await compareAgainstCache(desired, spec.dialect, ignore, command)
+        : await compareAgainstOrm(desired, spec.dialect, options.againstOrm ?? [], options.ormFormat, ignore)
+      console.log(formatDesignProposal(planDesignProposals(report), format))
+      process.exitCode = report.summary.errors > 0 ? 1 : 0
+    } catch (error) {
+      fail(error, format)
+    }
+  })
+
+async function compareAgainstCache(
+  desired: ReturnType<typeof compileDesignSchema>,
+  dialect: DesignDialect,
+  ignore: string[],
+  command: Command
+) {
+  const config = await configModule.read(resolveConfigPath(command))
+  const system = config.connection?.system
+  if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
+    throw new Error('design comparison against cache requires a configured PostgreSQL, MySQL, or MariaDB connection')
+  }
+  if (system !== dialect) {
+    throw new Error(`design dialect '${dialect}' does not match configured connection '${system}'`)
+  }
+  if (Object.keys(config.schema ?? {}).length === 0) {
+    throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
+  }
+  const actual = normalizeDbSchema(config.schema!, system === 'postgresql' ? { defaultSchema: 'public' } : {})
+  return compareNormalized(desired, actual, { ignore })
+}
+
+async function compareAgainstOrm(
+  desired: ReturnType<typeof compileDesignSchema>,
+  dialect: DesignDialect,
+  paths: string[],
+  ormFormat: string | undefined,
+  ignore: string[]
+) {
+  const { schema: orm, extraDefaultIgnore } = await loadOrmSchema(parseAgainstOrmValues(paths), {
+    ...(ormFormat !== undefined && { ormFormat }),
+    system: dialect,
+  })
+  return compareNormalized(desired, orm, {
+    ignore,
+    extraDefaultIgnore,
+    targetLabel: 'ORM definition',
+  })
+}
 
 designCommand
   .command('validate')

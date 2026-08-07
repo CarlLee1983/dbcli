@@ -1,4 +1,4 @@
-import type { DesignReviewReport, DesignSpec } from '@/core/design'
+import type { DesignProposalPlan, DesignReviewReport, DesignSpec } from '@/core/design'
 
 export type DesignFormat = 'json' | 'markdown' | 'mermaid'
 
@@ -21,6 +21,31 @@ export function formatDesignReview(review: DesignReviewReport, format: Exclude<D
     }
   }
   lines.push('', `Summary: ${review.summary.errors} error(s), ${review.summary.warns} warning(s), ${review.summary.infos} info(s).`)
+  return lines.join('\n')
+}
+
+export function formatDesignProposal(
+  plan: DesignProposalPlan,
+  format: Exclude<DesignFormat, 'mermaid'>
+): string {
+  if (format === 'json') return JSON.stringify(plan, null, 2)
+  const lines = ['# Design change proposal', '']
+  if (plan.proposals.length === 0) lines.push('No design changes need a proposal.')
+  for (const proposal of plan.proposals) {
+    lines.push(
+      `## ${proposal.table}.${proposal.object}`,
+      '',
+      `Safety: **${proposal.safety}**`,
+      '',
+      'Preflight:'
+    )
+    for (const step of proposal.preflight) lines.push(`- ${inlineCode(step)}`)
+    lines.push('', 'Proposed command or escalation:')
+    lines.push('```bash', ...proposal.commands, '```', '', `Rollback: ${proposal.rollback}`, '', 'Verification:')
+    for (const step of proposal.verification) lines.push(`- ${inlineCode(step)}`)
+    lines.push('')
+  }
+  lines.push(`Drift summary: ${plan.report.summary.errors} error(s), ${plan.report.summary.warns} warning(s).`)
   return lines.join('\n')
 }
 
@@ -98,6 +123,10 @@ function mermaidType(type: string): string {
 
 function inlineList(values: string[]): string {
   return values.length === 0 ? 'none' : values.map((value) => `\`${value}\``).join(', ')
+}
+
+function inlineCode(value: string): string {
+  return `\`${value.replace(/`/g, '\\`')}\``
 }
 
 function escapeTable(value: string): string {

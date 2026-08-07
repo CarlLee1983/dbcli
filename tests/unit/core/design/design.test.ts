@@ -105,7 +105,7 @@ describe('design artifact', () => {
   test('compiles the design to the shared normalized-schema shape', () => {
     const compiled = compileDesignSchema(parseDesignSpec(valid))
     expect(compiled).toMatchObject({
-      source: 'json',
+      source: 'design',
       defaultSchema: 'public',
       tables: [
         expect.objectContaining({ identity: { table: 'customers' } }),

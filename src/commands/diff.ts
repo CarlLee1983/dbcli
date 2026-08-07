@@ -50,6 +50,16 @@ export interface DriftOptions {
   ignore?: string
 }
 
+export interface LoadOrmSchemaOptions {
+  ormFormat?: string
+  system: SqlDatabaseSystem
+}
+
+export interface LoadedOrmSchema {
+  schema: NormalizedSchema
+  extraDefaultIgnore?: string[]
+}
+
 export interface DiffActionOptions {
   snapshot?: string
   against?: string
@@ -122,21 +132,14 @@ function mergeNormalizedSchemas(schemas: NormalizedSchema[]): NormalizedSchema {
   })
 }
 
-export async function runDrift(
-  paths: string[],
-  options: DriftOptions,
-  config: DbcliConfig
-): Promise<{ report: DriftReport }> {
-  const system = config.connection?.system
-  if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
-    throw new Error(`This command requires a SQL connection, got: ${system ?? 'none'}`)
-  }
-
-  const cached = (config.schema ?? {}) as Record<string, TableSchema>
-  if (Object.keys(cached).length === 0) {
-    throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
-  }
-
+/**
+ * Parse an explicit local ORM artifact into the normalized comparison shape.
+ * This never opens a database connection or reads dbcli configuration.
+ */
+export async function loadOrmSchema(
+  paths: string[] | string,
+  options: LoadOrmSchemaOptions
+): Promise<LoadedOrmSchema> {
   const ormFormat = parseOrmFormat(options.ormFormat)
   const includesGlob = parseAgainstOrmValues(paths).some(hasGlobMagic)
   const expandedPaths = await expandOrmPaths(paths)
@@ -178,21 +181,44 @@ export async function runDrift(
   const merged = inputs.every((input) => isDdlFormat(input.format))
     ? parseDdlFiles(
         inputs.map((input) => input.content),
-        system as SqlDatabaseSystem
+        options.system
       )
     : mergeNormalizedSchemas(
         inputs.map(({ content, format }) => {
           if (format === 'prisma') return parsePrismaSchema(content)
-          if (format === 'ddl' || format in ORM_ALIASES) {
-            return parseDdl(content, system as SqlDatabaseSystem)
-          }
+          if (format === 'ddl' || format in ORM_ALIASES) return parseDdl(content, options.system)
           if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
           const parsed = normalizedSchemaZod.parse(JSON.parse(content))
           return { ...parsed, source: 'json' as const }
         })
       )
   const alias = ormFormat && ormFormat in ORM_ALIASES ? (ormFormat as OrmAlias) : undefined
-  const orm = alias ? { ...merged, source: alias as OrmSource } : merged
+
+  return {
+    schema: alias ? { ...merged, source: alias as OrmSource } : merged,
+    ...(alias ? { extraDefaultIgnore: [...ORM_ALIASES[alias].defaultIgnore] } : {}),
+  }
+}
+
+export async function runDrift(
+  paths: string[],
+  options: DriftOptions,
+  config: DbcliConfig
+): Promise<{ report: DriftReport }> {
+  const system = config.connection?.system
+  if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
+    throw new Error(`This command requires a SQL connection, got: ${system ?? 'none'}`)
+  }
+
+  const cached = (config.schema ?? {}) as Record<string, TableSchema>
+  if (Object.keys(cached).length === 0) {
+    throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
+  }
+
+  const { schema: orm, extraDefaultIgnore } = await loadOrmSchema(paths, {
+    ...(options.ormFormat !== undefined && { ormFormat: options.ormFormat }),
+    system: system as SqlDatabaseSystem,
+  })
   const ignore = (options.ignore ?? '')
     .split(',')
     .map((pattern) => pattern.trim())
@@ -205,7 +231,7 @@ export async function runDrift(
   return {
     report: compareNormalized(orm, db, {
       ignore,
-      extraDefaultIgnore: alias ? [...ORM_ALIASES[alias].defaultIgnore] : undefined,
+      extraDefaultIgnore,
     }),
   }
 }

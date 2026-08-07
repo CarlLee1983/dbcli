@@ -1,7 +1,7 @@
 # Database Design Assistant v1
 
 **Date:** 2026-08-07
-**Status:** Approved for implementation
+**Status:** Implemented and verified
 **Baseline:** dbcli v1.51.2 schema cache, ORM drift, DDL, verification, semantic context, and task packs
 
 ## Outcome
@@ -162,6 +162,14 @@ Each ticket must have focused tests. No later ticket may weaken the safety
 contract established here. DGN-09 updates `docs/user/en/index.md`,
 `docs/user/en/index.html`, `docs/user/zh-TW/index.md`, and
 `docs/user/zh-TW/index.html` together.
+
+## Implementation status
+
+- Completed: DGN-00 through DGN-07. The shipped slice includes artifact review,
+  rendering, cache and ORM comparison, review-only proposal plans, and the
+  `design-review` task pack.
+- Completed: DGN-08/DGN-09. Focused and full test suites, typecheck, lint,
+  user-document parity, skill parity, and CLI help contracts have passed.
 
 ## Acceptance criteria
 

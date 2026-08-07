@@ -775,7 +775,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |
-| `design init` / `design validate` / `design render` / `design diff` | 明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，並與本機 SQL schema cache 比較。不會執行 DDL 或暗中寫入設計檔。 |
+| `design init` / `design validate` / `design render` / `design diff` / `design propose` | 明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，與本機 SQL schema cache 或本機 ORM 定義比較，並產出只供審查的變更計畫。不會執行 DDL 或暗中寫入設計檔。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
@@ -839,11 +839,13 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > dbcli design validate --format json
 > dbcli design render --format mermaid
 > dbcli design diff --against-cache --format markdown
+> dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
+> dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
 > ```
 >
-> `validate` 對格式錯誤、缺少 primary key、無效 relationship endpoint 或 cardinality、relation type 不相容與不安全 index 採 fail-closed；也會回報建議性的 access-pattern index 缺口。`render` 只在設計沒有 error 時才輸出 JSON、Markdown 或 Mermaid ERD。`diff --against-cache` 讀取既有的本機 cache（先執行 `schema`），不會開啟連線，並回報不同的 column、index 與 foreign key。`init` 是唯一的寫入指令，必須指定 `--output`，且拒絕覆寫既有檔案。這些指令不會呼叫 LLM、查詢資料或執行 migration；外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。
+> `validate` 對格式錯誤、缺少 primary key、無效 relationship endpoint 或 cardinality、relation type 不相容與不安全 index 採 fail-closed；也會回報建議性的 access-pattern index 缺口。`render` 只在設計沒有 error 時才輸出 JSON、Markdown 或 Mermaid ERD。`diff --against-cache` 讀取既有的本機 cache（先執行 `schema`），不會開啟連線，並回報不同的 column、index 與 foreign key。`diff --against-orm` 完全在本機執行：可對照明確指定的 Prisma、DDL、Drizzle snapshot 或 normalized JSON artifact，不需要設定或資料庫連線；DDL 可使用 glob。兩種模式都唯讀，而且必須剛好選擇一個比較目標。`propose` 會為每一項變更加上 blacklist/schema 預檢、僅在既有 migration 能無損表示時才提供 dry-run 指令、回滾提醒與寫入後的唯讀驗證計畫；其他變更一律升級為 `migration-review`。它不會套用任何寫入。`init` 是唯一的寫入指令，必須指定 `--output`，且拒絕覆寫既有檔案。這些指令不會呼叫 LLM 或查詢資料；外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。
 
-> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
+> **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`、`design-review` 與 `connection-health`。`design-review` 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
 > **`safe-backfill-verify` 任務計畫與 `verification` 區塊。** 執行 `dbcli skill tasks plan safe-backfill-verify --format json` 回傳的計畫 JSON 中包含一個 `verification` 區塊，其 `status` 為 `"planned"`。此區塊描述任務執行時將進行的回讀斷言 — 這是**計畫中**的佐證定義，**而非執行結果**。`status: "planned"` **不代表**驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。
 

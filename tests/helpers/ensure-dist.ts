@@ -59,6 +59,7 @@ export const BUILD_INPUTS = [
 /** Everything the build writes. All must exist, or the last build did not finish. */
 export const BUILD_OUTPUTS = [
   'dist/cli.mjs',
+  'dist/cli-runtime.mjs',
   'dist/core.mjs',
   'dist/core.d.ts',
   'dist/agent-core.mjs',

@@ -297,7 +297,7 @@ Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 - [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
 - [ ] `.planning/STATE.md` 的 milestone 段落、Release Gate 表格與 `last_updated` 已更新
 - [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major`）
-- [ ] Benchmark（`bun run test:perf`）— advisory，不擋 release，但建議跑一次留紀錄
+- [ ] Benchmark（`bun run test:perf`）— blocking CI gate；確認所有預算與實測輸出皆通過
 
 ### Version Bumping
 

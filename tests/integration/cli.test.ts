@@ -14,6 +14,12 @@ describe('CLI smoke tests', () => {
     expect(result.code).toBe(0)
   })
 
+  it('should display version with -V', async () => {
+    const result = await execCommand(['-V'])
+    expect(result.stdout).toMatch(/\d+\.\d+\.\d+/)
+    expect(result.code).toBe(0)
+  })
+
   it('should display plan command in help', async () => {
     const result = await execCommand(['--help'])
     expect(result.stdout).toContain('plan')

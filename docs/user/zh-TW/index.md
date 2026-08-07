@@ -54,6 +54,8 @@ npm install -g @carllee1983/dbcli
 bun install -g @carllee1983/dbcli
 ```
 
+單獨執行 `dbcli --version` 或 `dbcli -V` 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。
+
 ### 初始化連線
 `init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 進階備援請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
 

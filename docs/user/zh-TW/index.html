@@ -172,6 +172,7 @@ npm install -g @carllee1983/dbcli
 
 # 使用 Bun (推薦)
 bun install -g @carllee1983/dbcli</code></pre>
+            <p>單獨執行 <code>dbcli --version</code> 或 <code>dbcli -V</code> 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。</p>
             <p>透過互動式導覽初始化您的第一個連線：</p>
             <pre><code>dbcli init</code></pre>
             <p>若是 MongoDB，<code>init</code> 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、<code>authSource</code>，最後是可選的 <code>replicaSet</code> / <code>tls</code>）——完整欄位列表與 <code>--uri</code> 進階備援請見下方「引擎支援矩陣」一節的「MongoDB 連線設定」。</p>

@@ -55,6 +55,8 @@ npm install -g @carllee1983/dbcli
 bun install -g @carllee1983/dbcli
 ```
 
+Standalone `dbcli --version` and `dbcli -V` checks use a lightweight launcher and do not load database drivers. Other invocations load the full command runtime as usual.
+
 ### Initializing a Connection
 The `init` command guides you through setting up your first connection. It can automatically parse existing `.env` files. For MongoDB, `init` walks through connection fields one at a time (Host, SRV, Port, User, Password, `authSource`, then optional `replicaSet` / `tls`) — see "MongoDB connection configuration" in the [Database Engine Support Matrix](#database-engine-support-matrix) section below for the full field list and the `--uri` advanced fallback.
 

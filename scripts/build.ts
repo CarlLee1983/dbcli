@@ -1,6 +1,6 @@
 /**
  * Cross-platform build script.
- * Bundles src/cli.ts → dist/cli.mjs with shebang prepended.
+ * Bundles the lightweight launcher and full command runtime separately.
  */
 import { $ } from 'bun'
 import { rmSync } from 'node:fs'
@@ -21,6 +21,7 @@ rmSync(stampFile, { force: true })
 // is tracked) — a restore stamps mtime as "now" while changing the content.
 const artifacts = [
   'dist/cli.mjs',
+  'dist/cli-runtime.mjs',
   'dist/core.mjs',
   'dist/core.d.ts',
   'dist/agent-core.mjs',
@@ -29,8 +30,12 @@ const artifacts = [
   'assets/ui-template.html',
 ]
 
-// 1. Bundle
-await $`bun build ./src/cli.ts --outfile ${outfile} --target bun --external pg --external mysql2 --external mongodb --external open`
+// 1. Bundle the full runtime separately so `dbcli --version` does not parse it.
+await $`bun build ./src/cli-runtime.ts --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
+
+// Keep the launcher's dynamic runtime path external. In source it resolves to
+// cli-runtime.ts; beside the built launcher Bun resolves cli-runtime.mjs.
+await $`bun build ./src/cli.ts --outfile ${outfile} --target bun`
 
 // 2. Prepend shebang (cross-platform, no subshell)
 const content = await Bun.file(outfile).text()

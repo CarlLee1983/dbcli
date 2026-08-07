@@ -43,6 +43,7 @@ const SOURCE_FILES = [
 
 const ARTIFACTS = [
   'dist/cli.mjs',
+  'dist/cli-runtime.mjs',
   'dist/core.mjs',
   'dist/core.d.ts',
   'dist/agent-core.mjs',

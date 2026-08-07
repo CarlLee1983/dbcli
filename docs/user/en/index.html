@@ -172,6 +172,7 @@ npm install -g @carllee1983/dbcli
 
 # Using Bun (Recommended)
 bun install -g @carllee1983/dbcli</code></pre>
+            <p>Standalone <code>dbcli --version</code> and <code>dbcli -V</code> checks use a lightweight launcher and do not load database drivers. Other invocations load the full command runtime as usual.</p>
             <p>Initialize your first connection with the interactive wizard:</p>
             <pre><code>dbcli init</code></pre>
             <p>For MongoDB, <code>init</code> walks through connection fields one at a time (Host, SRV, Port, User, Password, <code>authSource</code>, then optional <code>replicaSet</code> / <code>tls</code>) — see "MongoDB connection configuration" in the Engine Support Matrix section below for the full field list and the <code>--uri</code> advanced fallback.</p>

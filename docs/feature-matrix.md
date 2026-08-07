@@ -77,7 +77,7 @@ bash scripts/release-check.sh   # 9/9 doc-presence (audit row + CHANGELOG versio
 - Step 5/9 (`bun run lint`) enforces `--max-warnings=0` — any new ESLint warning blocks release.
 - Step 8/9 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install` (including `SKILL.zh-TW.md` since v1.20.0).
 - Step 9/9 (doc-presence) is a shell-grep gate: confirms `docs/feature-matrix.md` has the `audit` row and `CHANGELOG.md` has a `## [<package.json version>]` heading. Catches doc-vs-version drift before tagging.
-- Benchmark (`bun run test:perf`) remains advisory and is allowed to fail (`continue-on-error: true`).
+- Benchmark (`bun run test:perf`) is a blocking CI gate across the supported OS/Bun matrix; each budget is based on runner measurements and prints its observed value.
 
 See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
 

@@ -220,8 +220,43 @@ dbcli query "SELECT day, dau FROM dau_daily" --ui                # open in brows
 dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdout
 ```
 
-**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--recovery`
+**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
+
+#### Passive slow-query hint (`--slow-ms`)
+
+`query` and `q` read the execution time they already measured for a finished
+query and, at or above the threshold, add a hint. Default `1000`; `--slow-ms 0`
+disables it for that invocation. This is **not** the `proxy` / `proxy analyze`
+flag of the same name — that one flags events in the proxy log; this one only
+annotates a single command's own result.
+
+The hint performs no extra work: it never runs `EXPLAIN`, reads a schema, or
+issues a second request. It is suppressed entirely under `--recovery`, so the
+recovery envelope keeps its exact machine contract.
+
+- `--format table` appends `Performance hint: <recommendation>` to the footer.
+- `--format json` adds `metadata.performanceAdvisory`:
+
+```json
+{
+  "metadata": {
+    "statement": "SELECT",
+    "performanceAdvisory": {
+      "code": "SLOW_QUERY",
+      "executionTimeMs": 1250,
+      "thresholdMs": 1000,
+      "recommendation": "Review safely with: dbcli guide slow-query --format markdown. This hint runs no additional database diagnostics."
+    }
+  }
+}
+```
+
+The recommendation is engine-aware: PostgreSQL, MySQL, MariaDB, and Redis are
+pointed at `dbcli guide slow-query`, because that goal resolves to real
+diagnostic snippets for them. MongoDB and Elasticsearch ship no snippet for its
+intents, so their hint states the timing and says so instead of naming a command
+that would come back empty. `csv` and `html` output are unchanged.
 
 Below `admin`, SQL holding more than one statement is rejected, because only the
 first statement would decide the permission check while a driver on the simple
@@ -529,6 +564,7 @@ dbcli q @analytics/revenue --param days=30 --format html > report.html
 - `--no-limit` — skip the `SELECT * FROM (…) AS _dbcli_guard LIMIT 1000` wrap
 - `--dry-run` — print the bound SQL + values without executing
 - `--use <name>` — pick a v2 named connection
+- `--slow-ms <number>` — passive slow-query hint threshold (default `1000`; `0` disables). Same contract as `query` — see "Passive slow-query hint" there
 - `--recovery` — emit a `RecoveryEnvelope` on failure (see `recover`)
 - `--verify` — run the snippet's verification assertions after execution (only if the snippet defines them)
 
@@ -1076,6 +1112,139 @@ dbcli skill tasks plan migration-review \
 Both parameters are required. Keep each expansion as one quoted shell argument;
 never use `eval`, and consider `--execute` only after the plan and captured DDL
 have been reviewed.
+
+### design
+
+Author, validate, render, and review a version-controlled SQL database design
+kept beside the code as `dbcli.design.json`. Every subcommand is offline: none
+opens a database connection, executes DDL, or calls an LLM. `design init` is the
+only writer, and it writes only to the explicit `--output` path.
+
+```text
+dbcli design init --output <path> [--dialect <dialect>]
+dbcli design validate [--file <path>] [--format <format>]
+dbcli design render [--file <path>] [--format <format>]
+dbcli design diff (--against-cache | --against-orm <paths>) [options]
+dbcli design propose (--against-cache | --against-orm <paths>) [options]
+```
+
+```bash
+# Writes only to this explicit, missing path; edit the starter before validating.
+dbcli design init --output ./dbcli.design.json --dialect postgresql
+
+dbcli design validate --format json
+dbcli design render --format mermaid
+dbcli design diff --against-cache --format markdown
+dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
+dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
+```
+
+| Option | Applies to | Default | Meaning |
+|---|---|---|---|
+| `--output <path>` | `init` | required | Destination for the new artifact; refuses to overwrite an existing file. |
+| `--dialect <postgresql\|mysql\|mariadb>` | `init` | `postgresql` | Target SQL dialect recorded in the artifact. |
+| `--file <path>` | all but `init` | `dbcli.design.json` | Design artifact to read. |
+| `--format <format>` | all but `init` | see below | `validate`/`propose`: `json`, `markdown`. `render`: `json`, `markdown`, `mermaid` (default `markdown`). `diff`: `json` (default), `table`, `markdown`. |
+| `--against-cache` | `diff`, `propose` | off | Compare with the local schema cache; requires a configured PostgreSQL/MySQL/MariaDB connection whose system matches the artifact dialect, and a non-empty cache (run `dbcli schema` first). |
+| `--against-orm <paths>` | `diff`, `propose` | none | Compare with local ORM definition(s); repeatable or comma-separated, DDL paths support globs. Needs no config and no connection. |
+| `--orm-format <format>` | `diff`, `propose` | auto-detect | Force `prisma`, `ddl`, `json`, `drizzle`, `typeorm`, or `sequelize`. |
+| `--ignore <globs>` | `diff`, `propose` | none | Comma-separated table globs excluded from drift. |
+
+`diff` and `propose` require **exactly one** comparison target; passing both or
+neither is an error.
+
+#### Artifact shape
+
+```json
+{
+  "version": 1,
+  "dialect": "postgresql",
+  "models": [
+    {
+      "name": "orders",
+      "table": "orders",
+      "description": "Completed purchases.",
+      "fields": [
+        { "name": "id", "type": "bigint", "nullable": false, "primaryKey": true, "unique": true },
+        { "name": "customer_id", "type": "bigint", "nullable": false, "primaryKey": false, "unique": false }
+      ],
+      "indexes": [{ "name": "orders_customer_idx", "columns": ["customer_id"], "unique": false }]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "orders_customer",
+      "from": { "model": "orders", "field": "customer_id" },
+      "to": { "model": "customers", "field": "id" },
+      "cardinality": "many-to-one"
+    }
+  ],
+  "accessPatterns": [{ "model": "orders", "filters": ["customer_id"], "sort": ["created_at"] }],
+  "decisions": [{ "name": "single-currency", "rationale": "Amounts are stored in minor units, USD only." }]
+}
+```
+
+It holds no SQL, credentials, rows, or provider configuration. `design init`
+emits this envelope with empty `models`, `relationships`, `accessPatterns`, and
+`decisions`.
+
+#### Review findings
+
+`validate` is fail-closed: any `error` finding exits `1`, and `render`, `diff`,
+and `propose` refuse to do their work while errors remain.
+
+| Severity | Codes |
+|---|---|
+| `error` | `NO_MODELS`, `DUPLICATE_MODEL`, `DUPLICATE_TABLE`, `DUPLICATE_FIELD`, `PRIMARY_KEY_COUNT`, `NULLABLE_PRIMARY_KEY`, `UNKNOWN_INDEX_FIELD`, `DUPLICATE_RELATIONSHIP`, `REVERSE_RELATIONSHIP`, `UNKNOWN_RELATIONSHIP_MODEL`, `UNKNOWN_RELATIONSHIP_FIELD`, `RELATIONSHIP_TYPE_MISMATCH`, `MANY_TO_MANY_REQUIRES_BRIDGE`, `ONE_TO_ONE_REQUIRES_UNIQUE_FK`, `UNKNOWN_ACCESS_MODEL`, `UNKNOWN_ACCESS_FIELD` |
+| `warn` | `DUPLICATE_INDEX`, `REDUNDANT_PRIMARY_KEY_INDEX`, `PREFIX_REDUNDANT_INDEX`, `ACCESS_PATTERN_INDEX` |
+
+`REVERSE_RELATIONSHIP` fires when the same endpoints are declared again in the
+opposite direction; `PREFIX_REDUNDANT_INDEX` fires when a non-unique index is a
+leading-column prefix of a longer index. `v1` requires exactly one primary-key
+field per model and an explicit bridge model for `many-to-many`.
+
+#### `design propose` (review-only)
+
+`propose` turns drift into a plan a human reviews; it never applies a write. Each
+entry carries a `safety` of `dry-run` (an existing `migrate` command can represent
+the change losslessly) or `migration-review` (everything else), plus `preflight`,
+`rollback`, and `verification` steps:
+
+```json
+{
+  "table": "orders",
+  "object": "total_cents",
+  "safety": "migration-review",
+  "commands": ["..."],
+  "preflight": [
+    "dbcli blacklist list",
+    "Confirm the exact affected table with: dbcli schema <exact-table> --format json"
+  ],
+  "rollback": "Capture the current schema and generated DDL before any approved write; define the inverse migration before execution.",
+  "verification": [
+    "After an approved write, run: dbcli schema <exact-table> --format json",
+    "Re-run this same design diff command and review the remaining drift."
+  ]
+}
+```
+
+**Workflows:**
+
+- **New project** — `design init` → edit the artifact → `design validate` →
+  `design render`. If application models already exist, use the offline
+  `design diff --against-orm <path>` to reconcile the artifact and the ORM before
+  any database exists.
+- **Existing database** — `blacklist list` → refresh the cache with
+  `schema --format json` → `design diff --against-cache` →
+  `design propose --against-cache`. Review the plan, perform any approved
+  migration separately, then refresh the schema and rerun the same diff.
+
+**Exit codes:** `0` when no errors, `1` when the artifact has review errors, an
+invalid target selection, an unreadable file, or reported drift errors.
+
+An external coding agent may draft the artifact, but a human should review it
+before it is relied upon. Do not create or rewrite `dbcli.design.json` without an
+explicit human request.
 
 ### snapshot
 

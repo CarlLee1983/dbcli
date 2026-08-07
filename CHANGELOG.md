@@ -5,6 +5,23 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.0] - 2026-08-07 - Offline database design assistant and slow-query hints
+
+### Added
+
+- **Offline database design assistant.** `dbcli design init|validate|render|diff|propose` authors and reviews a version-controlled `dbcli.design.json` beside the code. Every subcommand is offline: none opens a connection, executes DDL, or calls a provider, and `design init` is the only writer — to the explicit `--output` path, refusing to overwrite. `validate` is fail-closed, so `render`, `diff`, and `propose` refuse to work while `error` findings remain; `render` emits `json`, `markdown`, or `mermaid`.
+- **Design drift comparison and review-only proposals.** `design diff` and `design propose` compare the artifact against the local schema cache (`--against-cache`) or local ORM definitions (`--against-orm`, supporting Prisma, DDL, Drizzle, TypeORM, Sequelize, and JSON), with `--orm-format` and `--ignore` for control. `propose` turns drift into a plan a human reviews and never applies a write: each entry carries a `dry-run` or `migration-review` safety level plus `preflight`, `rollback`, and `verification` steps.
+- **Two further design review rules.** `REVERSE_RELATIONSHIP` (error) fires when the same endpoints are declared again in the opposite direction, and `PREFIX_REDUNDANT_INDEX` (warn) fires when a non-unique index is a leading-column prefix of a longer index.
+- **Passive slow-query hint on `query` and `q`.** At or above `--slow-ms` (default 1000, `0` disables), a finished query gains a Performance hint footer and `metadata.performanceAdvisory`. It reuses the execution time already measured — no `EXPLAIN`, no schema read, no second request. The recommendation is engine-aware: PostgreSQL, MySQL, MariaDB, and Redis are pointed at `guide slow-query`; MongoDB and Elasticsearch state the timing instead. `--recovery` suppresses the hint so that envelope keeps its contract.
+
+### Changed
+
+- **Skill reference documents the new surface.** `skills/dbcli/reference.md` gains the `design` section (subcommands, artifact shape, finding codes and severities, the review-only `propose` contract, and workflows) plus the `--slow-ms` flag and the `metadata.performanceAdvisory` shape, disambiguated from the proxy flag of the same name.
+
+### Tests
+
+- Gherkin CLI workflow coverage for workspace inspection, blacklist review, and the verification prune dry run.
+
 ## [1.51.2] - 2026-08-07 - Intent confirmation for business requests
 
 ### Added

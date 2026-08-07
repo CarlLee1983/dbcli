@@ -5,6 +5,16 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.51.1] - 2026-08-07 - Proactive semantic context discovery
+
+### Changed
+
+- **Agent skills now surface semantic context before users have to discover it.** When a request uses business aliases, metrics, recurring terminology, or relationship/join intent, installed dbcli skills first check `skill context`; they use validated semantic vocabulary when available, otherwise fall back to the blacklist-filtered schema and explain that `dbcli.semantic.json` is an optional way to keep future requests consistent. Skills never create, update, or migrate the file without explicit human instruction.
+
+### Fixed
+
+- **Release formatting gate.** Remove an extra closing brace from the static guides stylesheet so Prettier can parse the repository and the release gate can run.
+
 ## [1.51.0] - 2026-08-07 - Local semantic context and offline query-draft validation
 
 ### Added

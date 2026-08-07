@@ -64,6 +64,14 @@ legacy 單檔 `.dbcli`。若要防護同一 OS 使用者的惡意 process，host
 stdout 保持可解析——把 JSON 導進 parser 時請用 `2>/dev/null` 或不要動 stderr。
 **絕對不要用 `2>&1`**：那會把那些訊息併回 stdout，解析必定失敗。
 
+**業務語言探索：** 當使用者以業務別名、metric、反覆出現的術語或 relationship/join 意圖，
+而非實體 table 或 field 名稱提出需求時，先執行 `dbcli skill context --format json`。若輸出含有
+`semantic`，將該已檢閱的區塊視為受治理詞彙；需查找特定術語時，用
+`dbcli semantic search <terms> --format json`。若沒有 semantic 區塊，或搜尋沒有結果，就退回
+`blacklist` → `schema` 對照，並告知使用者可選用的 `dbcli.semantic.json` 能讓後續需求保持一致。
+除非人類明確要求，絕不可建立、更新或 migrate 此檔案；語意詞彙不能取代 schema 確認或正常的
+query/write 安全閘門。
+
 ## Agent Task Packs
 
 當使用者要求一個資料庫工作流（例如「診斷這個慢查詢」、「審計權限」、「審視長時間執行的操作」），**優先選用已發布的任務模板，而非憑記憶自行組合步驟。**
@@ -421,7 +429,7 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 - **健康 / 成長：** `check --all`（除非加 `--include-large`，否則略過巨大表）；做 ad-hoc query 前先看 schema 的 `sizeCategory`。
 - **從活線 DB 產生程式：** `schema --format json` 餵給 ORM；再用 `dbcli query` 交叉驗證一次。
 - **整合事實：** 前 `query` → 跑應用 → 後 `query`。單元測試 mock 不能替代。
-- **自然語言請求**（如「把訂單更新為 shipped」）：先決定要 `query` 還是 DML，透過 `schema` 把詞彙映到欄位（值用 enum 資料），尊重 blacklist 與 `sizeCategory`，**寫入永遠先 `--dry-run`**。
+- **自然語言請求**（如「把訂單更新為 shipped」）：若需求使用業務術語，先遵循**業務語言探索**；接著決定要 `query` 還是 DML，透過 `schema` 把詞彙映到欄位（值用 enum 資料），尊重 blacklist 與 `sizeCategory`，**寫入永遠先 `--dry-run`**。
 
 ## 備註
 

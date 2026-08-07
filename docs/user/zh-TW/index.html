@@ -725,6 +725,7 @@ dbcli semantic search purchases --kind model --format json
 dbcli semantic drift --format json
 dbcli semantic migrate --to 2 --format json
 dbcli skill context --format json</code></pre>
+                <p><strong>如何被主動發現。</strong> 已安裝的 dbcli skill 會在需求含有業務別名、metric、反覆使用的術語或 relationship/join 意圖時，要求 agent 先檢查 <code>skill context</code>。若存在已驗證的 <code>semantic</code> 區塊，就以它作為受治理詞彙；否則退回已過濾 blacklist 的 schema，並告知你這項可選能力能讓後續需求保持一致。除非你明確要求，dbcli 不會建立或修改 <code>dbcli.semantic.json</code>。</p>
                 <p>v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 <code>query</code> 並非可用 <code>@saved-query</code> 的 metric。<code>semantic search &lt;terms...&gt;</code> 為離線且 deterministic 的搜尋；可用 <code>--kind</code> 與 <code>--limit 1-100</code>（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。<code>semantic drift</code> 在 <code>stale</code>、<code>invalid</code> 或 schema cache 不可用時以非零結束；<code>migrate --to 2</code> 只輸出 JSON，絕不寫回來源檔。</p>
                 <p><strong>Agent query draft。</strong> 先把已檢閱的 <code>dbcli semantic context --format json</code> 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 只能使用這些 model 與 field，回傳不受信任的 <code>QueryDraft</code>：</p>
                 <pre><code>{

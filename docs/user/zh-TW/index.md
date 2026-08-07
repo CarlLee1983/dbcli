@@ -803,6 +803,8 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > dbcli skill context --format json
 > ```
 >
+> **如何被主動發現。** 已安裝的 dbcli skill 會在需求含有業務別名、metric、反覆使用的術語或 relationship/join 意圖時，要求 agent 先檢查 `skill context`。若存在已驗證的 `semantic` 區塊，就以它作為受治理詞彙；否則退回已過濾 blacklist 的 schema，並告知你這項可選能力能讓後續需求保持一致。除非你明確要求，dbcli 不會建立或修改 `dbcli.semantic.json`。
+>
 > v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 `query` 並非可用 `@saved-query` 的 metric。`semantic search <terms...>` 為離線且 deterministic 的搜尋；可用 `--kind` 與 `--limit 1-100`（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。`semantic drift` 在 `stale`、`invalid` 或 schema cache 不可用時以非零結束；`migrate --to 2` 只輸出 JSON，絕不寫回來源檔。
 >
 > **Agent query draft。** 先把已檢閱的 `dbcli semantic context --format json` 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 回傳不受信任的 `QueryDraft` 檔案，形狀如下（只能使用該 semantic context 中的 model 與 field）：

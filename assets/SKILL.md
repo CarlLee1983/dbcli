@@ -82,6 +82,16 @@ warnings) go to stderr so stdout stays parseable — when piping JSON into a par
 use `2>/dev/null` or leave stderr alone. **Never `2>&1`**: it merges those lines back
 into stdout and the parse fails.
 
+**Business-language discovery:** When a user uses a business alias, metric, recurring
+term, or relationship/join intent instead of a physical table or field name, first run
+`dbcli skill context --format json`. If it includes `semantic`, treat that reviewed
+section as the governed vocabulary; use `dbcli semantic search <terms> --format json`
+to look up a specific term. If no semantic section exists or search returns no result,
+fall back to `blacklist` → `schema` mapping and tell the user that optional
+`dbcli.semantic.json` can make future requests consistent. Never create, update, or
+migrate that file without an explicit human request; semantic vocabulary never replaces
+schema confirmation or the normal query/write safety gates.
+
 ## Agent Task Packs
 
 When the user asks for a database workflow ("diagnose this slow query", "audit
@@ -552,7 +562,7 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 - **Health / growth:** `check --all` (huge tables skipped unless `--include-large`); consult schema `sizeCategory` before ad-hoc queries.
 - **Codegen from live DB:** `schema --format json` to drive an ORM; cross-check once with `dbcli query`.
 - **Integration truth:** `query` before → run app → `query` after. Unit-test mocks are not a substitute.
-- **Natural language requests** (e.g. "update order to shipped"): pick `query` vs DML, map terms → columns via `schema` (and enum values in data), respect blacklist and `sizeCategory`, **always `--dry-run` writes first**.
+- **Natural language requests** (e.g. "update order to shipped"): follow **Business-language discovery** first when the request uses business terminology; then pick `query` vs DML, map terms → columns via `schema` (and enum values in data), respect blacklist and `sizeCategory`, **always `--dry-run` writes first**.
 
 ## Notes
 

@@ -112,6 +112,7 @@ describe('skill context (CLI entrypoint)', () => {
     expect(parsed.version).toBe('9.9.9')
     expect(parsed.schema.users).toBeDefined()
     expect(parsed.semantic).toBeUndefined()
+    expect(errOut).toBe('')
   })
 
   test('includes a valid project semantic context in the agent JSON payload', async () => {

@@ -103,7 +103,9 @@ pre {
   color: var(--muted);
   text-decoration: none;
   border-radius: 999px;
-  transition: color 160ms ease, background 160ms ease;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
 }
 .nav-link:hover,
 .nav-link:focus-visible {
@@ -272,7 +274,10 @@ h1 {
   font-weight: 750;
   text-decoration: none;
   box-shadow: 0 5px 0 rgba(117, 47, 26, 0.2);
-  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
 }
 .button:hover,
 .button:focus-visible {
@@ -327,7 +332,10 @@ h1 {
 .guide-card {
   position: relative;
   overflow: hidden;
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
 }
 .guide-card::before {
   content: '';
@@ -384,7 +392,10 @@ h1 {
   background: var(--blue-soft);
   font-weight: 800;
   text-decoration: none;
-  transition: transform 160ms ease, color 160ms ease, background 160ms ease;
+  transition:
+    transform 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
 }
 .guide-card a:hover,
 .guide-card a:focus-visible {
@@ -540,7 +551,10 @@ h1 {
   background: linear-gradient(to top, rgba(173, 202, 248, 0.52) 0 38%, transparent 38%);
   font-weight: 800;
   text-decoration: none;
-  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
 }
 .article a:not(.button):hover,
 .article a:not(.button):focus-visible {
@@ -602,7 +616,10 @@ h1 {
   position: relative;
   padding-left: 74px;
   overflow: hidden;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .step:hover,
 .step:focus-within {
@@ -700,7 +717,6 @@ h1 {
 .article .next-card p + p {
   margin-top: 0.85rem;
 }
-}
 .next-card a {
   display: inline-flex;
   align-items: center;
@@ -743,7 +759,9 @@ h1 {
   color: var(--muted);
   font-weight: 700;
   text-decoration: none;
-  transition: color 160ms ease, background 160ms ease;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
 }
 .footer-links a:hover,
 .footer-links a:focus-visible {

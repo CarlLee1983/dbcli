@@ -2197,6 +2197,14 @@ project root. It supplies business names and descriptions to an agent, but is
 not a query language: these commands are offline, read-only, and never execute
 SQL or contact an LLM.
 
+When an agent receives a business term, metric, alias, or relationship/join intent,
+it should first inspect `dbcli skill context --format json`. If that output includes
+`semantic`, use the reviewed vocabulary and use `semantic search <terms>` for a
+specific lookup. When the section is absent or search has no result, fall back to the
+blacklist-filtered schema and tell the user that `dbcli.semantic.json` is an optional
+way to make future terminology consistent. Do not create, update, or migrate the file
+without an explicit human request.
+
 ```bash
 dbcli semantic validate
 dbcli semantic validate --format json

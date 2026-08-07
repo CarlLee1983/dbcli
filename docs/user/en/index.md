@@ -893,6 +893,8 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > dbcli skill context --format json
 > ```
 >
+> **How it is discovered.** Installed dbcli skills tell agents to check `skill context` when a request uses business aliases, metrics, recurring terms, or relationship/join intent. If a validated `semantic` section is present, it is the governed vocabulary; otherwise the agent falls back to the blacklist-filtered schema and tells you this optional feature could make future requests consistent. dbcli never creates or changes `dbcli.semantic.json` unless you explicitly ask it to.
+>
 > Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic search <terms...>` is deterministic and offline; use `--kind` and `--limit 1-100` (default 20). It returns only governed metadata and removes blacklist names from free-text results. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file.
 >
 > **Agent query drafts.** First give the external agent the reviewed output of `dbcli semantic context --format json`; keep its provider account, credentials, prompt, and any other agent context outside dbcli. The agent returns an untrusted `QueryDraft` file shaped like this (use only the models and fields from that semantic context):

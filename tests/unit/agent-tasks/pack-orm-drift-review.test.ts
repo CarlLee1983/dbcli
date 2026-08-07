@@ -33,7 +33,7 @@ describe('builtin pack: orm-drift-review', () => {
 
     expect(exitCode).toBeUndefined()
     const tasks = JSON.parse(logOut) as Array<{ name: string; source: string }>
-    expect(tasks).toHaveLength(13)
+    expect(tasks).toHaveLength(14)
     expect(tasks.map((task) => task.name)).toContain('orm-drift-review')
     expect(tasks.every((task) => task.source === 'builtin')).toBe(true)
   })

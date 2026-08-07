@@ -864,6 +864,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |
+| `design init` / `design validate` / `design render` / `design diff` | Creates an explicit local starter file, validates or renders a version-controlled SQL database design, and compares it with the local SQL schema cache. It never executes DDL or silently writes a design. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
@@ -916,6 +917,21 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > ```
 >
 > The report contains only status, hashes, canonical references, and safe violation codes—never the candidate SQL. Exit `0` is valid, `1` is rejected, and `2` means required local semantic evidence is unavailable. A valid result is not execution permission: review the original `draft.json`, then separately and explicitly invoke `dbcli explain "<reviewed-read-only-sql>"` or `dbcli query "<reviewed-read-only-sql>"` if execution is intended. Validation neither saves the input nor invokes either command; dbcli does not receive agent provider credentials or make provider requests.
+
+<!-- doc-key: design-assistant -->
+> **Database design assistant.** A new project can keep a reviewable `dbcli.design.json` beside its code. It describes the target PostgreSQL/MySQL/MariaDB models, fields, keys, relationships, indexes, access patterns, and design decisions; it does not contain SQL, credentials, database rows, or provider configuration.
+>
+> ```bash
+> # Writes only to this explicit missing path; edit the starter before validation.
+> dbcli design init --output ./dbcli.design.json --dialect postgresql
+>
+> # Both commands are offline and read-only.
+> dbcli design validate --format json
+> dbcli design render --format mermaid
+> dbcli design diff --against-cache --format markdown
+> ```
+>
+> `validate` fails closed for malformed artifacts, missing primary keys, invalid relationship endpoints or cardinality, incompatible relation types, and unsafe indexes. It also reports advisory access-pattern index gaps. `render` produces JSON, Markdown, or a Mermaid ERD only after validation has no errors. `diff --against-cache` reads the existing local cache (run `schema` first), never opens a connection, and reports columns, indexes, and foreign keys that differ. `init` is the only writer, requires `--output`, and refuses to overwrite an existing file. These commands do not call an LLM, query data, or execute a migration; an external coding agent may draft the file, but a human should review it before relying on it.
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, and `connection-health`. Browse all packs with `dbcli skill tasks list`.
 

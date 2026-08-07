@@ -1,6 +1,7 @@
 import { typeFamily } from '@/core/orm-drift/normalized-schema'
 import type {
   NormalizedColumn,
+  NormalizedForeignKey,
   NormalizedIndex,
   NormalizedSchema,
   NormalizedTable,
@@ -220,6 +221,51 @@ function compareTable(
   }
 
   compareIndexes(ormTable.indexes, dbTable.indexes, ormTable.identity, table, ormSource, entries)
+  compareForeignKeys(ormTable.foreignKeys, dbTable.foreignKeys, table, ormSource, entries)
+}
+
+function compareForeignKeys(
+  ormForeignKeys: NormalizedForeignKey[],
+  dbForeignKeys: NormalizedForeignKey[],
+  table: string,
+  ormSource: string,
+  entries: DriftEntry[]
+): void {
+  const ormByKey = new Map(ormForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey]))
+  const dbByKey = new Map(dbForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey]))
+
+  for (const [key, foreignKey] of ormByKey) {
+    if (dbByKey.has(key)) continue
+    entries.push(
+      entryWithProposals({
+        category: 'missing_in_db',
+        severity: 'error',
+        table,
+        object: `foreign key (${foreignKey.columns.join(', ')})`,
+        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) is defined in ${ormSource} but absent in the database`,
+      })
+    )
+  }
+  for (const [key, foreignKey] of dbByKey) {
+    if (ormByKey.has(key)) continue
+    entries.push(
+      entryWithProposals({
+        category: 'missing_in_orm',
+        severity: 'warn',
+        table,
+        object: `foreign key (${foreignKey.columns.join(', ')})`,
+        detail: `foreign key (${foreignKey.columns.join(', ')}) → ${qualifiedTableName(foreignKey.refTable)}(${foreignKey.refColumns.join(', ')}) exists in the database but is not defined in ${ormSource}`,
+      })
+    )
+  }
+}
+
+function foreignKeyKey(foreignKey: NormalizedForeignKey): string {
+  return [
+    foreignKey.columns.join('\u0000'),
+    tableIdentityKey(foreignKey.refTable),
+    foreignKey.refColumns.join('\u0000'),
+  ].join('\u0001')
 }
 
 function columnMismatch(

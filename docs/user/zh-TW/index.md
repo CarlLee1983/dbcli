@@ -775,6 +775,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |
+| `design init` / `design validate` / `design render` / `design diff` | 明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，並與本機 SQL schema cache 比較。不會執行 DDL 或暗中寫入設計檔。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
@@ -826,6 +827,21 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > ```
 >
 > 報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit `0` 代表有效、`1` 代表拒絕、`2` 代表必要的本機 semantic 證據不可用。有效結果不是執行授權：先檢閱原始 `draft.json`，若確實要執行，再另行明確呼叫 `dbcli explain "<已檢閱的唯讀-sql>"` 或 `dbcli query "<已檢閱的唯讀-sql>"`。驗證不會保存輸入，也不會呼叫這兩個指令；dbcli 不會取得 agent 的 provider 憑證，也不會發出 provider 請求。
+
+<!-- doc-key: design-assistant -->
+> **資料庫設計輔助工具。** 新專案可在程式碼旁保留一份可檢閱的 `dbcli.design.json`。它描述目標 PostgreSQL/MySQL/MariaDB 的 model、field、key、relationship、index、access pattern 與設計決策；不包含 SQL、憑證、資料列或 provider 設定。
+>
+> ```bash
+> # 只會寫入這個明確指定且不存在的路徑；請先編輯 starter 再驗證。
+> dbcli design init --output ./dbcli.design.json --dialect postgresql
+>
+> # 兩個指令都離線且唯讀。
+> dbcli design validate --format json
+> dbcli design render --format mermaid
+> dbcli design diff --against-cache --format markdown
+> ```
+>
+> `validate` 對格式錯誤、缺少 primary key、無效 relationship endpoint 或 cardinality、relation type 不相容與不安全 index 採 fail-closed；也會回報建議性的 access-pattern index 缺口。`render` 只在設計沒有 error 時才輸出 JSON、Markdown 或 Mermaid ERD。`diff --against-cache` 讀取既有的本機 cache（先執行 `schema`），不會開啟連線，並回報不同的 column、index 與 foreign key。`init` 是唯一的寫入指令，必須指定 `--output`，且拒絕覆寫既有檔案。這些指令不會呼叫 LLM、查詢資料或執行 migration；外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review` 與 `connection-health`。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 

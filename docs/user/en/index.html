@@ -702,6 +702,7 @@ dbcli proxy analyze \
                     <tr><td><code>skill --install</code></td><td>Install compact AI-agent instructions for Claude, Gemini, Antigravity, Codex, and similar tools.</td></tr>
                     <tr><td><code>skill context</code></td><td>Serialize cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown structures for AI prompt injection.</td></tr>
                     <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic search</code> / <code>semantic drift</code> / <code>semantic migrate</code> / <code>semantic draft validate</code></td><td>Validate, print, search, check drift, stdout-migrate, or safely validate an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only.</td></tr>
+                    <tr><td><code>design init</code> / <code>design validate</code> / <code>design render</code> / <code>design diff</code></td><td>Create an explicit local starter file, validate or render a version-controlled SQL database design, and compare it with the local SQL schema cache. Never executes DDL or silently writes a design.</td></tr>
                     <tr><td><code>skill tasks</code></td><td>Manage repeatable expert task packs for diagnostics, audits, and database workflows.</td></tr>
                     <tr><td><code>completion</code></td><td>Install shell completion for bash, zsh, or fish.</td></tr>
                 </tbody>
@@ -735,6 +736,19 @@ dbcli skill context --format json</code></pre>
   "semanticReferences": ["model:&lt;model&gt;", "field:&lt;model&gt;.&lt;field&gt;"]
 }</code></pre>
                 <p class="m-0">Validate only that explicit file or stdin payload with <code>dbcli semantic draft validate --input ./draft.json --format json</code> or <code>external-agent | dbcli semantic draft validate --input - --format json</code>. The report contains only status, hashes, canonical references, and safe violation codes—never candidate SQL. Exit <code>0</code> is valid, <code>1</code> is rejected, and <code>2</code> means local semantic evidence is unavailable. A valid result is not execution permission: review the original draft, then separately invoke <code>dbcli explain "&lt;reviewed-read-only-sql&gt;"</code> or <code>dbcli query "&lt;reviewed-read-only-sql&gt;"</code> if intended. Validation neither saves the input nor invokes either command; dbcli does not receive provider credentials or make provider requests.</p>
+            </div>
+            <!-- doc-key: design-assistant -->
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">Database design assistant</h4>
+                <p>Keep a reviewable <code>dbcli.design.json</code> beside a new project. It describes target PostgreSQL/MySQL/MariaDB models, fields, keys, relationships, indexes, access patterns, and decisions; it contains no SQL, credentials, rows, or provider configuration.</p>
+                <pre><code># Writes only to this explicit missing path; edit the starter before validation.
+dbcli design init --output ./dbcli.design.json --dialect postgresql
+
+# Both commands are offline and read-only.
+dbcli design validate --format json
+dbcli design render --format mermaid
+dbcli design diff --against-cache --format markdown</code></pre>
+                <p class="m-0"><code>validate</code> fails closed for malformed artifacts, missing primary keys, invalid relationship endpoints/cardinality, incompatible relation types, and unsafe indexes; access-pattern index gaps are advisory. <code>render</code> emits JSON, Markdown, or Mermaid only after validation has no errors. <code>diff --against-cache</code> reads the existing local cache (run <code>schema</code> first), never opens a connection, and reports differing columns, indexes, and foreign keys. <code>init</code> is the only writer, requires <code>--output</code>, and refuses to overwrite. These commands do not call an LLM, query data, or execute a migration. An external coding agent may draft the file, but a human should review it before relying on it.</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> task plan and the <code>verification</code> block</h4>

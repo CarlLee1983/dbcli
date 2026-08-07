@@ -702,6 +702,7 @@ dbcli proxy analyze \
                     <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Antigravity、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
                     <tr><td><code>skill context</code></td><td>將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。</td></tr>
                     <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic search</code> / <code>semantic drift</code> / <code>semantic migrate</code> / <code>semantic draft validate</code></td><td>驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。</td></tr>
+                    <tr><td><code>design init</code> / <code>design validate</code> / <code>design render</code> / <code>design diff</code></td><td>明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，並與本機 SQL schema cache 比較。不會執行 DDL 或暗中寫入設計檔。</td></tr>
                     <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
@@ -735,6 +736,19 @@ dbcli skill context --format json</code></pre>
   "semanticReferences": ["model:&lt;model&gt;", "field:&lt;model&gt;.&lt;field&gt;"]
 }</code></pre>
                 <p class="m-0">再只提交這個明確指定的檔案或 stdin 載荷：<code>dbcli semantic draft validate --input ./draft.json --format json</code>，或 <code>external-agent | dbcli semantic draft validate --input - --format json</code>。報告只含狀態、hash、canonical reference 與安全 violation code，絕不包含 candidate SQL。exit <code>0</code> 代表有效、<code>1</code> 代表拒絕、<code>2</code> 代表本機 semantic 證據不可用。有效結果不是執行授權：請先檢閱原始 draft，再視需要另行呼叫 <code>dbcli explain "&lt;已檢閱的唯讀-sql&gt;"</code> 或 <code>dbcli query "&lt;已檢閱的唯讀-sql&gt;"</code>。驗證不會保存輸入，也不會呼叫這兩個指令；dbcli 不會取得 provider 憑證，也不會發出 provider 請求。</p>
+            </div>
+            <!-- doc-key: design-assistant -->
+            <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
+                <h4 class="mt-0 mb-3 font-bold text-text-main">資料庫設計輔助工具</h4>
+                <p>在新專案旁保留可檢閱的 <code>dbcli.design.json</code>。它描述目標 PostgreSQL/MySQL/MariaDB 的 model、field、key、relationship、index、access pattern 與設計決策；不含 SQL、憑證、資料列或 provider 設定。</p>
+                <pre><code># 只會寫入這個明確指定且不存在的路徑；請先編輯 starter 再驗證。
+dbcli design init --output ./dbcli.design.json --dialect postgresql
+
+# 兩個指令都離線且唯讀。
+dbcli design validate --format json
+dbcli design render --format mermaid
+dbcli design diff --against-cache --format markdown</code></pre>
+                <p class="m-0"><code>validate</code> 對格式錯誤、缺少 primary key、無效 relationship endpoint/cardinality、relation type 不相容與不安全 index 採 fail-closed；access-pattern index 缺口屬建議性。<code>render</code> 只在驗證沒有 error 時輸出 JSON、Markdown 或 Mermaid。<code>diff --against-cache</code> 讀取既有的本機 cache（先執行 <code>schema</code>），不會開啟連線，並回報不同的 column、index 與 foreign key。<code>init</code> 是唯一的寫入指令，必須指定 <code>--output</code>，且拒絕覆寫。這些指令不會呼叫 LLM、查詢資料或執行 migration。外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

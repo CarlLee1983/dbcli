@@ -55,6 +55,9 @@ bun test --watch
 
 # Coverage
 bun test --coverage
+
+# Gherkin feature tests (CLI user workflows)
+bun run test:gherkin
 ```
 
 Target: **80%+ test coverage** for all new code.

@@ -1679,6 +1679,7 @@ bun test                  # full test suite (Bun test runner)
 bun run typecheck         # TypeScript compile-time validation
 bun run test:unit         # unit + core tests only
 bun run test:integration  # integration tests
+bun run test:gherkin      # Gherkin feature tests at the CLI boundary
 bun run test:docker       # integration tests with docker-compose.test.yml (MySQL + PostgreSQL)
 bun run build             # bundle CLI to dist/ (used before publish)
 ```

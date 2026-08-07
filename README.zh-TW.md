@@ -1558,6 +1558,7 @@ import {
 bun test                  # 完整測試（Bun test runner）
 bun run test:unit         # 僅單元與 core 測試
 bun run test:integration  # 整合測試
+bun run test:gherkin      # CLI 邊界的 Gherkin feature 測試
 bun run test:docker       # 搭配 docker-compose.test.yml（MySQL + PostgreSQL）
 bun run build             # 建置 CLI 至 dist/（發布前使用）
 ```

@@ -27,6 +27,7 @@ import { colors } from '@/utils/colors'
 import { trimAppliedLimit } from '@/core/applied-limit'
 import { printLocalizedCliError } from '@/utils/cli-error'
 import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
+import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 
 export interface DryRunInput {
   family: EngineFamily
@@ -72,6 +73,7 @@ export interface QCommandOptions {
   config?: string
   recovery?: boolean
   verify?: boolean
+  slowMs?: number
   // Open for audit-helper consumption.
   [key: string]: unknown
 }
@@ -84,6 +86,7 @@ export async function qCommand(
   let config: DbcliConfig | undefined
   let targetNameForAudit: string = name
   try {
+    assertValidSlowQueryThreshold(options.slowMs)
     if (!name?.startsWith('@')) {
       throw new Error(`Snippet name must start with '@' (got '${name}')`)
     }
@@ -231,19 +234,22 @@ export async function qCommand(
 
       const formatter = new QueryResultFormatter()
       const out = formatter.format(
-        {
-          rows: filtered.filteredRows,
-          rowCount: filtered.filteredRows.length,
-          columnNames: columnNames.filter((c) => !filtered.omittedColumns.includes(c)),
-          columnTypes: [],
-          executionTimeMs,
-          metadata: {
-            statement: 'SELECT',
-            affectedRows: 0,
-            ...(securityNotification ? { securityNotification } : {}),
+        attachSlowQueryAdvisory(
+          {
+            rows: filtered.filteredRows,
+            rowCount: filtered.filteredRows.length,
+            columnNames: columnNames.filter((c) => !filtered.omittedColumns.includes(c)),
+            columnTypes: [],
+            executionTimeMs,
+            metadata: {
+              statement: 'SELECT',
+              affectedRows: 0,
+              ...(securityNotification ? { securityNotification } : {}),
+            },
+            ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
           },
-          ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
-        },
+          { slowMs: options.slowMs, recovery: options.recovery, system: connectionSystem }
+        ),
         { format: (options.format as any) ?? 'table' }
       )
       console.log(out)

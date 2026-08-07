@@ -113,6 +113,32 @@ describe('QueryResultFormatter - Table Format', () => {
     expect(output).toContain('123ms')
   })
 
+  test('includes a passive performance hint when result metadata provides one', () => {
+    const formatter = new QueryResultFormatter()
+    const result: QueryResult<Record<string, any>> = {
+      rows: [{ col: 'value' }],
+      rowCount: 1,
+      columnNames: ['col'],
+      executionTimeMs: 1200,
+      metadata: {
+        statement: 'SELECT',
+        performanceAdvisory: {
+          code: 'SLOW_QUERY',
+          executionTimeMs: 1200,
+          thresholdMs: 1000,
+          recommendation: 'Review safely with: dbcli guide slow-query --format markdown.',
+        },
+      },
+    }
+
+    expect(formatter.format(result, { format: 'table' })).toContain(
+      'Performance hint: Review safely with: dbcli guide slow-query --format markdown.'
+    )
+    expect(JSON.parse(formatter.format(result, { format: 'json' })).metadata.performanceAdvisory).toEqual(
+      result.metadata?.performanceAdvisory
+    )
+  })
+
   test('omits execution time footer when not provided', () => {
     const formatter = new QueryResultFormatter()
     const result: QueryResult<Record<string, any>> = {

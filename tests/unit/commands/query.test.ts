@@ -10,6 +10,7 @@ import { AdapterFactory } from '@/adapters'
 import { configModule } from '@/core/config'
 import { QueryResultFormatter } from '@/formatters'
 import { queryCommand } from '@/commands/query'
+import { QueryExecutor } from '@/core/query-executor'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -84,6 +85,7 @@ let mockConfig: DbcliConfig
 let createAdapterSpy: any
 let configReadSpy: any
 let formatterSpy: any
+let queryExecutorSpy: any
 
 describe('Query Command', () => {
   beforeEach(() => {
@@ -125,11 +127,20 @@ describe('Query Command', () => {
     createAdapterSpy.mockRestore()
     configReadSpy.mockRestore()
     formatterSpy.mockRestore()
+    queryExecutorSpy?.mockRestore()
   })
 
   describe('Argument Validation', () => {
     test('should reject missing SQL argument', async () => {
       await expect(queryCommand(undefined, {})).rejects.toThrow('Exactly one query source')
+      expect(configReadSpy).not.toHaveBeenCalled()
+      expect(createAdapterSpy).not.toHaveBeenCalled()
+    })
+
+    test('rejects invalid slow-query threshold before reading config or connecting', async () => {
+      await expect(queryCommand('SELECT 1', { slowMs: -1 })).rejects.toThrow(
+        'slow-ms must be a non-negative integer'
+      )
       expect(configReadSpy).not.toHaveBeenCalled()
       expect(createAdapterSpy).not.toHaveBeenCalled()
     })
@@ -238,6 +249,42 @@ describe('Query Command', () => {
   })
 
   describe('Result Formatting', () => {
+    test('attaches a performance advisory when the measured query time crosses its threshold', async () => {
+      queryExecutorSpy = spyOn(QueryExecutor.prototype, 'execute').mockResolvedValue({
+        rows: [{ id: 1 }],
+        rowCount: 1,
+        columnNames: ['id'],
+        executionTimeMs: 250,
+        metadata: { statement: 'SELECT' },
+      } as any)
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+
+      await queryCommand('SELECT 1', { slowMs: 200 })
+
+      expect(formatterSpy.mock.calls[0]![0].metadata.performanceAdvisory).toMatchObject({
+        code: 'SLOW_QUERY',
+        executionTimeMs: 250,
+        thresholdMs: 200,
+      })
+      logSpy.mockRestore()
+    })
+
+    test('suppresses the performance advisory under --recovery', async () => {
+      queryExecutorSpy = spyOn(QueryExecutor.prototype, 'execute').mockResolvedValue({
+        rows: [{ id: 1 }],
+        rowCount: 1,
+        columnNames: ['id'],
+        executionTimeMs: 5000,
+        metadata: { statement: 'SELECT' },
+      } as any)
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+
+      await queryCommand('SELECT 1', { slowMs: 200, recovery: true })
+
+      expect(formatterSpy.mock.calls[0]![0].metadata.performanceAdvisory).toBeUndefined()
+      logSpy.mockRestore()
+    })
+
     test('should project SQL fields in requested order', async () => {
       const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 

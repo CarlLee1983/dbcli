@@ -50,6 +50,7 @@ import {
   MIN_CONNECTION_TIMEOUT_MS,
   MAX_CONNECTION_TIMEOUT_MS,
 } from './utils/validation'
+import { parseSlowQueryThreshold } from './core/slow-query-advisory'
 import pkg from '../package.json'
 
 /**
@@ -75,6 +76,14 @@ function parsePositiveInteger(value: string): number {
     throw new InvalidArgumentError('must be a positive integer')
   }
   return parsed
+}
+
+function parseSlowMs(value: string): number {
+  try {
+    return parseSlowQueryThreshold(value)
+  } catch {
+    throw new InvalidArgumentError('must be a non-negative integer')
+  }
 }
 
 /**
@@ -167,6 +176,12 @@ export function buildProgram(): Command {
       parsePositiveInteger
     )
     .option('--no-truncate', 'Disable the default table-cell truncation')
+    .option(
+      '--slow-ms <number>',
+      'Emit a passive performance hint at or above this execution time; 0 disables it',
+      parseSlowMs,
+      1000
+    )
     .addOption(createConnectionSelectorOption())
     .option(
       '--recovery',
@@ -218,6 +233,12 @@ export function buildProgram(): Command {
       [] as string[]
     )
     .option('--param-file <path>', 'JSON file containing param values')
+    .option(
+      '--slow-ms <number>',
+      'Emit a passive performance hint at or above this execution time; 0 disables it',
+      parseSlowMs,
+      1000
+    )
     .option(
       '--recovery',
       'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',

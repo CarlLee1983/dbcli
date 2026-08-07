@@ -56,6 +56,7 @@ import {
   runQueryFanOut,
 } from '@/core/query-fanout'
 import { enforceElasticsearchPermission } from '@/core/permission-guard'
+import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -80,6 +81,7 @@ interface QueryCommandOptions {
   truncate?: number
   noTruncate?: boolean
   connectionSelector?: string
+  slowMs?: number
 }
 
 interface QueryExecutionContext {
@@ -116,6 +118,7 @@ export async function queryCommand(
     if (options.limit !== undefined && (!Number.isInteger(options.limit) || options.limit <= 0)) {
       throw new Error('--limit must be a positive integer')
     }
+    assertValidSlowQueryThreshold(options.slowMs)
 
     if (options.format) {
       validateFormat(options.format, [...ALLOWED_FORMATS, 'html'] as any, 'query')
@@ -433,6 +436,15 @@ async function executeConnectionQuery(
       execution = await elasticsearchQueryBranch(query, options, context)
     } else {
       execution = await sqlQueryBranch(query, options, context, fieldSelection)
+    }
+
+    execution = {
+      ...execution,
+      result: attachSlowQueryAdvisory(execution.result, {
+        slowMs: options.slowMs,
+        recovery: options.recovery,
+        system,
+      }),
     }
 
     await writeAuditEntry(config, 'query', auditOptions, {

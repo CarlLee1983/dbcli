@@ -268,6 +268,20 @@ dbcli query --collection raw_logs --query-file - <<'JSON'
 JSON
 ```
 
+#### 被動慢查詢提示
+
+`query` 與 `q` 會觀察已完成查詢所回傳的執行時間。預設門檻為 `1000ms`；跨過門檻時，table 輸出會附上 `Performance hint`，JSON 輸出則會在 `metadata.performanceAdvisory` 提供結構化資訊。快速查詢的輸出維持不變，因此正常查詢不會反覆收到建議。
+
+```bash
+# 查詢花費 250ms 以上時才提示後續檢視方式
+dbcli query "SELECT * FROM events WHERE account_id = 42" --slow-ms 250
+
+# 為這次 invocation 關閉被動提示
+dbcli q @daily-active-users --slow-ms 0
+```
+
+此提示不會執行 `EXPLAIN`、讀取 schema，也不會發出第二個資料庫請求。在 PostgreSQL、MySQL、MariaDB 與 Redis 上，它建議不會修改資料的下一步：`dbcli guide slow-query --format markdown`；更深入的診斷應在檢閱該指引與相關 query 後才執行。MongoDB 與 Elasticsearch 沒有對應該目標的診斷 snippet，因此提示只陳述耗時，不會指向一個查不到東西的指令。
+
 #### 使用 `--fields` 投影欄位
 
 `--fields` 可將 SQL 或 MongoDB query 結果縮減為需要的欄位。使用 inclusion list 保留欄位，輸出順序會依照指定順序：

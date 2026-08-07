@@ -286,6 +286,20 @@ dbcli query --collection raw_logs --query-file - <<'JSON'
 JSON
 ```
 
+#### Passive slow-query hints
+
+`query` and `q` observe the execution time already returned for a completed query. At the default `1000ms` threshold, a slow result receives a `Performance hint` in table output and a `metadata.performanceAdvisory` object in JSON output. Fast results remain unchanged, so normal queries do not produce repetitive advice.
+
+```bash
+# Suggest a review for a query taking 250ms or more
+dbcli query "SELECT * FROM events WHERE account_id = 42" --slow-ms 250
+
+# Disable the passive hint for one invocation
+dbcli q @daily-active-users --slow-ms 0
+```
+
+The hint does not run `EXPLAIN`, inspect schema, or issue a second database request. On PostgreSQL, MySQL, MariaDB, and Redis it recommends the non-mutating next step `dbcli guide slow-query --format markdown`; run deeper diagnostics only after reviewing that guidance and the relevant query. MongoDB and Elasticsearch ship no diagnostic snippet for that goal, so their hint reports the timing without naming a command that would return nothing.
+
 #### Field projection with `--fields`
 
 `--fields` reduces SQL or MongoDB query results to the fields you need. Use an inclusion list to keep fields, in the requested order:

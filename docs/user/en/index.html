@@ -292,6 +292,14 @@ SQL</code></pre>
 dbcli query --collection raw_logs --query-file - &lt;&lt;'JSON'
 [{"$match":{"message":{"$regex":"user's event"}}}]
 JSON</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">Passive slow-query hints</h4>
+            <p><code>query</code> and <code>q</code> observe the execution time already returned for a completed query. At the default <code>1000ms</code> threshold, a slow result receives a <code>Performance hint</code> in table output and a <code>metadata.performanceAdvisory</code> object in JSON output. Fast results remain unchanged, so normal queries do not produce repetitive advice.</p>
+            <pre><code># Suggest a review for a query taking 250ms or more
+dbcli query "SELECT * FROM events WHERE account_id = 42" --slow-ms 250
+
+# Disable the passive hint for one invocation
+dbcli q @daily-active-users --slow-ms 0</code></pre>
+            <p>The hint does not run <code>EXPLAIN</code>, inspect schema, or issue a second database request. On PostgreSQL, MySQL, MariaDB, and Redis it recommends the non-mutating next step <code>dbcli guide slow-query --format markdown</code>; run deeper diagnostics only after reviewing that guidance and the relevant query. MongoDB and Elasticsearch ship no diagnostic snippet for that goal, so their hint reports the timing without naming a command that would return nothing.</p>
             <h4 class="mt-8 font-bold text-text-main">Field projection with <code>--fields</code></h4>
             <p><code>--fields</code> reduces SQL or MongoDB query results to the fields you need. Use an inclusion list to keep fields in the requested order:</p>
             <pre><code>dbcli query "SELECT * FROM events" --fields id,name,created_at

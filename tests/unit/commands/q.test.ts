@@ -103,6 +103,45 @@ describe('dbcli q', () => {
     expect(logSpy).toHaveBeenCalled()
   })
 
+  describe('passive slow-query advisory', () => {
+    /**
+     * `q` measures its own elapsed time, so the mock adapter has to actually
+     * take time. The assertion is one-sided (advisory present at a 1ms
+     * threshold after a 25ms delay) rather than a duration bound, so it does
+     * not depend on how fast the host is.
+     */
+    test('attaches the advisory to the formatted result once the threshold is crossed', async () => {
+      const slowExecute = spyOn(mock, 'execute').mockImplementation(async (sql: string) => {
+        await Bun.sleep(25)
+        return { rows: [{ dau: 42 }], affectedRows: 1, sql } as any
+      })
+
+      logSpy.mockClear()
+      await qCommand('@dau', { format: 'json', noLimit: true, slowMs: 1 })
+
+      const printed = logSpy.mock.calls.at(-1)!.join(' ')
+      expect(JSON.parse(printed).metadata.performanceAdvisory).toMatchObject({
+        code: 'SLOW_QUERY',
+        thresholdMs: 1,
+      })
+      slowExecute.mockRestore()
+    })
+
+    test('suppresses the advisory under --recovery even past the threshold', async () => {
+      const slowExecute = spyOn(mock, 'execute').mockImplementation(async (sql: string) => {
+        await Bun.sleep(25)
+        return { rows: [{ dau: 42 }], affectedRows: 1, sql } as any
+      })
+
+      logSpy.mockClear()
+      await qCommand('@dau', { format: 'json', noLimit: true, slowMs: 1, recovery: true })
+
+      const printed = logSpy.mock.calls.at(-1)!.join(' ')
+      expect(JSON.parse(printed).metadata?.performanceAdvisory).toBeUndefined()
+      slowExecute.mockRestore()
+    })
+  })
+
   test('--dry-run prints SQL without executing', async () => {
     await qCommand('@dau', { dryRun: true })
     expect(mock.lastSql).toBe('')

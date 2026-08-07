@@ -11,6 +11,13 @@ export type SqlStatementType = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'UNKN
 import type { AppliedLimitMetadata } from '@/agent-core/applied-limit'
 export type { AppliedLimitMetadata } from '@/agent-core/applied-limit'
 
+export interface PerformanceAdvisory {
+  code: 'SLOW_QUERY'
+  executionTimeMs: number
+  thresholdMs: number
+  recommendation: string
+}
+
 /**
  * Metadata about query execution and result characteristics
  */
@@ -23,6 +30,8 @@ export interface QueryMetadata {
   executionTimeMs?: number
   /** Security notification when columns were omitted due to blacklist */
   securityNotification?: string
+  /** Passive suggestion derived from already-measured execution time. */
+  performanceAdvisory?: PerformanceAdvisory
 }
 
 /**

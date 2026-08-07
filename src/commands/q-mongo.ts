@@ -16,6 +16,7 @@ import type { ResolvedSnippet } from '@/core/saved-queries'
 import type { PreparedExecution } from '@/core/saved-queries/runner'
 import type { DbcliConfig } from '@/utils/validation'
 import type { QCommandOptions } from '@/commands/q'
+import { attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 
 export async function qMongoBranch(
   snippet: ResolvedSnippet,
@@ -101,14 +102,17 @@ export async function qMongoBranch(
       const formatter = new QueryResultFormatter()
       console.log(
         formatter.format(
-          {
-            rows: masked,
-            rowCount: masked.length,
-            columnNames,
-            columnTypes: [],
-            executionTimeMs,
-            metadata: { statement: 'SELECT', affectedRows: 0 },
-          },
+          attachSlowQueryAdvisory(
+            {
+              rows: masked,
+              rowCount: masked.length,
+              columnNames,
+              columnTypes: [],
+              executionTimeMs,
+              metadata: { statement: 'SELECT', affectedRows: 0 },
+            },
+            { slowMs: options.slowMs, recovery: options.recovery, system: 'mongodb' }
+          ),
           { format: (options.format as 'table' | 'json' | 'csv' | 'html') ?? 'table' }
         )
       )

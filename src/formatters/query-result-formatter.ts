@@ -174,6 +174,9 @@ export class QueryResultFormatter implements OutputFormatter<QueryResult<Record<
     if (result.executionTimeMs !== undefined) {
       footerLines.push(`Execution time: ${result.executionTimeMs}ms`)
     }
+    if (result.metadata?.performanceAdvisory) {
+      footerLines.push(`Performance hint: ${result.metadata.performanceAdvisory.recommendation}`)
+    }
 
     return footerLines.join(' | ')
   }

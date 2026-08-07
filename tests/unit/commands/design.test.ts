@@ -205,6 +205,32 @@ describe('design commands', () => {
     })
   })
 
+  test('escalates missing tables to migration review instead of emitting executable DDL', async () => {
+    const designFile = join(sandbox, 'dbcli.design.json')
+    const ddlFile = join(sandbox, 'schema.sql')
+    writeFileSync(designFile, JSON.stringify(valid))
+    writeFileSync(ddlFile, 'CREATE TABLE customers (id UUID PRIMARY KEY);')
+
+    await root().parseAsync(
+      ['bun', 'dbcli', 'design', 'propose', '--against-orm', ddlFile, '--format', 'json'],
+      { from: 'node' }
+    )
+
+    const plan = JSON.parse(output)
+    expect(plan.proposals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'orders',
+          object: 'table',
+          safety: 'migration-review',
+          commands: expect.arrayContaining([expect.stringContaining('migration-review')]),
+        }),
+      ])
+    )
+    expect(JSON.stringify(plan)).not.toContain('migrate create')
+    expect(process.exitCode).toBe(1)
+  })
+
   test('keeps console spies alive for the shared command singleton', () => {
     expect(logSpy).toBeDefined()
     expect(errorSpy).toBeDefined()

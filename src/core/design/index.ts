@@ -240,7 +240,17 @@ export function reviewDesign(spec: DesignSpec): DesignReviewReport {
   for (const [relationshipIndex, relationship] of spec.relationships.entries()) {
     const path = `$.relationships[${relationshipIndex}]`
     const key = `${relationship.from.model}\u0000${relationship.from.field}\u0000${relationship.to.model}\u0000${relationship.to.field}`
+    const reverseKey = `${relationship.to.model}\u0000${relationship.to.field}\u0000${relationship.from.model}\u0000${relationship.from.field}`
     if (relationships.has(key)) addFinding(findings, 'error', 'DUPLICATE_RELATIONSHIP', path, 'must not repeat relationship endpoints')
+    else if (key !== reverseKey && relationships.has(reverseKey)) {
+      addFinding(
+        findings,
+        'error',
+        'REVERSE_RELATIONSHIP',
+        path,
+        'must use one relationship direction; the reverse endpoints are already declared'
+      )
+    }
     relationships.add(key)
     reviewRelationship(relationship, path, models, findings)
   }
@@ -342,6 +352,22 @@ function reviewModel(model: DesignModel, modelIndex: number, findings: DesignFin
     }
     if (index.columns.length === 1 && primaryKeys.some((field) => field.name === index.columns[0])) {
       addFinding(findings, 'warn', 'REDUNDANT_PRIMARY_KEY_INDEX', path, 'primary-key fields are already indexed')
+    }
+    if (
+      !index.unique &&
+      model.indexes.some(
+        (candidate) =>
+          candidate.columns.length > index.columns.length &&
+          index.columns.every((column, columnIndex) => candidate.columns[columnIndex] === column)
+      )
+    ) {
+      addFinding(
+        findings,
+        'warn',
+        'PREFIX_REDUNDANT_INDEX',
+        path,
+        'is covered by a longer index with the same leading columns'
+      )
     }
   }
 }

@@ -702,7 +702,7 @@ dbcli proxy analyze \
                     <tr><td><code>skill --install</code></td><td>為 Claude、Gemini、Antigravity、Codex 等 AI 工具安裝精簡代理指引。</td></tr>
                     <tr><td><code>skill context</code></td><td>將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。</td></tr>
                     <tr><td><code>semantic validate</code> / <code>semantic context</code> / <code>semantic search</code> / <code>semantic drift</code> / <code>semantic migrate</code> / <code>semantic draft validate</code></td><td>驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。</td></tr>
-                    <tr><td><code>design init</code> / <code>design validate</code> / <code>design render</code> / <code>design diff</code></td><td>明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，並與本機 SQL schema cache 比較。不會執行 DDL 或暗中寫入設計檔。</td></tr>
+                    <tr><td><code>design init</code> / <code>design validate</code> / <code>design render</code> / <code>design diff</code> / <code>design propose</code></td><td>明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，與本機 SQL schema cache 或 ORM 定義比較，並產出只供審查的變更計畫。不會執行 DDL 或暗中寫入設計檔。</td></tr>
                     <tr><td><code>skill tasks</code></td><td>管理診斷、稽核與資料庫工作流等可重複專家任務包。</td></tr>
                     <tr><td><code>completion</code></td><td>為 bash、zsh 或 fish 安裝 shell 自動補全。</td></tr>
                 </tbody>
@@ -751,6 +751,8 @@ dbcli design diff --against-cache --format markdown
 dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
 dbcli design propose --against-orm ./prisma/schema.prisma --format markdown</code></pre>
                 <p class="m-0"><code>validate</code> 對格式錯誤、缺少 primary key、無效 relationship endpoint/cardinality、relation type 不相容與不安全 index 採 fail-closed；access-pattern index 缺口屬建議性。<code>render</code> 只在驗證沒有 error 時輸出 JSON、Markdown 或 Mermaid。<code>diff --against-cache</code> 讀取既有的本機 cache（先執行 <code>schema</code>），不會開啟連線，並回報不同的 column、index 與 foreign key。<code>diff --against-orm</code> 完全在本機執行：可對照明確指定的 Prisma、DDL、Drizzle snapshot 或 normalized JSON artifact，不需要設定或資料庫連線；DDL 可使用 glob。兩種模式都唯讀，而且必須剛好選擇一個比較目標。<code>propose</code> 會為每一項變更加上 blacklist/schema 預檢、僅在既有 migration 能無損表示時才提供 dry-run 指令、回滾提醒與寫入後的唯讀驗證計畫；其他變更一律升級為 <code>migration-review</code>。它不會套用任何寫入。<code>init</code> 是唯一的寫入指令，必須指定 <code>--output</code>，且拒絕覆寫。這些指令不會呼叫 LLM 或查詢資料。外部 coding agent 可以起草檔案，但人仍應檢閱後再採用。</p>
+                <p><strong>新專案工作流。</strong> 執行 <code>design init</code>，編輯明確建立的 artifact，再執行 <code>design validate</code> 與 <code>design render</code>。若已有 application model，資料庫尚未建立前即可用離線的 <code>design diff --against-orm &lt;path&gt;</code> 對齊 artifact 與 ORM。</p>
+                <p class="m-0"><strong>既有資料庫演進。</strong> 先執行 <code>blacklist list</code>，以 <code>schema --format json</code> 更新 cache，再執行 <code>design diff --against-cache</code> 與 <code>design propose --against-cache</code>。檢閱計畫後，另外執行已核准的 migration；之後更新 schema 並重新執行相同的 diff。兩個 design 指令都不會寫入資料庫。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

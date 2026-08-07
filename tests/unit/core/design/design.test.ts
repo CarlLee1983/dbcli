@@ -102,6 +102,39 @@ describe('design artifact', () => {
     )
   })
 
+  test('reports reverse relationships and non-unique prefix-redundant indexes', () => {
+    const spec = parseDesignSpec({
+      ...valid,
+      models: valid.models.map((model) =>
+        model.name === 'orders'
+          ? {
+              ...model,
+              indexes: [
+                { columns: ['customer_id'] },
+                { columns: ['customer_id', 'created_at'] },
+              ],
+            }
+          : model
+      ),
+      relationships: [
+        ...valid.relationships,
+        {
+          name: 'customer-orders',
+          from: { model: 'customers', field: 'id' },
+          to: { model: 'orders', field: 'customer_id' },
+          cardinality: 'one-to-many',
+        },
+      ],
+    })
+
+    expect(reviewDesign(spec).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'REVERSE_RELATIONSHIP', severity: 'error' }),
+        expect.objectContaining({ code: 'PREFIX_REDUNDANT_INDEX', severity: 'warn' }),
+      ])
+    )
+  })
+
   test('compiles the design to the shared normalized-schema shape', () => {
     const compiled = compileDesignSchema(parseDesignSpec(valid))
     expect(compiled).toMatchObject({

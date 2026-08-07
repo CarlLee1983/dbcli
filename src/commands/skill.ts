@@ -12,6 +12,7 @@ import { Command, Option } from 'commander'
 import { gatherContext } from '@/core/context/context'
 import { serializeXml, serializeJson, serializeMarkdown } from '@/core/context/serializer'
 import { resolveConfigPath } from '@/utils/config-path'
+import { formatForPlatform } from '@/core/skill-install/platform-format'
 
 /** Long-form command reference (sibling to SKILL in assets/ and in install dir) */
 const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
@@ -22,10 +23,15 @@ const REFERENCE_SOURCE_PATH = packageAssetPath('reference.md')
  * skill apart from an unrelated file that happens to live at the same path
  * (notably the shared project-root `.windsurfrules`).
  */
-const SKILL_SENTINEL = 'name: dbcli'
+// Recognizing our own installed file has to survive two things: a platform
+// transform that strips the frontmatter (Windsurf — ADR 0006), and an install
+// from an older release that predates the body marker. Either marker is enough;
+// requiring the header alone made dbcli treat its own Windsurf install as a
+// stranger's file and "back it up" on every reinstall.
+const SKILL_SENTINELS = ['name: dbcli', 'dbcli blacklist list'] as const
 
 function looksLikeDbcliSkill(content: string): boolean {
-  return content.includes(SKILL_SENTINEL)
+  return SKILL_SENTINELS.some((sentinel) => content.includes(sentinel))
 }
 
 /**
@@ -223,7 +229,7 @@ async function writeSkillInstall(
     await backupForeignFile(installPath, `${installPath}.dbcli-backup`)
   }
 
-  await Bun.file(installPath).write(skillMarkdown)
+  await Bun.file(installPath).write(formatForPlatform(platformLower, skillMarkdown))
 
   // Platforms that use a rule file in root + companion reference in a hidden dir
   if (platformLower === 'cursor' || platformLower === 'windsurf') {

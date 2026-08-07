@@ -1,6 +1,6 @@
 ---
 name: dbcli
-description: Database CLI for AI agents with permission-based access control. Use to set up new connections, query, inspect schemas, insert/update/delete, export results, generate DB reports or interactive HTML dashboards, and blacklist sensitive columns/tables. Supports MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch with multiple named connections per project and custom env files. Trigger when configuring a database connection (`.dbcli` / `.env`), choosing between v1 single and v2 multi-connection layouts, picking auth modes (URI, env refs, Cloud ID, API key), running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL, generating a report/dashboard/HTML UI from raw SQL or saved snippets, exploring table/collection/key/index structures, switching database environments, protecting sensitive data from AI access, or performing automated recovery and guided remediation after command failures. For exhaustive flags and examples, read the sibling `reference.md`.
+description: Database CLI for AI agents with permission-gated access to MySQL, PostgreSQL, MariaDB, MongoDB, Redis, and Elasticsearch. Trigger when: wiring up a connection (`.dbcli` / `.env`, v1 single vs v2 multi-connection, auth mode); running SQL / MongoDB JSON / Redis commands / Elasticsearch DSL; inspecting table, collection, key, or index structure; writing rows or exporting results; building a report, dashboard, or HTML UI; authoring or reviewing a schema design; protecting sensitive data with the blacklist; or recovering after a failed command. For exhaustive flags and examples, read the sibling `reference.md`.
 ---
 
 # dbcli
@@ -71,7 +71,7 @@ afterwards add only the `@diag/*` it does not cover (`missing-indexes`, `locks`,
 `export` / `schema` / `inspect` / `lint` / `diff --against-orm`. The command emits a `RecoveryEnvelope` to stdout and saves
 it to `.dbcli/last-recovery.json`; then `dbcli recover` inspects it and `dbcli recover --apply`
 runs the saved plan under risk gating. Multi-turn `--next`, connection branching, and the
-post-apply verify probe are documented in reference.md §Recovery Cookbook.
+post-apply verify probe are documented in [reference.md](reference.md#recovery-cookbook-agent-walkthroughs).
 
 When reporting a check's outcome use the vocabulary `verified` (evidence matched) /
 `not_verified` (check ran and contradicted) / `indeterminate` (ran but ambiguous) /
@@ -202,7 +202,7 @@ Guardrails:
   inspect with `verification summary` / `list` / `show <id>`. The `verify safe-backfill` /
   `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>`
   family runs preflight + `--after-write` checks and **never executes the write**. Full flags
-  and the per-command blocks are in reference.md.
+  and the per-command blocks are in [reference.md](reference.md#commands).
 
 ## Audit log
 
@@ -219,7 +219,7 @@ The `inspect` / `guide` / `recover` agent JSON embeds `audit_recent` (last 5 ent
 fresh session has immediate history. An envelope's `audit_ref` and an audit entry's
 `recovery_ref` point at each other, so you can pivot either way. Audit is on by default
 (`audit.enabled = false` to opt out); entries are metadata-only (never SQL bodies, `--param`
-values, or result cells) and rotate at ~10 MB / 1000 entries. Full flags: reference.md §audit.
+values, or result cells) and rotate at ~10 MB / 1000 entries. Full flags: [reference.md](reference.md#audit).
 
 ## Quick start
 
@@ -375,7 +375,7 @@ refs have no value to connect with yet.
 - **Re-running `init`** — refuses to overwrite without `--force`; never use
   `--force` to "fix" a config full of `{ "$env": "..." }` refs.
 
-Full flags and edge cases: see [reference.md](reference.md) `init` section.
+Full flags and edge cases: see [reference.md](reference.md#init).
 
 ## Command overview
 
@@ -386,33 +386,33 @@ Full flags and edge cases: see [reference.md](reference.md) `init` section.
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
 | `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. `--fields` (projection), `--truncate` (cell width), `-f/--query-file` (read query from file or stdin), `--use a,b` (read-only fan-out). Supports `--recovery`. `--slow-ms <n>` sets the passive slow-query hint threshold (default 1000, `0` off): at or above it, table output gains a `Performance hint` footer and JSON gains `metadata.performanceAdvisory`; it runs no extra diagnostics and is suppressed under `--recovery`. Distinct from the `proxy` flag of the same name. See **Query workflow flags**. |
-| `explain` | query-only+ | **(v1.23)** Read-only query plan with annotations. SQL only. Single query, `@saved-query`, `@file.sql`, or `--bulk @glob/*`. `--analyze` (EXPLAIN ANALYZE / MariaDB ANALYZE SELECT), `--format markdown\|json\|table`. |
+| `explain` | query-only+ | Read-only query plan with annotations. SQL only. Single query, `@saved-query`, `@file.sql`, or `--bulk @glob/*`. `--analyze` (EXPLAIN ANALYZE / MariaDB ANALYZE SELECT), `--format markdown\|json\|table`. |
 | `lint` | n/a | Static SQL anti-pattern advisor (no DB connection). 9 rules incl. schema-aware implicit-cast / NOT IN-nullable checks via the layered `.dbcli/schemas/` cache; global `--use <conn>` selects a named cache. Findings carry rewrite drafts + guarded `explain` verify commands (`--analyze` only for proven read-only SQL) — report-only, never executes. `--format text\|json\|markdown`, `--min-severity`, `--no-schema`, `--bulk`. Supports `--recovery`. |
 | `plan` | n/a | Static SQL risk analyzer (`--format text\|json`); classifies a statement without connecting to the database. |
 | `q` | query-only+ | Run a saved snippet by `@name` with `--param k=v`. Supports `--verify` to run assertions and `--slow-ms <n>` (same passive slow-query hint as `query`). |
 | `queries` | n/a | Manage saved snippets: `list` / `show` / `search` / `suggest` / `new` / `edit` / `check` / `delete` / `rename` / `copy` / `import` / `export`. |
 | `insert` / `update` | read-write+ | SQL or MongoDB only. JSON `--data` / `--set`; `--where` required on `update`; `--dry-run` first. Redis writes go through `query`. Supports `--recovery`. |
 | `delete` | data-admin+ | SQL or MongoDB; Redis has a basic implementation (see Redis section). `--where` required; `--dry-run` first. Supports `--recovery`. |
-| `export` | query-only+ | SQL, MongoDB, or **(v1.22)** Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. **Fails closed rather than truncating silently**: if the auto-limit would drop rows, the export errors out and you must pass `--no-limit` or `--limit N`. Supports `--recovery`. |
+| `export` | query-only+ | SQL, MongoDB, or Elasticsearch (DSL `--index` or whole-index scroll). Query → `--format json\|jsonl\|csv\|html` file or stdout. `html` emits a standalone interactive dashboard. **Fails closed rather than truncating silently**: if the auto-limit would drop rows, the export errors out and you must pass `--no-limit` or `--limit N`. Supports `--recovery`. |
 | `blacklist` | n/a | `list` / `table` / `column` subcommands redact sensitive data from query results. |
 | `check` | query-only+ | SQL only (best on MySQL/MariaDB). |
-| `diff` | query-only+ | SQL only. Save/compare schema snapshots. **(P1b)** `--against-orm <path>` compares a Prisma schema / DDL file / normalized JSON against the local schema cache (no DB connection): categorized drift (`missing_in_db` = error, `missing_in_orm` = warn, `mismatch` per tolerance table, `unmanaged`) with dry-run `migrate` proposals; exit 1 on error-level drift. `--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`, `--ignore <globs>`, `--format json\|table\|markdown`. Drizzle: point at `drizzle/meta/<NNNN>_snapshot.json` (run `drizzle-kit generate` first; `.ts` sources are rejected with a hint). TypeORM/Sequelize: feed tool-generated DDL (`schema:log` / a schema-only dump); source files are rejected with the exact generation command to run. |
-| `design` | n/a | **(v1.52)** Offline SQL design assistant over a version-controlled `dbcli.design.json`: never connects, never runs DDL, never calls a provider. `init --output <path>` is the only writer and refuses to overwrite; `validate` is fail-closed, so `render` / `diff` / `propose` refuse to run while `error` findings remain. `diff` / `propose` need exactly one of `--against-cache` or `--against-orm <paths>`. **`propose` is review-only — it plans, it never writes.** Naming rules, finding codes, and the artifact shape are in reference.md. |
-| `snapshot` | query-only+ | **(v1.25)** SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
-| `assert` | query-only+ | **(v1.25)** SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
+| `diff` | query-only+ | SQL only. Save/compare schema snapshots. `--against-orm <path>` compares a Prisma schema / DDL file / normalized JSON against the local schema cache (no DB connection): categorized drift (`missing_in_db` = error, `missing_in_orm` = warn, `mismatch` per tolerance table, `unmanaged`) with dry-run `migrate` proposals; exit 1 on error-level drift. `--orm-format prisma\|ddl\|json\|drizzle\|typeorm\|sequelize`, `--ignore <globs>`, `--format json\|table\|markdown`. Drizzle: point at `drizzle/meta/<NNNN>_snapshot.json` (run `drizzle-kit generate` first; `.ts` sources are rejected with a hint). TypeORM/Sequelize: feed tool-generated DDL (`schema:log` / a schema-only dump); source files are rejected with the exact generation command to run. |
+| `design` | n/a | Offline SQL design assistant over a version-controlled `dbcli.design.json`: never connects, never runs DDL, never calls a provider. `init --output <path>` is the only writer and refuses to overwrite; `validate` is fail-closed, so `render` / `diff` / `propose` refuse to run while `error` findings remain. `diff` / `propose` need exactly one of `--against-cache` or `--against-orm <paths>`. **`propose` is review-only — it plans, it never writes.** Naming rules, finding codes, and the artifact shape are in [reference.md](reference.md#design). |
+| `snapshot` | query-only+ | SQL only. Capture a result fingerprint (`rowCount` + per-column null/distinct/min/max/sum + order-independent checksum). `--out` (default `.dbcli/snapshots/snap-<ts>.json`), `--rows`, `--stdout`, `--format`, `--no-limit`. Baseline for `assert --against`. |
+| `assert` | query-only+ | SQL only. Verify an invariant; exit 1 on failure unless `--no-fail`. `--expect "rows>0\|value==X\|col:c not null\|unique\|between a and b\|>= n"`, `--vs <query> --compare rows\|value` (reconcile), `--against <snapshot> --tolerance <pct>`. |
 | `verification` | n/a | Inspect and manage local verification artifacts. `list` / `show <id-or-path>` / `summary` are read-only; `prune` is dry-run by default and deletes only with `--execute --force`. Reads `<cwd>/.dbcli/verification/`; no DB connection, no audit writes. |
 | `backfill artifact` | n/a | Build a bounded, reviewable source-to-SQL backfill artifact from JSON. Includes source/target identity, blacklist/schema preflight, read-back verification, and rollback hints; dry-run only and never executes writes. |
-| `proxy` | n/a | **(v1.26)** MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Subcommands: `mysql` \| `mariadb` \| `postgresql`. `--listen`, `--target`, `--events` (default `.dbcli/proxy/events.jsonl`), `--slow-ms` (default `1000`), `--redact none\|literals` (default `none`). Observe-only. **(v1.27)** `proxy analyze` aggregates the event log offline into a JSON/text report (summary, byFingerprint, slowest, errors, hotTables, N+1) — `--format`, `--top`, `--slow-ms`, `--n-plus-one`; errors out if no events exist yet. **(v1.50)** `proxy analyze --format markdown` produces the QueryLens report and redacts SQL/error literals in-memory before analysis; use `proxy <engine> --redact literals` to protect the log itself. Actionable blocks carry `suggestedCommands` + `hints` so an agent can act: SELECT hotspots/N+1 → `explain` / `guide missing-index-for`, errors → `schema <table>` (verify names, never guess), N+1 → batch (JOIN / `IN (...)`). After analyzing, run each finding's `suggestedCommands`, read its `hints`, then propose the fix. |
+| `proxy` | n/a | MySQL/MariaDB/PostgreSQL only. Local-dev observability proxy — relays app traffic to the real DB and appends query/latency/byte/error events to `.dbcli/proxy/events.jsonl`. Observe-only. `proxy analyze` aggregates that log offline (summary, byFingerprint, slowest, errors, hotTables, N+1; `--format markdown` produces the QueryLens report) and errors out if no events exist. Act on it: run each finding's `suggestedCommands`, read its `hints`, then propose the fix — never guess a table name, confirm with `schema`. Protect the log itself with `--redact literals`. [Flags](reference.md#proxy). |
 | `status` | query-only+ | Safe JSON/text summary (no credentials). |
-| `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and **(v1.23)** human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
+| `inspect` | query-only+ | Read-only context snapshot (connection, permission, blacklist, objects, snippets, context-aware `suggestedCommands`, and human-readable `hints`). `--for-agent` / `--brief` / `--no-connect` / `--require-schema-cache`. Supports `--recovery`. |
 | `report` | query-only+ | Diagnostic report built from `@diag/*` snippets. `--section <health\|capacity\|perf>` (comma-separated to combine), `--brief`, `--for-agent`, `--no-connect`. |
-| `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. **(v1.23)** `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
+| `guide` | query-only+ | Deterministic next-command plan for a fixed goal (`slow-query`, `capacity`, `health`, `index-usage`, `permissions`, `schema-overview`). `--list` to enumerate. `guide missing-index-for <query>` suggests composite indexes for a single SELECT (`--format yaml\|json\|markdown`, `--min-confidence`). |
 | `recovery` | n/a | Look up the structured `RecoveryEnvelope` for a known error code (`--code <CODE>` or `--list`). Standalone synthesizer; does not require a real failure. |
 | `recover` | n/a | Inspect (default) or `--apply` the auto-saved recovery plan in `.dbcli/last-recovery.json`. `--allow-write=readonly-cmd\|write-cmd`, `--no-verify`, `--from <file>`, `--next --after-step <n> --result <json\|@file>` for multi-turn step-at-a-time. |
 | `doctor` | n/a | Environment/runtime identity, config, connection, SRV diagnostics (Mongo), schema cache age. `--format json --remediation` emits candidate-only blacklist/schema/bounded-sample plans (SQL: `dbcli plan` → human-confirmed bounded `dbcli query`; MongoDB/Elasticsearch: `dbcli schema` preflight → human-confirmed bounded query); it never applies them. |
 | `completion` | n/a | bash / zsh / fish scripts. |
 | `upgrade` | n/a | Self-update from npm; 24h-cached version hints on every command. |
-| `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). **(v1.22)** Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
+| `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
 | `semantic` | n/a | Validate, search, inspect drift, migrate to v2, or print the optional project-root `dbcli.semantic.json`. Give its reviewed context to an external agent, but keep provider credentials, prompts, and agent context outside dbcli. `semantic draft validate --input <file|-> [--format text\|json]` validates only the explicit untrusted `QueryDraft` offline against local semantic/schema/saved-query metadata; it returns safe hashes/references/violation codes, never executes or echoes candidate SQL. Review the original draft, then invoke `explain` or `query` separately if intended. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
@@ -480,12 +480,12 @@ truncation from a round number. This applies to `query` and to `q` snippets
   explicit operators (`$set`/`$inc`/`$push`/…) pass through. Nested blacklist accepts dotted
   paths (`profile.email`) and trailing wildcards (`profile.tokens.*`). Saved snippets end in
   `.mongodb.sql` (frontmatter `engine: mongodb`, `operation: find|aggregate`). Full
-  write-planner tiers and syntax: reference.md MongoDB section.
+  write-planner tiers and syntax: [reference.md](reference.md#mongodb-support).
 
 ## Redis
 
 - `query` runs a single **whitelisted** Redis command (e.g. `GET`, `SET`, `HSET`, `DEL`).
-  The full whitelist and the per-command permission tier are defined in reference.md.
+  The full whitelist and the per-command permission tier are defined in [reference.md](reference.md#redis-support).
 - **Supported:** `init`, `list` (keys via SCAN), `schema <key>` (type / TTL / size / sample),
   `query`, `q` (saved snippets — **read-only commands only**), `delete` (basic implementation:
   `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`, needs `data-admin`; `query "DEL <key>"` also
@@ -498,7 +498,7 @@ truncation from a round number. This applies to `query` and to `q` snippets
   blacklist (matching reads/writes are rejected). To preview a delete, use `delete <key> --dry-run`.
 - `database` is the logical DB index (default `0`). `dbcli blacklist table add 'secrets:*'`
   registers a key glob; an optional `redis.mask` block masks values on read. Size guards
-  (SCAN/HGETALL truncation, `--no-limit` to bypass) and masking details: reference.md Redis section.
+  (SCAN/HGETALL truncation, `--no-limit` to bypass) and masking details: [reference.md](reference.md#redis-support).
 
 ## Elasticsearch
 
@@ -510,14 +510,14 @@ dbcli query '{"query":{"match":{"status":"active"}}}' --collection orders
 
 - `query` takes a DSL (JSON body) or Lucene query string; `--collection <index>` is required.
 - **Supported:** `init`, `list` (indices with doc count), `schema [index]` (flattened mapping),
-  `query`, `q` (snippets use the `.elasticsearch.sql` extension), `export` (v1.22),
-  `shell` (v1.22), `status`, `use`, `doctor`. **Not supported:**
+  `query`, `q` (snippets use the `.elasticsearch.sql` extension), `export`,
+  `shell`, `status`, `use`, `doctor`. **Not supported:**
   `insert`, `update`, `delete`, `check`, `diff`, `migrate`.
 - `export` takes a search DSL with `--index <index>`, or an index name as the query to scroll
   the whole index via `match_all`. Query-only caps at 1000 hits; `--no-limit` streams the whole
   index via the scroll API. (The 10 000 bound belongs to `query`, not `export`.)
 - Schema flattens nested fields (`a.b.c`) and surfaces `.fields` multi-fields. `shell` opens a
-  Kibana Dev Tools-style REPL. Full syntax and examples: reference.md Elasticsearch section.
+  Kibana Dev Tools-style REPL. Full syntax and examples: [reference.md](reference.md#elasticsearch-support).
 
 ## Saved queries
 
@@ -582,7 +582,7 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 When a saved snippet exists, prefer `q @<name> --ui` / `q @<name> --format html` because snippet
 metadata can drive titles, KPI cards, and charts. Blacklist redaction is applied **before**
 rendering. To get KPIs and charts instead of a plain table, add a `visual:` block (`title`,
-`kpis[]`, `charts[]`) to the snippet frontmatter — see reference.md for the full `visual:`
+`kpis[]`, `charts[]`) to the snippet frontmatter — see [reference.md](reference.md#interactive-html-dashboard) for the full `visual:`
 schema. Raw `query` / `export` invocations render a sortable table only.
 
 ## Common workflows
@@ -599,6 +599,6 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 
 - Query-only mode auto-appends `LIMIT 1000`; add `--no-limit` for `information_schema` or statements that break with `LIMIT`.
 - Blacklisted tables and columns are redacted from query output.
-- `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in reference.md.
+- `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in [reference.md](reference.md#schema).
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
 - **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `--timeout <ms>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

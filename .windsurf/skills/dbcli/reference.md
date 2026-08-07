@@ -4,6 +4,66 @@ Companion to [SKILL.md](SKILL.md). Exhaustive flags, copy-paste examples, `shell
 
 For cross-engine support status, see `docs/feature-matrix.md` in the repository.
 
+## Index
+
+Jump straight to what you need — this file is long, and reading it end to end is
+never the right move.
+
+| Section | What is in it |
+|---|---|
+| [Global options and placement](#global-options-and-placement) | Flags that must precede the command (`--use`, `--config`), and [redirecting output](#redirecting-output). |
+| [Commands](#commands) | Every command, one `###` each — see the command list below. |
+| [Recovery Cookbook](#recovery-cookbook-agent-walkthroughs) | Failure-to-fix walkthroughs S1–S6, the [scenario index](#scenario-index), [risk gate cheat sheet](#risk-gate-cheat-sheet), and [common pitfalls](#common-pitfalls). |
+| [Interactive HTML dashboard](#interactive-html-dashboard) | `--ui` / `--format html`: [entry points](#entry-points), [data injection contract](#data-injection-contract), [`meta` shape](#meta-shape). |
+| [MongoDB Support](#mongodb-support) | Connection shapes, JSON query bodies, write-stage guard. |
+| [Redis Support](#redis-support) | Command permission tiers, size guards, key masking. |
+| [Elasticsearch Support](#elasticsearch-support) | DSL and Lucene queries, scroll export, mapping flattening. |
+
+**Commands** —
+[init](#init) ·
+[use](#use) ·
+[list](#list) ·
+[schema](#schema) ·
+[query](#query) ·
+[explain](#explain) ·
+[lint](#lint) ·
+[plan](#plan) ·
+[q](#q) ·
+[queries](#queries) ·
+[insert](#insert) ·
+[update](#update) ·
+[delete](#delete) ·
+[export](#export) ·
+[blacklist](#blacklist) ·
+[check](#check) ·
+[diff](#diff) ·
+[design](#design) ·
+[snapshot](#snapshot) ·
+[assert](#assert) ·
+[proxy](#proxy) ·
+[status](#status) ·
+[inspect](#inspect) ·
+[report](#report) ·
+[guide](#guide) ·
+[recovery](#recovery) ·
+[recover](#recover) ·
+[audit](#audit) ·
+[verify](#verify) ·
+[verification](#verification) ·
+[backfill](#backfill) ·
+[doctor](#doctor) ·
+[completion](#completion) ·
+[upgrade](#upgrade) ·
+[shell](#dbcli-shell) ·
+[migrate](#migrate) ·
+[semantic](#semantic) ·
+[skill](#skill) ·
+[skill context](#skill-context) ·
+[skill tasks](#skill-tasks-agent-task-packs)
+
+Also worth knowing before you connect:
+[Agent configuration trust boundary](#agent-configuration-trust-boundary).
+
 ## Global options and placement
 
 These options are available on the root `dbcli` command. Root-level options must

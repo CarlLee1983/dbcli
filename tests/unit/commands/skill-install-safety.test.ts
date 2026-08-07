@@ -42,8 +42,11 @@ describe('skill --install windsurf preserves an existing user .windsurfrules', (
 
     await skillCommand({} as any, { install: 'windsurf' })
 
-    // The skill was written to .windsurfrules...
-    expect(await Bun.file(rulesPath).text()).toContain('name: dbcli')
+    // The skill was written to .windsurfrules — without the frontmatter Windsurf
+    // cannot parse (ADR 0006), so the check is on the body.
+    const written = await Bun.file(rulesPath).text()
+    expect(written).toContain('dbcli blacklist list')
+    expect(written).not.toContain('name: dbcli')
     // ...but the user's original content survives in a backup.
     const backupPath = join(sandbox, '.windsurfrules.dbcli-backup')
     expect(existsSync(backupPath)).toBe(true)

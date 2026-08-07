@@ -106,5 +106,6 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `✓ Platform roster aligned across ${checks.length} surfaces: ${[...canonical].join(', ')}`
+  `✓ Platform roster aligned across ${checks.length} surfaces; ` +
+    `${canonical.size} platforms: ${[...canonical].join(', ')}`
 )

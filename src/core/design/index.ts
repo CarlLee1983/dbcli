@@ -96,8 +96,13 @@ export interface DesignProposalPlan {
 }
 
 export class DesignValidationError extends Error {
-  constructor(readonly filePath: string, readonly issues: DesignIssue[]) {
-    super(`Invalid design artifact at ${filePath}: ${issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}`)
+  constructor(
+    readonly filePath: string,
+    readonly issues: DesignIssue[]
+  ) {
+    super(
+      `Invalid design artifact at ${filePath}: ${issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}`
+    )
     this.name = 'DesignValidationError'
   }
 }
@@ -111,7 +116,8 @@ const MAX_ACCESS_PATTERNS = 200
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 const DESIGN_NAME = /^[a-z][a-z0-9-]*$/
 const TYPE = /^[^;\r\n]{1,100}$/
-const UNSAFE_TEXT = /(?:\b(?:select|insert|update|delete|alter|drop|grant)\b\s+|\bcreate\s+(?:table|index)\b|(?:postgres(?:ql)?|mysql):\/\/)/i
+const UNSAFE_TEXT =
+  /(?:\b(?:select|insert|update|delete|alter|drop|grant)\b\s+|\bcreate\s+(?:table|index)\b|(?:postgres(?:ql)?|mysql):\/\/)/i
 
 const identifier = z.string().regex(IDENTIFIER, 'must be a SQL-safe identifier')
 const designName = z.string().regex(DESIGN_NAME, 'must be lowercase kebab-case')
@@ -226,12 +232,15 @@ export function reviewDesign(spec: DesignSpec): DesignReviewReport {
   const models = new Map<string, { model: DesignModel; index: number }>()
   const tables = new Map<string, number>()
 
-  if (spec.models.length === 0) addFinding(findings, 'error', 'NO_MODELS', '$.models', 'must contain at least one model')
+  if (spec.models.length === 0)
+    addFinding(findings, 'error', 'NO_MODELS', '$.models', 'must contain at least one model')
   for (const [modelIndex, model] of spec.models.entries()) {
     const path = `$.models[${modelIndex}]`
-    if (models.has(model.name)) addFinding(findings, 'error', 'DUPLICATE_MODEL', `${path}.name`, 'must be unique')
+    if (models.has(model.name))
+      addFinding(findings, 'error', 'DUPLICATE_MODEL', `${path}.name`, 'must be unique')
     else models.set(model.name, { model, index: modelIndex })
-    if (tables.has(model.table)) addFinding(findings, 'error', 'DUPLICATE_TABLE', `${path}.table`, 'must be unique')
+    if (tables.has(model.table))
+      addFinding(findings, 'error', 'DUPLICATE_TABLE', `${path}.table`, 'must be unique')
     else tables.set(model.table, modelIndex)
     reviewModel(model, modelIndex, findings)
   }
@@ -241,7 +250,14 @@ export function reviewDesign(spec: DesignSpec): DesignReviewReport {
     const path = `$.relationships[${relationshipIndex}]`
     const key = `${relationship.from.model}\u0000${relationship.from.field}\u0000${relationship.to.model}\u0000${relationship.to.field}`
     const reverseKey = `${relationship.to.model}\u0000${relationship.to.field}\u0000${relationship.from.model}\u0000${relationship.from.field}`
-    if (relationships.has(key)) addFinding(findings, 'error', 'DUPLICATE_RELATIONSHIP', path, 'must not repeat relationship endpoints')
+    if (relationships.has(key))
+      addFinding(
+        findings,
+        'error',
+        'DUPLICATE_RELATIONSHIP',
+        path,
+        'must not repeat relationship endpoints'
+      )
     else if (key !== reverseKey && relationships.has(reverseKey)) {
       addFinding(
         findings,
@@ -291,10 +307,17 @@ export function compileDesignSchema(spec: DesignSpec): NormalizedSchema {
           .map((field) => ({ columns: [field.name], unique: true })),
       ],
       foreignKeys: spec.relationships.flatMap((relationship) => {
-        if (relationship.cardinality === 'many-to-many' || relationship.from.model !== model.name) return []
+        if (relationship.cardinality === 'many-to-many' || relationship.from.model !== model.name)
+          return []
         const target = models.get(relationship.to.model)
         if (!target) return []
-        return [{ columns: [relationship.from.field], refTable: { table: target.table }, refColumns: [relationship.to.field] }]
+        return [
+          {
+            columns: [relationship.from.field],
+            refTable: { table: target.table },
+            refColumns: [relationship.to.field],
+          },
+        ]
       }),
     })),
     unparsed: [],
@@ -334,24 +357,62 @@ export function planDesignProposals(report: DriftReport): DesignProposalPlan {
 function reviewModel(model: DesignModel, modelIndex: number, findings: DesignFinding[]): void {
   const fields = new Map<string, number>()
   const primaryKeys = model.fields.filter((field) => field.primaryKey)
-  if (primaryKeys.length !== 1) addFinding(findings, 'error', 'PRIMARY_KEY_COUNT', `$.models[${modelIndex}].fields`, 'must declare exactly one primary-key field in v1')
+  if (primaryKeys.length !== 1)
+    addFinding(
+      findings,
+      'error',
+      'PRIMARY_KEY_COUNT',
+      `$.models[${modelIndex}].fields`,
+      'must declare exactly one primary-key field in v1'
+    )
   for (const [fieldIndex, field] of model.fields.entries()) {
     const path = `$.models[${modelIndex}].fields[${fieldIndex}]`
-    if (fields.has(field.name)) addFinding(findings, 'error', 'DUPLICATE_FIELD', `${path}.name`, 'must be unique within its model')
+    if (fields.has(field.name))
+      addFinding(
+        findings,
+        'error',
+        'DUPLICATE_FIELD',
+        `${path}.name`,
+        'must be unique within its model'
+      )
     else fields.set(field.name, fieldIndex)
-    if (field.primaryKey && field.nullable) addFinding(findings, 'error', 'NULLABLE_PRIMARY_KEY', `${path}.nullable`, 'primary-key fields must not be nullable')
+    if (field.primaryKey && field.nullable)
+      addFinding(
+        findings,
+        'error',
+        'NULLABLE_PRIMARY_KEY',
+        `${path}.nullable`,
+        'primary-key fields must not be nullable'
+      )
   }
   const indexKeys = new Set<string>()
   for (const [indexIndex, index] of model.indexes.entries()) {
     const path = `$.models[${modelIndex}].indexes[${indexIndex}]`
     const key = `${index.unique}\u0000${index.columns.join('\u0000')}`
-    if (indexKeys.has(key)) addFinding(findings, 'warn', 'DUPLICATE_INDEX', path, 'duplicates a prior index')
+    if (indexKeys.has(key))
+      addFinding(findings, 'warn', 'DUPLICATE_INDEX', path, 'duplicates a prior index')
     indexKeys.add(key)
     for (const column of index.columns) {
-      if (!fields.has(column)) addFinding(findings, 'error', 'UNKNOWN_INDEX_FIELD', `${path}.columns`, `references unknown field '${column}'`)
+      if (!fields.has(column))
+        addFinding(
+          findings,
+          'error',
+          'UNKNOWN_INDEX_FIELD',
+          `${path}.columns`,
+          `references unknown field '${column}'`
+        )
     }
-    if (index.columns.length === 1 && primaryKeys.some((field) => field.name === index.columns[0])) {
-      addFinding(findings, 'warn', 'REDUNDANT_PRIMARY_KEY_INDEX', path, 'primary-key fields are already indexed')
+    if (
+      index.columns.length === 1 &&
+      primaryKeys.some((field) => field.name === index.columns[0])
+    ) {
+      addFinding(
+        findings,
+        'warn',
+        'REDUNDANT_PRIMARY_KEY_INDEX',
+        path,
+        'primary-key fields are already indexed'
+      )
     }
     if (
       !index.unique &&
@@ -382,13 +443,31 @@ function reviewRelationship(
   const to = lookupField(relationship.to, `${path}.to`, models, findings)
   if (!from || !to) return
   if (relationship.cardinality === 'many-to-many') {
-    addFinding(findings, 'error', 'MANY_TO_MANY_REQUIRES_BRIDGE', `${path}.cardinality`, 'requires an explicit bridge model in v1')
+    addFinding(
+      findings,
+      'error',
+      'MANY_TO_MANY_REQUIRES_BRIDGE',
+      `${path}.cardinality`,
+      'requires an explicit bridge model in v1'
+    )
   }
   if (typeFamily(from.field.type) !== typeFamily(to.field.type)) {
-    addFinding(findings, 'error', 'RELATIONSHIP_TYPE_MISMATCH', path, `field types are incompatible (${from.field.type} vs ${to.field.type})`)
+    addFinding(
+      findings,
+      'error',
+      'RELATIONSHIP_TYPE_MISMATCH',
+      path,
+      `field types are incompatible (${from.field.type} vs ${to.field.type})`
+    )
   }
   if (relationship.cardinality === 'one-to-one' && !isUniqueField(from.model, from.field.name)) {
-    addFinding(findings, 'error', 'ONE_TO_ONE_REQUIRES_UNIQUE_FK', `${path}.from.field`, 'must be primary-key, unique, or covered by a single-column unique index')
+    addFinding(
+      findings,
+      'error',
+      'ONE_TO_ONE_REQUIRES_UNIQUE_FK',
+      `${path}.from.field`,
+      'must be primary-key, unique, or covered by a single-column unique index'
+    )
   }
 }
 
@@ -400,16 +479,35 @@ function reviewAccessPattern(
 ): void {
   const found = models.get(pattern.model)
   if (!found) {
-    addFinding(findings, 'error', 'UNKNOWN_ACCESS_MODEL', `${path}.model`, `references unknown model '${pattern.model}'`)
+    addFinding(
+      findings,
+      'error',
+      'UNKNOWN_ACCESS_MODEL',
+      `${path}.model`,
+      `references unknown model '${pattern.model}'`
+    )
     return
   }
   const fields = new Set(found.model.fields.map((field) => field.name))
   for (const field of [...pattern.filters, ...pattern.sort]) {
-    if (!fields.has(field)) addFinding(findings, 'error', 'UNKNOWN_ACCESS_FIELD', path, `references unknown field '${field}'`)
+    if (!fields.has(field))
+      addFinding(
+        findings,
+        'error',
+        'UNKNOWN_ACCESS_FIELD',
+        path,
+        `references unknown field '${field}'`
+      )
   }
   const needed = [...pattern.filters, ...pattern.sort]
   if (needed.length > 0 && !hasSupportingIndex(found.model, needed)) {
-    addFinding(findings, 'warn', 'ACCESS_PATTERN_INDEX', path, `consider an index beginning with (${needed.join(', ')})`)
+    addFinding(
+      findings,
+      'warn',
+      'ACCESS_PATTERN_INDEX',
+      path,
+      `consider an index beginning with (${needed.join(', ')})`
+    )
   }
 }
 
@@ -421,12 +519,24 @@ function lookupField(
 ): { model: DesignModel; field: DesignField } | undefined {
   const found = models.get(endpoint.model)
   if (!found) {
-    addFinding(findings, 'error', 'UNKNOWN_RELATIONSHIP_MODEL', `${path}.model`, `references unknown model '${endpoint.model}'`)
+    addFinding(
+      findings,
+      'error',
+      'UNKNOWN_RELATIONSHIP_MODEL',
+      `${path}.model`,
+      `references unknown model '${endpoint.model}'`
+    )
     return undefined
   }
   const field = found.model.fields.find((candidate) => candidate.name === endpoint.field)
   if (!field) {
-    addFinding(findings, 'error', 'UNKNOWN_RELATIONSHIP_FIELD', `${path}.field`, `references unknown field '${endpoint.field}'`)
+    addFinding(
+      findings,
+      'error',
+      'UNKNOWN_RELATIONSHIP_FIELD',
+      `${path}.field`,
+      `references unknown field '${endpoint.field}'`
+    )
     return undefined
   }
   return { model: found.model, field }
@@ -434,20 +544,32 @@ function lookupField(
 
 function isUniqueField(model: DesignModel, field: string): boolean {
   return (
-    model.fields.some((candidate) => candidate.name === field && (candidate.primaryKey || candidate.unique)) ||
-    model.indexes.some((index) => index.unique && index.columns.length === 1 && index.columns[0] === field)
+    model.fields.some(
+      (candidate) => candidate.name === field && (candidate.primaryKey || candidate.unique)
+    ) ||
+    model.indexes.some(
+      (index) => index.unique && index.columns.length === 1 && index.columns[0] === field
+    )
   )
 }
 
 function hasSupportingIndex(model: DesignModel, needed: string[]): boolean {
   const indexes = [
     ...model.indexes.map((index) => index.columns),
-    ...model.fields.filter((field) => field.primaryKey || field.unique).map((field) => [field.name]),
+    ...model.fields
+      .filter((field) => field.primaryKey || field.unique)
+      .map((field) => [field.name]),
   ]
   return indexes.some((columns) => needed.every((column, index) => columns[index] === column))
 }
 
-function addFinding(findings: DesignFinding[], severity: DesignFindingSeverity, code: string, path: string, message: string): void {
+function addFinding(
+  findings: DesignFinding[],
+  severity: DesignFindingSeverity,
+  code: string,
+  path: string,
+  message: string
+): void {
   findings.push({ severity, code, path, message })
 }
 
@@ -455,7 +577,9 @@ function normalizeSpec(spec: z.infer<typeof specSchema>): DesignSpec {
   return {
     ...spec,
     models: [...spec.models].sort((left, right) => codePointOrder(left.name, right.name)),
-    relationships: [...spec.relationships].sort((left, right) => codePointOrder(left.name, right.name)),
+    relationships: [...spec.relationships].sort((left, right) =>
+      codePointOrder(left.name, right.name)
+    ),
     accessPatterns: [...spec.accessPatterns].sort((left, right) => {
       const leftKey = `${left.model}\u0000${left.filters.join('\u0000')}\u0000${left.sort.join('\u0000')}`
       const rightKey = `${right.model}\u0000${right.filters.join('\u0000')}\u0000${right.sort.join('\u0000')}`
@@ -473,7 +597,11 @@ function formatZodPath(path: Array<string | number>): string {
 }
 
 function findingOrder(left: DesignFinding, right: DesignFinding): number {
-  return codePointOrder(left.path, right.path) || codePointOrder(left.code, right.code) || codePointOrder(left.message, right.message)
+  return (
+    codePointOrder(left.path, right.path) ||
+    codePointOrder(left.code, right.code) ||
+    codePointOrder(left.message, right.message)
+  )
 }
 
 function codePointOrder(left: string, right: string): number {

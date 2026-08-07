@@ -36,24 +36,30 @@ function parseIgnore(value?: string): string[] {
 }
 
 function template(dialect: DesignDialect): string {
-  return JSON.stringify(
-    {
-      version: 1,
-      dialect,
-      models: [],
-      relationships: [],
-      accessPatterns: [],
-      decisions: [],
-    },
-    null,
-    2
-  ) + '\n'
+  return (
+    JSON.stringify(
+      {
+        version: 1,
+        dialect,
+        models: [],
+        relationships: [],
+        accessPatterns: [],
+        decisions: [],
+      },
+      null,
+      2
+    ) + '\n'
+  )
 }
 
 function fail(error: unknown, format: 'json' | 'markdown'): never {
   if (error instanceof DesignValidationError) {
     const report = {
-      findings: error.issues.map((issue) => ({ ...issue, code: 'INVALID_ARTIFACT', severity: 'error' as const })),
+      findings: error.issues.map((issue) => ({
+        ...issue,
+        code: 'INVALID_ARTIFACT',
+        severity: 'error' as const,
+      })),
       summary: { errors: error.issues.length, warns: 0, infos: 0 },
     }
     console.log(formatDesignReview(report, format))
@@ -78,7 +84,8 @@ designCommand
         throw new Error('dialect must be postgresql, mysql, or mariadb')
       }
       const file = Bun.file(options.output)
-      if (await file.exists()) throw new Error(`refusing to overwrite existing file: ${options.output}`)
+      if (await file.exists())
+        throw new Error(`refusing to overwrite existing file: ${options.output}`)
       await Bun.write(options.output, template(options.dialect as DesignDialect))
       console.log(JSON.stringify({ status: 'created', path: options.output }, null, 2))
     } catch (error) {
@@ -89,7 +96,9 @@ designCommand
 
 designCommand
   .command('diff')
-  .description('Compare a valid design against the local schema cache or local ORM definition without connecting')
+  .description(
+    'Compare a valid design against the local schema cache or local ORM definition without connecting'
+  )
   .option('--file <path>', 'Design JSON file (default: dbcli.design.json)')
   .option('--against-cache', 'Compare against the configured local schema cache')
   .option(
@@ -98,46 +107,59 @@ designCommand
     collectOption,
     []
   )
-  .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
+  .option(
+    '--orm-format <format>',
+    'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize'
+  )
   .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
   .option('--format <format>', 'Output format: json, table, or markdown', 'json')
-  .action(async (
-    options: {
-      file?: string
-      againstCache?: boolean
-      againstOrm?: string[]
-      ormFormat?: string
-      ignore?: string
-      format?: string
-    },
-    command: Command
-  ) => {
-    const format = options.format
-    if (!isFormat(format, DIFF_FORMATS)) throw new Error('format must be json, table, or markdown')
-    try {
-      const spec = await loadDesignSpec(defaultFile(options.file))
-      const review = reviewDesign(spec)
-      if (review.summary.errors > 0) {
-        console.log(formatDesignReview(review, format === 'table' ? 'markdown' : format))
-        process.exitCode = 1
-        return
-      }
-      const modeCount = Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
-      if (modeCount !== 1) {
-        throw new Error('Choose exactly one of --against-cache or --against-orm')
-      }
+  .action(
+    async (
+      options: {
+        file?: string
+        againstCache?: boolean
+        againstOrm?: string[]
+        ormFormat?: string
+        ignore?: string
+        format?: string
+      },
+      command: Command
+    ) => {
+      const format = options.format
+      if (!isFormat(format, DIFF_FORMATS))
+        throw new Error('format must be json, table, or markdown')
+      try {
+        const spec = await loadDesignSpec(defaultFile(options.file))
+        const review = reviewDesign(spec)
+        if (review.summary.errors > 0) {
+          console.log(formatDesignReview(review, format === 'table' ? 'markdown' : format))
+          process.exitCode = 1
+          return
+        }
+        const modeCount =
+          Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
+        if (modeCount !== 1) {
+          throw new Error('Choose exactly one of --against-cache or --against-orm')
+        }
 
-      const desired = compileDesignSchema(spec)
-      const ignore = parseIgnore(options.ignore)
-      const report = options.againstCache
-        ? await compareAgainstCache(desired, spec.dialect, ignore, command)
-        : await compareAgainstOrm(desired, spec.dialect, options.againstOrm ?? [], options.ormFormat, ignore)
-      console.log(formatDrift(report, format as DriftFormat))
-      process.exitCode = report.summary.errors > 0 ? 1 : 0
-    } catch (error) {
-      fail(error, format === 'table' ? 'markdown' : format)
+        const desired = compileDesignSchema(spec)
+        const ignore = parseIgnore(options.ignore)
+        const report = options.againstCache
+          ? await compareAgainstCache(desired, spec.dialect, ignore, command)
+          : await compareAgainstOrm(
+              desired,
+              spec.dialect,
+              options.againstOrm ?? [],
+              options.ormFormat,
+              ignore
+            )
+        console.log(formatDrift(report, format as DriftFormat))
+        process.exitCode = report.summary.errors > 0 ? 1 : 0
+      } catch (error) {
+        fail(error, format === 'table' ? 'markdown' : format)
+      }
     }
-  })
+  )
 
 designCommand
   .command('propose')
@@ -150,46 +172,58 @@ designCommand
     collectOption,
     []
   )
-  .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
+  .option(
+    '--orm-format <format>',
+    'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize'
+  )
   .option('--ignore <globs>', 'Comma-separated table globs excluded from drift')
   .option('--format <format>', 'Output format: json or markdown', 'markdown')
-  .action(async (
-    options: {
-      file?: string
-      againstCache?: boolean
-      againstOrm?: string[]
-      ormFormat?: string
-      ignore?: string
-      format?: string
-    },
-    command: Command
-  ) => {
-    const format = options.format
-    if (!isFormat(format, VALIDATE_FORMATS)) throw new Error('format must be json or markdown')
-    try {
-      const spec = await loadDesignSpec(defaultFile(options.file))
-      const review = reviewDesign(spec)
-      if (review.summary.errors > 0) {
-        console.log(formatDesignReview(review, format))
-        process.exitCode = 1
-        return
-      }
-      const modeCount = Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
-      if (modeCount !== 1) {
-        throw new Error('Choose exactly one of --against-cache or --against-orm')
-      }
+  .action(
+    async (
+      options: {
+        file?: string
+        againstCache?: boolean
+        againstOrm?: string[]
+        ormFormat?: string
+        ignore?: string
+        format?: string
+      },
+      command: Command
+    ) => {
+      const format = options.format
+      if (!isFormat(format, VALIDATE_FORMATS)) throw new Error('format must be json or markdown')
+      try {
+        const spec = await loadDesignSpec(defaultFile(options.file))
+        const review = reviewDesign(spec)
+        if (review.summary.errors > 0) {
+          console.log(formatDesignReview(review, format))
+          process.exitCode = 1
+          return
+        }
+        const modeCount =
+          Number(Boolean(options.againstCache)) + Number((options.againstOrm?.length ?? 0) > 0)
+        if (modeCount !== 1) {
+          throw new Error('Choose exactly one of --against-cache or --against-orm')
+        }
 
-      const desired = compileDesignSchema(spec)
-      const ignore = parseIgnore(options.ignore)
-      const report = options.againstCache
-        ? await compareAgainstCache(desired, spec.dialect, ignore, command)
-        : await compareAgainstOrm(desired, spec.dialect, options.againstOrm ?? [], options.ormFormat, ignore)
-      console.log(formatDesignProposal(planDesignProposals(report), format))
-      process.exitCode = report.summary.errors > 0 ? 1 : 0
-    } catch (error) {
-      fail(error, format)
+        const desired = compileDesignSchema(spec)
+        const ignore = parseIgnore(options.ignore)
+        const report = options.againstCache
+          ? await compareAgainstCache(desired, spec.dialect, ignore, command)
+          : await compareAgainstOrm(
+              desired,
+              spec.dialect,
+              options.againstOrm ?? [],
+              options.ormFormat,
+              ignore
+            )
+        console.log(formatDesignProposal(planDesignProposals(report), format))
+        process.exitCode = report.summary.errors > 0 ? 1 : 0
+      } catch (error) {
+        fail(error, format)
+      }
     }
-  })
+  )
 
 async function compareAgainstCache(
   desired: ReturnType<typeof compileDesignSchema>,
@@ -200,7 +234,9 @@ async function compareAgainstCache(
   const config = await configModule.read(resolveConfigPath(command))
   const system = config.connection?.system
   if (!system || !['postgresql', 'mysql', 'mariadb'].includes(system)) {
-    throw new Error('design comparison against cache requires a configured PostgreSQL, MySQL, or MariaDB connection')
+    throw new Error(
+      'design comparison against cache requires a configured PostgreSQL, MySQL, or MariaDB connection'
+    )
   }
   if (system !== dialect) {
     throw new Error(`design dialect '${dialect}' does not match configured connection '${system}'`)
@@ -208,7 +244,10 @@ async function compareAgainstCache(
   if (Object.keys(config.schema ?? {}).length === 0) {
     throw new Error("Schema cache is empty. Run 'dbcli schema' first.")
   }
-  const actual = normalizeDbSchema(config.schema!, system === 'postgresql' ? { defaultSchema: 'public' } : {})
+  const actual = normalizeDbSchema(
+    config.schema!,
+    system === 'postgresql' ? { defaultSchema: 'public' } : {}
+  )
   return compareNormalized(desired, actual, { ignore })
 }
 
@@ -254,7 +293,8 @@ designCommand
   .option('--format <format>', 'Output format: json, markdown, or mermaid', 'markdown')
   .action(async (options: { file?: string; format?: string }) => {
     const format = options.format
-    if (!isFormat(format, RENDER_FORMATS)) throw new Error('format must be json, markdown, or mermaid')
+    if (!isFormat(format, RENDER_FORMATS))
+      throw new Error('format must be json, markdown, or mermaid')
     try {
       const spec = await loadDesignSpec(defaultFile(options.file))
       const review = reviewDesign(spec)
@@ -269,6 +309,9 @@ designCommand
     }
   })
 
-function isFormat<T extends readonly string[]>(value: string | undefined, formats: T): value is T[number] {
+function isFormat<T extends readonly string[]>(
+  value: string | undefined,
+  formats: T
+): value is T[number] {
   return value !== undefined && (formats as readonly string[]).includes(value)
 }

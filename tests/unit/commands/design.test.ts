@@ -91,9 +91,12 @@ describe('design commands', () => {
     expect(await Bun.file(file).json()).toMatchObject({ version: 1, models: [] })
 
     output = ''
-    await root().parseAsync(['bun', 'dbcli', 'design', 'validate', '--file', file, '--format', 'json'], {
-      from: 'node',
-    })
+    await root().parseAsync(
+      ['bun', 'dbcli', 'design', 'validate', '--file', file, '--format', 'json'],
+      {
+        from: 'node',
+      }
+    )
     expect(JSON.parse(output)).toMatchObject({
       findings: [expect.objectContaining({ code: 'NO_MODELS', severity: 'error' })],
     })
@@ -121,7 +124,13 @@ describe('design commands', () => {
     writeFileSync(
       configFile,
       JSON.stringify({
-        connection: { system: 'postgresql', host: 'unreachable.invalid', port: 5432, user: 'test', database: 'app' },
+        connection: {
+          system: 'postgresql',
+          host: 'unreachable.invalid',
+          port: 5432,
+          user: 'test',
+          database: 'app',
+        },
         permission: 'query-only',
         blacklist: { tables: [], columns: {} },
         schema: {
@@ -138,7 +147,12 @@ describe('design commands', () => {
             ],
             indexes: [{ name: 'orders_customer_id_idx', columns: ['customer_id'], unique: false }],
             foreignKeys: [
-              { name: 'orders_customer_id_fkey', columns: ['customer_id'], refTable: 'customers', refColumns: ['id'] },
+              {
+                name: 'orders_customer_id_fkey',
+                columns: ['customer_id'],
+                refTable: 'customers',
+                refColumns: ['id'],
+              },
             ],
           },
         },
@@ -146,7 +160,17 @@ describe('design commands', () => {
     )
 
     await root().parseAsync(
-      ['bun', 'dbcli', '--config', configFile, 'design', 'diff', '--against-cache', '--format', 'json'],
+      [
+        'bun',
+        'dbcli',
+        '--config',
+        configFile,
+        'design',
+        'diff',
+        '--against-cache',
+        '--format',
+        'json',
+      ],
       { from: 'node' }
     )
 
@@ -171,7 +195,11 @@ describe('design commands', () => {
       { from: 'node' }
     )
 
-    expect(JSON.parse(output)).toMatchObject({ ormSource: 'design', entries: [], summary: { errors: 0 } })
+    expect(JSON.parse(output)).toMatchObject({
+      ormSource: 'design',
+      entries: [],
+      summary: { errors: 0 },
+    })
   })
 
   test('produces a review-only dry-run proposal with preflight and verification steps', async () => {
@@ -199,7 +227,9 @@ describe('design commands', () => {
           verification: expect.arrayContaining([
             'After an approved write, run: dbcli schema <exact-table> --format json',
           ]),
-          commands: expect.arrayContaining([expect.stringContaining('dbcli migrate add-index orders')]),
+          commands: expect.arrayContaining([
+            expect.stringContaining('dbcli migrate add-index orders'),
+          ]),
         }),
       ],
     })

@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { loadAgentTasks, planAgentTask, resolveAgentTaskDirs, resolveTaskByName } from '@/core/agent-tasks'
+import {
+  loadAgentTasks,
+  planAgentTask,
+  resolveAgentTaskDirs,
+  resolveTaskByName,
+} from '@/core/agent-tasks'
 
 describe('builtin pack: design-review', () => {
   test('plans only design review, cache comparison, and review-only proposal steps', async () => {

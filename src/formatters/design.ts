@@ -2,13 +2,20 @@ import type { DesignProposalPlan, DesignReviewReport, DesignSpec } from '@/core/
 
 export type DesignFormat = 'json' | 'markdown' | 'mermaid'
 
-export function formatDesign(spec: DesignSpec, review: DesignReviewReport, format: DesignFormat): string {
+export function formatDesign(
+  spec: DesignSpec,
+  review: DesignReviewReport,
+  format: DesignFormat
+): string {
   if (format === 'json') return JSON.stringify({ spec, review }, null, 2)
   if (format === 'mermaid') return formatMermaid(spec)
   return formatMarkdown(spec, review)
 }
 
-export function formatDesignReview(review: DesignReviewReport, format: Exclude<DesignFormat, 'mermaid'>): string {
+export function formatDesignReview(
+  review: DesignReviewReport,
+  format: Exclude<DesignFormat, 'mermaid'>
+): string {
   if (format === 'json') return JSON.stringify(review, null, 2)
   const lines = ['# Design review', '']
   if (review.findings.length === 0) lines.push('No design findings.')
@@ -20,7 +27,10 @@ export function formatDesignReview(review: DesignReviewReport, format: Exclude<D
       )
     }
   }
-  lines.push('', `Summary: ${review.summary.errors} error(s), ${review.summary.warns} warning(s), ${review.summary.infos} info(s).`)
+  lines.push(
+    '',
+    `Summary: ${review.summary.errors} error(s), ${review.summary.warns} warning(s), ${review.summary.infos} info(s).`
+  )
   return lines.join('\n')
 }
 
@@ -41,11 +51,21 @@ export function formatDesignProposal(
     )
     for (const step of proposal.preflight) lines.push(`- ${inlineCode(step)}`)
     lines.push('', 'Proposed command or escalation:')
-    lines.push('```bash', ...proposal.commands, '```', '', `Rollback: ${proposal.rollback}`, '', 'Verification:')
+    lines.push(
+      '```bash',
+      ...proposal.commands,
+      '```',
+      '',
+      `Rollback: ${proposal.rollback}`,
+      '',
+      'Verification:'
+    )
     for (const step of proposal.verification) lines.push(`- ${inlineCode(step)}`)
     lines.push('')
   }
-  lines.push(`Drift summary: ${plan.report.summary.errors} error(s), ${plan.report.summary.warns} warning(s).`)
+  lines.push(
+    `Drift summary: ${plan.report.summary.errors} error(s), ${plan.report.summary.warns} warning(s).`
+  )
   return lines.join('\n')
 }
 
@@ -57,7 +77,9 @@ function formatMarkdown(spec: DesignSpec, review: DesignReviewReport): string {
     lines.push('', '| Field | Type | Nullable | Key |', '| --- | --- | --- | --- |')
     for (const field of model.fields) {
       const key = field.primaryKey ? 'primary' : field.unique ? 'unique' : ''
-      lines.push(`| \`${field.name}\` | \`${field.type}\` | ${field.nullable ? 'yes' : 'no'} | ${key} |`)
+      lines.push(
+        `| \`${field.name}\` | \`${field.type}\` | ${field.nullable ? 'yes' : 'no'} | ${key} |`
+      )
     }
     if (model.indexes.length > 0) {
       lines.push('', 'Indexes:')
@@ -70,20 +92,25 @@ function formatMarkdown(spec: DesignSpec, review: DesignReviewReport): string {
   if (spec.relationships.length > 0) {
     lines.push('## Relationships', '')
     for (const relationship of spec.relationships) {
-      lines.push(`- \`${relationship.name}\`: \`${relationship.from.model}.${relationship.from.field}\` → \`${relationship.to.model}.${relationship.to.field}\` (${relationship.cardinality})`)
+      lines.push(
+        `- \`${relationship.name}\`: \`${relationship.from.model}.${relationship.from.field}\` → \`${relationship.to.model}.${relationship.to.field}\` (${relationship.cardinality})`
+      )
     }
     lines.push('')
   }
   if (spec.accessPatterns.length > 0) {
     lines.push('## Access patterns', '')
     for (const pattern of spec.accessPatterns) {
-      lines.push(`- \`${pattern.model}\`: filter ${inlineList(pattern.filters)}; sort ${inlineList(pattern.sort)}`)
+      lines.push(
+        `- \`${pattern.model}\`: filter ${inlineList(pattern.filters)}; sort ${inlineList(pattern.sort)}`
+      )
     }
     lines.push('')
   }
   if (spec.decisions.length > 0) {
     lines.push('## Decisions', '')
-    for (const decision of spec.decisions) lines.push(`- **${decision.name}** — ${escapeText(decision.rationale)}`)
+    for (const decision of spec.decisions)
+      lines.push(`- **${decision.name}** — ${escapeText(decision.rationale)}`)
     lines.push('')
   }
   lines.push(formatDesignReview(review, 'markdown'))
@@ -95,7 +122,9 @@ function formatMermaid(spec: DesignSpec): string {
   for (const model of spec.models) {
     lines.push(`  ${model.table} {`)
     for (const field of model.fields) {
-      const markers = [field.primaryKey ? 'PK' : '', field.unique && !field.primaryKey ? 'UK' : ''].filter(Boolean).join(', ')
+      const markers = [field.primaryKey ? 'PK' : '', field.unique && !field.primaryKey ? 'UK' : '']
+        .filter(Boolean)
+        .join(', ')
       lines.push(`    ${mermaidType(field.type)} ${field.name}${markers ? ` "${markers}"` : ''}`)
     }
     lines.push('  }')
@@ -105,7 +134,9 @@ function formatMermaid(spec: DesignSpec): string {
     const from = models.get(relationship.from.model)
     const to = models.get(relationship.to.model)
     if (!from || !to) continue
-    lines.push(`  ${from.table} ${mermaidCardinality(relationship.cardinality)} ${to.table} : "${relationship.name}"`)
+    lines.push(
+      `  ${from.table} ${mermaidCardinality(relationship.cardinality)} ${to.table} : "${relationship.name}"`
+    )
   }
   return lines.join('\n')
 }
@@ -130,7 +161,10 @@ function inlineCode(value: string): string {
 }
 
 function escapeTable(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>')
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r\n|\r|\n/g, '<br>')
 }
 
 function escapeText(value: string): string {

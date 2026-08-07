@@ -51,8 +51,7 @@ export function parseSlowQueryThreshold(value: string): number {
 
 function recommendationFor(system: string | undefined): string {
   const covered =
-    system === undefined ||
-    (GUIDE_SLOW_QUERY_SYSTEMS as readonly string[]).includes(system)
+    system === undefined || (GUIDE_SLOW_QUERY_SYSTEMS as readonly string[]).includes(system)
 
   return covered
     ? `Review safely with: dbcli guide slow-query --format markdown. ${NO_EXTRA_WORK}`

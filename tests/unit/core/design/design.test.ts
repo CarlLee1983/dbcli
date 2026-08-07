@@ -55,9 +55,9 @@ describe('design artifact', () => {
         models: [{ ...valid.models[0], description: 'SELECT * FROM customers' }],
       })
     ).toThrow(DesignValidationError)
-    expect(() =>
-      parseDesignSpec({ ...valid, connection: 'postgres://secret@host/db' })
-    ).toThrow(DesignValidationError)
+    expect(() => parseDesignSpec({ ...valid, connection: 'postgres://secret@host/db' })).toThrow(
+      DesignValidationError
+    )
   })
 
   test('reports physical relationship and access-pattern design errors deterministically', () => {
@@ -109,10 +109,7 @@ describe('design artifact', () => {
         model.name === 'orders'
           ? {
               ...model,
-              indexes: [
-                { columns: ['customer_id'] },
-                { columns: ['customer_id', 'created_at'] },
-              ],
+              indexes: [{ columns: ['customer_id'] }, { columns: ['customer_id', 'created_at'] }],
             }
           : model
       ),

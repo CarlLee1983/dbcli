@@ -48,9 +48,9 @@ describe('slow query advisory', () => {
 
     expect(attachSlowQueryAdvisory(result, { slowMs: 0 })).toBe(result)
     expect(attachSlowQueryAdvisory(result, { recovery: true })).toBe(result)
-    expect(attachSlowQueryAdvisory({ ...SELECT_RESULT, executionTimeMs: 1 }, {})).not.toHaveProperty(
-      'metadata.performanceAdvisory'
-    )
+    expect(
+      attachSlowQueryAdvisory({ ...SELECT_RESULT, executionTimeMs: 1 }, {})
+    ).not.toHaveProperty('metadata.performanceAdvisory')
   })
 
   describe('threshold resolution', () => {

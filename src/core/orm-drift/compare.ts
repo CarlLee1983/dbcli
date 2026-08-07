@@ -143,7 +143,8 @@ export function compareNormalized(
       continue
     }
 
-    if (ormTable && dbTable) compareTable(ormTable, dbTable, table, orm.source, targetLabel, entries)
+    if (ormTable && dbTable)
+      compareTable(ormTable, dbTable, table, orm.source, targetLabel, entries)
   }
 
   entries.sort(entryOrder)
@@ -222,8 +223,23 @@ function compareTable(
     )
   }
 
-  compareIndexes(ormTable.indexes, dbTable.indexes, ormTable.identity, table, ormSource, targetLabel, entries)
-  compareForeignKeys(ormTable.foreignKeys, dbTable.foreignKeys, table, ormSource, targetLabel, entries)
+  compareIndexes(
+    ormTable.indexes,
+    dbTable.indexes,
+    ormTable.identity,
+    table,
+    ormSource,
+    targetLabel,
+    entries
+  )
+  compareForeignKeys(
+    ormTable.foreignKeys,
+    dbTable.foreignKeys,
+    table,
+    ormSource,
+    targetLabel,
+    entries
+  )
 }
 
 function compareForeignKeys(
@@ -234,8 +250,12 @@ function compareForeignKeys(
   targetLabel: string,
   entries: DriftEntry[]
 ): void {
-  const ormByKey = new Map(ormForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey]))
-  const dbByKey = new Map(dbForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey]))
+  const ormByKey = new Map(
+    ormForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey])
+  )
+  const dbByKey = new Map(
+    dbForeignKeys.map((foreignKey) => [foreignKeyKey(foreignKey), foreignKey])
+  )
 
   for (const [key, foreignKey] of ormByKey) {
     if (dbByKey.has(key)) continue

@@ -134,9 +134,9 @@ describe('QueryResultFormatter - Table Format', () => {
     expect(formatter.format(result, { format: 'table' })).toContain(
       'Performance hint: Review safely with: dbcli guide slow-query --format markdown.'
     )
-    expect(JSON.parse(formatter.format(result, { format: 'json' })).metadata.performanceAdvisory).toEqual(
-      result.metadata?.performanceAdvisory
-    )
+    expect(
+      JSON.parse(formatter.format(result, { format: 'json' })).metadata.performanceAdvisory
+    ).toEqual(result.metadata?.performanceAdvisory)
   })
 
   test('omits execution time footer when not provided', () => {

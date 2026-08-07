@@ -5,6 +5,26 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.1] - 2026-08-08 - Skill audit: correct claims, per-platform install, drift gate
+
+### Fixed
+
+- **The skill documented three flags that do not exist.** `q --use` (the global `dbcli --use <name> q` form is the real one), `q --collection` (a MongoDB snippet's `target:` is the only collection source), and `audit tail --recovery-ref` (it lives on `audit show`). The same wrong `audit tail --recovery-ref` is corrected in `docs/user` (en/zh, Markdown and HTML).
+- **The `design` artifact example failed its own validator.** It is replaced with one that validates clean, and the naming rules it has to satisfy are now documented: lowercase kebab-case for design names versus SQL identifiers for tables and columns, endpoints referencing a model rather than a table, strict objects, descriptions that must not contain SQL keywords, and the size limits. Structural violations report `INVALID_ARTIFACT`, a code the severity table did not list.
+- **Stale lists corrected against the CLI.** `--recovery` covers `lint` and `diff`; verification subject kinds include `table` (what `verify constraint` writes); the Redis permission table includes `XLEN` / `XREAD` / `XRANGE` / `XREVRANGE` / `XADD` / `XDEL` / `LREM`; `audit show` lists `--brief` and `--for-agent`; the snippet guard emits `LIMIT 1001`, fetching one extra row to detect truncation. Elasticsearch supports `q`, and the 10 000 bound belongs to `query` — `export --no-limit` streams via the scroll API. `schema --help` claimed `--sample-size` defaults to 50; it is 100.
+- **`design` was unreachable from the skill entry point.** `SKILL.md` did not mention it at all, so an agent asked to design or review a schema would hand-write DDL and bypass the review-only `propose` contract. It now has a command row, both workflows, and a guardrail that a proposed plan is never executed.
+- **Six drifts between the English and Traditional Chinese skills.** The most serious dropped the permission-tier semantics (multi-statement SQL rejected below `admin`, snippets free of write and DDL keywords, `$out` / `$merge` requiring `data-admin`). The MongoDB connection guidance also disagreed between languages — field-by-field is the recommendation, full URI the escape hatch — and the zh-TW side was missing the env-refs MongoDB exception, the `uri`-wins-silently gotcha, `--slow-ms` on `query` and `q`, and the `proxy analyze` action guidance.
+- **Cursor and Windsurf installs were the Claude skill verbatim.** Windsurf does not parse frontmatter, so roughly 900 characters of `description:` were read as rule text; Cursor reads `description` / `globs` / `alwaysApply` and received none of them. Both platforms keep `reference.md` outside the primary file's directory, so every mention of it resolved to nothing. `dbcli skill --install` now shapes the file per platform — Cursor as an Agent Requested rule, Windsurf with the frontmatter stripped and the description kept as prose — and repoints the reference path. Recognizing an existing dbcli install no longer depends on the frontmatter, so a Windsurf reinstall stops backing up dbcli's own file. See ADR 0006.
+
+### Added
+
+- **`reference.md` has an index.** 3300 lines previously offered no way in but a full read or a guessed grep, and the skill pointed at it in prose ("reference.md Redis section"). Those pointers are real anchors now, and a test derives the anchors from the headings so a renamed heading cannot break them silently.
+
+### Changed
+
+- **The bilingual parity gate compares content, not just shape.** It checked heading levels, fence counts, table rows, and a curated token list for mere presence — every drift above kept that structure intact. It now compares per-section counts of every code token and list item; run against 1.52.0 it reports 48 problems it used to pass. Its success message no longer reads as "the docs are aligned" when it only checked the skeleton.
+- **The skill entry point carries less that an agent cannot act on.** The always-loaded `description` drops from 990 to 626 characters with every trigger branch intact, release markers such as `(v1.23)` and an internal ticket id are gone (an agent has exactly one installed version), and the `proxy` row's flag wall becomes an anchor.
+
 ## [1.52.0] - 2026-08-07 - Offline database design assistant and slow-query hints
 
 ### Added

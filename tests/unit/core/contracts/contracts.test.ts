@@ -59,7 +59,11 @@ describe('semantic contracts', () => {
       ],
     })
 
-    const contracts = await loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
+    const contracts = await loadSemanticContracts({
+      workspaceRoot: workspace!,
+      filePath,
+      references,
+    })
 
     expect(contracts.map((contract) => contract.name)).toEqual(['active-customer', 'churn-risk'])
     expect(contracts[0]?.subjects).toEqual(['metric:paid-orders-30d', 'model:customers'])
@@ -71,7 +75,9 @@ describe('semantic contracts', () => {
   test('allows an absent file only when requested', async () => {
     workspace = await mkdtemp(join(tmpdir(), 'dbcli-contracts-'))
 
-    await expect(loadSemanticContracts({ workspaceRoot: workspace, references })).resolves.toEqual([])
+    await expect(loadSemanticContracts({ workspaceRoot: workspace, references })).resolves.toEqual(
+      []
+    )
     await expect(
       loadSemanticContracts({ workspaceRoot: workspace, references, missingFile: 'error' })
     ).rejects.toThrow(/file not found/)
@@ -171,7 +177,11 @@ describe('semantic contracts', () => {
 
   test('renders normalized contracts deterministically', async () => {
     const filePath = await writeContracts(contractFile)
-    const contracts = await loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
+    const contracts = await loadSemanticContracts({
+      workspaceRoot: workspace!,
+      filePath,
+      references,
+    })
 
     expect(renderSemanticContractsMarkdown(contracts)).toBe(`# Semantic contracts
 

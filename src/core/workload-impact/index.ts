@@ -9,7 +9,11 @@ const MAX_EVENT_LINES = 10_000
 const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type WorkloadEvidenceState = 'available' | 'absent' | 'invalid' | 'unavailable'
-export type WorkloadIssue = 'malformed' | 'stale' | 'redaction-failed' | 'redacted-protected-subject'
+export type WorkloadIssue =
+  | 'malformed'
+  | 'stale'
+  | 'redaction-failed'
+  | 'redacted-protected-subject'
 
 export interface ObservedWorkload {
   tables: readonly string[]
@@ -49,9 +53,12 @@ export async function loadWorkloadEvidence(
   try {
     info = await lstat(options.path)
   } catch (error) {
-    return sourceFailure((error as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'unavailable')
+    return sourceFailure(
+      (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'unavailable'
+    )
   }
-  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_EVENT_LOG_BYTES) return sourceFailure('invalid')
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_EVENT_LOG_BYTES)
+    return sourceFailure('invalid')
 
   const tables = new Set<string>()
   const timestamps: Date[] = []
@@ -139,10 +146,9 @@ function sourceFailure(state: Exclude<WorkloadEvidenceState, 'available'>): Work
   return { state, origin: 'proxy-workload', observations: [], malformedLines: 0, issues: [] }
 }
 
-function parseEvent(line: string):
-  | { kind: 'query'; event: ProxyEvent }
-  | { kind: 'ignored' }
-  | { kind: 'invalid' } {
+function parseEvent(
+  line: string
+): { kind: 'query'; event: ProxyEvent } | { kind: 'ignored' } | { kind: 'invalid' } {
   try {
     const value: unknown = JSON.parse(line)
     if (!isKnownEventEnvelope(value)) return { kind: 'invalid' }
@@ -158,9 +164,15 @@ function isKnownEventEnvelope(value: unknown): value is Record<string, unknown> 
   return (
     event.version === 1 &&
     typeof event.timestamp === 'string' &&
-    ['proxy_started', 'session_started', 'session_ended', 'query_observed', 'query_completed', 'query_errored', 'parse_error'].includes(
-      String(event.type)
-    )
+    [
+      'proxy_started',
+      'session_started',
+      'session_ended',
+      'query_observed',
+      'query_completed',
+      'query_errored',
+      'parse_error',
+    ].includes(String(event.type))
   )
 }
 

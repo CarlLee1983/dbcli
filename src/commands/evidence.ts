@@ -194,7 +194,10 @@ async function resolveReferences(
       throw new EvidencePackValidationError('receipt evidence path must stay inside the workspace')
     const receipt = await readEvidenceReceipt(resolved)
     references.push({
-      kind: 'receipt', id: receipt.id, createdAt: receipt.createdAt, operation: receipt.operation,
+      kind: 'receipt',
+      id: receipt.id,
+      createdAt: receipt.createdAt,
+      operation: receipt.operation,
       outcome: receipt.outcome,
       digest: `sha256:${createHash('sha256').update(JSON.stringify(receipt)).digest('hex')}`,
       path: safePath,
@@ -234,7 +237,8 @@ async function expiredReferences(
         const workspace = await realpath(process.cwd())
         const target = await realpath(resolve(workspace, reference.path))
         const safePath = relative(workspace, target)
-        if (safePath.startsWith(`..${sep}`) || safePath === '..' || safePath.includes(`..${sep}`)) throw new Error('outside')
+        if (safePath.startsWith(`..${sep}`) || safePath === '..' || safePath.includes(`..${sep}`))
+          throw new Error('outside')
         const receipt = await readEvidenceReceipt(target)
         const digest = `sha256:${createHash('sha256').update(JSON.stringify(receipt)).digest('hex')}`
         if (receipt.id !== reference.id || digest !== reference.digest) throw new Error('mismatch')

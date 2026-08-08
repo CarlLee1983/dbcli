@@ -223,8 +223,15 @@ function parseReference(value: unknown): EvidenceReference {
     }
   }
   if (kind === 'receipt') {
-    requireExactKeys(value, ['kind', 'id', 'createdAt', 'operation', 'outcome', 'digest', 'path'], 'receipt evidence')
-    if (!['assert', 'verify'].includes(String(value.operation)) || !['succeeded', 'failed'].includes(String(value.outcome))) {
+    requireExactKeys(
+      value,
+      ['kind', 'id', 'createdAt', 'operation', 'outcome', 'digest', 'path'],
+      'receipt evidence'
+    )
+    if (
+      !['assert', 'verify'].includes(String(value.operation)) ||
+      !['succeeded', 'failed'].includes(String(value.outcome))
+    ) {
       throw new EvidencePackValidationError('receipt evidence has an invalid operation or outcome')
     }
     const path = text(value.path, 'receipt evidence.path', 512)
@@ -232,8 +239,17 @@ function parseReference(value: unknown): EvidenceReference {
       throw new EvidencePackValidationError('receipt evidence.path must be workspace-relative')
     }
     const digest = text(value.digest, 'receipt evidence.digest', 80)
-    if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new EvidencePackValidationError('receipt evidence.digest is invalid')
-    return { kind, id: id(value.id, 'receipt evidence.id'), createdAt: iso(value.createdAt, 'receipt evidence.createdAt'), operation: value.operation as 'assert' | 'verify', outcome: value.outcome as 'succeeded' | 'failed', digest, path }
+    if (!/^sha256:[a-f0-9]{64}$/.test(digest))
+      throw new EvidencePackValidationError('receipt evidence.digest is invalid')
+    return {
+      kind,
+      id: id(value.id, 'receipt evidence.id'),
+      createdAt: iso(value.createdAt, 'receipt evidence.createdAt'),
+      operation: value.operation as 'assert' | 'verify',
+      outcome: value.outcome as 'succeeded' | 'failed',
+      digest,
+      path,
+    }
   }
   throw new EvidencePackValidationError('evidence reference has an unsupported kind')
 }
@@ -509,7 +525,9 @@ export function renderEvidencePackMarkdown(pack: EvidencePack): string {
       } else if (reference.kind === 'verification-artifact') {
         lines.push(`- verification artifact \`${markdown(reference.id)}\` · ${reference.status}`)
       } else {
-        lines.push(`- evidence receipt \`${markdown(reference.id)}\` · ${reference.operation} ${reference.outcome}`)
+        lines.push(
+          `- evidence receipt \`${markdown(reference.id)}\` · ${reference.operation} ${reference.outcome}`
+        )
       }
     }
     lines.push('')

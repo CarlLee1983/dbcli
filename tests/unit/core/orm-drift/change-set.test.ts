@@ -5,7 +5,10 @@ import {
 } from '@/core/orm-drift/change-set'
 import type { NormalizedSchema, NormalizedTable } from '@/core/orm-drift/normalized-schema'
 
-function table(name: string, overrides: Partial<Omit<NormalizedTable, 'identity'>> = {}): NormalizedTable {
+function table(
+  name: string,
+  overrides: Partial<Omit<NormalizedTable, 'identity'>> = {}
+): NormalizedTable {
   return {
     identity: { table: name },
     columns: [],
@@ -173,7 +176,12 @@ describe('normalizeProposedChanges', () => {
     )
     const archiveCatalog = normalizeProposedChanges(
       input(declared, baseline, {
-        scope: { key: 'production', system: 'postgresql', connection: 'primary', catalog: 'archive' },
+        scope: {
+          key: 'production',
+          system: 'postgresql',
+          connection: 'primary',
+          catalog: 'archive',
+        },
       })
     )
 
@@ -186,10 +194,20 @@ describe('normalizeProposedChanges', () => {
   test('keeps schema-qualified table identities separate', () => {
     const baseline = schema('db', [])
     const publicTable = normalizeProposedChanges(
-      input(schema('design', [{ ...table('accounts'), identity: { schema: 'public', table: 'accounts' } }]), baseline)
+      input(
+        schema('design', [
+          { ...table('accounts'), identity: { schema: 'public', table: 'accounts' } },
+        ]),
+        baseline
+      )
     )
     const auditTable = normalizeProposedChanges(
-      input(schema('design', [{ ...table('accounts'), identity: { schema: 'audit', table: 'accounts' } }]), baseline)
+      input(
+        schema('design', [
+          { ...table('accounts'), identity: { schema: 'audit', table: 'accounts' } },
+        ]),
+        baseline
+      )
     )
 
     expect(publicTable.changes[0]?.id).not.toBe(auditTable.changes[0]?.id)
@@ -221,16 +239,22 @@ describe('normalizeProposedChanges', () => {
 
   test('records unparsed, ignored, and index-name loss as explicit coverage gaps', () => {
     const declared = schema('design', [
-      table('accounts', { indexes: [{ name: 'accounts_email', columns: ['email'], unique: true }] }),
+      table('accounts', {
+        indexes: [{ name: 'accounts_email', columns: ['email'], unique: true }],
+      }),
       table('ignored_table'),
     ])
     declared.unparsed.push({ location: '$.models[0].policies', reason: 'blocked: policies' })
     const baseline = schema('db', [
-      table('accounts', { indexes: [{ name: 'different_name', columns: ['email'], unique: true }] }),
+      table('accounts', {
+        indexes: [{ name: 'different_name', columns: ['email'], unique: true }],
+      }),
       table('ignored_table'),
     ])
 
-    const changeSet = normalizeProposedChanges(input(declared, baseline, { ignore: ['public.ignored_table'] }))
+    const changeSet = normalizeProposedChanges(
+      input(declared, baseline, { ignore: ['public.ignored_table'] })
+    )
 
     expect(changeSet.changes).toEqual([])
     expect(changeSet.coverage.level).toBe('partial')

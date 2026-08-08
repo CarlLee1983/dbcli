@@ -111,9 +111,7 @@ term, or relationship/join intent instead of a physical table or field name, fir
 `dbcli skill context --format json`. If it includes `semantic`, treat that reviewed
 section as the governed vocabulary; use `dbcli semantic search <terms> --format json`
 to look up a specific term. If `contracts` is present, use only its approved terms and
-their descriptive evidence policy; it never authorizes an assertion or query. If no
-semantic section exists or search returns no result,
-fall back to `blacklist` → `schema` mapping and tell the user that optional
+their descriptive evidence policy; it never authorizes an assertion or query. If no semantic section exists or search returns no result, fall back to `blacklist` → `schema` mapping and tell the user that optional
 `dbcli.semantic.json` can make future requests consistent. Never create, update, or
 migrate that file without an explicit human request; semantic vocabulary never replaces
 schema confirmation or the normal query/write safety gates.

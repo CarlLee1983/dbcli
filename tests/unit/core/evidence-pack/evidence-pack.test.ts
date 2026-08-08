@@ -57,17 +57,23 @@ describe('evidence packs', () => {
   })
 
   test('accepts a verify receipt reference without changing its operation', () => {
-    const pack = buildEvidencePack(claims, [{
+    const pack = buildEvidencePack(claims, [
+      {
+        kind: 'receipt',
+        id: 'evr_verify-1',
+        createdAt: '2026-08-08T00:00:00.000Z',
+        operation: 'verify',
+        outcome: 'failed',
+        digest: `sha256:${'a'.repeat(64)}`,
+        path: '.dbcli/evidence/verify.json',
+      },
+    ])
+    expect(
+      parseEvidencePack(JSON.parse(JSON.stringify(pack))).claims[0]?.evidence[0]
+    ).toMatchObject({
       kind: 'receipt',
-      id: 'evr_verify-1',
-      createdAt: '2026-08-08T00:00:00.000Z',
       operation: 'verify',
       outcome: 'failed',
-      digest: `sha256:${'a'.repeat(64)}`,
-      path: '.dbcli/evidence/verify.json',
-    }])
-    expect(parseEvidencePack(JSON.parse(JSON.stringify(pack))).claims[0]?.evidence[0]).toMatchObject({
-      kind: 'receipt', operation: 'verify', outcome: 'failed',
     })
   })
 

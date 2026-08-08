@@ -77,7 +77,10 @@ function isKnownBooleanFlag(command: string | undefined, name: string): boolean 
 }
 
 function isRedactedValueFlag(command: string | undefined, name: string): boolean {
-  return REDACTED_VALUE_FLAGS.has(name) || (command === 'verify' && VERIFY_REDACTED_VALUE_FLAGS.has(name))
+  return (
+    REDACTED_VALUE_FLAGS.has(name) ||
+    (command === 'verify' && VERIFY_REDACTED_VALUE_FLAGS.has(name))
+  )
 }
 
 function findSensitiveSubcommand(argv: string[]): {
@@ -145,11 +148,19 @@ function sensitiveArgvValues(argv: string[]): string[] {
       continue
     }
 
-    if (sensitiveCommand?.command === 'verify' && index > sensitiveCommand.index && !verifyScenarioSeen) {
+    if (
+      sensitiveCommand?.command === 'verify' &&
+      index > sensitiveCommand.index &&
+      !verifyScenarioSeen
+    ) {
       verifyScenarioSeen = true
       continue
     }
-    if (sensitiveCommand && index > sensitiveCommand.index && (sensitiveCommand.command === 'lint' || !capturedSingleSql)) {
+    if (
+      sensitiveCommand &&
+      index > sensitiveCommand.index &&
+      (sensitiveCommand.command === 'lint' || !capturedSingleSql)
+    ) {
       values.add(token)
       capturedSingleSql = true
     }
@@ -204,12 +215,20 @@ export function redactArgv(argv: string[]): string {
         continue
       }
     }
-    if (sensitiveCommand?.command === 'verify' && i > sensitiveCommand.index && !verifyScenarioSeen) {
+    if (
+      sensitiveCommand?.command === 'verify' &&
+      i > sensitiveCommand.index &&
+      !verifyScenarioSeen
+    ) {
       out.push(tok)
       verifyScenarioSeen = true
       continue
     }
-    if (sensitiveCommand && i > sensitiveCommand.index && (sensitiveCommand.command === 'lint' || !redactedSingleSql)) {
+    if (
+      sensitiveCommand &&
+      i > sensitiveCommand.index &&
+      (sensitiveCommand.command === 'lint' || !redactedSingleSql)
+    ) {
       out.push('<sql>')
       redactedSingleSql = true
       continue

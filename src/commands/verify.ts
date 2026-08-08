@@ -1258,8 +1258,13 @@ async function executeScenario<
     let evidenceReceiptError: string | undefined
     if (typeof options.evidenceReceipt === 'string') {
       const receiptResult = await writeVerifyEvidenceReceipt({
-        workspaceRoot: process.cwd(), scenarioName: def.name, config, artifact, artifactPath,
-        outputPath: options.evidenceReceipt, argv: process.argv,
+        workspaceRoot: process.cwd(),
+        scenarioName: def.name,
+        config,
+        artifact,
+        artifactPath,
+        outputPath: options.evidenceReceipt,
+        argv: process.argv,
       })
       if ('path' in receiptResult) evidenceReceiptPath = receiptResult.path
       else evidenceReceiptError = receiptResult.error

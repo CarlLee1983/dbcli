@@ -6,7 +6,13 @@ import { join } from 'node:path'
 import { contractCommand } from '@/commands/contracts'
 
 const CONFIG = {
-  connection: { system: 'postgresql', host: 'localhost', port: 5432, user: 'user', database: 'app' },
+  connection: {
+    system: 'postgresql',
+    host: 'localhost',
+    port: 5432,
+    user: 'user',
+    database: 'app',
+  },
   permission: 'query-only',
   blacklist: { tables: [], columns: {} },
   schema: {

@@ -25,7 +25,8 @@ function formatMarkdown(report: ImpactReport): string {
     }
   }
   lines.push('', '## Recommended verification', '')
-  if (report.recommendedVerification.length === 0) lines.push('No additional declared verification is recommended.')
+  if (report.recommendedVerification.length === 0)
+    lines.push('No additional declared verification is recommended.')
   else {
     for (const recommendation of report.recommendedVerification) {
       lines.push(

@@ -7,7 +7,13 @@ import type { VerificationArtifact, VerificationStatus } from '@/core/verificati
 import { writeVerifyEvidenceReceipt } from '@/commands/verify-receipt'
 
 const config = {
-  connection: { system: 'postgresql', host: 'localhost', port: 5432, user: 'postgres', database: 'dbcli' },
+  connection: {
+    system: 'postgresql',
+    host: 'localhost',
+    port: 5432,
+    user: 'postgres',
+    database: 'dbcli',
+  },
   permission: 'query-only',
   blacklist: { tables: [], columns: {} },
 } as RuntimeDbcliConfig
@@ -26,9 +32,20 @@ function artifact(status: VerificationStatus): VerificationArtifact {
 
 function argv(scenario: string): string[] {
   return [
-    '/opt/homebrew/bin/bun', 'run', '/private/workspace/src/cli.ts', 'verify', scenario,
-    '--table', 'private_orders', '--query', "UPDATE private_orders SET token = 'secret'",
-    '--verify-query', 'SELECT count(*) FROM private_orders', '--expect', 'value == 0', '--after-write',
+    '/opt/homebrew/bin/bun',
+    'run',
+    '/private/workspace/src/cli.ts',
+    'verify',
+    scenario,
+    '--table',
+    'private_orders',
+    '--query',
+    "UPDATE private_orders SET token = 'secret'",
+    '--verify-query',
+    'SELECT count(*) FROM private_orders',
+    '--expect',
+    'value == 0',
+    '--after-write',
   ]
 }
 
@@ -65,7 +82,13 @@ describe('verify evidence receipt lifecycle boundary', () => {
         expect(JSON.stringify(receipt)).not.toContain('secret')
         receipts.push({ status, receipt })
       }
-      expect(new Set(receipts.map(({ receipt }) => (receipt.observation as { fingerprint: string }).fingerprint)).size).toBe(4)
+      expect(
+        new Set(
+          receipts.map(
+            ({ receipt }) => (receipt.observation as { fingerprint: string }).fingerprint
+          )
+        ).size
+      ).toBe(4)
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -76,14 +99,22 @@ describe('verify evidence receipt lifecycle boundary', () => {
     const outside = await mkdtemp(join(tmpdir(), 'dbcli-verify-receipt-outside-'))
     try {
       const input = {
-        workspaceRoot: root, scenarioName: 'constraint', config, artifact: artifact('verified'),
+        workspaceRoot: root,
+        scenarioName: 'constraint',
+        config,
+        artifact: artifact('verified'),
         artifactPath: join(root, '.dbcli', 'verification', 'constraint.json'),
-        outputPath: 'evidence/receipt.json', argv: argv('constraint'),
+        outputPath: 'evidence/receipt.json',
+        argv: argv('constraint'),
       }
       expect(await writeVerifyEvidenceReceipt(input)).toMatchObject({ path: expect.any(String) })
-      await expect(writeVerifyEvidenceReceipt(input)).resolves.toEqual({ error: 'Failed to write evidence receipt' })
+      await expect(writeVerifyEvidenceReceipt(input)).resolves.toEqual({
+        error: 'Failed to write evidence receipt',
+      })
       await symlink(outside, join(root, 'linked'))
-      await expect(writeVerifyEvidenceReceipt({ ...input, outputPath: 'linked/escape.json' })).resolves.toEqual({ error: 'Failed to write evidence receipt' })
+      await expect(
+        writeVerifyEvidenceReceipt({ ...input, outputPath: 'linked/escape.json' })
+      ).resolves.toEqual({ error: 'Failed to write evidence receipt' })
       await expect(lstat(join(outside, 'escape.json'))).rejects.toThrow()
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -95,21 +126,37 @@ describe('verify evidence receipt lifecycle boundary', () => {
     const root = await mkdtemp(join(tmpdir(), 'dbcli-verify-receipt-'))
     try {
       const failedArtifact = await writeVerifyEvidenceReceipt({
-        workspaceRoot: root, scenarioName: 'safe-backfill', config, artifact: artifact('verified'),
-        outputPath: 'evidence/no-artifact.json', argv: argv('safe-backfill'),
+        workspaceRoot: root,
+        scenarioName: 'safe-backfill',
+        config,
+        artifact: artifact('verified'),
+        outputPath: 'evidence/no-artifact.json',
+        argv: argv('safe-backfill'),
       })
       expect('path' in failedArtifact).toBe(true)
       if ('path' in failedArtifact) {
         expect(JSON.parse(await readFile(failedArtifact.path, 'utf8'))).toMatchObject({
-          outcome: 'failed', provenance: { verificationArtifactRef: null },
+          outcome: 'failed',
+          provenance: { verificationArtifactRef: null },
         })
       }
       const ambiguous = artifact('verified')
-      ambiguous.evidence = [{ kind: 'manual', auditRef: 'audit-one' }, { kind: 'manual', auditRef: 'audit-two' }]
-      await expect(writeVerifyEvidenceReceipt({
-        workspaceRoot: root, scenarioName: 'constraint', config, artifact: ambiguous,
-        outputPath: 'evidence/ambiguous.json', argv: argv('constraint'),
-      })).resolves.toEqual({ error: 'Evidence receipt unsupported for built-in verify scenario constraint' })
+      ambiguous.evidence = [
+        { kind: 'manual', auditRef: 'audit-one' },
+        { kind: 'manual', auditRef: 'audit-two' },
+      ]
+      await expect(
+        writeVerifyEvidenceReceipt({
+          workspaceRoot: root,
+          scenarioName: 'constraint',
+          config,
+          artifact: ambiguous,
+          outputPath: 'evidence/ambiguous.json',
+          argv: argv('constraint'),
+        })
+      ).resolves.toEqual({
+        error: 'Evidence receipt unsupported for built-in verify scenario constraint',
+      })
     } finally {
       await rm(root, { recursive: true, force: true })
     }

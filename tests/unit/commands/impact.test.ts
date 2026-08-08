@@ -51,7 +51,13 @@ describe('impact assess command', () => {
     writeFileSync(
       join(sandbox, 'config.json'),
       JSON.stringify({
-        connection: { system: 'postgresql', host: 'unreachable.invalid', port: 5432, user: 'test', database: 'app' },
+        connection: {
+          system: 'postgresql',
+          host: 'unreachable.invalid',
+          port: 5432,
+          user: 'test',
+          database: 'app',
+        },
         permission: 'query-only',
         blacklist: { tables: [], columns: {} },
         schema: {
@@ -67,7 +73,10 @@ describe('impact assess command', () => {
       })
     )
     mkdirSync(join(sandbox, '.dbcli', 'queries'), { recursive: true })
-    writeFileSync(join(sandbox, '.dbcli', 'queries', 'active-accounts.sql'), '-- not read by impact\n')
+    writeFileSync(
+      join(sandbox, '.dbcli', 'queries', 'active-accounts.sql'),
+      '-- not read by impact\n'
+    )
     writeFileSync(
       join(sandbox, 'dbcli.semantic.json'),
       JSON.stringify({
@@ -107,9 +116,12 @@ describe('impact assess command', () => {
   })
 
   async function run(...args: string[]): Promise<void> {
-    await root().parseAsync(['bun', 'dbcli', '--config', join(sandbox, 'config.json'), 'impact', 'assess', ...args], {
-      from: 'node',
-    })
+    await root().parseAsync(
+      ['bun', 'dbcli', '--config', join(sandbox, 'config.json'), 'impact', 'assess', ...args],
+      {
+        from: 'node',
+      }
+    )
   }
 
   test('does not let advisory workload findings or coverage gaps alone trip --fail-on warn', () => {
@@ -126,7 +138,15 @@ describe('impact assess command', () => {
   })
 
   test('assesses a cache baseline offline and writes a safe declared report', async () => {
-    await run('--design', 'design.json', '--against-cache', '--output', 'impact.json', '--format', 'json')
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--output',
+      'impact.json',
+      '--format',
+      'json'
+    )
 
     expect(JSON.parse(output)).toMatchObject({ path: 'impact.json', coverage: 'partial' })
     const report = await Bun.file(join(sandbox, 'impact.json')).json()
@@ -143,7 +163,15 @@ describe('impact assess command', () => {
   })
 
   test('renders Markdown when explicitly requested', async () => {
-    await run('--design', 'design.json', '--against-cache', '--output', 'impact.md', '--format', 'markdown')
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--output',
+      'impact.md',
+      '--format',
+      'markdown'
+    )
 
     expect(await Bun.file(join(sandbox, 'impact.md')).text()).toContain('# Impact assessment')
   })
@@ -186,7 +214,13 @@ describe('impact assess command', () => {
       JSON.stringify({
         version: 1,
         operations: [
-          { name: 'invalid', source: '../private-source.ts', kind: 'read', references: ['model:accounts'], coverage: 'declared' },
+          {
+            name: 'invalid',
+            source: '../private-source.ts',
+            kind: 'read',
+            references: ['model:accounts'],
+            coverage: 'declared',
+          },
         ],
       })
     )
@@ -194,7 +228,9 @@ describe('impact assess command', () => {
     await run('--design', 'design.json', '--against-cache', '--output', 'invalid-access.json')
 
     const report = await Bun.file(join(sandbox, 'invalid-access.json')).json()
-    expect(report.coverage.gaps).toContainEqual(expect.objectContaining({ code: 'DATA_ACCESS_INVALID' }))
+    expect(report.coverage.gaps).toContainEqual(
+      expect.objectContaining({ code: 'DATA_ACCESS_INVALID' })
+    )
     expect(JSON.stringify(report)).not.toContain('private-source')
   })
 
@@ -218,14 +254,29 @@ describe('impact assess command', () => {
       })}\n`
     )
 
-    await run('--design', 'design.json', '--against-cache', '--events', 'events.jsonl', '--output', 'workload.json')
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--events',
+      'events.jsonl',
+      '--output',
+      'workload.json'
+    )
 
     const report = await Bun.file(join(sandbox, 'workload.json')).json()
     expect(report.findings).toContainEqual(
       expect.objectContaining({ code: 'AFFECTED_OBSERVED_WORKLOAD', severity: 'warn' })
     )
     const serialized = JSON.stringify(report)
-    for (const unsafe of ['private-session', 'private-query', 'private-client', 'private-target', 'private-literal', 'private-error']) {
+    for (const unsafe of [
+      'private-session',
+      'private-query',
+      'private-client',
+      'private-target',
+      'private-literal',
+      'private-error',
+    ]) {
       expect(serialized).not.toContain(unsafe)
     }
   })
@@ -259,12 +310,28 @@ describe('impact assess command', () => {
   })
 
   test('writes identical findings before --fail-on changes only the exit code', async () => {
-    await run('--design', 'design.json', '--against-cache', '--output', 'never.json', '--fail-on', 'never')
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--output',
+      'never.json',
+      '--fail-on',
+      'never'
+    )
     const never = await Bun.file(join(sandbox, 'never.json')).text()
     output = ''
     process.exitCode = 0
 
-    await run('--design', 'design.json', '--against-cache', '--output', 'warn.json', '--fail-on', 'warn')
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--output',
+      'warn.json',
+      '--fail-on',
+      'warn'
+    )
     const warn = await Bun.file(join(sandbox, 'warn.json')).text()
 
     expect(warn).toBe(never)

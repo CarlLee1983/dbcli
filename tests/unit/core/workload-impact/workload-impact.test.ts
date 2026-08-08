@@ -38,7 +38,10 @@ describe('loadWorkloadEvidence', () => {
 
   test('returns only bounded redacted metadata from recent completed events', async () => {
     const path = join(workspace, 'events.jsonl')
-    await writeFile(path, `${JSON.stringify(event({ type: 'query_errored', error: { message: 'private-error', code: 'x' } }))}\n`)
+    await writeFile(
+      path,
+      `${JSON.stringify(event({ type: 'query_errored', error: { message: 'private-error', code: 'x' } }))}\n`
+    )
 
     const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: [], now })
 
@@ -51,13 +54,24 @@ describe('loadWorkloadEvidence', () => {
       timeframe: { from: '2026-08-08T11:00:00.000Z', to: '2026-08-08T11:00:00.000Z' },
     })
     const serialized = JSON.stringify(evidence)
-    for (const unsafe of ['private-literal', 'private-error', 'private-session', 'private-query', 'private-client', 'private-target']) {
+    for (const unsafe of [
+      'private-literal',
+      'private-error',
+      'private-session',
+      'private-query',
+      'private-client',
+      'private-target',
+    ]) {
       expect(serialized).not.toContain(unsafe)
     }
   })
 
   test('makes missing, malformed, stale, and protected input non-clean without retaining source content', async () => {
-    const missing = await loadWorkloadEvidence({ path: join(workspace, 'missing.jsonl'), blockedIdentifiers: [], now })
+    const missing = await loadWorkloadEvidence({
+      path: join(workspace, 'missing.jsonl'),
+      blockedIdentifiers: [],
+      now,
+    })
     expect(missing.state).toBe('absent')
 
     const path = join(workspace, 'events.jsonl')
@@ -70,7 +84,11 @@ describe('loadWorkloadEvidence', () => {
         JSON.stringify(event({ tables: ['not a canonical table'] })),
       ].join('\n')
     )
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: ['restricted_accounts'], now })
+    const evidence = await loadWorkloadEvidence({
+      path,
+      blockedIdentifiers: ['restricted_accounts'],
+      now,
+    })
 
     expect(evidence.state).toBe('available')
     expect(evidence.observations).toEqual([])
@@ -83,7 +101,11 @@ describe('loadWorkloadEvidence', () => {
     await writeFile(
       path,
       [
-        JSON.stringify({ version: 1, type: 'session_started', timestamp: '2026-08-08T11:00:00.000Z' }),
+        JSON.stringify({
+          version: 1,
+          type: 'session_started',
+          timestamp: '2026-08-08T11:00:00.000Z',
+        }),
         JSON.stringify(event({ type: 'query_observed' })),
         JSON.stringify(event()),
         JSON.stringify(event()),
@@ -99,9 +121,16 @@ describe('loadWorkloadEvidence', () => {
 
   test('retains safe tables from mixed protected observations without leaking the protected table', async () => {
     const path = join(workspace, 'events.jsonl')
-    await writeFile(path, `${JSON.stringify(event({ tables: ['accounts', 'restricted_accounts'] }))}\n`)
+    await writeFile(
+      path,
+      `${JSON.stringify(event({ tables: ['accounts', 'restricted_accounts'] }))}\n`
+    )
 
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: ['restricted_accounts'], now })
+    const evidence = await loadWorkloadEvidence({
+      path,
+      blockedIdentifiers: ['restricted_accounts'],
+      now,
+    })
 
     expect(evidence.observations).toEqual([{ tables: ['accounts'] }])
     expect(evidence.issues).toEqual(['redacted-protected-subject'])

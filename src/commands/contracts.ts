@@ -28,7 +28,10 @@ interface ContractEvidence {
   blockedTerms: string[]
 }
 
-async function collectContractEvidence(command: Command, filePath?: string): Promise<ContractEvidence> {
+async function collectContractEvidence(
+  command: Command,
+  filePath?: string
+): Promise<ContractEvidence> {
   const workspaceRoot = process.cwd()
   const config = await configModule.read(resolveConfigPath(command))
   const schema = compactVisibleSchema(config)
@@ -52,7 +55,9 @@ async function collectContractEvidence(command: Command, filePath?: string): Pro
   return {
     workspaceRoot,
     filePath: filePath ?? defaultSemanticContractsFile(workspaceRoot),
-    references: context ? semanticReferenceRegistry(context, schema, [...snippets.keys()]) : new Set(),
+    references: context
+      ? semanticReferenceRegistry(context, schema, [...snippets.keys()])
+      : new Set(),
     referencesAvailable: context !== null,
     blockedTerms,
   }
@@ -73,7 +78,10 @@ async function loadContractsForInspection(
   }
 }
 
-function assertFormat(format: string | undefined, supported: readonly ContractFormat[]): ContractFormat {
+function assertFormat(
+  format: string | undefined,
+  supported: readonly ContractFormat[]
+): ContractFormat {
   if (!format || !supported.includes(format as ContractFormat)) {
     throw new Error(`Invalid format: supported formats are ${supported.join(', ')}`)
   }
@@ -87,8 +95,13 @@ function renderSearchText(contracts: readonly SemanticContract[]): string {
     .join('\n')
 }
 
-function searchContracts(contracts: readonly SemanticContract[], terms: readonly string[]): SemanticContract[] {
-  const normalizedTerms = [...new Set(terms.map((term) => term.trim().toLowerCase()).filter(Boolean))]
+function searchContracts(
+  contracts: readonly SemanticContract[],
+  terms: readonly string[]
+): SemanticContract[] {
+  const normalizedTerms = [
+    ...new Set(terms.map((term) => term.trim().toLowerCase()).filter(Boolean)),
+  ]
   return contracts.filter((contract) => {
     const searchable = [
       contract.name,
@@ -134,7 +147,11 @@ contractCommand
         draft: counts.draft ?? 0,
         deprecated: counts.deprecated ?? 0,
       }
-      console.log(format === 'json' ? JSON.stringify(payload, null, 2) : `Valid semantic contracts: ${filePath}`)
+      console.log(
+        format === 'json'
+          ? JSON.stringify(payload, null, 2)
+          : `Valid semantic contracts: ${filePath}`
+      )
     } catch (error) {
       fail(error)
     }
@@ -151,7 +168,9 @@ contractCommand
       const { contracts } = await loadContractsForInspection(command, options.file)
       const approved = filterApprovedSemanticContracts(contracts)
       console.log(
-        format === 'json' ? JSON.stringify(approved, null, 2) : renderSemanticContractsMarkdown(approved)
+        format === 'json'
+          ? JSON.stringify(approved, null, 2)
+          : renderSemanticContractsMarkdown(approved)
       )
     } catch (error) {
       fail(error)

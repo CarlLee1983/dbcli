@@ -57,8 +57,19 @@ describe('data-access manifest', () => {
         {
           version: 1,
           operations: [
-            { name: 'orders.list', source: 'src/orders.ts', kind: 'read', references: ['model:orders'] },
-            { name: 'orders.list', source: 'src/orders.ts', kind: 'write', references: ['secret-subject'], coverage: 'declared' },
+            {
+              name: 'orders.list',
+              source: 'src/orders.ts',
+              kind: 'read',
+              references: ['model:orders'],
+            },
+            {
+              name: 'orders.list',
+              source: 'src/orders.ts',
+              kind: 'write',
+              references: ['secret-subject'],
+              coverage: 'declared',
+            },
           ],
         },
         { workspaceRoot: workspace, references, blockedTerms: ['secret-subject'] }
@@ -68,7 +79,15 @@ describe('data-access manifest', () => {
       await normalizeDataAccessManifest(
         {
           version: 1,
-          operations: [{ name: 'safe', source: 'src/orders.ts', kind: 'read', references: ['secret-subject'], coverage: 'declared' }],
+          operations: [
+            {
+              name: 'safe',
+              source: 'src/orders.ts',
+              kind: 'read',
+              references: ['secret-subject'],
+              coverage: 'declared',
+            },
+          ],
         },
         { workspaceRoot: workspace, references, blockedTerms: ['secret-subject'] }
       )
@@ -83,7 +102,13 @@ describe('data-access manifest', () => {
         {
           version: 1,
           operations: [
-            { name: 'invalid', source: 'src/orders.ts', kind: 'read', references: ['not:a-canonical-reference'], coverage: 'declared' },
+            {
+              name: 'invalid',
+              source: 'src/orders.ts',
+              kind: 'read',
+              references: ['not:a-canonical-reference'],
+              coverage: 'declared',
+            },
           ],
         },
         { workspaceRoot: workspace, references: new Set(['not:a-canonical-reference']) }
@@ -99,7 +124,18 @@ describe('data-access manifest', () => {
       for (const source of ['../outside.ts', 'src/outside.ts']) {
         await expect(
           normalizeDataAccessManifest(
-            { version: 1, operations: [{ name: source, source, kind: 'read', references: ['model:orders'], coverage: 'declared' }] },
+            {
+              version: 1,
+              operations: [
+                {
+                  name: source,
+                  source,
+                  kind: 'read',
+                  references: ['model:orders'],
+                  coverage: 'declared',
+                },
+              ],
+            },
             { workspaceRoot: workspace, references }
           )
         ).rejects.toBeInstanceOf(DataAccessManifestValidationError)
@@ -116,18 +152,20 @@ describe('data-access manifest', () => {
       await writeFile(externalManifest, JSON.stringify({ version: 1, operations: [] }))
       await symlink(externalManifest, join(workspace, 'dbcli.data-access.json'))
 
-      await expect(loadDataAccessManifest({ workspaceRoot: workspace, references, missingFile: 'error' })).rejects.toBeInstanceOf(
-        DataAccessManifestValidationError
-      )
+      await expect(
+        loadDataAccessManifest({ workspaceRoot: workspace, references, missingFile: 'error' })
+      ).rejects.toBeInstanceOf(DataAccessManifestValidationError)
     } finally {
       await rm(external, { recursive: true, force: true })
     }
   })
 
   test('treats the optional missing manifest as empty only when allowed', async () => {
-    await expect(loadDataAccessManifest({ workspaceRoot: workspace, references })).resolves.toEqual([])
-    await expect(loadDataAccessManifest({ workspaceRoot: workspace, references, missingFile: 'error' })).rejects.toBeInstanceOf(
-      DataAccessManifestValidationError
+    await expect(loadDataAccessManifest({ workspaceRoot: workspace, references })).resolves.toEqual(
+      []
     )
+    await expect(
+      loadDataAccessManifest({ workspaceRoot: workspace, references, missingFile: 'error' })
+    ).rejects.toBeInstanceOf(DataAccessManifestValidationError)
   })
 })

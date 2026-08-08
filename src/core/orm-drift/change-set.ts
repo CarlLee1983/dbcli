@@ -110,7 +110,9 @@ export function normalizeProposedChanges(input: NormalizedChangeSetInput): Norma
   const baselineTables = tableMap(input.baseline, input.baseline.defaultSchema, 'baseline')
   const ignored = ignoredTableKeys(input, declaredTables, baselineTables, gaps)
   const changes: NormalizedChange[] = []
-  const tableKeys = [...new Set([...declaredTables.keys(), ...baselineTables.keys()])].sort(codePointOrder)
+  const tableKeys = [...new Set([...declaredTables.keys(), ...baselineTables.keys()])].sort(
+    codePointOrder
+  )
 
   for (const tableKey of tableKeys) {
     if (ignored.has(tableKey)) continue
@@ -139,7 +141,8 @@ export function normalizeProposedChanges(input: NormalizedChangeSetInput): Norma
 
 function validateInput(input: NormalizedChangeSetInput): void {
   if (!input.scope.key.trim()) throw new NormalizedChangeSetError('scope.key must not be empty')
-  if (!input.scope.system.trim()) throw new NormalizedChangeSetError('scope.system must not be empty')
+  if (!input.scope.system.trim())
+    throw new NormalizedChangeSetError('scope.system must not be empty')
   if (!input.origins.declared.trim() || !input.origins.baseline.trim())
     throw new NormalizedChangeSetError('declared and baseline origins must not be empty')
 }
@@ -217,12 +220,15 @@ function compareTable(
     baseline.identity,
     'baseline'
   )
-  const columnKeys = [...new Set([...declaredColumns.keys(), ...baselineColumns.keys()])].sort(codePointOrder)
+  const columnKeys = [...new Set([...declaredColumns.keys(), ...baselineColumns.keys()])].sort(
+    codePointOrder
+  )
   for (const key of columnKeys) {
     const after = declaredColumns.get(key)
     const before = baselineColumns.get(key)
     if (after && !before) changes.push(columnChange(input, 'add', declared.identity, after))
-    else if (!after && before) changes.push(columnChange(input, 'remove', baseline.identity, before))
+    else if (!after && before)
+      changes.push(columnChange(input, 'remove', baseline.identity, before))
     else if (after && before) {
       const changedFields = columnChangedFields(before, after)
       if (changedFields.length > 0)
@@ -255,11 +261,14 @@ function compareIndexes(
     baseline.identity,
     'baseline'
   )
-  const keys = [...new Set([...declaredIndexes.keys(), ...baselineIndexes.keys()])].sort(codePointOrder)
+  const keys = [...new Set([...declaredIndexes.keys(), ...baselineIndexes.keys()])].sort(
+    codePointOrder
+  )
   for (const key of keys) {
     const after = declaredIndexes.get(key)
     const before = baselineIndexes.get(key)
-    if (after && !before) changes.push(objectChange(input, 'add', 'index', declared.identity, key, 'declared'))
+    if (after && !before)
+      changes.push(objectChange(input, 'add', 'index', declared.identity, key, 'declared'))
     else if (!after && before)
       changes.push(objectChange(input, 'remove', 'index', baseline.identity, key, 'baseline'))
     else if (after && before && after.name !== before.name) {
@@ -350,8 +359,15 @@ function objectChange(
   objectKey: string,
   side: Side
 ): NormalizedChange {
-  const subject = { ...subjectFor(input.scope, identity), ...(objectKind !== 'table' && { objectKey }) }
-  const location = objectLocation(input.origins[side], identity, objectKind === 'table' ? undefined : objectKey)
+  const subject = {
+    ...subjectFor(input.scope, identity),
+    ...(objectKind !== 'table' && { objectKey }),
+  }
+  const location = objectLocation(
+    input.origins[side],
+    identity,
+    objectKind === 'table' ? undefined : objectKey
+  )
   return {
     id: changeId(input.scope, identity, objectKind, objectKey, operation),
     operation,
@@ -408,7 +424,10 @@ function foreignKeyKey(foreignKey: NormalizedForeignKey, defaultSchema?: string)
   ])
 }
 
-function subjectFor(scope: NormalizedChangeScope, identity: NormalizedTableIdentity): NormalizedChangeSubject {
+function subjectFor(
+  scope: NormalizedChangeScope,
+  identity: NormalizedTableIdentity
+): NormalizedChangeSubject {
   return {
     scopeKey: scope.key,
     system: scope.system,
@@ -420,7 +439,9 @@ function subjectFor(scope: NormalizedChangeScope, identity: NormalizedTableIdent
   }
 }
 
-function tableSubject(identity: NormalizedTableIdentity): Pick<NormalizedChangeSubject, 'schema' | 'table'> {
+function tableSubject(
+  identity: NormalizedTableIdentity
+): Pick<NormalizedChangeSubject, 'schema' | 'table'> {
   return {
     ...(identity.schema !== undefined && { schema: identity.schema }),
     table: identity.table,
@@ -448,7 +469,11 @@ function changeId(
   ])
 }
 
-function objectLocation(origin: string, identity: NormalizedTableIdentity, objectKey?: string): string {
+function objectLocation(
+  origin: string,
+  identity: NormalizedTableIdentity,
+  objectKey?: string
+): string {
   const table = qualifiedTableName(identity)
   return objectKey === undefined ? `${origin}#${table}` : `${origin}#${table}.${objectKey}`
 }

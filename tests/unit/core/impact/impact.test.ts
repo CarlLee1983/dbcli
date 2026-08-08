@@ -104,7 +104,9 @@ describe('assessImpact', () => {
       'AFFECTED_SAVED_QUERY',
       'AFFECTED_VERIFICATION',
     ])
-    expect(report.findings.every((finding) => finding.changeId === 'change:accounts.email:remove')).toBe(true)
+    expect(
+      report.findings.every((finding) => finding.changeId === 'change:accounts.email:remove')
+    ).toBe(true)
     expect(report.recommendedVerification).toEqual([
       {
         changeId: 'change:accounts.email:remove',
@@ -130,7 +132,9 @@ describe('assessImpact', () => {
     expect(report.findings.map((finding) => finding.id)).toEqual(
       [...report.findings.map((finding) => finding.id)].sort()
     )
-    expect(report.findings.filter((finding) => finding.code === 'AFFECTED_SEMANTIC_RELATIONSHIP')).toHaveLength(1)
+    expect(
+      report.findings.filter((finding) => finding.code === 'AFFECTED_SEMANTIC_RELATIONSHIP')
+    ).toHaveLength(1)
   })
 
   test('maps index and foreign-key changes through their owning table model', () => {
@@ -178,7 +182,9 @@ describe('assessImpact', () => {
       })
     )
 
-    expect(report.findings.filter((finding) => finding.code === 'AFFECTED_DECLARED_ACCESS_OPERATION')).toEqual([
+    expect(
+      report.findings.filter((finding) => finding.code === 'AFFECTED_DECLARED_ACCESS_OPERATION')
+    ).toEqual([
       expect.objectContaining({
         severity: 'warn',
         location: { artifact: 'src/accounts.ts', selector: 'data-access:read:accounts.lookup' },
@@ -330,22 +336,35 @@ describe('assessImpact', () => {
         subject: { ...change.subject, scopeKey: 'restricted-scope' },
       })),
     }
-    const report = assessImpact(input({ changes: protectedChanges, blockedIdentifiers: ['restricted-scope'] }))
+    const report = assessImpact(
+      input({ changes: protectedChanges, blockedIdentifiers: ['restricted-scope'] })
+    )
 
     expect(report.scope).toMatchObject({ key: '[redacted]', environment: '[redacted]' })
     expect(JSON.stringify(report)).not.toContain('restricted-scope')
   })
 
   test('keeps safe verification findings when semantic evidence is absent', () => {
-    const report = assessImpact(input({ semantic: { state: 'absent', origin: 'dbcli.semantic.json', reason: 'missing' } }))
+    const report = assessImpact(
+      input({ semantic: { state: 'absent', origin: 'dbcli.semantic.json', reason: 'missing' } })
+    )
 
     expect(report.findings.map((finding) => finding.code)).toEqual(['AFFECTED_VERIFICATION'])
-    expect(report.coverage.gaps).toContainEqual(expect.objectContaining({ code: 'SEMANTIC_ABSENT' }))
+    expect(report.coverage.gaps).toContainEqual(
+      expect.objectContaining({ code: 'SEMANTIC_ABSENT' })
+    )
   })
 
   test('marks filtered evidence as a visible redaction gap', () => {
     const report = assessImpact(
-      input({ verifications: { state: 'available', origin: 'verification-artifacts', redacted: true, value: [] } })
+      input({
+        verifications: {
+          state: 'available',
+          origin: 'verification-artifacts',
+          redacted: true,
+          value: [],
+        },
+      })
     )
 
     expect(report.coverage.gaps).toContainEqual(

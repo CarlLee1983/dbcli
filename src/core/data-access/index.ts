@@ -31,7 +31,9 @@ export class DataAccessManifestValidationError extends Error {
   readonly issues: readonly DataAccessManifestIssue[]
 
   constructor(issues: readonly DataAccessManifestIssue[]) {
-    super(`data-access manifest is invalid (${issues.length} issue${issues.length === 1 ? '' : 's'})`)
+    super(
+      `data-access manifest is invalid (${issues.length} issue${issues.length === 1 ? '' : 's'})`
+    )
     this.name = 'DataAccessManifestValidationError'
     this.issues = issues
   }
@@ -51,21 +53,28 @@ export async function loadDataAccessManifest(
   const workspace = await safeWorkspace(input.workspaceRoot, [])
   const requested = resolve(workspace, input.filePath ?? defaultDataAccessManifestFile(workspace))
   if (!inside(workspace, requested)) {
-    throw new DataAccessManifestValidationError([{ path: '$', message: 'file must stay inside the workspace' }])
+    throw new DataAccessManifestValidationError([
+      { path: '$', message: 'file must stay inside the workspace' },
+    ])
   }
   let stats: Awaited<ReturnType<typeof lstat>>
   try {
     stats = await lstat(requested)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT' && input.missingFile !== 'error') return []
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' && input.missingFile !== 'error')
+      return []
     throw new DataAccessManifestValidationError([{ path: '$', message: 'file not found' }])
   }
   if (!stats.isFile() || stats.isSymbolicLink()) {
-    throw new DataAccessManifestValidationError([{ path: '$', message: 'file must be a regular workspace file' }])
+    throw new DataAccessManifestValidationError([
+      { path: '$', message: 'file must be a regular workspace file' },
+    ])
   }
   try {
     if (!inside(workspace, await realpath(requested))) {
-      throw new DataAccessManifestValidationError([{ path: '$', message: 'file must stay inside the workspace' }])
+      throw new DataAccessManifestValidationError([
+        { path: '$', message: 'file must stay inside the workspace' },
+      ])
     }
   } catch (error) {
     if (error instanceof DataAccessManifestValidationError) throw error
@@ -78,7 +87,9 @@ export async function loadDataAccessManifest(
   try {
     raw = JSON.parse(await Bun.file(requested).text())
     if (!inside(workspace, await realpath(requested))) {
-      throw new DataAccessManifestValidationError([{ path: '$', message: 'file must stay inside the workspace' }])
+      throw new DataAccessManifestValidationError([
+        { path: '$', message: 'file must stay inside the workspace' },
+      ])
     }
   } catch {
     throw new DataAccessManifestValidationError([{ path: '$', message: 'invalid JSON' }])
@@ -109,7 +120,10 @@ export async function normalizeDataAccessManifest(
   }
   if (issues.length > 0) throw new DataAccessManifestValidationError(issues)
   return normalized
-    .map((operation) => ({ ...operation, references: [...operation.references].sort(codePointOrder) }))
+    .map((operation) => ({
+      ...operation,
+      references: [...operation.references].sort(codePointOrder),
+    }))
     .sort((left, right) => codePointOrder(left.name, right.name))
 }
 
@@ -128,9 +142,16 @@ function parseOperation(
   names.add(name)
   const source = text(value.source, `${path}.source`, issues)
   const kind = value.kind === 'read' || value.kind === 'write' ? value.kind : 'read'
-  if (value.kind !== 'read' && value.kind !== 'write') issue(issues, `${path}.kind`, 'must be read or write')
+  if (value.kind !== 'read' && value.kind !== 'write')
+    issue(issues, `${path}.kind`, 'must be read or write')
   if (value.coverage !== 'declared') issue(issues, `${path}.coverage`, 'must equal declared')
-  const references = parseReferences(value.references, `${path}.references`, registry, blocked, issues)
+  const references = parseReferences(
+    value.references,
+    `${path}.references`,
+    registry,
+    blocked,
+    issues
+  )
   return { name, source, kind, references, coverage: 'declared' }
 }
 
@@ -142,7 +163,8 @@ function parseReferences(
   issues: DataAccessManifestIssue[]
 ): string[] {
   const values = array(raw, path, issues)
-  if (values.length === 0 || values.length > MAX_REFERENCES) issue(issues, path, 'must contain bounded references')
+  if (values.length === 0 || values.length > MAX_REFERENCES)
+    issue(issues, path, 'must contain bounded references')
   const seen = new Set<string>()
   return values.map((value, index) => {
     const reference = text(value, `${path}[${index}]`, issues)
@@ -159,7 +181,10 @@ function parseReferences(
   })
 }
 
-async function safeWorkspace(workspaceRoot: string, issues: DataAccessManifestIssue[]): Promise<string> {
+async function safeWorkspace(
+  workspaceRoot: string,
+  issues: DataAccessManifestIssue[]
+): Promise<string> {
   try {
     return await realpath(workspaceRoot)
   } catch {
@@ -175,7 +200,11 @@ async function normalizeSource(
   issues: DataAccessManifestIssue[]
 ): Promise<DataAccessOperation> {
   const path = `$.operations[${index}].source`
-  if (operation.source.length === 0 || operation.source.length > MAX_NAME_LENGTH || /[\0\r\n]/.test(operation.source)) {
+  if (
+    operation.source.length === 0 ||
+    operation.source.length > MAX_NAME_LENGTH ||
+    /[\0\r\n]/.test(operation.source)
+  ) {
     issue(issues, path, 'must be a bounded single-line source path')
     return operation
   }
@@ -217,8 +246,13 @@ function inside(root: string, target: string): boolean {
   )
 }
 
-function record(value: unknown, path: string, issues: DataAccessManifestIssue[]): Record<string, unknown> {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as Record<string, unknown>
+function record(
+  value: unknown,
+  path: string,
+  issues: DataAccessManifestIssue[]
+): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value))
+    return value as Record<string, unknown>
   issue(issues, path, 'must be an object')
   return {}
 }
@@ -230,13 +264,25 @@ function array(value: unknown, path: string, issues: DataAccessManifestIssue[]):
 }
 
 function text(value: unknown, path: string, issues: DataAccessManifestIssue[]): string {
-  if (typeof value === 'string' && value.length > 0 && value.length <= MAX_NAME_LENGTH && !/[\0\r\n]/.test(value)) return value
+  if (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_NAME_LENGTH &&
+    !/[\0\r\n]/.test(value)
+  )
+    return value
   issue(issues, path, 'must be a bounded non-empty single-line string')
   return ''
 }
 
-function rejectUnknownKeys(value: Record<string, unknown>, allowed: readonly string[], path: string, issues: DataAccessManifestIssue[]): void {
-  for (const key of Object.keys(value)) if (!allowed.includes(key)) issue(issues, `${path}.${key}`, 'is not allowed')
+function rejectUnknownKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  path: string,
+  issues: DataAccessManifestIssue[]
+): void {
+  for (const key of Object.keys(value))
+    if (!allowed.includes(key)) issue(issues, `${path}.${key}`, 'is not allowed')
 }
 
 function issue(issues: DataAccessManifestIssue[], path: string, message: string): void {

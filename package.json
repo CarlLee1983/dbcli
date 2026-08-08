@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "1.52.1",
+  "version": "1.53.0",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -117,9 +117,9 @@
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^10.4.0",
     "happy-dom": "^20.10.6",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.26",
     "prettier": "^3.8.3",
-    "tailwindcss": "3.4.1",
+    "tailwindcss": "3.4.19",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.4"
   },

@@ -73,7 +73,10 @@ export const assertCommand = new Command()
     'Required with --write-verification-artifact: "<kind>:<name>"'
   )
   .option('--verification-summary <text>', 'Optional summary text for the verification artifact')
-  .option('--evidence-receipt <path>', 'Write a safe provenance receipt after the assertion outcome is authoritative')
+  .option(
+    '--evidence-receipt <path>',
+    'Write a safe provenance receipt after the assertion outcome is authoritative'
+  )
   .action(async (query: string, options: Record<string, unknown>, command: Command) => {
     try {
       validateFormat(options.format as string, ALLOWED_FORMATS, 'assert')
@@ -189,10 +192,16 @@ export const assertCommand = new Command()
             command: redactArgv(process.argv),
             context: await buildEvidenceReceiptContext(config, process.cwd()),
             auditRef,
-            verificationArtifactRef: verificationArtifactPath ? basename(verificationArtifactPath) : null,
+            verificationArtifactRef: verificationArtifactPath
+              ? basename(verificationArtifactPath)
+              : null,
             verdict,
           })
-          evidenceReceiptPath = await writeEvidenceReceipt(process.cwd(), options.evidenceReceipt, receipt)
+          evidenceReceiptPath = await writeEvidenceReceipt(
+            process.cwd(),
+            options.evidenceReceipt,
+            receipt
+          )
         } catch {
           console.error('Failed to write evidence receipt')
           process.exit(1)
@@ -202,7 +211,11 @@ export const assertCommand = new Command()
       if (options.format === 'json') {
         console.log(
           JSON.stringify(
-            { ...verdict, ...(verificationArtifactPath ? { verificationArtifactPath } : {}), ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}) },
+            {
+              ...verdict,
+              ...(verificationArtifactPath ? { verificationArtifactPath } : {}),
+              ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}),
+            },
             null,
             2
           )

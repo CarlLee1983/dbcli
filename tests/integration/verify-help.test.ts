@@ -119,9 +119,18 @@ describe('verify --help surface', () => {
 
   test('preflight rejects an evidence receipt before any database configuration is read', async () => {
     const result = await runCommand([
-      'verify', 'safe-backfill', '--table', 'orders', '--query', 'UPDATE orders SET status = 1 WHERE id = 1',
-      '--verify-query', 'SELECT count(*) FROM orders', '--expect', 'value == 0',
-      '--evidence-receipt', 'evidence/receipt.json',
+      'verify',
+      'safe-backfill',
+      '--table',
+      'orders',
+      '--query',
+      'UPDATE orders SET status = 1 WHERE id = 1',
+      '--verify-query',
+      'SELECT count(*) FROM orders',
+      '--expect',
+      'value == 0',
+      '--evidence-receipt',
+      'evidence/receipt.json',
     ])
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('Evidence receipt unsupported: receipts require --after-write')

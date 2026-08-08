@@ -15,9 +15,7 @@ export interface WriteVerifyEvidenceReceiptInput {
   argv: string[]
 }
 
-export type WriteVerifyEvidenceReceiptResult =
-  | { path: string }
-  | { error: string }
+export type WriteVerifyEvidenceReceiptResult = { path: string } | { error: string }
 
 /**
  * Writes the optional receipt only after the scenario's artifact outcome is known.
@@ -27,10 +25,14 @@ export async function writeVerifyEvidenceReceipt(
   input: WriteVerifyEvidenceReceiptInput
 ): Promise<WriteVerifyEvidenceReceiptResult> {
   const auditRefs = [
-    ...new Set(input.artifact.evidence.flatMap((entry) => (entry.auditRef ? [entry.auditRef] : []))),
+    ...new Set(
+      input.artifact.evidence.flatMap((entry) => (entry.auditRef ? [entry.auditRef] : []))
+    ),
   ]
   if (auditRefs.length > 1) {
-    return { error: `Evidence receipt unsupported for built-in verify scenario ${input.scenarioName}` }
+    return {
+      error: `Evidence receipt unsupported for built-in verify scenario ${input.scenarioName}`,
+    }
   }
   try {
     const receipt = buildEvidenceReceipt({

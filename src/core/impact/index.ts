@@ -1,7 +1,11 @@
 import { containsBlockedSemanticIdentifier } from '@/core/semantic'
 import type { SemanticContext, SemanticField, SemanticModel } from '@/core/semantic'
 import type { SemanticContract } from '@/core/contracts'
-import type { NormalizedChange, NormalizedChangeScope, NormalizedChangeSet } from '@/core/orm-drift/change-set'
+import type {
+  NormalizedChange,
+  NormalizedChangeScope,
+  NormalizedChangeSet,
+} from '@/core/orm-drift/change-set'
 import type { VerificationStatus, VerificationSubject } from '@/core/verification/types'
 import type { DataAccessOperation } from '@/core/data-access'
 import type { WorkloadEvidence } from '@/core/workload-impact'
@@ -11,7 +15,11 @@ export type ImpactEvidenceReason = 'missing' | 'invalid' | 'unavailable'
 
 export type ImpactEvidenceSource<T> =
   | { state: 'available'; origin: string; value: T; redacted?: boolean }
-  | { state: Exclude<ImpactEvidenceState, 'available'>; origin: string; reason: ImpactEvidenceReason }
+  | {
+      state: Exclude<ImpactEvidenceState, 'available'>
+      origin: string
+      reason: ImpactEvidenceReason
+    }
 
 export interface SafeVerificationMetadata {
   id: string
@@ -132,14 +140,23 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
       continue
     }
     if (input.verifications.state === 'available') {
-      findings.push(...verificationFindings(change, input.verifications.value, input.blockedIdentifiers))
+      findings.push(
+        ...verificationFindings(change, input.verifications.value, input.blockedIdentifiers)
+      )
     }
-    findings.push(...observedWorkloadFindings(change, input.observedWorkload, input.blockedIdentifiers))
+    findings.push(
+      ...observedWorkloadFindings(change, input.observedWorkload, input.blockedIdentifiers)
+    )
     if (input.semantic.state !== 'available') continue
 
     const nodes = traverseSemantic(change, input.semantic.value, input.blockedIdentifiers)
     for (const node of nodes) {
-      const finding = findingForSemanticNode(change, node, input.semantic.origin, input.blockedIdentifiers)
+      const finding = findingForSemanticNode(
+        change,
+        node,
+        input.semantic.origin,
+        input.blockedIdentifiers
+      )
       if (finding) findings.push(finding)
     }
 
@@ -154,7 +171,10 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
     recommendations.push(...contractResult.recommendations)
     for (const metric of contractResult.metrics) {
       if (input.savedQueries.state !== 'available') continue
-      if (input.savedQueries.value.includes(metric.query) && isSafe(metric.query, input.blockedIdentifiers)) {
+      if (
+        input.savedQueries.value.includes(metric.query) &&
+        isSafe(metric.query, input.blockedIdentifiers)
+      ) {
         findings.push(
           finding(change, 'AFFECTED_SAVED_QUERY', severityFor(change), {
             artifact: logicalArtifact(input.savedQueries.origin, input.blockedIdentifiers),
@@ -170,7 +190,12 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
         ...nodes.map((node) => node.reference),
         ...contractResult.metrics.map((metric) => `metric:${metric.name}`),
       ])
-      const access = dataAccessFindings(change, references, input.dataAccess.value, input.blockedIdentifiers)
+      const access = dataAccessFindings(
+        change,
+        references,
+        input.dataAccess.value,
+        input.blockedIdentifiers
+      )
       findings.push(...access.findings)
       if (access.redacted) addGap(gaps, 'REDACTED_PROTECTED_SUBJECT')
     }
@@ -206,12 +231,17 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
         0
       ),
       malformedLines: input.observedWorkload.malformedLines,
-      ...(input.observedWorkload.timeframe !== undefined && { timeframe: input.observedWorkload.timeframe }),
+      ...(input.observedWorkload.timeframe !== undefined && {
+        timeframe: input.observedWorkload.timeframe,
+      }),
     },
   }
 }
 
-function redactScope(scope: NormalizedChangeScope, blocked: readonly string[]): NormalizedChangeScope {
+function redactScope(
+  scope: NormalizedChangeScope,
+  blocked: readonly string[]
+): NormalizedChangeScope {
   const redact = (value: string): string => (isSafe(value, blocked) ? value : '[redacted]')
   return {
     key: redact(scope.key),
@@ -280,10 +310,13 @@ function traverseSemantic(
 
   for (const model of context.models) {
     if (model.table !== change.subject.table) continue
-    if (change.objectKind === 'table' || change.objectKind === 'index' || change.objectKind === 'foreign-key') {
+    if (
+      change.objectKind === 'table' ||
+      change.objectKind === 'index' ||
+      change.objectKind === 'foreign-key'
+    ) {
       enqueue(`model:${model.name}`)
-    }
-    else if (change.subject.column) {
+    } else if (change.subject.column) {
       for (const field of model.fields) {
         if (field.column === change.subject.column) enqueue(`field:${model.name}.${field.column}`)
       }
@@ -331,7 +364,9 @@ function semanticNode(
     return model && field ? { reference, kind: 'field', field: { model, field } } : undefined
   }
   if (reference.startsWith('relationship:')) {
-    return context.relationships.some((relationship) => reference === `relationship:${relationship.name}`)
+    return context.relationships.some(
+      (relationship) => reference === `relationship:${relationship.name}`
+    )
       ? { reference, kind: 'relationship' }
       : undefined
   }
@@ -369,7 +404,11 @@ function traverseContracts(
   context: SemanticContext,
   source: ImpactEvidenceSource<readonly SemanticContract[]>,
   blocked: readonly string[]
-): { findings: ImpactFinding[]; recommendations: VerificationRecommendation[]; metrics: SemanticContext['metrics'] } {
+): {
+  findings: ImpactFinding[]
+  recommendations: VerificationRecommendation[]
+  metrics: SemanticContext['metrics']
+} {
   if (source.state !== 'available') return { findings: [], recommendations: [], metrics: [] }
   const known = new Set(seedNodes.map((node) => node.reference))
   const contracts = source.value.filter((contract) => contract.status === 'approved')
@@ -380,7 +419,10 @@ function traverseContracts(
   while (changed) {
     changed = false
     for (const contract of contracts) {
-      if (!isSafe(contract.name, blocked) || contract.subjects.some((subject) => !isSafe(subject, blocked)))
+      if (
+        !isSafe(contract.name, blocked) ||
+        contract.subjects.some((subject) => !isSafe(subject, blocked))
+      )
         continue
       if (!contract.subjects.some((subject) => known.has(subject))) continue
       const contractSelector = `contract:${contract.name}`
@@ -397,7 +439,10 @@ function traverseContracts(
           recommendations.push({
             changeId: change.id,
             policy: contract.evidencePolicy,
-            source: { artifact: logicalArtifact(source.origin, blocked), selector: contractSelector },
+            source: {
+              artifact: logicalArtifact(source.origin, blocked),
+              selector: contractSelector,
+            },
           })
         }
       }
@@ -426,7 +471,8 @@ function verificationFindings(
     .filter(
       (verification) =>
         verification.subject.kind === 'table' &&
-        (verification.subject.name === qualified || verification.subject.name === change.subject.table) &&
+        (verification.subject.name === qualified ||
+          verification.subject.name === change.subject.table) &&
         isSafe(verification.id, blocked) &&
         isSafe(verification.location, blocked)
     )
@@ -447,7 +493,9 @@ function dataAccessFindings(
   const findings: ImpactFinding[] = []
   let redacted = false
   for (const operation of operations) {
-    if (!isSafe(`${operation.name}.${operation.source}.${operation.references.join('.')}`, blocked)) {
+    if (
+      !isSafe(`${operation.name}.${operation.source}.${operation.references.join('.')}`, blocked)
+    ) {
       redacted = true
       continue
     }
@@ -468,10 +516,16 @@ function observedWorkloadFindings(
   blocked: readonly string[]
 ): ImpactFinding[] {
   if (workload.state !== 'available') return []
-  const qualifiedTable = change.subject.schema ? `${change.subject.schema}.${change.subject.table}` : change.subject.table
+  const qualifiedTable = change.subject.schema
+    ? `${change.subject.schema}.${change.subject.table}`
+    : change.subject.table
   if (!isSafe(qualifiedTable, blocked)) return []
   return workload.observations
-    .filter((observation) => observation.tables.includes(change.subject.table) || observation.tables.includes(qualifiedTable))
+    .filter(
+      (observation) =>
+        observation.tables.includes(change.subject.table) ||
+        observation.tables.includes(qualifiedTable)
+    )
     .map(() =>
       finding(change, 'AFFECTED_OBSERVED_WORKLOAD', 'warn', {
         artifact: 'proxy-workload',
@@ -511,7 +565,16 @@ function severityFor(change: NormalizedChange): ImpactFinding['severity'] {
 
 function isSafeChange(change: NormalizedChange, blocked: readonly string[]): boolean {
   return isSafe(
-    [change.subject.scopeKey, change.subject.system, change.subject.connection, change.subject.catalog, change.subject.schema, change.subject.table, change.subject.column, change.subject.objectKey]
+    [
+      change.subject.scopeKey,
+      change.subject.system,
+      change.subject.connection,
+      change.subject.catalog,
+      change.subject.schema,
+      change.subject.table,
+      change.subject.column,
+      change.subject.objectKey,
+    ]
       .filter((value): value is string => value !== undefined)
       .join('.'),
     blocked

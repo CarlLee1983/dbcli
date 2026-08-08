@@ -4,10 +4,7 @@ import { containsBlockedSemanticIdentifier } from '@/core/semantic'
 export const SEMANTIC_CONTRACT_VERSION = 1
 
 export type SemanticContractStatus = 'draft' | 'approved' | 'deprecated'
-export type SemanticContractEvidencePolicy =
-  | 'none'
-  | 'receipt-required'
-  | 'verification-required'
+export type SemanticContractEvidencePolicy = 'none' | 'receipt-required' | 'verification-required'
 
 export interface SemanticContract {
   name: string
@@ -109,7 +106,10 @@ export async function inspectSemanticContractDrift(
     throw error
   }
   if (!loaded) {
-    return { status: 'unavailable', issues: [{ path: '$', message: 'contract file is unavailable' }] }
+    return {
+      status: 'unavailable',
+      issues: [{ path: '$', message: 'contract file is unavailable' }],
+    }
   }
 
   const { contracts, issues } = parseSemanticContracts(loaded.raw, input.blockedTerms)
@@ -388,11 +388,7 @@ function rejectUnknownKeys(
   }
 }
 
-function issue(
-  issues: SemanticContractValidationIssue[],
-  path: string,
-  message: string
-): void {
+function issue(issues: SemanticContractValidationIssue[], path: string, message: string): void {
   issues.push({ path, message })
 }
 

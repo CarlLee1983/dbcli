@@ -126,15 +126,26 @@ describe('dbcli evidence (CLI)', () => {
     work = await seed()
     const compose = await run(
       [
-        'evidence', 'compose', '--claims', 'claims.json', '--receipt', 'verify-receipt.json',
-        '--output', '.dbcli/evidence/verify-pack.json',
+        'evidence',
+        'compose',
+        '--claims',
+        'claims.json',
+        '--receipt',
+        'verify-receipt.json',
+        '--output',
+        '.dbcli/evidence/verify-pack.json',
       ],
       work
     )
     expect(compose.code).toBe(0)
     const pack = await Bun.file(join(work, '.dbcli/evidence/verify-pack.json')).json()
-    expect(pack.claims[0].evidence).toMatchObject([{ kind: 'receipt', operation: 'verify', outcome: 'succeeded' }])
-    const validation = await run(['evidence', 'validate', '--file', '.dbcli/evidence/verify-pack.json'], work)
+    expect(pack.claims[0].evidence).toMatchObject([
+      { kind: 'receipt', operation: 'verify', outcome: 'succeeded' },
+    ])
+    const validation = await run(
+      ['evidence', 'validate', '--file', '.dbcli/evidence/verify-pack.json'],
+      work
+    )
     expect(validation.code).toBe(0)
     expect(JSON.parse(validation.stdout)).toMatchObject({ integrity: 'valid', references: 'valid' })
   })

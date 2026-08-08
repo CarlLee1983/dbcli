@@ -9,7 +9,11 @@ import {
   type SafeVerificationMetadata,
 } from '@/core/impact'
 import { compileDesignSchema, loadDesignSpec, reviewDesign } from '@/core/design'
-import { defaultSemanticContractsFile, loadSemanticContracts, type SemanticContract } from '@/core/contracts'
+import {
+  defaultSemanticContractsFile,
+  loadSemanticContracts,
+  type SemanticContract,
+} from '@/core/contracts'
 import {
   defaultDataAccessManifestFile,
   loadDataAccessManifest,
@@ -63,7 +67,9 @@ export const impactCommand = new Command('impact').description(
 
 impactCommand
   .command('assess')
-  .description('Write an offline impact assessment for a design against a local cache or ORM artifact')
+  .description(
+    'Write an offline impact assessment for a design against a local cache or ORM artifact'
+  )
   .requiredOption('--design <path>', 'Design JSON file')
   .option('--against-cache', 'Compare against the configured local schema cache')
   .option(
@@ -72,7 +78,10 @@ impactCommand
     collectOption,
     []
   )
-  .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
+  .option(
+    '--orm-format <format>',
+    'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize'
+  )
   .option('--ignore <globs>', 'Comma-separated table globs excluded from impact analysis')
   .option('--events <path>', 'Explicit proxy event file for advisory workload evidence')
   .requiredOption('--output <path>', 'Workspace-contained report output path')
@@ -108,11 +117,19 @@ impactCommand
         declared: desired,
         baseline,
         scope,
-        origins: { declared: 'design-artifact', baseline: againstCache ? 'schema-cache' : 'orm-artifact' },
+        origins: {
+          declared: 'design-artifact',
+          baseline: againstCache ? 'schema-cache' : 'orm-artifact',
+        },
         ignore: parseIgnore(options.ignore as string | undefined),
       })
       const savedQueries = await loadSavedQueryKeys(workspaceRoot)
-      const semantic = await loadSemanticEvidence(workspaceRoot, baseline, blockedIdentifiers, savedQueries)
+      const semantic = await loadSemanticEvidence(
+        workspaceRoot,
+        baseline,
+        blockedIdentifiers,
+        savedQueries
+      )
       const contracts = await loadContractEvidence(
         workspaceRoot,
         semantic,
@@ -149,7 +166,17 @@ impactCommand
         throw new Error('design and output paths must differ')
       }
       await writeOutput(workspaceRoot, output, rendered)
-      console.log(JSON.stringify({ path: relative(workspaceRoot, output), summary: report.summary, coverage: report.coverage.level }, null, 2))
+      console.log(
+        JSON.stringify(
+          {
+            path: relative(workspaceRoot, output),
+            summary: report.summary,
+            coverage: report.coverage.level,
+          },
+          null,
+          2
+        )
+      )
       process.exitCode = shouldFail(report, failOn) ? 1 : 0
     } catch (error) {
       console.error(safeMessage(error))
@@ -167,7 +194,10 @@ function loadCacheBaseline(
   }
   if (system !== dialect) throw new Error('design dialect does not match the configured connection')
   if (Object.keys(config.schema ?? {}).length === 0) throw new Error('schema cache is empty')
-  return normalizeDbSchema(config.schema!, system === 'postgresql' ? { defaultSchema: 'public' } : {})
+  return normalizeDbSchema(
+    config.schema!,
+    system === 'postgresql' ? { defaultSchema: 'public' } : {}
+  )
 }
 
 async function loadOrmBaseline(
@@ -201,9 +231,15 @@ function changeScope(
   }
 }
 
-async function loadSavedQueryKeys(workspaceRoot: string): Promise<ImpactEvidenceSource<readonly string[]>> {
+async function loadSavedQueryKeys(
+  workspaceRoot: string
+): Promise<ImpactEvidenceSource<readonly string[]>> {
   try {
-    return { state: 'available', origin: 'saved-query-index', value: await listSnippetKeys(resolveSnippetDirs(workspaceRoot)) }
+    return {
+      state: 'available',
+      origin: 'saved-query-index',
+      value: await listSnippetKeys(resolveSnippetDirs(workspaceRoot)),
+    }
   } catch {
     return { state: 'unavailable', origin: 'saved-query-index', reason: 'unavailable' }
   }
@@ -224,7 +260,9 @@ async function loadSemanticEvidence(
     const context = await loadSemanticContext({
       workspaceRoot,
       schema,
-      snippets: (savedQueries.state === 'available' ? savedQueries.value : []).map((key) => ({ key })),
+      snippets: (savedQueries.state === 'available' ? savedQueries.value : []).map((key) => ({
+        key,
+      })),
       missingFile: 'error',
     })
     return context
@@ -249,7 +287,8 @@ async function loadContractEvidence(
     return { state: 'unavailable', origin: 'dbcli.contracts.json', reason: 'unavailable' }
   }
   const schema = semanticSchema(baseline, blocked)
-  if (!schema) return { state: 'unavailable', origin: 'dbcli.contracts.json', reason: 'unavailable' }
+  if (!schema)
+    return { state: 'unavailable', origin: 'dbcli.contracts.json', reason: 'unavailable' }
   try {
     const references = semanticReferenceRegistry(
       semantic.value,
@@ -282,7 +321,8 @@ async function loadDataAccessEvidence(
     return { state: 'unavailable', origin: 'dbcli.data-access.json', reason: 'unavailable' }
   }
   const schema = semanticSchema(baseline, blocked)
-  if (!schema) return { state: 'unavailable', origin: 'dbcli.data-access.json', reason: 'unavailable' }
+  if (!schema)
+    return { state: 'unavailable', origin: 'dbcli.data-access.json', reason: 'unavailable' }
   try {
     const references = semanticReferenceRegistry(
       semantic.value,
@@ -329,12 +369,15 @@ async function loadVerificationEvidence(
       origin: 'verification-artifacts',
       redacted: safeArtifacts.length !== read.artifacts.length,
       value: safeArtifacts.map((record) => ({
-          id: record.artifact.id,
-          createdAt: record.artifact.createdAt,
-          status: record.artifact.status,
-          subject: { kind: record.artifact.subject.kind, ...(record.artifact.subject.name !== undefined && { name: record.artifact.subject.name }) },
-          location: `verification:${record.artifact.id}`,
-        })),
+        id: record.artifact.id,
+        createdAt: record.artifact.createdAt,
+        status: record.artifact.status,
+        subject: {
+          kind: record.artifact.subject.kind,
+          ...(record.artifact.subject.name !== undefined && { name: record.artifact.subject.name }),
+        },
+        location: `verification:${record.artifact.id}`,
+      })),
     }
   } catch {
     return { state: 'unavailable', origin: 'verification-artifacts', reason: 'unavailable' }
@@ -364,34 +407,53 @@ async function loadObservedWorkloadEvidence(
   blocked: readonly string[]
 ): Promise<WorkloadEvidence> {
   if (path === undefined) {
-    return { state: 'absent', origin: 'proxy-workload', observations: [], malformedLines: 0, issues: [] }
+    return {
+      state: 'absent',
+      origin: 'proxy-workload',
+      observations: [],
+      malformedLines: 0,
+      issues: [],
+    }
   }
   return loadWorkloadEvidence({ path: resolve(workspaceRoot, path), blockedIdentifiers: blocked })
 }
 
 export function shouldFail(
-  report: { summary: { errors: number }; findings: { code: string; severity: string }[]; coverage: { gaps: { code: string }[] } },
+  report: {
+    summary: { errors: number }
+    findings: { code: string; severity: string }[]
+    coverage: { gaps: { code: string }[] }
+  },
   failOn: FailOn
 ): boolean {
   if (failOn === 'never') return false
   if (failOn === 'error') return report.summary.errors > 0
   return (
     report.summary.errors > 0 ||
-    report.findings.some((finding) => finding.severity === 'warn' && finding.code !== 'AFFECTED_OBSERVED_WORKLOAD') ||
+    report.findings.some(
+      (finding) => finding.severity === 'warn' && finding.code !== 'AFFECTED_OBSERVED_WORKLOAD'
+    ) ||
     report.coverage.gaps.some((gap) => !gap.code.startsWith('WORKLOAD_'))
   )
 }
 
 function safeMessage(error: unknown): string {
   if (!(error instanceof Error)) return 'impact assessment failed'
-  return /^(format must|fail-on must|Choose exactly|design and output paths must differ|output path must|impact assessment against|design dialect|schema cache is empty|design contains validation errors)/.test(error.message)
+  return /^(format must|fail-on must|Choose exactly|design and output paths must differ|output path must|impact assessment against|design dialect|schema cache is empty|design contains validation errors)/.test(
+    error.message
+  )
     ? error.message
     : 'impact assessment failed; inspect the supplied local artifacts'
 }
 
 function isInside(root: string, target: string): boolean {
   const relativePath = relative(root, target)
-  return relativePath !== '' && !relativePath.startsWith(`..${sep}`) && relativePath !== '..' && !relativePath.includes(`..${sep}`)
+  return (
+    relativePath !== '' &&
+    !relativePath.startsWith(`..${sep}`) &&
+    relativePath !== '..' &&
+    !relativePath.includes(`..${sep}`)
+  )
 }
 
 async function realExistingAncestor(path: string): Promise<string> {
@@ -445,7 +507,8 @@ async function writeOutput(workspaceRoot: string, path: string, content: string)
     await assertOutputParent(workspaceRoot, path)
     await link(temp, path)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('impact output already exists')
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+      throw new Error('impact output already exists')
     throw error
   } finally {
     await unlink(temp).catch(() => {})

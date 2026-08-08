@@ -38,6 +38,7 @@ never the right move.
 [check](#check) ·
 [diff](#diff) ·
 [design](#design) ·
+[impact assess](#impact-assess) ·
 [snapshot](#snapshot) ·
 [assert](#assert) ·
 [proxy](#proxy) ·

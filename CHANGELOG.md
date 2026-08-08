@@ -5,6 +5,24 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.53.0] - 2026-08-09 - Offline evidence, semantic contracts, and impact assessment
+
+### Added
+
+- **Offline evidence packs.** `dbcli evidence compose`, `validate`, and `render` create, verify, and render workspace-contained evidence packs from safe claim text plus existing verification artifacts, audit entries, and optional assert receipts. Packs omit SQL, rows, targets, credentials, audit metadata, and verification summaries; source retention loss remains visible without preventing historical rendering.
+- **Evidence receipts for post-write assertions.** `assert --evidence-receipt <path>` atomically records safe provenance only after the verdict, audit attempt, and optional verification artifact are authoritative. Receipts are workspace-contained, contain no SQL or returned data, cannot be used as execution approval, and may be composed into an evidence pack.
+- **Reviewable semantic contracts.** `dbcli contract validate|context|search|drift` governs optional `dbcli.contracts.json` evidence expectations for canonical semantic terms. The commands are offline and read-only; only valid approved contracts enter ordinary agent context.
+- **Offline impact assessment.** `dbcli impact assess` creates a declared-coverage report for a design change against exactly one local schema-cache or ORM baseline, optionally incorporating reviewed data-access metadata and redaction-first proxy workload evidence. It never connects, executes SQL, or claims complete coverage.
+
+### Changed
+
+- **Shared execution and adapter boundaries.** Query execution now uses an injectable command runtime, SQL adapters share readiness and driver-error handling, and doctor accepts a non-SQL collector runtime. These internal changes keep the CLI behavior stable while making offline evidence and impact workflows testable.
+- **Documentation and agent skills cover the new surfaces.** English and Traditional Chinese Markdown and HTML guides, installed skill copies, and reference material document evidence packs, assert receipts, semantic contracts, and impact assessment.
+
+### Fixed
+
+- **Release audit no longer resolves a vulnerable `nanoid`.** The build-only PostCSS and Tailwind dependencies now resolve `nanoid@3.3.18`, satisfying the security advisory without adding a runtime dependency.
+
 ## [1.52.1] - 2026-08-08 - Skill audit: correct claims, per-platform install, drift gate
 
 ### Fixed

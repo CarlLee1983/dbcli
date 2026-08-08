@@ -42,17 +42,41 @@ describe('redaction utils', () => {
         ['safe-backfill', '--query', "UPDATE private_orders SET status = 'secret'"],
         ['migration', '--ddl', "ALTER TABLE private_orders ADD COLUMN token text DEFAULT 'secret'"],
         ['rollback', '--statement', "UPDATE private_orders SET status = 'secret'"],
-        ['constraint', '--violation-query', "SELECT count(*) FROM private_orders WHERE token = 'secret'"],
+        [
+          'constraint',
+          '--violation-query',
+          "SELECT count(*) FROM private_orders WHERE token = 'secret'",
+        ],
       ] as const
       for (const [scenario, valueFlag, value] of cases) {
         const redacted = redactArgv([
-          'dbcli', 'verify', scenario, '--table', 'private_orders', valueFlag, value,
-          '--verify-query', 'SELECT count(*) FROM private_orders', '--expect', 'value == 0',
-          '--subject-name', 'customer-secret', '--summary', 'private summary', '--after-write',
-          '--evidence-receipt', '/private/receipt.json',
+          'dbcli',
+          'verify',
+          scenario,
+          '--table',
+          'private_orders',
+          valueFlag,
+          value,
+          '--verify-query',
+          'SELECT count(*) FROM private_orders',
+          '--expect',
+          'value == 0',
+          '--subject-name',
+          'customer-secret',
+          '--summary',
+          'private summary',
+          '--after-write',
+          '--evidence-receipt',
+          '/private/receipt.json',
         ])
         expect(redacted).toContain(`dbcli verify ${scenario}`)
-        for (const secret of ['private_orders', 'secret', 'customer-secret', 'private summary', '/private/receipt.json']) {
+        for (const secret of [
+          'private_orders',
+          'secret',
+          'customer-secret',
+          'private summary',
+          '/private/receipt.json',
+        ]) {
           expect(redacted).not.toContain(secret)
         }
       }

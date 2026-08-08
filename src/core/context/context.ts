@@ -4,7 +4,11 @@ import { loadSnippets } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import type { TableSchema } from '@/adapters/types'
 import type { ResolvedSnippet } from '@/core/saved-queries/types'
-import { loadSemanticContext, semanticReferenceRegistry, type SemanticContext } from '@/core/semantic'
+import {
+  loadSemanticContext,
+  semanticReferenceRegistry,
+  type SemanticContext,
+} from '@/core/semantic'
 import {
   filterApprovedSemanticContracts,
   loadSemanticContracts,
@@ -204,7 +208,11 @@ export async function gatherContext(
     const contracts = await loadSemanticContracts({
       workspaceRoot,
       references: semantic
-        ? semanticReferenceRegistry(semantic, compactSchema, compactSnippets.map(({ key }) => key))
+        ? semanticReferenceRegistry(
+            semantic,
+            compactSchema,
+            compactSnippets.map(({ key }) => key)
+          )
         : new Set(),
       blockedTerms: [...blacklistTables, ...Object.values(blacklistColumns).flat()],
     })

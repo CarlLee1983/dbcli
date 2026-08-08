@@ -285,7 +285,7 @@ evidenceCommand
       const receipt = (options.receipt as string[] | undefined) ?? []
       if (verification.length + audit.length + receipt.length === 0) {
         throw new EvidencePackValidationError(
-          'at least one --verification or --audit reference is required'
+          'at least one --verification, --audit, or --receipt reference is required'
         )
       }
       const { configPath, config } = await readConfig(command)

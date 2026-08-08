@@ -1191,6 +1191,7 @@ dbcli design validate [--file <path>] [--format <format>]
 dbcli design render [--file <path>] [--format <format>]
 dbcli design diff (--against-cache | --against-orm <paths>) [options]
 dbcli design propose (--against-cache | --against-orm <paths>) [options]
+dbcli impact assess --design <path> (--against-cache | --against-orm <paths>) --output <path> [options]
 ```
 
 ```bash
@@ -1202,6 +1203,7 @@ dbcli design render --format mermaid
 dbcli design diff --against-cache --format markdown
 dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
 dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
+dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn
 ```
 
 | Option | Applies to | Default | Meaning |
@@ -1217,6 +1219,10 @@ dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
 
 `diff` and `propose` require **exactly one** comparison target; passing both or
 neither is an error.
+
+### impact assess
+
+Writes an offline JSON or Markdown report for the known declared impact of a design change. It requires `--design`, exactly one baseline (`--against-cache` or `--against-orm`), and an explicit workspace-contained `--output`. `--format` is `json` (default) or `markdown`; `--fail-on` is `error`, `warn`, or `never` (default). The threshold changes only the successful command exit code after the report is written. The report is limited to declared/partial coverage and never claims complete coverage. It may join the optional reviewed `dbcli.data-access.json` manifest only after validating its canonical semantic references and existing workspace-relative source paths; it never reads those sources. An optional explicit `--events <path>` is bounded and streamed through a redaction-first projection that retains recent safe table metadata only. It never starts a proxy, reads a rotated log, renders SQL/literals/errors/sessions/paths, or makes the command fail solely because workload evidence is absent or advisory. It reads no database, executes no SQL, and never reads saved-query bodies.
 
 #### Artifact shape
 
@@ -1941,7 +1947,7 @@ Output reports: writer enabled/disabled, last write result, file-lock state, rot
 ### verify
 
 Run a verification scenario. `verify` **runs** verification scenarios (safe-backfill,
-migration, rollback) and never executes writes/DDL. `verification` **inspects and manages**
+migration, rollback, constraint) and never executes writes/DDL. `verification` **inspects and manages**
 the local result artifacts those scenarios produce under `.dbcli/verification/`.
 
 ```bash
@@ -1953,7 +1959,8 @@ dbcli verify safe-backfill \
   --expect "value == 0"
 
 # After-write: re-run guards, run the read-back assertion, write a v1 artifact.
-dbcli verify safe-backfill ... --after-write
+# An optional receipt is provenance only, never approval to execute a write.
+dbcli verify safe-backfill ... --after-write --evidence-receipt .dbcli/evidence/verify-receipt.json
 
 # JSON for agents.
 dbcli verify safe-backfill ... --format json
@@ -1961,7 +1968,11 @@ dbcli verify safe-backfill ... --format json
 
 Options: `--table` (req), `--query` (req, analyzed not executed), `--verify-query`
 (req, **plain SELECT only**), `--expect` (req), `--after-write`, `--format <table|json>`,
-`--subject-name <name>`, `--summary <text>`.
+`--subject-name <name>`, `--summary <text>`, `--evidence-receipt <workspace-relative-path>`
+(after-write only). A receipt is safe provenance for the already-executed verification,
+not approval to execute a write. Its `succeeded`/`failed` outcome remains distinct from
+the artifact status (`verified`, `not_verified`, `indeterminate`, or `blocked`); task-pack
+`planned` evidence stays plan-only.
 
 Guard constraints (fail closed): `--verify-query` must be a **plain `SELECT`** —
 `EXPLAIN`/`EXPLAIN ANALYZE`, `SHOW`, `DESCRIBE`, and data-modifying CTEs are rejected
@@ -2478,6 +2489,7 @@ verification verdicts.
 
 ```bash
 dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --receipt .dbcli/evidence/verify-receipt.json \
   --output .dbcli/evidence/review.json --format json
 ```
 
@@ -2486,10 +2498,11 @@ dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a
 | `--claims <file>` | Required JSON file with exactly `subject` and `claims`; every claim has an `id` and plain-language `text`. SQL-shaped text, credentials, error content, and blacklisted identifiers are rejected. | — |
 | `--verification <selector...>` | One or more verification artifact ids, unique prefixes, filenames, or in-bounds paths. | none |
 | `--audit <selector...>` | One or more audit ids or unique prefixes (minimum four characters) from the active connection. | none |
+| `--receipt <path...>` | Explicit workspace-relative receipt path(s). Receipts contribute safe provenance only; they are not execution approval. | none |
 | `--output <path>` | Required new JSON path under the current workspace. Existing files and paths outside the workspace are refused. | — |
 | `--format <json\|markdown>` | Compose receipt format printed to stdout. | `json` |
 
-At least one `--verification` or `--audit` reference is required. The resulting pack
+At least one `--verification`, `--audit`, or `--receipt` reference is required. The resulting pack
 contains a canonical SHA-256 integrity digest and `coverage.completeForDeclaredEvidence:
 true` for its explicitly selected references.
 

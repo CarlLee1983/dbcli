@@ -16,6 +16,7 @@ import { parseExpect, AssertExpressionError } from '@/core/assert/grammar'
 import { evaluateExpect, AssertShapeError, firstScalar } from '@/core/assert/evaluator'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { writeVerificationArtifact } from '@/core/verification'
+import { writeVerifyEvidenceReceipt } from '@/commands/verify-receipt'
 import type { BlacklistConfig } from '@/types/blacklist'
 import type { TableSchema } from '@/adapters/types'
 import { toSqlDialect } from '@/core/permission-guard'
@@ -1206,6 +1207,10 @@ async function executeScenario<
 
   try {
     const configPath = resolveConfigPath(command, options as { config?: string })
+    if (!input.afterWrite && typeof options.evidenceReceipt === 'string') {
+      console.error('Evidence receipt unsupported: receipts require --after-write')
+      process.exit(1)
+    }
     const config = await configModule.read(configPath)
     if (!config.connection) {
       console.error('Database not configured. Run: dbcli init')
@@ -1240,12 +1245,24 @@ async function executeScenario<
       await adapter.disconnect()
     }
 
+    const artifact = def.artifactOf(result)
     let artifactPath: string | undefined
     let artifactError: string | undefined
     try {
-      artifactPath = await writeVerificationArtifact(process.cwd(), def.artifactOf(result))
+      artifactPath = await writeVerificationArtifact(process.cwd(), artifact)
     } catch (e) {
       artifactError = (e as Error).message
+    }
+
+    let evidenceReceiptPath: string | undefined
+    let evidenceReceiptError: string | undefined
+    if (typeof options.evidenceReceipt === 'string') {
+      const receiptResult = await writeVerifyEvidenceReceipt({
+        workspaceRoot: process.cwd(), scenarioName: def.name, config, artifact, artifactPath,
+        outputPath: options.evidenceReceipt, argv: process.argv,
+      })
+      if ('path' in receiptResult) evidenceReceiptPath = receiptResult.path
+      else evidenceReceiptError = receiptResult.error
     }
 
     if (input.format === 'json') {
@@ -1254,6 +1271,8 @@ async function executeScenario<
           {
             ...(def.afterWriteJson(result, artifactPath) as object),
             ...(artifactError ? { artifactError } : {}),
+            ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}),
+            ...(evidenceReceiptError ? { evidenceReceiptError } : {}),
           },
           null,
           2
@@ -1262,10 +1281,12 @@ async function executeScenario<
     } else {
       console.log(def.renderAfterWriteTable(result, artifactPath))
       if (artifactError) console.error(`Failed to write verification artifact: ${artifactError}`)
+      if (evidenceReceiptPath) console.log(`Evidence receipt: ${evidenceReceiptPath}`)
+      if (evidenceReceiptError) console.error(evidenceReceiptError)
     }
 
     // Verified exits 0 only when the artifact also persisted; any other state exits 1.
-    process.exit(def.isAfterWriteVerified(result, artifactError) ? 0 : 1)
+    process.exit(def.isAfterWriteVerified(result, artifactError) && !evidenceReceiptError ? 0 : 1)
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message)
@@ -1283,6 +1304,10 @@ function registerScenario<Input extends VerifyScenarioInputBase, Runners, Prefli
 ): void {
   const command = parent.command(def.name).description(def.description)
   def.configureOptions(command)
+  command.option(
+    '--evidence-receipt <path>',
+    'Write a safe provenance receipt after the verification artifact is authoritative'
+  )
   command.action((options: Record<string, unknown>, cmd: Command) =>
     executeScenario(def, options, cmd)
   )

@@ -518,6 +518,14 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
 > constraint) and never executes writes/DDL. `dbcli verification` **inspects and manages** the local result
 > artifacts those scenarios produce under `.dbcli/verification/`.
 
+After an `--after-write` run, add `--evidence-receipt <workspace-relative-path>` to
+write a safe, atomic provenance receipt linked to the resulting artifact. A receipt
+contains no SQL, rows, credentials, or user paths; it records provenance only and is
+**not** execution approval. It is unavailable in preflight mode, which has no executed
+result artifact. The receipt outcome (`succeeded`/`failed`) is separate from the
+scenario status (`verified`, `not_verified`, `indeterminate`, or `blocked`); task-pack
+`planned` evidence remains plan-only.
+
 #### verify safe-backfill
 
 Verify a safe backfill without ever executing the `UPDATE`. Preflight (default) runs
@@ -786,7 +794,7 @@ database and does not copy SQL, targets, audit metadata, verification summaries,
 credentials into the pack. Claims are externally supplied statements, explicitly
 labeled as such; they are not dbcli verification verdicts.
 
-- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] --output <path> [--format json|markdown]`
+- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] [--receipt <path...>] --output <path> [--format json|markdown]`
   — resolves one or more existing references and writes a new pack. The claims file is
   JSON with exactly `subject` and `claims`; each claim has an `id` and plain-language
   `text`. Claim text cannot contain SQL, credentials, error content, or blacklisted
@@ -804,6 +812,7 @@ labeled as such; they are not dbcli verification verdicts.
 
 ```bash
 dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --receipt .dbcli/evidence/verify-receipt.json \
   --output .dbcli/evidence/review.json
 dbcli evidence validate --file .dbcli/evidence/review.json --format json
 dbcli evidence render --file .dbcli/evidence/review.json

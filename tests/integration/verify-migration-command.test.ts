@@ -152,16 +152,23 @@ describe('dbcli verify migration (integration)', () => {
       '--expect',
       'value == 3',
       '--after-write',
+      '--evidence-receipt',
+      'evidence/migration-receipt.json',
       '--format',
       'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
     expect(j.status).toBe('verified')
+    expect(j.evidenceReceiptPath).toContain('evidence/migration-receipt.json')
     expect(j.artifact.id).toBeTruthy()
     expect(j.artifact.subject.kind).toBe('migration')
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
     expect(raw.schemaVersion).toBe(1)
+    const receipt = JSON.parse(await readFile(j.evidenceReceiptPath, 'utf8'))
+    expect(receipt.operation).toBe('verify')
+    expect(receipt.outcome).toBe('succeeded')
+    expect(JSON.stringify(receipt)).not.toContain(DDL)
     // The DDL was never executed: the "never_added" column must not exist.
     const probe = await run([
       'query',

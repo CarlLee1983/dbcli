@@ -1,6 +1,5 @@
 // src/commands/assert.ts
 import { Command } from 'commander'
-import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import {
   AdapterFactory,
@@ -36,8 +35,7 @@ import {
 import type { VerificationSubject } from '@/core/verification'
 import { buildEvidenceReceipt, writeEvidenceReceipt } from '@/core/evidence-receipt'
 import { redactArgv } from '@/utils/redaction'
-import { compactVisibleSchema } from '@/core/context/context'
-import { defaultSemanticFile, loadSemanticContext } from '@/core/semantic'
+import { buildEvidenceReceiptContext } from '@/commands/evidence-receipt-context'
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb']
@@ -187,33 +185,9 @@ export const assertCommand = new Command()
       let evidenceReceiptPath: string | undefined
       if (typeof options.evidenceReceipt === 'string') {
         try {
-          const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) =>
-            item && typeof item === 'object' && !Array.isArray(item)
-              ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right)))
-              : item
-          )
-          const fingerprint = (value: unknown) => `sha256:${createHash('sha256').update(canonical(value)).digest('hex')}`
-          const visibleSchema = compactVisibleSchema(config)
-          const semanticFile = defaultSemanticFile(process.cwd())
-          const semanticFingerprint = (await Bun.file(semanticFile).exists())
-            ? fingerprint(await loadSemanticContext({
-                workspaceRoot: process.cwd(),
-                schema: Object.fromEntries(
-                  Object.entries(visibleSchema).map(([table, value]) => [table, { columns: value.columns.map((column) => ({ name: column.name })) }])
-                ),
-                snippets: [],
-                missingFile: 'error',
-              }))
-            : null
           const receipt = buildEvidenceReceipt({
             command: redactArgv(process.argv),
-            context: {
-              engine: config.connection.system,
-              connectionName: config.effectiveConnectionName ?? 'default',
-              environment: config.effectiveEnvironment ?? 'default',
-              schemaFingerprint: fingerprint(visibleSchema),
-              semanticFingerprint,
-            },
+            context: await buildEvidenceReceiptContext(config, process.cwd()),
             auditRef,
             verificationArtifactRef: verificationArtifactPath ? basename(verificationArtifactPath) : null,
             verdict,

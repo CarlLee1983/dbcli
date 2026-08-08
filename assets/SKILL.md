@@ -204,7 +204,9 @@ Guardrails:
 - Durable evidence: `assert … --write-verification-artifact --verification-subject <kind:name>`;
   inspect with `verification summary` / `list` / `show <id>`. The `verify safe-backfill` /
   `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>`
-  family runs preflight + `--after-write` checks and **never executes the write**. Full flags
+  family runs preflight + `--after-write` checks and **never executes the write**. Add
+  `--evidence-receipt <workspace-relative-path>` only after after-write for a safe provenance
+  receipt; it is never approval to execute a write. Full flags
   and the per-command blocks are in [reference.md](reference.md#commands).
 
 ## Audit log

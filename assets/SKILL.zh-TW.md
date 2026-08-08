@@ -155,7 +155,7 @@ dbcli inspect --for-agent --no-connect --format json
 - 不要直接從 performance suggestion 建 index；應轉成經過 review 的 migration。
 - 不要執行 `design propose` 計畫裡的 `commands`；未經人類要求，也不要建立或改寫 `dbcli.design.json`。
 - 不要列印 credentials、複製的連線字串或 blacklisted 值。
-- 持久化佐證：`assert … --write-verification-artifact --verification-subject <kind:name>`；以 `verification summary` / `list` / `show <id>` 檢視。`verify safe-backfill` / `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>` 系列執行 preflight + `--after-write` 驗證，**永不執行寫入**。完整旗標與每個指令的區塊詳見 [reference.md](reference.md#commands)。
+- 持久化佐證：`assert … --write-verification-artifact --verification-subject <kind:name>`；以 `verification summary` / `list` / `show <id>` 檢視。`verify safe-backfill` / `migration` / `rollback --kind <ddl|dml>` / `constraint --check <fk|not-null|unique|custom>` 系列執行 preflight + `--after-write` 驗證，**永不執行寫入**。僅可在 after-write 後加入 `--evidence-receipt <工作區相對路徑>` 寫入安全 provenance receipt；它不代表核准執行寫入。完整旗標與每個指令的區塊詳見 [reference.md](reference.md#commands)。
 
 ## Audit Log 使用
 

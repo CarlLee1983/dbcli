@@ -17,6 +17,10 @@ function runHelp(args: string[]): Promise<{ stdout: string; stderr: string; code
   })
 }
 
+function runCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+  return runHelp(args)
+}
+
 /** `--help` must exit 0 with a clean stderr; anything else signals CLI-surface drift. */
 function expectCleanHelp({ stderr, code }: { stderr: string; code: number }) {
   expect(code).toBe(0)
@@ -46,6 +50,7 @@ describe('verify --help surface', () => {
       '--format',
       '--subject-name',
       '--summary',
+      '--evidence-receipt',
     ]) {
       expect(stdout).toContain(flag)
     }
@@ -64,6 +69,7 @@ describe('verify --help surface', () => {
       '--format',
       '--subject-name',
       '--summary',
+      '--evidence-receipt',
     ]) {
       expect(stdout).toContain(flag)
     }
@@ -83,6 +89,7 @@ describe('verify --help surface', () => {
       '--format',
       '--subject-name',
       '--summary',
+      '--evidence-receipt',
     ]) {
       expect(stdout).toContain(flag)
     }
@@ -104,8 +111,19 @@ describe('verify --help surface', () => {
       '--format',
       '--subject-name',
       '--summary',
+      '--evidence-receipt',
     ]) {
       expect(stdout).toContain(flag)
     }
+  })
+
+  test('preflight rejects an evidence receipt before any database configuration is read', async () => {
+    const result = await runCommand([
+      'verify', 'safe-backfill', '--table', 'orders', '--query', 'UPDATE orders SET status = 1 WHERE id = 1',
+      '--verify-query', 'SELECT count(*) FROM orders', '--expect', 'value == 0',
+      '--evidence-receipt', 'evidence/receipt.json',
+    ])
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('Evidence receipt unsupported: receipts require --after-write')
   })
 })

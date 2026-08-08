@@ -495,6 +495,8 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
 > `dbcli verify` **執行**驗證情境（safe-backfill、migration、rollback、constraint），永不執行寫入或 DDL。
 > `dbcli verification` **檢視與管理**這些情境產生的本機結果文物（位於 `.dbcli/verification/`）。
 
+在 `--after-write` 執行完成後，可加入 `--evidence-receipt <工作區相對路徑>`，原子寫入連結至結果文物的安全 provenance receipt。receipt 不含 SQL、rows、credentials 或使用者路徑；它只記錄 provenance，**不代表**核准執行。預檢模式沒有已執行的結果文物，因此不支援 receipt。receipt outcome（`succeeded`/`failed`）與情境 status（`verified`、`not_verified`、`indeterminate` 或 `blocked`）分開；task-pack 的 `planned` evidence 仍僅限計畫。
+
 #### verify safe-backfill
 
 在不執行任何 `UPDATE` 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；`--after-write` 模式重新執行防護、執行回讀斷言，並寫入驗證文物。
@@ -696,7 +698,7 @@ dbcli verification prune --older-than 30d --keep-latest 20 --execute --force
 verification summary 或憑證複製進包內。Claim 是外部提供的陳述，會被明確標示；它不是 dbcli 的
 驗證裁決。
 
-- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] --output <path> [--format json|markdown]`
+- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] [--receipt <path...>] --output <path> [--format json|markdown]`
   — 解析一或多個既有參照並寫入新證據包。claims 檔案是只含 `subject` 與 `claims` 的 JSON；每個
   claim 都含 `id` 與自然語言 `text`。Claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。
   輸出必須留在目前工作區內，且絕不覆寫既有檔案。
@@ -710,6 +712,7 @@ verification summary 或憑證複製進包內。Claim 是外部提供的陳述�
 
 ```bash
 dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --receipt .dbcli/evidence/verify-receipt.json \
   --output .dbcli/evidence/review.json
 dbcli evidence validate --file .dbcli/evidence/review.json --format json
 dbcli evidence render --file .dbcli/evidence/review.json

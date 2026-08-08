@@ -1,4 +1,4 @@
-const SQL_SUBCOMMANDS = new Set(['query', 'export', 'lint', 'assert'])
+const SQL_SUBCOMMANDS = new Set(['query', 'export', 'lint', 'assert', 'verify'])
 const REDACTED_VALUE_FLAGS = new Set([
   '--where',
   '--set',
@@ -35,6 +35,21 @@ const KEEP_VALUE_FLAGS = new Set([
 const LINT_BOOLEAN_FLAGS = new Set(['--no-schema', '--recovery'])
 const QUERY_BOOLEAN_FLAGS = new Set(['--ui', '--no-limit', '--no-truncate', '--recovery'])
 const ASSERT_BOOLEAN_FLAGS = new Set(['--no-fail', '--write-verification-artifact'])
+const VERIFY_REDACTED_VALUE_FLAGS = new Set([
+  '--table',
+  '--query',
+  '--verify-query',
+  '--ddl',
+  '--statement',
+  '--check',
+  '--column',
+  '--references',
+  '--violation-query',
+  '--subject-name',
+  '--summary',
+  '--baseline',
+])
+const VERIFY_BOOLEAN_FLAGS = new Set(['--after-write', '--allow-preexisting'])
 
 function optionParts(token: string): {
   name: string
@@ -57,7 +72,12 @@ function isKnownBooleanFlag(command: string | undefined, name: string): boolean 
   if (command === 'lint') return LINT_BOOLEAN_FLAGS.has(name)
   if (command === 'query') return QUERY_BOOLEAN_FLAGS.has(name)
   if (command === 'assert') return ASSERT_BOOLEAN_FLAGS.has(name)
+  if (command === 'verify') return VERIFY_BOOLEAN_FLAGS.has(name)
   return false
+}
+
+function isRedactedValueFlag(command: string | undefined, name: string): boolean {
+  return REDACTED_VALUE_FLAGS.has(name) || (command === 'verify' && VERIFY_REDACTED_VALUE_FLAGS.has(name))
 }
 
 function findSensitiveSubcommand(argv: string[]): {
@@ -70,7 +90,7 @@ function findSensitiveSubcommand(argv: string[]): {
       const { name, inlineValue } = optionParts(token)
       if (
         inlineValue === undefined &&
-        (REDACTED_VALUE_FLAGS.has(name) || KEEP_VALUE_FLAGS.has(name))
+        (isRedactedValueFlag(undefined, name) || KEEP_VALUE_FLAGS.has(name))
       ) {
         index++
       }
@@ -85,6 +105,7 @@ function sensitiveArgvValues(argv: string[]): string[] {
   const sensitiveCommand = findSensitiveSubcommand(argv)
   const values = new Set<string>()
   let capturedSingleSql = false
+  let verifyScenarioSeen = false
   let afterEndOfOptions = false
 
   for (let index = 0; index < argv.length; index++) {
@@ -95,7 +116,7 @@ function sensitiveArgvValues(argv: string[]): string[] {
     }
     if (!afterEndOfOptions && isOptionToken(token)) {
       const { name, inlineValue } = optionParts(token)
-      if (REDACTED_VALUE_FLAGS.has(name)) {
+      if (isRedactedValueFlag(sensitiveCommand?.command, name)) {
         const value = inlineValue ?? argv[index + 1]
         if (value) {
           values.add(value)
@@ -124,11 +145,11 @@ function sensitiveArgvValues(argv: string[]): string[] {
       continue
     }
 
-    if (
-      sensitiveCommand &&
-      index > sensitiveCommand.index &&
-      (sensitiveCommand.command === 'lint' || !capturedSingleSql)
-    ) {
+    if (sensitiveCommand?.command === 'verify' && index > sensitiveCommand.index && !verifyScenarioSeen) {
+      verifyScenarioSeen = true
+      continue
+    }
+    if (sensitiveCommand && index > sensitiveCommand.index && (sensitiveCommand.command === 'lint' || !capturedSingleSql)) {
       values.add(token)
       capturedSingleSql = true
     }
@@ -146,6 +167,7 @@ export function redactArgv(argv: string[]): string {
   const sensitiveCommand = findSensitiveSubcommand(argv)
   const out: string[] = []
   let redactedSingleSql = false
+  let verifyScenarioSeen = false
   let afterEndOfOptions = false
 
   for (let i = 0; i < argv.length; i++) {
@@ -157,7 +179,7 @@ export function redactArgv(argv: string[]): string {
     }
     if (!afterEndOfOptions && isOptionToken(tok)) {
       const { name, inlineValue } = optionParts(tok)
-      if (REDACTED_VALUE_FLAGS.has(name)) {
+      if (isRedactedValueFlag(sensitiveCommand?.command, name)) {
         out.push(`${name} <redacted>`)
         if (inlineValue === undefined) i++
         continue
@@ -182,11 +204,12 @@ export function redactArgv(argv: string[]): string {
         continue
       }
     }
-    if (
-      sensitiveCommand &&
-      i > sensitiveCommand.index &&
-      (sensitiveCommand.command === 'lint' || !redactedSingleSql)
-    ) {
+    if (sensitiveCommand?.command === 'verify' && i > sensitiveCommand.index && !verifyScenarioSeen) {
+      out.push(tok)
+      verifyScenarioSeen = true
+      continue
+    }
+    if (sensitiveCommand && i > sensitiveCommand.index && (sensitiveCommand.command === 'lint' || !redactedSingleSql)) {
       out.push('<sql>')
       redactedSingleSql = true
       continue

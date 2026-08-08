@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { buildEvidenceReceipt } from '@/core/evidence-receipt'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 const AUDIT_ID = 'a1111111-evidence-audit'
@@ -71,6 +72,24 @@ async function seed(blacklist: string[] = []): Promise<string> {
       metadata: { private: 'must-not-leak' },
     })}\n`
   )
+  const receipt = buildEvidenceReceipt(
+    {
+      operation: 'verify',
+      command: 'dbcli verify safe-backfill --after-write',
+      context: {
+        engine: 'postgresql',
+        connectionName: 'default',
+        environment: 'default',
+        schemaFingerprint: `sha256:${'a'.repeat(64)}`,
+        semanticFingerprint: null,
+      },
+      verificationArtifactRef: 'verification-20260808-100000-evidenceverify1.json',
+      verificationStatus: 'verified',
+      verificationArtifactPersisted: true,
+    },
+    { now: () => new Date('2026-08-08T10:00:00.000Z'), idFactory: () => 'evr_verify-1' }
+  )
+  await writeFile(join(work, 'verify-receipt.json'), JSON.stringify(receipt, null, 2))
   await writeFile(
     join(work, '.dbcli', 'verification', 'verification-20260808-100000-evidenceverify1.json'),
     JSON.stringify({
@@ -103,6 +122,23 @@ afterEach(async () => {
 })
 
 describe('dbcli evidence (CLI)', () => {
+  test('composes and validates a verify receipt reference offline', async () => {
+    work = await seed()
+    const compose = await run(
+      [
+        'evidence', 'compose', '--claims', 'claims.json', '--receipt', 'verify-receipt.json',
+        '--output', '.dbcli/evidence/verify-pack.json',
+      ],
+      work
+    )
+    expect(compose.code).toBe(0)
+    const pack = await Bun.file(join(work, '.dbcli/evidence/verify-pack.json')).json()
+    expect(pack.claims[0].evidence).toMatchObject([{ kind: 'receipt', operation: 'verify', outcome: 'succeeded' }])
+    const validation = await run(['evidence', 'validate', '--file', '.dbcli/evidence/verify-pack.json'], work)
+    expect(validation.code).toBe(0)
+    expect(JSON.parse(validation.stdout)).toMatchObject({ integrity: 'valid', references: 'valid' })
+  })
+
   test('composes a restricted pack, validates it, and renders it offline', async () => {
     work = await seed()
     const compose = await run(

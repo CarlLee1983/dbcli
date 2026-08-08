@@ -189,16 +189,23 @@ describe('dbcli verify rollback (integration)', () => {
       '--expect',
       'value == 0',
       '--after-write',
+      '--evidence-receipt',
+      'evidence/rollback-receipt.json',
       '--format',
       'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
     expect(j.status).toBe('verified')
+    expect(j.evidenceReceiptPath).toContain('evidence/rollback-receipt.json')
     expect(j.artifact.subject.kind).toBe('migration')
     expect(j.artifact.subject.command).toBe('verify rollback')
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
     expect(raw.schemaVersion).toBe(1)
+    const receipt = JSON.parse(await readFile(j.evidenceReceiptPath, 'utf8'))
+    expect(receipt.operation).toBe('verify')
+    expect(receipt.outcome).toBe('succeeded')
+    expect(JSON.stringify(receipt)).not.toContain(DDL)
     // The DROP COLUMN was never executed: the `status` column must still exist.
     const probe = await run([
       'query',

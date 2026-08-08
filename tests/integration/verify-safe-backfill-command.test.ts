@@ -169,12 +169,15 @@ describe('dbcli verify safe-backfill (integration)', () => {
       '--expect',
       'value == 3',
       '--after-write',
+      '--evidence-receipt',
+      'evidence/safe-backfill-receipt.json',
       '--format',
       'json',
     ])
     const j = JSON.parse(stdout)
     expect(code).toBe(0)
     expect(j.status).toBe('verified')
+    expect(j.evidenceReceiptPath).toContain('evidence/safe-backfill-receipt.json')
     expect(j.artifact.path).toContain('.dbcli/verification/')
     expect(j.artifact.subject).toEqual({
       kind: 'backfill',
@@ -185,6 +188,11 @@ describe('dbcli verify safe-backfill (integration)', () => {
     expect(raw.schemaVersion).toBe(1)
     expect(raw.status).toBe('verified')
     expect(raw.evidence.map((e: { kind: string }) => e.kind)).toContain('task-pack-plan')
+    const receipt = JSON.parse(await readFile(j.evidenceReceiptPath, 'utf8'))
+    expect(receipt.operation).toBe('verify')
+    expect(receipt.outcome).toBe('succeeded')
+    expect(receipt.provenance.verificationArtifactRef).toBeTruthy()
+    expect(JSON.stringify(receipt)).not.toContain(UPDATE_SQL)
   })
 
   test('after-write assertion failure exits 1 and writes not_verified', async () => {

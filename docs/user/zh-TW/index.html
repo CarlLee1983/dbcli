@@ -470,6 +470,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
   --verification-subject backfill:safe-backfill-verify</code></pre>
 
             <p class="mb-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"><code>dbcli verify</code> <strong>執行</strong>驗證情境（safe-backfill、migration、rollback、constraint），永不執行寫入或 DDL。<code>dbcli verification</code> <strong>檢視與管理</strong>這些情境產生的本機結果文物（位於 <code>.dbcli/verification/</code>）。</p>
+            <p class="mb-4">在 <code>--after-write</code> 執行完成後，可加入 <code>--evidence-receipt &lt;工作區相對路徑&gt;</code>，原子寫入連結至結果文物的安全 provenance receipt。receipt 不含 SQL、rows、credentials 或使用者路徑；它只記錄 provenance，<strong>不代表</strong>核准執行。預檢模式沒有已執行的結果文物，因此不支援 receipt。receipt outcome（<code>succeeded</code>/<code>failed</code>）與情境 status（<code>verified</code>、<code>not_verified</code>、<code>indeterminate</code> 或 <code>blocked</code>）分開；task-pack 的 <code>planned</code> evidence 仍僅限計畫。</p>
             <h4 class="mt-6 mb-2 font-bold">verify safe-backfill</h4>
             <p class="mb-4">在不執行任何 <code>UPDATE</code> 的前提下，驗證安全 backfill 的正確性。預檢模式（預設）執行唯讀防護並印出實際的 after-write 指令；<code>--after-write</code> 模式重新執行防護、執行回讀斷言，並寫入驗證文物。</p>
             <p class="mb-4 text-amber-700 font-medium">⚠️ <code>verify safe-backfill</code> 永遠不會執行 backfill 寫入。請先透過一般寫入指令執行已核准的寫入，再執行 <code>--after-write</code>。</p>
@@ -619,11 +620,12 @@ dbcli verification prune --older-than 30d --keep-latest 20 --execute --force</co
             <h3 id="evidence-packs">evidence — 建立離線證據包</h3>
             <p class="text-text-muted mb-4"><code>dbcli evidence</code> 把既有 verification artifact 與 audit entry 收斂為可供審閱或交接的、工作區內 canonical JSON 證據包。它不連線資料庫，也不會把 SQL、target、audit metadata、verification summary 或憑證複製進包內。Claim 是外部提供的陳述，會被明確標示；它不是 dbcli 的驗證裁決。</p>
             <ul class="mb-4">
-                <li><code>dbcli evidence compose --claims &lt;file&gt; [--verification &lt;selector...&gt;] [--audit &lt;selector...&gt;] --output &lt;path&gt; [--format json|markdown]</code> — 解析既有參照並寫入新證據包。claims JSON 只含 <code>subject</code> 與 <code>claims</code>；claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。輸出必須留在目前工作區內，且不會覆寫既有檔案。</li>
+                <li><code>dbcli evidence compose --claims &lt;file&gt; [--verification &lt;selector...&gt;] [--audit &lt;selector...&gt;] [--receipt &lt;path...&gt;] --output &lt;path&gt; [--format json|markdown]</code> — 解析既有參照並寫入新證據包。receipt 只記錄 provenance，不代表核准執行。claims JSON 只含 <code>subject</code> 與 <code>claims</code>；claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。輸出必須留在目前工作區內，且不會覆寫既有檔案。</li>
                 <li><code>dbcli evidence validate --file &lt;path&gt; [--format json|markdown]</code> — 驗證 SHA-256 digest 與來源證據可用性。已保留的 pack 若對應 audit/artifact 之後輪替、清除或消失，回傳 <code>references: "source-expired"</code> 並以 <code>1</code> 退出，但仍可 render。</li>
                 <li><code>dbcli evidence render --file &lt;path&gt; [--format json|markdown]</code> — 驗證目前的黑名單政策後，不重讀原始參照就輸出有效 pack，因此來源保留期屆滿後仍可供歷史審閱。</li>
             </ul>
             <pre><code>dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --receipt .dbcli/evidence/verify-receipt.json \
   --output .dbcli/evidence/review.json
 dbcli evidence validate --file .dbcli/evidence/review.json --format json
 dbcli evidence render --file .dbcli/evidence/review.json</code></pre>

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
+import { isVerificationStatus, type VerificationStatus } from '@/core/verification'
 
 export const EVIDENCE_RECEIPT_VERSION = 1 as const
 
@@ -13,7 +14,7 @@ export interface EvidenceReceipt {
   version: typeof EVIDENCE_RECEIPT_VERSION
   id: string
   createdAt: string
-  operation: 'assert'
+  operation: 'assert' | 'verify'
   outcome: 'succeeded' | 'failed'
   context: {
     engine: string
@@ -29,16 +30,31 @@ export interface EvidenceReceipt {
     verificationArtifactRef: string | null
   }
   replay: { status: 'context-required' }
-  observation: { kind: 'assert-verdict'; fingerprint: string }
+  observation: { kind: 'assert-verdict' | 'verify-outcome'; fingerprint: string }
 }
 
-export interface BuildEvidenceReceiptInput {
+interface BuildEvidenceReceiptBase {
   command: string
   context: EvidenceReceipt['context']
   auditRef?: string | null
   verificationArtifactRef?: string | null
-  verdict: { pass: boolean; checks: ReadonlyArray<{ pass: boolean }> }
 }
+
+type AssertVerdictBits = { pass: boolean; checks: ReadonlyArray<{ pass: boolean }> }
+
+export type BuildEvidenceReceiptInput =
+  | (BuildEvidenceReceiptBase & {
+      operation?: 'assert'
+      /** Only bounded pass bits may enter an assert receipt. */
+      verdict: AssertVerdictBits
+    })
+  | (BuildEvidenceReceiptBase & {
+      operation: 'verify'
+      /** Kept distinct from the receipt's coarse outcome. */
+      verificationStatus: VerificationStatus
+      /** Whether the linked verification artifact persisted. */
+      verificationArtifactPersisted: boolean
+    })
 
 export class EvidenceReceiptValidationError extends Error {
   constructor(message: string) {
@@ -59,6 +75,13 @@ function exact(value: Record<string, unknown>, keys: readonly string[], label: s
 function bounded(value: unknown, label: string, max = 2_000): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > max || !SAFE_TEXT.test(value)) {
     throw new EvidenceReceiptValidationError(`${label} must be safe bounded text`)
+  }
+  return value
+}
+
+function boundedCommandSource(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2_000) {
+    throw new EvidenceReceiptValidationError('command must be bounded text')
   }
   return value
 }
@@ -89,15 +112,17 @@ function timestamp(value: unknown): string {
   return value
 }
 
-/** Remove runtime executable/source prefixes; retain only the already-redacted assert command. */
-export function canonicalizeEvidenceReceiptCommand(command: string): string {
-  const source = bounded(command, 'command')
-  const match = /(?:^|\s)assert(?:\s|$)/.exec(source)
-  if (!match) throw new EvidenceReceiptValidationError('command must contain assert')
-  const args = source.slice(match.index + match[0].indexOf('assert') + 'assert'.length).trim()
-  const canonical = `dbcli assert${args ? ` ${args}` : ''}`
+/** Remove runtime executable/source prefixes; retain only already-redacted command provenance. */
+export function canonicalizeEvidenceReceiptCommand(command: string, operation: EvidenceReceipt['operation'] = 'assert'): string {
+  // Runtime argv includes absolute executable/source paths. Discard that prefix first;
+  // only the already-redacted operation segment is allowed into the receipt.
+  const source = boundedCommandSource(command)
+  const match = new RegExp(`(?:^|\\s)${operation}(?:\\s|$)`).exec(source)
+  if (!match) throw new EvidenceReceiptValidationError(`command must contain ${operation}`)
+  const args = source.slice(match.index + match[0].indexOf(operation) + operation.length).trim()
+  const canonical = `dbcli ${operation}${args ? ` ${args}` : ''}`
   if (!SAFE_TEXT.test(canonical) || /\b(?:select|insert|update|delete|from|password|secret|token|error|exception)\b/i.test(canonical)) {
-    throw new EvidenceReceiptValidationError('command is not safe redacted assert provenance')
+    throw new EvidenceReceiptValidationError('command is not safe redacted provenance')
   }
   return canonical
 }
@@ -106,7 +131,7 @@ function sha256(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`
 }
 
-function verdictFingerprint(verdict: BuildEvidenceReceiptInput['verdict']): string {
+function verdictFingerprint(verdict: AssertVerdictBits): string {
   if (!record(verdict) || typeof verdict.pass !== 'boolean' || !Array.isArray(verdict.checks) || verdict.checks.length > 1_000) {
     throw new EvidenceReceiptValidationError('verdict must contain bounded pass bits')
   }
@@ -119,18 +144,43 @@ function verdictFingerprint(verdict: BuildEvidenceReceiptInput['verdict']): stri
   return sha256(JSON.stringify({ pass: verdict.pass, checks: bits }))
 }
 
+function verificationOutcomeFingerprint(status: VerificationStatus, artifactPersisted: boolean): string {
+  if (!isVerificationStatus(status)) {
+    throw new EvidenceReceiptValidationError('verificationStatus must be a verification status')
+  }
+  if (typeof artifactPersisted !== 'boolean') {
+    throw new EvidenceReceiptValidationError('verificationArtifactPersisted must be a boolean')
+  }
+  return sha256(JSON.stringify({ status, artifactPersisted }))
+}
+
 export function buildEvidenceReceipt(
   input: BuildEvidenceReceiptInput,
   options: { now?: () => Date; idFactory?: () => string } = {}
 ): EvidenceReceipt {
-  const command = canonicalizeEvidenceReceiptCommand(input.command)
+  const operation: EvidenceReceipt['operation'] = input.operation === 'verify' ? 'verify' : 'assert'
+  const command = canonicalizeEvidenceReceiptCommand(input.command, operation)
   const context = parseContext(input.context)
+  const { observationFingerprint, outcome } = input.operation === 'verify'
+    ? {
+        observationFingerprint: verificationOutcomeFingerprint(
+          input.verificationStatus,
+          input.verificationArtifactPersisted
+        ),
+        outcome: input.verificationStatus === 'verified' && input.verificationArtifactPersisted
+          ? 'succeeded' as const
+          : 'failed' as const,
+      }
+    : {
+        observationFingerprint: verdictFingerprint(input.verdict),
+        outcome: input.verdict.pass ? 'succeeded' as const : 'failed' as const,
+      }
   const receipt: EvidenceReceipt = {
     version: EVIDENCE_RECEIPT_VERSION,
     id: safeId(options.idFactory?.() ?? `evr_${randomUUID()}`, 'id'),
     createdAt: (options.now?.() ?? new Date()).toISOString(),
-    operation: 'assert',
-    outcome: input.verdict.pass ? 'succeeded' : 'failed',
+    operation,
+    outcome,
     context,
     provenance: {
       command,
@@ -142,7 +192,10 @@ export function buildEvidenceReceipt(
           : nullableId(input.verificationArtifactRef, 'verificationArtifactRef'),
     },
     replay: { status: 'context-required' },
-    observation: { kind: 'assert-verdict', fingerprint: verdictFingerprint(input.verdict) },
+    observation: {
+      kind: operation === 'assert' ? 'assert-verdict' : 'verify-outcome',
+      fingerprint: observationFingerprint,
+    },
   }
   return receipt
 }
@@ -163,19 +216,22 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
   if (!record(raw)) throw new EvidenceReceiptValidationError('evidence receipt must be an object')
   exact(raw, ['version', 'id', 'createdAt', 'operation', 'outcome', 'context', 'provenance', 'replay', 'observation'], 'evidence receipt')
   if (raw.version !== EVIDENCE_RECEIPT_VERSION) throw new EvidenceReceiptValidationError('evidence receipt version must be 1')
-  if (raw.operation !== 'assert') throw new EvidenceReceiptValidationError('operation must be assert')
+  if (raw.operation !== 'assert' && raw.operation !== 'verify') throw new EvidenceReceiptValidationError('operation is invalid')
+  const operation: EvidenceReceipt['operation'] = raw.operation
   if (raw.outcome !== 'succeeded' && raw.outcome !== 'failed') throw new EvidenceReceiptValidationError('outcome is invalid')
   if (!record(raw.provenance)) throw new EvidenceReceiptValidationError('provenance must be an object')
   exact(raw.provenance, ['command', 'commandHash', 'auditRef', 'verificationArtifactRef'], 'provenance')
-  const command = canonicalizeEvidenceReceiptCommand(bounded(raw.provenance.command, 'provenance.command'))
+  const command = canonicalizeEvidenceReceiptCommand(bounded(raw.provenance.command, 'provenance.command'), operation)
   if (command !== raw.provenance.command || fingerprint(raw.provenance.commandHash, 'provenance.commandHash') !== sha256(command)) throw new EvidenceReceiptValidationError('command provenance hash mismatch')
   if (!record(raw.replay) || raw.replay.status !== 'context-required' || Object.keys(raw.replay).length !== 1) throw new EvidenceReceiptValidationError('replay must be context-required')
-  if (!record(raw.observation) || raw.observation.kind !== 'assert-verdict' || Object.keys(raw.observation).length !== 2) throw new EvidenceReceiptValidationError('observation must be an assert verdict fingerprint')
+  if (!record(raw.observation) || raw.observation.kind !== (operation === 'assert' ? 'assert-verdict' : 'verify-outcome') || Object.keys(raw.observation).length !== 2) throw new EvidenceReceiptValidationError('observation must match receipt operation')
+  const observationKind: EvidenceReceipt['observation']['kind'] =
+    operation === 'assert' ? 'assert-verdict' : 'verify-outcome'
   return {
-    version: EVIDENCE_RECEIPT_VERSION, id: safeId(raw.id, 'id'), createdAt: timestamp(raw.createdAt), operation: 'assert', outcome: raw.outcome,
+    version: EVIDENCE_RECEIPT_VERSION, id: safeId(raw.id, 'id'), createdAt: timestamp(raw.createdAt), operation, outcome: raw.outcome,
     context: parseContext(raw.context),
     provenance: { command, commandHash: fingerprint(raw.provenance.commandHash, 'provenance.commandHash'), auditRef: nullableId(raw.provenance.auditRef, 'provenance.auditRef'), verificationArtifactRef: nullableId(raw.provenance.verificationArtifactRef, 'provenance.verificationArtifactRef') },
-    replay: { status: 'context-required' }, observation: { kind: 'assert-verdict', fingerprint: fingerprint(raw.observation.fingerprint, 'observation.fingerprint') },
+    replay: { status: 'context-required' }, observation: { kind: observationKind, fingerprint: fingerprint(raw.observation.fingerprint, 'observation.fingerprint') },
   }
 }
 

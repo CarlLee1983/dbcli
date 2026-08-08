@@ -42,6 +42,7 @@ import { designCommand } from './commands/design'
 import { backfillCommand } from './commands/backfill'
 import { evidenceCommand } from './commands/evidence'
 import { contractCommand } from './commands/contracts'
+import { impactCommand } from './commands/impact'
 import {
   createConnectionSelectorOption,
   resolveConnectionSelector,
@@ -397,6 +398,7 @@ export function buildProgram(): Command {
   program.addCommand(backfillCommand)
   program.addCommand(evidenceCommand)
   program.addCommand(contractCommand)
+  program.addCommand(impactCommand)
 
   return program
 }

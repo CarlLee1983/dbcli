@@ -821,6 +821,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |
 | `contract validate` / `contract context` / `contract search` / `contract drift` | 驗證、輸出、搜尋或檢查可選的已審閱 `dbcli.contracts.json` 是否仍符合 semantic 證據。離線且唯讀；普通 agent context 只會納入 approved 契約。 |
 | `design init` / `design validate` / `design render` / `design diff` / `design propose` | 明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，與本機 SQL schema cache 或本機 ORM 定義比較，並產出只供審查的變更計畫。不會執行 DDL 或暗中寫入設計檔。 |
+| `impact assess` | 將設計變更相對於本機 schema cache 或 ORM artifact 的已知影響寫成離線報告；不會連線、執行 SQL，亦不會宣稱覆蓋完整。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
 
@@ -904,6 +905,15 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > **新專案工作流。** 執行 `design init`，編輯明確建立的 artifact，再執行 `design validate` 與 `design render`。若已有 application model，資料庫尚未建立前即可用離線的 `design diff --against-orm <path>` 對齊 artifact 與 ORM。
 
 > **既有資料庫演進。** 先執行 `blacklist list`，以 `schema --format json` 更新 cache，再執行 `design diff --against-cache` 與 `design propose --against-cache`。檢閱計畫後，另外執行已核准的 migration；之後更新 schema 並重新執行相同的 diff。兩個 design 指令都不會寫入資料庫。
+
+> **影響評估。** 在將 schema 變更視為安全之前，先寫出受治理依賴的有限報告：
+>
+> ```bash
+> dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --format json --fail-on warn
+> dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.prisma --output ./impact.md --format markdown --fail-on never
+> ```
+>
+> 必須剛好選一種 baseline。指令只會讀取明確指定的 design／ORM 檔或既有本機 cache、semantic contracts、saved-query 名稱與 verification artifact metadata；不會連線、更新 cache、執行 SQL、讀取 query body，或輸出保護識別字。缺少、無效或被隱藏的證據會明確列為 `partial` coverage gap；v1 永不回報 complete。`--fail-on` 只在報告寫出後改變 exit code（`error`、`warn` 或 `never`）。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`、`design-review` 與 `connection-health`。`design-review` 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 

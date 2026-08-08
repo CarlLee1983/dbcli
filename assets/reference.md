@@ -1191,6 +1191,7 @@ dbcli design validate [--file <path>] [--format <format>]
 dbcli design render [--file <path>] [--format <format>]
 dbcli design diff (--against-cache | --against-orm <paths>) [options]
 dbcli design propose (--against-cache | --against-orm <paths>) [options]
+dbcli impact assess --design <path> (--against-cache | --against-orm <paths>) --output <path> [options]
 ```
 
 ```bash
@@ -1202,6 +1203,7 @@ dbcli design render --format mermaid
 dbcli design diff --against-cache --format markdown
 dbcli design diff --against-orm ./prisma/schema.prisma --format markdown
 dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
+dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn
 ```
 
 | Option | Applies to | Default | Meaning |
@@ -1217,6 +1219,10 @@ dbcli design propose --against-orm ./prisma/schema.prisma --format markdown
 
 `diff` and `propose` require **exactly one** comparison target; passing both or
 neither is an error.
+
+### impact assess
+
+Writes an offline JSON or Markdown report for the known declared impact of a design change. It requires `--design`, exactly one baseline (`--against-cache` or `--against-orm`), and an explicit workspace-contained `--output`. `--format` is `json` (default) or `markdown`; `--fail-on` is `error`, `warn`, or `never` (default). The threshold changes only the successful command exit code after the report is written. The report is limited to declared/partial coverage and never claims complete coverage. It reads no database, executes no SQL, and never reads saved-query bodies.
 
 #### Artifact shape
 

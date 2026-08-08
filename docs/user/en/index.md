@@ -915,6 +915,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |
 | `contract validate` / `contract context` / `contract search` / `contract drift` | Validates, prints, searches, or checks the optional reviewed `dbcli.contracts.json` against semantic evidence. Offline and read-only; ordinary agent context includes approved contracts only. |
 | `design init` / `design validate` / `design render` / `design diff` / `design propose` | Creates an explicit local starter file, validates or renders a version-controlled SQL database design, compares it with either the local SQL schema cache or a local ORM definition, and produces a review-only change plan. It never executes DDL or silently writes a design. |
+| `impact assess` | Writes an offline, declared-impact report for a design change against a local schema cache or ORM artifact. It never connects, executes SQL, or claims complete coverage. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
 
@@ -999,6 +1000,15 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > **New project workflow.** Run `design init`, edit the explicit artifact, then run `design validate` and `design render`. If application models already exist, use the offline `design diff --against-orm <path>` to make the artifact and ORM agree before any database exists.
 
 > **Existing database evolution.** Run `blacklist list`, refresh the cache with `schema --format json`, then use `design diff --against-cache` and `design propose --against-cache`. Review the plan and separately perform any approved migration; afterwards refresh the schema and rerun the same diff. Neither design command writes the database.
+
+> **Impact assessment.** Before presenting a schema change as safe, write a bounded report of the known governed dependencies:
+>
+> ```bash
+> dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --format json --fail-on warn
+> dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.prisma --output ./impact.md --format markdown --fail-on never
+> ```
+>
+> Choose exactly one baseline. The command reads only the explicit design/ORM file or existing local cache, semantic contracts, saved-query names, and verification artifact metadata. It does not connect, refresh the cache, execute SQL, read query bodies, or publish protected identifiers. Missing, invalid, or redacted evidence is a visible `partial` coverage gap; v1 never reports complete coverage. `--fail-on` changes only the exit code (`error`, `warn`, or `never`) after the report has been written.
 
 > **Builtin task pack `analyze-table-perf`.** A read-only (`plan-only`) pack that takes a required `table` parameter and walks `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`. `dbcli inspect` suggests it automatically for the hottest table in recent activity. Other read-only packs ship too — `audit-permissions`, `safe-backfill`, `schema-drift-review`, `orm-drift-review`, `design-review`, and `connection-health`. `design-review` validates/renders the artifact, refreshes the cache, and emits review-only proposals; it never applies them. Browse all packs with `dbcli skill tasks list`.
 

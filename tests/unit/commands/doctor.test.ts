@@ -1,13 +1,25 @@
-import { describe, test, expect, spyOn } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import {
   runDoctorChecks,
   resolveSchemaLastUpdated,
+  collectElasticsearchDoctorResults,
   collectMongoDoctorResults,
   buildDoctorRemediationPlan,
+  type DoctorCollectorRuntime,
   type DoctorResult,
 } from '../../../src/commands/doctor'
 import type { RuntimeInfo } from '@/utils/runtime-info'
 import { AdapterFactory } from '@/adapters'
+
+function mongoRuntime(
+  adapter: ReturnType<typeof AdapterFactory.createMongoDBAdapter>,
+  checkMongoSrvConnectivity: DoctorCollectorRuntime['checkMongoSrvConnectivity'] = async () => null
+): Partial<DoctorCollectorRuntime> {
+  return {
+    createMongoDBAdapter: () => adapter,
+    checkMongoSrvConnectivity,
+  }
+}
 
 describe('doctor checks', () => {
   test('checkRuntime reports executable provenance and package mismatch remediation', () => {
@@ -337,28 +349,30 @@ describe('doctor checks', () => {
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
 
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue({
-      group: 'Environment',
-      label: 'MongoDB SRV lookup',
-      status: 'warn',
-      message:
-        'Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved cluster.example.mongodb.net.',
-    })
-    const results = await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        uri: 'mongodb+srv://user:pass@cluster.example.mongodb.net/testdb',
-        host: '',
-        port: 27017,
-        user: '',
-        password: '',
-        database: 'testdb',
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          uri: 'mongodb+srv://user:pass@cluster.example.mongodb.net/testdb',
+          host: '',
+          port: 27017,
+          user: '',
+          password: '',
+          database: 'testdb',
+        },
+        metadata: {},
       },
-      metadata: {},
-    })
+      mongoRuntime(
+        adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>,
+        async () => ({
+          group: 'Environment',
+          label: 'MongoDB SRV lookup',
+          status: 'warn',
+          message:
+            'Direct SRV DNS lookup failed in this shell, but DNS-over-HTTPS fallback resolved cluster.example.mongodb.net.',
+        })
+      )
+    )
 
     expect(
       results.some((result) => result.label === 'MongoDB SRV lookup' && result.status === 'warn')
@@ -369,8 +383,44 @@ describe('doctor checks', () => {
     expect(
       results.some((result) => result.label === 'Collections' && result.status === 'pass')
     ).toBe(true)
-    spy.mockRestore()
-    srvSpy.mockRestore()
+  })
+
+  test('collectElasticsearchDoctorResults accepts an isolated adapter runtime', async () => {
+    let disconnected = false
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {
+        disconnected = true
+      },
+      getServerVersion: async () => '8.17.0',
+      listTables: async () => [{ name: 'users', estimatedRowCount: 2 }],
+      getTableSchema: async () => ({ name: 'users', columns: [], tableType: 'table' as const }),
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+
+    const results = await collectElasticsearchDoctorResults(
+      {
+        connection: {
+          system: 'elasticsearch',
+          host: 'localhost',
+          port: 9200,
+          user: '',
+          password: '',
+          database: 'catalog',
+        },
+        metadata: {},
+      },
+      {
+        createElasticsearchAdapter: () =>
+          adapter as unknown as ReturnType<typeof AdapterFactory.createElasticsearchAdapter>,
+      }
+    )
+
+    expect(
+      results.some((result) => result.label === 'Connection' && result.status === 'pass')
+    ).toBe(true)
+    expect(disconnected).toBe(true)
   })
 
   test('collectMongoDoctorResults warns when uri and per-field config coexist', async () => {
@@ -382,30 +432,25 @@ describe('doctor checks', () => {
       testConnection: async () => true,
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
-
-    const results = await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        uri: 'mongodb://elsewhere.example.com:27017/other',
-        host: 'localhost',
-        port: 27017,
-        user: 'app',
-        password: 'secret',
-        database: 'testdb',
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          uri: 'mongodb://elsewhere.example.com:27017/other',
+          host: 'localhost',
+          port: 27017,
+          user: 'app',
+          password: 'secret',
+          database: 'testdb',
+        },
+        metadata: {},
       },
-      metadata: {},
-    })
+      mongoRuntime(adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>)
+    )
 
     const conflict = results.find((result) => result.label === 'MongoDB connection fields')
     expect(conflict?.status).toBe('warn')
     expect(conflict?.message).toContain('uri')
-
-    spy.mockRestore()
-    srvSpy.mockRestore()
   })
 
   test('collectMongoDoctorResults runs the SRV check for field-based srv:true config', async () => {
@@ -417,29 +462,32 @@ describe('doctor checks', () => {
       testConnection: async () => true,
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
+    const srvProbeUris: Array<string | undefined> = []
 
-    await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        host: 'cluster.example.mongodb.net',
-        port: 27017,
-        user: 'app',
-        password: 'secret',
-        database: 'shop',
-        srv: true,
+    await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          host: 'cluster.example.mongodb.net',
+          port: 27017,
+          user: 'app',
+          password: 'secret',
+          database: 'shop',
+          srv: true,
+        },
+        metadata: {},
       },
-      metadata: {},
-    })
+      mongoRuntime(
+        adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>,
+        async (uri) => {
+          srvProbeUris.push(uri)
+          return null
+        }
+      )
+    )
 
     // 逐欄的 srv:true 是新的主路徑（Atlas），最需要 SRV 診斷
-    expect(srvSpy.mock.calls[0]?.[0]).toContain('mongodb+srv://cluster.example.mongodb.net')
-
-    spy.mockRestore()
-    srvSpy.mockRestore()
+    expect(srvProbeUris[0]).toContain('mongodb+srv://cluster.example.mongodb.net')
   })
 
   test('checkMongoSrvConnectivity reports an unparsable host as an SRV error, not by throwing', async () => {
@@ -458,29 +506,24 @@ describe('doctor checks', () => {
       testConnection: async () => true,
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
-
-    const results = await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        host: 'cluster.example.com',
-        port: 27018,
-        user: 'app',
-        password: 'secret',
-        database: 'testdb',
-        srv: true,
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          host: 'cluster.example.com',
+          port: 27018,
+          user: 'app',
+          password: 'secret',
+          database: 'testdb',
+          srv: true,
+        },
+        metadata: {},
       },
-      metadata: {},
-    })
+      mongoRuntime(adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>)
+    )
 
     const portWarn = results.find((result) => result.label === 'MongoDB SRV port')
     expect(portWarn?.status).toBe('warn')
-
-    spy.mockRestore()
-    srvSpy.mockRestore()
   })
 
   test('collectMongoDoctorResults reports schema cache freshness using standard rules when schemaLastUpdated is present', async () => {
@@ -494,32 +537,27 @@ describe('doctor checks', () => {
       testConnection: async () => true,
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
-
     const fresh = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const results = await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        uri: 'mongodb://localhost:27017/testdb',
-        host: 'localhost',
-        port: 27017,
-        user: '',
-        password: '',
-        database: 'testdb',
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          uri: 'mongodb://localhost:27017/testdb',
+          host: 'localhost',
+          port: 27017,
+          user: '',
+          password: '',
+          database: 'testdb',
+        },
+        metadata: { schemaLastUpdated: fresh },
       },
-      metadata: { schemaLastUpdated: fresh },
-    })
+      mongoRuntime(adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>)
+    )
 
     const cache = results.find((r) => r.label === 'Schema cache')
     expect(cache).toBeDefined()
     expect(cache!.status).toBe('pass')
     expect(cache!.message).not.toMatch(/not tracked/i)
-
-    spy.mockRestore()
-    srvSpy.mockRestore()
   })
 
   test('collectMongoDoctorResults emits standard empty-cache message (not "not tracked") when metadata lacks schemaLastUpdated', async () => {
@@ -533,30 +571,25 @@ describe('doctor checks', () => {
       testConnection: async () => true,
       execute: async () => ({ rows: [], affectedRows: 0 }),
     }
-    const spy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(
-      adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>
-    )
-    const srvSpy = spyOn(runDoctorChecks, 'checkMongoSrvConnectivity').mockResolvedValue(null)
-
-    const results = await collectMongoDoctorResults({
-      connection: {
-        system: 'mongodb',
-        uri: 'mongodb://localhost:27017/testdb',
-        host: 'localhost',
-        port: 27017,
-        user: '',
-        password: '',
-        database: 'testdb',
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          uri: 'mongodb://localhost:27017/testdb',
+          host: 'localhost',
+          port: 27017,
+          user: '',
+          password: '',
+          database: 'testdb',
+        },
+        metadata: {},
       },
-      metadata: {},
-    })
+      mongoRuntime(adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>)
+    )
 
     const cache = results.find((r) => r.label === 'Schema cache')
     expect(cache).toBeDefined()
     expect(cache!.message).not.toMatch(/not tracked/i)
     expect(cache!.message).toMatch(/No schema cache|schema --refresh/i)
-
-    spy.mockRestore()
-    srvSpy.mockRestore()
   })
 })

@@ -52,6 +52,17 @@ export interface DoctorResult {
   }
 }
 
+/**
+ * Dependencies owned by the non-SQL doctor collectors.  The optional runtime
+ * parameter on the exported collectors keeps the CLI path on production
+ * defaults while giving tests an isolated boundary around external adapters.
+ */
+export interface DoctorCollectorRuntime {
+  createMongoDBAdapter: typeof AdapterFactory.createMongoDBAdapter
+  createElasticsearchAdapter: typeof AdapterFactory.createElasticsearchAdapter
+  checkMongoSrvConnectivity: typeof runDoctorChecks.checkMongoSrvConnectivity
+}
+
 export interface DoctorRemediationStep {
   kind: 'blacklist-candidate' | 'schema-refresh' | 'bounded-sample'
   status: 'candidate'
@@ -622,11 +633,21 @@ export const runDoctorChecks = {
   },
 }
 
-export async function collectMongoDoctorResults(config: {
-  connection: ConnectionConfig
-  metadata?: { schemaLastUpdated?: string }
-  blacklistedColumns?: Map<string, Set<string>>
-}): Promise<DoctorResult[]> {
+const defaultDoctorCollectorRuntime: DoctorCollectorRuntime = {
+  createMongoDBAdapter: AdapterFactory.createMongoDBAdapter,
+  createElasticsearchAdapter: AdapterFactory.createElasticsearchAdapter,
+  checkMongoSrvConnectivity: runDoctorChecks.checkMongoSrvConnectivity,
+}
+
+export async function collectMongoDoctorResults(
+  config: {
+    connection: ConnectionConfig
+    metadata?: { schemaLastUpdated?: string }
+    blacklistedColumns?: Map<string, Set<string>>
+  },
+  runtimeOverrides: Partial<DoctorCollectorRuntime> = {}
+): Promise<DoctorResult[]> {
+  const runtime = { ...defaultDoctorCollectorRuntime, ...runtimeOverrides }
   const results: DoctorResult[] = []
 
   const mongoConn = config.connection.system === 'mongodb' ? config.connection : null
@@ -638,7 +659,7 @@ export async function collectMongoDoctorResults(config: {
     (mongoConn?.srv === true && typeof mongoConn.host === 'string' && mongoConn.host
       ? `mongodb+srv://${mongoConn.host}/`
       : undefined)
-  const srvCheck = await runDoctorChecks.checkMongoSrvConnectivity(srvProbeUri)
+  const srvCheck = await runtime.checkMongoSrvConnectivity(srvProbeUri)
   if (srvCheck) {
     results.push(srvCheck)
     if (srvCheck.status === 'error') {
@@ -670,7 +691,7 @@ export async function collectMongoDoctorResults(config: {
     }
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const adapter = runtime.createMongoDBAdapter(config.connection as ConnectionOptions)
 
   try {
     await adapter.connect()
@@ -752,15 +773,17 @@ export async function collectMongoDoctorResults(config: {
   return results
 }
 
-export async function collectElasticsearchDoctorResults(config: {
-  connection: ConnectionConfig
-  metadata?: { schemaLastUpdated?: string }
-  blacklistedColumns?: Map<string, Set<string>>
-}): Promise<DoctorResult[]> {
+export async function collectElasticsearchDoctorResults(
+  config: {
+    connection: ConnectionConfig
+    metadata?: { schemaLastUpdated?: string }
+    blacklistedColumns?: Map<string, Set<string>>
+  },
+  runtimeOverrides: Partial<DoctorCollectorRuntime> = {}
+): Promise<DoctorResult[]> {
+  const runtime = { ...defaultDoctorCollectorRuntime, ...runtimeOverrides }
   const results: DoctorResult[] = []
-  const esAdapter = AdapterFactory.createElasticsearchAdapter(
-    config.connection as ConnectionOptions
-  )
+  const esAdapter = runtime.createElasticsearchAdapter(config.connection as ConnectionOptions)
 
   try {
     await esAdapter.connect()

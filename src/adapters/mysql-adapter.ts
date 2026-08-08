@@ -6,8 +6,7 @@
 
 import mysql from 'mysql2/promise'
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
-import { mapError } from './error-mapper'
-import { requireConnected } from './sql-adapter-utils'
+import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 
@@ -47,7 +46,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if connection fails
    */
   async connect(): Promise<void> {
-    try {
+    await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
       // Note: mysql2/promise does not support connectionTimeout in createConnection
       // Timeout should be configured at query execution level if needed
@@ -74,10 +73,7 @@ export class MySQLAdapter implements DatabaseAdapter {
       } catch {
         // Version check is non-critical; silently continue
       }
-    } catch (error) {
-      // Pass actual system type for proper error messages
-      throw mapError(error, this.system, this.options)
-    }
+    })
   }
 
   /**
@@ -104,13 +100,11 @@ export class MySQLAdapter implements DatabaseAdapter {
   async testConnection(): Promise<boolean> {
     requireConnected(this.db)
 
-    try {
+    return withMappedConnectionError(this.system, this.options, async () => {
       // Execute lightweight SELECT 1 query
       const result = await this.execute<{ count: number }>('SELECT 1 as count')
       return result.rows.length > 0
-    } catch (error) {
-      throw mapError(error, this.system, this.options)
-    }
+    })
   }
 
   /**
@@ -127,7 +121,7 @@ export class MySQLAdapter implements DatabaseAdapter {
   ): Promise<ExecutionResult<T>> {
     const db = requireConnected(this.db)
 
-    try {
+    return withMappedConnectionError(this.system, this.options, async () => {
       // Use parameterized query to prevent SQL injection
       // mysql2/promise returns [rows, fields]
       const [result] = params ? await db.execute(sql, params) : await db.execute(sql)
@@ -147,10 +141,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         affectedRows: header.affectedRows || 0,
         lastInsertId: header.insertId,
       }
-    } catch (error) {
-      // Pass actual system type for proper error messages
-      throw mapError(error, this.system, this.options)
-    }
+    })
   }
 
   /**
@@ -170,7 +161,7 @@ export class MySQLAdapter implements DatabaseAdapter {
   async listTables(): Promise<TableSchema[]> {
     requireConnected(this.db)
 
-    try {
+    return withMappedConnectionError(this.system, this.options, async () => {
       // Query information_schema.TABLES and count columns for each table
       const query = `
         SELECT
@@ -204,9 +195,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         estimatedRowCount: row.row_count || 0,
         tableType: (row.table_type === 'VIEW' ? 'view' : 'table') as 'table' | 'view',
       }))
-    } catch (error) {
-      throw mapError(error, this.system, this.options)
-    }
+    })
   }
 
   /**
@@ -220,7 +209,7 @@ export class MySQLAdapter implements DatabaseAdapter {
   async getTableSchema(tableName: string): Promise<TableSchema> {
     requireConnected(this.db)
 
-    try {
+    return withMappedConnectionError(this.system, this.options, async () => {
       // Query information_schema.COLUMNS for column details (UPPERCASE)
       const columnQuery = `
         SELECT
@@ -361,8 +350,6 @@ export class MySQLAdapter implements DatabaseAdapter {
       }
 
       return schema
-    } catch (error) {
-      throw mapError(error, this.system, this.options)
-    }
+    })
   }
 }

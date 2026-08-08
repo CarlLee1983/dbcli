@@ -4,8 +4,7 @@
  */
 
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
-import { mapError } from './error-mapper'
-import { requireConnected } from './sql-adapter-utils'
+import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
@@ -38,7 +37,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if connection fails
    */
   async connect(): Promise<void> {
-    try {
+    await withMappedConnectionError('postgresql', this.options, async () => {
       // Create connection pool with options
       this.pool = new Pool({
         host: this.options.host,
@@ -61,9 +60,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       } catch {
         // Version check is non-critical; silently continue
       }
-    } catch (error) {
-      throw mapError(error, 'postgresql', this.options)
-    }
+    })
   }
 
   /**
@@ -93,13 +90,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   async testConnection(): Promise<boolean> {
     requireConnected(this.pool)
 
-    try {
+    return withMappedConnectionError('postgresql', this.options, async () => {
       // Execute lightweight SELECT 1 query
       const result = await this.execute<{ count: number }>('SELECT 1 as count')
       return result.rows.length > 0
-    } catch (error) {
-      throw mapError(error, 'postgresql', this.options)
-    }
+    })
   }
 
   /**
@@ -116,7 +111,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   ): Promise<ExecutionResult<T>> {
     const pool = requireConnected(this.pool)
 
-    try {
+    return withMappedConnectionError('postgresql', this.options, async () => {
       // Use parameterized query to prevent SQL injection
       // PostgreSQL uses $1, $2, ... placeholders
       const result = params ? await pool.query(sql, params) : await pool.query(sql)
@@ -126,9 +121,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         rows: result.rows as T[],
         affectedRows: result.rowCount ?? 0,
       }
-    } catch (error) {
-      throw mapError(error, 'postgresql', this.options)
-    }
+    })
   }
 
   /**
@@ -148,7 +141,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   async listTables(): Promise<TableSchema[]> {
     requireConnected(this.pool)
 
-    try {
+    return withMappedConnectionError('postgresql', this.options, async () => {
       // Query pg_class to get tables and views with estimated row counts
       const query = `
         SELECT
@@ -188,9 +181,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         estimatedRowCount: Math.max(0, row.estimated_rows || 0),
         tableType: row.table_type as 'table' | 'view',
       }))
-    } catch (error) {
-      throw mapError(error, 'postgresql', this.options)
-    }
+    })
   }
 
   /**
@@ -203,7 +194,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   async getTableSchema(tableName: string): Promise<TableSchema> {
     requireConnected(this.pool)
 
-    try {
+    return withMappedConnectionError('postgresql', this.options, async () => {
       // Query information_schema for column details including autoIncrement and comment
       const columnQuery = `
         SELECT
@@ -440,8 +431,6 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       }
 
       return schema
-    } catch (error) {
-      throw mapError(error, 'postgresql', this.options)
-    }
+    })
   }
 }

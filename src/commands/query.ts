@@ -96,6 +96,63 @@ interface QueryExecutionOutput {
   notices: string[]
 }
 
+export interface QueryCommandRuntime {
+  loadConfig: (configPath: string, connectionName?: string) => Promise<DbcliConfig>
+  runMultiConnection: (
+    query: string,
+    options: QueryCommandOptions,
+    configPath: string,
+    connectionNames: string[],
+    fieldSelection: FieldSelection | undefined,
+    tableCellLimit: number | false
+  ) => Promise<void>
+  preflight: (
+    query: string,
+    options: QueryCommandOptions,
+    context: QueryExecutionContext,
+    fieldSelection: FieldSelection | undefined,
+    multiConnection: boolean
+  ) => Promise<void>
+  executeConnection: (
+    query: string,
+    options: QueryCommandOptions,
+    context: QueryExecutionContext,
+    fieldSelection: FieldSelection | undefined
+  ) => Promise<QueryExecutionOutput>
+  presentResult: (
+    query: string,
+    options: QueryCommandOptions,
+    execution: QueryExecutionOutput,
+    tableCellLimit: number | false
+  ) => Promise<void>
+  writeAudit: typeof writeAuditEntry
+  randomUUID: () => string
+  emitRecovery: (
+    error: unknown,
+    context: { operation: 'query'; table?: string },
+    options: { envelopeId: string; auditRef?: string }
+  ) => Promise<void>
+  extractTableName: (query: string) => Promise<string | undefined>
+}
+
+const defaultQueryCommandRuntime: QueryCommandRuntime = {
+  loadConfig: (configPath, connectionName) => configModule.read(configPath, connectionName),
+  runMultiConnection: runMultiConnectionQuery,
+  preflight: preflightQuery,
+  executeConnection: executeConnectionQuery,
+  presentResult: presentSingleResult,
+  writeAudit: writeAuditEntry,
+  randomUUID: () => crypto.randomUUID(),
+  emitRecovery: async (error, context, options) => {
+    const { emitRecoveryEnvelope } = await import('@/core/recovery')
+    emitRecoveryEnvelope(error, context, options)
+  },
+  extractTableName: async (query) => {
+    const { extractTableName } = await import('@/utils/engine-hints')
+    return extractTableName(query) ?? undefined
+  },
+}
+
 /**
  * Query command action handler
  * Accepts a SQL query, executes it, and formats the output
@@ -105,6 +162,16 @@ export async function queryCommand(
   options: QueryCommandOptions,
   command?: import('commander').Command
 ): Promise<void> {
+  return executeQueryCommand(sql, options, command)
+}
+
+export async function executeQueryCommand(
+  sql: string | undefined,
+  options: QueryCommandOptions,
+  command?: import('commander').Command,
+  runtimeOverrides: Partial<QueryCommandRuntime> = {}
+): Promise<void> {
+  const runtime = { ...defaultQueryCommandRuntime, ...runtimeOverrides }
   let config: DbcliConfig | undefined
   let resolvedSql = sql ?? ''
   let configPath = options.config ?? '.dbcli'
@@ -136,7 +203,7 @@ export async function queryCommand(
     multiConnectionRequest = connectionNames.length > 1
 
     if (multiConnectionRequest) {
-      await runMultiConnectionQuery(
+      await runtime.runMultiConnection(
         resolvedSql,
         options,
         configPath,
@@ -148,23 +215,23 @@ export async function queryCommand(
     }
 
     connectionName = connectionNames[0]
-    config = await configModule.read(configPath, connectionName)
+    config = await runtime.loadConfig(configPath, connectionName)
     const context = { config, configPath, connectionName }
-    await preflightQuery(resolvedSql, options, context, fieldSelection, false)
-    const execution = await executeConnectionQuery(resolvedSql, options, context, fieldSelection)
-    await presentSingleResult(resolvedSql, options, execution, tableCellLimit)
+    await runtime.preflight(resolvedSql, options, context, fieldSelection, false)
+    const execution = await runtime.executeConnection(resolvedSql, options, context, fieldSelection)
+    await runtime.presentResult(resolvedSql, options, execution, tableCellLimit)
   } catch (error) {
     let auditId: string | null = null
     let envelopeId: string | undefined
     if (options.recovery === true && !multiConnectionRequest) {
-      envelopeId = crypto.randomUUID() // Phase 25 D-51 / D-J
+      envelopeId = runtime.randomUUID() // Phase 25 D-51 / D-J
     }
     // A sub-branch (e.g. redisQueryBranch) may have already written a richer
     // audit entry — with engine-specific metadata — before re-throwing. Skip
     // writing here to avoid a duplicate, metadata-less generic entry.
     const alreadyAudited = (error as { __auditWritten?: boolean })?.__auditWritten === true
     if (config && !alreadyAudited) {
-      auditId = await writeAuditEntry(
+      auditId = await runtime.writeAudit(
         config,
         'query',
         { ...options, config: configPath, connectionName },
@@ -178,12 +245,11 @@ export async function queryCommand(
     }
 
     if (envelopeId !== undefined) {
-      const { emitRecoveryEnvelope } = await import('@/core/recovery')
-      emitRecoveryEnvelope(
+      await runtime.emitRecovery(
         error,
         {
           operation: 'query',
-          table: (await import('@/utils/engine-hints')).extractTableName(resolvedSql) ?? undefined,
+          table: await runtime.extractTableName(resolvedSql),
         },
         {
           envelopeId, // Phase 25 D-51

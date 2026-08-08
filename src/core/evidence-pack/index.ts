@@ -1,0 +1,494 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { link, lstat, mkdir, realpath, unlink, writeFile } from 'node:fs/promises'
+import { basename, dirname, relative, resolve, sep } from 'node:path'
+import { Parser } from 'node-sql-parser'
+
+export const EVIDENCE_PACK_VERSION = 1 as const
+
+export type VerificationEvidenceStatus = 'verified' | 'not_verified' | 'indeterminate' | 'blocked'
+
+const MAX_CLAIMS = 100
+const MAX_REFERENCES = 100
+const MAX_TEXT_LENGTH = 2_000
+const MAX_ID_LENGTH = 160
+const MARKDOWN_ESCAPE_CHARACTERS = new Set('\\`*_{}[]<>()#+!|')
+const SQL_PARSER = new Parser()
+const SQL_FRAGMENT =
+  /(?:^|\s)(?:select\s+.+\s+from|insert\s+into|update\s+\S+\s+set|delete\s+from|alter\s+(?:table|index)|create\s+(?:table|index)|drop\s+(?:table|index)|truncate\s+table|merge\s+into|grant\s+.+\s+on|revoke\s+.+\s+on|from\s+\S+\s+where)\b/i
+const UNPARSED_SQL_PREFIX =
+  /^\s*(?:(?:--[^\n]*\n|\/\*[\s\S]*?\*\/)\s*)*(?:copy|vacuum|analyze|reindex|cluster|comment|do|prepare|execute|deallocate|lock|begin|start|commit|rollback|savepoint|release|declare|fetch|move|listen|notify|unlisten|load|attach|detach|pragma|replace|handler|kill|optimize|repair|check|flush|install|uninstall)\b/i
+
+export type EvidenceReference =
+  | {
+      kind: 'verification-artifact'
+      id: string
+      createdAt: string
+      status: VerificationEvidenceStatus
+      subjectKind: string
+    }
+  | {
+      kind: 'audit'
+      id: string
+      createdAt: string
+      connectionName: string
+      command: string
+      success: boolean
+      recoveryRef?: string
+    }
+
+export interface EvidenceClaimInput {
+  id: string
+  text: string
+}
+
+export interface EvidencePackSubject {
+  kind: string
+  name?: string
+}
+
+export interface EvidenceClaimsInput {
+  subject: EvidencePackSubject
+  claims: EvidenceClaimInput[]
+}
+
+export interface EvidenceClaim extends EvidenceClaimInput {
+  evidence: EvidenceReference[]
+}
+
+export interface EvidencePack {
+  version: typeof EVIDENCE_PACK_VERSION
+  id: string
+  createdAt: string
+  subject: EvidencePackSubject
+  claims: EvidenceClaim[]
+  coverage: {
+    completeForDeclaredEvidence: true
+    gaps: string[]
+  }
+  integrity: {
+    algorithm: 'sha256'
+    digest: string
+  }
+}
+
+export class EvidencePackValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'EvidencePackValidationError'
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+  label: string
+): void {
+  if (Object.keys(value).some((key) => !keys.includes(key))) {
+    throw new EvidencePackValidationError(`${label} contains an unknown field`)
+  }
+}
+
+function text(value: unknown, label: string, max = MAX_TEXT_LENGTH): string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > max) {
+    throw new EvidencePackValidationError(`${label} must be a non-empty bounded string`)
+  }
+  if (
+    [...value].some((character) => {
+      const code = character.codePointAt(0)!
+      return code <= 0x1f || code === 0x7f
+    })
+  ) {
+    throw new EvidencePackValidationError(`${label} contains control characters`)
+  }
+  return value
+}
+
+function claimText(value: unknown): string {
+  const parsed = text(value, 'claim.text')
+  if (containsRawSql(parsed)) {
+    throw new EvidencePackValidationError('claim text must not contain SQL')
+  }
+  if (
+    /\b(?:password|secret|token|api[ _-]?key|authorization|credential)\s*[:=]|\bbearer\s+\S+|\b(?:error|exception)\s*:/i.test(
+      parsed
+    )
+  ) {
+    throw new EvidencePackValidationError(
+      'claim text must not contain credentials or error content'
+    )
+  }
+  if (/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|https?):\/\//i.test(parsed)) {
+    throw new EvidencePackValidationError('claim text must not contain connection strings')
+  }
+  return parsed
+}
+
+function containsRawSql(value: string): boolean {
+  try {
+    SQL_PARSER.astify(value)
+    return true
+  } catch {
+    return (
+      SQL_FRAGMENT.test(value) ||
+      /\bwhere\s+\S+\s*(?:=|<>|!=|<=|>=|<|>)\s*\S+/i.test(value) ||
+      UNPARSED_SQL_PREFIX.test(value)
+    )
+  }
+}
+
+function id(value: unknown, label: string): string {
+  const parsed = text(value, label, MAX_ID_LENGTH)
+  if (!/^[A-Za-z0-9._:-]+$/.test(parsed)) {
+    throw new EvidencePackValidationError(`${label} contains unsupported characters`)
+  }
+  return parsed
+}
+
+function iso(value: unknown, label: string): string {
+  const parsed = text(value, label, 64)
+  if (Number.isNaN(Date.parse(parsed))) {
+    throw new EvidencePackValidationError(`${label} must be an ISO date`)
+  }
+  return parsed
+}
+
+function parseSubject(value: unknown): EvidencePackSubject {
+  if (!isRecord(value)) throw new EvidencePackValidationError('subject must be an object')
+  requireExactKeys(value, ['kind', 'name'], 'subject')
+  const kind = id(value.kind, 'subject.kind')
+  const name = value.name === undefined ? undefined : text(value.name, 'subject.name')
+  return name === undefined ? { kind } : { kind, name }
+}
+
+function compareReferences(a: EvidenceReference, b: EvidenceReference): number {
+  return a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind.localeCompare(b.kind)
+}
+
+function parseReference(value: unknown): EvidenceReference {
+  if (!isRecord(value))
+    throw new EvidencePackValidationError('evidence reference must be an object')
+  const kind = value.kind
+  if (kind === 'verification-artifact') {
+    requireExactKeys(
+      value,
+      ['kind', 'id', 'createdAt', 'status', 'subjectKind'],
+      'verification evidence'
+    )
+    const status = value.status
+    if (!['verified', 'not_verified', 'indeterminate', 'blocked'].includes(String(status))) {
+      throw new EvidencePackValidationError('verification evidence has an invalid status')
+    }
+    return {
+      kind,
+      id: id(value.id, 'verification evidence.id'),
+      createdAt: iso(value.createdAt, 'verification evidence.createdAt'),
+      status: status as VerificationEvidenceStatus,
+      subjectKind: id(value.subjectKind, 'verification evidence.subjectKind'),
+    }
+  }
+  if (kind === 'audit') {
+    requireExactKeys(
+      value,
+      ['kind', 'id', 'createdAt', 'connectionName', 'command', 'success', 'recoveryRef'],
+      'audit evidence'
+    )
+    if (typeof value.success !== 'boolean') {
+      throw new EvidencePackValidationError('audit evidence.success must be a boolean')
+    }
+    const recoveryRef =
+      value.recoveryRef === undefined
+        ? undefined
+        : id(value.recoveryRef, 'audit evidence.recoveryRef')
+    return {
+      kind,
+      id: id(value.id, 'audit evidence.id'),
+      createdAt: iso(value.createdAt, 'audit evidence.createdAt'),
+      connectionName: id(value.connectionName, 'audit evidence.connectionName'),
+      command: id(value.command, 'audit evidence.command'),
+      success: value.success,
+      ...(recoveryRef === undefined ? {} : { recoveryRef }),
+    }
+  }
+  throw new EvidencePackValidationError('evidence reference has an unsupported kind')
+}
+
+function parseClaims(value: unknown, requireEvidence: boolean): EvidenceClaim[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CLAIMS) {
+    throw new EvidencePackValidationError(`claims must contain between 1 and ${MAX_CLAIMS} entries`)
+  }
+  const claimIds = new Set<string>()
+  const claims = value.map((raw) => {
+    if (!isRecord(raw)) throw new EvidencePackValidationError('claim must be an object')
+    requireExactKeys(raw, requireEvidence ? ['id', 'text', 'evidence'] : ['id', 'text'], 'claim')
+    const claimId = id(raw.id, 'claim.id')
+    if (claimIds.has(claimId)) throw new EvidencePackValidationError('claim ids must be unique')
+    claimIds.add(claimId)
+    const parsedClaimText = claimText(raw.text)
+    const evidenceRaw = requireEvidence ? raw.evidence : []
+    if (
+      !Array.isArray(evidenceRaw) ||
+      evidenceRaw.length === 0 ||
+      evidenceRaw.length > MAX_REFERENCES
+    ) {
+      throw new EvidencePackValidationError(
+        `claim evidence must contain between 1 and ${MAX_REFERENCES} entries`
+      )
+    }
+    const evidence = evidenceRaw.map(parseReference).sort(compareReferences)
+    const refs = new Set(evidence.map((reference) => `${reference.kind}\u0000${reference.id}`))
+    if (refs.size !== evidence.length)
+      throw new EvidencePackValidationError('claim evidence references must be unique')
+    return { id: claimId, text: parsedClaimText, evidence }
+  })
+  return claims.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+function assertVerificationSubjects(subject: EvidencePackSubject, claims: EvidenceClaim[]): void {
+  if (
+    claims.some((claim) =>
+      claim.evidence.some(
+        (reference) =>
+          reference.kind === 'verification-artifact' && reference.subjectKind !== subject.kind
+      )
+    )
+  ) {
+    throw new EvidencePackValidationError(
+      'verification evidence must match the claims subject kind'
+    )
+  }
+}
+
+function canonicalizeWithoutDigest(pack: Omit<EvidencePack, 'integrity'>): string {
+  return JSON.stringify(pack)
+}
+
+function digest(pack: Omit<EvidencePack, 'integrity'>): string {
+  return createHash('sha256').update(canonicalizeWithoutDigest(pack)).digest('hex')
+}
+
+export function parseEvidenceClaimsInput(raw: unknown): EvidenceClaimsInput {
+  if (!isRecord(raw)) throw new EvidencePackValidationError('claims input must be an object')
+  requireExactKeys(raw, ['subject', 'claims'], 'claims input')
+  const subject = parseSubject(raw.subject)
+  if (!Array.isArray(raw.claims) || raw.claims.length === 0 || raw.claims.length > MAX_CLAIMS) {
+    throw new EvidencePackValidationError(`claims must contain between 1 and ${MAX_CLAIMS} entries`)
+  }
+  const seen = new Set<string>()
+  const claims = raw.claims
+    .map((claim) => {
+      if (!isRecord(claim)) throw new EvidencePackValidationError('claim must be an object')
+      requireExactKeys(claim, ['id', 'text'], 'claim')
+      const claimId = id(claim.id, 'claim.id')
+      if (seen.has(claimId)) throw new EvidencePackValidationError('claim ids must be unique')
+      seen.add(claimId)
+      return { id: claimId, text: claimText(claim.text) }
+    })
+    .sort((a, b) => a.id.localeCompare(b.id))
+  return { subject, claims }
+}
+
+export function buildEvidencePack(
+  input: EvidenceClaimsInput,
+  references: EvidenceReference[],
+  options: { now?: () => Date; idFactory?: () => string } = {}
+): EvidencePack {
+  if (references.length === 0 || references.length > MAX_REFERENCES) {
+    throw new EvidencePackValidationError(
+      `references must contain between 1 and ${MAX_REFERENCES} entries`
+    )
+  }
+  const evidence = references.map(parseReference).sort(compareReferences)
+  const refKeys = new Set(evidence.map((reference) => `${reference.kind}\u0000${reference.id}`))
+  if (refKeys.size !== evidence.length)
+    throw new EvidencePackValidationError('references must be unique')
+  const normalized = parseEvidenceClaimsInput(input)
+  if (
+    evidence.some(
+      (reference) =>
+        reference.kind === 'verification-artifact' &&
+        reference.subjectKind !== normalized.subject.kind
+    )
+  ) {
+    throw new EvidencePackValidationError(
+      'verification evidence must match the claims subject kind'
+    )
+  }
+  const base: Omit<EvidencePack, 'integrity'> = {
+    version: EVIDENCE_PACK_VERSION,
+    id: id(options.idFactory?.() ?? `evp_${randomUUID()}`, 'pack.id'),
+    createdAt: (options.now?.() ?? new Date()).toISOString(),
+    subject: normalized.subject,
+    claims: normalized.claims.map((claim) => ({ ...claim, evidence })),
+    coverage: { completeForDeclaredEvidence: true, gaps: [] },
+  }
+  return { ...base, integrity: { algorithm: 'sha256', digest: digest(base) } }
+}
+
+export function parseEvidencePack(raw: unknown): EvidencePack {
+  if (!isRecord(raw)) throw new EvidencePackValidationError('evidence pack must be an object')
+  requireExactKeys(
+    raw,
+    ['version', 'id', 'createdAt', 'subject', 'claims', 'coverage', 'integrity'],
+    'evidence pack'
+  )
+  if (raw.version !== EVIDENCE_PACK_VERSION) {
+    throw new EvidencePackValidationError(`evidence pack version must be ${EVIDENCE_PACK_VERSION}`)
+  }
+  if (!isRecord(raw.coverage)) throw new EvidencePackValidationError('coverage must be an object')
+  requireExactKeys(raw.coverage, ['completeForDeclaredEvidence', 'gaps'], 'coverage')
+  if (
+    raw.coverage.completeForDeclaredEvidence !== true ||
+    !Array.isArray(raw.coverage.gaps) ||
+    raw.coverage.gaps.length !== 0
+  ) {
+    throw new EvidencePackValidationError(
+      'v1 coverage must be complete for declared evidence with no gaps'
+    )
+  }
+  if (!isRecord(raw.integrity)) throw new EvidencePackValidationError('integrity must be an object')
+  requireExactKeys(raw.integrity, ['algorithm', 'digest'], 'integrity')
+  if (raw.integrity.algorithm !== 'sha256')
+    throw new EvidencePackValidationError('integrity.algorithm must be sha256')
+  const base: Omit<EvidencePack, 'integrity'> = {
+    version: EVIDENCE_PACK_VERSION,
+    id: id(raw.id, 'pack.id'),
+    createdAt: iso(raw.createdAt, 'pack.createdAt'),
+    subject: parseSubject(raw.subject),
+    claims: parseClaims(raw.claims, true),
+    coverage: { completeForDeclaredEvidence: true, gaps: [] },
+  }
+  assertVerificationSubjects(base.subject, base.claims)
+  const actualDigest = text(raw.integrity.digest, 'integrity.digest', 128)
+  if (!/^[a-f0-9]{64}$/.test(actualDigest))
+    throw new EvidencePackValidationError('integrity.digest must be sha256 hex')
+  if (actualDigest !== digest(base))
+    throw new EvidencePackValidationError('evidence pack digest mismatch')
+  return { ...base, integrity: { algorithm: 'sha256', digest: actualDigest } }
+}
+
+function isInside(root: string, target: string): boolean {
+  const relativePath = relative(root, target)
+  return (
+    relativePath !== '' &&
+    !relativePath.startsWith(`..${sep}`) &&
+    relativePath !== '..' &&
+    !relativePath.includes(`..${sep}`)
+  )
+}
+
+async function realExistingAncestor(path: string): Promise<string> {
+  let candidate = path
+  while (true) {
+    try {
+      return await realpath(candidate)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      const parent = dirname(candidate)
+      if (parent === candidate) throw error
+      candidate = parent
+    }
+  }
+}
+
+export async function writeEvidencePack(
+  workspaceRoot: string,
+  outputPath: string,
+  pack: EvidencePack
+): Promise<string> {
+  const workspace = await realpath(workspaceRoot)
+  const requestedTarget = resolve(workspace, outputPath)
+  if (!isInside(workspace, requestedTarget))
+    throw new EvidencePackValidationError('output path must stay inside the workspace')
+  const parent = dirname(requestedTarget)
+  const existingAncestor = await realExistingAncestor(parent)
+  if (!isInside(workspace, existingAncestor) && existingAncestor !== workspace) {
+    throw new EvidencePackValidationError('output path resolves outside the workspace')
+  }
+  await mkdir(parent, { recursive: true })
+  const realParent = await realpath(parent)
+  if (!isInside(workspace, realParent) && realParent !== workspace) {
+    throw new EvidencePackValidationError('output path resolves outside the workspace')
+  }
+  const target = resolve(realParent, basename(requestedTarget))
+  try {
+    await lstat(target)
+    throw new EvidencePackValidationError('evidence pack output already exists')
+  } catch (error) {
+    if (error instanceof EvidencePackValidationError) throw error
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  const temp = resolve(realParent, `.${basename(target)}.${process.pid}.${randomUUID()}.tmp`)
+  try {
+    await writeFile(temp, `${JSON.stringify(pack, null, 2)}\n`, 'utf8')
+    try {
+      await link(temp, target)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new EvidencePackValidationError('evidence pack output already exists')
+      }
+      throw error
+    }
+  } finally {
+    await unlink(temp).catch(() => {})
+  }
+  return target
+}
+
+export async function readEvidencePack(filePath: string): Promise<EvidencePack> {
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) throw new EvidencePackValidationError('evidence pack file not found')
+  if (file.size > 256 * 1024)
+    throw new EvidencePackValidationError('evidence pack file exceeds 256 KiB')
+  try {
+    return parseEvidencePack(JSON.parse(await file.text()))
+  } catch (error) {
+    if (error instanceof EvidencePackValidationError) throw error
+    throw new EvidencePackValidationError('evidence pack must contain valid JSON')
+  }
+}
+
+export function renderEvidencePackMarkdown(pack: EvidencePack): string {
+  const markdown = (value: string): string =>
+    [...value]
+      .map((character) =>
+        MARKDOWN_ESCAPE_CHARACTERS.has(character) ? `\\${character}` : character
+      )
+      .join('')
+  const lines = [
+    '# Evidence pack',
+    '',
+    `- Id: \`${markdown(pack.id)}\``,
+    `- Created: ${pack.createdAt}`,
+    `- Subject: \`${markdown(pack.subject.kind)}${pack.subject.name ? `:${markdown(pack.subject.name)}` : ''}\``,
+    `- Integrity: \`sha256:${pack.integrity.digest}\``,
+    '',
+    '## Claims',
+    '',
+  ]
+  for (const claim of pack.claims) {
+    lines.push(
+      `### ${markdown(claim.id)}`,
+      '',
+      `> External claim — not a dbcli verification verdict.`,
+      '',
+      markdown(claim.text),
+      '',
+      'Evidence:'
+    )
+    for (const reference of claim.evidence) {
+      if (reference.kind === 'audit') {
+        lines.push(
+          `- audit \`${markdown(reference.id)}\` · ${markdown(reference.command)} · ${reference.success ? 'success' : 'failure'}`
+        )
+      } else {
+        lines.push(`- verification artifact \`${markdown(reference.id)}\` · ${reference.status}`)
+      }
+    }
+    lines.push('')
+  }
+  return `${lines.join('\n')}\n`
+}

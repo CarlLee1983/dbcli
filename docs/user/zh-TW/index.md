@@ -17,6 +17,7 @@
     *   [健康度、診斷與修復](#健康度診斷與修復)
     *   [資料驗證 (snapshot, assert)](#資料驗證)
     *   [驗證文物檢視器](#verification-inspect)
+    *   [證據包](#evidence-packs)
     *   [本機觀察型 Proxy](#proxy)
     *   [QueryLens](#querylens)
     *   [進階工具 (DDL, Shell, AI Skills)](#進階工具)
@@ -682,6 +683,33 @@ dbcli verification list --status verified --subject backfill:safe-backfill-verif
 dbcli verification show ver_abcd --format json
 dbcli verification prune --older-than 30d --format json
 dbcli verification prune --older-than 30d --keep-latest 20 --execute --force
+```
+
+<!-- doc-key: evidence-packs -->
+### evidence — 建立離線證據包
+
+`dbcli evidence` 把既有的 verification artifact 與 audit entry 收斂為可供審閱或交接的、
+工作區內 canonical JSON 證據包。它不會連線資料庫，也不會把 SQL、target、audit metadata、
+verification summary 或憑證複製進包內。Claim 是外部提供的陳述，會被明確標示；它不是 dbcli 的
+驗證裁決。
+
+- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] --output <path> [--format json|markdown]`
+  — 解析一或多個既有參照並寫入新證據包。claims 檔案是只含 `subject` 與 `claims` 的 JSON；每個
+  claim 都含 `id` 與自然語言 `text`。Claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。
+  輸出必須留在目前工作區內，且絕不覆寫既有檔案。
+- `dbcli evidence validate --file <path> [--format json|markdown]`
+  — 驗證 SHA-256 integrity digest，並檢查來源證據是否仍可取得。已保留的 pack 若對應的
+  audit/artifact 之後輪替、清除或消失，會回傳 `references: "source-expired"` 並以 `1` 退出；
+  但仍可 render。
+- `dbcli evidence render --file <path> [--format json|markdown]`
+  — 驗證目前的黑名單政策後，不重讀原始參照就輸出有效 pack，因此來源的保留期屆滿後仍可供
+  歷史審閱。
+
+```bash
+dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --output .dbcli/evidence/review.json
+dbcli evidence validate --file .dbcli/evidence/review.json --format json
+dbcli evidence render --file .dbcli/evidence/review.json
 ```
 
 <!-- doc-key: proxy -->

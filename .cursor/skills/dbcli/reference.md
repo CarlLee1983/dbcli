@@ -2464,6 +2464,64 @@ dbcli migrate drop-enum status --execute --force
 
 **AI agent note:** Always use dry-run first (no `--execute`) to preview generated SQL. Only add `--execute` after confirming the SQL is correct. For DROP operations, both `--execute` and `--force` are required.
 
+### evidence
+
+Compose a canonical, offline **Evidence Pack** from existing verification artifacts
+and audit entries. This command never opens a database connection. A pack retains only
+safe pointers and outcome fields: it excludes SQL, targets, audit metadata, verification
+summaries, result data, and credentials. Claims are external statements, never dbcli
+verification verdicts.
+
+#### `evidence compose`
+
+```bash
+dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --output .dbcli/evidence/review.json --format json
+```
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--claims <file>` | Required JSON file with exactly `subject` and `claims`; every claim has an `id` and plain-language `text`. SQL-shaped text, credentials, error content, and blacklisted identifiers are rejected. | — |
+| `--verification <selector...>` | One or more verification artifact ids, unique prefixes, filenames, or in-bounds paths. | none |
+| `--audit <selector...>` | One or more audit ids or unique prefixes (minimum four characters) from the active connection. | none |
+| `--output <path>` | Required new JSON path under the current workspace. Existing files and paths outside the workspace are refused. | — |
+| `--format <json\|markdown>` | Compose receipt format printed to stdout. | `json` |
+
+At least one `--verification` or `--audit` reference is required. The resulting pack
+contains a canonical SHA-256 integrity digest and `coverage.completeForDeclaredEvidence:
+true` for its explicitly selected references.
+
+#### `evidence validate`
+
+```bash
+dbcli evidence validate --file .dbcli/evidence/review.json --format json
+```
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--file <path>` | Required evidence-pack JSON file. | — |
+| `--format <json\|markdown>` | Validation report format. | `json` |
+
+Exit `0` when digest and all selected sources are valid. If a referenced audit or
+verification artifact later rotates, is cleared, disappears, or belongs to a different
+active connection, output stays parseable with `integrity: "valid"` and
+`references: "source-expired"`, then exits `1`.
+
+#### `evidence render`
+
+```bash
+dbcli evidence render --file .dbcli/evidence/review.json --format markdown
+```
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--file <path>` | Required evidence-pack JSON file. | — |
+| `--format <json\|markdown>` | Render format. | `markdown` |
+
+`render` validates the pack digest and active blacklist policy but does not resolve its
+original references. It is therefore available for historical review after `validate`
+reports `source-expired`, unless an exposed pack field is now blacklisted.
+
 ### semantic
 
 Validate or print the optional, version-controlled `dbcli.semantic.json` in the

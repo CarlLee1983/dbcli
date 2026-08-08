@@ -40,6 +40,7 @@ import { proxyCommand } from './commands/proxy'
 import { semanticCommand } from './commands/semantic'
 import { designCommand } from './commands/design'
 import { backfillCommand } from './commands/backfill'
+import { evidenceCommand } from './commands/evidence'
 import {
   createConnectionSelectorOption,
   resolveConnectionSelector,
@@ -393,6 +394,7 @@ export function buildProgram(): Command {
   program.addCommand(semanticCommand)
   program.addCommand(designCommand)
   program.addCommand(backfillCommand)
+  program.addCommand(evidenceCommand)
 
   return program
 }

@@ -17,6 +17,7 @@
     *   [Health, Diagnostics & Recovery](#health-diagnostics--recovery)
     *   [Data Verification (snapshot, assert)](#data-verification)
     *   [Verification Artifact Inspector](#verification-inspect)
+    *   [Evidence Packs](#evidence-packs)
     *   [Local Observability Proxy](#proxy)
     *   [QueryLens](#querylens)
     *   [Advanced Tools (DDL, Shell, AI Skills)](#advanced-tools)
@@ -771,6 +772,38 @@ dbcli verification list --status verified --subject backfill:safe-backfill-verif
 dbcli verification show ver_abcd --format json
 dbcli verification prune --older-than 30d --format json
 dbcli verification prune --older-than 30d --keep-latest 20 --execute --force
+```
+
+<!-- doc-key: evidence-packs -->
+### evidence — compose offline evidence packs
+
+`dbcli evidence` turns existing verification artifacts and audit entries into a
+canonical, workspace-contained JSON pack for review or handoff. It never queries a
+database and does not copy SQL, targets, audit metadata, verification summaries, or
+credentials into the pack. Claims are externally supplied statements, explicitly
+labeled as such; they are not dbcli verification verdicts.
+
+- `dbcli evidence compose --claims <file> [--verification <selector...>] [--audit <selector...>] --output <path> [--format json|markdown]`
+  — resolves one or more existing references and writes a new pack. The claims file is
+  JSON with exactly `subject` and `claims`; each claim has an `id` and plain-language
+  `text`. Claim text cannot contain SQL, credentials, error content, or blacklisted
+  identifiers. Output must stay inside the current workspace and will never overwrite
+  an existing file.
+- `dbcli evidence validate --file <path> [--format json|markdown]`
+  — validates the SHA-256 integrity digest and checks whether the referenced source
+  evidence is still available. A retained pack whose audit/artifact has since rotated,
+  been cleared, or disappeared returns `references: "source-expired"` and exits `1`;
+  it remains renderable.
+- `dbcli evidence render --file <path> [--format json|markdown]`
+  — validates the active blacklist policy and renders a valid pack without rereading
+  the original references, so it remains available for historical review after source
+  retention expires.
+
+```bash
+dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --output .dbcli/evidence/review.json
+dbcli evidence validate --file .dbcli/evidence/review.json --format json
+dbcli evidence render --file .dbcli/evidence/review.json
 ```
 
 <!-- doc-key: proxy -->

@@ -614,6 +614,19 @@ dbcli verification show ver_abcd --format json
 dbcli verification prune --older-than 30d --format json
 dbcli verification prune --older-than 30d --keep-latest 20 --execute --force</code></pre>
 
+            <!-- doc-key: evidence-packs -->
+            <h3 id="evidence-packs">evidence — compose offline evidence packs</h3>
+            <p class="text-text-muted mb-4"><code>dbcli evidence</code> combines existing verification artifacts and audit entries into a canonical, workspace-contained JSON pack for review or handoff. It never opens a database connection and does not copy SQL, targets, audit metadata, verification summaries, or credentials into the pack. Claims are external statements, explicitly labeled as such; they are not dbcli verification verdicts.</p>
+            <ul class="mb-4">
+                <li><code>dbcli evidence compose --claims &lt;file&gt; [--verification &lt;selector...&gt;] [--audit &lt;selector...&gt;] --output &lt;path&gt; [--format json|markdown]</code> — resolves existing references and writes a new pack. The claims JSON has exactly <code>subject</code> and <code>claims</code>; claim text cannot contain SQL, credentials, error content, or blacklisted identifiers. Output stays in the current workspace and never overwrites an existing file.</li>
+                <li><code>dbcli evidence validate --file &lt;path&gt; [--format json|markdown]</code> — validates the SHA-256 digest and referenced evidence availability. A retained pack whose audit/artifact later rotates, is cleared, or disappears reports <code>references: "source-expired"</code> and exits <code>1</code>, but remains renderable.</li>
+                <li><code>dbcli evidence render --file &lt;path&gt; [--format json|markdown]</code> — validates the active blacklist policy and renders a valid pack without rereading original references, including after source retention expires.</li>
+            </ul>
+            <pre><code>dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --output .dbcli/evidence/review.json
+dbcli evidence validate --file .dbcli/evidence/review.json --format json
+dbcli evidence render --file .dbcli/evidence/review.json</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — Local Observability Proxy</h3>
             <p class="text-text-muted mb-4">A local development observability proxy — point an existing application at the proxy port and <code>dbcli</code> relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. <strong>This is NOT a production gateway.</strong> Use it during local development only.</p>

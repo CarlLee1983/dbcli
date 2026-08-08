@@ -614,6 +614,19 @@ dbcli verification show ver_abcd --format json
 dbcli verification prune --older-than 30d --format json
 dbcli verification prune --older-than 30d --keep-latest 20 --execute --force</code></pre>
 
+            <!-- doc-key: evidence-packs -->
+            <h3 id="evidence-packs">evidence — 建立離線證據包</h3>
+            <p class="text-text-muted mb-4"><code>dbcli evidence</code> 把既有 verification artifact 與 audit entry 收斂為可供審閱或交接的、工作區內 canonical JSON 證據包。它不連線資料庫，也不會把 SQL、target、audit metadata、verification summary 或憑證複製進包內。Claim 是外部提供的陳述，會被明確標示；它不是 dbcli 的驗證裁決。</p>
+            <ul class="mb-4">
+                <li><code>dbcli evidence compose --claims &lt;file&gt; [--verification &lt;selector...&gt;] [--audit &lt;selector...&gt;] --output &lt;path&gt; [--format json|markdown]</code> — 解析既有參照並寫入新證據包。claims JSON 只含 <code>subject</code> 與 <code>claims</code>；claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。輸出必須留在目前工作區內，且不會覆寫既有檔案。</li>
+                <li><code>dbcli evidence validate --file &lt;path&gt; [--format json|markdown]</code> — 驗證 SHA-256 digest 與來源證據可用性。已保留的 pack 若對應 audit/artifact 之後輪替、清除或消失，回傳 <code>references: "source-expired"</code> 並以 <code>1</code> 退出，但仍可 render。</li>
+                <li><code>dbcli evidence render --file &lt;path&gt; [--format json|markdown]</code> — 驗證目前的黑名單政策後，不重讀原始參照就輸出有效 pack，因此來源保留期屆滿後仍可供歷史審閱。</li>
+            </ul>
+            <pre><code>dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a2b \
+  --output .dbcli/evidence/review.json
+dbcli evidence validate --file .dbcli/evidence/review.json --format json
+dbcli evidence render --file .dbcli/evidence/review.json</code></pre>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — 本機觀察型 Proxy</h3>
             <p class="text-text-muted mb-4">本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，<code>dbcli</code> 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。<strong>這不是正式環境閘道器。</strong> 僅限本機開發環境使用。</p>

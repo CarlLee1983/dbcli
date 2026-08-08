@@ -47,3 +47,38 @@ outside dbcli.
 dbcli explicitly calls an approved provider to create a `QueryDraft`. It is a
 separate, policy-gated transport concern and uses the same validator; it is not
 a different permission tier.
+
+## Agent data-work language
+
+**Evidence receipt**:
+A bounded, machine-readable record of one explicit dbcli operation. It proves
+what dbcli observed or verified under a particular governed context; it never
+contains database rows, unredacted SQL, credentials, or an agent's conclusion.
+
+**Evidence pack**:
+A reviewable collection that connects one or more human- or agent-authored
+claims to evidence receipts, verification artifacts, and audit references. A
+pack makes provenance inspectable; it does not make a claim true.
+
+**Claim**:
+Bounded human- or agent-authored text in an evidence pack. It is untrusted
+interpretation, not a dbcli verification verdict or executable assertion.
+
+**Semantic contract**:
+An approved, version-controlled business definition whose references are
+validated against the governed semantic context. It is not a database-schema
+contract, a permission rule, or executable SQL.
+
+**Data subject**:
+A stable, connection-scoped identity for a governed physical or semantic
+object. It is not an unqualified table name that can collide across connections.
+
+**Impact assessment**:
+A deterministic report of known effects of a proposed schema/design change on
+governed semantic references, saved queries, verification evidence, observed
+workload, and explicitly declared code access. It reports the limits of its
+coverage rather than claiming to find every application dependency.
+
+**Coverage gap**:
+An explicit statement that an impact assessment lacks a source needed to rule
+out an effect. It is a warning, never a clean result.

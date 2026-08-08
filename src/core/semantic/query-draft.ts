@@ -491,7 +491,7 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function isCanonicalSemanticReference(value: string): boolean {
+export function isCanonicalSemanticReference(value: string): boolean {
   const [kind, target, extra] = value.split(':')
   if (extra !== undefined || !target) return false
   if (kind === 'model' || kind === 'metric' || kind === 'relationship')

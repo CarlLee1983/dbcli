@@ -2,6 +2,7 @@ import { join } from 'node:path'
 
 export {
   semanticReferenceRegistry,
+  isCanonicalSemanticReference,
   validateQueryDraft,
   queryDraftReportMetadata,
   type QueryDraft,

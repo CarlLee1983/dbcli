@@ -11,6 +11,11 @@ import {
 import { compileDesignSchema, loadDesignSpec, reviewDesign } from '@/core/design'
 import { defaultSemanticContractsFile, loadSemanticContracts, type SemanticContract } from '@/core/contracts'
 import {
+  defaultDataAccessManifestFile,
+  loadDataAccessManifest,
+  type DataAccessOperation,
+} from '@/core/data-access'
+import {
   defaultSemanticFile,
   containsBlockedSemanticIdentifier,
   loadSemanticContext,
@@ -113,6 +118,13 @@ impactCommand
         savedQueries,
         blockedIdentifiers
       )
+      const dataAccess = await loadDataAccessEvidence(
+        workspaceRoot,
+        semantic,
+        baseline,
+        savedQueries,
+        blockedIdentifiers
+      )
       const verifications = await loadVerificationEvidence(workspaceRoot, blockedIdentifiers)
       const report = assessImpact({
         changes,
@@ -120,6 +132,7 @@ impactCommand
         contracts,
         savedQueries,
         verifications,
+        dataAccess,
         blockedIdentifiers,
       })
       const rendered = formatImpact(report, format)
@@ -244,6 +257,42 @@ async function loadContractEvidence(
     return { state: 'available', origin: 'dbcli.contracts.json', value: contracts }
   } catch {
     return { state: 'invalid', origin: 'dbcli.contracts.json', reason: 'invalid' }
+  }
+}
+
+async function loadDataAccessEvidence(
+  workspaceRoot: string,
+  semantic: ImpactEvidenceSource<SemanticContext>,
+  baseline: ReturnType<typeof compileDesignSchema>,
+  savedQueries: ImpactEvidenceSource<readonly string[]>,
+  blocked: readonly string[]
+): Promise<ImpactEvidenceSource<readonly DataAccessOperation[]>> {
+  if (!(await Bun.file(defaultDataAccessManifestFile(workspaceRoot)).exists())) {
+    return { state: 'absent', origin: 'dbcli.data-access.json', reason: 'missing' }
+  }
+  if (semantic.state !== 'available') {
+    return { state: 'unavailable', origin: 'dbcli.data-access.json', reason: 'unavailable' }
+  }
+  const schema = semanticSchema(baseline, blocked)
+  if (!schema) return { state: 'unavailable', origin: 'dbcli.data-access.json', reason: 'unavailable' }
+  try {
+    const references = semanticReferenceRegistry(
+      semantic.value,
+      schema,
+      savedQueries.state === 'available' ? savedQueries.value : []
+    )
+    return {
+      state: 'available',
+      origin: 'dbcli.data-access.json',
+      value: await loadDataAccessManifest({
+        workspaceRoot,
+        references,
+        blockedTerms: blocked,
+        missingFile: 'error',
+      }),
+    }
+  } catch {
+    return { state: 'invalid', origin: 'dbcli.data-access.json', reason: 'invalid' }
   }
 }
 

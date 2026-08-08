@@ -135,6 +135,56 @@ describe('impact assess command', () => {
     expect(await Bun.file(join(sandbox, 'impact.md')).text()).toContain('# Impact assessment')
   })
 
+  test('joins a valid declared data-access manifest without reading its source', async () => {
+    mkdirSync(join(sandbox, 'src'), { recursive: true })
+    writeFileSync(join(sandbox, 'src', 'accounts.ts'), '// application source is never parsed\n')
+    writeFileSync(
+      join(sandbox, 'dbcli.data-access.json'),
+      JSON.stringify({
+        version: 1,
+        operations: [
+          {
+            name: 'accounts.lookup',
+            source: 'src/accounts.ts',
+            kind: 'read',
+            references: ['field:accounts.email'],
+            coverage: 'declared',
+          },
+        ],
+      })
+    )
+
+    await run('--design', 'design.json', '--against-cache', '--output', 'access.json')
+
+    const report = await Bun.file(join(sandbox, 'access.json')).json()
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({
+        code: 'AFFECTED_DECLARED_ACCESS_OPERATION',
+        severity: 'warn',
+        location: { artifact: 'src/accounts.ts', selector: 'data-access:read:accounts.lookup' },
+      })
+    )
+    expect(JSON.stringify(report)).not.toContain('application source is never parsed')
+  })
+
+  test('records an invalid optional data-access manifest as coverage without leaking its path', async () => {
+    writeFileSync(
+      join(sandbox, 'dbcli.data-access.json'),
+      JSON.stringify({
+        version: 1,
+        operations: [
+          { name: 'invalid', source: '../private-source.ts', kind: 'read', references: ['model:accounts'], coverage: 'declared' },
+        ],
+      })
+    )
+
+    await run('--design', 'design.json', '--against-cache', '--output', 'invalid-access.json')
+
+    const report = await Bun.file(join(sandbox, 'invalid-access.json')).json()
+    expect(report.coverage.gaps).toContainEqual(expect.objectContaining({ code: 'DATA_ACCESS_INVALID' }))
+    expect(JSON.stringify(report)).not.toContain('private-source')
+  })
+
   test('marks protected verification metadata as a redacted coverage gap', async () => {
     const config = await Bun.file(join(sandbox, 'config.json')).json()
     config.blacklist.columns.accounts = ['private-verification']

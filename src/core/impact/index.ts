@@ -3,6 +3,7 @@ import type { SemanticContext, SemanticField, SemanticModel } from '@/core/seman
 import type { SemanticContract } from '@/core/contracts'
 import type { NormalizedChange, NormalizedChangeScope, NormalizedChangeSet } from '@/core/orm-drift/change-set'
 import type { VerificationStatus, VerificationSubject } from '@/core/verification/types'
+import type { DataAccessOperation } from '@/core/data-access'
 
 export type ImpactEvidenceState = 'available' | 'absent' | 'invalid' | 'unavailable'
 export type ImpactEvidenceReason = 'missing' | 'invalid' | 'unavailable'
@@ -27,6 +28,7 @@ export interface ImpactAssessmentInput {
   /** Saved-query keys only; the assessment never receives query bodies. */
   savedQueries: ImpactEvidenceSource<readonly string[]>
   verifications: ImpactEvidenceSource<readonly SafeVerificationMetadata[]>
+  dataAccess: ImpactEvidenceSource<readonly DataAccessOperation[]>
   blockedIdentifiers: readonly string[]
 }
 
@@ -37,6 +39,7 @@ export type ImpactFindingCode =
   | 'AFFECTED_SEMANTIC_CONTRACT'
   | 'AFFECTED_SAVED_QUERY'
   | 'AFFECTED_VERIFICATION'
+  | 'AFFECTED_DECLARED_ACCESS_OPERATION'
 
 export interface ImpactLocation {
   artifact: string
@@ -71,6 +74,10 @@ export type ImpactCoverageCode =
   | 'VERIFICATIONS_ABSENT'
   | 'VERIFICATIONS_INVALID'
   | 'VERIFICATIONS_UNAVAILABLE'
+  | 'DATA_ACCESS_ABSENT'
+  | 'DATA_ACCESS_INVALID'
+  | 'DATA_ACCESS_UNAVAILABLE'
+  | 'DATA_ACCESS_DYNAMIC_OR_UNLISTED'
   | 'SAVED_QUERY_REFERENCE_UNAVAILABLE'
   | 'REDACTED_PROTECTED_SUBJECT'
 
@@ -141,6 +148,15 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
         addGap(gaps, 'SAVED_QUERY_REFERENCE_UNAVAILABLE')
       }
     }
+    if (input.dataAccess.state === 'available') {
+      const references = new Set([
+        ...nodes.map((node) => node.reference),
+        ...contractResult.metrics.map((metric) => `metric:${metric.name}`),
+      ])
+      const access = dataAccessFindings(change, references, input.dataAccess.value, input.blockedIdentifiers)
+      findings.push(...access.findings)
+      if (access.redacted) addGap(gaps, 'REDACTED_PROTECTED_SUBJECT')
+    }
   }
 
   findings.sort((left, right) => codePointOrder(left.id, right.id))
@@ -187,12 +203,14 @@ function coverageGaps(input: ImpactAssessmentInput): Map<ImpactCoverageCode, Imp
   addEvidenceGap(gaps, 'CONTRACTS', input.contracts)
   addEvidenceGap(gaps, 'SAVED_QUERIES', input.savedQueries)
   addEvidenceGap(gaps, 'VERIFICATIONS', input.verifications)
+  addEvidenceGap(gaps, 'DATA_ACCESS', input.dataAccess)
+  if (input.dataAccess.state === 'available') addGap(gaps, 'DATA_ACCESS_DYNAMIC_OR_UNLISTED')
   return gaps
 }
 
 function addEvidenceGap<T>(
   gaps: Map<ImpactCoverageCode, ImpactCoverageGap>,
-  prefix: 'SEMANTIC' | 'CONTRACTS' | 'SAVED_QUERIES' | 'VERIFICATIONS',
+  prefix: 'SEMANTIC' | 'CONTRACTS' | 'SAVED_QUERIES' | 'VERIFICATIONS' | 'DATA_ACCESS',
   source: ImpactEvidenceSource<T>
 ): void {
   if (source.state === 'available') {
@@ -382,6 +400,30 @@ function verificationFindings(
     )
 }
 
+function dataAccessFindings(
+  change: NormalizedChange,
+  references: ReadonlySet<string>,
+  operations: readonly DataAccessOperation[],
+  blocked: readonly string[]
+): { findings: ImpactFinding[]; redacted: boolean } {
+  const findings: ImpactFinding[] = []
+  let redacted = false
+  for (const operation of operations) {
+    if (!isSafe(`${operation.name}.${operation.source}.${operation.references.join('.')}`, blocked)) {
+      redacted = true
+      continue
+    }
+    if (!operation.references.some((reference) => references.has(reference))) continue
+    findings.push(
+      finding(change, 'AFFECTED_DECLARED_ACCESS_OPERATION', 'warn', {
+        artifact: operation.source,
+        selector: `data-access:${operation.kind}:${operation.name}`,
+      })
+    )
+  }
+  return { findings, redacted }
+}
+
 function finding(
   change: NormalizedChange,
   code: ImpactFindingCode,
@@ -395,6 +437,7 @@ function finding(
     AFFECTED_SEMANTIC_CONTRACT: '3',
     AFFECTED_SAVED_QUERY: '4',
     AFFECTED_VERIFICATION: '5',
+    AFFECTED_DECLARED_ACCESS_OPERATION: '6',
   }
   return {
     id: JSON.stringify([change.id, priority[code], code, location.artifact, location.selector]),

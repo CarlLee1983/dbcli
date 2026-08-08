@@ -161,7 +161,7 @@ in **How to use dbcli** still applies.
 | ORM or migration work | `schema --format json` → `diff --against-orm <orm-schema>` → review error-level drift → proposals via `migrate` (dry-run) → `migration-review` task pack → `diff --against <snapshot>` after applying. |
 | Schema design, no database yet | `design init --output ./dbcli.design.json` → edit → `design validate` → `design render --format mermaid`. With existing ORM models, reconcile via `design diff --against-orm <path>` first. |
 | Design drift on a live database | `blacklist list` → `schema --format json` → `design diff --against-cache` → `design propose --against-cache`, then hand the plan to a human before any migration. |
-| PR schema-change review | `blacklist list` → `impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn`, then review declared findings and coverage gaps. |
+| PR schema-change review | `blacklist list` → `impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn`, then review declared findings, coverage gaps, and the optional reviewed `dbcli.data-access.json` (declared operations only; never source parsing). |
 | PR database review | Review changed persistence paths, then propose concrete `schema` / `plan` / `dry-run` / `report` / `guide` commands per material claim. |
 | Slow endpoint or query | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`; use `proxy analyze` when logs exist. |
 | Safe data backfill | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back or snippet `--verify`. |

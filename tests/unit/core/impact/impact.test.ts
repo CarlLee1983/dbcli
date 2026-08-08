@@ -77,6 +77,11 @@ function input(overrides: Partial<ImpactAssessmentInput> = {}): ImpactAssessment
         },
       ],
     },
+    dataAccess: {
+      state: 'available',
+      origin: 'dbcli.data-access.json',
+      value: [],
+    },
     blockedIdentifiers: [],
     ...overrides,
   }
@@ -140,6 +145,69 @@ describe('assessImpact', () => {
     expect(report.findings.map((finding) => finding.code)).toContain('AFFECTED_SEMANTIC_MODEL')
   })
 
+  test('emits one stable warning for each affected declared access operation', () => {
+    const report = assessImpact(
+      input({
+        dataAccess: {
+          state: 'available',
+          origin: 'dbcli.data-access.json',
+          value: [
+            {
+              name: 'accounts.lookup',
+              kind: 'read',
+              source: 'src/accounts.ts',
+              references: ['field:account.email', 'model:account'],
+              coverage: 'declared',
+            },
+            {
+              name: 'unrelated',
+              kind: 'write',
+              source: 'src/other.ts',
+              references: ['metric:other'],
+              coverage: 'declared',
+            },
+          ],
+        },
+      })
+    )
+
+    expect(report.findings.filter((finding) => finding.code === 'AFFECTED_DECLARED_ACCESS_OPERATION')).toEqual([
+      expect.objectContaining({
+        severity: 'warn',
+        location: { artifact: 'src/accounts.ts', selector: 'data-access:read:accounts.lookup' },
+      }),
+    ])
+    expect(report.coverage.gaps).toContainEqual(
+      expect.objectContaining({ code: 'DATA_ACCESS_DYNAMIC_OR_UNLISTED' })
+    )
+  })
+
+  test('redacts protected declared operation metadata and records the omission', () => {
+    const report = assessImpact(
+      input({
+        blockedIdentifiers: ['private-access'],
+        dataAccess: {
+          state: 'available',
+          origin: 'dbcli.data-access.json',
+          value: [
+            {
+              name: 'private-access',
+              kind: 'read',
+              source: 'src/accounts.ts',
+              references: ['field:account.email'],
+              coverage: 'declared',
+            },
+          ],
+        },
+      })
+    )
+
+    expect(JSON.stringify(report)).not.toContain('private-access')
+    expect(report.coverage.gaps).toContainEqual(
+      expect.objectContaining({ code: 'REDACTED_PROTECTED_SUBJECT' })
+    )
+  })
+
   test('makes missing sources and inherited normalization uncertainty visible without claiming complete coverage', () => {
     const partialChanges: NormalizedChangeSet = {
       ...changes,
@@ -164,6 +232,7 @@ describe('assessImpact', () => {
 
     expect(report.coverage).toMatchObject({ level: 'partial' })
     expect(report.coverage.gaps.map((gap) => gap.code)).toEqual([
+      'DATA_ACCESS_DYNAMIC_OR_UNLISTED',
       'NORMALIZATION_PARTIAL',
       'SAVED_QUERIES_ABSENT',
     ])

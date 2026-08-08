@@ -1222,7 +1222,7 @@ neither is an error.
 
 ### impact assess
 
-Writes an offline JSON or Markdown report for the known declared impact of a design change. It requires `--design`, exactly one baseline (`--against-cache` or `--against-orm`), and an explicit workspace-contained `--output`. `--format` is `json` (default) or `markdown`; `--fail-on` is `error`, `warn`, or `never` (default). The threshold changes only the successful command exit code after the report is written. The report is limited to declared/partial coverage and never claims complete coverage. It reads no database, executes no SQL, and never reads saved-query bodies.
+Writes an offline JSON or Markdown report for the known declared impact of a design change. It requires `--design`, exactly one baseline (`--against-cache` or `--against-orm`), and an explicit workspace-contained `--output`. `--format` is `json` (default) or `markdown`; `--fail-on` is `error`, `warn`, or `never` (default). The threshold changes only the successful command exit code after the report is written. The report is limited to declared/partial coverage and never claims complete coverage. It may join the optional reviewed `dbcli.data-access.json` manifest only after validating its canonical semantic references and existing workspace-relative source paths; it never reads those sources. It reads no database, executes no SQL, and never reads saved-query bodies.
 
 #### Artifact shape
 

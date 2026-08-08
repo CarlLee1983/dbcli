@@ -40,8 +40,10 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
     gate: 'enforcePermission() — permission tier, stacked statements, blacklist',
   },
   'core/data-executor.ts': {
-    calls: 3,
-    gate: 'enforcePermission() per operation — insert/update/delete require data-admin',
+    calls: 1,
+    gate:
+      'operation-specific blacklist and permission checks run before insert/update/delete ' +
+      'converge on the shared executeMutation() adapter-execution gate',
   },
   'core/ddl-executor.ts': {
     calls: 1,
@@ -150,6 +152,7 @@ describe('database execution paths are registered with a gate', () => {
 
   test('every registered path states its gate', () => {
     for (const [file, entry] of Object.entries(REGISTERED_PATHS)) {
+      expect(entry.calls, `${file} must register at least one adapter call`).toBeGreaterThan(0)
       expect(entry.gate.trim().length, `${file} must state a gate`).toBeGreaterThan(0)
     }
   })

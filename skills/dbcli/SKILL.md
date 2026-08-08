@@ -110,7 +110,9 @@ still stop where those gates require human confirmation.
 term, or relationship/join intent instead of a physical table or field name, first run
 `dbcli skill context --format json`. If it includes `semantic`, treat that reviewed
 section as the governed vocabulary; use `dbcli semantic search <terms> --format json`
-to look up a specific term. If no semantic section exists or search returns no result,
+to look up a specific term. If `contracts` is present, use only its approved terms and
+their descriptive evidence policy; it never authorizes an assertion or query. If no
+semantic section exists or search returns no result,
 fall back to `blacklist` → `schema` mapping and tell the user that optional
 `dbcli.semantic.json` can make future requests consistent. Never create, update, or
 migrate that file without an explicit human request; semantic vocabulary never replaces
@@ -415,6 +417,7 @@ Full flags and edge cases: see [reference.md](reference.md#init).
 | `shell` | (same as query+) | Interactive REPL. SQL engines, MongoDB, and Redis (single-line; `.no-limit on/off`). Elasticsearch opens a Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank line submits). |
 | `skill` | n/a | Generate / install AI skill docs (`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`); `skill tasks list/show/plan` for Agent Task Packs; `skill context` for an LLM prompt-context payload (for injecting into another LLM, not needed for normal operation). |
 | `semantic` | n/a | Validate, search, inspect drift, migrate to v2, or print the optional project-root `dbcli.semantic.json`. Give its reviewed context to an external agent, but keep provider credentials, prompts, and agent context outside dbcli. `semantic draft validate --input <file|-> [--format text\|json]` validates only the explicit untrusted `QueryDraft` offline against local semantic/schema/saved-query metadata; it returns safe hashes/references/violation codes, never executes or echoes candidate SQL. Review the original draft, then invoke `explain` or `query` separately if intended. |
+| `contract` | n/a | Validate, inspect approved context, search, or inspect drift for optional project-root `dbcli.contracts.json`. Contracts add ownership and a descriptive evidence policy to canonical semantic references; they are offline, never execute SQL, and cannot create verification or query authority. `skill context` includes only valid approved contracts. |
 | `migrate` | admin | SQL only. **DDL; dry-run by default** — needs `--execute`. |
 
 Use root-level `dbcli --use <name> <command>` for any command; `query`, `schema`, `list`,

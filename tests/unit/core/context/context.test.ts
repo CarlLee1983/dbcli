@@ -207,6 +207,114 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     expect(serializeMarkdown(payload)).toContain('## Business Semantic Context')
   })
 
+  test('gatherContext exposes only approved valid semantic contracts', async () => {
+    await Bun.file(TEST_CONFIG_PATH).write(
+      JSON.stringify({
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: 'pass',
+          database: 'app',
+        },
+        schema: {
+          orders: {
+            name: 'orders',
+            columns: [{ name: 'created_at', type: 'timestamp', nullable: false }],
+          },
+        },
+      })
+    )
+    await Bun.file(join(TEST_WORKSPACE, 'dbcli.semantic.json')).write(
+      JSON.stringify({
+        version: 1,
+        models: [{ name: 'orders', table: 'orders', fields: [{ column: 'created_at' }] }],
+        metrics: [],
+      })
+    )
+    await Bun.file(join(TEST_WORKSPACE, 'dbcli.contracts.json')).write(
+      JSON.stringify({
+        version: 1,
+        contracts: [
+          {
+            name: 'active-customer',
+            status: 'approved',
+            description: 'A customer with a recent paid order.',
+            subjects: ['model:orders'],
+            owner: 'growth',
+            evidencePolicy: 'verification-required',
+          },
+          {
+            name: 'future-customer',
+            status: 'draft',
+            description: 'A term still under review.',
+            subjects: ['model:orders'],
+            owner: 'growth',
+            evidencePolicy: 'none',
+          },
+        ],
+      })
+    )
+
+    const payload = await gatherContext(TEST_WORKSPACE, TEST_CONFIG_PATH)
+
+    expect(payload.contracts).toEqual([
+      {
+        name: 'active-customer',
+        status: 'approved',
+        description: 'A customer with a recent paid order.',
+        subjects: ['model:orders'],
+        owner: 'growth',
+        aliases: [],
+        evidencePolicy: 'verification-required',
+      },
+    ])
+    expect(JSON.parse(serializeJson(payload)).contracts).toHaveLength(1)
+    expect(serializeXml(payload)).toContain('<semantic_contracts>')
+    expect(serializeMarkdown(payload)).toContain('## Approved Semantic Contracts')
+  })
+
+  test('gatherContext fails closed when contracts exist without semantic evidence', async () => {
+    await Bun.file(TEST_CONFIG_PATH).write(
+      JSON.stringify({
+        connection: {
+          system: 'postgresql',
+          host: 'localhost',
+          port: 5432,
+          user: 'user',
+          password: 'pass',
+          database: 'app',
+        },
+        schema: {
+          orders: {
+            name: 'orders',
+            columns: [{ name: 'created_at', type: 'timestamp', nullable: false }],
+          },
+        },
+      })
+    )
+    await Bun.file(join(TEST_WORKSPACE, 'dbcli.contracts.json')).write(
+      JSON.stringify({
+        version: 1,
+        contracts: [
+          {
+            name: 'active-customer',
+            status: 'approved',
+            description: 'A customer with a recent paid order.',
+            subjects: ['model:orders'],
+            owner: 'growth',
+            evidencePolicy: 'verification-required',
+          },
+        ],
+      })
+    )
+
+    await expect(gatherContext(TEST_WORKSPACE, TEST_CONFIG_PATH)).rejects.toThrow(
+      'must reference an available semantic entity'
+    )
+  })
+
   test('gatherContext fails closed when semantic context names a blacklisted column', async () => {
     await Bun.file(TEST_CONFIG_PATH).write(
       JSON.stringify({

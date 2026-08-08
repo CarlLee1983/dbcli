@@ -84,7 +84,8 @@ blacklist、schema、permission、dry-run、production 選取或寫入確認閘�
 **業務語言探索：** 當使用者以業務別名、metric、反覆出現的術語或 relationship/join 意圖，
 而非實體 table 或 field 名稱提出需求時，先執行 `dbcli skill context --format json`。若輸出含有
 `semantic`，將該已檢閱的區塊視為受治理詞彙；需查找特定術語時，用
-`dbcli semantic search <terms> --format json`。若沒有 semantic 區塊，或搜尋沒有結果，就退回
+`dbcli semantic search <terms> --format json`。若有 `contracts` 區塊，只能使用其中 approved 術語
+及描述性的 evidence policy；它絕不授權 assertion 或 query。若沒有 semantic 區塊，或搜尋沒有結果，就退回
 `blacklist` → `schema` 對照，並告知使用者可選用的 `dbcli.semantic.json` 能讓後續需求保持一致。
 除非人類明確要求，絕不可建立、更新或 migrate 此檔案；語意詞彙不能取代 schema 確認或正常的
 query/write 安全閘門。
@@ -329,6 +330,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 | `shell` | (與 query 同) | 互動式 REPL。SQL 引擎、MongoDB 與 Redis（單行；`.no-limit on/off`）。Elasticsearch 開啟 Kibana Dev Tools 風格的 REPL（`<METHOD> /<path>` + 可選 JSON body，空白行送出）。 |
 | `skill` | n/a | 產出 / 安裝 AI skill 文件（`--install <claude\|gemini\|antigravity\|copilot\|cursor\|codex\|windsurf>`）；`skill tasks list/show/plan` 提供 Agent Task Packs；`skill context` 提供 LLM 提示詞脈絡載荷（用於注入其他 LLM，正常操作不需要）。 |
 | `semantic` | n/a | 驗證、搜尋、檢查漂移、遷移至 v2 或輸出可選的專案根目錄 `dbcli.semantic.json`。把已檢閱的 context 交給外部 agent，但 provider 憑證、prompt 與 agent context 都留在 dbcli 外。`semantic draft validate --input <file|-> [--format text\|json]` 只會以本機 semantic/schema/saved-query metadata 離線驗證明確提交、不受信任的 `QueryDraft`；只回傳安全的 hash/reference/violation code，絕不執行或回顯 candidate SQL。先檢閱原始 draft，若要執行再另行呼叫 `explain` 或 `query`。 |
+| `contract` | n/a | 驗證、檢視 approved context、搜尋或檢查可選專案根目錄 `dbcli.contracts.json` 的漂移。契約為 canonical semantic reference 加上 owner 與描述性的 evidence policy；完全離線、絕不執行 SQL，也不能建立 verification 或 query 權限。`skill context` 只納入有效且 approved 的契約。 |
 | `migrate` | admin | 僅 SQL。**DDL；預設 dry-run** — 需 `--execute`。 |
 
 任何指令都可使用 root 層級的 `dbcli --use <name> <command>`；`query`、`schema`、`list`、`export`、`check` 也接受指令層級的 `--use`。兩種寫法都只把本次目標切到 v2 連線，不改變預設值。`--recovery` 被 `query`、`q`、`insert`、`update`、`delete`、`export`、`schema`、`inspect`、`lint` 與 `diff --against-orm` 支援（見上方**失敗時**）。

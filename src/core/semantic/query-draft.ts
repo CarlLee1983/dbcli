@@ -242,7 +242,12 @@ function validateSemanticReferences(
   return [...safe].sort()
 }
 
-function semanticReferenceRegistry(
+/**
+ * Canonical, currently visible semantic references. Consumers such as semantic
+ * contracts must use this registry rather than reconstructing schema or
+ * blacklist visibility rules.
+ */
+export function semanticReferenceRegistry(
   context: SemanticContext,
   schema: Record<string, SemanticSchemaTable>,
   savedQueryNames: readonly string[]

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
 export {
+  semanticReferenceRegistry,
   validateQueryDraft,
   queryDraftReportMetadata,
   type QueryDraft,
@@ -265,6 +266,14 @@ export function searchSemanticContext(
     .map(({ result, match }) => ({ ...result, matchedTerms: match.terms }))
 }
 
+/** Shared blacklist matching for semantic-facing artifacts and search output. */
+export function containsBlockedSemanticIdentifier(
+  value: string,
+  blockedTerms: readonly string[]
+): boolean {
+  return blockedTerms.some((term) => isBlockedIdentifier(value, term.trim()))
+}
+
 interface SearchCandidate {
   result: Omit<SemanticSearchResult, 'matchedTerms'>
   canonical: string
@@ -401,9 +410,7 @@ function candidateContainsBlockedIdentifier(
   blockedTerms: string[]
 ): boolean {
   const exposedValues = [candidate.result.reference, ...(candidate.result.models ?? [])]
-  return exposedValues.some((value) =>
-    blockedTerms.some((term) => isBlockedIdentifier(value, term))
-  )
+  return exposedValues.some((value) => containsBlockedSemanticIdentifier(value, blockedTerms))
 }
 
 function isBlockedIdentifier(value: string, blocked: string): boolean {

@@ -913,6 +913,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |
+| `contract validate` / `contract context` / `contract search` / `contract drift` | Validates, prints, searches, or checks the optional reviewed `dbcli.contracts.json` against semantic evidence. Offline and read-only; ordinary agent context includes approved contracts only. |
 | `design init` / `design validate` / `design render` / `design diff` / `design propose` | Creates an explicit local starter file, validates or renders a version-controlled SQL database design, compares it with either the local SQL schema cache or a local ORM definition, and produces a review-only change plan. It never executes DDL or silently writes a design. |
 | `skill tasks` | Manages "Task Packs" — repeatable expert database workflows. |
 | `completion` | Installs shell auto-completion for bash/zsh/fish. |
@@ -946,6 +947,17 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > **How it is discovered.** Installed dbcli skills tell agents to check `skill context` when a request uses business aliases, metrics, recurring terms, or relationship/join intent. If a validated `semantic` section is present, it is the governed vocabulary; otherwise the agent falls back to the blacklist-filtered schema and tells you this optional feature could make future requests consistent. dbcli never creates or changes `dbcli.semantic.json` unless you explicitly ask it to.
 >
 > Version 1 remains compatible; v2 adds relationships between declared visible model fields. The validator rejects tables or columns absent from the cached visible schema, including blacklisted objects, and metrics whose `query` is not an available `@saved-query`. `semantic search <terms...>` is deterministic and offline; use `--kind` and `--limit 1-100` (default 20). It returns only governed metadata and removes blacklist names from free-text results. `semantic drift` is non-zero for `stale`, `invalid`, or unavailable schema cache; `migrate --to 2` prints JSON but never writes the source file.
+>
+> **Semantic contracts.** Put an optional, reviewable `dbcli.contracts.json` beside the semantic file to add an owner and descriptive evidence expectation to a governed business term. It must use version `1`, canonical contract names, canonical `model:` / `field:` / `relationship:` / `metric:` subjects, a `draft`, `approved`, or `deprecated` status, and an evidence policy of `none`, `receipt-required`, or `verification-required`. It cannot contain SQL, credentials, protected identifiers, or executable rules.
+>
+> ```bash
+> dbcli contract validate --format json
+> dbcli contract context --format json
+> dbcli contract search customer --format json
+> dbcli contract drift --format json
+> ```
+>
+> These commands never connect or execute queries. `context`, `search`, and `skill context` expose only valid `approved` contracts; draft and deprecated terms remain local review artifacts. A missing contract file leaves ordinary semantic context unchanged, while an explicitly requested missing or invalid file fails closed. `contract drift` distinguishes valid, stale, invalid, and unavailable local evidence.
 >
 > **Agent query drafts.** First give the external agent the reviewed output of `dbcli semantic context --format json`; keep its provider account, credentials, prompt, and any other agent context outside dbcli. The agent returns an untrusted `QueryDraft` file shaped like this (use only the models and fields from that semantic context):
 >

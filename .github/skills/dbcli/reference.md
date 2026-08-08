@@ -51,12 +51,14 @@ never the right move.
 [verify](#verify) ·
 [verification](#verification) ·
 [backfill](#backfill) ·
+[evidence](#evidence) ·
 [doctor](#doctor) ·
 [completion](#completion) ·
 [upgrade](#upgrade) ·
 [shell](#dbcli-shell) ·
 [migrate](#migrate) ·
 [semantic](#semantic) ·
+[contract](#contract) ·
 [skill](#skill) ·
 [skill context](#skill-context) ·
 [skill tasks](#skill-tasks-agent-task-packs)
@@ -2645,6 +2647,39 @@ When valid, `dbcli skill context` includes the same bounded data in its JSON,
 XML, and Markdown output. To run a metric, an agent must still invoke the named
 saved query through `dbcli q`; all ordinary permissions, blacklist masking,
 limits, audit, and recovery safeguards remain in force.
+
+**Permission:** n/a (local files only; no database connection).
+
+### contract
+
+Inspect the optional, version-controlled `dbcli.contracts.json` without opening a
+database connection. A contract adds a reviewed owner and descriptive evidence policy
+to canonical semantic references; it is not an executable data contract, assertion,
+query, or verification scenario.
+
+```bash
+dbcli contract validate --format json
+dbcli contract context --format json
+dbcli contract context --format markdown
+dbcli contract search customer --format json
+dbcli contract drift --format json
+```
+
+The strict v1 artifact contains `version` and `contracts`. Each contract has a unique
+canonical `name`, `status` (`draft`, `approved`, or `deprecated`), bounded plain-text
+`description` and `owner`, one or more canonical semantic `subjects`, optional aliases,
+and an `evidencePolicy` of `none`, `receipt-required`, or `verification-required`.
+Subjects must remain in the existing visible semantic registry; protected identifiers,
+unknown keys, duplicate names or subjects, SQL-like text, credentials, and stale
+references fail closed without exposing protected names.
+
+`contract validate` requires an explicit valid artifact. `contract context` and
+`contract search` return only valid approved contracts; draft and deprecated contracts
+remain local review artifacts. `contract drift` reports `valid`, `stale`, `invalid`, or
+`unavailable` evidence offline and exits non-zero except for `valid`. A missing default
+file is allowed by `skill context` and leaves ordinary semantic context unchanged; a
+present invalid file fails closed. No contract command writes a file, opens a database
+connection, widens a `QueryDraft`, or changes permission/blacklist behavior.
 
 **Permission:** n/a (local files only; no database connection).
 

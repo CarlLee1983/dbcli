@@ -819,6 +819,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |
+| `contract validate` / `contract context` / `contract search` / `contract drift` | 驗證、輸出、搜尋或檢查可選的已審閱 `dbcli.contracts.json` 是否仍符合 semantic 證據。離線且唯讀；普通 agent context 只會納入 approved 契約。 |
 | `design init` / `design validate` / `design render` / `design diff` / `design propose` | 明確建立本機 starter 檔，驗證或輸出可版控的 SQL 資料庫設計，與本機 SQL schema cache 或本機 ORM 定義比較，並產出只供審查的變更計畫。不會執行 DDL 或暗中寫入設計檔。 |
 | `skill tasks` | 管理任務包 (Task Packs) — 專家級的可重複資料庫工作流。 |
 | `completion` | 安裝 shell 自動補全 (bash/zsh/fish)。 |
@@ -851,6 +852,17 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > **如何被主動發現。** 已安裝的 dbcli skill 會在需求含有業務別名、metric、反覆使用的術語或 relationship/join 意圖時，要求 agent 先檢查 `skill context`。若存在已驗證的 `semantic` 區塊，就以它作為受治理詞彙；否則退回已過濾 blacklist 的 schema，並告知你這項可選能力能讓後續需求保持一致。除非你明確要求，dbcli 不會建立或修改 `dbcli.semantic.json`。
 >
 > v1 持續相容；v2 新增已宣告且可見 model 欄位間的 relationship。驗證器會拒絕不存在於快取可見 schema 的資料表或欄位（包含 blacklist 的物件），以及 `query` 並非可用 `@saved-query` 的 metric。`semantic search <terms...>` 為離線且 deterministic 的搜尋；可用 `--kind` 與 `--limit 1-100`（預設 20）。它只輸出受治理的 metadata，並從自由文字結果移除 blacklist 名稱。`semantic drift` 在 `stale`、`invalid` 或 schema cache 不可用時以非零結束；`migrate --to 2` 只輸出 JSON，絕不寫回來源檔。
+>
+> **語意契約。** 在 semantic 檔旁加入可選、可檢閱的 `dbcli.contracts.json`，為受治理的業務術語補上 owner 與描述性的 evidence expectation。檔案必須使用版本 `1`、canonical contract name、canonical `model:` / `field:` / `relationship:` / `metric:` subject、`draft`、`approved` 或 `deprecated` status，以及 `none`、`receipt-required` 或 `verification-required` evidence policy；不得包含 SQL、憑證、受保護識別字或可執行規則。
+>
+> ```bash
+> dbcli contract validate --format json
+> dbcli contract context --format json
+> dbcli contract search customer --format json
+> dbcli contract drift --format json
+> ```
+>
+> 這些指令不會連線或執行查詢。`context`、`search` 與 `skill context` 只會輸出有效且 `approved` 的契約；draft 與 deprecated 術語保留為本機審閱產物。缺少契約檔不會改變一般 semantic context；但明確指定的缺檔或無效檔案會 fail closed。`contract drift` 會區分 valid、stale、invalid 與 unavailable 的本機證據。
 >
 > **Agent query draft。** 先把已檢閱的 `dbcli semantic context --format json` 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 回傳不受信任的 `QueryDraft` 檔案，形狀如下（只能使用該 semantic context 中的 model 與 field）：
 >

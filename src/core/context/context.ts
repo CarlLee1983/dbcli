@@ -4,7 +4,12 @@ import { loadSnippets } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import type { TableSchema } from '@/adapters/types'
 import type { ResolvedSnippet } from '@/core/saved-queries/types'
-import { loadSemanticContext, type SemanticContext } from '@/core/semantic'
+import { loadSemanticContext, semanticReferenceRegistry, type SemanticContext } from '@/core/semantic'
+import {
+  filterApprovedSemanticContracts,
+  loadSemanticContracts,
+  type SemanticContract,
+} from '@/core/contracts'
 import type { DbcliConfig } from '@/utils/validation'
 
 export interface CompactColumn {
@@ -54,6 +59,7 @@ export interface ContextPayload {
   schema: Record<string, CompactTable>
   snippets: CompactSnippet[]
   semantic?: SemanticContext
+  contracts?: SemanticContract[]
 }
 
 /**
@@ -195,6 +201,15 @@ export async function gatherContext(
       missingFile: 'allow',
     })
     if (semantic) payload.semantic = semantic
+    const contracts = await loadSemanticContracts({
+      workspaceRoot,
+      references: semantic
+        ? semanticReferenceRegistry(semantic, compactSchema, compactSnippets.map(({ key }) => key))
+        : new Set(),
+      blockedTerms: [...blacklistTables, ...Object.values(blacklistColumns).flat()],
+    })
+    const approvedContracts = filterApprovedSemanticContracts(contracts)
+    if (approvedContracts.length > 0) payload.contracts = approvedContracts
   }
 
   return payload

@@ -104,6 +104,22 @@ export function serializeXml(payload: ContextPayload): string {
     parts.push('  </semantic_context>')
   }
 
+  if (payload.contracts && payload.contracts.length > 0) {
+    parts.push('  <semantic_contracts>')
+    for (const contract of payload.contracts) {
+      parts.push(
+        `    <contract name="${escapeXml(contract.name)}" owner="${escapeXml(contract.owner)}" evidence_policy="${escapeXml(contract.evidencePolicy)}">`
+      )
+      parts.push(`      <description>${escapeXml(contract.description)}</description>`)
+      for (const subject of contract.subjects) {
+        parts.push(`      <subject reference="${escapeXml(subject)}" />`)
+      }
+      for (const alias of contract.aliases) parts.push(`      <alias>${escapeXml(alias)}</alias>`)
+      parts.push('    </contract>')
+    }
+    parts.push('  </semantic_contracts>')
+  }
+
   parts.push('</database_context>')
   return parts.join('\n')
 }
@@ -217,6 +233,22 @@ export function serializeMarkdown(payload: ContextPayload): string {
       )
     }
     if (payload.semantic.relationships.length > 0) parts.push(``)
+  }
+
+  if (payload.contracts && payload.contracts.length > 0) {
+    parts.push(`## Approved Semantic Contracts`)
+    parts.push(``)
+    for (const contract of payload.contracts) {
+      parts.push(`### \`${contract.name}\``)
+      parts.push(contract.description)
+      parts.push(`- Owner: \`${contract.owner}\``)
+      parts.push(`- Evidence policy: \`${contract.evidencePolicy}\``)
+      parts.push(`- Subjects: ${contract.subjects.map((subject) => `\`${subject}\``).join(', ')}`)
+      if (contract.aliases.length > 0) {
+        parts.push(`- Aliases: ${contract.aliases.map((alias) => `\`${alias}\``).join(', ')}`)
+      }
+      parts.push(``)
+    }
   }
 
   return parts.join('\n')

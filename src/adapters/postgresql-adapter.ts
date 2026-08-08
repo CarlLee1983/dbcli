@@ -4,8 +4,8 @@
  */
 
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
-import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
+import { requireConnected } from './sql-adapter-utils'
 import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
@@ -91,11 +91,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if test fails
    */
   async testConnection(): Promise<boolean> {
-    if (!this.pool) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.pool)
 
     try {
       // Execute lightweight SELECT 1 query
@@ -118,16 +114,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     sql: string,
     params?: (string | number | boolean | null)[]
   ): Promise<ExecutionResult<T>> {
-    if (!this.pool) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    const pool = requireConnected(this.pool)
 
     try {
       // Use parameterized query to prevent SQL injection
       // PostgreSQL uses $1, $2, ... placeholders
-      const result = params ? await this.pool.query(sql, params) : await this.pool.query(sql)
+      const result = params ? await pool.query(sql, params) : await pool.query(sql)
 
       // Return ExecutionResult
       return {
@@ -154,11 +146,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async listTables(): Promise<TableSchema[]> {
-    if (!this.pool) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.pool)
 
     try {
       // Query pg_class to get tables and views with estimated row counts
@@ -213,11 +201,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async getTableSchema(tableName: string): Promise<TableSchema> {
-    if (!this.pool) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.pool)
 
     try {
       // Query information_schema for column details including autoIncrement and comment

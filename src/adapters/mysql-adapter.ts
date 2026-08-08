@@ -6,8 +6,8 @@
 
 import mysql from 'mysql2/promise'
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
-import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
+import { requireConnected } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 
@@ -102,11 +102,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if test fails
    */
   async testConnection(): Promise<boolean> {
-    if (!this.db) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.db)
 
     try {
       // Execute lightweight SELECT 1 query
@@ -129,16 +125,12 @@ export class MySQLAdapter implements DatabaseAdapter {
     sql: string,
     params?: (string | number | boolean | null)[]
   ): Promise<ExecutionResult<T>> {
-    if (!this.db) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    const db = requireConnected(this.db)
 
     try {
       // Use parameterized query to prevent SQL injection
       // mysql2/promise returns [rows, fields]
-      const [result] = params ? await this.db.execute(sql, params) : await this.db.execute(sql)
+      const [result] = params ? await db.execute(sql, params) : await db.execute(sql)
 
       // Handle query results (array of rows)
       if (Array.isArray(result)) {
@@ -176,11 +168,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async listTables(): Promise<TableSchema[]> {
-    if (!this.db) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.db)
 
     try {
       // Query information_schema.TABLES and count columns for each table
@@ -230,11 +218,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if query fails
    */
   async getTableSchema(tableName: string): Promise<TableSchema> {
-    if (!this.db) {
-      throw new ConnectionError('UNKNOWN', 'Database connection not established', [
-        'Call connect() to establish a connection',
-      ])
-    }
+    requireConnected(this.db)
 
     try {
       // Query information_schema.COLUMNS for column details (UPPERCASE)

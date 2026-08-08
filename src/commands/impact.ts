@@ -29,6 +29,7 @@ import { loadOrmSchema, parseAgainstOrmValues } from '@/commands/diff'
 import { listSnippetKeys } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import { readVerificationArtifacts } from '@/core/verification/reader'
+import { loadWorkloadEvidence, type WorkloadEvidence } from '@/core/workload-impact'
 import { formatImpact, type ImpactFormat } from '@/formatters/impact'
 import { resolveConfigPath } from '@/utils/config-path'
 
@@ -73,6 +74,7 @@ impactCommand
   )
   .option('--orm-format <format>', 'Force ORM input: prisma | ddl | json | drizzle | typeorm | sequelize')
   .option('--ignore <globs>', 'Comma-separated table globs excluded from impact analysis')
+  .option('--events <path>', 'Explicit proxy event file for advisory workload evidence')
   .requiredOption('--output <path>', 'Workspace-contained report output path')
   .option('--format <format>', `Output format: ${FORMATS.join(' or ')}`, 'json')
   .option('--fail-on <severity>', `Exit threshold: ${FAIL_ON.join(', ')}`, 'never')
@@ -126,6 +128,11 @@ impactCommand
         blockedIdentifiers
       )
       const verifications = await loadVerificationEvidence(workspaceRoot, blockedIdentifiers)
+      const observedWorkload = await loadObservedWorkloadEvidence(
+        options.events as string | undefined,
+        workspaceRoot,
+        blockedIdentifiers
+      )
       const report = assessImpact({
         changes,
         semantic,
@@ -133,6 +140,7 @@ impactCommand
         savedQueries,
         verifications,
         dataAccess,
+        observedWorkload,
         blockedIdentifiers,
       })
       const rendered = formatImpact(report, format)
@@ -142,7 +150,7 @@ impactCommand
       }
       await writeOutput(workspaceRoot, output, rendered)
       console.log(JSON.stringify({ path: relative(workspaceRoot, output), summary: report.summary, coverage: report.coverage.level }, null, 2))
-      process.exitCode = shouldFail(report.summary, report.coverage.gaps.length, failOn) ? 1 : 0
+      process.exitCode = shouldFail(report, failOn) ? 1 : 0
     } catch (error) {
       console.error(safeMessage(error))
       process.exitCode = 1
@@ -350,10 +358,28 @@ function semanticSchema(
   return result
 }
 
-function shouldFail(summary: { errors: number; warns: number }, coverageGaps: number, failOn: FailOn): boolean {
+async function loadObservedWorkloadEvidence(
+  path: string | undefined,
+  workspaceRoot: string,
+  blocked: readonly string[]
+): Promise<WorkloadEvidence> {
+  if (path === undefined) {
+    return { state: 'absent', origin: 'proxy-workload', observations: [], malformedLines: 0, issues: [] }
+  }
+  return loadWorkloadEvidence({ path: resolve(workspaceRoot, path), blockedIdentifiers: blocked })
+}
+
+export function shouldFail(
+  report: { summary: { errors: number }; findings: { code: string; severity: string }[]; coverage: { gaps: { code: string }[] } },
+  failOn: FailOn
+): boolean {
   if (failOn === 'never') return false
-  if (failOn === 'error') return summary.errors > 0
-  return summary.errors > 0 || summary.warns > 0 || coverageGaps > 0
+  if (failOn === 'error') return report.summary.errors > 0
+  return (
+    report.summary.errors > 0 ||
+    report.findings.some((finding) => finding.severity === 'warn' && finding.code !== 'AFFECTED_OBSERVED_WORKLOAD') ||
+    report.coverage.gaps.some((gap) => !gap.code.startsWith('WORKLOAD_'))
+  )
 }
 
 function safeMessage(error: unknown): string {

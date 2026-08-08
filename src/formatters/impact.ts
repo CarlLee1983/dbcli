@@ -33,6 +33,15 @@ function formatMarkdown(report: ImpactReport): string {
       )
     }
   }
+  lines.push('', '## Observed workload', '')
+  lines.push(
+    `Source: ${report.observedWorkload.state}; ${report.observedWorkload.tableReferenceCount} safe table reference(s), ${report.observedWorkload.malformedLines} malformed line(s).`
+  )
+  if (report.observedWorkload.timeframe) {
+    lines.push(
+      `Timeframe: ${escapeInline(report.observedWorkload.timeframe.from)} to ${escapeInline(report.observedWorkload.timeframe.to)}.`
+    )
+  }
   lines.push('', '## Coverage', '', `Level: **${report.coverage.level}**`)
   if (report.coverage.gaps.length > 0) {
     lines.push('')

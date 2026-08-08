@@ -82,6 +82,13 @@ function input(overrides: Partial<ImpactAssessmentInput> = {}): ImpactAssessment
       origin: 'dbcli.data-access.json',
       value: [],
     },
+    observedWorkload: {
+      state: 'absent',
+      origin: 'proxy-workload',
+      observations: [],
+      malformedLines: 0,
+      issues: [],
+    },
     blockedIdentifiers: [],
     ...overrides,
   }
@@ -182,6 +189,69 @@ describe('assessImpact', () => {
     )
   })
 
+  test('adds advisory observed workload warnings without depending on semantic evidence', () => {
+    const report = assessImpact(
+      input({
+        semantic: { state: 'absent', origin: 'dbcli.semantic.json', reason: 'missing' },
+        observedWorkload: {
+          state: 'available',
+          origin: 'proxy-workload',
+          observations: [{ tables: ['accounts'] }],
+          malformedLines: 0,
+          issues: [],
+          timeframe: { from: '2026-08-07T00:00:00.000Z', to: '2026-08-08T00:00:00.000Z' },
+        },
+      })
+    )
+
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({
+        code: 'AFFECTED_OBSERVED_WORKLOAD',
+        severity: 'warn',
+        location: { artifact: 'proxy-workload', selector: 'observed-table:public.accounts' },
+      })
+    )
+  })
+
+  test('maps every workload evidence quality issue to visible coverage without exposing protected references', () => {
+    const report = assessImpact(
+      input({
+        observedWorkload: {
+          state: 'available',
+          origin: 'proxy-workload',
+          observations: [],
+          malformedLines: 1,
+          issues: ['malformed', 'stale', 'redaction-failed', 'redacted-protected-subject'],
+        },
+      })
+    )
+
+    expect(report.coverage.gaps.map((gap) => gap.code)).toEqual(
+      expect.arrayContaining([
+        'WORKLOAD_MALFORMED',
+        'WORKLOAD_STALE',
+        'WORKLOAD_REDACTION_FAILED',
+        'WORKLOAD_PROTECTED_REFERENCE_OMITTED',
+      ])
+    )
+  })
+
+  test('reports the count of safe observed table references rather than aggregate objects', () => {
+    const report = assessImpact(
+      input({
+        observedWorkload: {
+          state: 'available',
+          origin: 'proxy-workload',
+          observations: [{ tables: ['accounts', 'orders'] }],
+          malformedLines: 0,
+          issues: [],
+        },
+      })
+    )
+
+    expect(report.observedWorkload.tableReferenceCount).toBe(2)
+  })
+
   test('redacts protected declared operation metadata and records the omission', () => {
     const report = assessImpact(
       input({
@@ -235,6 +305,7 @@ describe('assessImpact', () => {
       'DATA_ACCESS_DYNAMIC_OR_UNLISTED',
       'NORMALIZATION_PARTIAL',
       'SAVED_QUERIES_ABSENT',
+      'WORKLOAD_ABSENT',
     ])
     expect(JSON.stringify(report)).not.toContain('private source location')
     expect(JSON.stringify(report)).not.toContain('private parser detail')

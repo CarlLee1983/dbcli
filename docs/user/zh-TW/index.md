@@ -909,11 +909,11 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > **影響評估。** 在將 schema 變更視為安全之前，先寫出受治理依賴的有限報告：
 >
 > ```bash
-> dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --format json --fail-on warn
+> dbcli impact assess --design ./dbcli.design.json --against-cache --events ./.dbcli/proxy/events.jsonl --output ./impact.json --format json --fail-on warn
 > dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.prisma --output ./impact.md --format markdown --fail-on never
 > ```
 >
-> 必須剛好選一種 baseline。指令只會讀取明確指定的 design／ORM 檔或既有本機 cache、semantic contracts、saved-query 名稱、verification artifact metadata，以及可選且已審閱的 `dbcli.data-access.json` operation metadata。此 manifest 必須使用 canonical semantic reference 與既存、workspace-relative 的 source path；dbcli 絕不讀取或解析那些 source file。它不會連線、更新 cache、執行 SQL、讀取 query body，或輸出保護識別字。缺少、無效或被隱藏的證據會明確列為 `partial` coverage gap；v1 永不回報 complete。`--fail-on` 只在報告寫出後改變 exit code（`error`、`warn` 或 `never`）。
+> 必須剛好選一種 baseline。指令只會讀取明確指定的 design／ORM 檔或既有本機 cache、semantic contracts、saved-query 名稱、verification artifact metadata，以及可選且已審閱的 `dbcli.data-access.json` operation metadata。此 manifest 必須使用 canonical semantic reference 與既存、workspace-relative 的 source path；dbcli 絕不讀取或解析那些 source file。可選的明確 `--events` 檔會先經 redaction-first 投影，只保留近期且安全的 table metadata；不會啟動 proxy、不會讀取 rotated log，也不會輸出 SQL、literal、error、session 或路徑。缺少、格式錯誤、過期、無法讀取或 redaction 失敗的 workload 證據會保留為 advisory coverage gap，且單獨存在時不會使 `--fail-on warn` 失敗。它不會連線、更新 cache、執行 SQL、讀取 query body，或輸出保護識別字。缺少、無效或被隱藏的證據會明確列為 `partial` coverage gap；v1 永不回報 complete。`--fail-on` 只在報告寫出後改變 exit code（`error`、`warn` 或 `never`）。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`、`design-review` 與 `connection-health`。`design-review` 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 

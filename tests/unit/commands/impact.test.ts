@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Command } from 'commander'
-import { impactCommand } from '@/commands/impact'
+import { impactCommand, shouldFail } from '@/commands/impact'
 
 function root(): Command {
   const program = new Command().name('dbcli').exitOverride().enablePositionalOptions()
@@ -112,6 +112,19 @@ describe('impact assess command', () => {
     })
   }
 
+  test('does not let advisory workload findings or coverage gaps alone trip --fail-on warn', () => {
+    expect(
+      shouldFail(
+        {
+          summary: { errors: 0 },
+          findings: [{ code: 'AFFECTED_OBSERVED_WORKLOAD', severity: 'warn' }],
+          coverage: { gaps: [{ code: 'WORKLOAD_STALE' }] },
+        },
+        'warn'
+      )
+    ).toBe(false)
+  })
+
   test('assesses a cache baseline offline and writes a safe declared report', async () => {
     await run('--design', 'design.json', '--against-cache', '--output', 'impact.json', '--format', 'json')
 
@@ -183,6 +196,38 @@ describe('impact assess command', () => {
     const report = await Bun.file(join(sandbox, 'invalid-access.json')).json()
     expect(report.coverage.gaps).toContainEqual(expect.objectContaining({ code: 'DATA_ACCESS_INVALID' }))
     expect(JSON.stringify(report)).not.toContain('private-source')
+  })
+
+  test('joins explicit proxy workload metadata as advisory evidence without leaking event contents', async () => {
+    writeFileSync(
+      join(sandbox, 'events.jsonl'),
+      `${JSON.stringify({
+        version: 1,
+        type: 'query_completed',
+        timestamp: new Date().toISOString(),
+        engine: 'postgresql',
+        sessionId: 'private-session',
+        queryId: 'private-query',
+        client: 'private-client',
+        target: 'private-target',
+        sql: "SELECT * FROM accounts WHERE token = 'private-literal'",
+        statement: 'select',
+        tables: ['accounts'],
+        error: { message: 'private-error', code: 'x' },
+        tags: [],
+      })}\n`
+    )
+
+    await run('--design', 'design.json', '--against-cache', '--events', 'events.jsonl', '--output', 'workload.json')
+
+    const report = await Bun.file(join(sandbox, 'workload.json')).json()
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: 'AFFECTED_OBSERVED_WORKLOAD', severity: 'warn' })
+    )
+    const serialized = JSON.stringify(report)
+    for (const unsafe of ['private-session', 'private-query', 'private-client', 'private-target', 'private-literal', 'private-error']) {
+      expect(serialized).not.toContain(unsafe)
+    }
   })
 
   test('marks protected verification metadata as a redacted coverage gap', async () => {

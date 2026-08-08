@@ -786,9 +786,9 @@ dbcli design propose --against-orm ./prisma/schema.prisma --format markdown</cod
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main">影響評估</h4>
-                <pre><code>dbcli impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --format json --fail-on warn
+                <pre><code>dbcli impact assess --design ./dbcli.design.json --against-cache --events ./.dbcli/proxy/events.jsonl --output ./impact.json --format json --fail-on warn
 dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.prisma --output ./impact.md --format markdown --fail-on never</code></pre>
-                <p class="m-0">必須剛好選一種 baseline。指令只讀取本機 design/cache/ORM、semantic contract、saved-query 名稱、verification metadata，以及可選且已審閱的 <code>dbcli.data-access.json</code> operation metadata。其 source path 必須已存在 workspace 內；dbcli 絕不讀取或解析那些 source file。它不會連線、更新 cache、執行 SQL 或讀取 query body。缺少、無效或被隱藏的證據會保留為 <code>partial</code> coverage；v1 永不回報 complete。<code>--fail-on</code> 只在報告寫出後改變 exit code。</p>
+                <p class="m-0">必須剛好選一種 baseline。指令只讀取本機 design/cache/ORM、semantic contract、saved-query 名稱、verification metadata，以及可選且已審閱的 <code>dbcli.data-access.json</code> operation metadata。其 source path 必須已存在 workspace 內；dbcli 絕不讀取或解析那些 source file。可選的明確 <code>--events</code> 檔會先經 redaction-first 投影，只保留近期且安全的 table metadata；不會啟動 proxy、不會讀取 rotated log，也不會輸出 SQL、literal、error、session 或路徑。缺少、格式錯誤、過期、無法讀取或 redaction 失敗的 workload 證據會保留為 advisory coverage gap，且單獨存在時不會使 <code>--fail-on warn</code> 失敗。它不會連線、更新 cache、執行 SQL 或讀取 query body。</p>
             </div>
             <div class="paper-card p-6 border-l-4 border-l-primary mt-4">
                 <h4 class="mt-0 mb-3 font-bold text-text-main"><code>safe-backfill-verify</code> 任務計畫與 <code>verification</code> 區塊</h4>

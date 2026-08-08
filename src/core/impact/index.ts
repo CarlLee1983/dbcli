@@ -4,6 +4,7 @@ import type { SemanticContract } from '@/core/contracts'
 import type { NormalizedChange, NormalizedChangeScope, NormalizedChangeSet } from '@/core/orm-drift/change-set'
 import type { VerificationStatus, VerificationSubject } from '@/core/verification/types'
 import type { DataAccessOperation } from '@/core/data-access'
+import type { WorkloadEvidence } from '@/core/workload-impact'
 
 export type ImpactEvidenceState = 'available' | 'absent' | 'invalid' | 'unavailable'
 export type ImpactEvidenceReason = 'missing' | 'invalid' | 'unavailable'
@@ -29,6 +30,7 @@ export interface ImpactAssessmentInput {
   savedQueries: ImpactEvidenceSource<readonly string[]>
   verifications: ImpactEvidenceSource<readonly SafeVerificationMetadata[]>
   dataAccess: ImpactEvidenceSource<readonly DataAccessOperation[]>
+  observedWorkload: WorkloadEvidence
   blockedIdentifiers: readonly string[]
 }
 
@@ -40,6 +42,7 @@ export type ImpactFindingCode =
   | 'AFFECTED_SAVED_QUERY'
   | 'AFFECTED_VERIFICATION'
   | 'AFFECTED_DECLARED_ACCESS_OPERATION'
+  | 'AFFECTED_OBSERVED_WORKLOAD'
 
 export interface ImpactLocation {
   artifact: string
@@ -78,6 +81,13 @@ export type ImpactCoverageCode =
   | 'DATA_ACCESS_INVALID'
   | 'DATA_ACCESS_UNAVAILABLE'
   | 'DATA_ACCESS_DYNAMIC_OR_UNLISTED'
+  | 'WORKLOAD_ABSENT'
+  | 'WORKLOAD_INVALID'
+  | 'WORKLOAD_UNAVAILABLE'
+  | 'WORKLOAD_MALFORMED'
+  | 'WORKLOAD_STALE'
+  | 'WORKLOAD_REDACTION_FAILED'
+  | 'WORKLOAD_PROTECTED_REFERENCE_OMITTED'
   | 'SAVED_QUERY_REFERENCE_UNAVAILABLE'
   | 'REDACTED_PROTECTED_SUBJECT'
 
@@ -92,6 +102,12 @@ export interface ImpactReport {
   recommendedVerification: VerificationRecommendation[]
   coverage: { level: 'declared' | 'partial'; gaps: ImpactCoverageGap[] }
   summary: { errors: number; warns: number; infos: number }
+  observedWorkload: {
+    state: WorkloadEvidence['state']
+    tableReferenceCount: number
+    malformedLines: number
+    timeframe?: WorkloadEvidence['timeframe']
+  }
 }
 
 interface SemanticNode {
@@ -118,6 +134,7 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
     if (input.verifications.state === 'available') {
       findings.push(...verificationFindings(change, input.verifications.value, input.blockedIdentifiers))
     }
+    findings.push(...observedWorkloadFindings(change, input.observedWorkload, input.blockedIdentifiers))
     if (input.semantic.state !== 'available') continue
 
     const nodes = traverseSemantic(change, input.semantic.value, input.blockedIdentifiers)
@@ -182,6 +199,15 @@ export function assessImpact(input: ImpactAssessmentInput): ImpactReport {
       warns: findings.filter((finding) => finding.severity === 'warn').length,
       infos: findings.filter((finding) => finding.severity === 'info').length,
     },
+    observedWorkload: {
+      state: input.observedWorkload.state,
+      tableReferenceCount: input.observedWorkload.observations.reduce(
+        (count, observation) => count + observation.tables.length,
+        0
+      ),
+      malformedLines: input.observedWorkload.malformedLines,
+      ...(input.observedWorkload.timeframe !== undefined && { timeframe: input.observedWorkload.timeframe }),
+    },
   }
 }
 
@@ -205,6 +231,18 @@ function coverageGaps(input: ImpactAssessmentInput): Map<ImpactCoverageCode, Imp
   addEvidenceGap(gaps, 'VERIFICATIONS', input.verifications)
   addEvidenceGap(gaps, 'DATA_ACCESS', input.dataAccess)
   if (input.dataAccess.state === 'available') addGap(gaps, 'DATA_ACCESS_DYNAMIC_OR_UNLISTED')
+  if (input.observedWorkload.state !== 'available') {
+    addGap(gaps, `WORKLOAD_${input.observedWorkload.state.toUpperCase()}` as ImpactCoverageCode)
+  }
+  for (const issue of input.observedWorkload.issues) {
+    const code: Record<typeof issue, ImpactCoverageCode> = {
+      malformed: 'WORKLOAD_MALFORMED',
+      stale: 'WORKLOAD_STALE',
+      'redaction-failed': 'WORKLOAD_REDACTION_FAILED',
+      'redacted-protected-subject': 'WORKLOAD_PROTECTED_REFERENCE_OMITTED',
+    }
+    addGap(gaps, code[issue])
+  }
   return gaps
 }
 
@@ -424,6 +462,24 @@ function dataAccessFindings(
   return { findings, redacted }
 }
 
+function observedWorkloadFindings(
+  change: NormalizedChange,
+  workload: WorkloadEvidence,
+  blocked: readonly string[]
+): ImpactFinding[] {
+  if (workload.state !== 'available') return []
+  const qualifiedTable = change.subject.schema ? `${change.subject.schema}.${change.subject.table}` : change.subject.table
+  if (!isSafe(qualifiedTable, blocked)) return []
+  return workload.observations
+    .filter((observation) => observation.tables.includes(change.subject.table) || observation.tables.includes(qualifiedTable))
+    .map(() =>
+      finding(change, 'AFFECTED_OBSERVED_WORKLOAD', 'warn', {
+        artifact: 'proxy-workload',
+        selector: `observed-table:${qualifiedTable}`,
+      })
+    )
+}
+
 function finding(
   change: NormalizedChange,
   code: ImpactFindingCode,
@@ -438,6 +494,7 @@ function finding(
     AFFECTED_SAVED_QUERY: '4',
     AFFECTED_VERIFICATION: '5',
     AFFECTED_DECLARED_ACCESS_OPERATION: '6',
+    AFFECTED_OBSERVED_WORKLOAD: '7',
   }
   return {
     id: JSON.stringify([change.id, priority[code], code, location.artifact, location.selector]),

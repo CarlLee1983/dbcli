@@ -118,7 +118,7 @@ dbcli skill tasks plan <task> --param key=value --format json     # generate pla
 | ORM 或 migration | `schema --format json` → `diff --against-orm <orm-schema>` → 審查 error-level drift → 透過 `migrate` 取得提案（dry-run）→ `migration-review` task pack → 套用後執行 `diff --against <snapshot>`。 |
 | 資料庫設計（尚未有 DB） | `design init --output ./dbcli.design.json` → 編輯 → `design validate` → `design render --format mermaid`。已有 ORM 模型時，先用 `design diff --against-orm <path>` 對齊。 |
 | 既有資料庫的設計漂移 | `blacklist list` → `schema --format json` → `design diff --against-cache` → `design propose --against-cache`，計畫交人類審查後才執行 migration。 |
-| PR schema 變更審查 | `blacklist list` → `impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn`，再檢閱已宣告 findings、coverage gaps 與可選且已審閱的 `dbcli.data-access.json`（僅 declared operations；絕不解析 source）。 |
+| PR schema 變更審查 | `blacklist list` → `impact assess --design ./dbcli.design.json --against-cache --output ./impact.json --fail-on warn`；可選擇加入明確的 `--events ./.dbcli/proxy/events.jsonl` 取得 advisory、已 redaction 的 workload table evidence（不輸出 SQL/log，也不作為 blocker），再檢閱已宣告 findings、coverage gaps 與可選且已審閱的 `dbcli.data-access.json`（僅 declared operations；絕不解析 source）。 |
 | PR 資料庫風險審查 | 審查變更的 persistence path，並針對每個重要主張提出具體 `schema`、`plan`、`dry-run`、`report` 或 `guide` 指令。 |
 | 慢 endpoint 或查詢 | `report --section perf` → task pack `analyze-table-perf` → `lint "<query>"` → `guide missing-index-for "<query>"`；有 proxy log 時使用 `proxy analyze`。 |
 | 安全資料回填 | `blacklist list` → `schema <object>` → count/scope query → `update … --dry-run` → read-back 或 snippet `--verify`。 |

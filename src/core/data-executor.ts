@@ -13,6 +13,17 @@ import { promptUser } from '@/utils/prompts'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
+type MutationOperation = DataExecutionResult['operation']
+type SqlStatement = {
+  sql: string
+  params: (string | number | boolean | null)[]
+}
+
+type MutationConfirmation = {
+  prompt: string
+  warning?: string
+}
+
 /**
  * DataExecutor class for executing INSERT, UPDATE, DELETE operations
  */
@@ -94,85 +105,17 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
-      // 0. Check table blacklist before doing anything else
-      if (this.blacklistValidator) {
-        this.blacklistValidator.checkTableBlacklist('INSERT', tableName, [])
-      }
-
-      // 1. Enforce permission check - INSERT requires read-write or admin
+      this.checkBlacklist('INSERT', tableName)
       enforcePermission('INSERT INTO dummy', this.permission)
-
-      // 2. Build parameterized SQL
-      const { sql, params } = this.buildInsertSql(tableName, data, schema)
-
-      // 3. Dry-run mode: show SQL but do not execute
-      if (options?.dryRun) {
-        return {
-          status: 'success',
-          operation: 'insert',
-          rows_affected: 0,
-          timestamp,
-          sql,
-        }
-      }
-
-      // 4. Non-forced mode: show SQL and require confirmation
-      if (!options?.force) {
-        console.log('\nGenerated SQL:')
-        console.log(`  ${sql}`)
-        console.log('\nParameters:')
-        console.log(`  ${JSON.stringify(params, null, 2)}`)
-
-        const confirmed = await promptUser.confirm('Proceed with this operation?')
-        if (!confirmed) {
-          return {
-            status: 'success',
-            operation: 'insert',
-            rows_affected: 0,
-            timestamp,
-            sql,
-          }
-        }
-      }
-
-      // 5. Execute INSERT
-      const result = await this.adapter.execute(sql, params)
-
-      // Return result
-      return {
-        status: 'success',
-        operation: 'insert',
-        rows_affected: result.affectedRows,
+      return await this.executeMutation(
+        'insert',
+        this.buildInsertSql(tableName, data, schema),
         timestamp,
-        sql,
-      }
+        options,
+        { prompt: 'Proceed with this operation?' }
+      )
     } catch (error) {
-      // BlacklistError passes through to caller
-      if (error instanceof BlacklistError) {
-        throw error
-      }
-
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      // Special handling for permission errors
-      if (error instanceof PermissionError) {
-        return {
-          status: 'error',
-          operation: 'insert',
-          rows_affected: 0,
-          timestamp,
-          error:
-            'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute INSERT.',
-        }
-      }
-
-      return {
-        status: 'error',
-        operation: 'insert',
-        rows_affected: 0,
-        timestamp,
-        error: `INSERT failed: ${errorMessage}`,
-      }
+      return this.handleMutationError('insert', timestamp, error)
     }
   }
 
@@ -197,83 +140,17 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
-      // 0. Check table blacklist before doing anything else
-      if (this.blacklistValidator) {
-        this.blacklistValidator.checkTableBlacklist('UPDATE', tableName, [])
-      }
-
-      // 1. Enforce permission check
+      this.checkBlacklist('UPDATE', tableName)
       enforcePermission('UPDATE dummy', this.permission)
-
-      // 2. Build parameterized UPDATE SQL
-      const { sql, params } = this.buildUpdateSql(tableName, data, where, schema)
-
-      // 3. Dry-run mode
-      if (options?.dryRun) {
-        return {
-          status: 'success',
-          operation: 'update',
-          rows_affected: 0,
-          timestamp,
-          sql,
-        }
-      }
-
-      // 4. Non-forced mode: show SQL and require confirmation
-      if (!options?.force) {
-        console.log('\nGenerated SQL:')
-        console.log(`  ${sql}`)
-        console.log('\nParameters:')
-        console.log(`  ${JSON.stringify(params, null, 2)}`)
-
-        const confirmed = await promptUser.confirm('Proceed with this operation?')
-        if (!confirmed) {
-          return {
-            status: 'success',
-            operation: 'update',
-            rows_affected: 0,
-            timestamp,
-            sql,
-          }
-        }
-      }
-
-      // 5. Execute UPDATE
-      const result = await this.adapter.execute(sql, params)
-
-      return {
-        status: 'success',
-        operation: 'update',
-        rows_affected: result.affectedRows,
+      return await this.executeMutation(
+        'update',
+        this.buildUpdateSql(tableName, data, where, schema),
         timestamp,
-        sql,
-      }
+        options,
+        { prompt: 'Proceed with this operation?' }
+      )
     } catch (error) {
-      // BlacklistError passes through to caller
-      if (error instanceof BlacklistError) {
-        throw error
-      }
-
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      if (error instanceof PermissionError) {
-        return {
-          status: 'error',
-          operation: 'update',
-          rows_affected: 0,
-          timestamp,
-          error:
-            'Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute UPDATE.',
-        }
-      }
-
-      return {
-        status: 'error',
-        operation: 'update',
-        rows_affected: 0,
-        timestamp,
-        error: `UPDATE failed: ${errorMessage}`,
-      }
+      return this.handleMutationError('update', timestamp, error)
     }
   }
 
@@ -296,12 +173,8 @@ export class DataExecutor {
     const timestamp = new Date().toISOString()
 
     try {
-      // 0. Check table blacklist before doing anything else
-      if (this.blacklistValidator) {
-        this.blacklistValidator.checkTableBlacklist('DELETE', tableName, [])
-      }
+      this.checkBlacklist('DELETE', tableName)
 
-      // 1. DELETE requires data-admin or admin permission
       if (this.permission !== 'data-admin' && this.permission !== 'admin') {
         return {
           status: 'error',
@@ -312,67 +185,18 @@ export class DataExecutor {
         }
       }
 
-      // 2. Build parameterized DELETE SQL
-      const { sql, params } = this.buildDeleteSql(tableName, where, schema)
-
-      // 3. Dry-run mode
-      if (options?.dryRun) {
-        return {
-          status: 'success',
-          operation: 'delete',
-          rows_affected: 0,
-          timestamp,
-          sql,
-        }
-      }
-
-      // 4. DELETE usually requires confirmation (unless --force flag)
-      if (!options?.force) {
-        console.log('\n⚠️  Warning: DELETE operation is destructive and cannot be undone!')
-        console.log('\nGenerated SQL:')
-        console.log(`  ${sql}`)
-        console.log('\nParameters:')
-        console.log(`  ${JSON.stringify(params, null, 2)}`)
-
-        const confirmed = await promptUser.confirm(
-          'Are you sure you want to execute this DELETE operation? This cannot be undone.'
-        )
-        if (!confirmed) {
-          return {
-            status: 'success',
-            operation: 'delete',
-            rows_affected: 0,
-            timestamp,
-            sql,
-          }
-        }
-      }
-
-      // 5. Execute DELETE
-      const result = await this.adapter.execute(sql, params)
-
-      return {
-        status: 'success',
-        operation: 'delete',
-        rows_affected: result.affectedRows,
+      return await this.executeMutation(
+        'delete',
+        this.buildDeleteSql(tableName, where, schema),
         timestamp,
-        sql,
-      }
+        options,
+        {
+          warning: '⚠️  Warning: DELETE operation is destructive and cannot be undone!',
+          prompt: 'Are you sure you want to execute this DELETE operation? This cannot be undone.',
+        }
+      )
     } catch (error) {
-      // BlacklistError passes through to caller
-      if (error instanceof BlacklistError) {
-        throw error
-      }
-
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      return {
-        status: 'error',
-        operation: 'delete',
-        rows_affected: 0,
-        timestamp,
-        error: `DELETE failed: ${errorMessage}`,
-      }
+      return this.handleMutationError('delete', timestamp, error)
     }
   }
 
@@ -392,6 +216,83 @@ export class DataExecutor {
    */
   private getQuoteChar(): string {
     return this.dbSystem === 'mysql' ? '`' : '"'
+  }
+
+  private checkBlacklist(operation: 'INSERT' | 'UPDATE' | 'DELETE', tableName: string): void {
+    this.blacklistValidator?.checkTableBlacklist(operation, tableName, [])
+  }
+
+  private async executeMutation(
+    operation: MutationOperation,
+    statement: SqlStatement,
+    timestamp: string,
+    options: DataExecutionOptions | undefined,
+    confirmation: MutationConfirmation
+  ): Promise<DataExecutionResult> {
+    if (options?.dryRun) {
+      return this.successResult(operation, 0, timestamp, statement.sql)
+    }
+
+    if (!options?.force) {
+      if (confirmation.warning) {
+        console.log(`\n${confirmation.warning}`)
+      }
+      console.log('\nGenerated SQL:')
+      console.log(`  ${statement.sql}`)
+      console.log('\nParameters:')
+      console.log(`  ${JSON.stringify(statement.params, null, 2)}`)
+
+      if (!(await promptUser.confirm(confirmation.prompt))) {
+        return this.successResult(operation, 0, timestamp, statement.sql)
+      }
+    }
+
+    const result = await this.adapter.execute(statement.sql, statement.params)
+    return this.successResult(operation, result.affectedRows, timestamp, statement.sql)
+  }
+
+  private successResult(
+    operation: MutationOperation,
+    rowsAffected: number,
+    timestamp: string,
+    sql: string
+  ): DataExecutionResult {
+    return {
+      status: 'success',
+      operation,
+      rows_affected: rowsAffected,
+      timestamp,
+      sql,
+    }
+  }
+
+  private handleMutationError(
+    operation: MutationOperation,
+    timestamp: string,
+    error: unknown
+  ): DataExecutionResult {
+    if (error instanceof BlacklistError) {
+      throw error
+    }
+
+    if (error instanceof PermissionError && operation !== 'delete') {
+      return {
+        status: 'error',
+        operation,
+        rows_affected: 0,
+        timestamp,
+        error: `Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute ${operation.toUpperCase()}.`,
+      }
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return {
+      status: 'error',
+      operation,
+      rows_affected: 0,
+      timestamp,
+      error: `${operation.toUpperCase()} failed: ${errorMessage}`,
+    }
   }
 
   /**

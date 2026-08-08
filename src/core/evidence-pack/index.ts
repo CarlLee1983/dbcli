@@ -35,6 +35,15 @@ export type EvidenceReference =
       success: boolean
       recoveryRef?: string
     }
+  | {
+      kind: 'receipt'
+      id: string
+      createdAt: string
+      operation: 'assert'
+      outcome: 'succeeded' | 'failed'
+      digest: string
+      path: string
+    }
 
 export interface EvidenceClaimInput {
   id: string
@@ -212,6 +221,19 @@ function parseReference(value: unknown): EvidenceReference {
       success: value.success,
       ...(recoveryRef === undefined ? {} : { recoveryRef }),
     }
+  }
+  if (kind === 'receipt') {
+    requireExactKeys(value, ['kind', 'id', 'createdAt', 'operation', 'outcome', 'digest', 'path'], 'receipt evidence')
+    if (value.operation !== 'assert' || !['succeeded', 'failed'].includes(String(value.outcome))) {
+      throw new EvidencePackValidationError('receipt evidence has an invalid operation or outcome')
+    }
+    const path = text(value.path, 'receipt evidence.path', 512)
+    if (path.startsWith('/') || path.includes('..') || path.includes('\\')) {
+      throw new EvidencePackValidationError('receipt evidence.path must be workspace-relative')
+    }
+    const digest = text(value.digest, 'receipt evidence.digest', 80)
+    if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new EvidencePackValidationError('receipt evidence.digest is invalid')
+    return { kind, id: id(value.id, 'receipt evidence.id'), createdAt: iso(value.createdAt, 'receipt evidence.createdAt'), operation: 'assert', outcome: value.outcome as 'succeeded' | 'failed', digest, path }
   }
   throw new EvidencePackValidationError('evidence reference has an unsupported kind')
 }
@@ -484,8 +506,10 @@ export function renderEvidencePackMarkdown(pack: EvidencePack): string {
         lines.push(
           `- audit \`${markdown(reference.id)}\` · ${markdown(reference.command)} · ${reference.success ? 'success' : 'failure'}`
         )
-      } else {
+      } else if (reference.kind === 'verification-artifact') {
         lines.push(`- verification artifact \`${markdown(reference.id)}\` · ${reference.status}`)
+      } else {
+        lines.push(`- evidence receipt \`${markdown(reference.id)}\` · ${reference.operation} ${reference.outcome}`)
       }
     }
     lines.push('')

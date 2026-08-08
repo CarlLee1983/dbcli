@@ -18,6 +18,25 @@ describe('redaction utils', () => {
       expect(redactArgv(argv)).toBe('node query <sql> --format json')
     })
 
+    test('redacts assertion SQL, expectation text, subjects, and receipt paths', () => {
+      expect(
+        redactArgv([
+          'dbcli',
+          'assert',
+          "SELECT * FROM accounts WHERE token = 'private'",
+          '--expect',
+          'value == private-value',
+          '--verification-subject',
+          'table:private-accounts',
+          '--evidence-receipt',
+          '/private/receipt.json',
+          '--no-fail',
+        ])
+      ).toBe(
+        'dbcli assert <sql> --expect <redacted> --verification-subject <redacted> --evidence-receipt <redacted> --no-fail'
+      )
+    })
+
     test('redacts long and short query-file paths', () => {
       expect(redactArgv(['dbcli', 'query', '--query-file', '/secret/customer.sql'])).toBe(
         'dbcli query --query-file <redacted>'

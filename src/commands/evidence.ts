@@ -1,4 +1,6 @@
-import { join } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { Command } from 'commander'
 
 import { getGlobalConnectionName, configModule } from '@/core/config'
@@ -22,6 +24,7 @@ import { readEntries } from '@/core/audit/reader'
 import type { AuditEntry } from '@/core/audit/types'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
+import { readEvidenceReceipt } from '@/core/evidence-receipt'
 
 const FORMATS = ['json', 'markdown'] as const
 const MAX_INPUT_BYTES = 256 * 1024
@@ -168,6 +171,7 @@ function selectAudit(entries: AuditEntry[], selector: string): AuditEntry {
 async function resolveReferences(
   verificationSelectors: readonly string[],
   auditSelectors: readonly string[],
+  receiptPaths: readonly string[],
   configPath: string,
   config: EvidenceConfig
 ): Promise<EvidenceReference[]> {
@@ -177,6 +181,24 @@ async function resolveReferences(
     for (const selector of auditSelectors) {
       references.push(auditReference(selectAudit(entries, selector), connectionName))
     }
+  }
+  for (const receiptPath of receiptPaths) {
+    const workspace = await realpath(process.cwd())
+    const requested = resolve(workspace, receiptPath)
+    const path = relative(workspace, requested)
+    if (path === '' || path.startsWith(`..${sep}`) || path === '..' || path.includes(`..${sep}`))
+      throw new EvidencePackValidationError('receipt evidence path must be workspace-relative')
+    const resolved = await realpath(requested)
+    const safePath = relative(workspace, resolved)
+    if (safePath.startsWith(`..${sep}`) || safePath === '..' || safePath.includes(`..${sep}`))
+      throw new EvidencePackValidationError('receipt evidence path must stay inside the workspace')
+    const receipt = await readEvidenceReceipt(resolved)
+    references.push({
+      kind: 'receipt', id: receipt.id, createdAt: receipt.createdAt, operation: receipt.operation,
+      outcome: receipt.outcome,
+      digest: `sha256:${createHash('sha256').update(JSON.stringify(receipt)).digest('hex')}`,
+      path: safePath,
+    })
   }
   return references
 }
@@ -198,7 +220,7 @@ async function expiredReferences(
       if (reference.kind === 'verification-artifact') {
         const found = await resolveVerification(reference.id)
         if (!sameReference(reference, found)) throw new Error('mismatch')
-      } else {
+      } else if (reference.kind === 'audit') {
         audits ??= await auditEntries(configPath, config)
         const found = audits.entries.find((entry) => entry.id === reference.id)
         if (
@@ -208,6 +230,14 @@ async function expiredReferences(
         ) {
           throw new Error('missing')
         }
+      } else {
+        const workspace = await realpath(process.cwd())
+        const target = await realpath(resolve(workspace, reference.path))
+        const safePath = relative(workspace, target)
+        if (safePath.startsWith(`..${sep}`) || safePath === '..' || safePath.includes(`..${sep}`)) throw new Error('outside')
+        const receipt = await readEvidenceReceipt(target)
+        const digest = `sha256:${createHash('sha256').update(JSON.stringify(receipt)).digest('hex')}`
+        if (receipt.id !== reference.id || digest !== reference.digest) throw new Error('mismatch')
       }
     } catch {
       expired.push({ kind: reference.kind, id: reference.id })
@@ -243,6 +273,7 @@ evidenceCommand
   .requiredOption('--claims <file>', 'JSON file containing a subject and external claims')
   .option('--verification <selector...>', 'Verification artifact id, prefix, filename, or path')
   .option('--audit <selector...>', 'Audit entry id or prefix from the active connection')
+  .option('--receipt <paths...>', 'Explicit workspace-relative evidence receipt path')
   .requiredOption('--output <path>', 'Workspace-contained JSON evidence-pack output path')
   .option('--format <format>', `stdout format: ${FORMATS.join(' | ')}`, 'json')
   .action(async (options: Record<string, unknown>, command: Command) => {
@@ -251,7 +282,8 @@ evidenceCommand
       validateFormat(format, FORMATS, 'evidence compose')
       const verification = (options.verification as string[] | undefined) ?? []
       const audit = (options.audit as string[] | undefined) ?? []
-      if (verification.length + audit.length === 0) {
+      const receipt = (options.receipt as string[] | undefined) ?? []
+      if (verification.length + audit.length + receipt.length === 0) {
         throw new EvidencePackValidationError(
           'at least one --verification or --audit reference is required'
         )
@@ -260,7 +292,7 @@ evidenceCommand
       const claimsRaw = await readClaimsInput(String(options.claims))
       assertClaimsSafe(claimsRaw, blockedTerms(config))
       const claims = parseEvidenceClaimsInput(claimsRaw)
-      const references = await resolveReferences(verification, audit, configPath, config)
+      const references = await resolveReferences(verification, audit, receipt, configPath, config)
       assertReferencesMatchSubject(claims, references)
       const pack = buildEvidencePack(claims, references)
       const path = await writeEvidencePack(process.cwd(), String(options.output), pack)

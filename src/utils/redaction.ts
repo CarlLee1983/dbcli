@@ -1,4 +1,4 @@
-const SQL_SUBCOMMANDS = new Set(['query', 'export', 'lint'])
+const SQL_SUBCOMMANDS = new Set(['query', 'export', 'lint', 'assert'])
 const REDACTED_VALUE_FLAGS = new Set([
   '--where',
   '--set',
@@ -12,6 +12,12 @@ const REDACTED_VALUE_FLAGS = new Set([
   '--secret',
   '--bulk',
   '--query-file',
+  '--expect',
+  '--vs',
+  '--against',
+  '--verification-subject',
+  '--verification-summary',
+  '--evidence-receipt',
   '-f',
 ])
 const KEEP_VALUE_FLAGS = new Set([
@@ -28,6 +34,7 @@ const KEEP_VALUE_FLAGS = new Set([
 ])
 const LINT_BOOLEAN_FLAGS = new Set(['--no-schema', '--recovery'])
 const QUERY_BOOLEAN_FLAGS = new Set(['--ui', '--no-limit', '--no-truncate', '--recovery'])
+const ASSERT_BOOLEAN_FLAGS = new Set(['--no-fail', '--write-verification-artifact'])
 
 function optionParts(token: string): {
   name: string
@@ -49,6 +56,7 @@ function isOptionToken(token: string): boolean {
 function isKnownBooleanFlag(command: string | undefined, name: string): boolean {
   if (command === 'lint') return LINT_BOOLEAN_FLAGS.has(name)
   if (command === 'query') return QUERY_BOOLEAN_FLAGS.has(name)
+  if (command === 'assert') return ASSERT_BOOLEAN_FLAGS.has(name)
   return false
 }
 

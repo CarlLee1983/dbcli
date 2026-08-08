@@ -1,5 +1,7 @@
 // src/commands/assert.ts
 import { Command } from 'commander'
+import { createHash } from 'node:crypto'
+import { basename } from 'node:path'
 import {
   AdapterFactory,
   ConnectionError,
@@ -32,6 +34,10 @@ import {
   AssertArtifactError,
 } from '@/core/verification'
 import type { VerificationSubject } from '@/core/verification'
+import { buildEvidenceReceipt, writeEvidenceReceipt } from '@/core/evidence-receipt'
+import { redactArgv } from '@/utils/redaction'
+import { compactVisibleSchema } from '@/core/context/context'
+import { defaultSemanticFile, loadSemanticContext } from '@/core/semantic'
 
 const ALLOWED_FORMATS = ['json', 'table'] as const
 const SQL_SYSTEMS = ['postgresql', 'mysql', 'mariadb']
@@ -69,6 +75,7 @@ export const assertCommand = new Command()
     'Required with --write-verification-artifact: "<kind>:<name>"'
   )
   .option('--verification-summary <text>', 'Optional summary text for the verification artifact')
+  .option('--evidence-receipt <path>', 'Write a safe provenance receipt after the assertion outcome is authoritative')
   .action(async (query: string, options: Record<string, unknown>, command: Command) => {
     try {
       validateFormat(options.format as string, ALLOWED_FORMATS, 'assert')
@@ -177,10 +184,51 @@ export const assertCommand = new Command()
         }
       }
 
+      let evidenceReceiptPath: string | undefined
+      if (typeof options.evidenceReceipt === 'string') {
+        try {
+          const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) =>
+            item && typeof item === 'object' && !Array.isArray(item)
+              ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right)))
+              : item
+          )
+          const fingerprint = (value: unknown) => `sha256:${createHash('sha256').update(canonical(value)).digest('hex')}`
+          const visibleSchema = compactVisibleSchema(config)
+          const semanticFile = defaultSemanticFile(process.cwd())
+          const semanticFingerprint = (await Bun.file(semanticFile).exists())
+            ? fingerprint(await loadSemanticContext({
+                workspaceRoot: process.cwd(),
+                schema: Object.fromEntries(
+                  Object.entries(visibleSchema).map(([table, value]) => [table, { columns: value.columns.map((column) => ({ name: column.name })) }])
+                ),
+                snippets: [],
+                missingFile: 'error',
+              }))
+            : null
+          const receipt = buildEvidenceReceipt({
+            command: redactArgv(process.argv),
+            context: {
+              engine: config.connection.system,
+              connectionName: config.effectiveConnectionName ?? 'default',
+              environment: config.effectiveEnvironment ?? 'default',
+              schemaFingerprint: fingerprint(visibleSchema),
+              semanticFingerprint,
+            },
+            auditRef,
+            verificationArtifactRef: verificationArtifactPath ? basename(verificationArtifactPath) : null,
+            verdict,
+          })
+          evidenceReceiptPath = await writeEvidenceReceipt(process.cwd(), options.evidenceReceipt, receipt)
+        } catch {
+          console.error('Failed to write evidence receipt')
+          process.exit(1)
+        }
+      }
+
       if (options.format === 'json') {
         console.log(
           JSON.stringify(
-            { ...verdict, ...(verificationArtifactPath ? { verificationArtifactPath } : {}) },
+            { ...verdict, ...(verificationArtifactPath ? { verificationArtifactPath } : {}), ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}) },
             null,
             2
           )
@@ -195,6 +243,7 @@ export const assertCommand = new Command()
         if (verificationArtifactPath) {
           console.log(`Verification artifact: ${verificationArtifactPath}`)
         }
+        if (evidenceReceiptPath) console.log(`Evidence receipt: ${evidenceReceiptPath}`)
       }
       process.exit(verdict.pass || options.fail === false ? 0 : 1)
     } catch (error) {

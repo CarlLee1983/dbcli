@@ -437,6 +437,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
                 </thead>
                 <tbody>
                     <tr><td><code>--write-verification-artifact</code></td><td>opt-in</td><td>Write a VerificationArtifact JSON after the assertion runs.</td></tr>
+                    <tr><td><code>--evidence-receipt &lt;path&gt;</code></td><td>opt-in</td><td>Atomically write safe assert provenance after the outcome is authoritative; it contains no SQL or rows.</td></tr>
                     <tr><td><code>--verification-subject &lt;kind:name&gt;</code></td><td>yes (when flag is set)</td><td>Subject being verified. Allowed kinds: <code>recovery</code>, <code>task-pack</code>, <code>assertion</code>, <code>migration</code>, <code>backfill</code>, <code>manual</code>.</td></tr>
                     <tr><td><code>--verification-summary &lt;text&gt;</code></td><td>no</td><td>Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state."</td></tr>
                 </tbody>

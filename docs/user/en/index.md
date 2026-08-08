@@ -477,6 +477,9 @@ Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/v
 | Flag | Required | Description |
 | :--- | :--- | :--- |
 | `--write-verification-artifact` | opt-in | Write a VerificationArtifact JSON after the assertion runs. |
+| `--evidence-receipt <path>` | opt-in | Atomically write safe assert provenance after the verdict, audit attempt, and optional artifact are authoritative; it contains no SQL or rows. |
+
+`evidence compose` may reference that explicit workspace-contained receipt with `--receipt <path>`; provenance is not execution approval.
 | `--verification-subject <kind:name>` | yes (when flag is set) | Subject being verified. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
 | `--verification-summary <text>` | no | Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state." |
 

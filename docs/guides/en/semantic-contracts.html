@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Keep reviewed business-term contracts beside semantic metadata and make evidence expectations visible offline.">
+  <title>Protect governed business terms with contracts | dbcli use case</title><link rel="stylesheet" href="../../assets/dbcli-guides.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header"><nav class="nav container" aria-label="Primary navigation"><a class="brand" href="../../dbcli-intro.en.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../../dbcli-intro.en.html">Product</a><a class="nav-link" href="./index.html" aria-current="page">Use cases</a><a class="nav-link" href="../../user/en/">Documentation</a></div><a class="locale-link" href="../semantic-contracts.html" lang="zh-Hant">Traditional Chinese</a></nav></header>
+  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">Governed vocabulary · Change review</p><h1>Make the evidence expectation for a business term explicit.</h1><p class="lead">A semantic model defines the governed vocabulary. An optional reviewed contract can add an owner and descriptive evidence policy, so an agent has context for the term without inventing executable rules.</p></div></section>
+    <section class="section section-paper"><div class="container article"><div class="problem"><strong>Situation:</strong> A customer metric or business term matters to release review. The team needs its canonical governed subjects, owner, and expected evidence to be inspectable before a related schema or workflow change.</div><h2>A safe workflow</h2><div class="workflow">
+      <article class="step"><h3>Keep contracts as a reviewed local artifact</h3><p>Place <code>dbcli.contracts.json</code> beside the semantic file. Contracts use version 1, canonical names and subjects, a <code>draft</code>, <code>approved</code>, or <code>deprecated</code> status, and a descriptive evidence policy.</p></article>
+      <article class="step"><h3>Validate, inspect, and search offline</h3><p>Validate the artifact before relying on it, then use context or deterministic search to inspect the governed terms. These commands never connect or execute queries.</p><pre class="command"><code>dbcli contract validate --format json
+dbcli contract context --format json
+dbcli contract search customer --format json
+dbcli contract drift --format json</code></pre></article>
+      <article class="step"><h3>Use approved terms in ordinary agent context</h3><p>Only valid <code>approved</code> contracts appear in ordinary context, search, and skill context. Draft and deprecated terms remain local review artifacts; drift shows whether the local evidence is valid, stale, invalid, or unavailable.</p></article>
+    </div><aside class="boundary"><h2>What dbcli will not do for you</h2><p>A contract cannot contain SQL, credentials, protected identifiers, or executable rules. An evidence policy describes an expectation; it does not approve a change or replace verification. Missing or invalid explicitly requested contract evidence fails closed.</p></aside><aside class="next-card"><h2>Next step</h2><p>Read the complete <a href="../../user/en/#developer-workflows">semantic and contract documentation</a> for the file schema and command behavior.</p></aside></div></section>
+  </main><footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">All use cases</a><a href="../../user/en/">Documentation</a><a href="../semantic-contracts.html" lang="zh-Hant">Traditional Chinese</a></div></div></footer>
+</body>
+</html>

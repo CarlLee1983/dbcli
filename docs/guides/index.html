@@ -44,6 +44,10 @@
           <article class="guide-card"><span class="tag">上線前檢查</span><h2>找出 ORM 與資料庫的 schema 漂移</h2><p>先將實際 schema 與 ORM 定義比對，再把 DDL 是否執行的決定交還給團隊。</p><a href="./orm-schema-drift.html">閱讀 schema 漂移指南 →</a></article>
           <article class="guide-card"><span class="tag">效能調查</span><h2>用資料庫證據定位慢 API</h2><p>由觀測事件、查詢計畫與索引建議逐步縮小問題，不以直覺調整正式資料庫。</p><a href="./slow-endpoint.html">閱讀慢端點指南 →</a></article>
           <article class="guide-card"><span class="tag">工具選擇</span><h2>Vibe coding 時，什麼時候該用 dbcli？</h2><p>用圖解分辨直接 client、MCP 與 dbcli；看懂本機快速實驗何時需要升級成可重跑的工作流。</p><a href="./why-dbcli.html">閱讀工具選擇指南 →</a></article>
+          <article class="guide-card"><span class="tag">變更審查</span><h2>在 schema 變更前做離線影響評估</h2><p>以本機 schema cache 或 ORM baseline 找出已知依賴與 coverage gaps，不連線、不執行 SQL。</p><a href="./offline-impact-assessment.html">閱讀影響評估指南 →</a></article>
+          <article class="guide-card"><span class="tag">寫入後驗證</span><h2>寫入後驗證與 evidence receipt</h2><p>在外部寫入後執行唯讀驗證，留下不含敏感內容的 provenance，而不是把 receipt 當成核准。</p><a href="./verification-evidence.html">閱讀驗證證據指南 →</a></article>
+          <article class="guide-card"><span class="tag">審查交付</span><h2>為變更審查組成 Evidence Pack</h2><p>把既有 audit、verification artifact 與 receipt 組成可驗證的審查包，不交出 SQL 或資料列。</p><a href="./evidence-packs.html">閱讀 Evidence Pack 指南 →</a></article>
+          <article class="guide-card"><span class="tag">業務語意</span><h2>用語意契約保護業務指標</h2><p>用已審閱的 contract、owner 與 evidence policy，讓指標變更的治理邊界保持清楚。</p><a href="./semantic-contracts.html">閱讀語意契約指南 →</a></article>
         </div>
       </div>
     </section>

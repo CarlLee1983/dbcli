@@ -11,19 +11,19 @@
   <a class="skip-link" href="#main-content">跳到主要內容</a>
   <header class="site-header"><nav class="nav container" aria-label="主要導覽"><a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../dbcli-intro.html">產品介紹</a><a class="nav-link" href="./index.html" aria-current="page">使用情境</a><a class="nav-link" href="../user/zh-TW/">完整文件</a></div><a class="locale-link" href="./en/safe-backfill.html" lang="en">EN</a></nav></header>
   <main id="main-content">
-    <section class="hero"><div class="container article"><p class="eyebrow">資料修正 · SQL</p><h1>回填資料前，先證明它值得被執行。</h1><p class="lead">「把缺少的狀態補上」聽起來簡單，但它同時涉及目標表、影響範圍、敏感欄位與完成後的驗證。dbcli 讓 Agent 先產生可審查的證據，再把寫入決定交還給你。</p></div></section>
+    <section class="hero"><div class="container article"><p class="eyebrow">資料修正 · SQL</p><h1>客服說「有些客戶沒狀態」：別急著補值。</h1><p class="lead">這篇用一個常見的修正單走一遍：營運發現一批 <code>customers</code> 的 <code>status</code> 是空的，想補成 <code>active</code>。先把會改到誰、改完怎麼確認講清楚，才輪到 SQL。</p></div></section>
     <section class="section section-paper"><div class="container article">
-      <div class="problem"><strong>情境：</strong>你需要將 <code>customers</code> 裡尚未設定的狀態補成 <code>active</code>。問題不是「能不能寫 UPDATE」，而是「目標正不正確、會影響多少筆、寫完後怎麼證明結果」。</div>
-      <h2>安全工作流</h2>
+      <div class="problem"><strong>這次要處理的事：</strong>週一早上，客服把 12 筆訂單卡在後台，原因是客戶沒有狀態。工程師提出把空值補成 <code>active</code>。在送出變更前，審查者要看到三件事：沒有碰到受保護欄位、條件真的只選空值、寫入後空值歸零。</div>
+      <h2>這張修正單怎麼走</h2>
       <div class="workflow">
-        <article class="step"><h3>先檢查保護範圍</h3><p>從黑名單開始。若目標表或欄位受保護，先處理權限與資料政策，而不是改寫 SQL 繞過它。</p><pre class="command"><code>dbcli blacklist list</code></pre></article>
-        <article class="step"><h3>以實際 schema 確認目標</h3><p>要求 Agent 讀取正式的欄位與型別，避免把自然語言需求硬套到想像中的資料結構。</p><pre class="command"><code>dbcli schema customers --format json</code></pre></article>
-        <article class="step"><h3>預檢 UPDATE 與回讀斷言</h3><p>預檢確認 UPDATE 目標與 <code>--table</code> 一致、含 WHERE 條件，並檢查回讀查詢是純 SELECT。它會輸出可複製的 after-write 驗證指令。</p><pre class="command"><code>dbcli verify safe-backfill \
+        <article class="step"><h3>先看不能碰什麼</h3><p>工程師先查黑名單。如果 <code>customers</code> 或 <code>status</code> 被保護，這張單要回到權限與資料政策，不能改個 SQL 寫法硬闖。</p><pre class="command"><code>dbcli blacklist list</code></pre></article>
+        <article class="step"><h3>確認資料庫裡真的叫這個名字</h3><p>需求單寫「客戶狀態」，資料庫不一定就叫 <code>status</code>。先讀正式 schema，順便確認型別；這一步能擋掉最常見的欄位猜錯。</p><pre class="command"><code>dbcli schema customers --format json</code></pre></article>
+        <article class="step"><h3>把寫入條件和驗收條件一起送審</h3><p>這個預檢不會 UPDATE。它檢查目標表、WHERE 條件與回讀 SELECT，並印出寫入後可直接使用的驗證命令。審查者看到的不是一句「應該沒問題」，而是具體條件。</p><pre class="command"><code>dbcli verify safe-backfill \
   --table customers \
   --query "UPDATE customers SET status = 'active' WHERE status IS NULL" \
   --verify-query "SELECT count(*)::int AS n FROM customers WHERE status IS NULL" \
   --expect "value == 0"</code></pre></article>
-        <article class="step"><h3>人工核准後才執行寫入，再驗證</h3><p>檢閱預檢結果並依團隊既有的授權流程執行核准的寫入。完成後，使用預檢產生的命令加上 <code>--after-write</code> 執行回讀；結果會寫成可檢視的驗證文物。</p><pre class="command"><code>dbcli verify safe-backfill ... --after-write
+        <article class="step"><h3>核准的寫入在團隊流程內執行，然後回讀</h3><p>核准後才由既有流程執行 UPDATE。接著加上 <code>--after-write</code> 回讀：如果還有空值，結果不會被包裝成成功；如果歸零，會留下可檢視的驗證文物。</p><pre class="command"><code>dbcli verify safe-backfill ... --after-write
 dbcli verification list</code></pre></article>
       </div>
       <aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p><code>verify safe-backfill</code> 永遠不會執行 UPDATE。它只做預檢，或在寫入後進行回讀驗證。預檢的 <code>ready</code> 表示防護通過，不等於資料已被驗證正確。</p></aside>

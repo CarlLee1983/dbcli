@@ -8,12 +8,12 @@
 <body>
   <a class="skip-link" href="#main-content">跳到主要內容</a>
   <header class="site-header"><nav class="nav container" aria-label="主要導覽"><a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../dbcli-intro.html">產品介紹</a><a class="nav-link" href="./index.html" aria-current="page">使用情境</a><a class="nav-link" href="../user/zh-TW/">完整文件</a></div><a class="locale-link" href="./en/orm-schema-drift.html" lang="en">EN</a></nav></header>
-  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">上線前檢查</p><h1>ORM 寫的是一套 schema，正式資料庫未必是另一套。</h1><p class="lead">部署前的問題不該是「要不要直接套 migration」，而是「兩個來源實際上差在哪裡、差異是否符合意圖」。</p></div></section>
-    <section class="section section-paper"><div class="container article"><div class="problem"><strong>情境：</strong>團隊正準備發布包含 ORM model 變動的服務。資料庫可能曾被手動修正、延後 migration，或處在不同版本。</div><h2>安全工作流</h2><div class="workflow">
-      <article class="step"><h3>先確認連線保護與完整 schema 快取</h3><p>先確認黑名單，再讀取完整 schema，為 ORM 比對建立目前資料庫的結構證據與快取。</p><pre class="command"><code>dbcli blacklist list
+  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">上線前檢查</p><h1>PR 裡有新欄位，不代表正式資料庫也準備好了。</h1><p class="lead">一個服務準備上線，Drizzle snapshot 多了一個欄位；但正式環境可能有手動修正或延後的 migration。先把兩邊差異攤開，才知道 deployment 要不要停。</p></div></section>
+    <section class="section section-paper"><div class="container article"><div class="problem"><strong>這次要確認的事：</strong>團隊把 model 變更放進 release，但沒有人能只靠檔名保證 production 長什麼樣。這裡要回答的是：差在哪裡？是預期中的差異，還是漏掉的 migration？</div><h2>上線前的比對紀錄</h2><div class="workflow">
+      <article class="step"><h3>先取一份可對照的正式結構</h3><p>先檢查黑名單，再讀完整 schema。這份結果是比對基準；它也避免 Agent 根據 model 名稱猜資料庫欄位。</p><pre class="command"><code>dbcli blacklist list
 dbcli schema --format json</code></pre></article>
-      <article class="step"><h3>以 ORM 定義產生 drift 報告</h3><p>將已支援的 ORM schema 或 snapshot 作為比較來源，讓 dbcli 輸出具體差異，而不是讓 Agent 根據檔名推斷。</p><pre class="command"><code>dbcli diff --against-orm ./drizzle/meta/0000_snapshot.json --format markdown</code></pre></article>
-      <article class="step"><h3>由人審查 DDL 決定</h3><p>把 drift 報告交給 migration review。dbcli 可提供結構證據與建議流程，但是否執行 DDL 仍需明確授權與團隊審查。</p><pre class="command"><code>dbcli skill tasks plan migration-review \
+      <article class="step"><h3>把 snapshot 和目前資料庫直接比</h3><p>指定支援的 ORM schema 或 snapshot，報告會列出具體差異。看到「少欄位」或「型別不同」時，團隊可以回到 migration 與版本紀錄，而不是猜是哪一次部署留下的。</p><pre class="command"><code>dbcli diff --against-orm ./drizzle/meta/0000_snapshot.json --format markdown</code></pre></article>
+      <article class="step"><h3>讓報告進審查，不讓它直接變 DDL</h3><p>把 drift 報告帶進 migration review。dbcli 幫忙整理結構事實；是否建立、修改或執行 DDL，仍由有權限的人依團隊流程決定。</p><pre class="command"><code>dbcli skill tasks plan migration-review \
   --param "table=&lt;精確資料表名稱&gt;" \
   --param "ddl=&lt;已擷取的 dry-run DDL&gt;"</code></pre></article>
     </div><aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p>schema drift 報告不是 migration，也不會自動變更資料庫。它讓團隊先討論事實，再決定是否建立、修改或套用 DDL。</p></aside><aside class="next-card"><h2>下一步</h2><p>查看完整的 <a href="../user/zh-TW/#developer-workflows">開發者工作流</a> 與 <a href="../user/zh-TW/#data-verification">資料驗證</a> 文件。</p></aside></div></section>

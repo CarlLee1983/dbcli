@@ -1,6 +1,22 @@
 <!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="以 dbcli.contracts.json 管理已審閱的語意契約與證據政策。"><title>用語意契約保護業務指標 | dbcli 使用情境</title><link rel="stylesheet" href="../assets/dbcli-guides.css"></head>
-<body><a class="skip-link" href="#main-content">跳到主要內容</a><header class="site-header"><nav class="nav container" aria-label="主要導覽"><a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../dbcli-intro.html">產品介紹</a><a class="nav-link" href="./index.html" aria-current="page">使用情境</a><a class="nav-link" href="../user/zh-TW/">完整文件</a></div><a class="locale-link" href="./en/semantic-contracts.html" lang="en">EN</a></nav></header>
-<main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">業務語意</p><h1>讓重要指標有已審閱的語意與證據規則。</h1><p class="lead">把 owner、業務術語和證據需求寫進可檢閱的契約，讓 agent context 與 schema 變更評估都有治理邊界。</p></div></section><section class="section section-paper"><div class="container article"><div class="problem"><strong>情境：</strong>團隊希望保護訂單、客戶或營收指標；單靠欄位名稱不足以判斷變更風險。</div><h2>安全工作流</h2><div class="workflow"><article class="step"><h3>建立可檢閱的契約檔</h3><p>在 semantic 檔旁維護版本 1 的 <code>dbcli.contracts.json</code>。每份契約使用 canonical name 與 <code>model:</code>、<code>field:</code>、<code>relationship:</code> 或 <code>metric:</code> subject，並選擇 draft、approved 或 deprecated 狀態。</p></article><article class="step"><h3>驗證並提供安全 context</h3><p>先驗證檔案，再輸出或搜尋可供一般 agent 使用的已核准契約。</p><pre class="command"><code>dbcli contract validate --format json
-dbcli contract context --format json
-dbcli contract search customer --format json</code></pre></article><article class="step"><h3>在 schema 演進前檢查 drift</h3><p>evidence policy 可選 <code>none</code>、<code>receipt-required</code> 或 <code>verification-required</code>。在評估設計變更前檢查契約與本機 semantic 證據是否仍一致。</p><pre class="command"><code>dbcli contract drift --format json</code></pre></article></div><aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p>契約不得含 SQL、憑證、受保護識別字或可執行規則。所有 contract 指令都離線且唯讀；只有有效且 <code>approved</code> 的契約會進入一般 context。</p></aside><aside class="next-card"><h2>下一步</h2><p>以<a href="./offline-impact-assessment.html">離線影響評估</a>將已審閱的契約納入設計變更審查。</p></aside></div></section></main><footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">所有使用情境</a><a href="./en/semantic-contracts.html" lang="en">English</a></div></div></footer></body></html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="用可審閱的語意契約，讓重要業務指標在變更前有明確定義與證據邊界。"><title>用語意契約保護業務指標 | dbcli 使用情境</title><link rel="stylesheet" href="../assets/dbcli-guides.css"></head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要內容</a>
+  <header class="site-header"><nav class="nav container" aria-label="主要導覽"><a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../dbcli-intro.html">產品介紹</a><a class="nav-link" href="./index.html" aria-current="page">使用情境</a><a class="nav-link" href="../user/zh-TW/">完整文件</a></div><a class="locale-link" href="./en/semantic-contracts.html" lang="en">EN</a></nav></header>
+  <main id="main-content">
+    <section class="hero"><div class="container article"><p class="eyebrow">業務語意</p><h1>同一句「客戶數」，在兩個報表裡可能是兩件事。</h1><p class="lead">行銷把 trial 算客戶，財務只算付費帳戶。欄位名稱救不了這個歧義；要在 Agent 與變更審查裡少走彎路，得把名稱、owner 和證據期待寫成能被檢查的契約。</p></div></section>
+    <section class="section section-paper"><div class="container article">
+      <div class="problem"><strong>這次要釐清的事：</strong>release 前有人要改訂單模型，而「月活躍客戶」會受影響。審查者需要知道它對應哪個 governed subject、誰負責，以及這個詞需要什麼證據；不是讓 Agent 從欄位名稱自己推理。</div>
+      <h2>把定義留在可審查的地方</h2>
+      <div class="workflow">
+        <article class="step"><h3>把術語寫成版本控制下的契約</h3><p>在 semantic 檔旁維護版本 1 的 <code>dbcli.contracts.json</code>。每份契約有 canonical name、<code>model:</code>／<code>field:</code>／<code>relationship:</code>／<code>metric:</code> subject 和 draft、approved、deprecated 狀態。</p></article>
+        <article class="step"><h3>先驗證，再讓 Agent 看見已核准的定義</h3><p>契約檔有錯時，先修檔案，不要把它當 context。通過後可輸出或搜尋已核准契約，讓「客戶」指的內容有明確來源。</p><pre class="command"><code>dbcli contract validate --format json&#10;dbcli contract context --format json&#10;dbcli contract search customer --format json</code></pre></article>
+        <article class="step"><h3>變更前檢查定義是否還站得住腳</h3><p>evidence policy 可選 <code>none</code>、<code>receipt-required</code> 或 <code>verification-required</code>。設計要改前跑一次 drift；本機 semantic 證據過期或不一致時，就把它列為審查議題。</p><pre class="command"><code>dbcli contract drift --format json</code></pre></article>
+      </div>
+      <aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p>契約不得含 SQL、憑證、受保護識別字或可執行規則。所有 contract 指令都離線且唯讀；只有有效且 <code>approved</code> 的契約會進入一般 context。</p></aside>
+      <aside class="next-card"><h2>下一步</h2><p>以<a href="./offline-impact-assessment.html">離線影響評估</a>將已審閱的契約納入設計變更審查。</p></aside>
+    </div></section>
+  </main>
+  <footer class="footer"><div class="container footer-inner"><span>dbcli · Database CLI built for AI agents.</span><div class="footer-links"><a href="./index.html">所有使用情境</a><a href="../user/zh-TW/">完整文件</a><a href="./en/semantic-contracts.html" lang="en">English</a></div></div></footer>
+</body></html>

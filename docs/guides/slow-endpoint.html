@@ -8,12 +8,12 @@
 <body>
   <a class="skip-link" href="#main-content">跳到主要內容</a>
   <header class="site-header"><nav class="nav container" aria-label="主要導覽"><a class="brand" href="../dbcli-intro.html"><span class="brand-mark">d</span>dbcli</a><div class="nav-links"><a class="nav-link" href="../dbcli-intro.html">產品介紹</a><a class="nav-link" href="./index.html" aria-current="page">使用情境</a><a class="nav-link" href="../user/zh-TW/">完整文件</a></div><a class="locale-link" href="./en/slow-endpoint.html" lang="en">EN</a></nav></header>
-  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">效能調查 · SQL</p><h1>慢 API 的第一步，<br>不是猜哪個索引少了。</h1><p class="lead">讓 Agent 直接調整正式資料庫是高風險捷徑。先聚合觀測資料、讀查詢計畫、產生可審查的索引建議，才能把問題範圍縮小。</p></div></section>
-    <section class="section section-paper"><div class="container article"><div class="problem"><strong>情境：</strong>某個 API 在尖峰時段變慢。你需要知道是不是同一種 SQL 重複發生、最慢查詢碰到哪些表，以及改動前應該檢查什麼。</div><h2>安全工作流</h2><div class="workflow">
-      <article class="step"><h3>從本機觀測事件找出模式</h3><p>proxy analyze 讀取已記錄的事件，按 fingerprint、耗時、錯誤與熱門資料表聚合；它不會執行資料庫寫入。</p><pre class="command"><code>dbcli proxy analyze --format json --top 10</code></pre></article>
-      <article class="step"><h3>確認結構，再看查詢計畫</h3><p>先確認受影響表的實際 schema，再以 explain 蒐集執行證據。</p><pre class="command"><code>dbcli schema orders --format json
+  <main id="main-content"><section class="hero"><div class="container article"><p class="eyebrow">效能調查 · SQL</p><h1>週五晚上的慢 API，別先開一張「加索引」單。</h1><p class="lead">假設結帳 API 在晚間尖峰變慢。值班的人需要的是可重現的線索：哪一種查詢一直出現、它打到哪張表、計畫到底做了什麼；不是靠感覺補一個索引。</p></div></section>
+    <section class="section section-paper"><div class="container article"><div class="problem"><strong>這次要查的事：</strong>監控顯示結帳 API 的延遲上升，但錯誤率沒變。先別把「訂單很多」當原因。這個流程把本機觀測、<code>orders</code> 的實際結構與查詢計畫排在一起，讓下一步有依據。</div><h2>把猜測縮成可審查的問題</h2><div class="workflow">
+      <article class="step"><h3>先確認是不是同一種查詢在拖慢</h3><p><code>proxy analyze</code> 把已記錄事件按 fingerprint、耗時、錯誤和熱門資料表整理。它只讀本機觀測資料，適合先回答「哪一條值得追」。</p><pre class="command"><code>dbcli proxy analyze --format json --top 10</code></pre></article>
+      <article class="step"><h3>找到了候選查詢，再看真正的表與計畫</h3><p>如果最慢的 fingerprint 指向訂單查詢，先確認 <code>orders</code> 現在的欄位，再用 explain 看資料庫的執行證據。這能分開「查詢寫錯」和「資料量真的變了」。</p><pre class="command"><code>dbcli schema orders --format json
 dbcli explain "@saved-query" --format markdown</code></pre></article>
-      <article class="step"><h3>把索引提案留在審查階段</h3><p>根據被確認的查詢取得缺失索引建議，然後交由 migration review 決定是否形成 DDL。</p><pre class="command"><code>dbcli guide missing-index-for "@saved-query" --format json
+      <article class="step"><h3>建議是下一張審查材料，不是自動修復</h3><p>確認了查詢和表結構後，才產生缺失索引建議。它可以進 migration review，但還要評估寫入成本、鎖定和部署時機，才決定是否形成 DDL。</p><pre class="command"><code>dbcli guide missing-index-for "@saved-query" --format json
 dbcli skill tasks plan migration-review \
   --param "table=&lt;精確資料表名稱&gt;" \
   --param "ddl=&lt;已擷取的 dry-run DDL&gt;"</code></pre></article>

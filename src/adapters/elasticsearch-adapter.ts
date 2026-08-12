@@ -1,5 +1,6 @@
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
+import { encodeEsIndexExpression, encodeEsPathSegment } from './identifier-quote'
 
 export class ElasticsearchAdapter implements QueryableAdapter {
   private options: ConnectionOptions
@@ -40,7 +41,8 @@ export class ElasticsearchAdapter implements QueryableAdapter {
 
     const isDsl = query.trim().startsWith('{')
     const limit = options?.limit ?? 100
-    let path = `/${indexName}/_search`
+    // index 是使用者輸入而路徑是結構——編碼是兩者之間唯一的界線
+    let path = `/${encodeEsIndexExpression(indexName)}/_search`
     let body: any = undefined
 
     if (isDsl) {
@@ -108,7 +110,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     tableName: string,
     _options?: { sampleSize?: number }
   ): Promise<TableSchema> {
-    const mapping = await this.request<any>('GET', `/${tableName}/_mapping`)
+    const mapping = await this.request<any>(
+      'GET',
+      `/${encodeEsIndexExpression(tableName)}/_mapping`
+    )
     const indexMapping = mapping[tableName] || Object.values(mapping)[0]
 
     if (!indexMapping) {
@@ -174,7 +179,12 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     delete body._id
     delete body.id
 
-    const response = await this.request<any>('PUT', `/${collection}/_doc/${id || ''}`, body)
+    const encodedId = id ? encodeEsPathSegment(id) : ''
+    const response = await this.request<any>(
+      'PUT',
+      `/${encodeEsIndexExpression(collection)}/_doc/${encodedId}`,
+      body
+    )
     return {
       rows: [],
       affectedRows: response.result === 'created' || response.result === 'updated' ? 1 : 0,
@@ -192,9 +202,13 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       throw new Error('Elasticsearch update requires _id or id in filter')
     }
 
-    const response = await this.request<any>('POST', `/${collection}/_update/${id}`, {
-      doc: update,
-    })
+    const response = await this.request<any>(
+      'POST',
+      `/${encodeEsIndexExpression(collection)}/_update/${encodeEsPathSegment(id)}`,
+      {
+        doc: update,
+      }
+    )
     return {
       rows: [],
       affectedRows: response.result === 'updated' || response.result === 'noop' ? 1 : 0,
@@ -210,7 +224,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       throw new Error('Elasticsearch delete requires _id or id in filter')
     }
 
-    const response = await this.request<any>('DELETE', `/${collection}/_doc/${id}`)
+    const response = await this.request<any>(
+      'DELETE',
+      `/${encodeEsIndexExpression(collection)}/_doc/${encodeEsPathSegment(id)}`
+    )
     return {
       rows: [],
       affectedRows: response.result === 'deleted' ? 1 : 0,

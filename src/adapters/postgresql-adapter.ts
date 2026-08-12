@@ -8,10 +8,7 @@ import { requireConnected, withMappedConnectionError } from './sql-adapter-utils
 import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
-
-function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`
-}
+import { quoteIdentifier } from './identifier-quote'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -387,7 +384,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const pkResults = pkResult.rows
 
       // Get row count
-      const qualifiedTableName = `${quoteIdentifier('public')}.${quoteIdentifier(tableName)}`
+      const qualifiedTableName = `${quoteIdentifier('public', 'postgresql')}.${quoteIdentifier(tableName, 'postgresql')}`
       const countResult = await this.execute<{ count: number }>(
         `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
       )

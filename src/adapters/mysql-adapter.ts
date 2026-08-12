@@ -9,6 +9,7 @@ import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult }
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
+import { quoteIdentifier } from './identifier-quote'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -295,7 +296,7 @@ export class MySQLAdapter implements DatabaseAdapter {
 
       // Get row count
       const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM \`${tableName}\``
+        `SELECT COUNT(*) as count FROM ${quoteIdentifier(tableName, this.system)}`
       )
 
       // Get engine type

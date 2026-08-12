@@ -350,3 +350,70 @@ test('request() is callable from outside the adapter', () => {
   const adapter = new ElasticsearchAdapter(opts)
   expect(typeof (adapter as unknown as { request: unknown }).request).toBe('function')
 })
+
+// ── URL 路徑編碼（#39） ────────────────────────────────────────────────────
+
+describe('ElasticsearchAdapter URL 路徑編碼', () => {
+  function adapterWithCapturedPaths(): {
+    adapter: ElasticsearchAdapter
+    paths: { method: string; path: string }[]
+  } {
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+    const paths: { method: string; path: string }[] = []
+    ;(adapter as unknown as { request: unknown }).request = async (
+      method: string,
+      path: string
+    ): Promise<unknown> => {
+      paths.push({ method, path })
+      return { hits: { hits: [] }, result: 'created' }
+    }
+    return { adapter, paths }
+  }
+
+  test('index 名稱中的斜線不會多切出一層路徑', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.execute('{}', ['secrets/_search'])
+    expect(paths[0]?.path).toBe('/secrets%2F_search/_search')
+  })
+
+  test('getTableSchema 的 index 名稱被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    ;(adapter as unknown as { request: unknown }).request = async (
+      _method: string,
+      path: string
+    ): Promise<unknown> => {
+      paths.push({ method: _method, path })
+      return { 'we ird': { mappings: { properties: {} } } }
+    }
+    await adapter.getTableSchema('we ird')
+    expect(paths[0]?.path).toBe('/we%20ird/_mapping')
+  })
+
+  test('document id 中的斜線與問號被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.insert('logs', { _id: 'a/b?c', msg: 'x' })
+    expect(paths[0]?.path).toBe('/logs/_doc/a%2Fb%3Fc')
+  })
+
+  test('update 與 delete 的 id 同樣被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.update('logs', { _id: 'a/b' }, { msg: 'y' })
+    await adapter.delete('logs', { _id: 'a/b' })
+    expect(paths[0]?.path).toBe('/logs/_update/a%2Fb')
+    expect(paths[1]?.path).toBe('/logs/_doc/a%2Fb')
+  })
+
+  test('逗號分隔的多 index 語法仍然可用', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.execute('{}', ['logs-a,logs-b'])
+    expect(paths[0]?.path).toBe('/logs-a,logs-b/_search')
+  })
+})

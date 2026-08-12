@@ -40,3 +40,36 @@ test('getTableSchema uses a foreign-key query accepted by ONLY_FULL_GROUP_BY', a
     executedSql.some((sql) => sql.includes('information_schema.REFERENTIAL_CONSTRAINTS'))
   ).toBe(true)
 })
+
+test('getTableSchema 的 row count 查詢跳脫表名中的反引號 (#39)', async () => {
+  const adapter = new MySQLAdapter({
+    system: 'mysql',
+    host: 'localhost',
+    port: 3306,
+    user: 'test',
+    password: 'test',
+    database: 'test',
+  })
+  const executedSql: string[] = []
+
+  ;(
+    adapter as unknown as {
+      db: { execute(sql: string): Promise<[unknown[], unknown[]]> }
+    }
+  ).db = {
+    async execute(sql: string): Promise<[unknown[], unknown[]]> {
+      executedSql.push(sql)
+      return [[], []]
+    },
+  }
+
+  await adapter.getTableSchema('we`ird')
+
+  const inlined = executedSql.filter((sql) => sql.includes('we'))
+  expect(inlined.length).toBeGreaterThan(0)
+  // 未跳脫時會產生 `we`ird`，反引號提前收尾、語法錯誤或指到別的物件
+  for (const sql of inlined) {
+    expect(sql).toContain('`we``ird`')
+    expect(sql).not.toContain('`we`ird`')
+  }
+})

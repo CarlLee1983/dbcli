@@ -136,7 +136,10 @@ export interface QueryCommandRuntime {
 }
 
 const defaultQueryCommandRuntime: QueryCommandRuntime = {
-  loadConfig: (configPath, connectionName) => configModule.read(configPath, connectionName),
+  // 查詢不需要整份 schema 索引：size guard 只會用到查詢提到的那幾張表，
+  // 由 resolveTableSchema() 按需取得（#43）。
+  loadConfig: (configPath, connectionName) =>
+    configModule.read(configPath, connectionName, { loadLayeredSchema: false }),
   runMultiConnection: runMultiConnectionQuery,
   preflight: preflightQuery,
   executeConnection: executeConnectionQuery,
@@ -279,7 +282,9 @@ async function runMultiConnectionQuery(
 
   const contexts: QueryExecutionContext[] = []
   for (const connectionName of connectionNames) {
-    const config = await configModule.read(configPath, connectionName)
+    const config = await configModule.read(configPath, connectionName, {
+      loadLayeredSchema: false,
+    })
     contexts.push({ config, configPath, connectionName })
   }
 
@@ -364,7 +369,7 @@ async function preflightQuery(
   }
 
   if (system === 'mongodb') {
-    await preflightMongoQuery(query, options, config, multiConnection)
+    await preflightMongoQuery(query, options, context, multiConnection)
     return
   }
 
@@ -374,15 +379,16 @@ async function preflightQuery(
   }
 
   if (multiConnection) assertFanOutReadOnlySql(query, system)
-  await preflightSqlSizeGuard(query, options, config)
+  await preflightSqlSizeGuard(query, options, context)
 }
 
 async function preflightSqlSizeGuard(
   query: string,
   options: QueryCommandOptions,
-  config: DbcliConfig
+  context: QueryExecutionContext
 ): Promise<void> {
-  if (!config.schema || options.noLimit) return
+  if (options.noLimit) return
+  const { config, configPath, connectionName } = context
   const { extractTableReferences } = await import('@/utils/sql-tables')
   const { SQL_DIALECTS } = await import('@/core/permission-guard')
   const dialect = SQL_DIALECTS.find((candidate) => candidate === config.connection?.system)
@@ -390,11 +396,11 @@ async function preflightSqlSizeGuard(
   // returned `public` for `FROM public.users`, which is not a schema key, so
   // the guard silently did nothing for every schema-qualified query.
   const tables = extractTableReferences(query, { ...(dialect ? { dialect } : {}) })
-  const schema = config.schema as Record<string, unknown>
 
+  const { resolveTableSchema } = await import('./query-table-schema')
   const { shouldBlockQuery } = await import('./query-size-guard')
   for (const table of tables) {
-    const tableSchema = schema[table]
+    const tableSchema = await resolveTableSchema(config, configPath, connectionName, table)
     if (!tableSchema) continue
     const guard = shouldBlockQuery(query, tableSchema as { estimatedRowCount: number })
     if (guard.blocked) throw new Error(`\u26A0 ${guard.reason}`)
@@ -404,9 +410,10 @@ async function preflightSqlSizeGuard(
 async function preflightMongoQuery(
   query: string,
   options: QueryCommandOptions,
-  config: DbcliConfig,
+  context: QueryExecutionContext,
   multiConnection: boolean
 ): Promise<void> {
+  const { config, configPath, connectionName } = context
   const collection = options.collection
   if (!collection) throw new Error('MongoDB 查詢需要指定 --collection <name>')
 
@@ -446,8 +453,9 @@ async function preflightMongoQuery(
     ...findMongoCollectionReferences(parsedQuery),
   ])
 
-  if (!config.schema || options.noLimit) return
-  const tableSchema = (config.schema as Record<string, unknown>)[collection]
+  if (options.noLimit) return
+  const { resolveTableSchema } = await import('./query-table-schema')
+  const tableSchema = await resolveTableSchema(config, configPath, connectionName, collection)
   if (!tableSchema) return
   const { shouldBlockQuery } = await import('./query-size-guard')
   const isFiltered = query.length > 2

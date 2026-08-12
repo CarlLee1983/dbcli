@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,9 @@ import { SessionIdService } from '../../src/core/audit/session-id'
 import { redactArgv, redactSql, redactParams } from '../../src/utils/redaction'
 import { expectNoSensitiveFragments } from '../helpers/sensitive-output'
 import { QueryExecutor } from '../../src/core/query-executor'
+import { AdapterFactory } from '../../src/adapters'
+import { configModule } from '../../src/core/config'
+import { queryCommand } from '../../src/commands/query'
 
 describe('Audit Contract Integration', () => {
   let workDir: string
@@ -123,8 +126,14 @@ describe('Audit Contract Integration', () => {
     expect(parsed.metadata.original_error).toContain('password=<redacted>')
   })
 
-  test('QueryExecutor automatically writes audit entries on success and failure', async () => {
-    const mockAdapter = {
+  // ── 一次 CLI 查詢 = 恰好一筆 entry（#41） ──────────────────────────────────
+  //
+  // 稽核紀錄的價值建立在「一筆 entry 對應一次操作」上。執行器與命令層各寫一筆
+  // 時，同一次查詢在 log 裡出現兩次，統計與追蹤都會失真；而且執行器寫的那筆
+  // 永遠署名 'query'，即使呼叫者是 export 或 verify。寫入點因此只留命令層一個。
+
+  function auditMockAdapter() {
+    return {
       system: 'postgresql' as const,
       connect: async () => {},
       disconnect: async () => {},
@@ -134,37 +143,102 @@ describe('Audit Contract Integration', () => {
       },
       listTables: async () => ['users', 'products'],
     }
+  }
 
-    const config: any = {
-      connection: { system: 'postgresql' },
+  function auditConfig(): any {
+    return {
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        database: 'testdb',
+      },
+      permission: 'admin',
+      schema: {},
+      metadata: { version: '1.0' },
+      blacklist: { tables: [], columns: {} },
       audit: { enabled: true, rotation: { max_bytes: 1000000, max_entries: 1000 } },
       effectiveConnectionName: 'test-conn',
     }
+  }
 
-    const executor = new QueryExecutor(mockAdapter as any, 'admin', undefined, config, {
-      config: workDir,
-    })
+  async function auditLines(): Promise<Record<string, unknown>[]> {
+    const logPath = join(workDir, '.dbcli', 'audit', 'test-conn.jsonl')
+    const content = await readFile(logPath, 'utf8').catch(() => '')
+    return content
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+  }
+
+  test('QueryExecutor does not write audit entries of its own', async () => {
+    const executor = new QueryExecutor(
+      auditMockAdapter() as any,
+      'admin',
+      undefined,
+      auditConfig(),
+      {
+        config: workDir,
+      }
+    )
 
     await executor.execute('SELECT 1 FROM users')
     try {
       await executor.execute('SELECT FAIL FROM users')
     } catch {
-      // expected: query throws, audit failure path captured
+      // expected: the query throws; the command layer owns the audit entry
     }
 
-    const logPath = join(workDir, '.dbcli', 'audit', 'test-conn.jsonl')
-    const logLines = (await readFile(logPath, 'utf8')).split('\n').filter(Boolean)
+    expect(await auditLines()).toHaveLength(0)
+  })
 
-    expect(logLines.length).toBe(2)
+  test('one CLI query writes exactly one audit entry — success', async () => {
+    const adapter = auditMockAdapter()
+    const config = auditConfig()
+    const adapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(adapter as any)
+    const configSpy = spyOn(configModule, 'read').mockImplementation(async () => config)
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
-    const successEntry = JSON.parse(logLines[0])
-    expect(successEntry.success).toBe(true)
-    expect(successEntry.command).toBe('query')
-    expect(successEntry.target).toBe('users')
-    expect(successEntry.redacted_sql).toBe('SELECT 0 FROM users')
+    try {
+      await queryCommand('SELECT 1 FROM users', { format: 'json', config: workDir })
+    } finally {
+      adapterSpy.mockRestore()
+      configSpy.mockRestore()
+      logSpy.mockRestore()
+    }
 
-    const failureEntry = JSON.parse(logLines[1])
-    expect(failureEntry.success).toBe(false)
-    expect(failureEntry.error).toContain('DB Error: table not found')
+    const entries = await auditLines()
+    expect(entries).toHaveLength(1)
+    expect(entries[0].success).toBe(true)
+    expect(entries[0].command).toBe('query')
+    expect(entries[0].target).toBe('users')
+    expect((entries[0].metadata as Record<string, unknown>).execution_ms).toBeNumber()
+  })
+
+  test('one CLI query writes exactly one audit entry — failure', async () => {
+    const adapter = auditMockAdapter()
+    const config = auditConfig()
+    const adapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(adapter as any)
+    const configSpy = spyOn(configModule, 'read').mockImplementation(async () => config)
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await queryCommand('SELECT FAIL FROM users', { format: 'json', config: workDir })
+    } catch {
+      // expected
+    } finally {
+      adapterSpy.mockRestore()
+      configSpy.mockRestore()
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+
+    const entries = await auditLines()
+    expect(entries).toHaveLength(1)
+    expect(entries[0].success).toBe(false)
+    expect(entries[0].error).toContain('table not found')
   })
 })

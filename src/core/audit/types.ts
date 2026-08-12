@@ -1,6 +1,15 @@
 import type { DatabaseSystem } from '../../adapters/types'
 import type { SideEffectTier } from '../../adapters/capabilities'
 
+/**
+ * 一次 CLI 命令執行 = 恰好一筆 AuditEntry。
+ *
+ * 寫入點只有命令層（`src/commands/*`）。核心元件——特別是 QueryExecutor——
+ * 不自行寫入，只把耗時與列數回報給命令層。這條規則讓「log 行數 = 操作次數」
+ * 成立；破壞它，稽核統計就會重複計數，而且重複那筆的 command 欄位會署名
+ * 執行器所知的名字而非使用者真正下的命令。合約測試見
+ * `tests/integration/audit-contract.test.ts`。
+ */
 export interface AuditEntry {
   /** Unique ID for the audit entry (e.g., UUID). */
   id: string

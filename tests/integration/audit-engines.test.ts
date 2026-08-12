@@ -1,10 +1,10 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { QueryExecutor } from '../../src/core/query-executor'
-import { BlacklistValidator } from '../../src/core/blacklist-validator'
-import { BlacklistManager } from '../../src/core/blacklist-manager'
+import { AdapterFactory } from '../../src/adapters'
+import { configModule } from '../../src/core/config'
+import { queryCommand } from '../../src/commands/query'
 
 describe('Cross-Engine Audit & Rejection Paths', () => {
   let workDir: string
@@ -20,84 +20,92 @@ describe('Cross-Engine Audit & Rejection Paths', () => {
     await rm(workDir, { recursive: true, force: true })
   })
 
+  // 拒絕路徑走的是命令層那唯一的 audit 寫入點（#41），所以測試也從 CLI 進入。
+  async function runQueryWithAudit(sql: string, config: any): Promise<void> {
+    const mockAdapter = {
+      system: 'postgresql' as const,
+      connect: async () => {},
+      disconnect: async () => {},
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+      listTables: async () => [],
+    }
+    const adapterSpy = spyOn(AdapterFactory, 'createSqlAdapter').mockReturnValue(mockAdapter as any)
+    const configSpy = spyOn(configModule, 'read').mockImplementation(async () => config)
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await queryCommand(sql, { format: 'json', config: workDir })
+    } catch {
+      // rejection paths throw; the audit entry is what this test is about
+    } finally {
+      adapterSpy.mockRestore()
+      configSpy.mockRestore()
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  }
+
+  async function readEntries(connectionName: string): Promise<any[]> {
+    const content = await readFile(join(auditDir, `${connectionName}.jsonl`), 'utf8')
+    return content
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+  }
+
   test('Blacklist rejection is recorded as failure with redacted reason', async () => {
-    const config: any = {
-      connection: { system: 'postgresql' },
+    await runQueryWithAudit('SELECT * FROM secrets', {
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        database: 'testdb',
+      },
       permission: 'admin',
+      schema: {},
+      metadata: { version: '1.0' },
       blacklist: {
         tables: ['secrets'],
         columns: { users: ['password'] },
       },
       audit: { enabled: true },
       effectiveConnectionName: 'default',
-    }
-
-    const mockAdapter = {
-      system: 'postgresql' as const,
-      connect: async () => {},
-      disconnect: async () => {},
-      execute: async () => ({ rows: [], affectedRows: 0 }),
-      listTables: async () => [],
-    }
-
-    const blacklistManager = new BlacklistManager(config)
-    const blacklistValidator = new BlacklistValidator(blacklistManager)
-    const executor = new QueryExecutor(mockAdapter as any, 'admin', blacklistValidator, config, {
-      config: workDir,
     })
 
-    // 1. Table Blacklist Reject
-    try {
-      await executor.execute('SELECT * FROM secrets')
-    } catch (e) {
-      expect((e as Error).name).toBe('BlacklistError')
-    }
-
-    const logPath = join(auditDir, 'default.jsonl')
-    const logLines = (await readFile(logPath, 'utf8')).split('\n').filter(Boolean)
-    const entry = JSON.parse(logLines[0])
-
-    expect(entry.success).toBe(false)
-    expect(entry.command).toBe('query')
-    expect(entry.target).toBe('secrets')
-    expect(entry.error).toContain('blacklisted')
-    expect(entry.side_effect_tier).toBe('readonly')
+    const entries = await readEntries('default')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].success).toBe(false)
+    expect(entries[0].command).toBe('query')
+    expect(entries[0].target).toBe('secrets')
+    expect(entries[0].error).toContain('blacklisted')
+    expect(entries[0].side_effect_tier).toBe('readonly')
   })
 
   test('Permission rejection is recorded as failure', async () => {
-    const config: any = {
-      connection: { system: 'postgresql' },
+    await runQueryWithAudit('DROP TABLE users', {
+      connection: {
+        system: 'postgresql',
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        database: 'testdb',
+      },
       permission: 'query-only',
+      schema: {},
+      metadata: { version: '1.0' },
+      blacklist: { tables: [], columns: {} },
       audit: { enabled: true },
       effectiveConnectionName: 'query-conn',
-    }
-
-    const mockAdapter = {
-      system: 'postgresql' as const,
-      connect: async () => {},
-      disconnect: async () => {},
-      execute: async () => ({ rows: [], affectedRows: 0 }),
-      listTables: async () => [],
-    }
-
-    const executor = new QueryExecutor(mockAdapter as any, 'query-only', undefined, config, {
-      config: workDir,
     })
 
-    // 2. Permission Reject (DROP TABLE is dangerous/admin only)
-    try {
-      await executor.execute('DROP TABLE users')
-    } catch (e) {
-      expect((e as Error).name).toBe('PermissionError')
-    }
-
-    const logPath = join(auditDir, 'query-conn.jsonl')
-    const logLines = (await readFile(logPath, 'utf8')).split('\n').filter(Boolean)
-    const entry = JSON.parse(logLines[0])
-
-    expect(entry.success).toBe(false)
-    expect(entry.command).toBe('query')
-    expect(entry.error).toContain('permission')
+    const entries = await readEntries('query-conn')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].success).toBe(false)
+    expect(entries[0].command).toBe('query')
+    expect(entries[0].error).toContain('permission')
   })
 
   test('NoSQL (MongoDB) query is recorded correctly', async () => {

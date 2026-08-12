@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "date": "2026-08-12",
+  "date": "2026-08-13",
   "platform": "macos",
   "hardware": "MacBook Air M4 (arm64)",
   "node_version": "22.17.1",
@@ -9,11 +9,12 @@
   "method": "median of 5 samples after a discarded warm-up (tests/perf/*.bench.ts)",
   "benchmarks": {
     "cli_startup_help": {
-      "mean_ms": 120,
-      "min_ms": 119,
-      "max_ms": 124,
+      "mean_ms": 106,
+      "min_ms": 105,
+      "max_ms": 107,
       "target_ms": 200,
-      "status": "PASS"
+      "status": "PASS",
+      "notes": "2026-08-13 #48：pg 與 mysql2 改為 connect() 時才載入，help 自 120ms 降到 106ms"
     },
     "cli_startup_version": {
       "mean_ms": 8,
@@ -40,5 +41,5 @@
       "workload": "redis PING via query (localhost)"
     }
   },
-  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。"
+  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。"
 }

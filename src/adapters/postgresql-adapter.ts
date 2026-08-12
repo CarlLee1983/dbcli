@@ -5,7 +5,10 @@
 
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
-import { Pool, type PoolClient } from 'pg'
+// 型別匯入在執行期會被抹除；driver 本體改在 connect() 時才載入，這樣查
+// Redis 或 Mongo 的命令不必為了 import 一個用不到的 SQL driver 付啟動成本
+// （MongoDB adapter 的動態 import 是既有先例）。
+import type { Pool, PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
@@ -40,6 +43,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // statement_timeout 只在使用者實際要求時才送——沒要求時交給伺服器預設，
       // 而不是拿連線逾時的預設值去砍每一句查詢（見 timeout-policy.ts）。
       const timeouts = resolveTimeoutPolicy(this.options)
+      const { Pool } = await import('pg')
       this.pool = new Pool({
         host: this.options.host,
         port: this.options.port,

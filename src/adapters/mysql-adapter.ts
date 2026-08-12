@@ -4,7 +4,8 @@
  * Note: MariaDB is a MySQL fork with compatible protocol and schema
  */
 
-import mysql from 'mysql2/promise'
+// 只留型別；driver 本體在 connect() 時才載入（見 postgresql-adapter 的說明）
+import type mysql from 'mysql2/promise'
 import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
@@ -51,7 +52,8 @@ export class MySQLAdapter implements DatabaseAdapter {
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
       const timeouts = resolveTimeoutPolicy(this.options)
-      this.db = await mysql.createConnection({
+      const { default: driver } = await import('mysql2/promise')
+      this.db = await driver.createConnection({
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,

@@ -110,35 +110,26 @@ describe('ElasticsearchAdapter list/schema', () => {
       database: '',
     })
 
-    const mockIndices = {
-      users: { settings: { index: { creation_date: '...' } } },
-      '.security': { settings: { index: { creation_date: '...' } } },
-    }
+    const catRows = [
+      { index: 'users', 'docs.count': '100' },
+      { index: '.security', 'docs.count': '5' },
+    ]
 
-    const mockStats = {
-      indices: {
-        users: { total: { docs: { count: 100 } } },
-        '.security': { total: { docs: { count: 5 } } },
-      },
-    }
-
+    const requestedUrls: string[] = []
     // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
-    globalThis.fetch = Response.json
-      ? async (url: string) => {
-          if (url.includes('_settings')) return Response.json(mockIndices)
-          if (url.includes('_stats')) return Response.json(mockStats)
-          return Response.json({})
-        }
-      : async (url: string) => {
-          if (url.includes('_settings')) return new Response(JSON.stringify(mockIndices))
-          if (url.includes('_stats')) return new Response(JSON.stringify(mockStats))
-          return new Response('{}')
-        }
+    globalThis.fetch = async (url: string) => {
+      requestedUrls.push(url)
+      if (url.includes('_cat/indices')) return Response.json(catRows)
+      return Response.json({})
+    }
 
     const collections = await adapter.listCollections()
     expect(collections).toHaveLength(1)
     expect(collections[0]!.name).toBe('users')
     expect(collections[0]!.documentCount).toBe(100)
+    // 一個請求就夠：舊版還會把整個叢集的 settings 拉回來（#46）
+    expect(requestedUrls).toHaveLength(1)
+    expect(requestedUrls[0]).toContain('_cat/indices')
 
     const allCollections = await adapter.listCollections({ includeSystem: true })
     expect(allCollections).toHaveLength(2)

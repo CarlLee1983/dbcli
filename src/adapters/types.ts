@@ -307,6 +307,8 @@ export interface QueryableAdapter {
    */
   listCollections(options?: {
     includeSystem?: boolean
+    /** Redis: 取樣上限。列 key 沒有 catalog 可查，只能掃，所以上限是必要的。 */
+    limit?: number
   }): Promise<{ name: string; documentCount?: number }[]>
 
   /**

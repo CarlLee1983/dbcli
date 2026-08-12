@@ -82,18 +82,31 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     }
   }
 
+  /**
+   * 列出 index 名稱與文件數。
+   *
+   * 用 cat API 一個請求取回兩欄，而不是 `_settings` 加 `_stats/docs` 兩個
+   * 請求——前者會把整個叢集每個 index 的完整 settings 拉回來（大叢集上是
+   * 幾 MB 的 JSON），只為了取 key 的名字。
+   */
   async listCollections(options?: {
     includeSystem?: boolean
   }): Promise<{ name: string; documentCount?: number }[]> {
-    const indices = await this.request<Record<string, any>>('GET', '/_settings')
-    const stats = await this.request<any>('GET', '/_stats/docs')
+    const rows = await this.request<{ index?: string; 'docs.count'?: string }[]>(
+      'GET',
+      '/_cat/indices?format=json&h=index,docs.count'
+    )
 
-    return Object.keys(indices)
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) => row.index)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
       .filter((name) => options?.includeSystem || !name.startsWith('.'))
-      .map((name) => ({
-        name,
-        documentCount: stats.indices?.[name]?.total?.docs?.count ?? 0,
-      }))
+      .map((name) => {
+        const row = rows.find((candidate) => candidate.index === name)
+        // cat API 回傳字串；關閉中的 index 的 docs.count 是 null
+        const parsed = Number(row?.['docs.count'])
+        return { name, documentCount: Number.isFinite(parsed) ? parsed : 0 }
+      })
   }
 
   async listTables(options?: { includeSystem?: boolean }): Promise<TableSchema[]> {

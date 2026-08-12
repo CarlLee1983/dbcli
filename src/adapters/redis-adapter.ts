@@ -27,6 +27,17 @@ type RedisClientOptions = {
 
 type RedisCtor = new (url?: string, options?: RedisClientOptions) => RedisClient
 
+/**
+ * Redis `list` 的 key 取樣上限。
+ *
+ * Redis 沒有 catalog 可查，列 key 只能 SCAN；沒有上限時百萬 key 的 keyspace
+ * 會換來上百次往返與十萬筆名稱。數字與 query 的 auto-LIMIT 一致，因為兩者
+ * 回答的是同一個問題：「先看一眼這裡有什麼」。常數留在 adapter 層而不是
+ * `core/limits.ts`，是為了維持 `src/adapters/` 不 import `src/core/` 的分層
+ * （見 ADR 0003 Consequences）。
+ */
+export const REDIS_LIST_KEY_LIMIT = 1000
+
 export class RedisAdapter implements QueryableAdapter {
   private client: RedisClient | null = null
   private blacklistRules: string[] = []
@@ -128,30 +139,38 @@ export class RedisAdapter implements QueryableAdapter {
 
   // --- Discovery & schema (Task 3) ---------------------------------------
 
-  async listCollections(): Promise<{ name: string; documentCount?: number }[]> {
-    const client = this.requireClient()
-    const keys = await scanAllKeys(client, '*', 1000)
-    const rules = this.blacklistRules
-    if (rules.length === 0) return keys.map((name) => ({ name }))
-    const regexes = rules.map((p) => globToRegex(p))
-    return keys.filter((k) => !regexes.some((r) => r.test(k))).map((name) => ({ name }))
+  /**
+   * 列出 key 名稱，帶明確的取樣上限。
+   *
+   * 沒有上限的版本在正式環境的百萬 key keyspace 上會發出上百次 SCAN 並把十萬
+   * 個 key 名稱載進記憶體——而呼叫端要的只是「這裡有些什麼」。上限是取樣的
+   * 一部分，不是意外，所以 truncated 一併回報給呼叫端顯示。
+   */
+  async listCollections(options?: {
+    includeSystem?: boolean
+    limit?: number
+  }): Promise<{ name: string; documentCount?: number }[]> {
+    const { names } = await this.sampleKeyNames(options?.limit ?? REDIS_LIST_KEY_LIMIT)
+    return names.map((name) => ({ name }))
   }
 
   /**
-   * Sample up to `limit` key names for shell tab completion, applying the same
-   * blacklist filtering as listCollections. `truncated` is true when the raw
-   * scan hit the budget (i.e. the keyspace is larger than the sample), which is
-   * derived before blacklist filtering since truncation is a property of the scan.
+   * Sample up to `limit` key names, applying the same blacklist filtering as
+   * listCollections. `truncated` is true when the raw scan hit the budget
+   * (i.e. the keyspace is larger than the sample), which is derived before
+   * blacklist filtering since truncation is a property of the scan.
+   *
+   * 過濾在掃描過程中套用：被擋掉的 key 從來不會進入累積的集合，記憶體用量
+   * 因此由「看得到的 key」決定，而不是由 keyspace 裡有多少敏感 key 決定。
    */
   async sampleKeyNames(limit: number): Promise<{ names: string[]; truncated: boolean }> {
     const client = this.requireClient()
-    const keys = await scanAllKeys(client, '*', limit, limit)
-    const truncated = keys.length >= limit
     const rules = this.blacklistRules
-    if (rules.length === 0) return { names: keys, truncated }
     const regexes = rules.map((p) => globToRegex(p))
-    const names = keys.filter((k) => !regexes.some((r) => r.test(k)))
-    return { names, truncated }
+    const { keys, scanned } = await scanAllKeys(client, '*', limit, limit, (key) =>
+      regexes.every((r) => !r.test(key))
+    )
+    return { names: keys, truncated: scanned >= limit }
   }
 
   async getDbSize(): Promise<number> {
@@ -482,13 +501,21 @@ export function parseRedisCommand(input: string): string[] {
   return tokens
 }
 
+/**
+ * 走 SCAN cursor 直到歸零或掃到上限。
+ *
+ * `accept` 在掃描過程中套用，被拒絕的 key 不進入結果集合但仍計入 `scanned`
+ * ——上限限制的是掃描工作量，不是「使用者看得到幾個 key」。
+ */
 async function scanAllKeys(
   client: RedisClient,
   pattern: string,
   count: number,
-  maxKeys: number = 100_000
-): Promise<string[]> {
+  maxKeys: number,
+  accept: (key: string) => boolean = () => true
+): Promise<{ keys: string[]; scanned: number }> {
   const seen = new Set<string>()
+  const kept = new Set<string>()
   let cursor = '0'
   do {
     const reply = (await client.send('SCAN', [
@@ -499,11 +526,15 @@ async function scanAllKeys(
       String(count),
     ])) as [string, string[]]
     const [next, batch] = reply
-    for (const k of batch) seen.add(k)
+    for (const k of batch) {
+      if (seen.has(k)) continue
+      seen.add(k)
+      if (accept(k)) kept.add(k)
+    }
     cursor = next
     if (seen.size >= maxKeys) break
   } while (cursor !== '0')
-  return Array.from(seen)
+  return { keys: Array.from(kept), scanned: seen.size }
 }
 
 async function readSizeInfo(

@@ -223,7 +223,7 @@ dbcli list --include-system        # Elasticsearch: include `.system` indices
 **Permission:** query-only+
 
 > **MongoDB:** Lists collections with estimated document count.
-> **Redis:** Returns up to 100 000 keys via `SCAN MATCH * COUNT 1000`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
+> **Redis:** Samples the first 1 000 keys scanned via `SCAN MATCH * COUNT 1000`, applying the blacklist during the scan. When the keyspace is larger, table output adds a `Sampled the first 1000 keys scanned` line and JSON output carries `sampled: true` with `sampleLimit`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
 > **Elasticsearch:** Returns indices with `documentCount` from `/_stats/docs`; aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
 
 ### schema

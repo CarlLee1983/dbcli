@@ -1,5 +1,6 @@
 import { mkdir, open, rename, stat, unlink, writeFile } from 'node:fs/promises'
-import { dirname, extname, join } from 'node:path'
+import { dirname } from 'node:path'
+import { configSidecarPath } from './config-sidecar-path'
 
 export type UpdateHintKind = 'update' | 'skill'
 
@@ -26,12 +27,7 @@ export function defaultCliSessionKey(): string {
 }
 
 function statePath(configPath: string): string {
-  // `.dbcli` is the normal directory fallback, even though it has no
-  // extension. Explicit JSON/other extension paths are treated as legacy
-  // config files and keep the sidecar next to the file.
-  const looksLikeFile = extname(configPath) !== '' && !configPath.endsWith('.dbcli')
-  const directory = looksLikeFile ? dirname(configPath) : configPath
-  return join(directory, 'update-hints.json')
+  return configSidecarPath(configPath, 'update-hints.json')
 }
 
 async function withHintStateLock<T>(path: string, work: () => Promise<T>): Promise<T | null> {

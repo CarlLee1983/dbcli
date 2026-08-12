@@ -224,7 +224,7 @@ dbcli list --include-system        # Elasticsearch: include `.system` indices
 
 > **MongoDB:** Lists collections with estimated document count.
 > **Redis:** Samples the first 1 000 keys scanned via `SCAN MATCH * COUNT 1000`, applying the blacklist during the scan. When the keyspace is larger, table output adds a `Sampled the first 1000 keys scanned` line and JSON output carries `sampled: true` with `sampleLimit`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
-> **Elasticsearch:** Returns indices with `documentCount` from `/_stats/docs`; aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
+> **Elasticsearch:** Returns indices with `documentCount` from one `/_cat/indices?h=index,docs.count&expand_wildcards=all` request (open and closed indices alike). The count is primaries-only, so a replicated index no longer reports its replica copies as extra documents. Aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
 
 ### schema
 
@@ -246,8 +246,8 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 **Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`, `--sample-size <n>` (mongo only), `--sample-method <random|natural>` (mongo only)
 **Permission:** query-only+
 
-> **Row counts on a full scan:** scanning every table reports the engine's row
-> *estimate* (`information_schema.TABLES.TABLE_ROWS` on MySQL/MariaDB,
+> **Row counts on a full scan:** scanning every table records
+> `rowCountIsEstimate: true` and reports the engine's row *estimate* (`information_schema.TABLES.TABLE_ROWS` on MySQL/MariaDB,
 > `pg_class.reltuples` on PostgreSQL) rather than running `COUNT(*)` per table —
 > a hundred full-table counts is what made scanning a large database unusable.
 > `dbcli schema <table>` on a single table still reports the exact count. Tables

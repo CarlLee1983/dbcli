@@ -428,6 +428,15 @@ describe('MongoDBAdapter', () => {
       ).rejects.toThrow(/server-side script/i)
     })
 
+    test('update / delete 的 filter 也擋 $where', async () => {
+      await expect(
+        adapter.update('users', { $where: 'this.a > 1' }, { $set: { a: 2 } })
+      ).rejects.toThrow(/server-side script/i)
+      await expect(adapter.delete('users', { $where: 'this.a > 1' })).rejects.toThrow(
+        /server-side script/i
+      )
+    })
+
     test('throws when query is not valid JSON', async () => {
       await expect(adapter.execute('SELECT * FROM users', ['users'])).rejects.toThrow()
     })

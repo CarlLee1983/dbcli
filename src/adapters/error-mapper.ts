@@ -79,6 +79,9 @@ const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
   [/connection refused/i, 'ECONNREFUSED'],
   [/\bECONNREFUSED\b/, 'ECONNREFUSED'],
   [/connect(?:ion)? time(?:d )?out/i, 'ETIMEDOUT'],
+  // pg 的連線池逾時：`timeout exceeded when trying to connect`，沒有 code
+  [/timeout exceeded/i, 'ETIMEDOUT'],
+  [/timed out/i, 'ETIMEDOUT'],
   [/getaddrinfo/i, 'ENOTFOUND'],
   [/authentication failed/i, 'AUTH_FAILED'],
   [/access denied for user/i, 'AUTH_FAILED'],

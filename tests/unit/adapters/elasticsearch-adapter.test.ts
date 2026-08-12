@@ -130,6 +130,8 @@ describe('ElasticsearchAdapter list/schema', () => {
     // 一個請求就夠：舊版還會把整個叢集的 settings 拉回來（#46）
     expect(requestedUrls).toHaveLength(1)
     expect(requestedUrls[0]).toContain('_cat/indices')
+    // cat 預設只列 open index；少了這個參數，關閉中的 index 會從清單消失
+    expect(requestedUrls[0]).toContain('expand_wildcards=all')
 
     const allCollections = await adapter.listCollections({ includeSystem: true })
     expect(allCollections).toHaveLength(2)

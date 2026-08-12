@@ -430,6 +430,9 @@ export class MongoDBAdapter implements QueryableAdapter {
     update: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    // filter 與 update 都可能夾帶 $where / $function（#47：所有路徑一致受檢）
+    assertNoMongoServerSideScript(filter)
+    assertNoMongoServerSideScript(update)
     const result = await db.collection(collection).updateMany(filter, update)
     return {
       rows: [],
@@ -442,6 +445,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     filter: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    assertNoMongoServerSideScript(filter)
     const result = await db.collection(collection).deleteMany(filter)
     return {
       rows: [],

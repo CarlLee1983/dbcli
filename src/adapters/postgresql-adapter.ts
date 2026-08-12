@@ -3,7 +3,13 @@
  * Implements the DatabaseAdapter interface for PostgreSQL connections
  */
 
-import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
+import type {
+  DatabaseAdapter,
+  ConnectionOptions,
+  TableSchema,
+  TableSchemaOptions,
+  ExecutionResult,
+} from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 // 型別匯入在執行期會被抹除；driver 本體改在 connect() 時才載入，這樣查
 // Redis 或 Mongo 的命令不必為了 import 一個用不到的 SQL driver 付啟動成本
@@ -196,10 +202,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(
-    tableName: string,
-    options?: { exactRowCount?: boolean; sampleSize?: number }
-  ): Promise<TableSchema> {
+  async getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema> {
     requireConnected(this.pool)
 
     return withMappedConnectionError('postgresql', this.options, async () => {

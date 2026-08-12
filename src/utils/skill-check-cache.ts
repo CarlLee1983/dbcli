@@ -11,7 +11,8 @@
  */
 
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
-import { dirname, extname, join } from 'node:path'
+import { dirname } from 'node:path'
+import { configSidecarPath } from './config-sidecar-path'
 
 /** 一天。skill 來源只隨 dbcli 版本變動，而版本已經是快取鍵的一部分。 */
 export const SKILL_CHECK_TTL_MS = 24 * 60 * 60 * 1000
@@ -27,11 +28,7 @@ interface SkillCheckCache {
 }
 
 function cachePath(configPath: string): string {
-  // 與 update-hints.json 同一套規則：`.dbcli` 是目錄，帶其他副檔名的是舊式
-  // 單檔設定，快取放在該檔旁邊。
-  const looksLikeFile = extname(configPath) !== '' && !configPath.endsWith('.dbcli')
-  const directory = looksLikeFile ? dirname(configPath) : configPath
-  return join(directory, CACHE_FILE_NAME)
+  return configSidecarPath(configPath, CACHE_FILE_NAME)
 }
 
 /**

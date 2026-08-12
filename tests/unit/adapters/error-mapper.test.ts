@@ -278,3 +278,8 @@ test('mapError: 無 code 時 "authentication failed" 仍判成 AUTH_FAILED', () 
   const error = { message: 'password authentication failed for user "testuser"' }
   expect(mapError(error, 'postgresql', mockOptions).code).toBe('AUTH_FAILED')
 })
+
+test('mapError: pg 連線池的 "timeout exceeded" 沒有 code，仍分類為 ETIMEDOUT', () => {
+  const error = { message: 'timeout exceeded when trying to connect' }
+  expect(mapError(error, 'postgresql', mockOptions).code).toBe('ETIMEDOUT')
+})

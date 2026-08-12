@@ -91,24 +91,30 @@ export class ElasticsearchAdapter implements QueryableAdapter {
    * 用 cat API 一個請求取回兩欄，而不是 `_settings` 加 `_stats/docs` 兩個
    * 請求——前者會把整個叢集每個 index 的完整 settings 拉回來（大叢集上是
    * 幾 MB 的 JSON），只為了取 key 的名字。
+   *
+   * `expand_wildcards=all` 是必要的：cat API 預設只列 open index，而
+   * `_settings` 連 closed 的一起回。少了它，關閉中的 index 會從清單裡消失。
+   * 文件數改為 primaries-only（cat 的定義）；先前的 `_stats` `total` 把
+   * replica 的份也算進去，副本數大於零時會回報成倍數。
    */
   async listCollections(options?: {
     includeSystem?: boolean
   }): Promise<{ name: string; documentCount?: number }[]> {
     const rows = await this.request<{ index?: string; 'docs.count'?: string }[]>(
       'GET',
-      '/_cat/indices?format=json&h=index,docs.count'
+      '/_cat/indices?format=json&h=index,docs.count&expand_wildcards=all'
     )
 
     return (Array.isArray(rows) ? rows : [])
-      .map((row) => row.index)
-      .filter((name): name is string => typeof name === 'string' && name.length > 0)
-      .filter((name) => options?.includeSystem || !name.startsWith('.'))
-      .map((name) => {
-        const row = rows.find((candidate) => candidate.index === name)
+      .filter(
+        (row): row is { index: string; 'docs.count'?: string } =>
+          typeof row.index === 'string' && row.index.length > 0
+      )
+      .filter((row) => options?.includeSystem || !row.index.startsWith('.'))
+      .map((row) => {
         // cat API 回傳字串；關閉中的 index 的 docs.count 是 null
-        const parsed = Number(row?.['docs.count'])
-        return { name, documentCount: Number.isFinite(parsed) ? parsed : 0 }
+        const parsed = Number(row['docs.count'])
+        return { name: row.index, documentCount: Number.isFinite(parsed) ? parsed : 0 }
       })
   }
 

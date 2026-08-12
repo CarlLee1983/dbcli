@@ -191,6 +191,25 @@ export type RedisWarning =
   | { code: 'REDIS_BLACKLIST_FILTERED'; count: number }
 
 /**
+ * `getTableSchema()` 的選項，所有 adapter 共用一份。
+ *
+ * 分開宣告是因為它同時出現在介面、兩個 SQL adapter 與掃描命令四個地方；
+ * 各自就地拼一份 inline 型別時，MongoDB 的 sampleMethod 曾經在 SQL 側被
+ * 悄悄漏掉。
+ */
+export interface TableSchemaOptions {
+  /** MongoDB: 取樣文件數 */
+  sampleSize?: number
+  /** MongoDB: 取樣方式 */
+  sampleMethod?: 'random' | 'natural'
+  /**
+   * 精確列數要掃全表。掃描整個資料庫時設為 false，改用引擎的估計值——
+   * 一百張表的資料庫做不起一百次全表 COUNT。預設 true。
+   */
+  exactRowCount?: boolean
+}
+
+/**
  * Database adapter interface - contract for all database implementations
  * Defines methods that all database adapters must implement
  */
@@ -239,18 +258,7 @@ export interface DatabaseAdapter {
    * @returns Complete table schema including all column details
    * @throws {ConnectionError} If query fails
    */
-  getTableSchema(
-    tableName: string,
-    options?: {
-      sampleSize?: number
-      sampleMethod?: 'random' | 'natural'
-      /**
-       * 精確列數要掃全表。掃描整個資料庫時設為 false，改用引擎的估計值——
-       * 一百張表的資料庫做不起一百次全表 COUNT。預設 true。
-       */
-      exactRowCount?: boolean
-    }
-  ): Promise<TableSchema>
+  getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query

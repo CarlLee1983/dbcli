@@ -6,7 +6,13 @@
 
 // 只留型別；driver 本體在 connect() 時才載入（見 postgresql-adapter 的說明）
 import type mysql from 'mysql2/promise'
-import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
+import type {
+  DatabaseAdapter,
+  ConnectionOptions,
+  TableSchema,
+  TableSchemaOptions,
+  ExecutionResult,
+} from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
@@ -220,10 +226,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(
-    tableName: string,
-    options?: { exactRowCount?: boolean; sampleSize?: number }
-  ): Promise<TableSchema> {
+  async getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema> {
     requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {

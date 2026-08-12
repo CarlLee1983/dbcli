@@ -137,6 +137,36 @@ describe('config binding layout', () => {
     )
   })
 
+  // ── process 內快取（#44） ───────────────────────────────────────────────
+
+  test('同一個 process 內綁定檔只被讀取與驗證一次', async () => {
+    const storagePath = getProjectStoragePath(projectPath)
+    delete process.env.DBCLI_AGENT_MODE
+    await writeProjectBinding(projectPath, storagePath)
+
+    expect(await resolveConfigStoragePath(projectPath)).toBe(storagePath)
+
+    // 檔案在背後被換掉；快取有效時第二次呼叫不該再去碰它。快取若不存在，
+    // 這裡會讀到新的 storagePath 而失敗。
+    const bindingPath = join(projectPath, 'config.json')
+    const binding = await Bun.file(bindingPath).json()
+    binding.binding.storagePath = join(tempDirectory, 'somewhere-else')
+    await Bun.write(bindingPath, JSON.stringify(binding, null, 2))
+
+    expect(await resolveConfigStoragePath(projectPath)).toBe(storagePath)
+  })
+
+  test('寫入綁定後同 process 的後續讀取拿到新值', async () => {
+    delete process.env.DBCLI_AGENT_MODE
+    const firstStorage = getProjectStoragePath(projectPath)
+    await writeProjectBinding(projectPath, firstStorage)
+    expect(await resolveConfigStoragePath(projectPath)).toBe(firstStorage)
+
+    const secondStorage = join(tempDirectory, 'relocated-storage')
+    await writeProjectBinding(projectPath, secondStorage)
+    expect(await resolveConfigStoragePath(projectPath)).toBe(secondStorage)
+  })
+
   test('failed detached-anchor publication preserves the project binding and record', async () => {
     const storagePath = getProjectStoragePath(projectPath)
     delete process.env.DBCLI_AGENT_MODE

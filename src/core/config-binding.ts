@@ -75,7 +75,41 @@ export function getProjectStoragePath(projectPath: string): string {
   return join(getDbcliHomeRoot(), 'projects', `${projectName}-${hash}`)
 }
 
+/**
+ * Process 內的綁定快取。
+ *
+ * 一次 CLI 執行會沿著十幾條路徑問「這個專案綁到哪個 storage」——每次都要讀檔、
+ * 算 SHA-256、比對信任紀錄。同一份檔案在同一個 process 內不會變（唯一的合法
+ * 變更來自我們自己的寫入路徑，那裡會清掉快取），所以第二次之後的成本沒有換到
+ * 任何保證。
+ *
+ * 只快取讀取結果，不在寫入時預先填值：寫完立刻重讀一次的成本微不足道，而讓
+ * 每個未快取的路徑都真的走過完整性驗證，比省那一次 I/O 值得。快取鍵帶上
+ * agent mode，因為它決定驗證的嚴格程度。
+ */
+const _bindingCache = new Map<string, ProjectConfigBinding | null>()
+
+function bindingCacheKey(projectPath: string): string {
+  return `${process.env.DBCLI_AGENT_MODE ?? ''}:${resolve(projectPath)}`
+}
+
+/** 讓 process 內的綁定快取失效（寫入路徑與測試使用） */
+export function invalidateProjectBindingCache(): void {
+  _bindingCache.clear()
+}
+
 export async function readProjectBinding(
+  projectPath: string
+): Promise<ProjectConfigBinding | null> {
+  const cacheKey = bindingCacheKey(projectPath)
+  if (_bindingCache.has(cacheKey)) return _bindingCache.get(cacheKey) ?? null
+
+  const binding = await readProjectBindingUncached(projectPath)
+  _bindingCache.set(cacheKey, binding)
+  return binding
+}
+
+async function readProjectBindingUncached(
   projectPath: string
 ): Promise<ProjectConfigBinding | null> {
   const configFile = Bun.file(join(projectPath, BINDING_FILE_NAME))
@@ -89,6 +123,8 @@ export async function readProjectBinding(
     await assertBindingIntegrity(projectPath, content, { requireRecord: true })
     return raw
   } catch (error) {
+    // 驗證失敗不進快取：下一次呼叫該重新面對同一個錯誤，而不是拿到一個
+    // 「這裡沒有綁定」的偽陰性
     if (error instanceof ConfigError) throw error
     return null
   }
@@ -118,6 +154,7 @@ export async function writeProjectBinding(
   await mkdir(storagePath, { recursive: true })
   const content = JSON.stringify(binding, null, 2)
   await writeBindingWithIntegrity(projectPath, content)
+  invalidateProjectBindingCache()
 
   return binding
 }

@@ -246,6 +246,13 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 **Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`, `--sample-size <n>` (mongo only), `--sample-method <random|natural>` (mongo only)
 **Permission:** query-only+
 
+> **Row counts on a full scan:** scanning every table reports the engine's row
+> *estimate* (`information_schema.TABLES.TABLE_ROWS` on MySQL/MariaDB,
+> `pg_class.reltuples` on PostgreSQL) rather than running `COUNT(*)` per table —
+> a hundred full-table counts is what made scanning a large database unusable.
+> `dbcli schema <table>` on a single table still reports the exact count. Tables
+> are scanned with bounded parallelism (4 at a time).
+
 **Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
 > **PostgreSQL:** Introspection uses the exact `public` catalog identity throughout. Full catalog/schema/table joins prevent a reused constraint name from contaminating another table; enum lookup includes its namespace; composite primary-key order comes from the exact table OID and index ordinality; and row estimates are scoped to the exact `public` relation. Row-count SQL qualifies and quotes both `"public"` and the exact table identifier, escaping embedded quotes so mixed-case or punctuation-bearing names remain distinct and safe.

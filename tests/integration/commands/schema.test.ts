@@ -177,7 +177,67 @@ describe('dbcli schema command', () => {
     ])
 
     expect(calls.length).toBeGreaterThan(0)
-    expect(calls[0]!.options).toEqual({ sampleSize: 200 })
+    // 掃描模式一併關掉精確列數（#49）——每張表一次全表 COUNT 是掃描慢的主因
+    expect(calls[0]!.options).toEqual({ sampleSize: 200, exactRowCount: false })
+
+    adapterSpy.mockRestore()
+  })
+
+  test('全庫掃描不對每張表發全表 COUNT，且輸出內容完整（#49）', async () => {
+    await Bun.write(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          connection: {
+            system: 'postgresql',
+            host: 'localhost',
+            port: 5432,
+            user: 'test',
+            password: 'test',
+            database: 'testdb',
+          },
+          permission: 'read-write',
+          schema: {},
+          metadata: { version: '1.0' },
+        },
+        null,
+        2
+      )
+    )
+
+    const tables = ['users', 'orders', 'products']
+    const seenOptions: unknown[] = []
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      listTables: async () => tables.map((name) => ({ name, columns: [] })),
+      getTableSchema: async (name: string, options?: { exactRowCount?: boolean }) => {
+        seenOptions.push(options)
+        // 精確列數被關掉時，adapter 以估計值填 rowCount
+        return {
+          name,
+          columns: [{ name: 'id', type: 'bigint', nullable: false }],
+          tableType: 'table',
+          rowCount: 1000,
+          estimatedRowCount: 1000,
+          engine: 'PostgreSQL',
+        }
+      },
+    }
+    const adapterSpy = spyOn(AdapterFactory, 'createAdapter').mockReturnValue(adapter as any)
+
+    await schemaCommand.parseAsync(['node', 'schema', '--config', TEST_CONFIG_DIR, '--force'])
+
+    expect(seenOptions).toHaveLength(3)
+    for (const options of seenOptions) {
+      expect((options as { exactRowCount?: boolean }).exactRowCount).toBe(false)
+    }
+
+    const written = JSON.parse(await Bun.file(TEST_CONFIG_PATH).text())
+    expect(Object.keys(written.schema).sort()).toEqual(['orders', 'products', 'users'])
+    expect(written.schema.users.estimatedRowCount).toBe(1000)
+    expect(written.schema.users.columns).toHaveLength(1)
+    expect(written.metadata.schemaTableCount).toBe(3)
 
     adapterSpy.mockRestore()
   })

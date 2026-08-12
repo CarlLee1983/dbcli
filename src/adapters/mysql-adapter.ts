@@ -218,7 +218,10 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(tableName: string): Promise<TableSchema> {
+  async getTableSchema(
+    tableName: string,
+    options?: { exactRowCount?: boolean; sampleSize?: number }
+  ): Promise<TableSchema> {
     requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {
@@ -305,31 +308,30 @@ export class MySQLAdapter implements DatabaseAdapter {
       }>(indexQuery, [tableName])
       const indexResults = indexResult.rows
 
-      // Get row count
-      const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM ${quoteIdentifier(tableName, this.system)}`
-      )
-
-      // Get engine type
-      const tableQuery = `
-        SELECT ENGINE as engine
+      // Engine 與估計列數同源，一次查回來就好——先前是兩趟一模一樣的
+      // information_schema.TABLES 查詢（#49）
+      const tableMetaQuery = `
+        SELECT ENGINE as engine, TABLE_ROWS as estimated_rows
         FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       `
+      const tableMetaResult = await this.execute<{
+        engine: string
+        estimated_rows: number | null
+      }>(tableMetaQuery, [tableName])
+      const tableMeta = tableMetaResult.rows[0]
+      const estimatedRowCount = Math.max(0, tableMeta?.estimated_rows || 0)
 
-      const tableResult = await this.execute<{ engine: string }>(tableQuery, [tableName])
-      const tableResults = tableResult.rows
-
-      // Get estimated row count from information_schema (zero-cost)
-      const estimateQuery = `
-        SELECT TABLE_ROWS as estimated_rows
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
-      `
-      const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
-        tableName,
-      ])
-      const estimateResults = estimateResult.rows
+      // 精確列數要掃全表。掃描模式關掉它——一百張表的資料庫做不起一百次
+      // 全表 COUNT，而掃描要的本來就是概況。
+      const exactRowCount =
+        options?.exactRowCount === false
+          ? undefined
+          : (
+              await this.execute<{ count: number }>(
+                `SELECT COUNT(*) as count FROM ${quoteIdentifier(tableName, this.system)}`
+              )
+            ).rows[0]?.count
 
       const schema: TableSchema = {
         name: tableName,
@@ -344,8 +346,8 @@ export class MySQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: parseEnumValues(col.type),
         })),
-        rowCount: countResult.rows[0]?.count || 0,
-        engine: tableResults[0]?.engine || 'MySQL',
+        rowCount: exactRowCount ?? estimatedRowCount,
+        engine: tableMeta?.engine || 'MySQL',
         primaryKey: primaryKeyColumns,
         foreignKeys: fkResults.map((fk) => ({
           name: fk.name,
@@ -358,7 +360,7 @@ export class MySQLAdapter implements DatabaseAdapter {
           columns: idx.columns.split(',').map((c) => c.trim()),
           unique: idx.is_unique,
         })),
-        estimatedRowCount: estimateResults[0]?.estimated_rows || 0,
+        estimatedRowCount,
       }
 
       return schema

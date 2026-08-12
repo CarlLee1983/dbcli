@@ -241,7 +241,15 @@ export interface DatabaseAdapter {
    */
   getTableSchema(
     tableName: string,
-    options?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
+    options?: {
+      sampleSize?: number
+      sampleMethod?: 'random' | 'natural'
+      /**
+       * 精確列數要掃全表。掃描整個資料庫時設為 false，改用引擎的估計值——
+       * 一百張表的資料庫做不起一百次全表 COUNT。預設 true。
+       */
+      exactRowCount?: boolean
+    }
   ): Promise<TableSchema>
 
   /**

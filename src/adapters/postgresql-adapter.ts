@@ -192,7 +192,10 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(tableName: string): Promise<TableSchema> {
+  async getTableSchema(
+    tableName: string,
+    options?: { exactRowCount?: boolean; sampleSize?: number }
+  ): Promise<TableSchema> {
     requireConnected(this.pool)
 
     return withMappedConnectionError('postgresql', this.options, async () => {
@@ -387,11 +390,17 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const pkResult = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
       const pkResults = pkResult.rows
 
-      // Get row count
+      // 精確列數要掃全表。掃描模式關掉它，改用 pg_class 的估計值——一百張表
+      // 的資料庫做不起一百次全表 COUNT（#49）。
       const qualifiedTableName = `${quoteIdentifier('public', 'postgresql')}.${quoteIdentifier(tableName, 'postgresql')}`
-      const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
-      )
+      const exactRowCount =
+        options?.exactRowCount === false
+          ? undefined
+          : (
+              await this.execute<{ count: number }>(
+                `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
+              )
+            ).rows[0]?.count
 
       // Ensure primaryKey is always an array
       const primaryKeyArray = Array.isArray(pkResults[0]?.columns) ? pkResults[0].columns : []
@@ -419,7 +428,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: enumMap.get(col.name),
         })),
-        rowCount: countResult.rows[0]?.count || 0,
+        rowCount: exactRowCount ?? Math.max(0, estimateResults[0]?.estimated_rows || 0),
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
         foreignKeys: safeForeignKeys,

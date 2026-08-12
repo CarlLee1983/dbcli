@@ -10,6 +10,7 @@ import { requireConnected, withMappedConnectionError } from './sql-adapter-utils
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
+import { resolveTimeoutPolicy, statementTimeoutSql } from './timeout-policy'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -49,8 +50,7 @@ export class MySQLAdapter implements DatabaseAdapter {
   async connect(): Promise<void> {
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
-      // Note: mysql2/promise does not support connectionTimeout in createConnection
-      // Timeout should be configured at query execution level if needed
+      const timeouts = resolveTimeoutPolicy(this.options)
       this.db = await mysql.createConnection({
         host: this.options.host,
         port: this.options.port,
@@ -58,10 +58,21 @@ export class MySQLAdapter implements DatabaseAdapter {
         password: this.options.password || undefined,
         database: this.options.database,
         charset: 'utf8mb4',
+        connectTimeout: timeouts.connectMs,
       })
 
       // Ensure utf8mb4 for information_schema comments
       await this.db.execute('SET NAMES utf8mb4')
+
+      // 語句逾時是 session 級設定；沒有它時 --timeout 對 MySQL 只影響連線，
+      // 慢查詢仍會無限期等下去。伺服器太舊而不認得這個變數時不該讓連線失敗。
+      if (timeouts.statementMs !== undefined) {
+        try {
+          await this.db.query(statementTimeoutSql(this.system, timeouts.statementMs))
+        } catch {
+          // MySQL < 5.7.8 / MariaDB < 10.1 沒有這個 session 變數
+        }
+      }
 
       // Test connection with lightweight query
       await this.testConnection()

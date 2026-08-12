@@ -9,6 +9,7 @@ import { Pool, type PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
+import { resolveTimeoutPolicy } from './timeout-policy'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -35,15 +36,18 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async connect(): Promise<void> {
     await withMappedConnectionError('postgresql', this.options, async () => {
-      // Create connection pool with options
+      // Create connection pool with options.
+      // statement_timeout 只在使用者實際要求時才送——沒要求時交給伺服器預設，
+      // 而不是拿連線逾時的預設值去砍每一句查詢（見 timeout-policy.ts）。
+      const timeouts = resolveTimeoutPolicy(this.options)
       this.pool = new Pool({
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,
         password: this.options.password,
         database: this.options.database,
-        connectionTimeoutMillis: this.options.timeout || 5000,
-        statement_timeout: this.options.timeout || 5000,
+        connectionTimeoutMillis: timeouts.connectMs,
+        ...(timeouts.statementMs !== undefined && { statement_timeout: timeouts.statementMs }),
       })
 
       // Test connection with lightweight query

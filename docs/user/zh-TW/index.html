@@ -195,8 +195,10 @@ dbcli --global status --format json</code></pre>
 dbcli --global use shared
 dbcli --global query "SELECT 1"</code></pre>
             <p>未帶 <code>--global</code> 時，<code>dbcli</code> 仍會解析目前專案的 <code>.dbcli</code> binding。明確指定 scope 可避免在不相關的專案中意外選到全域連線。</p>
-            <p>Root-level <code>--timeout &lt;ms&gt;</code> 可針對單次執行覆寫連線 timeout（整數，100～600000；必須放在指令之前，與 <code>--global</code>、<code>--use</code> 同樣是 root-level flag）。它會覆寫連線設定中的 <code>timeout</code> 欄位；兩者都沒設定時，各 adapter 沿用內建的 5000ms 預設值。這個覆寫只在本次建立連線時套用，不會寫回 <code>config.json</code>；要永久生效請在連線設定裡寫 <code>timeout</code> 欄位。PostgreSQL 會把同一個值同時當作該 session 的 <code>statement_timeout</code>，設太低可能讓長查詢被中斷、且錯誤訊息看起來像連線逾時；Elasticsearch 則是把 timeout 套用在每個 request 上，而不是整條連線一次性生效。當預設值太緊時很實用，例如 MongoDB 跨 VPN 或連 Atlas：</p>
+            <p>Root-level <code>--timeout &lt;ms&gt;</code> 可針對單次執行覆寫連線 timeout（整數，100～600000；必須放在指令之前，與 <code>--global</code>、<code>--use</code> 同樣是 root-level flag）。它會覆寫連線設定中的 <code>timeout</code> 欄位；兩者都沒設定時，各 adapter 沿用內建的 5000ms 預設值。這個覆寫只在本次建立連線時套用，不會寫回 <code>config.json</code>；要永久生效請在連線設定裡寫 <code>timeout</code> 欄位。Elasticsearch 是把 timeout 套用在每個 request 上，而不是整條連線一次性生效。當預設值太緊時很實用，例如 MongoDB 跨 VPN 或連 Atlas：</p>
             <pre><code>dbcli --timeout 20000 --use &lt;conn&gt; list</code></pre>
+            <p>連線逾時與語句逾時是兩個獨立的上限。<code>--timeout</code> 會同時收緊兩者，所以 <code>--timeout 3000</code> 也會中止跑超過 3 秒的 SQL。只想調整「一句查詢能跑多久」時，用 root-level <code>--statement-timeout &lt;ms&gt;</code>（整數，0～3600000；<code>0</code> 表示取消上限）或連線設定的 <code>statementTimeout</code> 欄位。兩者都沒設定時 dbcli 不設語句上限，交給伺服器自己的設定——跑六秒的分析查詢不會再因為連線逾時預設五秒而被砍掉：</p>
+            <pre><code>dbcli --timeout 2000 --statement-timeout 120000 query "SELECT ... FROM big_table"</code></pre>
             <pre><code>dbcli use --list         # 列出所有連線名稱
 dbcli use --list --format json # 不含憑證的 JSON 連線清單
 dbcli use staging        # 切換預設連線
@@ -899,6 +901,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                 <li><code>tls</code>（布林）— 是否啟用 TLS。</li>
                 <li><code>srv</code>（布林，預設 <code>false</code>）— 組出 <code>mongodb+srv://</code> 並透過 DNS SRV 展開 host；啟用時 <code>port</code> 會被忽略。</li>
                 <li><code>timeout</code>（數字，毫秒，100～600000）— 連線 timeout；可用 root-level <code>--timeout &lt;ms&gt;</code> 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與上述其他欄位不同，它不接受 <code>{"$env": "..."}</code> 參照，只接受字面數字。</li>
+                <li><code>statementTimeout</code>（數字，毫秒，0～3600000）— 一句語句能跑多久，與連線 timeout 獨立；可用 root-level <code>--statement-timeout &lt;ms&gt;</code> 覆寫。未設定時退回 <code>timeout</code>，兩者都沒有則交給伺服器自己的設定。<code>0</code> 表示取消上限。與 <code>timeout</code> 一樣只接受字面數字。</li>
             </ul>
             <p><code>--auth-source &lt;db&gt;</code> 已是非互動的 <code>init</code> flag。<code>replicaSet</code> 與 <code>tls</code> 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 <code>.dbcli</code>（與 Elasticsearch 的 <code>caPath</code> / <code>rejectUnauthorized</code> 是同一套模式）。</p>
             <p>若設定同時存在 <code>uri</code> 與逐欄值（<code>host</code> / <code>user</code>），<code>uri</code> 仍會優先，逐欄值一樣被忽略——這點沒變，但 <code>dbcli doctor</code> 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。<code>doctor</code> 也會在 <code>srv: true</code> 又同時指定非預設 <code>port</code> 時發出警告，因為 SRV 記錄自帶埠號。</p>

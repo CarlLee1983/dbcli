@@ -171,3 +171,49 @@ describe('PostgreSQL Adapter Integration Tests', () => {
     expect(true).toBe(true)
   })
 })
+
+// ── 逾時語意（#42） ────────────────────────────────────────────────────────
+
+describe('PostgreSQL statement timeout', () => {
+  beforeAll(async () => {
+    SKIP_TESTS = await shouldSkipTests(validOptions)
+  })
+
+  test('慢查詢在指定的語句逾時內被中止', async () => {
+    if (SKIP_TESTS) return
+
+    const adapter = new PostgreSQLAdapter({ ...validOptions, statementTimeout: 500 })
+    await adapter.connect()
+    try {
+      await expect(adapter.execute('SELECT pg_sleep(3)')).rejects.toThrow()
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test('預設不設語句上限，跑得比連線逾時久的查詢不會被砍', async () => {
+    if (SKIP_TESTS) return
+
+    const adapter = new PostgreSQLAdapter(validOptions)
+    await adapter.connect()
+    try {
+      const result = await adapter.execute('SELECT pg_sleep(6) AS slept')
+      expect(result.rows).toHaveLength(1)
+    } finally {
+      await adapter.disconnect()
+    }
+  }, 30_000)
+
+  test('放寬語句逾時不會連帶放寬連線失敗的偵測時間', async () => {
+    if (SKIP_TESTS) return
+
+    const adapter = new PostgreSQLAdapter({
+      ...unreachableOptions,
+      timeout: 1000,
+      statementTimeout: 120_000,
+    })
+    const started = Date.now()
+    await expect(adapter.connect()).rejects.toBeInstanceOf(ConnectionError)
+    expect(Date.now() - started).toBeLessThan(10_000)
+  }, 30_000)
+})

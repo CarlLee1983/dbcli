@@ -100,13 +100,21 @@ dbcli --global query "SELECT 1"
 Root-level `--timeout <ms>` 可針對單次執行覆寫連線 timeout（整數，100～600000；必須放在指令之前，
 與 `--global`、`--use` 同樣是 root-level flag）。它會覆寫連線設定中的 `timeout` 欄位；兩者都沒設定
 時，各 adapter 沿用內建的 5000ms 預設值。這個覆寫只在本次建立連線時套用，不會寫回 `config.json`；
-要永久生效請在連線設定裡寫 `timeout` 欄位。PostgreSQL 會把同一個值同時當作該 session 的
-`statement_timeout`，設太低可能讓長查詢被中斷、且錯誤訊息看起來像連線逾時；Elasticsearch 則是
-把 timeout 套用在每個 request 上，而不是整條連線一次性生效。當預設值太緊時很實用，例如 MongoDB
-跨 VPN 或連 Atlas：
+要永久生效請在連線設定裡寫 `timeout` 欄位。Elasticsearch 是把 timeout 套用在每個 request 上，
+而不是整條連線一次性生效。當預設值太緊時很實用，例如 MongoDB 跨 VPN 或連 Atlas：
 
 ```bash
 dbcli --timeout 20000 --use <conn> list
+```
+
+連線逾時與語句逾時是兩個獨立的上限。`--timeout` 會同時收緊兩者，所以 `--timeout 3000` 也會中止
+跑超過 3 秒的 SQL。只想調整「一句查詢能跑多久」時，用 root-level `--statement-timeout <ms>`
+（整數，0～3600000；`0` 表示取消上限）或連線設定的 `statementTimeout` 欄位。兩者都沒設定時
+dbcli 不設語句上限，交給伺服器自己的設定——跑六秒的分析查詢不會再因為連線逾時預設五秒而被砍掉：
+
+```bash
+# 連不上要快速失敗，但報表查詢可以跑兩分鐘
+dbcli --timeout 2000 --statement-timeout 120000 query "SELECT ... FROM big_table"
 ```
 
 *   **列出所有連線**：`dbcli use --list`；agent 與 script 可用
@@ -970,6 +978,7 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 | `tls` | 布林 | 是否啟用 TLS。 |
 | `srv` | 布林（預設 `false`） | 組出 `mongodb+srv://` 並透過 DNS SRV 展開 host；啟用時 `port` 會被忽略。 |
 | `timeout` | 數字（毫秒，100～600000） | 連線 timeout；可用 root-level `--timeout <ms>` 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與本表其他欄位不同，它不接受 `{"$env": "..."}` 參照，只接受字面數字。 |
+| `statementTimeout` | 數字（毫秒，0～3600000） | 一句語句能跑多久，與連線 timeout 獨立；可用 root-level `--statement-timeout <ms>` 覆寫。未設定時退回 `timeout`，兩者都沒有則交給伺服器自己的設定。`0` 表示取消上限。與 `timeout` 一樣只接受字面數字。 |
 
 `--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
 

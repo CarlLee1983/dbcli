@@ -103,14 +103,25 @@ Root-level `--timeout <ms>` overrides the connection timeout for one invocation 
 connection config's `timeout` field; without either, adapters fall back to a built-in
 5000ms default. The override applies only when the adapter is created for this
 invocation and is never written back to `config.json` — set the connection's `timeout`
-field instead for a value that persists across runs. On PostgreSQL the same value also
-becomes the session's `statement_timeout`, so a low value can cut off a long-running
-query with an error that looks like a connection timeout; Elasticsearch applies its
-timeout per request rather than once for the whole connection. This is useful when the
-default is too tight, such as a MongoDB connection over a VPN or to Atlas:
+field instead for a value that persists across runs. Elasticsearch applies its timeout
+per request rather than once for the whole connection. This is useful when the default
+is too tight, such as a MongoDB connection over a VPN or to Atlas:
 
 ```bash
 dbcli --timeout 20000 --use <conn> list
+```
+
+Connection time and statement time are two separate limits. `--timeout` caps both, so
+`--timeout 3000` also aborts any SQL statement that runs longer than 3 seconds. To
+change only how long a statement may run, use root-level `--statement-timeout <ms>`
+(integer, 0–3600000; `0` removes the limit) or the connection's `statementTimeout`
+field. Without either, statements are not capped by dbcli — the server's own setting
+applies, and a six-second analytical query is no longer cut off just because the
+connection timeout defaults to five seconds:
+
+```bash
+# fail fast on an unreachable host, but let the report run for two minutes
+dbcli --timeout 2000 --statement-timeout 120000 query "SELECT ... FROM big_table"
 ```
 
 *   **List all connections**: `dbcli use --list`; agents and scripts can use
@@ -1071,6 +1082,7 @@ Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
 | `tls` | boolean | Enable TLS. |
 | `srv` | boolean (default `false`) | Build a `mongodb+srv://` URI and resolve hosts via DNS SRV; `port` is ignored when `true`. |
 | `timeout` | number (ms, 100–600000) | Connection timeout; overridable per invocation with root-level `--timeout <ms>`. Defaults to the adapter's built-in 5000ms when neither is set. Unlike the other fields in this table, it does not accept an `{"$env": "..."}` reference — only a literal number. |
+| `statementTimeout` | number (ms, 0–3600000) | How long one statement may run, independent of the connection timeout; overridable with root-level `--statement-timeout <ms>`. Falls back to `timeout` when unset, and to the server's own setting when neither is given. `0` removes the limit. Literal numbers only, like `timeout`. |
 
 `--auth-source <db>` is available as a non-interactive `init` flag. `replicaSet` and `tls` have no dedicated flag yet — set them through the interactive advanced step, or edit `.dbcli` directly afterward (the same pattern already used for Elasticsearch's `caPath` / `rejectUnauthorized`).
 

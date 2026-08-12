@@ -177,3 +177,37 @@ describe('MySQL Adapter Integration Tests', () => {
     }
   })
 })
+
+// ── 逾時語意（#42） ────────────────────────────────────────────────────────
+
+describe('MySQL statement timeout', () => {
+  beforeAll(async () => {
+    SKIP_TESTS = await shouldSkipTests(validOptions)
+  })
+
+  test('--timeout 讓慢查詢在指定時間內被中止', async () => {
+    if (SKIP_TESTS) return
+
+    // MySQL 的 max_execution_time 只約束 SELECT，這裡刻意用 SELECT SLEEP。
+    const adapter = new MySQLAdapter({ ...validOptions, statementTimeout: 500 })
+    await adapter.connect()
+    try {
+      await expect(adapter.execute('SELECT SLEEP(3)')).rejects.toThrow()
+    } finally {
+      await adapter.disconnect()
+    }
+  }, 30_000)
+
+  test('預設不設語句上限，跑得比連線逾時久的查詢不會被砍', async () => {
+    if (SKIP_TESTS) return
+
+    const adapter = new MySQLAdapter(validOptions)
+    await adapter.connect()
+    try {
+      const result = await adapter.execute<{ slept: number }>('SELECT SLEEP(6) AS slept')
+      expect(result.rows).toHaveLength(1)
+    } finally {
+      await adapter.disconnect()
+    }
+  }, 30_000)
+})

@@ -83,13 +83,16 @@ command-level option is only valid after the command that declares it.
 | `--global` | Select the user-global registry at `~/.config/dbcli/config.json` instead of the current project's `.dbcli` config. Place it before the command path. |
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
 | `--timeout <ms>` | Connection timeout in milliseconds (integer, 100–600000), overriding the connection config's `timeout` field for this invocation. Applies to every engine adapter. Without either the flag or the config field, adapters fall back to their built-in 5000ms default. |
+| `--statement-timeout <ms>` | How long a single statement may run, in milliseconds (integer, 0–3600000; `0` removes the limit), overriding the connection config's `statementTimeout` field. Independent of the connection timeout — raising it does not slow down detection of an unreachable host. Falls back to `--timeout` when unset, and to the server's own setting when neither is given. |
 
 `--timeout` is applied only when the adapter is constructed for this invocation — it is
 never written back to `config.json`. Set the connection's `timeout` field instead for a
-value that persists across runs. On PostgreSQL, the same value is also used as the
-session's `statement_timeout` (not just the connection timeout), so a low value can cut
-off a long-running query with an error that looks like a connection timeout; the 100ms
-floor exists specifically to keep that failure mode from being too easy to trigger.
+value that persists across runs. `--timeout` caps statement time as well as connection time, so a
+low value cuts off a long-running query with an error that reads like a connection
+problem; the 100ms floor exists specifically to keep that failure mode from being too
+easy to trigger. Use `--statement-timeout` when only the statement limit should change.
+With neither flag, dbcli sets no statement limit at all — the server's setting decides,
+so a query that runs longer than the connection timeout is no longer cut off.
 Elasticsearch applies its timeout per request rather than once for the whole connection.
 The `timeout` field itself always takes a literal number — unlike other connection
 fields, it does not accept an `{"$env": "..."}` reference.

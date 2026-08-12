@@ -43,6 +43,12 @@ export interface ConnectionOptions {
   srv?: boolean
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
+  /**
+   * Statement timeout in milliseconds. Falls back to `timeout` when unset, and
+   * to the server default when neither is given — an unset statement timeout
+   * means the server decides, not that 5000ms applies. 0 removes the limit.
+   */
+  statementTimeout?: number
   /** Elasticsearch protocol (http or https) */
   protocol?: 'http' | 'https'
   /** Elasticsearch nodes for round-robin (optional) */

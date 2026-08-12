@@ -605,4 +605,4 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 - Blacklisted tables and columns are redacted from query output.
 - `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in [reference.md](reference.md#schema).
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
-- **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `--timeout <ms>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.
+- **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `--timeout <ms>`, `--statement-timeout <ms>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

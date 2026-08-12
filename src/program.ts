@@ -50,8 +50,11 @@ import {
 import { printLocalizedCliError } from './utils/cli-error'
 import {
   parseTimeoutOption,
+  parseStatementTimeoutOption,
   MIN_CONNECTION_TIMEOUT_MS,
   MAX_CONNECTION_TIMEOUT_MS,
+  MIN_STATEMENT_TIMEOUT_MS,
+  MAX_STATEMENT_TIMEOUT_MS,
 } from './utils/validation'
 import { parseSlowQueryThreshold } from './core/slow-query-advisory'
 import pkg from '../package.json'
@@ -66,6 +69,16 @@ function parseConnectionTimeout(value: string): number {
   } catch {
     throw new InvalidArgumentError(
       `must be an integer between ${MIN_CONNECTION_TIMEOUT_MS} and ${MAX_CONNECTION_TIMEOUT_MS} milliseconds`
+    )
+  }
+}
+
+function parseStatementTimeout(value: string): number {
+  try {
+    return parseStatementTimeoutOption(value)
+  } catch {
+    throw new InvalidArgumentError(
+      `must be an integer between ${MIN_STATEMENT_TIMEOUT_MS} and ${MAX_STATEMENT_TIMEOUT_MS} milliseconds (0 removes the limit)`
     )
   }
 }
@@ -147,8 +160,13 @@ export function buildProgram(): Command {
     .option('--global', 'Use the user-global connection registry (~/.config/dbcli)', false)
     .option(
       '--timeout <ms>',
-      'Connection timeout in milliseconds (overrides the connection config; default 5000)',
+      'Connection timeout in milliseconds; also caps statement time unless --statement-timeout is given (default 5000)',
       parseConnectionTimeout
+    )
+    .option(
+      '--statement-timeout <ms>',
+      'Statement timeout in milliseconds, independent of the connection timeout (0 removes the limit; default: server setting)',
+      parseStatementTimeout
     )
     .addOption(createConnectionSelectorOption())
     // Required so options after a sub-subcommand (e.g. `dbcli proxy analyze --events ...`)

@@ -207,3 +207,74 @@ test('mapError: PostgreSQL undefined_column (42703) → COLUMN_NOT_FOUND', () =>
   expect(result.code).toBe('COLUMN_NOT_FOUND')
   expect(result.message).toContain('usr_id')
 })
+
+// ── code 優先於字串（#40） ─────────────────────────────────────────────────
+
+test('mapError: 帶 code 的錯誤不因訊息含 "user" 被判成認證失敗', () => {
+  const error = {
+    code: '23505',
+    message: 'duplicate key value violates unique constraint "users_email_key"',
+  }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).not.toBe('AUTH_FAILED')
+  expect(result.message).toContain('users_email_key')
+})
+
+test('mapError: 帶 errno 的 MySQL 重複鍵錯誤不被判成認證失敗', () => {
+  const error = {
+    code: 'ER_DUP_ENTRY',
+    errno: 1062,
+    message: "Duplicate entry 'a@b.c' for key 'users.email'",
+  }
+  const result = mapError(error, 'mariadb', { ...mockOptions, system: 'mariadb' })
+  expect(result.code).not.toBe('AUTH_FAILED')
+  expect(result.message).toContain('Duplicate entry')
+})
+
+test('mapError: 表名含 "user" 的 undefined_table 仍分類為 TABLE_NOT_FOUND', () => {
+  const error = { code: '42P01', message: 'relation "user_sessions" does not exist' }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).toBe('TABLE_NOT_FOUND')
+  expect(result.message).toContain('user_sessions')
+})
+
+test('mapError: 未知 code 的伺服器錯誤不套用連線疑難排解提示', () => {
+  const error = { code: '42501', message: 'permission denied for table users' }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).toBe('UNKNOWN')
+  expect(result.message).toContain('permission denied for table users')
+  expect(result.message).not.toContain('Connection failed')
+  expect(result.hints.join(' ')).not.toContain('host=')
+})
+
+test('mapError: PostgreSQL invalid_password (28P01) → AUTH_FAILED', () => {
+  const error = { code: '28P01', message: 'password authentication failed for user "testuser"' }
+  expect(mapError(error, 'postgresql', mockOptions).code).toBe('AUTH_FAILED')
+})
+
+test('mapError: MySQL ER_ACCESS_DENIED_ERROR (1045) → AUTH_FAILED', () => {
+  const error = {
+    code: 'ER_ACCESS_DENIED_ERROR',
+    errno: 1045,
+    message: "Access denied for user 'root'@'localhost'",
+  }
+  expect(mapError(error, 'mysql', { ...mockOptions, system: 'mysql' }).code).toBe('AUTH_FAILED')
+})
+
+test('mapError: 訊息含 "timeout" 但帶查詢 code 時不被判成連線逾時', () => {
+  const error = { code: '57014', message: 'canceling statement due to statement timeout' }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).not.toBe('ECONNREFUSED')
+  expect(result.message).toContain('statement timeout')
+})
+
+test('mapError: 無 code 時字串後備需完整詞組，"user" 不足以判成認證失敗', () => {
+  const error = { message: 'unexpected end of user-defined function stream' }
+  const result = mapError(error, 'postgresql', mockOptions)
+  expect(result.code).toBe('UNKNOWN')
+})
+
+test('mapError: 無 code 時 "authentication failed" 仍判成 AUTH_FAILED', () => {
+  const error = { message: 'password authentication failed for user "testuser"' }
+  expect(mapError(error, 'postgresql', mockOptions).code).toBe('AUTH_FAILED')
+})

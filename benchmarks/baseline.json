@@ -1,38 +1,44 @@
 {
-  "version": "1.0.0",
-  "date": "2026-03-26",
+  "version": "1.1.0",
+  "date": "2026-08-12",
   "platform": "macos",
-  "node_version": "20.10.0",
-  "bun_version": "1.3.3",
+  "hardware": "MacBook Air M4 (arm64)",
+  "node_version": "22.17.1",
+  "bun_version": "1.3.10",
+  "dbcli_version": "1.53.0",
+  "method": "median of 5 samples after a discarded warm-up (tests/perf/*.bench.ts)",
   "benchmarks": {
     "cli_startup_help": {
-      "mean_ms": 95,
-      "min_ms": 92,
-      "max_ms": 105,
+      "mean_ms": 120,
+      "min_ms": 119,
+      "max_ms": 124,
       "target_ms": 200,
       "status": "PASS"
     },
     "cli_startup_version": {
-      "mean_ms": 85,
-      "min_ms": 82,
-      "max_ms": 98,
+      "mean_ms": 8,
+      "min_ms": 7,
+      "max_ms": 8,
       "target_ms": 100,
-      "status": "PASS"
+      "status": "PASS",
+      "notes": "--version 走 src/cli.ts 的 fast path，不載入 cli-runtime"
     },
     "query_execution_json": {
-      "mean_ms": 35,
-      "min_ms": 32,
-      "max_ms": 42,
-      "target_ms": 50,
-      "status": "PASS"
+      "mean_ms": 123,
+      "min_ms": 123,
+      "max_ms": 126,
+      "target_ms": 800,
+      "status": "PASS",
+      "workload": "redis PING via query --format json (localhost)"
     },
     "query_execution_table": {
-      "mean_ms": 38,
-      "min_ms": 35,
-      "max_ms": 45,
-      "target_ms": 50,
-      "status": "PASS"
+      "mean_ms": 126,
+      "min_ms": 123,
+      "max_ms": 128,
+      "target_ms": 800,
+      "status": "PASS",
+      "workload": "redis PING via query (localhost)"
     }
   },
-  "notes": "Initial baseline established. Targets: startup < 200ms (macOS/Linux) / < 300ms (Windows), query < 50ms"
+  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。"
 }

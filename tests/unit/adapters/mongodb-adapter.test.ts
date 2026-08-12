@@ -409,6 +409,25 @@ describe('MongoDBAdapter', () => {
       expect(result.rows).toEqual([{ _id: 'NYC', count: 5 }])
     })
 
+    // ── server-side script 攔截（#47） ───────────────────────────────────
+
+    test('主查詢路徑的 $where 被攔截，且沒有送出查詢', async () => {
+      await expect(adapter.execute('{"$where": "this.a > 1"}', ['users'])).rejects.toThrow(
+        /server-side script/i
+      )
+      const client = (adapter as any).client as MockMongoClient
+      expect(client.findCalls).toHaveLength(0)
+    })
+
+    test('pipeline 裡的 $function 同樣被攔截', async () => {
+      await expect(
+        adapter.execute(
+          '[{"$set":{"x":{"$function":{"body":"function(){}","args":[],"lang":"js"}}}}]',
+          ['users']
+        )
+      ).rejects.toThrow(/server-side script/i)
+    })
+
     test('throws when query is not valid JSON', async () => {
       await expect(adapter.execute('SELECT * FROM users', ['users'])).rejects.toThrow()
     })

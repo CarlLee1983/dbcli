@@ -289,6 +289,12 @@ dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdou
 **Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
 
+> **Server-side scripts are rejected on every path.** MongoDB `$where`,
+> `$function`, and `$accumulator`, and Elasticsearch `script` / `script_fields`,
+> execute code on the database server. The adapters reject them anywhere in a
+> filter, pipeline, or DSL body — before the request is sent — so `query`, `q`,
+> saved snippets, and DML planning all behave the same way.
+
 #### Passive slow-query hint (`--slow-ms`)
 
 `query` and `q` read the execution time they already measured for a finished

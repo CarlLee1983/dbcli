@@ -1,6 +1,7 @@
 import type { MongoClient as MongoClientType, Db } from 'mongodb'
 import { resolveSrv, resolveTxt } from 'node:dns/promises'
 import { ConnectionError } from './types'
+import { assertNoMongoServerSideScript } from './server-side-script'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
 type MongoClientConstructor = new (uri: string, opts?: object) => MongoClientType
@@ -295,6 +296,9 @@ export class MongoDBAdapter implements QueryableAdapter {
     } catch {
       throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
     }
+
+    // 所有呼叫路徑共用的攔截點（#47）：$where 等於在資料庫上跑任意 JS
+    assertNoMongoServerSideScript(parsed)
 
     const limit = options?.limit
     let docs: T[]

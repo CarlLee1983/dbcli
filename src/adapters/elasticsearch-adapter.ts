@@ -1,6 +1,7 @@
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
 import { encodeEsIndexExpression, encodeEsPathSegment } from './identifier-quote'
+import { assertNoElasticsearchScript } from './server-side-script'
 
 export class ElasticsearchAdapter implements QueryableAdapter {
   private options: ConnectionOptions
@@ -47,6 +48,8 @@ export class ElasticsearchAdapter implements QueryableAdapter {
 
     if (isDsl) {
       body = JSON.parse(query)
+      // 所有呼叫路徑共用的攔截點（#47）：script 等於在叢集上跑程式碼
+      assertNoElasticsearchScript(body)
       if (body.size === undefined) {
         body.size = limit
       }

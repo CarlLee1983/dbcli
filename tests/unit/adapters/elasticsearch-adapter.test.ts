@@ -408,3 +408,41 @@ describe('ElasticsearchAdapter URL 路徑編碼', () => {
     expect(paths[0]?.path).toBe('/logs-a,logs-b/_search')
   })
 })
+
+// ── server-side script 攔截（#47） ─────────────────────────────────────────
+
+describe('ElasticsearchAdapter server-side script guard', () => {
+  function adapter(): ElasticsearchAdapter {
+    return new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+  }
+
+  test('主查詢路徑的 script 被攔截，且沒有送出任何請求', async () => {
+    const es = adapter()
+    let requested = false
+    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => {
+      requested = true
+      return { hits: { hits: [] } }
+    }
+
+    await expect(
+      es.execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
+    ).rejects.toThrow(/server-side script/i)
+    expect(requested).toBe(false)
+  })
+
+  test('一般 DSL 照常執行', async () => {
+    const es = adapter()
+    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => ({
+      hits: { hits: [] },
+    })
+    await expect(es.execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+  })
+})

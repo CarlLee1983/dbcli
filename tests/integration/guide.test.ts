@@ -143,10 +143,18 @@ describe('dbcli guide (CLI)', () => {
 
   test('NEVER leaks host / port / password into stdout', async () => {
     const { stdout } = await run(['guide', 'slow-query', '--format', 'json'])
-    expect(stdout).not.toContain('localhost')
-    expect(stdout).not.toContain('5432')
-    expect(stdout).not.toContain('"password"')
-    expect(stdout).not.toContain('"host"')
+
+    // 隨機 id 會與短數字字串相撞：一個 audit entry 的 UUID 曾經長成
+    // `b3698420-5432-4674-…`，讓「輸出不含 5432」在 CI 上偶發紅燈。所以
+    // 先把明確非機密的隨機欄位剝掉，再對其餘內容做子字串檢查。
+    const payload = JSON.parse(stdout)
+    for (const entry of payload.audit_recent ?? []) delete entry.id
+    const scrubbed = JSON.stringify(payload)
+
+    expect(scrubbed).not.toContain('localhost')
+    expect(scrubbed).not.toContain('5432')
+    expect(scrubbed).not.toContain('"password"')
+    expect(scrubbed).not.toContain('"host"')
   })
 
   test('no-config workspace exits 0 with dbcli-init bootstrap plan', async () => {

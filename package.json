@@ -10,7 +10,6 @@
     "dbcli": "./dist/cli.mjs"
   },
   "exports": {
-    ".": "./dist/cli.mjs",
     "./core": {
       "types": "./dist/core.d.ts",
       "import": "./dist/core.mjs"

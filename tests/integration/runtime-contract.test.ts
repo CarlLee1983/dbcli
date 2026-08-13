@@ -127,3 +127,40 @@ test.skipIf(process.platform === 'win32' || !NODE_BIN_DIR)(
 test('dist/agent-core.mjs stays importable under Node', () => {
   expect(importUnderNode('agent-core.mjs')).toBe('')
 })
+
+/** Every `exports` target, flattened across condition objects. */
+function exportTargets(): string[] {
+  const entries = Object.values(pkg.exports as Record<string, unknown>)
+  return entries.flatMap((entry) =>
+    typeof entry === 'string' ? [entry] : Object.values(entry as Record<string, string>)
+  )
+}
+
+test('no exports target is the CLI bundle', () => {
+  // `.` used to point at dist/cli.mjs, which runs the CLI against the host's argv the
+  // moment it is imported (see the positive control below). `bin` does not go through
+  // `exports`, so the executable is unaffected by its absence.
+  const binTarget = (pkg.bin as Record<string, string>).dbcli
+  expect(exportTargets()).not.toContain(binTarget)
+  expect(pkg.exports as Record<string, unknown>).not.toHaveProperty('.')
+})
+
+test('importing the CLI bundle still executes the CLI — which is why it is not exported', () => {
+  // Positive control for the reason above. `src/cli-runtime.ts` calls outputHelp() and
+  // parseAsync(process.argv) at module top level, so an import never returns a module.
+  // If this ever stops being true, the hazard is gone and re-exporting `.` can be
+  // reconsidered — the test failing is the prompt to make that call deliberately.
+  const bundle = pathToFileURL(join(ROOT, 'dist', 'cli.mjs')).href
+  const result = spawnSync(
+    'bun',
+    ['-e', `await import(${JSON.stringify(bundle)}); console.log('IMPORT_RETURNED')`],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      timeout: NODE_SPAWN_TIMEOUT_MS,
+      env: { ...process.env, NO_COLOR: '1' },
+    }
+  )
+  expect(result.stdout).not.toContain('IMPORT_RETURNED')
+  expect(result.stdout).toContain('Usage: dbcli')
+})

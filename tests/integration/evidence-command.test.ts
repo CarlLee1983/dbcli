@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { buildEvidenceReceipt } from '@/core/evidence-receipt'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
@@ -170,7 +170,7 @@ describe('dbcli evidence (CLI)', () => {
 
     expect(compose.code).toBe(0)
     const composed = JSON.parse(compose.stdout)
-    expect(composed.path).toEndWith('/.dbcli/evidence/pack.json')
+    expect(composed.path).toEndWith(`${sep}.dbcli${sep}evidence${sep}pack.json`)
 
     const persisted = await Bun.file(join(work, '.dbcli/evidence/pack.json')).json()
     expect(JSON.stringify(persisted)).not.toContain('sensitive_users')

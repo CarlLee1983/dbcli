@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import {
   buildEvidenceReceipt,
   canonicalizeEvidenceReceiptCommand,
@@ -87,7 +87,7 @@ describe('evidence receipt', () => {
         verdict: { pass: true, checks: [{ pass: true }] },
       })
       const path = await writeEvidenceReceipt(workspace, 'evidence/assert.json', receipt)
-      expect(path).toEndWith('/evidence/assert.json')
+      expect(path).toEndWith(`${sep}evidence${sep}assert.json`)
       await expect(
         writeEvidenceReceipt(workspace, 'evidence/assert.json', receipt)
       ).rejects.toThrow('already exists')

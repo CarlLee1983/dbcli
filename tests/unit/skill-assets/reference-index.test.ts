@@ -21,7 +21,7 @@ const source = await Bun.file('assets/reference.md').text()
 function headingAnchors(markdown: string): Set<string> {
   const anchors = new Set<string>()
   let inFence = false
-  for (const line of markdown.split('\n')) {
+  for (const line of markdown.split(/\r?\n/)) {
     if (/^```/.test(line)) {
       inFence = !inFence
       continue

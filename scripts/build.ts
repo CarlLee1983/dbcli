@@ -31,7 +31,7 @@ const artifacts = [
 ]
 
 // 1. Bundle the full runtime separately so `dbcli --version` does not parse it.
-await $`bun build ./src/cli-runtime.ts --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
+await $`bun build ./src/cli-runtime.ts --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser`
 
 // Keep the launcher's dynamic runtime path external. In source it resolves to
 // cli-runtime.ts; beside the built launcher Bun resolves cli-runtime.mjs.
@@ -49,7 +49,7 @@ if (process.platform !== 'win32') {
 
 // 3b. Bundle core library (no shebang) for the `./core` subpath export.
 //     Same externals as the CLI so native drivers stay peer-resolved.
-await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open`
+await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser`
 
 // 3c. Generate a single flat declaration file for the `./core` subpath.
 //     Requires devDep @types/pg: dts-bundle-generator resolves pg types reachable via AdapterFactory.

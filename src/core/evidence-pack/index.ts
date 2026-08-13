@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
-import { Parser } from 'node-sql-parser'
+import { sqlParser } from '@/core/sql-parser'
 
 export const EVIDENCE_PACK_VERSION = 1 as const
 
@@ -12,7 +12,6 @@ const MAX_REFERENCES = 100
 const MAX_TEXT_LENGTH = 2_000
 const MAX_ID_LENGTH = 160
 const MARKDOWN_ESCAPE_CHARACTERS = new Set('\\`*_{}[]<>()#+!|')
-const SQL_PARSER = new Parser()
 const SQL_FRAGMENT =
   /(?:^|\s)(?:select\s+.+\s+from|insert\s+into|update\s+\S+\s+set|delete\s+from|alter\s+(?:table|index)|create\s+(?:table|index)|drop\s+(?:table|index)|truncate\s+table|merge\s+into|grant\s+.+\s+on|revoke\s+.+\s+on|from\s+\S+\s+where)\b/i
 const UNPARSED_SQL_PREFIX =
@@ -138,7 +137,7 @@ function claimText(value: unknown): string {
 
 function containsRawSql(value: string): boolean {
   try {
-    SQL_PARSER.astify(value)
+    sqlParser().astify(value)
     return true
   } catch {
     return (

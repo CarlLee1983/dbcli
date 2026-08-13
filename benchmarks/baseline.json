@@ -9,20 +9,21 @@
   "method": "median of 5 samples after a discarded warm-up (tests/perf/*.bench.ts)",
   "benchmarks": {
     "cli_startup_help": {
-      "mean_ms": 106,
-      "min_ms": 105,
-      "max_ms": 107,
+      "mean_ms": 98,
+      "min_ms": 97,
+      "max_ms": 99,
+      "before_ms": 176,
       "target_ms": 200,
       "status": "PASS",
-      "notes": "2026-08-13 #48：pg 與 mysql2 改為 connect() 時才載入，help 自 120ms 降到 106ms"
+      "notes": "2026-08-13 #48：node-sql-parser 改為延後載入並自 bundle 外部化，--help 176ms → 98ms（同一台機器同一時段內先後量測；dist bundle 6.85MB → 2.58MB）。先前紀錄的 120ms / 106ms 是另一個機器狀態下的數字，不與這組對照"
     },
     "cli_startup_version": {
-      "mean_ms": 8,
-      "min_ms": 7,
-      "max_ms": 8,
+      "mean_ms": 13,
+      "min_ms": 13,
+      "max_ms": 14,
       "target_ms": 100,
       "status": "PASS",
-      "notes": "--version 走 src/cli.ts 的 fast path，不載入 cli-runtime"
+      "notes": "--version 走 src/cli.ts 的 fast path，不載入 cli-runtime。13ms 與 #48 前相同——它本來就沒付 parser 的成本"
     },
     "query_execution_json": {
       "mean_ms": 123,
@@ -96,5 +97,5 @@
       "notes": "#44：綁定檔的讀取＋SHA-256 驗證次數由每次執行 2–6 次降為 1 次。牆鐘時間量不到差異（blacklist list 對 bound project，有無快取 median 都是 450ms）——單檔約 250 bytes，本機 SSD 上一次讀取遠低於量測噪音。快取的價值是「一次執行內只驗證一次」這條可檢查的性質，不是省時間"
     }
   },
-  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。 2026-08-13 補量測（docker-compose.test.yml，OrbStack）：#49 的掃描與 #43 的查詢延遲改以真實 PostgreSQL 對照前後版本，數據見上；掃描與查詢均以 `bun run src/cli.ts` 直接執行，兩側同法。 2026-08-13 再補 #44 / #45 / #46 的量測；#46 的 Redis 需另起 6380 埠的容器，因為主機本身已有 redis-server 佔用 6379。"
+  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。 2026-08-13 補量測（docker-compose.test.yml，OrbStack）：#49 的掃描與 #43 的查詢延遲改以真實 PostgreSQL 對照前後版本，數據見上；掃描與查詢均以 `bun run src/cli.ts` 直接執行，兩側同法。 2026-08-13 再補 #44 / #45 / #46 的量測；#46 的 Redis 需另起 6380 埠的容器，因為主機本身已有 redis-server 佔用 6379。 啟動預算維持 200ms 而非收緊：機器有負載時（例如同時跑著測試用容器）實測會落在 170ms 上下，收到 150ms 會在 CI 上晃。"
 }

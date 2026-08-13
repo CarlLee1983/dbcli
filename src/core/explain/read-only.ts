@@ -1,7 +1,5 @@
-import { Parser } from 'node-sql-parser'
 import type { SqlDatabaseSystem } from '@/adapters/types'
-
-const parser = new Parser()
+import { sqlParser } from '@/core/sql-parser'
 
 const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
@@ -56,7 +54,7 @@ function containsAnalyzeUnsafeNode(node: unknown): boolean {
 export function isProvenReadOnlySql(sql: string, system: SqlDatabaseSystem): boolean {
   let ast: unknown
   try {
-    ast = parser.astify(sql, { database: DIALECT[system] })
+    ast = sqlParser().astify(sql, { database: DIALECT[system] })
   } catch {
     return false
   }

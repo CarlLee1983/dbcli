@@ -3,7 +3,6 @@
  * CREATE [UNIQUE] INDEX are consumed; unsupported or malformed statements
  * are retained as blocked entries instead of being guessed.
  */
-import { Parser } from 'node-sql-parser'
 import type { SqlDatabaseSystem } from '@/adapters/types'
 import type {
   NormalizedSchema,
@@ -18,6 +17,7 @@ import {
   resolveTableIdentifier,
   tableIdentityKey,
 } from '@/core/orm-drift/table-identity'
+import { sqlParser } from '@/core/sql-parser'
 
 const DIALECT: Record<SqlDatabaseSystem, string> = {
   mysql: 'MySQL',
@@ -25,7 +25,6 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
 }
 
-const parser = new Parser()
 type Ast = Record<string, unknown>
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string }
 
@@ -67,7 +66,7 @@ function parseDdlDocuments(
     for (const statement of splitSqlStatements(sql)) {
       let ast: unknown
       try {
-        ast = parser.astify(statement, { database: DIALECT[system] })
+        ast = sqlParser().astify(statement, { database: DIALECT[system] })
       } catch (error) {
         context.unparsed.push({
           location: statement.slice(0, 60),

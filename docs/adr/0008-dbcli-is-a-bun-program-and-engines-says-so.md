@@ -9,7 +9,9 @@ date: 2026-08-13
 from the first release. Measured on Node v22.17.1 against the `v1.54.1` `dist/`, none of
 that was true except for one entry point:
 
-- `node dist/cli.mjs` throws `ERR_MODULE_NOT_FOUND` before running any code.
+- `node dist/cli.mjs` throws `ERR_MODULE_NOT_FOUND` as soon as the launcher reaches its
+  dynamic import — before any command runs, including `--version` on Node 22, where
+  `import.meta.main` is `undefined` and the fast path is skipped.
   `src/cli.ts:19` keeps the runtime path as a non-literal `'./cli-runtime'` so Bun's
   bundler does not inline the heavy runtime into the `--version` launcher
   (`scripts/build.ts:41-43`). Bun's resolver appends `.mjs`; Node's ESM resolver requires
@@ -18,7 +20,7 @@ that was true except for one entry point:
   The bundle holds 30 Bun global references (`Bun.file` ×22, `Bun.write` ×5, `Bun.env`
   ×2, `Bun.spawn`); `dist/cli-runtime.mjs` holds 143, including `Bun.Glob`, `Bun.stdin`,
   `Bun.listen` and `Bun.connect`.
-- `scripts/build.ts:46` writes `#!/usr/bin/env bun` into the `bin` target, so even a
+- `scripts/build.ts:47` writes `#!/usr/bin/env bun` into the `bin` target, so even a
   fixed bundle would need Bun on `PATH` after `npm install -g`.
 - `dist/cli.mjs`'s `--version` fast path branches on `import.meta.main`, which is
   `undefined` before Node 24.
@@ -31,7 +33,7 @@ that was true except for one entry point:
 published entry point Node can import, and the docs say exactly that.
 
 The alternative — making the bundles Node-resolvable — was rejected on cost. It means
-switching to `--target node`, replacing 173 Bun API call sites with `node:` equivalents
+switching to `--target node`, replacing the ~169 `Bun.*` call sites in `src/` with `node:` equivalents
 and a glob dependency, resolving the launcher's runtime path through
 `new URL('./cli-runtime.mjs', import.meta.url)`, replacing `import.meta.main`, and adding
 a Node runtime e2e suite to CI. That buys a second runtime to maintain forever, for a

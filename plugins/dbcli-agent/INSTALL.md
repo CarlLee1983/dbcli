@@ -203,10 +203,10 @@ The installer requires Bun:
 bun install -g @carllee1983/dbcli
 ```
 
-If Bun is unavailable but npm exists, it still fetches the package with
-`npm install -g @carllee1983/dbcli` and then exits non-zero: the installed executable
-starts with `#!/usr/bin/env bun`, so without Bun on `PATH` it cannot run. Install Bun
-first with `curl -fsSL https://bun.sh/install | bash`.
+If Bun is not on `PATH` the script refuses and exits non-zero rather than installing
+through npm: the executable starts with `#!/usr/bin/env bun`, so an npm-only machine would
+end up with a `dbcli` that cannot start. Install Bun first with
+`curl -fsSL https://bun.sh/install | bash`.
 
 ## Verify Installation
 

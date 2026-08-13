@@ -1218,9 +1218,11 @@ dbcli skill --install cursor
 
 ### 各平台設定
 
+以下所有流程都假設 `PATH` 上有 Bun 1.3.3+：無論用哪個套件管理器安裝，`dbcli` 執行檔都以 Bun 執行。
+
 #### Claude Code（Anthropic）
 
-1. 全域安裝 dbcli：`npm install -g @carllee1983/dbcli`
+1. 全域安裝 dbcli：`bun install -g @carllee1983/dbcli`
 2. 初始化：`dbcli init`（選擇權限等級）
 3. 安裝 skill：`dbcli skill --install claude`
 4. 重新啟動 Claude Code 擴充
@@ -1232,7 +1234,7 @@ dbcli skill --install cursor
 
 #### Gemini CLI（Google）
 
-1. 全域安裝：`npm install -g @carllee1983/dbcli`
+1. 全域安裝：`bun install -g @carllee1983/dbcli`
 2. 初始化：`dbcli init`
 3. 安裝 skill：`dbcli skill --install gemini`
 4. 啟動 Gemini：`gemini start`
@@ -1244,7 +1246,7 @@ dbcli skill --install cursor
 
 #### GitHub Copilot CLI
 
-1. 全域安裝：`npm install -g @carllee1983/dbcli`
+1. 全域安裝：`bun install -g @carllee1983/dbcli`
 2. 初始化：`dbcli init`
 3. 安裝 skill：`dbcli skill --install copilot`
 4. 安裝 Copilot CLI：`npm install -g @github-next/github-copilot-cli`
@@ -1256,7 +1258,7 @@ dbcli skill --install cursor
 
 #### Cursor IDE
 
-1. 全域安裝：`npm install -g @carllee1983/dbcli`
+1. 全域安裝：`bun install -g @carllee1983/dbcli`
 2. 初始化：`dbcli init`
 3. 安裝 skill：`dbcli skill --install cursor`
 4. 開啟 Cursor
@@ -1272,7 +1274,7 @@ dbcli skill --install cursor
 
 1. 加入 marketplace：`codex plugin marketplace add CarlLee1983/dbcli`。
 2. 開啟 `/plugins`，選擇 dbcli Agent marketplace，並安裝 `dbcli-agent`。
-3. 若要常駐 CLI，請全域安裝 dbcli：`bun install -g @carllee1983/dbcli` 或 `npm install -g @carllee1983/dbcli`。
+3. 若要常駐 CLI，請全域安裝 dbcli：`bun install -g @carllee1983/dbcli`（或 `npm install -g`，但仍需 `PATH` 上有 Bun）。
 4. 若未全域安裝，plugin 內的 skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback。
 5. 初始化：`dbcli init` 或 `bunx @carllee1983/dbcli init`。
 
@@ -1288,7 +1290,7 @@ dbcli skill --install cursor
 
 ```bash
 # 1. 安裝並初始化
-npm install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 dbcli init  # 選擇「query-only」較安全
 
 # 2. 為 Claude Code 安裝 skill
@@ -1475,16 +1477,16 @@ dbcli query "SELECT * FROM users LIMIT 100 OFFSET 100"
 
 #### 「第一次執行 CLI 超過 30 秒」
 
-npx 正在下載並快取套件。
+bunx（或 npx）正在下載並快取套件。
 
 **處理方式：** 首次較慢屬正常，之後會很快：
 
 ```bash
-npx @carllee1983/dbcli init   # 首次約 30s
-npx @carllee1983/dbcli init   # 之後 <1s
+bunx @carllee1983/dbcli init   # 首次約 30s
+bunx @carllee1983/dbcli init   # 之後 <1s
 
 # 或全域安裝
-npm install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 dbcli init
 ```
 
@@ -1494,15 +1496,18 @@ dbcli init
 
 #### Windows：「Command not found: dbcli」
 
-npm 未建立 .cmd 或 PATH 未更新。
+shim 未建立、PATH 未更新，或機器上沒有 Bun —— `dbcli` 在 Windows 上同樣以 Bun 執行。
 
 **處理方式：**
 
 ```bash
+# 先確認 Bun 已安裝且在 PATH 上
+bun --version
+
 # 重開終端機以更新 PATH
 # 或重新全域安裝
-npm uninstall -g @carllee1983/dbcli
-npm install -g @carllee1983/dbcli
+bun uninstall -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 
 where dbcli
 ```

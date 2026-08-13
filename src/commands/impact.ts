@@ -99,7 +99,7 @@ impactCommand
         throw new Error('Choose exactly one of --against-cache or --against-orm')
       }
 
-      const workspaceRoot = process.cwd()
+      const workspaceRoot = await realpath(process.cwd())
       const spec = await loadDesignSpec(String(options.design))
       const review = reviewDesign(spec)
       if (review.summary.errors > 0) throw new Error('design contains validation errors')

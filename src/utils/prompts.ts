@@ -4,7 +4,39 @@
  * Attempts to use @inquirer/prompts for rich interactive experience.
  * If that fails (due to Bun compatibility issues), falls back to simple
  * console-based prompts using Bun's built-in stdin.
+ *
+ * Two failures used to be indistinguishable here, and both were swallowed
+ * (#56). Loading the module can fail — a bundle that tree-shook the prompt
+ * implementations away leaves an intact barrel that throws on import, which is
+ * how every interactive prompt silently degraded to plain text for however
+ * long. That case warns, once, and falls back. The prompt *call* failing is a
+ * different thing entirely: that is the user pressing Ctrl-C, and re-asking
+ * them in plain text is the opposite of what they wanted, so it propagates.
  */
+
+let promptsUnavailableReported = false
+
+/**
+ * Load @inquirer/prompts, reporting unavailability once per process.
+ *
+ * Returns undefined rather than throwing so each prompt can fall back, but the
+ * degradation is never silent again.
+ */
+async function loadInquirer(): Promise<typeof import('@inquirer/prompts') | undefined> {
+  try {
+    return await import('@inquirer/prompts')
+  } catch (error) {
+    if (!promptsUnavailableReported) {
+      promptsUnavailableReported = true
+      const reason = error instanceof Error ? error.message : String(error)
+      process.stderr.write(
+        `[dbcli] rich interactive prompts are unavailable (${reason}); ` +
+          'falling back to plain-text input\n'
+      )
+    }
+    return undefined
+  }
+}
 
 /**
  * Read a line from stdin using Node.js compatible API.
@@ -43,6 +75,33 @@ async function readLineFromStdin(prompt: string = ''): Promise<string> {
   })
 }
 
+async function textFallback(message: string, defaultValue?: string): Promise<string> {
+  const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
+  const answer = await readLineFromStdin(displayMessage)
+  return answer.trim() || defaultValue || ''
+}
+
+async function selectFallback(message: string, choices: string[]): Promise<string> {
+  console.log(message)
+  choices.forEach((choice, index) => {
+    console.log(`  ${index + 1}) ${choice}`)
+  })
+
+  const answer = await readLineFromStdin('Select option (number): ')
+  const selectedIndex = parseInt(answer, 10) - 1
+
+  if (selectedIndex >= 0 && selectedIndex < choices.length) {
+    return choices[selectedIndex] ?? choices[0] ?? ''
+  }
+
+  return choices[0] ?? ''
+}
+
+async function confirmFallback(message: string): Promise<boolean> {
+  const answer = await readLineFromStdin(`${message} (y/n): `)
+  return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
+}
+
 /**
  * Prompt user for text input with optional default value.
  *
@@ -52,21 +111,12 @@ async function readLineFromStdin(prompt: string = ''): Promise<string> {
  */
 export async function text(message: string, defaultValue?: string): Promise<string> {
   // Skip inquirer if not a TTY (e.g., piped input)
-  if (!process.stdin.isTTY) {
-    const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
-    const answer = await readLineFromStdin(displayMessage)
-    return answer.trim() || defaultValue || ''
-  }
+  if (!process.stdin.isTTY) return textFallback(message, defaultValue)
 
-  try {
-    const { input: inquirerText } = await import('@inquirer/prompts')
-    return await inquirerText({ message, default: defaultValue })
-  } catch {
-    // Fallback: use simple console prompts
-    const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
-    const answer = await readLineFromStdin(displayMessage)
-    return answer.trim() || defaultValue || ''
-  }
+  const inquirer = await loadInquirer()
+  if (!inquirer) return textFallback(message, defaultValue)
+
+  return await inquirer.input({ message, default: defaultValue })
 }
 
 /**
@@ -78,41 +128,12 @@ export async function text(message: string, defaultValue?: string): Promise<stri
  */
 export async function select(message: string, choices: string[]): Promise<string> {
   // Skip inquirer if not a TTY (e.g., piped input)
-  if (!process.stdin.isTTY) {
-    console.log(message)
-    choices.forEach((choice, index) => {
-      console.log(`  ${index + 1}) ${choice}`)
-    })
+  if (!process.stdin.isTTY) return await selectFallback(message, choices)
 
-    const answer = await readLineFromStdin('Select option (number): ')
-    const selectedIndex = parseInt(answer, 10) - 1
+  const inquirer = await loadInquirer()
+  if (!inquirer) return await selectFallback(message, choices)
 
-    if (selectedIndex >= 0 && selectedIndex < choices.length) {
-      return choices[selectedIndex] ?? choices[0] ?? ''
-    }
-
-    return choices[0] ?? ''
-  }
-
-  try {
-    const { select: inquirerSelect } = await import('@inquirer/prompts')
-    return await inquirerSelect({ message, choices })
-  } catch {
-    // Fallback: print choices and ask user to select
-    console.log(message)
-    choices.forEach((choice, index) => {
-      console.log(`  ${index + 1}) ${choice}`)
-    })
-
-    const answer = await readLineFromStdin('Select option (number): ')
-    const selectedIndex = parseInt(answer, 10) - 1
-
-    if (selectedIndex >= 0 && selectedIndex < choices.length) {
-      return choices[selectedIndex] ?? choices[0] ?? ''
-    }
-
-    return choices[0] ?? ''
-  }
+  return await inquirer.select({ message, choices })
 }
 
 /**
@@ -123,19 +144,12 @@ export async function select(message: string, choices: string[]): Promise<string
  */
 export async function confirm(message: string): Promise<boolean> {
   // Skip inquirer if not a TTY (e.g., piped input)
-  if (!process.stdin.isTTY) {
-    const answer = await readLineFromStdin(`${message} (y/n): `)
-    return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
-  }
+  if (!process.stdin.isTTY) return await confirmFallback(message)
 
-  try {
-    const { confirm: inquirerConfirm } = await import('@inquirer/prompts')
-    return await inquirerConfirm({ message })
-  } catch {
-    // Fallback: simple y/n prompt
-    const answer = await readLineFromStdin(`${message} (y/n): `)
-    return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
-  }
+  const inquirer = await loadInquirer()
+  if (!inquirer) return await confirmFallback(message)
+
+  return await inquirer.confirm({ message })
 }
 
 /**

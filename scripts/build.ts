@@ -31,7 +31,12 @@ const artifacts = [
 ]
 
 // 1. Bundle the full runtime separately so `dbcli --version` does not parse it.
-await $`bun build ./src/cli-runtime.ts --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser`
+//     @inquirer/prompts is external for correctness, not size: bundling it was
+//     non-deterministic (#56). Successive builds of identical source alternated
+//     between inlining the prompt implementations and tree-shaking them away
+//     behind an intact barrel, so `await import('@inquirer/prompts')` threw and
+//     every interactive prompt silently degraded to its plain-text fallback.
+await $`bun build ./src/cli-runtime.ts --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser --external @inquirer/prompts`
 
 // Keep the launcher's dynamic runtime path external. In source it resolves to
 // cli-runtime.ts; beside the built launcher Bun resolves cli-runtime.mjs.
@@ -49,7 +54,7 @@ if (process.platform !== 'win32') {
 
 // 3b. Bundle core library (no shebang) for the `./core` subpath export.
 //     Same externals as the CLI so native drivers stay peer-resolved.
-await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser`
+await $`bun build ./src/core/public.ts --outfile dist/core.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser --external @inquirer/prompts`
 
 // 3c. Generate a single flat declaration file for the `./core` subpath.
 //     Requires devDep @types/pg: dts-bundle-generator resolves pg types reachable via AdapterFactory.

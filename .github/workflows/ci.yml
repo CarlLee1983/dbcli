@@ -87,6 +87,19 @@ jobs:
       - name: Prettier
         run: bun run format:check
 
+  build-determinism:
+    # A bundler free to decide differently on the next run ships a different
+    # product than the one that was tested (#56). Builds twice, compares hashes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Build is reproducible
+        run: bun run build:determinism
+
   docs-parity:
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
     # platform copies, or user docs fall out of sync. Runs once (not per matrix).

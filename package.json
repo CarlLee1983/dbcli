@@ -65,6 +65,7 @@
   "scripts": {
     "dev": "bun run src/cli.ts",
     "build": "bun run scripts/build.ts",
+    "build:determinism": "bun run scripts/check-build-determinism.ts",
     "prepublishOnly": "bun run build",
     "release:check": "bash scripts/release-check.sh",
     "plugin:sync": "bun run scripts/sync-plugin-assets.ts --write",
@@ -87,6 +88,7 @@
     "lint:fix": "eslint src tests scripts --ext .ts --fix --max-warnings=0"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.4.3",
     "cli-table3": "^0.6.5",
     "commander": "13.0.0",
     "lru-cache": "^11.4.0",
@@ -107,7 +109,6 @@
     "@cucumber/messages": "^34.2.1",
     "@eslint/js": "^9.39.4",
     "@happy-dom/global-registrator": "^20.10.6",
-    "@inquirer/prompts": "^8.4.3",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
     "@types/pg": "^8.20.0",

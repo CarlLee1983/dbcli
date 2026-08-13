@@ -5,6 +5,27 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.54.0] - 2026-08-13 - Query engine hardening: timeout semantics, load-on-demand, deterministic builds
+
+### Added
+
+- **Separate connection and statement timeouts.** `--timeout` previously did two jobs at once: PostgreSQL fed it to both `connectionTimeoutMillis` and `statement_timeout`, so the 5000ms connection default silently became a global query ceiling, while MySQL consumed neither and ignored `--timeout` entirely. Connection timeout keeps its 5000ms built-in default, statement timeout now has none (the server decides) unless you ask for one, and the new root-level `--statement-timeout <ms>` plus the `statementTimeout` connection field (0–3600000, `0` removes the ceiling) adjust it on its own. MySQL now consumes both, mapping the statement limit onto session-level `max_execution_time` / `max_statement_time` where the server supports it.
+
+### Changed
+
+- **The CLI loads what a command actually needs.** Subcommands register lazily, SQL drivers load at connection time rather than at import, and `node-sql-parser` is both deferred and externalized from the bundle — measured at roughly 8ms off startup for the lazy registration alone.
+- **Full-schema scans cost less.** Per-table queries are merged, row estimates replace `COUNT(*)`, and remaining work runs with bounded parallelism. The query path no longer loads the layered schema in full — it fetches the single table it needs.
+- **Repeated lookups are cached within a process.** Config binding files are read and validated once per process, and the skill update check keeps a TTL cache instead of re-checking on every invocation. Redis and Elasticsearch list operations were narrowed to what the caller asked for.
+- **Identifier quoting and error classification each have one implementation.** Quote/encode helpers were consolidated into a shared utility, and driver errors are now classified by error code first rather than by matching message text.
+- **Server-side script protection lives in the adapter layer**, so every caller is covered by the same guard rather than each command re-implementing it.
+
+### Fixed
+
+- **`bun run build` was non-deterministic.** Consecutive builds of identical sources alternated between two `dist/cli-runtime.mjs` outputs about 690KB apart, depending on whether the bundler pulled in 48 `@inquirer/*` modules. `@inquirer/prompts` is now external, which also removes a silent degradation path where the prompt implementation quietly changed between builds. `bun run build:determinism` checks this in CI.
+- **One CLI query writes exactly one audit entry.** Some paths recorded the same query more than once.
+- **Windows CI is green again.** Path separator assumptions, CRLF handling in test fixtures, and CRLF frontmatter stripping in skill sources were all Unix-only.
+- **The startup benchmark measures the noise floor rather than the median**, which is what actually distinguishes a regression from scheduler jitter, and a guide test no longer flakes on a random UUID colliding with `'5432'`.
+
 ## [1.53.0] - 2026-08-09 - Offline evidence, semantic contracts, and impact assessment
 
 ### Added

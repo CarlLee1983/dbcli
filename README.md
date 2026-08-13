@@ -38,16 +38,21 @@ All messages, help text, error messages, and command output respond to the langu
 #### Global Installation (Recommended)
 
 ```bash
-npm install -g @carllee1983/dbcli
-# or: bun install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
+# or: npm install -g @carllee1983/dbcli
 ```
+
+**dbcli runs on Bun.** npm and npx are supported as distribution channels, but the
+installed `dbcli` executable requires Bun 1.3.3+ on your `PATH` — install it first with
+`curl -fsSL https://bun.sh/install | bash`. Only the `./agent-core` subpath export is
+importable from a plain Node process.
 
 #### Zero-Install (No Installation Needed)
 
 ```bash
-npx @carllee1983/dbcli init
-npx @carllee1983/dbcli query "SELECT * FROM users"
-# or with Bun: bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli query "SELECT * FROM users"
+# or with npm: npx @carllee1983/dbcli init
 ```
 
 #### Update
@@ -1647,8 +1652,11 @@ chmod +x dist/cli.mjs
 
 ### Runtime
 
-- **Node.js:** 18.0.0+
-- **Bun:** 1.3.3+
+- **Bun:** 1.3.3+ — required. The published bundles use Bun APIs and Bun module
+  resolution; `dbcli` does not run on Node.
+- **Node.js:** only for the `./agent-core` subpath export, which is Node-importable
+  (18.0.0+). `npm install -g` / `npx` work as distribution channels but still shell out
+  to Bun at run time.
 
 ### Platforms
 

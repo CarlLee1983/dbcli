@@ -38,16 +38,20 @@ dbcli init
 #### 全域安裝（建議）
 
 ```bash
-npm install -g @carllee1983/dbcli
-# 或使用 Bun：bun install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
+# 或使用 npm：npm install -g @carllee1983/dbcli
 ```
+
+**dbcli 執行於 Bun。** npm 與 npx 可作為發布通道，但安裝後的 `dbcli` 執行檔需要 `PATH`
+上有 Bun 1.3.3+，請先以 `curl -fsSL https://bun.sh/install | bash` 安裝。只有
+`./agent-core` 這個 subpath export 能被純 Node 程序 import。
 
 #### 免安裝（無需事先安裝）
 
 ```bash
-npx @carllee1983/dbcli init
-npx @carllee1983/dbcli query "SELECT * FROM users"
-# 或使用 Bun：bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli query "SELECT * FROM users"
+# 或使用 npm：npx @carllee1983/dbcli init
 ```
 
 #### 更新
@@ -1527,8 +1531,10 @@ chmod +x dist/cli.mjs
 
 ### 執行環境
 
-- **Node.js：** 18.0.0+
-- **Bun：** 1.3.3+
+- **Bun：** 1.3.3+ —— 必要。發布的 bundle 使用 Bun API 與 Bun 的模組解析，`dbcli`
+  無法在 Node 上執行。
+- **Node.js：** 僅 `./agent-core` 這個 subpath export 可被 Node import（18.0.0+）。
+  `npm install -g` / `npx` 可作為發布通道，但執行時仍會轉交給 Bun。
 
 ### 平台
 

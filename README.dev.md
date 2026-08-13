@@ -73,20 +73,22 @@ After publishing:
 
 1. **Global install:**
    ```bash
-   npm install -g @carllee1983/dbcli
+   bun install -g @carllee1983/dbcli
    which dbcli
    dbcli --version
    ```
+   `npm install -g` also works, but the installed executable still runs under Bun via its
+   `#!/usr/bin/env bun` shebang — verify on a machine that has Bun on `PATH`.
 
-2. **Zero-install (npx / bunx):**
+2. **Zero-install (bunx / npx):**
    ```bash
    cd /tmp && mkdir -p test-dbcli && cd test-dbcli
-   npx @carllee1983/dbcli --help
-   npx @carllee1983/dbcli --version
-   # or: bunx @carllee1983/dbcli --help
+   bunx @carllee1983/dbcli --help
+   bunx @carllee1983/dbcli --version
+   # or: npx @carllee1983/dbcli --help
    ```
 
-3. **Windows (if available):** `npm install -g @carllee1983/dbcli`, then `dbcli --help`. npm creates the `.cmd` stub for the `bin` entry; no hand-written `.cmd` in the repo.
+3. **Windows (if available):** `npm install -g @carllee1983/dbcli`, then `dbcli --help`. npm creates the `.cmd` stub for the `bin` entry; no hand-written `.cmd` in the repo. Bun must be on `PATH` there too.
 
 ### Rollback (if needed)
 
@@ -104,7 +106,7 @@ Then ship a patch version with the fix. Prefer **deprecate** over **unpublish** 
 
 - **`files` (in `package.json`):** Publishes `dist/`, `assets/`, `README.md`, `CHANGELOG.md`, `LICENSE`. The `assets/` tree is required for `dbcli skill` to copy bundled `SKILL.md` / `reference.md` from the installed package.
 - **`prepublishOnly`:** `bun run build` so `dist/cli.mjs` matches current source.
-- **`engines`:** Declares `node >= 18.0.0` and `bun >= 1.3.3` so npm can warn on outdated runtimes.
+- **`engines`:** Declares `bun >= 1.3.3` only. `node` was removed because the published bundles cannot run on Node: `dist/cli.mjs` dynamic-imports the extensionless `./cli-runtime` (Bun's resolver appends `.mjs`, Node's does not) and `dist/core.mjs` calls Bun globals. `tests/integration/runtime-contract.test.ts` fails if `engines.node` comes back without the bundles being fixed to match, and if `dist/agent-core.mjs` — the one entry point that is Node-importable — regresses. See `docs/adr/0008-dbcli-is-a-bun-program-and-engines-says-so.md`.
 - **Shebang:** `scripts/build.ts` prepends `#!/usr/bin/env bun` to `dist/cli.mjs`; the `bin` field in `package.json` points at that file.
 - **Live DB tests:** `tests/integration/live-db.test.ts` uses project `.dbcli` by default or `LIVE_DB_CONFIG_PATH` when you point at another config directory. Set `SKIP_INTEGRATION_TESTS=true` to skip all integration tests.
 

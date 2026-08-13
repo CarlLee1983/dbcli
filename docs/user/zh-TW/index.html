@@ -167,11 +167,12 @@
         <section id="getting-started">
             <h2>快速入門</h2>
             <p>使用您偏好的套件管理器進行全域安裝：</p>
-            <pre><code># 使用 npm
-npm install -g @carllee1983/dbcli
+            <pre><code># 使用 Bun（執行時必要）
+bun install -g @carllee1983/dbcli
 
-# 使用 Bun (推薦)
-bun install -g @carllee1983/dbcli</code></pre>
+# 使用 npm
+npm install -g @carllee1983/dbcli</code></pre>
+            <p>dbcli 執行於 Bun 1.3.3+。npm 與 npx 可作為發布通道，但安裝後的 <code>dbcli</code> 執行檔需要 <code>PATH</code> 上有 Bun；只有 <code>./agent-core</code> 這個 subpath export 能被純 Node 程序 import。</p>
             <p>單獨執行 <code>dbcli --version</code> 或 <code>dbcli -V</code> 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。</p>
             <p>透過互動式導覽初始化您的第一個連線：</p>
             <pre><code>dbcli init</code></pre>

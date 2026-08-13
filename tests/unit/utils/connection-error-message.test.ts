@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from 'bun:test'
 import { ConnectionError, type ConnectionErrorCode } from '@/adapters/types'
-import { presentConnectionError } from '@/utils/connection-error-message'
+import { presentConnectionError, IS_TRANSPORT_FAILURE } from '@/utils/connection-error-message'
 import { formatCliError } from '@/utils/cli-error'
 import { t_vars } from '@/i18n/message-loader'
 
@@ -18,6 +18,12 @@ const TRANSPORT_CODES = [
   'ETIMEDOUT',
   'AUTH_FAILED',
   'ENOTFOUND',
+  'EHOSTUNREACH',
+  'CONNECTION_LOST',
+  'TOO_MANY_CONNECTIONS',
+  'TLS_ERROR',
+  'SERVER_NOT_READY',
+  'CONNECTION_REJECTED',
 ] as const satisfies readonly ConnectionErrorCode[]
 
 const STATEMENT_CODES = [
@@ -29,21 +35,18 @@ const STATEMENT_CODES = [
 ] as const satisfies readonly ConnectionErrorCode[]
 
 describe('presentConnectionError', () => {
-  test('兩份清單合起來就是整個 ConnectionErrorCode union', () => {
-    // 少了哪個 code，它的措辭就從沒被任何測試決定過
+  test('兩份清單合起來就是原始碼那張表的全部 key', () => {
+    // 比對 IS_TRANSPORT_FAILURE 本身，而不是另一份手寫清單——後者等於自己跟自己
+    // 比對，union 新增 code 時測試照樣綠。
     const covered = [...TRANSPORT_CODES, ...STATEMENT_CODES]
-    const declared: Record<ConnectionErrorCode, true> = {
-      ECONNREFUSED: true,
-      ETIMEDOUT: true,
-      AUTH_FAILED: true,
-      ENOTFOUND: true,
-      SQL_SYNTAX_ERROR: true,
-      STATEMENT_TIMEOUT: true,
-      TABLE_NOT_FOUND: true,
-      COLUMN_NOT_FOUND: true,
-      UNKNOWN: true,
-    }
-    expect([...covered].sort()).toEqual((Object.keys(declared) as ConnectionErrorCode[]).sort())
+    expect([...covered].sort()).toEqual(
+      (Object.keys(IS_TRANSPORT_FAILURE) as ConnectionErrorCode[]).sort()
+    )
+  })
+
+  test('分類與原始碼一致：清單擺錯邊會紅', () => {
+    for (const code of TRANSPORT_CODES) expect(IS_TRANSPORT_FAILURE[code]).toBe(true)
+    for (const code of STATEMENT_CODES) expect(IS_TRANSPORT_FAILURE[code]).toBe(false)
   })
 
   test('真正的連線失敗維持連線措辭', () => {

@@ -8,8 +8,9 @@
  * 走的集中路徑一致，否則同一個錯誤在不同命令下會長得不一樣。
  */
 
-import type { ConnectionError, ConnectionErrorCode } from '@/adapters/types'
+import { ConnectionError, type ConnectionErrorCode } from '@/adapters/types'
 import type { CliErrorPresentation } from './cli-error'
+import { isTransportDriverCode } from '@/adapters/error-mapper'
 import { t_vars } from '@/i18n/message-loader'
 
 /**
@@ -17,11 +18,17 @@ import { t_vars } from '@/i18n/message-loader'
  * 日後新增一個 code 時，這裡不補就編不過——這個分類是使用者看到哪句話的唯一
  * 依據，預設值靜默生效正是要防的事。
  */
-const IS_TRANSPORT_FAILURE: Record<ConnectionErrorCode, boolean> = {
+export const IS_TRANSPORT_FAILURE: Record<ConnectionErrorCode, boolean> = {
   ECONNREFUSED: true,
   ETIMEDOUT: true,
   AUTH_FAILED: true,
   ENOTFOUND: true,
+  EHOSTUNREACH: true,
+  CONNECTION_LOST: true,
+  TOO_MANY_CONNECTIONS: true,
+  TLS_ERROR: true,
+  SERVER_NOT_READY: true,
+  CONNECTION_REJECTED: true,
   STATEMENT_TIMEOUT: false,
   SQL_SYNTAX_ERROR: false,
   TABLE_NOT_FOUND: false,
@@ -35,6 +42,17 @@ const IS_TRANSPORT_FAILURE: Record<ConnectionErrorCode, boolean> = {
  * 一個 ConnectionError 該呈現給使用者的內容。輸出、排版與 exit code 由呼叫端
  * 負責——這裡不碰 stack，verbose 與否是呈現層的決定。
  */
+/**
+ * 這個錯誤代表「連線本身壞了」嗎。repl 的自動重連據此決定要不要重連——語句層級的
+ * 失敗重連沒有意義，而先前它用的是自己那份非窮舉的 code 清單加訊息子字串比對。
+ */
+export function isTransportFailure(error: unknown): boolean {
+  if (error instanceof ConnectionError) return IS_TRANSPORT_FAILURE[error.code]
+  // 還沒經過 mapError 的原始 driver 錯誤：查 adapter 那份 code 表，不另立清單
+  const raw = (error as { code?: unknown } | null)?.code
+  return typeof raw === 'string' && isTransportDriverCode(raw)
+}
+
 export function presentConnectionError(error: ConnectionError): CliErrorPresentation {
   const key = IS_TRANSPORT_FAILURE[error.code] ? 'errors.connection_failed' : 'errors.message'
   return {

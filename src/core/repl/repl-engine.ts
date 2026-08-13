@@ -2,6 +2,7 @@
 import type { DatabaseAdapter } from '../../adapters/types'
 import type { ReplContext, ReplState } from './types'
 import type { DbcliConfig } from '../../types'
+import { isTransportFailure } from '@/utils/connection-error-message'
 import { classifyInput } from './input-classifier'
 import { MultilineBuffer } from './multiline-buffer'
 import { handleMetaCommand } from './meta-commands'
@@ -314,15 +315,8 @@ export class ReplEngine {
   }
 
   private isConnectionError(error: unknown): boolean {
-    const e = error as { message?: string; code?: string }
-    const msg = (e.message ?? '').toLowerCase()
-    return (
-      e.code === 'ECONNREFUSED' ||
-      e.code === 'ECONNRESET' ||
-      e.code === 'ETIMEDOUT' ||
-      msg.includes('connection') ||
-      msg.includes('terminated') ||
-      msg.includes('socket')
-    )
+    // 用 adapter 分類過的窮舉表，而不是第三份自己維護的 code 清單加訊息子字串——
+    // 後者會隨著錯誤措辭被改寫而靜默失效，也認不得 CONNECTION_LOST 這類新分類。
+    return isTransportFailure(error)
   }
 }

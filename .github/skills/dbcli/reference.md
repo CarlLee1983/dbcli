@@ -1667,6 +1667,14 @@ Recovery codes (fixed in v1.15.0):
   `branches` / `branchFork` / `verify` is emitted. PostgreSQL `57014` only counts as a
   statement timeout when the server says so — a `pg_cancel_backend()` cancel keeps the
   verbatim `Database error (57014): …` form instead of claiming a ceiling.
+  The same `details.connectionCode` field distinguishes the other causes that share a
+  connection code: `CONNECTION_LOST` (server closed the connection mid-session — PostgreSQL
+  class 08 and `57P01`/`57P02`, MySQL `1053`), `TOO_MANY_CONNECTIONS` (PostgreSQL `53300`,
+  MySQL `1040` — its plan counts current connections instead of running `doctor`, because
+  rewriting host/port cannot create a slot), `SERVER_NOT_READY` (`57P03`, still starting up),
+  `CONNECTION_REJECTED` (`08004` — the server answered and refused), `EHOSTUNREACH` (resolved
+  but unroutable) and `TLS_ERROR` (handshake failure; reported as `CONN_UNKNOWN` rather than
+  `CONN_AUTH_FAILED`, whose plan re-runs `init` for credentials that are not the problem).
 - `PERMISSION_DENIED` — active permission level forbids the operation.
 - `BLACKLIST_TABLE` / `BLACKLIST_COLUMN_WRITE` — blacklist violations.
 - `SNIPPET_NOT_FOUND` / `SNIPPET_AMBIGUOUS` / `SNIPPET_PARAM_MISSING` — saved-query failures.

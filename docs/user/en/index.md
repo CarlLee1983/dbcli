@@ -1523,7 +1523,9 @@ for diagnostics — the flag must precede the subcommand (`dbcli -v list`, not
 `dbcli list -v`). The write commands (`insert`, `update`, `delete`) and `q` keep
 their own localized wording, and honour the same stack switch. That wording is
 chosen by error code: only a genuine transport failure (`ECONNREFUSED`,
-`ETIMEDOUT`, `AUTH_FAILED`, `ENOTFOUND`) is reported as a connection failure —
+`ETIMEDOUT`, `AUTH_FAILED`, `ENOTFOUND`, `EHOSTUNREACH`, `CONNECTION_LOST`,
+`TOO_MANY_CONNECTIONS`, `TLS_ERROR`, `SERVER_NOT_READY`, `CONNECTION_REJECTED`) is
+reported as a connection failure —
 a statement-level error such as `TABLE_NOT_FOUND` or `STATEMENT_TIMEOUT` reaches
 the server fine, so it is reported as itself, with its hints, rather than as
 "failed to connect". When a supported command uses `--recovery`, the existing JSON

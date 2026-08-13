@@ -1,5 +1,5 @@
 import type { GuideStep } from '@/core/guide/types'
-import type { RecoveryCode, RecoveryContext } from './types'
+import { STATEMENT_TIMEOUT_CODE, type RecoveryCode, type RecoveryContext } from './types'
 
 /**
  * Per-RecoveryCode verifier step appended to the envelope.
@@ -10,6 +10,9 @@ import type { RecoveryCode, RecoveryContext } from './types'
  * - Never `interactive: true`.
  * - argv must be allowlisted under classifyArgvForCode for the same code.
  * - `order: 0` is a sentinel meaning "verify, not part of the main plan".
+ *
+ * One context-dependent exception: a statement timeout shares CONN_TIMEOUT but has
+ * no verifier that does not re-run the caller's own query, so it gets none.
  */
 
 const VERIFY_COMMAND_BY_CODE: Record<RecoveryCode, string> = {
@@ -63,7 +66,11 @@ const VERIFY_EXPECTS_BY_CODE: Record<RecoveryCode, string> = {
   UNKNOWN: 'JSON doctor report.',
 }
 
-export function verifyForCode(code: RecoveryCode, _ctx: RecoveryContext): GuideStep | null {
+export function verifyForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep | null {
+  // 語句逾時共用 CONN_TIMEOUT，但 doctor 驗證的是連線——連線從來沒壞，它會在查詢
+  // 仍然逾時的情況下回報 passed。這個錯誤沒有「不重跑原查詢就能驗證」的辦法，而原
+  // 查詢只有 agent 手上有，所以誠實的答案是不給 verify。
+  if (ctx.connectionCode === STATEMENT_TIMEOUT_CODE) return null
   const command = VERIFY_COMMAND_BY_CODE[code]
   if (!command) return null
   return {

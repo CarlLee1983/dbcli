@@ -265,7 +265,8 @@ test('mapError: 訊息含 "timeout" 但帶查詢 code 時不被判成連線逾�
   const error = { code: '57014', message: 'canceling statement due to statement timeout' }
   const result = mapError(error, 'postgresql', mockOptions)
   expect(result.code).not.toBe('ECONNREFUSED')
-  expect(result.message).toContain('statement timeout')
+  expect(result.code).not.toBe('ETIMEDOUT')
+  expect(result.message).toMatch(/statement timed out/i)
 })
 
 test('mapError: 無 code 時字串後備需完整詞組，"user" 不足以判成認證失敗', () => {
@@ -282,4 +283,96 @@ test('mapError: 無 code 時 "authentication failed" 仍判成 AUTH_FAILED', () 
 test('mapError: pg 連線池的 "timeout exceeded" 沒有 code，仍分類為 ETIMEDOUT', () => {
   const error = { message: 'timeout exceeded when trying to connect' }
   expect(mapError(error, 'postgresql', mockOptions).code).toBe('ETIMEDOUT')
+})
+
+test('mapError: MySQL ER_QUERY_TIMEOUT (3024) 與 MariaDB 1969 同樣是語句逾時', () => {
+  const mysqlOptions: ConnectionOptions = { ...mockOptions, system: 'mysql', port: 3306 }
+
+  const byCode = mapError(
+    { code: 'ER_QUERY_TIMEOUT', errno: 3024, message: 'Query execution was interrupted' },
+    'mysql',
+    mysqlOptions
+  )
+  expect(byCode.code).toBe('STATEMENT_TIMEOUT')
+
+  // 部分 driver 只給數字 errno
+  const byErrno = mapError(
+    { errno: 3024, message: 'Query execution was interrupted' },
+    'mysql',
+    mysqlOptions
+  )
+  expect(byErrno.code).toBe('STATEMENT_TIMEOUT')
+
+  const mariadb = mapError(
+    { errno: 1969, message: 'Query execution was interrupted (max_statement_time exceeded)' },
+    'mariadb',
+    { ...mysqlOptions, system: 'mariadb' }
+  )
+  expect(mariadb.code).toBe('STATEMENT_TIMEOUT')
+})
+
+test('mapError: 語句逾時訊息帶出實際生效的上限值', () => {
+  const result = mapError(
+    { code: '57014', message: 'canceling statement due to statement timeout' },
+    'postgresql',
+    { ...mockOptions, statementTimeout: 800 }
+  )
+
+  expect(result.message).toContain('800ms')
+})
+
+test('mapError: pg SQLSTATE 57014 是語句被取消，不是連線問題', () => {
+  const error = { code: '57014', message: 'canceling statement due to statement timeout' }
+  const result = mapError(error, 'postgresql', mockOptions)
+
+  expect(result.code).toBe('STATEMENT_TIMEOUT')
+  expect(result.hints.join(' ')).toContain('--statement-timeout')
+  // 連線是通的，連線疑難排解在這裡只會把方向帶偏
+  expect(result.hints.join(' ')).not.toContain('doctor')
+  expect(result.hints.join(' ')).not.toContain('ping')
+})
+
+test('mapError: 57014 但不是逾時（pg_cancel_backend）不冒充語句逾時', () => {
+  const result = mapError(
+    { code: '57014', message: 'canceling statement due to user request' },
+    'postgresql',
+    { ...mockOptions, statementTimeout: 5000 }
+  )
+
+  expect(result.code).not.toBe('STATEMENT_TIMEOUT')
+  // 沒有逾時就沒有上限值可言——編一個具體毫秒數是憑空斷言
+  expect(result.message).not.toContain('5000ms')
+  expect(result.message).toContain('57014')
+})
+
+test('mapError: 57014 因 recovery conflict 取消同樣不算語句逾時', () => {
+  const result = mapError(
+    { code: '57014', message: 'canceling statement due to conflict with recovery' },
+    'postgresql',
+    mockOptions
+  )
+
+  expect(result.code).not.toBe('STATEMENT_TIMEOUT')
+})
+
+test('mapError: 未設 statementTimeout 時，訊息用實際生效的連線逾時值', () => {
+  const result = mapError(
+    { code: '57014', message: 'canceling statement due to statement timeout' },
+    'postgresql',
+    { ...mockOptions, timeout: 4000 }
+  )
+
+  expect(result.message).toContain('4000ms')
+  expect(result.limitMs).toBe(4000)
+})
+
+test('mapError: statementTimeout 為 0（取消上限）不印出 (0ms)', () => {
+  const result = mapError(
+    { code: '57014', message: 'canceling statement due to statement timeout' },
+    'postgresql',
+    { ...mockOptions, timeout: 5000, statementTimeout: 0 }
+  )
+
+  expect(result.message).not.toContain('0ms')
+  expect(result.message).not.toContain('5000ms')
 })

@@ -1344,6 +1344,8 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
 
 若 doctor JSON 無法解析或沒有關鍵字匹配，`--next` 會回落為線性的 `recovery` 計畫 — 分支永遠不會造成 `--next` 失敗。`--apply` 維持線性走訪 `recovery`，不使用 `branches`。
 
+有一種連線類別錯誤**不會**分支：語句因超過 statement timeout 被伺服器取消（PostgreSQL SQLSTATE `57014`、MySQL `3024`、MariaDB `1969`）。它回報為 `CONN_TIMEOUT`，並將 `details.connectionCode` 設為 `STATEMENT_TIMEOUT`，這個欄位就是它與真正連線逾時的分辨依據 — 連線是通的，因此計畫針對查詢本身（`dbcli lint`、`dbcli explain`，再以明確的 `--statement-timeout <ms>` 重跑），而不是去跑 `doctor`。因為步驟 1 不是 `doctor`，envelope 不會帶 `branches` 與 `branchFork`，也不會帶 `verify` — 這個錯誤除了重跑原語句沒有別的驗證方式，而原語句只有呼叫端有。三個步驟都帶 placeholder，因此 `dbcli recover --apply` 會回報 `skipped-only` 且不執行任何指令。
+
 ### Audit ↔ Envelope 反查
 
 每次 `--recovery` 失敗都會雙向寫入對應的 UUID：

@@ -47,3 +47,17 @@ describe('classifyError — non-connection codes do NOT emit branches', () => {
     expect(env.branchFork).toBeUndefined()
   })
 })
+
+describe('classifyError — 語句逾時不掛 doctor 分支', () => {
+  test('STATEMENT_TIMEOUT 不發 branches/branchFork', () => {
+    const env = classifyError(new ConnectionError('STATEMENT_TIMEOUT', 'timed out', []), {
+      operation: 'query',
+      system: 'postgresql',
+    })
+
+    // branchFork.after 指的是「跑完第 1 步 doctor 之後」；語句逾時的第 1 步不是
+    // doctor，掛上這組分支等於叫 agent 依一個沒跑過的結果選路。
+    expect(env.branches).toBeUndefined()
+    expect(env.branchFork).toBeUndefined()
+  })
+})

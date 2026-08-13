@@ -1,5 +1,5 @@
 import type { GuideStep } from '@/core/guide/types'
-import type { RecoveryCode, RecoveryContext } from './types'
+import { STATEMENT_TIMEOUT_CODE, type RecoveryCode, type RecoveryContext } from './types'
 import { shellQuote } from './shell-quote'
 
 /** Hard cap on emitted recovery steps; prevents drowning agents in suggestions. */
@@ -43,6 +43,41 @@ function dryRunStepForWrite(
   return draft
 }
 
+/**
+ * Plan for a statement the server canceled (PostgreSQL 57014, MySQL 3024,
+ * MariaDB 1969). The connection is healthy, so the plan works on the query:
+ * an offline static read first, then the plan, then a re-run with a raised
+ * ceiling. All three carry `<sql>` placeholders — the agent supplies the
+ * statement it just lost, and `--apply` skips them rather than running blind.
+ */
+function statementTimeoutSteps(): StepDraft[] {
+  return [
+    {
+      command: 'dbcli lint "<sql>"',
+      rationale:
+        'Static anti-pattern read of the statement; needs no connection, so it cannot time out in turn.',
+      risk: 'readonly',
+      expects: 'Findings with rewrite drafts, or an empty list when nothing is flagged.',
+      placeholders: ['<sql>'],
+    },
+    {
+      command: 'dbcli explain "<sql>"',
+      rationale: 'Read the query plan to find the scan or join that exceeded the statement limit.',
+      risk: 'readonly',
+      expects: 'Annotated query plan; look for sequential scans and unindexed joins.',
+      placeholders: ['<sql>'],
+    },
+    {
+      command: 'dbcli --statement-timeout <ms> query "<sql>"',
+      rationale:
+        'Re-run with an explicit ceiling once the cost is understood; 0 removes the limit entirely.',
+      risk: 'readonly',
+      expects: 'Query result, or the same timeout if <ms> is still below what the plan costs.',
+      placeholders: ['<ms>', '<sql>'],
+    },
+  ]
+}
+
 export function stepsForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep[] {
   const drafts = draftsForCode(code, ctx)
   return drafts.slice(0, MAX_RECOVERY_STEPS).map((d, i) => ({ ...d, order: i + 1 }))
@@ -70,6 +105,11 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
     case 'CONN_REFUSED':
     case 'CONN_TIMEOUT':
     case 'CONN_UNKNOWN': {
+      // 語句逾時共用 CONN_TIMEOUT，但連線是通的——doctor / inspect 只會把方向帶偏。
+      // classifyConnection 保證它只映到 CONN_TIMEOUT，這裡照樣收窄到那一碼。
+      if (code === 'CONN_TIMEOUT' && ctx.connectionCode === STATEMENT_TIMEOUT_CODE) {
+        return statementTimeoutSteps()
+      }
       const out: StepDraft[] = [
         {
           command: 'dbcli doctor --format json',

@@ -8,6 +8,7 @@ import { buildConnectionBranches } from './connection-branches'
 import {
   RECOVERY_CODE_METADATA,
   RECOVERY_SCHEMA_VERSION,
+  STATEMENT_TIMEOUT_CODE,
   SchemaCacheMissingError,
   type RecoveryCode,
   type RecoveryContext,
@@ -20,8 +21,13 @@ export function classifyError(error: unknown, ctx: RecoveryContext): RecoveryEnv
   const ctxWithDetails = applyDetailsToContext(ctx, recoveryError)
   const recovery = stepsForCode(recoveryError.code, ctxWithDetails)
   const verify = verifyForCode(recoveryError.code, ctxWithDetails)
+  // 分支計畫的 branchFork.after = 1 指的是「跑完第 1 步 doctor 之後」。語句逾時
+  // 的計畫第 1 步不是 doctor，掛上這組分支等於要 agent 依一個沒跑過的結果選路。
   const branchExtras =
-    recoveryError.category === 'connection' ? buildConnectionBranches(ctxWithDetails) : null
+    recoveryError.category === 'connection' &&
+    ctxWithDetails.connectionCode !== STATEMENT_TIMEOUT_CODE
+      ? buildConnectionBranches(ctxWithDetails)
+      : null
   return {
     schemaVersion: RECOVERY_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -69,14 +75,27 @@ function classifyConnection(err: ConnectionError): RecoveryError {
   const code: RecoveryCode =
     err.code === 'ECONNREFUSED'
       ? 'CONN_REFUSED'
-      : err.code === 'ETIMEDOUT'
-        ? 'CONN_TIMEOUT'
+      : err.code === 'ETIMEDOUT' || err.code === STATEMENT_TIMEOUT_CODE
+        ? // 語句逾時共用 CONN_TIMEOUT，避免為它加一個 code 而動到 schemaVersion；
+          // details.connectionCode 是兩者的分辨依據，步驟庫據此給不同的計畫。
+          'CONN_TIMEOUT'
         : err.code === 'AUTH_FAILED'
           ? 'CONN_AUTH_FAILED'
           : err.code === 'ENOTFOUND'
             ? 'CONN_HOST_NOT_FOUND'
             : 'CONN_UNKNOWN'
-  return baseError(code, { connectionCode: err.code })
+  const base = baseError(code, { connectionCode: err.code })
+  if (err.code === STATEMENT_TIMEOUT_CODE) {
+    // CONN_TIMEOUT 的靜態描述講的是網路，對「連線正常但語句被伺服器取消」是誤導。
+    // 覆寫成固定字串加上一個毫秒數——數字不是 host / port / SQL / 憑證，沒有洩漏，
+    // 而少了它 agent 無從得知計畫裡的 `--statement-timeout <ms>` 該填多少。
+    const ceiling = err.limitMs !== undefined ? ` The ceiling in force was ${err.limitMs}ms.` : ''
+    return {
+      ...base,
+      message: `The server canceled the statement for exceeding the statement timeout.${ceiling}`,
+    }
+  }
+  return base
 }
 
 function classifyBlacklist(err: BlacklistError): RecoveryError {
@@ -138,5 +157,6 @@ function applyDetailsToContext(ctx: RecoveryContext, err: RecoveryError): Recove
     table: err.details?.table ?? ctx.table,
     snippet: err.details?.snippet ?? ctx.snippet,
     hint: err.details?.paramName ?? ctx.hint,
+    connectionCode: err.details?.connectionCode ?? ctx.connectionCode,
   }
 }

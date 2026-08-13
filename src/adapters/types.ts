@@ -139,22 +139,31 @@ export interface TableSchema {
 /**
  * Connection error with categorized error code and troubleshooting hints
  */
+export type ConnectionErrorCode =
+  | 'ECONNREFUSED'
+  | 'ETIMEDOUT'
+  | 'AUTH_FAILED'
+  | 'ENOTFOUND'
+  | 'SQL_SYNTAX_ERROR'
+  | 'STATEMENT_TIMEOUT'
+  | 'TABLE_NOT_FOUND'
+  | 'COLUMN_NOT_FOUND'
+  | 'UNKNOWN'
+
 export class ConnectionError extends Error {
   constructor(
     /** Error category code */
-    public code:
-      | 'ECONNREFUSED'
-      | 'ETIMEDOUT'
-      | 'AUTH_FAILED'
-      | 'ENOTFOUND'
-      | 'SQL_SYNTAX_ERROR'
-      | 'TABLE_NOT_FOUND'
-      | 'COLUMN_NOT_FOUND'
-      | 'UNKNOWN',
+    public code: ConnectionErrorCode,
     /** User-friendly error message */
     message: string,
     /** Array of actionable troubleshooting hints */
-    public hints: string[]
+    public hints: string[],
+    /**
+     * The ceiling that was in force, in milliseconds. Set on STATEMENT_TIMEOUT so
+     * consumers can state it without parsing `message`; the recovery envelope needs
+     * it to tell an agent what `--statement-timeout <ms>` it was already up against.
+     */
+    public limitMs?: number
   ) {
     super(message)
     this.name = 'ConnectionError'

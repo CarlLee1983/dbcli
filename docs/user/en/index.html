@@ -1156,6 +1156,7 @@ dbcli recover --next --after-step 2 --result @/tmp/r2.json
                 </tbody>
             </table>
             <p>If the doctor JSON cannot be parsed or no keyword matches, <code>--next</code> falls back to the linear <code>recovery</code> plan — branching never causes <code>--next</code> to fail. <code>--apply</code> continues to walk <code>recovery</code> linearly and ignores <code>branches</code>.</p>
+            <p>One connection-class error does <strong>not</strong> branch: a statement canceled by the server for exceeding the statement timeout (PostgreSQL SQLSTATE <code>57014</code>, MySQL <code>3024</code>, MariaDB <code>1969</code>). It reports as <code>CONN_TIMEOUT</code> with <code>details.connectionCode</code> set to <code>STATEMENT_TIMEOUT</code>, and that field is what separates it from a real connection timeout — the connection is healthy, so the plan works on the query (<code>dbcli lint</code>, <code>dbcli explain</code>, then a re-run with an explicit <code>--statement-timeout &lt;ms&gt;</code>) instead of running <code>doctor</code>. Because step 1 is not <code>doctor</code>, no <code>branches</code> or <code>branchFork</code> is emitted, and no <code>verify</code> step either — nothing verifies this error except re-running the statement, which only the caller has. All three steps carry placeholders, so <code>dbcli recover --apply</code> reports <code>skipped-only</code> and runs nothing.</p>
 
             <h3 class="mt-10">Audit ↔ Envelope pivot</h3>
             <ul>

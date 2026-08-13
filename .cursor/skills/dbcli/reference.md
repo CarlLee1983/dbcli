@@ -1660,6 +1660,13 @@ shape (`schemaVersion: 1`):
 Recovery codes (fixed in v1.15.0):
 - `CONFIG_MISSING` — no `.dbcli` config; run `dbcli init`.
 - `CONN_REFUSED` / `CONN_AUTH_FAILED` / `CONN_TIMEOUT` / `CONN_HOST_NOT_FOUND` / `CONN_UNKNOWN` — connection failure variants.
+  `CONN_TIMEOUT` also covers a statement the server canceled for exceeding the statement
+  timeout (PostgreSQL `57014`, MySQL `3024`, MariaDB `1969`); `details.connectionCode` is
+  `STATEMENT_TIMEOUT` there instead of `ETIMEDOUT`, the plan targets the query (`lint` →
+  `explain` → re-run with `--statement-timeout <ms>`) rather than `doctor`, and no
+  `branches` / `branchFork` / `verify` is emitted. PostgreSQL `57014` only counts as a
+  statement timeout when the server says so — a `pg_cancel_backend()` cancel keeps the
+  verbatim `Database error (57014): …` form instead of claiming a ceiling.
 - `PERMISSION_DENIED` — active permission level forbids the operation.
 - `BLACKLIST_TABLE` / `BLACKLIST_COLUMN_WRITE` — blacklist violations.
 - `SNIPPET_NOT_FOUND` / `SNIPPET_AMBIGUOUS` / `SNIPPET_PARAM_MISSING` — saved-query failures.

@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **`exports["."]` — importing the package ran the CLI instead of returning a module.** The root export pointed at `dist/cli.mjs`, and `src/cli-runtime.ts:280-290` calls `outputHelp()` and `parseAsync(process.argv)` at module top level with no guard. So any import that reached the runtime executed the CLI against the host process's argv: under Bun, `await import('@carllee1983/dbcli')` printed 186 lines of help and exited 1 — the statement after the import never ran — and under Node it threw `ERR_MODULE_NOT_FOUND` for the same extensionless `./cli-runtime` specifier described in v1.55.0. `.` is gone; `./core` and `./agent-core`, both with `types`, are the library surface, and neither bundle contains `cli-runtime`. `bin` does not resolve through `exports`, so `dbcli` itself is untouched. Anyone importing the root now gets `ERR_PACKAGE_PATH_NOT_EXPORTED` instead of a process that exits — a declaration withdrawn, not a capability. `tests/integration/runtime-contract.test.ts` asserts no `exports` target is the `bin` target, and keeps a positive control on the top-level side effect, so if `cli-runtime` ever stops executing on import the test says so rather than leaving the export permanently unreconsidered (#67).
+
 ## [1.55.1] - 2026-08-13 - The Bun-missing warning actually reaches the user
 
 ### Fixed

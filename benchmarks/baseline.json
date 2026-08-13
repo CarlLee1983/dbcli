@@ -39,7 +39,34 @@
       "target_ms": 800,
       "status": "PASS",
       "workload": "redis PING via query (localhost)"
+    },
+    "schema_full_scan_120_tables": {
+      "mean_ms": 2280,
+      "min_ms": 2030,
+      "max_ms": 2730,
+      "before_ms": 4260,
+      "status": "PASS",
+      "workload": "dbcli schema --force against PostgreSQL 16 with 120 tables × 2000 rows (docker-compose.test.yml)",
+      "notes": "#49 前後對照（前 = 5fea6f1a）：4.26s → 2.28s（median of 3）。合併 metadata 查詢＋估計列數取代 COUNT(*)＋每表 4 並行"
+    },
+    "schema_full_scan_500_tables": {
+      "mean_ms": 5880,
+      "min_ms": 5680,
+      "max_ms": 6340,
+      "before_ms": 14020,
+      "status": "PASS",
+      "workload": "dbcli schema --force against PostgreSQL 16 with 500 tables (docker-compose.test.yml)",
+      "notes": "#49 前後對照：14.02s → 5.88s（median of 3）。表數愈多差距愈大"
+    },
+    "query_with_500_table_schema_cache": {
+      "mean_ms": 300,
+      "min_ms": 260,
+      "max_ms": 350,
+      "before_ms": 340,
+      "status": "PASS",
+      "workload": "dbcli query \"SELECT 1\" --format json against PostgreSQL 16 with a 500-table layered schema cache",
+      "notes": "#43 前後對照（前 = 56a98aec）：median 340ms → 300ms，尾端從 560ms 收到 350ms。9 次 A/B 交錯取樣，消除機器漂移"
     }
   },
-  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。"
+  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。 2026-08-13 補量測（docker-compose.test.yml，OrbStack）：#49 的掃描與 #43 的查詢延遲改以真實 PostgreSQL 對照前後版本，數據見上；掃描與查詢均以 `bun run src/cli.ts` 直接執行，兩側同法。"
 }

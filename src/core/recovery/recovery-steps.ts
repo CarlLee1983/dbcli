@@ -78,6 +78,55 @@ function statementTimeoutSteps(): StepDraft[] {
   ]
 }
 
+/**
+ * TLS 握手失敗。`dbcli init` 問的是 system / host / 帳密，沒有一個欄位是憑證，
+ * 所以連線類別的預設計畫在這裡走不通；改設定檔的信任來源才是補救。
+ */
+function tlsErrorSteps(): StepDraft[] {
+  return [
+    {
+      command: 'dbcli status --format json',
+      rationale:
+        'Read back the active connection without a live probe to confirm which host and TLS settings are in force.',
+      risk: 'readonly',
+      expects: 'JSON status with system / permission; no credentials.',
+    },
+    {
+      command: 'dbcli doctor --format json',
+      rationale:
+        'Doctor reports the handshake failure verbatim, which names the certificate problem (expired, self-signed, altname mismatch).',
+      risk: 'readonly',
+      expects: 'JSON report whose connection check fails with the TLS error text.',
+    },
+  ]
+}
+
+/**
+ * 連線數用盡。等待與觀測是唯二有效的動作——重寫 host/port 不會生出連線槽。
+ */
+function connectionsExhaustedSteps(ctx: RecoveryContext): StepDraft[] {
+  const inspectSql =
+    ctx.system === 'postgresql'
+      ? 'SELECT count(*) FROM pg_stat_activity'
+      : 'SHOW STATUS LIKE "Threads_connected"'
+  return [
+    {
+      command: `dbcli query ${shellQuote(inspectSql)} --format json`,
+      rationale:
+        'Count the connections currently held so the limit can be compared against real usage; needs one free slot, so it may have to wait.',
+      risk: 'readonly',
+      expects: 'A single row with the current connection count.',
+    },
+    {
+      command: 'dbcli doctor --format json',
+      rationale:
+        'Once a slot frees up, confirm the connection itself is healthy — the config was never the problem.',
+      risk: 'readonly',
+      expects: 'JSON report with the connection check passing.',
+    },
+  ]
+}
+
 export function stepsForCode(code: RecoveryCode, ctx: RecoveryContext): GuideStep[] {
   const drafts = draftsForCode(code, ctx)
   return drafts.slice(0, MAX_RECOVERY_STEPS).map((d, i) => ({ ...d, order: i + 1 }))
@@ -110,6 +159,11 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       if (code === 'CONN_TIMEOUT' && ctx.connectionCode === STATEMENT_TIMEOUT_CODE) {
         return statementTimeoutSteps()
       }
+      // 這兩種連線失敗的補救與 doctor / init 那條路無關：憑證要改設定檔的信任來源，
+      // 連線數滿則是唯一保證「改設定沒用」的情況——池滿時 doctor 只會再失敗一次，
+      // 而它的訊息含 refused，會把分支解析器導向「重寫 host/port」。
+      if (ctx.connectionCode === 'TLS_ERROR') return tlsErrorSteps()
+      if (ctx.connectionCode === 'TOO_MANY_CONNECTIONS') return connectionsExhaustedSteps(ctx)
       const out: StepDraft[] = [
         {
           command: 'dbcli doctor --format json',

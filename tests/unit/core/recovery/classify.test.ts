@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { classifyError } from '@/core/recovery/classify'
-import { ConnectionError } from '@/adapters/types'
+import { ConnectionError, type ConnectionErrorCode } from '@/adapters/types'
 import { PermissionError, type StatementClassification } from '@/core/permission-guard'
 import { BlacklistError } from '@/types/blacklist'
 import { SavedQueryError } from '@/core/saved-queries/types'
@@ -257,7 +257,9 @@ describe('classifyError — #62 新增的傳輸層 code', () => {
       CONNECTION_LOST: 'CONN_REFUSED',
       TOO_MANY_CONNECTIONS: 'CONN_REFUSED',
       EHOSTUNREACH: 'CONN_HOST_NOT_FOUND',
-      TLS_ERROR: 'CONN_AUTH_FAILED',
+      // CONN_AUTH_FAILED 的計畫具體到「重跑 init 改帳密」，對憑證問題是錯的方向；
+      // 步驟由 connectionCode 另外給，envelope code 維持籠統但不誤導的那個。
+      TLS_ERROR: 'CONN_UNKNOWN',
     }
 
     for (const [connectionCode, recoveryCode] of Object.entries(expected)) {
@@ -271,5 +273,51 @@ describe('classifyError — #62 新增的傳輸層 code', () => {
       // 連線類別仍該拿到 doctor 分支——連線確實是壞的
       expect(env.branches).toBeDefined()
     }
+  })
+})
+
+describe('classifyError — #62 新 code 的 envelope 訊息', () => {
+  test('不沿用會說反話的靜態描述', () => {
+    const cases: [ConnectionErrorCode, RegExp][] = [
+      // 「名稱解析成功但路由不通」對上 CONN_HOST_NOT_FOUND 的「主機名稱無法解析」
+      ['EHOSTUNREACH', /unreachable|routing/i],
+      ['TOO_MANY_CONNECTIONS', /slot|connection limit|concurrent/i],
+      ['CONNECTION_LOST', /dropped|lost/i],
+      ['TLS_ERROR', /tls|certificate/i],
+    ]
+
+    for (const [connectionCode, expected] of cases) {
+      const env = classifyError(new ConnectionError(connectionCode, 'boom', []), {
+        operation: 'query',
+        system: 'postgresql',
+      })
+
+      expect(env.error.message).toMatch(expected)
+      expect(env.error.message).not.toBe(RECOVERY_CODE_METADATA[env.error.code].description)
+      // envelope 不得回吐 driver 原文
+      expect(env.error.message).not.toContain('boom')
+    }
+  })
+
+  test('TLS 問題不走「改帳密」那份計畫', () => {
+    const env = classifyError(new ConnectionError('TLS_ERROR', 'bad cert', []), {
+      operation: 'query',
+      system: 'postgresql',
+    })
+
+    const commands = env.recovery.map((s) => s.command).join(' | ')
+    // init --force 問的是帳密與 host，不會問 caPath / rejectUnauthorized
+    expect(commands).not.toContain('dbcli init')
+    expect(env.error.code).not.toBe('CONN_AUTH_FAILED')
+  })
+
+  test('連線數用盡的計畫不叫人改 host/port', () => {
+    const env = classifyError(new ConnectionError('TOO_MANY_CONNECTIONS', 'full', []), {
+      operation: 'query',
+      system: 'postgresql',
+    })
+
+    const commands = env.recovery.map((s) => s.command).join(' | ')
+    expect(commands).not.toContain('dbcli init')
   })
 })

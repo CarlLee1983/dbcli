@@ -82,11 +82,15 @@ const RECOVERY_CODE_BY_CONNECTION_CODE: Record<ConnectionErrorCode, RecoveryCode
   ECONNREFUSED: 'CONN_REFUSED',
   CONNECTION_LOST: 'CONN_REFUSED',
   TOO_MANY_CONNECTIONS: 'CONN_REFUSED',
+  SERVER_NOT_READY: 'CONN_REFUSED',
+  CONNECTION_REJECTED: 'CONN_REFUSED',
   ETIMEDOUT: 'CONN_TIMEOUT',
   STATEMENT_TIMEOUT: 'CONN_TIMEOUT',
   AUTH_FAILED: 'CONN_AUTH_FAILED',
-  // 憑證問題與帳密問題的復原計畫一樣是「改設定再連一次」，且都不是網路不通
-  TLS_ERROR: 'CONN_AUTH_FAILED',
+  // 不是 CONN_AUTH_FAILED：那份計畫的第二步是 `dbcli init --force`，而 init 問的是
+  // 帳密與 host，不會問 caPath / rejectUnauthorized。憑證的步驟由 connectionCode
+  // 在步驟庫另外給。
+  TLS_ERROR: 'CONN_UNKNOWN',
   ENOTFOUND: 'CONN_HOST_NOT_FOUND',
   EHOSTUNREACH: 'CONN_HOST_NOT_FOUND',
   SQL_SYNTAX_ERROR: 'CONN_UNKNOWN',
@@ -95,9 +99,27 @@ const RECOVERY_CODE_BY_CONNECTION_CODE: Record<ConnectionErrorCode, RecoveryCode
   UNKNOWN: 'CONN_UNKNOWN',
 }
 
+/**
+ * 幾個 adapter code 共用一個 RecoveryCode，但共用不到它的靜態描述——`CONN_HOST_NOT_FOUND`
+ * 說「主機名稱無法解析」，而 EHOSTUNREACH 的前提正是解析成功了。envelope 是 agent 讀的
+ * 那一份，說反話比籠統更糟。字串全為硬編，不含 host / port / SQL / 憑證。
+ */
+const MESSAGE_BY_CONNECTION_CODE: Partial<Record<ConnectionErrorCode, string>> = {
+  EHOSTUNREACH: 'The host name resolved, but the host or network is unreachable (routing or VPN).',
+  TOO_MANY_CONNECTIONS:
+    'The server has no connection slots left; the limit is on concurrent connections, not on this caller.',
+  CONNECTION_LOST: 'The connection was established and then dropped mid-session.',
+  TLS_ERROR: 'The TLS handshake failed (certificate or trust chain).',
+  SERVER_NOT_READY: 'The server is starting up or recovering and is not accepting connections yet.',
+  CONNECTION_REJECTED:
+    'The server answered and rejected the connection attempt (access rules, pooler, or a per-user limit).',
+}
+
 function classifyConnection(err: ConnectionError): RecoveryError {
   const code = RECOVERY_CODE_BY_CONNECTION_CODE[err.code]
   const base = baseError(code, { connectionCode: err.code })
+  const override = MESSAGE_BY_CONNECTION_CODE[err.code]
+  if (override) return { ...base, message: override }
   if (err.code === STATEMENT_TIMEOUT_CODE) {
     // CONN_TIMEOUT 的靜態描述講的是網路，對「連線正常但語句被伺服器取消」是誤導。
     // 覆寫成固定字串加上一個毫秒數——數字不是 host / port / SQL / 憑證，沒有洩漏，

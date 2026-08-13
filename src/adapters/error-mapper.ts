@@ -27,6 +27,8 @@ type CodedCategory =
   | 'CONNECTION_LOST'
   | 'TOO_MANY_CONNECTIONS'
   | 'TLS_ERROR'
+  | 'SERVER_NOT_READY'
+  | 'CONNECTION_REJECTED'
 
 /** OS / driver 層級的連線錯誤代碼 */
 const TRANSPORT_CODES: Record<string, CodedCategory> = {
@@ -46,15 +48,23 @@ const TRANSPORT_CODES: Record<string, CodedCategory> = {
   EHOSTUNREACH: 'EHOSTUNREACH',
   ENETUNREACH: 'EHOSTUNREACH',
   ENETDOWN: 'EHOSTUNREACH',
-  // TLS 憑證。node 的 TLS 錯誤把原因放在 code 上，訊息本身常常只有一句英文縮寫
-  CERT_HAS_EXPIRED: 'TLS_ERROR',
-  CERT_NOT_YET_VALID: 'TLS_ERROR',
-  DEPTH_ZERO_SELF_SIGNED_CERT: 'TLS_ERROR',
-  SELF_SIGNED_CERT_IN_CHAIN: 'TLS_ERROR',
-  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'TLS_ERROR',
-  UNABLE_TO_GET_ISSUER_CERT_LOCALLY: 'TLS_ERROR',
-  ERR_TLS_CERT_ALTNAME_INVALID: 'TLS_ERROR',
 }
+
+/**
+ * 這個 driver / OS code 本身就代表傳輸層失敗嗎。給還沒經過 mapError 的原始錯誤用
+ * （例如 repl 直接拿到 driver 物件的路徑），避免呼叫端各自維護一份 code 清單。
+ */
+export function isTransportDriverCode(code: string): boolean {
+  return TLS_CODE_PREFIX.test(code) || TRANSPORT_CODES[code] !== undefined
+}
+
+/**
+ * TLS 用前綴而非列舉：OpenSSL 的 verify code 有三十來個，node 另外還有自己的
+ * ERR_TLS_* / ERR_SSL_*。列舉法漏掉的每一個都會落回 `Database error (ERR_SSL_…)`
+ * 加上叫人去看語句的提示，也就是這張票要修的形狀本身。
+ */
+const TLS_CODE_PREFIX =
+  /^(CERT_|SELF_SIGNED_|DEPTH_ZERO_|UNABLE_TO_(?:GET|VERIFY)_|ERR_TLS_|ERR_SSL_)/
 
 /** MySQL / MariaDB 的具名錯誤碼 */
 const MYSQL_CODES: Record<string, CodedCategory> = {
@@ -84,6 +94,9 @@ const MYSQL_ERRNOS: Record<number, CodedCategory> = {
   1698: 'AUTH_FAILED',
   1040: 'TOO_MANY_CONNECTIONS', // ER_CON_COUNT_ERROR
   1053: 'CONNECTION_LOST', // ER_SERVER_SHUTDOWN
+  // 2006 / 2013 是 client 端的 CR_* 常數。mysql2 只在解析 server error packet 時
+  // 設 errno，所以本專案走不到這兩條——留給其他 driver，實際接住 mysql2 斷線的是
+  // PROTOCOL_CONNECTION_LOST 與下面的字串後備。
   2006: 'CONNECTION_LOST', // CR_SERVER_GONE_ERROR
   2013: 'CONNECTION_LOST', // CR_SERVER_LOST
   1969: 'STATEMENT_TIMEOUT', // MariaDB ER_STATEMENT_TIMEOUT
@@ -103,13 +116,16 @@ const SQLSTATES: Record<string, CodedCategory> = {
   '08003': 'CONNECTION_LOST', // connection_does_not_exist
   '08006': 'CONNECTION_LOST', // connection_failure
   '08001': 'ECONNREFUSED', // sqlclient_unable_to_establish_sqlconnection
-  '08004': 'ECONNREFUSED', // sqlserver_rejected_establishment_of_sqlconnection
+  // 伺服器活著而且回話了，只是拒絕這次連線（pg_hba、pooler 規則、連線上限）。
+  // 說成 ECONNREFUSED 的「沒在此 port 監聽」正好相反。
+  '08004': 'CONNECTION_REJECTED', // sqlserver_rejected_establishment_of_sqlconnection
   '53300': 'TOO_MANY_CONNECTIONS', // too_many_connections
   // class 57：伺服器主動結束連線。實測 `docker restart` 途中的查詢回的就是 57P01，
   // 先前它落到「有 code 但不認得」，提示叫人去確認語句引用的物件。
   '57P01': 'CONNECTION_LOST', // admin_shutdown
   '57P02': 'CONNECTION_LOST', // crash_shutdown
-  '57P03': 'CONNECTION_LOST', // cannot_connect_now — 伺服器啟動中，重試即可
+  // 連線從來沒建立過，不可能 mid-session 掉了——與 57P01/57P02 分開
+  '57P03': 'SERVER_NOT_READY', // cannot_connect_now
 }
 
 /** Redis 的錯誤前綴（redis 的錯誤沒有 code 欄位，第一個 token 就是類別） */
@@ -135,7 +151,7 @@ const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
   [/connection terminated/i, 'CONNECTION_LOST'],
   [/server closed the connection/i, 'CONNECTION_LOST'],
   [/server has gone away/i, 'CONNECTION_LOST'],
-  [/lost connection to .* server/i, 'CONNECTION_LOST'],
+  [/lost connection to \S+ server/i, 'CONNECTION_LOST'],
   [/getaddrinfo/i, 'ENOTFOUND'],
   [/authentication failed/i, 'AUTH_FAILED'],
   [/access denied for user/i, 'AUTH_FAILED'],
@@ -153,8 +169,14 @@ const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
  */
 const PG_CANCEL_BY_TIMEOUT = /statement timeout/i
 
-function categorize(errCode: string, errno: unknown, errMsg: string): CodedCategory | null {
+function categorize(
+  errCode: string,
+  errno: unknown,
+  errMsg: string,
+  system: DbSystem
+): CodedCategory | null {
   if (errCode) {
+    if (TLS_CODE_PREFIX.test(errCode)) return 'TLS_ERROR'
     const known =
       TRANSPORT_CODES[errCode] ??
       MYSQL_CODES[errCode] ??
@@ -170,13 +192,18 @@ function categorize(errCode: string, errno: unknown, errMsg: string): CodedCateg
     }
     if (known) return known
   }
-  if (typeof errno === 'number' && MYSQL_ERRNOS[errno]) return MYSQL_ERRNOS[errno]
+  // errno 只在 MySQL 系族查表。今天沒有碰撞（pg 不設 errno、node 的 system error
+  // 是負數），但那是巧合而非設計——1040 在別的引擎上不該被讀成連線數用盡。
+  const isMysqlFamily = system === 'mysql' || system === 'mariadb'
+  if (isMysqlFamily && typeof errno === 'number' && MYSQL_ERRNOS[errno]) {
+    return MYSQL_ERRNOS[errno]
+  }
   // Redis 的錯誤只有訊息，類別在第一個 token
   const redisPrefix = errMsg.match(/^([A-Z]+)\s/)?.[1]
   if (redisPrefix && REDIS_PREFIXES[redisPrefix]) return REDIS_PREFIXES[redisPrefix]
 
   // 有 code 卻不在表上：這是資料庫回報的具體錯誤，不該再用字串去猜
-  if (errCode || typeof errno === 'number') return null
+  if (errCode || (isMysqlFamily && typeof errno === 'number')) return null
 
   for (const [pattern, category] of FALLBACK_PATTERNS) {
     if (pattern.test(errMsg)) return category
@@ -258,7 +285,7 @@ export function mapError(
   const errCode = String(err?.code || '')
   const errno = err?.errno
 
-  switch (categorize(errCode, errno, errMsg)) {
+  switch (categorize(errCode, errno, errMsg, system)) {
     case 'ECONNREFUSED':
       return new ConnectionError(
         'ECONNREFUSED',
@@ -285,6 +312,28 @@ export function mapError(
           'Re-run the command: a dropped connection is often transient',
           `Check whether the server restarted or is cycling: ${SYSTEM_FACTS[system].logFile}`,
           'If it happens on long-running work, look at the server idle/wait timeout',
+        ]
+      )
+
+    case 'SERVER_NOT_READY':
+      return new ConnectionError(
+        'SERVER_NOT_READY',
+        `${options.host}:${options.port} is not accepting connections yet — the server is starting up or recovering`,
+        [
+          'Retry shortly: this clears on its own once startup or recovery finishes',
+          `Watch progress in the server log: ${SYSTEM_FACTS[system].logFile}`,
+          'On a replica, this also appears while it catches up with the primary',
+        ]
+      )
+
+    case 'CONNECTION_REJECTED':
+      return new ConnectionError(
+        'CONNECTION_REJECTED',
+        `${options.host}:${options.port} answered but rejected the connection attempt`,
+        [
+          'Check the server access rules (pg_hba.conf) for this user, database, and client address',
+          'If a pooler (pgbouncer / ProxySQL) sits in front, check its own rules and limits',
+          'Check whether the connection limit for this user or database is exhausted',
         ]
       )
 

@@ -444,16 +444,20 @@ test('mapError: TLS 憑證問題 → TLS_ERROR，提示指向憑證設定', () =
   }
 })
 
-test('mapError: PostgreSQL 08001 / 08004 建立連線失敗仍是連線類別', () => {
-  for (const code of ['08001', '08004']) {
-    const result = mapError(
-      { code, message: 'could not establish connection' },
+test('mapError: PostgreSQL 08001 是 client 端建不起來，08004 是伺服器拒絕', () => {
+  // 兩者語意不同，措辭也必須不同——之前這筆測試兩個 code 都接受，映射翻過來也不會紅
+  expect(
+    mapError(
+      { code: '08001', message: 'could not establish connection' },
       'postgresql',
       mockOptions
-    )
-    expect(['ECONNREFUSED', 'CONNECTION_LOST']).toContain(result.code)
-    expect(result.code).not.toBe('UNKNOWN')
-  }
+    ).code
+  ).toBe('ECONNREFUSED')
+
+  expect(
+    mapError({ code: '08004', message: 'server rejected connection' }, 'postgresql', mockOptions)
+      .code
+  ).toBe('CONNECTION_REJECTED')
 })
 
 test('mapError: 伺服器關閉 / 重啟 / 尚未就緒也是 CONNECTION_LOST', () => {
@@ -466,10 +470,11 @@ test('mapError: 伺服器關閉 / 重啟 / 尚未就緒也是 CONNECTION_LOST', 
       { code: '57P02', message: 'terminating connection due to crash of another server process' },
       'postgresql',
     ],
-    [{ code: '57P03', message: 'the database system is starting up' }, 'postgresql'],
     [{ code: 'ER_SERVER_SHUTDOWN', errno: 1053, message: 'Server shutdown in progress' }, 'mysql'],
-    [{ errno: 2006, message: 'MySQL server has gone away' }, 'mysql'],
-    [{ errno: 2013, message: 'Lost connection to MySQL server during query' }, 'mysql'],
+    // mysql2 斷線時給的是 code 而非 CR_* errno；2006 / 2013 那兩筆表項是給其他
+    // driver 用的，實際接住 mysql2 的是這個 code 與字串後備。
+    [{ code: 'PROTOCOL_CONNECTION_LOST', message: 'Connection lost' }, 'mysql'],
+    [{ message: 'MySQL server has gone away' }, 'mysql'],
   ]
 
   for (const [err, system] of cases) {
@@ -490,4 +495,97 @@ test('mapError: 沒有 code 的斷線訊息也認得（pg 的 Connection termina
     const result = mapError({ message }, 'postgresql', mockOptions)
     expect(result.code).toBe('CONNECTION_LOST')
   }
+})
+
+test('mapError: 57P03 是「伺服器還沒就緒」，不是連線中途掉了', () => {
+  const result = mapError(
+    { code: '57P03', message: 'the database system is starting up' },
+    'postgresql',
+    mockOptions
+  )
+
+  // 連線從來沒建立過，說 mid-session 掉了是假的
+  expect(result.message).not.toContain('mid-session')
+  expect(result.message).toMatch(/starting up|not accepting/i)
+  expect(result.hints.join(' ')).toMatch(/retry|re-run/i)
+})
+
+test('mapError: 08004 是伺服器拒絕，不能說成「伺服器沒開」', () => {
+  const result = mapError(
+    { code: '08004', message: 'server rejected establishment of connection' },
+    'postgresql',
+    mockOptions
+  )
+
+  expect(result.message).not.toContain('not running')
+  expect(result.message).toMatch(/rejected/i)
+  expect(result.hints.join(' ')).toMatch(/pg_hba|pooler|limit/i)
+})
+
+test('mapError: 未列舉的 TLS / SSL code 也認得（清單一定會漏）', () => {
+  for (const code of [
+    'CERT_UNTRUSTED',
+    'CERT_REVOKED',
+    'CERT_SIGNATURE_FAILURE',
+    'UNABLE_TO_GET_ISSUER_CERT',
+    'ERR_TLS_HANDSHAKE_TIMEOUT',
+    'ERR_SSL_WRONG_VERSION_NUMBER',
+  ]) {
+    expect(mapError({ code, message: 'tls failure' }, 'postgresql', mockOptions).code).toBe(
+      'TLS_ERROR'
+    )
+  }
+})
+
+test('mapError: MySQL errno 查表只對 MySQL 系族生效', () => {
+  // PG 不設 errno、node 的 system error 是負數，所以今天沒有碰撞——但那是巧合，
+  // 不是設計。1040 落在 PG 上不該被讀成「MySQL 連線數用盡」。
+  const onPostgres = mapError({ errno: 1040, message: 'something else' }, 'postgresql', mockOptions)
+  expect(onPostgres.code).not.toBe('TOO_MANY_CONNECTIONS')
+
+  const onMysql = mapError({ errno: 1040, message: 'Too many connections' }, 'mysql', {
+    ...mockOptions,
+    system: 'mysql',
+  })
+  expect(onMysql.code).toBe('TOO_MANY_CONNECTIONS')
+})
+
+test('mapError: pg-pool 的 "Connection terminated due to connection timeout" 仍是連線逾時', () => {
+  // 新增的 connection-lost 詞組排在逾時之後；順序調換會靜默把這條重分類
+  const result = mapError(
+    { message: 'Connection terminated due to connection timeout' },
+    'postgresql',
+    mockOptions
+  )
+  expect(result.code).toBe('ETIMEDOUT')
+})
+
+test('mapError: mysql2 斷線時給的 PROTOCOL_CONNECTION_LOST 是 CONNECTION_LOST', () => {
+  const result = mapError(
+    {
+      code: 'PROTOCOL_CONNECTION_LOST',
+      message: 'Connection lost: The server closed the connection.',
+    },
+    'mysql',
+    { ...mockOptions, system: 'mysql' }
+  )
+  expect(result.code).toBe('CONNECTION_LOST')
+})
+
+test('mapError: 其餘新增 key 的分類（ECONNABORTED / ENETDOWN / 08000 / errno 1053）', () => {
+  expect(
+    mapError({ code: 'ECONNABORTED', message: 'aborted' }, 'postgresql', mockOptions).code
+  ).toBe('CONNECTION_LOST')
+  expect(
+    mapError({ code: 'ENETDOWN', message: 'network is down' }, 'postgresql', mockOptions).code
+  ).toBe('EHOSTUNREACH')
+  expect(
+    mapError({ code: '08000', message: 'connection exception' }, 'postgresql', mockOptions).code
+  ).toBe('CONNECTION_LOST')
+  expect(
+    mapError({ errno: 1053, message: 'Server shutdown in progress' }, 'mysql', {
+      ...mockOptions,
+      system: 'mysql',
+    }).code
+  ).toBe('CONNECTION_LOST')
 })

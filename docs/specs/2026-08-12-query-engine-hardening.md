@@ -1,6 +1,13 @@
 # 查詢引擎 hardening 規格（v1.53 後）
 
 > 正式版本：GitHub issue [#37](https://github.com/CarlLee1983/dbcli/issues/37)（spec）與 #38–#49（tickets，皆貼 ready-for-agent）。本檔為 repo 內快照，實作以 issue 為準。
+>
+> **狀態（2026-08-13）**：#38–#49 全數完成並關閉。#48 只交付了兩項 AC（SQL driver 與
+> node-sql-parser 的按需載入），第三項「子命令按需載入」轉為 [#50](https://github.com/CarlLee1983/dbcli/issues/50)，
+> 附有量測數據與設計要求。實測結果記在 `benchmarks/baseline.json`：`--help` 176ms → 98ms、
+> schema 全掃描（500 表）14.02s → 5.88s、Redis `list`（50 萬 key）350ms → 180ms、
+> 命令收尾的 skill 檢查 240ms → 190ms。#44 的綁定檔快取只降低讀取次數（每次執行 2–6 次 → 1 次），
+> 牆鐘時間量不到差異。
 
 ## Problem Statement
 

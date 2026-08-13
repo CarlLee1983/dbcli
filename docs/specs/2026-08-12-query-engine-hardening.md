@@ -2,12 +2,22 @@
 
 > 正式版本：GitHub issue [#37](https://github.com/CarlLee1983/dbcli/issues/37)（spec）與 #38–#49（tickets，皆貼 ready-for-agent）。本檔為 repo 內快照，實作以 issue 為準。
 >
-> **狀態（2026-08-13）**：#38–#49 全數完成並關閉。#48 只交付了兩項 AC（SQL driver 與
-> node-sql-parser 的按需載入），第三項「子命令按需載入」轉為 [#50](https://github.com/CarlLee1983/dbcli/issues/50)，
-> 附有量測數據與設計要求。實測結果記在 `benchmarks/baseline.json`：`--help` 176ms → 98ms、
-> schema 全掃描（500 表）14.02s → 5.88s、Redis `list`（50 萬 key）350ms → 180ms、
-> 命令收尾的 skill 檢查 240ms → 190ms。#44 的綁定檔快取只降低讀取次數（每次執行 2–6 次 → 1 次），
-> 牆鐘時間量不到差異。
+> **狀態（2026-08-13，本規格已完成）**：#38–#50 全數完成並關閉。實測結果記在
+> `benchmarks/baseline.json`：`--help` 176ms → 98ms、schema 全掃描（500 表）
+> 14.02s → 5.88s、Redis `list`（50 萬 key）350ms → 180ms、命令收尾的 skill 檢查
+> 240ms → 190ms。#44 的綁定檔快取只降低讀取次數（每次執行 2–6 次 → 1 次），牆鐘時間
+> 量不到差異。
+>
+> #48 只交付了兩項 AC（SQL driver 與 node-sql-parser 的按需載入），第三項「子命令按需
+> 載入」轉為 [#50](https://github.com/CarlLee1983/dbcli/issues/50) 並於 PR #55 完成，
+> 決策記於 [ADR 0007](../adr/0007-lazy-subcommand-registration-runs-beside-the-eager-tree.md)。
+>
+> **這輪最值得帶走的一課**：#50 估 50ms、實得 8ms。那個估計來自對 source 跑
+> `bun -e 'await import(m)'` 量各模組的載入成本，但 dbcli 出貨的是 `bun build --outfile`
+> 的單檔 bundle、沒有 code splitting —— 延後求值不減少 parse，兩者不是同一回事。下一次
+> 動啟動成本前，先在**出貨產物**上量出天花板再選設計。量測本身也要當心：`bun run build`
+> 非決定性（[#56](https://github.com/CarlLee1983/dbcli/issues/56)），拿一側的大版比另一側
+> 的小版會量出約 13ms 的假象，兩側必須釘在同一個變體。
 
 ## Problem Statement
 

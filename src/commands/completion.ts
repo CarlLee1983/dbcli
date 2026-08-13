@@ -360,13 +360,13 @@ export const completionCommand = new Command('completion')
   .argument('[shell]', 'Shell type: bash, zsh, fish')
   .option('--install [shell]', 'Auto-install completion to shell rc file')
   .action(async (shellArg: string | undefined, options: { install?: string | boolean }) => {
-    const parentProgram = completionCommand.parent
-    if (!parentProgram) {
-      console.error(colors.error('Error: completion command must be registered to a program'))
-      process.exit(1)
-    }
-
-    const root = buildCompletionTree(parentProgram)
+    // Build the tree from the eager program rather than from this command's
+    // parent: under the lazy entry path (see ADR 0007) the parent holds only
+    // the command argv named, which would emit a completion script listing
+    // `completion` and nothing else — and `--install` writes that into the
+    // user's shell rc, leaving tab completion dead until reinstalled.
+    const { buildProgram } = await import('@/program')
+    const root = buildCompletionTree(buildProgram())
 
     const installing = options.install !== undefined
     const shell = installing

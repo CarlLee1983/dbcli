@@ -1,10 +1,9 @@
 // Full command runtime. Keep the lightweight process entry point in cli.ts so
 // standalone version checks do not parse database drivers and every command.
+import type { Command } from 'commander'
 import pkg from '../package.json'
 import { createLogger, setGlobalLogger, LogLevel } from './utils/logger'
-import { formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
-import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
 import { setGlobalConnectionTimeout, setGlobalStatementTimeout } from './utils/connection-timeout'
 import { resolveConnectionSelector } from './core/connection-selector'
@@ -12,7 +11,7 @@ import { resolveConfigPath } from './utils/config-path'
 import { isMachineReadableCommand } from './utils/cli-output'
 import { claimUpdateHint, defaultCliSessionKey } from './utils/update-hint-state'
 import { readSkillCheckCache, writeSkillCheckCache } from './utils/skill-check-cache'
-import { buildProgram } from './program'
+import { buildProgramFor } from './program-lazy'
 import { presentCliError } from './utils/cli-error'
 import { join } from 'path'
 import { writeSync } from 'node:fs'
@@ -86,7 +85,22 @@ function shouldSkipBackgroundChecks(): boolean {
 // `completion` is included because its stdout is eval'd at shell startup.
 const QUIET_OUTPUT_COMMANDS = new Set(['upgrade', 'completion'])
 
-const program = buildProgram()
+/**
+ * Building the program now involves a dynamic import per invocation (ADR 0007),
+ * so it can fail where the old static construction could not. Route that
+ * failure through the same presenter as every other CLI error instead of
+ * letting it surface as an unhandled rejection.
+ */
+async function buildProgramOrExit(): Promise<Command> {
+  try {
+    return await buildProgramFor(process.argv)
+  } catch (error) {
+    presentCliError(error)
+    process.exit(1)
+  }
+}
+
+const program = await buildProgramOrExit()
 
 function misplacedConnectionSelectorHint(): string | undefined {
   const rawArgs = process.argv.slice(2)
@@ -226,6 +240,7 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
       _bgVersionCheckResult.latestVersion
     ))
   ) {
+    const { formatUpdateHint } = await import('./commands/upgrade')
     process.stderr.write(formatUpdateHint(_bgVersionCheckResult.latestVersion) + '\n')
   }
 
@@ -242,6 +257,7 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
     const skillCacheKey = context?.configPath ?? resolveConfigPath(actionCommand)
     let outdatedSkills = await readSkillCheckCache(skillCacheKey, pkg.version)
     if (outdatedSkills === null) {
+      const { checkSkillUpdates } = await import('./commands/skill')
       outdatedSkills = await checkSkillUpdates()
       await writeSkillCheckCache(skillCacheKey, pkg.version, outdatedSkills)
     }
@@ -255,6 +271,7 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
         outdatedSkills.slice().sort().join(',')
       ))
     ) {
+      const { formatSkillUpdateReminder } = await import('./commands/upgrade')
       process.stderr.write(formatSkillUpdateReminder(outdatedSkills) + '\n')
     }
   }

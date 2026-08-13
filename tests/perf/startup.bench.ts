@@ -1,8 +1,12 @@
 /**
  * CLI Startup Performance
  *
- * Budgets are checked against the median after a discarded warm-up so one
- * descheduled process does not turn this into a flaky gate.
+ * Budgets are checked against the FASTEST of several runs, not the median.
+ * Startup noise is one-sided — a descheduled process is slower, never faster —
+ * so the minimum estimates the real cost and the median mostly reports how
+ * busy the runner was. Measured on `main`, the same workload has reported
+ * anywhere from 84ms to 283ms against a 200ms budget, failing CI on commits
+ * that touched nothing related.
  * Set SKIP_PERF_TESTS=1 to skip (e.g. on noisy CI runners).
  *
  *   --help    < 200ms on macOS/Linux
@@ -20,7 +24,9 @@ const enabled = existsSync(cliPath) && !process.env.SKIP_PERF_TESTS
 const STARTUP_BUDGETS =
   process.platform === 'win32' ? { help: 5000, version: 5000 } : { help: 200, version: 100 }
 
-function medianStartupMs(argument: '--help' | '--version', sampleCount = 5): number {
+const SAMPLE_COUNT = 9
+
+function fastestStartupMs(argument: '--help' | '--version', sampleCount = SAMPLE_COUNT): number {
   const run = () =>
     spawnSync(process.execPath, [cliPath, argument], {
       encoding: 'utf8',
@@ -39,23 +45,22 @@ function medianStartupMs(argument: '--help' | '--version', sampleCount = 5): num
     expect(result.status).toBe(0)
   }
 
-  samples.sort((a, b) => a - b)
-  return samples[Math.floor(samples.length / 2)]!
+  return Math.min(...samples)
 }
 
 function report(label: string, elapsed: number, budget: number): void {
-  console.log(`${label} = ${elapsed.toFixed(2)}ms (budget ${budget}ms)`)
+  console.log(`${label} = ${elapsed.toFixed(2)}ms (fastest of ${SAMPLE_COUNT}, budget ${budget}ms)`)
 }
 
 describe.if(enabled)('Performance: CLI Startup', () => {
   it('--help renders within budget', () => {
-    const elapsed = medianStartupMs('--help')
+    const elapsed = fastestStartupMs('--help')
     report('CLI startup (--help)', elapsed, STARTUP_BUDGETS.help)
     expect(elapsed).toBeLessThan(STARTUP_BUDGETS.help)
   })
 
   it('--version renders within budget', () => {
-    const elapsed = medianStartupMs('--version')
+    const elapsed = fastestStartupMs('--version')
     report('CLI startup (--version)', elapsed, STARTUP_BUDGETS.version)
     expect(elapsed).toBeLessThan(STARTUP_BUDGETS.version)
   })

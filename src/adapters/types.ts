@@ -328,6 +328,15 @@ export interface QueryableAdapter {
   }): Promise<{ name: string; documentCount?: number }[]>
 
   /**
+   * Redis-only: 取樣 key 名稱並回報是否觸及取樣上限。
+   *
+   * 宣告在介面上而不是讓呼叫端 double-cast：`dbcli list` 與 shell 補全都需要
+   * `truncated` 才能誠實顯示「只看了前 N 個」，而那個資訊 listCollections
+   * 的形狀裝不下。其他引擎有 catalog 可查，不需要取樣。
+   */
+  sampleKeyNames?(limit: number): Promise<{ names: string[]; truncated: boolean }>
+
+  /**
    * SQL-compatible collection listing for shared command surfaces.
    * @param options Optional filter for system indices
    */

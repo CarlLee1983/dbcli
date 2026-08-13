@@ -113,22 +113,56 @@ function categorize(errCode: string, errno: unknown, errMsg: string): CodedCateg
   return null
 }
 
+/**
+ * 每個引擎在提示裡要填的東西。先前這些散成五組 `system === 'postgresql' ? …`
+ * 的三元階梯，加一個引擎就要記得改五個地方——而漏掉的那個會安靜地給出
+ * 另一個引擎的指令。
+ */
+const SYSTEM_FACTS: Record<
+  DbSystem,
+  {
+    serviceCheck: string
+    defaultPort: string
+    firewallRule: string
+    client: string
+    logFile: string
+  }
+> = {
+  postgresql: {
+    serviceCheck: 'systemctl status postgresql',
+    defaultPort: 'default 5432',
+    firewallRule: 'allow TCP 5432',
+    client: 'psql',
+    logFile: 'postgresql.log',
+  },
+  mysql: {
+    serviceCheck: 'systemctl status mysql',
+    defaultPort: 'default 3306',
+    firewallRule: 'allow TCP 3306',
+    client: 'mysql',
+    logFile: 'mysql.log',
+  },
+  mariadb: {
+    serviceCheck: 'systemctl status mariadb',
+    defaultPort: 'default 3306',
+    firewallRule: 'allow TCP 3306',
+    client: 'mariadb',
+    logFile: 'mariadb.log',
+  },
+  redis: {
+    serviceCheck: 'redis-cli ping',
+    defaultPort: 'default 6379',
+    firewallRule: 'allow TCP 6379',
+    client: 'redis-cli',
+    logFile: 'redis.log',
+  },
+}
+
 function serviceHints(system: DbSystem, options: ConnectionOptions): string[] {
+  const facts = SYSTEM_FACTS[system]
   return [
-    `Check that the ${system} service is running: ${
-      system === 'postgresql'
-        ? 'systemctl status postgresql'
-        : system === 'redis'
-          ? 'redis-cli ping'
-          : 'systemctl status mysql'
-    }`,
-    `Verify the port is correct: ${
-      system === 'postgresql'
-        ? 'default 5432'
-        : system === 'redis'
-          ? 'default 6379'
-          : 'default 3306'
-    }`,
+    `Check that the ${system} service is running: ${facts.serviceCheck}`,
+    `Verify the port is correct: ${facts.defaultPort}`,
     `Check that ${options.host} is reachable: ping ${options.host} or telnet ${options.host} ${options.port}`,
   ]
 }
@@ -166,7 +200,7 @@ export function mapError(
         'ETIMEDOUT',
         `Connection timed out (${options.timeout || 5000}ms) — may be blocked by a firewall or slow network`,
         [
-          `Check firewall rules: ${system === 'postgresql' ? 'allow TCP 5432' : 'allow TCP 3306'}`,
+          `Check firewall rules: ${SYSTEM_FACTS[system].firewallRule}`,
           `Increase timeout: edit .dbcli and add "timeout": 15000`,
           `Verify network connectivity: ping ${options.host} -c 3`,
         ]
@@ -184,11 +218,9 @@ export function mapError(
         'AUTH_FAILED',
         `Authentication failed — check your username or password`,
         [
-          `Verify credentials: ${
-            system === 'postgresql'
-              ? `psql -U ${options.user} -h ${options.host}`
-              : `mysql -u ${options.user} -h ${options.host}`
-          }`,
+          `Verify credentials: ${SYSTEM_FACTS[system].client} ${
+            system === 'postgresql' ? '-U' : '-u'
+          } ${options.user} -h ${options.host}`,
           `Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)`,
           `Re-run dbcli init to update credentials`,
         ]
@@ -242,8 +274,8 @@ export function mapError(
   // 連 code 都沒有：只剩下連線層面的通用建議
   return new ConnectionError('UNKNOWN', `Connection failed: ${errMsg}`, [
     `Check connection parameters: host=${options.host}, port=${options.port}, user=${options.user}`,
-    `View server logs: ${system === 'postgresql' ? 'postgresql.log' : 'mysql.log'}`,
-    `Try connecting directly with the ${system === 'postgresql' ? 'psql' : 'mysql'} command-line tool`,
+    `View server logs: ${SYSTEM_FACTS[system].logFile}`,
+    `Try connecting directly with the ${SYSTEM_FACTS[system].client} command-line tool`,
   ])
 }
 

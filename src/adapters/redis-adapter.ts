@@ -147,6 +147,7 @@ export class RedisAdapter implements QueryableAdapter {
    * 一部分，不是意外，所以 truncated 一併回報給呼叫端顯示。
    */
   async listCollections(options?: {
+    /** 介面共用欄位；Redis 沒有系統 key 的概念，一律忽略 */
     includeSystem?: boolean
     limit?: number
   }): Promise<{ name: string; documentCount?: number }[]> {

@@ -1,15 +1,17 @@
 import type { ConstraintInput } from './constraint'
-import { quoteQualifiedIdentifier } from '@/adapters/identifier-quote'
-
-export type ConstraintEngine = 'postgresql' | 'mysql' | 'mariadb'
+import { quoteQualifiedIdentifier, type SqlIdentifierDialect } from '@/adapters/identifier-quote'
 
 /**
- * 逐段 quote 以點分隔的識別字。跳脫規則本身在 `adapters/identifier-quote.ts`，
- * 這裡只是把 ConstraintEngine 對應到方言。
+ * verify 支援的引擎恰好就是有識別字引號規則的那三個，所以直接沿用 adapter
+ * 層的方言型別，而不是再宣告一份會慢慢走鐘的複本。
  */
-export function quoteIdent(name: string, engine: ConstraintEngine): string {
-  return quoteQualifiedIdentifier(name, engine)
-}
+export type ConstraintEngine = SqlIdentifierDialect
+
+/**
+ * 逐段 quote 以點分隔的識別字。跳脫規則的唯一來源在
+ * `adapters/identifier-quote.ts`。
+ */
+export const quoteIdent = quoteQualifiedIdentifier
 
 export function buildNotNullViolationQuery(a: {
   engine: ConstraintEngine

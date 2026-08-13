@@ -159,11 +159,10 @@ async function redisListBranch(
 
   try {
     // 取樣上限是輸出的一部分：使用者要能分辨「只有這些 key」與「只看了這些」
-    const { names, truncated } = await (
-      redisAdapter as unknown as {
-        sampleKeyNames: (limit: number) => Promise<{ names: string[]; truncated: boolean }>
-      }
-    ).sampleKeyNames(REDIS_LIST_KEY_LIMIT)
+    if (!redisAdapter.sampleKeyNames) {
+      throw new Error('Redis adapter does not implement sampleKeyNames')
+    }
+    const { names, truncated } = await redisAdapter.sampleKeyNames(REDIS_LIST_KEY_LIMIT)
     const keys = names.map((name) => ({ name }))
     const totalKeys = await (
       redisAdapter as unknown as { getDbSize: () => Promise<number> }

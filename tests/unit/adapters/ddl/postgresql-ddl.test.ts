@@ -266,3 +266,23 @@ describe('PostgreSQL dropEnum', () => {
     expect(warnings.length).toBeGreaterThan(0)
   })
 })
+
+// ── 識別字跳脫（#39） ─────────────────────────────────────────────────────
+
+describe('PostgreSQL 識別字跳脫', () => {
+  test('表名含雙引號時以重複雙引號跳脫', () => {
+    const cols: ColumnDefinition[] = [{ name: 'id', type: 'int', primaryKey: true }]
+    const { sql } = gen.createTable('we"ird', cols)
+    expect(sql).toContain('CREATE TABLE "we""ird"')
+  })
+
+  test('欄位名含雙引號時同樣跳脫', () => {
+    const cols: ColumnDefinition[] = [{ name: 'co"l', type: 'int' }]
+    const { sql } = gen.createTable('t', cols)
+    expect(sql).toContain('"co""l" INT')
+  })
+
+  test('dropTable 的表名跳脫', () => {
+    expect(gen.dropTable('we"ird').sql).toContain('DROP TABLE "we""ird"')
+  })
+})

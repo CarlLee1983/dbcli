@@ -282,6 +282,45 @@ describe('RedisAdapter — discovery & schema', () => {
     expect(names).toEqual(['cache:x', 'session:abc', 'user:1', 'user:2'])
   })
 
+  // ── 列表取樣上限（#46） ─────────────────────────────────────────────────
+
+  test('listCollections() 有明確的取樣上限，不會掃完整個 keyspace', async () => {
+    const { adapter, client } = makeAdapter()
+    // 每輪回傳 2 個 key 且 cursor 永遠不歸零——正式環境的百萬 key 就長這樣
+    let round = 0
+    client.customHandlers.SCAN = () => {
+      round += 1
+      return ['1', [`k:${round}a`, `k:${round}b`]]
+    }
+    await adapter.connect()
+
+    const result = await adapter.listCollections({ limit: 6 })
+
+    expect(result).toHaveLength(6)
+    expect(round).toBe(3)
+  })
+
+  test('被 blacklist 擋掉的 key 不佔用結果，也不進入累積', async () => {
+    const { adapter, client } = makeAdapter()
+    client.scanResponses = [['0', ['secrets:a', 'user:1', 'secrets:b', 'user:2']]]
+    adapter.setBlacklistRules(['secrets:*'])
+    await adapter.connect()
+
+    const names = (await adapter.listCollections()).map((r) => r.name).sort()
+    expect(names).toEqual(['user:1', 'user:2'])
+  })
+
+  test('sampleKeyNames() 在掃描過程套用 blacklist，truncated 反映原始掃描量', async () => {
+    const { adapter, client } = makeAdapter()
+    client.scanResponses = [['0', ['secrets:a', 'user:1', 'user:2']]]
+    adapter.setBlacklistRules(['secrets:*'])
+    await adapter.connect()
+
+    const { names, truncated } = await adapter.sampleKeyNames(3)
+    expect(names.sort()).toEqual(['user:1', 'user:2'])
+    expect(truncated).toBe(true)
+  })
+
   test('getTableSchema() reports type/ttl/size for a string key', async () => {
     const { adapter, client } = makeAdapter()
     client.types.set('greeting', 'string')

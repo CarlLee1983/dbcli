@@ -1,38 +1,101 @@
 {
-  "version": "1.0.0",
-  "date": "2026-03-26",
+  "version": "1.1.0",
+  "date": "2026-08-13",
   "platform": "macos",
-  "node_version": "20.10.0",
-  "bun_version": "1.3.3",
+  "hardware": "MacBook Air M4 (arm64)",
+  "node_version": "22.17.1",
+  "bun_version": "1.3.10",
+  "dbcli_version": "1.53.0",
+  "method": "median of 5 samples after a discarded warm-up (tests/perf/*.bench.ts)",
   "benchmarks": {
     "cli_startup_help": {
-      "mean_ms": 95,
-      "min_ms": 92,
-      "max_ms": 105,
+      "mean_ms": 98,
+      "min_ms": 97,
+      "max_ms": 99,
+      "before_ms": 176,
       "target_ms": 200,
-      "status": "PASS"
+      "status": "PASS",
+      "notes": "2026-08-13 #48：node-sql-parser 改為延後載入並自 bundle 外部化，--help 176ms → 98ms（同一台機器同一時段內先後量測；dist bundle 6.85MB → 2.58MB）。先前紀錄的 120ms / 106ms 是另一個機器狀態下的數字，不與這組對照"
     },
     "cli_startup_version": {
-      "mean_ms": 85,
-      "min_ms": 82,
-      "max_ms": 98,
+      "mean_ms": 13,
+      "min_ms": 13,
+      "max_ms": 14,
       "target_ms": 100,
-      "status": "PASS"
+      "status": "PASS",
+      "notes": "--version 走 src/cli.ts 的 fast path，不載入 cli-runtime。13ms 與 #48 前相同——它本來就沒付 parser 的成本"
     },
     "query_execution_json": {
-      "mean_ms": 35,
-      "min_ms": 32,
-      "max_ms": 42,
-      "target_ms": 50,
-      "status": "PASS"
+      "mean_ms": 123,
+      "min_ms": 123,
+      "max_ms": 126,
+      "target_ms": 800,
+      "status": "PASS",
+      "workload": "redis PING via query --format json (localhost)"
     },
     "query_execution_table": {
-      "mean_ms": 38,
-      "min_ms": 35,
-      "max_ms": 45,
-      "target_ms": 50,
-      "status": "PASS"
+      "mean_ms": 126,
+      "min_ms": 123,
+      "max_ms": 128,
+      "target_ms": 800,
+      "status": "PASS",
+      "workload": "redis PING via query (localhost)"
+    },
+    "schema_full_scan_120_tables": {
+      "mean_ms": 2280,
+      "min_ms": 2030,
+      "max_ms": 2730,
+      "before_ms": 4260,
+      "status": "PASS",
+      "workload": "dbcli schema --force against PostgreSQL 16 with 120 tables × 2000 rows (docker-compose.test.yml)",
+      "notes": "#49 前後對照（前 = 5fea6f1a）：4.26s → 2.28s（median of 3）。合併 metadata 查詢＋估計列數取代 COUNT(*)＋每表 4 並行"
+    },
+    "schema_full_scan_500_tables": {
+      "mean_ms": 5880,
+      "min_ms": 5680,
+      "max_ms": 6340,
+      "before_ms": 14020,
+      "status": "PASS",
+      "workload": "dbcli schema --force against PostgreSQL 16 with 500 tables (docker-compose.test.yml)",
+      "notes": "#49 前後對照：14.02s → 5.88s（median of 3）。表數愈多差距愈大"
+    },
+    "query_with_500_table_schema_cache": {
+      "mean_ms": 300,
+      "min_ms": 260,
+      "max_ms": 350,
+      "before_ms": 340,
+      "status": "PASS",
+      "workload": "dbcli query \"SELECT 1\" --format json against PostgreSQL 16 with a 500-table layered schema cache",
+      "notes": "#43 前後對照（前 = 56a98aec）：median 340ms → 300ms，尾端從 560ms 收到 350ms。9 次 A/B 交錯取樣，消除機器漂移"
+    },
+    "redis_list_500k_keyspace": {
+      "mean_ms": 180,
+      "min_ms": 180,
+      "max_ms": 230,
+      "before_ms": 350,
+      "status": "PASS",
+      "workload": "dbcli list --format json against a 500 000-key Redis (blacklist 過濾約 22% 的 key)",
+      "notes": "#46 前後對照（前 = 13792e2c）：350ms → 180ms（median of 3），輸出 3.56MB / 77 889 key → 35KB / 770 key。舊版掃到十萬 key 的預設上限，新版取樣 1000 並在掃描中過濾"
+    },
+    "command_tail_skill_check": {
+      "mean_ms": 190,
+      "min_ms": 170,
+      "max_ms": 230,
+      "before_ms": 240,
+      "status": "PASS",
+      "workload": "dbcli blacklist list（預設 table 輸出，會觸發 postAction 的 skill 檢查）",
+      "notes": "#45 前後對照（前 = af73107f）：median 240ms → 190ms（9 次 A/B 交錯取樣）。省下的是七個平台安裝檔與兩份來源檔的逐檔比對"
+    },
+    "config_binding_reads": {
+      "before_reads": {
+        "list": 2,
+        "query": 3,
+        "schema": 6
+      },
+      "after_reads": 1,
+      "status": "PASS",
+      "notes": "#44：綁定檔的讀取＋SHA-256 驗證次數由每次執行 2–6 次降為 1 次。牆鐘時間量不到差異（blacklist list 對 bound project，有無快取 median 都是 450ms）——單檔約 250 bytes，本機 SSD 上一次讀取遠低於量測噪音。快取的價值是「一次執行內只驗證一次」這條可檢查的性質，不是省時間"
     }
   },
-  "notes": "Initial baseline established. Targets: startup < 200ms (macOS/Linux) / < 300ms (Windows), query < 50ms"
+  "notes": "2026-08-12 於 #38 以當前程式碼重測。query 預算自 5000ms 收緊到 800ms：實測一次完整 CLI 查詢往返約 123–126ms，800ms 留約 5.5 倍餘裕給 CI 噪音，仍能攔下數量級迴歸。本機無可用的 MySQL/PostgreSQL server（無 docker、無原生安裝），故 query 數據以 localhost Redis 量測；SQL 版 bench 保留並在 TEST_DATABASE_URL 可用時執行。啟動預算維持 help < 200ms / version < 100ms。 2026-08-13 於 #48 重測 startup：SQL driver 改為動態載入後 --help 自 120ms 降到 106ms（--version fast path 不受影響）。子命令模組本身仍為靜態註冊，剩餘啟動成本分散在多個 command 的共用相依樹上。 2026-08-13 補量測（docker-compose.test.yml，OrbStack）：#49 的掃描與 #43 的查詢延遲改以真實 PostgreSQL 對照前後版本，數據見上；掃描與查詢均以 `bun run src/cli.ts` 直接執行，兩側同法。 2026-08-13 再補 #44 / #45 / #46 的量測；#46 的 Redis 需另起 6380 埠的容器，因為主機本身已有 redis-server 佔用 6379。 啟動預算維持 200ms 而非收緊：機器有負載時（例如同時跑著測試用容器）實測會落在 170ms 上下，收到 150ms 會在 CI 上晃。"
 }

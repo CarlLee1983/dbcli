@@ -38,12 +38,21 @@ const OptNumberOrEnvRef = z.union([z.number().int(), EnvRefSchema]).optional().d
  * CLI flag the built-in 5000ms was unreachable, which is too tight for MongoDB
  * over a VPN or against Atlas.
  *
- * Lower bound is not 1: PostgreSQL maps this value onto `statement_timeout` as
- * well as the connect timeout, so a tiny value fails every query with what reads
- * like a connection error. Upper bound keeps a typo from hanging the CLI.
+ * Lower bound is not 1: `--timeout` also becomes the statement timeout when no
+ * separate one is given, so a tiny value fails every query with what reads like
+ * a connection error. Upper bound keeps a typo from hanging the CLI.
  */
 export const MIN_CONNECTION_TIMEOUT_MS = 100
 export const MAX_CONNECTION_TIMEOUT_MS = 600_000
+
+/**
+ * Statement timeout bounds (milliseconds).
+ *
+ * 0 是合法值且意義明確——取消上限，讓一句分析查詢想跑多久就跑多久。上限比
+ * 連線逾時寬鬆：等一句查詢一小時是合理的請求，等一個 TCP 連線一小時不是。
+ */
+export const MIN_STATEMENT_TIMEOUT_MS = 0
+export const MAX_STATEMENT_TIMEOUT_MS = 3_600_000
 
 const TimeoutField = {
   timeout: z
@@ -51,6 +60,12 @@ const TimeoutField = {
     .int()
     .min(MIN_CONNECTION_TIMEOUT_MS)
     .max(MAX_CONNECTION_TIMEOUT_MS)
+    .optional(),
+  statementTimeout: z
+    .number()
+    .int()
+    .min(MIN_STATEMENT_TIMEOUT_MS)
+    .max(MAX_STATEMENT_TIMEOUT_MS)
     .optional(),
 }
 
@@ -69,6 +84,27 @@ export function parseTimeoutOption(value: string): number {
     throw new Error(
       `Invalid --timeout '${value}': expected an integer between ` +
         `${MIN_CONNECTION_TIMEOUT_MS} and ${MAX_CONNECTION_TIMEOUT_MS} milliseconds`
+    )
+  }
+  return parsed
+}
+
+/**
+ * Parse a --statement-timeout CLI value into milliseconds
+ *
+ * @throws Error with the accepted range when the value is out of bounds
+ */
+export function parseStatementTimeoutOption(value: string): number {
+  const parsed = Number(value)
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < MIN_STATEMENT_TIMEOUT_MS ||
+    parsed > MAX_STATEMENT_TIMEOUT_MS
+  ) {
+    throw new Error(
+      `Invalid --statement-timeout '${value}': expected an integer between ` +
+        `${MIN_STATEMENT_TIMEOUT_MS} and ${MAX_STATEMENT_TIMEOUT_MS} milliseconds ` +
+        `(0 removes the limit)`
     )
   }
   return parsed

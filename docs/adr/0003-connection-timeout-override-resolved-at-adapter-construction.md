@@ -45,9 +45,13 @@ read → 改一個欄位 → `configModule.write()`，而 `write()` 會把 `conf
   而非重複；新增任何繞過這三者的生成路徑，旗標就會對該路徑失效。
 - `dbcli init` 的連線測試也走 `AdapterFactory`，所以第一次設定 MongoDB 時
   `--timeout` 同樣生效——那正是最容易卡住的一步。
-- 下限訂為 100ms 而非 1ms：PostgreSQL adapter 把同一個值同時給
-  `connectionTimeoutMillis` 與 `statement_timeout`，過小的值會讓每一句 SQL 立刻
-  失敗，且錯誤訊息長得像連線問題。
+- 下限訂為 100ms 而非 1ms：`--timeout` 在沒有另外指定語句逾時時也會成為語句
+  逾時，過小的值會讓每一句 SQL 立刻失敗，且錯誤訊息長得像連線問題。
+  （2026-08-13 更新：原本的理由是「PostgreSQL adapter 把同一個值同時給
+  `connectionTimeoutMillis` 與 `statement_timeout`」。逾時已拆成連線與語句兩個
+  概念——連線逾時保留 5000ms 內建預設，語句逾時預設不存在，交給伺服器決定；
+  規則在 `src/adapters/timeout-policy.ts`，新增的 `--statement-timeout` 讓兩者
+  可以分別調整。下限的結論不變，理由改成上面這條。）
 - `timeout` 是唯一不接受 `$env` 參照的連線欄位。逾時不是機密，且
   `resolveEnvReferences()` 目前只對 `port` 做字串轉數字；要支援得一併擴充轉型
   規則。此限制已寫入使用者文件。

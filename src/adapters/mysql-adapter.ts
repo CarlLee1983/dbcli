@@ -4,11 +4,20 @@
  * Note: MariaDB is a MySQL fork with compatible protocol and schema
  */
 
-import mysql from 'mysql2/promise'
-import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
+// 只留型別；driver 本體在 connect() 時才載入（見 postgresql-adapter 的說明）
+import type mysql from 'mysql2/promise'
+import type {
+  DatabaseAdapter,
+  ConnectionOptions,
+  TableSchema,
+  TableSchemaOptions,
+  ExecutionResult,
+} from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
+import { quoteIdentifier } from './identifier-quote'
+import { resolveTimeoutPolicy, statementTimeoutSql } from './timeout-policy'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -48,19 +57,30 @@ export class MySQLAdapter implements DatabaseAdapter {
   async connect(): Promise<void> {
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
-      // Note: mysql2/promise does not support connectionTimeout in createConnection
-      // Timeout should be configured at query execution level if needed
-      this.db = await mysql.createConnection({
+      const timeouts = resolveTimeoutPolicy(this.options)
+      const { default: driver } = await import('mysql2/promise')
+      this.db = await driver.createConnection({
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,
         password: this.options.password || undefined,
         database: this.options.database,
         charset: 'utf8mb4',
+        connectTimeout: timeouts.connectMs,
       })
 
       // Ensure utf8mb4 for information_schema comments
       await this.db.execute('SET NAMES utf8mb4')
+
+      // 語句逾時是 session 級設定；沒有它時 --timeout 對 MySQL 只影響連線，
+      // 慢查詢仍會無限期等下去。伺服器太舊而不認得這個變數時不該讓連線失敗。
+      if (timeouts.statementMs !== undefined) {
+        try {
+          await this.db.query(statementTimeoutSql(this.system, timeouts.statementMs))
+        } catch {
+          // MySQL < 5.7.8 / MariaDB < 10.1 沒有這個 session 變數
+        }
+      }
 
       // Test connection with lightweight query
       await this.testConnection()
@@ -206,7 +226,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(tableName: string): Promise<TableSchema> {
+  async getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema> {
     requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {
@@ -293,31 +313,30 @@ export class MySQLAdapter implements DatabaseAdapter {
       }>(indexQuery, [tableName])
       const indexResults = indexResult.rows
 
-      // Get row count
-      const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM \`${tableName}\``
-      )
-
-      // Get engine type
-      const tableQuery = `
-        SELECT ENGINE as engine
+      // Engine 與估計列數同源，一次查回來就好——先前是兩趟一模一樣的
+      // information_schema.TABLES 查詢（#49）
+      const tableMetaQuery = `
+        SELECT ENGINE as engine, TABLE_ROWS as estimated_rows
         FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       `
+      const tableMetaResult = await this.execute<{
+        engine: string
+        estimated_rows: number | null
+      }>(tableMetaQuery, [tableName])
+      const tableMeta = tableMetaResult.rows[0]
+      const estimatedRowCount = Math.max(0, tableMeta?.estimated_rows || 0)
 
-      const tableResult = await this.execute<{ engine: string }>(tableQuery, [tableName])
-      const tableResults = tableResult.rows
-
-      // Get estimated row count from information_schema (zero-cost)
-      const estimateQuery = `
-        SELECT TABLE_ROWS as estimated_rows
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
-      `
-      const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
-        tableName,
-      ])
-      const estimateResults = estimateResult.rows
+      // 精確列數要掃全表。掃描模式關掉它——一百張表的資料庫做不起一百次
+      // 全表 COUNT，而掃描要的本來就是概況。
+      const exactRowCount =
+        options?.exactRowCount === false
+          ? undefined
+          : (
+              await this.execute<{ count: number }>(
+                `SELECT COUNT(*) as count FROM ${quoteIdentifier(tableName, this.system)}`
+              )
+            ).rows[0]?.count
 
       const schema: TableSchema = {
         name: tableName,
@@ -332,8 +351,8 @@ export class MySQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: parseEnumValues(col.type),
         })),
-        rowCount: countResult.rows[0]?.count || 0,
-        engine: tableResults[0]?.engine || 'MySQL',
+        rowCount: exactRowCount ?? estimatedRowCount,
+        engine: tableMeta?.engine || 'MySQL',
         primaryKey: primaryKeyColumns,
         foreignKeys: fkResults.map((fk) => ({
           name: fk.name,
@@ -346,7 +365,7 @@ export class MySQLAdapter implements DatabaseAdapter {
           columns: idx.columns.split(',').map((c) => c.trim()),
           unique: idx.is_unique,
         })),
-        estimatedRowCount: estimateResults[0]?.estimated_rows || 0,
+        estimatedRowCount,
       }
 
       return schema

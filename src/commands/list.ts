@@ -7,6 +7,7 @@
 import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
 import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import { REDIS_LIST_KEY_LIMIT } from '@/adapters/redis-adapter'
 import { TableListFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -157,7 +158,12 @@ async function redisListBranch(
   await redisAdapter.connect()
 
   try {
-    const keys = await redisAdapter.listCollections()
+    // 取樣上限是輸出的一部分：使用者要能分辨「只有這些 key」與「只看了這些」
+    if (!redisAdapter.sampleKeyNames) {
+      throw new Error('Redis adapter does not implement sampleKeyNames')
+    }
+    const { names, truncated } = await redisAdapter.sampleKeyNames(REDIS_LIST_KEY_LIMIT)
+    const keys = names.map((name) => ({ name }))
     const totalKeys = await (
       redisAdapter as unknown as { getDbSize: () => Promise<number> }
     ).getDbSize()
@@ -168,13 +174,28 @@ async function redisListBranch(
     }
 
     if (format === 'json') {
-      console.log(JSON.stringify({ keys, totalKeys }, null, 2))
+      console.log(
+        JSON.stringify(
+          {
+            keys,
+            totalKeys,
+            ...(truncated ? { sampled: true, sampleLimit: REDIS_LIST_KEY_LIMIT } : {}),
+          },
+          null,
+          2
+        )
+      )
     } else {
       console.log(`Keys in db ${connName} (redis):`)
       for (const k of keys) {
         console.log(`  ${k.name}`)
       }
       console.log(`\n\u2713 Found ${keys.length} keys (Total in DB: ${totalKeys.toLocaleString()})`)
+      if (truncated) {
+        console.log(
+          `  Sampled the first ${REDIS_LIST_KEY_LIMIT} keys scanned; the keyspace is larger.`
+        )
+      }
     }
   } finally {
     await redisAdapter.disconnect()

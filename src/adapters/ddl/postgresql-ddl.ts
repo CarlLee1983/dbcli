@@ -12,9 +12,11 @@ import type {
   ConstraintDefinition,
   EnumDefinition,
 } from './types'
+import { quoteIdentifier } from '../identifier-quote'
 
+// 識別字跳脫的唯一來源見 adapters/identifier-quote.ts；這裡只綁定方言。
 function q(name: string): string {
-  return `"${name}"`
+  return quoteIdentifier(name, 'postgresql')
 }
 
 function columnSQL(col: ColumnDefinition): string {

@@ -144,9 +144,7 @@ describe('migrate core logic', () => {
     test('change type', async () => {
       const { stdout } = await runAction({
         kind: 'alterColumn',
-        table: 'users',
-        column: 'name',
-        options: { type: 'varchar(200)' },
+        options: { table: 'users', column: 'name', type: 'varchar(200)' },
       })
       const result = parseJSON(stdout, 'alterColumn type')
       expect(result.sql).toContain('VARCHAR(200)')
@@ -155,9 +153,7 @@ describe('migrate core logic', () => {
     test('rename column', async () => {
       const { stdout } = await runAction({
         kind: 'alterColumn',
-        table: 'users',
-        column: 'email',
-        options: { rename: 'user_email' },
+        options: { table: 'users', column: 'email', rename: 'user_email' },
       })
       const result = parseJSON(stdout, 'alterColumn rename')
       expect(result.sql).toContain('RENAME COLUMN')
@@ -171,8 +167,7 @@ describe('migrate core logic', () => {
     test('basic index', async () => {
       const { stdout } = await runAction({
         kind: 'addIndex',
-        table: 'users',
-        index: { columns: ['email'] },
+        index: { table: 'users', columns: ['email'] },
       })
       const result = parseJSON(stdout, 'addIndex')
       expect(result.sql).toContain('CREATE')
@@ -187,11 +182,11 @@ describe('migrate core logic', () => {
     test('foreign key', async () => {
       const { stdout } = await runAction({
         kind: 'addConstraint',
-        table: 'orders',
         constraint: {
+          table: 'orders',
           type: 'foreign_key' as any,
-          columns: ['user_id'],
-          references: { table: 'users', columns: ['id'] },
+          column: 'user_id',
+          references: { table: 'users', column: 'id' },
         },
       })
       const result = parseJSON(stdout, 'addConstraint fk')

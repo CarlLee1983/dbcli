@@ -276,3 +276,31 @@ describe('MySQL dropEnum', () => {
     expect(warnings.length).toBeGreaterThan(0)
   })
 })
+
+// ── 識別字跳脫（#39） ─────────────────────────────────────────────────────
+
+describe('MySQL 識別字跳脫', () => {
+  test('表名含反引號時以重複反引號跳脫', () => {
+    const cols: ColumnDefinition[] = [{ name: 'id', type: 'int', primaryKey: true }]
+    const { sql } = gen.createTable('we`ird', cols)
+    expect(sql).toContain('CREATE TABLE `we``ird`')
+  })
+
+  test('欄位名含反引號時同樣跳脫', () => {
+    const cols: ColumnDefinition[] = [{ name: 'co`l', type: 'int' }]
+    const { sql } = gen.createTable('t', cols)
+    expect(sql).toContain('`co``l` INT')
+  })
+
+  test('外鍵參照的表名與欄位名也跳脫', () => {
+    const cols: ColumnDefinition[] = [
+      { name: 'ref_id', type: 'int', references: { table: 'we`ird', column: 'i`d' } },
+    ]
+    const { sql } = gen.createTable('t', cols)
+    expect(sql).toContain('REFERENCES `we``ird`(`i``d`)')
+  })
+
+  test('dropTable 的表名跳脫', () => {
+    expect(gen.dropTable('we`ird').sql).toBe('DROP TABLE `we``ird`;')
+  })
+})

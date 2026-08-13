@@ -6,11 +6,12 @@ import { formatUpdateHint, formatSkillUpdateReminder } from './commands/upgrade'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { checkSkillUpdates } from './commands/skill'
 import { setGlobalConnectionName } from './core/config'
-import { setGlobalConnectionTimeout } from './utils/connection-timeout'
+import { setGlobalConnectionTimeout, setGlobalStatementTimeout } from './utils/connection-timeout'
 import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
 import { isMachineReadableCommand } from './utils/cli-output'
 import { claimUpdateHint, defaultCliSessionKey } from './utils/update-hint-state'
+import { readSkillCheckCache, writeSkillCheckCache } from './utils/skill-check-cache'
 import { buildProgram } from './program'
 import { presentCliError } from './utils/cli-error'
 import { join } from 'path'
@@ -160,6 +161,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   )
 
   setGlobalConnectionTimeout(opts.timeout as number | undefined)
+  setGlobalStatementTimeout(opts.statementTimeout as number | undefined)
 
   if (opts.color === false) {
     process.env.NO_COLOR = '1'
@@ -235,7 +237,14 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
     !context?.machineOutput &&
     !shouldSkipBackgroundChecks()
   ) {
-    const outdatedSkills = await checkSkillUpdates()
+    // TTL 快取：有效期內完全不碰 skill 檔案。掃描本身要讀十來個檔，而結論
+    // 幾乎永遠是「沒事」——那筆成本不該由每一個命令的收尾承擔（#45）。
+    const skillCacheKey = context?.configPath ?? resolveConfigPath(actionCommand)
+    let outdatedSkills = await readSkillCheckCache(skillCacheKey, pkg.version)
+    if (outdatedSkills === null) {
+      outdatedSkills = await checkSkillUpdates()
+      await writeSkillCheckCache(skillCacheKey, pkg.version, outdatedSkills)
+    }
     if (
       outdatedSkills.length > 0 &&
       context &&

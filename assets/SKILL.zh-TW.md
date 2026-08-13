@@ -472,4 +472,4 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 - 被 blacklist 的 table / column 會從查詢輸出中遮蔽。
 - `schema` 回報 `estimatedRowCount` 與 `sizeCategory`（small / medium / large / huge）。大 / 巨大表要加 `WHERE` 或 `LIMIT` — 分界值見 [reference.md](reference.md#schema)。
 - 對 `mongodb+srv://` 連線，`doctor` 會回報 SRV 是用原生解析或走 DoH fallback — 在執行環境限制 DNS 時很有用。
-- **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`--timeout <ms>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。
+- **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`--timeout <ms>`、`--statement-timeout <ms>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。

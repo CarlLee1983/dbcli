@@ -110,35 +110,28 @@ describe('ElasticsearchAdapter list/schema', () => {
       database: '',
     })
 
-    const mockIndices = {
-      users: { settings: { index: { creation_date: '...' } } },
-      '.security': { settings: { index: { creation_date: '...' } } },
-    }
+    const catRows = [
+      { index: 'users', 'docs.count': '100' },
+      { index: '.security', 'docs.count': '5' },
+    ]
 
-    const mockStats = {
-      indices: {
-        users: { total: { docs: { count: 100 } } },
-        '.security': { total: { docs: { count: 5 } } },
-      },
-    }
-
+    const requestedUrls: string[] = []
     // @ts-expect-error - mocking globalThis.fetch with simplified signature for test
-    globalThis.fetch = Response.json
-      ? async (url: string) => {
-          if (url.includes('_settings')) return Response.json(mockIndices)
-          if (url.includes('_stats')) return Response.json(mockStats)
-          return Response.json({})
-        }
-      : async (url: string) => {
-          if (url.includes('_settings')) return new Response(JSON.stringify(mockIndices))
-          if (url.includes('_stats')) return new Response(JSON.stringify(mockStats))
-          return new Response('{}')
-        }
+    globalThis.fetch = async (url: string) => {
+      requestedUrls.push(url)
+      if (url.includes('_cat/indices')) return Response.json(catRows)
+      return Response.json({})
+    }
 
     const collections = await adapter.listCollections()
     expect(collections).toHaveLength(1)
     expect(collections[0]!.name).toBe('users')
     expect(collections[0]!.documentCount).toBe(100)
+    // 一個請求就夠：舊版還會把整個叢集的 settings 拉回來（#46）
+    expect(requestedUrls).toHaveLength(1)
+    expect(requestedUrls[0]).toContain('_cat/indices')
+    // cat 預設只列 open index；少了這個參數，關閉中的 index 會從清單消失
+    expect(requestedUrls[0]).toContain('expand_wildcards=all')
 
     const allCollections = await adapter.listCollections({ includeSystem: true })
     expect(allCollections).toHaveLength(2)
@@ -349,4 +342,109 @@ test('request() is callable from outside the adapter', () => {
   } as unknown as import('@/adapters/types').ConnectionOptions
   const adapter = new ElasticsearchAdapter(opts)
   expect(typeof (adapter as unknown as { request: unknown }).request).toBe('function')
+})
+
+// ── URL 路徑編碼（#39） ────────────────────────────────────────────────────
+
+describe('ElasticsearchAdapter URL 路徑編碼', () => {
+  function adapterWithCapturedPaths(): {
+    adapter: ElasticsearchAdapter
+    paths: { method: string; path: string }[]
+  } {
+    const adapter = new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+    const paths: { method: string; path: string }[] = []
+    ;(adapter as unknown as { request: unknown }).request = async (
+      method: string,
+      path: string
+    ): Promise<unknown> => {
+      paths.push({ method, path })
+      return { hits: { hits: [] }, result: 'created' }
+    }
+    return { adapter, paths }
+  }
+
+  test('index 名稱中的斜線不會多切出一層路徑', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.execute('{}', ['secrets/_search'])
+    expect(paths[0]?.path).toBe('/secrets%2F_search/_search')
+  })
+
+  test('getTableSchema 的 index 名稱被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    ;(adapter as unknown as { request: unknown }).request = async (
+      _method: string,
+      path: string
+    ): Promise<unknown> => {
+      paths.push({ method: _method, path })
+      return { 'we ird': { mappings: { properties: {} } } }
+    }
+    await adapter.getTableSchema('we ird')
+    expect(paths[0]?.path).toBe('/we%20ird/_mapping')
+  })
+
+  test('document id 中的斜線與問號被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.insert('logs', { _id: 'a/b?c', msg: 'x' })
+    expect(paths[0]?.path).toBe('/logs/_doc/a%2Fb%3Fc')
+  })
+
+  test('update 與 delete 的 id 同樣被編碼', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.update('logs', { _id: 'a/b' }, { msg: 'y' })
+    await adapter.delete('logs', { _id: 'a/b' })
+    expect(paths[0]?.path).toBe('/logs/_update/a%2Fb')
+    expect(paths[1]?.path).toBe('/logs/_doc/a%2Fb')
+  })
+
+  test('逗號分隔的多 index 語法仍然可用', async () => {
+    const { adapter, paths } = adapterWithCapturedPaths()
+    await adapter.execute('{}', ['logs-a,logs-b'])
+    expect(paths[0]?.path).toBe('/logs-a,logs-b/_search')
+  })
+})
+
+// ── server-side script 攔截（#47） ─────────────────────────────────────────
+
+describe('ElasticsearchAdapter server-side script guard', () => {
+  function adapter(): ElasticsearchAdapter {
+    return new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+  }
+
+  test('主查詢路徑的 script 被攔截，且沒有送出任何請求', async () => {
+    const es = adapter()
+    let requested = false
+    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => {
+      requested = true
+      return { hits: { hits: [] } }
+    }
+
+    await expect(
+      es.execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
+    ).rejects.toThrow(/server-side script/i)
+    expect(requested).toBe(false)
+  })
+
+  test('一般 DSL 照常執行', async () => {
+    const es = adapter()
+    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => ({
+      hits: { hits: [] },
+    })
+    await expect(es.execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+  })
 })

@@ -43,6 +43,12 @@ export interface ConnectionOptions {
   srv?: boolean
   /** Connection timeout in milliseconds (default: 5000) */
   timeout?: number
+  /**
+   * Statement timeout in milliseconds. Falls back to `timeout` when unset, and
+   * to the server default when neither is given — an unset statement timeout
+   * means the server decides, not that 5000ms applies. 0 removes the limit.
+   */
+  statementTimeout?: number
   /** Elasticsearch protocol (http or https) */
   protocol?: 'http' | 'https'
   /** Elasticsearch nodes for round-robin (optional) */
@@ -185,6 +191,25 @@ export type RedisWarning =
   | { code: 'REDIS_BLACKLIST_FILTERED'; count: number }
 
 /**
+ * `getTableSchema()` 的選項，所有 adapter 共用一份。
+ *
+ * 分開宣告是因為它同時出現在介面、兩個 SQL adapter 與掃描命令四個地方；
+ * 各自就地拼一份 inline 型別時，MongoDB 的 sampleMethod 曾經在 SQL 側被
+ * 悄悄漏掉。
+ */
+export interface TableSchemaOptions {
+  /** MongoDB: 取樣文件數 */
+  sampleSize?: number
+  /** MongoDB: 取樣方式 */
+  sampleMethod?: 'random' | 'natural'
+  /**
+   * 精確列數要掃全表。掃描整個資料庫時設為 false，改用引擎的估計值——
+   * 一百張表的資料庫做不起一百次全表 COUNT。預設 true。
+   */
+  exactRowCount?: boolean
+}
+
+/**
  * Database adapter interface - contract for all database implementations
  * Defines methods that all database adapters must implement
  */
@@ -233,10 +258,7 @@ export interface DatabaseAdapter {
    * @returns Complete table schema including all column details
    * @throws {ConnectionError} If query fails
    */
-  getTableSchema(
-    tableName: string,
-    options?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' }
-  ): Promise<TableSchema>
+  getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema>
 
   /**
    * Test connection with lightweight probe query
@@ -301,7 +323,18 @@ export interface QueryableAdapter {
    */
   listCollections(options?: {
     includeSystem?: boolean
+    /** Redis: 取樣上限。列 key 沒有 catalog 可查，只能掃，所以上限是必要的。 */
+    limit?: number
   }): Promise<{ name: string; documentCount?: number }[]>
+
+  /**
+   * Redis-only: 取樣 key 名稱並回報是否觸及取樣上限。
+   *
+   * 宣告在介面上而不是讓呼叫端 double-cast：`dbcli list` 與 shell 補全都需要
+   * `truncated` 才能誠實顯示「只看了前 N 個」，而那個資訊 listCollections
+   * 的形狀裝不下。其他引擎有 catalog 可查，不需要取樣。
+   */
+  sampleKeyNames?(limit: number): Promise<{ names: string[]; truncated: boolean }>
 
   /**
    * SQL-compatible collection listing for shared command surfaces.

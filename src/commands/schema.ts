@@ -54,6 +54,8 @@ function decorateMongoSchema(schema: TableSchema, meta: MongoDecorateMeta): Tabl
 }
 
 import { resolveConfigPath } from '@/utils/config-path'
+import { mapWithConcurrency } from '@/utils/bounded-parallel'
+import type { TableSchemaOptions } from '@/adapters/types'
 
 /**
  * Enrich a TABLE_NOT_FOUND ConnectionError with fuzzy-match suggestions.
@@ -114,6 +116,26 @@ export const schemaCommand = new Command()
  * If a table is specified: display that table's schema
  * If no table is specified: scan the entire database and update .dbcli
  */
+
+/**
+ * 全庫掃描的每表並行度。
+ *
+ * 逐一 await 會讓總時間變成「表數 × 往返延遲」；不設限則會同時對同一條連線
+ * 開上百個查詢。4 是保守值：足以蓋掉延遲，又不會把單一連線塞爆。
+ */
+const SCHEMA_SCAN_CONCURRENCY = 4
+
+/**
+ * 掃描模式的 getTableSchema 選項：不要精確列數。
+ *
+ * 精確列數要對每張表做全表 COUNT——百張表的資料庫上，那是掃描慢到不可用的
+ * 主因，而掃描要的本來就是概況（rowCount 會落在引擎的估計值上）。單表
+ * `schema <table>` 不走這條路徑，仍然給精確值。
+ */
+function scanSchemaOptions(inferenceOptions?: TableSchemaOptions): TableSchemaOptions {
+  return { ...(inferenceOptions ?? {}), exactRowCount: false }
+}
+
 async function schemaAction(
   table: string | undefined,
   options: {
@@ -562,13 +584,14 @@ async function handleSchemaReset(
   const tables = await adapter.listTables()
   console.log(t_vars('schema.tables_found', { count: tables.length }))
 
-  const schemaData: Record<string, unknown> = {}
   let processed = 0
 
-  for (const table of tables) {
-    let fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+  // 並行執行但依 listTables 的順序寫入：鍵的順序若隨完成時間浮動，兩次內容
+  // 相同的掃描會產生不同的 config.json，diff 每次都在動。
+  const scanned = await mapWithConcurrency(tables, SCHEMA_SCAN_CONCURRENCY, async (table) => {
+    let fullSchema = await adapter.getTableSchema(table.name, scanSchemaOptions(inferenceOptions))
     if (mongoMeta) fullSchema = decorateMongoSchema(fullSchema, mongoMeta)
-    schemaData[table.name] = {
+    const entry = {
       name: fullSchema.name,
       columns: fullSchema.columns,
       rowCount: fullSchema.rowCount,
@@ -577,6 +600,9 @@ async function handleSchemaReset(
       foreignKeys: fullSchema.foreignKeys || [],
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
+      // 掃描模式的 rowCount 是引擎估計值，不是 COUNT(*) 的結果。標出來，
+      // 讀這份 schema 的人（與 agent）才分得出精確與估計。
+      rowCountIsEstimate: true,
       tableType: fullSchema.tableType || 'table',
       ...(mongoMeta
         ? { sampleMethod: mongoMeta.sampleMethod, sampleSize: mongoMeta.sampleSize }
@@ -587,7 +613,13 @@ async function handleSchemaReset(
     if (processed % 10 === 0 || processed === tables.length) {
       console.log(t_vars('schema.processing_tables', { processed, total: tables.length }))
     }
-  }
+    return entry
+  })
+
+  const schemaData: Record<string, unknown> = {}
+  tables.forEach((table, index) => {
+    schemaData[table.name] = scanned[index]
+  })
 
   const updatedConfig = {
     ...configWithoutSchema,
@@ -634,13 +666,14 @@ async function handleFullDatabaseScan(
   console.log(t_vars('schema.tables_found', { count: tables.length }))
 
   // Build schema object
-  const schemaData: Record<string, unknown> = {}
   let processed = 0
 
-  for (const table of tables) {
-    let fullSchema = await adapter.getTableSchema(table.name, inferenceOptions)
+  // 並行執行但依 listTables 的順序寫入：鍵的順序若隨完成時間浮動，兩次內容
+  // 相同的掃描會產生不同的 config.json，diff 每次都在動。
+  const scanned = await mapWithConcurrency(tables, SCHEMA_SCAN_CONCURRENCY, async (table) => {
+    let fullSchema = await adapter.getTableSchema(table.name, scanSchemaOptions(inferenceOptions))
     if (mongoMeta) fullSchema = decorateMongoSchema(fullSchema, mongoMeta)
-    schemaData[table.name] = {
+    const entry = {
       name: fullSchema.name,
       columns: fullSchema.columns,
       rowCount: fullSchema.rowCount,
@@ -649,6 +682,9 @@ async function handleFullDatabaseScan(
       foreignKeys: fullSchema.foreignKeys || [],
       indexes: fullSchema.indexes || [],
       estimatedRowCount: fullSchema.estimatedRowCount || 0,
+      // 掃描模式的 rowCount 是引擎估計值，不是 COUNT(*) 的結果。標出來，
+      // 讀這份 schema 的人（與 agent）才分得出精確與估計。
+      rowCountIsEstimate: true,
       tableType: fullSchema.tableType || 'table',
       ...(mongoMeta
         ? { sampleMethod: mongoMeta.sampleMethod, sampleSize: mongoMeta.sampleSize }
@@ -660,7 +696,13 @@ async function handleFullDatabaseScan(
     if (processed % 10 === 0 || processed === tables.length) {
       console.log(t_vars('schema.processing_tables', { processed, total: tables.length }))
     }
-  }
+    return entry
+  })
+
+  const schemaData: Record<string, unknown> = {}
+  tables.forEach((table, index) => {
+    schemaData[table.name] = scanned[index]
+  })
 
   // Check if schema already exists for this connection
   if (existingSchemaCount > 0 && !options.force) {

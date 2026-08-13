@@ -74,7 +74,7 @@ export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
  *   dbcli skill --output ./skill.md  # Write to file
  *   dbcli skill --install claude     # Install to ~/.claude/skills/dbcli/SKILL.md
  */
-export async function skillCommand(_program: Command, options: SkillOptions): Promise<void> {
+export async function skillCommand(program: Command, options: SkillOptions): Promise<void> {
   try {
     // 1. Read static SKILL.<lang>.md (single source of truth; D-73 source selector)
     const lang = options.lang ?? 'en' // defensive: commander supplies default, but unit tests bypass commander
@@ -113,6 +113,13 @@ export async function skillCommand(_program: Command, options: SkillOptions): Pr
       console.error(
         t_vars('skill.installed', { path: installPath, referencePath: referencePath ?? '' })
       )
+      // 剛裝完的 skill 是最新的；不清掉快取的話「有 skill 需要更新」的提醒
+      // 會繼續掛在每個命令的收尾直到 TTL 到期（#45）。
+      const { invalidateSkillCheckCache } = await import('@/utils/skill-check-cache')
+      // 呼叫端不一定是真的 Commander 物件（embedder 與測試會傳簡化的 stub），
+      // 那時就用預設設定路徑。
+      const commandLike = typeof program?.getOptionValueSource === 'function' ? program : undefined
+      await invalidateSkillCheckCache(resolveConfigPath(commandLike))
       return
     }
 

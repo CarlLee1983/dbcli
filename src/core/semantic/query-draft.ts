@@ -1,10 +1,8 @@
 import { createHash } from 'node:crypto'
-import { Parser } from 'node-sql-parser'
 import type { SqlDatabaseSystem } from '@/adapters/types'
 import { isProvenReadOnlySql } from '@/core/explain/read-only'
 import type { SemanticContext, SemanticSchemaTable } from './index'
-
-const parser = new Parser()
+import { sqlParser } from '@/core/sql-parser'
 
 const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
@@ -389,7 +387,7 @@ function validateSqlColumns(
 
 function parseSql(sql: string, system: SqlDatabaseSystem): unknown | undefined {
   try {
-    const parsed = parser.astify(sql, { database: DIALECT[system] })
+    const parsed = sqlParser().astify(sql, { database: DIALECT[system] })
     return Array.isArray(parsed) ? (parsed.length === 1 ? parsed[0] : undefined) : parsed
   } catch {
     return undefined

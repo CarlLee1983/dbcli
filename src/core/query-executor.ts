@@ -3,6 +3,10 @@
  *
  * Responsibility: Execute queries with permission enforcement, auto-limiting,
  * blacklist column filtering, and intelligent error handling with table name suggestions.
+ *
+ * 明確不負責 audit：一次 CLI 執行只在命令層寫一筆 entry。執行器同時寫入時，
+ * 同一次查詢在 log 裡會出現兩筆，而且執行器那筆永遠署名 'query'——即使呼叫者
+ * 是 export、verify 或 snapshot。執行器只回報耗時與列數，由命令層寫入。
  */
 
 import type { DatabaseAdapter } from '@/adapters/types'
@@ -20,7 +24,6 @@ import { extractTableReferences } from '@/utils/sql-tables'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { DEFAULT_QUERY_ONLY_LIMIT } from '@/core/limits'
 import { trimAppliedLimit } from '@/core/applied-limit'
-import { writeAuditEntry } from './audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
 import { projectRows, type FieldSelection } from '@/core/field-projection'
 
@@ -211,18 +214,6 @@ export class QueryExecutor {
         ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
       }
 
-      // 8. Audit Success
-      if (this.config) {
-        await writeAuditEntry(this.config, 'query', this.options, {
-          success: true,
-          sql,
-          metadata: {
-            rows_affected: visibleAffectedRows,
-            execution_ms: executionTimeMs,
-          },
-        })
-      }
-
       // Human diagnostics belong to the success path. Printing them before
       // adapter execution would contaminate the CLI's single failure envelope.
       if (this.options.recovery !== true) {
@@ -238,18 +229,6 @@ export class QueryExecutor {
 
       return result
     } catch (error) {
-      // 8. Audit Failure
-      if (this.config) {
-        await writeAuditEntry(this.config, 'query', this.options, {
-          success: false,
-          sql,
-          error,
-          metadata: {
-            execution_ms: Math.round(performance.now() - start),
-          },
-        })
-      }
-
       // Permission errors pass through as-is
       if (error instanceof PermissionError) {
         throw error

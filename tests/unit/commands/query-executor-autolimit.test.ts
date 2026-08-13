@@ -4,9 +4,6 @@
  */
 
 import { describe, it, expect, spyOn } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { QueryExecutor } from '@/core/query-executor'
 import type { DatabaseAdapter } from '@/adapters/types'
 
@@ -143,31 +140,20 @@ describe('QueryExecutor auto-LIMIT scope', () => {
     expect(result.rows).toEqual(rows)
   })
 
-  it('records the visible SQL row count in audit metadata, not the N+1 lookahead', async () => {
-    const workDir = await mkdtemp(join(tmpdir(), 'dbcli-autolimit-audit-'))
-    try {
-      const { adapter } = makeSpyAdapter([{ id: 1 }, { id: 2 }, { id: 3 }])
-      const config = {
-        connection: { system: 'postgresql' },
-        permission: 'query-only',
-        audit: { enabled: true },
-        effectiveConnectionName: 'autolimit',
-      }
-      const exec = new QueryExecutor(adapter, 'query-only', undefined, config as any, {
-        config: workDir,
-      })
+  // audit 的寫入點自 #41 起只在命令層，而命令層記的 rows_affected 取自
+  // result.rowCount。所以「不要把 N+1 的探測列數算進去」這條保證，在執行器
+  // 這一側要守的就是回傳的列數本身。
+  it('reports the visible SQL row count, not the N+1 lookahead', async () => {
+    const { adapter } = makeSpyAdapter([{ id: 1 }, { id: 2 }, { id: 3 }])
+    const exec = new QueryExecutor(adapter, 'query-only')
 
-      await exec.execute('SELECT * FROM users', {
-        limitValue: 2,
-        detectTruncation: true,
-      })
+    const result = await exec.execute('SELECT * FROM users', {
+      limitValue: 2,
+      detectTruncation: true,
+    })
 
-      const log = await readFile(join(workDir, '.dbcli', 'audit', 'autolimit.jsonl'), 'utf8')
-      const entry = JSON.parse(log.trim())
-      expect(entry.metadata.rows_affected).toBe(2)
-    } finally {
-      await rm(workDir, { recursive: true, force: true })
-    }
+    expect(result.rowCount).toBe(2)
+    expect(result.metadata?.affectedRows).toBe(2)
   })
 
   it('applies an explicit CLI limit outside query-only mode', async () => {

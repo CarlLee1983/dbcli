@@ -3,15 +3,22 @@
  * Implements the DatabaseAdapter interface for PostgreSQL connections
  */
 
-import type { DatabaseAdapter, ConnectionOptions, TableSchema, ExecutionResult } from './types'
+import type {
+  DatabaseAdapter,
+  ConnectionOptions,
+  TableSchema,
+  TableSchemaOptions,
+  ExecutionResult,
+} from './types'
 import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
-import { Pool, type PoolClient } from 'pg'
+// 型別匯入在執行期會被抹除；driver 本體改在 connect() 時才載入，這樣查
+// Redis 或 Mongo 的命令不必為了 import 一個用不到的 SQL driver 付啟動成本
+// （MongoDB adapter 的動態 import 是既有先例）。
+import type { Pool, PoolClient } from 'pg'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
-
-function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`
-}
+import { quoteIdentifier } from './identifier-quote'
+import { resolveTimeoutPolicy } from './timeout-policy'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -38,15 +45,19 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async connect(): Promise<void> {
     await withMappedConnectionError('postgresql', this.options, async () => {
-      // Create connection pool with options
+      // Create connection pool with options.
+      // statement_timeout 只在使用者實際要求時才送——沒要求時交給伺服器預設，
+      // 而不是拿連線逾時的預設值去砍每一句查詢（見 timeout-policy.ts）。
+      const timeouts = resolveTimeoutPolicy(this.options)
+      const { Pool } = await import('pg')
       this.pool = new Pool({
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,
         password: this.options.password,
         database: this.options.database,
-        connectionTimeoutMillis: this.options.timeout || 5000,
-        statement_timeout: this.options.timeout || 5000,
+        connectionTimeoutMillis: timeouts.connectMs,
+        ...(timeouts.statementMs !== undefined && { statement_timeout: timeouts.statementMs }),
       })
 
       // Test connection with lightweight query
@@ -191,7 +202,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    * @returns Complete table schema with column details
    * @throws ConnectionError if query fails
    */
-  async getTableSchema(tableName: string): Promise<TableSchema> {
+  async getTableSchema(tableName: string, options?: TableSchemaOptions): Promise<TableSchema> {
     requireConnected(this.pool)
 
     return withMappedConnectionError('postgresql', this.options, async () => {
@@ -386,11 +397,17 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const pkResult = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
       const pkResults = pkResult.rows
 
-      // Get row count
-      const qualifiedTableName = `${quoteIdentifier('public')}.${quoteIdentifier(tableName)}`
-      const countResult = await this.execute<{ count: number }>(
-        `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
-      )
+      // 精確列數要掃全表。掃描模式關掉它，改用 pg_class 的估計值——一百張表
+      // 的資料庫做不起一百次全表 COUNT（#49）。
+      const qualifiedTableName = `${quoteIdentifier('public', 'postgresql')}.${quoteIdentifier(tableName, 'postgresql')}`
+      const exactRowCount =
+        options?.exactRowCount === false
+          ? undefined
+          : (
+              await this.execute<{ count: number }>(
+                `SELECT COUNT(*) as count FROM ${qualifiedTableName}`
+              )
+            ).rows[0]?.count
 
       // Ensure primaryKey is always an array
       const primaryKeyArray = Array.isArray(pkResults[0]?.columns) ? pkResults[0].columns : []
@@ -418,7 +435,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: enumMap.get(col.name),
         })),
-        rowCount: countResult.rows[0]?.count || 0,
+        rowCount: exactRowCount ?? Math.max(0, estimateResults[0]?.estimated_rows || 0),
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
         foreignKeys: safeForeignKeys,

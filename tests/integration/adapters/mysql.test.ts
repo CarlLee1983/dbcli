@@ -177,3 +177,49 @@ describe('MySQL Adapter Integration Tests', () => {
     }
   })
 })
+
+// ── 逾時語意（#42） ────────────────────────────────────────────────────────
+
+describe('MySQL statement timeout', () => {
+  beforeAll(async () => {
+    SKIP_TESTS = await shouldSkipTests(validOptions)
+  })
+
+  // 刻意不用 SELECT SLEEP：max_execution_time 確實會中斷它，但 SLEEP 被中斷時
+  // 回傳 1 而不是報錯，語句仍然「成功」。要看到逾時錯誤得用真的在算的查詢。
+  const SLOW_QUERY =
+    'SELECT COUNT(*) FROM information_schema.COLUMNS a ' +
+    'JOIN information_schema.COLUMNS b JOIN information_schema.COLUMNS c'
+
+  test('--timeout 讓慢查詢在指定時間內被中止', async () => {
+    if (SKIP_TESTS) return
+
+    const adapter = new MySQLAdapter({ ...validOptions, statementTimeout: 500 })
+    await adapter.connect()
+    const started = Date.now()
+    try {
+      await expect(adapter.execute(SLOW_QUERY)).rejects.toThrow(/interrupted|timeout/i)
+      expect(Date.now() - started).toBeLessThan(10_000)
+    } finally {
+      await adapter.disconnect()
+    }
+  }, 60_000)
+
+  test('預設不設語句上限，跑得比連線逾時久的查詢不會被砍', async () => {
+    if (SKIP_TESTS) return
+
+    // 兩表 join 約 10 秒——遠超過 5000ms 的連線逾時預設值，正是先前
+    // 「連線逾時被當成語句上限」會砍掉的那種查詢。SELECT SLEEP 不適合：
+    // 它被中斷時回傳 1 而非報錯，看不出差別。
+    const mediumQuery =
+      'SELECT COUNT(*) FROM information_schema.COLUMNS a JOIN information_schema.COLUMNS b'
+    const adapter = new MySQLAdapter(validOptions)
+    await adapter.connect()
+    try {
+      const result = await adapter.execute<Record<string, number>>(mediumQuery)
+      expect(result.rows).toHaveLength(1)
+    } finally {
+      await adapter.disconnect()
+    }
+  }, 120_000)
+})

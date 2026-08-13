@@ -1,6 +1,7 @@
 import type { MongoClient as MongoClientType, Db } from 'mongodb'
 import { resolveSrv, resolveTxt } from 'node:dns/promises'
 import { ConnectionError } from './types'
+import { assertNoMongoServerSideScript } from './server-side-script'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
 type MongoClientConstructor = new (uri: string, opts?: object) => MongoClientType
@@ -296,6 +297,9 @@ export class MongoDBAdapter implements QueryableAdapter {
       throw new Error('MongoDB 查詢必須是有效的 JSON（object filter 或 array pipeline）')
     }
 
+    // 所有呼叫路徑共用的攔截點（#47）：$where 等於在資料庫上跑任意 JS
+    assertNoMongoServerSideScript(parsed)
+
     const limit = options?.limit
     let docs: T[]
     if (Array.isArray(parsed)) {
@@ -426,6 +430,9 @@ export class MongoDBAdapter implements QueryableAdapter {
     update: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    // filter 與 update 都可能夾帶 $where / $function（#47：所有路徑一致受檢）
+    assertNoMongoServerSideScript(filter)
+    assertNoMongoServerSideScript(update)
     const result = await db.collection(collection).updateMany(filter, update)
     return {
       rows: [],
@@ -438,6 +445,7 @@ export class MongoDBAdapter implements QueryableAdapter {
     filter: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    assertNoMongoServerSideScript(filter)
     const result = await db.collection(collection).deleteMany(filter)
     return {
       rows: [],

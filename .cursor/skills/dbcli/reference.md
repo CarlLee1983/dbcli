@@ -83,13 +83,16 @@ command-level option is only valid after the command that declares it.
 | `--global` | Select the user-global registry at `~/.config/dbcli/config.json` instead of the current project's `.dbcli` config. Place it before the command path. |
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
 | `--timeout <ms>` | Connection timeout in milliseconds (integer, 100–600000), overriding the connection config's `timeout` field for this invocation. Applies to every engine adapter. Without either the flag or the config field, adapters fall back to their built-in 5000ms default. |
+| `--statement-timeout <ms>` | How long a single statement may run, in milliseconds (integer, 0–3600000; `0` removes the limit), overriding the connection config's `statementTimeout` field. Independent of the connection timeout — raising it does not slow down detection of an unreachable host. Falls back to `--timeout` when unset, and to the server's own setting when neither is given. |
 
 `--timeout` is applied only when the adapter is constructed for this invocation — it is
 never written back to `config.json`. Set the connection's `timeout` field instead for a
-value that persists across runs. On PostgreSQL, the same value is also used as the
-session's `statement_timeout` (not just the connection timeout), so a low value can cut
-off a long-running query with an error that looks like a connection timeout; the 100ms
-floor exists specifically to keep that failure mode from being too easy to trigger.
+value that persists across runs. `--timeout` caps statement time as well as connection time, so a
+low value cuts off a long-running query with an error that reads like a connection
+problem; the 100ms floor exists specifically to keep that failure mode from being too
+easy to trigger. Use `--statement-timeout` when only the statement limit should change.
+With neither flag, dbcli sets no statement limit at all — the server's setting decides,
+so a query that runs longer than the connection timeout is no longer cut off.
 Elasticsearch applies its timeout per request rather than once for the whole connection.
 The `timeout` field itself always takes a literal number — unlike other connection
 fields, it does not accept an `{"$env": "..."}` reference.
@@ -220,8 +223,8 @@ dbcli list --include-system        # Elasticsearch: include `.system` indices
 **Permission:** query-only+
 
 > **MongoDB:** Lists collections with estimated document count.
-> **Redis:** Returns up to 100 000 keys via `SCAN MATCH * COUNT 1000`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
-> **Elasticsearch:** Returns indices with `documentCount` from `/_stats/docs`; aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
+> **Redis:** Samples the first 1 000 keys scanned via `SCAN MATCH * COUNT 1000`, applying the blacklist during the scan. When the keyspace is larger, table output adds a `Sampled the first 1000 keys scanned` line and JSON output carries `sampled: true` with `sampleLimit`. The header reads `Keys in db <n> (redis):` where `<n>` is the logical DB index.
+> **Elasticsearch:** Returns indices with `documentCount` from one `/_cat/indices?h=index,docs.count&expand_wildcards=all` request (open and closed indices alike). The count is primaries-only, so a replicated index no longer reports its replica copies as extra documents. Aliases are tagged separately. System indices (names starting with `.`) are hidden unless `--include-system` is passed.
 
 ### schema
 
@@ -242,6 +245,13 @@ dbcli schema --use prod             # Scan prod DB; saves to .dbcli/schemas/prod
 
 **Options:** `--format <table|json>`, `--refresh`, `--reset`, `--force`, `--use <connection>`, `--sample-size <n>` (mongo only), `--sample-method <random|natural>` (mongo only)
 **Permission:** query-only+
+
+> **Row counts on a full scan:** scanning every table records
+> `rowCountIsEstimate: true` and reports the engine's row *estimate* (`information_schema.TABLES.TABLE_ROWS` on MySQL/MariaDB,
+> `pg_class.reltuples` on PostgreSQL) rather than running `COUNT(*)` per table —
+> a hundred full-table counts is what made scanning a large database unusable.
+> `dbcli schema <table>` on a single table still reports the exact count. Tables
+> are scanned with bounded parallelism (4 at a time).
 
 **Schema storage (v1.4+):** Schema is persisted as layered files under `.dbcli/schemas/`. With v2 multi-connection config each connection gets its own subdirectory (`.dbcli/schemas/<connection>/`). Run `dbcli schema --use <connection>` once per connection before querying it — otherwise `schema <table>` may return data from the wrong connection's cache.
 
@@ -285,6 +295,12 @@ dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdou
 
 **Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
+
+> **Server-side scripts are rejected on every path.** MongoDB `$where`,
+> `$function`, and `$accumulator`, and Elasticsearch `script` / `script_fields`,
+> execute code on the database server. The adapters reject them anywhere in a
+> filter, pipeline, or DSL body — before the request is sent — so `query`, `q`,
+> saved snippets, and DML planning all behave the same way.
 
 #### Passive slow-query hint (`--slow-ms`)
 

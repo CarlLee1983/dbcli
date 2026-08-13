@@ -2,9 +2,9 @@
  * node-sql-parser wrapper for lint. Unlike missing-index/parse-sql.ts this
  * accepts any single statement type — individual rules guard on ast.type.
  */
-import { Parser } from 'node-sql-parser'
 import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { AstNode } from '@/core/lint/types'
+import { sqlParser } from '@/core/sql-parser'
 
 export class ParseFailure extends Error {
   constructor(message: string) {
@@ -19,12 +19,10 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
 }
 
-const parser = new Parser()
-
 export function parseSingleStatement(sql: string, system: SqlDatabaseSystem): AstNode {
   let ast: unknown
   try {
-    ast = parser.astify(sql, { database: DIALECT[system] })
+    ast = sqlParser().astify(sql, { database: DIALECT[system] })
   } catch (e) {
     throw new ParseFailure(`SQL parse failed: ${(e as Error).message}`)
   }

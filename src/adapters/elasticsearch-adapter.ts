@@ -1,5 +1,7 @@
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { ConnectionError } from './types'
+import { encodeEsIndexExpression, encodeEsPathSegment } from './identifier-quote'
+import { assertNoElasticsearchScript } from './server-side-script'
 
 export class ElasticsearchAdapter implements QueryableAdapter {
   private options: ConnectionOptions
@@ -40,11 +42,14 @@ export class ElasticsearchAdapter implements QueryableAdapter {
 
     const isDsl = query.trim().startsWith('{')
     const limit = options?.limit ?? 100
-    let path = `/${indexName}/_search`
+    // index 是使用者輸入而路徑是結構——編碼是兩者之間唯一的界線
+    let path = `/${encodeEsIndexExpression(indexName)}/_search`
     let body: any = undefined
 
     if (isDsl) {
       body = JSON.parse(query)
+      // 所有呼叫路徑共用的攔截點（#47）：script 等於在叢集上跑程式碼
+      assertNoElasticsearchScript(body)
       if (body.size === undefined) {
         body.size = limit
       }
@@ -80,18 +85,37 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     }
   }
 
+  /**
+   * 列出 index 名稱與文件數。
+   *
+   * 用 cat API 一個請求取回兩欄，而不是 `_settings` 加 `_stats/docs` 兩個
+   * 請求——前者會把整個叢集每個 index 的完整 settings 拉回來（大叢集上是
+   * 幾 MB 的 JSON），只為了取 key 的名字。
+   *
+   * `expand_wildcards=all` 是必要的：cat API 預設只列 open index，而
+   * `_settings` 連 closed 的一起回。少了它，關閉中的 index 會從清單裡消失。
+   * 文件數改為 primaries-only（cat 的定義）；先前的 `_stats` `total` 把
+   * replica 的份也算進去，副本數大於零時會回報成倍數。
+   */
   async listCollections(options?: {
     includeSystem?: boolean
   }): Promise<{ name: string; documentCount?: number }[]> {
-    const indices = await this.request<Record<string, any>>('GET', '/_settings')
-    const stats = await this.request<any>('GET', '/_stats/docs')
+    const rows = await this.request<{ index?: string; 'docs.count'?: string }[]>(
+      'GET',
+      '/_cat/indices?format=json&h=index,docs.count&expand_wildcards=all'
+    )
 
-    return Object.keys(indices)
-      .filter((name) => options?.includeSystem || !name.startsWith('.'))
-      .map((name) => ({
-        name,
-        documentCount: stats.indices?.[name]?.total?.docs?.count ?? 0,
-      }))
+    return (Array.isArray(rows) ? rows : [])
+      .filter(
+        (row): row is { index: string; 'docs.count'?: string } =>
+          typeof row.index === 'string' && row.index.length > 0
+      )
+      .filter((row) => options?.includeSystem || !row.index.startsWith('.'))
+      .map((row) => {
+        // cat API 回傳字串；關閉中的 index 的 docs.count 是 null
+        const parsed = Number(row['docs.count'])
+        return { name: row.index, documentCount: Number.isFinite(parsed) ? parsed : 0 }
+      })
   }
 
   async listTables(options?: { includeSystem?: boolean }): Promise<TableSchema[]> {
@@ -108,7 +132,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     tableName: string,
     _options?: { sampleSize?: number }
   ): Promise<TableSchema> {
-    const mapping = await this.request<any>('GET', `/${tableName}/_mapping`)
+    const mapping = await this.request<any>(
+      'GET',
+      `/${encodeEsIndexExpression(tableName)}/_mapping`
+    )
     const indexMapping = mapping[tableName] || Object.values(mapping)[0]
 
     if (!indexMapping) {
@@ -174,7 +201,12 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     delete body._id
     delete body.id
 
-    const response = await this.request<any>('PUT', `/${collection}/_doc/${id || ''}`, body)
+    const encodedId = id ? encodeEsPathSegment(id) : ''
+    const response = await this.request<any>(
+      'PUT',
+      `/${encodeEsIndexExpression(collection)}/_doc/${encodedId}`,
+      body
+    )
     return {
       rows: [],
       affectedRows: response.result === 'created' || response.result === 'updated' ? 1 : 0,
@@ -192,9 +224,13 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       throw new Error('Elasticsearch update requires _id or id in filter')
     }
 
-    const response = await this.request<any>('POST', `/${collection}/_update/${id}`, {
-      doc: update,
-    })
+    const response = await this.request<any>(
+      'POST',
+      `/${encodeEsIndexExpression(collection)}/_update/${encodeEsPathSegment(id)}`,
+      {
+        doc: update,
+      }
+    )
     return {
       rows: [],
       affectedRows: response.result === 'updated' || response.result === 'noop' ? 1 : 0,
@@ -210,7 +246,10 @@ export class ElasticsearchAdapter implements QueryableAdapter {
       throw new Error('Elasticsearch delete requires _id or id in filter')
     }
 
-    const response = await this.request<any>('DELETE', `/${collection}/_doc/${id}`)
+    const response = await this.request<any>(
+      'DELETE',
+      `/${encodeEsIndexExpression(collection)}/_doc/${encodeEsPathSegment(id)}`
+    )
     return {
       rows: [],
       affectedRows: response.result === 'deleted' ? 1 : 0,

@@ -19,6 +19,13 @@ export default [
     },
   },
   {
+    // Plain-Node ESM helpers (the postinstall check runs under node, not bun).
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+  },
+  {
     files: ['tests/**/*.{ts,tsx}'],
     rules: {
       'no-console': 'off',

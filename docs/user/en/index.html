@@ -167,11 +167,12 @@
         <section id="getting-started">
             <h2>Getting Started</h2>
             <p>Install globally using your preferred package manager:</p>
-            <pre><code># Using npm
-npm install -g @carllee1983/dbcli
+            <pre><code># Using Bun (required at run time)
+bun install -g @carllee1983/dbcli
 
-# Using Bun (Recommended)
-bun install -g @carllee1983/dbcli</code></pre>
+# Using npm
+npm install -g @carllee1983/dbcli</code></pre>
+            <p>dbcli runs on Bun 1.3.3+. npm and npx are supported as distribution channels, but the installed <code>dbcli</code> executable requires Bun on your <code>PATH</code>; only the <code>./agent-core</code> subpath export is importable from a plain Node process.</p>
             <p>Standalone <code>dbcli --version</code> and <code>dbcli -V</code> checks use a lightweight launcher and do not load database drivers. Other invocations load the full command runtime as usual.</p>
             <p>Initialize your first connection with the interactive wizard:</p>
             <pre><code>dbcli init</code></pre>

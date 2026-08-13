@@ -42,11 +42,11 @@
     "blacklist"
   ],
   "engines": {
-    "node": ">=18.0.0",
     "bun": ">=1.3.3"
   },
   "files": [
     "dist/",
+    "scripts/postinstall-check-bun.mjs",
     "!dist/.build-stamp",
     "assets/",
     "plugins/",
@@ -63,6 +63,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "postinstall": "bun scripts/postinstall-check-bun.mjs || node scripts/postinstall-check-bun.mjs || exit 0",
     "dev": "bun run src/cli.ts",
     "build": "bun run scripts/build.ts",
     "build:determinism": "bun run scripts/check-build-determinism.ts",

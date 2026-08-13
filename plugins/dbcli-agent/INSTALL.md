@@ -197,17 +197,16 @@ For a persistent `dbcli` executable in `PATH`, run:
 plugins/dbcli-agent/scripts/install-dbcli.sh
 ```
 
-The installer prefers Bun:
+The installer requires Bun:
 
 ```bash
 bun install -g @carllee1983/dbcli
 ```
 
-If Bun is unavailable but npm exists, it falls back to:
-
-```bash
-npm install -g @carllee1983/dbcli
-```
+If Bun is not on `PATH` the script refuses and exits non-zero rather than installing
+through npm: the executable starts with `#!/usr/bin/env bun`, so an npm-only machine would
+end up with a `dbcli` that cannot start. Install Bun first with
+`curl -fsSL https://bun.sh/install | bash`.
 
 ## Verify Installation
 

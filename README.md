@@ -38,16 +38,21 @@ All messages, help text, error messages, and command output respond to the langu
 #### Global Installation (Recommended)
 
 ```bash
-npm install -g @carllee1983/dbcli
-# or: bun install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
+# or: npm install -g @carllee1983/dbcli
 ```
+
+**dbcli runs on Bun.** npm and npx are supported as distribution channels, but the
+installed `dbcli` executable requires Bun 1.3.3+ on your `PATH` — install it first with
+`curl -fsSL https://bun.sh/install | bash`. Only the `./agent-core` subpath export is
+importable from a plain Node process.
 
 #### Zero-Install (No Installation Needed)
 
 ```bash
-npx @carllee1983/dbcli init
-npx @carllee1983/dbcli query "SELECT * FROM users"
-# or with Bun: bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli init
+bunx @carllee1983/dbcli query "SELECT * FROM users"
+# or with npm: npx @carllee1983/dbcli init
 ```
 
 #### Update
@@ -1324,9 +1329,11 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 ### Platform-Specific Setup
 
+Every flow below assumes Bun 1.3.3+ on your `PATH`: the installed `dbcli` executable runs under Bun regardless of which package manager fetched it.
+
 #### Claude Code (Anthropic)
 
-1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
+1. Install dbcli globally: `bun install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init` (choose permission level)
 3. Install skill: `dbcli skill --install claude`
 4. Restart Claude Code extension
@@ -1338,7 +1345,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Gemini CLI (Google)
 
-1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
+1. Install dbcli globally: `bun install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install gemini`
 4. Start Gemini: `gemini start`
@@ -1350,7 +1357,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### GitHub Copilot CLI
 
-1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
+1. Install dbcli globally: `bun install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install copilot`
 4. Install Copilot CLI: `npm install -g @github-next/github-copilot-cli`
@@ -1362,7 +1369,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 #### Cursor IDE
 
-1. Install dbcli globally: `npm install -g @carllee1983/dbcli`
+1. Install dbcli globally: `bun install -g @carllee1983/dbcli`
 2. Initialize: `dbcli init`
 3. Install skill: `dbcli skill --install cursor`
 4. Open Cursor editor
@@ -1378,7 +1385,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 1. Add the marketplace: `codex plugin marketplace add CarlLee1983/dbcli`.
 2. Open `/plugins`, select the dbcli Agent marketplace, and install `dbcli-agent`.
-3. For a persistent CLI, install dbcli globally: `bun install -g @carllee1983/dbcli` or `npm install -g @carllee1983/dbcli`.
+3. For a persistent CLI, install dbcli globally: `bun install -g @carllee1983/dbcli` (or `npm install -g`, which still needs Bun on `PATH`).
 4. Without a global install, the plugin skill uses `bunx @carllee1983/dbcli <command>` as its fallback.
 5. Initialize: `dbcli init` or `bunx @carllee1983/dbcli init`.
 
@@ -1394,7 +1401,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 ```bash
 # 1. Install and initialize
-npm install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 dbcli init  # Choose "query-only" for safety
 
 # 2. Install skill to Claude Code
@@ -1590,16 +1597,16 @@ dbcli query "SELECT * FROM users LIMIT 100 OFFSET 100"
 
 #### "CLI startup takes 30+ seconds (first run)"
 
-npx is downloading and caching package.
+bunx (or npx) is downloading and caching the package.
 
 **Solution:** This is normal on first run. Subsequent runs are instant:
 
 ```bash
-npx @carllee1983/dbcli init  # First run: 30s (downloads)
-npx @carllee1983/dbcli init  # Second run: <1s (cached)
+bunx @carllee1983/dbcli init  # First run: 30s (downloads)
+bunx @carllee1983/dbcli init  # Second run: <1s (cached)
 
 # Or install globally for faster startup
-npm install -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 dbcli init  # All future runs: <1s
 ```
 
@@ -1609,15 +1616,19 @@ dbcli init  # All future runs: <1s
 
 #### Windows: "Command not found: dbcli"
 
-npm .cmd wrapper not created or PATH not updated.
+The shim was not created, PATH was not updated, or Bun is missing — `dbcli` runs under
+Bun on Windows too.
 
 **Solutions:**
 
 ```bash
+# Confirm Bun is installed and on PATH first
+bun --version
+
 # Restart terminal to refresh PATH
 # OR reinstall globally
-npm uninstall -g @carllee1983/dbcli
-npm install -g @carllee1983/dbcli
+bun uninstall -g @carllee1983/dbcli
+bun install -g @carllee1983/dbcli
 
 # Verify installation
 where dbcli  # Windows command to find executable
@@ -1647,8 +1658,11 @@ chmod +x dist/cli.mjs
 
 ### Runtime
 
-- **Node.js:** 18.0.0+
-- **Bun:** 1.3.3+
+- **Bun:** 1.3.3+ — required. The published bundles use Bun APIs and Bun module
+  resolution; `dbcli` does not run on Node.
+- **Node.js:** only for the `./agent-core` subpath export, which is Node-importable
+  (18.0.0+). `npm install -g` / `npx` work as distribution channels but still shell out
+  to Bun at run time.
 
 ### Platforms
 

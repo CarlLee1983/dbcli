@@ -51,10 +51,14 @@ otherwise raise dbcli's declared permission or use another client.
 
 ### Installation
 ```bash
-npm install -g @carllee1983/dbcli
-# or using Bun
 bun install -g @carllee1983/dbcli
+# or using npm
+npm install -g @carllee1983/dbcli
 ```
+
+dbcli runs on Bun 1.3.3+. npm and npx are supported as distribution channels, but the
+installed `dbcli` executable requires Bun on your `PATH`; only the `./agent-core` subpath
+export is importable from a plain Node process.
 
 Standalone `dbcli --version` and `dbcli -V` checks use a lightweight launcher and do not load database drivers. Other invocations load the full command runtime as usual.
 

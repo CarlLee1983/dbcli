@@ -1,4 +1,4 @@
-import { ConnectionError } from '@/adapters/types'
+import { ConnectionError, type ConnectionErrorCode } from '@/adapters/types'
 import { PermissionError } from '@/core/permission-guard'
 import { BlacklistError } from '@/types/blacklist'
 import { SavedQueryError } from '@/core/saved-queries/types'
@@ -71,19 +71,32 @@ function errorToRecoveryError(error: unknown, ctx: RecoveryContext): RecoveryErr
   return baseError('UNKNOWN')
 }
 
+/**
+ * adapter code → envelope code。涵蓋整個 union，新增 adapter code 時不補就編不過：
+ * 漏掉的那個會安靜地變成 CONN_UNKNOWN，也就是回到 #61 / #62 要修的那個籠統值。
+ *
+ * 語句逾時共用 CONN_TIMEOUT，避免為它加一個 RecoveryCode 而動到 schemaVersion；
+ * details.connectionCode 是兩者的分辨依據，步驟庫據此給不同的計畫。
+ */
+const RECOVERY_CODE_BY_CONNECTION_CODE: Record<ConnectionErrorCode, RecoveryCode> = {
+  ECONNREFUSED: 'CONN_REFUSED',
+  CONNECTION_LOST: 'CONN_REFUSED',
+  TOO_MANY_CONNECTIONS: 'CONN_REFUSED',
+  ETIMEDOUT: 'CONN_TIMEOUT',
+  STATEMENT_TIMEOUT: 'CONN_TIMEOUT',
+  AUTH_FAILED: 'CONN_AUTH_FAILED',
+  // 憑證問題與帳密問題的復原計畫一樣是「改設定再連一次」，且都不是網路不通
+  TLS_ERROR: 'CONN_AUTH_FAILED',
+  ENOTFOUND: 'CONN_HOST_NOT_FOUND',
+  EHOSTUNREACH: 'CONN_HOST_NOT_FOUND',
+  SQL_SYNTAX_ERROR: 'CONN_UNKNOWN',
+  TABLE_NOT_FOUND: 'CONN_UNKNOWN',
+  COLUMN_NOT_FOUND: 'CONN_UNKNOWN',
+  UNKNOWN: 'CONN_UNKNOWN',
+}
+
 function classifyConnection(err: ConnectionError): RecoveryError {
-  const code: RecoveryCode =
-    err.code === 'ECONNREFUSED'
-      ? 'CONN_REFUSED'
-      : err.code === 'ETIMEDOUT' || err.code === STATEMENT_TIMEOUT_CODE
-        ? // 語句逾時共用 CONN_TIMEOUT，避免為它加一個 code 而動到 schemaVersion；
-          // details.connectionCode 是兩者的分辨依據，步驟庫據此給不同的計畫。
-          'CONN_TIMEOUT'
-        : err.code === 'AUTH_FAILED'
-          ? 'CONN_AUTH_FAILED'
-          : err.code === 'ENOTFOUND'
-            ? 'CONN_HOST_NOT_FOUND'
-            : 'CONN_UNKNOWN'
+  const code = RECOVERY_CODE_BY_CONNECTION_CODE[err.code]
   const base = baseError(code, { connectionCode: err.code })
   if (err.code === STATEMENT_TIMEOUT_CODE) {
     // CONN_TIMEOUT 的靜態描述講的是網路，對「連線正常但語句被伺服器取消」是誤導。

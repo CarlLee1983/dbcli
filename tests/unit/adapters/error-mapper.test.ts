@@ -376,3 +376,118 @@ test('mapError: statementTimeout 為 0（取消上限）不印出 (0ms)', () => 
   expect(result.message).not.toContain('0ms')
   expect(result.message).not.toContain('5000ms')
 })
+
+// ── 傳輸層錯誤碼（#62） ────────────────────────────────────────────────────
+
+test('mapError: 連線中途斷掉 → CONNECTION_LOST，而不是「伺服器沒開」', () => {
+  for (const err of [
+    { code: 'ECONNRESET', message: 'read ECONNRESET' },
+    { code: 'EPIPE', message: 'write EPIPE' },
+    { code: '08006', message: 'connection failure' },
+    { code: '08003', message: 'connection does not exist' },
+  ]) {
+    const result = mapError(err, 'postgresql', mockOptions)
+    expect(result.code).toBe('CONNECTION_LOST')
+    // 「服務沒啟動」的說法會把人送去檢查一個其實正在跑的服務
+    expect(result.message).not.toContain('not running')
+    expect(result.hints.length).toBeGreaterThan(0)
+  }
+})
+
+test('mapError: 連線數用盡 → TOO_MANY_CONNECTIONS，措辭與一般連不上不同', () => {
+  const pg = mapError({ code: '53300', message: 'too many clients already' }, 'postgresql', {
+    ...mockOptions,
+  })
+  const mysqlByCode = mapError(
+    { code: 'ER_CON_COUNT_ERROR', errno: 1040, message: 'Too many connections' },
+    'mysql',
+    { ...mockOptions, system: 'mysql', port: 3306 }
+  )
+  const mysqlByErrno = mapError({ errno: 1040, message: 'Too many connections' }, 'mysql', {
+    ...mockOptions,
+    system: 'mysql',
+    port: 3306,
+  })
+
+  for (const result of [pg, mysqlByCode, mysqlByErrno]) {
+    expect(result.code).toBe('TOO_MANY_CONNECTIONS')
+    // 連線池滿不是「伺服器沒開」也不是「網路不通」
+    expect(result.message).not.toContain('not running')
+    expect(result.hints.join(' ')).toMatch(/connection/i)
+  }
+})
+
+test('mapError: 主機或網路不可達 → EHOSTUNREACH，指向路由而非 DNS', () => {
+  for (const code of ['EHOSTUNREACH', 'ENETUNREACH']) {
+    const result = mapError(
+      { code, message: `connect ${code} 10.0.0.1:5432` },
+      'postgresql',
+      mockOptions
+    )
+    expect(result.code).toBe('EHOSTUNREACH')
+    // DNS 解析成功了，不通的是路由——叫人去 nslookup 是錯方向
+    expect(result.hints.join(' ')).not.toContain('nslookup')
+  }
+})
+
+test('mapError: TLS 憑證問題 → TLS_ERROR，提示指向憑證設定', () => {
+  for (const code of [
+    'CERT_HAS_EXPIRED',
+    'DEPTH_ZERO_SELF_SIGNED_CERT',
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'ERR_TLS_CERT_ALTNAME_INVALID',
+  ]) {
+    const result = mapError({ code, message: `tls: ${code}` }, 'postgresql', mockOptions)
+    expect(result.code).toBe('TLS_ERROR')
+    expect(result.hints.join(' ')).toMatch(/caPath|rejectUnauthorized|certificate/i)
+  }
+})
+
+test('mapError: PostgreSQL 08001 / 08004 建立連線失敗仍是連線類別', () => {
+  for (const code of ['08001', '08004']) {
+    const result = mapError(
+      { code, message: 'could not establish connection' },
+      'postgresql',
+      mockOptions
+    )
+    expect(['ECONNREFUSED', 'CONNECTION_LOST']).toContain(result.code)
+    expect(result.code).not.toBe('UNKNOWN')
+  }
+})
+
+test('mapError: 伺服器關閉 / 重啟 / 尚未就緒也是 CONNECTION_LOST', () => {
+  const cases: [Record<string, unknown>, 'postgresql' | 'mysql'][] = [
+    [
+      { code: '57P01', message: 'terminating connection due to administrator command' },
+      'postgresql',
+    ],
+    [
+      { code: '57P02', message: 'terminating connection due to crash of another server process' },
+      'postgresql',
+    ],
+    [{ code: '57P03', message: 'the database system is starting up' }, 'postgresql'],
+    [{ code: 'ER_SERVER_SHUTDOWN', errno: 1053, message: 'Server shutdown in progress' }, 'mysql'],
+    [{ errno: 2006, message: 'MySQL server has gone away' }, 'mysql'],
+    [{ errno: 2013, message: 'Lost connection to MySQL server during query' }, 'mysql'],
+  ]
+
+  for (const [err, system] of cases) {
+    const result = mapError(err, system, { ...mockOptions, system })
+    expect(result.code).toBe('CONNECTION_LOST')
+    // 先前這些會被說成「去確認語句引用的物件」——方向完全錯誤
+    expect(result.hints.join(' ')).not.toContain('dbcli schema')
+  }
+})
+
+test('mapError: 沒有 code 的斷線訊息也認得（pg 的 Connection terminated unexpectedly）', () => {
+  for (const message of [
+    'Connection terminated unexpectedly',
+    'server closed the connection unexpectedly',
+    'MySQL server has gone away',
+    'Lost connection to MySQL server during query',
+  ]) {
+    const result = mapError({ message }, 'postgresql', mockOptions)
+    expect(result.code).toBe('CONNECTION_LOST')
+  }
+})

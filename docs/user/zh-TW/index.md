@@ -1408,7 +1408,8 @@ stack、bundle 原始碼片段或 source-code frame。需要診斷資訊時，�
 `-v`（或 `-vv`）以顯示 stack——旗標必須放在子指令**之前**（`dbcli -v list`，
 而不是 `dbcli list -v`）。寫入類指令（`insert`、`update`、`delete`）與 `q`
 保留自己的在地化措辭，並同樣遵守這個 stack 開關。措辭依錯誤碼決定：只有真正的
-傳輸層失敗（`ECONNREFUSED`、`ETIMEDOUT`、`AUTH_FAILED`、`ENOTFOUND`）才會被說成
+傳輸層失敗（`ECONNREFUSED`、`ETIMEDOUT`、`AUTH_FAILED`、`ENOTFOUND`、
+`EHOSTUNREACH`、`CONNECTION_LOST`、`TOO_MANY_CONNECTIONS`、`TLS_ERROR`）才會被說成
 連線失敗——`TABLE_NOT_FOUND`、`STATEMENT_TIMEOUT` 這類語句層級的錯誤連得上伺服器，
 因此以自己的身分連同 hint 一起回報，而不是「無法連接到資料庫」。支援
 `--recovery` 的指令仍只在 stdout 輸出既有 JSON recovery envelope，並抑制

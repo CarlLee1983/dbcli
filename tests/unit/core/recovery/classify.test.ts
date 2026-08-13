@@ -250,3 +250,26 @@ describe('classifyError — 語句逾時的上限值', () => {
     expect(env.error.message).not.toMatch(/\d+\s*ms/)
   })
 })
+
+describe('classifyError — #62 新增的傳輸層 code', () => {
+  test('都落在 connection 類別，且不是 CONN_UNKNOWN 這個籠統值', () => {
+    const expected: Record<string, string> = {
+      CONNECTION_LOST: 'CONN_REFUSED',
+      TOO_MANY_CONNECTIONS: 'CONN_REFUSED',
+      EHOSTUNREACH: 'CONN_HOST_NOT_FOUND',
+      TLS_ERROR: 'CONN_AUTH_FAILED',
+    }
+
+    for (const [connectionCode, recoveryCode] of Object.entries(expected)) {
+      const env = classifyError(
+        new ConnectionError(connectionCode as 'CONNECTION_LOST', 'boom', []),
+        { operation: 'query', system: 'postgresql' }
+      )
+      expect(env.error.code).toBe(recoveryCode as typeof env.error.code)
+      expect(env.error.category).toBe('connection')
+      expect(env.error.details?.connectionCode).toBe(connectionCode as 'CONNECTION_LOST')
+      // 連線類別仍該拿到 doctor 分支——連線確實是壞的
+      expect(env.branches).toBeDefined()
+    }
+  })
+})

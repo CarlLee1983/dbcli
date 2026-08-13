@@ -23,6 +23,10 @@ type CodedCategory =
   | 'COLUMN_NOT_FOUND'
   | 'SQL_SYNTAX_ERROR'
   | 'STATEMENT_TIMEOUT'
+  | 'EHOSTUNREACH'
+  | 'CONNECTION_LOST'
+  | 'TOO_MANY_CONNECTIONS'
+  | 'TLS_ERROR'
 
 /** OS / driver 層級的連線錯誤代碼 */
 const TRANSPORT_CODES: Record<string, CodedCategory> = {
@@ -31,8 +35,25 @@ const TRANSPORT_CODES: Record<string, CodedCategory> = {
   ESOCKETTIMEDOUT: 'ETIMEDOUT',
   ENOTFOUND: 'ENOTFOUND',
   EAI_AGAIN: 'ENOTFOUND',
-  PROTOCOL_CONNECTION_LOST: 'ECONNREFUSED',
+  PROTOCOL_CONNECTION_LOST: 'CONNECTION_LOST',
   PROTOCOL_SEQUENCE_TIMEOUT: 'ETIMEDOUT',
+  // 連線建立過但中途斷掉：伺服器重啟、idle timeout、網路中斷都會走到這裡。
+  // 這些先前落在「有 code 但不認得」的分支，訊息變成 Database error (ECONNRESET)。
+  ECONNRESET: 'CONNECTION_LOST',
+  EPIPE: 'CONNECTION_LOST',
+  ECONNABORTED: 'CONNECTION_LOST',
+  // 路由層不通，與 DNS 查不到（ENOTFOUND）是兩回事
+  EHOSTUNREACH: 'EHOSTUNREACH',
+  ENETUNREACH: 'EHOSTUNREACH',
+  ENETDOWN: 'EHOSTUNREACH',
+  // TLS 憑證。node 的 TLS 錯誤把原因放在 code 上，訊息本身常常只有一句英文縮寫
+  CERT_HAS_EXPIRED: 'TLS_ERROR',
+  CERT_NOT_YET_VALID: 'TLS_ERROR',
+  DEPTH_ZERO_SELF_SIGNED_CERT: 'TLS_ERROR',
+  SELF_SIGNED_CERT_IN_CHAIN: 'TLS_ERROR',
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'TLS_ERROR',
+  UNABLE_TO_GET_ISSUER_CERT_LOCALLY: 'TLS_ERROR',
+  ERR_TLS_CERT_ALTNAME_INVALID: 'TLS_ERROR',
 }
 
 /** MySQL / MariaDB 的具名錯誤碼 */
@@ -48,6 +69,8 @@ const MYSQL_CODES: Record<string, CodedCategory> = {
   // 1317 (ER_QUERY_INTERRUPTED) 不同——後者刻意不列，那是人為中斷不是逾時。
   ER_QUERY_TIMEOUT: 'STATEMENT_TIMEOUT', // MySQL max_execution_time
   ER_STATEMENT_TIMEOUT: 'STATEMENT_TIMEOUT', // MariaDB max_statement_time
+  ER_CON_COUNT_ERROR: 'TOO_MANY_CONNECTIONS', // 1040：max_connections 用盡
+  ER_SERVER_SHUTDOWN: 'CONNECTION_LOST', // 1053
 }
 
 /** MySQL / MariaDB 的數字 errno（部分 driver 只給數字） */
@@ -59,6 +82,10 @@ const MYSQL_ERRNOS: Record<number, CodedCategory> = {
   1146: 'TABLE_NOT_FOUND',
   1251: 'AUTH_FAILED',
   1698: 'AUTH_FAILED',
+  1040: 'TOO_MANY_CONNECTIONS', // ER_CON_COUNT_ERROR
+  1053: 'CONNECTION_LOST', // ER_SERVER_SHUTDOWN
+  2006: 'CONNECTION_LOST', // CR_SERVER_GONE_ERROR
+  2013: 'CONNECTION_LOST', // CR_SERVER_LOST
   1969: 'STATEMENT_TIMEOUT', // MariaDB ER_STATEMENT_TIMEOUT
   3024: 'STATEMENT_TIMEOUT', // MySQL ER_QUERY_TIMEOUT
 }
@@ -71,6 +98,18 @@ const SQLSTATES: Record<string, CodedCategory> = {
   '42P01': 'TABLE_NOT_FOUND', // undefined_table
   '42703': 'COLUMN_NOT_FOUND', // undefined_column
   '57014': 'STATEMENT_TIMEOUT', // query_canceled — statement_timeout 或人為取消
+  // class 08：連線相關。這些有 code，所以不會經過無 code 才跑的字串後備比對
+  '08000': 'CONNECTION_LOST', // connection_exception
+  '08003': 'CONNECTION_LOST', // connection_does_not_exist
+  '08006': 'CONNECTION_LOST', // connection_failure
+  '08001': 'ECONNREFUSED', // sqlclient_unable_to_establish_sqlconnection
+  '08004': 'ECONNREFUSED', // sqlserver_rejected_establishment_of_sqlconnection
+  '53300': 'TOO_MANY_CONNECTIONS', // too_many_connections
+  // class 57：伺服器主動結束連線。實測 `docker restart` 途中的查詢回的就是 57P01，
+  // 先前它落到「有 code 但不認得」，提示叫人去確認語句引用的物件。
+  '57P01': 'CONNECTION_LOST', // admin_shutdown
+  '57P02': 'CONNECTION_LOST', // crash_shutdown
+  '57P03': 'CONNECTION_LOST', // cannot_connect_now — 伺服器啟動中，重試即可
 }
 
 /** Redis 的錯誤前綴（redis 的錯誤沒有 code 欄位，第一個 token 就是類別） */
@@ -90,6 +129,13 @@ const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
   // pg 的連線池逾時：`timeout exceeded when trying to connect`，沒有 code
   [/timeout exceeded/i, 'ETIMEDOUT'],
   [/timed out/i, 'ETIMEDOUT'],
+  // 斷線在 driver 那端常常沒有 code：pg 的 pool 直接丟 `Connection terminated
+  // unexpectedly`，libpq 與 mysql2 各有自己的說法。實測 `docker kill` 途中的查詢
+  // 走的就是第一條。
+  [/connection terminated/i, 'CONNECTION_LOST'],
+  [/server closed the connection/i, 'CONNECTION_LOST'],
+  [/server has gone away/i, 'CONNECTION_LOST'],
+  [/lost connection to .* server/i, 'CONNECTION_LOST'],
   [/getaddrinfo/i, 'ENOTFOUND'],
   [/authentication failed/i, 'AUTH_FAILED'],
   [/access denied for user/i, 'AUTH_FAILED'],
@@ -230,6 +276,48 @@ export function mapError(
           `Verify network connectivity: ping ${options.host} -c 3`,
         ]
       )
+
+    case 'CONNECTION_LOST':
+      return new ConnectionError(
+        'CONNECTION_LOST',
+        `Connection to ${options.host}:${options.port} was lost mid-session — the server closed it or the network dropped`,
+        [
+          'Re-run the command: a dropped connection is often transient',
+          `Check whether the server restarted or is cycling: ${SYSTEM_FACTS[system].logFile}`,
+          'If it happens on long-running work, look at the server idle/wait timeout',
+        ]
+      )
+
+    case 'TOO_MANY_CONNECTIONS':
+      return new ConnectionError(
+        'TOO_MANY_CONNECTIONS',
+        `${options.host}:${options.port} refused the connection — the server has no connection slots left`,
+        [
+          'Wait and retry: the limit is on concurrent connections, not on you',
+          system === 'postgresql'
+            ? 'Inspect usage: SELECT count(*) FROM pg_stat_activity — compare against max_connections'
+            : 'Inspect usage: SHOW STATUS LIKE "Threads_connected" — compare against max_connections',
+          'Close idle sessions, or raise max_connections if the load is legitimate',
+        ]
+      )
+
+    case 'EHOSTUNREACH':
+      return new ConnectionError(
+        'EHOSTUNREACH',
+        `No route to ${options.host} — the name resolved, but the host or network is unreachable`,
+        [
+          'Check that you are on the right network or VPN',
+          `Check routing and firewall between here and ${options.host}`,
+          `Confirm the address is the one you meant: ${options.host}:${options.port}`,
+        ]
+      )
+
+    case 'TLS_ERROR':
+      return new ConnectionError('TLS_ERROR', `TLS handshake failed: ${errMsg}`, [
+        'Point the connection at the right CA bundle: set "caPath" in .dbcli',
+        'For a self-signed certificate in a trusted network, set "rejectUnauthorized": false',
+        `Confirm the certificate covers the host you connected to: ${options.host}`,
+      ])
 
     case 'ENOTFOUND':
       return new ConnectionError('ENOTFOUND', `Host not found: ${options.host}`, [

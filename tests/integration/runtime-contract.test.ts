@@ -18,7 +18,7 @@
 
 import { test, expect, beforeAll } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { resolve, join } from 'node:path'
+import { resolve, join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
@@ -75,6 +75,54 @@ test('engines and the CLI bundles agree about Node', () => {
 test('engines declares the Bun version the CLI actually requires', () => {
   expect(engines.bun).toBeString()
 })
+
+/**
+ * Run the postinstall check under Node with Bun hidden from PATH, mimicking the machine
+ * the warning exists for. win32 is skipped: the sanitized PATH is not a reliable way to
+ * hide an executable there, and a false "bun is present" would pass silently.
+ */
+function nodeBinDir(): string {
+  // process.execPath under `bun test` is bun itself — ask node where it lives, and use
+  // only that directory as PATH so the child cannot find bun.
+  const located = spawnSync('node', ['-p', 'process.execPath'], { encoding: 'utf8' })
+  return located.status === 0 ? dirname(located.stdout.trim()) : ''
+}
+
+const NODE_BIN_DIR = nodeBinDir()
+
+function postinstallWithoutBun(env: Record<string, string>) {
+  return spawnSync('node', [join(ROOT, 'scripts', 'postinstall-check-bun.mjs')], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: NODE_SPAWN_TIMEOUT_MS,
+    env: { PATH: NODE_BIN_DIR, NO_COLOR: '1', ...env },
+  })
+}
+
+test.skipIf(process.platform === 'win32' || !NODE_BIN_DIR)(
+  'a global install without Bun fails loudly instead of leaving a dead executable',
+  () => {
+    // npm hides lifecycle output unless the script fails, so exiting non-zero is what
+    // makes the message reach the user — and what makes npm roll the `bin` back.
+    const result = postinstallWithoutBun({ npm_config_global: 'true' })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Bun was not found on PATH')
+
+    // The published command must not mask that exit code. `|| exit 0` once did, which is
+    // why v1.55.0 shipped a check that could never fail.
+    const postinstall = (pkg.scripts as Record<string, string>).postinstall
+    expect(postinstall).toContain('postinstall-check-bun.mjs')
+    expect(postinstall).not.toContain('exit 0')
+  }
+)
+
+test.skipIf(process.platform === 'win32' || !NODE_BIN_DIR)(
+  'a dependency install without Bun still succeeds — that is the ./agent-core consumer',
+  () => {
+    const result = postinstallWithoutBun({})
+    expect(result.status).toBe(0)
+  }
+)
 
 test('dist/agent-core.mjs stays importable under Node', () => {
   expect(importUnderNode('agent-core.mjs')).toBe('')

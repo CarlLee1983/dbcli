@@ -31,19 +31,31 @@ function bunIsAvailable() {
   }
 }
 
+// npm hides lifecycle-script output unless the script fails (verified on npm 10.9.8:
+// a warning printed here is invisible without --foreground-scripts). So a global
+// install — the one whose whole purpose is a working `dbcli` on PATH — exits non-zero
+// to make the reason visible, and npm rolls the broken executable back. A local install
+// stays silent and succeeds: that is the `./agent-core` consumer, who needs no Bun.
+const isGlobalInstall = process.env.npm_config_global === 'true'
+
 if (!bunIsAvailable()) {
-  console.warn(
-    [
-      '',
-      'dbcli: Bun was not found on PATH.',
-      '',
-      "  The package installed, but dbcli's executable runs under Bun (its shebang is",
-      '  `#!/usr/bin/env bun`), so `dbcli` will not start until Bun 1.3.3+ is installed:',
-      '',
-      `    ${BUN_INSTALL_HINT}`,
-      '',
-      '  The ./agent-core subpath export is importable from Node without Bun.',
-      '',
-    ].join('\n')
-  )
+  const message = [
+    '',
+    'dbcli: Bun was not found on PATH.',
+    '',
+    "  dbcli's executable runs under Bun (its shebang is `#!/usr/bin/env bun`), so it",
+    '  cannot start until Bun 1.3.3+ is installed:',
+    '',
+    `    ${BUN_INSTALL_HINT}`,
+    '',
+    '  Then re-run the install. The ./agent-core subpath export is importable from',
+    '  Node without Bun, and installing it as a project dependency does not need this.',
+    '',
+  ].join('\n')
+
+  if (isGlobalInstall) {
+    console.error(message)
+    process.exit(1)
+  }
+  console.warn(message)
 }

@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.55.1] - 2026-08-13 - The Bun-missing warning actually reaches the user
+
+### Fixed
+
+- **v1.55.0's post-install check could never fail, and npm therefore never showed it.** Verified against the published package in `docker run --rm node:22`: `npm install -g @carllee1983/dbcli` printed `added 131 packages` and nothing else, and `dbcli --version` then died with `/usr/bin/env: 'bun': No such file or directory` — exactly the experience the check was added to prevent. Two causes stacked. npm hides lifecycle-script output unless the script exits non-zero (the message was there all along under `--foreground-scripts`), and the `postinstall` command ended in `|| exit 0`, which swallowed any exit code the check could produce. The trailing `|| exit 0` is gone, and `scripts/postinstall-check-bun.mjs` now exits 1 when Bun is missing **and** `npm_config_global` is `true`. A global install is the case whose entire point is a runnable `dbcli`, so it fails loudly with the reason, and npm rolls the `bin` back rather than leaving a dead executable on `PATH` (verified: `command -v dbcli` finds nothing afterwards). A dependency install is left alone — that is the `./agent-core` consumer, who needs no Bun, and it still exits 0 with the subpath export importable from Node. `tests/integration/runtime-contract.test.ts` pins both outcomes and asserts the published `postinstall` command contains no `exit 0` mask, since a check that cannot fail is indistinguishable from one that passes (#65).
+
 ## [1.55.0] - 2026-08-13 - Packaging: the declared runtime matches the artifact
 
 ### Removed

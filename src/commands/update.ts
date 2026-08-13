@@ -5,7 +5,8 @@
 
 import crypto from 'node:crypto'
 import { t_vars } from '@/i18n/message-loader'
-import { printLocalizedCliError } from '@/utils/cli-error'
+import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
+import { presentConnectionError } from '@/utils/connection-error-message'
 import {
   AdapterFactory,
   ConnectionError,
@@ -399,7 +400,7 @@ export async function updateCommand(
 
     // Connection error
     if (error instanceof ConnectionError) {
-      printLocalizedCliError(t_vars('errors.connection_failed', { message: error.message }), error)
+      printLocalizedCliError(formatCliError(presentConnectionError(error)), error)
       process.exit(1)
     }
 

@@ -25,7 +25,8 @@ import {
 } from '@/core/saved-queries'
 import { colors } from '@/utils/colors'
 import { trimAppliedLimit } from '@/core/applied-limit'
-import { printLocalizedCliError } from '@/utils/cli-error'
+import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
+import { presentConnectionError } from '@/utils/connection-error-message'
 import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
 import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 
@@ -374,7 +375,7 @@ async function handleQError(
     process.exit(1)
   }
   if (error instanceof ConnectionError) {
-    printLocalizedCliError(t_vars('errors.connection_failed', { message: error.message }), error)
+    printLocalizedCliError(formatCliError(presentConnectionError(error)), error)
     process.exit(1)
   }
   printLocalizedCliError(t_vars('errors.message', { message: (error as Error).message }), error)

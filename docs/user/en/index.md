@@ -1521,8 +1521,12 @@ when available; it does not contain a JavaScript stack, bundled source excerpt,
 or source-code frame. Add `-v` (or `-vv`) before the command to include the stack
 for diagnostics — the flag must precede the subcommand (`dbcli -v list`, not
 `dbcli list -v`). The write commands (`insert`, `update`, `delete`) and `q` keep
-their own localized wording for connection failures and honour the same stack
-switch. When a supported command uses `--recovery`, the existing JSON
+their own localized wording, and honour the same stack switch. That wording is
+chosen by error code: only a genuine transport failure (`ECONNREFUSED`,
+`ETIMEDOUT`, `AUTH_FAILED`, `ENOTFOUND`) is reported as a connection failure —
+a statement-level error such as `TABLE_NOT_FOUND` or `STATEMENT_TIMEOUT` reaches
+the server fine, so it is reported as itself, with its hints, rather than as
+"failed to connect". When a supported command uses `--recovery`, the existing JSON
 recovery envelope remains the only failure output on stdout and the duplicate
 human stderr message is suppressed.
 

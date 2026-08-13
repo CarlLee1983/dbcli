@@ -1,4 +1,5 @@
 import type { GuideStep } from '@/core/guide/types'
+import type { ConnectionErrorCode } from '@/adapters/types'
 
 /** Stable contract version for RecoveryEnvelope JSON. Bump on breaking shape change. */
 export const RECOVERY_SCHEMA_VERSION = 1 as const
@@ -56,7 +57,7 @@ export interface RecoveryError {
     table?: string
     columns?: string
     requiredPermission?: string
-    connectionCode?: string
+    connectionCode?: ConnectionErrorCode
     snippet?: string
     intent?: string
     paramName?: string
@@ -125,7 +126,20 @@ export interface RecoveryContext {
    * inspecting it.
    */
   writeOperation?: 'INSERT' | 'UPDATE' | 'DELETE'
+  /**
+   * Adapter-level ConnectionError code, promoted from `error.details.connectionCode`
+   * by the classifier. Lets the step library separate causes that share a recovery
+   * code — `STATEMENT_TIMEOUT` vs a real `ETIMEDOUT`, both reported as CONN_TIMEOUT.
+   */
+  connectionCode?: ConnectionErrorCode
 }
+
+/**
+ * The one connection code that changes which plan a shared RecoveryCode emits.
+ * Named rather than compared inline: a typo in the string would silently fall
+ * back to the connection plan, and that comparison is the whole fork.
+ */
+export const STATEMENT_TIMEOUT_CODE = 'STATEMENT_TIMEOUT' as const satisfies ConnectionErrorCode
 
 /**
  * Sentinel error thrown when a caller needs a cached table schema but the

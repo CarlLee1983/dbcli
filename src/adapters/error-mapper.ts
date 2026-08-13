@@ -22,6 +22,7 @@ type CodedCategory =
   | 'TABLE_NOT_FOUND'
   | 'COLUMN_NOT_FOUND'
   | 'SQL_SYNTAX_ERROR'
+  | 'STATEMENT_TIMEOUT'
 
 /** OS / driver 層級的連線錯誤代碼 */
 const TRANSPORT_CODES: Record<string, CodedCategory> = {
@@ -43,6 +44,10 @@ const MYSQL_CODES: Record<string, CodedCategory> = {
   ER_DBACCESS_DENIED_ERROR: 'AUTH_FAILED',
   ER_NOT_SUPPORTED_AUTH_MODE: 'AUTH_FAILED',
   ER_MUST_CHANGE_PASSWORD_LOGIN: 'AUTH_FAILED',
+  // MySQL 3024 / MariaDB 1969：兩者都只由各自的語句上限觸發，與 KILL QUERY 的
+  // 1317 (ER_QUERY_INTERRUPTED) 不同——後者刻意不列，那是人為中斷不是逾時。
+  ER_QUERY_TIMEOUT: 'STATEMENT_TIMEOUT', // MySQL max_execution_time
+  ER_STATEMENT_TIMEOUT: 'STATEMENT_TIMEOUT', // MariaDB max_statement_time
 }
 
 /** MySQL / MariaDB 的數字 errno（部分 driver 只給數字） */
@@ -54,6 +59,8 @@ const MYSQL_ERRNOS: Record<number, CodedCategory> = {
   1146: 'TABLE_NOT_FOUND',
   1251: 'AUTH_FAILED',
   1698: 'AUTH_FAILED',
+  1969: 'STATEMENT_TIMEOUT', // MariaDB ER_STATEMENT_TIMEOUT
+  3024: 'STATEMENT_TIMEOUT', // MySQL ER_QUERY_TIMEOUT
 }
 
 /** PostgreSQL SQLSTATE */
@@ -63,6 +70,7 @@ const SQLSTATES: Record<string, CodedCategory> = {
   '42601': 'SQL_SYNTAX_ERROR', // syntax_error
   '42P01': 'TABLE_NOT_FOUND', // undefined_table
   '42703': 'COLUMN_NOT_FOUND', // undefined_column
+  '57014': 'STATEMENT_TIMEOUT', // query_canceled — statement_timeout 或人為取消
 }
 
 /** Redis 的錯誤前綴（redis 的錯誤沒有 code 欄位，第一個 token 就是類別） */
@@ -90,6 +98,15 @@ const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
   [/password supplied/i, 'AUTH_FAILED'],
 ]
 
+/**
+ * PostgreSQL `57014` is query_canceled, and statement_timeout is only one of its
+ * sources — `pg_cancel_backend()`, a client-side cancel, and a standby recovery
+ * conflict all raise the same SQLSTATE. Postgres separates them in the message,
+ * and the distinction matters: the timeout branch states a ceiling in ms, which
+ * would be a fabricated number for a cancel nobody configured a limit for.
+ */
+const PG_CANCEL_BY_TIMEOUT = /statement timeout/i
+
 function categorize(errCode: string, errno: unknown, errMsg: string): CodedCategory | null {
   if (errCode) {
     const known =
@@ -97,6 +114,14 @@ function categorize(errCode: string, errno: unknown, errMsg: string): CodedCateg
       MYSQL_CODES[errCode] ??
       SQLSTATES[errCode] ??
       REDIS_PREFIXES[errCode]
+    if (
+      known === 'STATEMENT_TIMEOUT' &&
+      errCode === '57014' &&
+      !PG_CANCEL_BY_TIMEOUT.test(errMsg)
+    ) {
+      // 取消但不是逾時：伺服器已經說清楚原因，原樣轉述比套一個類別誠實
+      return null
+    }
     if (known) return known
   }
   if (typeof errno === 'number' && MYSQL_ERRNOS[errno]) return MYSQL_ERRNOS[errno]
@@ -251,6 +276,21 @@ export function mapError(
         'Run `dbcli schema <table>` to see the actual column names',
         'Column names are case-sensitive on some databases (PostgreSQL with quoted identifiers)',
       ])
+    }
+
+    case 'STATEMENT_TIMEOUT': {
+      // 連線是通的，被砍掉的是這道語句——連線疑難排解在這裡是雜訊。
+      const limitMs = options.statementTimeout ?? options.timeout
+      return new ConnectionError(
+        'STATEMENT_TIMEOUT',
+        `Statement timed out${limitMs ? ` (${limitMs}ms)` : ''} — the server canceled this query before it finished`,
+        [
+          'Inspect the query plan: dbcli explain "<sql>"',
+          'Raise the ceiling for this run: dbcli --statement-timeout <ms> … (0 removes it)',
+          'Narrow the query: add WHERE filters, reduce the LIMIT, or index the scanned columns',
+        ],
+        limitMs
+      )
     }
 
     case 'SQL_SYNTAX_ERROR':

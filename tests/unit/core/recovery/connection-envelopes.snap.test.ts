@@ -54,4 +54,15 @@ describe('connection envelopes — snapshots', () => {
       })
     ).toMatchSnapshot()
   })
+
+  // 語句逾時共用 CONN_TIMEOUT，但整個 envelope 的形狀不同：計畫針對查詢、沒有
+  // verify、沒有 branches。這張快照就是那三點的釘樁。
+  test('CONN_TIMEOUT — statement timeout variant', () => {
+    expect(
+      stableEnvelope(
+        () => new ConnectionError('STATEMENT_TIMEOUT', 'statement timed out (800ms)', [], 800),
+        { operation: 'query' }
+      )
+    ).toMatchSnapshot()
+  })
 })

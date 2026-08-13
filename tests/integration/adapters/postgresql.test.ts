@@ -185,7 +185,13 @@ describe('PostgreSQL statement timeout', () => {
     const adapter = new PostgreSQLAdapter({ ...validOptions, statementTimeout: 500 })
     await adapter.connect()
     try {
-      await expect(adapter.execute('SELECT pg_sleep(3)')).rejects.toThrow()
+      // 伺服器回的是 SQLSTATE 57014，error-mapper 要把它分類成 STATEMENT_TIMEOUT
+      // 而非連線問題——這條是該分類唯一的實機證據。
+      const thrown = await adapter.execute('SELECT pg_sleep(3)').catch((e: unknown) => e)
+      expect(thrown).toBeInstanceOf(ConnectionError)
+      expect((thrown as ConnectionError).code).toBe('STATEMENT_TIMEOUT')
+      expect((thrown as ConnectionError).limitMs).toBe(500)
+      expect((thrown as ConnectionError).hints.join(' ')).not.toContain('ping')
     } finally {
       await adapter.disconnect()
     }

@@ -792,3 +792,52 @@ exports[`connection envelopes — snapshots CONN_UNKNOWN 1`] = `
   },
 }
 `;
+
+exports[`connection envelopes — snapshots CONN_TIMEOUT — statement timeout variant 1`] = `
+{
+  "error": {
+    "category": "connection",
+    "code": "CONN_TIMEOUT",
+    "details": {
+      "connectionCode": "STATEMENT_TIMEOUT",
+    },
+    "message": "The server canceled the statement for exceeding the statement timeout. The ceiling in force was 800ms.",
+  },
+  "generatedAt": "__stripped__",
+  "ok": false,
+  "recovery": [
+    {
+      "command": "dbcli lint "<sql>"",
+      "expects": "Findings with rewrite drafts, or an empty list when nothing is flagged.",
+      "order": 1,
+      "placeholders": [
+        "<sql>",
+      ],
+      "rationale": "Static anti-pattern read of the statement; needs no connection, so it cannot time out in turn.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli explain "<sql>"",
+      "expects": "Annotated query plan; look for sequential scans and unindexed joins.",
+      "order": 2,
+      "placeholders": [
+        "<sql>",
+      ],
+      "rationale": "Read the query plan to find the scan or join that exceeded the statement limit.",
+      "risk": "readonly",
+    },
+    {
+      "command": "dbcli --statement-timeout <ms> query "<sql>"",
+      "expects": "Query result, or the same timeout if <ms> is still below what the plan costs.",
+      "order": 3,
+      "placeholders": [
+        "<ms>",
+        "<sql>",
+      ],
+      "rationale": "Re-run with an explicit ceiling once the cost is understood; 0 removes the limit entirely.",
+      "risk": "readonly",
+    },
+  ],
+  "schemaVersion": 1,
+}
+`;

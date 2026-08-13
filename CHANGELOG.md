@@ -5,6 +5,12 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A statement the server canceled is no longer reported as a connection failure.** PostgreSQL `57014`, MySQL `3024`, and MariaDB `1969` fell through to `UNKNOWN` / `CONN_UNKNOWN`, so the CLI answered a query that ran out of statement time with connection-troubleshooting hints and a recovery plan that opened with `dbcli doctor` — the one thing that was not broken. They now map to a `STATEMENT_TIMEOUT` adapter code whose hints point at the query (`dbcli lint`, `dbcli explain`, re-run with an explicit `--statement-timeout <ms>`). The `--recovery` envelope keeps `schemaVersion` 1 and reports `CONN_TIMEOUT` with `details.connectionCode: "STATEMENT_TIMEOUT"`; that field selects the query-oriented plan, replaces the network-flavored message with one that states the ceiling that was in force, and suppresses both the `doctor-*` branches — whose `branchFork.after: 1` assumed step 1 was `doctor` — and the `verify` step, since nothing verifies this error except re-running the statement, which only the caller has. PostgreSQL `57014` is `query_canceled`, not only `statement_timeout`, so a `pg_cancel_backend()` or recovery-conflict cancel keeps the verbatim `Database error (57014): …` form rather than asserting a ceiling nobody set.
+
 ## [1.54.0] - 2026-08-13 - Query engine hardening: timeout semantics, load-on-demand, deterministic builds
 
 ### Added

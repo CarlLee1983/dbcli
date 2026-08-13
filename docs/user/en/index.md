@@ -1454,6 +1454,8 @@ For connection-class errors (`CONN_REFUSED`, `CONN_AUTH_FAILED`, `CONN_TIMEOUT`,
 
 If the doctor JSON cannot be parsed or no keyword matches, `--next` falls back to the linear `recovery` plan — branching never causes `--next` to fail. `--apply` continues to walk `recovery` linearly and ignores `branches`.
 
+One connection-class error does **not** branch: a statement canceled by the server for exceeding the statement timeout (PostgreSQL SQLSTATE `57014`, MySQL `3024`, MariaDB `1969`). It reports as `CONN_TIMEOUT` with `details.connectionCode` set to `STATEMENT_TIMEOUT`, and that field is what separates it from a real connection timeout — the connection is healthy, so the plan works on the query (`dbcli lint`, `dbcli explain`, then a re-run with an explicit `--statement-timeout <ms>`) instead of running `doctor`. Because step 1 is not `doctor`, no `branches` or `branchFork` is emitted, and no `verify` step either — nothing verifies this error except re-running the statement, which only the caller has. All three steps carry placeholders, so `dbcli recover --apply` reports `skipped-only` and runs nothing.
+
 ### Audit ↔ Envelope pivot
 
 Every `--recovery` failure writes a UUID link in both directions:

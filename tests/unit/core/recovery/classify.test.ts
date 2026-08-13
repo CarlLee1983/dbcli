@@ -180,3 +180,73 @@ describe('classifyError populates envelope.verify', () => {
     expect(env.verify).toBeDefined()
   })
 })
+
+describe('classifyError — 語句逾時', () => {
+  test('STATEMENT_TIMEOUT 走 CONN_TIMEOUT，但復原步驟針對查詢而非連線', () => {
+    const err = new ConnectionError('STATEMENT_TIMEOUT', 'Statement timed out (800ms)', [])
+    const env = classifyError(err, { operation: 'query', system: 'postgresql' })
+
+    expect(env.schemaVersion).toBe(1)
+    expect(env.error.code).toBe('CONN_TIMEOUT')
+    expect(env.error.details?.connectionCode).toBe('STATEMENT_TIMEOUT')
+
+    const commands = env.recovery.map((s) => s.command).join(' | ')
+    expect(commands).toContain('dbcli explain')
+    expect(commands).toContain('--statement-timeout')
+    // 連線是通的，doctor / init 在這裡只會把 agent 帶錯方向
+    expect(commands).not.toContain('dbcli doctor')
+    expect(commands).not.toContain('dbcli init')
+  })
+
+  test('真正的連線逾時仍然拿到連線疑難排解步驟', () => {
+    const err = new ConnectionError('ETIMEDOUT', 'Connection timed out', [])
+    const env = classifyError(err, { operation: 'query', system: 'postgresql' })
+
+    expect(env.error.code).toBe('CONN_TIMEOUT')
+    expect(env.recovery.map((s) => s.command).join(' | ')).toContain('dbcli doctor')
+  })
+})
+
+describe('classifyError — 語句逾時的 message', () => {
+  test('不沿用 CONN_TIMEOUT 的「網路慢或被擋」描述', () => {
+    const env = classifyError(new ConnectionError('STATEMENT_TIMEOUT', 'timed out (800ms)', []), {
+      operation: 'query',
+      system: 'postgresql',
+    })
+
+    expect(env.error.message).not.toBe(RECOVERY_CODE_METADATA.CONN_TIMEOUT.description)
+    expect(env.error.message).toMatch(/statement/i)
+    // 訊息仍不得帶出 host / port / SQL
+    expect(env.error.message).not.toContain('pg_sleep')
+    expect(env.error.message).not.toContain('localhost')
+  })
+})
+
+describe('classifyError — 語句逾時的 envelope 整體不叫人跑 doctor', () => {
+  test('recovery、verify、branches 都不含 doctor', () => {
+    const env = classifyError(new ConnectionError('STATEMENT_TIMEOUT', 'timed out (800ms)', []), {
+      operation: 'query',
+      system: 'postgresql',
+    })
+
+    // 對整個 envelope 斷言：只看 recovery 會讓 verify 夾帶的 doctor 溜過去
+    expect(JSON.stringify(env)).not.toContain('dbcli doctor')
+  })
+})
+
+describe('classifyError — 語句逾時的上限值', () => {
+  test('envelope 的 message 帶出當時生效的上限，agent 才知道 <ms> 要填多少', () => {
+    const err = new ConnectionError('STATEMENT_TIMEOUT', 'Statement timed out (800ms)', [], 800)
+    const env = classifyError(err, { operation: 'query', system: 'postgresql' })
+
+    expect(env.error.message).toContain('800')
+  })
+
+  test('沒有上限值時不編一個出來', () => {
+    const err = new ConnectionError('STATEMENT_TIMEOUT', 'Statement timed out', [])
+    const env = classifyError(err, { operation: 'query', system: 'postgresql' })
+
+    expect(env.error.message).toMatch(/statement/i)
+    expect(env.error.message).not.toMatch(/\d+\s*ms/)
+  })
+})

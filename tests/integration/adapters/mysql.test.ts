@@ -198,7 +198,9 @@ describe('MySQL statement timeout', () => {
     await adapter.connect()
     const started = Date.now()
     try {
-      await expect(adapter.execute(SLOW_QUERY)).rejects.toThrow(/interrupted|timeout/i)
+      // driver 的 ER_QUERY_TIMEOUT (3024) 會被 error-mapper 轉成 STATEMENT_TIMEOUT，
+      // 訊息是分類後的說法而非 driver 原文。
+      await expect(adapter.execute(SLOW_QUERY)).rejects.toThrow(/statement timed out/i)
       expect(Date.now() - started).toBeLessThan(10_000)
     } finally {
       await adapter.disconnect()

@@ -31,7 +31,11 @@ interface ParsedSkill {
 }
 
 function parseSkill(source: string): ParsedSkill {
-  const match = /^---\n([\s\S]*?)\n---\n?/.exec(source)
+  // `\r?\n`，不是 `\n`：來源檔可能是 CRLF（Windows 上 git autocrlf 的 checkout，
+  // 或使用者自己用 CRLF 編輯 assets/SKILL.md）。只認 LF 時整段比對不到，
+  // frontmatter 原封不動留在輸出裡——而 Windsurf 不解析 frontmatter，那 900
+  // 字的 Claude 標頭會變成寫給錯誤讀者的正文（ADR 0006）。
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(source)
   if (!match) return { frontmatter: '', body: source }
   return { frontmatter: match[1]!, body: source.slice(match[0].length) }
 }
@@ -61,7 +65,7 @@ export function formatForPlatform(platform: string, skillMarkdown: string): stri
 
   const { frontmatter, body } = parseSkill(skillMarkdown)
   const description = frontmatterValue(frontmatter, 'description')
-  const repointedBody = repointReference(body.replace(/^\n+/, ''), referencePath)
+  const repointedBody = repointReference(body.replace(/^[\r\n]+/, ''), referencePath)
 
   if (platform.toLowerCase() === 'cursor') {
     const header = [

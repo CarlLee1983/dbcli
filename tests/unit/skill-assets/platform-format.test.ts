@@ -92,3 +92,33 @@ Full flags live in reference.md, and the \`reference.md\` Redis section covers R
     expect(formatForPlatform('cursor', once)).toBe(once)
   })
 })
+
+// ── CRLF 來源檔（#52 B-1） ─────────────────────────────────────────────────
+//
+// Windows 上 git autocrlf 的 checkout 會把 assets/SKILL.md 變成 CRLF，使用者
+// 自己用 CRLF 編輯也一樣。frontmatter 的比對只認 LF 時整段剝不掉，Windsurf
+// 版就會帶著它不會解析的 YAML 標頭出貨——CI 上表現為 Windows job 紅燈。
+
+describe('formatForPlatform with CRLF source', () => {
+  const CRLF_SKILL = SKILL.replace(/\n/g, '\r\n')
+
+  test('windsurf 仍然剝掉 frontmatter', () => {
+    const out = formatForPlatform('windsurf', CRLF_SKILL)
+    expect(out).not.toContain('name: dbcli')
+    expect(out).not.toContain('---')
+    expect(out).toContain('# dbcli')
+  })
+
+  test('windsurf 仍然把 description 提為開頭段落並重指 reference', () => {
+    const out = formatForPlatform('windsurf', CRLF_SKILL)
+    expect(out.startsWith('Database CLI for AI agents.')).toBe(true)
+    expect(out).toContain('.windsurf/skills/dbcli/reference.md')
+  })
+
+  test('cursor 仍然換成自己的 rule 欄位', () => {
+    const out = formatForPlatform('cursor', CRLF_SKILL)
+    expect(out).not.toContain('name: dbcli')
+    expect(out).toContain('alwaysApply: false')
+    expect(out).toContain('description: Database CLI for AI agents.')
+  })
+})

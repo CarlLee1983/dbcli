@@ -19,6 +19,15 @@ export interface ElasticsearchRequest {
 }
 
 /**
+ * A path that names one document: `_doc/<id>`, or the `_source/<id>` spelling.
+ *
+ * The id has to be there. `DELETE /users/_doc` is not a valid document delete,
+ * so treating it as one would be inventing a narrower reading than the request
+ * supports.
+ */
+const ES_DOCUMENT_PATH = /\/(?:_doc|_source)\/[^/?]+/
+
+/**
  * Classify an Elasticsearch REST request into a SQL-like statement type and risk.
  */
 export function classifyElasticsearchRequest(
@@ -33,13 +42,24 @@ export function classifyElasticsearchRequest(
   }
 
   // 2. Read operations
+  //
+  // The method decides, not the path alone. `_mapping`, `_settings` and
+  // `_alias` name a resource that can be read *or* rewritten, and matching the
+  // path on its own classified `PUT /users/_mapping` — a schema change — as a
+  // read that query-only could run. A read is a read method against one of
+  // these; `_search` and `_count` also accept POST, because that is how a query
+  // with a body is sent.
+  const readMethod = method === 'GET' || method === 'HEAD'
+  const searchPath = path.includes('_search') || path.includes('_count')
+
   if (
-    path.includes('_search') ||
-    path.includes('_count') ||
-    path.includes('_mapping') ||
-    path.includes('_settings') ||
-    path.includes('_alias') ||
-    (method === 'GET' && (path.includes('_doc') || path.includes('_source')))
+    (searchPath && (readMethod || method === 'POST')) ||
+    (readMethod &&
+      (path.includes('_mapping') ||
+        path.includes('_settings') ||
+        path.includes('_alias') ||
+        path.includes('_doc') ||
+        path.includes('_source')))
   ) {
     return {
       type: 'SELECT',
@@ -72,9 +92,28 @@ export function classifyElasticsearchRequest(
   }
 
   // 4. Destructive operations
+  //
+  // Only a DELETE that names a document is the DELETE tier. `DELETE /users`
+  // removes the whole index, `DELETE /logs-*` removes every index the pattern
+  // matches, and `DELETE /_all` removes the cluster's contents — all of them
+  // were the same `DELETE` as removing one document, so data-admin could drop
+  // an index while the SQL equivalent, `DROP TABLE`, has always needed admin.
+  // Anything this cannot prove is document-scoped falls through to DROP, which
+  // is the fail-closed direction: the cost of being wrong is a refusal a user
+  // can escalate, rather than an index nobody can get back.
   if (method === 'DELETE') {
+    if (ES_DOCUMENT_PATH.test(path)) {
+      return {
+        type: 'DELETE',
+        isDangerous: true,
+        keywords: [method, path],
+        isComposite: false,
+        confidence: 'HIGH',
+      }
+    }
+
     return {
-      type: 'DELETE',
+      type: 'DROP',
       isDangerous: true,
       keywords: [method, path],
       isComposite: false,

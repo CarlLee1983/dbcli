@@ -14,6 +14,7 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
+import { confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { configModule } from '@/core/config'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -288,6 +289,7 @@ export async function insertCommand(
       const result = await executor.executeInsert(table, data, schema, {
         dryRun: options.dryRun,
         force: options.force,
+        confirm: confirmMutationInteractively,
       })
 
       // 8. Format output as JSON

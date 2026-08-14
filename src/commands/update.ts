@@ -14,6 +14,7 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
+import { confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { configModule } from '@/core/config'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -320,6 +321,7 @@ export async function updateCommand(
       const result = await executor.executeUpdate(table, setData, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,
+        confirm: confirmMutationInteractively,
       })
 
       // 10. Format output as JSON

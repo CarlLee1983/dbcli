@@ -25,8 +25,18 @@ const manifest = (await Bun.file('package.json').json()) as {
 }
 const buildScript = await Bun.file('scripts/build.ts').text()
 
-/** Bundles that can reach a prompt: the CLI runtime and the ./core subpath. */
-const PROMPT_BEARING_BUNDLES = ['dist/cli-runtime.mjs', 'dist/core.mjs']
+/**
+ * Bundles that can reach a prompt.
+ *
+ * `dist/core.mjs` used to be one of them. Core no longer prompts or prints —
+ * it reports what is about to happen and the command layer asks — so the ./core
+ * subpath has no path to @inquirer/prompts at all, and the assertion below
+ * inverts for it: absence is now the contract, checked so the edge cannot
+ * reappear unnoticed.
+ */
+const PROMPT_BEARING_BUNDLES = ['dist/cli-runtime.mjs']
+const PROMPT_FREE_BUNDLES = ['dist/core.mjs']
+const ALL_CHECKED_BUNDLES = [...PROMPT_BEARING_BUNDLES, ...PROMPT_FREE_BUNDLES]
 
 describe('@inquirer/prompts shipping contract', () => {
   test('is a runtime dependency, not a devDependency', () => {
@@ -43,7 +53,7 @@ describe('@inquirer/prompts shipping contract', () => {
 
   // The two tests above pin the intent; this one pins the result. Skipped when
   // dist/ is absent so the suite still runs pre-build.
-  describe.if(PROMPT_BEARING_BUNDLES.every((path) => existsSync(path)))('built artifacts', () => {
+  describe.if(ALL_CHECKED_BUNDLES.every((path) => existsSync(path)))('built artifacts', () => {
     test.each(PROMPT_BEARING_BUNDLES)('%s imports it rather than inlining it', async (outfile) => {
       const bundle = await Bun.file(outfile).text()
 
@@ -52,6 +62,14 @@ describe('@inquirer/prompts shipping contract', () => {
       // that shipped a barrel without its implementations.
       expect(bundle).toMatch(/import\(["']@inquirer\/prompts["']\)/)
       expect(bundle).not.toContain('// node_modules/@inquirer/prompts/')
+    })
+
+    test.each(PROMPT_FREE_BUNDLES)('%s cannot reach a prompt at all', async (outfile) => {
+      // Not a size optimisation: a core that can prompt is a core that can
+      // block on stdin and write to stdout, which is the thing the layering
+      // rule exists to prevent. If this fails, something in src/core started
+      // asking the user questions again.
+      expect(await Bun.file(outfile).text()).not.toContain(PACKAGE)
     })
   })
 

@@ -9,7 +9,6 @@ import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
-import { promptUser } from '@/utils/prompts'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
@@ -234,15 +233,22 @@ export class DataExecutor {
     }
 
     if (!options?.force) {
-      if (confirmation.warning) {
-        console.log(`\n${confirmation.warning}`)
+      if (!options?.confirm) {
+        throw new Error(
+          `Refusing to ${operation} without confirmation: no confirmation handler was supplied. ` +
+            'Pass options.confirm to ask the user, or options.force to proceed unattended.'
+        )
       }
-      console.log('\nGenerated SQL:')
-      console.log(`  ${statement.sql}`)
-      console.log('\nParameters:')
-      console.log(`  ${JSON.stringify(statement.params, null, 2)}`)
 
-      if (!(await promptUser.confirm(confirmation.prompt))) {
+      const proceed = await options.confirm({
+        operation,
+        sql: statement.sql,
+        params: statement.params,
+        ...(confirmation.warning && { warning: confirmation.warning }),
+        prompt: confirmation.prompt,
+      })
+
+      if (!proceed) {
         return this.successResult(operation, 0, timestamp, statement.sql)
       }
     }

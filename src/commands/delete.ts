@@ -14,6 +14,7 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
+import { confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { configModule } from '@/core/config'
 import { PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -289,6 +290,7 @@ export async function deleteCommand(
       const result = await executor.executeDelete(table, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,
+        confirm: confirmMutationInteractively,
       })
 
       // 9. Format output as JSON

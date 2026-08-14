@@ -1,5 +1,10 @@
 // Shared type definitions for dbcli
-export type { DataExecutionResult, DataExecutionOptions } from './data'
+export type {
+  DataExecutionResult,
+  DataExecutionOptions,
+  MutationConfirmationRequest,
+  MutationConfirmer,
+} from './data'
 export type { BlacklistConfig, ColumnBlacklist, BlacklistState } from './blacklist'
 export { BlacklistError } from './blacklist'
 

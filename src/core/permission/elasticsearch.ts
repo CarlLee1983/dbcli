@@ -1,9 +1,12 @@
 import type { Permission } from '@/types'
 import {
   PermissionError,
+  minimumPermissionFor,
+  permitsOperation,
   type StatementClassification,
   type StatementType,
 } from '@/core/permission-guard'
+import { t_vars } from '@/i18n/message-loader'
 
 // ============================================================================
 // ELASTICSEARCH CLASSIFICATION
@@ -140,7 +143,7 @@ export function enforceElasticsearchPermission(
   const result = checkElasticsearchPermission(classification, permission)
 
   if (!result.allowed) {
-    throw new PermissionError(result.reason, classification, permission)
+    throw new PermissionError(result.reason, classification, result.requiredPermission ?? 'admin')
   }
 
   return classification
@@ -149,27 +152,26 @@ export function enforceElasticsearchPermission(
 function checkElasticsearchPermission(
   classification: StatementClassification,
   permission: Permission
-): { allowed: boolean; reason: string } {
-  // Admin allows everything
-  if (permission === 'admin') return { allowed: true, reason: 'Admin' }
-
-  // Map ES types to the same rules as SQL
-  if (permission === 'data-admin') {
-    const allowed = ['SELECT', 'INSERT', 'UPDATE', 'DELETE']
-    if (allowed.includes(classification.type)) return { allowed: true, reason: 'Data-Admin' }
+): { allowed: boolean; reason: string; requiredPermission?: Permission } {
+  // The tiers are the SQL tiers. This used to restate them — a third copy of a
+  // table that had already drifted twice — and the two agree on every type this
+  // classifier can produce: SELECT, INSERT, UPDATE, DELETE and DROP. Reusing
+  // the shared rule keeps them agreeing by construction rather than by luck.
+  if (permitsOperation(classification.type, permission)) {
+    return { allowed: true, reason: `${classification.type} allowed in ${permission} mode` }
   }
 
-  if (permission === 'read-write') {
-    const allowed = ['SELECT', 'INSERT', 'UPDATE']
-    if (allowed.includes(classification.type)) return { allowed: true, reason: 'Read-Write' }
-  }
-
-  if (permission === 'query-only') {
-    if (classification.type === 'SELECT') return { allowed: true, reason: 'Query-Only' }
-  }
-
+  const minimum = minimumPermissionFor(classification.type)
   return {
     allowed: false,
-    reason: `Elasticsearch ${classification.type} operation requires higher permission tier`,
+    // Names the level that would work. It used to say "requires higher
+    // permission tier", which is true of every refusal and tells nobody what
+    // to change.
+    reason: t_vars('errors.elasticsearch_requires_level', {
+      type: classification.type,
+      minimum,
+      permission,
+    }),
+    requiredPermission: minimum,
   }
 }

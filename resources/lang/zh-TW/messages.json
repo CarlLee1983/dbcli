@@ -157,6 +157,7 @@
     "connection_failed": "無法連接到資料庫：{message}",
     "permission_denied": "權限被拒（需要：{required}）",
     "permission_requires_level": "{type} 操作需要 {minimum} 以上的權限（目前層級：{permission}）",
+    "elasticsearch_requires_level": "Elasticsearch {type} 操作需要 {minimum} 以上的權限（目前層級：{permission}）",
     "escalated_write_requires_admin": "此語句表面上是讀取，但實際包含可執行的 {keyword}。讀取語句中隱藏寫入操作需要 admin 權限（目前層級：{permission}）。",
     "multiple_statements_refused": "低於 admin 權限時拒絕執行包含多個語句的 SQL，因為權限檢查只會依據第一個語句判斷。請將各語句分開執行。",
     "unknown_statement_query_only": "無法辨識的 SQL 語句（目前層級：query-only）。安全政策要求未知語句至少需要 read-write 以上權限。若這其實是合法的唯讀語句，請至 https://github.com/CarlLee1983/dbcli/issues 提出議題。",

@@ -223,6 +223,17 @@ dbcli query --use primary,staging "SELECT count(*) FROM users"</code></pre>
             <p>連線名稱會移除前後空白，結果則維持 selector 的順序；空白或重複名稱會被拒絕。只指定一個名稱時仍走既有的單連線路徑。Fan-out 只會由明確的 <code>--use</code> 啟用：<code>DBCLI_CONNECTION</code> 仍代表一個完整的連線名稱，不會依逗號拆分。兩種 <code>--use</code> 寫法都不會修改持久化的預設連線。</p>
             <p>在任何 adapter 建立連線前，dbcli 會先載入並驗證所有選定的連線配置。SQL fan-out 只允許唯讀分類（<code>SELECT</code>、<code>SHOW</code>、<code>DESCRIBE</code>、<code>EXPLAIN</code>）；MongoDB 允許 filter object 與唯讀 aggregation pipeline，但拒絕頂層 <code>$out</code> 或 <code>$merge</code> stage；Elasticsearch 只允許 search。Redis 不支援 fan-out。多連線 query 也會拒絕 <code>--recovery</code>、<code>--ui</code>、CSV 與 HTML 輸出；請使用 <code>--format table</code>（預設）或 <code>--format json</code>。</p>
             <p>每個連線都會獨立使用自己的 adapter、blacklist 過濾、row-limit／截斷 metadata、audit entry、計時與 disconnect；其中一個連線失敗不會取消或隱藏其他結果。JSON 會依序回傳 <code>results</code> array，每個連線都有標示清楚的 <code>ok</code> 或 <code>error</code> outcome；table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功時 aggregate exit code 為 <code>0</code>，成功與失敗混合時為 <code>2</code>，全部失敗或執行前拒絕請求時為 <code>1</code>。</p>
+            <h3>密碼輪替</h3>
+            <p><code>dbcli password</code> 只變更單一連線的密碼，其他設定完全不動——專為密碼會定期自動輪替的環境設計。</p>
+            <pre><code>dbcli password                       # 遮蔽輸入，輪替預設連線
+dbcli password prod                  # 遮蔽輸入，輪替 'prod'
+rotate-secret | dbcli password prod --stdin   # 非互動，密碼不會留在 shell 歷史
+dbcli password prod --password "$NEW" --skip-test --format json</code></pre>
+            <p>密碼寫到哪裡是從設定檔讀出來的，不是用猜的：若連線的 <code>password</code> 是 <code>{ "$env": "NAME" }</code>，就會改寫該連線 <code>envFile</code> 裡的 <code>NAME</code>。連線沒宣告 <code>envFile</code> 時，輪替會順便把 <code>envFile</code>（<code>.env.local</code>）記錄進該連線設定——不記錄的話讀取端根本不會載入那個檔案。若連線目前仍是明文密碼，會一次性轉換成 <code>{ "$env": "DBCLI_&lt;CONN&gt;_PASSWORD" }</code>，之後的輪替就只會動 env 檔。值會以加引號的形式寫入（<code>NAME="..."</code>），密碼首尾的空白因此能原樣保留。</p>
+            <p>v1 設定則會改寫 <code>.env.local</code> 裡的 <code>DBCLI_PASSWORD</code>，與 v1 的讀取邏輯一致。若 v1 設定的密碼來自其他環境變數（不是 <code>DBCLI_PASSWORD</code>），指令會直接報錯說明：v1 沒有 per-connection env 檔，dbcli 寫任何檔案都無法讓那個變數有值，請直接更新環境變數，或升級到 v2。</p>
+            <p>預設會先用新密碼實際連線驗證，通過才會寫入檔案，避免輪替失敗卻留下壞掉的憑證。資料庫連不到時可用 <code>--skip-test</code> 跳過驗證。env 檔會以 <code>0600</code> 權限寫入，密碼不會被回顯或寫進 log。</p>
+            <p><strong>選項：</strong> <code>[connection]</code>、<code>--stdin</code>、<code>--password &lt;value&gt;</code>（會留在 shell 歷史與行程列表中，建議優先用 <code>--stdin</code>）、<code>--skip-test</code>、<code>--format &lt;text|json&gt;</code>。</p>
+            <p>在 <code>DBCLI_AGENT_MODE=1</code> 下，和其他憑證變更一樣會被擋下。</p>
         </section>
 
         <!-- doc-key: command-reference -->

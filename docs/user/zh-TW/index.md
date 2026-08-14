@@ -199,6 +199,40 @@ audit entry、計時與 disconnect；其中一個連線失敗不會取消或隱�
 table 則依各自 schema 顯示獨立且具連線標籤的區段。全部成功時 aggregate exit code
 為 `0`，成功與失敗混合時為 `2`，全部失敗或執行前拒絕請求時為 `1`。
 
+### 密碼輪替
+
+`dbcli password` 只變更單一連線的密碼，其他設定完全不動——專為密碼會定期
+自動輪替的環境設計。
+
+```bash
+dbcli password                       # 遮蔽輸入，輪替預設連線
+dbcli password prod                  # 遮蔽輸入，輪替 'prod'
+rotate-secret | dbcli password prod --stdin   # 非互動，密碼不會留在 shell 歷史
+dbcli password prod --password "$NEW" --skip-test --format json
+```
+
+密碼寫到哪裡是從設定檔讀出來的，不是用猜的：若連線的 `password` 是
+`{ "$env": "NAME" }`，就會改寫該連線 `envFile` 裡的 `NAME`。連線沒宣告
+`envFile` 時，輪替會順便把 `envFile`（`.env.local`）記錄進該連線設定——不
+記錄的話讀取端根本不會載入那個檔案。若連線目前仍是明文密碼，會一次性
+轉換成 `{ "$env": "DBCLI_<CONN>_PASSWORD" }`，之後的輪替就只會動 env 檔。
+值會以加引號的形式寫入（`NAME="..."`），密碼首尾的空白因此能原樣保留。
+
+v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏輯一致。
+若 v1 設定的密碼來自其他環境變數（不是 `DBCLI_PASSWORD`），指令會直接
+報錯說明：v1 沒有 per-connection env 檔，dbcli 寫任何檔案都無法讓那個
+變數有值，請直接更新環境變數，或升級到 v2。
+
+預設會先用新密碼實際連線驗證，通過才會寫入檔案，避免輪替失敗卻留下壞掉的
+憑證。資料庫連不到時可用 `--skip-test` 跳過驗證。env 檔會以 `0600` 權限
+寫入，密碼不會被回顯或寫進 log。
+
+**選項：** `[connection]`、`--stdin`、`--password <value>`（會留在 shell
+歷史與行程列表中，建議優先用 `--stdin`）、`--skip-test`、
+`--format <text|json>`。
+
+在 `DBCLI_AGENT_MODE=1` 下，和其他憑證變更一樣會被擋下。
+
 ---
 
 <!-- doc-key: command-reference -->

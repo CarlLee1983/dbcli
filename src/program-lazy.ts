@@ -181,6 +181,12 @@ export const COMMAND_LOADERS: Record<string, () => Promise<(program: Command) =>
       program.addCommand(migrateCommand)
     }
   },
+  password: async () => {
+    const { passwordCommand } = await import('./commands/credential')
+    return (program: Command) => {
+      program.addCommand(passwordCommand)
+    }
+  },
   use: async () => {
     const { useCommand } = await import('./commands/use')
     return (program) => {

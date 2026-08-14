@@ -270,5 +270,19 @@
     "add_enum_description": "建立列舉型別（僅 PostgreSQL）",
     "alter_enum_description": "新增列舉值",
     "drop_enum_description": "刪除列舉型別"
+  },
+  "password": {
+    "description": "只變更單一連線的密碼，其餘設定原封不動",
+    "arg_connection": "連線名稱（省略時改預設連線）",
+    "opt_stdin": "從 stdin 讀取新密碼（供輪替腳本使用）",
+    "opt_password": "直接帶入新密碼（會留在 shell 歷史與行程列表）",
+    "opt_skip_test": "存檔前不先用新密碼連線驗證",
+    "prompt": "連線 '{name}' 的新密碼",
+    "source_conflict": "--password 與 --stdin 只能擇一。",
+    "needs_source": "沒有終端機可做遮蔽輸入，請改用 --stdin 或 --password 傳入。",
+    "empty": "新密碼是空的，未做任何變更。",
+    "updated": "已更新連線 '{name}' 的密碼 → {envFile}（{varName}）",
+    "converted": "config.json 裡的明文密碼已改成 {{ \"$env\": \"{varName}\" }} 參照，之後輪替只會動 env 檔。",
+    "skipped_test": "已跳過驗證（--skip-test）：新密碼未經資料庫確認。"
   }
 }

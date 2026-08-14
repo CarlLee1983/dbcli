@@ -35,6 +35,7 @@ import { upgradeCommand } from './commands/upgrade'
 import { shellCommand } from './commands/shell'
 import { migrateCommand } from './commands/migrate'
 import { useCommand } from './commands/use'
+import { passwordCommand } from './commands/credential'
 import { proxyCommand } from './commands/proxy'
 import { semanticCommand } from './commands/semantic'
 import { designCommand } from './commands/design'
@@ -121,6 +122,7 @@ export function buildProgram(): Command {
   program.addCommand(shellCommand)
   program.addCommand(migrateCommand)
   program.addCommand(useCommand)
+  program.addCommand(passwordCommand)
   program.addCommand(queriesCommand)
   program.addCommand(explainCommand)
   program.addCommand(lintCommand)

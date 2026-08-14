@@ -5,7 +5,8 @@ describe('public core barrel exposes the connection writer surface', () => {
   test('exports writer + mutations', () => {
     for (const name of [
       'writeV2Config',
-      'writeConnectionSecret',
+      'setConnectionPassword',
+      'resolvePasswordTarget',
       'envVarNameFor',
       'upsertConnection',
       'removeConnection',

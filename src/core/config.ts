@@ -199,7 +199,14 @@ function resolveEnvReferences(
  */
 function parseEnvPassword(content: string): string | null {
   const match = content.match(/^DBCLI_PASSWORD=(.+)$/m)
-  return match?.[1] != null ? match[1].trim() : null
+  if (match?.[1] == null) return null
+
+  // 與 env-loader 同一套規則:trim 後剝掉一層對稱引號,
+  // 引號才能保住密碼首尾的空白。
+  const raw = match[1].trim()
+  const quoted =
+    (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))
+  return quoted && raw.length >= 2 ? raw.slice(1, -1) : raw
 }
 
 /**

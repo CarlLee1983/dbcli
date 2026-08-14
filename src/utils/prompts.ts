@@ -137,6 +137,27 @@ export async function select(message: string, choices: string[]): Promise<string
 }
 
 /**
+ * Prompt for a secret. The value is masked while typing and never echoed back.
+ *
+ * Requires a TTY: without inquirer's masking, a plain-text fallback would print
+ * the secret into the terminal scrollback, so callers must supply the value
+ * through a flag or stdin instead.
+ *
+ * @param message - The prompt message to display
+ * @returns The entered secret, exactly as typed
+ */
+export async function secret(message: string): Promise<string> {
+  const inquirer = await loadInquirer()
+  if (!inquirer) {
+    throw new Error(
+      'Masked input is unavailable; pass the value with --stdin or --password instead.'
+    )
+  }
+
+  return await inquirer.password({ message, mask: '*' })
+}
+
+/**
  * Prompt user for a yes/no confirmation.
  *
  * @param message - The confirmation prompt message
@@ -160,6 +181,7 @@ export const promptUser = {
   text,
   select,
   confirm,
+  secret,
 }
 
 export default promptUser

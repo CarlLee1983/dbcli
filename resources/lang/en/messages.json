@@ -270,5 +270,19 @@
     "add_enum_description": "Create an enum type (PostgreSQL only)",
     "alter_enum_description": "Add a value to an enum type",
     "drop_enum_description": "Drop an enum type"
+  },
+  "password": {
+    "description": "Change the password of a single connection, leaving every other setting untouched",
+    "arg_connection": "Connection name (defaults to the current default connection)",
+    "opt_stdin": "Read the new password from stdin (for rotation scripts)",
+    "opt_password": "New password given inline (visible in shell history and process list)",
+    "opt_skip_test": "Skip verifying the new password against the database before saving",
+    "prompt": "New password for connection '{name}'",
+    "source_conflict": "--password and --stdin cannot be used together; pick one source.",
+    "needs_source": "No terminal available for a masked prompt. Pass the value with --stdin or --password.",
+    "empty": "The new password is empty; nothing was changed.",
+    "updated": "Password for connection '{name}' updated → {envFile} ({varName})",
+    "converted": "The literal password in config.json was replaced by a {{ \"$env\": \"{varName}\" }} reference; later rotations only touch the env file.",
+    "skipped_test": "Verification skipped (--skip-test): the new password was not checked against the database."
   }
 }

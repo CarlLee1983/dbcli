@@ -221,6 +221,47 @@ output renders a separate labeled section for each schema. The aggregate exit
 code is `0` when all succeed, `2` for mixed success and failure, and `1` when all
 fail or the request is rejected before execution.
 
+### Password rotation
+
+`dbcli password` changes one connection's password without touching any other
+setting — built for environments where credentials rotate on a schedule.
+
+```bash
+dbcli password                       # Masked prompt, rotates the default connection
+dbcli password prod                  # Masked prompt, rotates 'prod'
+rotate-secret | dbcli password prod --stdin   # Non-interactive, nothing lands in shell history
+dbcli password prod --password "$NEW" --skip-test --format json
+```
+
+Where the value lands is read from the config, never guessed: a connection
+whose `password` is `{ "$env": "NAME" }` gets `NAME` rewritten in its
+`envFile`. A connection that declares no `envFile` has one recorded
+(`.env.local`) as part of the rotation — without it the reader would never
+load the file. A connection still holding a literal password is converted to
+`{ "$env": "DBCLI_<CONN>_PASSWORD" }` once, so later rotations only touch the
+env file. Values are written quoted (`NAME="..."`), so leading and trailing
+whitespace survives the round trip.
+
+v1 configs rewrite `DBCLI_PASSWORD` in `.env.local`, matching the v1 reader. A
+v1 config whose password comes from some other environment variable is
+refused with an explanation: v1 has no per-connection env file, so no file
+dbcli writes could make that variable resolve — set it in the environment,
+or migrate to v2.
+
+The new password is verified by connecting with it before anything is
+written, so a bad rotation fails without leaving broken credentials behind.
+Pass `--skip-test` when the database is unreachable from where the command
+runs. The env file is written with `0600` permissions on POSIX systems (Windows
+has no equivalent mode bit — the file inherits the directory's ACL), and the
+value is never
+echoed or logged.
+
+**Options:** `[connection]`, `--stdin`, `--password <value>` (visible in
+shell history and the process list — prefer `--stdin`), `--skip-test`,
+`--format <text|json>`.
+
+Blocked under `DBCLI_AGENT_MODE=1` like every other credential mutation.
+
 ---
 
 <!-- doc-key: command-reference -->

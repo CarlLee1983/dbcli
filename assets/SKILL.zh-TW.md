@@ -246,6 +246,17 @@ dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
 
+只輪替單一連線的密碼，其餘設定不動：
+
+```bash
+dbcli password prod                       # 遮蔽輸入
+rotate-secret | dbcli password prod --stdin   # 供排程輪替腳本使用
+```
+
+新密碼會寫進 config 實際參照的 env 變數（明文密碼會在第一次使用時轉成
+`{ "$env": ... }`；連線沒宣告 `envFile` 時會一併補記錄，讀取端才載得到），
+存檔前先用它連一次驗證（`--skip-test` 可跳過），env 檔在 POSIX 上以 0600 權限寫入。
+
 若要讓多個專案共用連線，請使用明確的 root-level `--global` scope。它會把 v2 registry 儲存在 `~/.config/dbcli/config.json`，不會建立或修改專案 binding：
 
 ```bash

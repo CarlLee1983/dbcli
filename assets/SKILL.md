@@ -310,6 +310,19 @@ dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
 
+Rotating one connection's password — nothing else in the config moves:
+
+```bash
+dbcli password prod                       # masked prompt
+rotate-secret | dbcli password prod --stdin   # for scheduled rotation scripts
+```
+
+The value goes to the env var the config actually references (a literal password
+is converted to `{ "$env": ... }` on first use, and a connection with no
+`envFile` gets one recorded so the reader loads it), is verified by connecting
+before it is saved (`--skip-test` to opt out), and the env file is written
+`0600` on POSIX.
+
 For a connection shared across projects, use the explicit root-level `--global` scope. It stores a v2 registry at `~/.config/dbcli/config.json`; it does not create or modify a project binding:
 
 ```bash

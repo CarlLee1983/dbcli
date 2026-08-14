@@ -15,6 +15,7 @@ Maintenance note: command support statuses in this table are mirrored by `src/ad
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB defaults to a field-by-field wizard (host/port/user/password/`authSource`/`replicaSet`/`tls`/`srv`); a full `uri` remains an advanced fallback (`--uri` for non-interactive use). Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
 | Multi-connection `use` / `--use` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | v2 config isolates connections and schema caches. |
+| `password` rotation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Changes one connection's password only. Writes to the env var the config references (a literal password is converted to `{ "$env": ... }` once); verifies by connecting before saving unless `--skip-test`. Blocked in agent mode. |
 | Read-only query fan-out (`--use a,b`) | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL read-only statements, Mongo filters/read-only pipelines, and ES search only. Rejects writes, recovery, UI, CSV, and HTML; mixed outcomes exit 2. |
 | `list` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | SQL: tables; Mongo: collections; Redis: keys (SCAN); ES: indices. |
 | `schema [table]` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Mongo: sampled; Redis: per-key only (type/TTL/size); ES: flattened mapping. |

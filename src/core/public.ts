@@ -25,13 +25,14 @@ export {
 // ── Config write (連線管理:GUI/CLI 共用) ──
 export {
   envVarNameFor,
-  writeConnectionSecret,
   upsertConnection,
   removeConnection,
   setDefaultConnection,
   migrateV1ToV2,
 } from '@/core/config-v2-mutations'
 export type { ConnectionInput, SqlSystem } from '@/core/config-v2-mutations'
+export { setConnectionPassword, resolvePasswordTarget } from '@/core/connection-credential'
+export type { PasswordTarget } from '@/core/connection-credential'
 export type { ResolvedConnection } from '@/core/config-v2'
 
 // ── Config read (unified: binding-aware, v1/v2, {$env}-expanded) ──

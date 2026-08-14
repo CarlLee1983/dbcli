@@ -1,5 +1,13 @@
 // Full command runtime. Keep the lightweight process entry point in cli.ts so
 // standalone version checks do not parse database drivers and every command.
+//
+// IMPORTING THIS MODULE RUNS THE CLI. The bottom of the file calls outputHelp()
+// and parseAsync(process.argv) at top level, so an import never returns a module
+// — it dispatches against the host process's argv and can exit. Only cli.ts may
+// import it, and only to launch. For an inert command tree use buildProgram()
+// from ./program (synchronous, side-effect free, what check-cli-contract.ts,
+// completion and the REPL walk). package.json exports no entry that reaches
+// here; tests/integration/runtime-contract.test.ts pins both facts.
 import type { Command } from 'commander'
 import pkg from '../package.json'
 import { createLogger, setGlobalLogger, LogLevel } from './utils/logger'

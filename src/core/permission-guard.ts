@@ -630,6 +630,48 @@ export function checkPermission(
     }
   }
 
+  return checkPermissionForClassification(classification, permission)
+}
+
+/**
+ * Decide a classified statement against a permission level.
+ *
+ * Split out of checkPermission so that callers who already know what they are
+ * running — the structured insert/update/delete commands build their own SQL —
+ * can reach the same tier rules without round-tripping a statement through the
+ * classifier. The guards that precede this in checkPermission (stacked
+ * statements, hidden writes) only apply to SQL supplied by a user; a statement
+ * this process assembled has neither.
+ */
+/** Types each tier adds to the one below it. */
+const TIER_GRANTS: ReadonlyArray<{ permission: Permission; types: readonly string[] }> = [
+  { permission: 'query-only', types: ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN'] },
+  { permission: 'read-write', types: ['INSERT', 'UPDATE'] },
+  { permission: 'data-admin', types: ['DELETE'] },
+]
+
+/**
+ * The lowest level that permits this statement type.
+ *
+ * Refusals used to name whichever tier sat one step above the one refusing,
+ * which is only right when that tier actually grants the type. It told a
+ * query-only user that DELETE "requires read-write", and read-write users that
+ * DDL "requires data-admin" — neither of which would have worked. Deriving the
+ * answer from the same table the decision uses keeps the advice true.
+ */
+function minimumPermissionFor(type: StatementType): Permission {
+  return TIER_GRANTS.find((tier) => tier.types.includes(type))?.permission ?? 'admin'
+}
+
+function refusalReason(type: StatementType, permission: Permission): string {
+  const minimum = minimumPermissionFor(type)
+  return `${type} operation requires ${minimum} permission or higher (current level: ${permission})`
+}
+
+export function checkPermissionForClassification(
+  classification: StatementClassification,
+  permission: Permission
+): PermissionCheckResult {
   // A statement re-classified because it hides a write is refused with what was
   // actually found. The generic messages below name the next tier up, which is
   // wrong here: every tier short of admin refuses it.
@@ -665,7 +707,7 @@ export function checkPermission(
     }
     return {
       allowed: false,
-      reason: `${classification.type} operation requires admin permission`,
+      reason: refusalReason(classification.type, permission),
       classification,
     }
   }
@@ -682,7 +724,7 @@ export function checkPermission(
     }
     return {
       allowed: false,
-      reason: `${classification.type} operation requires data-admin or admin permission`,
+      reason: refusalReason(classification.type, permission),
       classification,
     }
   }
@@ -702,7 +744,7 @@ export function checkPermission(
       allowed: false,
       reason: isUnknown
         ? `Unrecognised SQL statement (current level: query-only). Security policy requires read-write+ for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.`
-        : `${classification.type} operation requires read-write or admin permission`,
+        : refusalReason(classification.type, permission),
       classification,
     }
   }
@@ -712,6 +754,32 @@ export function checkPermission(
     allowed: false,
     reason: `Unknown permission level: ${permission}`,
     classification,
+  }
+}
+
+/**
+ * Throws PermissionError if an operation of this type is not allowed.
+ *
+ * For callers that assembled the statement themselves and therefore know its
+ * type with certainty. Passing a synthetic statement string to enforcePermission
+ * instead — which DataExecutor used to do — asks the classifier to rediscover
+ * something the caller already knew, and passing the *real* generated statement
+ * is worse still: it would force the SQL to be built, and its columns validated,
+ * before the caller is known to be authorised at all.
+ */
+export function enforcePermissionForType(type: StatementType, permission: Permission): void {
+  const classification: StatementClassification = {
+    type,
+    isDangerous: isDestructiveOperation(type),
+    keywords: [type],
+    isComposite: false,
+    confidence: 'HIGH',
+  }
+
+  const result = checkPermissionForClassification(classification, permission)
+
+  if (!result.allowed) {
+    throw new PermissionError(result.reason, classification, permission)
   }
 }
 

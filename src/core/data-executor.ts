@@ -8,7 +8,7 @@
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
-import { enforcePermission, PermissionError } from '@/core/permission-guard'
+import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
@@ -105,7 +105,7 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('INSERT', tableName)
-      enforcePermission('INSERT INTO dummy', this.permission)
+      enforcePermissionForType('INSERT', this.permission)
       return await this.executeMutation(
         'insert',
         this.buildInsertSql(tableName, data, schema),
@@ -140,7 +140,7 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('UPDATE', tableName)
-      enforcePermission('UPDATE dummy', this.permission)
+      enforcePermissionForType('UPDATE', this.permission)
       return await this.executeMutation(
         'update',
         this.buildUpdateSql(tableName, data, where, schema),
@@ -173,17 +173,7 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('DELETE', tableName)
-
-      if (this.permission !== 'data-admin' && this.permission !== 'admin') {
-        return {
-          status: 'error',
-          operation: 'delete',
-          rows_affected: 0,
-          timestamp,
-          error: 'Permission denied: DELETE operation requires Data-Admin or Admin permission.',
-        }
-      }
-
+      enforcePermissionForType('DELETE', this.permission)
       return await this.executeMutation(
         'delete',
         this.buildDeleteSql(tableName, where, schema),
@@ -281,13 +271,17 @@ export class DataExecutor {
       throw error
     }
 
-    if (error instanceof PermissionError && operation !== 'delete') {
+    // The refusal already knows which level was in effect and why. This used to
+    // substitute a fixed sentence naming query-only whatever the actual level
+    // was — latent rather than wrong only because every tier that reaches here
+    // today happens to be query-only.
+    if (error instanceof PermissionError) {
       return {
         status: 'error',
         operation,
         rows_affected: 0,
         timestamp,
-        error: `Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute ${operation.toUpperCase()}.`,
+        error: `Permission denied: ${error.message}`,
       }
     }
 

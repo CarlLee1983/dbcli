@@ -365,7 +365,7 @@ describe('Query Command', () => {
     test('should block INSERT in query-only mode', async () => {
       mockConfig.permission = 'query-only'
       await expect(queryCommand('INSERT INTO users VALUES (1, "Eve")', {})).rejects.toThrow(
-        'requires read-write or admin permission'
+        'requires read-write permission or higher'
       )
     })
 

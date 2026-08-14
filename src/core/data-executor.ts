@@ -219,7 +219,7 @@ export class DataExecutor {
     confirmation: MutationConfirmation
   ): Promise<DataExecutionResult> {
     if (options?.dryRun) {
-      return this.successResult(operation, 0, timestamp, statement.sql)
+      return this.outcomeResult('dry_run', operation, 0, timestamp, statement.sql)
     }
 
     if (!options?.force) {
@@ -239,7 +239,7 @@ export class DataExecutor {
       })
 
       if (!proceed) {
-        return this.successResult(operation, 0, timestamp, statement.sql)
+        return this.outcomeResult('cancelled', operation, 0, timestamp, statement.sql)
       }
     }
 
@@ -253,8 +253,18 @@ export class DataExecutor {
     timestamp: string,
     sql: string
   ): DataExecutionResult {
+    return this.outcomeResult('success', operation, rowsAffected, timestamp, sql)
+  }
+
+  private outcomeResult(
+    status: Exclude<DataExecutionResult['status'], 'error'>,
+    operation: MutationOperation,
+    rowsAffected: number,
+    timestamp: string,
+    sql: string
+  ): DataExecutionResult {
     return {
-      status: 'success',
+      status,
       operation,
       rows_affected: rowsAffected,
       timestamp,

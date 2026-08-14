@@ -259,7 +259,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
       force: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
   })
@@ -456,7 +456,7 @@ describe('DataExecutor.executeDelete', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
   })
@@ -626,7 +626,7 @@ describe('DataExecutor.executeUpdate', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.operation).toBe('update')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
@@ -980,7 +980,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
     expect(result.sql).toContain('DELETE FROM')

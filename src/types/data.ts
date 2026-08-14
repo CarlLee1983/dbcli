@@ -8,8 +8,17 @@
  * Used to wrap the execution result and metadata of data modification operations
  */
 export interface DataExecutionResult {
-  /** Execution status: success or error */
-  status: 'success' | 'error'
+  /**
+   * What became of the operation.
+   *
+   * `success` means the statement ran — `rows_affected` may still be 0 if it
+   * matched nothing. `cancelled` means a user declined at the confirmation.
+   * `dry_run` means it was previewed and deliberately not run. The last two
+   * were reported as `success` with `rows_affected: 0` until 2.0.0, which made
+   * them indistinguishable from a write that matched no rows and caused the
+   * audit log to record declined operations as writes that happened.
+   */
+  status: 'success' | 'error' | 'cancelled' | 'dry_run'
 
   /** Type of operation executed */
   operation: 'insert' | 'update' | 'delete'

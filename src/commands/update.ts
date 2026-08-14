@@ -15,6 +15,7 @@ import {
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { confirmMutationInteractively } from '@/commands/mutation-confirm'
+import { auditOutcomeForMutation } from '@/commands/mutation-audit'
 import { configModule } from '@/core/config'
 import { enforcePermission, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -336,18 +337,7 @@ export async function updateCommand(
 
       console.log(JSON.stringify(output, null, 2))
 
-      await writeAuditEntry(config, 'update', options, {
-        success: result.status === 'success',
-        target: table,
-        ...(result.sql && { sql: result.sql }),
-        metadata: {
-          rows_affected: result.rows_affected,
-          ...(options.dryRun && { dry_run: true }),
-        },
-        ...(result.status === 'error' && {
-          error: new Error(result.error ?? 'update failed'),
-        }),
-      })
+      await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(result, table))
 
       // Exit with code 1 if there is an error
       if (result.status === 'error') {

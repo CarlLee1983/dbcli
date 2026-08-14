@@ -118,7 +118,7 @@ describe('update/delete stdout characterisation', () => {
     )
   })
 
-  test('cancelling at the prompt still prints a success envelope today', async () => {
+  test('cancelling at the prompt reports cancelled, not success', async () => {
     confirmAnswer = false
     const { updateCommand } = await import('@/commands/update')
     const output = await run(() =>
@@ -126,7 +126,8 @@ describe('update/delete stdout characterisation', () => {
     )
 
     expect(output).toContain('"rows_affected": 0')
-    expect(output).toContain('"status": "success"')
+    expect(output).toContain('"status": "cancelled"')
+    expect(output).not.toContain('"status": "success"')
   })
 
   test('delete leads with the destructive warning', async () => {

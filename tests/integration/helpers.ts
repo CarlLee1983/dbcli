@@ -49,6 +49,14 @@ export const MYSQL_USER = process.env.MYSQL_USER || 'dbcli'
 export const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || 'testpass'
 export const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'dbcli_test'
 
+// Its own service, not a MySQL alias: the error codes, `ANALYZE SELECT` and the
+// EXPLAIN shape differ, which is what the tests using this exercise.
+export const MARIADB_HOST = process.env.MARIADB_HOST || 'localhost'
+export const MARIADB_PORT = Number(process.env.MARIADB_PORT || 3308)
+export const MARIADB_USER = process.env.MARIADB_USER || 'dbcli'
+export const MARIADB_PASSWORD = process.env.MARIADB_PASSWORD || 'testpass'
+export const MARIADB_DATABASE = process.env.MARIADB_DATABASE || 'dbcli_test'
+
 export const REDIS_HOST = process.env.REDIS_HOST || 'localhost'
 export const REDIS_PORT = Number(process.env.REDIS_PORT || 6379)
 

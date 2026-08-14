@@ -3,8 +3,11 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { isDbReachable, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DATABASE } from '../helpers'
 
-const SKIP = !process.env.DBCLI_LIVE_PG_HOST
+// It wanted "a real PostgreSQL", and the compose stack is one. Gating on an
+// operator-supplied server meant this never ran anywhere, including CI.
+const SKIP = !(await isDbReachable(PG_HOST, PG_PORT))
 const cliPath = join(import.meta.dir, '..', '..', '..', 'src', 'cli.ts')
 
 describe.skipIf(SKIP)('dbcli q (live PostgreSQL)', () => {
@@ -22,11 +25,11 @@ describe.skipIf(SKIP)('dbcli q (live PostgreSQL)', () => {
       JSON.stringify({
         connection: {
           system: 'postgresql',
-          host: process.env.DBCLI_LIVE_PG_HOST,
-          port: Number(process.env.DBCLI_LIVE_PG_PORT ?? 5432),
-          user: process.env.DBCLI_LIVE_PG_USER,
-          password: process.env.DBCLI_LIVE_PG_PASSWORD ?? '',
-          database: process.env.DBCLI_LIVE_PG_DATABASE,
+          host: PG_HOST,
+          port: PG_PORT,
+          user: PG_USER,
+          password: PG_PASSWORD,
+          database: PG_DATABASE,
         },
         permission: 'query-only',
         schema: {},
@@ -42,7 +45,11 @@ describe.skipIf(SKIP)('dbcli q (live PostgreSQL)', () => {
     })
     expect(r.status).toBe(0)
     const out = JSON.parse(r.stdout)
-    expect(out.rows).toEqual([{ x: 1 }])
+    // A string, not a number: PostgreSQL types an untyped parameter as text
+    // (`EXPLAIN VERBOSE` on `SELECT $1 AS x` shows `'1'::text`), so this is
+    // what the snippet returns. The assertion said `1` and had never been run
+    // against a server to find out.
+    expect(out.rows).toEqual([{ x: '1' }])
   })
 
   test('--param overrides', () => {
@@ -55,6 +62,6 @@ describe.skipIf(SKIP)('dbcli q (live PostgreSQL)', () => {
       }
     )
     expect(r.status).toBe(0)
-    expect(JSON.parse(r.stdout).rows).toEqual([{ x: 42 }])
+    expect(JSON.parse(r.stdout).rows).toEqual([{ x: '42' }])
   })
 })

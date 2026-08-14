@@ -43,7 +43,7 @@ describe('parsePublishedPorts', () => {
 
     // Named explicitly: adding a service to the compose file without a
     // published port would otherwise leave it silently unguarded.
-    expect(services).toEqual(['elasticsearch', 'mongodb', 'mysql', 'postgres', 'redis'])
+    expect(services).toEqual(['elasticsearch', 'mariadb', 'mongodb', 'mysql', 'postgres', 'redis'])
     expect(parsed.every((entry) => Number.isInteger(entry.port) && entry.port > 0)).toBe(true)
   })
 })

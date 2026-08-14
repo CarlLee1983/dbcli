@@ -3,27 +3,40 @@ import { AdapterFactory } from '@/adapters'
 import type { DatabaseAdapter, SqlConnectionOptions } from '@/adapters/types'
 import { QueryExecutor } from '@/core/query-executor'
 import { ConnectionError } from '@/adapters/types'
+import {
+  isDbReachable,
+  MARIADB_HOST,
+  MARIADB_PORT,
+  MARIADB_USER,
+  MARIADB_PASSWORD,
+  MARIADB_DATABASE,
+  PG_HOST,
+  PG_PORT,
+  PG_USER,
+  PG_PASSWORD,
+  PG_DATABASE,
+} from './helpers'
 
-const MARIADB_AVAILABLE = !!process.env.TEST_MARIADB_HOST || !!process.env.TEST_MARIADB_DSN
+const MARIADB_AVAILABLE = await isDbReachable(MARIADB_HOST, MARIADB_PORT)
 
 const MARIADB_OPTS: SqlConnectionOptions = {
   system: 'mariadb',
-  host: process.env.TEST_MARIADB_HOST || 'localhost',
-  port: Number(process.env.TEST_MARIADB_PORT || 3306),
-  user: process.env.TEST_MARIADB_USER || 'root',
-  password: process.env.TEST_MARIADB_PASSWORD || '',
-  database: process.env.TEST_MARIADB_DB || 'test',
+  host: MARIADB_HOST,
+  port: MARIADB_PORT,
+  user: MARIADB_USER,
+  password: MARIADB_PASSWORD,
+  database: MARIADB_DATABASE,
 }
 
-const PG_AVAILABLE = !!process.env.TEST_POSTGRESQL_HOST
+const PG_AVAILABLE = await isDbReachable(PG_HOST, PG_PORT)
 
 const PG_OPTS: SqlConnectionOptions = {
   system: 'postgresql',
-  host: process.env.TEST_POSTGRESQL_HOST || 'localhost',
-  port: Number(process.env.TEST_POSTGRESQL_PORT || 5432),
-  user: process.env.TEST_POSTGRESQL_USER || 'postgres',
-  password: process.env.TEST_POSTGRESQL_PASSWORD || '',
-  database: process.env.TEST_POSTGRESQL_DB || 'postgres',
+  host: PG_HOST,
+  port: PG_PORT,
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 describe.skipIf(!MARIADB_AVAILABLE)('P1: error classification (MariaDB)', () => {

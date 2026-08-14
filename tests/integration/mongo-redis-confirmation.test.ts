@@ -17,11 +17,8 @@ import { MongoClient } from 'mongodb'
 import { RedisClient } from 'bun'
 import { configModule } from '@/core/config'
 import { promptUser } from '@/utils/prompts'
-import { isDbReachable, SKIP_BY_ENV } from './helpers'
+import { isDbReachable, SKIP_BY_ENV, REDIS_HOST, REDIS_PORT, MONGO_URI } from './helpers'
 
-const REDIS_HOST = process.env.REDIS_HOST ?? 'localhost'
-const REDIS_PORT = Number(process.env.REDIS_PORT ?? 6379)
-const MONGO_URI = process.env.MONGO_TEST_URI ?? 'mongodb://localhost:27017'
 const MONGO_DB = 'dbcli_test_confirm'
 const COLLECTION = 'widgets'
 const KEY = 'dbcli:test:confirm'

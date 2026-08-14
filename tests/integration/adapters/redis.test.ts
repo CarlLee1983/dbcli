@@ -12,14 +12,14 @@ import { test, expect, describe, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { RedisAdapter } from 'src/adapters/redis-adapter'
 import { ConnectionError } from 'src/adapters'
 import type { ConnectionOptions } from 'src/adapters/types'
-import { shouldSkipTests } from '../helpers'
+import { shouldSkipTests, REDIS_HOST, REDIS_PORT } from '../helpers'
 
 let SKIP_TESTS = false
 
 const validOptions: ConnectionOptions = {
   system: 'redis',
-  host: process.env.REDIS_HOST || 'localhost',
-  port: Number(process.env.REDIS_PORT || 6379),
+  host: REDIS_HOST,
+  port: REDIS_PORT,
   user: '',
   password: process.env.REDIS_PASSWORD || '',
   database: process.env.REDIS_DB || '0',

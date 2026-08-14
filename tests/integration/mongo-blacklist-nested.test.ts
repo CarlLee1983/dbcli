@@ -2,8 +2,8 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { MongoClient } from 'mongodb'
 import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
 import { maskMongoRows } from '@/core/mongo/field-masker'
+import { MONGO_URI as URI } from './helpers'
 
-const URI = process.env.MONGO_TEST_URI ?? 'mongodb://localhost:27017'
 const DB = 'dbcli_test_blacklist'
 
 let client: MongoClient | null = null

@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { isDbReachable } from './helpers'
+import { isDbReachable, REDIS_HOST, REDIS_PORT } from './helpers'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
@@ -420,10 +420,7 @@ describe('Redis blacklist rejection writes audit entry [v1.21.0 parity pack]', (
   let skip = false
 
   beforeAll(async () => {
-    skip = !(await isDbReachable(
-      process.env.REDIS_HOST || 'localhost',
-      Number(process.env.REDIS_PORT || 6379)
-    ))
+    skip = !(await isDbReachable(REDIS_HOST, REDIS_PORT))
     if (skip) console.log('⏭ Redis not reachable — skipping blacklist-audit case')
   })
 
@@ -432,8 +429,8 @@ describe('Redis blacklist rejection writes audit entry [v1.21.0 parity pack]', (
     const cfg = {
       connection: {
         system: 'redis',
-        host: process.env.REDIS_HOST || 'localhost',
-        port: Number(process.env.REDIS_PORT || 6379),
+        host: REDIS_HOST,
+        port: REDIS_PORT,
         user: '',
         password: process.env.REDIS_PASSWORD || '',
         database: process.env.REDIS_DB || '0',

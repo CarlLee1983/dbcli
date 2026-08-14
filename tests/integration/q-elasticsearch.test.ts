@@ -3,12 +3,13 @@ import { ElasticsearchAdapter } from '@/adapters/elasticsearch-adapter'
 import { loadSnippets, resolveByName, resolveSnippetDirs } from '@/core/saved-queries'
 import { prepareExecution } from '@/core/saved-queries/runner'
 import type { ConnectionOptions } from '@/adapters/types'
+import { ES_HOST, ES_PORT } from './helpers'
 
 describe('q @diag/es-cluster-health (integration)', () => {
   const options: ConnectionOptions = {
     system: 'elasticsearch',
-    host: 'localhost',
-    port: 9201,
+    host: ES_HOST,
+    port: ES_PORT,
     user: '',
     password: '',
     database: '',

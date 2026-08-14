@@ -79,6 +79,7 @@ bash scripts/release-check.sh   # 9/9 doc-presence (audit row + CHANGELOG versio
 - Step 8/9 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install` (including `SKILL.zh-TW.md` since v1.20.0).
 - Step 9/9 (doc-presence) is a shell-grep gate: confirms `docs/feature-matrix.md` has the `audit` row and `CHANGELOG.md` has a `## [<package.json version>]` heading. Catches doc-vs-version drift before tagging.
 - Benchmark (`bun run test:perf`) is a blocking CI gate across the supported OS/Bun matrix; each budget is based on runner measurements and prints its observed value.
+- Step 6/9 (`bun test`) runs with `SKIP_INTEGRATION_TESTS=true` in the matrix job, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.
 
 See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
 

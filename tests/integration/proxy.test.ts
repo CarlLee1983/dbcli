@@ -4,7 +4,19 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ProxyServer } from '@/proxy/server'
-import { isDbReachable } from './helpers'
+import {
+  isDbReachable,
+  MYSQL_HOST,
+  MYSQL_PORT,
+  MYSQL_USER,
+  MYSQL_PASSWORD,
+  MYSQL_DATABASE,
+  PG_HOST,
+  PG_PORT,
+  PG_USER,
+  PG_PASSWORD,
+  PG_DATABASE,
+} from './helpers'
 
 const cleanups: Array<() => void> = []
 afterEach(() => {
@@ -14,18 +26,18 @@ afterEach(() => {
 type ProxyEngine = 'mysql' | 'mariadb' | 'postgresql'
 
 const MYSQL = {
-  host: process.env.MYSQL_HOST || '127.0.0.1',
-  port: Number(process.env.MYSQL_PORT || 3307),
-  user: process.env.MYSQL_USER || 'dbcli',
-  password: process.env.MYSQL_PASSWORD || 'testpass',
-  database: process.env.MYSQL_DATABASE || 'dbcli_test',
+  host: MYSQL_HOST,
+  port: MYSQL_PORT,
+  user: MYSQL_USER,
+  password: MYSQL_PASSWORD,
+  database: MYSQL_DATABASE,
 }
 const PG = {
-  host: process.env.PG_HOST || '127.0.0.1',
-  port: Number(process.env.PG_PORT || 5433),
-  user: process.env.PG_USER || 'dbcli',
-  password: process.env.PG_PASSWORD || 'testpass',
-  database: process.env.PG_DATABASE || 'dbcli_test',
+  host: PG_HOST,
+  port: PG_PORT,
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 async function startProxy(engine: ProxyEngine, target: { host: string; port: number }) {

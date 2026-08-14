@@ -12,18 +12,18 @@ import { test, expect, describe, beforeAll } from 'bun:test'
 import { PostgreSQLAdapter } from 'src/adapters/postgresql-adapter'
 import { ConnectionError } from 'src/adapters'
 import type { ConnectionOptions } from 'src/adapters/types'
-import { shouldSkipTests } from '../helpers'
+import { shouldSkipTests, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DATABASE } from '../helpers'
 
 let SKIP_TESTS = false
 
 // Read connection from env vars, fallback to docker-compose defaults
 const validOptions: ConnectionOptions = {
   system: 'postgresql',
-  host: process.env.PG_HOST || 'localhost',
-  port: Number(process.env.PG_PORT || 5433),
-  user: process.env.PG_USER || 'dbcli',
-  password: process.env.PG_PASSWORD || 'testpass',
-  database: process.env.PG_DATABASE || 'dbcli_test',
+  host: PG_HOST,
+  port: PG_PORT,
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 const invalidOptions: ConnectionOptions = {

@@ -1,6 +1,6 @@
 // src/core/repl/repl-engine.ts
 import type { DatabaseAdapter } from '../../adapters/types'
-import type { ReplContext, ReplState } from './types'
+import type { ReplContext, ReplState, ReplWriteGate } from './types'
 import type { DbcliConfig } from '../../types'
 import { isTransportFailure } from '@/utils/connection-error-message'
 import { classifyInput } from './input-classifier'
@@ -35,7 +35,13 @@ export class ReplEngine {
     private readonly adapter: DatabaseAdapter,
     private readonly context: ReplContext,
     historyPath: string,
-    config: DbcliConfig | null = null
+    config: DbcliConfig | null = null,
+    /**
+     * Supplied by `src/commands/shell.ts` for SQL engines only. Absent means no
+     * gate — Redis and MongoDB statements have a different shape and their own
+     * permission guards (#78).
+     */
+    private readonly writeGate: ReplWriteGate | null = null
   ) {
     this.state = { format: 'table', timing: false, connected: true, noLimit: false }
     this.buffer = new MultilineBuffer()
@@ -221,6 +227,27 @@ export class ReplEngine {
       }
     }
 
+    // The write gate, last of the three checks and the only one that asks a
+    // person. It sits outside `runStatement` so a reconnect retry does not ask
+    // again for a statement that was already confirmed.
+    // No output on refusal: the gate has already told the operator on stderr
+    // why nothing ran, and it is the only half that can tell a decline from a
+    // refusal. A second line from here would repeat it on stdout, which is the
+    // channel ADR 0009 keeps clear for results.
+    if (this.writeGate && !(await this.writeGate(sql))) return { action: 'continue' }
+
+    return this.runStatement(sql, blacklistValidator, referencedTables)
+  }
+
+  /**
+   * Send a statement that has already passed permission, blacklist and the
+   * write gate, format what comes back, and reconnect once if the socket died.
+   */
+  private async runStatement(
+    sql: string,
+    blacklistValidator: BlacklistValidator | undefined,
+    referencedTables: string[]
+  ): Promise<ProcessResult> {
     const startTime = Date.now()
 
     try {
@@ -267,8 +294,10 @@ export class ReplEngine {
           await this.adapter.connect()
           this.state = { ...this.state, connected: true }
           console.error(pc.green(t('shell.error_reconnect_success')))
-          // Retry the query once
-          return this.executeSql(sql)
+          // Retry the query once. Back into `runStatement`, not `executeSql`:
+          // the statement already passed the gate, and asking again after a
+          // reconnect would make one typed statement two questions.
+          return this.runStatement(sql, blacklistValidator, referencedTables)
         } catch (reconnectError) {
           return {
             action: 'continue',

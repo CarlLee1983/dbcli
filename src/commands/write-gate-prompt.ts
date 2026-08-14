@@ -62,6 +62,14 @@ export interface WriteGateRequest {
   human: HumanOutputContext
   /** `--yes`: skips tier one only. Tier two has no bypass by design. */
   yes?: boolean
+  /**
+   * How to read the typed confirmation. Defaults to `promptUser.text`, which
+   * opens its own reader on stdin — correct for a one-shot command and wrong
+   * inside the REPL, where a readline interface already owns the terminal and
+   * two readers would split the operator's keystrokes between them. The shell
+   * passes its own interface's question here.
+   */
+  ask?: (question: string) => Promise<string>
 }
 
 /**
@@ -126,7 +134,8 @@ async function enforceTierTwo(request: WriteGateRequest, attended: boolean): Pro
       : t_vars(WARNING_KEY[reason], { table: verdict.table ?? '' })
   process.stderr.write(`\n${warning}\n${t(REMEDY_KEY[reason])}\n`)
 
-  const typed = await promptUser.text(
+  const ask = request.ask ?? promptUser.text
+  const typed = await ask(
     t_vars('ceremony.gate_typed_prompt', { phrase: verdict.confirmationPhrase })
   )
 

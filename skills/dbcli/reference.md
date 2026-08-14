@@ -2542,6 +2542,14 @@ Inside the shell:
 - Multi-line SQL: keeps accumulating until `;` is found
 - History persists across sessions (~/.dbcli_history)
 
+> **Tier two applies here (2.0.0)** — on SQL connections a typed `UPDATE` / `DELETE` with
+> no `WHERE`, a `DROP` or a `TRUNCATE` asks for the target table name before it runs.
+> Anything else typed cancels the statement and returns to the prompt; the session stays
+> open. Tier one (the y/N on ordinary writes) is deliberately not wired here — every line
+> is typed by a person. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a
+> tier-two statement is refused and the remaining lines still run. Redis, MongoDB and
+> Elasticsearch shells are unaffected.
+
 The REPL flavor depends on the active engine: SQL engines and MongoDB use the
 form above; **Redis** opens a single-line command REPL (see [Redis › Interactive
 shell](#interactive-shell)); **Elasticsearch** opens a Kibana Dev Tools-style

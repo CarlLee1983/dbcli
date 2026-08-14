@@ -1,6 +1,7 @@
 /**
  * v1.23 P3 — missing-index-for integration smoke.
- * Gated on TEST_MARIADB_HOST / TEST_POSTGRESQL_HOST so dev env auto-skips
+ * Runs against the docker-compose.test.yml MariaDB and PostgreSQL, and skips
+ * when they are unreachable — unless REQUIRE_INTEGRATION_SERVICES demands them.
  * (mirrors tests/integration/p2-explain.test.ts). Self-seeds a synthetic table
  * so EXPLAIN enrichment + index introspection are meaningful; no shared fixture.
  */
@@ -13,26 +14,39 @@ import { parseSelect } from '@/core/guide/missing-index/parse-sql'
 import { extract } from '@/core/guide/missing-index/sql-extractor'
 import { makeIndexIntrospector } from '@/core/guide/missing-index/index-introspector'
 import { makeExplainEnricher } from '@/core/guide/missing-index/explain-enricher'
+import {
+  isDbReachable,
+  MARIADB_HOST,
+  MARIADB_PORT,
+  MARIADB_USER,
+  MARIADB_PASSWORD,
+  MARIADB_DATABASE,
+  PG_HOST,
+  PG_PORT,
+  PG_USER,
+  PG_PASSWORD,
+  PG_DATABASE,
+} from './helpers'
 
-const MARIADB_AVAILABLE = !!process.env.TEST_MARIADB_HOST
-const PG_AVAILABLE = !!process.env.TEST_POSTGRESQL_HOST
+const MARIADB_AVAILABLE = await isDbReachable(MARIADB_HOST, MARIADB_PORT)
+const PG_AVAILABLE = await isDbReachable(PG_HOST, PG_PORT)
 
 const MARIADB_OPTS: SqlConnectionOptions = {
   system: 'mariadb',
-  host: process.env.TEST_MARIADB_HOST || 'localhost',
-  port: Number(process.env.TEST_MARIADB_PORT || 3306),
-  user: process.env.TEST_MARIADB_USER || 'root',
-  password: process.env.TEST_MARIADB_PASSWORD || '',
-  database: process.env.TEST_MARIADB_DB || 'test',
+  host: MARIADB_HOST,
+  port: MARIADB_PORT,
+  user: MARIADB_USER,
+  password: MARIADB_PASSWORD,
+  database: MARIADB_DATABASE,
 }
 
 const PG_OPTS: SqlConnectionOptions = {
   system: 'postgresql',
-  host: process.env.TEST_POSTGRESQL_HOST || 'localhost',
-  port: Number(process.env.TEST_POSTGRESQL_PORT || 5432),
-  user: process.env.TEST_POSTGRESQL_USER || 'postgres',
-  password: process.env.TEST_POSTGRESQL_PASSWORD || '',
-  database: process.env.TEST_POSTGRESQL_DB || 'postgres',
+  host: PG_HOST,
+  port: PG_PORT,
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 const TABLE = 'p3_mi_demo'

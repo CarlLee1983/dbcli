@@ -20,6 +20,27 @@ services:
     tmpfs:
       - /var/lib/mysql
 
+  # MariaDB is not MySQL for the purposes of these tests: the error codes,
+  # `ANALYZE SELECT`, and the EXPLAIN output shape differ, which is exactly what
+  # tests/integration/p{1,2,3}-*.test.ts exercise. They had no service to run
+  # against and skipped everywhere, including locally.
+  mariadb:
+    image: mariadb:11
+    ports:
+      - '3308:3306'
+    environment:
+      MARIADB_ROOT_PASSWORD: testpass
+      MARIADB_DATABASE: dbcli_test
+      MARIADB_USER: dbcli
+      MARIADB_PASSWORD: testpass
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/mysql
+
   postgres:
     image: postgres:16-alpine
     ports:

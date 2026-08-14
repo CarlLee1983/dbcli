@@ -337,6 +337,13 @@ dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdou
 **Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
 
+> **Elasticsearch tiers by scope.** A read (`GET` / `HEAD`, plus `POST _search` and
+> `POST _count`) is query-only. Indexing or updating a document is read-write.
+> `DELETE /<index>/_doc/<id>` — one document — is data-admin. Everything that removes or
+> reshapes a container is **admin**: `DELETE /<index>`, a wildcard or `_all` delete,
+> templates and aliases, and `PUT` against `_mapping` or `_settings`. A request whose
+> scope cannot be established is treated as admin rather than guessed downward.
+
 > **Server-side scripts are rejected on every path.** MongoDB `$where`,
 > `$function`, and `$accumulator`, and Elasticsearch `script` / `script_fields`,
 > execute code on the database server. The adapters reject them anywhere in a

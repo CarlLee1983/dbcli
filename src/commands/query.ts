@@ -82,6 +82,8 @@ interface QueryCommandOptions {
   noTruncate?: boolean
   connectionSelector?: string
   slowMs?: number
+  /** Skip the tier-one confirmation. Tier two ignores it by design. */
+  yes?: boolean
 }
 
 interface QueryExecutionContext {
@@ -126,6 +128,11 @@ export interface QueryCommandRuntime {
     tableCellLimit: number | false
   ) => Promise<void>
   writeAudit: typeof writeAuditEntry
+  enforceGate: (
+    query: string,
+    options: QueryCommandOptions,
+    context: QueryExecutionContext
+  ) => Promise<boolean>
   randomUUID: () => string
   emitRecovery: (
     error: unknown,
@@ -145,6 +152,7 @@ const defaultQueryCommandRuntime: QueryCommandRuntime = {
   executeConnection: executeConnectionQuery,
   presentResult: presentSingleResult,
   writeAudit: writeAuditEntry,
+  enforceGate: enforceQueryWriteGate,
   randomUUID: () => crypto.randomUUID(),
   emitRecovery: async (error, context, options) => {
     const { emitRecoveryEnvelope } = await import('@/core/recovery')
@@ -220,10 +228,36 @@ export async function executeQueryCommand(
     connectionName = connectionNames[0]
     config = await runtime.loadConfig(configPath, connectionName)
     const context = { config, configPath, connectionName }
+    // Before the preflight, because the preflight reads table schemas and the
+    // point of a refusal is that a statement nobody confirmed reaches nothing.
+    if (!(await runtime.enforceGate(resolvedSql, options, context))) return
     await runtime.preflight(resolvedSql, options, context, fieldSelection, false)
     const execution = await runtime.executeConnection(resolvedSql, options, context, fieldSelection)
     await runtime.presentResult(resolvedSql, options, execution, tableCellLimit)
   } catch (error) {
+    // A refusal is not a failed statement. Its audit row was written by the gate
+    // with the tier and reason on it, `--recovery` has no plan to offer for a
+    // statement that was never sent, and a caller reading stdout under
+    // `--format json` needs the reason as data rather than as localized prose.
+    const { WriteGateRefusal } = await import('./write-gate-prompt')
+    if (error instanceof WriteGateRefusal) {
+      if (options.format === 'json') {
+        console.log(
+          JSON.stringify(
+            {
+              status: 'refused',
+              code: error.code,
+              reason: error.reason,
+              ...(error.table && { table: error.table }),
+            },
+            null,
+            2
+          )
+        )
+      }
+      throw error
+    }
+
     let auditId: string | null = null
     let envelopeId: string | undefined
     if (options.recovery === true && !multiConnectionRequest) {
@@ -341,6 +375,75 @@ function scopeMultiConnectionNotices(execution: QueryExecutionOutput): QueryExec
       },
     },
     notices: [],
+  }
+}
+
+/**
+ * The two-tier gate on raw SQL (#70).
+ *
+ * `dbcli query` is the entry point with no mandatory WHERE and no generated
+ * statement to inspect, which made it the only write path in the product with
+ * no confirmation at all — and the one an agent reaches for. The gate runs
+ * before anything else touches the connection, so a refusal means the statement
+ * was never sent rather than sent and regretted.
+ *
+ * Non-SQL engines return early: Redis, MongoDB and Elasticsearch each have
+ * their own write guard, and none of them has the statement shape this reads.
+ */
+async function enforceQueryWriteGate(
+  query: string,
+  options: QueryCommandOptions,
+  context: QueryExecutionContext
+): Promise<boolean> {
+  const { config } = context
+  const { toSqlDialect, enforcePermission } = await import('@/core/permission-guard')
+  const dialect = toSqlDialect(config.connection?.system)
+  if (!dialect) return true
+
+  const { classifySqlWriteGate } = await import('./write-gate')
+  const verdict = await classifySqlWriteGate(query, { dialect })
+  if (verdict.tier === 'none') return true
+
+  // Permission first, and with the real statement. A connection that may not
+  // run this at all should be told that, not asked to confirm something it was
+  // never going to be allowed to do. The executor checks again against the same
+  // function once connected; this only moves the verdict earlier, before any
+  // socket is opened.
+  enforcePermission(query, config.permission, dialect)
+
+  const { enforceWriteGate, WriteGateRefusal } = await import('./write-gate-prompt')
+  const { humanOutputContext } = await import('./mutation-outcome')
+
+  const { recordGateDecision } = await import('./write-gate-guard')
+  const record = (outcome: 'allowed' | 'declined' | 'refused') =>
+    recordGateDecision({
+      config,
+      command: 'query',
+      options: { ...options, config: context.configPath, connectionName: context.connectionName },
+      verdict,
+      outcome,
+      tier: verdict.tier === 'two' ? 'two' : 'one',
+      sql: query,
+    })
+
+  try {
+    const proceed = await enforceWriteGate({
+      verdict,
+      statement: query,
+      operation: verdict.operation ?? 'WRITE',
+      human: humanOutputContext(options),
+      ...(options.yes !== undefined && { yes: options.yes }),
+    })
+    // Tier two is recorded either way — that log is the only evidence the gate's
+    // effect can be measured from. Tier one is recorded only when somebody
+    // declined, because a confirmed routine write is already audited by the
+    // execution path and a second row would say nothing new.
+    if (verdict.tier === 'two') await record(proceed ? 'allowed' : 'declined')
+    else if (!proceed) await record('declined')
+    return proceed
+  } catch (error) {
+    if (error instanceof WriteGateRefusal) await record('refused')
+    throw error
   }
 }
 

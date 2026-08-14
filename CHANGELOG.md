@@ -5,6 +5,37 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - Unreleased - A write nobody can confirm does not run
+
+### Changed
+
+- **BREAKING: a statement that is not limited to particular rows is refused when nobody is watching.** `dbcli query "UPDATE users SET banned = 1"` used to execute against any read-write connection without asking anything, and the caller most likely to produce an unqualified `UPDATE` is the agent this product exists to serve. Raw SQL now passes through a two-tier gate before the connection is opened. Tier one is any write — an `INSERT`, an `UPDATE` or `DELETE` that has a `WHERE` or `LIMIT`, a `CREATE`, an `ALTER` — and behaves as it always has for a non-interactive caller; at a terminal it shows what dbcli understood the statement to do and asks, which `--yes` skips. Tier two is `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, several statements in one string — one statement to a classifier reading the leading keyword, two to a driver — and any statement the SQL parser cannot read: at a terminal the operator types the target table name, and **no flag skips it** — not `--yes`, not `--force`. Away from a terminal, or under `--format json`, tier two is refused: exit `1`, a `reason=` a caller can branch on (`no_where`, `ddl_destruction`, `unparseable`, `multiple_statements`), and the statement never sent, because the gate runs before the adapter is built rather than after. A parse failure resolves to tier two rather than tier one; the cost of being wrong is a needlessly typed table name against a needlessly emptied table. The reasoning, the alternatives, and the condition that would falsify it are in `docs/adr/0010-unattended-callers-are-refused-full-table-writes.md` (#70).
+
+- **BREAKING: `dbcli update` / `dbcli delete` refuse a `--where` that matches on nothing unique.** Their `WHERE` is mandatory, so "no `WHERE`" cannot happen — but `--where "status=active"` reads like a filter and writes like a full-table statement. When the conditions cover neither the primary key nor any unique index, the same tier-two treatment applies: type the table name, or be refused with `reason=non_unique_where`. The schema needed to tell the two apart is already in hand at that point, so this costs no extra round trip. `--force` is unaffected in what it always did — skip the ordinary confirmation — and does not open this gate (#70).
+
+- **BREAKING: `admin` permission no longer means "everything runs".** Permission and the gate are separate axes now: permission says what the connection may do, the gate says whether this statement may run right now. An `admin` connection running `DROP TABLE users` from a script is refused, because `DROP` and `TRUNCATE` have no clause to add and therefore no unattended route at all. Whether they are possible in an environment remains a `permission` decision that lives in version control; whether one happens today is a decision a person makes at a terminal (#70).
+
+- **The permission check for raw SQL now runs before the connection is opened.** It ran inside `QueryExecutor`, after `connect()`, so a refusal cost a round trip and arrived after the gate had already asked its question. The command layer now calls the same `enforcePermission` with the same real statement before either — a connection that may not run this at all is told so rather than asked to confirm something it was never going to be allowed to do. The executor still checks; this only moves the verdict earlier (#70).
+
+### Added
+
+- **`dbcli query --yes`** skips the tier-one confirmation, so a long sequence of routine writes does not become a sequence of keypresses. It has no effect on tier two by design: a flag that could be set once and forgotten is exactly what the escape route for a full-table write must not be (#70).
+
+- **Every tier-two evaluation is written to the audit log — allowed, declined and refused alike** — with `metadata.write_gate_outcome` and `metadata.write_gate_reason`. Deliberately unconditional: a log that kept only the refusals could not tell "nobody writes like that" apart from "everybody found a way around it". In six months, whether this gate prevented anything is a query rather than an impression, and if tier two turns out to be almost never reached, the criterion is wrong rather than the gate unnecessary (#70).
+
+### Migration
+
+Automation that performs unqualified full-table writes stops working. Three shapes are affected, and each has a fixed remedy:
+
+| Invocation | Now | Remedy |
+| :--- | :--- | :--- |
+| `dbcli query "UPDATE t SET c = v"` | exit 1, `reason=no_where` | `dbcli query "UPDATE t SET c = v WHERE 1=1"`, or add a `LIMIT` |
+| `dbcli query "DELETE FROM t"` | exit 1, `reason=no_where` | `dbcli query "DELETE FROM t WHERE 1=1"`, or add a `LIMIT` |
+| `dbcli query "DROP TABLE t"` / `TRUNCATE` | exit 1, `reason=ddl_destruction` | run it at a terminal, or apply the schema change through a reviewed migration |
+| `dbcli update t --where "status=x" …` | exit 1, `reason=non_unique_where` | select the primary keys first, then one write per key — or run it where a person can confirm |
+
+`WHERE 1=1` is the supported way to say "yes, every row". It is intentionally not a flag: appended to a statement that already has a `WHERE` it is a syntax error, so it cannot be added blanket-style to a script and forgotten. There is no environment variable that restores the old behaviour — a flag that makes the same version behave differently on different machines makes every later bug report ambiguous, and never gets removed.
+
 ## [1.58.0] - 2026-08-14 - A write that did not happen stops reporting success
 
 ### Changed

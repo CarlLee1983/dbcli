@@ -379,14 +379,23 @@ describe('Query Command', () => {
       logSpy.mockRestore()
     })
 
-    test('should allow everything in admin mode', async () => {
+    test('should allow non-destructive DDL in admin mode', async () => {
       mockConfig.permission = 'admin'
       const logSpy = spyOn(console, 'log').mockImplementation(() => {})
 
-      await queryCommand('DROP TABLE users', {})
+      await queryCommand('CREATE TABLE audit_copy (id INT)', {})
 
       expect(logSpy).toHaveBeenCalled()
       logSpy.mockRestore()
+    })
+
+    test('admin permission does not open the tier-two gate (#70)', async () => {
+      // Permission and the gate are separate axes as of 2.0.0: admin says the
+      // connection may drop a table, the gate says nobody unattended may. This
+      // used to pass as "admin allows everything".
+      mockConfig.permission = 'admin'
+
+      await expect(queryCommand('DROP TABLE users', {})).rejects.toThrow(/reason=ddl_destruction/)
     })
   })
 

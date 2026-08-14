@@ -51,6 +51,11 @@ export function registerQueryCommand(
     )
     .addOption(createConnectionSelectorOption())
     .option(
+      '--yes',
+      'Skip the confirmation shown before an ordinary write; statements that are not limited to specific rows ignore it',
+      false
+    )
+    .option(
       '--recovery',
       'On failure, emit a structured recovery envelope to stdout (suppresses human stderr message)',
       false

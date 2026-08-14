@@ -36,6 +36,17 @@ legacy 單檔 `.dbcli`。若要防護同一 OS 使用者的惡意 process，host
 `update` / `delete --where "id=<pk>"`（逐一等式）— 或升級交給人類處理。（MongoDB 的
 `--where` 接受完整 JSON filter，不受此限。）
 
+**寫入閘門（2.0.0）— 會直接拒絕你的那條規則。** 所有寫入都會分成兩級。一般寫入
+（`INSERT`、帶 `WHERE` 的 `UPDATE` / `DELETE`、`CREATE`、`ALTER`）在無人看管下照跑，
+與過去相同；`--yes` 用來跳過人類在終端機看到的提問。**沒有限定要動哪些列的語句，在沒有
+人能回答提問時會直接被拒絕** — 沒有 `WHERE` 的 `UPDATE` / `DELETE`、`DROP`、`TRUNCATE`、
+SQL parser 讀不懂的語句、一個字串裡塞了多句語句，以及 `update` / `delete --where` 沒有命中主鍵或唯一索引的情況。
+行程以 `1` 結束，訊息點名 `reason=no_where`、`reason=ddl_destruction`、
+`reason=unparseable` 或 `reason=non_unique_where`，而且**什麼都不會送到資料庫**。
+**沒有任何旗標可以繞過** — `--yes` 不行，`--force` 也不行。真的要寫全表，就把意圖寫進
+SQL 本身：補上 `WHERE 1=1` 或 `LIMIT`。`DROP` / `TRUNCATE` 完全沒有無人看管的路徑，請
+升級交給人類處理。
+
 > `report` 與 `guide` 已內嵌 `inspect` 快照 — **不需要**先跑 `dbcli inspect`。只有在需要 audit-recent 脈絡或診斷連線問題時，才手動跑 `dbcli inspect --for-agent`。
 
 **依任務路由：**

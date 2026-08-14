@@ -327,6 +327,30 @@ export async function deleteCommand(
       // 7. Get table schema
       const schema = await adapter.getTableSchema(table)
 
+      // 7b. The tier-two gate (#70). `--where "status=active"` reads like a
+      // filter and deletes like a full-table statement; the schema is what
+      // separates the two.
+      // A dry run sends nothing, so there is nothing to gate — and the
+      // documented habit is to preview first, which the gate would otherwise
+      // refuse before it could be useful.
+      const { guardStructuredWrite } = await import('./write-gate-guard')
+      if (
+        options.dryRun !== true &&
+        !(await guardStructuredWrite({
+          operation: 'delete',
+          table,
+          where: whereConditions,
+          schema,
+          config,
+          options,
+        }))
+      ) {
+        const cancelled = cancelledOutcome('delete', `DELETE FROM ${table}`)
+        printMutationOutcome(cancelled, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(cancelled, table))
+        return
+      }
+
       // 8. Create DataExecutor and execute DELETE
       const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
         | 'postgresql'
@@ -372,6 +396,15 @@ export async function deleteCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    // A refusal by the write gate is not a failed statement: the gate already
+    // wrote its own audit row with the tier and reason, and `--recovery` has no
+    // plan to offer for something that was never sent.
+    const { WriteGateRefusal } = await import('@/commands/write-gate-prompt')
+    if (error instanceof WriteGateRefusal) {
+      printMutationFailure(error, 'delete', humanOutputContext(options))
+      process.exit(1)
+    }
+
     let auditId: string | null = null
     let envelopeId: string | undefined
     if (options.recovery === true) {

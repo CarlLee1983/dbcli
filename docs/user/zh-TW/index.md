@@ -282,6 +282,33 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 | `plan "<sql>"` | **靜態分析器**：對 SQL 進行風險分級並給出優化建議。 |
 | `lint "<sql>"` | **靜態顧問**：不連線資料庫，回報 SQL 反模式與選用的 rewrite 草稿。 |
 
+#### 寫入確認閘門（2.0.0）
+
+所有寫入都會經過兩級閘門。第一級是一個問題，第二級是一道沒有旗標可以繞過的拒絕。
+
+**第一級——一般寫入。** INSERT、帶 WHERE 的 UPDATE / DELETE、CREATE、ALTER。在互動終端下，dbcli 會先印出它把這句理解成什麼，再問你要不要執行；`--yes` 可以跳過。非互動執行（stdout 被導向、CI、agent）根本不會看到這個問題，`--format json` 即使在終端下也會關掉它。
+
+**第二級——收不回來的寫入。** 沒有 WHERE 的 UPDATE / DELETE、DROP、TRUNCATE、SQL parser 讀不懂的語句、一個字串裡塞了多句語句，以及 `dbcli update` / `dbcli delete` 中 `--where` 沒有命中主鍵或唯一索引的情況。dbcli 會要求你打出目標資料表的名稱，**沒有任何旗標可以跳過**，`--yes` 與 `--force` 都不行。當現場沒有人時，dbcli 直接拒絕：退出碼 1、什麼都不會送到資料庫，訊息會點名 `reason=no_where`、`reason=ddl_destruction`、`reason=unparseable`、`reason=multiple_statements` 或 `reason=non_unique_where`。
+
+**逃生路徑寫在語句裡，不是寫在旗標上。** 要在無人看管下執行全表寫入，就把意圖寫進 SQL——補上 `WHERE 1=1` 或 `LIMIT`。這是刻意的設計：對已經有 WHERE 的語句再接一個 `WHERE 1=1` 是語法錯誤，所以「乾脆全部都加上去」會立刻壞掉，養不成習慣；旗標的性質剛好相反。DROP 與 TRUNCATE 沒有子句可加：能不能執行由連線的 `permission` 層級決定，而打字確認仍然必須由人完成。
+
+每一次第二級判定都會寫進稽核紀錄——放行、取消、拒絕都記——所以這道閘門有沒有擋到東西是可以量測的，不是靠印象。
+
+```bash
+# 拒絕：沒有 WHERE，也沒有人能確認
+dbcli query "UPDATE users SET banned = 1" --format json
+# → 退出碼 1、reason=no_where，什麼都沒送到資料庫
+
+# 放行：意圖已經寫在語句裡
+dbcli query "UPDATE users SET banned = 1 WHERE 1=1" --format json
+
+# 一般寫入，無人看管或直接跳過提問
+dbcli query "UPDATE users SET banned = 1 WHERE id = 3" --yes
+
+# 條件欄位不唯一的結構化刪除：第二級
+dbcli delete users --where "status=active"
+```
+
 #### 從 positional、檔案或 stdin 讀取 query
 
 `dbcli query [sql] [-f, --query-file <path>]` 必須且只能指定一個 query 來源：

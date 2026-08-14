@@ -334,8 +334,42 @@ dbcli query "SELECT day, dau FROM dau_daily" --ui                # open in brows
 dbcli query "SELECT * FROM orders" --format html > orders.html   # pipe to stdout
 ```
 
-**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--recovery`
+**Options:** `--format <table|json|csv|html>`, `--ui` (open the dashboard in the system browser; implies `--format html`), `--limit <number>`, `--no-limit`, `--collection <name>` (MongoDB / Elasticsearch), `--index <name>` (Elasticsearch alias for `--collection`), `--fields <list>`, `--truncate <number>` / `--no-truncate`, `-f, --query-file <path>`, `--use <name[,name]>`, `--slow-ms <number>`, `--yes`, `--recovery`
 **Permission:** query-only+ (Redis: per-command; Elasticsearch: per HTTP method/path)
+
+#### Write confirmation gate (2.0.0)
+
+A SQL write passes through a two-tier gate before the connection is opened. The gate is
+separate from the permission axis: permission says what the connection may do, the gate
+says whether this particular statement may run right now.
+
+| Tier | Statements | Interactive terminal | Non-interactive (or `--format json`) |
+| :--- | :--- | :--- | :--- |
+| One | `INSERT`, `UPDATE` / `DELETE` **with** a `WHERE` or `LIMIT`, `CREATE`, `ALTER` | Summary + `y/N`; `--yes` skips it | Runs, exactly as before |
+| Two | `UPDATE` / `DELETE` with **no** `WHERE`, `DROP`, `TRUNCATE`, unparseable statements, several statements in one string | Type the target table name; **no flag skips it** | **Refused**: exit `1`, nothing sent to the database |
+
+A refusal message names a machine-readable reason — `reason=no_where`,
+`reason=ddl_destruction`, `reason=unparseable`, `reason=multiple_statements` — so a caller can tell it apart from a
+connection failure or a permission denial.
+
+**Escape routes.** For a statement that accepts a `WHERE`, put the intent in the SQL:
+
+```bash
+dbcli query "UPDATE users SET banned = 1"                    # refused, reason=no_where
+dbcli query "UPDATE users SET banned = 1 WHERE 1=1"          # runs — intent is explicit
+dbcli query "DELETE FROM sessions LIMIT 1000"                # runs — damage is bounded
+dbcli query "UPDATE users SET banned = 1 WHERE id = 3" --yes # tier one, question skipped
+```
+
+This is deliberately not a flag. `WHERE 1=1` appended to a statement that already has a
+`WHERE` is a syntax error, so a blanket "always add it" habit breaks on the first ordinary
+statement; a flag would be harmless everywhere and therefore added everywhere. For `DROP`
+and `TRUNCATE` there is no clause to add — the connection's `permission` level decides
+whether they are possible at all, and the typed confirmation must come from a person.
+
+Every tier-two evaluation is written to the audit log with
+`metadata.write_gate_outcome` (`allowed` / `declined` / `refused`) and
+`metadata.write_gate_reason`.
 
 > **Elasticsearch tiers by scope.** A read (`GET` / `HEAD`, plus `POST _search` and
 > `POST _count`) is query-only. Indexing or updating a document is read-write.
@@ -954,6 +988,14 @@ dbcli update users --where "id=1" --set '{"name":"Bob"}' --plan --format json   
 > `a = "1 OR b=2"`, matching nothing intended). For ranges or compound predicates, select the
 > target primary keys first, then issue one `update` / `delete --where "id=<pk>"` per key.
 > (MongoDB `--where` accepts a full JSON filter and is exempt.)
+
+> **Tier two for structured writes (2.0.0)** — a `--where` that matches on no primary key
+> and no unique index selects an unknown number of rows, so it is treated the same as a
+> raw statement with no `WHERE`: the target table name must be typed at an interactive
+> terminal, and a non-interactive run is refused with exit `1` and
+> `reason=non_unique_where`. `--force` and `--dry-run` do not affect this; `--force` skips
+> the ordinary confirmation only. Select the primary keys first and write one row at a
+> time, or run it where a person can confirm it.
 
 ### delete
 

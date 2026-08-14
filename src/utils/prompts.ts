@@ -76,8 +76,13 @@ async function readLineFromStdin(prompt: string = ''): Promise<string> {
 }
 
 async function textFallback(message: string, defaultValue?: string): Promise<string> {
+  // The question goes to stderr for the same reason `confirmFallback` sends its
+  // own there: it is addressed to a person, and stdout is what a caller parses.
+  // This path is reached exactly when stdin is not a terminal, which is when
+  // something is most likely reading stdout.
   const displayMessage = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
-  const answer = await readLineFromStdin(displayMessage)
+  process.stderr.write(displayMessage)
+  const answer = await readLineFromStdin()
   return answer.trim() || defaultValue || ''
 }
 
@@ -121,7 +126,9 @@ export async function text(message: string, defaultValue?: string): Promise<stri
   const inquirer = await loadInquirer()
   if (!inquirer) return textFallback(message, defaultValue)
 
-  return await inquirer.input({ message, default: defaultValue })
+  // Same reason as `confirm`: the question is for the person, not for whatever
+  // is reading stdout. This is the prompt the tier-two write gate uses.
+  return await inquirer.input({ message, default: defaultValue }, { output: process.stderr })
 }
 
 /**

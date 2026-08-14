@@ -310,6 +310,33 @@ Both arrays are trimmed under `--for-agent` / `--brief` (≤ 3 hints, and a sing
 | `plan "<sql>"` | **Static analyzer**: Classifies SQL risk and gives recommendations. |
 | `lint "<sql>"` | **Static advisor**: Reports SQL anti-patterns and optional rewrite drafts without connecting to the database. |
 
+#### Write confirmation gate (2.0.0)
+
+Every write goes through a two-tier gate. Tier one is a question; tier two is a refusal you cannot flag your way past.
+
+**Tier one — ordinary writes.** An INSERT, an UPDATE or DELETE that has a WHERE, a CREATE, an ALTER. At an interactive terminal dbcli prints what it understood the statement to do and asks for confirmation. `--yes` skips it. A non-interactive run — piped stdout, CI, an agent — never sees it, and `--format json` suppresses it even at a terminal.
+
+**Tier two — writes that cannot be taken back.** An UPDATE or DELETE with no WHERE clause, a DROP, a TRUNCATE, a statement the SQL parser cannot read, several statements in one string, and — for `dbcli update` / `dbcli delete` — a `--where` that matches on no primary key and no unique index. dbcli asks you to type the target table name. **No flag skips this**, `--yes` and `--force` included. When nobody is watching, dbcli refuses: exit code 1, nothing sent to the database, and a message naming `reason=no_where`, `reason=ddl_destruction`, `reason=unparseable`, `reason=multiple_statements`, or `reason=non_unique_where`.
+
+**The escape route lives in the statement, not in a flag.** To run a full-table write unattended, say so in the SQL — add `WHERE 1=1` or a `LIMIT`. This is deliberate: appending `WHERE 1=1` to a statement that already has a WHERE is a syntax error, so "add it everywhere just in case" breaks immediately and cannot become a habit. A flag would have the opposite property. For DROP and TRUNCATE there is no clause to add: whether they are possible at all is decided by the connection's `permission` level, and the typed confirmation still has to come from a person.
+
+Every tier-two evaluation is written to the audit log — allowed, declined and refused alike — so the gate's effect is measurable rather than assumed.
+
+```bash
+# Refused: no WHERE and nobody to confirm it
+dbcli query "UPDATE users SET banned = 1" --format json
+# → exit 1, reason=no_where, nothing was sent to the database
+
+# Accepted: the intent is in the statement
+dbcli query "UPDATE users SET banned = 1 WHERE 1=1" --format json
+
+# An ordinary write, unattended or with the question skipped
+dbcli query "UPDATE users SET banned = 1 WHERE id = 3" --yes
+
+# Structured delete matching on a non-unique column: tier two
+dbcli delete users --where "status=active"
+```
+
 #### Query input from positional text, files, or stdin
 
 `dbcli query [sql] [-f, --query-file <path>]` requires exactly one query source:

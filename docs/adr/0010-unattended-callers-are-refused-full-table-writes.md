@@ -87,7 +87,10 @@ Its effect is a measurement, not an assumption. Every tier-two evaluation is wri
 audit log — allowed, declined and refused alike — because a log that kept only refusals
 could not tell "nobody writes like that" apart from "everyone found a way around it". If
 the records show tier two is almost never reached, the criterion is wrong rather than the
-gate unnecessary.
+gate unnecessary. Every such entry is filed under `side_effect_tier: db-write` whatever
+entry point produced it, so filtering the log for destructive operations by tier — the
+first filter anyone reaches for — returns all of them and not the third that happened to
+come from a command whose own capability is a write (#83).
 
 **Falsified if:** `src/commands/write-gate.ts` stops classifying an unqualified
 `UPDATE` / `DELETE`, `DROP`, `TRUNCATE` or unparseable statement as tier two, or

@@ -7,7 +7,7 @@ import { resolveConfigStoragePath } from '../config-binding'
 import { getGlobalConnectionName } from '../config'
 import type { DbcliConfig } from '../../utils/validation'
 import type { DatabaseSystem } from '../../adapters/types'
-import { getEngineCapability } from '../../adapters/capabilities'
+import { getEngineCapability, type SideEffectTier } from '../../adapters/capabilities'
 import {
   redactArgv,
   redactArgvSensitiveText,
@@ -63,6 +63,24 @@ export interface AuditOutcome {
   metadata?: Record<string, unknown>
   sql?: string
   target?: string
+  /**
+   * What the statement this entry is about would do, when the command's
+   * capability tier says something else. The capability describes the command
+   * as a whole — `query` is `readonly` because most queries read — which is the
+   * wrong answer for an entry about one specific statement that writes.
+   *
+   * The field states the statement's effect, not whether it happened: a
+   * refused or declined write is still `db-write`, and `success` together with
+   * the entry's own metadata says what became of it. `--dry-run` / `--plan`
+   * still win, because those are an explicit execution mode rather than an
+   * outcome.
+   *
+   * Deliberately narrower than `SideEffectTier`: this exists so a caller that
+   * knows more than the capability table can say so, never to file a write
+   * under a quieter tier than it deserves. Widen it when something actually
+   * needs a value that is not here.
+   */
+  sideEffectTier?: Extract<SideEffectTier, 'db-write' | 'local-write'>
   /** Phase 25 D-J: envelope id from the catch block, propagated onto the persisted audit entry as `recovery_ref`. */
   recovery_ref?: string
 }
@@ -94,7 +112,7 @@ export async function writeAuditEntry(
     const target = outcome.target || getOperationTarget(engine, commandName, options, outcome.sql)
 
     // 2. Resolve Side Effect Tier
-    let tier = getEngineCapability(engine, commandName as any).tier
+    let tier = outcome.sideEffectTier ?? getEngineCapability(engine, commandName as any).tier
     if (options.dryRun || options.plan) {
       tier = 'dry-run'
     }

@@ -40,6 +40,12 @@ export async function recordGateDecision(request: {
 }): Promise<void> {
   await writeAuditEntry(request.config, request.command, request.options, {
     success: request.outcome === 'allowed',
+    // The decision is about a statement that writes, whatever the command's own
+    // capability tier says. Read off the command, one DROP decision was filed
+    // as `readonly` from `query`, `db-write` from `delete` and `interactive`
+    // from `shell`, so filtering the log for destructive operations by tier —
+    // the obvious first filter — found a third of them (#83).
+    sideEffectTier: 'db-write',
     ...(request.sql && { sql: request.sql }),
     ...(request.verdict.table && { target: request.verdict.table }),
     metadata: {

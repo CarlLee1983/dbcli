@@ -156,6 +156,42 @@ describe('tier-two decisions in the audit log', () => {
     expect((entries[0]!.metadata as Record<string, unknown>).write_gate_outcome).toBe('declined')
   })
 
+  test('every entry point files the same decision under the same side-effect tier', async () => {
+    // The tier used to be read off the *command's* capability, so one DROP
+    // decision was filed as `readonly` from `query`, `db-write` from `delete`
+    // and `interactive` from `shell`. An auditor filtering for destructive
+    // operations by tier — the obvious first filter — saw a third of them.
+    setTTY(false)
+    await runQuery('DROP TABLE users')
+
+    const { createShellWriteGate } = await import('@/commands/shell-write-gate')
+    const gate = createShellWriteGate({
+      config: (await configModule.read(workDir)) as never,
+      configPath: workDir,
+      dialect: 'postgresql',
+    })
+    await gate('DROP TABLE users')
+
+    const { deleteCommand } = await import('@/commands/delete')
+    try {
+      await deleteCommand('users', {
+        where: 'status=active',
+        force: true,
+        config: workDir,
+      } as never)
+    } catch {
+      // Refusals throw; the log is what this file is about.
+    }
+
+    const entries = await gateEntries()
+    expect(entries.map((entry) => entry.command)).toEqual(['query', 'shell', 'delete'])
+    expect(entries.map((entry) => entry.side_effect_tier)).toEqual([
+      'db-write',
+      'db-write',
+      'db-write',
+    ])
+  })
+
   test('a structured delete refused for matching on nothing unique says so', async () => {
     setTTY(false)
     const { deleteCommand } = await import('@/commands/delete')

@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { MongoClient } from 'mongodb'
 import { analyzeMongoDmlRisk } from '@/core/mongo/dml-plan'
+import { MONGO_URI as URI } from './helpers'
 
-const URI = process.env.MONGO_TEST_URI ?? 'mongodb://localhost:27017'
 const DB = 'dbcli_test_optier'
 
 let client: MongoClient | null = null

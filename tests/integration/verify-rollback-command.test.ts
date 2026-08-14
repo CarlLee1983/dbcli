@@ -3,17 +3,17 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, writeFile, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { isDbReachable } from './helpers'
+import { isDbReachable, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DATABASE } from './helpers'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
 const CONN = {
   system: 'postgresql' as const,
-  host: process.env.PGHOST || 'localhost',
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'postgres',
-  database: process.env.PGDATABASE || 'postgres',
+  host: PG_HOST,
+  port: PG_PORT,
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 const TABLE = 'dbcli_verify_rollback_it'

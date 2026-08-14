@@ -12,18 +12,25 @@ import { test, expect, describe, beforeAll } from 'bun:test'
 import { MySQLAdapter } from 'src/adapters/mysql-adapter'
 import { ConnectionError } from 'src/adapters'
 import type { ConnectionOptions } from 'src/adapters/types'
-import { shouldSkipTests } from '../helpers'
+import {
+  shouldSkipTests,
+  MYSQL_HOST,
+  MYSQL_PORT,
+  MYSQL_USER,
+  MYSQL_PASSWORD,
+  MYSQL_DATABASE,
+} from '../helpers'
 
 let SKIP_TESTS = false
 
 // Read connection from env vars, fallback to docker-compose defaults
 const validOptions: ConnectionOptions = {
   system: 'mysql',
-  host: process.env.MYSQL_HOST || 'localhost',
-  port: Number(process.env.MYSQL_PORT || 3307),
-  user: process.env.MYSQL_USER || 'dbcli',
-  password: process.env.MYSQL_PASSWORD || 'testpass',
-  database: process.env.MYSQL_DATABASE || 'dbcli_test',
+  host: MYSQL_HOST,
+  port: MYSQL_PORT,
+  user: MYSQL_USER,
+  password: MYSQL_PASSWORD,
+  database: MYSQL_DATABASE,
 }
 
 const validMariaDBOptions: ConnectionOptions = {

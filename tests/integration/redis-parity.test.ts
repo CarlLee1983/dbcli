@@ -10,12 +10,12 @@ import { AdapterFactory } from 'src/adapters'
 import { RedisAdapter } from 'src/adapters/redis-adapter'
 import { BlacklistRejection } from 'src/adapters/redis/types'
 import type { ConnectionOptions, QueryableAdapter } from 'src/adapters/types'
-import { shouldSkipTests } from './helpers'
+import { shouldSkipTests, REDIS_HOST, REDIS_PORT } from './helpers'
 
 const options: ConnectionOptions = {
   system: 'redis',
-  host: process.env.REDIS_HOST || 'localhost',
-  port: Number(process.env.REDIS_PORT || 6379),
+  host: REDIS_HOST,
+  port: REDIS_PORT,
   user: '',
   password: process.env.REDIS_PASSWORD || '',
   database: process.env.REDIS_DB || '0',

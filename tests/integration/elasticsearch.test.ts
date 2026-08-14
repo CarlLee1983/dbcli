@@ -1,12 +1,13 @@
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { ElasticsearchAdapter } from '@/adapters/elasticsearch-adapter'
+import { ES_HOST, ES_PORT } from './helpers'
 
 describe('Elasticsearch Integration', () => {
   const options = {
     system: 'elasticsearch' as const,
     protocol: 'http' as const,
-    host: 'localhost',
-    port: 9201, // Docker port
+    host: ES_HOST,
+    port: ES_PORT, // Docker port
     user: '',
     password: '',
     database: '',

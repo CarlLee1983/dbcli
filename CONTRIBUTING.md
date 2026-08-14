@@ -260,6 +260,26 @@ test('queryCommand returns results', async () => {
 
 ### Integration Tests
 
+Tests under `tests/integration` talk to the databases in `docker-compose.test.yml`:
+
+```bash
+bun run test:docker    # starts every service, runs tests/integration, stops them
+```
+
+Without those services running, each test auto-skips. That is deliberate for a
+machine with no docker — and dangerous as a signal, because a skipped suite
+reports the same green as a passing one. Two guards exist:
+
+- `bun run services:check` fails with the address of anything not listening,
+  reading the port list out of the compose file rather than a copy.
+- `REQUIRE_INTEGRATION_SERVICES=true` turns the auto-skip into a failure. CI's
+  `integration` job sets it, so a job that starts no services goes red.
+
+Connection defaults live in one place, `tests/integration/helpers.ts`. Use them
+rather than writing an address into a test: the two spellings that grew up side
+by side (`PG_PORT` at 5433 and `PGPORT` at 5432) left several files pointing at
+a server this repo never starts, silently skipping for as long as they existed.
+
 Test full workflows with database connections:
 
 ```typescript

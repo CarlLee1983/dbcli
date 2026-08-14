@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { MongoClient } from 'mongodb'
 import { MongoDBAdapter } from 'src/adapters/mongodb-adapter'
+import { MONGO_URI as URI, MONGO_HOST, MONGO_PORT } from './helpers'
 
-const URI = process.env.MONGO_TEST_URI ?? 'mongodb://localhost:27017'
 const DB = 'dbcli_test_sampling'
 
 let raw: MongoClient | null = null
@@ -34,8 +34,8 @@ describe('mongo schema sampling integration', () => {
     if (!raw) return
     const adapter = new MongoDBAdapter({
       system: 'mongodb',
-      host: 'localhost',
-      port: 27017,
+      host: MONGO_HOST,
+      port: MONGO_PORT,
       user: '',
       password: '',
       database: DB,

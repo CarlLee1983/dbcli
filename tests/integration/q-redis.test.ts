@@ -3,12 +3,13 @@ import { RedisAdapter } from '@/adapters/redis-adapter'
 import { loadSnippets, resolveByName, resolveSnippetDirs } from '@/core/saved-queries'
 import { prepareExecution } from '@/core/saved-queries/runner'
 import type { ConnectionOptions } from '@/adapters/types'
+import { REDIS_HOST, REDIS_PORT } from './helpers'
 
 describe('q @diag/redis-key-stats (integration)', () => {
   const options: ConnectionOptions = {
     system: 'redis',
-    host: 'localhost',
-    port: 6379,
+    host: REDIS_HOST,
+    port: REDIS_PORT,
     user: '',
     password: '',
     database: '0',

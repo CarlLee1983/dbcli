@@ -103,6 +103,46 @@ jobs:
       - name: Build is reproducible
         run: bun run build:determinism
 
+  integration:
+    # The matrix job runs with SKIP_INTEGRATION_TESTS=true, so until this
+    # existed `tests/integration` was compiled and skipped in CI — 600-odd
+    # assertions against MySQL, PostgreSQL, Redis, MongoDB and Elasticsearch
+    # that only ever ran on a developer's machine, reporting the same green
+    # either way. Once, on Linux, where docker is available on the runner.
+    #
+    # REQUIRE_INTEGRATION_SERVICES turns the suite's auto-skip into a failure:
+    # a job that starts no services must go red rather than quietly pass, which
+    # is the whole reason this job is worth its minutes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+
+      - name: Start test databases
+        run: docker compose -f docker-compose.test.yml up -d --wait
+
+      # Before the suite rather than after: one readable failure naming the
+      # address beats 600 tests skipping past an unreachable service.
+      - name: Services are reachable
+        run: bun run services:check
+
+      - name: Integration tests
+        run: bun test tests/integration
+        env:
+          REQUIRE_INTEGRATION_SERVICES: 'true'
+
+      - name: Service logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 100
+
+      - name: Stop test databases
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
   docs-parity:
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
     # platform copies, or user docs fall out of sync. Runs once (not per matrix).

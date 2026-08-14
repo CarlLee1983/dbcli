@@ -12,7 +12,15 @@ import { configModule } from '@/core/config'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { AdapterFactory, ConnectionError } from '@/adapters'
-import { shouldSkipTests, SKIP_BY_ENV } from './helpers'
+import {
+  shouldSkipTests,
+  SKIP_BY_ENV,
+  PG_HOST,
+  PG_PORT,
+  PG_USER,
+  PG_PASSWORD,
+  PG_DATABASE,
+} from './helpers'
 
 describe('Init Command Integration Tests', () => {
   test('應該從 DATABASE_URL 格式解析配置', () => {
@@ -271,11 +279,11 @@ describe('Init Command Integration Tests', () => {
       SKIP_BY_ENV ||
       (await shouldSkipTests({
         system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        host: PG_HOST,
+        port: PG_PORT,
+        user: PG_USER,
+        password: PG_PASSWORD,
+        database: PG_DATABASE,
       }))
     )
       return
@@ -283,11 +291,11 @@ describe('Init Command Integration Tests', () => {
     // 驗證：使用有效的認證建立連接
     const config = {
       system: 'postgresql' as const,
-      host: 'localhost',
-      port: 5432,
-      user: 'postgres',
-      password: 'postgres',
-      database: 'postgres',
+      host: PG_HOST,
+      port: PG_PORT,
+      user: PG_USER,
+      password: PG_PASSWORD,
+      database: PG_DATABASE,
     }
 
     const adapter = AdapterFactory.createAdapter(config)
@@ -305,11 +313,11 @@ describe('Init Command Integration Tests', () => {
       SKIP_BY_ENV ||
       (await shouldSkipTests({
         system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        host: PG_HOST,
+        port: PG_PORT,
+        user: PG_USER,
+        password: PG_PASSWORD,
+        database: PG_DATABASE,
       }))
     )
       return
@@ -317,11 +325,11 @@ describe('Init Command Integration Tests', () => {
     // 驗證：無效密碼拋出 ConnectionError
     const config = {
       system: 'postgresql' as const,
-      host: 'localhost',
-      port: 5432,
+      host: PG_HOST,
+      port: PG_PORT,
       user: '__dbcli_no_such_user__',
       password: 'wrong_password',
-      database: 'postgres',
+      database: PG_DATABASE,
     }
 
     const adapter = AdapterFactory.createAdapter(config)
@@ -341,11 +349,11 @@ describe('Init Command Integration Tests', () => {
       SKIP_BY_ENV ||
       (await shouldSkipTests({
         system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        host: PG_HOST,
+        port: PG_PORT,
+        user: PG_USER,
+        password: PG_PASSWORD,
+        database: PG_DATABASE,
       }))
     )
       return
@@ -354,10 +362,10 @@ describe('Init Command Integration Tests', () => {
     const config = {
       system: 'postgresql' as const,
       host: '10.255.255.1', // 無法到達的 IP
-      port: 5432,
-      user: 'postgres',
-      password: 'postgres',
-      database: 'postgres',
+      port: PG_PORT,
+      user: PG_USER,
+      password: PG_PASSWORD,
+      database: PG_DATABASE,
       timeout: 1000,
     }
 

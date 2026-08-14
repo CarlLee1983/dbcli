@@ -19,19 +19,27 @@ import { join } from 'node:path'
 import { PostgreSQLAdapter } from '@/adapters/postgresql-adapter'
 import { runDDL } from '@/commands/migrate'
 import { promptUser } from '@/utils/prompts'
-import { isDbReachable, SKIP_BY_ENV } from './helpers'
+import {
+  isDbReachable,
+  SKIP_BY_ENV,
+  PG_HOST,
+  PG_PORT,
+  PG_USER,
+  PG_PASSWORD,
+  PG_DATABASE,
+} from './helpers'
 
-const HOST = process.env.PGHOST ?? 'localhost'
-const PORT = Number(process.env.PGPORT ?? 5433)
+const HOST = PG_HOST
+const PORT = PG_PORT
 const TABLE = 'dbcli_migrate_confirm'
 
 const connection = {
   system: 'postgresql' as const,
   host: HOST,
   port: PORT,
-  user: process.env.PGUSER ?? 'dbcli',
-  password: process.env.PGPASSWORD ?? 'testpass',
-  database: process.env.PGDATABASE ?? 'dbcli_test',
+  user: PG_USER,
+  password: PG_PASSWORD,
+  database: PG_DATABASE,
 }
 
 let up = false

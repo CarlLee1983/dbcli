@@ -14,12 +14,10 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { isDbReachable, SKIP_BY_ENV } from './helpers'
+import { isDbReachable, SKIP_BY_ENV, MYSQL_HOST, MYSQL_PORT } from './helpers'
 import { t_vars } from '@/i18n/message-loader'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
-const MYSQL_HOST = '127.0.0.1'
-const MYSQL_PORT = 3307
 const DEAD_PORT = 3999
 
 let SKIP_TESTS = SKIP_BY_ENV

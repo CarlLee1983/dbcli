@@ -359,7 +359,9 @@ Blacklist 仍是最終權限邊界：`--fields` 無法顯示受保護欄位；fi
 
 真的改動到資料的寫入，摘要還會說明如何取回先前的值——就這三個指令而言只有備份一途：寫入成功之後 dbcli 不保留任何自動還原機制。失敗時改為指出 `--recovery`，也就是產生回復計畫、供 `dbcli recover` 讀取的旗標。沒有造成任何改動的結局（取消、dry-run、沒有符合的列）不會提到還原，因為沒有東西需要還原。
 
-沒有加 `--force` 的 **SQL** 寫入所詢問的確認內容——產生的 SQL、參數、刪除的危險警告，以及 `y/n` 問句——一律寫到 **stderr**，不寫 stdout。終端機兩個串流都看得到，所以手動執行時外觀不變；而擷取 stdout 的腳本無論有沒有 `--force`，拿到的都只會是一份 JSON 文件。dry-run 與取消都不會對資料庫送出任何寫入，但兩者仍會連線並讀取資料表 schema——因為它們要顯示的 SQL 沒有欄位清單就組不出來；完全不連線的預檢請改用 `--plan`。只有 SQL 路徑會詢問：MongoDB 與 Redis 的寫入不經確認提示就執行，因此 `cancelled` 只會出現在 SQL 路徑，要預覽這兩種寫入請改用 `--dry-run`。
+失敗同樣是散文，並且寫到 stderr、退出碼 `1`——不論是 blacklist 拒絕、`--set` 格式錯誤，或資料庫退回的語句。`--format` 在這三個指令只接受 `text` 或 `json`，其他值會在連線之前就被拒絕，而不是悄悄當成 `text`。
+
+沒有加 `--force` 的寫入所詢問的確認內容——產生的 SQL、參數、刪除的危險警告，以及 `y/n` 問句——一律寫到 **stderr**，不寫 stdout。終端機兩個串流都看得到，所以手動執行時外觀不變；而擷取 stdout 的腳本無論有沒有 `--force`，拿到的都只會是一份 JSON 文件。dry-run 與取消都不會對資料庫送出任何寫入，但兩者仍會連線並讀取資料表 schema——因為它們要顯示的 SQL 沒有欄位清單就組不出來；完全不連線的預檢請改用 `--plan`。MongoDB 與 Redis 的寫入也會問同一個問題——它們是由指令直接送出而非經過 SQL executor，過去完全不問就執行——所以 `cancelled` 現在在每個引擎都可能出現。它們的提示顯示的是 dry-run 會印出的那段語句，沒有參數區塊，因為那些語句的值本來就寫在裡面。
 
 `--recovery` 同時改變 `insert` / `update` / `delete` 失敗時寫到 stdout 的內容：失敗時 recovery envelope 會取代 JSON result envelope，而不是接在它後面，因此解析 stdout 的呼叫端無論如何都只會拿到一份文件。沒有加這個旗標時，失敗仍然是印出 `status: "error"` 的 result envelope 並以 `1` 退出。
 
@@ -877,7 +879,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | 指令 | 說明 |
 | :--- | :--- |
 | `shell` | 啟動互動式 REPL，支援 Tab 自動補全與 SQL 高亮。 |
-| `migrate <action>` | **DDL 引擎**：建立/修改/刪除資料表與索引。 |
+| `migrate <action>` | **DDL 引擎**：建立/修改/刪除資料表與索引。具破壞性的動作若未加 `--force` 會在 stderr 詢問確認，拒絕時回報 `status: "cancelled"`。 |
 | `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |

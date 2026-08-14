@@ -90,7 +90,7 @@ describe('Redis/Elasticsearch unsupported write commands surface clear errors', 
       }
       const out = combinedOutput()
       expect(out).toContain('Elasticsearch')
-      expect(out).toContain('不支援')
+      expect(out).toContain('does not support')
     })
 
     test('update reports Elasticsearch is unsupported', async () => {
@@ -101,7 +101,7 @@ describe('Redis/Elasticsearch unsupported write commands surface clear errors', 
       }
       const out = combinedOutput()
       expect(out).toContain('Elasticsearch')
-      expect(out).toContain('不支援')
+      expect(out).toContain('does not support')
     })
 
     test('delete reports Elasticsearch is unsupported', async () => {
@@ -112,7 +112,7 @@ describe('Redis/Elasticsearch unsupported write commands surface clear errors', 
       }
       const out = combinedOutput()
       expect(out).toContain('Elasticsearch')
-      expect(out).toContain('不支援')
+      expect(out).toContain('does not support')
     })
 
     test('diff reports Elasticsearch is unsupported', async () => {

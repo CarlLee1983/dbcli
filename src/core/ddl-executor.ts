@@ -11,7 +11,6 @@ import type { BlacklistManager } from '@/core/blacklist-manager'
 import type { SchemaCacheManager } from '@/core/schema-cache'
 import type { DDLOperation, DDLExecutionOptions, DDLExecutionResult } from '@/types/ddl'
 import { getOperationTable, isDestructiveOperation } from '@/types/ddl'
-import { promptUser } from '@/utils/prompts'
 
 export class DDLExecutionError extends Error {
   constructor(message: string) {
@@ -93,15 +92,20 @@ export class DDLExecutor {
 
       // 5. Destructive operations require confirmation
       if (isDestructiveOperation(operation) && !options.force) {
-        const confirmed = await promptUser.confirm(
-          `This is a destructive operation (${operation.kind}). Proceed?`
-        )
+        if (!options.confirm) {
+          throw new DDLExecutionError(
+            `Refusing to run ${operation.kind} without confirmation: no confirmation handler was ` +
+              'supplied. Pass options.confirm to ask the user, or options.force to proceed unattended.'
+          )
+        }
+
+        const confirmed = await options.confirm({ operation: operation.kind, sql })
         if (!confirmed) {
           return {
-            status: 'success',
+            status: 'cancelled',
             operation: operation.kind,
             sql,
-            warnings: [...warnings, 'Operation cancelled by user'],
+            warnings,
             timestamp,
             dryRun: false,
           }

@@ -3,9 +3,9 @@ import { mapCliError, type CliErrorPresentation } from '@/utils/cli-error'
 import {
   classifyStatement,
   enforcePermission,
-  stripCommentsAndStrings,
   SQL_WRITE_OR_DDL_KEYWORDS,
 } from '@/core/permission-guard'
+import { stripCommentsAndStrings } from '@/core/permission/sql-analysis'
 
 export type ConnectionQueryOutcome =
   | {

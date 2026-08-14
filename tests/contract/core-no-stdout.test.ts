@@ -18,6 +18,16 @@ describe('core no-stdout gate', () => {
     ["writeSync(2, 'raw')", 'writeSync(2)'],
     ['Bun.write(Bun.stdout, payload)', 'Bun.write(Bun.stdout)'],
     ['Bun.write(Bun.stderr, payload)', 'Bun.write(Bun.stderr)'],
+    // The indirect route: prompts write a question and block for an answer, so
+    // holding the module is holding a terminal, whatever the call sites say.
+    [
+      "import { promptUser } from '@/utils/prompts'",
+      'promptUser (@/utils/prompts asks on a stream)',
+    ],
+    [
+      "import { promptUser } from '../utils/prompts'",
+      'promptUser (@/utils/prompts asks on a stream)',
+    ],
   ])('rejects %s', (source, callee) => {
     expect(findCoreStdoutViolations(source, 'fixture.ts')).toContain(
       `fixture.ts: writes to stdout via '${callee}'`

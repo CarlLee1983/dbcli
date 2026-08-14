@@ -38,7 +38,9 @@ mutation nobody forced produced stdout no parser could read. The wording moved t
 request carries `destructive: boolean` rather than a finished warning sentence and prompt,
 so the words are chosen — and translated — by the layer that owns presentation. When a mutation would execute unconfirmed and no handler
 was supplied, core throws rather than defaulting: proceeding silently and declining
-silently are both worse than saying nobody was available to ask.
+silently are both worse than saying nobody was available to ask. `DDLExecutionOptions`
+carries the same callback for the same reason, and a declined `DROP TABLE` reports
+`status: "cancelled"` rather than the `success` it used to claim.
 
 `scripts/check-core-no-stdout.ts` enforces this in CI, mirroring the existing agent-core
 purity gate. The 16 modules that predate the rule sit in `CORE_STDOUT_EXCEPTIONS`, a
@@ -46,7 +48,12 @@ ratchet rather than an amnesty: a contract test fails if a listed module no long
 violates, so cleaning one forces its line to be deleted, and the list can only shrink.
 `data-executor.ts` is deliberately not on it.
 
-Detection is textual, like its sibling gate. It catches `console.*`, `process.std*.write`,
+One rule matches an import rather than a call: `@/utils/prompts` under `src/core/**`.
+Every function it exports writes a question to a stream and blocks for an answer, so a
+core module holding it has a terminal whatever the call sites look like — and the routine
+way that rule gets broken again is an import added for convenience, not a `console.log`.
+
+Detection is otherwise textual, like its sibling gate. It catches `console.*`, `process.std*.write`,
 `writeSync` on a literal fd 1 or 2 — `src/core/recovery/emit.ts` already writes fd 1
 directly, on purpose, to survive a pipe truncated by `process.exit` on Windows — and
 `Bun.write` targeting `Bun.stdout`. An aliased write (`const c = console`) slips past. The
@@ -58,11 +65,12 @@ AST pass would cost more than that buys.
 The obvious reading of this rule is tidiness, and tidiness is negotiable under deadline.
 It is not tidiness. It is what makes "ceremony cannot pollute the agent-facing output" a
 structural fact instead of a habit: presentation work in core has no stream to leak into.
-One indirect route is still open and is stated here rather than implied away —
-`src/core/ddl-executor.ts:14` imports `promptUser` from `@/utils/prompts` and prompts from
-inside core, and the gate, being textual, sees an import rather than a write. Closing it
-means giving `ddl-executor` the same `confirm` callback `DataExecutor` now takes; until
-that lands, the rule holds for direct writes and one module can still ask a question. A later contributor who adds one
+The indirect route is closed too. `src/core/ddl-executor.ts` imported `promptUser` and
+prompted from inside core for as long as this gate existed, passing it because the gate
+reads calls and that is an import; `DDLExecutor` now takes the same `confirm` callback
+`DataExecutor` does, and the gate refuses an `@/utils/prompts` import under `src/core/**`
+outright. No module needed adding to the ratchet for that rule to hold, which is the
+evidence that this was the only one. A later contributor who adds one
 `console.log` to a core module "just for debugging" is not making a small mess, they are
 removing the guarantee.
 
@@ -80,5 +88,6 @@ to reference it at all, so the removed edge cannot reappear unnoticed.
 
 **Falsified if:** a module under `src/core/**` writes to stdout or stderr without
 appearing in `CORE_STDOUT_EXCEPTIONS` in `scripts/check-core-no-stdout.ts`, or that list
-grows, or `.github/workflows/ci.yml` stops running the gate, or `dist/core.mjs` regains a
-reference to `@inquirer/prompts`.
+grows, or `scripts/check-core-no-stdout.ts` stops rejecting an `@/utils/prompts` import
+under `src/core/**`, or `.github/workflows/ci.yml` stops running the gate, or
+`dist/core.mjs` regains a reference to `@inquirer/prompts`.

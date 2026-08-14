@@ -76,7 +76,7 @@ describe('Redis CLI commands', () => {
   test('insert command calls adapter.insert', async () => {
     const insertSpy = spyOn(mockAdapter, 'insert')
     try {
-      await insertCommand('mykey', { data: '{"value":"hi"}' })
+      await insertCommand('mykey', { data: '{"value":"hi"}', force: true })
     } catch {
       /* ignore */
     }
@@ -93,7 +93,7 @@ describe('Redis CLI commands', () => {
   test('update command calls adapter.update', async () => {
     const updateSpy = spyOn(mockAdapter, 'update')
     try {
-      await updateCommand('mykey', { where: 'ignore', set: '{"value":"new"}' })
+      await updateCommand('mykey', { where: 'ignore', set: '{"value":"new"}', force: true })
     } catch {
       /* ignore */
     }
@@ -110,7 +110,7 @@ describe('Redis CLI commands', () => {
   test('delete command calls adapter.delete', async () => {
     const deleteSpy = spyOn(mockAdapter, 'delete')
     try {
-      await deleteCommand('mykey', { where: 'field=val' })
+      await deleteCommand('mykey', { where: 'field=val', force: true })
     } catch {
       /* ignore */
     }

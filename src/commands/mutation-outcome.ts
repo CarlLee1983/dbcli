@@ -14,6 +14,7 @@
  */
 
 import { t, t_vars } from '@/i18n/message-loader'
+import { BlacklistError } from '@/types/blacklist'
 import type { DataExecutionResult } from '@/types/data'
 
 export interface HumanOutputContext {
@@ -112,11 +113,71 @@ export function printMutationOutcome(
   envelopeExtras: Record<string, unknown> = {}
 ): void {
   if (shouldRenderForHuman(context)) {
-    for (const line of renderMutationOutcome(result, table, elapsedMs)) console.log(line)
+    // A failure is still an error message and belongs on stderr with every
+    // other human-facing failure in this file; every other outcome is routine
+    // progress and stays on stdout.
+    const writeLine = result.status === 'error' ? console.error : console.log
+    for (const line of renderMutationOutcome(result, table, elapsedMs)) writeLine(line)
     return
   }
 
   console.log(JSON.stringify({ ...mutationEnvelope(result), ...envelopeExtras }, null, 2))
+}
+
+/**
+ * Report a failure that never reached the executor — a blacklist refusal, a
+ * malformed --set, a missing table name — the same way `printMutationOutcome`
+ * reports one that did.
+ *
+ * Machine mode prints the same envelope shape the catch-all branches in
+ * insert/update/delete used to build inline, byte for byte. Human mode writes
+ * to stderr, matching the `PermissionError` and `ConnectionError` branches in
+ * the same catch blocks: an error message belongs on the error stream, not
+ * mixed into stdout with the routine cases.
+ *
+ * The `--recovery` hint that `renderMutationOutcome` prints for an executor
+ * failure is deliberately absent here — `--recovery` writes a plan for a
+ * statement that failed against the database, and a failure at this stage
+ * never reached one. A `BlacklistError` gets its own hint instead, pointing
+ * at the command that explains the refusal.
+ */
+export function printMutationFailure(
+  error: Error,
+  operation: DataExecutionResult['operation'],
+  context: HumanOutputContext
+): void {
+  if (shouldRenderForHuman(context)) {
+    console.error(t_vars('ceremony.failed', { reason: error.message }))
+    if (error instanceof BlacklistError) {
+      console.error(t('ceremony.blacklist_hint'))
+    }
+    return
+  }
+
+  console.log(
+    JSON.stringify({ status: 'error', operation, rows_affected: 0, error: error.message }, null, 2)
+  )
+}
+
+/**
+ * The result of a write somebody declined.
+ *
+ * `DataExecutor` builds this for SQL; MongoDB and Redis writes never reach it,
+ * so their commands build the same thing here rather than each inventing a
+ * shape. A cancellation reports the statement it did not run, which is what
+ * makes the envelope readable as "this, and it did not happen".
+ */
+export function cancelledOutcome(
+  operation: DataExecutionResult['operation'],
+  preview: string
+): DataExecutionResult {
+  return {
+    status: 'cancelled',
+    operation,
+    rows_affected: 0,
+    sql: preview,
+    timestamp: new Date().toISOString(),
+  }
 }
 
 /**

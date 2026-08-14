@@ -9,6 +9,7 @@ import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
 import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
+import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
@@ -224,6 +225,7 @@ export class DataExecutor {
 
       const proceed = await options.confirm({
         operation,
+        engine: 'sql',
         sql: statement.sql,
         params: statement.params,
         destructive,
@@ -273,7 +275,7 @@ export class DataExecutor {
         operation,
         rows_affected: 0,
         timestamp,
-        error: `Permission denied: ${error.message}`,
+        error: t_vars('errors.permission_denied_reason', { reason: error.message }),
       }
     }
 

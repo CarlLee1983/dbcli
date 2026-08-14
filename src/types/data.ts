@@ -68,6 +68,16 @@ export interface DataExecutionOptions {
 export interface MutationConfirmationRequest {
   operation: DataExecutionResult['operation']
 
+  /**
+   * Which engine will run it.
+   *
+   * Only presentation depends on this: a MongoDB shell line or a Redis command
+   * announced as "Generated SQL" would be a lie about what is being approved,
+   * and approving the wrong thing is the failure this whole prompt exists to
+   * prevent.
+   */
+  engine: 'sql' | 'mongodb' | 'redis'
+
   /** The parameterised statement that will run if confirmed */
   sql: string
 

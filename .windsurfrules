@@ -450,6 +450,9 @@ changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `updat
   write really ran. Proceed once the SQL shape matches the intended `--where` / `--set`.
   Declining at the confirmation prompt reports `status:"cancelled"`, also not `success`.
   MongoDB prints a shell-style preview.
+- `--force` skips the confirmation prompt. Every `insert` / `update` / `delete` asks
+  first — SQL, MongoDB and Redis alike — and a non-interactive run cannot answer, so an
+  unattended write without `--force` ends as `status:"cancelled"` having changed nothing.
 - `--recovery` is recommended for automated agent pipelines (enables `dbcli recover --apply`
   after a failure); optional for one-off manual writes.
 

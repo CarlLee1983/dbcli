@@ -4,7 +4,7 @@
  */
 
 import crypto from 'node:crypto'
-import { t_vars } from '@/i18n/message-loader'
+import { t, t_vars } from '@/i18n/message-loader'
 import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
 import { presentConnectionError } from '@/utils/connection-error-message'
 import {
@@ -14,9 +14,14 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
-import { confirmMutationInteractively } from '@/commands/mutation-confirm'
+import { confirmDirectMutation, confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { auditOutcomeForMutation } from '@/commands/mutation-audit'
-import { humanOutputContext, printMutationOutcome } from '@/commands/mutation-outcome'
+import {
+  cancelledOutcome,
+  humanOutputContext,
+  printMutationFailure,
+  printMutationOutcome,
+} from '@/commands/mutation-outcome'
 import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
 import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
@@ -62,6 +67,12 @@ export async function updateCommand(
       throw new Error('Table name required')
     }
     table = table.trim()
+
+    // Reject an unsupported --format before any connection, schema read, or
+    // audit write — the way `dbcli export` validates its own formats.
+    if (options.format !== undefined && options.format !== 'text' && options.format !== 'json') {
+      throw new Error(t_vars('errors.invalid_output_format', { format: options.format }))
+    }
 
     // 2. Validate --where flag (relaxed under --plan; non-SQL engines may have
     // no meaningful WHERE clause and the planner handles empty filters itself).
@@ -156,14 +167,33 @@ export async function updateCommand(
       // Redis update expects the key as 'table' and fields in 'setData'
       // We ignore 'where' for Redis since it's key-value based, or we could
       // treat 'table' as the key.
+      const preview = `HSET ${table} ... (Redis Update)`
+
       if (options.dryRun) {
         const output: DataExecutionResult = {
           status: 'dry_run',
           operation: 'update',
           rows_affected: 0,
-          sql: `HSET ${table} ... (Redis Update)`,
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'update',
+          engine: 'redis',
+          preview,
+          destructive: false,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('update', preview)
         printMutationOutcome(output, table, 0, humanOutputContext(options))
         await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
@@ -202,8 +232,7 @@ export async function updateCommand(
         operation: 'update',
         rows_affected: 0,
         timestamp: new Date().toISOString(),
-        error:
-          'Elasticsearch 不支援 update 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件更新',
+        error: t('update.elasticsearch_unsupported'),
       }
       await writeAuditEntry(config, 'update', options, {
         success: false,
@@ -254,14 +283,33 @@ export async function updateCommand(
         filter = parseWhereClause(options.where)
       }
 
+      const preview = previewUpdate(table, filter, updateDoc)
+
       if (options.dryRun) {
         const output: DataExecutionResult = {
           status: 'dry_run',
           operation: 'update',
           rows_affected: 0,
-          sql: previewUpdate(table, filter, updateDoc),
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'update',
+          engine: 'mongodb',
+          preview,
+          destructive: false,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('update', preview)
         printMutationOutcome(output, table, 0, humanOutputContext(options))
         await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
@@ -379,13 +427,7 @@ export async function updateCommand(
 
     // Blacklist error
     if (error instanceof BlacklistError) {
-      const output = {
-        status: 'error',
-        operation: 'update',
-        rows_affected: 0,
-        error: error.message,
-      }
-      console.log(JSON.stringify(output, null, 2))
+      printMutationFailure(error, 'update', humanOutputContext(options))
       process.exit(1)
     }
 
@@ -404,13 +446,7 @@ export async function updateCommand(
     }
 
     // Validation or other errors
-    const output = {
-      status: 'error',
-      operation: 'update',
-      rows_affected: 0,
-      error: (error as Error).message,
-    }
-    console.log(JSON.stringify(output, null, 2))
+    printMutationFailure(error as Error, 'update', humanOutputContext(options))
     process.exit(1)
   }
 }

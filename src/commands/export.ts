@@ -196,7 +196,7 @@ async function redisExportBranch(
   options: ExportOptions,
   config: DbcliConfig
 ): Promise<void> {
-  const { enforceRedisPermission } = await import('@/core/permission-guard')
+  const { enforceRedisPermission } = await import('@/core/permission/redis')
   enforceRedisPermission(command, config.permission)
 
   const redisAdapter = AdapterFactory.createRedisAdapter(

@@ -9,10 +9,14 @@
   "failed": "失敗：{reason}",
   "unknown_error": "未知的錯誤",
   "confirm_sql": "產生的 SQL：",
+  "confirm_command": "即將執行的指令：",
   "confirm_params": "參數：",
   "confirm_destructive_warning": "⚠️  警告：DELETE 具破壞性，執行後無法復原！",
   "confirm_destructive_prompt": "確定要執行這個 DELETE 嗎？此操作無法復原。",
+  "confirm_destructive_warning_ddl": "⚠️  警告：這個 schema 變更具破壞性，執行後無法復原！",
+  "confirm_ddl_prompt": "確定要執行這個 {operation} 嗎？此操作無法復原。",
   "confirm_prompt": "要繼續執行這個操作嗎？",
   "recovery_none": "此操作無法自動還原，要取回先前的資料請從備份回復。",
-  "recovery_retry": "加上 --recovery 重跑可產生回復計畫，再用 dbcli recover 讀取"
+  "recovery_retry": "加上 --recovery 重跑可產生回復計畫，再用 dbcli recover 讀取",
+  "blacklist_hint": "執行 `dbcli blacklist list` 查看受保護的項目"
 }

@@ -8,8 +8,14 @@
  * all, which is the guarantee the machine path rests on.
  */
 
-import { describe, test, expect } from 'bun:test'
-import { renderMutationOutcome, shouldRenderForHuman } from '@/commands/mutation-outcome'
+import { describe, test, expect, spyOn } from 'bun:test'
+import {
+  printMutationFailure,
+  printMutationOutcome,
+  renderMutationOutcome,
+  shouldRenderForHuman,
+} from '@/commands/mutation-outcome'
+import { BlacklistError } from '@/types/blacklist'
 import type { DataExecutionResult } from '@/types/data'
 
 const result = (over: Partial<DataExecutionResult> = {}): DataExecutionResult => ({
@@ -122,6 +128,98 @@ describe('renderMutationOutcome', () => {
     ]) {
       const text = renderMutationOutcome(result(over), 'users', 10).join('\n').toLowerCase()
       expect(text).not.toMatch(/undo|backup|還原|備份/)
+    }
+  })
+})
+
+describe('printMutationOutcome', () => {
+  test('a human-mode failure goes to stderr, not stdout', () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      printMutationOutcome(
+        result({ status: 'error', rows_affected: 0, error: 'boom' }),
+        'users',
+        10,
+        { isTTY: true }
+      )
+      expect(logSpy).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalled()
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain('boom')
+    } finally {
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('a human-mode success stays on stdout', () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      printMutationOutcome(result(), 'users', 120, { isTTY: true })
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(logSpy).toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+})
+
+describe('printMutationFailure', () => {
+  test('machine mode prints the same envelope shape the catch-all branches used to build inline', () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      printMutationFailure(new Error('bad table'), 'insert', { isTTY: false })
+      expect(logSpy).toHaveBeenCalledTimes(1)
+      const printed = logSpy.mock.calls[0]?.[0] as string
+      expect(JSON.parse(printed)).toEqual({
+        status: 'error',
+        operation: 'insert',
+        rows_affected: 0,
+        error: 'bad table',
+      })
+    } finally {
+      logSpy.mockRestore()
+    }
+  })
+
+  test('human mode writes the failure reason to stderr, not stdout', () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      printMutationFailure(new Error('bad table'), 'insert', { isTTY: true })
+      expect(logSpy).not.toHaveBeenCalled()
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain('bad table')
+    } finally {
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('human mode adds a blacklist hint only for a BlacklistError', () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      printMutationFailure(new BlacklistError('table blocked', 'users', 'INSERT'), 'insert', {
+        isTTY: true,
+      })
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain('blacklist')
+
+      errorSpy.mockClear()
+      printMutationFailure(new Error('malformed --set'), 'update', { isTTY: true })
+      expect(errorSpy.mock.calls.flat().join('\n')).not.toContain('blacklist')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('human mode never mentions --recovery — a failure here never reached the executor', () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      printMutationFailure(new Error('bad table'), 'insert', { isTTY: true })
+      expect(errorSpy.mock.calls.flat().join('\n')).not.toContain('--recovery')
+    } finally {
+      errorSpy.mockRestore()
     }
   })
 })

@@ -64,6 +64,15 @@ const WRITERS: ReadonlyArray<{ pattern: RegExp; callee: string }> = [
   { pattern: /\bwriteSync\s*\(\s*2\s*,/g, callee: 'writeSync(2)' },
   { pattern: /\bBun\s*\.\s*write\s*\(\s*Bun\s*\.\s*stdout\b/g, callee: 'Bun.write(Bun.stdout)' },
   { pattern: /\bBun\s*\.\s*write\s*\(\s*Bun\s*\.\s*stderr\b/g, callee: 'Bun.write(Bun.stderr)' },
+  // An import rather than a write, and the only one worth naming: every
+  // function in @/utils/prompts writes a question to a stream and blocks on an
+  // answer. `ddl-executor.ts` reached a terminal that way for as long as this
+  // gate existed, passing it because the gate reads calls. A core module that
+  // needs an answer takes a callback, the way DataExecutor and DDLExecutor do.
+  {
+    pattern: /\bfrom\s+['"](?:@\/utils\/prompts|(?:\.\.?\/)+utils\/prompts)['"]/g,
+    callee: 'promptUser (@/utils/prompts asks on a stream)',
+  },
 ]
 
 /**

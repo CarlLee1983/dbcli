@@ -14,9 +14,14 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
-import { confirmMutationInteractively } from '@/commands/mutation-confirm'
+import { confirmDirectMutation, confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { auditOutcomeForMutation } from '@/commands/mutation-audit'
-import { humanOutputContext, printMutationOutcome } from '@/commands/mutation-outcome'
+import {
+  cancelledOutcome,
+  humanOutputContext,
+  printMutationFailure,
+  printMutationOutcome,
+} from '@/commands/mutation-outcome'
 import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
 import {
@@ -67,6 +72,12 @@ export async function deleteCommand(
       throw new Error('Table name required')
     }
     table = table.trim()
+
+    // Reject an unsupported --format before any connection, schema read, or
+    // audit write — the way `dbcli export` validates its own formats.
+    if (options.format !== undefined && options.format !== 'text' && options.format !== 'json') {
+      throw new Error(t_vars('errors.invalid_output_format', { format: options.format }))
+    }
 
     // 2. Validate --where flag (relaxed under --plan; non-SQL engines may have
     // no meaningful WHERE clause and the planner handles empty filters itself).
@@ -152,14 +163,33 @@ export async function deleteCommand(
         filter = parseWhereClause(options.where)
       }
 
+      const preview = `DEL ${table} (Redis Delete)`
+
       if (options.dryRun) {
         const output: DataExecutionResult = {
           status: 'dry_run',
           operation: 'delete',
           rows_affected: 0,
-          sql: `DEL ${table} (Redis Delete)`,
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'delete',
+          engine: 'redis',
+          preview,
+          destructive: true,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('delete', preview)
         printMutationOutcome(output, table, 0, humanOutputContext(options))
         await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
@@ -198,8 +228,7 @@ export async function deleteCommand(
         operation: 'delete',
         rows_affected: 0,
         timestamp: new Date().toISOString(),
-        error:
-          'Elasticsearch 不支援 delete 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件刪除',
+        error: t('delete.elasticsearch_unsupported'),
       }
       await writeAuditEntry(config, 'delete', options, {
         success: false,
@@ -224,14 +253,33 @@ export async function deleteCommand(
         filter = parseWhereClause(options.where)
       }
 
+      const preview = previewDelete(table, filter)
+
       if (options.dryRun) {
         const output: DataExecutionResult = {
           status: 'dry_run',
           operation: 'delete',
           rows_affected: 0,
-          sql: previewDelete(table, filter),
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'delete',
+          engine: 'mongodb',
+          preview,
+          destructive: true,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('delete', preview)
         printMutationOutcome(output, table, 0, humanOutputContext(options))
         await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
@@ -349,13 +397,7 @@ export async function deleteCommand(
 
     // Blacklist error
     if (error instanceof BlacklistError) {
-      const output = {
-        status: 'error',
-        operation: 'delete',
-        rows_affected: 0,
-        error: error.message,
-      }
-      console.log(JSON.stringify(output, null, 2))
+      printMutationFailure(error, 'delete', humanOutputContext(options))
       process.exit(1)
     }
 
@@ -374,13 +416,7 @@ export async function deleteCommand(
     }
 
     // Validation or other errors
-    const output = {
-      status: 'error',
-      operation: 'delete',
-      rows_affected: 0,
-      error: (error as Error).message,
-    }
-    console.log(JSON.stringify(output, null, 2))
+    printMutationFailure(error as Error, 'delete', humanOutputContext(options))
     process.exit(1)
   }
 }

@@ -22,8 +22,9 @@
  * verifiable rather than merely trusted.
  */
 
-import { t } from '@/i18n/message-loader'
+import { t, t_vars } from '@/i18n/message-loader'
 import type { MutationConfirmationRequest, MutationConfirmer } from '@/types'
+import type { DDLConfirmer } from '@/types/ddl'
 import { promptUser } from '@/utils/prompts'
 
 export const confirmMutationInteractively: MutationConfirmer = async (
@@ -32,12 +33,67 @@ export const confirmMutationInteractively: MutationConfirmer = async (
   if (request.destructive) {
     process.stderr.write(`\n${t('ceremony.confirm_destructive_warning')}\n`)
   }
-  process.stderr.write(`\n${t('ceremony.confirm_sql')}\n  ${request.sql}\n`)
-  process.stderr.write(
-    `\n${t('ceremony.confirm_params')}\n  ${JSON.stringify(request.params, null, 2)}\n`
-  )
+
+  const label = request.engine === 'sql' ? 'ceremony.confirm_sql' : 'ceremony.confirm_command'
+  process.stderr.write(`\n${t(label)}\n  ${request.sql}\n`)
+
+  // A MongoDB or Redis statement carries its values inline, so the block would
+  // read "Parameters: []" — noise directly above the question, on the one
+  // surface where noise costs the most.
+  if (request.params.length > 0) {
+    process.stderr.write(
+      `\n${t('ceremony.confirm_params')}\n  ${JSON.stringify(request.params, null, 2)}\n`
+    )
+  }
 
   return promptUser.confirm(
     t(request.destructive ? 'ceremony.confirm_destructive_prompt' : 'ceremony.confirm_prompt')
   )
+}
+
+/**
+ * Ask before a destructive schema change.
+ *
+ * `DDLExecutor` asked for itself until now, calling `promptUser` from inside
+ * `src/core` — the last route by which core could reach a terminal, and one the
+ * no-stdout gate could not see because it reads writes rather than imports. The
+ * question lives here with the others so that "how dbcli asks" has one answer,
+ * and so `migrate` can be embedded by a caller that asks its own way.
+ */
+export const confirmDdlInteractively: DDLConfirmer = async (request) => {
+  process.stderr.write(`\n${t('ceremony.confirm_destructive_warning_ddl')}\n`)
+  process.stderr.write(`\n${t('ceremony.confirm_sql')}\n  ${request.sql}\n`)
+
+  return promptUser.confirm(t_vars('ceremony.confirm_ddl_prompt', { operation: request.operation }))
+}
+
+/**
+ * Ask before a write that never passes through `DataExecutor`.
+ *
+ * MongoDB and Redis writes are issued straight from the command against the
+ * adapter, so the confirmation `DataExecutor` performs for SQL never ran for
+ * them: `dbcli delete` against a Mongo collection destroyed documents without
+ * asking anybody, whatever the terminal. The gate lives here rather than in
+ * each command so that the three engines cannot answer the question
+ * differently, and `--force` is honoured in exactly one place.
+ *
+ * Returns true when the write may proceed.
+ */
+export async function confirmDirectMutation(request: {
+  operation: MutationConfirmationRequest['operation']
+  engine: 'mongodb' | 'redis'
+  /** The statement, in the same form the dry run would print. */
+  preview: string
+  destructive: boolean
+  force?: boolean
+}): Promise<boolean> {
+  if (request.force === true) return true
+
+  return confirmMutationInteractively({
+    operation: request.operation,
+    engine: request.engine,
+    sql: request.preview,
+    params: [],
+    destructive: request.destructive,
+  })
 }

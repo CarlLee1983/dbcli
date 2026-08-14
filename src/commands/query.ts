@@ -55,7 +55,7 @@ import {
   assertFanOutReadOnlySql,
   runQueryFanOut,
 } from '@/core/query-fanout'
-import { enforceElasticsearchPermission } from '@/core/permission-guard'
+import { enforceElasticsearchPermission } from '@/core/permission/elasticsearch'
 import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
@@ -363,7 +363,7 @@ async function preflightQuery(
     if (multiConnection) {
       throw new Error('Redis queries do not support multiple connections')
     }
-    const { enforceRedisPermission } = await import('@/core/permission-guard')
+    const { enforceRedisPermission } = await import('@/core/permission/redis')
     enforceRedisPermission(query, config.permission)
     return
   }

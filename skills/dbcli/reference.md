@@ -2540,6 +2540,8 @@ dbcli migrate add-enum status active inactive suspended
 dbcli migrate alter-enum status --add-value archived
 dbcli migrate drop-enum status --execute --force
 ```
+A destructive `migrate` action (`drop`, `drop-column`, `drop-index`, `drop-enum`) asks for confirmation on stderr before it runs, and reports `status: "cancelled"` if you decline — not `success`, which it used to claim with the cancellation buried in `warnings`. `--force` skips the question; a non-interactive run that omits it cannot answer and therefore cancels.
+
 
 **Column spec format:** `name:type[:modifier[:modifier...]]`
 - Modifiers: `pk`, `not-null`, `unique`, `auto-increment`, `default=<value>`, `references=<table>.<column>`

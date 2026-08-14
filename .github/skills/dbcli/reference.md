@@ -925,7 +925,7 @@ dbcli insert users --data '{"name":"Alice"}' --force
 dbcli insert users --data '{"name":"Alice"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--data <json>`, `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--data <json>`, `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** read-write+
 
 ### update
@@ -938,7 +938,7 @@ dbcli update users --where "id=1" --set '{"name":"Bob"}' --dry-run
 dbcli update users --where "id=1" --set '{"name":"Bob"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** read-write+
 
 > **`--where` grammar (SQL `update` / `delete`)** — equality only: `col=val` or
@@ -959,7 +959,7 @@ dbcli delete users --where "id=1" --force
 dbcli delete users --where "id=1" --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--where <condition>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** data-admin+
 
 ### export
@@ -2540,6 +2540,8 @@ dbcli migrate add-enum status active inactive suspended
 dbcli migrate alter-enum status --add-value archived
 dbcli migrate drop-enum status --execute --force
 ```
+A destructive `migrate` action (`drop`, `drop-column`, `drop-index`, `drop-enum`) asks for confirmation on stderr before it runs, and reports `status: "cancelled"` if you decline — not `success`, which it used to claim with the cancellation buried in `warnings`. `--force` skips the question; a non-interactive run that omits it cannot answer and therefore cancels.
+
 
 **Column spec format:** `name:type[:modifier[:modifier...]]`
 - Modifiers: `pk`, `not-null`, `unique`, `auto-increment`, `default=<value>`, `references=<table>.<column>`

@@ -76,4 +76,13 @@ export type { SqlConnectionOptions, QueryableConnectionOptions } from '@/adapter
 export type { Permission } from '@/types'
 export type { DbcliConfig } from '@/utils/validation'
 export type { QueryResult } from '@/types/query'
-export type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
+// MutationConfirmer and its request come with the other two deliberately:
+// DataExecutionOptions.confirm is now required for any unforced write — the
+// executor throws rather than deciding on the caller's behalf — so an embedder
+// that cannot name the callback's type cannot write one.
+export type {
+  DataExecutionResult,
+  DataExecutionOptions,
+  MutationConfirmer,
+  MutationConfirmationRequest,
+} from '@/types/data'

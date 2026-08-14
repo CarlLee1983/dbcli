@@ -27,6 +27,9 @@ jobs:
       - name: Agent core purity
         run: bun run agent-core:check
 
+      - name: Core writes no stdout
+        run: bun run core-stdout:check
+
       - name: Typecheck
         run: bun run typecheck
 

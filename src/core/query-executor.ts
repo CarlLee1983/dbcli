@@ -15,10 +15,10 @@ import type { QueryResult } from '@/types/query'
 import {
   enforcePermission,
   PermissionError,
-  stripCommentsAndStrings,
   SQL_DIALECTS,
   type SqlDialect,
 } from '@/core/permission-guard'
+import { stripCommentsAndStrings } from '@/core/permission/sql-analysis'
 import { suggestTableName } from '@/utils/error-suggester'
 import { extractTableReferences } from '@/utils/sql-tables'
 import type { BlacklistValidator } from '@/core/blacklist-validator'

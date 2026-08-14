@@ -38,14 +38,42 @@ export interface DDLExecutionOptions {
   execute?: boolean
   /** Skip confirmation prompt for destructive operations */
   force?: boolean
+
+  /**
+   * How to ask before a destructive operation.
+   *
+   * The executor used to call `promptUser.confirm` itself, from inside
+   * `src/core` — the one thing ADR 0009 removed from `DataExecutor`, still in
+   * place here because the gate that enforces it reads text and saw an import
+   * rather than a write. Core describes what is about to happen; the caller
+   * decides how to ask, and whether there is anybody to ask at all.
+   */
+  confirm?: DDLConfirmer
 }
+
+/** Everything a caller needs to describe a pending destructive DDL to its user. */
+export interface DDLConfirmationRequest {
+  operation: DDLOperation['kind']
+
+  /** The statement that will run if confirmed. */
+  sql: string
+}
+
+/** Returns true to proceed, false to abandon the operation. */
+export type DDLConfirmer = (request: DDLConfirmationRequest) => Promise<boolean>
 
 // ---------------------------------------------------------------------------
 // Execution Result
 // ---------------------------------------------------------------------------
 
 export interface DDLExecutionResult {
-  status: 'success' | 'error'
+  /**
+   * `cancelled` exists for the same reason it does on the data commands: a
+   * `DROP TABLE` somebody declined at the prompt used to come back as
+   * `success` with the cancellation mentioned only in `warnings`, so a caller
+   * reading `status` was told the table was gone.
+   */
+  status: 'success' | 'error' | 'cancelled'
   operation: DDLOperation['kind']
   sql: string
   warnings: string[]

@@ -89,7 +89,7 @@ describe('MongoDB --dry-run output', () => {
     expect(mockAdapter.state.connectCalled).toBe(false)
     expect(mockAdapter.state.insertCalled).toBe(false)
     const out = logged.join('\n')
-    expect(out).toContain('"status": "success"')
+    expect(out).toContain('"status": "dry_run"')
     expect(out).toContain('"operation": "insert"')
     expect(out).toContain('"rows_affected": 0')
     expect(out).toContain('db.users.insertOne(')
@@ -112,7 +112,7 @@ describe('MongoDB --dry-run output', () => {
     expect(mockAdapter.state.connectCalled).toBe(false)
     expect(mockAdapter.state.updateCalled).toBe(false)
     const out = logged.join('\n')
-    expect(out).toContain('"status": "success"')
+    expect(out).toContain('"status": "dry_run"')
     expect(out).toContain('"operation": "update"')
     expect(out).toContain('db.users.updateMany(')
     expect(out).toContain('$set')
@@ -150,6 +150,7 @@ describe('MongoDB --dry-run output', () => {
     expect(mockAdapter.state.connectCalled).toBe(false)
     expect(mockAdapter.state.deleteCalled).toBe(false)
     const out = logged.join('\n')
+    expect(out).toContain('"status": "dry_run"')
     expect(out).toContain('"operation": "delete"')
     expect(out).toContain('db.orders.deleteMany(')
     expect(out).toContain('cancelled')
@@ -168,6 +169,27 @@ describe('MongoDB --dry-run output', () => {
     expect(out).toContain('db.orders.deleteMany(')
     expect(out).toContain('\\"id\\": 42')
     expect(mockAdapter.state.deleteCalled).toBe(false)
+  })
+
+  test('dry-run uses the shared human outcome in a terminal', async () => {
+    configSpy = spyOn(configModule, 'read').mockResolvedValue({
+      connection: baseMongoConnection,
+      permission: 'read-write',
+    } as any)
+    const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true })
+
+    try {
+      const { insertCommand } = await import('@/commands/insert')
+      await insertCommand('users', { data: '{"name":"alice"}', dryRun: true })
+    } finally {
+      if (descriptor) Object.defineProperty(process.stdout, 'isTTY', descriptor)
+      else delete (process.stdout as { isTTY?: boolean }).isTTY
+    }
+
+    const out = logged.join('\n')
+    expect(out).toContain('Preview only. users was not changed')
+    expect(out).not.toContain('"status"')
   })
 
   test('insert --dry-run still enforces blacklist (no preview emitted)', async () => {

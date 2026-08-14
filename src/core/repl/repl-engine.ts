@@ -8,12 +8,8 @@ import { MultilineBuffer } from './multiline-buffer'
 import { handleMetaCommand } from './meta-commands'
 import { parseCommandLine, isKnownCommand } from './command-dispatcher'
 import { HistoryManager } from './history-manager'
-import {
-  checkPermission,
-  classifyRedisCommand,
-  permissionAtLeast,
-  SQL_DIALECTS,
-} from '../permission-guard'
+import { checkPermission, permissionAtLeast, SQL_DIALECTS } from '../permission-guard'
+import { classifyRedisCommand } from '../permission/redis'
 import { QueryResultFormatter } from '../../formatters/query-result-formatter'
 import type { QueryResult } from '../../types/query'
 import { t_vars, t } from '../../i18n/message-loader'

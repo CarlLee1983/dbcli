@@ -8,8 +8,8 @@
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
-import { enforcePermission, PermissionError } from '@/core/permission-guard'
-import { promptUser } from '@/utils/prompts'
+import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
+import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 
@@ -17,11 +17,6 @@ type MutationOperation = DataExecutionResult['operation']
 type SqlStatement = {
   sql: string
   params: (string | number | boolean | null)[]
-}
-
-type MutationConfirmation = {
-  prompt: string
-  warning?: string
 }
 
 /**
@@ -106,13 +101,13 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('INSERT', tableName)
-      enforcePermission('INSERT INTO dummy', this.permission)
+      enforcePermissionForType('INSERT', this.permission)
       return await this.executeMutation(
         'insert',
         this.buildInsertSql(tableName, data, schema),
         timestamp,
         options,
-        { prompt: 'Proceed with this operation?' }
+        { destructive: false }
       )
     } catch (error) {
       return this.handleMutationError('insert', timestamp, error)
@@ -141,13 +136,13 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('UPDATE', tableName)
-      enforcePermission('UPDATE dummy', this.permission)
+      enforcePermissionForType('UPDATE', this.permission)
       return await this.executeMutation(
         'update',
         this.buildUpdateSql(tableName, data, where, schema),
         timestamp,
         options,
-        { prompt: 'Proceed with this operation?' }
+        { destructive: false }
       )
     } catch (error) {
       return this.handleMutationError('update', timestamp, error)
@@ -174,26 +169,13 @@ export class DataExecutor {
 
     try {
       this.checkBlacklist('DELETE', tableName)
-
-      if (this.permission !== 'data-admin' && this.permission !== 'admin') {
-        return {
-          status: 'error',
-          operation: 'delete',
-          rows_affected: 0,
-          timestamp,
-          error: 'Permission denied: DELETE operation requires Data-Admin or Admin permission.',
-        }
-      }
-
+      enforcePermissionForType('DELETE', this.permission)
       return await this.executeMutation(
         'delete',
         this.buildDeleteSql(tableName, where, schema),
         timestamp,
         options,
-        {
-          warning: '⚠️  Warning: DELETE operation is destructive and cannot be undone!',
-          prompt: 'Are you sure you want to execute this DELETE operation? This cannot be undone.',
-        }
+        { destructive: true }
       )
     } catch (error) {
       return this.handleMutationError('delete', timestamp, error)
@@ -227,38 +209,46 @@ export class DataExecutor {
     statement: SqlStatement,
     timestamp: string,
     options: DataExecutionOptions | undefined,
-    confirmation: MutationConfirmation
+    { destructive }: { destructive: boolean }
   ): Promise<DataExecutionResult> {
     if (options?.dryRun) {
-      return this.successResult(operation, 0, timestamp, statement.sql)
+      return this.outcomeResult('dry_run', operation, 0, timestamp, statement.sql)
     }
 
     if (!options?.force) {
-      if (confirmation.warning) {
-        console.log(`\n${confirmation.warning}`)
+      if (!options?.confirm) {
+        throw new Error(
+          `Refusing to ${operation} without confirmation: no confirmation handler was supplied. ` +
+            'Pass options.confirm to ask the user, or options.force to proceed unattended.'
+        )
       }
-      console.log('\nGenerated SQL:')
-      console.log(`  ${statement.sql}`)
-      console.log('\nParameters:')
-      console.log(`  ${JSON.stringify(statement.params, null, 2)}`)
 
-      if (!(await promptUser.confirm(confirmation.prompt))) {
-        return this.successResult(operation, 0, timestamp, statement.sql)
+      const proceed = await options.confirm({
+        operation,
+        engine: 'sql',
+        sql: statement.sql,
+        params: statement.params,
+        destructive,
+      })
+
+      if (!proceed) {
+        return this.outcomeResult('cancelled', operation, 0, timestamp, statement.sql)
       }
     }
 
     const result = await this.adapter.execute(statement.sql, statement.params)
-    return this.successResult(operation, result.affectedRows, timestamp, statement.sql)
+    return this.outcomeResult('success', operation, result.affectedRows, timestamp, statement.sql)
   }
 
-  private successResult(
+  private outcomeResult(
+    status: Exclude<DataExecutionResult['status'], 'error'>,
     operation: MutationOperation,
     rowsAffected: number,
     timestamp: string,
     sql: string
   ): DataExecutionResult {
     return {
-      status: 'success',
+      status,
       operation,
       rows_affected: rowsAffected,
       timestamp,
@@ -275,13 +265,17 @@ export class DataExecutor {
       throw error
     }
 
-    if (error instanceof PermissionError && operation !== 'delete') {
+    // The refusal already knows which level was in effect and why. This used to
+    // substitute a fixed sentence naming query-only whatever the actual level
+    // was — latent rather than wrong only because every tier that reaches here
+    // today happens to be query-only.
+    if (error instanceof PermissionError) {
       return {
         status: 'error',
         operation,
         rows_affected: 0,
         timestamp,
-        error: `Permission denied: Query-only mode only allows SELECT. Use Read-Write or Admin mode to execute ${operation.toUpperCase()}.`,
+        error: t_vars('errors.permission_denied_reason', { reason: error.message }),
       }
     }
 

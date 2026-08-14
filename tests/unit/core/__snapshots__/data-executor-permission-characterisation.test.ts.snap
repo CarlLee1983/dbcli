@@ -1,0 +1,25 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`DataExecutor permission verdicts insert under query-only 1`] = `"refused: Permission denied: INSERT operation requires read-write permission or higher (current level: query-only)"`;
+
+exports[`DataExecutor permission verdicts insert under read-write 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts insert under data-admin 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts insert under admin 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts update under query-only 1`] = `"refused: Permission denied: UPDATE operation requires read-write permission or higher (current level: query-only)"`;
+
+exports[`DataExecutor permission verdicts update under read-write 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts update under data-admin 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts update under admin 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts delete under query-only 1`] = `"refused: Permission denied: DELETE operation requires data-admin permission or higher (current level: query-only)"`;
+
+exports[`DataExecutor permission verdicts delete under read-write 1`] = `"refused: Permission denied: DELETE operation requires data-admin permission or higher (current level: read-write)"`;
+
+exports[`DataExecutor permission verdicts delete under data-admin 1`] = `"allowed"`;
+
+exports[`DataExecutor permission verdicts delete under admin 1`] = `"allowed"`;

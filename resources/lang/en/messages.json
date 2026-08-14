@@ -156,6 +156,11 @@
     "invalid_config": "Invalid configuration: {field}",
     "connection_failed": "Failed to connect to database: {message}",
     "permission_denied": "Permission denied (required: {required})",
+    "permission_requires_level": "{type} operation requires {minimum} permission or higher (current level: {permission})",
+    "escalated_write_requires_admin": "This statement opens as a read but contains an executable {keyword}. A write hidden inside a read statement requires admin permission (current level: {permission}).",
+    "multiple_statements_refused": "SQL containing multiple statements is refused below admin permission, because only the first statement determines the permission check. Run each statement separately.",
+    "unknown_statement_query_only": "Unrecognised SQL statement (current level: query-only). Security policy requires read-write+ for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.",
+    "permission_denied_reason": "Permission denied: {reason}",
     "table_not_found": "Table not found: {table}",
     "unsupported_lang": "Language '{lang}' not supported, using English",
     "invalid_json": "Invalid JSON: {message}",
@@ -173,7 +178,8 @@
     "require_user": "Non-interactive mode requires --user option",
     "require_name": "Non-interactive mode requires --name option",
     "env_refs_missing_options": "When using --use-env-refs, environment variable names must be specified.\nProvide options: --env-host, --env-port, --env-user, --env-password, --env-database\nOr use interactive mode: run \"dbcli init --use-env-refs\" without --no-interactive",
-    "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry"
+    "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry",
+    "invalid_output_format": "--format {format} is not supported here — use text or json"
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",
@@ -184,19 +190,22 @@
   "insert": {
     "description": "Insert data into a table",
     "prompt_data": "Enter JSON data to insert: ",
-    "confirm": "Insert {count} row(s) into {table}? (y/n): "
+    "confirm": "Insert {count} row(s) into {table}? (y/n): ",
+    "elasticsearch_unsupported": "Elasticsearch does not support the insert command; for now, use an external tool (e.g. curl or Kibana DevTools) to write documents"
   },
   "update": {
     "description": "Update data in a table",
     "prompt_where": "Enter WHERE clause (e.g., id=1): ",
     "prompt_set": "Enter JSON updates (e.g., {\"status\": \"active\"}): ",
-    "confirm": "Update rows in {table}? (y/n): "
+    "confirm": "Update rows in {table}? (y/n): ",
+    "elasticsearch_unsupported": "Elasticsearch does not support the update command; for now, use an external tool (e.g. curl or Kibana DevTools) to update documents"
   },
   "delete": {
     "description": "Delete data from a table",
     "prompt_where": "Enter WHERE clause (e.g., id=1): ",
     "confirm": "Delete rows from {table}? (y/n): ",
-    "admin_only": "Delete command requires data-admin or admin permission"
+    "admin_only": "Delete command requires data-admin or admin permission",
+    "elasticsearch_unsupported": "Elasticsearch does not support the delete command; for now, use an external tool (e.g. curl or Kibana DevTools) to delete documents"
   },
   "export": {
     "description": "Export query results",

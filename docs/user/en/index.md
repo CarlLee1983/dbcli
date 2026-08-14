@@ -381,6 +381,18 @@ SQL projection is applied to the returned rows after the query runs. MongoDB pus
 
 The blacklist remains the final authority: `--fields` cannot reveal a protected field, and field projection is a result-shaping convenience, not a security boundary.
 
+#### Mutation outcomes
+
+After `insert`, `update`, or `delete` finishes in an interactive terminal, dbcli summarizes what happened in plain language: the affected row count and table, no-match, cancellation, dry-run, or failure outcome, plus elapsed time when work actually ran. Redirected or piped stdout remains the stable JSON result envelope for scripts. Use `--format json` to keep that envelope even in a terminal. The same outcome vocabulary applies across SQL, MongoDB, and Redis; dry runs report `dry_run`, never `success`.
+
+A write that changed rows also states how to get the previous values back — which, for these commands, is a backup: dbcli keeps no automatic undo for a write that succeeded. A failure instead names `--recovery`, the flag that writes a recovery plan for `dbcli recover` to read. Outcomes that changed nothing (cancelled, dry-run, no rows matched) say nothing about reversal, because there is nothing to reverse.
+
+A failure is prose too, and it goes to stderr with the exit code `1`: a blacklist refusal, a malformed `--set`, or a statement the database rejected. `--format` accepts only `text` or `json` here; anything else is refused before dbcli connects, rather than silently meaning `text`.
+
+The confirmation a non-forced mutation asks for — the generated SQL, the parameters, the destructive-delete warning, and the `y/n` question — is written to **stderr**, not stdout. A terminal shows both, so nothing looks different when you run one by hand; a script that captures stdout gets exactly one JSON document whether or not it passed `--force`. Neither a dry run nor a cancellation sends a write to the database, but both do connect and read the table schema, because the SQL they exist to show cannot be built without the column list; use `--plan` for the preflight that opens no connection at all. MongoDB and Redis writes ask the same question — they are issued straight from the command rather than through the SQL executor, and used to run unasked — so `cancelled` is now reachable on every engine. Their prompt shows the statement the dry run would print, with no parameter block, since those statements carry their values inline.
+
+`--recovery` also changes what a failed `insert` / `update` / `delete` writes to stdout: on failure the recovery envelope replaces the JSON result envelope rather than following it, so a caller parsing stdout gets exactly one document either way. Without the flag, a failure prints the result envelope with `status: "error"` and exits `1`, as before.
+
 #### DML `--plan` preflight
 
 `insert`, `update`, and `delete` accept `--plan` to run a static risk analyzer against the planned write, **without connecting to the database**. The planner now supports SQL (`postgresql`, `mysql`, `mariadb`), MongoDB, Redis, and Elasticsearch.
@@ -977,7 +989,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | Command | Description |
 | :--- | :--- |
 | `shell` | Launches an interactive REPL with auto-completion and SQL highlighting. |
-| `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. |
+| `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. A destructive action asks for confirmation on stderr unless `--force`, and reports `status: "cancelled"` if declined. |
 | `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |

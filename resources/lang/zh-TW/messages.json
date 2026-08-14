@@ -156,6 +156,11 @@
     "invalid_config": "配置無效：{field}",
     "connection_failed": "無法連接到資料庫：{message}",
     "permission_denied": "權限被拒（需要：{required}）",
+    "permission_requires_level": "{type} 操作需要 {minimum} 以上的權限（目前層級：{permission}）",
+    "escalated_write_requires_admin": "此語句表面上是讀取，但實際包含可執行的 {keyword}。讀取語句中隱藏寫入操作需要 admin 權限（目前層級：{permission}）。",
+    "multiple_statements_refused": "低於 admin 權限時拒絕執行包含多個語句的 SQL，因為權限檢查只會依據第一個語句判斷。請將各語句分開執行。",
+    "unknown_statement_query_only": "無法辨識的 SQL 語句（目前層級：query-only）。安全政策要求未知語句至少需要 read-write 以上權限。若這其實是合法的唯讀語句，請至 https://github.com/CarlLee1983/dbcli/issues 提出議題。",
+    "permission_denied_reason": "權限被拒：{reason}",
     "table_not_found": "找不到表格：{table}",
     "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
     "invalid_json": "無效的 JSON：{message}",
@@ -173,7 +178,8 @@
     "require_user": "非互動模式需要 --user 選項",
     "require_name": "非互動模式需要 --name 選項",
     "env_refs_missing_options": "使用 --use-env-refs 時，必須指定環境變數名稱。\n請提供選項：--env-host、--env-port、--env-user、--env-password、--env-database\n或使用互動模式：執行 \"dbcli init --use-env-refs\"（不加 --no-interactive）",
-    "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試"
+    "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試",
+    "invalid_output_format": "無法使用 --format {format}，請使用 text 或 json"
   },
   "success": {
     "inserted": "成功插入 {count} 列",
@@ -184,19 +190,22 @@
   "insert": {
     "description": "插入資料到表格",
     "prompt_data": "輸入要插入的 JSON 資料：",
-    "confirm": "將 {count} 列插入到 {table}？ (y/n)："
+    "confirm": "將 {count} 列插入到 {table}？ (y/n)：",
+    "elasticsearch_unsupported": "Elasticsearch 不支援 insert 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件寫入"
   },
   "update": {
     "description": "更新表格中的資料",
     "prompt_where": "輸入 WHERE 子句 (例如：id=1)：",
     "prompt_set": "輸入 JSON 更新 (例如：{\"status\": \"active\"})：",
-    "confirm": "更新 {table} 中的列？ (y/n)："
+    "confirm": "更新 {table} 中的列？ (y/n)：",
+    "elasticsearch_unsupported": "Elasticsearch 不支援 update 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件更新"
   },
   "delete": {
     "description": "刪除表格中的資料",
     "prompt_where": "輸入 WHERE 子句 (例如：id=1)：",
     "confirm": "刪除 {table} 中的列？ (y/n)：",
-    "admin_only": "刪除命令需要 data-admin 或 admin 權限"
+    "admin_only": "刪除命令需要 data-admin 或 admin 權限",
+    "elasticsearch_unsupported": "Elasticsearch 不支援 delete 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件刪除"
   },
   "export": {
     "description": "匯出查詢結果",

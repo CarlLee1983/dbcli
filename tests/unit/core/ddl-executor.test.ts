@@ -197,6 +197,55 @@ describe('DDLExecutor destructive operations', () => {
     expect(result.status).toBe('success')
     expect(adapter.execute).toHaveBeenCalled()
   })
+
+  test('a declined DROP TABLE reports cancelled, not success', async () => {
+    // It used to report success with the cancellation mentioned only in
+    // warnings, so a caller reading status was told the table was gone.
+    const adapter = createMockAdapter()
+    const executor = new DDLExecutor(adapter, new PostgreSQLDDLGenerator(), 'admin')
+
+    const result = await executor.execute(dropTableOp, {
+      execute: true,
+      confirm: async () => false,
+    })
+
+    expect(result.status).toBe('cancelled')
+    expect(adapter.execute).not.toHaveBeenCalled()
+  })
+
+  test('a confirmed DROP TABLE runs, and the confirmer is shown the statement', async () => {
+    const adapter = createMockAdapter()
+    const executor = new DDLExecutor(adapter, new PostgreSQLDDLGenerator(), 'admin')
+    const asked: Array<{ operation: string; sql: string }> = []
+
+    const result = await executor.execute(dropTableOp, {
+      execute: true,
+      confirm: async (request) => {
+        asked.push(request)
+        return true
+      },
+    })
+
+    expect(result.status).toBe('success')
+    expect(adapter.execute).toHaveBeenCalled()
+    expect(asked).toHaveLength(1)
+    expect(asked[0]?.operation).toBe('dropTable')
+    expect(asked[0]?.sql).toContain('DROP TABLE')
+  })
+
+  test('a destructive op with nobody to ask refuses rather than proceeding', async () => {
+    // Core cannot prompt any more, so the missing handler has to be reported.
+    // Defaulting either way is worse: proceeding destroys data nobody approved,
+    // and declining silently looks like the operation succeeded at doing nothing.
+    const adapter = createMockAdapter()
+    const executor = new DDLExecutor(adapter, new PostgreSQLDDLGenerator(), 'admin')
+
+    const result = await executor.execute(dropTableOp, { execute: true })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('no confirmation handler')
+    expect(adapter.execute).not.toHaveBeenCalled()
+  })
 })
 
 // ── Schema refresh ───────────────────────────────────────────────────────

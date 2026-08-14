@@ -4,12 +4,13 @@ import {
   checkPermission,
   enforcePermission,
   PermissionError,
-  classifyRedisCommand,
-  enforceRedisPermission,
   permissionAtLeast,
+} from '@/core/permission-guard'
+import { classifyRedisCommand, enforceRedisPermission } from '@/core/permission/redis'
+import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
-} from '@/core/permission-guard'
+} from '@/core/permission/elasticsearch'
 
 // ============================================================================
 // Suite 1: Basic Statement Classification

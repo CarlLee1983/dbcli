@@ -49,7 +49,7 @@ describe('MongoDB unsupported commands', () => {
     }
     const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockReturnValue(adapter as any)
     try {
-      await insertCommand('users', { data: '{"name":"test"}' })
+      await insertCommand('users', { data: '{"name":"test"}', force: true })
       const output = logSpy.mock.calls.flat().join('\n')
       expect(output).toContain('"operation": "insert"')
       expect(output).toContain('"rows_affected": 1')

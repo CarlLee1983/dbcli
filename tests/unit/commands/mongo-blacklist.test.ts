@@ -187,7 +187,7 @@ describe('MongoDB write-path blacklist enforcement', () => {
 
     const { insertCommand } = await import('@/commands/insert')
     try {
-      await insertCommand('users', { data: '{"name":"alice","email":"a@b.com"}' })
+      await insertCommand('users', { data: '{"name":"alice","email":"a@b.com"}', force: true })
     } catch {
       /* exit */
     }

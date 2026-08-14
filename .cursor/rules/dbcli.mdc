@@ -449,8 +449,13 @@ changing the default. `--recovery` is honoured by `query`, `q`, `insert`, `updat
   (no `>=`, `!=`, `LIKE`, `OR`). MongoDB `--where` takes a full JSON filter
   (`'{"status":"pending"}'`), falling back to `col=val` when it is not valid JSON.
 - `--dry-run` prints the parameterized SQL (with `$1` / `?` placeholders, not real values)
-  and `rows_affected: 0`; proceed once `status:"success"` and the SQL shape matches the
-  intended `--where` / `--set`. MongoDB prints a shell-style preview.
+  and `status:"dry_run"` with `rows_affected: 0` — never `success`, which now means the
+  write really ran. Proceed once the SQL shape matches the intended `--where` / `--set`.
+  Declining at the confirmation prompt reports `status:"cancelled"`, also not `success`.
+  MongoDB prints a shell-style preview.
+- `--force` skips the confirmation prompt. Every `insert` / `update` / `delete` asks
+  first — SQL, MongoDB and Redis alike — and a non-interactive run cannot answer, so an
+  unattended write without `--force` ends as `status:"cancelled"` having changed nothing.
 - `--recovery` is recommended for automated agent pipelines (enables `dbcli recover --apply`
   after a failure); optional for one-off manual writes.
 

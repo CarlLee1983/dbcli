@@ -17,6 +17,7 @@ import {
 } from '@/adapters'
 import { DDLGeneratorFactory, parseColumnSpec } from '@/adapters/ddl'
 import { DDLExecutor } from '@/core/ddl-executor'
+import { confirmDdlInteractively } from '@/commands/mutation-confirm'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import type { DDLOperation, DDLExecutionOptions } from '@/types/ddl'
 import type { ConstraintType } from '@/adapters/ddl/types'
@@ -75,6 +76,7 @@ export async function runDDL(
     const result = await executor.execute(operation, {
       execute: opts.execute,
       force: opts.force,
+      confirm: confirmDdlInteractively,
     })
 
     // Output JSON result

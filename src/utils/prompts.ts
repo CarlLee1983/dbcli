@@ -98,7 +98,12 @@ async function selectFallback(message: string, choices: string[]): Promise<strin
 }
 
 async function confirmFallback(message: string): Promise<boolean> {
-  const answer = await readLineFromStdin(`${message} (y/n): `)
+  // The question goes to stderr: a confirmation is asked of a person, while
+  // stdout is the channel a caller parses. This path is reached exactly when
+  // stdin is not a terminal — a piped answer, which is also when stdout is most
+  // likely being read by something.
+  process.stderr.write(`${message} (y/n): `)
+  const answer = await readLineFromStdin()
   return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
 }
 
@@ -170,7 +175,9 @@ export async function confirm(message: string): Promise<boolean> {
   const inquirer = await loadInquirer()
   if (!inquirer) return await confirmFallback(message)
 
-  return await inquirer.confirm({ message })
+  // Same reason as confirmFallback: the question is for the person, so it must
+  // not land in whatever is reading stdout.
+  return await inquirer.confirm({ message }, { output: process.stderr })
 }
 
 /**

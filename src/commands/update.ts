@@ -4,7 +4,7 @@
  */
 
 import crypto from 'node:crypto'
-import { t_vars } from '@/i18n/message-loader'
+import { t, t_vars } from '@/i18n/message-loader'
 import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
 import { presentConnectionError } from '@/utils/connection-error-message'
 import {
@@ -14,8 +14,17 @@ import {
   type SqlConnectionOptions,
 } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
+import { confirmDirectMutation, confirmMutationInteractively } from '@/commands/mutation-confirm'
+import { auditOutcomeForMutation } from '@/commands/mutation-audit'
+import {
+  cancelledOutcome,
+  humanOutputContext,
+  printMutationFailure,
+  printMutationOutcome,
+} from '@/commands/mutation-outcome'
+import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
-import { enforcePermission, PermissionError } from '@/core/permission-guard'
+import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
@@ -58,6 +67,12 @@ export async function updateCommand(
       throw new Error('Table name required')
     }
     table = table.trim()
+
+    // Reject an unsupported --format before any connection, schema read, or
+    // audit write — the way `dbcli export` validates its own formats.
+    if (options.format !== undefined && options.format !== 'text' && options.format !== 'json') {
+      throw new Error(t_vars('errors.invalid_output_format', { format: options.format }))
+    }
 
     // 2. Validate --where flag (relaxed under --plan; non-SQL engines may have
     // no meaningful WHERE clause and the planner handles empty filters itself).
@@ -142,7 +157,7 @@ export async function updateCommand(
     }
 
     if (config.connection?.system === 'redis') {
-      enforcePermission('UPDATE dummy', config.permission)
+      enforcePermissionForType('UPDATE', config.permission)
 
       // Apply blacklist before opening any connection
       const blacklistManager = new BlacklistManager(config)
@@ -152,20 +167,35 @@ export async function updateCommand(
       // Redis update expects the key as 'table' and fields in 'setData'
       // We ignore 'where' for Redis since it's key-value based, or we could
       // treat 'table' as the key.
+      const preview = `HSET ${table} ... (Redis Update)`
+
       if (options.dryRun) {
-        const output = {
-          status: 'success',
+        const output: DataExecutionResult = {
+          status: 'dry_run',
           operation: 'update',
           rows_affected: 0,
-          sql: `HSET ${table} ... (Redis Update)`,
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'update', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: 0, dry_run: true },
-        })
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'update',
+          engine: 'redis',
+          preview,
+          destructive: false,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('update', preview)
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
       }
 
@@ -175,19 +205,21 @@ export async function updateCommand(
       )
       await adapter.connect()
       try {
+        const startedAt = performance.now()
         const result = await adapter.update(table, {}, setData)
-        const output = {
+        const output: DataExecutionResult = {
           status: 'success',
           operation: 'update',
           rows_affected: result.affectedRows,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'update', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: result.affectedRows },
-        })
+        printMutationOutcome(
+          output,
+          table,
+          performance.now() - startedAt,
+          humanOutputContext(options)
+        )
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
       } finally {
         await adapter.disconnect()
@@ -200,8 +232,7 @@ export async function updateCommand(
         operation: 'update',
         rows_affected: 0,
         timestamp: new Date().toISOString(),
-        error:
-          'Elasticsearch 不支援 update 指令；目前請使用外部工具（如 curl 或 Kibana DevTools）進行文件更新',
+        error: t('update.elasticsearch_unsupported'),
       }
       await writeAuditEntry(config, 'update', options, {
         success: false,
@@ -213,7 +244,7 @@ export async function updateCommand(
     }
 
     if (config.connection?.system === 'mongodb') {
-      enforcePermission('UPDATE dummy', config.permission)
+      enforcePermissionForType('UPDATE', config.permission)
 
       // Compute the update doc up-front so blacklist sees the real fields being written
       const hasOperator = Object.keys(setData).some((key) => key.startsWith('$'))
@@ -252,39 +283,56 @@ export async function updateCommand(
         filter = parseWhereClause(options.where)
       }
 
+      const preview = previewUpdate(table, filter, updateDoc)
+
       if (options.dryRun) {
-        const output = {
-          status: 'success',
+        const output: DataExecutionResult = {
+          status: 'dry_run',
           operation: 'update',
           rows_affected: 0,
-          sql: previewUpdate(table, filter, updateDoc),
+          sql: preview,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'update', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: 0, dry_run: true },
-        })
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
+        return
+      }
+
+      // Ask before writing, the same as the SQL path: this write never passes
+      // through DataExecutor, so the confirmation it performs never ran here.
+      if (
+        !(await confirmDirectMutation({
+          operation: 'update',
+          engine: 'mongodb',
+          preview,
+          destructive: false,
+          force: options.force,
+        }))
+      ) {
+        const output = cancelledOutcome('update', preview)
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
       }
 
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
+        const startedAt = performance.now()
         const result = await adapter.update(table, filter, updateDoc)
-        const output = {
+        const output: DataExecutionResult = {
           status: 'success',
           operation: 'update',
           rows_affected: result.affectedRows,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'update', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: result.affectedRows },
-        })
+        printMutationOutcome(
+          output,
+          table,
+          performance.now() - startedAt,
+          humanOutputContext(options)
+        )
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(output, table))
         return
       } finally {
         await adapter.disconnect()
@@ -317,35 +365,34 @@ export async function updateCommand(
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       const executor = new DataExecutor(adapter, config.permission, dbSystem, blacklistValidator)
+      const startedAt = performance.now()
       const result = await executor.executeUpdate(table, setData, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,
+        confirm: confirmMutationInteractively,
       })
+      const elapsedMs = performance.now() - startedAt
 
-      // 10. Format output as JSON
-      const output = {
-        status: result.status,
-        operation: result.operation,
-        rows_affected: result.rows_affected,
-        timestamp: result.timestamp,
-        ...(result.sql && { sql: result.sql }),
-        ...(result.error && { error: result.error }),
+      // 10. Report the outcome — prose for a person, the envelope for anything else
+      const recoveryEnvelopeId =
+        result.status === 'error' && options.recovery === true ? crypto.randomUUID() : undefined
+      const auditId = await writeAuditEntry(
+        config,
+        'update',
+        options,
+        auditOutcomeForMutation(result, table, recoveryEnvelopeId)
+      )
+
+      if (recoveryEnvelopeId !== undefined) {
+        const { emitRecoveryEnvelope } = await import('@/core/recovery')
+        emitRecoveryEnvelope(
+          new Error(result.error ?? 'UPDATE failed'),
+          { operation: 'update', table, writeOperation: 'UPDATE' },
+          { envelopeId: recoveryEnvelopeId, auditRef: auditId ?? undefined }
+        )
       }
 
-      console.log(JSON.stringify(output, null, 2))
-
-      await writeAuditEntry(config, 'update', options, {
-        success: result.status === 'success',
-        target: table,
-        ...(result.sql && { sql: result.sql }),
-        metadata: {
-          rows_affected: result.rows_affected,
-          ...(options.dryRun && { dry_run: true }),
-        },
-        ...(result.status === 'error' && {
-          error: new Error(result.error ?? 'update failed'),
-        }),
-      })
+      printMutationOutcome(result, table, elapsedMs, humanOutputContext(options))
 
       // Exit with code 1 if there is an error
       if (result.status === 'error') {
@@ -380,13 +427,7 @@ export async function updateCommand(
 
     // Blacklist error
     if (error instanceof BlacklistError) {
-      const output = {
-        status: 'error',
-        operation: 'update',
-        rows_affected: 0,
-        error: error.message,
-      }
-      console.log(JSON.stringify(output, null, 2))
+      printMutationFailure(error, 'update', humanOutputContext(options))
       process.exit(1)
     }
 
@@ -405,13 +446,7 @@ export async function updateCommand(
     }
 
     // Validation or other errors
-    const output = {
-      status: 'error',
-      operation: 'update',
-      rows_affected: 0,
-      error: (error as Error).message,
-    }
-    console.log(JSON.stringify(output, null, 2))
+    printMutationFailure(error as Error, 'update', humanOutputContext(options))
     process.exit(1)
   }
 }

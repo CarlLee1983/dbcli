@@ -216,8 +216,10 @@ describe('DataExecutor.executeInsert - Permissions', () => {
       force: true,
     })
 
-    expect(result.error).toContain('Read-Write')
-    expect(result.error).toContain('Admin')
+    // Both halves of a usable suggestion: the level that would work, spelled
+    // the way the config spells it, and the level currently in effect.
+    expect(result.error).toContain('read-write')
+    expect(result.error).toContain('query-only')
   })
 })
 
@@ -257,7 +259,7 @@ describe('DataExecutor.executeInsert - Execution', () => {
       force: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
   })
@@ -421,7 +423,7 @@ describe('DataExecutor.executeDelete', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Data-Admin')
+    expect(result.error).toContain('data-admin')
   })
 
   test('DELETE succeeds with data-admin', async () => {
@@ -454,7 +456,7 @@ describe('DataExecutor.executeDelete', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
   })
@@ -583,7 +585,7 @@ describe('DataExecutor.executeUpdate', () => {
 
     expect(result.status).toBe('error')
     expect(result.error).toContain('Permission denied')
-    expect(result.error).toContain('Query-only')
+    expect(result.error).toContain('query-only')
   })
 
   test('allows UPDATE with read-write permission', async () => {
@@ -624,7 +626,7 @@ describe('DataExecutor.executeUpdate', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.operation).toBe('update')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
@@ -820,7 +822,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Data-Admin')
+    expect(result.error).toContain('data-admin')
     expect(result.operation).toBe('delete')
   })
 
@@ -833,7 +835,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
     })
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Data-Admin')
+    expect(result.error).toContain('data-admin')
   })
 
   test('data-admin permission allows DELETE', async () => {
@@ -870,7 +872,7 @@ describe('DataExecutor.executeDelete - Permissions', () => {
       force: true,
     })
 
-    expect(result.error).toContain('Data-Admin')
+    expect(result.error).toContain('data-admin')
     expect(result.error).toContain('DELETE')
   })
 })
@@ -978,7 +980,7 @@ describe('DataExecutor.executeDelete - Execution', () => {
       dryRun: true,
     })
 
-    expect(result.status).toBe('success')
+    expect(result.status).toBe('dry_run')
     expect(result.rows_affected).toBe(0)
     expect(result.sql).toBeDefined()
     expect(result.sql).toContain('DELETE FROM')

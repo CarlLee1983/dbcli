@@ -231,7 +231,7 @@ rotate-secret | dbcli password prod --stdin   # 非互動，密碼不會留在 s
 dbcli password prod --password "$NEW" --skip-test --format json</code></pre>
             <p>密碼寫到哪裡是從設定檔讀出來的，不是用猜的：若連線的 <code>password</code> 是 <code>{ "$env": "NAME" }</code>，就會改寫該連線 <code>envFile</code> 裡的 <code>NAME</code>。連線沒宣告 <code>envFile</code> 時，輪替會順便把 <code>envFile</code>（<code>.env.local</code>）記錄進該連線設定——不記錄的話讀取端根本不會載入那個檔案。若連線目前仍是明文密碼，會一次性轉換成 <code>{ "$env": "DBCLI_&lt;CONN&gt;_PASSWORD" }</code>，之後的輪替就只會動 env 檔。值會以加引號的形式寫入（<code>NAME="..."</code>），密碼首尾的空白因此能原樣保留。</p>
             <p>v1 設定則會改寫 <code>.env.local</code> 裡的 <code>DBCLI_PASSWORD</code>，與 v1 的讀取邏輯一致。若 v1 設定的密碼來自其他環境變數（不是 <code>DBCLI_PASSWORD</code>），指令會直接報錯說明：v1 沒有 per-connection env 檔，dbcli 寫任何檔案都無法讓那個變數有值，請直接更新環境變數，或升級到 v2。</p>
-            <p>預設會先用新密碼實際連線驗證，通過才會寫入檔案，避免輪替失敗卻留下壞掉的憑證。資料庫連不到時可用 <code>--skip-test</code> 跳過驗證。env 檔會以 <code>0600</code> 權限寫入，密碼不會被回顯或寫進 log。</p>
+            <p>預設會先用新密碼實際連線驗證，通過才會寫入檔案，避免輪替失敗卻留下壞掉的憑證。資料庫連不到時可用 <code>--skip-test</code> 跳過驗證。env 檔在 POSIX 系統上會以 <code>0600</code> 權限寫入（Windows 沒有對應的權限位元，檔案沿用所在目錄的 ACL），密碼不會被回顯或寫進 log。</p>
             <p><strong>選項：</strong> <code>[connection]</code>、<code>--stdin</code>、<code>--password &lt;value&gt;</code>（會留在 shell 歷史與行程列表中，建議優先用 <code>--stdin</code>）、<code>--skip-test</code>、<code>--format &lt;text|json&gt;</code>。</p>
             <p>在 <code>DBCLI_AGENT_MODE=1</code> 下，和其他憑證變更一樣會被擋下。</p>
         </section>

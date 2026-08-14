@@ -251,7 +251,9 @@ or migrate to v2.
 The new password is verified by connecting with it before anything is
 written, so a bad rotation fails without leaving broken credentials behind.
 Pass `--skip-test` when the database is unreachable from where the command
-runs. The env file is written with `0600` permissions, and the value is never
+runs. The env file is written with `0600` permissions on POSIX systems (Windows
+has no equivalent mode bit — the file inherits the directory's ACL), and the
+value is never
 echoed or logged.
 
 **Options:** `[connection]`, `--stdin`, `--password <value>` (visible in

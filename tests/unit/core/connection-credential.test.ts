@@ -274,7 +274,9 @@ describe('setConnectionPassword — env file permissions', () => {
     await setupProject(baseConfig())
   })
 
-  test('the env file is owner-only readable', async () => {
+  // POSIX only:Windows 沒有對應的 mode 位元,chmod 在那裡只切換唯讀旗標,
+  // 檔案權限由所在目錄的 ACL 決定。斷言 0o600 只在有這個保證的平台成立。
+  test.skipIf(process.platform === 'win32')('the env file is owner-only readable', async () => {
     await setConnectionPassword(projectPath, 'primary', 'rotated-pw')
     const { stat } = await import('node:fs/promises')
     const mode = (await stat(join(getProjectStoragePath(projectPath), '.env.primary'))).mode

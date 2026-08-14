@@ -5,7 +5,12 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-/** env 檔裝的是密碼，一律鎖成只有擁有者可讀寫。 */
+/**
+ * env 檔裝的是密碼，一律鎖成只有擁有者可讀寫。
+ *
+ * POSIX 才有這個保證：Windows 沒有對應的 mode 位元，chmod 只切換唯讀旗標，
+ * 實際權限由所在目錄的 ACL 決定。
+ */
 const SECRET_FILE_MODE = 0o600
 
 function escapeForRegExp(value: string): string {

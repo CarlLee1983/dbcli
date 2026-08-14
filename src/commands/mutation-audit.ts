@@ -12,7 +12,8 @@ import type { DataExecutionResult } from '@/types/data'
 
 export function auditOutcomeForMutation(
   result: DataExecutionResult,
-  table: string
+  table: string,
+  recoveryRef?: string
 ): AuditOutcome {
   return {
     // A dry run did what it was asked to do. A cancellation did not do what it
@@ -20,6 +21,7 @@ export function auditOutcomeForMutation(
     // why `outcome` carries the precise answer alongside it.
     success: result.status === 'success' || result.status === 'dry_run',
     target: table,
+    ...(recoveryRef && { recovery_ref: recoveryRef }),
     ...(result.sql && { sql: result.sql }),
     metadata: {
       rows_affected: result.rows_affected,

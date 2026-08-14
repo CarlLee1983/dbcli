@@ -16,8 +16,15 @@ import {
 import { DataExecutor } from '@/core/data-executor'
 import { confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { auditOutcomeForMutation } from '@/commands/mutation-audit'
+import { humanOutputContext, printMutationOutcome } from '@/commands/mutation-outcome'
+import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
-import { PermissionError } from '@/core/permission-guard'
+import {
+  classificationForType,
+  minimumPermissionFor,
+  PermissionError,
+  permitsOperation,
+} from '@/core/permission-guard'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
@@ -120,18 +127,14 @@ export async function deleteCommand(
       return
     }
 
-    // 4. Validate permission (DELETE requires data-admin or admin)
-    if (config.permission !== 'data-admin' && config.permission !== 'admin') {
+    // 4. Validate permission before opening a connection. The rule comes from
+    // the permission guard so it cannot drift from the one the executor applies;
+    // only the wording is this command's, because it is localised.
+    if (!permitsOperation('DELETE', config.permission)) {
       throw new PermissionError(
         t('delete.admin_only'),
-        {
-          type: 'DELETE',
-          isDangerous: true,
-          keywords: ['DELETE'],
-          isComposite: false,
-          confidence: 'HIGH',
-        },
-        config.permission
+        classificationForType('DELETE'),
+        minimumPermissionFor('DELETE')
       )
     }
 
@@ -150,19 +153,15 @@ export async function deleteCommand(
       }
 
       if (options.dryRun) {
-        const output = {
-          status: 'success',
+        const output: DataExecutionResult = {
+          status: 'dry_run',
           operation: 'delete',
           rows_affected: 0,
           sql: `DEL ${table} (Redis Delete)`,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'delete', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: 0, dry_run: true },
-        })
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
       }
 
@@ -172,19 +171,21 @@ export async function deleteCommand(
       )
       await adapter.connect()
       try {
+        const startedAt = performance.now()
         const result = await adapter.delete(table, filter)
-        const output = {
+        const output: DataExecutionResult = {
           status: 'success',
           operation: 'delete',
           rows_affected: result.affectedRows,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'delete', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: result.affectedRows },
-        })
+        printMutationOutcome(
+          output,
+          table,
+          performance.now() - startedAt,
+          humanOutputContext(options)
+        )
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
       } finally {
         await adapter.disconnect()
@@ -224,38 +225,36 @@ export async function deleteCommand(
       }
 
       if (options.dryRun) {
-        const output = {
-          status: 'success',
+        const output: DataExecutionResult = {
+          status: 'dry_run',
           operation: 'delete',
           rows_affected: 0,
           sql: previewDelete(table, filter),
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'delete', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: 0, dry_run: true },
-        })
+        printMutationOutcome(output, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
       }
 
       const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
       await adapter.connect()
       try {
+        const startedAt = performance.now()
         const result = await adapter.delete(table, filter)
-        const output = {
+        const output: DataExecutionResult = {
           status: 'success',
           operation: 'delete',
           rows_affected: result.affectedRows,
           timestamp: new Date().toISOString(),
         }
-        console.log(JSON.stringify(output, null, 2))
-        await writeAuditEntry(config, 'delete', options, {
-          success: true,
-          target: table,
-          metadata: { rows_affected: result.affectedRows },
-        })
+        printMutationOutcome(
+          output,
+          table,
+          performance.now() - startedAt,
+          humanOutputContext(options)
+        )
+        await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(output, table))
         return
       } finally {
         await adapter.disconnect()
@@ -288,25 +287,34 @@ export async function deleteCommand(
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       const executor = new DataExecutor(adapter, config.permission, dbSystem, blacklistValidator)
+      const startedAt = performance.now()
       const result = await executor.executeDelete(table, whereConditions, schema, {
         dryRun: options.dryRun,
         force: options.force,
         confirm: confirmMutationInteractively,
       })
+      const elapsedMs = performance.now() - startedAt
 
-      // 9. Format output as JSON
-      const output = {
-        status: result.status,
-        operation: result.operation,
-        rows_affected: result.rows_affected,
-        timestamp: result.timestamp,
-        ...(result.sql && { sql: result.sql }),
-        ...(result.error && { error: result.error }),
+      // 9. Report the outcome — prose for a person, the envelope for anything else
+      const recoveryEnvelopeId =
+        result.status === 'error' && options.recovery === true ? crypto.randomUUID() : undefined
+      const auditId = await writeAuditEntry(
+        config,
+        'delete',
+        options,
+        auditOutcomeForMutation(result, table, recoveryEnvelopeId)
+      )
+
+      if (recoveryEnvelopeId !== undefined) {
+        const { emitRecoveryEnvelope } = await import('@/core/recovery')
+        emitRecoveryEnvelope(
+          new Error(result.error ?? 'DELETE failed'),
+          { operation: 'delete', table, writeOperation: 'DELETE' },
+          { envelopeId: recoveryEnvelopeId, auditRef: auditId ?? undefined }
+        )
       }
 
-      console.log(JSON.stringify(output, null, 2))
-
-      await writeAuditEntry(config, 'delete', options, auditOutcomeForMutation(result, table))
+      printMutationOutcome(result, table, elapsedMs, humanOutputContext(options))
 
       // Exit with code 1 if there is an error
       if (result.status === 'error') {
@@ -353,7 +361,7 @@ export async function deleteCommand(
 
     // Permission error
     if (error instanceof PermissionError) {
-      console.error(t_vars('errors.permission_denied', { required: 'data-admin' }))
+      console.error(t_vars('errors.permission_denied', { required: error.requiredPermission }))
       console.error(`   Operation: ${error.classification.type}`)
       console.error(`   Message: ${error.message}`)
       process.exit(1)

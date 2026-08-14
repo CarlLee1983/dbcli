@@ -353,6 +353,16 @@ SQL 會在 query 執行完畢後對回傳 rows 套用 projection。MongoDB 會�
 
 Blacklist 仍是最終權限邊界：`--fields` 無法顯示受保護欄位；field projection 只是調整結果形狀的便利功能，不是 security boundary。
 
+#### 寫入結果
+
+`insert`、`update` 或 `delete` 在互動終端完成後，dbcli 會以自然語句摘要實際結果：受影響的列數與資料表、沒有符合資料、取消、dry-run 或失敗；只有真正執行的操作才會顯示耗時。stdout 被重新導向或透過 pipe 傳遞時，仍維持供腳本使用的穩定 JSON result envelope。在終端中使用 `--format json` 也可明確保留該 envelope。SQL、MongoDB 與 Redis 使用相同的 outcome 詞彙；dry-run 會回報 `dry_run`，不再回報 `success`。
+
+真的改動到資料的寫入，摘要還會說明如何取回先前的值——就這三個指令而言只有備份一途：寫入成功之後 dbcli 不保留任何自動還原機制。失敗時改為指出 `--recovery`，也就是產生回復計畫、供 `dbcli recover` 讀取的旗標。沒有造成任何改動的結局（取消、dry-run、沒有符合的列）不會提到還原，因為沒有東西需要還原。
+
+沒有加 `--force` 的 **SQL** 寫入所詢問的確認內容——產生的 SQL、參數、刪除的危險警告，以及 `y/n` 問句——一律寫到 **stderr**，不寫 stdout。終端機兩個串流都看得到，所以手動執行時外觀不變；而擷取 stdout 的腳本無論有沒有 `--force`，拿到的都只會是一份 JSON 文件。dry-run 與取消都不會對資料庫送出任何寫入，但兩者仍會連線並讀取資料表 schema——因為它們要顯示的 SQL 沒有欄位清單就組不出來；完全不連線的預檢請改用 `--plan`。只有 SQL 路徑會詢問：MongoDB 與 Redis 的寫入不經確認提示就執行，因此 `cancelled` 只會出現在 SQL 路徑，要預覽這兩種寫入請改用 `--dry-run`。
+
+`--recovery` 同時改變 `insert` / `update` / `delete` 失敗時寫到 stdout 的內容：失敗時 recovery envelope 會取代 JSON result envelope，而不是接在它後面，因此解析 stdout 的呼叫端無論如何都只會拿到一份文件。沒有加這個旗標時，失敗仍然是印出 `status: "error"` 的 result envelope 並以 `1` 退出。
+
 #### DML `--plan` 預檢
 
 `insert`、`update`、`delete` 都支援 `--plan`，可以在**不連線資料庫**的情況下，對即將執行的寫入操作執行靜態風險分析。此預檢現已支援 SQL（`postgresql`、`mysql`、`mariadb`）、MongoDB、Redis 與 Elasticsearch。

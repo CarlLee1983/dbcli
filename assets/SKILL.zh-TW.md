@@ -351,7 +351,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 
 - `--set`（update）/ `--data`（insert）接受 **JSON 物件字串**，而非 SQL 片段：`dbcli update users --where "id=42" --set '{"email":"new@example.com"}'`。MongoDB 中，不含 `$` 運算子的 JSON 會自動包裝為 `$set`；明確傳入的運算子則直接傳遞。`insert --data` 也可從 stdin 讀取物件。
 - `--where`（SQL）僅接受 `col=val` 或 `col1=val1 AND col2=val2` — **不**支援完整 SQL（不支援 `>=`、`!=`、`LIKE`、`OR`）。MongoDB 的 `--where` 接受完整 JSON filter（`'{"status":"pending"}'`），若不是合法 JSON 則 fallback 為 `col=val`。
-- `--dry-run` 輸出參數化 SQL（使用 `$1` / `?` 佔位符，非真實值）與 `rows_affected: 0`；確認 `status:"success"` 且 SQL 形狀符合預期的 `--where` / `--set` 後再執行。MongoDB 輸出 shell 風格預覽。
+- `--dry-run` 輸出參數化 SQL（使用 `$1` / `?` 佔位符，非真實值），並回報 `status:"dry_run"` 與 `rows_affected: 0`——絕不會是 `success`——後者現在代表寫入真的執行了。確認 SQL 形狀符合預期的 `--where` / `--set` 後再執行。在確認提示回答否會得到 `status:"cancelled"`，同樣不是 `success`。MongoDB 輸出 shell 風格預覽。
 - `--recovery` 建議用於自動化 agent pipeline（讓失敗後可執行 `dbcli recover --apply`）；手動一次性寫入可選用。
 
 ## 查詢工作流程旗標 (Query workflow flags)

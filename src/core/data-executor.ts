@@ -18,11 +18,6 @@ type SqlStatement = {
   params: (string | number | boolean | null)[]
 }
 
-type MutationConfirmation = {
-  prompt: string
-  warning?: string
-}
-
 /**
  * DataExecutor class for executing INSERT, UPDATE, DELETE operations
  */
@@ -111,7 +106,7 @@ export class DataExecutor {
         this.buildInsertSql(tableName, data, schema),
         timestamp,
         options,
-        { prompt: 'Proceed with this operation?' }
+        { destructive: false }
       )
     } catch (error) {
       return this.handleMutationError('insert', timestamp, error)
@@ -146,7 +141,7 @@ export class DataExecutor {
         this.buildUpdateSql(tableName, data, where, schema),
         timestamp,
         options,
-        { prompt: 'Proceed with this operation?' }
+        { destructive: false }
       )
     } catch (error) {
       return this.handleMutationError('update', timestamp, error)
@@ -179,10 +174,7 @@ export class DataExecutor {
         this.buildDeleteSql(tableName, where, schema),
         timestamp,
         options,
-        {
-          warning: '⚠️  Warning: DELETE operation is destructive and cannot be undone!',
-          prompt: 'Are you sure you want to execute this DELETE operation? This cannot be undone.',
-        }
+        { destructive: true }
       )
     } catch (error) {
       return this.handleMutationError('delete', timestamp, error)
@@ -216,7 +208,7 @@ export class DataExecutor {
     statement: SqlStatement,
     timestamp: string,
     options: DataExecutionOptions | undefined,
-    confirmation: MutationConfirmation
+    { destructive }: { destructive: boolean }
   ): Promise<DataExecutionResult> {
     if (options?.dryRun) {
       return this.outcomeResult('dry_run', operation, 0, timestamp, statement.sql)
@@ -234,8 +226,7 @@ export class DataExecutor {
         operation,
         sql: statement.sql,
         params: statement.params,
-        ...(confirmation.warning && { warning: confirmation.warning }),
-        prompt: confirmation.prompt,
+        destructive,
       })
 
       if (!proceed) {
@@ -244,16 +235,7 @@ export class DataExecutor {
     }
 
     const result = await this.adapter.execute(statement.sql, statement.params)
-    return this.successResult(operation, result.affectedRows, timestamp, statement.sql)
-  }
-
-  private successResult(
-    operation: MutationOperation,
-    rowsAffected: number,
-    timestamp: string,
-    sql: string
-  ): DataExecutionResult {
-    return this.outcomeResult('success', operation, rowsAffected, timestamp, sql)
+    return this.outcomeResult('success', operation, result.affectedRows, timestamp, statement.sql)
   }
 
   private outcomeResult(

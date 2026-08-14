@@ -156,6 +156,7 @@
     "invalid_config": "Invalid configuration: {field}",
     "connection_failed": "Failed to connect to database: {message}",
     "permission_denied": "Permission denied (required: {required})",
+    "permission_requires_level": "{type} operation requires {minimum} permission or higher (current level: {permission})",
     "table_not_found": "Table not found: {table}",
     "unsupported_lang": "Language '{lang}' not supported, using English",
     "invalid_json": "Invalid JSON: {message}",

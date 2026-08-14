@@ -2,14 +2,20 @@ import enMessages from '../../resources/lang/en/messages.json'
 import zhTWMessages from '../../resources/lang/zh-TW/messages.json'
 import shellEnMessages from '../../resources/lang/en/shell.json'
 import shellZhTWMessages from '../../resources/lang/zh-TW/shell.json'
+import ceremonyEnMessages from '../../resources/lang/en/ceremony.json'
+import ceremonyZhTWMessages from '../../resources/lang/zh-TW/ceremony.json'
 
 export interface Messages {
   [key: string]: unknown
 }
 
 const BUNDLED_MESSAGES: Record<string, Messages> = {
-  en: { ...(enMessages as Messages), shell: shellEnMessages },
-  'zh-TW': { ...(zhTWMessages as Messages), shell: shellZhTWMessages },
+  en: { ...(enMessages as Messages), shell: shellEnMessages, ceremony: ceremonyEnMessages },
+  'zh-TW': {
+    ...(zhTWMessages as Messages),
+    shell: shellZhTWMessages,
+    ceremony: ceremonyZhTWMessages,
+  },
 }
 
 /**

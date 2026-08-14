@@ -5,6 +5,13 @@
  * come back as `status: 'success'` with `rows_affected: 0`, indistinguishable to
  * every caller — including the audit log, which recorded a cancellation as a
  * successful write.
+ *
+ * What these can prove about the database is that no statement is issued. They
+ * cannot say the database is never contacted at all: the commands connect and
+ * read the table schema before the executor is asked anything, because the SQL
+ * a dry run exists to show cannot be built without the column list. That wider
+ * boundary is asserted where it actually lives, in
+ * `tests/unit/commands/mutation-db-contact.test.ts`.
  */
 
 import { describe, test, expect, mock } from 'bun:test'
@@ -47,7 +54,7 @@ describe('mutation outcome status', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  test('a cancelled write reports cancelled and never reaches the database', async () => {
+  test('a cancelled write reports cancelled and never issues the statement', async () => {
     const { executor, execute } = executorFor()
     const result = await update(executor, { confirm: async () => false })
 
@@ -56,7 +63,7 @@ describe('mutation outcome status', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  test('a dry run reports dry_run and never reaches the database', async () => {
+  test('a dry run reports dry_run and never issues the statement', async () => {
     const { executor, execute } = executorFor()
     const result = await update(executor, { dryRun: true })
 
@@ -88,12 +95,7 @@ describe('mutation outcome status', () => {
       statuses.add(`${result.status}/${result.rows_affected}`)
     }
 
-    expect([...statuses].sort()).toEqual([
-      'cancelled/0',
-      'dry_run/0',
-      'success/0',
-      'success/3',
-    ])
+    expect([...statuses].sort()).toEqual(['cancelled/0', 'dry_run/0', 'success/0', 'success/3'])
   })
 
   test('a mutation with neither force nor a confirmer refuses loudly', async () => {

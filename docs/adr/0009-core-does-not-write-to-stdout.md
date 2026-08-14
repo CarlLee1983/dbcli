@@ -31,8 +31,12 @@ structured data; the command layer decides how — and whether — to say it.
 
 `DataExecutionOptions` gained a `confirm` callback. Core assembles a
 `MutationConfirmationRequest` describing the pending mutation and asks the caller;
-`src/commands/mutation-confirm.ts` holds the CLI's implementation, which reproduces the
-previous output byte for byte. When a mutation would execute unconfirmed and no handler
+`src/commands/mutation-confirm.ts` holds the CLI's implementation. Its English text is the
+pre-refactor text unchanged, which is what makes the move verifiable; the stream is not.
+The block goes to stderr, because sharing stdout with the result envelope meant every
+mutation nobody forced produced stdout no parser could read. The wording moved too: the
+request carries `destructive: boolean` rather than a finished warning sentence and prompt,
+so the words are chosen — and translated — by the layer that owns presentation. When a mutation would execute unconfirmed and no handler
 was supplied, core throws rather than defaulting: proceeding silently and declining
 silently are both worse than saying nobody was available to ask.
 
@@ -53,8 +57,12 @@ AST pass would cost more than that buys.
 
 The obvious reading of this rule is tidiness, and tidiness is negotiable under deadline.
 It is not tidiness. It is what makes "ceremony cannot pollute the agent-facing output" a
-structural fact instead of a habit: core has no way to reach stdout, so no amount of
-presentation work in core can leak into a parsed stream. A later contributor who adds one
+structural fact instead of a habit: presentation work in core has no stream to leak into.
+One indirect route is still open and is stated here rather than implied away —
+`src/core/ddl-executor.ts:14` imports `promptUser` from `@/utils/prompts` and prompts from
+inside core, and the gate, being textual, sees an import rather than a write. Closing it
+means giving `ddl-executor` the same `confirm` callback `DataExecutor` now takes; until
+that lands, the rule holds for direct writes and one module can still ask a question. A later contributor who adds one
 `console.log` to a core module "just for debugging" is not making a small mess, they are
 removing the guarantee.
 

@@ -9,6 +9,7 @@
  */
 
 import type { Permission } from '@/types'
+import { t_vars } from '@/i18n/message-loader'
 import { IDENTIFIER_CONTINUATION, dollarQuoteDelimiterAt } from '@/utils/sql-lexical'
 
 /**
@@ -633,16 +634,6 @@ export function checkPermission(
   return checkPermissionForClassification(classification, permission)
 }
 
-/**
- * Decide a classified statement against a permission level.
- *
- * Split out of checkPermission so that callers who already know what they are
- * running — the structured insert/update/delete commands build their own SQL —
- * can reach the same tier rules without round-tripping a statement through the
- * classifier. The guards that precede this in checkPermission (stacked
- * statements, hidden writes) only apply to SQL supplied by a user; a statement
- * this process assembled has neither.
- */
 /** Types each tier adds to the one below it. */
 const TIER_GRANTS: ReadonlyArray<{ permission: Permission; types: readonly string[] }> = [
   { permission: 'query-only', types: ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN'] },
@@ -659,15 +650,36 @@ const TIER_GRANTS: ReadonlyArray<{ permission: Permission; types: readonly strin
  * DDL "requires data-admin" — neither of which would have worked. Deriving the
  * answer from the same table the decision uses keeps the advice true.
  */
-function minimumPermissionFor(type: StatementType): Permission {
+export function minimumPermissionFor(type: StatementType): Permission {
   return TIER_GRANTS.find((tier) => tier.types.includes(type))?.permission ?? 'admin'
 }
 
+/**
+ * Say no in the user's language.
+ *
+ * A refusal is read by whoever was refused, so it goes through the catalogue
+ * like every other sentence the CLI puts in front of a person. The permission
+ * names themselves are interpolated verbatim: they are the values written in
+ * the config file, and translating them would name a level nobody could set.
+ */
 function refusalReason(type: StatementType, permission: Permission): string {
-  const minimum = minimumPermissionFor(type)
-  return `${type} operation requires ${minimum} permission or higher (current level: ${permission})`
+  return t_vars('errors.permission_requires_level', {
+    type,
+    minimum: minimumPermissionFor(type),
+    permission,
+  })
 }
 
+/**
+ * Decide a classified statement against a permission level.
+ *
+ * Split out of checkPermission so that callers who already know what they are
+ * running — the structured insert/update/delete commands build their own SQL —
+ * can reach the same tier rules without round-tripping a statement through the
+ * classifier. The guards that precede this in checkPermission (stacked
+ * statements, hidden writes) only apply to SQL supplied by a user; a statement
+ * this process assembled has neither.
+ */
 export function checkPermissionForClassification(
   classification: StatementClassification,
   permission: Permission
@@ -758,6 +770,36 @@ export function checkPermissionForClassification(
 }
 
 /**
+ * The classification of a statement this process assembled itself.
+ *
+ * Nothing has to be discovered: the caller chose the operation, so the type is
+ * known, the statement is single, and confidence is not in question. Shared so
+ * that the three callers who need such a classification — the two functions
+ * below and the delete command's pre-connection check — cannot describe the
+ * same statement differently.
+ */
+export function classificationForType(type: StatementType): StatementClassification {
+  return {
+    type,
+    isDangerous: isDestructiveOperation(type),
+    keywords: [type],
+    isComposite: false,
+    confidence: 'HIGH',
+  }
+}
+
+/**
+ * Whether this level permits this operation type, without throwing.
+ *
+ * For callers that need the verdict early — before opening a connection — while
+ * still reporting it in their own words. They get the rule from here so it stays
+ * single-sourced; only the message is theirs.
+ */
+export function permitsOperation(type: StatementType, permission: Permission): boolean {
+  return checkPermissionForClassification(classificationForType(type), permission).allowed
+}
+
+/**
  * Throws PermissionError if an operation of this type is not allowed.
  *
  * For callers that assembled the statement themselves and therefore know its
@@ -768,18 +810,18 @@ export function checkPermissionForClassification(
  * before the caller is known to be authorised at all.
  */
 export function enforcePermissionForType(type: StatementType, permission: Permission): void {
-  const classification: StatementClassification = {
-    type,
-    isDangerous: isDestructiveOperation(type),
-    keywords: [type],
-    isComposite: false,
-    confidence: 'HIGH',
-  }
-
+  const classification = classificationForType(type)
   const result = checkPermissionForClassification(classification, permission)
 
   if (!result.allowed) {
-    throw new PermissionError(result.reason, classification, permission)
+    // The third argument is the level that *would* work, not the one that did
+    // not. `PermissionError.requiredPermission` is printed as `required:` by
+    // every command that catches it, so passing the caller's current level —
+    // which this function used to do — produced a header telling a query-only
+    // user that INSERT "required: query-only", directly above a message saying
+    // it requires read-write. The Redis enforcer has always passed the level
+    // that would work; this path now agrees with it.
+    throw new PermissionError(result.reason, classification, minimumPermissionFor(type))
   }
 }
 

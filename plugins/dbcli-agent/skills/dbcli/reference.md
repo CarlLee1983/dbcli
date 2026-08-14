@@ -925,7 +925,7 @@ dbcli insert users --data '{"name":"Alice"}' --force
 dbcli insert users --data '{"name":"Alice"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--data <json>`, `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--data <json>`, `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** read-write+
 
 ### update
@@ -938,7 +938,7 @@ dbcli update users --where "id=1" --set '{"name":"Bob"}' --dry-run
 dbcli update users --where "id=1" --set '{"name":"Bob"}' --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--where <condition>` (required), `--set <json>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** read-write+
 
 > **`--where` grammar (SQL `update` / `delete`)** — equality only: `col=val` or
@@ -959,7 +959,7 @@ dbcli delete users --where "id=1" --force
 dbcli delete users --where "id=1" --plan --format json   # risk analysis only; no DB connection
 ```
 
-**Options:** `--where <condition>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output), `--recovery`
+**Options:** `--where <condition>` (required), `--dry-run`, `--force`, `--plan` (analyze risk without connecting or executing), `--format <text|json>` (`--plan` output; `json` also keeps the result envelope instead of prose in a terminal), `--recovery`
 **Permission:** data-admin+
 
 ### export

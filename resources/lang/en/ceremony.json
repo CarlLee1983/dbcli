@@ -1,0 +1,18 @@
+{
+  "updated": "Updated {count} row(s) in {table}",
+  "deleted": "Deleted {count} row(s) from {table}",
+  "inserted": "Inserted {count} row(s) into {table}",
+  "matched_nothing": "No rows matched in {table} — nothing changed",
+  "cancelled": "Cancelled. {table} was not changed",
+  "dry_run": "Preview only. {table} was not changed",
+  "elapsed": "Took {seconds}s",
+  "failed": "Failed: {reason}",
+  "unknown_error": "unknown error",
+  "confirm_sql": "Generated SQL:",
+  "confirm_params": "Parameters:",
+  "confirm_destructive_warning": "⚠️  Warning: DELETE operation is destructive and cannot be undone!",
+  "confirm_destructive_prompt": "Are you sure you want to execute this DELETE operation? This cannot be undone.",
+  "confirm_prompt": "Proceed with this operation?",
+  "recovery_none": "This cannot be undone automatically — restore from a backup to get the previous values back.",
+  "recovery_retry": "Re-run with --recovery to write a recovery plan, then read it with: dbcli recover"
+}

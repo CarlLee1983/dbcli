@@ -59,7 +59,9 @@ describe('core no-stdout gate', () => {
   test('the exception list only shrinks: every entry still violates', async () => {
     const stale: string[] = []
     for (const relativePath of CORE_STDOUT_EXCEPTIONS) {
-      const source = await Bun.file(new URL(`../../src/core/${relativePath}`, import.meta.url)).text()
+      const source = await Bun.file(
+        new URL(`../../src/core/${relativePath}`, import.meta.url)
+      ).text()
       if (findCoreStdoutViolations(source, relativePath).length === 0) stale.push(relativePath)
     }
     expect(stale).toEqual([])

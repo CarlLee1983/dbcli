@@ -1,0 +1,18 @@
+{
+  "updated": "已更新 {table} 的 {count} 列",
+  "deleted": "已從 {table} 刪除 {count} 列",
+  "inserted": "已寫入 {count} 列到 {table}",
+  "matched_nothing": "{table} 沒有任何列符合條件，資料未變動",
+  "cancelled": "已取消，{table} 未變動",
+  "dry_run": "僅預覽，{table} 未變動",
+  "elapsed": "耗時 {seconds} 秒",
+  "failed": "失敗：{reason}",
+  "unknown_error": "未知的錯誤",
+  "confirm_sql": "產生的 SQL：",
+  "confirm_params": "參數：",
+  "confirm_destructive_warning": "⚠️  警告：DELETE 具破壞性，執行後無法復原！",
+  "confirm_destructive_prompt": "確定要執行這個 DELETE 嗎？此操作無法復原。",
+  "confirm_prompt": "要繼續執行這個操作嗎？",
+  "recovery_none": "此操作無法自動還原，要取回先前的資料請從備份回復。",
+  "recovery_retry": "加上 --recovery 重跑可產生回復計畫，再用 dbcli recover 讀取"
+}

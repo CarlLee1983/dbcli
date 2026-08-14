@@ -156,6 +156,7 @@
     "invalid_config": "配置無效：{field}",
     "connection_failed": "無法連接到資料庫：{message}",
     "permission_denied": "權限被拒（需要：{required}）",
+    "permission_requires_level": "{type} 操作需要 {minimum} 以上的權限（目前層級：{permission}）",
     "table_not_found": "找不到表格：{table}",
     "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
     "invalid_json": "無效的 JSON：{message}",

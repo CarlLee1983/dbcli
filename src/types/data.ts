@@ -74,11 +74,19 @@ export interface MutationConfirmationRequest {
   /** Values bound to the statement's placeholders */
   params: (string | number | boolean | null)[]
 
-  /** Present when the operation is irreversible */
-  warning?: string
-
-  /** The question to put to the user */
-  prompt: string
+  /**
+   * Whether this operation is irreversible.
+   *
+   * A flag rather than the warning sentence and the question themselves, which
+   * is what this carried first. The division is not "core cannot translate" —
+   * `permission-guard` translates the refusal it throws, and so does
+   * `blacklist-validator` — it is that core owns facts and the command layer
+   * owns presentation. Whether a delete can be undone is a fact. Which sentence
+   * a person is shown about it, in what tone, on which stream, is presentation,
+   * and a caller embedding the executor should be able to say it in its own
+   * product's voice rather than inheriting dbcli's.
+   */
+  destructive: boolean
 }
 
 /**

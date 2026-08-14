@@ -35,10 +35,17 @@ connection is opened; on the structured `update` / `delete` path it runs after `
 and the schema read, because the uniqueness facts it judges by come from that schema — the
 statement itself is still never issued.
 
-**Scope.** SQL only, and the three entry points #70 named: `query`, `update`, `delete`.
+**Scope.** SQL only, and four entry points: the three #70 named — `query`, `update`,
+`delete` — and `shell`, added in #78 because leaving it out made the protection depend on
+which entry point the operator picked, which is the thing this decision exists to remove.
+The shell wires tier two alone: every line there is typed by a person, so a tier-one y/N
+would fire on each one and become reflex, and tier one was designed for a batch of
+generated writes, which a shell is not. A mistyped confirmation returns to the prompt
+instead of ending the session, and piped input (`dbcli shell < script.sql`) is the
+unattended case — the tier-two statement is refused and the remaining lines still run.
 MongoDB and Redis writes keep the confirmation they gained in 1.58.0 rather than a second
-tier; `q` needs no gate because a saved snippet is refused at parse time unless it is a
-single read-only statement. A write performed inside a stored procedure is invisible to
+tier, and their shells are untouched for the same reason; `q` needs no gate because a
+saved snippet is refused at parse time unless it is a single read-only statement. A write performed inside a stored procedure is invisible to
 this classification, and deliberately so: refusing every statement dbcli cannot recognise
 would refuse `SET`, `BEGIN` and `VACUUM` along with it.
 
@@ -88,4 +95,5 @@ gate unnecessary.
 statement when either stdout or stdin is not a terminal, or a flag is added that skips tier
 two, or
 `src/commands/write-gate-guard.ts` stops recording an allowed tier-two decision to the
-audit log.
+audit log, or `src/commands/shell-write-gate.ts` stops being handed to `ReplEngine` for a
+SQL connection in `src/commands/shell.ts`.

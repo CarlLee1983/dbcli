@@ -9,7 +9,7 @@ import { ReplEngine } from '../core/repl/repl-engine'
 import { createCompleter } from '../core/repl/completer'
 import { resolveConfigPath } from '@/utils/config-path'
 import type { ReplContext } from '../core/repl/types'
-import type { DbcliConfig } from '../types'
+import type { RuntimeDbcliConfig } from '../core/config'
 import { t, t_vars } from '../i18n/message-loader'
 import pc from 'picocolors'
 import { MongoShellAdapter } from '@/adapters/mongo-shell-adapter'
@@ -86,7 +86,7 @@ export const shellCommand = new Command('shell')
 
 export async function runShell(options: { sql?: boolean }, configPath: string): Promise<void> {
   // Load config
-  let config: DbcliConfig
+  let config: RuntimeDbcliConfig
   try {
     config = await configModule.read(configPath)
   } catch {
@@ -184,7 +184,47 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     commandNames,
   }
 
-  const engine = new ReplEngine(adapter, context, HISTORY_PATH, config)
+  // Assigned once the REPL's readline interface exists, below. The gate is built
+  // before the engine and the interface after it, so the confirmation reaches
+  // the one reader that owns the terminal through this holder rather than by
+  // opening a second one on stdin.
+  let replInterface: ReturnType<typeof createInterface> | null = null
+  const askAtPrompt = (question: string): Promise<string> => {
+    // Unreachable in production — the gate is only consulted from the `line`
+    // handler, which cannot run before the interface exists. Throwing rather
+    // than answering with an empty string keeps a programming error from being
+    // recorded in the audit log as an operator who mistyped the table name.
+    if (!replInterface)
+      throw new Error('Write gate asked for confirmation before the shell started')
+    const rl = replInterface
+    return new Promise<string>((resolve) =>
+      rl.question(`${question}: `, (answer) => {
+        // `question()` resumes the interface to read the answer, undoing the
+        // pause the line handler took out. Re-pausing here keeps that handler's
+        // `finally` the single point at which the shell starts reading lines
+        // again — otherwise the next line typed runs concurrently with the
+        // statement just confirmed, through the same engine and buffer.
+        rl.pause()
+        resolve(answer)
+      })
+    )
+  }
+
+  // The write gate (#78). SQL engines only: Redis and MongoDB statements have a
+  // different shape and their own permission guards, and `toSqlDialect` returns
+  // undefined for them, which is what leaves their shells untouched.
+  const { toSqlDialect } = await import('@/core/permission-guard')
+  const dialect = toSqlDialect(config.connection.system)
+  const writeGate = dialect
+    ? (await import('./shell-write-gate')).createShellWriteGate({
+        config,
+        configPath,
+        dialect,
+        ask: askAtPrompt,
+      })
+    : null
+
+  const engine = new ReplEngine(adapter, context, HISTORY_PATH, config, writeGate)
   const complete = createCompleter(context)
 
   // Welcome message
@@ -235,12 +275,32 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     terminal: process.stdin.isTTY ?? false,
   })
 
+  replInterface = rl
+
   const continuationPrompt = pc.dim(t('shell.continuation_prompt') + '> ')
 
   rl.prompt()
 
-  rl.on('line', async (line: string) => {
-    const result = await engine.processInput(line)
+  const handleLine = async (line: string): Promise<void> => {
+    // Paused while the statement runs so that a prompt raised from inside —
+    // the tier-two write gate is the only one today — owns stdin alone.
+    // Two readers on one terminal split the operator's keystrokes between them.
+    rl.pause()
+    let result
+    try {
+      result = await engine.processInput(line)
+    } catch (error) {
+      // A rejection here would leave the session with no prompt and the process
+      // dying on an unhandled rejection. The engine reports the errors it
+      // expects; anything reaching this point is a defect, and the operator
+      // should still get their shell back to work around it.
+      console.error(pc.red(t_vars('shell.error_sql_failed', { message: (error as Error).message })))
+      rl.setPrompt(pc.cyan(t('shell.prompt') + '> '))
+      rl.prompt()
+      return
+    } finally {
+      rl.resume()
+    }
 
     switch (result.action) {
       case 'quit':
@@ -266,6 +326,17 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     }
 
     rl.prompt()
+  }
+
+  // One statement at a time, whatever the terminal delivers. Pausing the
+  // interface is not enough on its own: several lines can arrive in a single
+  // chunk — a paste, or a confirmation typed ahead of the next statement — and
+  // readline emits them all before the handler's first `await` returns. Without
+  // this queue those handlers run concurrently through one `ReplEngine`, sharing
+  // its multiline buffer and its `.format` / `.no-limit` state.
+  let pending: Promise<void> = Promise.resolve()
+  rl.on('line', (line: string) => {
+    pending = pending.then(() => handleLine(line))
   })
 
   rl.on('close', async () => {

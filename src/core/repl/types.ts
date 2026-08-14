@@ -32,6 +32,18 @@ export interface ReplContext {
   readonly commandNames: readonly string[]
 }
 
+/**
+ * The write gate, asked before a typed statement reaches the adapter.
+ *
+ * A callback rather than a call into `@/commands/write-gate-prompt` because the
+ * gate has to ask a person, and ADR 0009 keeps every stream write out of
+ * `src/core` — the same shape `DataExecutor` and `DDLExecutor` already use for
+ * their confirmations. Returns true when the statement may run; a refusal or a
+ * mistyped confirmation comes back as false, never as a thrown error, because
+ * the shell must survive it and return to the prompt.
+ */
+export type ReplWriteGate = (sql: string) => Promise<boolean>
+
 export interface MetaCommandResult {
   readonly action: 'continue' | 'quit' | 'clear'
   readonly output?: string

@@ -62,6 +62,20 @@ export interface PermissionCheckResult {
   allowed: boolean
   reason: string
   classification: StatementClassification
+
+  /**
+   * The lowest level that would have allowed this, on a refusal.
+   *
+   * Every command prints it as `required:` above the reason, and the throw
+   * sites used to pass the level the caller already had — so a query-only user
+   * read `required: query-only` directly above a sentence saying the statement
+   * needs admin. The branch that decides the refusal is the only place that
+   * knows the answer (a hidden write needs admin whatever its type says, an
+   * unrecognised statement needs read-write, an ordinary type needs its tier),
+   * so it is decided there and carried out with the verdict rather than
+   * re-derived by whoever throws.
+   */
+  requiredPermission?: Permission
 }
 
 /**
@@ -261,6 +275,7 @@ export function checkPermission(
       allowed: false,
       reason: t('errors.multiple_statements_refused'),
       classification,
+      requiredPermission: 'admin',
     }
   }
 
@@ -328,6 +343,7 @@ export function checkPermissionForClassification(
         permission,
       }),
       classification,
+      requiredPermission: 'admin',
     }
   }
 
@@ -360,6 +376,9 @@ export function checkPermissionForClassification(
         ? t('errors.unknown_statement_query_only')
         : refusalReason(classification.type, permission),
       classification,
+      // The unknown-statement sentence promises read-write+, so the header
+      // above it has to say the same thing.
+      requiredPermission: isUnknown ? 'read-write' : minimumPermissionFor(classification.type),
     }
   }
 
@@ -368,6 +387,7 @@ export function checkPermissionForClassification(
     allowed: false,
     reason: `Unknown permission level: ${permission}`,
     classification,
+    requiredPermission: 'admin',
   }
 }
 
@@ -439,7 +459,11 @@ export function enforcePermission(
   const result = checkPermission(sql, permission, dialect)
 
   if (!result.allowed) {
-    throw new PermissionError(result.reason, result.classification, permission)
+    throw new PermissionError(
+      result.reason,
+      result.classification,
+      result.requiredPermission ?? 'admin'
+    )
   }
 
   return result.classification

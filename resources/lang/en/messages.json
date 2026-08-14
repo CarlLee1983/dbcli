@@ -157,6 +157,7 @@
     "connection_failed": "Failed to connect to database: {message}",
     "permission_denied": "Permission denied (required: {required})",
     "permission_requires_level": "{type} operation requires {minimum} permission or higher (current level: {permission})",
+    "elasticsearch_requires_level": "Elasticsearch {type} operation requires {minimum} permission or higher (current level: {permission})",
     "escalated_write_requires_admin": "This statement opens as a read but contains an executable {keyword}. A write hidden inside a read statement requires admin permission (current level: {permission}).",
     "multiple_statements_refused": "SQL containing multiple statements is refused below admin permission, because only the first statement determines the permission check. Run each statement separately.",
     "unknown_statement_query_only": "Unrecognised SQL statement (current level: query-only). Security policy requires read-write+ for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.",

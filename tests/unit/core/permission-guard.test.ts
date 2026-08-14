@@ -557,7 +557,10 @@ test('enforcePermission: error contains classification details', () => {
     if (error instanceof PermissionError) {
       expect(error.classification.type).toBe('DELETE')
       expect(error.classification.isDangerous).toBe(true)
-      expect(error.requiredPermission).toBe('query-only')
+      // The level that would work, not the one that did not. This asserted
+      // 'query-only' — the caller's own level — which every command then
+      // printed as `required:` above a message saying DELETE needs data-admin.
+      expect(error.requiredPermission).toBe('data-admin')
     }
   }
 })

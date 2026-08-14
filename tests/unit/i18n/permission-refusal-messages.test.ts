@@ -20,6 +20,7 @@ const KEYS = [
   'errors.multiple_statements_refused',
   'errors.unknown_statement_query_only',
   'errors.permission_denied_reason',
+  'errors.elasticsearch_requires_level',
 ] as const
 
 const placeholders = (value: string): string[] =>
@@ -103,6 +104,20 @@ describe('permission refusal rendering in zh-TW', () => {
     expect(rendered).not.toBe('errors.unknown_statement_query_only')
     expect(rendered).not.toBe((en.errors as Record<string, string>).unknown_statement_query_only)
     expect(rendered).toContain('query-only')
+  })
+
+  test('the elasticsearch refusal names both levels in Chinese', () => {
+    const rendered = zhLoader().interpolate('errors.elasticsearch_requires_level', {
+      type: 'DELETE',
+      minimum: 'data-admin',
+      permission: 'read-write',
+    })
+
+    // The permission names stay Latin: they are the values a user writes into a
+    // config file, so translating them would name a level nobody can set.
+    expect(rendered).toContain('data-admin')
+    expect(rendered).toContain('read-write')
+    expect(rendered).not.toContain('{')
   })
 
   test('the permission-denied reason is interpolated, not prefixed in English', () => {

@@ -43,6 +43,18 @@ condition, first `query` / `export` the target rows' primary keys, then run one
 `update` / `delete --where "id=<pk>"` per key — or escalate to a human. (MongoDB `--where`
 takes a full JSON filter and is exempt.)
 
+**Write gate (2.0.0) — the rule that will refuse you.** Every write is classified into two
+tiers. Ordinary writes (`INSERT`, `UPDATE` / `DELETE` with a `WHERE`, `CREATE`, `ALTER`)
+run unattended exactly as before; `--yes` skips the terminal prompt a human would see.
+**Statements that are not limited to specific rows are refused outright when nobody can
+answer a prompt** — `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, a statement
+the SQL parser cannot read, several statements in one string, and `update` / `delete --where` matching on no primary key and
+no unique index. The process exits `1` with `reason=no_where`, `reason=ddl_destruction`,
+`reason=unparseable` or `reason=non_unique_where`, and **nothing reaches the database**.
+**No flag bypasses this** — not `--yes`, not `--force`. To write every row on purpose, put
+the intent in the SQL itself: add `WHERE 1=1` or a `LIMIT`. `DROP` / `TRUNCATE` have no
+unattended route at all; escalate to a human.
+
 > `report` and `guide` already embed an `inspect` snapshot — you do **not** need to run
 > `dbcli inspect` first. Run `dbcli inspect --for-agent` manually only when you want the
 > audit-recent context or to diagnose a connection problem.

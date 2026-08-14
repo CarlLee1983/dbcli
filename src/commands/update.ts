@@ -357,6 +357,30 @@ export async function updateCommand(
       // 8. Get table schema
       const schema = await adapter.getTableSchema(table)
 
+      // 8b. The tier-two gate (#70). A WHERE that matches on nothing unique is
+      // a full-table write wearing a filter, and the schema in hand is what
+      // makes the difference visible.
+      // A dry run sends nothing, so there is nothing to gate — and the
+      // documented habit is to preview first, which the gate would otherwise
+      // refuse before it could be useful.
+      const { guardStructuredWrite } = await import('./write-gate-guard')
+      if (
+        options.dryRun !== true &&
+        !(await guardStructuredWrite({
+          operation: 'update',
+          table,
+          where: whereConditions,
+          schema,
+          config,
+          options,
+        }))
+      ) {
+        const cancelled = cancelledOutcome('update', `UPDATE ${table}`)
+        printMutationOutcome(cancelled, table, 0, humanOutputContext(options))
+        await writeAuditEntry(config, 'update', options, auditOutcomeForMutation(cancelled, table))
+        return
+      }
+
       // 9. Create DataExecutor and execute UPDATE
       const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
         | 'postgresql'
@@ -402,6 +426,15 @@ export async function updateCommand(
       await adapter.disconnect()
     }
   } catch (error) {
+    // A refusal by the write gate is not a failed statement: the gate already
+    // wrote its own audit row with the tier and reason, and `--recovery` has no
+    // plan to offer for something that was never sent.
+    const { WriteGateRefusal } = await import('@/commands/write-gate-prompt')
+    if (error instanceof WriteGateRefusal) {
+      printMutationFailure(error, 'update', humanOutputContext(options))
+      process.exit(1)
+    }
+
     let auditId: string | null = null
     let envelopeId: string | undefined
     if (options.recovery === true) {

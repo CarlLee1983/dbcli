@@ -292,6 +292,24 @@ dbcli insert users --data '{"name":"Alice","email":"a@b.com"}' --plan --format j
 dbcli update users --where '{"_id":"abc"}' --set '{"status":"inactive"}' --plan
 dbcli delete products --where '{"_id":"abc"}' --plan --format json
 dbcli delete 'user:42' --where '' --plan --format json</code></pre>
+            <h4 class="mt-8 font-bold text-text-main">寫入確認閘門（2.0.0）</h4>
+            <p>所有寫入都會經過兩級閘門。第一級是一個問題，第二級是一道沒有旗標可以繞過的拒絕。</p>
+            <p><strong>第一級——一般寫入。</strong> INSERT、帶 WHERE 的 UPDATE / DELETE、CREATE、ALTER。在互動終端下，dbcli 會先印出它把這句理解成什麼，再問你要不要執行；<code>--yes</code> 可以跳過。非互動執行（stdout 被導向、CI、agent）根本不會看到這個問題，<code>--format json</code> 即使在終端下也會關掉它。</p>
+            <p><strong>第二級——收不回來的寫入。</strong> 沒有 WHERE 的 UPDATE / DELETE、DROP、TRUNCATE、SQL parser 讀不懂的語句、一個字串裡塞了多句語句，以及 <code>dbcli update</code> / <code>dbcli delete</code> 中 <code>--where</code> 沒有命中主鍵或唯一索引的情況。dbcli 會要求你打出目標資料表的名稱，<strong>沒有任何旗標可以跳過</strong>，<code>--yes</code> 與 <code>--force</code> 都不行。當現場沒有人時，dbcli 直接拒絕：退出碼 1、什麼都不會送到資料庫，訊息會點名 <code>reason=no_where</code>、<code>reason=ddl_destruction</code>、<code>reason=unparseable</code>、<code>reason=multiple_statements</code> 或 <code>reason=non_unique_where</code>。</p>
+            <p><strong>逃生路徑寫在語句裡，不是寫在旗標上。</strong> 要在無人看管下執行全表寫入，就把意圖寫進 SQL——補上 <code>WHERE 1=1</code> 或 <code>LIMIT</code>。這是刻意的設計：對已經有 WHERE 的語句再接一個 <code>WHERE 1=1</code> 是語法錯誤，所以「乾脆全部都加上去」會立刻壞掉，養不成習慣；旗標的性質剛好相反。DROP 與 TRUNCATE 沒有子句可加：能不能執行由連線的 <code>permission</code> 層級決定，而打字確認仍然必須由人完成。</p>
+            <p>每一次第二級判定都會寫進稽核紀錄——放行、取消、拒絕都記——所以這道閘門有沒有擋到東西是可以量測的，不是靠印象。</p>
+            <pre><code># 拒絕：沒有 WHERE，也沒有人能確認
+dbcli query "UPDATE users SET banned = 1" --format json
+# → 退出碼 1、reason=no_where，什麼都沒送到資料庫
+
+# 放行：意圖已經寫在語句裡
+dbcli query "UPDATE users SET banned = 1 WHERE 1=1" --format json
+
+# 一般寫入，無人看管或直接跳過提問
+dbcli query "UPDATE users SET banned = 1 WHERE id = 3" --yes
+
+# 條件欄位不唯一的結構化刪除：第二級
+dbcli delete users --where "status=active"</code></pre>
             <h4 class="mt-8 font-bold text-text-main">從 positional、檔案或 stdin 讀取 query</h4>
             <p><code>dbcli query [sql] [-f, --query-file &lt;path&gt;]</code> 必須且只能指定一個 query 來源：positional query 文字、<code>--query-file</code> 指定的 UTF-8 檔案，或以 <code>--query-file -</code> 從 stdin 讀取。未提供來源，或同時提供 positional 文字與 <code>--query-file</code> 都會報錯。dbcli 讀取來源後會移除一個開頭的 UTF-8 BOM 與前後空白；處理後若為空內容，則會拒絕執行。<code>--query-file -</code> 需要 piped input：當 stdin 是互動式終端時，dbcli 會立即拒絕，而不是無提示地空等輸入。</p>
             <p>透過 stdin 傳入多行 SQL，就不需要把整段內容 escape 成單一 shell argument：</p>

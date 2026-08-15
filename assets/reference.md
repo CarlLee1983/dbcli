@@ -2549,6 +2549,11 @@ Inside the shell:
 > is typed by a person. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a
 > tier-two statement is refused and the remaining lines still run. Redis, MongoDB and
 > Elasticsearch shells are unaffected.
+>
+> dbcli **subcommands** typed in the shell (`query "..."`, `delete ...`) run as separate
+> processes with no stdin, so they cannot ask anything: a tier-two statement there is
+> refused with a message pointing you back to the `dbcli>` prompt, where the confirmation
+> can actually be typed.
 
 The REPL flavor depends on the active engine: SQL engines and MongoDB use the
 form above; **Redis** opens a single-line command REPL (see [Redis › Interactive

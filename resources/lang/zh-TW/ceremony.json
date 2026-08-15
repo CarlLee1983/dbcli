@@ -28,11 +28,13 @@
   "gate_typed_prompt": "輸入 {phrase} 才會執行",
   "gate_typed_mismatch": "輸入的內容與 {phrase} 不符，沒有執行任何語句。",
   "gate_refused": "已拒絕：這句沒有限定要動哪些列，而現在沒有人能確認（reason={reason}）。",
+  "gate_refused_in_shell": "已拒絕：從 shell 啟動的 dbcli 子指令沒有辦法向你提問，即使你人就在這裡（reason={reason}）。",
   "gate_remedy_no_where": "補上 WHERE（真的要全表就寫 WHERE 1=1）或 LIMIT，然後重跑。",
   "gate_remedy_ddl_destruction": "沒有任何旗標可以跳過這一關。請在互動終端下執行，或改走經過審查的 migration。",
   "gate_remedy_unparseable": "dbcli 無法解析這句，也不會用猜的。請簡化語句，或在互動終端下執行。",
   "gate_remedy_multiple_statements": "一次只執行一句語句。",
   "gate_remedy_non_unique_where": "改用主鍵或唯一索引欄位當條件，或在互動終端下執行。",
+  "gate_remedy_in_shell": "請直接在 dbcli> 提示符打這句語句——在那裡 dbcli 會請你打出目標資料表的名稱來確認。",
   "recovery_none": "此操作無法自動還原，要取回先前的資料請從備份回復。",
   "recovery_retry": "加上 --recovery 重跑可產生回復計畫，再用 dbcli recover 讀取",
   "blacklist_hint": "執行 `dbcli blacklist list` 查看受保護的項目"

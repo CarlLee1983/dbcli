@@ -1,5 +1,5 @@
 // tests/core/repl/repl-engine.test.ts
-import { afterEach, beforeEach, describe, test, expect, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, test, expect, mock, spyOn } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,6 +95,33 @@ describe('ReplEngine', () => {
     const r2 = await engine.processInput('FROM users;')
     expect(r2.action).toBe('continue')
     expect(adapter.execute).toHaveBeenCalled()
+  })
+
+  test('a spawned subcommand is marked as coming from the shell', async () => {
+    // The child gets no stdin, so anything needing an answer refuses. The
+    // marker is what lets that refusal say something the operator — who is at
+    // this very prompt — can act on (#84).
+    const spawn = spyOn(Bun, 'spawn').mockImplementation(
+      () =>
+        ({
+          stdout: new Response('').body,
+          stderr: new Response('').body,
+          exited: Promise.resolve(0),
+        }) as never
+    )
+    try {
+      const engine = new ReplEngine(
+        createMockAdapter(),
+        { ...mockContext, commandNames: ['schema'] },
+        historyPath
+      )
+      await engine.processInput('schema users')
+
+      const options = spawn.mock.calls[0]?.[1] as { env: Record<string, string> }
+      expect(options.env.DBCLI_SHELL_SUBCOMMAND).toBe('1')
+    } finally {
+      spawn.mockRestore()
+    }
   })
 
   test('processInput handles SQL error without crashing', async () => {

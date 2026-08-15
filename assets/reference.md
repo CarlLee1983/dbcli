@@ -2545,7 +2545,8 @@ Inside the shell:
 > **Tier two applies here (2.0.0)** — on SQL connections a typed `UPDATE` / `DELETE` with
 > no `WHERE`, a `DROP` or a `TRUNCATE` asks for the target table name before it runs.
 > Anything else typed cancels the statement and returns to the prompt; the session stays
-> open. Tier one (the y/N on ordinary writes) is deliberately not wired here — every line
+> open, and Ctrl-C withdraws the question itself — the next line is read as a statement,
+> not as the answer. Tier one (the y/N on ordinary writes) is deliberately not wired here — every line
 > is typed by a person. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a
 > tier-two statement is refused and the remaining lines still run. Redis, MongoDB and
 > Elasticsearch shells are unaffected.

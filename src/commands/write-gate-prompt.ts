@@ -68,8 +68,12 @@ export interface WriteGateRequest {
    * inside the REPL, where a readline interface already owns the terminal and
    * two readers would split the operator's keystrokes between them. The shell
    * passes its own interface's question here.
+   *
+   * `null` means the operator withdrew the question — Ctrl-C in the shell —
+   * which is a different thing from typing the wrong name and is reported as
+   * such.
    */
-  ask?: (question: string) => Promise<string>
+  ask?: (question: string) => Promise<string | null>
 }
 
 /**
@@ -146,6 +150,13 @@ async function enforceTierTwo(request: WriteGateRequest, attended: boolean): Pro
   const typed = await ask(
     t_vars('ceremony.gate_typed_prompt', { phrase: verdict.confirmationPhrase })
   )
+
+  // Withdrawn, not answered wrong. Telling somebody who pressed Ctrl-C that
+  // what they typed "did not match" describes an answer they never gave.
+  if (typed === null) {
+    process.stderr.write(`${t('ceremony.gate_cancelled')}\n`)
+    return false
+  }
 
   // Compared without case or surrounding space so that a correct answer typed
   // by a person is never rejected for a reason they cannot see. Nothing weaker:

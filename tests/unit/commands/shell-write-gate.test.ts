@@ -44,6 +44,7 @@ describe('the write gate on the interactive shell', () => {
   let spies: Array<{ mockRestore: () => void }> = []
   let originalStdinIsTTY: unknown
   let typedAnswer = ''
+  let written: string[] = []
   let tempDirectory: string
   let historyPath: string
 
@@ -89,10 +90,14 @@ describe('the write gate on the interactive shell', () => {
     historyPath = join(tempDirectory, 'history')
     typedAnswer = ''
     recorded = []
+    written = []
     originalStdinIsTTY = (process.stdin as { isTTY?: boolean }).isTTY
     execute = mock(async () => ({ rows: [], rowCount: 0, affectedRows: 0, columnNames: [] }))
     spies = [
-      spyOn(process.stderr, 'write').mockImplementation(() => true),
+      spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+        written.push(String(chunk))
+        return true
+      }),
       spyOn(promptUser, 'confirm').mockImplementation(async () => true),
       spyOn(promptUser, 'text').mockImplementation(async () => typedAnswer),
     ]
@@ -196,6 +201,28 @@ describe('the write gate on the interactive shell', () => {
     expect(allowed).toBe(true)
     expect(asked).toHaveLength(1)
     expect(promptUser.text).not.toHaveBeenCalled()
+  })
+
+  test('withdrawing the question runs nothing and is not reported as a typo', async () => {
+    // Ctrl-C at the confirmation. The operator gave no answer, so telling them
+    // what they typed "did not match" describes something that never happened
+    // (#85); the audit still records a decline, because they decided.
+    setStdinTTY(true)
+    const gate = createShellWriteGate({
+      config,
+      configPath: join(tempDirectory, '.dbcli'),
+      dialect: 'postgresql',
+      record: async (decision) => {
+        recorded.push({ outcome: decision.outcome, tier: decision.tier })
+      },
+      ask: async () => null,
+    })
+
+    const allowed = await gate('DELETE FROM users')
+
+    expect(allowed).toBe(false)
+    expect(recorded).toEqual([{ outcome: 'declined', tier: 'two' }])
+    expect(written.join('')).not.toMatch(/did not match/)
   })
 
   test('a statement typed over several lines is gated once, when it completes', async () => {

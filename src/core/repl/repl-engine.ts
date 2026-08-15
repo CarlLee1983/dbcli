@@ -58,6 +58,18 @@ export class ReplEngine {
     return this.buffer.isActive()
   }
 
+  /**
+   * Throw away a half-typed statement.
+   *
+   * Ctrl-C printed "Multiline input cancelled" and left the buffer holding what
+   * had been typed, so the next statement was appended to the abandoned one and
+   * came back as a syntax error naming a keyword the operator had not just
+   * typed. `MultilineBuffer.reset` existed all along with nobody calling it.
+   */
+  cancelMultiline(): void {
+    this.buffer.reset()
+  }
+
   getHistory(): readonly string[] {
     return this.history.getAll()
   }

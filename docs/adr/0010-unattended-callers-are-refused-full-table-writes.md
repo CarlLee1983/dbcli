@@ -53,6 +53,65 @@ At a terminal, the same statements require the operator to type the target table
 flag skips this tier — not `--yes`, which skips the ordinary tier-one confirmation, and not
 `--force`, which never bypassed the blacklist or the permission check either.
 
+**What counts as "limited to particular rows" was measured, and it turned out to be two
+different questions.** The first version of this decision asked whether the statement had a
+`WHERE` at all. It does not follow: a `WHERE` naming only a joined table restricts the far
+side of the join and removes nothing from the target. Against a 2000-row table,
+`UPDATE p SET … FROM o WHERE o.id = 1` overwrote all 2000 and
+`DELETE FROM p USING o WHERE o.ref > 0` deleted all 2000, both admitted as tier one, both
+executed to confirm the count rather than inferred from a plan (#80).
+
+Five rounds of adversarial review, each executing its findings against a real PostgreSQL and
+MySQL, then established that the follow-up question — *does this `WHERE` narrow the write* —
+is only answerable for one of the two cases:
+
+**A single-table write** is decidable, and the criterion is positive evidence: the `WHERE`
+must name a column of the table being written. A condition naming no column at all
+(`WHERE 1=1`) still qualifies, because that is the escape route below and it is a statement
+of intent rather than a claim about rows. A `WHERE` inside a subquery does not, because it
+restricts the subquery — but a correlated reference back to the target does, provided the
+name is not one the subquery binds itself. It is a lower bound: `WHERE id IS NOT NULL` names
+the target and touches every row, and no static check settles that.
+
+**A multi-table write is not decidable at all**, and this is the finding that shaped the
+rule. `DELETE p FROM p JOIN o ON p.id = o.ref WHERE o.x > 0` deleted 2 of 5 rows against one
+dataset and all 2000 against another: the same statement, a different answer. A join's `ON`
+necessarily names the target, so reading it as evidence admitted the entire class this ADR
+exists to refuse — including `UPDATE p SET … FROM o WHERE p.id = o.ref`, the standard
+spelling. Four successive criteria were tried and each was defeated by the next ordinary
+statement. So the tier is decided by what the statement *is*, which is knowable: a write that
+brings in a second table is tier two, reason `multi_table`.
+
+Where the parser cannot read the statement there is no tree to judge, so the same rule is
+applied to the text as an allowlist — one named table, a `WHERE` or `LIMIT`, and none of
+`SELECT` / `TABLE` / `VALUES` / `JOIN` / `USING`, no statement-level `WITH`, no
+`UPDATE … FROM`. Written that way because the denylist it replaced was defeated once per
+round: `USING`, then `JOIN`, then a CTE, then a subquery, then `TABLE` as a subquery. A
+denylist can only ever rule out the second tables someone remembered.
+
+**The cost, measured rather than estimated.** `DELETE … USING`, `UPDATE … FROM`,
+`UPDATE … JOIN … SET`, multi-table `DELETE` and CTE-wrapped writes are refused for unattended
+callers that used to be served, as is any statement the parser cannot read that carries a
+subquery. The remedy is in the statement: move the second table into a subquery in the
+`WHERE`, or run it where someone can confirm. Across five rounds the reviews found 15
+full-table writes admitted as tier one and 8 statements wrongly refused; every one of them is
+pinned in `tests/unit/commands/write-gate.test.ts` by the statement rather than by the rule,
+so a future simplification has to argue with the measurement instead of with the code.
+
+**Known residuals**, all in the statement-type classification rather than in the
+qualification criterion. A data-modifying CTE whose leading keyword is `INSERT` —
+`WITH x AS (DELETE FROM t RETURNING *) INSERT INTO archive …` — is classified as an `INSERT`
+and so is tier one, however unqualified the `DELETE` inside it (#94). `MERGE` is mapped to
+`INSERT` for the same reason, and
+`MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE` deleted every row of
+a 2000-row table as tier one; it needs a classification of its own rather than a keyword
+substitution, because the tier depends on which `WHEN … THEN` actions it carries (#95).
+`ALTER TABLE … DROP COLUMN` is tier one, which is consistent with `ALTER` being an ordinary
+write but is unarguably destructive; it is recorded here rather than decided. And
+`UPDATE ONLY p AS x` is indistinguishable in the parse tree from `UPDATE "only" AS x`, so a
+table genuinely named `only` and given an alias is named by its alias in the confirmation
+phrase.
+
 The escape route for anything that accepts a `WHERE` is the statement itself: `WHERE 1=1`
 or a `LIMIT`. This is not chosen for being harder to type. It is chosen because it cannot
 be composed — appending `WHERE 1=1` to a statement that already has a `WHERE` is a syntax
@@ -102,4 +161,9 @@ audit log, or `src/commands/shell-write-gate.ts` stops being handed to `ReplEngi
 SQL connection in `src/commands/shell.ts`, or
 `src/core/audit/write-gate-summary.ts` stops counting those recorded decisions — that
 summary is what makes the measurement above something anyone will actually take, so
-losing it leaves the rest of this condition true and unverified.
+losing it leaves the rest of this condition true and unverified — or if `narrowsTarget` /
+`writeTargets` in `src/commands/write-gate.ts` stop requiring a condition that names the
+table being written before granting tier one, or if `unparseable` in the same file stops
+resolving a statement that carries a join, a CTE or a subquery to tier two. Without that last clause the positive-evidence
+criterion contributes no boundary and could be reverted to "is there a WHERE at all"
+silently, which is the state three rounds of measurement were spent leaving.

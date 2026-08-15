@@ -50,7 +50,9 @@ run unattended exactly as before; `--yes` skips the terminal prompt a human woul
 answer a prompt** — `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, a statement
 the SQL parser cannot read, several statements in one string, and `update` / `delete --where` matching on no primary key and
 no unique index. The process exits `1` with `reason=no_where`, `reason=ddl_destruction`,
-`reason=unparseable` or `reason=non_unique_where`, and **nothing reaches the database**.
+`reason=unparseable`, `reason=multi_table` or `reason=non_unique_where`, and **nothing
+reaches the database**. A write that joins a second table is always tier two: whether it is
+limited to particular rows depends on the data, not on the statement.
 **No flag bypasses this** — not `--yes`, not `--force`. To write every row on purpose, put
 the intent in the SQL itself: add `WHERE 1=1` or a `LIMIT`. `DROP` / `TRUNCATE` have no
 unattended route at all; escalate to a human.

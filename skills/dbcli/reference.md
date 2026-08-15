@@ -348,9 +348,42 @@ says whether this particular statement may run right now.
 | One | `INSERT`, `UPDATE` / `DELETE` **with** a `WHERE` or `LIMIT`, `CREATE`, `ALTER` | Summary + `y/N`; `--yes` skips it | Runs, exactly as before |
 | Two | `UPDATE` / `DELETE` with **no** `WHERE`, `DROP`, `TRUNCATE`, unparseable statements, several statements in one string | Type the target table name; **no flag skips it** | **Refused**: exit `1`, nothing sent to the database |
 
-A refusal message names a machine-readable reason — `reason=no_where`,
+A refusal message names a machine-readable reason — `reason=no_where`, `reason=multi_table`,
 `reason=ddl_destruction`, `reason=unparseable`, `reason=multiple_statements` — so a caller can tell it apart from a
 connection failure or a permission denial.
+
+**A write that joins another table is tier two, whatever its `WHERE` says.** Whether such a
+write is limited to particular rows is not a property of the statement:
+`DELETE p FROM p JOIN o ON p.id = o.ref WHERE o.x > 0` deleted 2 of 5 rows against one
+dataset and all 2000 against another, and a join's `ON` necessarily names the target, so it
+proves nothing. Five rounds of adversarial measurement went into trying to read this off the
+syntax before the rule became "a second table means tier two" (#80, #93). That refuses the
+standard `UPDATE … FROM`, `UPDATE … JOIN … SET` and multi-table `DELETE` idioms for
+unattended callers: rewrite the other table into a subquery in the `WHERE`, or run them
+where someone can confirm.
+
+**For a single-table write, the `WHERE` has to be about that table.** `UPDATE p SET c = 1
+WHERE id = 1` is an ordinary write; `UPDATE p SET c = (SELECT max(x) FROM o WHERE o.id = 1)`
+is not, because its only `WHERE` restricts the subquery and the write touches every row. A
+*correlated* reference back to the target does count, so
+`DELETE FROM t WHERE EXISTS (SELECT 1 FROM o WHERE o.tid = t.id)` is tier one while
+`DELETE FROM t WHERE EXISTS (SELECT 1 FROM o WHERE o.id = 1)` deletes every row and is tier
+two. A qualifier the subquery binds itself — including the target's own name, as in
+`DELETE FROM sessions WHERE EXISTS (SELECT 1 FROM sessions WHERE …)` — is about the
+subquery's rows, not the write.
+
+This is a lower bound, not a proof: `WHERE id IS NOT NULL` names the target and still touches
+every row, and no static check settles that. What it rules out is the class where nothing in
+the condition is about the table being written.
+
+**When the parser cannot read the statement**, there is no tree to judge and the same rule is
+applied to the text: tier one only when the statement reads as a write to one named table
+with a `WHERE` or `LIMIT` and contains no `SELECT`, `TABLE`, `VALUES`, `JOIN`, `USING`, a
+statement-level `WITH`, or an `UPDATE … FROM`. A keyword inside parentheses is not at
+statement level, so `SUBSTRING(x FROM 2)` and `AGAINST ('a' WITH QUERY EXPANSION)` do not
+trip it. This is written as an allowlist because the denylist that preceded it was defeated
+once per review round — `USING`, then `JOIN`, then a CTE, then a subquery, then `TABLE` as a
+subquery.
 
 **Escape routes.** For a statement that accepts a `WHERE`, put the intent in the SQL:
 
@@ -359,6 +392,7 @@ dbcli query "UPDATE users SET banned = 1"                    # refused, reason=n
 dbcli query "UPDATE users SET banned = 1 WHERE 1=1"          # runs — intent is explicit
 dbcli query "DELETE FROM sessions LIMIT 1000"                # runs — damage is bounded
 dbcli query "UPDATE users SET banned = 1 WHERE id = 3" --yes # tier one, question skipped
+dbcli query "UPDATE p SET x = 1 FROM o WHERE o.id = 1"       # refused — the WHERE is about o, not p
 ```
 
 This is deliberately not a flag. `WHERE 1=1` appended to a statement that already has a

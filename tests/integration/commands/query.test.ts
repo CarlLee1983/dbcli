@@ -6,7 +6,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { queryCommand } from '@/commands/query'
 import { PostgreSQLAdapter } from '@/adapters/postgresql-adapter'
-import type { DbcliConfig } from '@/utils/validation'
 
 // Use SQLite for testing (no external database required)
 // In production, can be configured to use real PostgreSQL/MySQL
@@ -17,22 +16,6 @@ let mockConsoleError: string[] = []
 
 describe('Query Command Integration', () => {
   beforeAll(async () => {
-    // Create mock config
-    const _config: DbcliConfig = {
-      connection: {
-        system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'postgres',
-        password: 'postgres',
-        database: 'test_db',
-      },
-      permission: 'query-only',
-      schema: {},
-      metadata: { version: '1.0' },
-      blacklist: { tables: [], columns: {} },
-    }
-
     // Mock console for capturing output
     mockConsoleLog = []
     mockConsoleError = []

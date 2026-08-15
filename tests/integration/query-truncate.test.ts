@@ -9,7 +9,13 @@ let workspace: string
 let configDir: string
 
 async function run(args: string[]) {
-  const env = { ...process.env, NODE_ENV: 'test', DBCLI_NO_UPDATE_CHECK: '1' }
+  // `process.env` spreads into an object with only the declared keys, so the
+  // annotation is what lets a test add or drop a variable dbcli reads.
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    NODE_ENV: 'test',
+    DBCLI_NO_UPDATE_CHECK: '1',
+  }
   delete env.DBCLI_CONNECTION
   const child = Bun.spawn({
     cmd: ['bun', 'run', CLI, '--config', configDir, '--use', 'missing', 'query', ...args],

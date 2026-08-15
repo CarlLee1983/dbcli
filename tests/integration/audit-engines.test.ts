@@ -132,7 +132,7 @@ describe('Cross-Engine Audit & Rejection Paths', () => {
 
     const logPath = join(auditDir, 'mongo-conn.jsonl')
     const logLines = (await readFile(logPath, 'utf8')).split('\n').filter(Boolean)
-    const entry = JSON.parse(logLines[0])
+    const entry = JSON.parse(logLines[0]!)
 
     expect(entry.engine).toBe('mongodb')
     expect(entry.target).toBe('logs')

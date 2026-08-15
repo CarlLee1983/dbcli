@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { analyzeQuerylensEvents, redactEventsForAnalysis } from '@/querylens/analyze'
 import { renderQuerylensMarkdown } from '@/querylens/render'
+import type { QueryCompletedEvent } from '@/proxy/events'
 import { completed, errored, sessionStarted } from '../proxy/event-fixtures'
 
 const analyzeOptions = { slowMs: 50, top: 3, nPlusOne: 2, sourceFiles: [], malformedLines: 0 }
@@ -10,7 +11,9 @@ describe('QueryLens analysis', () => {
     const original = completed({
       sql: "SELECT * FROM users WHERE email = 'secret@example.com' AND id = 42",
     })
-    const redacted = redactEventsForAnalysis([original])
+    // `redactEventsForAnalysis` takes and returns the whole `ProxyEvent` union,
+    // only three members of which carry `sql`. What went in here is one of them.
+    const redacted = redactEventsForAnalysis([original]) as QueryCompletedEvent[]
     expect(redacted[0]!.sql).toBe('SELECT * FROM users WHERE email = ? AND id = ?')
     expect(original.sql).toContain('secret@example.com')
 

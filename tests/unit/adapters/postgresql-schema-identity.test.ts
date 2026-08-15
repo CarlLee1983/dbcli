@@ -30,7 +30,9 @@ function installForeignKeyCatalogFixture(
   }
 ): { foreignKeyQueries: string[] } {
   const foreignKeyQueries: string[] = []
-  adapter.execute = async (sql: string, params) => {
+  // A concrete mock cannot satisfy `execute`'s `<T>() => ExecutionResult<T>`
+  // for every T; it returns the rows this test's caller will ask for.
+  adapter.execute = (async (sql: string, params) => {
     const isForeignKeyQuery =
       sql.includes("constraint_type = 'FOREIGN KEY'") || sql.includes("contype = 'f'")
     if (!isForeignKeyQuery) {
@@ -43,7 +45,7 @@ function installForeignKeyCatalogFixture(
       ? fixture.oidKeyedRows[tableName]
       : fixture.nameJoinedRows[tableName]
     return { rows: rows ?? [], affectedRows: 0 }
-  }
+  }) as typeof adapter.execute
   return { foreignKeyQueries }
 }
 
@@ -91,7 +93,7 @@ function installSchemaQueryCapture(adapter: PostgreSQLAdapter): {
 } {
   const queries: Array<{ sql: string; params: unknown[] | undefined }> = []
 
-  adapter.execute = async (sql: string, params) => {
+  adapter.execute = (async (sql: string, params) => {
     queries.push({ sql, params })
 
     if (sql.includes('array_agg(primary_key_column.attname')) {
@@ -106,7 +108,7 @@ function installSchemaQueryCapture(adapter: PostgreSQLAdapter): {
     }
 
     return { rows: [], affectedRows: 0 }
-  }
+  }) as typeof adapter.execute
 
   return { queries }
 }
@@ -117,7 +119,7 @@ function normalizedQuery(sql: string): string {
 
 test('listTables preserves exact catalog schema and table names', async () => {
   const adapter = createAdapter()
-  adapter.execute = async () => ({
+  adapter.execute = (async () => ({
     rows: [
       {
         schema_name: 'Public',
@@ -128,7 +130,7 @@ test('listTables preserves exact catalog schema and table names', async () => {
       },
     ],
     affectedRows: 0,
-  })
+  })) as typeof adapter.execute
 
   expect(await adapter.listTables()).toContainEqual(
     expect.objectContaining({ schema: 'Public', name: 'Users' })

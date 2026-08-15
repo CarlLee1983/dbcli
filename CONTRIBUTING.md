@@ -75,19 +75,27 @@ DBCLI_LANG=zh-TW ./dist/cli.mjs --help
 
 #### Typechecking
 
-`bun run typecheck` covers `src/` and `scripts/`. Test files are a separate project,
-`tsconfig.tests.json`, run with `bun run typecheck:tests`.
+`bun run typecheck` covers `src/` and `scripts/`. Test files are a separate project:
 
-They are separate because they are not clean yet. The main `include` carried a
+| Command | Project | Covers | State |
+| :--- | :--- | :--- | :--- |
+| `bun run typecheck:tests` | `tsconfig.tests.json` | the test directories already clean | green, **enforced in CI** |
+| `bun run typecheck:tests:all` | `tsconfig.tests.all.json` | every test file | red — the remaining backlog |
+
+They are split because they are not all clean yet. The main `include` carried a
 `tests/**/*.{ts,tsx}` pattern for a long time, and TypeScript does not expand braces in an
-include glob — so it matched nothing and no test file had ever been typechecked. Turning it
-on reports 339 errors across 174 files, about six in ten of them an unchecked array index or
-optional field under `noUncheckedIndexedAccess`. Those are being cleared one test directory
-at a time, and `typecheck:tests` joins CI and the release checklist once they are (#97).
+include glob — so it matched nothing and no test file had ever been typechecked (#97).
+Turning it on reported 339 errors across 174 files, about six in ten an unchecked array index
+or optional field under `noUncheckedIndexedAccess`.
 
-Until then, a type-level assertion written in a test file compiles but nothing in CI runs it.
-Put compile-time guards in `src/` — `src/commands/audit.ts` has one, with a note explaining
-why it lives there rather than beside the code it guards.
+**When you clean a directory, add it to `tsconfig.tests.json`'s `include`.** That list is the
+ratchet: everything in it is checked in CI and cannot regress, and the backlog shrinks as the
+list grows. When the two projects cover the same files, delete `tsconfig.tests.all.json` and
+add `typecheck:tests` to the pre-release checklist.
+
+A type-level assertion in a directory that is not on the list yet compiles but nothing runs
+it — `src/commands/audit.ts` has one and a note explaining why it lives there rather than
+beside the code it guards.
 
 ### 5. Commit
 

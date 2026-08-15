@@ -33,6 +33,13 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # Test files were never typechecked at all until #97. They are being
+      # cleared one directory at a time, and `tsconfig.tests.json` lists the ones
+      # already clean — so this is green today and stops them regressing while
+      # the rest catch up. `bun run typecheck:tests:all` shows what is left.
+      - name: Typecheck tests
+        run: bun run typecheck:tests
+
       # Via `bun run` so the timeout lives in one place (package.json). Bun's 5s
       # default is too tight for windows-latest, where spawning a process costs
       # seconds; `[test] timeout` in bunfig.toml is documented but not honoured by

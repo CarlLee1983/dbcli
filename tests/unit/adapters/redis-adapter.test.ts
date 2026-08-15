@@ -533,10 +533,14 @@ describe('RedisAdapter — middleware (blacklist + size guard)', () => {
   })
 })
 
-function makeClientClass(reply: unknown) {
+// The adapter's client-class parameter type is not exported; take it from the
+// constructor rather than restating a shape that could drift from it.
+type RedisClientClass = ConstructorParameters<typeof RedisAdapter>[1]
+
+function makeClientClass(reply: unknown): RedisClientClass {
   return function (this: unknown) {
     return { connect: async () => {}, close: () => {}, send: async () => reply }
-  } as unknown as new () => unknown
+  } as unknown as RedisClientClass
 }
 
 test('RedisAdapter masks GET value per mask rules', async () => {

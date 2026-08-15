@@ -84,6 +84,7 @@
     "core-stdout:check": "bun run scripts/check-core-no-stdout.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "typecheck:tests": "tsc --noEmit --pretty false -p tsconfig.tests.json",
+    "typecheck:tests:all": "tsc --noEmit --pretty false -p tsconfig.tests.all.json",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
     "lint": "eslint src tests scripts --ext .ts --max-warnings=0",
     "format:check": "prettier --check .",

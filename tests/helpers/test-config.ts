@@ -21,14 +21,19 @@ const DEFAULT_PG_CONNECTION: DbcliConfig['connection'] = {
 
 export function makeTestConfig(overrides: ConfigOverrides = {}): DbcliConfig {
   const { connection: connOverride, ...rest } = overrides
-  return {
+  // Spreading the partial overrides last is what callers expect, and it is also
+  // what makes the literal stop matching `DbcliConfig`: every key the partial
+  // mentions comes back optional. Building the complete value first and merging
+  // into it keeps the required keys required.
+  const base: DbcliConfig = {
     connection: { ...DEFAULT_PG_CONNECTION, ...connOverride } as DbcliConfig['connection'],
     permission: 'query-only',
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
-    ...rest,
+    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
+  return { ...base, ...rest }
 }
 
 export function makeTestV2Config(

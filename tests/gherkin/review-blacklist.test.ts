@@ -72,11 +72,11 @@ await defineFeature<BlacklistWorld>({
     },
     {
       pattern: /^the protected tables are "([^"]+)"$/,
-      run: (world, match) => expect(world.report?.tables).toEqual([match[1]]),
+      run: (world, match) => expect(world.report?.tables).toEqual([match[1]!]),
     },
     {
       pattern: /^the protected columns for "([^"]+)" are "([^"]+)"$/,
-      run: (world, match) => expect(world.report?.columns[match[1]]).toEqual([match[2]]),
+      run: (world, match) => expect(world.report?.columns[match[1]!]).toEqual([match[2]!]),
     },
   ],
 })

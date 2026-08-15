@@ -21,8 +21,31 @@ function topLevelNames(program: Command): string[] {
   return program.commands.map((command) => command.name().split(' ')[0]!).sort()
 }
 
-/** Everything about a command that the CLI/help contract can observe. */
-function shape(command: Command) {
+/**
+ * Everything about a command that the CLI/help contract can observe.
+ *
+ * Written out rather than inferred because `shape` recurses through
+ * `subcommands`, and TypeScript cannot infer a type that refers to itself.
+ */
+interface CommandShape {
+  name: string
+  description: string
+  arguments: Array<{ name: string; required: boolean; variadic: boolean }>
+  options: Array<{
+    flags: string
+    long: string | undefined
+    short: string | undefined
+    description: string
+    defaultValue: unknown
+    required: boolean
+    optional: boolean
+    hasParser: boolean
+    choices: string[] | undefined
+  }>
+  subcommands: CommandShape[]
+}
+
+function shape(command: Command): CommandShape {
   return {
     name: command.name(),
     description: command.description(),

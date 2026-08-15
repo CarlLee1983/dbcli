@@ -48,11 +48,12 @@ export async function defineFeature<World>({
                   Boolean(candidate.match)
               )
 
-            if (matches.length !== 1) {
+            const [only] = matches
+            if (matches.length !== 1 || only === undefined) {
               const reason = matches.length === 0 ? 'No' : 'More than one'
               throw new Error(`${reason} step definition matched "${step.text}" in ${featurePath}`)
             }
-            await matches[0].definition.run(world, matches[0].match)
+            await only.definition.run(world, only.match)
           }
         } finally {
           await afterScenario?.(world)

@@ -29,7 +29,7 @@ describe('update hint session state', () => {
     expect(await claimUpdateHint(configPath, 'update', 'session-b', '1.3.0')).toBe(true)
 
     const state = JSON.parse(await readFile(updateHintStatePathForTest(configPath), 'utf8')) as {
-      sessions: Record<string, { update?: string; skill?: string }>
+      sessions: Record<string, { update?: string; skill?: string; updatedAt: string }>
     }
     expect(state.sessions['session-a']).toEqual({
       update: '1.2.0',

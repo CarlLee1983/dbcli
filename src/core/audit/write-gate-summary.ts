@@ -32,6 +32,7 @@ export const GATE_REASONS = [
   'unparseable',
   'multiple_statements',
   'non_unique_where',
+  'multi_table',
 ] as const
 
 export interface WriteGateSummary {

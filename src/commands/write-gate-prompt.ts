@@ -42,6 +42,7 @@ const REMEDY_KEY: Record<WriteGateReason, string> = {
   unparseable: 'ceremony.gate_remedy_unparseable',
   non_unique_where: 'ceremony.gate_remedy_non_unique_where',
   multiple_statements: 'ceremony.gate_remedy_multiple_statements',
+  multi_table: 'ceremony.gate_remedy_multi_table',
 }
 
 const WARNING_KEY: Record<WriteGateReason, string> = {
@@ -51,6 +52,7 @@ const WARNING_KEY: Record<WriteGateReason, string> = {
   unparseable: 'ceremony.gate_unparseable_warning',
   non_unique_where: 'ceremony.gate_full_table_warning',
   multiple_statements: 'ceremony.gate_multiple_statements_warning',
+  multi_table: 'ceremony.gate_multi_table_warning',
 }
 
 export interface WriteGateRequest {

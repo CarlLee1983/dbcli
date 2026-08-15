@@ -87,6 +87,7 @@ describe('summarizeWriteGate', () => {
       unparseable: 0,
       multiple_statements: 0,
       non_unique_where: 0,
+      multi_table: 0,
     })
   })
 

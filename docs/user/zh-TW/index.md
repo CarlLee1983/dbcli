@@ -288,7 +288,7 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 
 **第一級——一般寫入。** INSERT、帶 WHERE 的 UPDATE / DELETE、CREATE、ALTER。在互動終端下，dbcli 會先印出它把這句理解成什麼，再問你要不要執行；`--yes` 可以跳過。非互動執行（stdout 被導向、CI、agent）根本不會看到這個問題，`--format json` 即使在終端下也會關掉它。
 
-**第二級——收不回來的寫入。** 沒有 WHERE 的 UPDATE / DELETE、DROP、TRUNCATE、SQL parser 讀不懂的語句、一個字串裡塞了多句語句，以及 `dbcli update` / `dbcli delete` 中 `--where` 沒有命中主鍵或唯一索引的情況。dbcli 會要求你打出目標資料表的名稱，**沒有任何旗標可以跳過**，`--yes` 與 `--force` 都不行。當現場沒有人時，dbcli 直接拒絕：退出碼 1、什麼都不會送到資料庫，訊息會點名 `reason=no_where`、`reason=ddl_destruction`、`reason=unparseable`、`reason=multiple_statements` 、`reason=non_unique_where` 或 `reason=multi_table`。
+**第二級——收不回來的寫入。** 沒有 WHERE 的 UPDATE / DELETE、DROP、TRUNCATE、SQL parser 讀不懂的語句、一個字串裡塞了多句語句、裡面夾著另一個寫入的語句（資料修改型 CTE，例如 `WITH x AS (DELETE FROM t RETURNING *) INSERT INTO …`）、帶 `WHEN … THEN DELETE` 或 `THEN UPDATE` 動作的 `MERGE`，以及 `dbcli update` / `dbcli delete` 中 `--where` 沒有命中主鍵或唯一索引的情況。dbcli 會要求你打出目標資料表的名稱，**沒有任何旗標可以跳過**，`--yes` 與 `--force` 都不行。當現場沒有人時，dbcli 直接拒絕：退出碼 1、什麼都不會送到資料庫，訊息會點名 `reason=no_where`、`reason=ddl_destruction`、`reason=unparseable`、`reason=multiple_statements` 、`reason=non_unique_where`、`reason=multi_table` 或 `reason=nested_write`。
 
 **接了另一張表的寫入一律第二級，不管 WHERE 寫什麼。** 這種寫入會動到幾列取決於資料而不是語句：`DELETE p FROM p JOIN o ON p.id = o.ref WHERE o.x > 0` 在一組資料上刪了 5 列中的 2 列，在另一組上刪光 2000 列。join 的 ON 一定會提到目標表，所以它什麼也證明不了。這會讓 `UPDATE … FROM`、`UPDATE … JOIN … SET` 與多表 `DELETE` 這些標準寫法對無人看管的呼叫端被拒——把另一張表改寫成 WHERE 裡的子查詢，或改在有人可以確認的地方執行。
 

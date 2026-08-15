@@ -632,3 +632,339 @@ describe('what the operator has to type', () => {
     expect(verdict.confirmationPhrase).toBe('public.accounts')
   })
 })
+
+describe('a write nested inside another statement is not read off the head', () => {
+  // The statement type used to be whatever the leading keyword said, and
+  // PostgreSQL's data-modifying CTEs put an arbitrary write in front of it.
+  // Measured against a 2000-row table on PostgreSQL 16 (#94).
+
+  test('a CTE that deletes every row is not an INSERT', async () => {
+    // Measured: 2000 of 2000 deleted, admitted as tier one.
+    const verdict = await classifySqlWriteGate(
+      'WITH moved AS (DELETE FROM users RETURNING *) INSERT INTO archive (id) SELECT id FROM moved',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+    expect(verdict.operation).toBe('DELETE')
+  })
+
+  test('a CTE that rewrites every row is not an INSERT either', async () => {
+    // Measured: 2000 of 2000 rewritten, admitted as tier one.
+    const verdict = await classifySqlWriteGate(
+      'WITH u AS (UPDATE users SET banned = 1 RETURNING *) INSERT INTO archive (id) SELECT id FROM u',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.operation).toBe('UPDATE')
+  })
+
+  test('the same CTE under a CREATE head is the same statement', async () => {
+    // Which is why the rule is not attached to INSERT. Measured: 2000 of 2000
+    // deleted, admitted as tier one because `CREATE` is an ordinary write.
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE t2 AS WITH moved AS (DELETE FROM users RETURNING *) SELECT id FROM moved',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('a CTE that only reads leaves the insert alone', async () => {
+    const verdict = await classifySqlWriteGate(
+      'WITH s AS (SELECT id FROM users WHERE id < 5) INSERT INTO archive (id) SELECT id FROM s',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+
+  test('an upsert is not a nested write, however much DO UPDATE reads like one', async () => {
+    // The parenthesised group here is `(id)`, a conflict target. Measured: 1 row
+    // rewritten on PostgreSQL, and the MySQL spelling below likewise.
+    const postgres = await classifySqlWriteGate(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET name = 'b'",
+      { dialect: 'postgresql' }
+    )
+    expect(postgres.tier).toBe('one')
+
+    const mysql = await classifySqlWriteGate(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = 'b'",
+      { dialect: 'mysql' }
+    )
+    expect(mysql.tier).toBe('one')
+  })
+
+  test('a MERGE head does not shelter the CTE in front of it', async () => {
+    // The first version of this fix classified the MERGE first and returned tier
+    // one for its insert-only action list, which ended the classification before
+    // the CTE was ever looked at. Measured: `MERGE 2000`, and `p` left empty.
+    const verdict = await classifySqlWriteGate(
+      'WITH moved AS (DELETE FROM p RETURNING *) MERGE INTO archive a USING moved m ON a.id = m.id WHEN NOT MATCHED THEN INSERT VALUES (m.id, m.c)',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('an UPDATE head does not shelter it either', async () => {
+    // This one was hidden by an assumption rather than by an ordering: a
+    // CTE-wrapped DELETE defeats the parser and resolves upwards through
+    // `unparseable`, but a CTE-wrapped UPDATE parses, and its `with` clause was
+    // never read. Measured: `UPDATE 1` reported, 2000 rows of `p` rewritten.
+    const verdict = await classifySqlWriteGate(
+      'WITH m AS (UPDATE p SET c = 99 RETURNING *) UPDATE q SET c = 1 WHERE q.id = 1',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('and neither does a qualified DELETE head', async () => {
+    // Measured: 2000 rows appended to `log` while the DELETE removed one row.
+    const verdict = await classifySqlWriteGate(
+      'WITH m AS (INSERT INTO log SELECT g FROM generate_series(1, 2000) g RETURNING *) DELETE FROM q WHERE q.id = 1',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('a CTE body may open with a CTE of its own, and the write is still in there', async () => {
+    // The criterion asked whether a write *opened* the group, which a nested
+    // `WITH` is enough to prevent — the word standing after the parenthesis is
+    // `WITH`. Measured: `MERGE 2000`, and `p` left empty, as tier one.
+    const verdict = await classifySqlWriteGate(
+      'WITH m AS (WITH i AS (SELECT 1) DELETE FROM p RETURNING *) MERGE INTO archive a USING m ON a.id = m.id WHEN NOT MATCHED THEN INSERT VALUES (m.id, m.c)',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('the same body under a CREATE head', async () => {
+    // Measured: `SELECT 2000`, and `p` left empty, as tier one. The heads that
+    // do not pass through the parser — MERGE, CREATE, ALTER — have no accidental
+    // second line of defence, which is why this criterion has to hold alone.
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE t9 AS WITH m AS (WITH i AS (SELECT 1) DELETE FROM p RETURNING *) SELECT * FROM m',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('a column called merge is a column', async () => {
+    // `MERGE` is not reserved in any supported dialect, unlike INSERT, UPDATE
+    // and DELETE, which have to be quoted to be a column name — and quoting
+    // removes them from this text entirely. Measured on PostgreSQL 16 and MySQL
+    // 8.4: `merge int` builds, and this rewrites exactly the one row it names.
+    const verdict = await classifySqlWriteGate('UPDATE t SET total = (merge + 1) WHERE id = 1', {
+      dialect: 'postgresql',
+    })
+    expect(verdict.tier).toBe('one')
+  })
+
+  test('a MERGE inside a CTE body is still caught, INTO and all', async () => {
+    const verdict = await classifySqlWriteGate(
+      'WITH m AS (MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE RETURNING *) SELECT * FROM m',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('a locking read inside a subquery is not a nested write', async () => {
+    // `SELECT … FOR UPDATE` takes a lock; it writes nothing. The permission
+    // guard drops the clause before looking for a write keyword for exactly this
+    // reason, and a subquery is where the clause turns up. This statement is
+    // still tier two — the bundled grammar rejects the clause, and an unreadable
+    // statement carrying a subquery resolves upwards — but it is refused for not
+    // being readable, not for containing a write it does not contain.
+    const verdict = await classifySqlWriteGate(
+      'UPDATE users SET banned = 1 WHERE id IN (SELECT id FROM sessions FOR UPDATE)',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.reason).toBe('unparseable')
+  })
+
+  test("a foreign key's referential action is not a write", async () => {
+    // `ON DELETE CASCADE` lives inside the column list, which is where widening
+    // the criterion from "opens the group" to "anywhere inside it" put it. The
+    // giveaway is the contrast: the same constraint added by `ALTER TABLE …`
+    // sits at depth zero and was tier one, so the criterion was answering a
+    // question about parentheses rather than about writes.
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE child (id int PRIMARY KEY, pid int REFERENCES parent(id) ON DELETE CASCADE)',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+
+  test('nor is a named constraint carrying both actions', async () => {
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE child (id int, pid int, CONSTRAINT fk FOREIGN KEY (pid) REFERENCES parent(id) ON UPDATE CASCADE ON DELETE SET NULL)',
+      { dialect: 'mysql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+
+  test("nor is MySQL's ON UPDATE CURRENT_TIMESTAMP, which is on most tables", async () => {
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE stamps (id int PRIMARY KEY, ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)',
+      { dialect: 'mysql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+
+  test('but a CTE body is still read past a referential action in the same statement', async () => {
+    const verdict = await classifySqlWriteGate(
+      'CREATE TABLE child (id int REFERENCES parent(id) ON DELETE CASCADE) AS WITH m AS (DELETE FROM p RETURNING *) SELECT id FROM m',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('nested_write')
+  })
+
+  test('a scalar subquery in a VALUES row is not a nested write', async () => {
+    const verdict = await classifySqlWriteGate(
+      'INSERT INTO archive (id) VALUES ((SELECT max(id) FROM users))',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+})
+
+describe('MERGE is classified by the actions it carries', () => {
+  // `MERGE` used to map to `INSERT`, which made every one of them tier one.
+  // Measured against a 2000-row table on PostgreSQL 16 (#95).
+
+  test('WHEN MATCHED THEN DELETE empties the table in one statement', async () => {
+    // Measured: 2000 of 2000 deleted, admitted as tier one.
+    const verdict = await classifySqlWriteGate(
+      'MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.operation).toBe('DELETE')
+  })
+
+  test('a MERGE is still a MERGE when a CTE goes in front of it', async () => {
+    // Found by measuring the first fix rather than by reading it: anchoring on
+    // the leading keyword was defeated by the one thing that can legally precede
+    // a statement. Measured: 2000 of 2000 deleted, admitted as tier one.
+    const verdict = await classifySqlWriteGate(
+      'WITH s AS (SELECT 1 AS x) MERGE INTO p USING s ON true WHEN MATCHED THEN DELETE',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.operation).toBe('DELETE')
+  })
+
+  test('WHEN MATCHED THEN UPDATE rewrites it in one statement instead', async () => {
+    // Measured: 2000 of 2000 rewritten, admitted as tier one.
+    const verdict = await classifySqlWriteGate(
+      "MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN UPDATE SET c = 'x'",
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.operation).toBe('UPDATE')
+  })
+
+  test('a MERGE that can only insert stays an ordinary write', async () => {
+    // This is what keeps the fix a classification rather than a blanket refusal:
+    // a MERGE with no destructive action cannot empty or rewrite the target.
+    const verdict = await classifySqlWriteGate(
+      "MERGE INTO p USING (SELECT 9001 AS id) s ON p.id = s.id WHEN NOT MATCHED THEN INSERT (id, c) VALUES (s.id, 'n')",
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('one')
+    expect(verdict.operation).toBe('INSERT')
+  })
+
+  test('WHEN MATCHED THEN DO NOTHING is not a destructive action', async () => {
+    const verdict = await classifySqlWriteGate(
+      'MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DO NOTHING',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('one')
+  })
+
+  test('a MERGE names its target, so the phrase is a table rather than CONFIRM', async () => {
+    const verdict = await classifySqlWriteGate(
+      'MERGE INTO public.accounts USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.confirmationPhrase).toBe('public.accounts')
+  })
+
+  test('a quoted target asks for the fixed phrase rather than the next word along', async () => {
+    // Quoted identifiers are erased along with string literals before any of
+    // this is read, so there is no name left to ask for — and the word standing
+    // where it was is `USING`, which the operator can type without having looked
+    // at what the statement targets. Same fallback as an index drop.
+    const verdict = await classifySqlWriteGate(
+      'MERGE INTO "accounts" USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.confirmationPhrase).toBe(WRITE_GATE_FALLBACK_PHRASE)
+  })
+
+  test('a schema-qualified quoted target does not ask for half a name either', async () => {
+    const verdict = await classifySqlWriteGate(
+      'MERGE INTO public."accounts" USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.confirmationPhrase).toBe(WRITE_GATE_FALLBACK_PHRASE)
+  })
+})
+
+describe('the cost of these two rules, recorded rather than hidden', () => {
+  // Both are refusals of statements that touch one row. Both are accepted for
+  // the reason `multiple_statements` gives: a statement carrying two writes has
+  // no single tier, and reading one off the other is what #94 and #95 were.
+
+  test('a CTE deleting one row by primary key is refused with the rest', async () => {
+    // Measured: 1 of 2000 deleted.
+    const verdict = await classifySqlWriteGate(
+      'WITH moved AS (DELETE FROM users WHERE id = 1 RETURNING *) INSERT INTO archive (id) SELECT id FROM moved',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+  })
+
+  test('a publication option named after a write is refused, and left that way', async () => {
+    // PostgreSQL's `WITH (option = value)` takes a reserved word as a bare
+    // value, and logical replication's options are those words. Refusing it is
+    // wrong, and fixing it would cost more than it buys: each removal the
+    // criterion makes rests on a fact about the grammar, and this one would rest
+    // on recognising a particular clause shape — the failure the criterion
+    // exists to avoid. Recorded in ADR 0010 as a residual rather than patched.
+    const verdict = await classifySqlWriteGate(
+      'CREATE PUBLICATION pub FOR TABLE t WITH (publish = delete)',
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+
+    // The quoted spelling, which is the one the documentation shows, is fine.
+    const quoted = await classifySqlWriteGate(
+      "CREATE PUBLICATION pub FOR TABLE t WITH (publish = 'insert, update, delete')",
+      { dialect: 'postgresql' }
+    )
+    expect(quoted.tier).toBe('one')
+  })
+
+  test('the ordinary MERGE upsert is refused too', async () => {
+    // Measured: 1 of 2000 rewritten. It is a multi-table write, and it is
+    // refused on the same terms as `UPDATE p SET … FROM o WHERE p.id = o.ref`,
+    // which ADR 0010 already refuses. The remedy is the same: run it where
+    // someone can confirm it.
+    const verdict = await classifySqlWriteGate(
+      "MERGE INTO p USING (SELECT 1 AS id) s ON p.id = s.id WHEN MATCHED THEN UPDATE SET c = 'x' WHEN NOT MATCHED THEN INSERT (id, c) VALUES (s.id, 'n')",
+      { dialect: 'postgresql' }
+    )
+    expect(verdict.tier).toBe('two')
+    expect(verdict.reason).toBe('multi_table')
+  })
+})

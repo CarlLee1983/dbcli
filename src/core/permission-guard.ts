@@ -156,8 +156,12 @@ export const SQL_WRITE_OR_DDL_KEYWORDS =
 /**
  * `FOR UPDATE` and `FOR SHARE` take row locks. They read, and the `UPDATE`
  * inside them must not be mistaken for a write.
+ *
+ * For `String.replace` only. The `g` flag makes this stateful, and it is shared
+ * across modules — `replace` ignores and resets `lastIndex`, but `test` and
+ * `exec` would carry it between callers and skip matches intermittently.
  */
-const SQL_LOCK_CLAUSE = /\bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b|\bFOR\s+(?:KEY\s+)?SHARE\b/gi
+export const SQL_LOCK_CLAUSE = /\bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b|\bFOR\s+(?:KEY\s+)?SHARE\b/gi
 
 /**
  * The write or DDL keyword a statement would actually execute, or undefined if

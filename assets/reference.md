@@ -346,10 +346,10 @@ says whether this particular statement may run right now.
 | Tier | Statements | Interactive terminal | Non-interactive (or `--format json`) |
 | :--- | :--- | :--- | :--- |
 | One | `INSERT`, `UPDATE` / `DELETE` **with** a `WHERE` or `LIMIT`, `CREATE`, `ALTER` | Summary + `y/N`; `--yes` skips it | Runs, exactly as before |
-| Two | `UPDATE` / `DELETE` with **no** `WHERE`, `DROP`, `TRUNCATE`, unparseable statements, several statements in one string | Type the target table name; **no flag skips it** | **Refused**: exit `1`, nothing sent to the database |
+| Two | `UPDATE` / `DELETE` with **no** `WHERE`, `DROP`, `TRUNCATE`, unparseable statements, several statements in one string, a write nested inside another statement, a destructive `MERGE` | Type the target table name; **no flag skips it** | **Refused**: exit `1`, nothing sent to the database |
 
 A refusal message names a machine-readable reason — `reason=no_where`, `reason=multi_table`,
-`reason=ddl_destruction`, `reason=unparseable`, `reason=multiple_statements` — so a caller can tell it apart from a
+`reason=ddl_destruction`, `reason=unparseable`, `reason=multiple_statements`, `reason=nested_write` — so a caller can tell it apart from a
 connection failure or a permission denial.
 
 **A write that joins another table is tier two, whatever its `WHERE` says.** Whether such a
@@ -361,6 +361,19 @@ syntax before the rule became "a second table means tier two" (#80, #93). That r
 standard `UPDATE … FROM`, `UPDATE … JOIN … SET` and multi-table `DELETE` idioms for
 unattended callers: rewrite the other table into a subquery in the `WHERE`, or run them
 where someone can confirm.
+
+**A statement is not the keyword it starts with.** PostgreSQL's data-modifying CTEs put an
+arbitrary write in front of the statement the first keyword names, and a `MERGE` carries its
+writes in a `WHEN … THEN` list — measured against a 2000-row table,
+`WITH moved AS (DELETE FROM p RETURNING *) INSERT INTO archive …` and
+`MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE` each emptied it
+while reading as an ordinary `INSERT` (#94, #95). So a write nested inside another statement
+is tier two, `reason=nested_write`, and a `MERGE` is classified by its actions: a
+`THEN DELETE` or `THEN UPDATE` is tier two, `reason=multi_table`, while an insert-only or
+`DO NOTHING` one stays tier one. `ON CONFLICT … DO UPDATE`, `ON DUPLICATE KEY UPDATE` and
+`INSERT … SELECT` are untouched by this — they are not nested writes, whatever they read
+like. The cost is a CTE that deletes one row by primary key, and the ordinary `MERGE` upsert,
+both refused for unattended callers.
 
 **For a single-table write, the `WHERE` has to be about that table.** `UPDATE p SET c = 1
 WHERE id = 1` is an ordinary write; `UPDATE p SET c = (SELECT max(x) FROM o WHERE o.id = 1)`

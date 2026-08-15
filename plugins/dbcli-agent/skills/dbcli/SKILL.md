@@ -50,10 +50,14 @@ run unattended exactly as before; `--yes` skips the terminal prompt a human woul
 answer a prompt** — `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, a statement
 the SQL parser cannot read, several statements in one string, and `update` / `delete --where` matching on no primary key and
 no unique index. The process exits `1` with `reason=no_where`, `reason=ddl_destruction`,
-`reason=unparseable`, `reason=multi_table` or `reason=non_unique_where`, and **nothing
+`reason=unparseable`, `reason=multi_table`, `reason=nested_write` or
+`reason=non_unique_where`, and **nothing
 reaches the database**. In `dbcli shell`, a subcommand whose name is a SQL keyword needs a
 `\` prefix (`\delete users --where id=1`) — a bare `delete …` is read as SQL. A write that joins a second table is always tier two: whether it is
-limited to particular rows depends on the data, not on the statement.
+limited to particular rows depends on the data, not on the statement. So is a statement
+carrying a second write inside it — a data-modifying CTE
+(`WITH x AS (DELETE FROM t RETURNING *) INSERT INTO …`) or a `MERGE` with a
+`WHEN … THEN DELETE` / `THEN UPDATE` action.
 **No flag bypasses this** — not `--yes`, not `--force`. To write every row on purpose, put
 the intent in the SQL itself: add `WHERE 1=1` or a `LIMIT`. `DROP` / `TRUNCATE` have no
 unattended route at all; escalate to a human.

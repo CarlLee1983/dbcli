@@ -42,9 +42,13 @@ legacy 單檔 `.dbcli`。若要防護同一 OS 使用者的惡意 process，host
 人能回答提問時會直接被拒絕** — 沒有 `WHERE` 的 `UPDATE` / `DELETE`、`DROP`、`TRUNCATE`、
 SQL parser 讀不懂的語句、一個字串裡塞了多句語句，以及 `update` / `delete --where` 沒有命中主鍵或唯一索引的情況。
 行程以 `1` 結束，訊息點名 `reason=no_where`、`reason=ddl_destruction`、
-`reason=unparseable`、`reason=multi_table` 或 `reason=non_unique_where`，而且**什麼都不會
+`reason=unparseable`、`reason=multi_table`、`reason=nested_write` 或
+`reason=non_unique_where`，而且**什麼都不會
 送到資料庫**。在 `dbcli shell` 裡，名稱與 SQL 關鍵字相同的子指令需要 `\` 前綴
 （`\delete users --where id=1`）——直接打 `delete …` 會被當成 SQL。接了第二張表的寫入一律第二級：它會動到幾列取決於資料而不是語句。
+裡面還夾著另一個寫入的語句也是——資料修改型 CTE
+（`WITH x AS (DELETE FROM t RETURNING *) INSERT INTO …`）與帶
+`WHEN … THEN DELETE` / `THEN UPDATE` 動作的 `MERGE` 都算。
 **沒有任何旗標可以繞過** — `--yes` 不行，`--force` 也不行。真的要寫全表，就把意圖寫進
 SQL 本身：補上 `WHERE 1=1` 或 `LIMIT`。`DROP` / `TRUNCATE` 完全沒有無人看管的路徑，請
 升級交給人類處理。

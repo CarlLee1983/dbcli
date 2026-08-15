@@ -142,14 +142,26 @@ export class ReplEngine {
       // Resolve the dbcli CLI entry point path
       const cliPath = new URL('../../cli.ts', import.meta.url).pathname
 
-      // Build argv: [command, --config, current-config, ...args]
-      const argv = [parsed.command, '--config', this.context.configPath, ...parsed.args]
+      // `--config` goes ahead of the command, where the program-level option
+      // lives. Behind it, Commander hands it to the subcommand, and the ones
+      // that do not declare their own — `query`, `insert`, `update`, `delete`,
+      // every write path — died with "unknown option '--config'" before doing
+      // anything. Commands that do declare it still read this: an explicitly
+      // set ancestor option outranks their own default (`resolveConfigPath`).
+      const argv = ['--config', this.context.configPath, parsed.command, ...parsed.args]
 
       // Spawn a subprocess to run the dbcli command
       const proc = Bun.spawn(['bun', 'run', cliPath, ...argv], {
         stdout: 'pipe',
         stderr: 'pipe',
-        env: { ...process.env },
+        // The child gets no stdin (Bun's default is `ignore`), so anything that
+        // needs an answer — the tier-two write gate above all — sees an
+        // unattended caller and refuses. That refusal is correct, but its
+        // ordinary wording ("nobody is here", "run it from an interactive
+        // terminal") is the opposite of what the operator sees: they are at a
+        // terminal, in this shell. The marker lets the refusal say something
+        // they can act on instead (#84).
+        env: { ...process.env, DBCLI_SHELL_SUBCOMMAND: '1' },
       })
 
       const [stdoutBuf, stderrBuf] = await Promise.all([

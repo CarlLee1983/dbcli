@@ -186,6 +186,33 @@ describe('the two-tier gate on raw SQL', () => {
       expect((error as Error).message).toMatch(/WHERE|LIMIT/)
     })
 
+    test('a subcommand run from the shell is told what it can actually do', async () => {
+      // `dbcli shell` spawns subcommands with no stdin, so they refuse — right
+      // outcome, wrong sentence: "nobody is here to confirm it" is read by a
+      // person sitting at the prompt that started it (#84).
+      setTTY(false)
+      process.env.DBCLI_SHELL_SUBCOMMAND = '1'
+      try {
+        const error = await run('DROP TABLE users').catch((caught: unknown) => caught)
+
+        expect((error as Error).message).toMatch(/dbcli>/)
+        expect((error as Error).message).not.toMatch(/nobody is here|interactive terminal/)
+        // Prose only: an agent branches on these two and must not have to care.
+        expect((error as { code?: string }).code).toBe('WRITE_GATE_REFUSED')
+        expect((error as { reason?: string }).reason).toBe('ddl_destruction')
+        expect(executeConnection).not.toHaveBeenCalled()
+      } finally {
+        delete process.env.DBCLI_SHELL_SUBCOMMAND
+      }
+    })
+
+    test('outside the shell the refusal keeps its own wording', async () => {
+      setTTY(false)
+      const error = await run('DROP TABLE users').catch((caught: unknown) => caught)
+
+      expect((error as Error).message).not.toMatch(/dbcli>/)
+    })
+
     test('an explicit json format is refused even at a terminal', async () => {
       setTTY(true)
       const attempt = run('DELETE FROM users', { format: 'json' })

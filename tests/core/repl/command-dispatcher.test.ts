@@ -28,7 +28,20 @@ describe('parseCommandLine', () => {
   test('parses command with multiple arguments', () => {
     const result = parseCommandLine('query "SELECT * FROM users" --format json')
     expect(result.command).toBe('query')
-    expect(result.args).toEqual(['"SELECT * FROM users"', '--format', 'json'])
+    // Without the quotes: these tokens become argv for `Bun.spawn`, where no
+    // shell strips them and the statement would reach the parser as one quoted
+    // identifier.
+    expect(result.args).toEqual(['SELECT * FROM users', '--format', 'json'])
+  })
+
+  test('an empty quoted argument survives as an empty string', () => {
+    const result = parseCommandLine('delete users --where ""')
+    expect(result.args).toEqual(['users', '--where', ''])
+  })
+
+  test('a quote inside an argument groups without becoming part of it', () => {
+    const result = parseCommandLine(`query "SELECT * FROM users WHERE name = 'a b'"`)
+    expect(result.args).toEqual(["SELECT * FROM users WHERE name = 'a b'"])
   })
 
   test('parses command with flags', () => {

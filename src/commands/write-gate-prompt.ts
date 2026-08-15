@@ -118,8 +118,16 @@ async function enforceTierTwo(request: WriteGateRequest, attended: boolean): Pro
   const reason = verdict.reason ?? 'no_where'
 
   if (!attended) {
+    // Same refusal, different sentence, when the caller is a dbcli subcommand
+    // the interactive shell spawned: there a person *is* watching, and telling
+    // them "nobody is here" or "run it from an interactive terminal" describes
+    // neither their situation nor anything they can do. `code` and `reason` are
+    // untouched — an agent branches on those, and this changes only the prose.
+    const inShell = process.env.DBCLI_SHELL_SUBCOMMAND === '1'
     throw new WriteGateRefusal(
-      `${t_vars('ceremony.gate_refused', { reason })} ${t(REMEDY_KEY[reason])}`,
+      inShell
+        ? `${t_vars('ceremony.gate_refused_in_shell', { reason })} ${t('ceremony.gate_remedy_in_shell')}`
+        : `${t_vars('ceremony.gate_refused', { reason })} ${t(REMEDY_KEY[reason])}`,
       reason,
       verdict.table
     )

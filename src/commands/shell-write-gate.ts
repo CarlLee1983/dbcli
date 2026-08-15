@@ -47,7 +47,7 @@ export interface ShellWriteGateOptions {
    * reader opened on stdin would take the same keystrokes twice — once as the
    * confirmation and once as the next line at the prompt.
    */
-  ask?: (question: string) => Promise<string>
+  ask?: (question: string) => Promise<string | null>
 }
 
 /**

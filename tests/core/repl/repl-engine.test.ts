@@ -163,6 +163,20 @@ describe('ReplEngine', () => {
     expect(engine.isMultiline()).toBe(true)
   })
 
+  test('cancelling multiline drops what was typed instead of prefixing the next statement', async () => {
+    const adapter = createMockAdapter()
+    const engine = new ReplEngine(adapter, mockContext, historyPath)
+
+    await engine.processInput('SELECT *')
+    engine.cancelMultiline()
+    expect(engine.isMultiline()).toBe(false)
+
+    await engine.processInput('SELECT 1;')
+
+    const [sql] = (adapter.execute as unknown as { mock: { calls: string[][] } }).mock.calls[0]!
+    expect(sql).toBe('SELECT 1;')
+  })
+
   test('attempts reconnection on connection error', async () => {
     const adapter = createMockAdapter()
     let callCount = 0

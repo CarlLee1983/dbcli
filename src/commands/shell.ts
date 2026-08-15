@@ -189,26 +189,8 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // the one reader that owns the terminal through this holder rather than by
   // opening a second one on stdin.
   let replInterface: ReturnType<typeof createInterface> | null = null
-  const askAtPrompt = (question: string): Promise<string> => {
-    // Unreachable in production — the gate is only consulted from the `line`
-    // handler, which cannot run before the interface exists. Throwing rather
-    // than answering with an empty string keeps a programming error from being
-    // recorded in the audit log as an operator who mistyped the table name.
-    if (!replInterface)
-      throw new Error('Write gate asked for confirmation before the shell started')
-    const rl = replInterface
-    return new Promise<string>((resolve) =>
-      rl.question(`${question}: `, (answer) => {
-        // `question()` resumes the interface to read the answer, undoing the
-        // pause the line handler took out. Re-pausing here keeps that handler's
-        // `finally` the single point at which the shell starts reading lines
-        // again — otherwise the next line typed runs concurrently with the
-        // statement just confirmed, through the same engine and buffer.
-        rl.pause()
-        resolve(answer)
-      })
-    )
-  }
+  const { createPromptAsker } = await import('./shell-prompt-asker')
+  const asker = createPromptAsker(() => replInterface)
 
   // The write gate (#78). SQL engines only: Redis and MongoDB statements have a
   // different shape and their own permission guards, and `toSqlDialect` returns
@@ -220,7 +202,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
         config,
         configPath,
         dialect,
-        ask: askAtPrompt,
+        ask: asker.ask,
       })
     : null
 
@@ -348,7 +330,13 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
 
   // Handle SIGINT (Ctrl+C) — cancel multiline, don't exit
   rl.on('SIGINT', () => {
+    // A confirmation on screen takes precedence: withdraw it and let the gate
+    // report the cancellation and the line handler restore the prompt. Printing
+    // one here would land between the gate's own two lines.
+    if (asker.cancel()) return
+
     if (engine.isMultiline()) {
+      engine.cancelMultiline()
       console.error(pc.dim(t('shell.multiline_cancelled')))
       rl.setPrompt(pc.cyan(t('shell.prompt') + '> '))
     }

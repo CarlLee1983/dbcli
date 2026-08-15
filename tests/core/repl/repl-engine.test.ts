@@ -97,6 +97,161 @@ describe('ReplEngine', () => {
     expect(adapter.execute).toHaveBeenCalled()
   })
 
+  test('a line that reads as SQL but names a subcommand says how to reach it', async () => {
+    // SQL wins the clash, so `delete users --where status=active` is a statement
+    // waiting for its semicolon — which is correct and completely opaque to
+    // whoever meant the subcommand. The hint is the only thing that tells them
+    // the prefix exists; it does not change what the line is (#88).
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      { ...mockContext, commandNames: ['delete'] },
+      historyPath
+    )
+
+    const result = await engine.processInput('delete users --where status=active')
+
+    expect(result.action).toBe('multiline')
+    expect(result.output ?? '').toContain('\\delete')
+  })
+
+  test('a SQL comment is not a flag', async () => {
+    // `--` opens a comment as well as an option, so `DELETE FROM t --note`
+    // matched the first two conditions and told the operator to use `\\delete`
+    // for an ordinary statement.
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      { ...mockContext, commandNames: ['delete'] },
+      historyPath
+    )
+
+    const result = await engine.processInput('DELETE FROM users --keep this comment')
+    expect(result.action).toBe('multiline')
+    expect(result.output).toBeUndefined()
+  })
+
+  test('an ordinary statement gets no hint', async () => {
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      { ...mockContext, commandNames: ['delete'] },
+      historyPath
+    )
+
+    const result = await engine.processInput('DELETE FROM users')
+    expect(result.action).toBe('multiline')
+    expect(result.output).toBeUndefined()
+  })
+
+  describe('a half-typed statement does not take the shell hostage', () => {
+    // The half of #88 that mattered more: a line misread as SQL opened multiline
+    // mode, and everything after it — `.quit` included — went into the buffer.
+    // The operator saw a shell that had stopped responding and could only end
+    // the session from outside.
+    test('.quit still quits while a statement is buffering', async () => {
+      const engine = new ReplEngine(createMockAdapter(), mockContext, historyPath)
+
+      expect((await engine.processInput('SELECT * FROM users')).action).toBe('multiline')
+      expect(engine.isMultiline()).toBe(true)
+
+      expect((await engine.processInput('.quit')).action).toBe('quit')
+    })
+
+    test('.exit does too', async () => {
+      const engine = new ReplEngine(createMockAdapter(), mockContext, historyPath)
+      await engine.processInput('SELECT * FROM users')
+      expect((await engine.processInput('.exit')).action).toBe('quit')
+    })
+
+    test('.clear abandons the buffer rather than being appended to it', async () => {
+      const engine = new ReplEngine(createMockAdapter(), mockContext, historyPath)
+      await engine.processInput('SELECT * FROM users')
+
+      expect((await engine.processInput('.clear')).action).toBe('clear')
+      expect(engine.isMultiline()).toBe(false)
+    })
+
+    test('a meta name inside an open string literal stays part of the statement', async () => {
+      // The escape has to know where it is. `MultilineBuffer` tracks quoting;
+      // classifying the raw line does not, so a literal spanning lines had its
+      // middle lifted out and the statement reached the server mutilated —
+      // silent data corruption on an INSERT or UPDATE.
+      const adapter = createMockAdapter()
+      const engine = new ReplEngine(adapter, mockContext, historyPath)
+
+      await engine.processInput("SELECT 'a")
+      expect((await engine.processInput('.timing off')).action).toBe('multiline')
+      await engine.processInput("b' AS t;")
+
+      const sql = (adapter.execute as any).mock.calls[0][0] as string
+      expect(sql).toContain('.timing off')
+    })
+
+    test('a line that merely looks like a meta command is still SQL', async () => {
+      // `.5` is a fragment of a decimal literal, not a command. Only the names
+      // the shell actually implements are lifted out of the buffer.
+      const adapter = createMockAdapter()
+      const engine = new ReplEngine(adapter, mockContext, historyPath)
+      await engine.processInput('SELECT * FROM t WHERE x >')
+
+      expect((await engine.processInput('.5;')).action).toBe('continue')
+      expect(adapter.execute).toHaveBeenCalled()
+      const sql = (adapter.execute as any).mock.calls[0][0] as string
+      expect(sql).toContain('.5')
+    })
+  })
+
+  test('a Redis shell executes a prefixed command without its prefix', async () => {
+    // Redis accepts raw commands that are not dbcli subcommands, and that branch
+    // used the unstripped line: the backslash reached the permission classifier,
+    // which read `\\GET` as an unknown command and denied it at every tier.
+    const adapter = createMockAdapter()
+    const engine = new ReplEngine(
+      adapter,
+      { ...mockContext, system: 'redis', commandNames: [] },
+      historyPath,
+      { permission: 'admin' } as never
+    )
+
+    const result = await engine.processInput('\\GET foo')
+
+    expect(result.output ?? '').not.toContain('Permission denied')
+    expect(adapter.execute).toHaveBeenCalled()
+    expect((adapter.execute as any).mock.calls[0][0]).toBe('GET foo')
+  })
+
+  test('a backslash-prefixed subcommand runs the subcommand, not SQL', async () => {
+    // The clash this exists for: `delete users --where …` is SQL by decision, so
+    // the subcommand needs a prefix that no statement can claim. Measured before
+    // the fix: the line reached the command path carrying its backslash, and the
+    // dispatcher answered "unknown command: \\delete" (#88).
+    const spawn = spyOn(Bun, 'spawn').mockImplementation(
+      () =>
+        ({
+          stdout: new Response('').body,
+          stderr: new Response('').body,
+          exited: Promise.resolve(0),
+        }) as never
+    )
+    try {
+      const adapter = createMockAdapter()
+      const engine = new ReplEngine(
+        adapter,
+        { ...mockContext, commandNames: ['delete'] },
+        historyPath
+      )
+      const result = await engine.processInput('\\delete users --where status=active')
+
+      expect(result.action).toBe('continue')
+      expect(result.output ?? '').not.toContain('Unknown command')
+      // Nothing reached the adapter: this was never SQL.
+      expect(adapter.execute).not.toHaveBeenCalled()
+      const argv = spawn.mock.calls[0]?.[0] as string[]
+      expect(argv).toContain('delete')
+      expect(argv).not.toContain('\\delete')
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test('a spawned subcommand is marked as coming from the shell', async () => {
     // The child gets no stdin, so anything needing an answer refuses. The
     // marker is what lets that refusal say something the operator — who is at

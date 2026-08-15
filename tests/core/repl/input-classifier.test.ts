@@ -15,6 +15,41 @@ describe('classifyInput', () => {
     })
   })
 
+  describe('the backslash prefix reaches a dbcli subcommand', () => {
+    // SQL wins on a keyword clash — the shell is for typing SQL, and
+    // `DELETE FROM users WHERE …` has to work — so the subcommands whose names
+    // are SQL keywords need a way in that no statement can claim (#88).
+    test('classifies \\delete as a command, not as SQL', () => {
+      const result = classifyInput('\\delete users --where status=active')
+      expect(result.type).toBe('command')
+    })
+
+    test('the same for the other clashing names', () => {
+      // The four dbcli subcommands whose names are SQL keywords — the complete
+      // set, derived rather than remembered, so a new one cannot quietly join.
+      for (const name of ['insert', 'update', 'delete', 'explain']) {
+        expect(classifyInput(`\\${name} users --where id=1`).type).toBe('command')
+      }
+    })
+
+    test('a name that never clashed takes the prefix too', () => {
+      // One rule to remember rather than a list of which names need it.
+      expect(classifyInput('\\query "SELECT 1"').type).toBe('command')
+    })
+
+    test('a trailing semicolon does not turn a prefixed command back into SQL', () => {
+      // The prefix is the whole point: nothing after it may reclassify the line.
+      // `;` is habit for anyone typing SQL all day, and it used to send
+      // `\\delete users --where x;` down the SQL path.
+      expect(classifyInput('\\delete users --where x;').type).toBe('command')
+    })
+
+    test('a bare clashing name is still SQL', () => {
+      // The decision, pinned: nothing about the shape of the line changes this.
+      expect(classifyInput('delete users --where status=active').type).toBe('sql')
+    })
+  })
+
   describe('meta commands', () => {
     test('classifies .help as meta', () => {
       const result = classifyInput('.help')

@@ -17,5 +17,6 @@
   "multiline_cancelled": "已取消多行輸入。",
   "timing_display": "耗時：{ms}ms",
   "rows_display": "{count} 筆資料",
-  "unknown_command": "未知指令：'{command}'。輸入 '.help' 查看可用指令。"
+  "unknown_command": "未知指令：'{command}'。輸入 '.help' 查看可用指令。",
+  "subcommand_prefix_hint": "這一行被當成 SQL，正在等分號。如果你要的是 dbcli 子指令，請改打 {command}。Ctrl-C 可取消。"
 }

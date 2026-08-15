@@ -1,6 +1,7 @@
 // src/core/repl/completer.ts
 import type { ReplContext } from './types'
 import { SQL_KEYWORDS_FOR_COMPLETION, SQL_KEYWORDS_FOR_DETECTION, META_COMMANDS } from './types'
+import { COMMAND_PREFIX } from './input-classifier'
 import { REDIS_COMMAND_TABLE } from '@/adapters/redis/command-metadata'
 
 const REDIS_COMMANDS = Object.keys(REDIS_COMMAND_TABLE)
@@ -78,7 +79,15 @@ export function createCompleter(ctx: ReplContext): CompleterFn {
     // dbcli command context
     const words = trimmed.split(/\s+/)
     if (words.length === 1) {
-      // Completing the command name itself
+      // Completing the command name itself. A leading `\` is the prefix that
+      // forces a subcommand (#88), so complete against the names behind it and
+      // hand the prefix back with each hit — without this, `\del<TAB>` matched
+      // nothing at all.
+      if (lastWord.startsWith(COMMAND_PREFIX)) {
+        const bare = lastWord.slice(COMMAND_PREFIX.length)
+        const [hits] = matchWithSuffix([...ctx.commandNames], bare)
+        return [hits.map((hit) => `${COMMAND_PREFIX}${hit}`), lastWord]
+      }
       const cmdHits = matchWithSuffix([...ctx.commandNames], lastWord)
       const sqlHits = matchWithSuffix([...SQL_KEYWORDS_FOR_COMPLETION], lastWord)
       return [[...cmdHits[0], ...sqlHits[0]], lastWord]

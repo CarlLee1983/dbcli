@@ -156,4 +156,12 @@ describe('createCompleter', () => {
       expect(hits).toContain('.no-limit ')
     })
   })
+
+  test('completes a backslash-prefixed subcommand', () => {
+    // The prefix is how the SQL-keyword subcommands are reached at all (#88);
+    // without stripping it before matching, `\\del<TAB>` offered nothing.
+    const [hits] = complete('\\del')
+    expect(hits).toContain('\\delete ')
+    expect(hits.every((hit: string) => hit.startsWith('\\'))).toBe(true)
+  })
 })

@@ -17,5 +17,6 @@
   "multiline_cancelled": "Multiline input cancelled.",
   "timing_display": "Time: {ms}ms",
   "rows_display": "{count} row(s)",
-  "unknown_command": "Unknown command: '{command}'. Type '.help' for available commands."
+  "unknown_command": "Unknown command: '{command}'. Type '.help' for available commands.",
+  "subcommand_prefix_hint": "This line is being read as SQL and is waiting for its `;`. If you meant the dbcli subcommand, type {command} instead. Ctrl-C cancels."
 }

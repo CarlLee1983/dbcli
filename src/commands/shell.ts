@@ -295,7 +295,9 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
         break
 
       case 'multiline':
-        rl.setPrompt(continuationPrompt)
+        // A statement in progress can carry a note — the subcommand-prefix hint
+        // — and it goes to stderr so a piped session's stdout stays data only.
+        if (result.output) console.error(result.output)
         break
 
       case 'continue':
@@ -303,10 +305,15 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
           // Output structured data to stdout, messages to stderr
           console.log(result.output)
         }
-        rl.setPrompt(pc.cyan(t('shell.prompt') + '> '))
         break
     }
 
+    // The prompt is read off the engine rather than set per branch. A meta
+    // command answered while a statement was accumulating used to return the
+    // `dbcli>` prompt while the buffer still held the statement, and `.clear`
+    // left `...>` after abandoning it — the prompt said one thing and the
+    // buffer meant another.
+    rl.setPrompt(engine.isMultiline() ? continuationPrompt : pc.cyan(t('shell.prompt') + '> '))
     rl.prompt()
   }
 
@@ -350,7 +357,12 @@ export async function runBatchSession(engine: ReplEngine, input: string): Promis
     if (line.trim() === '' && lines.length > 1) continue
     const result = await engine.processInput(line)
     if (result.output) {
-      console.log(result.output)
+      // A statement still accumulating can carry a note rather than data — the
+      // subcommand-prefix hint. It goes to stderr so a piped session's stdout
+      // stays parseable; printing it inline corrupted the stream for anything
+      // reading the output.
+      if (result.action === 'multiline') console.error(result.output)
+      else console.log(result.output)
     }
     if (result.action === 'quit') {
       return

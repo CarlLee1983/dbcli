@@ -57,7 +57,11 @@ function helpText(): string {
     '',
     pc.bold('Usage:'),
     `  SQL statements     Execute directly (end with ${pc.cyan(';')})`,
-    `  dbcli commands     Run without ${pc.dim('dbcli')} prefix (e.g. ${pc.cyan('schema users')})`,
+    `  dbcli commands     Run without the ${pc.dim('dbcli')} prefix (e.g. ${pc.cyan('schema users')})`,
+    // The names that collide with SQL keywords have no other way in: the line is
+    // read as SQL, which is the right call for a shell, so the prefix is what
+    // reaches the subcommand (#88).
+    `  ${pc.cyan('\\<command>')}         Force the dbcli subcommand — required for ${pc.dim('delete')}, ${pc.dim('update')}, ${pc.dim('insert')} and other SQL keywords (e.g. ${pc.cyan('\\delete users --where id=1')})`,
     `  Ctrl+D             Exit`,
   ]
   return lines.join('\n')

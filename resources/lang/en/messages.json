@@ -114,6 +114,15 @@
     "health": {
       "description": "Show AuditLogger health snapshot (size, entries, lock state, last write)"
     },
+    "write_gate": {
+      "description": "Summarize tier-two write-gate decisions (ADR 0010's measurement)",
+      "header": "Write-gate summary — connection: {conn}",
+      "window": "Audit entries scanned: {scanned}, {from} → {to}",
+      "decisions": "Tier-two evaluations: {count}, {from} → {to}",
+      "tier_one": "Tier one, counted apart: {count} ({outcomes})",
+      "no_decisions": "Tier two was never reached in this window. Per ADR 0010 that falsifies the criterion, not the gate: the shapes it looks for are not the shapes people write.",
+      "no_entries": "The audit log is empty, so this says nothing about the gate either way. Run some writes, or check `dbcli audit health`."
+    },
     "disabled_hint": "Audit is disabled (audit.enabled = false in .dbcli). Use 'dbcli audit health' for details.",
     "no_entries": "No audit entries.",
     "show_no_match": "No audit entry matches '{prefix}'.",

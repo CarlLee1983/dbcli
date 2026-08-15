@@ -28,6 +28,37 @@ import {
 import { getAuditLogger } from '@/core/audit/integration-helper'
 import type { AuditHealthReport } from '@/core/audit/logger'
 import type { AuditEntry } from '@/core/audit/types'
+import {
+  GATE_OUTCOMES,
+  GATE_REASONS,
+  summarizeWriteGate,
+  type WriteGateSummary,
+} from '@/core/audit/write-gate-summary'
+import type { WriteGateReason } from '@/commands/write-gate'
+import type { GateOutcome } from '@/commands/write-gate-guard'
+
+/**
+ * The summary seeds its tables from hand-copied lists, because `src/core/`
+ * cannot import from `src/commands/` where the two unions are defined. Nothing
+ * at the definition site fails when a sixth reason is added — and that silence
+ * would undo the summary's own argument: a reason absent from the seed list
+ * stops being reportable-at-zero and only appears once it has already fired,
+ * which is the "answers how often while refusing to answer at all" failure the
+ * summary exists to prevent.
+ *
+ * This layer may import both, so the tie is made here, in the direction the
+ * layering allows. Each pair fails to compile on a member missing from the seed
+ * list and on one invented there. (It is deliberately not in the summary's own
+ * test file: `tsconfig.json`'s `include` uses a brace pattern TypeScript does
+ * not expand, so no test file is typechecked at all — a compile-time guard put
+ * there would silently guard nothing.)
+ */
+type Covers<A, B> = [A] extends [B] ? true : false
+const _noInventedReason: Covers<(typeof GATE_REASONS)[number], WriteGateReason> = true
+const _noMissingReason: Covers<WriteGateReason, (typeof GATE_REASONS)[number]> = true
+const _noInventedOutcome: Covers<(typeof GATE_OUTCOMES)[number], GateOutcome> = true
+const _noMissingOutcome: Covers<GateOutcome, (typeof GATE_OUTCOMES)[number]> = true
+void [_noInventedReason, _noMissingReason, _noInventedOutcome, _noMissingOutcome]
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
 const DEFAULT_TAIL_N = 10
@@ -251,6 +282,82 @@ function readLineFromStdinWithStderrPrompt(prompt: string): Promise<string> {
     process.stdin.on('end', onEnd)
     process.stdin.resume()
   })
+}
+
+/** `declined 3, refused 1` — the outcome breakdown as one line. */
+function formatOutcomeCounts(outcomes: Record<string, number>): string {
+  const seen = Object.entries(outcomes).filter(([, count]) => count > 0)
+  if (seen.length === 0) return MISSING_PLACEHOLDER
+  return seen.map(([name, count]) => `${name} ${count}`).join(', ')
+}
+
+function renderWriteGateSummary(summary: WriteGateSummary, connections: string[]): string {
+  const lines: string[] = []
+  lines.push(
+    t_vars('audit.write_gate.header', {
+      conn: connections.length > 0 ? connections.join(', ') : MISSING_PLACEHOLDER,
+    })
+  )
+  // No window line when nothing was scanned: `— → —` reads as a measurement
+  // over an unknown interval, when in fact no interval was measured.
+  if (summary.window) {
+    lines.push(
+      t_vars('audit.write_gate.window', {
+        scanned: String(summary.scanned),
+        from: summary.window.from,
+        to: summary.window.to,
+      })
+    )
+  }
+
+  if (summary.total === 0) {
+    // Zero is a result, not an empty table. ADR 0010 says an untouched tier two
+    // falsifies the criterion rather than the gate, so the summary has to say
+    // which of those two readings the data supports instead of printing blanks.
+    lines.push('')
+    lines.push(
+      summary.scanned === 0 ? t('audit.write_gate.no_entries') : t('audit.write_gate.no_decisions')
+    )
+    if (summary.tierOne.total > 0) {
+      lines.push(
+        t_vars('audit.write_gate.tier_one', {
+          count: String(summary.tierOne.total),
+          outcomes: formatOutcomeCounts(summary.tierOne.outcomes),
+        })
+      )
+    }
+    return lines.join('\n')
+  }
+
+  lines.push(
+    t_vars('audit.write_gate.decisions', {
+      count: String(summary.total),
+      from: summary.range?.from ?? MISSING_PLACEHOLDER,
+      to: summary.range?.to ?? MISSING_PLACEHOLDER,
+    })
+  )
+  lines.push('')
+  lines.push(
+    renderTable(
+      Object.entries(summary.outcomes).map(([name, count]) => [name, String(count)]),
+      ['outcome', 'count']
+    )
+  )
+  lines.push('')
+  lines.push(
+    renderTable(
+      Object.entries(summary.reasons).map(([name, count]) => [name, String(count)]),
+      ['reason', 'count']
+    )
+  )
+  lines.push('')
+  lines.push(
+    t_vars('audit.write_gate.tier_one', {
+      count: String(summary.tierOne.total),
+      outcomes: formatOutcomeCounts(summary.tierOne.outcomes),
+    })
+  )
+  return lines.join('\n')
 }
 
 async function statAuditFile(file: string): Promise<{ entries: number; size: string } | null> {
@@ -529,6 +636,49 @@ auditCommand
     // F decision: NO writeAuditEntry / NO logger.write here.
     // D-48: NO touch on .dbcli/last-session-id.
     process.exit(0)
+  })
+
+auditCommand
+  .command('write-gate')
+  .description(t('audit.write_gate.description'))
+  .option('--all', 'Summarize across all connections', false)
+  .option(
+    '--format <format>',
+    `Output format: ${ALLOWED_FORMATS.join(' | ')} (default: table)`,
+    'table'
+  )
+  .option('--for-agent', 'Shortcut for --format json', false)
+  .action(async (options: Record<string, unknown>, command: Command) => {
+    const format = options.forAgent === true ? 'json' : (options.format as string)
+    validateFormat(format, ALLOWED_FORMATS, 'audit write-gate')
+
+    const configPath = resolveConfigPath(command, options as { config?: string })
+    const config = (await configModule.read(configPath)) as AuditConfigShape
+    if (isAuditDisabled(config)) emitDisabledAndExit0()
+
+    const { auditDir, auditFile, connectionName } = await resolveAuditPaths(configPath, config)
+
+    // Rotated files included throughout: the measurement is over the whole
+    // retained history, and a gate decision that rotated out of the current file
+    // is still a decision the criterion made.
+    let entries: AuditEntry[] = []
+    let connections: string[] = [connectionName]
+    if (options.all === true) {
+      const discovered = await discoverConnections(auditDir)
+      connections = discovered.map((c) => c.connection)
+      for (const c of discovered) {
+        for (const file of c.files) entries.push(...(await readEntries(file)))
+      }
+    } else {
+      entries = await readEntries(auditFile, { include_rotated: true })
+    }
+
+    const summary = summarizeWriteGate(entries)
+    if (format === 'json') {
+      console.log(JSON.stringify({ connections, summary }, null, 2))
+      return
+    }
+    console.log(renderWriteGateSummary(summary, connections))
   })
 
 auditCommand

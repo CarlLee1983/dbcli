@@ -99,4 +99,7 @@ statement when either stdout or stdin is not a terminal, or a flag is added that
 two, or
 `src/commands/write-gate-guard.ts` stops recording an allowed tier-two decision to the
 audit log, or `src/commands/shell-write-gate.ts` stops being handed to `ReplEngine` for a
-SQL connection in `src/commands/shell.ts`.
+SQL connection in `src/commands/shell.ts`, or
+`src/core/audit/write-gate-summary.ts` stops counting those recorded decisions — that
+summary is what makes the measurement above something anyone will actually take, so
+losing it leaves the rest of this condition true and unverified.

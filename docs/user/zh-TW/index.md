@@ -294,7 +294,7 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 
 **`dbcli shell` 只接第二級，不接第一級。** shell 裡的每一句都是人手打的，逐句 y/N 會變成反射動作；但沒有 WHERE 的 DELETE、DROP、TRUNCATE 一樣要打出資料表名稱。打錯只會印出「已取消」並回到提示符——連線、緩衝區與歷史都還在，行程不會結束。按 Ctrl-C 則是收回這個提問：什麼都不會執行，接下來打的那一行會被當成語句，而不是被吃成確認答案。以管線餵進來的輸入（`dbcli shell < script.sql`）沒有人能回答，該句會被拒絕，其餘的行照跑。Redis、MongoDB 與 Elasticsearch 的 shell 不受影響，寫入仍由連線 permission 把關。在 shell 裡以子指令形式打的 dbcli 指令（`query "..."`、`delete ...`）跑在沒有 stdin 的獨立行程裡，沒有辦法提問，所以第二級語句會被拒絕，訊息會請你回到 `dbcli>` 提示符直接打。
 
-每一次第二級判定都會寫進稽核紀錄——放行、取消、拒絕都記——所以這道閘門有沒有擋到東西是可以量測的，不是靠印象。
+每一次第二級判定都會寫進稽核紀錄——放行、取消、拒絕都記——所以這道閘門有沒有擋到東西是可以量測的，不是靠印象。`dbcli audit write-gate` 就是那個量測：第二級被觸及幾次、依哪一條判準、以及最後怎麼被回答。如果數字是零，該檢討的是判準，不是閘門。
 
 ```bash
 # 拒絕：沒有 WHERE，也沒有人能確認
@@ -446,6 +446,7 @@ dbcli delete 'user:42' --where '' --plan --format json
 | `guide <goal>` | 產生特定目標的引導計畫（如：`slow-query`）。 |
 | `recover --apply` | **自動化修復**：自動執行上次建議的故障修復計畫。 |
 | `audit tail` | **稽核日誌**：讀取 `.dbcli/audit/<conn>.jsonl`（agent-facing JSONL）；使用 `--for-agent --n 10` 取得 session handoff JSON。|
+| `audit write-gate` | **閘門量測**：第二級寫入閘門被觸及幾次、依哪一條判準，以及放行／取消／拒絕各幾次。|
 | `--recovery`（支援的指令） | **Recovery ↔ Audit 雙向連結**：`query`、`inspect`、`insert`、`update`、`delete`、`export`、`q`、`schema`、`lint` 失敗時都會寫入互相對應的 `audit.recovery_ref` ↔ `envelope.audit_ref` UUID；用 `audit show --recovery-ref <id>` 從 envelope 反查 audit entry。|
 
 `doctor` 也會回報 runtime identity（launcher/source、runtime 與 package version），並在

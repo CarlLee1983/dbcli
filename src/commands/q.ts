@@ -6,7 +6,7 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
-import { PermissionError, SQL_DIALECTS } from '@/core/permission-guard'
+import { enforcePermission, PermissionError, SQL_DIALECTS } from '@/core/permission-guard'
 import { extractTableReferences } from '@/utils/sql-tables'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
@@ -113,10 +113,28 @@ export async function qCommand(
     for (const w of prepared.warnings) console.error(`⚠ ${w}`)
     if (prepared.warnings.length > 0) console.error('')
 
+    const family = engineFamily(engine)
+    const sqlDialect = SQL_DIALECTS.find((dialect) => dialect === connectionSystem)
+
+    // Defence in depth (issue #81): until now "q only runs reads" was held up
+    // entirely by `validateBody`'s parse-time rule in another module, so q.ts
+    // read as if it executed arbitrary SQL unchecked. Every snippet the contract
+    // allows still passes — the value is that the guarantee is now provable here.
+    //
+    // Above the dry-run branch, not below it: a refusal should read the same
+    // whether or not the statement was going to run, which is the choice
+    // `q-mongo.ts` already documents. And the rewritten SQL, not the driver SQL —
+    // the latter is the size guard's wrapper, so classifying it would describe
+    // dbcli's wrapping rather than the statement the snippet asked for.
+    const classification =
+      family === 'sql'
+        ? enforcePermission(prepared.rewrittenSql, config.permission, sqlDialect)
+        : undefined
+
     if (options.dryRun) {
       console.log(
         formatDryRun({
-          family: engineFamily(engine),
+          family,
           driverSql: prepared.driver.sql,
           values: prepared.driver.values,
           execHints: prepared.execHints,
@@ -140,8 +158,6 @@ export async function qCommand(
 
     const blacklistManager = new BlacklistManager(config)
     const blacklistValidator = new BlacklistValidator(blacklistManager)
-    const family = engineFamily(engine)
-    const sqlDialect = SQL_DIALECTS.find((dialect) => dialect === connectionSystem)
     // A snippet is checked against every table it references, not just the
     // first one — a JOIN, a comma, or a UNION branch reaches a table the
     // leading FROM never names (issue #23).
@@ -165,8 +181,12 @@ export async function qCommand(
       // `index:` in a snippet's frontmatter is an expression too — comma lists
       // and wildcards reach an index that equality never matches.
       blacklistValidator.checkIndexBlacklist('SELECT', targetName)
-    } else if (family !== 'redis' && targets.length > 0) {
-      blacklistValidator.checkTablesBlacklist('SELECT', targets)
+    } else if (classification && targets.length > 0) {
+      // Gated on the classification rather than on the family, so the operation
+      // label is the statement type the guard actually read. Hardcoding 'SELECT'
+      // wrote the snippet contract into this call site a second time, where it
+      // would have gone on saying SELECT if that contract ever widened.
+      blacklistValidator.checkTablesBlacklist(classification.type, targets)
     }
 
     const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)

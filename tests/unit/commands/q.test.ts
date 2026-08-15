@@ -103,6 +103,22 @@ describe('dbcli q', () => {
     expect(logSpy).toHaveBeenCalled()
   })
 
+  // `q` enforces the connection's permission on the rewritten SQL before it
+  // executes (issue #81). A CTE is the case that check most easily gets wrong:
+  // its leading keyword is WITH, not SELECT, so a classifier reading only the
+  // first word would refuse a read on this query-only connection. The snippet
+  // contract makes the refusal path unreachable, so what is pinned here is the
+  // other direction — the check kept every allowed snippet runnable.
+  test('read-only CTE snippet still reaches the adapter on a query-only connection', async () => {
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/cte.sql'),
+      `-- ---\n-- name: cte\n-- engine: postgres\n-- ---\nWITH src AS (SELECT 1 AS dau) SELECT dau FROM src;`
+    )
+    await qCommand('@cte', { format: 'json', noLimit: true })
+    expect(mock.lastSql).toMatch(/WITH src AS/)
+    expect(exitSpy).not.toHaveBeenCalled()
+  })
+
   describe('passive slow-query advisory', () => {
     /**
      * `q` measures its own elapsed time, so the mock adapter has to actually

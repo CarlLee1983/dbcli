@@ -369,7 +369,8 @@ whether they are possible at all, and the typed confirmation must come from a pe
 
 Every tier-two evaluation is written to the audit log with
 `metadata.write_gate_outcome` (`allowed` / `declined` / `refused`) and
-`metadata.write_gate_reason`.
+`metadata.write_gate_reason`. `dbcli audit write-gate` summarizes them — that is
+the measurement ADR 0010 stakes this gate on.
 
 > **Elasticsearch tiers by scope.** A read (`GET` / `HEAD`, plus `POST _search` and
 > `POST _count`) is query-only. Indexing or updating a document is read-write.
@@ -1988,6 +1989,7 @@ Audit entries are metadata-only by design — never raw SQL bodies, `--param` va
 | `audit show` | `readonly` | Print a single full entry by id prefix or `--recovery-ref`. |
 | `audit clear` | `local-write` | Delete `<conn>.jsonl` + rotated `.jsonl.1` from local disk. Requires `--yes` or interactive confirm. |
 | `audit health` | `readonly` | Render `AuditLogger.getHealth()` snapshot (writer state, lock state, rotation usage). |
+| `audit write-gate` | `readonly` | Summarize tier-two write-gate decisions: how often the gate was reached, by which reason, and how it was answered. |
 
 #### `audit tail`
 
@@ -2047,6 +2049,32 @@ Examples:
 | `--no-brief` | Disable brief mode when a higher-level default enables it. | off |
 
 Output reports: writer enabled/disabled, last write result, file-lock state, rotation cap usage (`max_bytes` / `max_entries`). When `audit.enabled = false` (D1 opt-out), `tail` / `show` / `health` still exit 0 and print `Audit is disabled (audit.enabled = false in .dbcli). Use 'dbcli audit health' for details.` (E note).
+
+#### `audit write-gate`
+
+Answers the question ADR 0010 stakes the two-tier write gate on: is tier two stopping anything, or has everyone routed around it? The data was always written — `metadata.write_gate_tier` / `write_gate_outcome` / `write_gate_reason` on every evaluation — but reading it meant hand-writing jq over the JSONL.
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--format <fmt>` | `table` \| `json`. | `table` |
+| `--all` | Merge every connection into one measurement. | off |
+| `--for-agent` | Shortcut for `--format json`. | off |
+
+```bash
+dbcli audit write-gate
+dbcli audit write-gate --format json
+dbcli audit write-gate --all
+```
+
+Reports, over the current connection's retained history (rotated `.jsonl.1` included):
+
+- `total` — tier-two evaluations, with `range` giving the interval they span.
+- `outcomes` — `allowed` / `declined` / `refused`. The ratio between them is the line between "the gate is stopping things" and "everyone confirms through it".
+- `reasons` — which criterion sent the statement to tier two. Every known reason is listed, **including the ones that never fired**: a criterion that triggers zero times is the finding, not a row to omit.
+- `scanned` + `window` — the denominator. Two decisions in a week and two in a year are different findings.
+- `tierOne` — counted apart, with its own outcome breakdown, because tier one is recorded only when the operator declined.
+
+When tier two was never reached, the summary says so and names the conclusion ADR 0010 draws from it (the criterion is wrong, not the gate unnecessary) rather than printing an empty table. An entirely empty audit log is reported as a separate case: it supports no conclusion either way.
 
 #### Boundaries
 

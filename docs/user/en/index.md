@@ -322,7 +322,7 @@ Every write goes through a two-tier gate. Tier one is a question; tier two is a 
 
 **In `dbcli shell`, tier two applies and tier one does not.** Every line in a shell is typed by a person, so a y/N on each write would become reflex; a full-table DELETE, a DROP or a TRUNCATE still asks for the table name. Typing anything else prints a cancellation and returns you to the prompt — the session, the connection and the history survive. Ctrl-C withdraws the question itself: nothing runs, and the next line you type is read as a statement rather than as an answer. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a tier-two statement there is refused and the remaining lines still run. The Redis, MongoDB and Elasticsearch shells are unaffected; their writes are guarded by connection permission as before. dbcli subcommands typed in the shell (`query "..."`, `delete ...`) run as separate processes with no stdin and cannot ask anything, so a tier-two statement there is refused with a message pointing you back to the `dbcli>` prompt.
 
-Every tier-two evaluation is written to the audit log — allowed, declined and refused alike — so the gate's effect is measurable rather than assumed.
+Every tier-two evaluation is written to the audit log — allowed, declined and refused alike — so the gate's effect is measurable rather than assumed. `dbcli audit write-gate` is that measurement: how often tier two was reached, under which criterion, and how it was answered. If it reports zero, the criterion is what needs revisiting, not the gate.
 
 ```bash
 # Refused: no WHERE and nobody to confirm it
@@ -474,6 +474,7 @@ Saved queries (Snippets) allow you to store complex SQL in your repository. They
 | `guide <goal>` | Generates a step-by-step troubleshooting plan (e.g., `slow-query`). |
 | `recover --apply` | **Automated Recovery**: Applies the last suggested recovery plan. |
 | `audit tail` | **Audit Log**: Tails `.dbcli/audit/<conn>.jsonl` (agent-facing JSONL). Use `--for-agent --n 10` for session-handoff JSON. |
+| `audit write-gate` | **Gate measurement**: how often the tier-two write gate was reached, by which reason, and whether it was allowed, declined or refused. |
 | `--recovery` (supported commands) | **Bi-directional Recovery ↔ Audit Link**: `query`, `inspect`, `insert`, `update`, `delete`, `export`, `q`, `schema`, and `lint` all emit matching `audit.recovery_ref` ↔ `envelope.audit_ref` UUIDs on failure. Use `audit show --recovery-ref <id>` to jump from an envelope to its audit entry. |
 
 `doctor` also reports runtime identity (launcher/source, runtime and package

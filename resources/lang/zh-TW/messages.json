@@ -114,6 +114,15 @@
     "health": {
       "description": "顯示 AuditLogger 健康狀態（檔案大小、筆數、lock 狀態、最後寫入結果）"
     },
+    "write_gate": {
+      "description": "統計第二級寫入閘門的判定（ADR 0010 押注的那個量測）",
+      "header": "寫入閘門摘要 — 連線：{conn}",
+      "window": "掃過的稽核紀錄：{scanned} 筆，{from} → {to}",
+      "decisions": "第二級判定：{count} 次，{from} → {to}",
+      "tier_one": "第一級，分開計算：{count} 次（{outcomes}）",
+      "no_decisions": "這段區間內第二級一次都沒被觸及。依 ADR 0010，這推翻的是判準而不是閘門：它在找的形狀不是大家實際會寫的形狀。",
+      "no_entries": "稽核紀錄是空的，所以這對閘門沒有任何結論。先跑一些寫入，或用 `dbcli audit health` 檢查。"
+    },
     "disabled_hint": "Audit 已停用（.dbcli 中 audit.enabled = false）。執行 `dbcli audit health` 查看詳情。",
     "no_entries": "沒有 audit 紀錄。",
     "show_no_match": "找不到符合 '{prefix}' 的 audit 紀錄。",

@@ -45,7 +45,7 @@ describe('runLint', () => {
     )
 
     expect(reports).toHaveLength(1)
-    expect(reports[0].findings.map((finding) => finding.rule)).toContain('select-star')
+    expect(reports[0]!.findings.map((finding) => finding.rule)).toContain('select-star')
   })
 
   for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
@@ -63,7 +63,7 @@ describe('runLint', () => {
         }
       )
 
-      expect(reports[0].dialect).toBe(system)
+      expect(reports[0]!.dialect).toBe(system)
     })
   }
 
@@ -97,7 +97,7 @@ describe('runLint', () => {
       { config: baseConfig, schema, loadSavedQuery: noSnippets }
     )
 
-    expect(reports[0].skippedRules).toEqual(
+    expect(reports[0]!.skippedRules).toEqual(
       expect.arrayContaining([
         { rule: 'implicit-cast', reason: 'blocked: --no-schema' },
         { rule: 'not-in-nullable', reason: 'blocked: --no-schema' },
@@ -118,8 +118,8 @@ describe('runLint', () => {
       }
     )
 
-    expect(reports[0].label).toBe('perf/top')
-    expect(reports[0].findings.map((finding) => finding.rule)).toContain('select-star')
+    expect(reports[0]!.label).toBe('perf/top')
+    expect(reports[0]!.findings.map((finding) => finding.rule)).toContain('select-star')
   })
 
   test('resolves SQL files and comma-separated bulk inputs', async () => {
@@ -138,7 +138,7 @@ describe('runLint', () => {
       )
 
       expect(reports).toHaveLength(3)
-      expect(reports[0].label).toBe('queries.sql#1')
+      expect(reports[0]!.label).toBe('queries.sql#1')
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -480,7 +480,7 @@ describe('lint command registration surface', () => {
 
       expect(await Bun.file(join(configPath, 'schemas')).exists()).toBe(false)
       expect(reports).toHaveLength(1)
-      expect(reports[0].skippedRules).toEqual(
+      expect(reports[0]!.skippedRules).toEqual(
         expect.arrayContaining([
           { rule: 'implicit-cast', reason: 'blocked: --no-schema' },
           { rule: 'not-in-nullable', reason: 'blocked: --no-schema' },
@@ -516,12 +516,12 @@ describe('executeLintCommand audit and recovery wiring', () => {
 
     expect(result.reports).toHaveLength(1)
     expect(auditCalls).toHaveLength(1)
-    expect(auditCalls[0][1]).toBe('lint')
-    expect(auditCalls[0][2]).toEqual(expect.objectContaining({ config: '/project/.dbcli' }))
-    expect(auditCalls[0][3]).toEqual({
+    expect(auditCalls[0]![1]).toBe('lint')
+    expect(auditCalls[0]![2]).toEqual(expect.objectContaining({ config: '/project/.dbcli' }))
+    expect(auditCalls[0]![3]).toEqual({
       success: true,
       target: '*',
-      metadata: { queries: 1, findings: result.reports[0].findings.length },
+      metadata: { queries: 1, findings: result.reports[0]!.findings.length },
     })
   })
 
@@ -533,7 +533,7 @@ describe('executeLintCommand audit and recovery wiring', () => {
         loadDeps: async () => loadedDeps,
         loadSavedQuery: noSnippets,
         writeAudit: async (_config, _command, _options, outcome) => {
-          outcomes.push(outcome as Record<string, unknown>)
+          outcomes.push(outcome as unknown as Record<string, unknown>)
           return 'failure-audit'
         },
       })

@@ -3,6 +3,7 @@ import { AdapterFactory } from '@/adapters'
 import { planCommand } from '@/commands/plan'
 import { configModule } from '@/core/config'
 import type { DbcliConfig } from '@/utils/validation'
+import { makeTestConfig } from '../../helpers/test-config'
 
 let mockConfig: DbcliConfig
 let configReadSpy: any
@@ -16,15 +17,8 @@ function lastLog(): string {
 
 describe('planCommand', () => {
   beforeEach(() => {
-    mockConfig = {
-      connection: {
-        system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'test',
-        password: 'test',
-        database: 'testdb',
-      },
+    mockConfig = makeTestConfig({
+      connection: { database: 'testdb' },
       permission: 'admin',
       schema: {
         users: {
@@ -37,9 +31,7 @@ describe('planCommand', () => {
           ],
         },
       },
-      metadata: { version: '1.0' },
-      blacklist: { tables: [], columns: {} },
-    }
+    })
 
     configReadSpy = spyOn(configModule, 'read').mockImplementation(async () => mockConfig)
     logSpy = spyOn(console, 'log').mockImplementation(() => {})

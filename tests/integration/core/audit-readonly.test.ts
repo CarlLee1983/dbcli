@@ -12,6 +12,28 @@ import { join } from 'node:path'
 
 import { AuditLogger } from '../../../src/core/audit/logger'
 import { SessionIdService } from '../../../src/core/audit/session-id'
+import type { AuditEntry } from '../../../src/core/audit/types'
+
+/**
+ * A valid audit entry carrying whatever marker a test needs to recognise it.
+ *
+ * `write` takes a whole `AuditEntry` minus the three fields the logger fills in.
+ * These tests are about a readonly directory rather than about entry content, so
+ * they used to pass a bare `{ i: 1 }` — which no typechecker ever saw.
+ */
+function markedEntry(
+  marker: Record<string, unknown>
+): Omit<AuditEntry, 'id' | 'ts' | 'session_id'> {
+  return {
+    engine: 'postgresql',
+    command: 'query',
+    side_effect_tier: 'readonly',
+    target: 'test_table',
+    success: true,
+    redacted_query: 'query test_table',
+    metadata: marker,
+  }
+}
 
 let workDir: string
 let auditDir: string
@@ -76,13 +98,13 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
     stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true)
     const logger = makeLogger()
 
-    const first = await logger.write({ i: 1 })
+    const first = await logger.write(markedEntry({ i: 1 }))
 
     // A readonly audit dir commonly exhausts the lock budget because the
     // lockfile temp write cannot succeed; either skip marker is fail-soft.
     expect(first).toEqual(expect.objectContaining({ skipped: expect.any(String) }))
     for (let i = 2; i <= 6; i += 1) {
-      const result = await logger.write({ i })
+      const result = await logger.write(markedEntry({ i }))
       expect(result).toEqual(expect.objectContaining({ skipped: expect.any(String) }))
     }
 
@@ -101,7 +123,11 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
 
     async function simulatedMainCommand(auditLogger: AuditLogger) {
       const result = { rows: 3, command: 'query' }
-      await auditLogger.write({ command: 'query', success: true, rowsAffected: 3 })
+      await auditLogger.write({
+        ...markedEntry({ rowsAffected: 3 }),
+        command: 'query',
+        success: true,
+      })
       return { result, exitCode: 0 }
     }
 
@@ -115,12 +141,12 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
     await makeReadonlyAuditDir()
     stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true)
     const logger1 = makeLogger()
-    const failed = await logger1.write({ beforeRestore: true })
+    const failed = await logger1.write(markedEntry({ beforeRestore: true }))
     expect(failed).toEqual(expect.objectContaining({ skipped: expect.any(String) }))
 
     await chmod(auditDir, 0o755)
     const logger2 = makeLogger()
-    const result = await logger2.write({ recovered: true })
+    const result = await logger2.write(markedEntry({ recovered: true }))
 
     expect(result).toEqual(expect.objectContaining({ success: true }))
     const raw = await readFile(join(auditDir, 'default.jsonl'), 'utf8')
@@ -128,7 +154,7 @@ describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
     expect(lines.length).toBe(1)
     expect(JSON.parse(lines[0]!)).toEqual(
       expect.objectContaining({
-        recovered: true,
+        metadata: { recovered: true },
         session_id: 'readonly-test-session',
         id: expect.any(String),
         ts: expect.any(String),

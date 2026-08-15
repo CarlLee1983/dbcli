@@ -42,7 +42,9 @@ async function run(
   args: string[],
   environmentConnection?: string
 ): Promise<{ stdout: string; stderr: string; code: number }> {
-  const env = {
+  // `process.env` spreads into an object with only the declared keys, so the
+  // annotation is what lets a test add or drop a variable dbcli reads.
+  const env: Record<string, string | undefined> = {
     ...process.env,
     NODE_ENV: 'test',
     DBCLI_NO_UPDATE_CHECK: '1',

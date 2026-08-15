@@ -33,8 +33,10 @@ async function run(
     stderr: 'pipe',
   })
   if (stdin !== undefined) {
-    child.stdin.write(stdin)
-    child.stdin.end()
+    // `stdin: 'pipe'` is what the spawn above asked for on exactly this branch,
+    // but the handle's type does not carry that correlation.
+    child.stdin!.write(stdin)
+    child.stdin!.end()
   }
   const [stdout, stderr, code] = await Promise.all([
     new Response(child.stdout).text(),

@@ -83,6 +83,7 @@
     "agent-core:check": "bun run scripts/check-agent-core-purity.ts",
     "core-stdout:check": "bun run scripts/check-core-no-stdout.ts",
     "typecheck": "tsc --noEmit --pretty false",
+    "typecheck:tests": "tsc --noEmit --pretty false -p tsconfig.tests.json",
     "test:perf": "bun test ./tests/perf/*.bench.ts",
     "lint": "eslint src tests scripts --ext .ts --max-warnings=0",
     "format:check": "prettier --check .",

@@ -73,6 +73,22 @@ DBCLI_LANG=en ./dist/cli.mjs --help
 DBCLI_LANG=zh-TW ./dist/cli.mjs --help
 ```
 
+#### Typechecking
+
+`bun run typecheck` covers `src/` and `scripts/`. Test files are a separate project,
+`tsconfig.tests.json`, run with `bun run typecheck:tests`.
+
+They are separate because they are not clean yet. The main `include` carried a
+`tests/**/*.{ts,tsx}` pattern for a long time, and TypeScript does not expand braces in an
+include glob — so it matched nothing and no test file had ever been typechecked. Turning it
+on reports 339 errors across 174 files, about six in ten of them an unchecked array index or
+optional field under `noUncheckedIndexedAccess`. Those are being cleared one test directory
+at a time, and `typecheck:tests` joins CI and the release checklist once they are (#97).
+
+Until then, a type-level assertion written in a test file compiles but nothing in CI runs it.
+Put compile-time guards in `src/` — `src/commands/audit.ts` has one, with a note explaining
+why it lives there rather than beside the code it guards.
+
 ### 5. Commit
 
 Use conventional commit format:

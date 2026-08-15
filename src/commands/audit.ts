@@ -49,9 +49,11 @@ import type { GateOutcome } from '@/commands/write-gate-guard'
  * This layer may import both, so the tie is made here, in the direction the
  * layering allows. Each pair fails to compile on a member missing from the seed
  * list and on one invented there. (It is deliberately not in the summary's own
- * test file: `tsconfig.json`'s `include` uses a brace pattern TypeScript does
- * not expand, so no test file is typechecked at all — a compile-time guard put
- * there would silently guard nothing.)
+ * test file. `tsconfig.json`'s `include` used a brace pattern TypeScript does
+ * not expand, so no test file was typechecked at all and a compile-time guard
+ * put there would have guarded nothing; `tsconfig.tests.json` now covers them,
+ * but nothing runs it in CI until the 339 errors it reports are cleared, so the
+ * conclusion stands for now (#97).)
  */
 type Covers<A, B> = [A] extends [B] ? true : false
 const _noInventedReason: Covers<(typeof GATE_REASONS)[number], WriteGateReason> = true

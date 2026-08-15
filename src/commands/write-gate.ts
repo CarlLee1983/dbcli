@@ -25,6 +25,7 @@ import {
   classifyStatement,
   containsMultipleStatements,
   findWriteKeyword,
+  SQL_LOCK_CLAUSE,
   type SqlDialect,
   type StatementType,
 } from '@/core/permission-guard'
@@ -48,6 +49,8 @@ export type WriteGateReason =
   | 'multiple_statements'
   /** A structured update/delete whose WHERE selects by nothing unique. */
   | 'non_unique_where'
+  /** A second write is nested inside the statement, so the head does not decide the tier. */
+  | 'nested_write'
 
 export interface WriteGateVerdict {
   tier: WriteGateTier
@@ -134,6 +137,18 @@ export async function classifySqlWriteGate(
   if (containsMultipleStatements(sql, dialect)) {
     return verdict('two', 'multiple_statements', undefined, type)
   }
+
+  // Ahead of every branch that can end the classification, because each of them
+  // answers for the statement the head names and a nested write is a different
+  // statement. Placed after `classifyMerge` it was skipped for an insert-only
+  // MERGE, and left in the tier-one branch below it was never reached for an
+  // UPDATE or DELETE head at all — both measured, both emptying a 2000-row table
+  // as tier one.
+  const nested = nestedWrite(sql, dialect)
+  if (nested) return verdict('two', 'nested_write', undefined, nested)
+
+  const merge = classifyMerge(sql, dialect)
+  if (merge) return merge
 
   if (type === 'DROP' || type === 'TRUNCATE') {
     const matched = DDL_TARGET.exec(sql)?.[1]
@@ -473,6 +488,183 @@ function unparseable(
   return verdict('two', 'unparseable', undefined, type)
 }
 
+/**
+ * A `MERGE` statement.
+ *
+ * `INTO` is required rather than incidental: it is what separates the statement
+ * from a column that happens to be called `merge`, which is not a reserved word
+ * in any supported dialect.
+ */
+const MERGE_STATEMENT = /\bMERGE\s+INTO\b/i
+
+/**
+ * The single table a `MERGE` writes, when the text can show which one it is.
+ *
+ * `MERGE INTO <name>` names exactly one target, so unlike the other multi-table
+ * writes this one can usually ask for a table name rather than the fallback
+ * phrase. Deliberately as narrow as `DDL_TARGET`, and for the same reason: a
+ * quoted identifier is erased before this reads the statement, and the word left
+ * standing where it was is `USING` — a phrase the operator can type without
+ * having looked at what the statement targets is not a confirmation. So a name
+ * that is a `MERGE` keyword, or a schema prefix whose table was quoted away,
+ * falls back to the fixed phrase instead.
+ */
+const MERGE_TARGET = /\bMERGE\s+INTO\s+(?:ONLY\s+)?([\w$.]+)/i
+
+/**
+ * The tier for a `MERGE`, which is decided by its `WHEN … THEN` actions.
+ *
+ * `MERGE` was mapped to `INSERT`, so every one of them was tier one. Measured on
+ * PostgreSQL 16 against a 2000-row table:
+ * `MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE`
+ * deleted all 2000 and the `THEN UPDATE` spelling rewrote all 2000, both as tier
+ * one. A `MERGE` that only inserts cannot do either, and stays tier one — that
+ * is what makes this a classification rather than a blanket refusal of the
+ * statement, which would have taken every ordinary upsert with it.
+ *
+ * A destructive action is tier two under the rule that already covers this
+ * shape: a `MERGE` reads its rows from the `USING` source, so it is a
+ * multi-table write, and ADR 0010 records the measurement showing that whether
+ * such a write is limited to particular rows cannot be read off the statement.
+ * Its `ON` is a join condition and is evidence of nothing, exactly as a join's
+ * `ON` is in `UPDATE p SET … FROM o WHERE p.id = o.ref`.
+ */
+function classifyMerge(sql: string, dialect: SqlDialect | undefined): WriteGateVerdict | undefined {
+  // Read at statement level, not off the leading keyword. Anchoring on the head
+  // was the first spelling of this and a CTE walked past it: measured,
+  // `WITH s AS (SELECT 1 AS x) MERGE INTO p USING s ON true WHEN MATCHED THEN
+  // DELETE` deleted all 2000 rows as tier one. A `MERGE` that is inside the
+  // parentheses instead is a CTE body, and `nestedWrite` is what answers for it.
+  const executable = stripParenthesised(stripCommentsAndStrings(sql, dialect ? { dialect } : {}))
+  if (!MERGE_STATEMENT.test(executable)) return undefined
+
+  // Whether the target can be named is a separate question from whether this is
+  // a MERGE, and answering both at once made an unnameable target — a quoted
+  // one — leave the statement unclassified altogether.
+  const matched = MERGE_TARGET.exec(executable)?.[1]
+  const table =
+    matched === undefined || matched.endsWith('.') || /^USING$/i.test(matched) ? undefined : matched
+
+  // `THEN` introduces a MERGE action and the arms of a CASE, and a CASE arm is
+  // an expression — it cannot be a bare `DELETE` or `UPDATE`, so the keyword
+  // after `THEN` belongs to the action list wherever it is found.
+  const destructive = /\bTHEN\s+DELETE\b/i.test(executable)
+    ? 'DELETE'
+    : /\bTHEN\s+UPDATE\b/i.test(executable)
+      ? 'UPDATE'
+      : undefined
+
+  if (!destructive) return verdict('one', undefined, table, 'INSERT')
+  return verdict('two', 'multi_table', table, destructive)
+}
+
+/**
+ * A write nested inside the statement, when the statement's own head is not one.
+ *
+ * PostgreSQL's data-modifying CTEs put an arbitrary write in front of the
+ * statement the leading keyword names, and the leading keyword is how the type
+ * was decided. Measured on PostgreSQL 16 against a 2000-row table:
+ * `WITH moved AS (DELETE FROM p RETURNING *) INSERT INTO archive …` deleted all
+ * 2000 as tier one, and so did the same CTE under a `CREATE TABLE … AS` head —
+ * so the rule cannot be attached to `INSERT`, and is attached to the shape.
+ *
+ * The shape is "a write keyword anywhere inside parentheses". It was first
+ * written as "a group that *opens* with a write", which is the same thing only
+ * if a CTE body starts with its write — and PostgreSQL lets a CTE body open a
+ * CTE of its own, so `WITH m AS (WITH i AS (SELECT 1) DELETE FROM p RETURNING *)
+ * MERGE INTO archive …` put a `WITH` in the opening position and emptied a
+ * 2000-row table as tier one. The position of the write inside the group is not
+ * something the grammar bounds; that it is inside one is.
+ *
+ * What bounds this instead is the other direction: parentheses that are not a
+ * statement body cannot contain a write at all. A column list, a `VALUES` row, a
+ * conflict target, a function argument and a subquery each admit expressions and
+ * queries, and none of them admits an `INSERT`, `UPDATE` or `DELETE` — those
+ * three are reserved words in every supported dialect, so a column named after
+ * one must be quoted, and quoting removes it from this text before it is read.
+ * `MERGE` is the exception that proves it: it is reserved nowhere, so it counts
+ * only as `MERGE INTO`, the spelling that separates the statement from a column
+ * called `merge` (`UPDATE t SET total = (merge + 1) WHERE id = 1` is one row,
+ * measured, and stays tier one). `INSERT INTO t (id)`, `ON CONFLICT (id) DO
+ * UPDATE SET …` and `INSERT … SELECT` are untouched, all measured before and
+ * after.
+ *
+ * Two keywords do sit inside parentheses without writing anything, and both are
+ * removed before the scan: the lock clause (`SELECT … FOR UPDATE`) and a
+ * referential action (`REFERENCES parent(id) ON DELETE CASCADE`). Both were
+ * found by measuring rather than by reading — see `SQL_LOCK_CLAUSE` and
+ * `REFERENTIAL_ACTION` for what each of them was refusing.
+ *
+ * Asked before every branch that can end the classification, `classifyMerge` and
+ * the DDL branch included. Those answer for the statement the head names; this
+ * one is about a statement the head does not name, and putting it second meant
+ * an insert-only `MERGE` head and any `UPDATE` / `DELETE` head sheltered the CTE
+ * in front of them — both measured emptying a 2000-row table as tier one. It has
+ * to hold on its own, too: an `UPDATE` / `DELETE` head that slips past this is
+ * caught again by the parser resolving upwards, but a `MERGE`, `CREATE` or
+ * `ALTER` head never reaches the parser at all.
+ *
+ * The tier is two whatever the nested write is qualified by, for the reason
+ * `multiple_statements` gives: two writes in one statement have no single tier,
+ * and the head cannot be read for the tail. The cost is recorded in ADR 0010 —
+ * a CTE deleting one row by primary key is refused along with the rest.
+ */
+function nestedWrite(sql: string, dialect: SqlDialect | undefined): StatementType | undefined {
+  const executable = stripCommentsAndStrings(sql, dialect ? { dialect } : {})
+    .replace(SQL_LOCK_CLAUSE, ' ')
+    .replace(REFERENTIAL_ACTION, ' ')
+  const match = /\b(INSERT|UPDATE|DELETE)\b|\bMERGE\s+INTO\b/i.exec(insideParentheses(executable))
+  if (match === null) return undefined
+  return keywordToType(match[1] ?? 'MERGE')
+}
+
+/**
+ * `ON DELETE` / `ON UPDATE` — a foreign key's referential action, or MySQL's
+ * `ON UPDATE CURRENT_TIMESTAMP`.
+ *
+ * Removed before the scan for the same reason the lock clause is: the keyword
+ * names something the database will do later, not a write in this statement, and
+ * a column list is exactly where it appears. `CREATE TABLE child (… REFERENCES
+ * parent(id) ON DELETE CASCADE)` was refused outright, while the same constraint
+ * added through `ALTER TABLE … ADD CONSTRAINT` sat outside any parenthesis and
+ * passed — one meaning, two answers, which is how a criterion says it is
+ * matching the wrong thing. `ON UPDATE CURRENT_TIMESTAMP` is on most MySQL
+ * tables, and tier two has no flag, so this was refusing ordinary migrations.
+ *
+ * Safe to remove because no write can follow: `ON DELETE` and `ON UPDATE` are
+ * each followed by a referential action or an expression, never by a statement.
+ */
+const REFERENTIAL_ACTION = /\bON\s+(?:DELETE|UPDATE)\b/gi
+
+/**
+ * The statement with everything outside parentheses blanked out.
+ *
+ * Blanked rather than dropped: removing the outer text would push tokens from
+ * either side of a discarded region together and manufacture keywords that were
+ * never in the statement. Every character keeps its position, and only what sits
+ * inside a parenthesis survives to be read.
+ */
+function insideParentheses(text: string): string {
+  let depth = 0
+  let result = ''
+  for (const char of text) {
+    if (char === '(') {
+      depth += 1
+      result += ' '
+      continue
+    }
+    if (char === ')') {
+      // A statement with unbalanced parentheses is one the parser will refuse
+      // anyway; clamping keeps the scan from reading the tail as nested.
+      depth = Math.max(0, depth - 1)
+      result += ' '
+      continue
+    }
+    result += depth > 0 ? char : ' '
+  }
+  return result
+}
+
 /** Just enough of a table schema to say whether a set of columns identifies a row. */
 export interface UniquenessFacts {
   primaryKey?: string[] | string
@@ -536,13 +728,9 @@ function keywordToType(keyword: string): StatementType | undefined {
   const upper = keyword.toUpperCase()
   if (WRITE_TYPES.has(upper as StatementType)) return upper as StatementType
   // UPSERT, REPLACE, GRANT, RENAME and friends write, but none of them has the
-  // shape tier two exists to catch, so they get the ordinary gate.
-  //
-  // MERGE does have it, and this line is why it is not caught: measured against
-  // a 2000-row table, `MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED
-  // THEN DELETE` deleted all 2000 as tier one. Left as it is here rather than
-  // half-fixed — a MERGE carries a whole list of actions and needs its own
-  // classification, not a keyword substitution (#95).
+  // shape tier two exists to catch, so they get the ordinary gate. MERGE did
+  // have it and was caught here as an INSERT; it is now classified by its action
+  // list in `classifyMerge`, above this line's reach (#95).
   return 'INSERT'
 }
 

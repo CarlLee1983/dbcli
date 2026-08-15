@@ -33,6 +33,7 @@ export const GATE_REASONS = [
   'multiple_statements',
   'non_unique_where',
   'multi_table',
+  'nested_write',
 ] as const
 
 export interface WriteGateSummary {

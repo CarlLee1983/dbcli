@@ -28,7 +28,7 @@ from the other: a terminal on stdout alone — an agent harness with a pty on th
 — would otherwise be prompted, and would either answer with an empty line that reads as a
 decline and exits zero, or block forever. The process exits non-zero with a reason a caller
 can branch on (`reason=no_where`, `ddl_destruction`, `unparseable`, `multiple_statements`,
-`non_unique_where`).
+`multi_table`, `nested_write`, `non_unique_where`).
 
 Refused means the statement is never sent. On the raw-SQL path the gate runs before the
 connection is opened; on the structured `update` / `delete` path it runs after `connect()`
@@ -98,16 +98,83 @@ full-table writes admitted as tier one and 8 statements wrongly refused; every o
 pinned in `tests/unit/commands/write-gate.test.ts` by the statement rather than by the rule,
 so a future simplification has to argue with the measurement instead of with the code.
 
-**Known residuals**, all in the statement-type classification rather than in the
-qualification criterion. A data-modifying CTE whose leading keyword is `INSERT` —
-`WITH x AS (DELETE FROM t RETURNING *) INSERT INTO archive …` — is classified as an `INSERT`
-and so is tier one, however unqualified the `DELETE` inside it (#94). `MERGE` is mapped to
-`INSERT` for the same reason, and
-`MERGE INTO p USING (SELECT 1 AS x) s ON true WHEN MATCHED THEN DELETE` deleted every row of
-a 2000-row table as tier one; it needs a classification of its own rather than a keyword
-substitution, because the tier depends on which `WHEN … THEN` actions it carries (#95).
-`ALTER TABLE … DROP COLUMN` is tier one, which is consistent with `ALTER` being an ordinary
-write but is unarguably destructive; it is recorded here rather than decided. And
+**The statement type is not the leading keyword**, which took its own round of measurement
+(#94, #95). Two shapes put a write in front of, or instead of, the statement the first
+keyword names, and each emptied or rewrote all 2000 rows of the fixture as tier one.
+
+A **data-modifying CTE** carries an arbitrary write in its body:
+`WITH moved AS (DELETE FROM p RETURNING *) INSERT INTO archive …` read as an `INSERT`, and
+the same CTE under a `CREATE TABLE … AS` head read as a `CREATE` — so the rule is attached
+to the shape rather than to `INSERT`. The shape is "a write keyword anywhere inside
+parentheses". It was first written as "a group that *opens* with a write", and measurement
+defeated that in one step: PostgreSQL lets a CTE body open a CTE of its own, so
+`WITH m AS (WITH i AS (SELECT 1) DELETE FROM p RETURNING *) MERGE INTO archive …` puts a
+`WITH` in the opening position and emptied the fixture as tier one. Where the write sits
+inside the group is not something the grammar bounds; that it is inside one is.
+
+What bounds the criterion is the other direction — parentheses that are not a statement body
+cannot contain a write at all. A column list, a `VALUES` row, a conflict target, a function
+argument and a subquery admit expressions and queries, and none of them admits an `INSERT`,
+`UPDATE` or `DELETE`: those three are reserved in every supported dialect, so a column named
+after one must be quoted, and quoting removes it from the text before it is read. `MERGE` is
+the exception that proves the rule, being reserved nowhere, so it counts only as
+`MERGE INTO` — `UPDATE t SET total = (merge + 1) WHERE id = 1` is a one-row write, measured,
+and stays tier one. Two keywords do appear inside parentheses without writing anything, and
+both are dropped before the scan: the lock clause `SELECT … FOR UPDATE`, as
+`findWriteKeyword` already dropped it, and a foreign key's referential action —
+`CREATE TABLE child (… REFERENCES parent(id) ON DELETE CASCADE)` was refused outright while
+the same constraint added through `ALTER TABLE … ADD CONSTRAINT` sat outside any parenthesis
+and passed. One meaning and two answers is how a criterion reports that it is matching the
+wrong thing; MySQL's `ON UPDATE CURRENT_TIMESTAMP` is on most tables, and tier two has no
+flag, so this was refusing ordinary migrations outright.
+
+Such a statement is tier two, reason `nested_write`, whatever the nested write is qualified
+by — for the reason `multiple_statements` gives, that two writes in one statement have no
+single tier and the head cannot be read for the tail.
+
+The check runs before every branch that can end the classification. That ordering is
+load-bearing rather than incidental, and it was measured twice: placed after the `MERGE`
+classification it was skipped for an insert-only `MERGE` head, and left in the tier-one
+branch it was never reached for an `UPDATE` or `DELETE` head —
+`WITH moved AS (DELETE FROM p RETURNING *) MERGE INTO archive …` and
+`WITH m AS (UPDATE p SET c = 99 RETURNING *) UPDATE q SET c = 1 WHERE q.id = 1` each emptied
+or rewrote all 2000 rows as tier one. The second is not an ordering slip but a wrong
+assumption: a CTE-wrapped `DELETE` defeats the parser and resolves upwards through
+`unparseable`, while a CTE-wrapped `UPDATE` or `INSERT` parses cleanly and its `with` clause
+was never read. That backstop is not a second line of defence to lean on either — it exists
+only for `UPDATE` and `DELETE` heads, the ones that reach the parser at all. A `MERGE`,
+`CREATE` or `ALTER` head never does, so the criterion has to hold on its own.
+
+`MERGE` is classified by its `WHEN … THEN` action list, not by a keyword substitution: a
+destructive action (`THEN DELETE`, `THEN UPDATE`) makes it tier two, an insert-only or
+`DO NOTHING` one leaves it tier one. That distinction is what keeps this a classification
+rather than a blanket refusal that would have taken every ordinary upsert with it. The tier
+comes from the rule already covering the shape — a `MERGE` reads its rows from `USING`, so
+it is a multi-table write, and its `ON` is a join condition and evidence of nothing — so the
+reason is `multi_table`. Reading `MERGE` off the leading keyword was the first spelling of
+this fix and a CTE walked past it in measurement, so it is read at statement level instead.
+
+The cost, measured: a CTE deleting one row by primary key and the ordinary
+`WHEN MATCHED THEN UPDATE … WHEN NOT MATCHED THEN INSERT` upsert are both refused, one row
+each. Both are accepted on the same terms as the multi-table rule above. `ON CONFLICT … DO
+UPDATE`, `ON DUPLICATE KEY UPDATE`, `INSERT … SELECT`, a read-only CTE feeding an `INSERT`
+and a scalar subquery in a `VALUES` row were each measured before and after and stayed tier
+one.
+
+**Known residuals.** PostgreSQL's `WITH (option = value)` admits a reserved word as a bare
+value, and logical replication's options are those words:
+`CREATE PUBLICATION pub FOR TABLE t WITH (publish = delete)` is refused as `nested_write`,
+though the quoted spelling `WITH (publish = 'insert, update, delete')` is not. Recorded
+rather than fixed, deliberately. Each of the three removals above rests on a fact about the
+grammar — reserved words must be quoted to be identifiers, a lock is not a write, `ON` is
+never followed by a statement — and a fourth would rest on recognising one particular clause
+shape, which is the "rule out the spellings someone remembered" failure this criterion was
+built to avoid. Logical replication is a rare administrative operation rather than a write
+path, and at a terminal the cost is one typed table name.
+
+`ALTER TABLE … DROP COLUMN` is tier one, which is consistent with
+`ALTER` being an ordinary write but is unarguably destructive; it is recorded here rather
+than decided. And
 `UPDATE ONLY p AS x` is indistinguishable in the parse tree from `UPDATE "only" AS x`, so a
 table genuinely named `only` and given an alias is named by its alias in the confirmation
 phrase.
@@ -161,7 +228,11 @@ audit log, or `src/commands/shell-write-gate.ts` stops being handed to `ReplEngi
 SQL connection in `src/commands/shell.ts`, or
 `src/core/audit/write-gate-summary.ts` stops counting those recorded decisions — that
 summary is what makes the measurement above something anyone will actually take, so
-losing it leaves the rest of this condition true and unverified — or if `narrowsTarget` /
+losing it leaves the rest of this condition true and unverified — or if `nestedWrite` or
+`classifyMerge` in `src/commands/write-gate.ts` stop resolving a statement that carries a
+write inside a parenthesised group, or a `MERGE` with a `THEN DELETE` / `THEN UPDATE` action,
+to tier two — without those two the statement type falls back to the leading keyword, which
+is the state #94 and #95 were — or if `narrowsTarget` /
 `writeTargets` in `src/commands/write-gate.ts` stop requiring a condition that names the
 table being written before granting tier one, or if `unparseable` in the same file stops
 resolving a statement that carries a join, a CTE or a subquery to tier two. Without that last clause the positive-evidence

@@ -34,7 +34,6 @@ describe('Elasticsearch Integration', () => {
     const index = 'test-index-' + Date.now()
 
     // 1. Create index with mapping (using fetch directly since adapter doesn't have createIndex)
-    // @ts-expect-error - accessing private request() for test setup
     await adapter.request('PUT', `/${index}`, {
       mappings: {
         properties: {
@@ -48,7 +47,6 @@ describe('Elasticsearch Integration', () => {
     await adapter.insert(index, { id: 'doc1', title: 'Hello ES', tags: ['test'] })
 
     // Refresh index
-    // @ts-expect-error - accessing private request() for test setup
     await adapter.request('POST', `/${index}/_refresh`)
 
     // 3. Query document
@@ -67,7 +65,6 @@ describe('Elasticsearch Integration', () => {
     expect(schema.columns).toContainEqual({ name: 'tags', type: 'keyword', nullable: true })
 
     // Cleanup
-    // @ts-expect-error - accessing private request() for test cleanup
     await adapter.request('DELETE', `/${index}`)
   })
 })

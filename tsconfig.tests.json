@@ -8,6 +8,7 @@
     "tests/gherkin/**/*.ts",
     "tests/graft/**/*.ts",
     "tests/helpers/**/*.ts",
+    "tests/integration/**/*.ts",
     "tests/perf/**/*.ts",
     "tests/unit/*.ts",
     "tests/unit/adapters/**/*.ts",

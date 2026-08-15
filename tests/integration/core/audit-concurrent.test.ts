@@ -13,6 +13,32 @@ import { join } from 'node:path'
 
 import { AuditLogger } from '../../../src/core/audit/logger'
 import { SessionIdService } from '../../../src/core/audit/session-id'
+import type { AuditEntry } from '../../../src/core/audit/types'
+
+/**
+ * A valid audit entry carrying the marker these assertions read.
+ *
+ * `write` takes a whole `AuditEntry` minus the three fields the logger fills in.
+ * This file used to hand it a bare `{ src, i }`, which no typechecker ever saw;
+ * the markers now travel in `metadata`, where arbitrary keys belong.
+ */
+function markedEntry(
+  marker: Record<string, unknown>
+): Omit<AuditEntry, 'id' | 'ts' | 'session_id'> {
+  return {
+    engine: 'postgresql',
+    command: 'query',
+    side_effect_tier: 'readonly',
+    target: 'test_table',
+    success: true,
+    redacted_query: 'query test_table',
+    metadata: marker,
+  }
+}
+
+function markerOf(row: Record<string, unknown>): string | undefined {
+  return (row['metadata'] as { src?: string } | undefined)?.src
+}
 
 let workDir: string
 let originalEnv: string | undefined
@@ -53,8 +79,8 @@ describe('AuditLogger concurrent integration (STORE-03)', () => {
     const sessionIdService = new SessionIdService(workDir)
     const loggerA = makeLogger('default', sessionIdService)
     const loggerB = makeLogger('default', sessionIdService)
-    const entriesA = Array.from({ length: 50 }, (_, i) => ({ src: 'a', i }))
-    const entriesB = Array.from({ length: 50 }, (_, i) => ({ src: 'b', i }))
+    const entriesA = Array.from({ length: 50 }, (_, i) => markedEntry({ src: 'a', i }))
+    const entriesB = Array.from({ length: 50 }, (_, i) => markedEntry({ src: 'b', i }))
 
     const results = await Promise.all([
       ...entriesA.map((entry) => loggerA.write(entry)),
@@ -72,7 +98,7 @@ describe('AuditLogger concurrent integration (STORE-03)', () => {
     expect(parsed.length).toBe(successCount)
     for (const row of parsed) {
       expect(row['session_id']).toBe('concurrent-test-session')
-      expect(row['src'] === 'a' || row['src'] === 'b').toBe(true)
+      expect(markerOf(row) === 'a' || markerOf(row) === 'b').toBe(true)
     }
     expect(successCount).toBeGreaterThanOrEqual(95)
   })
@@ -93,8 +119,8 @@ describe('AuditLogger concurrent integration (STORE-03)', () => {
       rotation: { maxBytes: 10_000_000, maxEntries: 10_000 },
       sessionIdService,
     })
-    const entriesA = Array.from({ length: 50 }, (_, i) => ({ src: 'a', i }))
-    const entriesB = Array.from({ length: 50 }, (_, i) => ({ src: 'b', i }))
+    const entriesA = Array.from({ length: 50 }, (_, i) => markedEntry({ src: 'a', i }))
+    const entriesB = Array.from({ length: 50 }, (_, i) => markedEntry({ src: 'b', i }))
 
     const results = await Promise.all([
       ...entriesA.map((entry) => loggerA.write(entry)),
@@ -108,7 +134,7 @@ describe('AuditLogger concurrent integration (STORE-03)', () => {
 
     expect(connALines.length).toBe(50)
     expect(connBLines.length).toBe(50)
-    expect(connALines.every((row) => row['src'] === 'a')).toBe(true)
-    expect(connBLines.every((row) => row['src'] === 'b')).toBe(true)
+    expect(connALines.every((row) => markerOf(row) === 'a')).toBe(true)
+    expect(connBLines.every((row) => markerOf(row) === 'b')).toBe(true)
   })
 })

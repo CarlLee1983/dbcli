@@ -80,7 +80,9 @@ describe('mongo operator tier integration', () => {
       }
     )
     expect(plan.decision).toBe('WARN')
-    await col.updateOne({ _id: 't' } as any, { $push: { tags: 'new' } })
+    // The driver types `$push` against the collection's document type, which
+    // this test never declares — the surrounding `_id` casts say the same.
+    await col.updateOne({ _id: 't' } as any, { $push: { tags: 'new' } } as any)
     const doc = await col.findOne({ _id: 't' } as any)
     expect((doc as any).tags).toEqual(['new'])
   })

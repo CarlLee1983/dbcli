@@ -211,10 +211,10 @@ describe('Audit Contract Integration', () => {
 
     const entries = await auditLines()
     expect(entries).toHaveLength(1)
-    expect(entries[0].success).toBe(true)
-    expect(entries[0].command).toBe('query')
-    expect(entries[0].target).toBe('users')
-    expect((entries[0].metadata as Record<string, unknown>).execution_ms).toBeNumber()
+    expect(entries[0]!.success).toBe(true)
+    expect(entries[0]!.command).toBe('query')
+    expect(entries[0]!.target).toBe('users')
+    expect((entries[0]!.metadata as Record<string, unknown>).execution_ms).toBeNumber()
   })
 
   test('one CLI query writes exactly one audit entry — failure', async () => {
@@ -238,7 +238,7 @@ describe('Audit Contract Integration', () => {
 
     const entries = await auditLines()
     expect(entries).toHaveLength(1)
-    expect(entries[0].success).toBe(false)
-    expect(entries[0].error).toContain('table not found')
+    expect(entries[0]!.success).toBe(false)
+    expect(entries[0]!.error).toContain('table not found')
   })
 })

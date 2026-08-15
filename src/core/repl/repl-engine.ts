@@ -3,7 +3,7 @@ import type { DatabaseAdapter } from '../../adapters/types'
 import type { ReplContext, ReplState, ReplWriteGate } from './types'
 import type { DbcliConfig } from '../../types'
 import { isTransportFailure } from '@/utils/connection-error-message'
-import { classifyInput } from './input-classifier'
+import { classifyInput, COMMAND_PREFIX } from './input-classifier'
 import { MultilineBuffer } from './multiline-buffer'
 import { handleMetaCommand } from './meta-commands'
 import { parseCommandLine, isKnownCommand } from './command-dispatcher'
@@ -18,6 +18,20 @@ import { extractTableReferences } from '../../utils/sql-tables'
 import { BlacklistManager } from '../blacklist-manager'
 import { BlacklistValidator } from '../blacklist-validator'
 import { BlacklistError } from '../../types/blacklist'
+
+/**
+ * Words that follow a write keyword in SQL but never in a dbcli invocation,
+ * where the second word is the table or the first option.
+ */
+const STATEMENT_CONTINUATION = new Set([
+  'FROM',
+  'INTO',
+  'SET',
+  'TABLE',
+  'INDEX',
+  'VIEW',
+  'DATABASE',
+])
 
 export interface ProcessResult {
   readonly action: 'continue' | 'quit' | 'clear' | 'multiline'
@@ -81,6 +95,20 @@ export class ReplEngine {
   async processInput(line: string): Promise<ProcessResult> {
     // If in multiline mode, feed to buffer
     if (this.buffer.isActive()) {
+      // Except for the shell's own commands, which stay reachable. Everything
+      // typed after a statement opened multiline mode used to go into the
+      // buffer, `.quit` included, so a line misread as SQL left a shell that
+      // looked dead and could only be ended from outside (#88). Only the names
+      // the shell implements are lifted out — `.5` is part of a decimal
+      // literal, not a command — and neither is a line inside an unterminated
+      // string literal, where lifting it out would corrupt the statement.
+      const classified = classifyInput(line)
+      if (classified.type === 'meta' && !this.buffer.isInsideLiteral()) {
+        const result = this.handleMeta(classified.normalized)
+        if (result.action === 'quit' || result.action === 'clear') this.buffer.reset()
+        return result
+      }
+
       const bufResult = this.buffer.append(line)
       if (bufResult.complete) {
         this.history.add(bufResult.sql!)
@@ -128,19 +156,54 @@ export class ReplEngine {
       return this.executeSql(bufResult.sql!)
     }
 
-    return { action: 'multiline' }
+    const hint = this.subcommandHint(input)
+    return hint ? { action: 'multiline', output: hint } : { action: 'multiline' }
+  }
+
+  /**
+   * Say how to reach the subcommand, for a line that was almost certainly meant
+   * as one.
+   *
+   * `delete users --where status=active` is SQL by decision and correct as such:
+   * it is a statement waiting for its semicolon. It is also completely opaque to
+   * whoever meant `dbcli delete`, who sees the prompt change and nothing else.
+   * This changes nothing about what the line is — it only names the prefix.
+   *
+   * Three conditions, because two were not enough: the first word is a
+   * subcommand, the line carries a double-dash option, and the second word is
+   * not a keyword that continues the statement. `--` also opens a SQL comment,
+   * so `DELETE FROM t --keep this` met the first two and printed a hint for
+   * ordinary SQL (#88).
+   */
+  private subcommandHint(input: string): string | undefined {
+    const words = input.trim().split(/\s+/)
+    const firstWord = (words[0] ?? '').toLowerCase()
+    if (!this.context.commandNames.includes(firstWord)) return undefined
+    if (!/\s--[a-z]/.test(input)) return undefined
+    if (STATEMENT_CONTINUATION.has((words[1] ?? '').toUpperCase())) return undefined
+
+    return pc.dim(
+      t_vars('shell.subcommand_prefix_hint', { command: `${COMMAND_PREFIX}${firstWord}` })
+    )
   }
 
   private async handleCommand(input: string): Promise<ProcessResult> {
-    const parsed = parseCommandLine(input)
+    // The prefix reaches this layer and is removed here rather than in the
+    // classifier, so history keeps the line as it was typed and recall replays
+    // something that still works.
+    const invocation = input.startsWith(COMMAND_PREFIX) ? input.slice(COMMAND_PREFIX.length) : input
+    const parsed = parseCommandLine(invocation)
 
     if (!isKnownCommand(parsed.command, this.context.commandNames)) {
       // Non-SQL engines (Redis) accept raw single-line commands that are not dbcli
       // subcommands; execute them directly instead of rejecting. SQL engines keep
       // the unknown-command behavior.
       if (this.context.system === 'redis') {
+        // History keeps the line as typed; execution gets it without the prefix,
+        // or the backslash reaches the permission classifier as part of the
+        // command name and every tier denies it.
         this.history.add(input)
-        return this.executeSql(input)
+        return this.executeSql(invocation)
       }
       return {
         action: 'continue',

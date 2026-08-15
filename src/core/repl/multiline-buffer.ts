@@ -25,6 +25,19 @@ export class MultilineBuffer {
     return this.lines.length > 0
   }
 
+  /**
+   * Is the buffered text sitting inside an unterminated string literal?
+   *
+   * The shell lifts its own commands out of a statement in progress so `.quit`
+   * cannot be swallowed, and that decision needs the one piece of context only
+   * this class has. A line reading `.timing off` between `SELECT 'a` and
+   * `b' AS t;` is part of the literal, and taking it out sent a mutilated
+   * statement to the server (#88).
+   */
+  isInsideLiteral(): boolean {
+    return insideLiteral(this.lines.join('\n'))
+  }
+
   getPartial(): string {
     return this.lines.join('\n')
   }
@@ -35,9 +48,24 @@ export class MultilineBuffer {
 }
 
 function hasUnquotedSemicolon(sql: string): boolean {
+  return scan(sql).semicolon
+}
+
+function insideLiteral(sql: string): boolean {
+  const { inSingleQuote, inDoubleQuote } = scan(sql)
+  return inSingleQuote || inDoubleQuote
+}
+
+/** One pass over the text, reporting both what the callers above need. */
+function scan(sql: string): {
+  semicolon: boolean
+  inSingleQuote: boolean
+  inDoubleQuote: boolean
+} {
   let inSingleQuote = false
   let inDoubleQuote = false
   let escaped = false
+  let semicolon = false
 
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i]
@@ -63,9 +91,9 @@ function hasUnquotedSemicolon(sql: string): boolean {
     }
 
     if (ch === ';' && !inSingleQuote && !inDoubleQuote) {
-      return true
+      semicolon = true
     }
   }
 
-  return false
+  return { semicolon, inSingleQuote, inDoubleQuote }
 }

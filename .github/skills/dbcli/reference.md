@@ -2599,9 +2599,22 @@ dbcli shell --sql    # SQL-only mode
 Inside the shell:
 - Type SQL statements ending with `;` to execute
 - Type dbcli commands without the `dbcli` prefix (e.g., `schema users`)
+- Prefix a subcommand with `\` to force it: `\delete users --where id=1`. Required for the
+  subcommands whose names are also SQL keywords — `insert`, `update`, `delete`, `explain` —
+  because a line starting with one of those is read as SQL,
+  which is what a shell is for. The prefix works on every subcommand, so it is one rule
+  rather than a list of exceptions (#88).
+- A subcommand runs in its own process with no stdin, so its ordinary y/n confirmation reads
+  EOF and cancels. `\insert` / `\update` / `\delete` therefore need `--force` from inside
+  the shell — or type the SQL at the prompt, where the confirmation can actually be
+  answered. Tier two is unaffected either way: it is refused in the child and points you
+  back to the prompt.
 - Use Tab for auto-completion (SQL keywords, table names, column names)
 - Type `.help` for meta commands (.quit, .clear, .format, .history, .timing)
-- Multi-line SQL: keeps accumulating until `;` is found
+- Multi-line SQL: keeps accumulating until `;` is found. Meta commands still work while a
+  statement is accumulating — `.quit` quits, `.clear` abandons the buffer — and Ctrl-C
+  cancels. A line that reads as SQL but names a subcommand and carries a double-dash option prints
+  a note saying which prefix would have reached the subcommand.
 - History persists across sessions (~/.dbcli_history)
 
 > **Tier two applies here (2.0.0)** — on SQL connections a typed `UPDATE` / `DELETE` with

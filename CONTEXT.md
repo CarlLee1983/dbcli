@@ -26,6 +26,18 @@ relevant changes, tests, documentation checks, and known risks.
 An intentionally postponed choice with an explicit condition for reopening it;
 it is not an unspecified future TODO.
 
+**Known deviation**:
+A named part of delivered work that intentionally does not satisfy its own
+acceptance criterion, recorded with what it deviates from and what would make
+it worth revisiting. It is neither a TODO nor an unreported defect: work
+carrying one is delivered, not complete.
+
+**Unverified**:
+An acceptance criterion whose implementation exists but which no test asserts.
+It is a statement about proof, not about correctness, and it is distinct from a
+known deviation: nobody has decided the criterion is unmet, nobody has shown it
+is met. A partially asserted criterion is unverified, not covered.
+
 ## Semantic query-drafting language
 
 **QueryDraft**:

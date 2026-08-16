@@ -1,7 +1,7 @@
 /**
  * AuditLogger — append-only JSONL writer with rotation + fail-soft semantics.
  *
- * Decisions implemented (see 21-CONTEXT.md):
+ * Decisions implemented (the record they pointed to is gone; they are the record now):
  * - D-01: lives under src/core/audit/
  * - D-02: class instance, one per process; stateful (counters, sticky lastError)
  * - D-03: async write(); awaited by callers (engines in Phase 23)

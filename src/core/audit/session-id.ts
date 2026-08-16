@@ -1,7 +1,7 @@
 /**
  * SessionIdService — resolves and persists the per-process audit session id.
  *
- * Decisions (see .planning/phases/21-audit-writer-foundation/21-CONTEXT.md):
+ * Decisions (the record they pointed to is gone; they are the record now):
  * - D-02: the DBCLI session-id env wins; otherwise `<pid>-<unix-ts-ms>-<6charHex>`.
  * - D-04: independent module (not embedded in AuditLogger); constructor-injected.
  * - D-13: persisted JSON includes pid; mismatch -> regenerate. No POSIX signal

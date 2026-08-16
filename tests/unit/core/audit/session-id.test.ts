@@ -4,8 +4,8 @@
  * Covers AUDIT-02 (env-first + `<pid>-<unix-ts-ms>-<6charHex>` fallback) and
  * AUDIT-03 (in-process cache reuse + `.dbcli/last-session-id` persistence).
  *
- * Tests 1–7 correspond exactly to the seven behavior cases defined in
- * `.planning/phases/21-audit-writer-foundation/21-02-session-id-service-PLAN.md`.
+ * Tests 1–7 were written against seven behavior cases in a plan document that
+ * no longer exists; the cases survive only as these tests.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'

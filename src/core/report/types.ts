@@ -10,7 +10,7 @@ export type EvidenceStatus = 'ok' | 'no-data' | 'skipped' | 'error' | 'timeout'
 
 export type Severity = 'info' | 'warn' | 'error'
 
-export interface EvidenceItem {
+export interface ReportFinding {
   /** Snippet key, e.g. `@diag/db-size`. */
   snippet: string
   /** Snippet `intent` taxonomy slot, e.g. `capacity.size`. */
@@ -29,7 +29,7 @@ export interface EvidenceItem {
 
 export interface ReportSection {
   id: ReportSectionId
-  evidence: EvidenceItem[]
+  evidence: ReportFinding[]
 }
 
 export interface ReportWarning {

@@ -21,7 +21,7 @@ import {
   type ReportSectionId,
   type ReportSnapshot,
   type ReportWarning,
-  type EvidenceItem,
+  type ReportFinding,
 } from './types'
 
 const DEFAULT_PER_SNIPPET_TIMEOUT_MS = 3000
@@ -90,7 +90,7 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
   // user-writable directories, so the blacklist has to reach this path.
   const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
 
-  const sectionEvidence = new Map<ReportSectionId, EvidenceItem[]>()
+  const sectionEvidence = new Map<ReportSectionId, ReportFinding[]>()
   for (const id of sections) sectionEvidence.set(id, [])
 
   try {

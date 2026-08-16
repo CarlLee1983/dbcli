@@ -75,27 +75,19 @@ DBCLI_LANG=zh-TW ./dist/cli.mjs --help
 
 #### Typechecking
 
-`bun run typecheck` covers `src/` and `scripts/`. Test files are a separate project:
+`bun run typecheck` covers `src/` and `scripts/`; `bun run typecheck:tests` covers `tests/`.
+Both run in CI and both are in the pre-release checklist.
 
-| Command | Project | Covers | State |
-| :--- | :--- | :--- | :--- |
-| `bun run typecheck:tests` | `tsconfig.tests.json` | the test directories already clean | green, **enforced in CI** |
-| `bun run typecheck:tests:all` | `tsconfig.tests.all.json` | every test file | red — the remaining backlog |
+They are two projects rather than one because the test tree needs no declaration output and
+the build's `dts-bundle-generator` reads `tsconfig.json` directly. Keep new test directories
+inside `tests/` and they are covered automatically — the include is `tests/**/*.ts`.
 
-They are split because they are not all clean yet. The main `include` carried a
+A note on why this is worth stating at all: the main `include` carried a
 `tests/**/*.{ts,tsx}` pattern for a long time, and TypeScript does not expand braces in an
-include glob — so it matched nothing and no test file had ever been typechecked (#97).
-Turning it on reported 339 errors across 174 files, about six in ten an unchecked array index
-or optional field under `noUncheckedIndexedAccess`.
-
-**When you clean a directory, add it to `tsconfig.tests.json`'s `include`.** That list is the
-ratchet: everything in it is checked in CI and cannot regress, and the backlog shrinks as the
-list grows. When the two projects cover the same files, delete `tsconfig.tests.all.json` and
-add `typecheck:tests` to the pre-release checklist.
-
-A type-level assertion in a directory that is not on the list yet compiles but nothing runs
-it — `src/commands/audit.ts` has one and a note explaining why it lives there rather than
-beside the code it guards.
+include glob. It matched nothing, so no test file had ever been typechecked, and a
+type-level assertion written in one guarded nothing. Turning it on surfaced 339 errors across
+174 files — among them an import from a module that does not exist, a helper call missing a
+required argument, and fixtures missing fields their types had gained (#97).
 
 ### 5. Commit
 
@@ -332,6 +324,7 @@ The release gate is defined in [`docs/feature-matrix.md → Required CI validati
 Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 
 - [ ] `bun run typecheck` — `tsc --noEmit` 無錯誤
+- [ ] `bun run typecheck:tests` — 測試檔同樣無型別錯誤（#97）
 - [ ] `bun test` — 單元 + 整合測試（含 `tests/integration/dist-smoke.test.ts` 守護 packaged assets path）綠燈
 - [ ] `bun run lint` — `--max-warnings=0`，任何新 ESLint warning 都會擋下 release
 - [ ] `bun run build` — `dist/cli.mjs` 與 `dist/assets/` 產出成功

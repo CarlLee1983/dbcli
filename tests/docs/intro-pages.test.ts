@@ -1,10 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 
+/**
+ * happy-dom's `Document`, not the one `lib.dom` declares.
+ *
+ * The two are unrelated classes with the same name, and the helpers below were
+ * annotated with the global — which typechecked as long as nothing typechecked
+ * this file. Deriving it from `Window` keeps the two in step whatever happy-dom
+ * does next (#97).
+ */
+type PageDocument = Window['document']
+
 const pages = [
   { locale: 'zh-TW', path: 'docs/dbcli-intro.html', counterpart: 'dbcli-intro.en.html' },
   { locale: 'en', path: 'docs/dbcli-intro.en.html', counterpart: 'dbcli-intro.html' },
-] as const
+  // Not `as const`: bun-types' object-table overload for `each` takes a mutable
+  // array, and nothing here needs the literal types.
+]
 
 async function loadIntroPage(path: string) {
   const html = await Bun.file(path).text()
@@ -13,11 +25,11 @@ async function loadIntroPage(path: string) {
   return { html, document: window.document }
 }
 
-function cssText(document: Document) {
+function cssText(document: PageDocument) {
   return [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
 }
 
-function quickstartCommands(document: Document): string[] {
+function quickstartCommands(document: PageDocument): string[] {
   return [...document.querySelectorAll('#quickstart .command-box code')]
     .flatMap((code) => (code.textContent ?? '').split(/\r?\n/).map((line) => line.trim()))
     .filter(Boolean)
@@ -40,12 +52,12 @@ function contrastRatio(foreground: string, background: string) {
   return (lighter! + 0.05) / (darker! + 0.05)
 }
 
-function rootTokens(document: Document) {
+function rootTokens(document: PageDocument) {
   const root = cssText(document).match(/:root\s*\{([^}]+)\}/)?.[1] ?? ''
   return Object.fromEntries(
     [...root.matchAll(/--([\w-]+):\s*(#[\da-f]{6})/gi)].map((match) => [
       match[1],
-      match[2].toLowerCase(),
+      match[2]!.toLowerCase(),
     ])
   )
 }
@@ -104,7 +116,7 @@ describe.each(pages)('$locale intro page', ({ path, counterpart }) => {
 
   test('all internal fragment links have targets', async () => {
     const { document } = await loadIntroPage(path)
-    for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+    for (const link of document.querySelectorAll('a[href^="#"]')) {
       const target = link.getAttribute('href')!.slice(1)
       expect(target.length).toBeGreaterThan(0)
       expect(document.getElementById(target)).not.toBeNull()
@@ -130,7 +142,7 @@ describe.each(pages)('$locale intro page', ({ path, counterpart }) => {
 test('locale pages expose the same section and component contract', async () => {
   const zh = await loadIntroPage('docs/dbcli-intro.html')
   const en = await loadIntroPage('docs/dbcli-intro.en.html')
-  const ids = (document: Document) =>
+  const ids = (document: PageDocument) =>
     [...document.querySelectorAll('main section[id]')].map((section) => section.id)
   expect(ids(zh.document)).toEqual(ids(en.document))
   expect(zh.document.querySelectorAll('.workflow-step').length).toBe(
@@ -180,14 +192,14 @@ test.each(pages)('$locale uses the real interactive-report command labels', asyn
 
 test('English interface contains no residual Traditional Chinese copy', async () => {
   const { document } = await loadIntroPage('docs/dbcli-intro.en.html')
-  const clone = document.documentElement.cloneNode(true) as HTMLElement
+  const clone = document.documentElement.cloneNode(true)
   clone.querySelectorAll('.locale-link').forEach((node) => node.remove())
   expect(clone.textContent).not.toMatch(/[\u3400-\u9fff]/)
 })
 
 test.each(pages)('$locale local assets exist', async ({ path }) => {
   const { document } = await loadIntroPage(path)
-  for (const element of document.querySelectorAll<HTMLImageElement>('img[src]')) {
+  for (const element of document.querySelectorAll('img[src]')) {
     const src = element.getAttribute('src')!
     if (/^(https?:|data:)/.test(src)) continue
     const resolved = new URL(src, `file://${process.cwd()}/${path}`).pathname

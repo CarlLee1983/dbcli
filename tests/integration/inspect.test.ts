@@ -23,6 +23,55 @@ function run(
   })
 }
 
+/** What the fixture's config holds, and therefore what must never be published. */
+const FIXTURE_SECRETS = { host: 'localhost', port: 5432 }
+
+/**
+ * Credential leaks in a parsed inspect snapshot, described by where they sit.
+ *
+ * Walks the parsed document rather than scanning the serialized text. That is
+ * the whole point: a port is four digits, `audit_recent` carries UUIDs, and hex
+ * collides — so `stdout.includes('5432')` answers a question nobody asked. A
+ * leaf value that *is* the port, or a string that contains the host, is a leak;
+ * `435432` inside an id is not.
+ *
+ * Credential field names are reported wherever they appear, because a key called
+ * `password` in this output is a defect even when its value looks harmless — the
+ * fixture's password is the single character `p`, which no value check can find.
+ */
+const CREDENTIAL_KEYS = new Set(['host', 'port', 'password', 'user', 'uri', 'connectionstring'])
+
+function credentialLeaks(node: unknown, secrets: { host: string; port: number }): string[] {
+  const leaks: string[] = []
+
+  const walk = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => walk(item, path ? `${path}.${index}` : String(index)))
+      return
+    }
+    if (value !== null && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        const childPath = path ? `${path}.${key}` : key
+        if (CREDENTIAL_KEYS.has(key.toLowerCase())) {
+          leaks.push(`${childPath} is a credential field`)
+        }
+        walk(child, childPath)
+      }
+      return
+    }
+    if (value === secrets.port || value === String(secrets.port)) {
+      leaks.push(`${path} is the port`)
+      return
+    }
+    if (typeof value === 'string' && value.includes(secrets.host)) {
+      leaks.push(`${path} contains the host`)
+    }
+  }
+
+  walk(node, '')
+  return leaks
+}
+
 beforeAll(async () => {
   // Copy fixture to a tmp dir so the cache-freshness mutation does not dirty
   // the committed fixture between test runs.
@@ -71,12 +120,48 @@ describe('dbcli inspect (CLI)', () => {
     expect(stdout).toContain('## Suggested commands')
   })
 
+  test('the leak criterion ignores a port that is only a substring of a random id', () => {
+    // The reason this criterion is structural. `not.toContain('5432')` over the
+    // whole document went red on CI once because an audit entry's UUID ended
+    // `...435432`; the same commit passed on a re-run. Three ids of 32 hex
+    // characters put that at roughly one run in 700 — rare enough to look like a
+    // regression, common enough to keep costing a CI run and an investigation.
+    const snapshot = {
+      connection: { name: 'default', database: 'app', version: '16.4' },
+      audit_recent: [
+        { id: 'd234ec76-8833-4413-9d02-7c35f8435432', target: 'users' },
+        { id: '3cfdce8a-378d-4d9e-a0a7-5ad8673d12a2', target: '*' },
+      ],
+    }
+    expect(credentialLeaks(snapshot, FIXTURE_SECRETS)).toEqual([])
+  })
+
+  test('the leak criterion still catches a real leak, wherever it sits', () => {
+    expect(
+      credentialLeaks(
+        { connection: { name: 'default', database: 'app', host: 'localhost' } },
+        FIXTURE_SECRETS
+      )
+    ).toEqual(['connection.host is a credential field', 'connection.host contains the host'])
+
+    expect(
+      credentialLeaks({ hints: ['try dbcli query --host localhost'] }, FIXTURE_SECRETS)
+    ).toEqual(['hints.0 contains the host'])
+
+    expect(credentialLeaks({ objects: { count: 5432 } }, FIXTURE_SECRETS)).toEqual([
+      'objects.count is the port',
+    ])
+  })
+
   test('NEVER leaks host / port / password into stdout', async () => {
     const { stdout } = await run(['inspect', '--format', 'json', '--no-connect'])
-    expect(stdout).not.toContain('localhost')
-    expect(stdout).not.toContain('5432')
-    expect(stdout).not.toContain('"password"')
-    expect(stdout).not.toContain('"host"')
+    const snapshot = JSON.parse(stdout)
+
+    // The connection section is the only place a credential could legitimately
+    // be near, so it is pinned by its whole key set: anything added to it fails
+    // here until someone decides it is safe to publish.
+    expect(Object.keys(snapshot.connection).sort()).toEqual(['database', 'name', 'version'])
+    expect(credentialLeaks(snapshot, FIXTURE_SECRETS)).toEqual([])
   })
 
   test('no-config workspace exits 0 with degraded snapshot', async () => {

@@ -15,21 +15,26 @@ describe('Elasticsearch Integration', () => {
 
   const adapter = new ElasticsearchAdapter(options)
 
+  // Why the reason is reported rather than assumed: this file spent months
+  // printing "container not running" while the container was running and
+  // healthy — a global happy-dom registration was giving `fetch` a same-origin
+  // policy, so `connect()` threw `Cross-Origin Request Blocked` and the skip
+  // branch swallowed it (#109). A skip that states its cause can be checked.
+  let unreachable: string | null = null
+
   beforeAll(async () => {
-    // Skip if Elasticsearch is not running
     try {
       await adapter.connect()
-    } catch {
-      console.warn('Skipping Elasticsearch integration tests (container not running on port 9201)')
+    } catch (error) {
+      unreachable = error instanceof Error ? error.message : String(error)
+      console.warn(
+        `Skipping Elasticsearch integration tests — ${ES_HOST}:${ES_PORT} unreachable: ${unreachable}`
+      )
     }
   })
 
   test('can create index, insert document, and query it', async () => {
-    try {
-      await adapter.connect()
-    } catch {
-      return // skip
-    }
+    if (unreachable) return
 
     const index = 'test-index-' + Date.now()
 

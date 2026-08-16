@@ -82,6 +82,7 @@
     "platform:check": "bun run scripts/check-platform-parity.ts",
     "agent-core:check": "bun run scripts/check-agent-core-purity.ts",
     "core-stdout:check": "bun run scripts/check-core-no-stdout.ts",
+    "plan:check": "bun run scripts/check-plan-acceptance.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "typecheck:tests": "tsc --noEmit --pretty false -p tsconfig.tests.json",
     "test:perf": "bun test ./tests/perf/*.bench.ts",

@@ -60,7 +60,7 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The release gate is 9 shell steps encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`skill:check`, `platform:check`, `plugin:check`, `docs:check`, plus the `reference.md` command-coverage test in `bun test`) run in CI on every push/PR via the `docs-parity` job; the full 9-step gate must pass locally via `bun run release:check` before tagging a release:
+The release gate is 9 shell steps encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`skill:check`, `platform:check`, `plugin:check`, `docs:check`, `contract:check`, `plan:check`, plus the `reference.md` command-coverage test in `bun test`) run in CI on every push/PR via the `docs-parity` job; the full 9-step gate must pass locally via `bun run release:check` before tagging a release:
 
 ```bash
 bun audit                                                              # 1/9

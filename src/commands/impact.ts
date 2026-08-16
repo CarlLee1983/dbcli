@@ -33,7 +33,7 @@ import { loadOrmSchema, parseAgainstOrmValues } from '@/commands/diff'
 import { listSnippetKeys } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import { readVerificationArtifacts } from '@/core/verification/reader'
-import { loadWorkloadEvidence, type WorkloadEvidence } from '@/core/workload-impact'
+import { loadWorkloadSource, type WorkloadSource } from '@/core/workload-impact'
 import { formatImpact, type ImpactFormat } from '@/formatters/impact'
 import { resolveConfigPath } from '@/utils/config-path'
 
@@ -145,7 +145,7 @@ impactCommand
         blockedIdentifiers
       )
       const verifications = await loadVerificationEvidence(workspaceRoot, blockedIdentifiers)
-      const observedWorkload = await loadObservedWorkloadEvidence(
+      const observedWorkload = await loadObservedWorkloadSource(
         options.events as string | undefined,
         workspaceRoot,
         blockedIdentifiers
@@ -401,11 +401,11 @@ function semanticSchema(
   return result
 }
 
-async function loadObservedWorkloadEvidence(
+async function loadObservedWorkloadSource(
   path: string | undefined,
   workspaceRoot: string,
   blocked: readonly string[]
-): Promise<WorkloadEvidence> {
+): Promise<WorkloadSource> {
   if (path === undefined) {
     return {
       state: 'absent',
@@ -415,7 +415,7 @@ async function loadObservedWorkloadEvidence(
       issues: [],
     }
   }
-  return loadWorkloadEvidence({ path: resolve(workspaceRoot, path), blockedIdentifiers: blocked })
+  return loadWorkloadSource({ path: resolve(workspaceRoot, path), blockedIdentifiers: blocked })
 }
 
 export function shouldFail(

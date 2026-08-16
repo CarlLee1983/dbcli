@@ -8,7 +8,7 @@ const MAX_EVENT_LOG_BYTES = 2 * 1024 * 1024
 const MAX_EVENT_LINES = 10_000
 const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
-export type WorkloadEvidenceState = 'available' | 'absent' | 'invalid' | 'unavailable'
+export type WorkloadSourceState = 'available' | 'absent' | 'invalid' | 'unavailable'
 export type WorkloadIssue =
   | 'malformed'
   | 'stale'
@@ -24,8 +24,8 @@ export interface WorkloadTimeframe {
   to: string
 }
 
-export interface WorkloadEvidence {
-  state: WorkloadEvidenceState
+export interface WorkloadSource {
+  state: WorkloadSourceState
   /** A logical origin only. The supplied path is never retained. */
   origin: 'proxy-workload'
   observations: readonly ObservedWorkload[]
@@ -34,7 +34,7 @@ export interface WorkloadEvidence {
   timeframe?: WorkloadTimeframe
 }
 
-export interface LoadWorkloadEvidenceOptions {
+export interface LoadWorkloadSourceOptions {
   path: string
   blockedIdentifiers: readonly string[]
   now?: Date
@@ -45,9 +45,9 @@ export interface LoadWorkloadEvidenceOptions {
  * workload evidence. It deliberately never delegates to the general event
  * reader because that reader retains unbounded event bodies for QueryLens.
  */
-export async function loadWorkloadEvidence(
-  options: LoadWorkloadEvidenceOptions
-): Promise<WorkloadEvidence> {
+export async function loadWorkloadSource(
+  options: LoadWorkloadSourceOptions
+): Promise<WorkloadSource> {
   const now = options.now ?? new Date()
   let info: Awaited<ReturnType<typeof lstat>>
   try {
@@ -142,7 +142,7 @@ export async function loadWorkloadEvidence(
   }
 }
 
-function sourceFailure(state: Exclude<WorkloadEvidenceState, 'available'>): WorkloadEvidence {
+function sourceFailure(state: Exclude<WorkloadSourceState, 'available'>): WorkloadSource {
   return { state, origin: 'proxy-workload', observations: [], malformedLines: 0, issues: [] }
 }
 

@@ -1,4 +1,4 @@
-import type { EvidenceItem, ReportSnapshot } from './types'
+import type { ReportFinding, ReportSnapshot } from './types'
 import type { RenderOptions } from './render-json'
 
 const MAX_ROWS_IN_MD = 10
@@ -64,7 +64,7 @@ export function renderMarkdown(snap: ReportSnapshot, options: RenderOptions = {}
   return lines.join('\n')
 }
 
-function renderRowTable(ev: EvidenceItem): string[] {
+function renderRowTable(ev: ReportFinding): string[] {
   const rows = ev.rows.slice(0, MAX_ROWS_IN_MD)
   const cols = Array.from(
     rows.reduce((set, r) => {

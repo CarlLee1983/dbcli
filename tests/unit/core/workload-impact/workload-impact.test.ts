@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadWorkloadEvidence } from '@/core/workload-impact'
+import { loadWorkloadSource } from '@/core/workload-impact'
 
 const now = new Date('2026-08-08T12:00:00.000Z')
 
@@ -25,7 +25,7 @@ function event(overrides: Record<string, unknown> = {}): Record<string, unknown>
   }
 }
 
-describe('loadWorkloadEvidence', () => {
+describe('loadWorkloadSource', () => {
   let workspace = ''
 
   beforeEach(async () => {
@@ -43,7 +43,7 @@ describe('loadWorkloadEvidence', () => {
       `${JSON.stringify(event({ type: 'query_errored', error: { message: 'private-error', code: 'x' } }))}\n`
     )
 
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: [], now })
+    const evidence = await loadWorkloadSource({ path, blockedIdentifiers: [], now })
 
     expect(evidence).toMatchObject({
       state: 'available',
@@ -67,7 +67,7 @@ describe('loadWorkloadEvidence', () => {
   })
 
   test('makes missing, malformed, stale, and protected input non-clean without retaining source content', async () => {
-    const missing = await loadWorkloadEvidence({
+    const missing = await loadWorkloadSource({
       path: join(workspace, 'missing.jsonl'),
       blockedIdentifiers: [],
       now,
@@ -84,7 +84,7 @@ describe('loadWorkloadEvidence', () => {
         JSON.stringify(event({ tables: ['not a canonical table'] })),
       ].join('\n')
     )
-    const evidence = await loadWorkloadEvidence({
+    const evidence = await loadWorkloadSource({
       path,
       blockedIdentifiers: ['restricted_accounts'],
       now,
@@ -112,7 +112,7 @@ describe('loadWorkloadEvidence', () => {
       ].join('\n')
     )
 
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: [], now })
+    const evidence = await loadWorkloadSource({ path, blockedIdentifiers: [], now })
 
     expect(evidence.observations).toEqual([{ tables: ['accounts'] }])
     expect(evidence.malformedLines).toBe(0)
@@ -126,7 +126,7 @@ describe('loadWorkloadEvidence', () => {
       `${JSON.stringify(event({ tables: ['accounts', 'restricted_accounts'] }))}\n`
     )
 
-    const evidence = await loadWorkloadEvidence({
+    const evidence = await loadWorkloadSource({
       path,
       blockedIdentifiers: ['restricted_accounts'],
       now,
@@ -141,7 +141,7 @@ describe('loadWorkloadEvidence', () => {
     const path = join(workspace, 'events.jsonl')
     await writeFile(path, `${JSON.stringify(event({ timestamp: '2026-07-01T11:00:00.000Z' }))}\n`)
 
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: [], now })
+    const evidence = await loadWorkloadSource({ path, blockedIdentifiers: [], now })
 
     expect(evidence.observations).toEqual([])
     expect(evidence.issues).toEqual(['stale'])
@@ -151,7 +151,7 @@ describe('loadWorkloadEvidence', () => {
     const path = join(workspace, 'events.jsonl')
     await writeFile(path, 'x'.repeat(2 * 1024 * 1024 + 1))
 
-    const evidence = await loadWorkloadEvidence({ path, blockedIdentifiers: [], now })
+    const evidence = await loadWorkloadSource({ path, blockedIdentifiers: [], now })
 
     expect(evidence).toEqual({
       state: 'invalid',

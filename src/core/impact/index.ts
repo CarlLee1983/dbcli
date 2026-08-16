@@ -8,7 +8,7 @@ import type {
 } from '@/core/orm-drift/change-set'
 import type { VerificationStatus, VerificationSubject } from '@/core/verification/types'
 import type { DataAccessOperation } from '@/core/data-access'
-import type { WorkloadEvidence } from '@/core/workload-impact'
+import type { WorkloadSource } from '@/core/workload-impact'
 
 export type ImpactEvidenceState = 'available' | 'absent' | 'invalid' | 'unavailable'
 export type ImpactEvidenceReason = 'missing' | 'invalid' | 'unavailable'
@@ -38,7 +38,7 @@ export interface ImpactAssessmentInput {
   savedQueries: ImpactEvidenceSource<readonly string[]>
   verifications: ImpactEvidenceSource<readonly SafeVerificationMetadata[]>
   dataAccess: ImpactEvidenceSource<readonly DataAccessOperation[]>
-  observedWorkload: WorkloadEvidence
+  observedWorkload: WorkloadSource
   blockedIdentifiers: readonly string[]
 }
 
@@ -111,10 +111,10 @@ export interface ImpactReport {
   coverage: { level: 'declared' | 'partial'; gaps: ImpactCoverageGap[] }
   summary: { errors: number; warns: number; infos: number }
   observedWorkload: {
-    state: WorkloadEvidence['state']
+    state: WorkloadSource['state']
     tableReferenceCount: number
     malformedLines: number
-    timeframe?: WorkloadEvidence['timeframe']
+    timeframe?: WorkloadSource['timeframe']
   }
 }
 
@@ -512,7 +512,7 @@ function dataAccessFindings(
 
 function observedWorkloadFindings(
   change: NormalizedChange,
-  workload: WorkloadEvidence,
+  workload: WorkloadSource,
   blocked: readonly string[]
 ): ImpactFinding[] {
   if (workload.state !== 'available') return []

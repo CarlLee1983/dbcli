@@ -16,7 +16,7 @@ const ENGINE_DIALECT: Record<string, SqlTablesDialect | undefined> = {
 }
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
-import type { EvidenceItem } from './types'
+import type { ReportFinding } from './types'
 
 export interface RunDiagnosticInput {
   snippet: ResolvedSnippet
@@ -33,13 +33,13 @@ export interface RunDiagnosticInput {
 }
 
 /**
- * Runs a single snippet and always returns an EvidenceItem — never throws.
+ * Runs a single snippet and always returns an ReportFinding — never throws.
  * Statuses: ok / no-data / skipped (engine mismatch, prepare error) / error /
  * timeout. Rows are truncated to `maxRows`; `rowCount` reports the true count.
  */
-export async function runDiagnostic(input: RunDiagnosticInput): Promise<EvidenceItem> {
+export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFinding> {
   const meta = input.snippet.query.meta
-  const base: Pick<EvidenceItem, 'snippet' | 'intent' | 'description'> = {
+  const base: Pick<ReportFinding, 'snippet' | 'intent' | 'description'> = {
     snippet: meta.key,
     intent: meta.intent ?? '',
     description: meta.description ?? '',

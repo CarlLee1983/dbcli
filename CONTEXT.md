@@ -94,3 +94,23 @@ coverage rather than claiming to find every application dependency.
 **Coverage gap**:
 An explicit statement that an impact assessment lacks a source needed to rule
 out an effect. It is a warning, never a clean result.
+
+## Outcome vocabularies
+
+Three vocabularies describe how something turned out. They are not
+interchangeable, and none of them may be mapped onto another.
+
+**Verification status**:
+The verdict a verification artifact records about its subject — `verified`,
+`not_verified`, `indeterminate`, or `blocked`. Alone among the three it is a
+judgment about the database, and it is part of a published JSON contract.
+
+**Report finding**:
+How one diagnostic snippet in a report snapshot turned out — `ok`, `no-data`,
+`skipped`, `error`, or `timeout`. It says whether a diagnostic ran, not whether
+anything was verified.
+
+**Workload source**:
+Whether an explicit proxy event file offered to an impact assessment could be
+used — `available`, `absent`, `invalid`, or `unavailable`. It describes the
+source, not a finding about the database, and it is always advisory.

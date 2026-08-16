@@ -1,7 +1,7 @@
 /**
  * AuditLockManager - short-budget file lock for audit writes.
  *
- * Decisions (see .planning/phases/21-audit-writer-foundation/21-CONTEXT.md):
+ * Decisions (the record they pointed to is gone; they are the record now):
  * - D-05: NOT a reuse of ConcurrentLockManager; tunings differ.
  * - D-06: one lock per audit file (`<auditFilePath>.lock`).
  * - D-07: total retry budget ~200ms; on exhaustion RETURN false (do NOT throw).

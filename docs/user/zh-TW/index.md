@@ -565,7 +565,7 @@ dbcli skill tasks plan migration-review \
 
 **計畫佐證 vs 結果佐證的區別。** `dbcli skill tasks plan safe-backfill-verify` 產生的計畫 JSON 包含一個 `verification` 區塊，其 `status` 為 `"planned"` — 這是**計畫中**的佐證定義，描述哪項檢查將在執行時進行。最後的 `assert --write-verification-artifact` 步驟才會產生**結果**佐證（`status: verified` 或 `not_verified`）。這兩者是不同的記錄；`"planned"` **不代表**驗證已執行。
 
-> **注意：** 請將 bigint 聚合函數（`count(*)`、`sum()`）轉型為 `::int`，讓 `value ==` 做數值比較 — Postgres 回傳的 bigint 是字串，而 `value ==` 採嚴格相等。
+> **注意：** Postgres 的 bigint 聚合函數（`count(*)`、`sum()`）回傳的是字串，但比較時會依數值進行，因此 `value == 0` 不必轉型也成立。若要比對文字，把期望值加引號（`value == "0"`）。
 
 ```bash
 # 1. 規劃工作流（plan-only，計畫佐證）

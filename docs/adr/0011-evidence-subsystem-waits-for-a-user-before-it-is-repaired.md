@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-08-16
-review_by: 2026-09-16
+dogfooded: 2026-08-16
 ---
 
 # The evidence subsystem waits for a user before it is repaired
@@ -25,6 +25,44 @@ The trigger is deliberately attached to work that already happens: the next time
 from it and read the result. If that has not happened by **2026-09-16**, the
 subsystem is frozen — marked experimental in the user documentation, removed
 from the recommended workflow, and given no further investment.
+
+## The trigger fired on 2026-08-16
+
+`dbcli verify safe-backfill --after-write` ran against a PostgreSQL instance
+after an externally applied backfill, wrote a verification artifact and an
+evidence receipt, and `dbcli evidence compose` built a pack from both.
+`validate` reported `integrity: valid, references: valid, expired: []` and the
+Markdown render was read. **The freeze does not happen.** Repair of the
+deviations below is authorized from here, so each one now needs a reason to be
+worth doing rather than a reason to wait.
+
+The workflow held end to end. Claims rendered as
+`External claim — not a dbcli verification verdict.`, the receipt's `command`
+was redacted to `--table <redacted> --query <redacted>`, and no SQL or row
+reached either artifact.
+
+## What the first real use found
+
+The first run reported `not_verified` on data that was correct. Two assertions
+were tried and both failed for reasons unrelated to the database:
+
+- `rows == 0` counts rows in the result set. Against
+  `SELECT count(*) AS rows …` it reads as a column reference and is neither —
+  legal syntax, different meaning.
+- `value == 0` compared a PostgreSQL `bigint`, which arrives as a JavaScript
+  string, against a number under `===`. Every `value == <count>` assertion
+  failed on PostgreSQL, and because ordering operators coerce, `value > 5`
+  worked while `value == 6` did not. Fixed in `src/core/assert/evaluator.ts`;
+  the same command now reports `verified` against the same data.
+
+None of the four known deviations below was reached by this run, so none is
+repaired and none has yet cost anything. The finding that mattered was in the
+verification path, not the evidence path.
+
+The pack itself was honest but thin: every useful sentence in it was one a human
+wrote. The generated half recorded `not_verified` without recording why, and
+"why" was the only thing worth reading. That is the gap worth closing if this
+subsystem gets more investment.
 
 ## Known deviations
 
@@ -64,23 +102,24 @@ a subsystem whose acceptance criteria finally hold and that still has no users.
 The code is written, tested, and published. Deleting it costs a major version
 bump and breaks an API surface whose consumers we cannot enumerate, and buys
 back only maintenance we are choosing not to spend. Freezing achieves the same
-saving without the breaking change, which is why the 2026-09-16 fallback is a
-freeze rather than a removal.
+saving without the breaking change, which is why the fallback was a freeze
+rather than a removal. The trigger fired first, so neither was needed.
 
 ## Consequences
 
-- A reader who finds these defects should not fix them; this record is the
-  reason they are still there.
+- A reader who finds these defects should not assume they are undiscovered;
+  this record is the reason they are still there. Repairing one is now allowed,
+  but it should carry a use that reached it.
 - The affected tickets in
   `docs/plans/2026-08-08-agent-data-evidence-and-change-intelligence-ticket-backlog.md`
-  are marked delivered with named known deviations rather than completed.
-- Repair work becomes authorized by evidence of use, not by the defect list.
-- The freeze path, if taken, changes documentation and recommendation only. It
-  removes no command and breaks no published interface.
+  are marked delivered with named known deviations rather than completed. A
+  repair updates that annotation in the same change.
+- The freeze path is spent and will not be taken.
+- What the first use actually proved is narrow: the workflow runs and the
+  output is safe. It did not prove anyone wants the output.
 
-**Falsified if:** `src/core/evidence-pack/index.ts`,
-`src/core/evidence-receipt/index.ts`, `src/core/contracts/index.ts`,
-`src/core/impact/index.ts`, `src/core/data-access/index.ts`, or
-`src/core/workload-impact/index.ts` gains a behavioral change before a real
-evidence pack has been composed and read, or 2026-09-16 passes with neither
-that record nor the freeze.
+**Falsified if:** a deviation listed above is repaired while
+`docs/plans/2026-08-08-agent-data-evidence-and-change-intelligence-ticket-backlog.md`
+still annotates it as a known deviation, or `src/core/evidence-pack/index.ts`
+stops hard-coding `gaps: []` without that annotation being removed in the same
+change.

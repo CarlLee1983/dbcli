@@ -11,20 +11,60 @@ export class AssertShapeError extends Error {
   }
 }
 
+/**
+ * The number a value denotes, or null if it does not denote one.
+ *
+ * PostgreSQL hands back `bigint`, `int8`, and `numeric` as JavaScript strings,
+ * so the actual side of an assertion is routinely `'6'` where the expectation
+ * is `6`. Integers beyond `Number.MAX_SAFE_INTEGER` compare imprecisely; the
+ * expectation is already parsed into a JS number upstream, so nothing is lost
+ * here that survives parsing anyway.
+ */
+function numeric(value: number | string): number | null {
+  if (typeof value === 'number') return Number.isNaN(value) ? null : value
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+/**
+ * Compare an actual value against an expectation.
+ *
+ * A numeric expectation is compared numerically, so a count returned as a
+ * string matches the number it denotes. A quoted expectation stays a string
+ * comparison — `'006'` and `6` are equal as numbers and different as text, and
+ * asking for the text is the reason to quote it.
+ *
+ * `==` and `!=` were previously strict, which made every `value == <count>`
+ * assertion fail against PostgreSQL while `>` and `<` coerced and passed.
+ */
 function compare(a: number | string, op: Op, b: number | string): boolean {
+  let left: number | string = a
+  let right: number | string = b
+
+  if (typeof a !== typeof b) {
+    const na = numeric(a)
+    const nb = numeric(b)
+    if (na !== null && nb !== null) {
+      left = na
+      right = nb
+    }
+  }
+
   switch (op) {
     case '>':
-      return a > b
+      return left > right
     case '>=':
-      return a >= b
+      return left >= right
     case '<':
-      return a < b
+      return left < right
     case '<=':
-      return a <= b
+      return left <= right
     case '==':
-      return a === b
+      return left === right
     case '!=':
-      return a !== b
+      return left !== right
   }
 }
 
@@ -84,7 +124,10 @@ export function evaluateExpect(
     }
   }
   if (pred.type === 'between') {
-    const bad = nonNull.filter((v) => typeof v !== 'number' || v < pred.low || v > pred.high)
+    const bad = nonNull.filter((v) => {
+      const n = numeric(v as number | string)
+      return n === null || n < pred.low || n > pred.high
+    })
     return {
       name: `col:${column} between ${pred.low} and ${pred.high}`,
       expected: '0 out of range',
@@ -121,6 +164,6 @@ export function compareVs(
     name: 'vs:value',
     expected: String(bv),
     actual: String(av),
-    pass: av !== null && bv !== null && av === bv,
+    pass: av !== null && bv !== null && compare(av, '==', bv),
   }
 }

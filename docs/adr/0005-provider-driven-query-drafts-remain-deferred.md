@@ -1,6 +1,7 @@
 ---
-status: deferred
+status: accepted
 date: 2026-08-07
+accepted: 2026-08-16
 reopen_trigger: Explicit product and security approval recorded against the checklist below.
 ---
 
@@ -11,6 +12,11 @@ an explicit draft and `dbcli semantic draft validate` checks it locally. No
 provider-driven generation is authorized in dbcli at this time.
 
 ## Decision
+
+`status: accepted` here means the policy below is settled, not that
+provider-driven generation is approved. What stays deferred is the feature —
+SQD-05 and SQD-06 — and it stays deferred until a superseding record clears the
+reopen checklist. This ADR is not an open question awaiting an answer.
 
 Do not add a provider SDK, provider configuration, credential lookup, outbound
 transport, or `semantic draft generate` command. No provider or model is

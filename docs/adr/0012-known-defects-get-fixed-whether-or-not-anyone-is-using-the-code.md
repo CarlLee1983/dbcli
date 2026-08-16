@@ -44,6 +44,20 @@ one afternoon. It also invites the reading that correctness is a service level
 offered to users who show up, which is not a position this project wants to
 hold for a tool whose entire promise is that its output can be trusted.
 
+## Repair status
+
+Two of the four are tracked as acceptance criteria in the ticket backlog and
+carry their annotation there. The other two exist only in ADR-0011's list, so
+they are tracked here.
+
+- `coverage.gaps` dead schema surface — repaired 2026-08-16; the field is gone.
+- Pack digest not reproducible — repaired 2026-08-16; the digest covers content
+  and the id derives from it.
+- Blacklist substring matching over prose — repaired 2026-08-16; terms match as
+  identifiers, the columns map's keys are included, and the refusal names the
+  field rather than the term.
+- `observation.fingerprint` unsalted over a low-entropy value — open.
+
 ## Consequences
 
 - Each of the four deviations gets its own change, with the ticket annotation in

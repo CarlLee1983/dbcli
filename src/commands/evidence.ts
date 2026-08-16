@@ -54,30 +54,67 @@ async function readClaimsInput(filePath: string): Promise<unknown> {
   }
 }
 
-function blockedTerms(config: EvidenceConfig): string[] {
+/**
+ * Every protected identifier, including the table names that appear only as
+ * keys of the columns map. Omitting those keys meant a table protected through
+ * a column entry was never blocked in prose.
+ */
+export function blockedTerms(config: EvidenceConfig): string[] {
   return [
     ...(config.blacklist?.tables ?? []),
+    ...Object.keys(config.blacklist?.columns ?? {}),
     ...Object.values(config.blacklist?.columns ?? {}).flat(),
   ]
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0)
 }
 
-function assertNoBlockedText(value: string | undefined, terms: readonly string[]): void {
-  if (!value) return
+/**
+ * Whether a protected identifier appears in this text as an identifier.
+ *
+ * Matching used to be an unbounded substring test, so a blacklisted column
+ * named `id` blocked any claim containing "identifier" or "considered", and the
+ * error named no term — leaving the author with a refusal and no way to find
+ * the cause. A term now has to stand alone: `_`, letters, and digits on either
+ * side are part of a longer identifier and are not a match, while a dot, quote,
+ * space, or punctuation is a boundary.
+ *
+ * This catches an identifier written as an identifier. It does not catch one
+ * spelled around — `secret_customer` written as "secret customer" still passes,
+ * and no matcher over free prose can honestly promise otherwise.
+ */
+export function containsBlockedTerm(value: string, terms: readonly string[]): boolean {
   const normalized = value.toLowerCase()
-  if (terms.some((term) => normalized.includes(term))) {
-    throw new EvidencePackValidationError('evidence content contains a blocked identifier')
+  return terms.some((term) => {
+    const trimmed = term.trim().toLowerCase()
+    if (trimmed.length === 0) return false
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`).test(normalized)
+  })
+}
+
+function assertNoBlockedText(
+  value: string | undefined,
+  terms: readonly string[],
+  field: string
+): void {
+  if (!value) return
+  if (containsBlockedTerm(value, terms)) {
+    // The field is named and the term is not: saying which identifier matched
+    // would print the protected name into an error the author may paste on.
+    throw new EvidencePackValidationError(`${field} contains a blocked identifier`)
   }
 }
 
 function assertClaimsSafe(raw: unknown, terms: readonly string[]): void {
   const input = parseEvidenceClaimsInput(raw)
-  assertNoBlockedText(input.subject.kind, terms)
-  assertNoBlockedText(input.subject.name, terms)
-  for (const claim of input.claims) {
-    assertNoBlockedText(claim.id, terms)
-    assertNoBlockedText(claim.text, terms)
+  assertNoBlockedText(input.subject.kind, terms, 'subject.kind')
+  assertNoBlockedText(input.subject.name, terms, 'subject.name')
+  // Located by position, not by id: a claim id that is itself blocked would put
+  // the protected identifier straight into the error message.
+  for (const [index, claim] of input.claims.entries()) {
+    assertNoBlockedText(claim.id, terms, `claim ${index + 1} id`)
+    assertNoBlockedText(claim.text, terms, `claim ${index + 1} text`)
   }
 }
 

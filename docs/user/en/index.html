@@ -492,7 +492,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
                 <li>Status follows assertion truth: <code>--no-fail</code> failures still record <code>not_verified</code> / evidence <code>exitCode: 1</code>.</li>
             </ul>
             <p class="mt-4 mb-4"><strong>Planned vs Result evidence.</strong> <code>dbcli skill tasks plan safe-backfill-verify</code> produces a plan JSON with a <code>verification</code> block whose <code>status</code> is <code>"planned"</code> — this is the <strong>planned</strong> evidence definition describing which check will run. The final <code>assert --write-verification-artifact</code> step produces <strong>result</strong> evidence (<code>status: verified</code> or <code>not_verified</code>). These are two different records; <code>"planned"</code> does <strong>not</strong> mean verification has run.</p>
-            <p class="mb-2 text-sm text-text-muted"><strong>Note:</strong> Cast bigint aggregates (<code>count(*)</code>, <code>sum()</code>) to <code>::int</code> so <code>value ==</code> compares numerically — Postgres returns bigint as a string, and <code>value ==</code> uses strict equality.</p>
+            <p class="mb-2 text-sm text-text-muted"><strong>Note:</strong> Bigint aggregates (<code>count(*)</code>, <code>sum()</code>) arrive from Postgres as strings and are compared numerically anyway, so <code>value == 0</code> works without a cast. Quote the expectation (<code>value == "0"</code>) when you mean a text comparison.</p>
             <pre><code># 1. plan the workflow (plan-only, planned evidence)
 dbcli skill tasks plan safe-backfill-verify \
   --param table=orders \

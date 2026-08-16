@@ -1573,7 +1573,7 @@ Opt-in flag trio that persists a **VerificationArtifact JSON** (schema v1) under
 
 **Planned vs Result evidence.** `dbcli skill tasks plan safe-backfill-verify --format json` returns a plan containing a `verification` block with `status: "planned"`. That block is the **planned** evidence definition — it describes which check will run. Running `assert --write-verification-artifact` on the actual data produces **result** evidence (`status: "verified"` or `status: "not_verified"`). The two records are distinct; `"planned"` does **not** indicate that verification has run or passed.
 
-> **Casting note:** Postgres returns `count(*)` and `sum()` as bigint (a string in the result set). `value ==` uses strict equality, so `"0" == 0` is false. Cast to `::int` (`count(*)::int`) to ensure numeric comparison works correctly.
+> **Numeric note:** Postgres returns `count(*)` and `sum()` as bigint, which arrives as a string. A numeric expectation is compared numerically, so `value == 0` matches it without a cast. A quoted expectation stays a text comparison: `value == "0"` matches the text, not the number. The `::int` casts in the examples below are harmless and no longer required.
 
 ```bash
 dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \

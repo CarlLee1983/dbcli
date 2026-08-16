@@ -597,7 +597,7 @@ Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/v
 
 **Planned vs Result evidence.** `dbcli skill tasks plan safe-backfill-verify` produces a plan JSON with a `verification` block whose `status` is `"planned"` — this is the **planned** evidence definition describing which check will run. The final `assert --write-verification-artifact` step produces **result** evidence (`status: verified` or `not_verified`). These are two different records; `"planned"` does **not** mean verification has run.
 
-> **Note:** Cast bigint aggregates (`count(*)`, `sum()`) to `::int` so `value ==` compares numerically — Postgres returns bigint as a string, and `value ==` uses strict equality.
+> **Note:** Bigint aggregates (`count(*)`, `sum()`) arrive from Postgres as strings and are compared numerically anyway, so `value == 0` works without a cast. Quote the expectation (`value == "0"`) when you mean a text comparison.
 
 ```bash
 # 1. plan the workflow (plan-only, planned evidence)

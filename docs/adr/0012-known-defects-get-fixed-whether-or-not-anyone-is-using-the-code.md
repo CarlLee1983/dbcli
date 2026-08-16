@@ -56,7 +56,9 @@ they are tracked here.
 - Blacklist substring matching over prose — repaired 2026-08-16; terms match as
   identifiers, the columns map's keys are included, and the refusal names the
   field rather than the term.
-- `observation.fingerprint` unsalted over a low-entropy value — open.
+- `observation.fingerprint` unsalted over a low-entropy value — repaired
+  2026-08-16; the field is replaced by the observation stated plainly, which is
+  less than the digest leaked to anyone who inverted it.
 
 ## Consequences
 

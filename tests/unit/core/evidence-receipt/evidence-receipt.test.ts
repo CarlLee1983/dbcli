@@ -60,7 +60,12 @@ describe('evidence receipt', () => {
       'failed',
       'failed',
     ])
-    expect(new Set(receipts.map((receipt) => receipt.observation.fingerprint)).size).toBe(4)
+    expect(receipts.map((receipt) => receipt.observation)).toEqual([
+      { kind: 'verify-outcome', status: 'verified' },
+      { kind: 'verify-outcome', status: 'not_verified' },
+      { kind: 'verify-outcome', status: 'indeterminate' },
+      { kind: 'verify-outcome', status: 'blocked' },
+    ])
     for (const receipt of receipts) {
       expect(receipt.operation).toBe('verify')
       expect(receipt.observation.kind).toBe('verify-outcome')
@@ -97,6 +102,77 @@ describe('evidence receipt', () => {
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
+  })
+
+  // observation.fingerprint was an unsalted SHA-256 over a value with eight
+  // possible preimages for verify, and 2^(n+1) for an assert with n checks. It
+  // hid nothing a dictionary could not recover in milliseconds, while its
+  // determinism let two receipts be linked by their outcome. What it covered is
+  // now stated plainly, which is strictly less than an attacker could already
+  // read out of the hash.
+  test('states the assert verdict as counts rather than a breakable digest', () => {
+    const receipt = buildEvidenceReceipt({
+      command: 'dbcli assert <sql>',
+      context,
+      verdict: { pass: false, checks: [{ pass: true }, { pass: false }, { pass: true }] },
+    })
+    expect(receipt.observation).toEqual({
+      kind: 'assert-verdict',
+      checksPassed: 2,
+      checksTotal: 3,
+    })
+    expect(parseEvidenceReceipt(receipt)).toEqual(receipt)
+  })
+
+  test('does not reveal which check failed', () => {
+    const first = buildEvidenceReceipt({
+      command: 'dbcli assert <sql>',
+      context,
+      verdict: { pass: false, checks: [{ pass: false }, { pass: true }] },
+    })
+    const second = buildEvidenceReceipt({
+      command: 'dbcli assert <sql>',
+      context,
+      verdict: { pass: false, checks: [{ pass: true }, { pass: false }] },
+    })
+    expect(second.observation).toEqual(first.observation)
+  })
+
+  test('carries no fingerprint field at all', () => {
+    const receipt = buildEvidenceReceipt({
+      command: 'dbcli assert <sql>',
+      context,
+      verdict: { pass: true, checks: [{ pass: true }] },
+    })
+    expect(receipt.observation).not.toHaveProperty('fingerprint')
+    expect(JSON.stringify(receipt)).not.toContain('fingerprint')
+  })
+
+  test('rejects a receipt still carrying the removed fingerprint', () => {
+    const receipt = buildEvidenceReceipt({
+      command: 'dbcli assert <sql>',
+      context,
+      verdict: { pass: true, checks: [{ pass: true }] },
+    })
+    expect(() =>
+      parseEvidenceReceipt({
+        ...receipt,
+        observation: { kind: 'assert-verdict', fingerprint: `sha256:${'a'.repeat(64)}` },
+      })
+    ).toThrow(/observation/)
+  })
+
+  test('still rejects a verdict whose checks carry more than a pass bit', () => {
+    expect(() =>
+      buildEvidenceReceipt({
+        command: 'dbcli assert <sql>',
+        context,
+        verdict: {
+          pass: true,
+          checks: [{ pass: true, value: 42 } as unknown as { pass: boolean }],
+        },
+      })
+    ).toThrow(/pass bits/)
   })
 
   test('rejects a symlinked output ancestor that resolves outside the workspace', async () => {

@@ -24,9 +24,9 @@ describe('select-star', () => {
   test('flags SELECT *', () => {
     const findings = selectStarRule.check(ctxFor('SELECT * FROM users'))
     expect(findings).toHaveLength(1)
-    expect(findings[0].rule).toBe('select-star')
-    expect(findings[0].severity).toBe('warn')
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rule).toBe('select-star')
+    expect(findings[0]!.severity).toBe('warn')
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('with schema + single table, offers explicit-column rewrite', () => {
@@ -38,10 +38,10 @@ describe('select-star', () => {
       ],
     }
     const findings = selectStarRule.check(ctxFor('SELECT * FROM users', { users }))
-    expect(findings[0].rewrite?.sql).toBe('SELECT id, email FROM users')
-    expect(findings[0].rewrite?.confidence).toBe('high')
-    expect(findings[0].verifyCommand).toContain('dbcli explain --analyze')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite?.sql).toBe('SELECT id, email FROM users')
+    expect(findings[0]!.rewrite?.confidence).toBe('high')
+    expect(findings[0]!.verifyCommand).toContain('dbcli explain --analyze')
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('withholds a schema rewrite when a CTE shadows a cached physical table', () => {
@@ -56,9 +56,9 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].verifyCommand).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.verifyCommand).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('withholds a schema rewrite for a derived relation', () => {
@@ -73,9 +73,9 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].verifyCommand).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.verifyCommand).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('keeps the schema rewrite for one unambiguous physical table', () => {
@@ -85,9 +85,9 @@ describe('select-star', () => {
     }
     const findings = selectStarRule.check(ctxFor('SELECT * FROM x', { x: physicalX }))
 
-    expect(findings[0].rewrite?.sql).toBe('SELECT physical_only FROM x')
-    expect(findings[0].rewrite?.confidence).toBe('high')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite?.sql).toBe('SELECT physical_only FROM x')
+    expect(findings[0]!.rewrite?.confidence).toBe('high')
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('withholds a PostgreSQL schema rewrite for a schema-qualified table', () => {
@@ -100,9 +100,9 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].verifyCommand).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.verifyCommand).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   for (const system of ['mysql', 'mariadb'] as const) {
@@ -116,9 +116,9 @@ describe('select-star', () => {
       )
 
       expect(findings).toHaveLength(1)
-      expect(findings[0].rewrite).toBeUndefined()
-      expect(findings[0].verifyCommand).toBeUndefined()
-      expect(findings[0].schemaVerified).toBe(false)
+      expect(findings[0]!.rewrite).toBeUndefined()
+      expect(findings[0]!.verifyCommand).toBeUndefined()
+      expect(findings[0]!.schemaVerified).toBe(false)
     })
   }
 
@@ -136,8 +136,8 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('withholds an unquoted mixed-case table rewrite when its folded bucket collides', () => {
@@ -154,8 +154,8 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('withholds a quoted mixed-case table rewrite when quote provenance is unavailable', () => {
@@ -172,8 +172,8 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('keeps a unique case-insensitive select-star schema lookup', () => {
@@ -183,8 +183,8 @@ describe('select-star', () => {
     }
     const findings = selectStarRule.check(ctxFor('SELECT * FROM USERS', { users }, 'postgresql'))
 
-    expect(findings[0].rewrite?.sql).toBe('SELECT id FROM USERS')
-    expect(findings[0].rewrite?.confidence).toBe('high')
+    expect(findings[0]!.rewrite?.sql).toBe('SELECT id FROM USERS')
+    expect(findings[0]!.rewrite?.confidence).toBe('high')
   })
 
   test('rewrites the projection wildcard instead of a star in a leading comment', () => {
@@ -199,9 +199,9 @@ describe('select-star', () => {
       ctxFor('/* retain * marker */ SELECT * FROM users', { users })
     )
 
-    expect(findings[0].rewrite?.sql).toBe('/* retain * marker */ SELECT id, email FROM users')
-    expect(findings[0].rewrite?.confidence).toBe('high')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite?.sql).toBe('/* retain * marker */ SELECT id, email FROM users')
+    expect(findings[0]!.rewrite?.confidence).toBe('high')
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('withholds rewrite for a mixed projection containing multiplication and a wildcard', () => {
@@ -217,9 +217,9 @@ describe('select-star', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].verifyCommand).toBeUndefined()
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.verifyCommand).toBeUndefined()
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('quotes and escapes unsafe PostgreSQL schema column identifiers', () => {
@@ -233,10 +233,10 @@ describe('select-star', () => {
     }
     const findings = selectStarRule.check(ctxFor('SELECT * FROM users', { users }))
 
-    expect(findings[0].rewrite?.sql).toBe(
+    expect(findings[0]!.rewrite?.sql).toBe(
       'SELECT "select", "full name", "display""name" FROM users'
     )
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('quotes and escapes unsafe MySQL schema column identifiers', () => {
@@ -250,8 +250,8 @@ describe('select-star', () => {
     }
     const findings = selectStarRule.check(ctxFor('SELECT * FROM users', { users }, 'mysql'))
 
-    expect(findings[0].rewrite?.sql).toBe('SELECT `select`, `full name`, `tick``name` FROM users')
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite?.sql).toBe('SELECT `select`, `full name`, `tick``name` FROM users')
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('does not flag a backtick-quoted asterisk column in MySQL', () => {
@@ -281,7 +281,7 @@ describe('unanchored-like', () => {
       ctxFor("SELECT id FROM users WHERE email LIKE '%@x.com'")
     )
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('warn')
+    expect(findings[0]!.severity).toBe('warn')
   })
 
   test("does not flag anchored LIKE 'abc%'", () => {
@@ -297,8 +297,8 @@ describe('missing-limit-offset', () => {
       ctxFor('SELECT id FROM users ORDER BY id LIMIT 20 OFFSET 5000')
     )
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('info')
-    expect(findings[0].message).toContain('keyset')
+    expect(findings[0]!.severity).toBe('info')
+    expect(findings[0]!.message).toContain('keyset')
   })
 
   test('does not flag small offsets or no offset', () => {

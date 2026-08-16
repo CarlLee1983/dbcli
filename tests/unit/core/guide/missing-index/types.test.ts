@@ -28,6 +28,6 @@ test('MissingIndexReport shape is constructable', () => {
     candidates: [candidate],
     warnings: [{ rule: 'parser-limit', detail: 'window function ignored' }],
   }
-  expect(report.candidates[0].columns).toEqual(['user_id', 'settled_at'])
+  expect(report.candidates[0]!.columns).toEqual(['user_id', 'settled_at'])
   expect(usage.table).toBe('betting_logs')
 })

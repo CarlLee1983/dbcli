@@ -23,7 +23,9 @@ import {
 } from '@/core/permission-guard'
 import { enforceElasticsearchPermission } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
-import type { StatementType } from '@/types/permission'
+// `@/types/permission` does not exist. Bun strips a type-only import without
+// resolving it, so this ran green for as long as nothing typechecked the file.
+import type { StatementType } from '@/core/permission-guard'
 
 const PERMISSIONS: Permission[] = ['query-only', 'read-write', 'data-admin', 'admin']
 const TYPES: StatementType[] = ['INSERT', 'UPDATE', 'DELETE']

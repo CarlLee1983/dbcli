@@ -136,7 +136,7 @@ describe('validateQueryDraft', () => {
         ...semanticContext,
         models: [
           {
-            ...semanticContext.models[0],
+            ...semanticContext.models[0]!,
             fields: [{ column: 'created_at', aliases: [] }],
           },
         ],
@@ -223,10 +223,12 @@ describe('validateQueryDraft', () => {
   test('does not send a request or return an executable command while validating', () => {
     const originalFetch = globalThis.fetch
     let fetchCalls = 0
-    globalThis.fetch = async () => {
+    // Cast because `typeof fetch` carries `preconnect`, which a stand-in that
+    // exists only to fail on the first call has no reason to implement.
+    globalThis.fetch = (async () => {
       fetchCalls++
       throw new Error('network must not be used')
-    }
+    }) as unknown as typeof fetch
 
     try {
       const report = validateQueryDraft({ ...baseInput, draft: validDraft() })

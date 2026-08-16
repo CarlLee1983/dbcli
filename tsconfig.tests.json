@@ -16,6 +16,7 @@
     "tests/unit/agent-tasks/**/*.ts",
     "tests/unit/build/**/*.ts",
     "tests/unit/commands/**/*.ts",
+    "tests/unit/core/**/*.ts",
     "tests/unit/formatters/**/*.ts",
     "tests/unit/i18n/**/*.ts",
     "tests/unit/program/**/*.ts",

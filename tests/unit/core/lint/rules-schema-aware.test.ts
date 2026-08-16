@@ -63,10 +63,10 @@ describe('implicit-cast', () => {
     const findings = implicitCastRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('warn')
-    expect(findings[0].schemaVerified).toBe(true)
-    expect(findings[0].rewrite?.sql).toContain('id = 42')
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe("id = '42'")
+    expect(findings[0]!.severity).toBe('warn')
+    expect(findings[0]!.schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite?.sql).toContain('id = 42')
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe("id = '42'")
   })
 
   test('flags number literal compared to string column', () => {
@@ -75,7 +75,7 @@ describe('implicit-cast', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('ref_code')
+    expect(findings[0]!.message).toContain('ref_code')
   })
 
   for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
@@ -84,17 +84,17 @@ describe('implicit-cast', () => {
       const findings = implicitCastRule.check(ctxFor(sql, schema, system))
 
       expect(findings).toHaveLength(1)
-      expect(findings[0].rewrite?.sql).toBe('SELECT id FROM users WHERE 42 < id')
-      expect(findings[0].rewrite?.confidence).toBe('high')
-      expect(findings[0].message).toContain("'id'")
-      expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe("'42' < id")
+      expect(findings[0]!.rewrite?.sql).toBe('SELECT id FROM users WHERE 42 < id')
+      expect(findings[0]!.rewrite?.confidence).toBe('high')
+      expect(findings[0]!.message).toContain("'id'")
+      expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe("'42' < id")
     })
   }
 
   test('literal-left rewrite preserves the original comparison operator', () => {
     const findings = implicitCastRule.check(ctxFor("SELECT id FROM users WHERE '42' >= id", schema))
 
-    expect(findings[0].rewrite?.sql).toBe('SELECT id FROM users WHERE 42 >= id')
+    expect(findings[0]!.rewrite?.sql).toBe('SELECT id FROM users WHERE 42 >= id')
   })
 
   test('withholds literal-left rewrites when targeting is ambiguous', () => {
@@ -163,7 +163,7 @@ describe('implicit-cast', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].rewrite?.sql).toBe("SELECT '42' AS marker, id FROM users WHERE id = 42")
+    expect(findings[0]!.rewrite?.sql).toBe("SELECT '42' AS marker, id FROM users WHERE id = 42")
   })
 
   test('omits a rewrite when identical comparisons cannot be targeted unambiguously', () => {
@@ -184,8 +184,8 @@ describe('implicit-cast', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('shared_id')
-    expect(findings[0].message).toContain('varchar(32)')
+    expect(findings[0]!.message).toContain('shared_id')
+    expect(findings[0]!.message).toContain('varchar(32)')
   })
 
   test('skips an ambiguous unqualified column across joined tables', () => {
@@ -204,8 +204,8 @@ describe('implicit-cast', () => {
     const findings = implicitCastRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain("'id'")
-    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0]!.message).toContain("'id'")
+    expect(findings[0]!.rewrite).toBeUndefined()
   })
 
   test('never rewrites a matching JOIN comparison for a diagnosed WHERE node', () => {
@@ -214,8 +214,8 @@ describe('implicit-cast', () => {
     const findings = implicitCastRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain("'id'")
-    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0]!.message).toContain("'id'")
+    expect(findings[0]!.rewrite).toBeUndefined()
   })
 
   test('withholds rewrites when the WHERE contains a correlated subquery', () => {
@@ -224,9 +224,9 @@ describe('implicit-cast', () => {
     const findings = implicitCastRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain("'id'")
-    expect(findings[0].rewrite).toBeUndefined()
-    expect(findings[0].verifyCommand).toBeUndefined()
+    expect(findings[0]!.message).toContain("'id'")
+    expect(findings[0]!.rewrite).toBeUndefined()
+    expect(findings[0]!.verifyCommand).toBeUndefined()
   })
 
   test('resolves a named table alias after a derived table without shifting scope', () => {
@@ -238,7 +238,7 @@ describe('implicit-cast', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain("'id'")
+    expect(findings[0]!.message).toContain("'id'")
   })
 
   test('does not resolve a CTE-shadowed name through the physical schema cache', () => {
@@ -305,10 +305,10 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('warn')
-    expect(findings[0].message).toContain('NULL')
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(findings[0]!.severity).toBe('warn')
+    expect(findings[0]!.message).toContain('NULL')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('flags a subquery whose projected column is nullable in its own alias scope', () => {
@@ -320,10 +320,10 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('IS NOT NULL')
-    expect(findings[0].message).toContain('NOT EXISTS')
-    expect(findings[0].schemaVerified).toBe(true)
-    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0]!.message).toContain('IS NOT NULL')
+    expect(findings[0]!.message).toContain('NOT EXISTS')
+    expect(findings[0]!.schemaVerified).toBe(true)
+    expect(findings[0]!.rewrite).toBeUndefined()
   })
 
   test('suppresses a nullable projected column null-rejected through a table alias', () => {
@@ -376,7 +376,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('right-hand')
+    expect(findings[0]!.message).toContain('right-hand')
   })
 
   test('flags a null-propagating RHS expression over a nullable column', () => {
@@ -385,7 +385,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('right-hand')
+    expect(findings[0]!.message).toContain('right-hand')
   })
 
   for (const system of ['postgresql', 'mysql', 'mariadb'] as const) {
@@ -459,8 +459,8 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('b.id')
-    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0]!.message).toContain('b.id')
+    expect(findings[0]!.rewrite).toBeUndefined()
   })
 
   test('flags a declared non-null column on the nullable side of a RIGHT JOIN', () => {
@@ -472,7 +472,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('source.id')
+    expect(findings[0]!.message).toContain('source.id')
   })
 
   test('flags a declared non-null column on either nullable side of a FULL JOIN', () => {
@@ -484,7 +484,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('b.id')
+    expect(findings[0]!.message).toContain('b.id')
   })
 
   test('suppresses an outer-join null extension guarded directly with IS NOT NULL', () => {
@@ -529,9 +529,9 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('nullable expression')
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(findings[0].rewrite).toBeUndefined()
+    expect(findings[0]!.message).toContain('nullable expression')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(findings[0]!.rewrite).toBeUndefined()
   })
 
   test('does not flag a CASE projection with non-null branches and ELSE', () => {
@@ -588,9 +588,9 @@ describe('not-in-nullable', () => {
       )
 
       expect(findings).toHaveLength(1)
-      expect(findings[0].message).toContain(aggregate)
-      expect(findings[0].schemaVerified).toBe(false)
-      expect(findings[0].rewrite).toBeUndefined()
+      expect(findings[0]!.message).toContain(aggregate)
+      expect(findings[0]!.schemaVerified).toBe(false)
+      expect(findings[0]!.rewrite).toBeUndefined()
     })
   }
 
@@ -604,8 +604,8 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('CORR')
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.message).toContain('CORR')
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('flags an unrecognized parser aggregate node conservatively', () => {
@@ -618,7 +618,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('GROUP_CONCAT')
+    expect(findings[0]!.message).toContain('GROUP_CONCAT')
   })
 
   test('does not treat an arbitrary function AST node as an aggregate', () => {
@@ -807,7 +807,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('marks CAST of a schema-nullable column as schema verified', () => {
@@ -816,7 +816,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   for (const system of ['mysql', 'mariadb'] as const) {
@@ -857,7 +857,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('b.email')
+    expect(findings[0]!.message).toContain('b.email')
   })
 
   test('skips an ambiguous unqualified RHS column across joined tables', () => {
@@ -898,9 +898,9 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(findings[0].message).toContain('WHERE id IS NOT NULL')
-    expect(findings[0].message).not.toContain('WHERE NULL IS NOT NULL')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(findings[0]!.message).toContain('WHERE id IS NOT NULL')
+    expect(findings[0]!.message).not.toContain('WHERE NULL IS NOT NULL')
   })
 
   test('does not flag an unambiguous CTE output that projects a non-null literal', () => {
@@ -923,9 +923,9 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(findings[0].message).toContain('WHERE d.id IS NOT NULL')
-    expect(findings[0].message).not.toContain('WHERE NULL IS NOT NULL')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(findings[0]!.message).toContain('WHERE d.id IS NOT NULL')
+    expect(findings[0]!.message).not.toContain('WHERE NULL IS NOT NULL')
   })
 
   test('does not flag an unambiguous derived-table output that projects a non-null literal', () => {
@@ -1012,8 +1012,8 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('projected expression itself')
-    expect(findings[0].message).not.toContain('WHERE a IS NOT NULL')
+    expect(findings[0]!.message).toContain('projected expression itself')
+    expect(findings[0]!.message).not.toContain('WHERE a IS NOT NULL')
   })
 
   test('recursively detects explicit NULL in a nested query predicate', () => {
@@ -1022,8 +1022,8 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('recursively analyzes HAVING predicates', () => {
@@ -1031,7 +1031,7 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('recursively analyzes JOIN predicates', () => {
@@ -1039,7 +1039,7 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('does not resolve a nested NOT IN expression with the outer table scope', () => {
@@ -1059,8 +1059,8 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, {}))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(findings[0].message).toContain('WHERE b.id IS NOT NULL')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(findings[0]!.message).toContain('WHERE b.id IS NOT NULL')
   })
 
   test('detects null extension from a qualified derived relation without schema metadata', () => {
@@ -1072,8 +1072,8 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(findings[0].message).toContain('WHERE b.id IS NOT NULL')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(findings[0]!.message).toContain('WHERE b.id IS NOT NULL')
   })
 
   test('does not treat a qualified INNER JOIN source as null-extended without schema metadata', () => {
@@ -1129,7 +1129,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(true)
+    expect(findings[0]!.schemaVerified).toBe(true)
   })
 
   test('applies null extension from a completed join inside a later join ON predicate', () => {
@@ -1141,7 +1141,7 @@ describe('not-in-nullable', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
+    expect(findings[0]!.schemaVerified).toBe(false)
   })
 
   test('keeps lexical spans aligned after a safe projected NOT IN expression', () => {
@@ -1149,7 +1149,7 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].span.start).toBe(sql.lastIndexOf('NOT IN'))
+    expect(findings[0]!.span.start).toBe(sql.lastIndexOf('NOT IN'))
   })
 
   test('recursively analyzes CTE predicates in lexical order', () => {
@@ -1168,8 +1168,8 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].schemaVerified).toBe(false)
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(findings[0]!.schemaVerified).toBe(false)
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('maps nested infix findings to their own lexical NOT IN operators', () => {
@@ -1188,8 +1188,8 @@ describe('not-in-nullable', () => {
     const findings = notInNullableRule.check(ctxFor(sql, schema))
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].span.start).toBe(sql.lastIndexOf('NOT IN'))
-    expect(sql.slice(findings[0].span.start, findings[0].span.end)).toBe('NOT IN')
+    expect(findings[0]!.span.start).toBe(sql.lastIndexOf('NOT IN'))
+    expect(sql.slice(findings[0]!.span.start, findings[0]!.span.end)).toBe('NOT IN')
   })
 
   test('assigns successive spans to successive top-level NOT IN findings', () => {

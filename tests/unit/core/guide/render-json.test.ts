@@ -18,6 +18,7 @@ const CONTEXT: InspectSnapshot = {
   snippets: { count: 5, engines: ['postgres'], intents: [] },
   suggestedCommands: ['dbcli list --format json'],
   warnings: [],
+  hints: [],
 }
 
 const SNAP: GuideSnapshot = {

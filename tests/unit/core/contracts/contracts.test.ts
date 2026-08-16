@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import {
   filterApprovedSemanticContracts,
+  type SemanticContract,
   inspectSemanticContractDrift,
   loadSemanticContracts,
   renderSemanticContractsMarkdown,
@@ -27,7 +28,10 @@ async function writeContracts(value: unknown): Promise<string> {
 
 const references = new Set(['metric:paid-orders-30d', 'model:customers'])
 
-const contractFile = {
+// Typed rather than inferred: the filtering seam below takes
+// `SemanticContract[]`, and an inferred literal widens `status` and
+// `evidencePolicy` to `string`, which is not one.
+const contractFile: { version: number; contracts: SemanticContract[] } = {
   version: 1,
   contracts: [
     {
@@ -239,9 +243,9 @@ A customer with a paid order in the trailing 30 days.
 
   test('sorts approved contracts at the public filtering seam', () => {
     const approved = filterApprovedSemanticContracts([
-      { ...contractFile.contracts[0], name: 'zebra', aliases: [] },
-      { ...contractFile.contracts[0], name: 'archer', aliases: [] },
-      { ...contractFile.contracts[0], status: 'deprecated', aliases: [] },
+      { ...contractFile.contracts[0]!, name: 'zebra', aliases: [] },
+      { ...contractFile.contracts[0]!, name: 'archer', aliases: [] },
+      { ...contractFile.contracts[0]!, status: 'deprecated', aliases: [] },
     ])
 
     expect(approved.map((contract) => contract.name)).toEqual(['archer', 'zebra'])

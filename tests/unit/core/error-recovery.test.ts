@@ -8,21 +8,9 @@ import { ErrorRecoveryManager } from '@/core/error-recovery'
 import type { DbcliConfig } from '@/utils/validation'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { makeTestConfig } from '../../helpers/test-config'
 
-const mockConfig: DbcliConfig = {
-  connection: {
-    system: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    user: 'test',
-    password: 'test',
-    database: 'testdb',
-  },
-  permission: 'query-only',
-  schema: {},
-  metadata: { version: '1.0' },
-  blacklist: { tables: [], columns: {} },
-}
+const mockConfig = makeTestConfig({ connection: { database: 'testdb' } })
 
 test('ErrorRecoveryManager - initialize creates recovery dir', async () => {
   const testDir = join(tmpdir(), `recovery-test-${Date.now()}`)

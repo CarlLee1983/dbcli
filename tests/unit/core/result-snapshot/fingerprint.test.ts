@@ -36,7 +36,7 @@ describe('buildFingerprint', () => {
     const a = buildFingerprint(qr([{ id: 1 }, { id: 2 }], ['id']), {})
     const b = buildFingerprint(qr([{ id: 2 }, { id: 1 }], ['id']), {})
     expect(a.resultChecksum).toBe(b.resultChecksum)
-    expect(a.columns[0].checksum).toBe(b.columns[0].checksum)
+    expect(a.columns[0]!.checksum).toBe(b.columns[0]!.checksum)
   })
 
   it('omits rows by default and includes them with includeRows', () => {

@@ -109,7 +109,7 @@ describe('setConnectionPassword — v2 connection still holding a literal passwo
     })
 
     const config = await readV2Config(projectPath)
-    expect(config.connections.primary.password).toEqual({ $env: 'DBCLI_PRIMARY_PASSWORD' })
+    expect(config.connections.primary!.password).toEqual({ $env: 'DBCLI_PRIMARY_PASSWORD' })
 
     const envText = await Bun.file(join(getProjectStoragePath(projectPath), '.env.local')).text()
     expect(envText).toContain('DBCLI_PRIMARY_PASSWORD="rotated-pw"')

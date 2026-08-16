@@ -26,9 +26,12 @@ describe('verification status contract', () => {
     ['passed', 'verified'],
     ['failed', 'not_verified'],
     ['indeterminate', 'indeterminate'],
-  ] as Array<[VerifyStatus, string]>)('maps recovery %s to %s', (input, expected) => {
-    expect(recoveryVerifyToVerificationStatus(input)).toBe(expected)
-  })
+  ] as Array<[VerifyStatus, ReturnType<typeof recoveryVerifyToVerificationStatus>]>)(
+    'maps recovery %s to %s',
+    (input, expected) => {
+      expect(recoveryVerifyToVerificationStatus(input)).toBe(expected)
+    }
+  )
 
   test('maps skipped recovery verifier to blocked', () => {
     expect(

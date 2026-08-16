@@ -28,7 +28,7 @@ import type { Permission } from '@/types'
 const CASES: Array<{
   method: string
   apiPath: string
-  type: string
+  type: ReturnType<typeof classifyElasticsearchRequest>['type']
   lowest: Permission
   why: string
 }> = [

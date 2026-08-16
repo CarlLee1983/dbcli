@@ -60,6 +60,7 @@ const PG_CONTEXT: InspectSnapshot = {
   snippets: { count: 5, engines: ['postgres'], intents: [] },
   suggestedCommands: [],
   warnings: [],
+  hints: [],
 }
 
 const NULL_CONTEXT: InspectSnapshot = {

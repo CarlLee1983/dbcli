@@ -21,22 +21,15 @@ import { createShellWriteGate } from '@/commands/shell-write-gate'
 import { ReplEngine } from '@/core/repl/repl-engine'
 import type { ReplContext } from '@/core/repl/types'
 import type { DatabaseAdapter } from '@/adapters/types'
-import type { DbcliConfig } from '@/types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { makeTestConfig } from '../../helpers/test-config'
 
-const config = {
-  connection: {
-    system: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    database: 'test',
-    user: 'user',
-    password: 'pass',
-  },
+const config = makeTestConfig({
+  connection: { user: 'user', password: 'pass' },
   permission: 'admin',
-} as unknown as DbcliConfig
+})
 
 describe('the write gate on the interactive shell', () => {
   let execute: ReturnType<typeof mock>

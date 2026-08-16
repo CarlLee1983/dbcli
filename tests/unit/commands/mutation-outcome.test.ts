@@ -61,7 +61,7 @@ describe('renderMutationOutcome', () => {
   test('a write that matched nothing says so rather than reporting zero rows', () => {
     const lines = renderMutationOutcome(result({ rows_affected: 0 }), 'users', 50)
 
-    expect(lines[0].toLowerCase()).toContain('no rows')
+    expect(lines[0]!.toLowerCase()).toContain('no rows')
     expect(lines[0]).toContain('users')
   })
 
@@ -72,14 +72,14 @@ describe('renderMutationOutcome', () => {
       5
     )
 
-    expect(lines[0].toLowerCase()).toContain('cancel')
+    expect(lines[0]!.toLowerCase()).toContain('cancel')
     expect(lines[0]).toContain('users')
   })
 
   test('a dry run states that nothing changed', () => {
     const lines = renderMutationOutcome(result({ status: 'dry_run', rows_affected: 0 }), 'users', 5)
 
-    expect(lines[0].toLowerCase()).toContain('preview')
+    expect(lines[0]!.toLowerCase()).toContain('preview')
   })
 
   test('a failure leads with the reason', () => {

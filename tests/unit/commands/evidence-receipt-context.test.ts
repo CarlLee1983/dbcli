@@ -4,22 +4,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeDbcliConfig } from '@/core/config'
 import { buildEvidenceReceiptContext } from '@/commands/evidence-receipt-context'
+import { makeTestConfig } from '../../helpers/test-config'
 
 function config(schema: Record<string, unknown>): RuntimeDbcliConfig {
   return {
-    connection: {
-      system: 'postgresql',
-      host: 'localhost',
-      port: 5432,
-      user: 'postgres',
-      database: 'dbcli',
-    },
-    permission: 'query-only',
-    blacklist: { tables: ['private_accounts'], columns: { orders: ['secret'] } },
-    schema,
+    ...makeTestConfig({
+      connection: { user: 'postgres', database: 'dbcli' },
+      blacklist: { tables: ['private_accounts'], columns: { orders: ['secret'] } },
+      schema,
+    }),
     effectiveConnectionName: 'staging',
     effectiveEnvironment: 'staging',
-  } as RuntimeDbcliConfig
+  }
 }
 
 describe('evidence receipt context', () => {

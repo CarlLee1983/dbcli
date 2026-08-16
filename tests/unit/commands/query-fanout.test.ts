@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test'
 import { AdapterFactory } from '@/adapters'
 import type { DatabaseAdapter, ExecutionResult, SqlConnectionOptions } from '@/adapters/types'
 import { queryCommand } from '@/commands/query'
@@ -6,6 +6,7 @@ import { configModule } from '@/core/config'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { QueryableAdapter } from '@/adapters/types'
 
 class FanOutAdapter implements DatabaseAdapter {
   connected = 0
@@ -68,13 +69,16 @@ function sqlConfig(name: string) {
 }
 
 describe('query command fan-out', () => {
-  let configReadSpy: ReturnType<typeof spyOn>
-  let createAdapterSpy: ReturnType<typeof spyOn>
-  let createMongoAdapterSpy: ReturnType<typeof spyOn>
-  let createRedisAdapterSpy: ReturnType<typeof spyOn>
-  let createElasticsearchAdapterSpy: ReturnType<typeof spyOn>
-  let logSpy: ReturnType<typeof spyOn>
-  let errorSpy: ReturnType<typeof spyOn>
+  // Declared against the real functions rather than as a bare
+  // `ReturnType<typeof spyOn>`, which erases every parameter and return type and
+  // left the mock implementations below inferring `any` for their arguments.
+  let configReadSpy: Mock<typeof configModule.read>
+  let createAdapterSpy: Mock<typeof AdapterFactory.createSqlAdapter>
+  let createMongoAdapterSpy: Mock<typeof AdapterFactory.createMongoDBAdapter>
+  let createRedisAdapterSpy: Mock<typeof AdapterFactory.createRedisAdapter>
+  let createElasticsearchAdapterSpy: Mock<typeof AdapterFactory.createElasticsearchAdapter>
+  let logSpy: Mock<typeof console.log>
+  let errorSpy: Mock<typeof console.error>
   let originalExitCode: number | string | null | undefined
 
   beforeEach(() => {
@@ -498,7 +502,13 @@ describe('query command fan-out', () => {
         }) as never
     )
     createMongoAdapterSpy.mockImplementation(
-      () => new FanOutAdapter('mongo', undefined, undefined, [{ id: 1, secret: 'hidden' }])
+      // The double implements `DatabaseAdapter`; the mongo factory promises the
+      // wider `QueryableAdapter`. Fan-out only ever calls the narrow half, and
+      // stubbing the other four methods would say nothing about this test.
+      () =>
+        new FanOutAdapter('mongo', undefined, undefined, [
+          { id: 1, secret: 'hidden' },
+        ]) as unknown as QueryableAdapter
     )
 
     await queryCommand('{}', {
@@ -541,7 +551,10 @@ describe('query command fan-out', () => {
         }) as never
     )
     createElasticsearchAdapterSpy.mockImplementation(
-      () => new FanOutAdapter('elasticsearch', undefined, undefined, [{ id: 1, secret: 'hidden' }])
+      () =>
+        new FanOutAdapter('elasticsearch', undefined, undefined, [
+          { id: 1, secret: 'hidden' },
+        ]) as unknown as QueryableAdapter
     )
 
     await queryCommand('{}', {

@@ -2721,7 +2721,7 @@ dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a
 
 | Flag | Purpose | Default |
 |---|---|---|
-| `--claims <file>` | Required JSON file with exactly `subject` and `claims`; every claim has an `id` and plain-language `text`. SQL-shaped text, credentials, error content, and blacklisted identifiers are rejected. | — |
+| `--claims <file>` | Required JSON file with exactly `subject` and `claims`; every claim has an `id` and plain-language `text`. SQL-shaped text, credentials, error content, and blacklisted identifiers are rejected. A blacklisted identifier has to appear as an identifier — a term like `id` matches `orders.id` but not the word "identifier" — and the refusal names the field, never the matched term. | — |
 | `--verification <selector...>` | One or more verification artifact ids, unique prefixes, filenames, or in-bounds paths. | none |
 | `--audit <selector...>` | One or more audit ids or unique prefixes (minimum four characters) from the active connection. | none |
 | `--receipt <path...>` | Explicit workspace-relative receipt path(s). Receipts contribute safe provenance only; they are not execution approval. | none |

@@ -22,7 +22,7 @@ describe('parseDrizzleSnapshot', () => {
     expect(users.identity).toEqual({ schema: 'public', table: 'users' })
     const byName = Object.fromEntries(users.columns.map((c) => [c.name, c]))
     expect(byName.id).toMatchObject({ type: 'serial', nullable: false, primaryKey: true })
-    expect(byName.email.nullable).toBe(false)
+    expect(byName.email!.nullable).toBe(false)
     expect(byName.bio).toMatchObject({ nullable: true, default: "''" })
   })
 

@@ -49,7 +49,7 @@ test('extracts GROUP BY / ORDER BY columns', () => {
 test('records functional columns separately (DATE(x))', () => {
   const u = usageFor('SELECT 1 FROM betting_logs b GROUP BY DATE(b.settled_at)', 'betting_logs')
   expect(u.functionalColumns.map((f) => f.column)).toContain('settled_at')
-  expect(u.functionalColumns[0].expr.toUpperCase()).toContain('DATE')
+  expect(u.functionalColumns[0]!.expr.toUpperCase()).toContain('DATE')
   // functional column must NOT also be counted as a plain order column
   expect(u.orderColumns).not.toContain('settled_at')
 })

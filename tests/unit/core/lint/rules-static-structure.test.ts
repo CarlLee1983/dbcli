@@ -13,7 +13,7 @@ function ctxFor(sql: string, system: SqlDatabaseSystem = 'postgresql'): LintRule
     system,
     sql,
     ast: parseSingleStatement(sql, system),
-    schema: buildSchemaContext(),
+    schema: buildSchemaContext(undefined),
   }
 }
 
@@ -24,10 +24,10 @@ describe('non-sargable-where', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('warn')
-    expect(findings[0].message).toContain('LOWER')
-    expect(findings[0].message).toContain('may prevent use of a conventional index')
-    expect(findings[0].message).toContain('expression index')
+    expect(findings[0]!.severity).toBe('warn')
+    expect(findings[0]!.message).toContain('LOWER')
+    expect(findings[0]!.message).toContain('may prevent use of a conventional index')
+    expect(findings[0]!.message).toContain('expression index')
   })
 
   test('flags arithmetic on a column in a comparison', () => {
@@ -58,11 +58,11 @@ describe('or-to-union', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('info')
-    expect(findings[0].message).toContain('UNION ALL')
-    expect(findings[0].message).toContain('mutually exclusive')
-    expect(findings[0].message).toContain('row identity and multiplicity')
-    expect(findings[0].message).toContain('Verify')
+    expect(findings[0]!.severity).toBe('info')
+    expect(findings[0]!.message).toContain('UNION ALL')
+    expect(findings[0]!.message).toContain('mutually exclusive')
+    expect(findings[0]!.message).toContain('row identity and multiplicity')
+    expect(findings[0]!.message).toContain('Verify')
   })
 
   test('flags top-level OR when one branch wraps a single column in a function', () => {
@@ -71,7 +71,7 @@ describe('or-to-union', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('email / name')
+    expect(findings[0]!.message).toContain('email / name')
   })
 
   test('does not guess a column identity from a multi-column function branch', () => {
@@ -96,7 +96,7 @@ describe('or-to-union', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('u.email / p.email')
+    expect(findings[0]!.message).toContain('u.email / p.email')
   })
 })
 
@@ -107,9 +107,9 @@ describe('subquery-to-join', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain('JOIN')
-    expect(findings[0].message).toContain('semi-join')
-    expect(findings[0].message).toContain('unique or explicitly deduplicated')
+    expect(findings[0]!.message).toContain('JOIN')
+    expect(findings[0]!.message).toContain('semi-join')
+    expect(findings[0]!.message).toContain('unique or explicitly deduplicated')
   })
 
   test('does not flag IN over a literal list', () => {
@@ -126,7 +126,7 @@ describe('distinct-groupby-abuse', () => {
     )
 
     expect(findings).toHaveLength(1)
-    expect(findings[0].severity).toBe('warn')
+    expect(findings[0]!.severity).toBe('warn')
   })
 
   test('does not flag plain DISTINCT', () => {

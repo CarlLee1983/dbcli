@@ -119,12 +119,12 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
     // Verify schema loading & filters
     expect(payload.schema.audit_logs).toBeUndefined() // completely blacklisted table
     expect(payload.schema.users).toBeDefined()
-    expect(payload.schema.users.name).toBe('users')
-    expect(payload.schema.users.rowCount).toBe(120)
-    expect(payload.schema.users.primaryKey).toEqual(['id'])
+    expect(payload.schema.users!.name).toBe('users')
+    expect(payload.schema.users!.rowCount).toBe(120)
+    expect(payload.schema.users!.primaryKey).toEqual(['id'])
 
     // Check that blacklisted columns inside active tables are filtered out
-    const userColumns = payload.schema.users.columns.map((c) => c.name)
+    const userColumns = payload.schema.users!.columns.map((c) => c.name)
     expect(userColumns).toContain('id')
     expect(userColumns).toContain('username')
     expect(userColumns).not.toContain('password')
@@ -132,13 +132,13 @@ SELECT * FROM users WHERE id >= :min_id AND active = true`
 
     // Check order columns & default values & foreign keys
     expect(payload.schema.orders).toBeDefined()
-    expect(payload.schema.orders.rowCount).toBe(450)
-    const orderTotalCol = payload.schema.orders.columns.find((c) => c.name === 'total')
+    expect(payload.schema.orders!.rowCount).toBe(450)
+    const orderTotalCol = payload.schema.orders!.columns.find((c) => c.name === 'total')
     expect(orderTotalCol?.default).toBe('0.00')
 
-    const orderUserIdCol = payload.schema.orders.columns.find((c) => c.name === 'user_id')
+    const orderUserIdCol = payload.schema.orders!.columns.find((c) => c.name === 'user_id')
     expect(orderUserIdCol?.foreignKey).toEqual({ table: 'users', column: 'id' })
-    expect(payload.schema.orders.foreignKeys).toEqual([
+    expect(payload.schema.orders!.foreignKeys).toEqual([
       {
         columns: ['user_id'],
         refTable: 'users',

@@ -22,17 +22,17 @@ test('orders columns equality → range → order', () => {
     }),
     []
   )
-  expect(out[0].columns).toEqual(['user_id', 'settled_at', 'created_at'])
+  expect(out[0]!.columns).toEqual(['user_id', 'settled_at', 'created_at'])
 })
 
 test('join columns count as equality and lead the prefix', () => {
   const out = buildCandidates(usage({ joinColumns: ['user_id'], rangeColumns: ['settled_at'] }), [])
-  expect(out[0].columns).toEqual(['user_id', 'settled_at'])
+  expect(out[0]!.columns).toEqual(['user_id', 'settled_at'])
 })
 
 test('dedups a column used in both join and where', () => {
   const out = buildCandidates(usage({ joinColumns: ['user_id'], equalityColumns: ['user_id'] }), [])
-  expect(out[0].columns).toEqual(['user_id'])
+  expect(out[0]!.columns).toEqual(['user_id'])
 })
 
 test('drops candidate already fully covered by an existing index prefix', () => {
@@ -52,8 +52,8 @@ test('marks collision when an existing index shares the leftmost column', () => 
     usage({ equalityColumns: ['user_id'], rangeColumns: ['settled_at'] }),
     existing
   )
-  expect(out[0].columns).toEqual(['user_id', 'settled_at'])
-  expect(out[0].existingIndexCollision).toBe('idx_user')
+  expect(out[0]!.columns).toEqual(['user_id', 'settled_at'])
+  expect(out[0]!.existingIndexCollision).toBe('idx_user')
 })
 
 test('returns no candidate when table has no indexable columns', () => {

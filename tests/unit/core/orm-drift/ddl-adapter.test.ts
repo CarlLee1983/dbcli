@@ -18,7 +18,7 @@ describe('parseDdl', () => {
     const byName = Object.fromEntries(users.columns.map((column) => [column.name, column]))
     expect(byName.id).toMatchObject({ type: 'integer', nullable: false, primaryKey: true })
     expect(byName.email).toMatchObject({ type: 'varchar(255)', nullable: false })
-    expect(byName.name.nullable).toBe(true)
+    expect(byName.name!.nullable).toBe(true)
   })
 
   test('collects CREATE INDEX statements onto their table', () => {
@@ -52,7 +52,7 @@ describe('parseDdl', () => {
   test('unparseable SQL becomes one unparsed entry, not a throw', () => {
     const out = parseDdl('CREATE GIBBERISH', 'postgresql')
     expect(out.tables).toHaveLength(0)
-    expect(out.unparsed[0].reason).toContain('blocked: parse failed')
+    expect(out.unparsed[0]!.reason).toContain('blocked: parse failed')
   })
 
   test('preserves a CREATE TABLE after a leading comment', () => {
@@ -97,7 +97,7 @@ describe('parseDdl', () => {
       'postgresql'
     )
     expect(tableNamed(out, 'checked_table').columns.map((column) => column.name)).toEqual(['id'])
-    expect(out.unparsed[0].reason).toContain('blocked: unsupported table definition')
+    expect(out.unparsed[0]!.reason).toContain('blocked: unsupported table definition')
   })
 
   test('blocks PostgreSQL partition semantics instead of emitting a regular table', () => {

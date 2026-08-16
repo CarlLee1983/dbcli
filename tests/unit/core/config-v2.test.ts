@@ -82,6 +82,7 @@ describe('config-v2', () => {
       schemas: {},
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
+      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
     }
 
     test('should resolve default connection when no name given', () => {
@@ -149,6 +150,7 @@ describe('config-v2', () => {
         schemas: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
+        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
       }
 
       await writeV2Config(configPath, config)
@@ -188,6 +190,7 @@ describe('config-v2', () => {
       schemas: {},
       metadata: { version: '2.0' },
       blacklist: { tables: [], columns: {} },
+      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
     }
 
     test('writes schema to correct connection slot', async () => {

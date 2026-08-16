@@ -39,8 +39,8 @@ function deps(over: Partial<MissingIndexDeps> = {}): MissingIndexDeps {
 test('happy path produces a scored candidate + functional warning', async () => {
   const report = await analyzeMissingIndex('SELECT ...', deps(), {})
   expect(report.candidates).toHaveLength(1)
-  expect(report.candidates[0].confidence).toBe('high')
-  expect(report.candidates[0].columns).toEqual(['user_id', 'settled_at'])
+  expect(report.candidates[0]!.confidence).toBe('high')
+  expect(report.candidates[0]!.columns).toEqual(['user_id', 'settled_at'])
   expect(report.warnings.find((w) => w.rule === 'functional-expression')).toBeDefined()
 })
 
@@ -55,7 +55,7 @@ test('parse failure → fallback: no candidates, parser-limit warning', async ()
     {}
   )
   expect(report.candidates).toEqual([])
-  expect(report.warnings[0].rule).toBe('parser-limit')
+  expect(report.warnings[0]!.rule).toBe('parser-limit')
 })
 
 test('--min-confidence filters out lower-confidence candidates', async () => {

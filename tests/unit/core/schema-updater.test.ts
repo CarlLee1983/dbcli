@@ -68,6 +68,7 @@ test('SchemaUpdater - generates patch for added tables', async () => {
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
+    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
 
   // Set up new table in adapter
@@ -181,6 +182,7 @@ test('SchemaUpdater - handles table deletion', async () => {
     },
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
+    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
 
   // Adapter has no tables (simulating deletion)

@@ -24,7 +24,7 @@ test('emits functional-expression warning per functional column', () => {
 test('fallback (parsed=false) emits a single parser-limit warning', () => {
   const out = collectWarnings({ parsed: false, tables: [] })
   expect(out).toHaveLength(1)
-  expect(out[0].rule).toBe('parser-limit')
+  expect(out[0]!.rule).toBe('parser-limit')
 })
 
 test('clean analysis emits no warnings', () => {

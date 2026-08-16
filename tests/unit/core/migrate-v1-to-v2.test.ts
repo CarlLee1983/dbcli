@@ -34,11 +34,11 @@ describe('migrateV1ToV2', () => {
     expect(out.version).toBe(2)
     expect(out.default).toBe('default')
     expect(Object.keys(out.connections)).toEqual(['default'])
-    expect(out.connections.default.system).toBe('mariadb')
-    expect(out.connections.default.host).toBe('localhost')
-    expect(out.connections.default.password).toEqual({ $env: 'DB_PASSWORD' })
-    expect(out.connections.default.envFile).toBe('.env.local')
-    expect(out.connections.default.permission).toBe('query-only')
+    expect(out.connections.default!.system).toBe('mariadb')
+    expect(out.connections.default!.host).toBe('localhost')
+    expect(out.connections.default!.password).toEqual({ $env: 'DB_PASSWORD' })
+    expect(out.connections.default!.envFile).toBe('.env.local')
+    expect(out.connections.default!.permission).toBe('query-only')
   })
 
   test('carries over blacklist / audit / metadata', () => {

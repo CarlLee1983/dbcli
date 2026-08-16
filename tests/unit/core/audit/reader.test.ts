@@ -28,9 +28,10 @@ let auditFile: string
 let stderrSpy: Mock<typeof process.stderr.write> | null = null
 
 function makeEntry(overrides: Partial<AuditEntry> & { ts: string; id: string }): AuditEntry {
+  // `...overrides` comes last and wins, so naming `id` and `ts` above it set
+  // them twice and the first pair was dead. The two are required by the
+  // parameter type, which is what makes dropping them here safe.
   return {
-    id: overrides.id,
-    ts: overrides.ts,
     session_id: overrides.session_id ?? 'test-session',
     engine: overrides.engine ?? 'postgresql',
     command: overrides.command ?? 'query',

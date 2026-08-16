@@ -86,9 +86,9 @@ describe('upsertConnection', () => {
       user: 'root',
       database: 'app2',
     })
-    expect(next.connections.primary.permission).toBe('read-write')
-    expect(next.connections.primary.host).toBe('newhost')
-    expect(next.connections.primary.port).toBe(3307)
+    expect(next.connections.primary!.permission).toBe('read-write')
+    expect(next.connections.primary!.host).toBe('newhost')
+    expect(next.connections.primary!.port).toBe(3307)
   })
 })
 

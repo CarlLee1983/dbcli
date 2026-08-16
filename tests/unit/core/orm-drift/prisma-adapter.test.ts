@@ -31,12 +31,12 @@ describe('parsePrismaSchema', () => {
       nullable: false,
       primaryKey: true,
     })
-    expect(byName.email.nullable).toBe(false)
-    expect(byName.name.nullable).toBe(true)
-    expect(byName.bio.type).toBe('text')
-    expect(byName.created_at.type).toBe('timestamp')
-    expect(byName.id.default).toBe('autoincrement()')
-    expect(byName.created_at.default).toBe('now()')
+    expect(byName.email!.nullable).toBe(false)
+    expect(byName.name!.nullable).toBe(true)
+    expect(byName.bio!.type).toBe('text')
+    expect(byName.created_at!.type).toBe('timestamp')
+    expect(byName.id!.default).toBe('autoincrement()')
+    expect(byName.created_at!.default).toBe('now()')
     expect(users.indexes).toContainEqual({ name: undefined, columns: ['email'], unique: true })
   })
 

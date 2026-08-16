@@ -50,15 +50,18 @@ describe('query fan-out orchestration', () => {
   })
 
   test('maps all-success, partial-failure, and all-failure exit codes', () => {
-    const ok = { connection: 'a', status: 'ok', result: result('a') } as const
-    const failed = {
+    // Annotated rather than `as const`: the latter makes `hints` a readonly
+    // tuple, which `ConnectionQueryOutcome` does not accept, and it was the
+    // reason the mixed array below needed a cast.
+    const ok: ConnectionQueryOutcome = { connection: 'a', status: 'ok', result: result('a') }
+    const failed: ConnectionQueryOutcome = {
       connection: 'b',
       status: 'error',
       error: { message: 'failed', hints: [] },
-    } as const
+    }
 
     expect(aggregateFanOutExitCode([ok])).toBe(0)
-    expect(aggregateFanOutExitCode([ok, failed] as ConnectionQueryOutcome[])).toBe(2)
+    expect(aggregateFanOutExitCode([ok, failed])).toBe(2)
     expect(aggregateFanOutExitCode([failed])).toBe(1)
   })
 

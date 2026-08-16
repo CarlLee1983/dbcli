@@ -91,7 +91,12 @@ function readCriteria(lines: readonly string[], start: number): Criterion[] {
  * criterion, in document order.
  */
 export function findPlanAcceptanceViolations(source: string, relativePath: string): string[] {
-  const lines = source.split('\n')
+  // Split on either line ending. A trailing \r is a line terminator to a JS
+  // regex, so `.` will not match it and a non-multiline `$` will not sit before
+  // it: every pattern here anchored with `$` silently fails on a CRLF checkout,
+  // and the gate reports a clean file on Windows while finding violations
+  // everywhere else.
+  const lines = source.split(/\r?\n/)
   const violations: string[] = []
   let ticket = '(no ticket heading)'
 

@@ -44,6 +44,17 @@ describe('plan acceptance annotation gate', () => {
     expect(findPlanAcceptanceViolations(section(criterion), 'plan.md')).toEqual([])
   })
 
+  // A CRLF checkout leaves \r at every line end. That is a line terminator to a
+  // JS regex, so patterns anchored with `$` stop matching and the gate reports a
+  // clean file — which is how it passed on macOS and Linux while finding nothing
+  // at all on Windows.
+  test('reads a file checked out with CRLF line endings', () => {
+    const source = section('1. It works.').replaceAll('\n', '\r\n')
+    expect(findPlanAcceptanceViolations(source, 'plan.md')).toEqual([
+      'plan.md: TCK-01 criterion 1 carries no — covered by: / — unverified: / — known deviation: annotation',
+    ])
+  })
+
   test('rejects an annotation with no text after the marker', () => {
     expect(findPlanAcceptanceViolations(section('1. It works. — unverified:'), 'plan.md')).toEqual([
       'plan.md: TCK-01 criterion 1 has an empty — unverified: annotation',

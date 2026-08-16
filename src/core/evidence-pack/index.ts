@@ -63,16 +63,23 @@ export interface EvidenceClaim extends EvidenceClaimInput {
   evidence: EvidenceReference[]
 }
 
-export interface EvidencePack {
+/**
+ * The part of a pack the digest and the id are derived from.
+ *
+ * `createdAt` is deliberately outside it. Including it made two composes of the
+ * same claims produce two unrelated digests, which left nothing to compare
+ * across runs; the cost is that a restamped `createdAt` is not detectable,
+ * which the render and the user documentation both say plainly.
+ */
+export interface EvidencePackContent {
   version: typeof EVIDENCE_PACK_VERSION
-  id: string
-  createdAt: string
   subject: EvidencePackSubject
   claims: EvidenceClaim[]
-  coverage: {
-    completeForDeclaredEvidence: true
-    gaps: string[]
-  }
+}
+
+export interface EvidencePack extends EvidencePackContent {
+  id: string
+  createdAt: string
   integrity: {
     algorithm: 'sha256'
     digest: string
@@ -299,12 +306,32 @@ function assertVerificationSubjects(subject: EvidencePackSubject, claims: Eviden
   }
 }
 
-function canonicalizeWithoutDigest(pack: Omit<EvidencePack, 'integrity'>): string {
-  return JSON.stringify(pack)
+/**
+ * Serialize with every object key sorted, at every depth.
+ *
+ * The previous implementation was a bare `JSON.stringify`, so "canonical" meant
+ * "whatever order the build and parse paths happened to insert keys in". Any
+ * edit to either one would have silently invalidated every stored digest.
+ */
+function canonicalize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, v]) => `${JSON.stringify(key)}:${canonicalize(v)}`)
+  return `{${entries.join(',')}}`
 }
 
-function digest(pack: Omit<EvidencePack, 'integrity'>): string {
-  return createHash('sha256').update(canonicalizeWithoutDigest(pack)).digest('hex')
+function digest(content: EvidencePackContent): string {
+  return createHash('sha256').update(canonicalize(content)).digest('hex')
+}
+
+/**
+ * Content-addressed id, so equivalent packs are recognisably the same pack.
+ */
+function packId(contentDigest: string): string {
+  return `evp_${contentDigest.slice(0, 32)}`
 }
 
 export function parseEvidenceClaimsInput(raw: unknown): EvidenceClaimsInput {
@@ -331,7 +358,7 @@ export function parseEvidenceClaimsInput(raw: unknown): EvidenceClaimsInput {
 export function buildEvidencePack(
   input: EvidenceClaimsInput,
   references: EvidenceReference[],
-  options: { now?: () => Date; idFactory?: () => string } = {}
+  options: { now?: () => Date } = {}
 ): EvidencePack {
   if (references.length === 0 || references.length > MAX_REFERENCES) {
     throw new EvidencePackValidationError(
@@ -354,57 +381,55 @@ export function buildEvidencePack(
       'verification evidence must match the claims subject kind'
     )
   }
-  const base: Omit<EvidencePack, 'integrity'> = {
+  const content: EvidencePackContent = {
     version: EVIDENCE_PACK_VERSION,
-    id: id(options.idFactory?.() ?? `evp_${randomUUID()}`, 'pack.id'),
-    createdAt: (options.now?.() ?? new Date()).toISOString(),
     subject: normalized.subject,
     claims: normalized.claims.map((claim) => ({ ...claim, evidence })),
-    coverage: { completeForDeclaredEvidence: true, gaps: [] },
   }
-  return { ...base, integrity: { algorithm: 'sha256', digest: digest(base) } }
+  const contentDigest = digest(content)
+  return {
+    ...content,
+    id: packId(contentDigest),
+    createdAt: (options.now?.() ?? new Date()).toISOString(),
+    integrity: { algorithm: 'sha256', digest: contentDigest },
+  }
 }
 
 export function parseEvidencePack(raw: unknown): EvidencePack {
   if (!isRecord(raw)) throw new EvidencePackValidationError('evidence pack must be an object')
   requireExactKeys(
     raw,
-    ['version', 'id', 'createdAt', 'subject', 'claims', 'coverage', 'integrity'],
+    ['version', 'id', 'createdAt', 'subject', 'claims', 'integrity'],
     'evidence pack'
   )
   if (raw.version !== EVIDENCE_PACK_VERSION) {
     throw new EvidencePackValidationError(`evidence pack version must be ${EVIDENCE_PACK_VERSION}`)
   }
-  if (!isRecord(raw.coverage)) throw new EvidencePackValidationError('coverage must be an object')
-  requireExactKeys(raw.coverage, ['completeForDeclaredEvidence', 'gaps'], 'coverage')
-  if (
-    raw.coverage.completeForDeclaredEvidence !== true ||
-    !Array.isArray(raw.coverage.gaps) ||
-    raw.coverage.gaps.length !== 0
-  ) {
-    throw new EvidencePackValidationError(
-      'v1 coverage must be complete for declared evidence with no gaps'
-    )
-  }
   if (!isRecord(raw.integrity)) throw new EvidencePackValidationError('integrity must be an object')
   requireExactKeys(raw.integrity, ['algorithm', 'digest'], 'integrity')
   if (raw.integrity.algorithm !== 'sha256')
     throw new EvidencePackValidationError('integrity.algorithm must be sha256')
-  const base: Omit<EvidencePack, 'integrity'> = {
+  const content: EvidencePackContent = {
     version: EVIDENCE_PACK_VERSION,
-    id: id(raw.id, 'pack.id'),
-    createdAt: iso(raw.createdAt, 'pack.createdAt'),
     subject: parseSubject(raw.subject),
     claims: parseClaims(raw.claims, true),
-    coverage: { completeForDeclaredEvidence: true, gaps: [] },
   }
-  assertVerificationSubjects(base.subject, base.claims)
+  assertVerificationSubjects(content.subject, content.claims)
   const actualDigest = text(raw.integrity.digest, 'integrity.digest', 128)
   if (!/^[a-f0-9]{64}$/.test(actualDigest))
     throw new EvidencePackValidationError('integrity.digest must be sha256 hex')
-  if (actualDigest !== digest(base))
+  const expectedDigest = digest(content)
+  if (actualDigest !== expectedDigest)
     throw new EvidencePackValidationError('evidence pack digest mismatch')
-  return { ...base, integrity: { algorithm: 'sha256', digest: actualDigest } }
+  const packIdentity = id(raw.id, 'pack.id')
+  if (packIdentity !== packId(expectedDigest))
+    throw new EvidencePackValidationError('evidence pack id does not match its content digest')
+  return {
+    ...content,
+    id: packIdentity,
+    createdAt: iso(raw.createdAt, 'pack.createdAt'),
+    integrity: { algorithm: 'sha256', digest: actualDigest },
+  }
 }
 
 function isInside(root: string, target: string): boolean {

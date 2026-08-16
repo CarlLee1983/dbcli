@@ -1,8 +1,10 @@
 # Agent Data Evidence and Change Intelligence
 
 **Date:** 2026-08-08
-**Status:** Proposed — specification only; no implementation is authorized by
-this document
+**Status:** Delivered in v1.53.0 (2026-08-09). Disposition of the shipped code
+is governed by
+[ADR-0011](../adr/0011-evidence-subsystem-waits-for-a-user-before-it-is-repaired.md);
+see the ticket backlog for per-ticket known deviations
 **Depends on:** the semantic context roadmap, verification artifacts, audit and
 recovery contracts, and the Design Assistant
 **Supersedes:** nothing

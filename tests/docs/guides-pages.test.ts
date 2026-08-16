@@ -9,7 +9,8 @@ const guideSlugs = [
   'orm-schema-drift',
   'slow-endpoint',
   'why-dbcli',
-] as const
+  // Not `as const`, for the same reason as `locales` below.
+]
 
 const locales = [
   {
@@ -26,7 +27,9 @@ const locales = [
     docs: '../../user/en/',
     counterpartPrefix: '../',
   },
-] as const
+  // Not `as const`: bun-types' object-table overload for `each` takes a mutable
+  // array, and nothing here needs the literal types.
+]
 
 async function loadPage(path: string) {
   const html = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
@@ -81,12 +84,13 @@ test('safe-backfill pages clearly state that verification never runs the update'
 test('why-dbcli uses its local illustration and a complete story arc in both languages', async () => {
   expect(await Bun.file('docs/assets/why-dbcli-hero.png').exists()).toBe(true)
 
-  for (const [path, asset] of [
+  const heroPages: Array<[path: string, asset: string]> = [
     ['docs/guides/why-dbcli.html', '../assets/why-dbcli-hero.png'],
     ['docs/guides/en/why-dbcli.html', '../../assets/why-dbcli-hero.png'],
-  ]) {
+  ]
+  for (const [path, asset] of heroPages) {
     const { document } = await loadPage(path)
-    const image = document.querySelector<HTMLImageElement>('.story-hero-art img')
+    const image = document.querySelector('.story-hero-art img')
     expect(image?.getAttribute('src')).toBe(asset)
     expect(document.querySelectorAll('.story-timeline .story-moment').length).toBe(3)
     expect(document.querySelectorAll('.contrast-grid .contrast-panel').length).toBe(2)
@@ -128,7 +132,7 @@ test('all local guide links and documentation fragments resolve', async () => {
 
   for (const path of pages) {
     const { document } = await loadPage(path)
-    for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    for (const link of document.querySelectorAll('a[href]')) {
       const href = link.getAttribute('href')!
       const resolved = new URL(href, pathToFileURL(resolve(path)))
       if (resolved.protocol !== 'file:') continue
@@ -147,7 +151,7 @@ test('all local guide links and documentation fragments resolve', async () => {
 test('English guide pages contain no residual Traditional Chinese copy', async () => {
   for (const slug of ['index', ...guideSlugs]) {
     const { document } = await loadPage(`docs/guides/en/${slug}.html`)
-    const clone = document.documentElement.cloneNode(true) as HTMLElement
+    const clone = document.documentElement.cloneNode(true)
     clone.querySelectorAll('.locale-link').forEach((node) => node.remove())
     expect(clone.textContent).not.toMatch(/[\u3400-\u9fff]/)
   }

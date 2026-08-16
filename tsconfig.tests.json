@@ -1,31 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": [
-    "tests/commands/**/*.ts",
-    "tests/contract/**/*.ts",
-    "tests/core/**/*.ts",
-    "tests/fixtures/**/*.ts",
-    "tests/gherkin/**/*.ts",
-    "tests/graft/**/*.ts",
-    "tests/helpers/**/*.ts",
-    "tests/integration/**/*.ts",
-    "tests/perf/**/*.ts",
-    "tests/unit/*.ts",
-    "tests/unit/adapters/**/*.ts",
-    "tests/unit/agent-core/**/*.ts",
-    "tests/unit/agent-tasks/**/*.ts",
-    "tests/unit/build/**/*.ts",
-    "tests/unit/commands/**/*.ts",
-    "tests/unit/core/**/*.ts",
-    "tests/unit/formatters/**/*.ts",
-    "tests/unit/i18n/**/*.ts",
-    "tests/unit/program/**/*.ts",
-    "tests/unit/proxy/**/*.ts",
-    "tests/unit/querylens/**/*.ts",
-    "tests/unit/recovery/**/*.ts",
-    "tests/unit/scripts/**/*.ts",
-    "tests/unit/skill-assets/**/*.ts",
-    "tests/unit/ui-template/**/*.ts",
-    "tests/unit/utils/**/*.ts"
-  ]
+  "include": ["tests/**/*.ts", "tests/**/*.tsx"]
 }

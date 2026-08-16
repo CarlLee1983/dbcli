@@ -33,10 +33,10 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      # Test files were never typechecked at all until #97. They are being
-      # cleared one directory at a time, and `tsconfig.tests.json` lists the ones
-      # already clean — so this is green today and stops them regressing while
-      # the rest catch up. `bun run typecheck:tests:all` shows what is left.
+      # Separate project because the test tree needs no declaration output and
+      # the build reads `tsconfig.json` directly. Test files went untypechecked
+      # for a long time — the main include used a brace glob TypeScript does not
+      # expand — so losing this step would put them back there (#97).
       - name: Typecheck tests
         run: bun run typecheck:tests
 

@@ -92,7 +92,9 @@ interface QueryExecutionContext {
   connectionName?: string
 }
 
-interface QueryExecutionOutput {
+/** What one connection's execution hands back. Exported so a caller substituting
+ * the `executeConnection` seam can type its stand-in against the real contract. */
+export interface QueryExecutionOutput {
   result: QueryResult<Record<string, unknown>>
   diagnostics: string[]
   notices: string[]

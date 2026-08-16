@@ -31,6 +31,7 @@ function configFor(system: 'mongodb' | 'redis' | 'elasticsearch'): DbcliConfig {
       schema: baseSchema(),
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
+      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
     } as DbcliConfig
   }
   if (system === 'redis') {
@@ -47,6 +48,7 @@ function configFor(system: 'mongodb' | 'redis' | 'elasticsearch'): DbcliConfig {
       schema: baseSchema(),
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
+      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
     } as DbcliConfig
   }
   return {
@@ -62,6 +64,7 @@ function configFor(system: 'mongodb' | 'redis' | 'elasticsearch'): DbcliConfig {
     schema: baseSchema(),
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
+    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   } as DbcliConfig
 }
 

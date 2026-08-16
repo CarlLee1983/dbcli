@@ -13,19 +13,28 @@ import { normalizeLimitFlags } from '@/program'
 
 describe('normalizeLimitFlags', () => {
   test('--no-limit (limit: false) becomes noLimit', () => {
-    expect(normalizeLimitFlags({ limit: false })).toEqual({ limit: undefined, noLimit: true })
+    expect(normalizeLimitFlags({ limit: false }) as Record<string, unknown>).toEqual({
+      limit: undefined,
+      noLimit: true,
+    })
   })
 
   test('an omitted standalone flag (limit: true) is not noLimit', () => {
-    expect(normalizeLimitFlags({ limit: true })).toEqual({ limit: undefined, noLimit: false })
+    expect(normalizeLimitFlags({ limit: true }) as Record<string, unknown>).toEqual({
+      limit: undefined,
+      noLimit: false,
+    })
   })
 
   test('a real row count survives untouched', () => {
-    expect(normalizeLimitFlags({ limit: 500 })).toEqual({ limit: 500, noLimit: false })
+    expect(normalizeLimitFlags({ limit: 500 }) as Record<string, unknown>).toEqual({
+      limit: 500,
+      noLimit: false,
+    })
   })
 
   test('neither flag given leaves limit undefined', () => {
-    expect(normalizeLimitFlags({})).toEqual({ noLimit: false })
+    expect(normalizeLimitFlags({}) as Record<string, unknown>).toEqual({ noLimit: false })
   })
 
   test('a boolean limit never reaches the command as a row count', () => {
@@ -35,7 +44,12 @@ describe('normalizeLimitFlags', () => {
   })
 
   test('unrelated options are preserved', () => {
-    expect(normalizeLimitFlags({ format: 'json', collection: 'users', limit: false })).toEqual({
+    expect(
+      normalizeLimitFlags({ format: 'json', collection: 'users', limit: false }) as Record<
+        string,
+        unknown
+      >
+    ).toEqual({
       format: 'json',
       collection: 'users',
       limit: undefined,

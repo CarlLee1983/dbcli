@@ -105,10 +105,11 @@ describe('SQL mutation recovery output', () => {
     }
     const envelopeId = emitOptions.envelopeId
     const auditRef = emitOptions.auditRef
-    expect(emitOptions).toMatchObject({
-      envelopeId: expect.any(String),
-      auditRef: expect.any(String),
-    })
+    // Asserted rather than matched, so the two reads below are strings to the
+    // typechecker as well as at runtime.
+    expect(envelopeId).toBeString()
+    expect(auditRef).toBeString()
+    if (envelopeId === undefined || auditRef === undefined) throw new Error('unreachable')
 
     const rawAudit = await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).text()
     const auditEntries = rawAudit

@@ -59,7 +59,7 @@ async function runInit(
   const selectSpy = spyOn(promptUser, 'select').mockImplementation(
     async (label: string, choices: string[]) => {
       const answer = answerFor(label)
-      return answer === '' ? choices[0] : String(answer)
+      return answer === '' ? (choices[0] ?? '') : String(answer)
     }
   )
   const confirmSpy = spyOn(promptUser, 'confirm').mockImplementation(async (label: string) => {

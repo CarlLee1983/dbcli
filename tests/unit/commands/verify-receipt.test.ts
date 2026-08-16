@@ -5,18 +5,11 @@ import { join } from 'node:path'
 import type { RuntimeDbcliConfig } from '@/core/config'
 import type { VerificationArtifact, VerificationStatus } from '@/core/verification'
 import { writeVerifyEvidenceReceipt } from '@/commands/verify-receipt'
+import { makeTestConfig } from '../../helpers/test-config'
 
-const config = {
-  connection: {
-    system: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    user: 'postgres',
-    database: 'dbcli',
-  },
-  permission: 'query-only',
-  blacklist: { tables: [], columns: {} },
-} as RuntimeDbcliConfig
+const config: RuntimeDbcliConfig = makeTestConfig({
+  connection: { user: 'postgres', database: 'dbcli' },
+})
 
 function artifact(status: VerificationStatus): VerificationArtifact {
   return {

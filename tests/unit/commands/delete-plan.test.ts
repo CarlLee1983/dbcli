@@ -81,7 +81,11 @@ describe('deleteCommand --plan', () => {
   })
 
   test('BLOCK on insufficient permission exits 0 (no admin gate before --plan)', async () => {
-    mockConfig = makeConfig({ permission: 'read-only' })
+    // `read-only` is not one of the four permission values; the plan blocked
+    // anyway because an unrecognised level grants nothing, so this asserted
+    // the right outcome for the wrong reason. `query-only` is the real level
+    // that cannot delete.
+    mockConfig = makeConfig({ permission: 'query-only' })
     configReadSpy.mockImplementation(async () => mockConfig)
     const exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 

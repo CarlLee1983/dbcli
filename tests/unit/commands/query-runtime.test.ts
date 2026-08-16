@@ -1,23 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { executeQueryCommand } from '@/commands/query'
-import type { DbcliConfig } from '@/utils/validation'
+import { executeQueryCommand, type QueryExecutionOutput } from '@/commands/query'
+import { makeTestConfig } from '../../helpers/test-config'
 
-const config: DbcliConfig = {
-  connection: {
-    system: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    user: 'test',
-    password: 'test',
-    database: 'test',
-  },
-  permission: 'query-only',
-  schema: {},
-  metadata: { version: '1.0' },
-  blacklist: { tables: [], columns: {} },
-}
+const config = makeTestConfig()
 
-const execution = {
+const execution: QueryExecutionOutput = {
   result: {
     rows: [{ id: 1 }],
     rowCount: 1,

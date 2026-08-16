@@ -14,6 +14,7 @@ import { QueryExecutor } from '@/core/query-executor'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { makeTestConfig } from '../../helpers/test-config'
 
 // Mock adapter for testing
 class MockAdapter implements DatabaseAdapter {
@@ -107,20 +108,7 @@ describe('Query Command', () => {
         return `Table: ${result.rowCount} rows`
       }
     )
-    mockConfig = {
-      connection: {
-        system: 'postgresql',
-        host: 'localhost',
-        port: 5432,
-        user: 'test',
-        password: 'test',
-        database: 'testdb',
-      },
-      permission: 'query-only',
-      schema: {},
-      metadata: { version: '1.0' },
-      blacklist: { tables: [], columns: {} },
-    }
+    mockConfig = makeTestConfig({ connection: { database: 'testdb' } })
   })
 
   afterEach(() => {

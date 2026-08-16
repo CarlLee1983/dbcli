@@ -75,13 +75,15 @@ describe('verify evidence receipt lifecycle boundary', () => {
         expect(JSON.stringify(receipt)).not.toContain('secret')
         receipts.push({ status, receipt })
       }
-      expect(
-        new Set(
-          receipts.map(
-            ({ receipt }) => (receipt.observation as { fingerprint: string }).fingerprint
-          )
-        ).size
-      ).toBe(4)
+      // Asserted through the typed field rather than a cast: the previous
+      // version reached into `observation` as `{ fingerprint: string }`, so a
+      // change to the shape left it comparing four undefined values.
+      expect(receipts.map(({ receipt }) => receipt.observation)).toEqual([
+        { kind: 'verify-outcome', status: 'verified' },
+        { kind: 'verify-outcome', status: 'not_verified' },
+        { kind: 'verify-outcome', status: 'indeterminate' },
+        { kind: 'verify-outcome', status: 'blocked' },
+      ])
     } finally {
       await rm(root, { recursive: true, force: true })
     }

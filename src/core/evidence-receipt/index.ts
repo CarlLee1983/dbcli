@@ -30,7 +30,19 @@ export interface EvidenceReceipt {
     verificationArtifactRef: string | null
   }
   replay: { status: 'context-required' }
-  observation: { kind: 'assert-verdict' | 'verify-outcome'; fingerprint: string }
+  /**
+   * What was observed, stated rather than hashed.
+   *
+   * This was an unsalted SHA-256 over the same values: eight possible preimages
+   * for a verify outcome, and 2^(n+1) for an assert with n checks. It hid
+   * nothing a dictionary could not recover, while being deterministic enough to
+   * link two receipts by their result. The counts below reveal how many checks
+   * failed but never which, which is less than the digest leaked to anyone who
+   * bothered to invert it.
+   */
+  observation:
+    | { kind: 'assert-verdict'; checksPassed: number; checksTotal: number }
+    | { kind: 'verify-outcome'; status: VerificationStatus }
 }
 
 interface BuildEvidenceReceiptBase {
@@ -151,7 +163,11 @@ function sha256(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`
 }
 
-function verdictFingerprint(verdict: AssertVerdictBits): string {
+function verdictObservation(verdict: AssertVerdictBits): {
+  kind: 'assert-verdict'
+  checksPassed: number
+  checksTotal: number
+} {
   if (
     !record(verdict) ||
     typeof verdict.pass !== 'boolean' ||
@@ -170,20 +186,24 @@ function verdictFingerprint(verdict: AssertVerdictBits): string {
     }
     return check.pass
   })
-  return sha256(JSON.stringify({ pass: verdict.pass, checks: bits }))
+  return {
+    kind: 'assert-verdict',
+    checksPassed: bits.filter(Boolean).length,
+    checksTotal: bits.length,
+  }
 }
 
-function verificationOutcomeFingerprint(
+function verificationObservation(
   status: VerificationStatus,
   artifactPersisted: boolean
-): string {
+): { kind: 'verify-outcome'; status: VerificationStatus } {
   if (!isVerificationStatus(status)) {
     throw new EvidenceReceiptValidationError('verificationStatus must be a verification status')
   }
   if (typeof artifactPersisted !== 'boolean') {
     throw new EvidenceReceiptValidationError('verificationArtifactPersisted must be a boolean')
   }
-  return sha256(JSON.stringify({ status, artifactPersisted }))
+  return { kind: 'verify-outcome', status }
 }
 
 export function buildEvidenceReceipt(
@@ -193,10 +213,10 @@ export function buildEvidenceReceipt(
   const operation: EvidenceReceipt['operation'] = input.operation === 'verify' ? 'verify' : 'assert'
   const command = canonicalizeEvidenceReceiptCommand(input.command, operation)
   const context = parseContext(input.context)
-  const { observationFingerprint, outcome } =
+  const { observation, outcome } =
     input.operation === 'verify'
       ? {
-          observationFingerprint: verificationOutcomeFingerprint(
+          observation: verificationObservation(
             input.verificationStatus,
             input.verificationArtifactPersisted
           ),
@@ -206,7 +226,7 @@ export function buildEvidenceReceipt(
               : ('failed' as const),
         }
       : {
-          observationFingerprint: verdictFingerprint(input.verdict),
+          observation: verdictObservation(input.verdict),
           outcome: input.verdict.pass ? ('succeeded' as const) : ('failed' as const),
         }
   const receipt: EvidenceReceipt = {
@@ -226,10 +246,7 @@ export function buildEvidenceReceipt(
           : nullableId(input.verificationArtifactRef, 'verificationArtifactRef'),
     },
     replay: { status: 'context-required' },
-    observation: {
-      kind: operation === 'assert' ? 'assert-verdict' : 'verify-outcome',
-      fingerprint: observationFingerprint,
-    },
+    observation,
   }
   return receipt
 }
@@ -299,14 +316,7 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
     Object.keys(raw.replay).length !== 1
   )
     throw new EvidenceReceiptValidationError('replay must be context-required')
-  if (
-    !record(raw.observation) ||
-    raw.observation.kind !== (operation === 'assert' ? 'assert-verdict' : 'verify-outcome') ||
-    Object.keys(raw.observation).length !== 2
-  )
-    throw new EvidenceReceiptValidationError('observation must match receipt operation')
-  const observationKind: EvidenceReceipt['observation']['kind'] =
-    operation === 'assert' ? 'assert-verdict' : 'verify-outcome'
+  const observation = parseObservation(raw.observation, operation)
   return {
     version: EVIDENCE_RECEIPT_VERSION,
     id: safeId(raw.id, 'id'),
@@ -324,10 +334,35 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
       ),
     },
     replay: { status: 'context-required' },
-    observation: {
-      kind: observationKind,
-      fingerprint: fingerprint(raw.observation.fingerprint, 'observation.fingerprint'),
-    },
+    observation,
+  }
+}
+
+function parseObservation(
+  raw: unknown,
+  operation: EvidenceReceipt['operation']
+): EvidenceReceipt['observation'] {
+  if (!record(raw)) throw new EvidenceReceiptValidationError('observation must be an object')
+  if (operation === 'verify') {
+    exact(raw, ['kind', 'status'], 'observation')
+    if (raw.kind !== 'verify-outcome' || !isVerificationStatus(raw.status))
+      throw new EvidenceReceiptValidationError('observation must match receipt operation')
+    return { kind: 'verify-outcome', status: raw.status }
+  }
+  exact(raw, ['kind', 'checksPassed', 'checksTotal'], 'observation')
+  const { kind, checksPassed, checksTotal } = raw
+  if (
+    kind !== 'assert-verdict' ||
+    !Number.isSafeInteger(checksPassed) ||
+    !Number.isSafeInteger(checksTotal) ||
+    (checksPassed as number) < 0 ||
+    (checksTotal as number) < (checksPassed as number)
+  )
+    throw new EvidenceReceiptValidationError('observation must match receipt operation')
+  return {
+    kind: 'assert-verdict',
+    checksPassed: checksPassed as number,
+    checksTotal: checksTotal as number,
   }
 }
 

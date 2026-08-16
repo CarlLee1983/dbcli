@@ -167,7 +167,10 @@ describe('evidence receipt', () => {
       buildEvidenceReceipt({
         command: 'dbcli assert <sql>',
         context,
-        verdict: { pass: true, checks: [{ pass: true, value: 42 }] },
+        verdict: {
+          pass: true,
+          checks: [{ pass: true, value: 42 } as unknown as { pass: boolean }],
+        },
       })
     ).toThrow(/pass bits/)
   })

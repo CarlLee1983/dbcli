@@ -167,3 +167,4 @@ jobs:
           bun run plugin:check
           bun run docs:check
           bun run contract:check
+          bun run plan:check

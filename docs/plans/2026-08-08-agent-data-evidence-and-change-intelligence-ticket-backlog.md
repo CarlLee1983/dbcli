@@ -41,8 +41,10 @@ useful without them and report their absence as coverage gaps.
 
 ## EVD-01 — Evidence Pack v1
 
-**Status:** Delivered in v1.53.0 (2026-08-09). Known deviations: criterion 3 and
-the expired-reference coverage gap in Scope. Unverified: criteria 1, 2, and 5.
+**Status:** Delivered in v1.53.0 (2026-08-09). Both known deviations were
+repaired on 2026-08-16 under
+[ADR-0012](../adr/0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md).
+Unverified: criteria 1, 2, and 5.
 
 **Depends on:** Existing verification artifact reader and audit/recovery reader
 
@@ -65,10 +67,15 @@ and safe audit/recovery reference projections.
   requested source fails composition; a reference that expires later through
   audit rotation/clear yields non-zero `source-expired` reference validation
   plus a coverage gap, while digest validation and forensic rendering remain
-  available. — known deviation: the coverage gap is unreachable. Both writers
-  hard-code an empty `gaps` array (`src/core/evidence-pack/index.ts:363,399`)
-  and the parser rejects a non-empty one (`:380-388`), so expiry is visible only
-  in the transient `validate` output, never in the pack.
+  available. — covered by: `tests/integration/evidence-command.test.ts`
+  (`reports source-expired after audit retention while rendering remains
+  available`). The promised coverage gap was unreachable and the `coverage`
+  field is now removed rather than faked: a pack is immutable, so a reference
+  that expires after composition cannot be written back into it. Expiry is
+  reported by `evidence validate`, which is where a reader can act on it —
+  asserted by `tests/unit/core/evidence-pack/evidence-pack.test.ts` (`does not
+  carry a coverage field`, `rejects a pack that still carries the removed
+  coverage field`).
 - Update four-way user docs and generated skill/platform guidance. Claims must
   visibly remain external interpretation, not a dbcli verification verdict.
 
@@ -89,11 +96,12 @@ result export, archive/import support, signing, or authentication.
    required source, oversized input, and malformed reference objects have no
    test.
 3. Equivalent claim/reference sets produce canonical identical JSON and digest.
-   — known deviation: unsatisfiable. The digest covers a random UUID id and a
-   millisecond `createdAt` (`src/core/evidence-pack/index.ts:302-308,357-364`),
-   and the command injects neither a fixed id nor a clock
-   (`src/commands/evidence.ts:301`). Only claim and reference ordering is
-   canonical.
+   — covered by: `tests/unit/core/evidence-pack/evidence-pack.test.ts`
+   (`composing the same claims and references twice produces the same digest`,
+   `derives the pack id from its content digest`, `validates a pack whose keys
+   are stored in a different order`). The digest now covers content only and the
+   id is derived from it; `createdAt` is metadata outside the digest, which is
+   the one field a restamp can change undetected.
 4. Tampering is detected; expired provenance is neither hidden nor misreported
    as a valid reference. — covered by:
    `tests/unit/core/evidence-pack/evidence-pack.test.ts` (`canonicalizes claims

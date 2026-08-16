@@ -2729,8 +2729,11 @@ dbcli evidence compose --claims ./claims.json --verification ver_abcd --audit 1a
 | `--format <json\|markdown>` | Compose receipt format printed to stdout. | `json` |
 
 At least one `--verification`, `--audit`, or `--receipt` reference is required. The resulting pack
-contains a canonical SHA-256 integrity digest and `coverage.completeForDeclaredEvidence:
-true` for its explicitly selected references.
+carries a canonical SHA-256 digest over its content, and its `id` is derived from that digest, so
+composing the same claims and references twice produces the same pack. `createdAt` records when the
+pack was written and is deliberately outside the digest — it is the one field a restamp can change
+without breaking validation. Whether a referenced source is still resolvable is reported by
+`evidence validate`, not stored in the pack.
 
 #### `evidence validate`
 

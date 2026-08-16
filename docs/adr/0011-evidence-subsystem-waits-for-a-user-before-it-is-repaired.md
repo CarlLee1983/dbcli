@@ -1,8 +1,13 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-16
 dogfooded: 2026-08-16
+superseded_by: 0012
 ---
+
+> The decision below — that repair waits for evidence of use — is superseded by
+> [ADR-0012](0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md).
+> The record of what the dogfood found is still current and still accurate.
 
 # The evidence subsystem waits for a user before it is repaired
 

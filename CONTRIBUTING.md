@@ -332,7 +332,6 @@ Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 - [ ] `bun run agent-core:check` — 公開 agent-core 不含資料庫專屬詞彙或內部／CLI framework 相依
 - [ ] `bash scripts/release-check.sh` 第 9/9 步 doc-presence — `docs/feature-matrix.md` 含 `audit` row、`CHANGELOG.md` 含 `## [<version>]` heading（D-78）
 - [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
-- [ ] `.planning/STATE.md` 的 milestone 段落、Release Gate 表格與 `last_updated` 已更新
 - [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major`）
 - [ ] Benchmark（`bun run test:perf`）— blocking CI gate；確認所有預算與實測輸出皆通過
 

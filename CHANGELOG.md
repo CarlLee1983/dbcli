@@ -5,6 +5,28 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Contract and release integrity
+
+Three numbers in this repository disagreed with reality and nothing checked any of them. The evidence pack and receipt formats still said `version: 1` after v3.0.0 broke both of them, so two mutually incompatible layouts shipped under one version number and an old artifact was reported as a tampered one. Five plugin manifests said `1.51.2` while the package said `3.0.0`. `SECURITY.md` promised fixes for `1.x`. Each is now stated once, derived from one source, and guarded by a check that fails on drift.
+
+### Changed
+
+- **BREAKING (artifact format): evidence packs and receipts are `version: 2`, and the format version is no longer tied to the package version.** v3.0.0 changed the pack digest input, the id derivation, the `coverage` field and the receipt `observation` while leaving both constants at `1` — ADR-0012 decided to amend the schema in place, which was right about the repairs and wrong about the number. A reader now classifies an artifact by version *and* structure before computing anything: `v1-coverage` (2.1.0 and earlier), `v1-untagged-v3` (3.0.0), current, or unsupported. Both legacy formats stay readable and integrity-checkable through frozen reimplementations of their own digests, and neither is ever `trust: "current-valid"`. There is no migration and cannot be one — a pack's id derives from its digest, so rewriting an old pack would mint a new artifact wearing an old one's provenance, and a v2.1.0 receipt's hashed `observation` can only be "recovered" by inverting it, which is a guess and not a record. Recorded in `docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`, amending ADR-0012.
+
+- **`evidence validate --format json` distinguishes three answers where it used to give one.** `status` is `current-valid`, `current-references-expired`, `recognized-legacy`, or `unsupported`, with `trust` stating plainly whether the pack may be relied on; `recognized-legacy` also carries `legacyFormat`, `producedBy`, and that format's own `integrity`. An unknown version fails closed. Previously every one of these arrived as `evidence pack digest mismatch`, which tells the holder of a two-week-old file that someone tampered with it.
+
+- **`SECURITY.md` documents the major line that actually exists.** It listed `1.x` as supported against a `3.0.0` package — a security document making a false promise about which releases get fixes. `3.x` is supported; `2.x` and `1.x` are explicitly not, with no backport commitment invented to soften it.
+
+- **Plugin and extension manifests carry the package version.** `.claude-plugin`, `.codex-plugin`, `.cursor-plugin`, `gemini-extension.json` and the portable `plugins/dbcli-agent` copy all read `1.51.2` — two majors behind what a user installing from a marketplace would receive.
+
+### Added
+
+- **`bun run manifest:check` (and `manifest:sync`) makes manifest drift fail the build.** It checks every manifest's version against `package.json`, the plugin name, that declared skill directories and entry files exist, that the root and portable copies agree, that the marketplace listing names the plugin, and that `SECURITY.md`'s supported major matches the package. Blocking in CI's drift job and in `release:check`. `tests/unit/scripts/plugin-manifest-contract.test.ts` breaks one thing at a time in a scratch tree and asserts the script goes red, because a guard only ever run against a correct tree is how five manifests drifted through a green build.
+
+- **Frozen legacy artifact fixtures under `tests/fixtures/evidence-legacy/`.** Six files produced by the code that actually shipped — v2.1.0's builder and v3.0.0's — never regenerated. A test that builds its own "legacy" input proves the builder agrees with itself, which is precisely the check that would have caught none of this.
+
+- **CI runs a dependency audit and installs from a frozen lockfile.** `bun audit` ran only inside `release:check`, by hand, shortly before a release; it is now its own blocking job on every push. Every job installs with `--frozen-lockfile`, and the workflow declares `permissions: contents: read`.
+
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 
 The evidence subsystem shipped in v1.53.0 and, until this week, nobody had composed a pack outside its own tests. The first real use — a `verify safe-backfill --after-write` against a live PostgreSQL — came back `not_verified` on data that was correct, and the audit that followed found three more defects of the same kind: an evidence pack whose digest covered a random UUID, so the same claims never produced the same pack twice; a receipt "fingerprint" that was an unsalted SHA-256 over eight possible values; and a blacklist comparison with no identifier boundaries, so a protected column named `id` refused any claim containing the word "identifier". Fixing them changes both published formats, which is what makes this a major release: **packs written by 2.x will fail validation under 3.0.0, and `observation.fingerprint` no longer exists.** The reversal that authorized the repairs — known defects get fixed whether or not anyone is using the code — is recorded in `docs/adr/0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md`, superseding ADR 0011.

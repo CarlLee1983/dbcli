@@ -19,7 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **ES shell 的每個請求都寫入 audit，執行或被拒都寫。** side-effect tier 取自該請求的分類結果而非發起它的命令 —— 用命令的能力表來標記是一個已知缺陷，同一個破壞性操作曾因為經由不同命令而被記成三種不同的 tier。
 
-- **Elasticsearch 的讀取判定不再是路徑白名單。** 原本只認 `_search`、`_count`、`_mapping`、`_settings`、`_alias`、`_doc`、`_source`，其餘一律落到需要 `admin` 的預設，所以 `GET /_cat/indices`（shell 開場橫幅叫使用者去試的那一行）、`GET /_cluster/health`、`GET /<index>`、`HEAD /<index>` 全都要 admin。這在只有 `query` 使用這個分類器的時候看不見，因為那條路徑只送得出搜尋。現在 `GET` 與 `HEAD` 一律判為讀取 —— Elasticsearch 的 REST API 沒有會變更狀態的 GET，而「可以讀到哪些物件」是黑名單的問題，不是這個函式的問題。這個放寬只移動 `GET`／`HEAD`，沒有任何寫入操作因此變成被允許，`query` 的行為完全未變，兩者都有測試釘住。
+- **分類器改讀伺服器實際路由的路徑。** 先前它拿到的是原始文字（含 query string），而黑名單拿到的是去掉 query string 的路徑。分類器裡每個子字串比對因此都會命中攻擊者控制的參數值，而 `filter_path` 是每個端點都接受、且吃任意字串的通用參數：`POST /<index>/_delete_by_query?filter_path=_count` 判成搜尋、`DELETE /<index>?filter_path=_bulk` 判成搜尋、`PUT /<index>/_mapping?filter_path=_bulk` 判成搜尋，三者都在 `query-only` 下實測執行成功。現在 query string 被丟棄、百分比編碼與 dot segment 在分類前解析，欄位也從 `apiPath` 改名為 `rawPath` 並在模組內正規化，呼叫端不可能再傳錯一個。
+
+- **比對改為位置感知的路徑區段，不再是子字串。** `_search`、`_count`、`_bulk` 都是合法的文件 id，所以精確區段比對本身也不夠：`POST /<index>/_doc/_search` 是「索引＋id」的寫入請求，最後一段卻是 `_search`。`_search` 與 `_count` 只在一段或兩段路徑的端點位置才算數，文件 id 一律不透明、永不參與比對。
+
+- **Elasticsearch 的讀取判定維持白名單，並補上讓它不堪用的那幾個形狀。** 新增 `_cat/*`（不含 `_cat/aliases` 與 `_cat/tasks`）、`_cluster/health`、`GET`／`HEAD` 裸索引名稱。其餘一律落到需要 `admin` 的預設 —— 包含任何沒被列上的端點。這個方向是刻意的：白名單漏一項，使用者多付一個不必要的 admin 要求；拒絕集漏一項，使用者拿到一個繞過。記在 ADR-0014。
+
+- **`_bulk` 的 body 無法辨識或無法解析時判為 `DROP`。** 先前判 `SELECT`，而 bulk 分支由路徑單獨選中，所以那是一個通用的降級管道。
+
+- **路徑文字與實際路由不一致時一律拒絕，不再取決於有沒有設定黑名單。** 這道檢查原本只為黑名單服務，現在同時是分類器的支柱：`%2F` 可以製造出伺服器看不到的區段，`/a%2F_search/_delete_by_query` 在 dbcli 眼中會路由成一個搜尋。
+
+- **引號字串形式的 request body 一律拒絕。** JSON 字串字面值是合法的 body，卻能挾帶 NDJSON 通過每一個只走物件與陣列的檢查 —— 一個 bulk delete 曾因此從無害的路徑名稱抵達黑名單索引。
+
+- **`_ingest` 與 `_tasks` 移出 shell 的 unscoped metadata 白名單**：pipeline 定義常內嵌憑證，詳細 task 列表會帶出執行中查詢的 request source。
+
+- **`_update_by_query` 從 `read-write` 收緊為 `admin`**：它是獨立的區段，精確比對之下落到破壞性預設，而它確實會改寫索引裡的每一份文件。
 
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 

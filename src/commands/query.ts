@@ -584,7 +584,7 @@ function preflightElasticsearchQuery(
   const body = query.trim().startsWith('{') ? query : undefined
   if (body !== undefined) JSON.parse(body)
   enforceElasticsearchPermission(
-    { method: 'POST', apiPath: `/${indexName}/_search`, body },
+    { method: 'POST', rawPath: `/${indexName}/_search`, body },
     multiConnection ? 'query-only' : config.permission
   )
 

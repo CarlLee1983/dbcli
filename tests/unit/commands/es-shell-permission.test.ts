@@ -97,9 +97,12 @@ const DESTRUCTIVE_SHAPES: ReadonlyArray<{
     permitted: 'admin',
   },
   {
+    // `_update_by_query` is its own segment, distinct from `_update`, so exact
+    // segment matching drops it through to the destructive default. That is
+    // stricter than before and correct: it rewrites every document in an index.
     name: 'update by query rewrites every document',
     req: { method: 'POST', path: '/orders/_update_by_query', body: { script: { source: '' } } },
-    permitted: 'read-write',
+    permitted: 'admin',
   },
 ]
 
@@ -304,5 +307,108 @@ describe('every request is recorded, executed or refused', () => {
       )
     ).rejects.toThrow(/blacklist/)
     expect(log).toEqual([{ success: false, target: 'secrets' }])
+  })
+})
+
+describe('the two bypasses found in review stay closed', () => {
+  // CRITICAL-1: the classifier read the raw path while the blacklist read the
+  // routed one, so `filter_path` — a parameter every Elasticsearch endpoint
+  // accepts, taking an arbitrary string — decided the tier. Verified executed
+  // at query-only before the fix.
+  const SMUGGLED: ReadonlyArray<[string, EsRequest]> = [
+    [
+      'delete by query disguised as a count',
+      { method: 'POST', path: '/orders/_delete_by_query?filter_path=_count', body: { query: {} } },
+    ],
+    ['index deletion disguised as a bulk', { method: 'DELETE', path: '/orders?filter_path=_bulk' }],
+    [
+      'a mapping rewrite disguised as a bulk',
+      { method: 'PUT', path: '/orders/_mapping?filter_path=_bulk', body: { properties: {} } },
+    ],
+    [
+      'a dot segment spelling a read that routes to a delete',
+      { method: 'POST', path: '/orders/_search/../_delete_by_query', body: { query: {} } },
+    ],
+  ]
+
+  test.each(SMUGGLED)('%s is refused at query-only', async (_name, req) => {
+    const target = captured()
+    await expect(run(req, 'query-only', target)).rejects.toThrow()
+    expect(target.calls).toBe(0)
+  })
+
+  // CRITICAL-2: a JSON string literal is a legal body that carries NDJSON, and
+  // it was never walked by the body index scan, so a bulk delete reached a
+  // blacklisted index from a path naming an innocuous one.
+  test('a quoted string body is refused outright', async () => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        {
+          method: 'POST',
+          path: '/public/_bulk',
+          body: '{"delete":{"_index":"secrets","_id":"1"}}\n',
+        },
+        fakeAdapter(target) as never,
+        ['secrets'],
+        {},
+        { permission: 'admin' }
+      )
+    ).rejects.toThrow(/quoted string request body/)
+    expect(target.calls).toBe(0)
+  })
+
+  test('a string body is refused even with no blacklist configured', async () => {
+    const target = captured()
+    await expect(
+      run(
+        { method: 'POST', path: '/public/_bulk', body: '{"index":{"_index":"a"}}\n' },
+        'admin',
+        target
+      )
+    ).rejects.toThrow(/quoted string request body/)
+    expect(target.calls).toBe(0)
+  })
+
+  // The routed-vs-literal refusal is what closes `%2F` manufacturing a segment
+  // the server never sees. It used to run only when a blacklist was configured,
+  // which is not the default.
+  test('an obfuscated path is refused with no blacklist configured', async () => {
+    const target = captured()
+    await expect(
+      run({ method: 'POST', path: '/a%2F_search/_delete_by_query' }, 'admin', target)
+    ).rejects.toThrow(/routes to/)
+    expect(target.calls).toBe(0)
+  })
+})
+
+describe('the classifier and the scoping allowlist agree about unscoped paths', () => {
+  // A conjunctive pair: a request must satisfy the tier classifier AND, when a
+  // blacklist is configured, `isUnscopedMetadataPath`. They answer different
+  // questions, so listing a prefix in both is correct — but a path the
+  // classifier admits while unscoped and the scoping list does not know about
+  // would be permitted on a default config and refused on a configured one.
+  const CLASSIFIER_ADMITTED_UNSCOPED = ['/_cat/indices', '/_cluster/health']
+
+  test.each(CLASSIFIER_ADMITTED_UNSCOPED)(
+    '%s is permitted with and without a blacklist configured',
+    async (path) => {
+      const bare = captured()
+      await run({ method: 'GET', path }, 'query-only', bare)
+      expect(bare.calls).toBe(1)
+
+      const configured = captured()
+      await run({ method: 'GET', path }, 'query-only', configured, ['secrets'])
+      expect(configured.calls).toBe(1)
+    }
+  )
+
+  // Removed from the scoping allowlist: pipeline definitions embed credentials
+  // and detailed task listings carry running search bodies. Both also fail the
+  // classifier, so this asserts the pair rather than either alone.
+  test.each([['/_ingest/pipeline'], ['/_tasks']])('%s is refused', async (path) => {
+    const target = captured()
+    await expect(run({ method: 'GET', path }, 'query-only', target)).rejects.toThrow()
+    expect(target.calls).toBe(0)
   })
 })

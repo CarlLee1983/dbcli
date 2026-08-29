@@ -22,36 +22,36 @@ import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
 } from '@/core/permission/elasticsearch'
-import { PermissionError, type StatementType } from '@/core/permission-guard'
+import { PermissionError } from '@/core/permission-guard'
 import type { Permission } from '@/types'
 
 const CASES: Array<{
   method: string
-  apiPath: string
+  rawPath: string
   type: ReturnType<typeof classifyElasticsearchRequest>['type']
   lowest: Permission
   why: string
 }> = [
   // Reads stay reads.
-  { method: 'GET', apiPath: '/users/_search', type: 'SELECT', lowest: 'query-only', why: 'search' },
+  { method: 'GET', rawPath: '/users/_search', type: 'SELECT', lowest: 'query-only', why: 'search' },
   {
     method: 'POST',
-    apiPath: '/users/_search',
+    rawPath: '/users/_search',
     type: 'SELECT',
     lowest: 'query-only',
     why: 'search with a body is a POST',
   },
-  { method: 'GET', apiPath: '/users/_count', type: 'SELECT', lowest: 'query-only', why: 'count' },
+  { method: 'GET', rawPath: '/users/_count', type: 'SELECT', lowest: 'query-only', why: 'count' },
   {
     method: 'GET',
-    apiPath: '/users/_mapping',
+    rawPath: '/users/_mapping',
     type: 'SELECT',
     lowest: 'query-only',
     why: 'reading a mapping',
   },
   {
     method: 'GET',
-    apiPath: '/users/_doc/1',
+    rawPath: '/users/_doc/1',
     type: 'SELECT',
     lowest: 'query-only',
     why: 'reading one document',
@@ -60,21 +60,21 @@ const CASES: Array<{
   // Document writes stay at the tier their SQL equivalent has.
   {
     method: 'PUT',
-    apiPath: '/users/_doc/1',
+    rawPath: '/users/_doc/1',
     type: 'INSERT',
     lowest: 'read-write',
     why: 'indexing a document',
   },
   {
     method: 'POST',
-    apiPath: '/users/_update/1',
+    rawPath: '/users/_update/1',
     type: 'UPDATE',
     lowest: 'read-write',
     why: 'updating a document',
   },
   {
     method: 'DELETE',
-    apiPath: '/users/_doc/1',
+    rawPath: '/users/_doc/1',
     type: 'DELETE',
     lowest: 'data-admin',
     why: 'deleting one document is the DELETE tier, as in SQL',
@@ -83,63 +83,63 @@ const CASES: Array<{
   // Anything that removes or reshapes the container is admin.
   {
     method: 'DELETE',
-    apiPath: '/users',
+    rawPath: '/users',
     type: 'DROP',
     lowest: 'admin',
     why: 'deleting an index is DROP TABLE, not DELETE FROM',
   },
   {
     method: 'DELETE',
-    apiPath: '/logs-*',
+    rawPath: '/logs-*',
     type: 'DROP',
     lowest: 'admin',
     why: 'a wildcard deletes every matching index at once',
   },
   {
     method: 'DELETE',
-    apiPath: '/_all',
+    rawPath: '/_all',
     type: 'DROP',
     lowest: 'admin',
     why: '_all is every index in the cluster',
   },
   {
     method: 'DELETE',
-    apiPath: '/users,orders',
+    rawPath: '/users,orders',
     type: 'DROP',
     lowest: 'admin',
     why: 'a comma-separated list is still whole indices',
   },
   {
     method: 'DELETE',
-    apiPath: '/_index_template/t',
+    rawPath: '/_index_template/t',
     type: 'DROP',
     lowest: 'admin',
     why: 'templates shape indices that do not exist yet',
   },
   {
     method: 'DELETE',
-    apiPath: '/users/_alias/a',
+    rawPath: '/users/_alias/a',
     type: 'DROP',
     lowest: 'admin',
     why: 'matched the _alias read rule before, so query-only could delete it',
   },
   {
     method: 'PUT',
-    apiPath: '/users/_mapping',
+    rawPath: '/users/_mapping',
     type: 'DROP',
     lowest: 'admin',
     why: 'changing a mapping is a schema change',
   },
   {
     method: 'PUT',
-    apiPath: '/users/_settings',
+    rawPath: '/users/_settings',
     type: 'DROP',
     lowest: 'admin',
     why: 'changing index settings is a schema change',
   },
   {
     method: 'PUT',
-    apiPath: '/_cluster/settings',
+    rawPath: '/_cluster/settings',
     type: 'DROP',
     lowest: 'admin',
     why: 'cluster configuration',
@@ -150,18 +150,18 @@ const TIERS: Permission[] = ['query-only', 'read-write', 'data-admin', 'admin']
 const rank = (permission: Permission): number => TIERS.indexOf(permission)
 
 describe('elasticsearch request classification', () => {
-  for (const { method, apiPath, type, why } of CASES) {
-    test(`${method} ${apiPath} is ${type} — ${why}`, () => {
-      expect(classifyElasticsearchRequest({ method, apiPath }).type).toBe(type)
+  for (const { method, rawPath, type, why } of CASES) {
+    test(`${method} ${rawPath} is ${type} — ${why}`, () => {
+      expect(classifyElasticsearchRequest({ method, rawPath }).type).toBe(type)
     })
   }
 })
 
 describe('elasticsearch permission tiers', () => {
-  for (const { method, apiPath, lowest } of CASES) {
-    test(`${method} ${apiPath} needs ${lowest}`, () => {
+  for (const { method, rawPath, lowest } of CASES) {
+    test(`${method} ${rawPath} needs ${lowest}`, () => {
       for (const permission of TIERS) {
-        const run = () => enforceElasticsearchPermission({ method, apiPath }, permission)
+        const run = () => enforceElasticsearchPermission({ method, rawPath }, permission)
 
         if (rank(permission) >= rank(lowest)) {
           expect(run).not.toThrow()
@@ -174,71 +174,174 @@ describe('elasticsearch permission tiers', () => {
 })
 
 /**
- * The read rule used to be an allowlist of paths — `_search`, `_count`,
- * `_mapping`, `_settings`, `_alias`, `_doc`, `_source` — and anything unlisted
- * fell through to the destructive default. That was invisible while only
- * `dbcli query` used this classifier, because that path can only synthesise a
- * search. The Elasticsearch shell sends whatever the operator types, so
- * `GET /_cat/indices` — the command the shell's own banner suggests — needed
- * admin.
+ * Reads are an allowlist and everything else needs admin.
  *
- * Every GET and HEAD is now a read. What may be read is a question for the
- * blacklist, not for this function.
+ * A revision made inside this same change inverted that — every GET and HEAD
+ * became a read, with a deny-set for the dangerous ones — because
+ * `GET /_cat/indices`, the command the Elasticsearch shell's own banner
+ * suggests, otherwise required admin. The inversion was withdrawn: both designs
+ * are enumerations, but a gap in an allowlist costs a user an unnecessary admin
+ * requirement, and a gap in a deny-set costs them a bypass. See ADR-0014.
  */
-describe('read verbs are reads, whatever the path', () => {
+describe('the read set is an allowlist', () => {
   const READS: ReadonlyArray<[string, string]> = [
+    ['GET', '/users/_search'],
+    ['POST', '/users/_search'],
+    ['GET', '/users/_count'],
+    ['GET', '/users/_doc/1'],
+    ['GET', '/users/_source/1'],
+    ['GET', '/users/_mapping'],
+    ['GET', '/users/_settings'],
+    ['GET', '/users/_alias'],
     ['GET', '/_cat/indices'],
+    ['GET', '/_cat/health'],
     ['GET', '/_cluster/health'],
-    ['GET', '/_nodes'],
     ['GET', '/users'],
     ['HEAD', '/users'],
-    ['GET', '/users/_search'],
-    ['GET', '/users/_mapping'],
-    ['GET', '/users/_doc/1'],
   ]
 
-  test.each(READS)('%s %s classifies as SELECT', (method, apiPath) => {
-    expect(classifyElasticsearchRequest({ method, apiPath }).type).toBe('SELECT')
-  })
-
-  test.each(READS)('%s %s is permitted at query-only', (method, apiPath) => {
-    expect(() => enforceElasticsearchPermission({ method, apiPath }, 'query-only')).not.toThrow()
+  test.each(READS)('%s %s is a read at query-only', (method, rawPath) => {
+    expect(classifyElasticsearchRequest({ method, rawPath }).type).toBe('SELECT')
+    expect(() => enforceElasticsearchPermission({ method, rawPath }, 'query-only')).not.toThrow()
   })
 })
 
-/**
- * The relaxation above moves GET and HEAD only. Nothing that writes is a GET in
- * the Elasticsearch REST API, so no mutation may have become permitted — and
- * the query path, which synthesises exactly one shape, must be untouched.
- */
-describe('the read relaxation moved no write', () => {
-  const WRITES: ReadonlyArray<[string, string, StatementType]> = [
-    ['POST', '/users/_delete_by_query', 'DROP'],
-    ['POST', '/_reindex', 'DROP'],
-    ['POST', '/_aliases', 'DROP'],
-    ['PUT', '/users/_mapping', 'DROP'],
-    ['PUT', '/users/_settings', 'DROP'],
-    ['DELETE', '/users', 'DROP'],
-    ['DELETE', '/_all', 'DROP'],
-    ['DELETE', '/users/_doc/1', 'DELETE'],
-    ['PUT', '/users/_doc/1', 'INSERT'],
-    ['POST', '/users/_update/1', 'UPDATE'],
-  ]
-
-  test.each(WRITES)('%s %s still classifies as %s', (method, apiPath, expected) => {
-    expect(classifyElasticsearchRequest({ method, apiPath }).type).toBe(expected)
+describe('anything the read set does not name needs admin', () => {
+  // The property the whole design rests on. It is what disappears silently if
+  // anyone reintroduces a substring test, and it is the only assertion here
+  // still meaningful after Elasticsearch ships an endpoint none of us has heard
+  // of.
+  test('an endpoint nobody has enumerated needs admin', () => {
+    const invented = { method: 'GET', rawPath: '/_something_that_does_not_exist' }
+    expect(classifyElasticsearchRequest(invented).type).toBe('DROP')
+    expect(() => enforceElasticsearchPermission(invented, 'query-only')).toThrow(PermissionError)
+    expect(() => enforceElasticsearchPermission(invented, 'data-admin')).toThrow(PermissionError)
   })
 
-  test.each(WRITES)('%s %s is still refused at query-only', (method, apiPath) => {
-    expect(() => enforceElasticsearchPermission({ method, apiPath }, 'query-only')).toThrow(
+  const WITHHELD: ReadonlyArray<[string, string, string]> = [
+    ['GET', '/_security/user', 'credentials and roles'],
+    ['GET', '/_security/api_key', 'API keys'],
+    ['GET', '/_snapshot/_all', 'repository configuration, buckets and regions'],
+    ['GET', '/_watcher/watch/w', 'watch definitions'],
+    ['GET', '/_ilm/policy', 'lifecycle policy'],
+    ['GET', '/_ml/anomaly_detectors', 'model configuration'],
+    ['GET', '/_transform', 'transform configuration'],
+    ['GET', '/_sql', 'executes SQL and opens a cursor'],
+    ['GET', '/_scripts/painless/_execute', 'executes Painless'],
+    ['GET', '/_render/template', 'renders a stored template'],
+    ['GET', '/_async_search/id', 'results of a search scoped by someone else'],
+    ['GET', '/_nodes', 'node paths, plugins, JVM arguments, published addresses'],
+    ['GET', '/_cluster/state', 'every index name and mapping'],
+    ['GET', '/_search/scroll', 'allocates and consumes a server-side scroll context'],
+    ['GET', '/_refresh', 'state-changing, GET-registered in 7.x'],
+    ['GET', '/_cache/clear', 'state-changing, GET-registered in 7.x'],
+    // Read-only, withheld as a disclosure judgment rather than a safety one:
+    // aliases resolve to indices, which the blacklist cannot follow.
+    ['GET', '/_cat/aliases', 'resolves aliases to the indices behind them'],
+    ['GET', '/_cat/tasks', 'carries the request source of running searches'],
+    // Two spellings of one request must not land in two tiers.
+    ['GET', '/*', 'every index mapping and setting, same as /_all'],
+    ['GET', '/_all', 'every index mapping and setting'],
+    ['GET', '/logs-*', 'a multi-index expression is not a bare index'],
+    ['GET', '/a,b', 'a comma list is not a bare index'],
+  ]
+
+  test.each(WITHHELD)('%s %s needs admin — %s', (method, rawPath) => {
+    expect(() => enforceElasticsearchPermission({ method, rawPath }, 'query-only')).toThrow(
+      PermissionError
+    )
+    expect(() => enforceElasticsearchPermission({ method, rawPath }, 'data-admin')).toThrow(
+      PermissionError
+    )
+  })
+})
+
+describe('matching is position-aware and reads the routed path', () => {
+  // `_search`, `_count` and `_bulk` are legal document ids, so an exact segment
+  // match still matches a segment the attacker planted.
+  const FORGED: ReadonlyArray<[string, string]> = [
+    ['POST', '/orders/_doc/_search'],
+    ['POST', '/orders/_doc/_count'],
+    ['PUT', '/orders/_doc/_search'],
+    ['POST', '/orders/_update/_search'],
+  ]
+
+  test.each(FORGED)('%s %s is not a read', (method, rawPath) => {
+    expect(classifyElasticsearchRequest({ method, rawPath }).type).not.toBe('SELECT')
+    expect(() => enforceElasticsearchPermission({ method, rawPath }, 'query-only')).toThrow(
       PermissionError
     )
   })
 
-  // The shape `dbcli query` builds for Elasticsearch, unchanged by any of this.
-  test('the query path still classifies its own request as a read', () => {
+  // `filter_path` is accepted by every Elasticsearch endpoint and takes an
+  // arbitrary string, so a classifier reading the raw path matched on its
+  // value. This is the bypass that made `POST /orders/_delete_by_query`
+  // classify as a search and execute at query-only.
+  const SMUGGLED: ReadonlyArray<[string, string]> = [
+    ['POST', '/orders/_delete_by_query?filter_path=_count'],
+    ['POST', '/orders/_delete_by_query?filter_path=_search'],
+    ['DELETE', '/orders?filter_path=_bulk'],
+    ['PUT', '/orders/_mapping?filter_path=_bulk'],
+    ['POST', '/orders/_close?routing=_bulk'],
+    ['DELETE', '/orders?pretty&filter_path=_doc'],
+  ]
+
+  test.each(SMUGGLED)('%s %s cannot be downgraded by its query string', (method, rawPath) => {
+    expect(() => enforceElasticsearchPermission({ method, rawPath }, 'query-only')).toThrow(
+      PermissionError
+    )
+  })
+
+  test('a dot segment cannot spell a read that routes to a write', () => {
     expect(
-      classifyElasticsearchRequest({ method: 'POST', apiPath: '/users/_search', body: '{}' }).type
-    ).toBe('SELECT')
+      classifyElasticsearchRequest({
+        method: 'POST',
+        rawPath: '/orders/_search/../_delete_by_query',
+      }).type
+    ).toBe('DROP')
+  })
+})
+
+describe('an unreadable bulk body is the destructive tier', () => {
+  // Selected by the path alone, this returned SELECT for an empty, unparseable
+  // or unrecognised body — a general-purpose downgrade oracle.
+  const BODIES: ReadonlyArray<[string, string]> = [
+    ['empty', ''],
+    ['unparseable', 'not json at all'],
+    ['no recognised operation', '{"properties":{"a":{"type":"text"}}}'],
+    ['half parseable', '{"nope":1}\n{"also":2}'],
+  ]
+
+  test.each(BODIES)('a %s bulk body needs admin', (_name, body) => {
+    const request = { method: 'POST', rawPath: '/orders/_bulk', body }
+    expect(classifyElasticsearchRequest(request).type).toBe('DROP')
+    expect(() => enforceElasticsearchPermission(request, 'query-only')).toThrow(PermissionError)
+  })
+
+  test('a recognised bulk body still classifies by its highest operation', () => {
+    expect(
+      classifyElasticsearchRequest({
+        method: 'POST',
+        rawPath: '/orders/_bulk',
+        body: '{"delete":{"_index":"orders","_id":"1"}}',
+      }).type
+    ).toBe('DELETE')
+  })
+})
+
+describe('the query path is unaffected', () => {
+  // `dbcli query` synthesises exactly one shape. None of the above may move it.
+  test('the shape dbcli query builds is still a read', () => {
+    const request = { method: 'POST', rawPath: '/users/_search', body: '{}' }
+    expect(classifyElasticsearchRequest(request).type).toBe('SELECT')
+    expect(() => enforceElasticsearchPermission(request, 'query-only')).not.toThrow()
+  })
+
+  test('a comma list or wildcard index still classifies its search as a read', () => {
+    for (const index of ['a,b', 'logs-*']) {
+      expect(
+        classifyElasticsearchRequest({ method: 'POST', rawPath: `/${index}/_search` }).type
+      ).toBe('SELECT')
+    }
   })
 })

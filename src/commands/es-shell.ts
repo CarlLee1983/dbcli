@@ -50,8 +50,16 @@ export function extractIndexFromPath(path: string): string | undefined {
  * Paths that return cluster or index *metadata* and never document contents.
  * An allow-list, not a deny-list: a request that cannot be scoped to an index
  * is refused unless it is known to be harmless.
+ *
+ * `_ingest` and `_tasks` were here and are not any more: pipeline definitions
+ * routinely embed credentials, and a detailed task listing carries the request
+ * source of running searches, including searches over blacklisted indices.
+ *
+ * This list answers a different question from the permission classifier's read
+ * set — scoping, not tier — so a path must satisfy both. They overlap by
+ * construction, not by coincidence.
  */
-const UNSCOPED_METADATA_PREFIXES = ['_cat', '_cluster', '_nodes', '_tasks', '_ingest', '_license']
+const UNSCOPED_METADATA_PREFIXES = ['_cat', '_cluster', '_nodes', '_license']
 
 function isUnscopedMetadataPath(path: string): boolean {
   const first = path.replace(/^\//, '').split('/')[0]?.split('?')[0] ?? ''
@@ -66,11 +74,12 @@ function isUnscopedMetadataPath(path: string): boolean {
  * document over-reports — an ordinary field called `index` becomes a candidate
  * — which refuses more rather than less.
  *
- * NDJSON bodies (`_bulk`, `_msearch`) are out of reach today: `parseEsRequest`
- * JSON-parses the whole body, so a multi-line request never gets this far. This
- * function already handles their shapes, so adding NDJSON support does not
- * reopen the hole — but until it does, the coverage here is untested against a
- * real bulk body.
+ * Objects and arrays only. A JSON *string* body is never walked, which is why
+ * `runEsRequest` refuses one outright: `"{\"delete\":{\"_index\":\"secrets\"}}\n"`
+ * is a legal JSON document that `parseEsRequest` turns into a JS string
+ * carrying NDJSON, and it reached a blacklisted index from a path naming an
+ * innocuous one. An earlier comment here claimed NDJSON bodies were
+ * unreachable; they were not.
  */
 function findIndexNamesInBody(body: unknown): string[] {
   const found: string[] = []
@@ -181,7 +190,7 @@ export async function runEsRequest(
       : typeof req.body === 'string'
         ? req.body
         : JSON.stringify(req.body)
-  const esRequest = { method: req.method, apiPath: req.path, body: bodyText }
+  const esRequest = { method: req.method, rawPath: req.path, body: bodyText }
 
   // Classified once for the audit tier, which has to be recorded whether the
   // request is executed or refused. Recording the command's capability tier
@@ -191,9 +200,18 @@ export async function runEsRequest(
   const classification = classifyElasticsearchRequest(esRequest)
   const tierOverride = classification.type === 'SELECT' ? undefined : ('db-write' as const)
 
+  // The sink's own errors are not this request's outcome. `writeAuditEntry`
+  // swallows its failures today, but the sink is an injected interface: one
+  // that rejected would replace a PermissionError with an audit error on the
+  // failure path, and on the success path would report an executed mutation to
+  // the operator as a failure while logging it as one.
   const audit = async (success: boolean, error?: unknown): Promise<void> => {
     if (!options.audit) return
-    await options.audit({ success, error, target: index, tierOverride })
+    try {
+      await options.audit({ success, error, target: index, tierOverride })
+    } catch {
+      // Nothing to do with it here: the request's outcome stands either way.
+    }
   }
 
   try {
@@ -204,31 +222,42 @@ export async function runEsRequest(
   }
 
   async function execute(): Promise<unknown> {
+    // Unconditional, and first. This began life as a blacklist check and is now
+    // load-bearing for the tier gate too: the classifier reads the routed path,
+    // the server reads the text, and `%2F` can manufacture a segment the server
+    // never sees — `/a%2F_search/_delete_by_query` routes, in dbcli's view, to
+    // a search. Gating this on a blacklist being configured would leave the
+    // classifier reading a string the server will not receive, for the default
+    // configuration. A legitimate request never trips it: it costs only a path
+    // that spells something other than where it goes.
+    const literalSegments = `/${rawPath.split('/').filter(Boolean).join('/')}`
+    if (routedPath !== literalSegments) {
+      throw new Error(
+        `Refused: '${req.path}' routes to '${routedPath}', which is not what it ` +
+          `spells. Write the path the server will receive.`
+      )
+    }
+
+    // A JSON string body carries NDJSON past every check that walks objects.
+    // Nothing legitimate produces one — `parseEsRequest` yields a string only
+    // when the operator wrote a quoted literal — so it is refused rather than
+    // parsed.
+    if (typeof req.body === 'string') {
+      throw new Error(
+        'Refused: a quoted string request body is not supported. Write the body as JSON.'
+      )
+    }
+
     // The tier gate, which this path did not have. It runs before the blacklist
     // because it is the coarser question: whether this caller may perform this
     // kind of operation at all, on any object.
     enforceElasticsearchPermission(esRequest, options.permission)
 
-    // Conditional on a blacklist existing, deliberately. Every refusal in this
-    // block answers a question about the blacklist — a path that cannot be
-    // attributed to an index cannot be *checked against* one, and a path that
-    // routes somewhere other than it spells evades that check. With nothing
-    // configured there is no check to evade, so refusing `GET /_search` would
-    // cost an ordinary query and protect nothing. The danger that made this
-    // look unconditional — `DELETE /_all` at `query-only` — is refused by the
-    // tier gate above, which is where it belongs.
+    // The rest of this block answers questions *about the blacklist* — a path
+    // that cannot be attributed to an index cannot be checked against one — so
+    // with nothing configured there is nothing to check and refusing would cost
+    // an ordinary query while protecting nothing.
     if (blacklistTables.length === 0) return send()
-
-    // Refuse rather than silently check one string and send another: the HTTP
-    // client resolves dot segments and percent-encoding itself, so a path whose
-    // routing differs from its text is an obfuscated path, not a typo.
-    const literalSegments = `/${rawPath.split('/').filter(Boolean).join('/')}`
-    if (routedPath !== literalSegments) {
-      throw new Error(
-        `BlacklistRejection: '${req.path}' routes to '${routedPath}', which is not what it ` +
-          `spells. Write the path the server will receive.`
-      )
-    }
 
     // Any segment naming a blacklisted index is refused, whatever the endpoint
     // — `/_cat/indices/secrets` reports on it without reading documents, and

@@ -857,7 +857,7 @@ describe('Elasticsearch Permission Guard', () => {
   test('classify: _search is SELECT', () => {
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/users/_search',
+      rawPath: '/users/_search',
       body: '{}',
     })
     expect(result.type).toBe('SELECT')
@@ -865,14 +865,14 @@ describe('Elasticsearch Permission Guard', () => {
   })
 
   test('classify: GET _doc is SELECT', () => {
-    const result = classifyElasticsearchRequest({ method: 'GET', apiPath: '/users/_doc/1' })
+    const result = classifyElasticsearchRequest({ method: 'GET', rawPath: '/users/_doc/1' })
     expect(result.type).toBe('SELECT')
   })
 
   test('classify: PUT _doc is INSERT', () => {
     const result = classifyElasticsearchRequest({
       method: 'PUT',
-      apiPath: '/users/_doc/1',
+      rawPath: '/users/_doc/1',
       body: '{}',
     })
     expect(result.type).toBe('INSERT')
@@ -881,14 +881,14 @@ describe('Elasticsearch Permission Guard', () => {
   test('classify: POST _update is UPDATE', () => {
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/users/_update/1',
+      rawPath: '/users/_update/1',
       body: '{}',
     })
     expect(result.type).toBe('UPDATE')
   })
 
   test('classify: DELETE _doc is DELETE', () => {
-    const result = classifyElasticsearchRequest({ method: 'DELETE', apiPath: '/users/_doc/1' })
+    const result = classifyElasticsearchRequest({ method: 'DELETE', rawPath: '/users/_doc/1' })
     expect(result.type).toBe('DELETE')
     expect(result.isDangerous).toBe(true)
   })
@@ -902,7 +902,7 @@ describe('Elasticsearch Permission Guard', () => {
     ].join('\n')
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_bulk',
+      rawPath: '/_bulk',
       body: bulkBody,
     })
     expect(result.type).toBe('DELETE') // delete is higher than index
@@ -912,7 +912,7 @@ describe('Elasticsearch Permission Guard', () => {
     const bulkBody = '{ "delete": { "_index": "test", "_id": "2" } }\n'
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'POST', apiPath: '/_bulk', body: bulkBody },
+        { method: 'POST', rawPath: '/_bulk', body: bulkBody },
         'query-only'
       )
     ).toThrow(PermissionError)
@@ -921,7 +921,7 @@ describe('Elasticsearch Permission Guard', () => {
   test('enforce: admin allows everything', () => {
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'POST', apiPath: '/_all/_settings', body: '{}' },
+        { method: 'POST', rawPath: '/_all/_settings', body: '{}' },
         'admin'
       )
     ).not.toThrow()
@@ -1022,8 +1022,13 @@ describe('enforceRedisPermission success paths', () => {
 
 describe('Elasticsearch classify hardening', () => {
   test('_count, _mapping, _settings, _alias all classify as SELECT', () => {
-    for (const apiPath of ['/users/_count', '/users/_mapping', '/users/_settings', '/_alias']) {
-      const result = classifyElasticsearchRequest({ method: 'GET', apiPath })
+    for (const rawPath of [
+      '/users/_count',
+      '/users/_mapping',
+      '/users/_settings',
+      '/users/_alias',
+    ]) {
+      const result = classifyElasticsearchRequest({ method: 'GET', rawPath })
       expect(result.type).toBe('SELECT')
       expect(result.isDangerous).toBe(false)
     }
@@ -1032,7 +1037,7 @@ describe('Elasticsearch classify hardening', () => {
   test('PUT _create classifies as INSERT', () => {
     const result = classifyElasticsearchRequest({
       method: 'PUT',
-      apiPath: '/users/_create/1',
+      rawPath: '/users/_create/1',
       body: '{}',
     })
     expect(result.type).toBe('INSERT')
@@ -1048,7 +1053,7 @@ describe('Elasticsearch classify hardening', () => {
     ].join('\n')
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_bulk',
+      rawPath: '/_bulk',
       body,
     })
     expect(result.type).toBe('INSERT')
@@ -1065,23 +1070,28 @@ describe('Elasticsearch classify hardening', () => {
     ].join('\n')
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_bulk',
+      rawPath: '/_bulk',
       body,
     })
     expect(result.type).toBe('UPDATE')
   })
 
-  test('_bulk with empty / invalid body falls back to SELECT (non-dangerous)', () => {
-    const empty = classifyElasticsearchRequest({ method: 'POST', apiPath: '/_bulk', body: '' })
-    expect(empty.type).toBe('SELECT')
-    expect(empty.isDangerous).toBe(false)
+  // This asserted the opposite until 3.0.1: an empty or unreadable bulk body
+  // classified as a non-dangerous SELECT. Because the bulk branch is selected
+  // by the path alone, that made it a general-purpose downgrade —
+  // `DELETE /orders?filter_path=_bulk` was classified as a read and executed at
+  // query-only. Nothing readable means nothing proven.
+  test('_bulk with an empty or unreadable body is the destructive tier', () => {
+    const empty = classifyElasticsearchRequest({ method: 'POST', rawPath: '/_bulk', body: '' })
+    expect(empty.type).toBe('DROP')
+    expect(empty.isDangerous).toBe(true)
 
     const garbage = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_bulk',
+      rawPath: '/_bulk',
       body: 'not json\nnot json either\n',
     })
-    expect(garbage.type).toBe('SELECT')
+    expect(garbage.type).toBe('DROP')
   })
 
   test('_bulk delete short-circuits to DELETE even if other ops follow', () => {
@@ -1093,7 +1103,7 @@ describe('Elasticsearch classify hardening', () => {
     ].join('\n')
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_bulk',
+      rawPath: '/_bulk',
       body,
     })
     expect(result.type).toBe('DELETE')
@@ -1103,7 +1113,7 @@ describe('Elasticsearch classify hardening', () => {
   test('unrecognised cluster/schema operation defaults to DROP/admin/dangerous', () => {
     const result = classifyElasticsearchRequest({
       method: 'POST',
-      apiPath: '/_cluster/reroute',
+      rawPath: '/_cluster/reroute',
       body: '{}',
     })
     expect(result.type).toBe('DROP')
@@ -1116,19 +1126,19 @@ describe('enforceElasticsearchPermission tiers', () => {
   test('query-only allows _search and _count', () => {
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'POST', apiPath: '/users/_search', body: '{}' },
+        { method: 'POST', rawPath: '/users/_search', body: '{}' },
         'query-only'
       )
     ).not.toThrow()
     expect(() =>
-      enforceElasticsearchPermission({ method: 'GET', apiPath: '/users/_count' }, 'query-only')
+      enforceElasticsearchPermission({ method: 'GET', rawPath: '/users/_count' }, 'query-only')
     ).not.toThrow()
   })
 
   test('query-only blocks PUT _doc (INSERT)', () => {
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'PUT', apiPath: '/users/_doc/1', body: '{}' },
+        { method: 'PUT', rawPath: '/users/_doc/1', body: '{}' },
         'query-only'
       )
     ).toThrow(PermissionError)
@@ -1137,28 +1147,28 @@ describe('enforceElasticsearchPermission tiers', () => {
   test('read-write allows INSERT/UPDATE but blocks DELETE', () => {
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'PUT', apiPath: '/users/_doc/1', body: '{}' },
+        { method: 'PUT', rawPath: '/users/_doc/1', body: '{}' },
         'read-write'
       )
     ).not.toThrow()
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'POST', apiPath: '/users/_update/1', body: '{}' },
+        { method: 'POST', rawPath: '/users/_update/1', body: '{}' },
         'read-write'
       )
     ).not.toThrow()
     expect(() =>
-      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'read-write')
+      enforceElasticsearchPermission({ method: 'DELETE', rawPath: '/users/_doc/1' }, 'read-write')
     ).toThrow(PermissionError)
   })
 
   test('data-admin allows DELETE but blocks cluster ops (DROP)', () => {
     expect(() =>
-      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'data-admin')
+      enforceElasticsearchPermission({ method: 'DELETE', rawPath: '/users/_doc/1' }, 'data-admin')
     ).not.toThrow()
     expect(() =>
       enforceElasticsearchPermission(
-        { method: 'POST', apiPath: '/_cluster/reroute', body: '{}' },
+        { method: 'POST', rawPath: '/_cluster/reroute', body: '{}' },
         'data-admin'
       )
     ).toThrow(PermissionError)
@@ -1166,7 +1176,7 @@ describe('enforceElasticsearchPermission tiers', () => {
 
   test('returns classification on success', () => {
     const result = enforceElasticsearchPermission(
-      { method: 'POST', apiPath: '/users/_search', body: '{}' },
+      { method: 'POST', rawPath: '/users/_search', body: '{}' },
       'query-only'
     )
     expect(result.type).toBe('SELECT')
@@ -1176,7 +1186,7 @@ describe('enforceElasticsearchPermission tiers', () => {
   test('PermissionError carries DELETE classification on a blocked DELETE', () => {
     let caught: unknown
     try {
-      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'read-write')
+      enforceElasticsearchPermission({ method: 'DELETE', rawPath: '/users/_doc/1' }, 'read-write')
     } catch (err) {
       caught = err
     }

@@ -7,6 +7,7 @@ import {
   type StatementType,
 } from '@/core/permission-guard'
 import { t_vars } from '@/i18n/message-loader'
+import { normalizeEsPath } from '@/utils/es-index-target'
 
 // ============================================================================
 // ELASTICSEARCH CLASSIFICATION
@@ -14,127 +15,175 @@ import { t_vars } from '@/i18n/message-loader'
 
 export interface ElasticsearchRequest {
   method: string
-  apiPath: string
+  /**
+   * The path as written, query string and all.
+   *
+   * Normalised inside this module, not by the caller. It used to be named
+   * `apiPath` and callers were trusted to pass something routable; the
+   * Elasticsearch shell computed the routed path twelve lines above the call
+   * and passed the raw text anyway, so every substring test below matched on
+   * attacker-controlled query-parameter values. `?filter_path=_count` made a
+   * `_delete_by_query` classify as a search. Nothing in the type system saw it,
+   * because both values are strings.
+   */
+  rawPath: string
   body?: string
 }
 
+/** Endpoint segments that may follow an index name. The document id after one is opaque. */
+const DOCUMENT_ENDPOINTS = new Set(['_doc', '_source', '_create'])
+
 /**
- * A path that names one document: `_doc/<id>`, or the `_source/<id>` spelling.
+ * `_cat` sub-resources withheld from the read set.
  *
- * The id has to be there. `DELETE /users/_doc` is not a valid document delete,
- * so treating it as one would be inventing a narrower reading than the request
- * supports.
+ * A disclosure judgment, not a safety boundary — both are read-only. Aliases
+ * resolve to indices, which `es-index-target.ts` documents as server-side
+ * knowledge dbcli does not have, so `_cat/aliases` turns a documented ceiling
+ * into a lookup; `_cat/tasks` carries running search request bodies. Do not
+ * grow this into a general deny-set: the read rules below are an allowlist
+ * precisely so that an omission denies rather than permits.
  */
-const ES_DOCUMENT_PATH = /\/(?:_doc|_source)\/[^/?]+/
+const CAT_WITHHELD = new Set(['aliases', 'tasks'])
+
+/** Routed segments: query string discarded, percent-encoding and dot segments resolved. */
+function routedSegments(rawPath: string): string[] {
+  const withoutQuery = rawPath.split('?')[0] ?? rawPath
+  return normalizeEsPath(withoutQuery)
+    .split('/')
+    .filter((segment) => segment.length > 0)
+}
+
+/** An index expression, not an endpoint and not a multi-index spelling. */
+function isBareIndexSegment(segment: string | undefined): boolean {
+  // A leading underscore is how every single-segment endpoint Elasticsearch
+  // routes is spelled, so excluding it covers `_search`, `_bulk`, `_msearch`,
+  // `_refresh` and the rest without listing them. `*`, `?` and `,` are excluded
+  // because `GET /*` returns every index's mappings and settings while the
+  // identical `GET /_all` needs admin — two spellings of one request must not
+  // land in two tiers.
+  return (
+    segment !== undefined &&
+    segment.length > 0 &&
+    !segment.startsWith('_') &&
+    !/[*?,]/.test(segment)
+  )
+}
+
+const READ: StatementClassification = {
+  type: 'SELECT',
+  isDangerous: false,
+  keywords: [],
+  isComposite: false,
+  confidence: 'HIGH',
+}
 
 /**
  * Classify an Elasticsearch REST request into a SQL-like statement type and risk.
+ *
+ * **Reads are an allowlist and everything else is `DROP`.** An earlier revision
+ * of this function inverted that — every GET and HEAD became a read, with a
+ * deny-set for the dangerous ones — to stop `GET /_cat/indices` from requiring
+ * admin. Both designs are enumerations and both drift, but they drift at
+ * different rates: an allowlist drifts when Elasticsearch adds an endpoint a
+ * user wants, and that user is blocked and says so; a deny-set drifts when
+ * Elasticsearch adds an endpoint nobody thought about, and nobody finds out.
+ * The set below is a floor, not a proof that everything absent from it is
+ * dangerous. See ADR-0014.
+ *
+ * Matching is on routed segments and is position-aware. `_search` as a bare
+ * substring matched `POST /orders/_doc/_search`, where `_search` is a document
+ * id and the request writes.
  */
 export function classifyElasticsearchRequest(
   request: ElasticsearchRequest
 ): StatementClassification {
   const method = request.method.toUpperCase()
-  const path = request.apiPath.toLowerCase()
-
-  // 1. Special case: _bulk NDJSON parsing
-  if (path.includes('_bulk')) {
-    return classifyElasticsearchBulk(request.body ?? '')
-  }
-
-  // 2. Read operations
-  //
-  // The method decides, not the path. `_mapping`, `_settings` and `_alias` name
-  // a resource that can be read *or* rewritten, and matching the path on its own
-  // classified `PUT /users/_mapping` — a schema change — as a read that
-  // query-only could run.
-  //
-  // Every GET and HEAD is a read. Elasticsearch has no state-changing GET: the
-  // REST API spends POST, PUT and DELETE on every mutation it offers, and the
-  // read verbs are safe across the whole surface. This used to be an allowlist
-  // of read paths, which was the same enumeration mistake in the other
-  // direction — anything unlisted fell through to the destructive default, so
-  // `GET /_cat/indices`, `GET /_cluster/health` and a bare `GET /<index>`
-  // needed admin. That was invisible while only the query path used this
-  // classifier, because that path can only ever produce a search.
-  //
-  // What may be *read* is not this function's question. The blacklist decides
-  // which objects a caller may reach, and a request that cannot be attributed
-  // to an index is refused before it gets here.
-  //
-  // `_search` and `_count` also accept POST, because that is how a query with a
-  // body is sent.
+  const segments = routedSegments(request.rawPath).map((segment) => segment.toLowerCase())
+  const keywords = [method, `/${segments.join('/')}`]
+  const at = (index: number): string | undefined => segments[index]
+  const last = segments[segments.length - 1]
   const readMethod = method === 'GET' || method === 'HEAD'
-  const searchPath = path.includes('_search') || path.includes('_count')
+  const classify = (
+    type: StatementType,
+    isDangerous: boolean,
+    confidence: StatementClassification['confidence'] = 'HIGH'
+  ): StatementClassification => ({ type, isDangerous, keywords, isComposite: false, confidence })
 
-  if (readMethod || (searchPath && method === 'POST')) {
-    return {
-      type: 'SELECT',
-      isDangerous: false,
-      keywords: [method, path],
-      isComposite: false,
-      confidence: 'HIGH',
-    }
+  // Ordered, first match wins. Precedence is the point: written as independent
+  // clauses, a reader picks whichever they meet first and only one ordering
+  // fails closed.
+
+  // 1. Bulk, wherever it sits. Its own body decides, and an unreadable body is
+  //    the destructive tier — this used to return SELECT for an empty or
+  //    unparseable body, which made it a general-purpose downgrade oracle.
+  if (segments.includes('_bulk')) {
+    return { ...classifyElasticsearchBulk(request.body ?? ''), keywords }
   }
 
-  // 3. Write operations
-  if (path.includes('_update') || (method === 'POST' && path.includes('_doc'))) {
-    return {
-      type: 'UPDATE',
-      isDangerous: false,
-      keywords: [method, path],
-      isComposite: false,
-      confidence: 'HIGH',
-    }
+  // 2. Search and count, only where Elasticsearch routes them: unscoped, or
+  //    directly after an index. A third segment means the match is a document
+  //    id, not an endpoint.
+  if (
+    (last === '_search' || last === '_count') &&
+    segments.length <= 2 &&
+    (readMethod || method === 'POST')
+  ) {
+    return { ...READ, keywords }
   }
 
-  if (method === 'PUT' && (path.includes('_doc') || path.includes('_create'))) {
-    return {
-      type: 'INSERT',
-      isDangerous: false,
-      keywords: [method, path],
-      isComposite: false,
-      confidence: 'HIGH',
-    }
+  // 3. Reading one document. The id is opaque and is never matched against
+  //    anything.
+  if (readMethod && segments.length === 3 && DOCUMENT_ENDPOINTS.has(at(1)!)) {
+    return { ...READ, keywords }
   }
 
-  // 4. Destructive operations
-  //
-  // Only a DELETE that names a document is the DELETE tier. `DELETE /users`
-  // removes the whole index, `DELETE /logs-*` removes every index the pattern
-  // matches, and `DELETE /_all` removes the cluster's contents — all of them
-  // were the same `DELETE` as removing one document, so data-admin could drop
-  // an index while the SQL equivalent, `DROP TABLE`, has always needed admin.
-  // Anything this cannot prove is document-scoped falls through to DROP, which
-  // is the fail-closed direction: the cost of being wrong is a refusal a user
-  // can escalate, rather than an index nobody can get back.
-  if (method === 'DELETE') {
-    if (ES_DOCUMENT_PATH.test(path)) {
-      return {
-        type: 'DELETE',
-        isDangerous: true,
-        keywords: [method, path],
-        isComposite: false,
-        confidence: 'HIGH',
-      }
-    }
-
-    return {
-      type: 'DROP',
-      isDangerous: true,
-      keywords: [method, path],
-      isComposite: false,
-      confidence: 'HIGH',
-    }
+  // 4. Reading an index's schema or aliases.
+  if (
+    readMethod &&
+    segments.length >= 2 &&
+    segments.length <= 3 &&
+    ['_mapping', '_mappings', '_settings', '_alias', '_aliases'].includes(at(1) ?? '') &&
+    isBareIndexSegment(at(0))
+  ) {
+    return { ...READ, keywords }
   }
 
-  // 5. Schema/Cluster operations (default to admin)
-  return {
-    type: 'DROP',
-    isDangerous: true,
-    keywords: [method, path],
-    isComposite: false,
-    confidence: 'LOW',
+  // 5. Cluster and index listings that carry no document content.
+  if (readMethod && at(0) === '_cat' && !CAT_WITHHELD.has(at(1) ?? '')) {
+    return { ...READ, keywords }
   }
+  if (readMethod && at(0) === '_cluster' && at(1) === 'health' && segments.length <= 3) {
+    return { ...READ, keywords }
+  }
+
+  // 6. A bare index: metadata and existence. This discloses field names,
+  //    including blacklisted ones, and their aliases; values stay hidden and
+  //    `dbcli schema` already exposes the same names, so it is accepted rather
+  //    than overlooked.
+  if (readMethod && segments.length === 1 && isBareIndexSegment(at(0))) {
+    return { ...READ, keywords }
+  }
+
+  // 7. Writes to one document.
+  if (method === 'POST' && at(1) === '_update' && segments.length === 3) {
+    return classify('UPDATE', false)
+  }
+  if (method === 'POST' && at(1) === '_doc' && segments.length <= 3) {
+    return classify('UPDATE', false)
+  }
+  if (method === 'PUT' && segments.length === 3 && DOCUMENT_ENDPOINTS.has(at(1)!)) {
+    return classify('INSERT', false)
+  }
+  if (method === 'DELETE' && segments.length === 3 && at(1) === '_doc') {
+    return classify('DELETE', true)
+  }
+
+  // 8. Everything else. `DELETE /users` removes an index, `DELETE /logs-*`
+  //    removes every index a pattern matches, `_delete_by_query` empties one,
+  //    `PUT /users/_mapping` rewrites a schema — and an endpoint none of us has
+  //    heard of lands here too, which is the direction this function is meant
+  //    to fail in. A refusal can be escalated; an index cannot be recovered.
+  return classify('DROP', true, method === 'DELETE' ? 'HIGH' : 'LOW')
 }
 
 /**
@@ -142,8 +191,14 @@ export function classifyElasticsearchRequest(
  */
 function classifyElasticsearchBulk(body: string): StatementClassification {
   const lines = body.split('\n').filter((l) => l.trim().length > 0)
-  let highestType: StatementType = 'SELECT'
-  let isDangerous = false
+  // Nothing readable means nothing proven. This returned SELECT for an empty
+  // body, an unparseable one, or any body whose first key was not a known op —
+  // and because the bulk branch is selected by the path alone, that made it a
+  // general-purpose downgrade: `DELETE /orders?filter_path=_bulk` classified as
+  // a read.
+  let highestType: StatementType = 'DROP'
+  let isDangerous = true
+  let recognised = false
 
   for (const line of lines) {
     try {
@@ -151,15 +206,24 @@ function classifyElasticsearchBulk(body: string): StatementClassification {
       const op = Object.keys(action)[0]
 
       if (op === 'delete') {
+        recognised = true
         highestType = 'DELETE'
         isDangerous = true
         break // DELETE is highest for DML
       }
-      if (op === 'update' && highestType !== 'DELETE') {
-        highestType = 'UPDATE'
+      if (op === 'update') {
+        recognised = true
+        if (highestType !== 'DELETE') {
+          highestType = 'UPDATE'
+          isDangerous = false
+        }
       }
-      if ((op === 'index' || op === 'create') && !['DELETE', 'UPDATE'].includes(highestType)) {
-        highestType = 'INSERT'
+      if (op === 'index' || op === 'create') {
+        recognised = true
+        if (!['DELETE', 'UPDATE'].includes(highestType)) {
+          highestType = 'INSERT'
+          isDangerous = false
+        }
       }
     } catch {
       // Ignore invalid JSON lines in bulk (usually data lines)
@@ -167,11 +231,11 @@ function classifyElasticsearchBulk(body: string): StatementClassification {
   }
 
   return {
-    type: highestType,
-    isDangerous,
+    type: recognised ? highestType : 'DROP',
+    isDangerous: recognised ? isDangerous : true,
     keywords: ['BULK'],
     isComposite: true,
-    confidence: 'HIGH',
+    confidence: recognised ? 'HIGH' : 'LOW',
   }
 }
 

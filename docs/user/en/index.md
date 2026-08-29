@@ -907,10 +907,32 @@ labeled as such; they are not dbcli verification verdicts.
   identifiers. Output must stay inside the current workspace and will never overwrite
   an existing file.
 - `dbcli evidence validate --file <path> [--format json|markdown]`
-  — validates the SHA-256 integrity digest and checks whether the referenced source
-  evidence is still available. A retained pack whose audit/artifact has since rotated,
-  been cleared, or disappeared returns `references: "source-expired"` and exits `1`;
-  it remains renderable.
+  — names the pack's format, then validates the SHA-256 integrity digest and checks
+  whether the referenced source evidence is still available. A retained pack whose
+  audit/artifact has since rotated, been cleared, or disappeared returns
+  `references: "source-expired"` and exits `1`; it remains renderable.
+
+#### Artifact format versions
+
+Packs and receipts carry their own `version`, which is **not** the dbcli package
+version — see [ADR-0013](https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
+The current format is `version: 2`; dbcli 3.0.0 and earlier wrote `version: 1` in two
+mutually incompatible layouts.
+
+`validate --format json` reports one of three answers in `status`, and only the first
+means the pack can be relied on:
+
+| `status` | `trust` | Meaning | Exit |
+| --- | --- | --- | --- |
+| `current-valid` | `current-valid` | Current format, digest verified, references resolvable. | `0` |
+| `current-references-expired` | `current-valid` | Current format and digest, but a referenced source is gone. | `1` |
+| `recognized-legacy` | `not-current-valid` | A pack written by an older dbcli. `legacyFormat` and `producedBy` say which; `integrity` reports whether that format's own digest still verifies. References are **not** evaluated. | `1` |
+| `unsupported` | `not-current-valid` | The version is unknown, or the version and the structure disagree. | `1` |
+
+Legacy packs and receipts are readable and integrity-checkable but are never treated as
+current-valid, and there is no migration: a pack's identity is derived from its digest,
+so rewriting one would mint a new artifact wearing an old one's provenance. Compose a
+new pack from current evidence instead.
 - `dbcli evidence render --file <path> [--format json|markdown]`
   — validates the active blacklist policy and renders a valid pack without rereading
   the original references, so it remains available for historical review after source

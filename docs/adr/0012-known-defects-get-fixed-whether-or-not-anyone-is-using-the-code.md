@@ -2,7 +2,14 @@
 status: accepted
 date: 2026-08-16
 supersedes: 0011
+amended_by: 0013
 ---
+
+> The versioning clause below — that the evidence-pack schema changes without a
+> version bump — is amended by
+> [ADR-0013](0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
+> The decision this record is about, that a known defect gets repaired
+> regardless of usage, is unchanged and still current.
 
 # Known defects get fixed whether or not anyone is using the code
 
@@ -70,7 +77,10 @@ they are tracked here.
   that is not "no one has hit it yet".
 - The evidence-pack schema changes without a version bump. Any pack written
   before this change fails validation, which is correct: its digest was computed
-  under rules that no longer hold.
+  under rules that no longer hold. **Amended by ADR-0013**: it should have
+  carried a new format version, so that an old pack fails as *old* rather than as
+  a digest mismatch. The format is now `version: 2` and pre-3.0.0 artifacts are
+  recognised rather than merely rejected.
 - ADR-0011 keeps its record of what the dogfood found. Only its decision clause
   is superseded.
 

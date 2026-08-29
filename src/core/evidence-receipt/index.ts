@@ -2,8 +2,30 @@ import { createHash, randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { isVerificationStatus, type VerificationStatus } from '@/core/verification'
+import {
+  classifyEvidenceReceiptArtifact,
+  describeEvidenceReceiptClassification,
+  EVIDENCE_RECEIPT_CURRENT_VERSION,
+  type EvidenceReceiptClassification,
+} from '@/core/evidence-receipt/legacy'
 
-export const EVIDENCE_RECEIPT_VERSION = 1 as const
+export {
+  classifyEvidenceReceiptArtifact,
+  describeEvidenceReceiptClassification,
+  EVIDENCE_RECEIPT_CURRENT_VERSION,
+  KNOWN_EVIDENCE_RECEIPT_VERSIONS,
+  type EvidenceReceiptClassification,
+  type EvidenceReceiptLegacyFormat,
+  type EvidenceReceiptLegacyIntegrity,
+} from '@/core/evidence-receipt/legacy'
+
+/**
+ * The artifact format version, which is not the package version.
+ *
+ * It went to 2 because v3.0.0 replaced the hashed `observation` with the stated
+ * one and left this constant at 1. See ADR-0013.
+ */
+export const EVIDENCE_RECEIPT_VERSION = EVIDENCE_RECEIPT_CURRENT_VERSION
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/
 const SAFE_TEXT = /^[A-Za-z0-9_.:@<>= -]+$/
@@ -72,6 +94,21 @@ export class EvidenceReceiptValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'EvidenceReceiptValidationError'
+  }
+}
+
+/**
+ * A receipt the reader recognises and refuses to treat as current. Distinct
+ * from a plain validation error so "this is old" never reads as "this is
+ * corrupt".
+ */
+export class EvidenceReceiptLegacyFormatError extends EvidenceReceiptValidationError {
+  constructor(
+    message: string,
+    readonly classification: EvidenceReceiptClassification
+  ) {
+    super(message)
+    this.name = 'EvidenceReceiptLegacyFormatError'
   }
 }
 
@@ -271,6 +308,18 @@ function parseContext(value: unknown): EvidenceReceipt['context'] {
 }
 
 export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
+  // Classify before validating: a legacy receipt fails the current structural
+  // rules because it is old, not because it is malformed.
+  const classification = classifyEvidenceReceiptArtifact(raw)
+  if (classification.format === 'legacy') {
+    throw new EvidenceReceiptLegacyFormatError(
+      describeEvidenceReceiptClassification(classification),
+      classification
+    )
+  }
+  if (classification.format === 'unsupported' && classification.reason !== 'not-an-object') {
+    throw new EvidenceReceiptValidationError(describeEvidenceReceiptClassification(classification))
+  }
   if (!record(raw)) throw new EvidenceReceiptValidationError('evidence receipt must be an object')
   exact(
     raw,
@@ -287,8 +336,6 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
     ],
     'evidence receipt'
   )
-  if (raw.version !== EVIDENCE_RECEIPT_VERSION)
-    throw new EvidenceReceiptValidationError('evidence receipt version must be 1')
   if (raw.operation !== 'assert' && raw.operation !== 'verify')
     throw new EvidenceReceiptValidationError('operation is invalid')
   const operation: EvidenceReceipt['operation'] = raw.operation

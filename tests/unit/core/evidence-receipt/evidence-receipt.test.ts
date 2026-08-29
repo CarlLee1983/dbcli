@@ -159,7 +159,7 @@ describe('evidence receipt', () => {
         ...receipt,
         observation: { kind: 'assert-verdict', fingerprint: `sha256:${'a'.repeat(64)}` },
       })
-    ).toThrow(/observation/)
+    ).toThrow(/structure belongs to another format/)
   })
 
   test('still rejects a verdict whose checks carry more than a pass bit', () => {

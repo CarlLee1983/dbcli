@@ -240,9 +240,14 @@ describe('the session runs under the configured tier', () => {
   })
 })
 
-describe('every request is recorded, executed or refused', () => {
+describe('every request that reaches the runner is recorded, executed or refused', () => {
   // The path wrote no audit entry at all, so an operator who was affected by
   // the bypass would have had nothing to find afterwards.
+  //
+  // The title is bounded on purpose. A block that fails `parseEsRequest` never
+  // reaches this function and is not audited: it produced no method, no path
+  // and no target, so there is no database operation to record — only
+  // keystrokes. That boundary is stated rather than papered over.
   interface Recorded {
     success: boolean
     target?: string
@@ -272,6 +277,22 @@ describe('every request is recorded, executed or refused', () => {
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/orders/_search' }, 'query-only', log)
     expect(log).toEqual([{ success: true, target: 'orders', tierOverride: undefined }])
+  })
+
+  // An entry naming neither the operation nor the object is not a record. Every
+  // `_`-leading path used to audit with no target at all.
+  test('a request naming no index is recorded against its routed path', async () => {
+    const log: Recorded[] = []
+    await withAudit({ method: 'GET', path: '/_cat/indices' }, 'query-only', log)
+    expect(log).toEqual([{ success: true, target: '/_cat/indices', tierOverride: undefined }])
+  })
+
+  test('a refused unscoped write is recorded against its routed path', async () => {
+    const log: Recorded[] = []
+    await expect(
+      withAudit({ method: 'POST', path: '/_reindex' }, 'query-only', log)
+    ).rejects.toThrow()
+    expect(log).toEqual([{ success: false, target: '/_reindex', tierOverride: 'db-write' }])
   })
 
   test('an executed write is recorded and overrides the tier to db-write', async () => {

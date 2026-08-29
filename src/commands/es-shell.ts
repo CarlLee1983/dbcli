@@ -205,10 +205,17 @@ export async function runEsRequest(
   // that rejected would replace a PermissionError with an audit error on the
   // failure path, and on the success path would report an executed mutation to
   // the operator as a failure while logging it as one.
+  // `extractIndexFromPath` returns undefined for every `_`-leading path, so
+  // `POST /_bulk`, `_msearch`, `_mget` and every `_cat` request audited with no
+  // target at all — and the entry carries no statement either, so a bulk write
+  // against the cluster produced a row naming neither the operation nor the
+  // object. The routed path is the object when no index can be named.
+  const auditTarget = index ?? routedPath
+
   const audit = async (success: boolean, error?: unknown): Promise<void> => {
     if (!options.audit) return
     try {
-      await options.audit({ success, error, target: index, tierOverride })
+      await options.audit({ success, error, target: auditTarget, tierOverride })
     } catch {
       // Nothing to do with it here: the request's outcome stands either way.
     }
@@ -315,6 +322,11 @@ export async function runEsRequest(
       }
     }
 
+    // A convenience default, not a control. `{"size": 100000}` is honoured
+    // because the cap is only injected when `size` is absent, and `from`,
+    // `search_after` and `scroll` are not bounded at all. What bounds disclosure
+    // on this path is the blacklist and the permission tier; this only stops an
+    // unqualified `_search` from filling a terminal.
     let body = req.body
     if (
       req.path.includes('_search') &&

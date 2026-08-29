@@ -99,9 +99,15 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
   'commands/es-shell.ts': {
     calls: 1,
     gate:
-      'runEsRequest() — the resolved path is checked segment by segment against the index ' +
-      'blacklist, unscoped non-metadata paths are refused, index names in the request body ' +
-      'are checked, and blacklisted fields are removed from the response',
+      'runEsRequest() — enforceElasticsearchPermission() first, using the same classifier as ' +
+      'the query path; then, when a blacklist is configured, the resolved path is checked ' +
+      'segment by segment against the index blacklist, unscoped non-metadata paths are ' +
+      'refused and index names in the request body are checked; blacklisted fields are ' +
+      'removed from the response and every request is audited, executed or refused. ' +
+      'This entry named only the blacklist gates while every comparable entry named a ' +
+      'permission gate — the omission was visible here for the life of the defect and ' +
+      'nobody read it, which is an argument about the shape of this field, not about ' +
+      'whoever missed it.',
   },
   'commands/q-mongo.ts': {
     calls: 1,

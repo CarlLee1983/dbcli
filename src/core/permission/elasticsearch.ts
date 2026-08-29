@@ -43,24 +43,30 @@ export function classifyElasticsearchRequest(
 
   // 2. Read operations
   //
-  // The method decides, not the path alone. `_mapping`, `_settings` and
-  // `_alias` name a resource that can be read *or* rewritten, and matching the
-  // path on its own classified `PUT /users/_mapping` — a schema change — as a
-  // read that query-only could run. A read is a read method against one of
-  // these; `_search` and `_count` also accept POST, because that is how a query
-  // with a body is sent.
+  // The method decides, not the path. `_mapping`, `_settings` and `_alias` name
+  // a resource that can be read *or* rewritten, and matching the path on its own
+  // classified `PUT /users/_mapping` — a schema change — as a read that
+  // query-only could run.
+  //
+  // Every GET and HEAD is a read. Elasticsearch has no state-changing GET: the
+  // REST API spends POST, PUT and DELETE on every mutation it offers, and the
+  // read verbs are safe across the whole surface. This used to be an allowlist
+  // of read paths, which was the same enumeration mistake in the other
+  // direction — anything unlisted fell through to the destructive default, so
+  // `GET /_cat/indices`, `GET /_cluster/health` and a bare `GET /<index>`
+  // needed admin. That was invisible while only the query path used this
+  // classifier, because that path can only ever produce a search.
+  //
+  // What may be *read* is not this function's question. The blacklist decides
+  // which objects a caller may reach, and a request that cannot be attributed
+  // to an index is refused before it gets here.
+  //
+  // `_search` and `_count` also accept POST, because that is how a query with a
+  // body is sent.
   const readMethod = method === 'GET' || method === 'HEAD'
   const searchPath = path.includes('_search') || path.includes('_count')
 
-  if (
-    (searchPath && (readMethod || method === 'POST')) ||
-    (readMethod &&
-      (path.includes('_mapping') ||
-        path.includes('_settings') ||
-        path.includes('_alias') ||
-        path.includes('_doc') ||
-        path.includes('_source')))
-  ) {
+  if (readMethod || (searchPath && method === 'POST')) {
     return {
       type: 'SELECT',
       isDangerous: false,

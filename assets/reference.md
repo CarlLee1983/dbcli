@@ -2637,7 +2637,8 @@ Inside the shell:
 > not as the answer. Tier one (the y/N on ordinary writes) is deliberately not wired here — every line
 > is typed by a person. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a
 > tier-two statement is refused and the remaining lines still run. Redis, MongoDB and
-> Elasticsearch shells are unaffected.
+> Elasticsearch shells do not use the write gate; their writes are bounded by the
+> connection's permission tier instead.
 >
 > dbcli **subcommands** typed in the shell (`query "..."`, `delete ...`) run as separate
 > processes with no stdin, so they cannot ask anything: a tier-two statement there is
@@ -3662,7 +3663,13 @@ GET /orders/_search
 ```
 
 - Enter a request line `<METHOD> /<path>`, then an optional multi-line JSON body; a **blank line** submits the block. Responses render as pretty-printed JSON.
-- Read-focused: index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
+- **The connection's permission tier applies, as it does to `dbcli query`.** The request is classified by method and path through the same classifier the query path uses: `GET` and `HEAD` are reads; `PUT`/`POST` to a document path are writes; a `DELETE` naming one document is the delete tier; anything that cannot be proven document-scoped — `DELETE /<index>`, `DELETE /_all`, `POST /<index>/_delete_by_query`, `PUT /<index>/_mapping`, `PUT /<index>/_settings`, `POST /_aliases`, `POST /_reindex` — requires `admin`. A refusal names the tier that would work and the request is never sent.
+- Every request is written to the audit log whether it executed or was refused, tiered by what the request would do rather than by the command that issued it.
+- Index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
+
+> **Before v3.0.1 this path applied no permission check at all.** A `query-only`
+> Elasticsearch connection could delete documents, drop an index or rewrite a mapping
+> through the shell, and nothing was recorded. See the 3.0.1 entry in `CHANGELOG.md`.
 
 ### Doctor and diagnostics
 

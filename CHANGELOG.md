@@ -5,6 +5,22 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission
+
+**建議所有把 Elasticsearch 連線交給 AI agent 操作的使用者升級。** `dbcli shell` 連到 Elasticsearch 時，完全沒有檢查連線設定的 permission 等級就把請求送到叢集：`shell.ts` 在到達 SQL 與 Redis 共用的那道閘門之前就分支到 `es-shell.ts`。因此 `permission: query-only` 的連線可以送出 `POST /<index>/_delete_by_query` 清空索引、`DELETE /<index>` 刪掉索引、`PUT /<index>/_mapping` 改寫 schema —— 同樣這些請求走 `dbcli query` 一律會被拒絕。這條路徑也不寫任何 audit 紀錄，所以受影響的人事後無從查證發生過什麼。
+
+它可以腳本化：shell 用管線餵入的 stdin 驅動與互動輸入相同的迴圈，所以一個 agent 用單一非互動指令就能做到上述任何一項。
+
+影響範圍是所有 Elasticsearch 連線，`1.22`（ES shell 首次出現）起至 `3.0.0` 止。SQL、Redis、MongoDB 的 shell 不受影響 —— 它們走的是有閘門的那一條分支。沒有任何生產事故的紀錄，但這是從缺席推論出來的，而這條路徑本來就不寫 audit，受影響的操作者本來就無從發現。
+
+### Fixed
+
+- **BREAKING（對 `query-only` 與 `read-write` 的 Elasticsearch shell 使用者而言）：ES shell 現在套用連線的 permission 等級。** 請求由 `dbcli query` 使用的同一個分類器判定 —— shell 交給它的是真正的 method 與 path，而 `query` 只生得出一個合成的 `_search`。無法證明是文件層級的操作一律落到需要 `admin` 的那一級：`DELETE /<index>`、`DELETE /_all`、`_delete_by_query`、`PUT /_mapping`、`PUT /_settings`、`POST /_aliases`、`POST /_reindex`。拒絕訊息會指出可行的等級，而且請求不會送出。先前能在 `query-only` 下跑這些請求的人，現在會被擋。
+
+- **ES shell 的每個請求都寫入 audit，執行或被拒都寫。** side-effect tier 取自該請求的分類結果而非發起它的命令 —— 用命令的能力表來標記是一個已知缺陷，同一個破壞性操作曾因為經由不同命令而被記成三種不同的 tier。
+
+- **Elasticsearch 的讀取判定不再是路徑白名單。** 原本只認 `_search`、`_count`、`_mapping`、`_settings`、`_alias`、`_doc`、`_source`，其餘一律落到需要 `admin` 的預設，所以 `GET /_cat/indices`（shell 開場橫幅叫使用者去試的那一行）、`GET /_cluster/health`、`GET /<index>`、`HEAD /<index>` 全都要 admin。這在只有 `query` 使用這個分類器的時候看不見，因為那條路徑只送得出搜尋。現在 `GET` 與 `HEAD` 一律判為讀取 —— Elasticsearch 的 REST API 沒有會變更狀態的 GET，而「可以讀到哪些物件」是黑名單的問題，不是這個函式的問題。這個放寬只移動 `GET`／`HEAD`，沒有任何寫入操作因此變成被允許，`query` 的行為完全未變，兩者都有測試釘住。
+
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 
 The evidence subsystem shipped in v1.53.0 and, until this week, nobody had composed a pack outside its own tests. The first real use — a `verify safe-backfill --after-write` against a live PostgreSQL — came back `not_verified` on data that was correct, and the audit that followed found three more defects of the same kind: an evidence pack whose digest covered a random UUID, so the same claims never produced the same pack twice; a receipt "fingerprint" that was an unsalted SHA-256 over eight possible values; and a blacklist comparison with no identifier boundaries, so a protected column named `id` refused any claim containing the word "identifier". Fixing them changes both published formats, which is what makes this a major release: **packs written by 2.x will fail validation under 3.0.0, and `observation.fingerprint` no longer exists.** The reversal that authorized the repairs — known defects get fixed whether or not anyone is using the code — is recorded in `docs/adr/0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md`, superseding ADR 0011.

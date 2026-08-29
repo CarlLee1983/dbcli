@@ -296,7 +296,7 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 
 **逃生路徑寫在語句裡，不是寫在旗標上。** 要在無人看管下執行全表寫入，就把意圖寫進 SQL——補上 `WHERE 1=1` 或 `LIMIT`。這是刻意的設計：對已經有 WHERE 的語句再接一個 `WHERE 1=1` 是語法錯誤，所以「乾脆全部都加上去」會立刻壞掉，養不成習慣；旗標的性質剛好相反。DROP 與 TRUNCATE 沒有子句可加：能不能執行由連線的 `permission` 層級決定，而打字確認仍然必須由人完成。
 
-**`dbcli shell` 只接第二級，不接第一級。** shell 裡的每一句都是人手打的，逐句 y/N 會變成反射動作；但沒有 WHERE 的 DELETE、DROP、TRUNCATE 一樣要打出資料表名稱。打錯只會印出「已取消」並回到提示符——連線、緩衝區與歷史都還在，行程不會結束。按 Ctrl-C 則是收回這個提問：什麼都不會執行，接下來打的那一行會被當成語句，而不是被吃成確認答案。以管線餵進來的輸入（`dbcli shell < script.sql`）沒有人能回答，該句會被拒絕，其餘的行照跑。Redis、MongoDB 與 Elasticsearch 的 shell 不受影響，寫入仍由連線 permission 把關。在 shell 裡以子指令形式打的 dbcli 指令（`query "..."`、`\delete ...`）跑在沒有 stdin 的獨立行程裡，沒有辦法提問，所以第二級語句會被拒絕，訊息會請你回到 `dbcli>` 提示符直接打。
+**`dbcli shell` 只接第二級，不接第一級。** shell 裡的每一句都是人手打的，逐句 y/N 會變成反射動作；但沒有 WHERE 的 DELETE、DROP、TRUNCATE 一樣要打出資料表名稱。打錯只會印出「已取消」並回到提示符——連線、緩衝區與歷史都還在，行程不會結束。按 Ctrl-C 則是收回這個提問：什麼都不會執行，接下來打的那一行會被當成語句，而不是被吃成確認答案。以管線餵進來的輸入（`dbcli shell < script.sql`）沒有人能回答，該句會被拒絕，其餘的行照跑。Redis、MongoDB 與 Elasticsearch 的 shell 不走寫入閘門，改由連線的 permission 等級把關。**Elasticsearch 這一道在 3.0.1 之前並不存在** —— ES shell 完全沒有 permission 檢查就送到叢集，`query-only` 連線可以刪除文件、刪掉索引或改寫 mapping，而且什麼都沒被記錄。現在它用與 `dbcli query` 相同的分類器判斷每個請求，拒絕該等級不允許的操作，並且不論執行或被拒都寫入 audit。在 shell 裡以子指令形式打的 dbcli 指令（`query "..."`、`\delete ...`）跑在沒有 stdin 的獨立行程裡，沒有辦法提問，所以第二級語句會被拒絕，訊息會請你回到 `dbcli>` 提示符直接打。
 
 **名稱與 SQL 關鍵字相同的子指令需要 `\` 前綴。** `delete users --where id=1` 會被當成 SQL——shell 就是拿來打 SQL 的，`DELETE FROM users WHERE …` 一定要能照打——所以它會等分號而不是執行子指令。要呼叫子指令請打 `\delete users --where id=1`。`insert`、`update`、`explain` 同理——與 SQL 關鍵字同名的子指令就這四個；前綴對每一個子指令都有效，所以要記的是一條規則而不是一張清單。語句還在累積時，`.quit` 與 `.clear` 依然有效、Ctrl-C 可取消——它們原本會被吃進緩衝區，讓 shell 看起來像當掉。
 

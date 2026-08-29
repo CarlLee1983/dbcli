@@ -1,5 +1,19 @@
 import { test, expect } from 'bun:test'
-import { runEsRequest } from '@/commands/es-shell'
+import { runEsRequest, type EsRequest } from '@/commands/es-shell'
+
+/**
+ * These tests are about the blacklist and the search size cap, so they run at
+ * `admin` — the tier gate is exercised in `es-shell-permission.test.ts`, and
+ * leaving it to refuse things here would mean every assertion below passed for
+ * the wrong reason.
+ */
+const run = (
+  req: EsRequest,
+  adapter: unknown,
+  blacklistTables: string[],
+  blacklistColumns: Record<string, string[]> = {}
+): Promise<unknown> =>
+  runEsRequest(req, adapter as never, blacklistTables, blacklistColumns, { permission: 'admin' })
 
 function fakeAdapter(captured: { method?: string; path?: string; body?: unknown }) {
   return {
@@ -15,16 +29,14 @@ function fakeAdapter(captured: { method?: string; path?: string; body?: unknown 
 test('blocks blacklisted index', async () => {
   const captured: Record<string, unknown> = {}
   await expect(
-    runEsRequest({ method: 'GET', path: '/secrets/_search' }, fakeAdapter(captured) as never, [
-      'secrets',
-    ])
+    run({ method: 'GET', path: '/secrets/_search' }, fakeAdapter(captured) as never, ['secrets'])
   ).rejects.toThrow('blacklist')
   expect(captured.path).toBeUndefined()
 })
 
 test('injects size cap into a _search body lacking size', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest(
+  await run(
     { method: 'POST', path: '/users/_search', body: { query: { match_all: {} } } },
     fakeAdapter(captured) as never,
     []
@@ -34,7 +46,7 @@ test('injects size cap into a _search body lacking size', async () => {
 
 test('passes non-search requests through unchanged', async () => {
   const captured: Record<string, unknown> = {}
-  const res = await runEsRequest(
+  const res = await run(
     { method: 'GET', path: '/_cat/indices' },
     fakeAdapter(captured) as never,
     []
@@ -63,7 +75,7 @@ for (const path of unscopedDocumentPaths) {
   test(`refuses ${path} when a blacklist exists`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -72,14 +84,14 @@ for (const path of unscopedDocumentPaths) {
 test('still allows cluster metadata endpoints', async () => {
   for (const path of ['/_cat/indices', '/_cluster/health', '/_nodes']) {
     const captured: Record<string, unknown> = {}
-    await runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+    await run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     expect(captured.path).toBe(path)
   }
 })
 
 test('allows an unscoped path when nothing is blacklisted', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest({ method: 'GET', path: '/_search' }, fakeAdapter(captured) as never, [])
+  await run({ method: 'GET', path: '/_search' }, fakeAdapter(captured) as never, [])
   expect(captured.path).toBe('/_search')
 })
 
@@ -92,7 +104,7 @@ test('blocks a comma list, a wildcard and an encoded wildcard', async () => {
   ]) {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   }
@@ -100,9 +112,7 @@ test('blocks a comma list, a wildcard and an encoded wildcard', async () => {
 
 test('still allows an unrelated index expression', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest({ method: 'GET', path: '/logs-*/_search' }, fakeAdapter(captured) as never, [
-    'secrets',
-  ])
+  await run({ method: 'GET', path: '/logs-*/_search' }, fakeAdapter(captured) as never, ['secrets'])
   expect(captured.path).toBe('/logs-*/_search')
 })
 
@@ -122,7 +132,7 @@ for (const path of encodedPaths) {
   test(`refuses ${path} once the path is resolved`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -146,7 +156,7 @@ for (const path of launderedPaths) {
   test(`refuses ${path}`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -166,7 +176,7 @@ for (const [path, body] of bodiesNamingSecrets) {
   test(`refuses a body naming a blacklisted index on ${path}`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'POST', path, body }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'POST', path, body }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -174,7 +184,7 @@ for (const [path, body] of bodiesNamingSecrets) {
 
 test('still allows a body naming only permitted indices', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest(
+  await run(
     { method: 'POST', path: '/orders/_mget', body: { docs: [{ _index: 'orders', _id: '1' }] } },
     fakeAdapter(captured) as never,
     ['secrets']
@@ -192,7 +202,7 @@ test('redacts blacklisted fields from the response', async () => {
       hits: { hits: [{ _index: 'users', _source: { id: 1, password_hash: 'SECRET' } }] },
     }),
   }
-  const res = await runEsRequest({ method: 'GET', path: '/users/_search' }, adapter as never, [], {
+  const res = await run({ method: 'GET', path: '/users/_search' }, adapter as never, [], {
     users: ['password_hash'],
   })
 
@@ -203,12 +213,7 @@ test('redacts blacklisted fields from the response', async () => {
 
 test('leaves the response alone when no column rules exist', async () => {
   const adapter = { request: async () => ({ hits: { hits: [{ _source: { a: 1 } }] } }) }
-  const res = await runEsRequest(
-    { method: 'GET', path: '/users/_search' },
-    adapter as never,
-    [],
-    {}
-  )
+  const res = await run({ method: 'GET', path: '/users/_search' }, adapter as never, [], {})
   expect(JSON.stringify(res)).toContain('"a":1')
 })
 
@@ -228,14 +233,9 @@ for (const body of requestsNamingAProtectedField) {
   test(`refuses a request naming a protected field: ${JSON.stringify(body).slice(0, 40)}`, async () => {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest(
-        { method: 'POST', path: '/users/_search', body },
-        fakeAdapter(captured) as never,
-        [],
-        {
-          users: ['password'],
-        }
-      )
+      run({ method: 'POST', path: '/users/_search', body }, fakeAdapter(captured) as never, [], {
+        users: ['password'],
+      })
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   })
@@ -243,7 +243,7 @@ for (const body of requestsNamingAProtectedField) {
 
 test('still allows a request that names no protected field', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest(
+  await run(
     { method: 'POST', path: '/users/_search', body: { query: { match_all: {} } } },
     fakeAdapter(captured) as never,
     [],
@@ -260,11 +260,9 @@ test('refuses an array-valued index naming a blacklisted index', async () => {
   ]) {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest(
-        { method: 'POST', path: '/public/_search', body },
-        fakeAdapter(captured) as never,
-        ['secrets']
-      )
+      run({ method: 'POST', path: '/public/_search', body }, fakeAdapter(captured) as never, [
+        'secrets',
+      ])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   }
@@ -274,7 +272,7 @@ test('refuses a data-stream backing index and a rollover index', async () => {
   for (const path of ['/.ds-secrets-2026.08.05-000001/_search', '/secrets-000001/_search']) {
     const captured: Record<string, unknown> = {}
     await expect(
-      runEsRequest({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
+      run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
     ).rejects.toThrow(/blacklist/i)
     expect(captured.path).toBeUndefined()
   }
@@ -282,10 +280,8 @@ test('refuses a data-stream backing index and a rollover index', async () => {
 
 test('does not refuse an unrelated index that merely shares a prefix', async () => {
   const captured: Record<string, unknown> = {}
-  await runEsRequest(
-    { method: 'GET', path: '/secrets-archive/_search' },
-    fakeAdapter(captured) as never,
-    ['secrets']
-  )
+  await run({ method: 'GET', path: '/secrets-archive/_search' }, fakeAdapter(captured) as never, [
+    'secrets',
+  ])
   expect(captured.path).toBe('/secrets-archive/_search')
 })

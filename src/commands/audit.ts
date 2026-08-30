@@ -118,14 +118,31 @@ function parseTailN(raw: unknown): number {
   return requested
 }
 
-type BriefEntry = Pick<AuditEntry, 'ts' | 'command' | 'target' | 'success'>
+type BriefEntry = Pick<
+  AuditEntry,
+  'ts' | 'command' | 'target' | 'success' | 'side_effect_tier' | 'redacted_sql'
+> & { phase?: unknown }
 
+/**
+ * `--for-agent` 預設走這裡，所以它決定的是 agent 讀到什麼。
+ *
+ * 原本只留 ts / command / target / success，於是 `DELETE /orders` 與
+ * `PUT /orders/_mapping` 在 agent 眼中是同一列——「一列 audit 要說得出對誰做了
+ * 什麼」這件事只在 `audit show --no-brief` 修好了，在預設路徑上沒有。同理，
+ * 少了 phase 就分不出「送出前」與「回應後」那兩列，量的統計會整個翻倍。
+ *
+ * brief 的目的是省 token，不是省掉辨識操作所需的欄位。
+ */
 function briefify(entry: AuditEntry): BriefEntry {
+  const phase = (entry.metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
   return {
     ts: entry.ts,
     command: entry.command,
     target: entry.target,
     success: entry.success,
+    side_effect_tier: entry.side_effect_tier,
+    redacted_sql: entry.redacted_sql,
+    ...(phase !== undefined && { phase }),
   }
 }
 
@@ -143,14 +160,21 @@ function shortId(id: string | undefined): string {
  * 呈現層跟能被偽造的儲存層一樣糟。
  */
 function sanitizeCell(cell: string): string {
-  return cell.replace(/[\u0000-\u001f\u007f]/g, (char) => {
-    const escapes: Record<string, string> = {
-      '\n': '\\n',
-      '\r': '\\r',
-      '\t': '\\t',
+  // C0 與 DEL 不夠。U+202E 之類的雙向控制字元會讓該 cell 之後整段以右到左
+  // 顯示，tier 與 success 欄因此可被視覺調換；U+2028 / U+0085 在許多終端機與
+  // 編輯器裡同樣算換行；零寬字元則讓兩個看起來相同的 target 其實不同。
+  // 這些都不是「顯示得不好看」，是讓讀者讀到與發生過的事不一樣的東西。
+  return cell.replace(
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g,
+    (char) => {
+      const escapes: Record<string, string> = {
+        '\n': '\\n',
+        '\r': '\\r',
+        '\t': '\\t',
+      }
+      return escapes[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
     }
-    return escapes[char] ?? `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`
-  })
+  )
 }
 
 function renderTable(rawRows: string[][], headers: string[]): string {
@@ -170,11 +194,14 @@ function renderTable(rawRows: string[][], headers: string[]): string {
 }
 
 function renderTailTable(entries: AuditEntry[]): string {
-  const headers = ['ts', 'command', 'target', 'tier', 'success', 'id', 'recovery_ref']
+  // `statement` 在表格裡：沒有它，四個不同的破壞性操作在 `audit tail` 上是
+  // 四列一模一樣的紀錄。
+  const headers = ['ts', 'command', 'target', 'statement', 'tier', 'success', 'id', 'recovery_ref']
   const rows = entries.map((e) => [
     e.ts,
     e.command,
     e.target,
+    e.redacted_sql ?? MISSING_PLACEHOLDER,
     e.side_effect_tier,
     String(e.success),
     shortId(e.id),
@@ -199,12 +226,18 @@ function renderTailAllTable(envelopes: Array<{ connection: string; entry: AuditE
 }
 
 // ── show helpers ──────────────────────────────────────────────────────────
-type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'>
+// `metadata` 不整個剝掉：`es_shell_phase` 是分辨 attempt 與 outcome 的唯一依據。
+type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'> & {
+  metadata?: { es_shell_phase?: unknown }
+}
 
 function briefifyShow(entry: AuditEntry): ShowEntry {
+  // `metadata` 整個剝掉會連 `es_shell_phase` 一起丟——那是分辨 attempt 與
+  // outcome 的唯一依據，留著。
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { metadata, redacted_query, ...rest } = entry
-  return rest
+  const phase = (metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
+  return phase === undefined ? rest : { ...rest, metadata: { es_shell_phase: phase } }
 }
 
 // Accept Partial<AuditEntry> so brief mode (which strips metadata + redacted_query)

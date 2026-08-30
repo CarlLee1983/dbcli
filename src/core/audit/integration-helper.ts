@@ -1,7 +1,7 @@
 /**
  * AuditIntegrationHelper — centralized entry point for wiring audit logs into commands.
  */
-import { AuditLogger } from './logger'
+import { AuditLogger, type AuditWriteResult } from './logger'
 import { SessionIdService } from './session-id'
 import { resolveConfigStoragePath } from '../config-binding'
 import { getGlobalConnectionName } from '../config'
@@ -99,6 +99,24 @@ export async function writeAuditEntry(
   options: { config?: string; [key: string]: unknown },
   outcome: AuditOutcome
 ): Promise<string | null> {
+  const result = await writeAuditEntryResult(config, commandName, options, outcome)
+  return 'success' in result ? result.id : null
+}
+
+/**
+ * 同 `writeAuditEntry`，但回傳完整的 `AuditWriteResult`。
+ *
+ * `writeAuditEntry` 把「audit 關閉」與「audit 寫失敗」一起收斂成 `null`，
+ * 於是想要 fail-closed 的呼叫端分不出這兩件事——而它們的正確反應完全相反：
+ * 關閉是使用者的選擇，寫失敗是控制失效。`config.audit.strict` 要能成立，
+ * 這個區別必須留到呼叫端手上。
+ */
+export async function writeAuditEntryResult(
+  config: DbcliConfig,
+  commandName: string,
+  options: { config?: string; [key: string]: unknown },
+  outcome: AuditOutcome
+): Promise<AuditWriteResult> {
   try {
     const connectionName =
       (typeof options.connectionName === 'string' && options.connectionName) ||
@@ -133,7 +151,15 @@ export async function writeAuditEntry(
       target,
       success: outcome.success,
       redacted_query: redactArgv(process.argv),
-      ...(outcome.sql && { redacted_sql: redactSql(outcome.sql) }),
+      // `redactSql` 是 SQL 字面值遮罩：它會把數字換成 `0`、吃掉引號之間的東西。
+      // 套在 Elasticsearch 的 `<METHOD> <path>` 上會吃掉操作對象本身——
+      // `DELETE /orders/_doc/12345` 變成 `DELETE /orders/_doc/0`，
+      // `POST /logs-2026.08.30/_delete_by_query` 變成 `POST /logs-0.0/...`。
+      // ES 的 statement 是路徑不是語句，改用一般的敏感字串遮罩。
+      ...(outcome.sql && {
+        redacted_sql:
+          engine === 'elasticsearch' ? redactSensitive(outcome.sql) : redactSql(outcome.sql),
+      }),
       ...(errorMessage && { error: errorMessage }),
       ...(outcome.recovery_ref && { recovery_ref: outcome.recovery_ref }),
       // The resolved runtime identity is authoritative.  Keep it in every
@@ -146,13 +172,13 @@ export async function writeAuditEntry(
       },
     }
 
-    const result = await logger.write(entry)
-    // Phase 25 D-K / L5: 'success' in result discriminator — only the success
-    // variant of AuditWriteResult exposes the entry id.
-    return 'success' in result ? result.id : null
-  } catch {
+    return await logger.write(entry)
+  } catch (error) {
     // D6: Never throw from audit integration.
     // Logger already prints to stderr once if write fails.
-    return null
+    return {
+      skipped: 'write-failed',
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }

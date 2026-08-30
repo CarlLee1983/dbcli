@@ -7,9 +7,10 @@ import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target
 import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
+  routedPathname,
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
-import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { writeAuditEntryResult } from '@/core/audit/integration-helper'
 
 export interface EsRequest {
   method: string
@@ -184,7 +185,30 @@ export interface EsShellAuditSink {
      * depending on which command reached it.
      */
     tierOverride?: 'db-write'
-  }): Promise<void | string | null>
+  }): Promise<AuditSinkResult>
+}
+
+/**
+ * sink 回報寫入結果，而不只是「有沒有丟例外」。
+ *
+ * `audit.strict` 要成立，呼叫端必須分得出「audit 關閉」與「audit 寫失敗」——
+ * 前者是使用者的選擇，後者是控制失效，兩者的正確反應相反。回傳 void 是為了
+ * 讓不在意結果的測試與呼叫端不必假造一個。
+ */
+export type AuditSinkResult =
+  | void
+  | string
+  | null
+  | { skipped: 'disabled' }
+  | { skipped: 'lock-budget-exhausted' }
+  | { skipped: 'write-failed'; error: string }
+  | { success: true; rotated: boolean; id: string }
+
+/** 只有真正的寫入失敗算失敗：關閉不是失敗。 */
+function auditWriteFailed(result: AuditSinkResult): boolean {
+  if (result === null || result === undefined || typeof result === 'string') return false
+  if ('success' in result) return false
+  return result.skipped !== 'disabled'
 }
 
 export interface RunEsRequestOptions {
@@ -195,6 +219,12 @@ export interface RunEsRequestOptions {
    */
   permission: Permission
   audit?: EsShellAuditSink
+  /**
+   * `config.audit.strict`。開啟時，送出前那一列 audit 寫不出去就拒絕執行。
+   *
+   * 只管 `attempt` 那一列：`outcome` 寫不出去時請求已經在叢集上了，擋也擋不回來。
+   */
+  strictAudit?: boolean
 }
 
 /**
@@ -272,10 +302,10 @@ export async function runEsRequest(
     phase: 'attempt' | 'outcome',
     success: boolean,
     error?: unknown
-  ): Promise<void> => {
-    if (!options.audit) return
+  ): Promise<AuditSinkResult> => {
+    if (!options.audit) return undefined
     try {
-      await options.audit({
+      return await options.audit({
         phase,
         success,
         error,
@@ -284,7 +314,9 @@ export async function runEsRequest(
         tierOverride,
       })
     } catch {
-      // Nothing to do with it here: the request's outcome stands either way.
+      // The sink's own errors are not this request's outcome — but a sink that
+      // threw did not record anything either, so strict mode must see it.
+      return { skipped: 'write-failed', error: 'audit sink threw' }
     }
   }
 
@@ -409,12 +441,22 @@ export async function runEsRequest(
       // request chose, which is the same disclosure the body check exists to
       // stop. Values are split on the separators Elasticsearch accepts inside
       // them so a field named among several is still seen.
-      // Lucene 的 query syntax 會把運算子貼在欄位名上：`+password`、`-password`、
-      // `password*`、`!password`、`password^2`、`password~`。少切一個字元，
-      // 整個欄位檢查就看不到那個 term——第五輪實測 `?q=%2Bpassword:hunter2`
-      // 通過而 `?q=password:hunter2` 被拒，缺口在切詞器而不在 wildcard 語意。
+      // 兩套切法都跑，取聯集。
+      //
+      // Lucene 會把運算子貼在欄位名上（`+password`、`password*`、`!password`），
+      // 所以要有一套把那些字元當分隔符的切法；但 Elasticsearch 的欄位名**本身**
+      // 就允許 `-`、`*`、`|`、`/` 這些字元，`user-password` 是常見命名，只用
+      // 加寬的那套會把它切成 `user` 與 `password`——兩者都不在黑名單裡，於是
+      // 一個原本擋得住的欄位變成擋不住。
+      //
+      // 單獨任一套都有它擋不住的一半，而這裡的錯誤方向只有一種是可接受的：
+      // 多切一次只會多幾個不命中的 term，少切一次會漏掉一個受保護的欄位。
+      const CONSERVATIVE = /[\s,:()"'[\]{}]+/
+      const LUCENE_OPERATORS = /[\s,:()"'[\]{}+\-*!^~|;/\\]+/
       const queryTerms = [...query.entries()].flatMap(([, value]) =>
-        value.split(/[\s,:()"'[\]{}+\-*!^~|;/\\]+/).filter((term) => term.length > 0)
+        [value, ...value.split(CONSERVATIVE), ...value.split(LUCENE_OPERATORS)].filter(
+          (term) => term.length > 0
+        )
       )
       const named = [...findStrings(req.body), ...queryTerms].find((text) =>
         namesProtectedField(text, protectedFields)
@@ -439,11 +481,18 @@ export async function runEsRequest(
     // searches here and had `size` written into the document — a check reading
     // one set of bytes while another goes out, which is the shape of the two
     // earlier CRITICALs. This was the last raw-path substring test in the file.
-    // 條件與 `classifyElasticsearchRequest` 的規則 2 一致：`_search` 只有在
-    // ES 真的把它當端點路由時才是搜尋——不掛在 index 之後、或後面還有第三段，
-    // 那一段就是文件 id。
-    const searchSegments = routedPath.split('/').filter((segment) => segment.length > 0)
+    // 條件與 `classifyElasticsearchRequest` 的規則 2 一致，而且讀的是**同一個**
+    // 路徑函式（`routedPathname`，不解碼）。先前這裡讀 `normalizeEsPath`（會
+    // 解碼）又不看 method，於是 `PUT /orders/_search` 與 `POST /orders/%5Fsearch`
+    // 上兩者給出不同答案。都不可利用——ES 不把寫入路由到 `/_search`，分歧也都
+    // 落在需要 admin 的那一側——但「同一個請求、兩個函式、兩種答案」正是前幾輪
+    // CRITICAL 的形狀，不留著。
+    const searchSegments = routedPathname(req.path)
+      .split('/')
+      .filter((segment) => segment.length > 0)
+    const searchMethod = ['GET', 'HEAD', 'POST'].includes(req.method.toUpperCase())
     const searchesDocuments =
+      searchMethod &&
       searchSegments[searchSegments.length - 1]?.toLowerCase() === '_search' &&
       searchSegments.length <= 2
     let body = req.body
@@ -457,10 +506,24 @@ export async function runEsRequest(
       body = { ...(body as Record<string, unknown>), size: ES_SHELL_SIZE_CAP }
     }
 
-    // Before the socket, not after: everything that could refuse this request
-    // has already run, so from here on the cluster may act on it whatever
-    // happens to this process.
-    await audit('attempt', true)
+    // Before the socket, not after: from here on the cluster may act on this
+    // request whatever happens to this process, so a record that only exists on
+    // the way back cannot describe a request that never comes back.
+    //
+    // `success: false`, always. At this point the operation has not succeeded —
+    // it may not even leave the process, because the transport applies the
+    // server-side script check. Writing `true` here made "not sent" and "sent
+    // and succeeded" the same row, and doubled every success count. The truth
+    // is the `outcome` row's job; this row's job is to exist.
+    const attempt = await audit('attempt', false)
+    if (options.strictAudit && auditWriteFailed(attempt)) {
+      // 稽核是這條路徑上的控制本身，不是佐證。寫不出來就等於沒有控制。
+      throw new Error(
+        'Refused: the audit entry for this request could not be written, and audit.strict is on. ' +
+          'Fix the audit sink (disk space, directory permissions, a stale lockfile in ' +
+          '.dbcli/audit) or turn audit.strict off to accept unrecorded requests.'
+      )
+    }
     const response = await adapter.request(req.method, req.path, body)
     await audit('outcome', true)
 
@@ -581,10 +644,14 @@ export async function runEsShell(configPath: string): Promise<void> {
   })
 
   let blockLines: string[] = []
-  const submit = async () => {
-    const block = blockLines.join('\n').trim()
-    blockLines = []
-    rl.setPrompt(pc.cyan('es> '))
+  // block 在**排入佇列的當下**取快照，不是在任務跑起來時才讀 `blockLines`。
+  // readline 會把管線送來的行在同一個 tick 全部同步發完，所以「跑起來時才讀」
+  // 等於把快照推遲到微任務之後，中間的行會灌進同一個 buffer：兩個命令被合併
+  // 成一個 block（於是一個都沒送出），而互動模式下還沒打空行提交的內容會被
+  // 當成前一筆的 body 送進叢集。
+  //
+  // 這也讓 SIGINT 只清得到未提交的行——`blockLines` 之後不再裝已提交的 block。
+  const submit = async (block: string) => {
     if (block === '') return
     if (block === 'exit' || block === 'quit') {
       rl.close()
@@ -599,8 +666,9 @@ export async function runEsShell(configPath: string): Promise<void> {
         blacklistColumns as Record<string, string[]>,
         {
           permission,
+          strictAudit: config.audit?.strict ?? false,
           audit: (record) =>
-            writeAuditEntry(
+            writeAuditEntryResult(
               config,
               'shell',
               { config: configPath },
@@ -630,7 +698,10 @@ export async function runEsShell(configPath: string): Promise<void> {
   rl.prompt()
   rl.on('line', (line: string) => {
     if (line.trim() === '') {
-      queue.enqueue(submit)
+      const block = blockLines.join('\n').trim()
+      blockLines = []
+      rl.setPrompt(pc.cyan('es> '))
+      queue.enqueue(() => submit(block))
     } else {
       blockLines.push(line)
       rl.setPrompt(pc.dim('...  '))

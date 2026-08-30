@@ -176,3 +176,88 @@ describe('ElasticsearchAdapter.request 是第二個執行入口，共用同一�
     }
   })
 })
+
+/**
+ * 第六輪 CRITICAL：第五輪把檢查點搬對了層，卻沒發現它認得的名字不夠多。
+ *
+ * `scripted_metric` 聚合把它的四個 script 槽拼成 `init_script`、`map_script`、
+ * `combine_script`、`reduce_script`。一個都不等於 `script` 或 `script_fields`，
+ * 於是 query-only 可以用它在叢集上跑任意 Painless，把黑名單欄位以
+ * `aggregations.<name>.value` 這個請求自選的 key 讀回來——`redactFields` 看的
+ * 是 key 名稱，摸不到。
+ *
+ * 第五輪的 commit message 宣稱「一律拒絕 script 鍵」已經關掉
+ * `doc['pass'+'word']` 這條路。那句話是錯的：拒絕的是兩個字面名稱，而
+ * Elasticsearch 的 script 槽不只兩個。比對改看**形狀**而不是清單成員。
+ */
+describe('script 槽以形狀比對，不是兩個字面名稱', () => {
+  test.each([
+    'init_script',
+    'map_script',
+    'combine_script',
+    'reduce_script',
+    'inline_script',
+    'stored_script',
+  ])('攔截 %s', (key) => {
+    expect(() =>
+      assertNoElasticsearchScript({ aggs: { leak: { scripted_metric: { [key]: 'state.s=[]' } } } })
+    ).toThrow(ServerSideScriptRejection)
+  })
+
+  test('攔截完整的 scripted_metric 洩漏 body', () => {
+    expect(() =>
+      assertNoElasticsearchScript({
+        size: 0,
+        aggs: {
+          leak: {
+            scripted_metric: {
+              init_script: 'state.s=[]',
+              map_script: "state.s.add(doc['pass'+'word'].value)",
+              combine_script: 'return state.s',
+              reduce_script: 'return states',
+            },
+          },
+        },
+      })
+    ).toThrow(/script/i)
+  })
+
+  test('runtime_mappings 與 moving_fn 的巢狀 script 仍然擋得到', () => {
+    expect(() =>
+      assertNoElasticsearchScript({
+        runtime_mappings: { x: { type: 'keyword', script: 'emit(1)' } },
+      })
+    ).toThrow(ServerSideScriptRejection)
+    expect(() =>
+      assertNoElasticsearchScript({
+        aggs: { m: { moving_fn: { script: 'MovingFunctions.min(values)' } } },
+      })
+    ).toThrow(ServerSideScriptRejection)
+  })
+
+  test('名字裡剛好帶 script 但不是 script 槽的欄位不受影響', () => {
+    // 結尾不是 `_script`，也不等於 `script`：一般文件欄位不該被誤擋。
+    expect(() =>
+      assertNoElasticsearchScript({ query: { match: { script_name: 'deploy.sh' } } })
+    ).not.toThrow()
+    expect(() =>
+      assertNoElasticsearchScript({ query: { match: { transcription: 'a script tag' } } })
+    ).not.toThrow()
+  })
+})
+
+/**
+ * 第六輪 MEDIUM：`'['.repeat(100000)` 是合法 JSON，遞迴掃描會丟
+ * `RangeError: Maximum call stack size exceeded`。它 fail-closed（請求沒送出），
+ * 但一個防護不該以「當掉」作為拒絕的方式——錯誤訊息要說得出發生什麼事。
+ */
+test('過深的 body 以明確的拒絕收場，不是 RangeError', () => {
+  const deep = JSON.parse('['.repeat(50000) + ']'.repeat(50000)) as unknown
+  expect(() => assertNoElasticsearchScript(deep)).toThrow(ServerSideScriptRejection)
+  expect(() => assertNoElasticsearchScript(deep)).toThrow(/nests deeper/)
+})
+
+test('一般深度的 body 不受深度上限影響', () => {
+  const nested = JSON.parse('['.repeat(50) + ']'.repeat(50)) as unknown
+  expect(() => assertNoElasticsearchScript(nested)).not.toThrow()
+})

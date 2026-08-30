@@ -276,9 +276,9 @@ describe('every request that reaches the runner is recorded, executed or refused
   test('an executed read is recorded without a write tier override', async () => {
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/orders/_search' }, 'query-only', log)
-    // 兩列：送出前的 attempt 與回應後的 outcome。
+    // 兩列：送出前的 attempt（尚未成功）與回應後的 outcome。
     expect(log).toEqual([
-      { success: true, target: 'orders', tierOverride: undefined },
+      { success: false, target: 'orders', tierOverride: undefined },
       { success: true, target: 'orders', tierOverride: undefined },
     ])
   })
@@ -289,7 +289,7 @@ describe('every request that reaches the runner is recorded, executed or refused
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/_cat/indices' }, 'query-only', log)
     expect(log).toEqual([
-      { success: true, target: '/_cat/indices', tierOverride: undefined },
+      { success: false, target: '/_cat/indices', tierOverride: undefined },
       { success: true, target: '/_cat/indices', tierOverride: undefined },
     ])
   })
@@ -306,7 +306,7 @@ describe('every request that reaches the runner is recorded, executed or refused
     const log: Recorded[] = []
     await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log)
     expect(log).toEqual([
-      { success: true, target: 'orders', tierOverride: 'db-write' },
+      { success: false, target: 'orders', tierOverride: 'db-write' },
       { success: true, target: 'orders', tierOverride: 'db-write' },
     ])
   })
@@ -727,6 +727,35 @@ describe('audit 說得出操作，而且在送出之前就先記一筆', () => {
     expect(statements).toContain('PUT /orders/_mapping')
   })
 
+  /**
+   * 第六輪 HIGH：`attempt` 列原本硬寫 `success: true`，於是「還沒送出」與
+   * 「送出並成功」在紀錄裡長得一樣。任何以 `success` 統計成功寫入的讀者都會
+   * 把每個操作算兩次，包含**被擋下來從未送出**的那些。
+   *
+   * `attempt` 列現在一律 `success: false`：那一刻這個操作尚未成功，而這是唯一
+   * 安全的方向。真相由 `outcome` 那一列說，所以一個操作至多貢獻一次 success。
+   */
+  test('attempt 列不宣稱成功', async () => {
+    const log: Recorded[] = []
+    await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log)
+    expect(log[0]).toMatchObject({ phase: 'attempt', success: false })
+    expect(log[1]).toMatchObject({ phase: 'outcome', success: true })
+    expect(log.filter((entry) => entry.success)).toHaveLength(1)
+  })
+
+  test('被 adapter 擋下、從未離開行程的請求不會留下一列成功', async () => {
+    const log: Recorded[] = []
+    const adapter = {
+      request: async () => {
+        throw new Error('ServerSideScriptRejection: script executes code on the cluster')
+      },
+    }
+    await expect(
+      withAudit({ method: 'POST', path: '/orders/_search' }, 'query-only', log, adapter)
+    ).rejects.toThrow(/ServerSideScriptRejection/)
+    expect(log.filter((entry) => entry.success)).toHaveLength(0)
+  })
+
   test('送出之前先寫一筆 attempt，回應之後再寫 outcome', async () => {
     const log: Recorded[] = []
     await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log)
@@ -788,5 +817,85 @@ describe('audit 說得出操作，而且在送出之前就先記一筆', () => {
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/%5Fsearch' }, 'query-only', log)
     expect(log.at(-1)?.statement).toBe('GET /_search')
+  })
+})
+
+/**
+ * 第六輪 HIGH：audit 寫不出去時請求照送，而且這件事連表達都表達不了。
+ *
+ * `AuditLockManager` 的 lock budget 耗盡、目錄不可寫、磁碟滿——三者都讓
+ * `writeAuditEntry` 靜靜回 null，`runEsRequest` 連看都不看，於是 `DELETE /orders`
+ * 照送、零紀錄，只有一行 stderr 警告（一個 process 只印一次，管線模式通常
+ * 被丟掉）。lock budget 那條尤其糟：它可以被刻意耗盡。
+ *
+ * `attempt` 那一列的整個理由建立在「它一定寫得出來」上，而它是 best-effort。
+ * `config.audit.strict` 讓「稽核寫不出來就別動叢集」變成可以表達的取捨；
+ * 預設關閉，因為這改的是既有行為。
+ */
+describe('audit.strict 讓稽核失敗擋下請求', () => {
+  function withFailingAudit(
+    req: EsRequest,
+    permission: Permission,
+    strict: boolean,
+    target: Captured
+  ): Promise<unknown> {
+    return runEsRequest(
+      req,
+      fakeAdapter(target) as never,
+      [],
+      {},
+      {
+        permission,
+        strictAudit: strict,
+        // 寫失敗回報成 skipped，與 writeAuditEntryResult 的形狀一致。
+        audit: async () => ({ skipped: 'lock-budget-exhausted' }) as const,
+      }
+    )
+  }
+
+  test('strict 開啟時，attempt 寫不出去就不送出請求', async () => {
+    const captured = { calls: 0 } as Captured
+    await expect(
+      withFailingAudit({ method: 'DELETE', path: '/orders' }, 'admin', true, captured)
+    ).rejects.toThrow(/audit/i)
+    expect(captured.calls).toBe(0)
+  })
+
+  test('strict 關閉時維持現行行為——請求照送', async () => {
+    const captured = { calls: 0 } as Captured
+    await withFailingAudit({ method: 'DELETE', path: '/orders' }, 'admin', false, captured)
+    expect(captured.calls).toBe(1)
+  })
+
+  test('audit 關閉（disabled）不算失敗，strict 開著也照送', async () => {
+    const captured = { calls: 0 } as Captured
+    await runEsRequest(
+      { method: 'DELETE', path: '/orders' },
+      fakeAdapter(captured) as never,
+      [],
+      {},
+      {
+        permission: 'admin',
+        strictAudit: true,
+        audit: async () => ({ skipped: 'disabled' }) as const,
+      }
+    )
+    expect(captured.calls).toBe(1)
+  })
+
+  test('audit 寫成功時 strict 不影響任何事', async () => {
+    const captured = { calls: 0 } as Captured
+    await runEsRequest(
+      { method: 'DELETE', path: '/orders' },
+      fakeAdapter(captured) as never,
+      [],
+      {},
+      {
+        permission: 'admin',
+        strictAudit: true,
+        audit: async () => ({ success: true, rotated: false, id: 'x' }) as const,
+      }
+    )
+    expect(captured.calls).toBe(1)
   })
 })

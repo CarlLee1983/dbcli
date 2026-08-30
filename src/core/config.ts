@@ -123,6 +123,7 @@ const DEFAULT_CONFIG: DbcliConfig = {
   blacklist: { tables: [], columns: {} },
   audit: {
     enabled: true,
+    strict: false,
     rotation: { max_bytes: 10_485_760, max_entries: 1000 },
   },
 }

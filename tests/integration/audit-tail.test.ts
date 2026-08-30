@@ -320,3 +320,59 @@ describe('audit tail 的表格不能被 cell 內容偽造', () => {
     expect(stdout).toContain('/_cat/indices')
   })
 })
+
+/**
+ * 第六輪：`sanitizeCell` 只換 C0 與 DEL。雙向控制字元 U+202E（RTL override）、
+ * 零寬字元、以及 U+2028 / U+0085 這些同樣被視為換行的字元全數放行，
+ * 於是該 cell 之後整段以右到左顯示，tier 與 success 欄可被視覺調換。
+ *
+ * 這是零權限的日誌注入：被 blacklist 拒絕的請求照樣寫 outcome 列，而 target
+ * 是攻擊者選的字串——不需要索引存在，也不需要通過任何檢查。
+ */
+describe('audit tail 的 cell 逃脫涵蓋非 C0 的控制字元', () => {
+  const dirs: string[] = []
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+  })
+
+  async function seedWithTarget(target: string): Promise<string> {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-audit-tail-bidi-'))
+    dirs.push(work)
+    const auditDir = join(work, '.dbcli', 'audit')
+    await mkdir(auditDir, { recursive: true })
+    await writeFile(join(work, 'config.json'), JSON.stringify(makeMinimalConfig(), null, 2))
+    await writeFile(
+      join(auditDir, 'default.jsonl'),
+      JSON.stringify({
+        id: '00000001-uuid-default',
+        ts: '2026-05-15T00:00:00.000Z',
+        session_id: 'test-session',
+        engine: 'elasticsearch',
+        command: 'shell',
+        side_effect_tier: 'readonly',
+        target,
+        success: true,
+        redacted_query: 'dbcli shell',
+      }) + '\n'
+    )
+    return work
+  }
+
+  test.each([
+    ['\u202E', 'RTL override'],
+    ['\u200B', 'zero-width space'],
+    ['\u2028', 'line separator'],
+    ['\u0085', 'NEL'],
+  ])('target 裡的控制字元不會原樣進入輸出（%s）', async (char) => {
+    const work = await seedWithTarget(`a${char}b`)
+    const { stdout, code } = await run(['audit', 'tail'], work)
+
+    expect(code).toBe(0)
+    expect(stdout).not.toContain(char)
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+    expect(lines.length).toBe(3)
+  })
+})

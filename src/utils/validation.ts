@@ -269,11 +269,24 @@ export const AuditRotationConfigSchema = z
 export const AuditConfigSchema = z
   .object({
     enabled: z.boolean().default(true), // D-01: opt-out default ON
+    /**
+     * 稽核寫不出來就不要動資料庫。
+     *
+     * audit 一直是 best-effort：磁碟滿、目錄不可寫、lock budget 耗盡時，操作
+     * 照樣執行而紀錄不存在，只有一行 stderr 警告（一個 process 只印一次，
+     * 管線模式通常看不到）。對多數使用者這是對的取捨——遺失一列紀錄不該讓
+     * 工具停擺。但把稽核當成控制本身的人（ES shell 的 permission 就是這種
+     * 情形）需要能表達相反的取捨，而先前連表達都表達不了。
+     *
+     * 預設關閉：這改的是既有行為，開啟與否是使用者的判斷。
+     */
+    strict: z.boolean().default(false),
     rotation: AuditRotationConfigSchema,
   })
   .optional()
   .default({
     enabled: true,
+    strict: false,
     rotation: { max_bytes: 10_485_760, max_entries: 1000 },
   })
 

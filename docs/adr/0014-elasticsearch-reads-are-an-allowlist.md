@@ -251,6 +251,91 @@ does not yet exist; closing it after the first import would be a breaking change
 Re-opening the ability to construct an adapter means publishing a gated façade,
 never the factory.
 
+## Decision 6: a control is matched by shape, and a record that is not written is not a record
+
+A sixth round reviewed the fifth round's own patch. It found three CRITICALs,
+**two of them regressions introduced by that patch** — which is the same ratio
+the four rounds before it produced, and the reason this record now treats
+"the fix is the most dangerous code in the change" as the working assumption
+rather than an observation.
+
+**Script slots are matched by shape, not by a list of names.** Decision 3 moved
+`assertNoElasticsearchScript` to the transport and claimed the disclosure was
+closed. It was not: `ES_SCRIPT_KEYS` held two literal names, and the
+`scripted_metric` aggregation spells its four slots `init_script`, `map_script`,
+`combine_script` and `reduce_script`. A `query-only` shell could therefore run
+the exact Painless the previous decision named as the thing it had just shut,
+and read the value back under `aggregations.<name>.value` — a key the request
+chose, which response redaction cannot reach. Any key equal to `script` /
+`script_fields` **or ending in `_script`** now matches, which also covers slots
+Elasticsearch adds later. **A list of names cannot hold a door against an API
+that composes names.**
+
+The check is still blind to string-encoded bodies (a search template's `source`,
+a stored template's `id`). That is not currently reachable, but the reason is the
+tier gate, not this control — stated at `src/adapters/server-side-script.ts` so
+that whoever adds a `_search/template` read rule sees what it costs.
+
+**The tokenizer widening in Decision 4 re-opened what it meant to close.** Adding
+`-` to the query-value separators split `user-password` into `user` and
+`password`, neither of them blacklisted — and `?sort=user-password:asc` returns
+the value verbatim under `hits.hits[].sort`, where redaction cannot reach it.
+Elasticsearch field names legitimately contain `-`, `*`, `|` and `/`, so a
+separator set tuned for Lucene *operators* cannot also be right for field
+*names*. Both tokenisations now run and the results are unioned: over-tokenising
+costs a few tokens that match nothing, under-tokenising loses a protected field,
+and only one of those two errors is acceptable.
+
+**Snapshot the block when it is queued, not when it runs.** Decision 3's queue
+introduced a second defect of its own: `submit` read the shared `blockLines`
+buffer at execution time, while `readline` kept pushing into it synchronously.
+A pipeline carrying two commands merged them into one block and executed
+**neither**, exiting 0 with an empty audit log — the same silence the original
+report was filed for, reached by a different route. Interactively, lines an
+operator had typed but not yet submitted were sent as the previous request's
+body. Note what this is *not*: there is no divergence between the bytes checked
+and the bytes sent. It is a divergence between what the operator submitted and
+what was sent, which no amount of parser agreement would have caught.
+
+**An `attempt` row records that an attempt began, so it cannot claim success.**
+It was written with `success: true`, making "not sent" and "sent and succeeded"
+the same row — including for requests the transport then refused — and doubling
+every success count. It is now always `false`; the `outcome` row carries the
+truth, so one operation contributes at most one success.
+
+**`audit.strict` exists, defaulting to off.** Audit writes are best-effort:
+a full disk, an unwritable directory, or an exhausted lock budget (which an
+attacker can deliberately exhaust) makes `writeAuditEntry` return `null`, and
+the request went out anyway with a single once-per-process stderr warning that
+piped sessions discard. For most commands that is the right trade — losing a row
+should not stop the tool. But on this path the audit *is* the control, and
+before this there was no way to even express the opposite trade. With it on, a
+failed `attempt` row refuses the request. Only that row: an `outcome` that
+cannot be written describes a request the cluster already has.
+
+Making it work required `writeAuditEntryResult`, because `writeAuditEntry`
+collapsed "audit is disabled" and "audit failed" into the same `null` — the
+first is the user's choice and the second is a control failing, and their
+correct responses are opposite.
+
+**Brief output is where the record is actually read.** `audit tail --for-agent`
+defaults to brief, which kept only `ts`/`command`/`target`/`success` — so
+Decision 3's statement field and phase were dropped, and every agent reading the
+log saw two identical rows per request. "Says what it did" was true only of
+`audit show --no-brief`. Brief now keeps the statement, the tier and the phase,
+and the tail table has a `statement` column.
+
+**`redactSql` is for SQL, and an Elasticsearch statement is a path.** Applied to
+one it eats the object: `DELETE /orders/_doc/12345` became
+`DELETE /orders/_doc/0`, `POST /logs-2026.08.30/_delete_by_query` became
+`POST /logs-0.0/…`. Elasticsearch entries use `redactSensitive` instead.
+
+**Cell sanitising covers more than C0.** U+202E and friends reverse the display
+of everything after them, letting the tier and success columns be visually
+swapped; U+2028 and U+0085 are line breaks to many terminals. This is
+zero-privilege log injection — a refused request still writes an `outcome` row
+whose target is an attacker-chosen string.
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
@@ -270,4 +355,12 @@ or either shell's `'close'` handler in `src/commands/es-shell.ts` or
 `src/commands/shell.ts` exits without draining `createSubmitQueue` from
 `src/commands/shell-submit-queue.ts`; or `src/core/public.ts` exports
 `AdapterFactory`, or any other value from which an ungated adapter can be
-obtained.
+obtained; or `isElasticsearchScriptKey` in `src/adapters/server-side-script.ts`
+becomes a membership test over a fixed list again; or the query-value
+tokenisation in `src/commands/es-shell.ts` stops emitting both the conservative
+and the Lucene-operator splits; or `runEsShell` in that file reads `blockLines`
+anywhere other than the `'line'` handler that fills it; or the `attempt` audit
+row is written with `success: true`; or `writeAuditEntryResult` in
+`src/core/audit/integration-helper.ts` stops distinguishing a disabled sink from
+a failed one; or `briefify` in `src/commands/audit.ts` drops the statement or
+the phase.

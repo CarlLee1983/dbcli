@@ -279,3 +279,20 @@ describe('redactSensitive 與 URL 裡的帳密', () => {
     expect(redactSensitive('contact ops@example.com')).toBe('contact ops@example.com')
   })
 })
+
+/**
+ * 第六輪：userinfo 的比對 `[^/@\s]+@` 停在第一個 `@`，所以密碼裡含字面 `@`
+ * 時尾巴會留在紀錄裡。真實 URL 的 `@` 應該編碼成 `%40`，但錯誤訊息帶的是
+ * 使用者寫在設定檔裡的那一串，不是規範化過的。
+ */
+test('userinfo 裡含字面 @ 的密碼整段被遮蔽', () => {
+  expect(
+    redactSensitive('Connection refused at https://elastic:p@ssw0rd@es.example.com:9243')
+  ).toBe('Connection refused at https://<redacted>@es.example.com:9243')
+})
+
+test('遮蔽在 host 之後就停手，不吃掉路徑裡的 @', () => {
+  expect(redactSensitive('GET https://es.example.com/idx/_doc/a@b')).toBe(
+    'GET https://es.example.com/idx/_doc/a@b'
+  )
+})

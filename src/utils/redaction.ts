@@ -256,7 +256,10 @@ export function redactSensitive(text: string): string {
       // URL 的 userinfo：`https://elastic:hunter2@host:9243`。keyword=value 的
       // 規則一個字元都吃不到它，而連線字串常常就是這樣寫的——ES 連線失敗的
       // 錯誤訊息把整串 baseUrl 帶進 audit 的 error 欄。
-      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, '$1<redacted>@')
+      // `[^/\s]*@` 而不是 `[^/@\s]+@`：貪婪到 authority 段的**最後**一個 `@`。
+      // 密碼裡含字面 `@` 時，停在第一個會把尾巴留在紀錄裡。`[^/\s]` 保證不會
+      // 越過 authority 段，所以路徑裡的 `@`（文件 id）不受影響。
+      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/gi, '$1<redacted>@')
       .replace(
         /\b(password|token|apiKey|secret|key|token|auth|credential|pass|pwd|sid)([:=]|\s+)([^\s"';,]+)/gi,
         '$1$2<redacted>'

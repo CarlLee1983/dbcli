@@ -434,3 +434,113 @@ test('沒有命中黑名單的 query string 照常放行', async () => {
   )
   expect(captured.path).toBe('/users/_search?q=%2Bstatus:active')
 })
+
+/**
+ * 第六輪 CRITICAL：第五輪把 `-` 加進分隔字元集，於是欄位名本身含連字號的
+ * 黑名單欄位被切成兩半而不再命中——`user-password` 變成 `user` 與 `password`，
+ * 兩者都不在黑名單裡。ES 的欄位名允許 `-`，`user-password` 這種命名很常見。
+ *
+ * `?sort=` 是其中最嚴重的一條：搜尋回應把 sort key 的值原樣放在
+ * `hits.hits[].sort` 陣列裡，不掛在欄位名下，所以 `redactFields` 結構上摸不到。
+ * 同一個請求寫成 body（`{"sort":[{"user-password":"asc"}]}`）會被正確拒絕——
+ * 差別只在切詞器，不在政策。
+ *
+ * 修法是兩套分隔字元集都切、取聯集：保守集（含 `:` 不含 `-`）產出
+ * `user-password`，加寬集產出第五輪要擋的 `+password`。單靠任一套都不夠。
+ */
+test.each([
+  ['?sort=user-password:asc', 'sort 直接洩值'],
+  ['?q=user-password:hunter2', 'q 的 match oracle'],
+  ['?docvalue_fields=user-password', 'docvalue_fields'],
+  ['?_source_includes=user-password', '_source_includes'],
+])('欄位名含連字號時仍然要被擋：%s（%s）', async (queryString) => {
+  const captured: Record<string, unknown> = {}
+  await expect(
+    run({ method: 'GET', path: `/users/_search${queryString}` }, fakeAdapter(captured), [], {
+      users: ['user-password'],
+    })
+  ).rejects.toThrow(/blacklist-protected/)
+  expect(captured.path).toBeUndefined()
+})
+
+test('第五輪的 Lucene 前綴修補不得因此失效', async () => {
+  const captured: Record<string, unknown> = {}
+  await expect(
+    run(
+      { method: 'GET', path: '/users/_search?q=%2Bpassword:hunter2' },
+      fakeAdapter(captured),
+      [],
+      {
+        users: ['password'],
+      }
+    )
+  ).rejects.toThrow(/blacklist-protected/)
+  expect(captured.path).toBeUndefined()
+})
+
+test('其他含符號的合法欄位名同樣擋得住', async () => {
+  for (const [field, queryString] of [
+    ['user*name', '?sort=user*name:asc'],
+    ['a|b', '?q=a|b:x'],
+    ['a/b', '?sort=a/b:asc'],
+  ] as [string, string][]) {
+    const captured: Record<string, unknown> = {}
+    await expect(
+      run({ method: 'GET', path: `/users/_search${queryString}` }, fakeAdapter(captured), [], {
+        users: [field],
+      })
+    ).rejects.toThrow(/blacklist-protected/)
+  }
+})
+
+test('沒命中的請求不受兩套切法影響', async () => {
+  const captured: Record<string, unknown> = {}
+  await run(
+    { method: 'GET', path: '/users/_search?sort=created-at:asc' },
+    fakeAdapter(captured),
+    [],
+    {
+      users: ['user-password'],
+    }
+  )
+  expect(captured.path).toBe('/users/_search?sort=created-at:asc')
+})
+
+/**
+ * 第六輪 MEDIUM：size cap 與分類器規則 2 對同一個請求給出不同答案。
+ *
+ * 兩處分歧：cap 不看 method（分類器要求 GET/HEAD/POST），且 cap 讀
+ * `normalizeEsPath`（會解碼）而分類器讀原始 pathname（不解碼）。兩者都不可
+ * 利用——ES 不會把寫入路由到 `/_search`，而分歧都落在需要 admin 的那一側——
+ * 但「同一個請求、兩個函式、兩種答案」正是前幾輪 CRITICAL 的形狀。
+ */
+test.each([
+  ['PUT', '/orders/_search'],
+  ['DELETE', '/orders/_search'],
+])('%s %s 不是搜尋，不得注入 size', async (method, path) => {
+  const captured: Record<string, unknown> = {}
+  await run({ method, path, body: { title: 'x' } } as EsRequest, fakeAdapter(captured), [])
+  expect(captured.body).toEqual({ title: 'x' })
+})
+
+test('百分號編碼的 _search 依分類器的看法處理，不依解碼後的樣子', async () => {
+  const captured: Record<string, unknown> = {}
+  await run(
+    { method: 'POST', path: '/orders/%5Fsearch', body: { query: { match_all: {} } } },
+    fakeAdapter(captured),
+    []
+  )
+  expect(captured.body).toEqual({ query: { match_all: {} } })
+})
+
+test('真正的搜尋仍然拿到 size cap（GET 與 POST 都要）', async () => {
+  for (const method of ['GET', 'POST']) {
+    const captured: Record<string, unknown> = {}
+    await run(
+      { method, path: '/orders/_search', body: { query: { match_all: {} } } } as EsRequest,
+      fakeAdapter(captured),
+      []
+    )
+    expect((captured.body as { size?: number }).size).toBe(1000)
+  }
+})

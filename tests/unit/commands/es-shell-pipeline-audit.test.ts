@@ -136,6 +136,58 @@ describe('ES shell 管線輸入的 audit', () => {
     })
   }
 
+  /**
+   * 第六輪：第五輪把 `rl.on('line', async ...)` 改成 `queue.enqueue(submit)`，
+   * 而 `submit` 是在**任務跑起來時**才讀 `blockLines`。readline 會在同一個
+   * tick 把管線的所有行同步發完，所以快照被推遲到微任務之後，中間的行全部
+   * 灌進同一個 buffer：兩個命令被合併成一個 block，`parseEsRequest` 拿第二行
+   * 當 body 去 parse，兩個命令一個都沒送出，audit 零列，exit code 仍是 0。
+   *
+   * 上面那個單命令測試對此是綠的——這就是為什麼要有這一個。
+   */
+  test('管線送兩個命令，兩個都要送出並各自留下 audit', async () => {
+    const proc = Bun.spawn(
+      ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],
+      {
+        cwd: sandbox,
+        stdin: new TextEncoder().encode('GET /_cat/indices\n\nGET /orders/_search\n\n'),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }
+    )
+    await proc.exited
+    const stderr = await new Response(proc.stderr).text()
+
+    const seen = await hits()
+    expect(seen, stderr).toContain('GET /_cat/indices')
+    expect(seen, stderr).toContain('GET /orders/_search')
+
+    // 每個請求一組 attempt / outcome。
+    expect(auditRows().length, stderr).toBe(4)
+  }, 30_000)
+
+  /** 快照改動最可能傷到的就是多行 block：header 之後的行是 body,不是下一個命令。 */
+  test('多行 block 的 body 仍然跟著它的 header 一起送出', async () => {
+    const proc = Bun.spawn(
+      ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],
+      {
+        cwd: sandbox,
+        stdin: new TextEncoder().encode(
+          'POST /orders/_search\n{"query":{"match_all":{}}}\n\nGET /_cat/indices\n\n'
+        ),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }
+    )
+    await proc.exited
+    const stderr = await new Response(proc.stderr).text()
+
+    const seen = await hits()
+    expect(seen, stderr).toContain('POST /orders/_search')
+    expect(seen, stderr).toContain('GET /_cat/indices')
+    expect(stderr).not.toMatch(/JSON Parse error/)
+  }, 30_000)
+
   test('EOF 前送出的請求，其 audit 在行程結束前寫完', async () => {
     const proc = Bun.spawn(
       ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],

@@ -55,6 +55,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **連線失敗訊息裡的 URL 帳密會被遮蔽。** `nodes` 常寫成 `https://elastic:hunter2@host:9243`，而該字串會整串進入 audit 的 error 欄；`redactSensitive` 原本只認 `keyword=value` 形式，一個字元都吃不到 URL 的 userinfo。
 
+- **server-side script 的比對改看形狀，不是兩個字面名稱。** 上一項把檢查點搬到傳輸層，但它認得的名字只有 `script` 與 `script_fields`，而 `scripted_metric` 聚合把四個 script 槽拼成 `init_script`、`map_script`、`combine_script`、`reduce_script`。`query-only` 因此仍可跑任意 Painless，並把黑名單欄位以 `aggregations.<name>.value` 這個請求自選的 key 讀回來。現在任何等於 `script`／`script_fields` 或以 `_script` 結尾的鍵都算——**一份名字清單擋不住一個會自己組名字的 API**。掃描另外加上深度上限，`'['.repeat(100000)` 這種合法 JSON 先前會讓它以 `RangeError` 收場。
+
+- **黑名單欄位名含 `-`、`*`、`|`、`/` 時重新擋得住。** 上一項把 Lucene 運算子加進 query string 的分隔字元集，卻讓 `user-password` 被切成 `user` 與 `password`——兩者都不在黑名單裡。ES 的欄位名本來就允許這些字元，而 `?sort=user-password:asc` 會把值原樣放在 `hits.hits[].sort`，遮罩摸不到。現在保守與加寬兩套切法都跑、取聯集：多切一次只多幾個不命中的 term，少切一次會漏掉一個受保護欄位。
+
+- **shell 的 block 在排入佇列的當下取快照。** 上一項把 `rl.on('line', async ...)` 改成 `queue.enqueue(submit)`，而 `submit` 是在任務跑起來時才讀共用的 `blockLines`；readline 會把管線送來的行在同一個 tick 全部同步發完，於是兩個命令被合併成一個 block，`parseEsRequest` 解析失敗，**兩個命令一個都沒送出**，audit 零列，exit code 仍是 0。互動模式下則是還沒打空行提交的內容被當成前一筆的 body 送進叢集。
+
+- **`attempt` 那一列不再宣稱成功。** 它原本硬寫 `success: true`，於是「還沒送出」與「送出並成功」在紀錄裡長得一樣——包含被傳輸層擋下、從未離開行程的請求——而且讓每個操作的成功計數翻倍。現在一律 `false`，真相由 `outcome` 那一列說。
+
+- **`audit tail --for-agent` 與 `--brief` 保留 statement 與 phase。** brief 原本只留 `ts`／`command`／`target`／`success`，所以「一列 audit 要說得出對誰做了什麼」只在 `audit show --no-brief` 修好了，agent 讀到的仍是兩筆一模一樣的紀錄。`audit tail` 的表格另外新增 `statement` 欄位。
+
+- **Elasticsearch 的 audit statement 不再套用 SQL 字面值遮罩。** `redactSql` 會把數字換成 `0`，於是 `DELETE /orders/_doc/12345` 記成 `DELETE /orders/_doc/0`、`POST /logs-2026.08.30/_delete_by_query` 記成 `POST /logs-0.0/...`——操作對象被遮罩吃掉。ES 的 statement 是路徑不是語句，改用一般的敏感字串遮罩。
+
+- **audit 表格的 cell 逃脫涵蓋非 C0 控制字元。** U+202E（RTL override）會讓該 cell 之後整段以右到左顯示，tier 與 success 欄可被視覺調換；U+2028／U+0085 在許多終端機裡同樣算換行。這是零權限的日誌注入——被 blacklist 拒絕的請求照樣寫紀錄，而 target 是攻擊者選的字串。
+
+- **URL 帳密的遮蔽貪婪到最後一個 `@`。** 密碼裡含字面 `@` 時（`https://elastic:p@ssw0rd@host`）先前只遮到第一個，尾巴留在紀錄裡。
+
+- **搜尋的 size 上限與分類器讀同一個路徑函式。** 先前 cap 不看 method 且讀解碼後的路徑，分類器看 method 且讀原始路徑，於是 `PUT /orders/_search` 與 `POST /orders/%5Fsearch` 上兩者給出不同答案。都不可利用，但「同一個請求、兩個函式、兩種答案」是前幾輪 CRITICAL 的形狀。
+
+### Added
+
+- **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。
+
 ### Changed
 
 - **BREAKING：`@carllee1983/dbcli/core` 不再匯出 `AdapterFactory`。** 它回傳的 adapter 的 `request()` 是 public，所以任何函式庫使用者都能拿到一條不經 permission、不經 blacklist、不寫 audit 的路徑。`QueryExecutor` 與 `DataExecutor` 保留——它們自己帶著閘門。CLI 使用者不受影響。

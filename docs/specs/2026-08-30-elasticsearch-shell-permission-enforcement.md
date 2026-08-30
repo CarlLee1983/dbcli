@@ -3,7 +3,7 @@
 **Status:** ready-for-agent
 **Date:** 2026-08-30
 **Severity:** Critical — permission tier bypass in the current supported major (3.x)
-**Target release:** 3.0.1, with a user advisory
+**Target release:** 4.0.0, with a user advisory
 
 ## Problem Statement
 
@@ -254,7 +254,7 @@ and a functional bug rather than a security one.
 branch must be committed and opened as its own pull request before this work branches, so
 that the security change is reviewable on its own diff.
 
-**Release handling.** This ships as 3.0.1 with a changelog advisory, following the
+**Release handling.** This ships as 4.0.0 with a changelog advisory, following the
 precedent of the prior release that fixed six read-only bypasses and told every user
 running dbcli against an AI agent to upgrade. The security policy was recently corrected to
 state that only the current major is supported; leaving a known permission bypass in the

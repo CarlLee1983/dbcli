@@ -53,13 +53,9 @@ export function parseEsRequest(block: string): EsRequest {
   return { method, path, body: JSON.parse(bodyText) }
 }
 
-
-
-
 interface EsRequestCapable {
   request<T>(method: string, path: string, body?: unknown): Promise<T>
 }
-
 
 /**
  * The tier an Elasticsearch shell session runs under.
@@ -306,7 +302,6 @@ export async function runEsRequest(
     tierOverride,
   })
 
-
   try {
     return await execute()
   } catch (error) {
@@ -335,7 +330,6 @@ export async function runEsRequest(
     const protectedFields = collectProtectedFields(blacklistColumns)
     assertNoProtectedFieldNamed(req, query, protectedFields)
     const body = capSearchSize(req)
-
 
     // Before the socket, not after: from here on the cluster may act on this
     // request whatever happens to this process, so a record that only exists on
@@ -368,7 +362,6 @@ export async function runEsRequest(
   }
 }
 
-
 /** The banner. Written to stderr so a piped session's stdout carries only responses. */
 function printEsShellBanner(): void {
   console.error(pc.bold(t('shell.es.banner_title')))
@@ -399,30 +392,30 @@ async function executeEsBlock(block: string, session: EsShellSession): Promise<b
     const res = await runEsRequest(req, adapter, blacklistTables, blacklistColumns, {
       permission,
       strictAudit: config.audit?.strict ?? false,
-          audit: (record) =>
-            writeAuditEntryResult(
-              config,
-              'shell',
-              { config: configPath },
-              {
-                success: record.success,
-                error: record.error,
-                target: record.target,
-                // 操作本身。少了它，`DELETE /orders` 與 `PUT /orders/_mapping`
-                // 在紀錄裡是同一列。
-                sql: record.statement,
-                sideEffectTier: record.tierOverride,
-                metadata: { es_shell_phase: record.phase },
-              }
-            ),
+      audit: (record) =>
+        writeAuditEntryResult(
+          config,
+          'shell',
+          { config: configPath },
+          {
+            success: record.success,
+            error: record.error,
+            target: record.target,
+            // 操作本身。少了它，`DELETE /orders` 與 `PUT /orders/_mapping`
+            // 在紀錄裡是同一列。
+            sql: record.statement,
+            sideEffectTier: record.tierOverride,
+            metadata: { es_shell_phase: record.phase },
+          }
+        ),
     })
     console.log(JSON.stringify(res, null, 2))
     return true
   } catch (error) {
-      // 訊息內嵌使用者寫的路徑，而路徑可以帶 `ESC[2K ESC[1G`——那會清掉整行並把
-      // 游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功
-      // 訊息。audit 檔（JSONL）與 `audit tail`（表格）都已經處理這件事，
-      // 唯獨 shell 自己的 stderr 沒有。
+    // 訊息內嵌使用者寫的路徑，而路徑可以帶 `ESC[2K ESC[1G`——那會清掉整行並把
+    // 游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功
+    // 訊息。audit 檔（JSONL）與 `audit tail`（表格）都已經處理這件事，
+    // 唯獨 shell 自己的 stderr 沒有。
     console.error(pc.red(escapeControlCharacters((error as Error).message)))
     return false
   }
@@ -518,7 +511,6 @@ export async function runEsShell(configPath: string): Promise<void> {
       if (!ok) failed = true
     }
   }
-
 
   // readline 不 await 這個 handler，`'close'` 也不會等它——管線輸入下請求送得出去
   // 而 audit 寫不完，就是第五輪那個稽核逃逸。佇列同時管序列化與排乾。

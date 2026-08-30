@@ -100,9 +100,9 @@ test('t_vars() with table name in message', () => {
 describe('interpolate does not let a value rewrite the message', () => {
   test('a `$&` in a value is inserted literally, not expanded to the match', () => {
     const rendered = MessageLoader.getInstance().interpolate('shell.es.blacklist_index', {
-      index: "sec$&rets",
+      index: 'sec$&rets',
     })
-    expect(rendered).toContain("sec$&rets")
+    expect(rendered).toContain('sec$&rets')
     expect(rendered).not.toContain('{index}')
   })
 

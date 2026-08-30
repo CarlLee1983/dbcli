@@ -501,7 +501,7 @@ describe('execute() 的請求形狀是那兩處缺少 gate 的唯一理由', () 
       expect(path.endsWith('/_search')).toBe(true)
       // index 是唯一的變動段，且必須是單一段——編碼過的 `/` 不得長出新段。
       expect(path.split('/').filter((s) => s.length > 0)).toHaveLength(2)
-      expect(['GET', 'POST']).toContain(seen.method)
+      expect(['GET', 'POST']).toContain(seen.method!)
     } finally {
       mockFetch.mockRestore()
     }

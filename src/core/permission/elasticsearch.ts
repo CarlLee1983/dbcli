@@ -7,7 +7,6 @@ import {
   type StatementType,
 } from '@/core/permission-guard'
 import { t_vars } from '@/i18n/message-loader'
-import { normalizeEsPath } from '@/utils/es-index-target'
 
 // ============================================================================
 // ELASTICSEARCH CLASSIFICATION
@@ -45,10 +44,35 @@ const DOCUMENT_ENDPOINTS = new Set(['_doc', '_source', '_create'])
  */
 const CAT_WITHHELD = new Set(['aliases', 'tasks'])
 
-/** Routed segments: query string discarded, percent-encoding and dot segments resolved. */
+/**
+ * The path Elasticsearch will route, taken from the parser the transport uses.
+ *
+ * `new URL` and not `normalizeEsPath`. dbcli had its own notion of a routed
+ * path that *approximated* what `fetch` does, and an approximation is exactly
+ * as good as its worst gap: `#` was one — `POST /_reindex#/_count` read as a
+ * two-segment count here while `fetch` sent `POST /_reindex` — and tab, LF, CR
+ * and `\` were three more. Enumerating them is how this keeps happening. This
+ * asks the same parser the request will go through.
+ *
+ * `normalizeEsPath` is still right for the blacklist, which decodes an index
+ * *name* because Elasticsearch decodes segments too. Two functions is not the
+ * hazard; two functions answering the same question was. Routing and naming are
+ * different questions, and `/orders/_doc/a%2Fb` is where they part company:
+ * three segments to the server, four to a decoder.
+ */
+export function routedPathname(rawPath: string): string {
+  try {
+    return new URL(rawPath, PATH_PARSE_BASE).pathname
+  } catch {
+    // An input the URL parser rejects outright cannot be routed either.
+    return ''
+  }
+}
+
+const PATH_PARSE_BASE = 'http://dbcli.invalid'
+
 function routedSegments(rawPath: string): string[] {
-  const withoutQuery = rawPath.split('?')[0] ?? rawPath
-  return normalizeEsPath(withoutQuery)
+  return routedPathname(rawPath)
     .split('/')
     .filter((segment) => segment.length > 0)
 }
@@ -133,7 +157,12 @@ export function classifyElasticsearchRequest(
 
   // 3. Reading one document. The id is opaque and is never matched against
   //    anything.
-  if (readMethod && segments.length === 3 && DOCUMENT_ENDPOINTS.has(at(1)!)) {
+  if (
+    readMethod &&
+    segments.length === 3 &&
+    DOCUMENT_ENDPOINTS.has(at(1)!) &&
+    isBareIndexSegment(at(0))
+  ) {
     return { ...READ, keywords }
   }
 
@@ -165,16 +194,21 @@ export function classifyElasticsearchRequest(
   }
 
   // 7. Writes to one document.
-  if (method === 'POST' && at(1) === '_update' && segments.length === 3) {
+  // Each of these requires a concrete index in position 0, as the read rules
+  // do. Elasticsearch forbids a leading `_`, `*`, `?` and `,` in an index name,
+  // so nothing legitimate is rejected — and rules that differ for no reason are
+  // how a gap gets built.
+  const scoped = isBareIndexSegment(at(0))
+  if (scoped && method === 'POST' && at(1) === '_update' && segments.length === 3) {
     return classify('UPDATE', false)
   }
-  if (method === 'POST' && at(1) === '_doc' && segments.length <= 3) {
+  if (scoped && method === 'POST' && at(1) === '_doc' && segments.length <= 3) {
     return classify('UPDATE', false)
   }
-  if (method === 'PUT' && segments.length === 3 && DOCUMENT_ENDPOINTS.has(at(1)!)) {
+  if (scoped && method === 'PUT' && segments.length === 3 && DOCUMENT_ENDPOINTS.has(at(1)!)) {
     return classify('INSERT', false)
   }
-  if (method === 'DELETE' && segments.length === 3 && at(1) === '_doc') {
+  if (scoped && method === 'DELETE' && segments.length === 3 && at(1) === '_doc') {
     return classify('DELETE', true)
   }
 

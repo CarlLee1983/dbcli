@@ -27,7 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`_bulk` 的 body 無法辨識或無法解析時判為 `DROP`。** 先前判 `SELECT`，而 bulk 分支由路徑單獨選中，所以那是一個通用的降級管道。
 
-- **路徑文字與實際路由不一致時一律拒絕，不再取決於有沒有設定黑名單。** 這道檢查原本只為黑名單服務，現在同時是分類器的支柱：`%2F` 可以製造出伺服器看不到的區段，`/a%2F_search/_delete_by_query` 在 dbcli 眼中會路由成一個搜尋。
+- **路徑必須與 URL parser 產出的字串逐位元組相同，否則一律拒絕**，而拒絕訊息會給出正確的寫法。dbcli 原本有一套自己的「路由後路徑」概念，它在*近似* `fetch` 的行為——而近似的價值等於它最糟的那個缺口。`#` 就是一個：`fetch` 會丟棄第一個 `#` 之後的一切，所以 `POST /_reindex#/_count` 在 dbcli 眼中是兩段的 count、伺服器收到的卻是 `POST /_reindex`，那是任意索引對拷，因此同時也是黑名單繞過——把受保護的索引拷進可讀的索引再正常讀。tab、換行與 `\` 是同一形狀的另外三個缺口。現在改問傳輸層用的同一個 parser，adapter 也改用它組 URL，所以驗證過的字串就是送出的字串。
+
+- **`source` query 參數一律拒絕。** Elasticsearch 接受 `source=<json>&source_content_type=...` 取代 request body，而這條路徑上每個 body 側檢查都讀 `req.body` —— 被保護的欄位名稱寫在偷渡的 body 裡時，那個為此存在的檢查完全看不到。參數以精確鍵名比對，`_source`、`_source_includes`、`_source_excludes` 不受影響。
+
+- **黑名單欄位名稱在 query string 裡也會被拒絕**，因為 URI search 形式直接在參數裡指名欄位（`?q=password:*`、`?sort=password:asc`、`?docvalue_fields=`），而值會以請求自選的 key 回傳。
 
 - **引號字串形式的 request body 一律拒絕。** JSON 字串字面值是合法的 body，卻能挾帶 NDJSON 通過每一個只走物件與陣列的檢查 —— 一個 bulk delete 曾因此從無害的路徑名稱抵達黑名單索引。
 

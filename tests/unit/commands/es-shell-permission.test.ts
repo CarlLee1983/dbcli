@@ -197,7 +197,7 @@ describe('the blacklist checks are scoped to a configured blacklist, and the tie
     const target = captured()
     await expect(
       run({ method: 'GET', path: '/_cat/../orders/_search' }, 'query-only', target, ['secrets'])
-    ).rejects.toThrow(/routes to/)
+    ).rejects.toThrow(/not the path the server would receive/)
     expect(target.calls).toBe(0)
   })
 
@@ -391,14 +391,108 @@ describe('the two bypasses found in review stay closed', () => {
     expect(target.calls).toBe(0)
   })
 
-  // The routed-vs-literal refusal is what closes `%2F` manufacturing a segment
-  // the server never sees. It used to run only when a blacklist was configured,
-  // which is not the default.
-  test('an obfuscated path is refused with no blacklist configured', async () => {
+  // `%2F` used to manufacture a segment the server never sees, because the
+  // classifier decoded the path and the server does not. It no longer does:
+  // the classifier reads what the URL parser produces, so this is one index
+  // named `a%2F_search` and a `_delete_by_query` endpoint — which is what
+  // Elasticsearch routes, and which needs admin.
+  test('an encoded separator is one segment, not two, and is tiered accordingly', async () => {
+    const refused = captured()
+    await expect(
+      run({ method: 'POST', path: '/a%2F_search/_delete_by_query' }, 'query-only', refused)
+    ).rejects.toThrow()
+    expect(refused.calls).toBe(0)
+
+    const permitted = captured()
+    await run({ method: 'POST', path: '/a%2F_search/_delete_by_query' }, 'admin', permitted)
+    expect(permitted.calls).toBe(1)
+  })
+
+  // CRITICAL-3: `fetch` discards everything from the first `#`, so the shell
+  // read a longer path than the server received. `POST /_reindex#/_count`
+  // classified as a two-segment count and executed at query-only, which is an
+  // arbitrary index-to-index copy and therefore also a blacklist bypass.
+  test.each([
+    ['/_reindex#/_count'],
+    ['/_aliases#/_count'],
+    ['/_sql#/_search'],
+    ['/_bulk#/_count'],
+    ['/_msearch#/_count'],
+  ])('%s is refused: the server would not receive that path', async (path) => {
+    const target = captured()
+    await expect(run({ method: 'POST', path }, 'query-only', target)).rejects.toThrow(
+      /not the path the server would receive/
+    )
+    expect(target.calls).toBe(0)
+  })
+
+  test.each([['/orders/_del\tete_by_query'], ['/a\\..\\_reindex']])(
+    'a path the URL parser rewrites is refused: %s',
+    async (path) => {
+      const target = captured()
+      await expect(run({ method: 'POST', path }, 'admin', target)).rejects.toThrow(
+        /not the path the server would receive/
+      )
+      expect(target.calls).toBe(0)
+    }
+  )
+
+  test('the refusal hands back the spelling the server would receive', async () => {
+    const target = captured()
+    await expect(run({ method: 'GET', path: '/idx/_doc/a b' }, 'admin', target)).rejects.toThrow(
+      /Write it as '\/idx\/_doc\/a%20b'/
+    )
+    expect(target.calls).toBe(0)
+  })
+
+  // HIGH: Elasticsearch accepts `source=<json>` in place of a body, where every
+  // body-side check is blind.
+  test('a body smuggled through the query string is refused', async () => {
     const target = captured()
     await expect(
-      run({ method: 'POST', path: '/a%2F_search/_delete_by_query' }, 'admin', target)
-    ).rejects.toThrow(/routes to/)
+      run(
+        {
+          method: 'GET',
+          path: '/public/_search?source={"sort":[{"password":"asc"}]}&source_content_type=application/json',
+        },
+        'query-only',
+        target
+      )
+    ).rejects.toThrow(/`source` in the query string/)
+    expect(target.calls).toBe(0)
+  })
+
+  // The parameter is matched as an exact key. `_source`, `_source_includes`
+  // and `_source_excludes` are legitimate and a substring test would catch them
+  // — this repo has shipped that bug before.
+  test('_source and its relatives are not caught by the source refusal', async () => {
+    const target = captured()
+    await run(
+      { method: 'GET', path: '/orders/_search?_source_includes=name' },
+      'query-only',
+      target
+    )
+    expect(target.calls).toBe(1)
+  })
+
+  // The URI-search form names fields in the query string, bypassing the body
+  // check that exists to stop exactly this disclosure.
+  test.each([
+    ['/orders/_search?q=password:*'],
+    ['/orders/_search?sort=password:asc'],
+    ['/orders/_search?docvalue_fields=password'],
+    ['/orders/_search?_source_includes=password'],
+  ])('a protected field named in the query string is refused: %s', async (path) => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        { method: 'GET', path },
+        fakeAdapter(target) as never,
+        [],
+        { orders: ['password'] },
+        { permission: 'query-only' }
+      )
+    ).rejects.toThrow(/blacklist-protected/)
     expect(target.calls).toBe(0)
   })
 })

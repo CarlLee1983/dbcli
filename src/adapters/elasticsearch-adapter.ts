@@ -315,13 +315,24 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     return this.baseUrl
   }
 
+  /** A base without a trailing slash drops its last path segment when resolved against. */
+  private static base(baseUrl: string): string {
+    return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  }
+
   async request<T>(
     method: string,
     path: string,
     body?: unknown,
     options?: { timeout?: number }
   ): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`
+    // Built with the URL parser rather than by concatenation, so that what the
+    // shell verified byte-for-byte against `new URL` is what goes out — a
+    // `baseUrl` carrying a path prefix would otherwise make the two disagree.
+    const url = new URL(
+      path.startsWith('/') ? path.slice(1) : path,
+      ElasticsearchAdapter.base(this.baseUrl)
+    ).toString()
     const headers = await this.getHeaders()
     const controller = new AbortController()
     const timeout = options?.timeout ?? this.options.timeout ?? 5000

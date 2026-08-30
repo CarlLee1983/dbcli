@@ -6,6 +6,7 @@ import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target
 import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
+  routedPathname,
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
@@ -177,8 +178,12 @@ export async function runEsRequest(
   // `/secrets/_search`, and `/_cat/../secrets/_search` resolves to
   // `/secrets/_search`. Checking the raw text answers a question about a
   // request the server will never see.
-  const rawPath = req.path.split('?')[0] ?? req.path
-  const routedPath = normalizeEsPath(rawPath)
+  const [pathOnly = req.path, queryString = ''] = req.path.split('?')
+  const query = new URLSearchParams(queryString)
+  // `normalizeEsPath` decodes, which is right for reading an index *name* and
+  // wrong for deciding where a request routes. The classifier answers the
+  // second question with the URL parser; this answers the first.
+  const routedPath = normalizeEsPath(pathOnly)
   const index = extractIndexFromPath(routedPath)
 
   // `_bulk` is classified from its NDJSON body, which arrives here already
@@ -229,19 +234,32 @@ export async function runEsRequest(
   }
 
   async function execute(): Promise<unknown> {
-    // Unconditional, and first. This began life as a blacklist check and is now
-    // load-bearing for the tier gate too: the classifier reads the routed path,
-    // the server reads the text, and `%2F` can manufacture a segment the server
-    // never sees — `/a%2F_search/_delete_by_query` routes, in dbcli's view, to
-    // a search. Gating this on a blacklist being configured would leave the
-    // classifier reading a string the server will not receive, for the default
-    // configuration. A legitimate request never trips it: it costs only a path
-    // that spells something other than where it goes.
-    const literalSegments = `/${rawPath.split('/').filter(Boolean).join('/')}`
-    if (routedPath !== literalSegments) {
+    // Byte-identity against the parser the request will actually go through.
+    //
+    // Comparing against a dbcli-owned normaliser is what let `#` through:
+    // `POST /_reindex#/_count` read here as a two-segment count while `fetch`
+    // sent `POST /_reindex`, and tab, LF, CR and `\` are the same shape of gap.
+    // The rule is deliberately unforgiving — no resolution, no repair — because
+    // any softening reintroduces a second path function, which is the class of
+    // defect this removes. The canonical spelling is handed back so an operator
+    // who wrote a legitimate path with a space or a non-ASCII document id can
+    // copy the answer rather than guess at an encoding.
+    const canonicalPath = routedPathname(pathOnly)
+    if (canonicalPath !== pathOnly) {
       throw new Error(
-        `Refused: '${req.path}' routes to '${routedPath}', which is not what it ` +
-          `spells. Write the path the server will receive.`
+        `Refused: '${pathOnly}' is not the path the server would receive. ` +
+          `Write it as '${canonicalPath}'.`
+      )
+    }
+
+    // Elasticsearch accepts `source=<json>&source_content_type=...` in place of
+    // a request body, and every body-side check here — protected fields, index
+    // names, the size cap — reads `req.body`. Refusing the parameter restores
+    // that invariant instead of teaching four checks about a second body.
+    if (query.has('source')) {
+      throw new Error(
+        'Refused: `source` in the query string is a request body by another route. ' +
+          'Write the body as JSON.'
       )
     }
 
@@ -313,7 +331,18 @@ export async function runEsRequest(
     // protected field name is refused too) in the direction that withholds data.
     const protectedFields = new Set(Object.values(blacklistColumns).flat())
     if (protectedFields.size > 0) {
-      const named = findStrings(req.body).find((text) => protectedFields.has(text))
+      // The URI-search form names fields in the query string rather than the
+      // body — `?q=password:*`, `?sort=password:asc`, `?docvalue_fields=`,
+      // `?_source_includes=` — and each returns the value under a key the
+      // request chose, which is the same disclosure the body check exists to
+      // stop. Values are split on the separators Elasticsearch accepts inside
+      // them so a field named among several is still seen.
+      const queryTerms = [...query.entries()].flatMap(([, value]) =>
+        value.split(/[\s,:()"'[\]{}]+/).filter((term) => term.length > 0)
+      )
+      const named = [...findStrings(req.body), ...queryTerms].find((text) =>
+        protectedFields.has(text)
+      )
       if (named !== undefined) {
         throw new Error(
           `BlacklistRejection: field '${named}' is blacklist-protected and cannot be named in a ` +

@@ -261,3 +261,15 @@ test('一般深度的 body 不受深度上限影響', () => {
   const nested = JSON.parse('['.repeat(50) + ']'.repeat(50)) as unknown
   expect(() => assertNoElasticsearchScript(nested)).not.toThrow()
 })
+
+/**
+ * 循環參照的 body 由深度上限接住，不需要另外記已訪節點——重點是它以一個
+ * 說得出原因的拒絕收場，而不是 `RangeError`。目前只有函式庫呼叫端能手工建出
+ * 這種物件（`JSON.parse` 產不出），而 `AdapterFactory` 已不在公共表面上。
+ */
+test('循環參照的 body 以明確的拒絕收場', () => {
+  const cyclic: Record<string, unknown> = { x: 1 }
+  cyclic.self = cyclic
+  expect(() => assertNoElasticsearchScript(cyclic)).toThrow(ServerSideScriptRejection)
+  expect(() => assertNoElasticsearchScript(cyclic)).toThrow(/nests deeper/)
+})

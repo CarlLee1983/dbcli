@@ -101,7 +101,14 @@ export function assertNoMongoServerSideScript(query: unknown): void {
 }
 
 /**
- * @throws {ServerSideScriptRejection} DSL 含 script / script_fields
+ * @throws {ServerSideScriptRejection} DSL 含 script 槽，或巢狀過深無法檢查
+ *
+ * 已知的取捨：掃描不分「請求的控制結構」與「文件內容」，所以一份**欄位名叫
+ * `script`** 的文件走 `_doc` / `_create` / `_update` 寫入時會被誤擋。目前不可
+ * 觸發——`insert.ts` 與 `update.ts` 對 Elasticsearch 明確拒絕，adapter 的
+ * `insert()` / `update()` 從 CLI 走不到——但 ES 寫入功能實作出來的那天，這會
+ * 變成一個沒人解釋得了的錯誤。正確的修法不是在 `insert()` 繞過檢查，而是讓
+ * 掃描知道 `doc` 之下是資料不是指令。
  */
 export function assertNoElasticsearchScript(body: unknown): void {
   const key = findKey(body, isElasticsearchScriptKey)

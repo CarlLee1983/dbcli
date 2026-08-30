@@ -481,12 +481,14 @@ export async function runEsRequest(
     // searches here and had `size` written into the document — a check reading
     // one set of bytes while another goes out, which is the shape of the two
     // earlier CRITICALs. This was the last raw-path substring test in the file.
-    // 條件與 `classifyElasticsearchRequest` 的規則 2 一致，而且讀的是**同一個**
-    // 路徑函式（`routedPathname`，不解碼）。先前這裡讀 `normalizeEsPath`（會
-    // 解碼）又不看 method，於是 `PUT /orders/_search` 與 `POST /orders/%5Fsearch`
-    // 上兩者給出不同答案。都不可利用——ES 不把寫入路由到 `/_search`，分歧也都
-    // 落在需要 admin 的那一側——但「同一個請求、兩個函式、兩種答案」正是前幾輪
-    // CRITICAL 的形狀，不留著。
+    // 讀的是與 `classifyElasticsearchRequest` **同一個**路徑函式
+    // （`routedPathname`，不解碼），method 條件也與規則 2 相同。先前這裡讀
+    // `normalizeEsPath`（會解碼）又不看 method，於是 `PUT /orders/_search` 與
+    // `POST /orders/%5Fsearch` 上兩者給出不同答案。
+    //
+    // 刻意**不**完全等同規則 2：規則 2 也涵蓋 `_count`，而 `_count` 不吃 `size`，
+    // 注進去只會讓 Elasticsearch 回錯誤。差異寫在這裡，不寫成「一致」——上一輪
+    // 這句註解就是宣稱一致而實際不是，而錯的那一半沒人去查。
     const searchSegments = routedPathname(req.path)
       .split('/')
       .filter((segment) => segment.length > 0)

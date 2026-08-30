@@ -455,3 +455,55 @@ describe('ElasticsearchAdapter server-side script guard', () => {
     }
   })
 })
+
+/**
+ * `execute()` 只發得出 `/<index>/_search`。
+ *
+ * `q` 與 `export` 的 Elasticsearch 路徑從不呼叫 `enforceElasticsearchPermission`，
+ * 目前無害**只因為**這件事——SELECT 在最低 tier 也放行，所以只要 `execute()`
+ * 發不出第二種端點，缺少 gate 就不構成缺口。那是一個隱性依賴，先前沒有任何
+ * 東西釘住它：`execute()` 一旦支援第二種端點，那兩處立刻變成現成的繞道。
+ *
+ * 這個測試不讓那個依賴繼續隱性。它紅掉的時候，要做的不是改測試，是去那兩處
+ * 補上 gate。
+ */
+describe('execute() 的請求形狀是那兩處缺少 gate 的唯一理由', () => {
+  function adapter(): ElasticsearchAdapter {
+    return new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
+    })
+  }
+
+  test.each([
+    ['DSL 查詢', '{"query":{"match_all":{}}}'],
+    ['字串查詢', 'status:active'],
+    ['index 名稱含斜線與問號的嘗試', '{"query":{"match_all":{}}}'],
+  ])('%s 只送到 /<index>/_search', async (_label, query) => {
+    const seen: { method?: string; url?: string } = {}
+    const mockFetch = spyOn(globalThis, 'fetch').mockImplementation((async (
+      url: string,
+      init: { method?: string }
+    ) => {
+      seen.url = String(url)
+      seen.method = init?.method
+      return new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    }) as unknown as typeof fetch)
+
+    try {
+      await adapter().execute(query, ['logs/../secrets?x=1'])
+      const path = new URL(seen.url!).pathname
+      expect(path.endsWith('/_search')).toBe(true)
+      // index 是唯一的變動段，且必須是單一段——編碼過的 `/` 不得長出新段。
+      expect(path.split('/').filter((s) => s.length > 0)).toHaveLength(2)
+      expect(['GET', 'POST']).toContain(seen.method)
+    } finally {
+      mockFetch.mockRestore()
+    }
+  })
+})

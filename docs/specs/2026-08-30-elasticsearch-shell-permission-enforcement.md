@@ -46,8 +46,12 @@ The Elasticsearch shell classifies every request through the same Elasticsearch 
 classifier that `dbcli query` uses, and refuses anything the configured tier does not
 allow — before the request reaches the adapter.
 
-The shell's object-scoped checks run unconditionally, whether or not a blacklist is
-configured.
+~~The shell's object-scoped checks run unconditionally, whether or not a blacklist is
+configured.~~ **Corrected after implementation — see ADR-0014 Decision 9.** The tier
+check runs unconditionally; the object-scoped checks below it are skipped when *neither*
+`blacklist.tables` nor `blacklist.columns` is configured, because with no protected object
+they have nothing to compare a request against and refusing would cost ordinary reads
+(`_sql`, `_mget`, `_search/scroll`) while hiding no field.
 
 Every request the shell executes writes an audit entry, so the path is reviewable like
 every other write path.
@@ -71,9 +75,9 @@ gives for the same request.
 10. As an operator, I want a refusal to name the permission tier the request would need, so that I can decide whether to escalate deliberately rather than guess.
 11. As an operator, I want a refusal to leave the cluster untouched, so that a refused request has no partial effect.
 12. As an operator with `permission: admin`, I want destructive requests to still work, so that the fix does not remove a capability I deliberately configured.
-13. As an operator with no blacklist configured, I want the shell's path-normalization refusal to run anyway, so that an encoded or traversing path cannot reach a resource by a route the checks did not see.
-14. As an operator with no blacklist configured, I want unscoped non-metadata paths refused anyway, so that a request that cannot be attributed to an index cannot be checked and is therefore not run.
-15. As an operator with no blacklist configured, I want request-body index names checked anyway, so that the object a request touches is checked wherever it is named.
+13. As an operator with no blacklist configured, I want the shell's path-normalization refusal to run anyway, so that an encoded or traversing path cannot reach a resource by a route the checks did not see. *(Holds: the byte-identity refusal sits above the blacklist gate.)*
+14. ~~As an operator with no blacklist configured, I want unscoped non-metadata paths refused anyway, so that a request that cannot be attributed to an index cannot be checked and is therefore not run.~~ **Not delivered for a blacklist-less connection — ADR-0014 Decision 9.** Holds as soon as any blacklist entry exists.
+15. ~~As an operator with no blacklist configured, I want request-body index names checked anyway, so that the object a request touches is checked wherever it is named.~~ **Not delivered for a blacklist-less connection — ADR-0014 Decision 9.** Holds as soon as any blacklist entry exists.
 16. As an operator, I want the blacklist behaviour I already rely on to be unchanged when I do have one configured, so that this change adds refusals and removes none.
 17. As an operator reviewing an incident, I want every Elasticsearch shell request recorded in the audit log, so that I can establish what was run and when.
 18. As an operator reviewing an incident, I want a refused Elasticsearch shell request recorded too, so that attempts are visible and not only successes.
@@ -105,7 +109,11 @@ an earlier one was wrong. Adding an eleventh inside the shell would be the same 
 **The shell has better inputs than the query path.** The query path synthesises a request
 shape — it hard-codes a search against a named index and classifies that. The shell parses
 a real method and path from operator input, so it can hand the classifier the actual
-request. No adaptation layer is needed.
+request. ~~No adaptation layer is needed.~~ **Corrected after implementation:** one thin
+adaptation remains. `_bulk` is classified from its NDJSON body, which the shell has already
+parsed, so `runEsRequest` re-serialises the body to text rather than teaching the
+classifier a second input shape — the trade the sentence anticipated, made in the shell
+rather than in the classifier.
 
 **Enforcement happens inside the request runner, not in the read loop.** The shell's
 request runner is already the single function through which every shell request passes,
@@ -151,7 +159,10 @@ fixing the thing it failed to disclose would repeat the omission.
 
 **Refusal is by the existing permission error type, with the existing message shape.**
 The shell surfaces the message the same way it surfaces its blacklist refusals today. No
-new error type, no new message format, no new exit code.
+new error type, no new message format. ~~No new exit code.~~ **Overturned — see ADR-0014
+Decision 10.** The Elasticsearch shell now exits `1` when any request in the session
+failed; exiting `0` after a refusal made a refused piped script indistinguishable from a
+successful one, which defeats US 21.
 
 ## Testing Decisions
 
@@ -222,9 +233,13 @@ stale entry it touches.
 single entry-point-independent source is the final slice of the programme. This spec reuses
 one existing classifier rather than beginning that consolidation.
 
-**The published library surface.** The `core` entry point exports an adapter factory that
+**The published library surface.** ~~The `core` entry point exports an adapter factory that
 hands out an ungated executor. That is a real exposure and a separate decision, recorded
-with a condition tied to when its intended consumer begins using it.
+with a condition tied to when its intended consumer begins using it.~~ **Overturned — see
+ADR-0014 Decision 5.** `AdapterFactory` was removed from `src/core/public.ts` inside this
+branch: its adapters expose a public `request()`, which is precisely the ungated door this
+spec exists to close, and closing it costs nothing only while the intended consumer
+(`dbcli-gui`) does not yet exist.
 
 **Routing the Elasticsearch shell through the shared shell engine.** Making the
 Elasticsearch branch use the same engine as SQL and Redis would be structurally better and

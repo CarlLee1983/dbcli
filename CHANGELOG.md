@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **shell 的錯誤訊息逃脫控制字元。** 訊息內嵌使用者寫的路徑，而 `ESC[2K ESC[1G` 會清掉整行並把游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功訊息。audit 檔與 `audit tail` 早已處理這件事，唯獨 shell 自己的 stderr 沒有；逃脫邏輯抽成共用的 `escapeControlCharacters`。
 
-- **ES shell 的退出碼反映失敗。** 先前一律 `exit(0)`，所以 `dbcli shell < script.txt` 的呼叫端分不出「全部成功」與「一條都沒跑」——權限拒絕、blacklist 拒絕、strict-audit 拒絕全部只印一行紅字。
+- **BREAKING（對用管線或腳本驅動 ES shell 的呼叫端而言）：ES shell 的退出碼反映失敗。** 先前一律 `exit(0)`，所以 `dbcli shell < script.txt` 的呼叫端分不出「全部成功」與「一條都沒跑」——權限拒絕、blacklist 拒絕、strict-audit 拒絕全部只印一行紅字。**這會改變既有腳本的行為**：一個 session 內只要有任何一個請求失敗，`dbcli shell` 就以 `1` 結束，先前依賴它一律成功的 CI 步驟會開始紅。記在 ADR-0014 Decision 10。
 
 - **不含欄位名的 query 參數不再進入黑名單切詞器。** `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被誤擋，而 `routing`／`scroll`／`preference`／`filter_path` 的值沒有任何欄位名語意。
 

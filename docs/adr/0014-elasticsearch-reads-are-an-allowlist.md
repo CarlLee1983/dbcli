@@ -500,6 +500,56 @@ results by aiming at code that had never been attacked directly, and the two
 worst findings came from asking the same question in a new place: *does this
 matcher normalise both of the things it compares?*
 
+## Decision 9: the object-scoped checks answer a blacklist question, and asking it of nobody costs something
+
+The spec for this change wrote that "the shell's object-scoped checks run
+unconditionally, whether or not a blacklist is configured". The code never did
+that: with neither `blacklist.tables` nor `blacklist.columns` configured,
+`runEsRequest` sends. Round eight widened that gate from `tables` to
+`tables ∨ columns` — closing a real defect — but left the gate standing, and
+nobody reconciled the sentence. **The sentence is the part that was wrong**, and
+this decision is where the gate is now recorded rather than assumed.
+
+Two of the checks behind the gate — the unscoped-path refusal and the body index
+check — are not asking whether this operator may perform this operation. That
+question is answered above them by `enforceElasticsearchPermission`, which runs
+unconditionally and stays unconditional. They are asking whether a request can be
+*attributed to an index*, so that an index the operator protected can be
+recognised in it. With no index protected there is nothing for the answer to be
+compared against: refusing `_sql`, `_mget` and `_search/scroll` would take away
+three ordinary read paths in exchange for hiding no field, because no field was
+declared.
+
+The gate is therefore not the tier gate weakening. A `query-only` connection is
+held by the classifier whether or not a blacklist exists, and an unrecognised
+shape still classifies as `DROP`. What the gate skips is only the layer whose
+subject — a protected object — a blacklist-less configuration does not have.
+
+**The disclosure, stated plainly:** US 14 and US 15 do not hold for a connection
+with no blacklist configured. US 13 does — the byte-identity path refusal is
+above the gate and covers every request, which is why it is the one of the three
+that survives here. An operator who wants `_sql` refused arms the whole
+object-scoped layer with a single blacklist entry. This is the third accepted
+disclosure in this record and it belongs beside the two in Decision 4.
+
+## Decision 10: a refused shell request exits non-zero, and the spec's "no new exit code" did not survive contact with a pipe
+
+The spec closed its implementation decisions with "no new error type, no new
+message format, no new exit code". The first two held. The third did not, and the
+reason is the same one that produced the audit-draining fix: a piped shell has a
+caller, and a caller reads the exit code.
+
+`dbcli shell < script.txt` previously exited `0` whether every request ran or
+every request was refused. For the caller this record exists to protect — an
+agent driving the shell non-interactively — that makes a permission refusal
+indistinguishable from success, which defeats US 21 in the same spec that forbade
+the change. `runEsShell` now exits `1` if any request in the session failed.
+
+This is breaking for anyone whose script relied on the shell always succeeding,
+and it is marked as such in the changelog. It is recorded here rather than
+silently, because the spec forbids it in writing and a later reader finding the
+contradiction would otherwise be right to "fix" the code back.
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
@@ -542,4 +592,9 @@ re-splitting them after decoding; or `isUnscopedMetadataPath` in
 `src/commands/es-shell.ts` matches on the first path segment alone; or
 `BlacklistConfigSchema` and `NamedConnectionSchema` in
 `src/utils/validation.ts` stop rejecting the blacklist shapes that parse to
-nothing; or `blacklist add`/`remove` writes a v2 config through the v1 writer.
+nothing; or `blacklist add`/`remove` writes a v2 config through the v1 writer; or
+`enforceElasticsearchPermission` in `src/commands/es-shell.ts` stops being
+called before the blacklist gate there, or becomes conditional on any
+configuration; or that gate stops being keyed on *both* `blacklist.tables` and
+`blacklist.columns` being empty; or `runEsShell` in that file exits `0` after a
+request in the session failed.

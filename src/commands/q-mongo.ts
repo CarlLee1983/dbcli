@@ -1,4 +1,4 @@
-import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory } from '@/adapters'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { maskMongoRowsForCollections } from '@/core/mongo/field-masker'

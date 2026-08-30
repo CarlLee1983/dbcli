@@ -3673,9 +3673,9 @@ GET /orders/_search
 - Every request is written to the audit log whether it executed or was refused, tiered by what the request would do rather than by the command that issued it.
 - Index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
 
-> **Before v3.0.1 this path applied no permission check at all.** A `query-only`
+> **Before v4.0.0 this path applied no permission check at all.** A `query-only`
 > Elasticsearch connection could delete documents, drop an index or rewrite a mapping
-> through the shell, and nothing was recorded. See the 3.0.1 entry in `CHANGELOG.md`.
+> through the shell, and nothing was recorded. See the 4.0.0 entry in `CHANGELOG.md`.
 
 ### Doctor and diagnostics
 

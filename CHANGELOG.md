@@ -5,39 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Redis 與 MongoDB：同兩個形狀，另外兩個引擎
-
-ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比的兩樣東西都正規化？」問到其他引擎上，找到 Redis 四個、MongoDB 兩個 CRITICAL。設計決策記在 ADR-0015。
-
-### Fixed
-
-- **BREAKING（對 `blacklist.tables` 設了 glob 的 Redis 使用者而言）：`insert`／`update`／`delete` 現在也套 glob 黑名單。** 這三條只經過 `BlacklistValidator.checkTableBlacklist`（字面相等，不懂 glob），而 `RedisAdapter` 的三個方法一次 `checkKeyArgs` 都沒有。於是 `dbcli blacklist table add 'secrets:*'` 之後 `dbcli delete secrets:api_key` 照刪——而 `'secrets:*'` 正是使用者文件教的寫法，只有寫成完整字面 key 才擋得住。檢查改掛在 adapter 邊界。先前能刪改這些 key 的腳本現在會被擋。
-
-- **`redis.mask` 對 `query`／`list`／`schema`／`insert`／`update`／`delete` 完全無效。** mask rules 是 `createRedisAdapter` 的第三個選擇性參數，八個呼叫端裡六個沒傳。文件明寫 `dbcli query "GET secret:api_key"` 回 `{"value":"[REDACTED]"}`，實際回明文。`export` 與 `shell` 有傳，所以任何人想驗證這個功能時它都是好的。factory 改為接整個 config。
-
-- **指令表與權限白名單的落差不再是黑名單繞過。** `checkKeyArgs` 拿不到 command spec 時 fail-open，而 32 個被權限放行的指令沒有 spec：`LPOP secrets:list` 在 `read-write` 下把黑名單 key 的值取出來兼銷毀，`XRANGE secrets:stream - +` 在 `query-only` 下讀得到。改為 fail-closed（只在有設黑名單時生效），補齊 32 個 spec，並加契約測試釘住兩張表的關係。`RedisCommandSpec.permissionTier` 直接移除：它是一份沒人強制、已在五個指令上分歧的副本。
-
-- **`SCAN` 不再列舉得出黑名單 key 名。** `SCAN 0 MATCH secrets:*` 只要 `query-only` 且完全不被檢查，而 `KEYS secrets:*` 要 `admin` 且被擋——低權限那條路才是通的。MATCH 現在會被找出來（不限位置、大小寫不敏感）並比對重疊；而只修 MATCH 擋不住裸 `SCAN 0`，所以 `SCAN` 與 `KEYS` 的回應也會把受保護的 key 名濾掉。cursor 不動。
-
-- **MongoDB 的整份文件轉移也擋得住。** 上一項只擋「請求裡指名了受保護欄位」，而 `[{"$project":{"all":"$$ROOT"}}]` 一個欄位名都沒提就把整份文件放到自選的鍵底下回傳，遮罩比對的是完整路徑 `all.password`、對不上錨定在 `password` 的規則。`{"$objectToArray":"$$ROOT"}` 更徹底：文件變成 `[{k:"password",v:"p1"}]`，受保護的名字成了**值**，任何看鍵名的遮罩結構上都追不到。`$replaceRoot`／`$replaceWith` 把子樹提到頂層，同樣讓 `user.password` 這種規則失去指涉。這些現在一律視為「一次指名了所有受保護欄位」；`$getField` 的 `field` 若是運算式而非字串常數也一併拒絕——dbcli 判斷不出它會解析成什麼名字，就不轉發。`$$ROOT` 原本**有**被處理，但是當成「要剝掉的前綴」（為了讓 `$$ROOT.password` 命中），單獨出現時被讀成一個叫 `ROOT` 的路徑。
-
-- **`SCAN` 的 `MATCH` 改為檢查每一個出現位置。** Redis 解析選項是後者覆寫前者，所以 `SCAN 0 MATCH benign:* MATCH secrets:*` 真正送出去的是 `secrets:*`，而只讀第一個等於檢查了一個從未送出的 pattern。回應過濾本來就會把 key 濾掉所以沒有洩漏，但「指名就拒絕」這條規則在這裡沒有成立。
-
-- **`filterReturnedKeyNames` 對認不得的回應形狀改為 fail-closed。** 原本原樣轉發，與同一批修補在 `checkKeyArgs` 選的預設相反。非字串的 key 同樣丟棄——無法與 glob 比對的東西，回答不了「這個受不受保護」。
-
-- **`MongoDBAdapter.insert` 補上兩個攔截點。** 它既沒有 `assertNoMongoServerSideScript` 也沒有欄位檢查，而 #47 的註解宣稱所有路徑一致受檢。實際蓋住它的是 `insert.ts` 的 `checkColumnBlacklistOnWrite`——掛在呼叫端的控制，正是 ADR-0015 Decision 1 要移除的安排。
-
-- **`$lookup` 帶進來的 collection 名改為大小寫不敏感比對。** 請求側是精確比對、遮罩側 (`findCaseInsensitive`) 不敏感，於是同一份設定在遮罩生效、在請求側拒絕不生效。
-
-- **MongoDB 的 `blacklist.columns` 擋得住換名了。** 遮罩只看回傳文件的鍵名，而 aggregation 自己決定那些鍵名：`$project:{"leak":"$password"}`、`$addFields`、`$set` 都把值搬到別的鍵下原文回傳，`query-only` 即可。`$group:{"_id":"$password"}` 更是保證出口——`_id` 為了保住文件參照而被無條件豁免。回應側追不完，所以改成**請求側拒絕**：請求裡指名受保護欄位就拒絕，與 Elasticsearch 的 `namesProtectedField` 同一個形狀，包含同樣的過度拒絕（值剛好等於受保護欄位名也會被拒）。檢查掛在 `assertNoMongoServerSideScript` 旁邊，那是所有 MongoDB 路徑本來就共用的攔截點。
-
-## [3.0.1] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission
+## [4.0.0] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission，同兩個形狀在 Redis 與 MongoDB 也成立
 
 **建議所有把 Elasticsearch 連線交給 AI agent 操作的使用者升級。** `dbcli shell` 連到 Elasticsearch 時，完全沒有檢查連線設定的 permission 等級就把請求送到叢集：`shell.ts` 在到達 SQL 與 Redis 共用的那道閘門之前就分支到 `es-shell.ts`。因此 `permission: query-only` 的連線可以送出 `POST /<index>/_delete_by_query` 清空索引、`DELETE /<index>` 刪掉索引、`PUT /<index>/_mapping` 改寫 schema —— 同樣這些請求走 `dbcli query` 一律會被拒絕。這條路徑也不寫任何 audit 紀錄，所以受影響的人事後無從查證發生過什麼。
 
 它可以腳本化：shell 用管線餵入的 stdin 驅動與互動輸入相同的迴圈，所以一個 agent 用單一非互動指令就能做到上述任何一項。
 
 影響範圍是所有 Elasticsearch 連線，`1.22`（ES shell 首次出現）起至 `3.0.0` 止。SQL、Redis、MongoDB 的 shell 不受影響 —— 它們走的是有閘門的那一條分支。沒有任何生產事故的紀錄，但這是從缺席推論出來的，而這條路徑本來就不寫 audit，受影響的操作者本來就無從發現。
+
+ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比的兩樣東西都正規化？」問到其他引擎上，找到 Redis 四個、MongoDB 兩個 CRITICAL。設計決策記在 ADR-0015。
 
 ### Fixed
 
@@ -150,6 +126,26 @@ ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比�
 - **經 `query` 執行的 DML 記成 `db-write` 而非 `readonly`。** `writeAuditEntry` 在沒拿到 `sideEffectTier` 時取命令的能力等級，而 `query` 的能力是 `readonly`。於是 `DELETE`／`UPDATE`／`INSERT`／`CREATE TABLE AS` 全部以 `readonly` 入帳，而被寫入閘門**拒絕**的 `DROP`／`TRUNCATE` 由 `recordGateDecision` 帶著 `db-write`——以 tier 篩選破壞性操作會找到被擋下的那些、漏掉真正發生的那些。「讀」的判定沿用既有的 tier 語意（在 `query-only` 下被允許的就是讀），而不是另外維護一份唯讀型別清單。
 
 - **`blacklist table add` 對 SQL 與 MongoDB 連線拒絕萬用字元條目。** 上一版為了 Elasticsearch 與 Redis 的名稱放寬了字元集，但沒有問「這個寫法對這個引擎有沒有意義」：那兩個引擎的黑名單比對是字面相等，`secret*` 這種條目永遠不會命中，而 CLI 回報成功。錯誤訊息會說出原因，不只是「名稱非法」。
+
+- **BREAKING（對 `blacklist.tables` 設了 glob 的 Redis 使用者而言）：`insert`／`update`／`delete` 現在也套 glob 黑名單。** 這三條只經過 `BlacklistValidator.checkTableBlacklist`（字面相等，不懂 glob），而 `RedisAdapter` 的三個方法一次 `checkKeyArgs` 都沒有。於是 `dbcli blacklist table add 'secrets:*'` 之後 `dbcli delete secrets:api_key` 照刪——而 `'secrets:*'` 正是使用者文件教的寫法，只有寫成完整字面 key 才擋得住。檢查改掛在 adapter 邊界。先前能刪改這些 key 的腳本現在會被擋。
+
+- **`redis.mask` 對 `query`／`list`／`schema`／`insert`／`update`／`delete` 完全無效。** mask rules 是 `createRedisAdapter` 的第三個選擇性參數，八個呼叫端裡六個沒傳。文件明寫 `dbcli query "GET secret:api_key"` 回 `{"value":"[REDACTED]"}`，實際回明文。`export` 與 `shell` 有傳，所以任何人想驗證這個功能時它都是好的。factory 改為接整個 config。
+
+- **指令表與權限白名單的落差不再是黑名單繞過。** `checkKeyArgs` 拿不到 command spec 時 fail-open，而 32 個被權限放行的指令沒有 spec：`LPOP secrets:list` 在 `read-write` 下把黑名單 key 的值取出來兼銷毀，`XRANGE secrets:stream - +` 在 `query-only` 下讀得到。改為 fail-closed（只在有設黑名單時生效），補齊 32 個 spec，並加契約測試釘住兩張表的關係。`RedisCommandSpec.permissionTier` 直接移除：它是一份沒人強制、已在五個指令上分歧的副本。
+
+- **`SCAN` 不再列舉得出黑名單 key 名。** `SCAN 0 MATCH secrets:*` 只要 `query-only` 且完全不被檢查，而 `KEYS secrets:*` 要 `admin` 且被擋——低權限那條路才是通的。MATCH 現在會被找出來（不限位置、大小寫不敏感）並比對重疊；而只修 MATCH 擋不住裸 `SCAN 0`，所以 `SCAN` 與 `KEYS` 的回應也會把受保護的 key 名濾掉。cursor 不動。
+
+- **MongoDB 的整份文件轉移也擋得住。** 底下那則「`blacklist.columns` 擋得住換名了」只擋「請求裡指名了受保護欄位」，而 `[{"$project":{"all":"$$ROOT"}}]` 一個欄位名都沒提就把整份文件放到自選的鍵底下回傳，遮罩比對的是完整路徑 `all.password`、對不上錨定在 `password` 的規則。`{"$objectToArray":"$$ROOT"}` 更徹底：文件變成 `[{k:"password",v:"p1"}]`，受保護的名字成了**值**，任何看鍵名的遮罩結構上都追不到。`$replaceRoot`／`$replaceWith` 把子樹提到頂層，同樣讓 `user.password` 這種規則失去指涉。這些現在一律視為「一次指名了所有受保護欄位」；`$getField` 的 `field` 若是運算式而非字串常數也一併拒絕——dbcli 判斷不出它會解析成什麼名字，就不轉發。`$$ROOT` 原本**有**被處理，但是當成「要剝掉的前綴」（為了讓 `$$ROOT.password` 命中），單獨出現時被讀成一個叫 `ROOT` 的路徑。
+
+- **`SCAN` 的 `MATCH` 改為檢查每一個出現位置。** Redis 解析選項是後者覆寫前者，所以 `SCAN 0 MATCH benign:* MATCH secrets:*` 真正送出去的是 `secrets:*`，而只讀第一個等於檢查了一個從未送出的 pattern。回應過濾本來就會把 key 濾掉所以沒有洩漏，但「指名就拒絕」這條規則在這裡沒有成立。
+
+- **`filterReturnedKeyNames` 對認不得的回應形狀改為 fail-closed。** 原本原樣轉發，與同一批修補在 `checkKeyArgs` 選的預設相反。非字串的 key 同樣丟棄——無法與 glob 比對的東西，回答不了「這個受不受保護」。
+
+- **`MongoDBAdapter.insert` 補上兩個攔截點。** 它既沒有 `assertNoMongoServerSideScript` 也沒有欄位檢查，而 #47 的註解宣稱所有路徑一致受檢。實際蓋住它的是 `insert.ts` 的 `checkColumnBlacklistOnWrite`——掛在呼叫端的控制，正是 ADR-0015 Decision 1 要移除的安排。
+
+- **`$lookup` 帶進來的 collection 名改為大小寫不敏感比對。** 請求側是精確比對、遮罩側 (`findCaseInsensitive`) 不敏感，於是同一份設定在遮罩生效、在請求側拒絕不生效。
+
+- **MongoDB 的 `blacklist.columns` 擋得住換名了。** 遮罩只看回傳文件的鍵名，而 aggregation 自己決定那些鍵名：`$project:{"leak":"$password"}`、`$addFields`、`$set` 都把值搬到別的鍵下原文回傳，`query-only` 即可。`$group:{"_id":"$password"}` 更是保證出口——`_id` 為了保住文件參照而被無條件豁免。回應側追不完，所以改成**請求側拒絕**：請求裡指名受保護欄位就拒絕，與 Elasticsearch 的 `namesProtectedField` 同一個形狀，包含同樣的過度拒絕（值剛好等於受保護欄位名也會被拒）。檢查掛在 `assertNoMongoServerSideScript` 旁邊，那是所有 MongoDB 路徑本來就共用的攔截點。
 
 ### Added
 

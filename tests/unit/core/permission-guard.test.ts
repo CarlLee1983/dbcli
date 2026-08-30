@@ -1076,7 +1076,7 @@ describe('Elasticsearch classify hardening', () => {
     expect(result.type).toBe('UPDATE')
   })
 
-  // This asserted the opposite until 3.0.1: an empty or unreadable bulk body
+  // This asserted the opposite until 4.0.0: an empty or unreadable bulk body
   // classified as a non-dangerous SELECT. Because the bulk branch is selected
   // by the path alone, that made it a general-purpose downgrade —
   // `DELETE /orders?filter_path=_bulk` was classified as a read and executed at

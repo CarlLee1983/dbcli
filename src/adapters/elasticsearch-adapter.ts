@@ -48,8 +48,6 @@ export class ElasticsearchAdapter implements QueryableAdapter {
 
     if (isDsl) {
       body = JSON.parse(query)
-      // 所有呼叫路徑共用的攔截點（#47）：script 等於在叢集上跑程式碼
-      assertNoElasticsearchScript(body)
       if (body.size === undefined) {
         body.size = limit
       }
@@ -326,6 +324,11 @@ export class ElasticsearchAdapter implements QueryableAdapter {
     body?: unknown,
     options?: { timeout?: number }
   ): Promise<T> {
+    // adapter 有兩個執行入口——`execute()` 與這裡，`dbcli shell` 走的是這裡。
+    // 第五輪複查發現 script 防護只掛在前者，於是 shell 成了它宣稱不會再出現
+    // 的那條繞道。檢查放在這裡，才讓「所有路徑經過同一個檢查」為真。
+    assertNoElasticsearchScript(body)
+
     // Built with the URL parser rather than by concatenation, so that what the
     // shell verified byte-for-byte against `new URL` is what goes out — a
     // `baseUrl` carrying a path prefix would otherwise make the two disagree.

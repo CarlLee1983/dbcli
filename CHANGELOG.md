@@ -39,6 +39,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`_ingest` 與 `_tasks` 移出 shell 的 unscoped metadata 白名單**：pipeline 定義常內嵌憑證，詳細 task 列表會帶出執行中查詢的 request source。
 
+- **server-side script 的攔截點移到傳輸層，shell 不再繞過它。** `assertNoElasticsearchScript` 原本只掛在 `ElasticsearchAdapter.execute()`，而 shell 走的是另一個執行入口 `request()`。因此 `query-only` 可以用 `POST /<index>/_search` 帶 `script_fields` 在叢集上執行任意 Painless，並把黑名單欄位以請求自選的 key 讀回來（欄位遮罩看的是 key 名稱，所以遮不到）；`read-write` 則可用 `POST /<index>/_update/<id>` 的 `ctx._source` 直接改文件——同樣的操作走 `dbcli update` 一律被擋。檢查現在放在 `request()`，兩個入口共用。這也推翻了 ADR-0014 原本記下的一個「上限」：`doc['pass' + 'word']` 確實不是任何字面掃描擋得住的，但一律拒絕 `script` 鍵的控制本來就存在於這個倉庫裡。
+
+- **shell 在退出前把在飛的請求與 audit 排乾。** `readline` 不會 await `'line'` handler，所以 EOF 的 `'close'` 會在請求還沒回來、audit 還沒寫出時就 `process.exit(0)`：`printf 'DELETE /orders\n\n' | dbcli shell` 會把請求送到叢集而一列紀錄都不留。權限與黑名單檢查都在送出前同步完成，所以檢查會通過、封包會出去，唯一沒發生的就是稽核——也就是原始漏洞報告裡「不留 audit」的那一半。**SQL shell 有同一個缺陷**（它有序列化那一半，缺排乾那一半），一併修正。
+
+- **audit 在送出之前先記一筆 attempt，回應之後再記 outcome，而且每一列都說得出操作。** 只在回應後寫的紀錄描述不了一個沒有回來的請求：`_delete_by_query` 在 client 端逾時會 abort socket 而叢集把刪除做完，執行中被 SIGTERM 則連一列都沒有。同時每列補上 `<METHOD> <routed path>`——先前 `DELETE /orders`、`POST /orders/_update_by_query`、`PUT /orders/_mapping`、`POST /orders/_close` 產生的是四列一模一樣的紀錄。
+
+- **只設定 `blacklist.columns`、沒設定 `blacklist.tables` 時，指不出索引的路徑不再被放行。** 整段黑名單檢查原本以 `tables` 是否為空決定要不要跳過，連帶跳過了「路徑指不出索引就拒絕」那一道守門員——而那道守門員才是擋住 `_sql`、`_mget`、`_search/scroll` 的東西。`POST /_sql` 配 `SELECT * FROM users` 會把受保護欄位的值原文放在 `rows` 陣列裡回傳，而欄位名只出現在 `columns[].name` 的值裡、不是 key，所以回應遮罩結構上救不回來。
+
+- **query string 的欄位比對補上 Lucene 語法字元。** 切詞器只切 `[\s,:()"'[\]{}]`，於是 `?q=+password:hunter2` 通過而 `?q=password:hunter2` 被拒。`+`、`-`、`*`、`!`、`^`、`~`、`|`、`/`、`\` 一併視為分隔字元。
+
+- **搜尋的 size 上限改讀路由後的路徑。** 原本用 `path.includes('_search')` 判斷，所以 `PUT /<index>/_doc/_search`（id 剛好叫 `_search` 的寫入）與 `?routing=_search` 都被當成搜尋，把一個使用者從未輸入的 `size` 欄位寫進文件。這是檔案裡最後一處對原始路徑做子字串比對的地方。
+
+- **`dbcli audit tail` 與 `audit show` 的輸出逃脫控制字元。** ES shell 的 audit target 來自路徑，`%0A` 解碼後是真正的換行，因此一列紀錄能在表格輸出裡長成兩列、其中一列是偽造的。JSONL 檔本身不受影響。
+
+- **連線失敗訊息裡的 URL 帳密會被遮蔽。** `nodes` 常寫成 `https://elastic:hunter2@host:9243`，而該字串會整串進入 audit 的 error 欄；`redactSensitive` 原本只認 `keyword=value` 形式，一個字元都吃不到 URL 的 userinfo。
+
+### Changed
+
+- **BREAKING：`@carllee1983/dbcli/core` 不再匯出 `AdapterFactory`。** 它回傳的 adapter 的 `request()` 是 public，所以任何函式庫使用者都能拿到一條不經 permission、不經 blacklist、不寫 audit 的路徑。`QueryExecutor` 與 `DataExecutor` 保留——它們自己帶著閘門。CLI 使用者不受影響。
+
 - **`_update_by_query` 從 `read-write` 收緊為 `admin`**：它是獨立的區段，精確比對之下落到破壞性預設，而它確實會改寫索引裡的每一份文件。
 
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing

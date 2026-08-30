@@ -4,6 +4,7 @@ import {
   redactArgvSensitiveText,
   redactSql,
   redactParams,
+  redactSensitive,
 } from '../../../src/utils/redaction'
 
 describe('redaction utils', () => {
@@ -246,5 +247,35 @@ describe('redaction utils', () => {
       expect(redactParams(null)).toBeNull()
       expect(redactParams(undefined)).toBeUndefined()
     })
+  })
+})
+
+/**
+ * 第五輪：ES 連線失敗的錯誤訊息帶著整串 baseUrl，而 `nodes` 設定常寫成
+ * `https://elastic:hunter2@host:9243`。那個訊息會進 audit 的 error 欄，
+ * `redactSensitive` 只認 `keyword[:=]value`，URL 的 userinfo 一個都不吃，
+ * 於是明文帳密落進 `.dbcli/audit/<conn>.jsonl`。session 中途 ES 重啟即可觸發。
+ */
+describe('redactSensitive 與 URL 裡的帳密', () => {
+  test('連線字串的 userinfo 被遮蔽', () => {
+    expect(
+      redactSensitive('Connection refused at https://elastic:hunter2@es.example.com:9243')
+    ).toBe('Connection refused at https://<redacted>@es.example.com:9243')
+  })
+
+  test('只有使用者名稱、沒有密碼的 userinfo 也遮掉', () => {
+    expect(redactSensitive('Host not found: http://elastic@localhost:9200')).toBe(
+      'Host not found: http://<redacted>@localhost:9200'
+    )
+  })
+
+  test('沒有 userinfo 的 URL 原樣保留——遮蔽不得吃掉可診斷的資訊', () => {
+    expect(redactSensitive('Connection refused at http://localhost:9200')).toBe(
+      'Connection refused at http://localhost:9200'
+    )
+  })
+
+  test('不會誤傷 email 之類非 URL 的 @', () => {
+    expect(redactSensitive('contact ops@example.com')).toBe('contact ops@example.com')
   })
 })

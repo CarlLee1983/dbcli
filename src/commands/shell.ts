@@ -17,6 +17,7 @@ import { RedisShellAdapter } from '@/adapters/redis-shell-adapter'
 import * as esShell from '@/commands/es-shell'
 import type { RedisAdapter } from '@/adapters/redis-adapter'
 import type { QueryableAdapter } from '@/adapters/types'
+import { createSubmitQueue } from './shell-submit-queue'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -323,12 +324,15 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // readline emits them all before the handler's first `await` returns. Without
   // this queue those handlers run concurrently through one `ReplEngine`, sharing
   // its multiline buffer and its `.format` / `.no-limit` state.
-  let pending: Promise<void> = Promise.resolve()
+  // 序列化只是一半。`'close'` 不等這條鏈就 `process.exit(0)`，於是管線輸入的
+  // 最後一筆會送得出去而 audit 寫不完——與 ES shell 上第五輪找到的是同一個洞。
+  const queue = createSubmitQueue()
   rl.on('line', (line: string) => {
-    pending = pending.then(() => handleLine(line))
+    queue.enqueue(() => handleLine(line))
   })
 
   rl.on('close', async () => {
+    await queue.drain()
     console.error(pc.dim(t('shell.goodbye')))
     await engine.saveHistory()
     await adapter.disconnect()

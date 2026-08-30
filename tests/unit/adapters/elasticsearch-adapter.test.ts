@@ -426,25 +426,32 @@ describe('ElasticsearchAdapter server-side script guard', () => {
     })
   }
 
+  // 這兩個測試原本 stub `request` 來斷言「沒有送出請求」。檢查點就在 request，
+  // 所以那個 stub 等於把待測的那一層 mock 掉——會漏掉第五輪那個 CRITICAL 的
+  // 測試長的就是那樣。改 stub `fetch`：唯一真的算「送出」的邊界。
   test('主查詢路徑的 script 被攔截，且沒有送出任何請求', async () => {
-    const es = adapter()
-    let requested = false
-    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => {
-      requested = true
-      return { hits: { hits: [] } }
+    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    )
+    try {
+      await expect(
+        adapter().execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
+      ).rejects.toThrow(/server-side script/i)
+      expect(mockFetch).not.toHaveBeenCalled()
+    } finally {
+      mockFetch.mockRestore()
     }
-
-    await expect(
-      es.execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
-    ).rejects.toThrow(/server-side script/i)
-    expect(requested).toBe(false)
   })
 
   test('一般 DSL 照常執行', async () => {
-    const es = adapter()
-    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => ({
-      hits: { hits: [] },
-    })
-    await expect(es.execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    )
+    try {
+      await expect(adapter().execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    } finally {
+      mockFetch.mockRestore()
+    }
   })
 })

@@ -245,3 +245,78 @@ describe('dbcli audit tail (CLI)', () => {
     }
   })
 })
+
+/**
+ * 第五輪對抗式複查（MEDIUM）：使用者可控字串能在表格輸出裡偽造一列。
+ *
+ * ES shell 的 audit target 來自 `normalizeEsPath`，它會 `decodeURIComponent`，
+ * 所以 `GET /a%0A...` 會讓 target 帶真正的換行（`%0A` 在 `url.pathname` 保持
+ * 編碼，故通過 shell 的 canonical byte 比對）。JSONL 檔本身安全——
+ * `JSON.stringify` 會逃脫——但 `renderTable` 完全不逃脫 cell，於是 `audit tail`
+ * 的輸出會多出一列看似另一次真實操作的紀錄。
+ *
+ * 稽核紀錄的價值在於「讀到的就是發生過的」，能被偽造的呈現層跟能被偽造的
+ * 儲存層一樣糟。
+ */
+describe('audit tail 的表格不能被 cell 內容偽造', () => {
+  const dirs: string[] = []
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+  })
+
+  async function seedWithTarget(target: string): Promise<string> {
+    const work = await mkdtemp(join(tmpdir(), 'dbcli-audit-tail-inject-'))
+    dirs.push(work)
+    const auditDir = join(work, '.dbcli', 'audit')
+    await mkdir(auditDir, { recursive: true })
+    await writeFile(join(work, 'config.json'), JSON.stringify(makeMinimalConfig(), null, 2))
+    await writeFile(
+      join(auditDir, 'default.jsonl'),
+      JSON.stringify({
+        id: '00000001-uuid-default',
+        ts: '2026-05-15T00:00:00.000Z',
+        session_id: 'test-session',
+        engine: 'elasticsearch',
+        command: 'shell',
+        side_effect_tier: 'readonly',
+        target,
+        success: true,
+        redacted_query: 'dbcli shell',
+      }) + '\n'
+    )
+    return work
+  }
+
+  test('target 裡的換行不會在輸出裡變成新的一列', async () => {
+    const work = await seedWithTarget('a\n2026-08-30T09:00:00Z  shell  orders  readonly  true')
+    const { stdout, code } = await run(['audit', 'tail'], work)
+
+    expect(code).toBe(0)
+    // 表頭 + 分隔線 + 恰好一列資料。偽造的那一列若成立，這裡會是 4。
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+    expect(lines.length).toBe(3)
+    expect(stdout).not.toMatch(/^2026-08-30T09:00:00Z/m)
+  })
+
+  test('回車與 tab 同樣不得破壞欄位對齊', async () => {
+    const work = await seedWithTarget('a\r\tb')
+    const { stdout, code } = await run(['audit', 'tail'], work)
+
+    expect(code).toBe(0)
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+    expect(lines.length).toBe(3)
+    expect(lines[2]).not.toContain('\t')
+  })
+
+  test('一般 target 的顯示不受影響', async () => {
+    const work = await seedWithTarget('/_cat/indices')
+    const { stdout } = await run(['audit', 'tail'], work)
+    expect(stdout).toContain('/_cat/indices')
+  })
+})

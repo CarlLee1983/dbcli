@@ -134,7 +134,27 @@ function shortId(id: string | undefined): string {
   return id.length <= SHORT_ID_LEN ? id : id.slice(0, SHORT_ID_LEN)
 }
 
-function renderTable(rows: string[][], headers: string[]): string {
+/**
+ * 控制字元換成可見的跳脫寫法。
+ *
+ * cell 的內容有使用者可控的部分——ES shell 的 target 來自路徑，`%0A` 解碼後
+ * 就是真正的換行。JSONL 檔本身安全（`JSON.stringify` 會逃脫），但這裡的表格
+ * 不逃脫的話，一列紀錄就能在畫面上長成兩列，其中一列是偽造的。能被偽造的
+ * 呈現層跟能被偽造的儲存層一樣糟。
+ */
+function sanitizeCell(cell: string): string {
+  return cell.replace(/[\u0000-\u001f\u007f]/g, (char) => {
+    const escapes: Record<string, string> = {
+      '\n': '\\n',
+      '\r': '\\r',
+      '\t': '\\t',
+    }
+    return escapes[char] ?? `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`
+  })
+}
+
+function renderTable(rawRows: string[][], headers: string[]): string {
+  const rows = rawRows.map((row) => row.map((cell) => sanitizeCell(cell ?? '')))
   const allRows = [headers, ...rows]
   const widths = headers.map((_, col) => Math.max(...allRows.map((r) => (r[col] ?? '').length)))
   const fmt = (r: string[]): string =>
@@ -189,21 +209,31 @@ function briefifyShow(entry: AuditEntry): ShowEntry {
 
 // Accept Partial<AuditEntry> so brief mode (which strips metadata + redacted_query)
 // does not render literal "undefined" lines. Only emit a row when the field is present.
+/** cell 同樣要逃脫——`audit show` 與 `audit tail` 讀的是同一批使用者可控字串。 */
 function renderEntryTable(entry: Partial<AuditEntry>): string {
   const lines: string[] = []
-  if (entry.id !== undefined) lines.push(`Id:                ${entry.id}`)
-  if (entry.ts !== undefined) lines.push(`Ts:                ${entry.ts}`)
-  if (entry.session_id !== undefined) lines.push(`Session id:        ${entry.session_id}`)
-  if (entry.engine !== undefined) lines.push(`Engine:            ${entry.engine}`)
-  if (entry.command !== undefined) lines.push(`Command:           ${entry.command}`)
+  if (entry.id !== undefined) lines.push(`Id:                ${sanitizeCell(String(entry.id))}`)
+  if (entry.ts !== undefined) lines.push(`Ts:                ${sanitizeCell(String(entry.ts))}`)
+  if (entry.session_id !== undefined)
+    lines.push(`Session id:        ${sanitizeCell(String(entry.session_id))}`)
+  if (entry.engine !== undefined)
+    lines.push(`Engine:            ${sanitizeCell(String(entry.engine))}`)
+  if (entry.command !== undefined)
+    lines.push(`Command:           ${sanitizeCell(String(entry.command))}`)
   if (entry.side_effect_tier !== undefined)
-    lines.push(`Side effect tier:  ${entry.side_effect_tier}`)
-  if (entry.target !== undefined) lines.push(`Target:            ${entry.target}`)
-  if (entry.success !== undefined) lines.push(`Success:           ${entry.success}`)
-  if (entry.recovery_ref !== undefined) lines.push(`Recovery ref:      ${entry.recovery_ref}`)
-  if (entry.redacted_query !== undefined) lines.push(`Redacted query:    ${entry.redacted_query}`)
-  if (entry.redacted_sql !== undefined) lines.push(`Redacted SQL:      ${entry.redacted_sql}`)
-  if (entry.error !== undefined) lines.push(`Error:             ${entry.error}`)
+    lines.push(`Side effect tier:  ${sanitizeCell(String(entry.side_effect_tier))}`)
+  if (entry.target !== undefined)
+    lines.push(`Target:            ${sanitizeCell(String(entry.target))}`)
+  if (entry.success !== undefined)
+    lines.push(`Success:           ${sanitizeCell(String(entry.success))}`)
+  if (entry.recovery_ref !== undefined)
+    lines.push(`Recovery ref:      ${sanitizeCell(String(entry.recovery_ref))}`)
+  if (entry.redacted_query !== undefined)
+    lines.push(`Redacted query:    ${sanitizeCell(String(entry.redacted_query))}`)
+  if (entry.redacted_sql !== undefined)
+    lines.push(`Redacted SQL:      ${sanitizeCell(String(entry.redacted_sql))}`)
+  if (entry.error !== undefined)
+    lines.push(`Error:             ${sanitizeCell(String(entry.error))}`)
   if (entry.metadata !== undefined)
     lines.push(`Metadata:          ${JSON.stringify(entry.metadata)}`)
   return lines.join('\n')

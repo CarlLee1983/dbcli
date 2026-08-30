@@ -276,7 +276,11 @@ describe('every request that reaches the runner is recorded, executed or refused
   test('an executed read is recorded without a write tier override', async () => {
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/orders/_search' }, 'query-only', log)
-    expect(log).toEqual([{ success: true, target: 'orders', tierOverride: undefined }])
+    // 兩列：送出前的 attempt 與回應後的 outcome。
+    expect(log).toEqual([
+      { success: true, target: 'orders', tierOverride: undefined },
+      { success: true, target: 'orders', tierOverride: undefined },
+    ])
   })
 
   // An entry naming neither the operation nor the object is not a record. Every
@@ -284,7 +288,10 @@ describe('every request that reaches the runner is recorded, executed or refused
   test('a request naming no index is recorded against its routed path', async () => {
     const log: Recorded[] = []
     await withAudit({ method: 'GET', path: '/_cat/indices' }, 'query-only', log)
-    expect(log).toEqual([{ success: true, target: '/_cat/indices', tierOverride: undefined }])
+    expect(log).toEqual([
+      { success: true, target: '/_cat/indices', tierOverride: undefined },
+      { success: true, target: '/_cat/indices', tierOverride: undefined },
+    ])
   })
 
   test('a refused unscoped write is recorded against its routed path', async () => {
@@ -298,7 +305,10 @@ describe('every request that reaches the runner is recorded, executed or refused
   test('an executed write is recorded and overrides the tier to db-write', async () => {
     const log: Recorded[] = []
     await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log)
-    expect(log).toEqual([{ success: true, target: 'orders', tierOverride: 'db-write' }])
+    expect(log).toEqual([
+      { success: true, target: 'orders', tierOverride: 'db-write' },
+      { success: true, target: 'orders', tierOverride: 'db-write' },
+    ])
   })
 
   // A refused write is still a db-write attempt: the field states what the
@@ -650,5 +660,133 @@ describe('the classifier and the scoping allowlist agree about unscoped paths', 
     const target = captured()
     await expect(run({ method: 'GET', path }, 'query-only', target)).rejects.toThrow()
     expect(target.calls).toBe(0)
+  })
+})
+
+/**
+ * 第五輪：一列 audit 要說得出「對誰做了什麼」。
+ *
+ * 上一輪補上了「誰」——`_`-開頭的路徑不再以空 target 入帳。但「什麼」還是缺的：
+ * `DELETE /orders`、`POST /orders/_update_by_query`、`PUT /orders/_mapping`、
+ * `POST /orders/_close` 產生的是**完全相同**的一列，method 與 endpoint 都不在
+ * 紀錄裡。SQL 那條線早就在傳 statement（`write-gate-guard` 傳 `sql`，`q` 傳
+ * `prepared.driver.sql`），ES 這條沒有。
+ *
+ * 另一半是時序。audit 只在回應之後寫，所以 client 端逾時（`_delete_by_query`
+ * 跑完而 dbcli 早已 abort）與執行中被 SIGTERM，都會讓一次真的發生過的破壞性
+ * 操作留下錯的紀錄或不留紀錄。SQL shell 的 `recordGateDecision` 是**執行前**
+ * 無條件寫的，理由就寫在那個函式的 docstring 裡。
+ */
+describe('audit 說得出操作，而且在送出之前就先記一筆', () => {
+  interface Recorded {
+    phase: 'attempt' | 'outcome'
+    success: boolean
+    target?: string
+    statement?: string
+  }
+
+  function withAudit(
+    req: EsRequest,
+    permission: Permission,
+    log: Recorded[],
+    adapter?: unknown
+  ): Promise<unknown> {
+    return runEsRequest(
+      req,
+      (adapter ?? fakeAdapter(captured())) as never,
+      [],
+      {},
+      {
+        permission,
+        audit: async (record) => {
+          log.push({
+            phase: record.phase,
+            success: record.success,
+            target: record.target,
+            statement: record.statement,
+          })
+        },
+      }
+    )
+  }
+
+  test('四種破壞性操作不再產生同一列', async () => {
+    const statements: (string | undefined)[] = []
+    for (const req of [
+      { method: 'DELETE', path: '/orders' },
+      { method: 'POST', path: '/orders/_update_by_query' },
+      { method: 'PUT', path: '/orders/_mapping' },
+      { method: 'POST', path: '/orders/_close' },
+    ] as EsRequest[]) {
+      const log: Recorded[] = []
+      await withAudit(req, 'admin', log)
+      statements.push(log.at(-1)?.statement)
+    }
+    expect(new Set(statements).size).toBe(4)
+    expect(statements).toContain('DELETE /orders')
+    expect(statements).toContain('PUT /orders/_mapping')
+  })
+
+  test('送出之前先寫一筆 attempt，回應之後再寫 outcome', async () => {
+    const log: Recorded[] = []
+    await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log)
+    expect(log.map((entry) => entry.phase)).toEqual(['attempt', 'outcome'])
+    expect(log[0]).toMatchObject({
+      phase: 'attempt',
+      target: 'orders',
+      statement: 'DELETE /orders',
+    })
+    expect(log[1]).toMatchObject({ phase: 'outcome', success: true })
+  })
+
+  test('attempt 那一筆在 adapter 被呼叫之前就寫完——逾時或被殺都還留得下它', async () => {
+    const log: Recorded[] = []
+    const seenAtRequestTime: string[] = []
+    const adapter = {
+      request: async () => {
+        seenAtRequestTime.push(...log.map((entry) => entry.phase))
+        return { ok: true }
+      },
+    }
+    await withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log, adapter)
+    expect(seenAtRequestTime).toEqual(['attempt'])
+  })
+
+  test('請求丟出例外時，attempt 仍在，outcome 記為失敗', async () => {
+    const log: Recorded[] = []
+    const adapter = {
+      request: async () => {
+        throw new Error('ETIMEDOUT')
+      },
+    }
+    await expect(
+      withAudit({ method: 'DELETE', path: '/orders' }, 'admin', log, adapter)
+    ).rejects.toThrow(/ETIMEDOUT/)
+    expect(log.map((entry) => entry.phase)).toEqual(['attempt', 'outcome'])
+    expect(log[1]?.success).toBe(false)
+  })
+
+  test('被權限擋下的請求不寫 attempt——它從來沒有被嘗試送出', async () => {
+    const log: Recorded[] = []
+    await expect(
+      withAudit({ method: 'DELETE', path: '/orders' }, 'query-only', log)
+    ).rejects.toThrow()
+    expect(log.map((entry) => entry.phase)).toEqual(['outcome'])
+    expect(log[0]).toMatchObject({ success: false, statement: 'DELETE /orders' })
+  })
+
+  // `..` 這種寫法在更前面就被 byte-identity 檢查拒了，走不到 audit——所以這裡
+  // 用真的通得過的兩種形狀：query string 不屬於操作本身，而百分號編碼的路徑
+  // 要以伺服器實際路由到的樣子入帳。
+  test('statement 不含 query string', async () => {
+    const log: Recorded[] = []
+    await withAudit({ method: 'GET', path: '/orders/_search?size=5' }, 'query-only', log)
+    expect(log.at(-1)?.statement).toBe('GET /orders/_search')
+  })
+
+  test('statement 用伺服器路由到的路徑，不是使用者打的編碼原文', async () => {
+    const log: Recorded[] = []
+    await withAudit({ method: 'GET', path: '/%5Fsearch' }, 'query-only', log)
+    expect(log.at(-1)?.statement).toBe('GET /_search')
   })
 })

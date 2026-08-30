@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline'
 import pc from 'picocolors'
 import { configModule } from '../core/config'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { createSubmitQueue } from './shell-submit-queue'
 import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target'
 import {
   classifyElasticsearchRequest,
@@ -150,9 +151,31 @@ export function resolveEsShellPermission(config: { permission?: Permission }): P
  */
 export interface EsShellAuditSink {
   (record: {
+    /**
+     * `attempt` is written before the request goes out, `outcome` after it
+     * returns or throws. One row written only on the way back cannot describe a
+     * request that never came back: a client-side timeout on
+     * `_delete_by_query` aborts the socket while the cluster finishes the
+     * delete, and a SIGTERM mid-request leaves nothing at all. The SQL path
+     * records its gate decision before executing for the same reason — see
+     * `recordGateDecision`.
+     *
+     * A request refused by the tier gate or the blacklist writes only
+     * `outcome`: it was never attempted.
+     */
+    phase: 'attempt' | 'outcome'
     success: boolean
     error?: unknown
     target?: string
+    /**
+     * The operation, as `<METHOD> <routed path>`. Without it every shell entry
+     * named its object and not its action, so `DELETE /orders`,
+     * `POST /orders/_update_by_query`, `PUT /orders/_mapping` and
+     * `POST /orders/_close` were one indistinguishable row. Built from the
+     * routed path rather than the raw one, so the record says where the request
+     * actually went.
+     */
+    statement: string
     /**
      * Set only when the request writes. The audit helper otherwise labels the
      * entry with the command's capability tier; this field overrides that for a
@@ -243,11 +266,23 @@ export async function runEsRequest(
   // against the cluster produced a row naming neither the operation nor the
   // object. The routed path is the object when no index can be named.
   const auditTarget = index ?? routedPath
+  const auditStatement = `${req.method.toUpperCase()} ${routedPath}`
 
-  const audit = async (success: boolean, error?: unknown): Promise<void> => {
+  const audit = async (
+    phase: 'attempt' | 'outcome',
+    success: boolean,
+    error?: unknown
+  ): Promise<void> => {
     if (!options.audit) return
     try {
-      await options.audit({ success, error, target: auditTarget, tierOverride })
+      await options.audit({
+        phase,
+        success,
+        error,
+        target: auditTarget,
+        statement: auditStatement,
+        tierOverride,
+      })
     } catch {
       // Nothing to do with it here: the request's outcome stands either way.
     }
@@ -256,7 +291,7 @@ export async function runEsRequest(
   try {
     return await execute()
   } catch (error) {
-    await audit(false, error)
+    await audit('outcome', false, error)
     throw error
   }
 
@@ -310,16 +345,25 @@ export async function runEsRequest(
     // that cannot be attributed to an index cannot be checked against one — so
     // with nothing configured there is nothing to check and refusing would cost
     // an ordinary query while protecting nothing.
-    if (blacklistTables.length === 0) return send()
+    //
+    // "Nothing configured" means *neither* list. Keying this on `blacklistTables`
+    // alone skipped the unscoped-path guard below for a columns-only blacklist,
+    // and that guard is what holds `_sql`, `_mget` and `_search/scroll` shut —
+    // `_sql` returns values in a `rows` array, so key-based redaction cannot
+    // reach them at all.
+    const columnsConfigured = Object.values(blacklistColumns).some((fields) => fields.length > 0)
+    if (blacklistTables.length === 0 && !columnsConfigured) return send()
 
-    // Any segment naming a blacklisted index is refused, whatever the endpoint
-    // — `/_cat/indices/secrets` reports on it without reading documents, and
-    // the blacklist is about the object, not only its contents.
-    const blacklistedSegment = routedPath
-      .split('/')
-      .find((segment) => segment.length > 0 && indexExpressionReaches(segment, blacklistTables))
-    if (blacklistedSegment !== undefined) {
-      throw new Error(`BlacklistRejection: index '${blacklistedSegment}' is blacklist-protected`)
+    if (blacklistTables.length > 0) {
+      // Any segment naming a blacklisted index is refused, whatever the endpoint
+      // — `/_cat/indices/secrets` reports on it without reading documents, and
+      // the blacklist is about the object, not only its contents.
+      const blacklistedSegment = routedPath
+        .split('/')
+        .find((segment) => segment.length > 0 && indexExpressionReaches(segment, blacklistTables))
+      if (blacklistedSegment !== undefined) {
+        throw new Error(`BlacklistRejection: index '${blacklistedSegment}' is blacklist-protected`)
+      }
     }
 
     if (index === undefined) {
@@ -365,8 +409,12 @@ export async function runEsRequest(
       // request chose, which is the same disclosure the body check exists to
       // stop. Values are split on the separators Elasticsearch accepts inside
       // them so a field named among several is still seen.
+      // Lucene 的 query syntax 會把運算子貼在欄位名上：`+password`、`-password`、
+      // `password*`、`!password`、`password^2`、`password~`。少切一個字元，
+      // 整個欄位檢查就看不到那個 term——第五輪實測 `?q=%2Bpassword:hunter2`
+      // 通過而 `?q=password:hunter2` 被拒，缺口在切詞器而不在 wildcard 語意。
       const queryTerms = [...query.entries()].flatMap(([, value]) =>
-        value.split(/[\s,:()"'[\]{}]+/).filter((term) => term.length > 0)
+        value.split(/[\s,:()"'[\]{}+\-*!^~|;/\\]+/).filter((term) => term.length > 0)
       )
       const named = [...findStrings(req.body), ...queryTerms].find((text) =>
         namesProtectedField(text, protectedFields)
@@ -384,9 +432,23 @@ export async function runEsRequest(
     // `search_after` and `scroll` are not bounded at all. What bounds disclosure
     // on this path is the blacklist and the permission tier; this only stops an
     // unqualified `_search` from filling a terminal.
+    //
+    // Read from the routed path, not a substring of the raw one: `PUT
+    // /orders/_doc/_search` is a write whose *id* is `_search`, and
+    // `?routing=_search` is not a path at all. Both used to be treated as
+    // searches here and had `size` written into the document — a check reading
+    // one set of bytes while another goes out, which is the shape of the two
+    // earlier CRITICALs. This was the last raw-path substring test in the file.
+    // 條件與 `classifyElasticsearchRequest` 的規則 2 一致：`_search` 只有在
+    // ES 真的把它當端點路由時才是搜尋——不掛在 index 之後、或後面還有第三段，
+    // 那一段就是文件 id。
+    const searchSegments = routedPath.split('/').filter((segment) => segment.length > 0)
+    const searchesDocuments =
+      searchSegments[searchSegments.length - 1]?.toLowerCase() === '_search' &&
+      searchSegments.length <= 2
     let body = req.body
     if (
-      req.path.includes('_search') &&
+      searchesDocuments &&
       body !== null &&
       typeof body === 'object' &&
       !Array.isArray(body) &&
@@ -395,8 +457,12 @@ export async function runEsRequest(
       body = { ...(body as Record<string, unknown>), size: ES_SHELL_SIZE_CAP }
     }
 
+    // Before the socket, not after: everything that could refuse this request
+    // has already run, so from here on the cluster may act on it whatever
+    // happens to this process.
+    await audit('attempt', true)
     const response = await adapter.request(req.method, req.path, body)
-    await audit(true)
+    await audit('outcome', true)
 
     // `dbcli query --index users` hides these fields; the shell returned them in
     // full because it never consulted `blacklist.columns`. An Elasticsearch
@@ -542,7 +608,11 @@ export async function runEsShell(configPath: string): Promise<void> {
                 success: record.success,
                 error: record.error,
                 target: record.target,
+                // 操作本身。少了它，`DELETE /orders` 與 `PUT /orders/_mapping`
+                // 在紀錄裡是同一列。
+                sql: record.statement,
                 sideEffectTier: record.tierOverride,
+                metadata: { es_shell_phase: record.phase },
               }
             ),
         }
@@ -553,10 +623,14 @@ export async function runEsShell(configPath: string): Promise<void> {
     }
   }
 
+  // readline 不 await 這個 handler，`'close'` 也不會等它——管線輸入下請求送得出去
+  // 而 audit 寫不完，就是第五輪那個稽核逃逸。佇列同時管序列化與排乾。
+  const queue = createSubmitQueue()
+
   rl.prompt()
-  rl.on('line', async (line: string) => {
+  rl.on('line', (line: string) => {
     if (line.trim() === '') {
-      await submit()
+      queue.enqueue(submit)
     } else {
       blockLines.push(line)
       rl.setPrompt(pc.dim('...  '))
@@ -570,6 +644,8 @@ export async function runEsShell(configPath: string): Promise<void> {
     rl.prompt()
   })
   rl.on('close', async () => {
+    // 排乾必須在 disconnect 與 exit 之前：在飛的請求要落地，audit 要寫完。
+    await queue.drain()
     await adapter.disconnect()
     console.error(pc.dim('Goodbye'))
     process.exit(0)

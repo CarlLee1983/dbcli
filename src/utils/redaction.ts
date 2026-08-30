@@ -251,9 +251,16 @@ export function redactArgvSensitiveText(text: string, argv: string[]): string {
  * Redact sensitive patterns (password=..., token=..., etc.) from arbitrary strings.
  */
 export function redactSensitive(text: string): string {
-  return text.replace(
-    /\b(password|token|apiKey|secret|key|token|auth|credential|pass|pwd|sid)([:=]|\s+)([^\s"';,]+)/gi,
-    '$1$2<redacted>'
+  return (
+    text
+      // URL 的 userinfo：`https://elastic:hunter2@host:9243`。keyword=value 的
+      // 規則一個字元都吃不到它，而連線字串常常就是這樣寫的——ES 連線失敗的
+      // 錯誤訊息把整串 baseUrl 帶進 audit 的 error 欄。
+      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, '$1<redacted>@')
+      .replace(
+        /\b(password|token|apiKey|secret|key|token|auth|credential|pass|pwd|sid)([:=]|\s+)([^\s"';,]+)/gi,
+        '$1$2<redacted>'
+      )
   )
 }
 

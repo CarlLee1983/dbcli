@@ -176,6 +176,81 @@ two-segment path; a document id is opaque and is never matched against anything.
   definitions embed credentials, and detailed task listings carry the request
   source of running searches.
 
+## Decision 3: the checkpoint belongs to the transport, and audit brackets it
+
+A fifth adversarial round found two CRITICALs that share a shape with the four
+before them, in a place none of them had looked: not in how dbcli parses input,
+but in *where* a control is mounted and *when* a record is written.
+
+**`assertNoElasticsearchScript` moved to `ElasticsearchAdapter.request()`.** It
+had been called from `execute()`, and its own module docstring claimed a
+checkpoint "at the adapter's execution entry point, so every path passes through
+the same check". Elasticsearch has two such entry points, and the shell uses the
+other one — so `query-only` could run arbitrary Painless via `script_fields`,
+read a blacklisted field back under a key of the request's choosing, and at
+`read-write` rewrite documents with `ctx._source`. Two reviewers reached this
+from unrelated directions, which is the strongest signal the round produced.
+
+The general rule this records: **a control mounted on a caller is a control that
+the next caller will not have.** Mount it where the bytes leave.
+
+This also retires one of Decision 1's three stated ceilings. `doc['pass' +
+'word']` was described there as unclosable by any literal scan, and that was
+true of *term scanning* — but the wrong conclusion followed from it, because a
+control that rejects the `script` key outright, regardless of what it names, had
+existed in the repository all along. A ceiling is a claim about the whole system,
+not about the check in front of you.
+
+**Audit brackets the request rather than trailing it.** An `attempt` row is
+written before the socket and an `outcome` row after, and every row now carries
+the operation as `<METHOD> <routed path>`. Both halves were gaps, and both were
+invisible to tests that only ask whether a request was refused: a client-side
+timeout on `_delete_by_query` aborts the socket while the cluster finishes the
+delete, and `DELETE /orders`, `POST /orders/_update_by_query`,
+`PUT /orders/_mapping` and `POST /orders/_close` used to produce four identical
+rows. Neither is a new idea here — `recordGateDecision` on the SQL path records
+before executing, and says why in its own docstring.
+
+**The shells drain before they exit.** `readline` does not await its `'line'`
+handler, so `'close'` reached `process.exit(0)` while a request was still in
+flight and its audit row unwritten — a pipeline could execute against the cluster
+and leave nothing behind, which is exactly the property the original CRITICAL
+was reported for. The permission and blacklist checks all complete
+synchronously before the send, so the checks passed, the packet left, and only
+the record was lost. The same defect was present on the SQL shell, which had the
+serialising half of the fix and not the draining half; both now share
+`createSubmitQueue`.
+
+## Decision 4: two disclosures are accepted, in writing
+
+`GET /_cat/indices` reports every index — name, `docs.count`, store size —
+without naming one, so a blacklisted index is disclosed by an endpoint that
+`/_cat/indices/secrets` is refused for. Refusing unqualified `_cat` subresources
+whenever any index is blacklisted would take away the ordinary orientation
+command, and filtering rows out of the response would make a response-shape
+dependency load-bearing in the way Decision 1 pushed back against. **Accepted,
+in the same spirit as classification rule 6:** the blacklist hides an index's
+contents, and its existence and document count are disclosed to anyone who can
+list the cluster. `docs.count` observed repeatedly is a write oracle, and that
+is part of what is accepted.
+
+The Lucene-syntax tokenizer gap that this round also found is *not* in this
+category and was closed: `?q=+password:hunter2` passed while
+`?q=password:hunter2` was refused, because the query-value splitter did not
+treat `+`, `-`, `*`, `!`, `^`, `~`, `|`, `/` or `\` as separators. That was a
+tokenizer defect, not a ceiling — the distinction Decision 3 exists to make.
+
+## Decision 5: the published surface no longer exports the adapter factory
+
+`./core` exported `AdapterFactory`, whose adapters expose a public `request()`.
+Any library consumer could therefore hold a path that skips permission,
+blacklist and audit together — every door this record describes, bypassed by one
+import. `QueryExecutor` and `DataExecutor` stay: they carry their gates with
+them. Closing it now costs nothing because the intended consumer, `dbcli-gui`,
+does not yet exist; closing it after the first import would be a breaking change.
+Re-opening the ability to construct an adapter means publishing a gated façade,
+never the factory.
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
@@ -185,4 +260,14 @@ configuration, stops covering the query string, or starts repairing a request
 instead of refusing it; or any check in that file reads a path or query derived
 from `String.split` rather than from the parsed `URL`; or
 `normalizeEsPath` from `src/utils/es-index-target.ts` is used again to decide
-where a request routes; or an unrecognised request stops classifying as `DROP`.
+where a request routes; or an unrecognised request stops classifying as `DROP`;
+or `assertNoElasticsearchScript` in `src/adapters/server-side-script.ts` is
+called from anywhere other than the transport boundary in
+`src/adapters/elasticsearch-adapter.ts`, or a third execution entry point
+appears there without it; or `runEsRequest` in `src/commands/es-shell.ts` stops
+writing its `attempt` row before the request or drops the statement from a row;
+or either shell's `'close'` handler in `src/commands/es-shell.ts` or
+`src/commands/shell.ts` exits without draining `createSubmitQueue` from
+`src/commands/shell-submit-queue.ts`; or `src/core/public.ts` exports
+`AdapterFactory`, or any other value from which an ungated adapter can be
+obtained.

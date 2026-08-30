@@ -188,6 +188,55 @@ describe('ES shell 管線輸入的 audit', () => {
     expect(stderr).not.toMatch(/JSON Parse error/)
   }, 30_000)
 
+  /**
+   * 第七輪 HIGH：`exit` 之後排在佇列裡的 block 仍然被執行。
+   *
+   * `'line'` handler 在同一個 tick 把管線的所有行同步 enqueue 完，而 `exit` 的
+   * `rl.close()` 要等它自己那個任務跑起來才執行——此時後面的 block 早已在鏈上，
+   * 而 `'close'` 的 `drain()` 語意是「排空」，於是把它們全部執行完才退出。
+   * 使用者預期是「`exit` 之後不再對叢集做任何事」。
+   */
+  test('exit 之後排在佇列裡的命令不得送出', async () => {
+    const proc = Bun.spawn(
+      ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],
+      {
+        cwd: sandbox,
+        stdin: new TextEncoder().encode('exit\n\nGET /_cat/indices\n\n'),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }
+    )
+    await proc.exited
+    const stderr = await new Response(proc.stderr).text()
+
+    expect(await hits(), stderr).not.toContain('GET /_cat/indices')
+    expect(auditRows(), stderr).toHaveLength(0)
+  }, 30_000)
+
+  /**
+   * body 中間含空白的行不得把請求截成「沒有 body 的版本」照送。
+   * `POST /orders/_search` 無 body 會被 size cap 補上 `{size:1000}` 而成功——
+   * 所以這裡要斷言送出的那一筆帶著使用者寫的 query。
+   */
+  test('含空白的行屬於 block 的內容，不是它的結尾', async () => {
+    const proc = Bun.spawn(
+      ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],
+      {
+        cwd: sandbox,
+        stdin: new TextEncoder().encode('POST /orders/_search\n  \n{"query":{"match_all":{}}}\n\n'),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }
+    )
+    await proc.exited
+    const stderr = await new Response(proc.stderr).text()
+
+    // 一筆請求，不是兩筆；而且不是「無 body 版本先送出去」。
+    const seen = (await hits()).filter((h) => h !== 'GET /')
+    expect(seen, stderr).toEqual(['POST /orders/_search'])
+    expect(stderr).not.toMatch(/JSON Parse error/)
+  }, 30_000)
+
   test('EOF 前送出的請求，其 audit 在行程結束前寫完', async () => {
     const proc = Bun.spawn(
       ['bun', 'run', join(process.cwd(), 'src/cli.ts'), '--config', '.dbcli', 'shell'],

@@ -47,4 +47,9 @@ export interface AuditEntry {
  * PROHIBITED keys (must not be present in serialized output): redacted_query,
  * redacted_sql, metadata, session_id, engine, side_effect_tier (D-59).
  */
-export type AuditEntryBrief = Pick<AuditEntry, 'id' | 'ts' | 'command' | 'target' | 'success'>
+export type AuditEntryBrief = Pick<AuditEntry, 'id' | 'ts' | 'command' | 'target' | 'success'> & {
+  /** 操作本身。沒有它，一列紀錄說得出對象、說不出動作。 */
+  redacted_sql?: string
+  /** `attempt`（送出前）或 `outcome`（回應後）。少了它，一個請求的兩列無從分辨。 */
+  phase?: unknown
+}

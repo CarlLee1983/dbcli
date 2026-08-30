@@ -297,13 +297,17 @@ describe('dbcli audit health (CLI)', () => {
     }
   })
 
-  test('health --brief --format json: only enabled / lastWrite / rotationUsage', async () => {
+  // `strict` 在 brief 裡：它是使用者唯一能確認 fail-closed 真的開著的管道，
+  // 而一個無從確認的安全設定跟沒開沒兩樣。brief 省的是體積，不是安全狀態。
+  test('health --brief --format json: enabled / strict / lastWrite / rotationUsage', async () => {
     const s = await seed()
     work = s.work
     const r = await run(['audit', 'health', '--brief', '--format', 'json'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
-    expect(Object.keys(obj).sort()).toEqual(['enabled', 'lastWrite', 'rotationUsage'].sort())
+    expect(Object.keys(obj).sort()).toEqual(
+      ['enabled', 'strict', 'lastWrite', 'rotationUsage'].sort()
+    )
   })
 
   test('health --for-agent: equivalent to brief json', async () => {
@@ -312,7 +316,9 @@ describe('dbcli audit health (CLI)', () => {
     const r = await run(['audit', 'health', '--for-agent'], s.work)
     expect(r.code).toBe(0)
     const obj = JSON.parse(r.stdout)
-    expect(Object.keys(obj).sort()).toEqual(['enabled', 'lastWrite', 'rotationUsage'].sort())
+    expect(Object.keys(obj).sort()).toEqual(
+      ['enabled', 'strict', 'lastWrite', 'rotationUsage'].sort()
+    )
   })
 
   test('health --for-agent --no-brief: full json', async () => {

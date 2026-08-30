@@ -273,3 +273,83 @@ test('循環參照的 body 以明確的拒絕收場', () => {
   expect(() => assertNoElasticsearchScript(cyclic)).toThrow(ServerSideScriptRejection)
   expect(() => assertNoElasticsearchScript(cyclic)).toThrow(/nests deeper/)
 })
+
+/**
+ * 第七輪 CRITICAL：`wrapper` query 把整段 query 放在 base64 字串裡，伺服器
+ * 解碼後執行。掃描只走物件的**鍵**，碰不到字串內部——形狀比對再怎麼放寬都
+ * 無效，因為 body 裡的鍵只有 `query` / `wrapper` / `query`。
+ *
+ * 後果不只是 oracle：`function_score.script_score` 把值算進 `_score`，
+ * 於是每筆 hit 的 `_score` 就是黑名單欄位的數值原文，而 `_score` 不是受保護
+ * 的鍵名，回應遮罩不會動它。同一條路也繞過黑名單詞比對——base64 裡沒有
+ * 那個欄位名。
+ *
+ * 這與已經拒絕的「字串形式 body」和 `?source=` 是同一個原則：**dbcli 檢查不了
+ * 的編碼 body 一律拒絕**，而不是教四個檢查各自去解一種編碼。
+ */
+describe('dbcli 檢查不了的編碼 body 一律拒絕', () => {
+  test('攔截 wrapper query', () => {
+    expect(() =>
+      assertNoElasticsearchScript({
+        query: {
+          wrapper: {
+            query:
+              'eyJmdW5jdGlvbl9zY29yZSI6eyJzY3JpcHRfc2NvcmUiOnsic2NyaXB0Ijp7InNvdXJjZSI6ImRvY1snc2FsYXJ5J10udmFsdWUifX19fQ==',
+          },
+        },
+      })
+    ).toThrow(ServerSideScriptRejection)
+  })
+
+  test('攔截巢狀在 bool 裡的 wrapper', () => {
+    expect(() =>
+      assertNoElasticsearchScript({ query: { bool: { must: [{ wrapper: { query: 'e30=' } }] } } })
+    ).toThrow(/wrapper/i)
+  })
+
+  test('錯誤訊息說得出為什麼——不是「含有 script」', () => {
+    expect(() => assertNoElasticsearchScript({ query: { wrapper: { query: 'e30=' } } })).toThrow(
+      /cannot be inspected|encoded/i
+    )
+  })
+
+  test('欄位名剛好叫 wrapper 的一般查詢不受影響', () => {
+    expect(() =>
+      assertNoElasticsearchScript({ query: { match: { wrapper_type: 'carton' } } })
+    ).not.toThrow()
+  })
+})
+
+/**
+ * 第七輪 HIGH（誤擋）：`_script` 後綴無條件成立時，`deploy_script` 這種一般
+ * 欄位名在 query-only 的唯讀查詢上就被拒絕，訊息還說它「executes script code
+ * on the cluster」——指著一個純資料欄位。`term` / `match` / `range` / `sort` /
+ * `exists` 都把欄位名放在鍵的位置，正是掃描看的位置。
+ */
+describe('欄位名不因為以 _script 結尾就被當成 script 槽', () => {
+  test.each([
+    [{ query: { term: { deploy_script: 'x' } } }, 'term'],
+    [{ sort: [{ build_script: 'asc' }] }, 'sort'],
+    [{ query: { exists: { field: 'onboarding_script' } } }, 'exists'],
+    [{ query: { range: { rollout_script: { gte: 1 } } } }, 'range'],
+  ])('%#: %s 位置的一般欄位名放行', (body) => {
+    expect(() => assertNoElasticsearchScript(body)).not.toThrow()
+  })
+
+  test('scripted_metric 底下的同名鍵仍然被擋', () => {
+    expect(() =>
+      assertNoElasticsearchScript({ aggs: { a: { scripted_metric: { map_script: 'x' } } } })
+    ).toThrow(ServerSideScriptRejection)
+  })
+
+  test('其餘 script 載體靠內層字面 script 鍵接住', () => {
+    for (const body of [
+      { query: { function_score: { script_score: { script: { source: 'x' } } } } },
+      { aggs: { a: { bucket_script: { script: 'params.a' } } } },
+      { runtime_mappings: { f: { type: 'long', script: 'emit(1)' } } },
+      { script: { source: "ctx._source.role='admin'" } },
+    ]) {
+      expect(() => assertNoElasticsearchScript(body)).toThrow(ServerSideScriptRejection)
+    }
+  })
+})

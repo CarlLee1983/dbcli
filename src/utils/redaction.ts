@@ -300,3 +300,23 @@ export function redactParams(params: unknown): unknown {
   }
   return '<redacted>'
 }
+
+/**
+ * 把控制字元換成可見的跳脫寫法，供任何要把使用者可控字串印給人看的地方使用。
+ *
+ * C0 與 DEL 之外還涵蓋：雙向控制字元（U+202E 之類，會讓其後整段以右到左顯示，
+ * 足以把一行訊息重排成另一個意思）、U+2028／U+2029／U+0085（在多數終端機與
+ * 編輯器裡就是換行）、零寬字元（讓兩個看起來相同的字串其實不同）。
+ *
+ * 這不是排版問題：`ESC[2K ESC[1G` 會清掉整行並把游標移回行首，於是使用者自己
+ * 寫進路徑裡的字元可以蓋掉一句「Refused」，讓操作者看到一則假的成功訊息。
+ */
+export function escapeControlCharacters(text: string): string {
+  return text.replace(
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g,
+    (char) => {
+      const named: Record<string, string> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' }
+      return named[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+    }
+  )
+}

@@ -29,16 +29,38 @@ export class ServerSideScriptRejection extends Error {
 const MONGO_SCRIPT_OPERATORS = ['$where', '$function', '$accumulator'] as const
 
 /**
- * Elasticsearch 上會執行伺服器端 script 的欄位。
+ * Elasticsearch 上會執行伺服器端 script 的鍵。
  *
- * 以形狀比對，不是清單成員。`scripted_metric` 把它的四個槽拼成 `init_script`、
- * `map_script`、`combine_script`、`reduce_script`，一個都不等於 `script`——
- * 一份兩個名字的清單擋不住一個會自己組名字的 API。任何以 `_script` 結尾的鍵
- * 都算，這連 ES 之後新增的槽也一起涵蓋，而那正是清單做不到的事。
+ * `script` 與 `script_fields` 在任何位置都算。以 `_script` 結尾的鍵只在
+ * `scripted_metric` 底下算——那是唯一把 script 槽拼成 `init_script` /
+ * `map_script` / `combine_script` / `reduce_script` 而內層沒有 `script` 鍵的
+ * 聚合；其餘的 script 載體（`script_score`、`bucket_script`、ingest 的
+ * script processor、`runtime_mappings`、`_update_by_query` 的 script）內層
+ * 一定有一個字面的 `script` 鍵，已經被第一條接住。
+ *
+ * 為什麼不是「任何 `_script` 結尾」：`term` / `match` / `range` / `sort` /
+ * `exists` 都把**欄位名**放在鍵的位置，而 `deploy_script`、`build_script`
+ * 是常見的欄位命名。無條件的後綴規則會讓 query-only 的唯讀查詢被一句
+ * 「executes script code on the cluster」擋下，而它指著的是一個純資料欄位。
+ * 值的形狀分不出這兩者（兩邊都可以是字串），父鍵可以。
  */
-function isElasticsearchScriptKey(key: string): boolean {
-  return key === 'script' || key === 'script_fields' || key.endsWith('_script')
+function isElasticsearchScriptKey(key: string, parentKey: string | undefined): boolean {
+  if (key === 'script' || key === 'script_fields') return true
+  return parentKey === 'scripted_metric' && key.endsWith('_script')
 }
+
+/**
+ * dbcli 檢查不了的編碼 body。
+ *
+ * `wrapper` query 帶的是 base64 編碼的 query，伺服器解碼後執行——而所有
+ * body 側的檢查都只走物件的鍵，碰不到字串內部。裡面可以是
+ * `function_score.script_score`，於是黑名單欄位的數值原文會以 `_score` 回來，
+ * 那不是受保護的鍵名，回應遮罩碰不到；黑名單詞比對也看不到 base64 裡的欄位名。
+ *
+ * 拒絕而不是解碼：解碼一種編碼只會邀請下一種。這與已經拒絕的字串形式 body
+ * 和 `?source=` 是同一個原則——檢查不了的東西不放行。
+ */
+const ES_OPAQUE_BODY_KEYS = ['wrapper'] as const
 
 /**
  * 已知的盲點：字串編碼的 body。
@@ -53,7 +75,12 @@ function isElasticsearchScriptKey(key: string): boolean {
  * 規則，必須同時處理這裡——否則那條規則會直接開一扇門。
  */
 
-function findKey(value: unknown, matches: (key: string) => boolean, depth = 0): string | undefined {
+function findKey(
+  value: unknown,
+  matches: (key: string, parentKey: string | undefined) => boolean,
+  depth = 0,
+  parentKey?: string
+): string | undefined {
   // 深度上限：`'['.repeat(100000)` 是合法 JSON，遞迴掃描會爆 stack。丟
   // RangeError 而不是拒絕請求，會讓一個防護變成一個當掉的理由。
   if (depth > MAX_SCAN_DEPTH) {
@@ -66,17 +93,17 @@ function findKey(value: unknown, matches: (key: string) => boolean, depth = 0): 
   if (value === null || typeof value !== 'object') return undefined
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findKey(item, matches, depth + 1)
+      const found = findKey(item, matches, depth + 1, parentKey)
       if (found) return found
     }
     return undefined
   }
   const record = value as Record<string, unknown>
   for (const key of Object.keys(record)) {
-    if (matches(key)) return key
+    if (matches(key, parentKey)) return key
   }
-  for (const nested of Object.values(record)) {
-    const found = findKey(nested, matches, depth + 1)
+  for (const [key, nested] of Object.entries(record)) {
+    const found = findKey(nested, matches, depth + 1, key)
     if (found) return found
   }
   return undefined
@@ -111,6 +138,15 @@ export function assertNoMongoServerSideScript(query: unknown): void {
  * 掃描知道 `doc` 之下是資料不是指令。
  */
 export function assertNoElasticsearchScript(body: unknown): void {
+  const opaque = findKey(body, (key) => (ES_OPAQUE_BODY_KEYS as readonly string[]).includes(key))
+  if (opaque) {
+    throw new ServerSideScriptRejection(
+      `Elasticsearch request rejected: '${opaque}' carries an encoded body that dbcli cannot ` +
+        `inspect, so no check on this path can see what it asks for. Write the query out in full.`,
+      opaque
+    )
+  }
+
   const key = findKey(body, isElasticsearchScriptKey)
   if (!key) return
   throw new ServerSideScriptRejection(

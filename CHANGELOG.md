@@ -73,6 +73,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **搜尋的 size 上限與分類器讀同一個路徑函式。** 先前 cap 不看 method 且讀解碼後的路徑，分類器看 method 且讀原始路徑，於是 `PUT /orders/_search` 與 `POST /orders/%5Fsearch` 上兩者給出不同答案。都不可利用，但「同一個請求、兩個函式、兩種答案」是前幾輪 CRITICAL 的形狀。
 
+- **`wrapper` query 一律拒絕。** 它帶的是 base64 編碼的 query，伺服器解碼後執行，而所有 body 側檢查都只走物件的鍵、碰不到字串內部。裡面可以放 `function_score.script_score`，於是黑名單欄位的數值原文會以每筆 hit 的 `_score` 回來——那不是受保護的鍵名，回應遮罩不會動它；黑名單詞比對也看不到 base64 裡的欄位名。這與已經拒絕的字串形式 body 和 `?source=` 是同一個原則：**dbcli 檢查不了的編碼 body 不放行**，解碼一種編碼只會邀請下一種。
+
+- **含 `.` 的黑名單欄位名重新生效。** `namesProtectedField` 先比整串相等，再把 term 拆成單一元件比對——而拆出來的元件永遠不含 `.`，所以 `blacklist.columns` 寫成 `user.password` 對整個檢查毫無作用。同一個函式也是回應遮罩的判斷，於是請求端放行 `?docvalue_fields=user.password.keyword`、回應端原樣返回 `_source.user.password`。ES 的 object field 一律以點分名稱呈現，那是最自然的設定寫法。比對改為**連續的點分元件區段**，遮罩則帶著走過的鍵路徑，才比對得到巢狀呈現的回應。扁平欄位名的行為完全不變——這正是這個缺陷七輪沒被發現的原因，每個測試用的都是扁平名稱。
+
+- **`_script` 後綴的比對縮回 `scripted_metric` 底下。** 無條件的後綴規則會讓 `deploy_script`、`build_script` 這種一般欄位名在 `query-only` 的唯讀查詢上被拒絕，訊息還說它「executes script code on the cluster」——`term`／`match`／`range`／`sort`／`exists` 都把欄位名放在鍵的位置。`scripted_metric` 是唯一內層沒有字面 `script` 鍵的聚合，其餘 script 載體都已被第一條規則接住。
+
+- **編碼後才出現的 `..` 一律拒絕。** `%2F` 原封不動通過位元組同一性檢查，但 `normalizeEsPath` 會先解碼再讓 `..` 刪掉前一段，跨過一個伺服器根本不存在的段界。`GET /secrets%2F..%2Fpublic/_search` 因此讓 `secrets` 從路徑區段檢查、index 抽取與 audit 三處同時消失。ES 是否解析得出那個 index expression 未經驗證——那正是拒絕而非正規化的理由。
+
+- **`exit` 之後排在佇列裡的命令不再執行。** `'line'` handler 在同一個 tick 把管線的所有行 enqueue 完，所以 `rl.close()` 執行時後面的 block 早已在鏈上，而 `'close'` 的排乾語意是「全部跑完」——`printf 'exit\n\nDELETE /orders\n\n'` 會把索引刪掉。兩個 shell 都補上關閉旗標。
+
+- **只有空白的行屬於 block 的內容，不是它的結尾。** 提交的判斷原本是 `trim()` 後為空，於是編輯器留下的空白會把 block 截斷、前半段以一個**沒有 body** 的請求送出——而 `POST /_update_by_query` 沒有 body 是合法的、作用範圍是整個索引，且 audit 寫下的字串與使用者本來要送的那筆逐字相同。改成只在真正的空行提交：反方向的代價是分隔行帶空白時命令會黏成一塊而解析失敗，但那個失敗可見且什麼都不會送出。
+
+- **shell 的錯誤訊息逃脫控制字元。** 訊息內嵌使用者寫的路徑，而 `ESC[2K ESC[1G` 會清掉整行並把游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功訊息。audit 檔與 `audit tail` 早已處理這件事，唯獨 shell 自己的 stderr 沒有；逃脫邏輯抽成共用的 `escapeControlCharacters`。
+
+- **ES shell 的退出碼反映失敗。** 先前一律 `exit(0)`，所以 `dbcli shell < script.txt` 的呼叫端分不出「全部成功」與「一條都沒跑」——權限拒絕、blacklist 拒絕、strict-audit 拒絕全部只印一行紅字。
+
+- **不含欄位名的 query 參數不再進入黑名單切詞器。** `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被誤擋，而 `routing`／`scroll`／`preference`／`filter_path` 的值沒有任何欄位名語意。
+
+- **`audit.strict` 的強制點改在「效果發生前」的稽核寫入。** 先前只有 ES shell 讀這個鍵，但它放在全域 `audit` 區塊、文件也寫得像全域開關：設了 `strict: true` 再把 audit 目錄設成不可寫，`dbcli delete` 照樣執行。現在 ES shell 送出請求前那一列與 SQL 寫入閘門的決定紀錄都走 `writeAuditEntryBeforeEffect`。事後才寫的紀錄不在範圍內——那時拒絕擋不回任何東西，只會把一次已完成的操作回報成失敗。同時：`enabled: false` 配 `strict: true` 在讀設定時就失敗（那組合的語意是「不記錄、也不擋」）；`dbcli audit health` 印得出 strict 的狀態；沒有 sink 或 sink 回 `null`（舊版 `writeAuditEntry` 的失敗形狀）在 strict 下都算失敗。
+
+- **`recover` 與 `inspect` 的 audit 摘要跟上 statement 與 phase。** 第六輪修好了 `audit tail` 的 brief，但沒動 `briefifyForRecent`，於是這兩條路徑上一次成功的請求仍呈現為兩列只差 `success` 的紀錄。`topQueriedTable` 另外不再把 attempt 列重複計數，也不再把 `/_cat/indices` 這種路由路徑當成「最常查詢的資料表」。
+
 ### Added
 
 - **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。

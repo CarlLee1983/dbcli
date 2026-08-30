@@ -278,10 +278,24 @@ export const AuditConfigSchema = z
      * 工具停擺。但把稽核當成控制本身的人（ES shell 的 permission 就是這種
      * 情形）需要能表達相反的取捨，而先前連表達都表達不了。
      *
+     * 強制點是「效果發生前」的稽核寫入（`writeAuditEntryBeforeEffect`）：
+     * ES shell 送出請求前的那一列，與 SQL 的 gate decision。效果已經發生之後
+     * 才寫的紀錄不在範圍內——那時拒絕擋不回任何東西，只會把一次成功的操作
+     * 回報成失敗。
+     *
      * 預設關閉：這改的是既有行為，開啟與否是使用者的判斷。
      */
     strict: z.boolean().default(false),
     rotation: AuditRotationConfigSchema,
+  })
+  // `enabled: false` 配 `strict: true` 的語意是「不記錄、也不擋」，與寫下
+  // strict 的人想要的完全相反。這種組合是打字錯誤或誤解，不是取捨——
+  // 讓它在讀設定時就失敗，而不是在需要它的那一刻靜靜地什麼都不做。
+  .refine((audit) => !(audit.strict && !audit.enabled), {
+    message:
+      'audit.strict requires audit.enabled: with audit off there is nothing to write, so ' +
+      'strict would refuse nothing. Enable audit, or turn strict off.',
+    path: ['strict'],
   })
   .optional()
   .default({

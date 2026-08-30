@@ -103,6 +103,50 @@ export async function writeAuditEntry(
   return 'success' in result ? result.id : null
 }
 
+/** 稽核在這個位置是控制本身，而它寫不出來。 */
+export class AuditRequiredError extends Error {
+  constructor(detail: string) {
+    super(
+      `Refused: the audit entry for this operation could not be written (${detail}), and ` +
+        `audit.strict is on. Fix the audit sink (disk space, directory permissions, a stale ` +
+        `lockfile under .dbcli/audit) or turn audit.strict off to accept unrecorded operations.`
+    )
+    this.name = 'AuditRequiredError'
+    Object.setPrototypeOf(this, AuditRequiredError.prototype)
+  }
+}
+
+/** 只有真正的寫入失敗算失敗：關閉是使用者的選擇，不是控制失效。 */
+export function auditWriteFailed(result: AuditWriteResult): boolean {
+  return !('success' in result) && result.skipped !== 'disabled'
+}
+
+/**
+ * 效果發生**之前**的稽核寫入點。`audit.strict` 只在這裡有意義。
+ *
+ * audit 呼叫分兩種位置：效果發生前（ES shell 送出請求前的 attempt、SQL 的
+ * gate decision）與效果發生後（outcome）。strict 的語意是「稽核寫不出來就別
+ * 動資料庫」，而那個「別動」只有在前一種位置說得出口——效果已經發生之後，
+ * 拒絕擋不回任何東西，只會把一次成功的操作回報成失敗。
+ *
+ * 所以強制點是這個函式，不是每一個 `writeAuditEntry` 呼叫端。加一個新的
+ * 效果前寫入點時要呼叫它；那也是唯一需要記住的規則。
+ *
+ * @throws {AuditRequiredError} `audit.strict` 開啟且這一列寫不出去
+ */
+export async function writeAuditEntryBeforeEffect(
+  config: DbcliConfig,
+  commandName: string,
+  options: { config?: string; [key: string]: unknown },
+  outcome: AuditOutcome
+): Promise<AuditWriteResult> {
+  const result = await writeAuditEntryResult(config, commandName, options, outcome)
+  if (config.audit?.strict === true && auditWriteFailed(result)) {
+    throw new AuditRequiredError('skipped' in result ? result.skipped : 'unknown')
+  }
+  return result
+}
+
 /**
  * 同 `writeAuditEntry`，但回傳完整的 `AuditWriteResult`。
  *

@@ -34,6 +34,7 @@ import {
   summarizeWriteGate,
   type WriteGateSummary,
 } from '@/core/audit/write-gate-summary'
+import { escapeControlCharacters } from '@/utils/redaction'
 import type { WriteGateReason } from '@/commands/write-gate'
 import type { GateOutcome } from '@/commands/write-gate-guard'
 
@@ -151,31 +152,8 @@ function shortId(id: string | undefined): string {
   return id.length <= SHORT_ID_LEN ? id : id.slice(0, SHORT_ID_LEN)
 }
 
-/**
- * 控制字元換成可見的跳脫寫法。
- *
- * cell 的內容有使用者可控的部分——ES shell 的 target 來自路徑，`%0A` 解碼後
- * 就是真正的換行。JSONL 檔本身安全（`JSON.stringify` 會逃脫），但這裡的表格
- * 不逃脫的話，一列紀錄就能在畫面上長成兩列，其中一列是偽造的。能被偽造的
- * 呈現層跟能被偽造的儲存層一樣糟。
- */
-function sanitizeCell(cell: string): string {
-  // C0 與 DEL 不夠。U+202E 之類的雙向控制字元會讓該 cell 之後整段以右到左
-  // 顯示，tier 與 success 欄因此可被視覺調換；U+2028 / U+0085 在許多終端機與
-  // 編輯器裡同樣算換行；零寬字元則讓兩個看起來相同的 target 其實不同。
-  // 這些都不是「顯示得不好看」，是讓讀者讀到與發生過的事不一樣的東西。
-  return cell.replace(
-    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g,
-    (char) => {
-      const escapes: Record<string, string> = {
-        '\n': '\\n',
-        '\r': '\\r',
-        '\t': '\\t',
-      }
-      return escapes[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
-    }
-  )
-}
+/** 表格 cell 的內容有使用者可控的部分——見 `escapeControlCharacters`。 */
+const sanitizeCell = escapeControlCharacters
 
 function renderTable(rawRows: string[][], headers: string[]): string {
   const rows = rawRows.map((row) => row.map((cell) => sanitizeCell(cell ?? '')))
@@ -299,7 +277,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function renderHealthTable(h: AuditHealthReport): string {
+function renderHealthTable(h: AuditHealthReport & { strict?: boolean }): string {
   const sizePct = Math.round(h.rotationUsage.bytes.pct)
   const entriesPct = Math.round(h.rotationUsage.entries.pct)
   const lastWrite = h.lastWrite
@@ -311,6 +289,7 @@ function renderHealthTable(h: AuditHealthReport): string {
     : MISSING_PLACEHOLDER
   return [
     `Enabled:        ${h.enabled}`,
+    `Strict:         ${h.strict === true}`,
     `File:           ${h.currentFile}`,
     `Size:           ${formatBytes(h.currentSizeBytes)} / ${formatBytes(h.rotationUsage.bytes.max)} (${sizePct}%)`,
     `Entries:        ${h.currentEntryCount} / ${h.rotationUsage.entries.max} (${entriesPct}%)`,
@@ -771,9 +750,13 @@ auditCommand
     // health is exactly the tool to observe the enabled-state.
 
     const logger = await getAuditLogger(config as never, configPath)
-    const health = logger.getHealth()
+    // `strict` 住在設定裡而不是 logger 裡，但這個指令是使用者唯一能觀察稽核
+    // 狀態的地方。少了它，開了 strict 的人沒有任何管道確認它真的開著——而一個
+    // 無從確認的安全設定，跟沒開沒兩樣。
+    const strict = (config as { audit?: { strict?: boolean } }).audit?.strict === true
+    const health = { ...logger.getHealth(), strict }
     if (format === 'json') {
-      const payload: AuditHealthReport | BriefHealth = brief ? briefifyHealth(health) : health
+      const payload = brief ? { ...briefifyHealth(health), strict } : health
       console.log(JSON.stringify(payload, null, 2))
     } else if (brief) {
       const sizePct = Math.round(health.rotationUsage.bytes.pct)
@@ -782,6 +765,7 @@ auditCommand
         ? `${health.lastWrite.ts} (${health.lastWrite.success ? 'success' : 'failed'})`
         : MISSING_PLACEHOLDER
       console.log(`Enabled:        ${health.enabled}`)
+      console.log(`Strict:         ${health.strict}`)
       console.log(`Last write:     ${lastWriteLine}`)
       console.log(`Rotation usage: ${sizePct}% bytes, ${entriesPct}% entries`)
     } else {

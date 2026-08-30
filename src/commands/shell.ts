@@ -264,6 +264,10 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
 
   rl.prompt()
 
+  // `.quit` 之後排在佇列裡的行不再執行。宣告在 `handleLine` 之前，因為兩邊
+  // 都讀它：設旗標的是 quit 分支，擋下 enqueue 的是 `'line'` handler。
+  let isClosing = false
+
   const handleLine = async (line: string): Promise<void> => {
     // Paused while the statement runs so that a prompt raised from inside —
     // the tier-two write gate is the only one today — owns stdin alone.
@@ -288,6 +292,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     switch (result.action) {
       case 'quit':
         if (result.output) console.error(result.output)
+        isClosing = true
         rl.close()
         return
 
@@ -328,6 +333,8 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // 最後一筆會送得出去而 audit 寫不完——與 ES shell 上第五輪找到的是同一個洞。
   const queue = createSubmitQueue()
   rl.on('line', (line: string) => {
+    // `.quit` 之後排在佇列裡的行不再執行——與 ES shell 的 `exit` 同一個形狀。
+    if (isClosing) return
     queue.enqueue(() => handleLine(line))
   })
 

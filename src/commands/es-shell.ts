@@ -4,13 +4,14 @@ import { configModule } from '../core/config'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { createSubmitQueue } from './shell-submit-queue'
 import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target'
+import { escapeControlCharacters } from '@/utils/redaction'
 import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
   routedPathname,
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
-import { writeAuditEntryResult } from '@/core/audit/integration-helper'
+import { auditWriteFailed, writeAuditEntryResult } from '@/core/audit/integration-helper'
 
 export interface EsRequest {
   method: string
@@ -192,8 +193,12 @@ export interface EsShellAuditSink {
  * sink 回報寫入結果，而不只是「有沒有丟例外」。
  *
  * `audit.strict` 要成立，呼叫端必須分得出「audit 關閉」與「audit 寫失敗」——
- * 前者是使用者的選擇，後者是控制失效，兩者的正確反應相反。回傳 void 是為了
- * 讓不在意結果的測試與呼叫端不必假造一個。
+ * 前者是使用者的選擇，後者是控制失效，兩者的正確反應相反。
+ *
+ * `void | string | null` 留在型別裡是為了不強迫每個測試假造一個結果，代價是
+ * 型別看起來允許把舊版 `writeAuditEntry`（失敗回 `null`）直接接上來。strict
+ * 因此把這兩種形狀都當成失敗——便利的代價由 `auditSinkFailed` 承擔，不由
+ * 安全性承擔。
  */
 export type AuditSinkResult =
   | void
@@ -204,11 +209,18 @@ export type AuditSinkResult =
   | { skipped: 'write-failed'; error: string }
   | { success: true; rotated: boolean; id: string }
 
-/** 只有真正的寫入失敗算失敗：關閉不是失敗。 */
-function auditWriteFailed(result: AuditSinkResult): boolean {
-  if (result === null || result === undefined || typeof result === 'string') return false
-  if ('success' in result) return false
-  return result.skipped !== 'disabled'
+/**
+ * strict 之下，什麼算「這一列沒寫成」。
+ *
+ * `undefined`（沒有 sink）與 `null`（舊版 `writeAuditEntry` 的失敗回傳）都算
+ * 失敗。先前它們算成功，於是把 sink 接成舊版 helper、或根本不接 sink，
+ * 都會讓 fail-closed 靜默失效——而 `AuditSinkResult` 的型別明文接受這兩種形狀，
+ * 等於主動邀請這個錯誤。沒有稽核與稽核寫失敗，對 strict 是同一件事。
+ */
+function auditSinkFailed(result: AuditSinkResult): boolean {
+  if (result === null || result === undefined) return true
+  if (typeof result === 'string') return false
+  return auditWriteFailed(result)
 }
 
 export interface RunEsRequestOptions {
@@ -222,7 +234,10 @@ export interface RunEsRequestOptions {
   /**
    * `config.audit.strict`。開啟時，送出前那一列 audit 寫不出去就拒絕執行。
    *
-   * 只管 `attempt` 那一列：`outcome` 寫不出去時請求已經在叢集上了，擋也擋不回來。
+   * 只管 `attempt` 那一列。理由對執行後的 `outcome` 成立——請求已經在叢集上，
+   * 擋也擋不回來。但被權限或 blacklist 拒絕的請求也只寫 `outcome`，而它從未
+   * 上叢集：那一列寫不出去時，稽核同樣不存在，只是 fail-closed 在那裡沒有東西
+   * 可擋（請求本來就沒送出）。這個範圍是刻意的，不是論證涵蓋到了。
    */
   strictAudit?: boolean
 }
@@ -338,6 +353,27 @@ export async function runEsRequest(
     // defect this removes. The canonical spelling is handed back so an operator
     // who wrote a legitimate path with a space or a non-ASCII document id can
     // copy the answer rather than guess at an encoding.
+    // 位元組同一性擋得住字面的 `..`（`/_cat/../secrets/_search` 的 canonical
+    // 不同），擋不住編碼的：`%2F` 原封不動留在 `url.pathname` 裡，所以
+    // `/secrets%2F..%2Fpublic/_search` 通得過。但 `normalizeEsPath` 會先把
+    // `%2F` 解碼成 `/` 再讓 `..` 刪掉前一段，於是 `secrets` 從路徑檢查、
+    // index 抽取與 audit 三處同時消失，而伺服器收到的是一整段 index
+    // expression。dbcli 分辨不出伺服器怎麼解讀它——所以拒絕，不正規化。
+    // 這與上面那條是同一個原則：不近似傳輸層的行為。
+    const decodedPath = ((): string => {
+      try {
+        return decodeURIComponent(target?.url.pathname ?? req.path)
+      } catch {
+        return target?.url.pathname ?? req.path
+      }
+    })()
+    if (decodedPath.split('/').includes('..')) {
+      throw new Error(
+        `Refused: '${req.path}' contains a '..' segment once decoded, and dbcli cannot tell ` +
+          `which path Elasticsearch would route it to. Write the path out without '..'.`
+      )
+    }
+
     if (target === null || target.canonical !== req.path) {
       throw new Error(
         `Refused: '${req.path}' is not the request the server would receive. ` +
@@ -453,11 +489,27 @@ export async function runEsRequest(
       // 多切一次只會多幾個不命中的 term，少切一次會漏掉一個受保護的欄位。
       const CONSERVATIVE = /[\s,:()"'[\]{}]+/
       const LUCENE_OPERATORS = /[\s,:()"'[\]{}+\-*!^~|;/\\]+/
-      const queryTerms = [...query.entries()].flatMap(([, value]) =>
-        [value, ...value.split(CONSERVATIVE), ...value.split(LUCENE_OPERATORS)].filter(
-          (term) => term.length > 0
+      // `routing` / `scroll` / `preference` / `filter_path` 的值不含欄位名，
+      // 而加寬的切法會把 `?routing=abc-name-1` 切出 `name`——黑名單欄位叫
+      // `name` 時那是純誤擋，路徑上沒有任何欄位名語意可言。
+      const NON_FIELD_PARAMS = new Set([
+        'routing',
+        'scroll',
+        'scroll_id',
+        'preference',
+        'filter_path',
+        'pipeline',
+        'refresh',
+        'timeout',
+        'wait_for_completion',
+      ])
+      const queryTerms = [...query.entries()]
+        .filter(([name]) => !NON_FIELD_PARAMS.has(name.toLowerCase()))
+        .flatMap(([, value]) =>
+          [value, ...value.split(CONSERVATIVE), ...value.split(LUCENE_OPERATORS)].filter(
+            (term) => term.length > 0
+          )
         )
-      )
       const named = [...findStrings(req.body), ...queryTerms].find((text) =>
         namesProtectedField(text, protectedFields)
       )
@@ -512,13 +564,17 @@ export async function runEsRequest(
     // request whatever happens to this process, so a record that only exists on
     // the way back cannot describe a request that never comes back.
     //
+    // 「寫下去了」的強度到 page cache 為止：`AuditLogger` 用 `appendFile`
+    // 且刻意不做 fsync（D-08）。斷電或 kill -9 之下這一列仍可能不存在。
+    // strict 把這條路徑從 best-effort 提升為控制，但提升不到硬體那一層。
+    //
     // `success: false`, always. At this point the operation has not succeeded —
     // it may not even leave the process, because the transport applies the
     // server-side script check. Writing `true` here made "not sent" and "sent
     // and succeeded" the same row, and doubled every success count. The truth
     // is the `outcome` row's job; this row's job is to exist.
     const attempt = await audit('attempt', false)
-    if (options.strictAudit && auditWriteFailed(attempt)) {
+    if (options.strictAudit && auditSinkFailed(attempt)) {
       // 稽核是這條路徑上的控制本身，不是佐證。寫不出來就等於沒有控制。
       throw new Error(
         'Refused: the audit entry for this request could not be written, and audit.strict is on. ' +
@@ -594,14 +650,34 @@ function findStrings(node: unknown): string[] {
  * glob matching would mean guessing Elasticsearch's wildcard semantics, which
  * is the approximate-the-parser mistake in a third field.
  */
+/**
+ * 這個 term 有沒有指到受保護的欄位。
+ *
+ * 比對的是**連續的點分元件區段**，不是整串相等、也不是單一元件。舊版先比整串
+ * 再把 term 拆成單一元件逐一比對，而拆出來的元件永遠不含 `.`——所以一個含 `.`
+ * 的黑名單設定（`user.password`）永遠不可能被任何元件命中，整條檢查對它毫無
+ * 作用。ES 的 object field 一律以點分名稱呈現，那是最自然的設定寫法。
+ *
+ * 區段比對同時涵蓋兩端的擴充：`user.password.keyword` 是 multi-field 子欄位，
+ * `params._source.user.password` 是 Painless 的讀法，受保護的名稱可以落在點分
+ * 路徑的任一段。代價是過度比對——回應裡任何以 `user.password` 結尾的路徑都會
+ * 被遮——而那是withholding 的方向。
+ */
 function namesProtectedField(term: string, protectedFields: ReadonlySet<string>): boolean {
   if (protectedFields.has(term)) return true
-  if (!term.includes('.')) return false
-  return term.split('.').some((component) => protectedFields.has(component))
+  const parts = term.split('.')
+  if (parts.length === 1) return false
+  for (let start = 0; start < parts.length; start += 1) {
+    for (let end = start + 1; end <= parts.length; end += 1) {
+      if (protectedFields.has(parts.slice(start, end).join('.'))) return true
+    }
+  }
+  return false
 }
 
-function redactFields(node: unknown, fields: Set<string>): unknown {
-  if (Array.isArray(node)) return node.map((item) => redactFields(item, fields))
+function redactFields(node: unknown, fields: Set<string>, trail: string[] = []): unknown {
+  // 陣列不進 trail：`hits.hits[]` 的索引不是欄位路徑的一部分。
+  if (Array.isArray(node)) return node.map((item) => redactFields(item, fields, trail))
   if (node === null || typeof node !== 'object') return node
 
   const out: Record<string, unknown> = {}
@@ -612,8 +688,15 @@ function redactFields(node: unknown, fields: Set<string>): unknown {
     // `fields[password.keyword]` survived an exact-key match. This is also the
     // backstop for a wildcard field expression, which expands server-side and
     // comes back under the real field name.
-    if (namesProtectedField(key, fields)) continue
-    out[key] = redactFields(value, fields)
+    //
+    // 帶著走過的鍵：ES 的 object field 在回應裡是**巢狀的**（`_source.user.password`），
+    // 但在設定與 `fields` 裡是點分的（`user.password`）。只看單一個鍵的話，
+    // 巢狀那一側的每一層都不等於任何黑名單項目，於是含 `.` 的設定對回應毫無
+    // 作用。信封鍵（`hits`、`_source`）留在 trail 裡無妨——比對只看結尾的
+    // 連續區段。
+    const path = [...trail, key]
+    if (namesProtectedField(path.join('.'), fields)) continue
+    out[key] = redactFields(value, fields, path)
   }
   return out
 }
@@ -653,9 +736,24 @@ export async function runEsShell(configPath: string): Promise<void> {
   // 當成前一筆的 body 送進叢集。
   //
   // 這也讓 SIGINT 只清得到未提交的行——`blockLines` 之後不再裝已提交的 block。
+  // `exit` 之後不再對叢集做任何事。
+  //
+  // `'line'` handler 在同一個 tick 把管線的所有行同步 enqueue 完，而 `exit` 的
+  // `rl.close()` 要等它自己那個任務跑起來才執行——此時後面的 block 早已在鏈上，
+  // 而 `'close'` 的 `drain()` 語意是「排空」，於是會把它們全部執行完。
+  // 旗標同時擋住「還沒 enqueue 的」與「已經排隊的」兩邊。
+  let closing = false
+  // 任何一筆被拒絕或失敗，退出碼就不是 0。
+  //
+  // 先前一律 `exit(0)`，所以 `dbcli shell < script.txt` 的呼叫端分不出「全部
+  // 成功」與「一條都沒跑」——權限拒絕、blacklist 拒絕、strict-audit 拒絕全部
+  // 只印一行紅字就結束。對人來說看得見，對自動化來說不存在。
+  let failed = false
   const submit = async (block: string) => {
+    if (closing) return
     if (block === '') return
     if (block === 'exit' || block === 'quit') {
+      closing = true
       rl.close()
       return
     }
@@ -689,7 +787,12 @@ export async function runEsShell(configPath: string): Promise<void> {
       )
       console.log(JSON.stringify(res, null, 2))
     } catch (error) {
-      console.error(pc.red((error as Error).message))
+      failed = true
+      // 訊息內嵌使用者寫的路徑，而路徑可以帶 `ESC[2K ESC[1G`——那會清掉整行並把
+      // 游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功
+      // 訊息。audit 檔（JSONL）與 `audit tail`（表格）都已經處理這件事，
+      // 唯獨 shell 自己的 stderr 沒有。
+      console.error(pc.red(escapeControlCharacters((error as Error).message)))
     }
   }
 
@@ -699,7 +802,19 @@ export async function runEsShell(configPath: string): Promise<void> {
 
   rl.prompt()
   rl.on('line', (line: string) => {
-    if (line.trim() === '') {
+    if (closing) return
+    // 提交的是**真正的空行**，不是 `trim()` 之後為空的行。
+    //
+    // 編輯器很容易在空行留下空白，而 `trim()` 讓那種行等同於提交：貼進一段
+    // `POST /orders/_update_by_query` 加一行兩個空白加 body，前半段會以一個
+    // **沒有 body** 的請求送出——而 `_update_by_query` 沒有 body 是合法的，
+    // 作用範圍是整個 index。使用者只看到後半段的格式錯誤，而 audit 寫下的字串
+    // 與他本來要送的那筆逐字相同，事後查不出差別。
+    //
+    // 反方向的代價是：分隔行若帶著空白，管線裡的命令會黏成一塊而解析失敗。
+    // 那個失敗是可見的、而且什麼都不會送出——fail-closed，與上面那個
+    // fail-open 不對稱，所以取這一邊。
+    if (line.replace(/\r$/, '') === '') {
       const block = blockLines.join('\n').trim()
       blockLines = []
       rl.setPrompt(pc.cyan('es> '))
@@ -721,6 +836,6 @@ export async function runEsShell(configPath: string): Promise<void> {
     await queue.drain()
     await adapter.disconnect()
     console.error(pc.dim('Goodbye'))
-    process.exit(0)
+    process.exit(failed ? 1 : 0)
   })
 }

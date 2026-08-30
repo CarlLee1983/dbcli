@@ -899,3 +899,62 @@ describe('audit.strict 讓稽核失敗擋下請求', () => {
     expect(captured.calls).toBe(1)
   })
 })
+
+/**
+ * 第七輪 HIGH：strict 之下「沒有 sink」與「sink 回 null」都必須算失敗。
+ *
+ * `AuditSinkResult` 的型別接受 `void | string | null`，而 `writeAuditEntry`
+ * （舊版、仍被十幾個檔案使用）失敗時正是回 `null`。先前這兩種都被當成成功，
+ * 所以把 sink 接成舊版 helper、或根本不接，都會讓 fail-closed 靜默失效——
+ * 型別本身在邀請這個錯誤。沒有稽核與稽核寫失敗，對 strict 是同一件事。
+ */
+describe('strict 之下沒有稽核就等於稽核失敗', () => {
+  test('完全沒有 sink 時，strict 擋下請求', async () => {
+    const captured = { calls: 0 } as Captured
+    await expect(
+      runEsRequest(
+        { method: 'DELETE', path: '/orders' },
+        fakeAdapter(captured) as never,
+        [],
+        {},
+        {
+          permission: 'admin',
+          strictAudit: true,
+        }
+      )
+    ).rejects.toThrow(/audit/i)
+    expect(captured.calls).toBe(0)
+  })
+
+  test('sink 回 null（舊版 writeAuditEntry 的失敗形狀）時，strict 擋下請求', async () => {
+    const captured = { calls: 0 } as Captured
+    await expect(
+      runEsRequest(
+        { method: 'DELETE', path: '/orders' },
+        fakeAdapter(captured) as never,
+        [],
+        {},
+        {
+          permission: 'admin',
+          strictAudit: true,
+          audit: async () => null,
+        }
+      )
+    ).rejects.toThrow(/audit/i)
+    expect(captured.calls).toBe(0)
+  })
+
+  test('沒開 strict 時，沒有 sink 仍然照常執行', async () => {
+    const captured = { calls: 0 } as Captured
+    await runEsRequest(
+      { method: 'DELETE', path: '/orders' },
+      fakeAdapter(captured) as never,
+      [],
+      {},
+      {
+        permission: 'admin',
+      }
+    )
+    expect(captured.calls).toBe(1)
+  })
+})

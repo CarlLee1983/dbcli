@@ -1,5 +1,5 @@
-import { test, expect } from 'bun:test'
-import { runEsRequest, type EsRequest } from '@/commands/es-shell'
+import { describe, test, expect } from 'bun:test'
+import { parseEsRequest, runEsRequest, type EsRequest } from '@/commands/es-shell'
 
 /**
  * These tests are about the blacklist and the search size cap, so they run at
@@ -543,4 +543,188 @@ test('真正的搜尋仍然拿到 size cap（GET 與 POST 都要）', async () =
     )
     expect((captured.body as { size?: number }).size).toBe(1000)
   }
+})
+
+/**
+ * 第七輪 CRITICAL：帶 `.` 的黑名單欄位名整條失效——請求端與遮罩端同時漏掉。
+ *
+ * `namesProtectedField` 先比對整串相等，再把 term 拆成點分元件逐一比對。
+ * 拆出來的元件永遠不含 `.`，所以**永遠不可能**等於一個含 `.` 的集合成員：
+ * `user.password` 這種設定寫法對整個檢查毫無作用。而 ES 的 object field 一律
+ * 以點分名稱呈現（`user.password`、`payment.card_number`），那是最自然的寫法。
+ *
+ * 遮罩端是同一個函式，所以 `_source` 巢狀走下去時鍵是 `user` 再 `password`，
+ * 兩者都不在集合裡——回應原樣返回。對照組：扁平的 `password` 走同樣的路徑
+ * 會被擋也會被遮，差別就只有那個 `.`。
+ */
+describe('含點的黑名單欄位名', () => {
+  const dotted = { orders: ['user.password'] }
+
+  test.each([
+    '?docvalue_fields=user.password.keyword',
+    '?sort=user.password:asc',
+    '?_source_includes=user.password',
+    '?q=user.password:hunter2',
+  ])('請求端擋得住 %s', async (queryString) => {
+    const captured: Record<string, unknown> = {}
+    await expect(
+      run(
+        { method: 'GET', path: `/orders/_search${queryString}` },
+        fakeAdapter(captured),
+        [],
+        dotted
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+    expect(captured.path).toBeUndefined()
+  })
+
+  test('body 裡指名也擋得住', async () => {
+    const captured: Record<string, unknown> = {}
+    await expect(
+      run(
+        { method: 'GET', path: '/orders/_search', body: { docvalue_fields: ['user.password'] } },
+        fakeAdapter(captured),
+        [],
+        dotted
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+  })
+
+  test('遮罩端把巢狀在 _source 底下的值移除', async () => {
+    const adapter = {
+      request: async () => ({
+        hits: {
+          hits: [{ _source: { id: 1, user: { name: 'a', password: 'hunter2' } } }],
+        },
+      }),
+    }
+    const res = (await run({ method: 'GET', path: '/orders/_search' }, adapter, [], dotted)) as any
+    const source = res.hits.hits[0]._source
+    expect(source.user.password).toBeUndefined()
+    expect(source.user.name).toBe('a')
+    expect(source.id).toBe(1)
+  })
+
+  test('遮罩端也移除點分呈現的 fields 鍵', async () => {
+    const adapter = {
+      request: async () => ({
+        hits: { hits: [{ fields: { 'user.password.keyword': ['hunter2'], 'user.name': ['a'] } }] },
+      }),
+    }
+    const res = (await run({ method: 'GET', path: '/orders/_search' }, adapter, [], dotted)) as any
+    expect(res.hits.hits[0].fields['user.password.keyword']).toBeUndefined()
+    expect(res.hits.hits[0].fields['user.name']).toEqual(['a'])
+  })
+
+  test('同名但不同路徑的欄位不受影響——user.password 不該連 admin.password 一起遮', async () => {
+    const adapter = {
+      request: async () => ({
+        hits: { hits: [{ _source: { admin: { password: 'keep' } } }] },
+      }),
+    }
+    const res = (await run({ method: 'GET', path: '/orders/_search' }, adapter, [], dotted)) as any
+    expect(res.hits.hits[0]._source.admin.password).toBe('keep')
+  })
+
+  test('扁平欄位名的既有行為不變', async () => {
+    const captured: Record<string, unknown> = {}
+    await expect(
+      run({ method: 'GET', path: '/orders/_search?sort=password:asc' }, fakeAdapter(captured), [], {
+        orders: ['password'],
+      })
+    ).rejects.toThrow(/blacklist-protected/)
+  })
+})
+
+/**
+ * 第七輪 HIGH：`%2F..%2F` 讓 blacklist 與 audit 讀到一條伺服器收不到的路徑。
+ *
+ * `GET /secrets%2F..%2Fpublic/_search` 通得過位元組同一性檢查——`url.pathname`
+ * 原封不動保留 `%2F`——但 `normalizeEsPath` 先把 `%2F` 解碼成 `/`，再用 `..`
+ * 把前一段刪掉。於是 `secrets` 從路徑區段檢查、`extractIndexFromPath` 與
+ * audit 的 target／statement 三處同時消失，而 ES 收到的是一整段
+ * `secrets/../public` 的 index expression。
+ *
+ * dbcli 分辨不出伺服器會怎麼解讀它，所以拒絕而不是正規化——這與位元組同一性
+ * 檢查是同一個原則：不近似傳輸層的行為。
+ */
+describe('編碼後才出現的 .. 一律拒絕', () => {
+  test.each([
+    '/secrets%2F..%2Fpublic/_search',
+    '/public/..%2Fsecrets/_search',
+    '/a%2F..%2Fb/_doc/1',
+  ])('拒絕 %s', async (path) => {
+    const captured: Record<string, unknown> = {}
+    await expect(run({ method: 'GET', path }, fakeAdapter(captured), ['secrets'])).rejects.toThrow(
+      /\.\./
+    )
+    expect(captured.path).toBeUndefined()
+  })
+
+  test('沒有 .. 的編碼斜線不受影響', async () => {
+    const captured: Record<string, unknown> = {}
+    await run({ method: 'GET', path: '/orders/_doc/a%2Fb' }, fakeAdapter(captured), [])
+    expect(captured.path).toBe('/orders/_doc/a%2Fb')
+  })
+
+  test('一般路徑不受影響', async () => {
+    const captured: Record<string, unknown> = {}
+    await run({ method: 'GET', path: '/orders/_search' }, fakeAdapter(captured), [])
+    expect(captured.path).toBe('/orders/_search')
+  })
+})
+
+/**
+ * 第七輪 MEDIUM：body 中間夾一行「只有空白」的行會把 block 截斷，前半段照送。
+ *
+ * 提交的判斷是 `line.trim() === ''`，所以編輯器常見的「含空白的空行」等同於
+ * 提交。最壞的具體例子是 `POST /orders/_update_by_query` 後面接一行兩個空白：
+ * 前半段解析成一個**沒有 body** 的請求並實際送出，而 `_update_by_query` 沒有
+ * body 是合法的、作用範圍是整個 index；使用者只會看到後半段的一則格式錯誤，
+ * 以為整筆沒送。而 audit 寫下的 `POST /orders/_update_by_query` 與使用者本來
+ * 打算送的那一筆逐字相同，事後查不出送出去的是無 body 版本。
+ *
+ * 這是第六輪那個 CRITICAL 的同一類——「使用者提交的」與「送出的」不一致——
+ * 只是源頭在 block 的切分規則。含空白的行屬於 block 的內容，不是它的結尾。
+ */
+test('block 內部含空白的行不是提交，body 跟著 header 一起送出', () => {
+  const req = parseEsRequest(
+    'POST /orders/_update_by_query\n  \n{"query":{"term":{"status":"draft"}}}'
+  )
+  expect(req.method).toBe('POST')
+  expect(req.path).toBe('/orders/_update_by_query')
+  expect(req.body).toEqual({ query: { term: { status: 'draft' } } })
+})
+
+test('前導與尾端的空白行仍然被忽略', () => {
+  const req = parseEsRequest('\n  \nGET /orders/_search\n')
+  expect(req.method).toBe('GET')
+  expect(req.path).toBe('/orders/_search')
+  expect(req.body).toBeUndefined()
+})
+
+/**
+ * 第七輪 MEDIUM（誤擋）：不含欄位名的 query 參數不該進切詞器。
+ * `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被拒絕——路徑上沒有任何
+ * 欄位名語意可言，那是純誤擋。
+ */
+test.each([
+  ['?routing=abc-name-1', 'routing'],
+  ['?preference=_shards:2', 'preference'],
+  ['?filter_path=hits.hits._source.name', 'filter_path'],
+])('不含欄位名的參數 %s（%s）不因為切出片段而被擋', async (queryString) => {
+  const captured: Record<string, unknown> = {}
+  await run({ method: 'GET', path: `/orders/_search${queryString}` }, fakeAdapter(captured), [], {
+    orders: ['name'],
+  })
+  expect(captured.path).toBe(`/orders/_search${queryString}`)
+})
+
+test('真正指名欄位的參數仍然被擋', async () => {
+  const captured: Record<string, unknown> = {}
+  await expect(
+    run({ method: 'GET', path: '/orders/_search?sort=name:asc' }, fakeAdapter(captured), [], {
+      orders: ['name'],
+    })
+  ).rejects.toThrow(/blacklist-protected/)
 })

@@ -336,6 +336,83 @@ swapped; U+2028 and U+0085 are line breaks to many terminals. This is
 zero-privilege log injection — a refused request still writes an `outcome` row
 whose target is an attacker-chosen string.
 
+## Decision 7: what dbcli cannot read, it refuses; and a dotted name is a path
+
+A seventh round found two CRITICALs. Unlike rounds five and six, **neither was a
+regression** — both had survived every round so far, which is the first evidence
+that the reviews had been circling the code they had just changed rather than
+the surface as a whole.
+
+**An encoded body is refused, not decoded.** The `wrapper` query carries a
+base64-encoded query that the server decodes and runs. Every body-side check
+walks object *keys* and never enters strings, so the only keys present are
+`query`/`wrapper`/`query` — no amount of loosening the key match reaches inside.
+The payload can be `function_score.script_score`, which returns a blacklisted
+field's value as each hit's `_score`, a key response redaction has no reason to
+touch. This is the same principle already applied to string request bodies and
+to `?source=`: **what dbcli cannot inspect, it does not forward.** Decoding one
+encoding only invites the next.
+
+Note where the previous round's reasoning failed. Decision 6 recorded the
+string-encoded-body blind spot and argued it was unreachable *because the tier
+gate holds `_search/template`*. That argument was about one endpoint; `wrapper`
+is a query type, and it rides the two-segment `/<index>/_search` path that the
+read allowlist deliberately permits. An unreachability argument is only as good
+as its enumeration of the ways in.
+
+**A blacklist entry containing a dot never matched anything.**
+`namesProtectedField` compared the whole term, then split it and compared each
+single component — and a single component never contains a dot, so
+`user.password` could not be matched by either branch. The same function is the
+redaction rule, so the failure was symmetric: the request side let
+`?docvalue_fields=user.password.keyword` through and the response side returned
+`_source.user.password` in full. Elasticsearch renders every object field as a
+dotted name, so this is the *natural* way to write the setting. Matching is now
+over any contiguous run of dotted components, and `redactFields` carries the
+walked key path so a nested response shape is compared against a dotted
+configuration. Flat names behave exactly as before, which is what made the
+defect invisible: every test used one.
+
+**The `_script` suffix rule was over-broad and is now scoped by parent key.**
+Decision 6 matched any key ending in `_script`. But `term`, `match`, `range`,
+`sort` and `exists` all put *field names* in key position, so `deploy_script`
+became a refused query at `query-only`, told that it "executes script code on
+the cluster". `scripted_metric` is the only aggregation whose slots are spelled
+`*_script` without a literal `script` key inside them, so the suffix rule now
+applies only beneath it. Value shape cannot separate the two cases — both are
+strings — and the parent key can.
+
+**Encoded `..` is refused.** `%2F` survives the byte-identity check unchanged,
+but `normalizeEsPath` decodes it and then lets `..` erase the preceding segment,
+across a boundary the server never sees. `GET /secrets%2F..%2Fpublic/_search`
+therefore disappeared from the segment check, from index extraction, and from
+the audit target at once. Whether Elasticsearch resolves that index expression
+at all is unverified — and that is precisely the reason to refuse rather than
+normalise.
+
+**`exit` discards what is queued.** The `'line'` handler enqueues every piped
+line in one tick, so `rl.close()` ran with later blocks already on the chain and
+`drain()` — meaning "run everything" — executed them. `printf 'exit\n\nDELETE
+/orders\n\n'` deleted the index. Both shells now set a closing flag that stops
+both enqueueing and execution.
+
+**A whitespace-only line is content, not a submit.** Submitting on
+`line.trim() === ''` let an editor's stray spaces split a block, sending the
+first half as a request with **no body** — and `POST /_update_by_query` without a
+body is valid and rewrites the whole index. The audit row was byte-identical to
+the one the operator meant to send. Submitting only on a truly empty line
+inverts the failure: a piped script whose separators carry spaces now merges and
+fails to parse, sending nothing. Fail-closed replacing fail-open is the whole of
+the argument.
+
+**Two disclosure surfaces the review kept finding, now closed at the source.**
+Refusal messages embed the operator's own path and went to stderr unescaped, so
+`ESC[2K ESC[1G` could erase the word "Refused" and leave a forged success line;
+the escaping written for audit tables is now shared as
+`escapeControlCharacters` and applied there too. And the shell exited 0 whatever
+happened, so `dbcli shell < script.txt` could not distinguish "all succeeded"
+from "every statement was refused".
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
@@ -363,4 +440,11 @@ anywhere other than the `'line'` handler that fills it; or the `attempt` audit
 row is written with `success: true`; or `writeAuditEntryResult` in
 `src/core/audit/integration-helper.ts` stops distinguishing a disabled sink from
 a failed one; or `briefify` in `src/commands/audit.ts` drops the statement or
-the phase.
+the phase; or `namesProtectedField` in `src/commands/es-shell.ts` stops matching
+contiguous dotted-component runs, or `redactFields` there stops carrying the
+walked key path; or `ES_OPAQUE_BODY_KEYS` in
+`src/adapters/server-side-script.ts` shrinks while Elasticsearch still accepts
+an encoded body under that name; or either shell stops discarding queued input
+after `exit`; or `runEsShell` submits on a line that is not empty before
+trimming; or `audit.strict` is enforced anywhere other than
+`writeAuditEntryBeforeEffect` in `src/core/audit/integration-helper.ts`.

@@ -8,9 +8,9 @@
  * stopped anything, and it is worth exactly as much as its consistency.
  */
 
-import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { writeAuditEntryBeforeEffect } from '@/core/audit/integration-helper'
 /** The config shape the audit helper accepts, taken from the helper itself. */
-type AuditableConfig = Parameters<typeof writeAuditEntry>[0]
+type AuditableConfig = Parameters<typeof writeAuditEntryBeforeEffect>[0]
 import { humanOutputContext } from './mutation-outcome'
 import {
   classifyStructuredWriteGate,
@@ -38,7 +38,9 @@ export async function recordGateDecision(request: {
   tier: 'one' | 'two'
   sql?: string
 }): Promise<void> {
-  await writeAuditEntry(request.config, request.command, request.options, {
+  // 這是效果**發生前**的紀錄——該函式的 docstring 講的就是這件事——所以
+  // `audit.strict` 在這裡強制得起來：寫不出這一列就不要往下執行。
+  await writeAuditEntryBeforeEffect(request.config, request.command, request.options, {
     success: request.outcome === 'allowed',
     // The decision is about a statement that writes, whatever the command's own
     // capability tier says. Read off the command, one DROP decision was filed

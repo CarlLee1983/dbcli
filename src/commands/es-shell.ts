@@ -3,12 +3,11 @@ import pc from 'picocolors'
 import { configModule } from '../core/config'
 import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { createSubmitQueue } from './shell-submit-queue'
-import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target'
+import { normalizeEsPath } from '@/utils/es-index-target'
 import { escapeControlCharacters } from '@/utils/redaction'
 import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
-  routedPathname,
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
 import { auditWriteFailed, writeAuditEntryResult } from '@/core/audit/integration-helper'

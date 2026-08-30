@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 test('public API 暴露 engine 進入點', () => {
-  expect(typeof core.AdapterFactory).toBe('function')
   expect(typeof core.QueryExecutor).toBe('function')
   expect(typeof core.SchemaLayeredLoader).toBe('function')
   expect(core.ConnectionError).toBeDefined()
@@ -49,4 +48,19 @@ test('readConfig 對空目錄回傳預設 config（含 connection + permission�
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+/**
+ * 第五輪對抗式複查（HIGH）：`AdapterFactory` 在已發佈表面上，等於一扇繞過
+ * 所有 gate 的門。
+ *
+ * `AdapterFactory.createElasticsearchAdapter(conn).request('DELETE', '/orders')`
+ * 不經 permission、不經 blacklist、不寫 audit——這條分支花了五輪把 shell 那扇門
+ * 補起來，門旁邊卻一直開著這扇窗。CLI 使用者進不來，`./core` 的消費者可以。
+ *
+ * 現在關掉的成本近乎零：預定消費者 `dbcli-gui` 尚未建出，沒有人 import 它。
+ * 等到有人 import 之後再關，就是 breaking change。
+ */
+test('public API 不暴露未經 gate 的 adapter 工廠', () => {
+  expect('AdapterFactory' in core).toBe(false)
 })

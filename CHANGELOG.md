@@ -5,6 +5,136 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission
+
+**建議所有把 Elasticsearch 連線交給 AI agent 操作的使用者升級。** `dbcli shell` 連到 Elasticsearch 時，完全沒有檢查連線設定的 permission 等級就把請求送到叢集：`shell.ts` 在到達 SQL 與 Redis 共用的那道閘門之前就分支到 `es-shell.ts`。因此 `permission: query-only` 的連線可以送出 `POST /<index>/_delete_by_query` 清空索引、`DELETE /<index>` 刪掉索引、`PUT /<index>/_mapping` 改寫 schema —— 同樣這些請求走 `dbcli query` 一律會被拒絕。這條路徑也不寫任何 audit 紀錄，所以受影響的人事後無從查證發生過什麼。
+
+它可以腳本化：shell 用管線餵入的 stdin 驅動與互動輸入相同的迴圈，所以一個 agent 用單一非互動指令就能做到上述任何一項。
+
+影響範圍是所有 Elasticsearch 連線，`1.22`（ES shell 首次出現）起至 `3.0.0` 止。SQL、Redis、MongoDB 的 shell 不受影響 —— 它們走的是有閘門的那一條分支。沒有任何生產事故的紀錄，但這是從缺席推論出來的，而這條路徑本來就不寫 audit，受影響的操作者本來就無從發現。
+
+### Fixed
+
+- **BREAKING（對 `query-only` 與 `read-write` 的 Elasticsearch shell 使用者而言）：ES shell 現在套用連線的 permission 等級。** 請求由 `dbcli query` 使用的同一個分類器判定 —— shell 交給它的是真正的 method 與 path，而 `query` 只生得出一個合成的 `_search`。無法證明是文件層級的操作一律落到需要 `admin` 的那一級：`DELETE /<index>`、`DELETE /_all`、`_delete_by_query`、`PUT /_mapping`、`PUT /_settings`、`POST /_aliases`、`POST /_reindex`。拒絕訊息會指出可行的等級，而且請求不會送出。先前能在 `query-only` 下跑這些請求的人，現在會被擋。
+
+- **ES shell 的每個請求都寫入 audit，執行或被拒都寫。** side-effect tier 取自該請求的分類結果而非發起它的命令 —— 用命令的能力表來標記是一個已知缺陷，同一個破壞性操作曾因為經由不同命令而被記成三種不同的 tier。
+
+- **分類器改讀伺服器實際路由的路徑。** 先前它拿到的是原始文字（含 query string），而黑名單拿到的是去掉 query string 的路徑。分類器裡每個子字串比對因此都會命中攻擊者控制的參數值，而 `filter_path` 是每個端點都接受、且吃任意字串的通用參數：`POST /<index>/_delete_by_query?filter_path=_count` 判成搜尋、`DELETE /<index>?filter_path=_bulk` 判成搜尋、`PUT /<index>/_mapping?filter_path=_bulk` 判成搜尋，三者都在 `query-only` 下實測執行成功。現在 query string 被丟棄、百分比編碼與 dot segment 在分類前解析，欄位也從 `apiPath` 改名為 `rawPath` 並在模組內正規化，呼叫端不可能再傳錯一個。
+
+- **比對改為位置感知的路徑區段，不再是子字串。** `_search`、`_count`、`_bulk` 都是合法的文件 id，所以精確區段比對本身也不夠：`POST /<index>/_doc/_search` 是「索引＋id」的寫入請求，最後一段卻是 `_search`。`_search` 與 `_count` 只在一段或兩段路徑的端點位置才算數，文件 id 一律不透明、永不參與比對。
+
+- **Elasticsearch 的讀取判定維持白名單，並補上讓它不堪用的那幾個形狀。** 新增 `_cat/*`（不含 `_cat/aliases` 與 `_cat/tasks`）、`_cluster/health`、`GET`／`HEAD` 裸索引名稱。其餘一律落到需要 `admin` 的預設 —— 包含任何沒被列上的端點。這個方向是刻意的：白名單漏一項，使用者多付一個不必要的 admin 要求；拒絕集漏一項，使用者拿到一個繞過。記在 ADR-0014。
+
+- **`_bulk` 的 body 無法辨識或無法解析時判為 `DROP`。** 先前判 `SELECT`，而 bulk 分支由路徑單獨選中，所以那是一個通用的降級管道。
+
+- **路徑必須與 URL parser 產出的字串逐位元組相同，否則一律拒絕**，而拒絕訊息會給出正確的寫法。dbcli 原本有一套自己的「路由後路徑」概念，它在*近似* `fetch` 的行為——而近似的價值等於它最糟的那個缺口。`#` 就是一個：`fetch` 會丟棄第一個 `#` 之後的一切，所以 `POST /_reindex#/_count` 在 dbcli 眼中是兩段的 count、伺服器收到的卻是 `POST /_reindex`，那是任意索引對拷，因此同時也是黑名單繞過——把受保護的索引拷進可讀的索引再正常讀。tab、換行與 `\` 是同一形狀的另外三個缺口。現在改問傳輸層用的同一個 parser，adapter 也改用它組 URL，所以驗證過的字串就是送出的字串。
+
+- **`source` query 參數一律拒絕。** Elasticsearch 接受 `source=<json>&source_content_type=...` 取代 request body，而這條路徑上每個 body 側檢查都讀 `req.body` —— 被保護的欄位名稱寫在偷渡的 body 裡時，那個為此存在的檢查完全看不到。參數以精確鍵名比對，`_source`、`_source_includes`、`_source_excludes` 不受影響。
+
+- **黑名單欄位名稱在 query string 裡也會被拒絕**，因為 URI search 形式直接在參數裡指名欄位（`?q=password:*`、`?sort=password:asc`、`?docvalue_fields=`），而值會以請求自選的 key 回傳。比對改為看**點分元件**而非整串相等：`password.keyword` 是標準動態 mapping 對每個 `text` 欄位預設產生的 multi-field，而 `params._source.password` 是 Painless script 讀欄位的寫法——受保護的名稱可能落在點分路徑的任一端。回應遮罩套用同一條規則。
+
+- **path 與 query 都從同一個 `URL` 解析，不再用 `String.split('?')`。** `split` 會在每一個 `?` 切開，而解構只取第二個元素，所以第二個 `?` 之後的一切都從這些檢查讀到的 query 中消失，adapter 卻拿到完整路徑：`?filter_path=x?&source=<body>` 因此對每一個為了找出偷渡 body 而存在的檢查隱形。逐位元組相等也隨之擴及整個 request target，不再只有路徑。
+
+- **引號字串形式的 request body 一律拒絕。** JSON 字串字面值是合法的 body，卻能挾帶 NDJSON 通過每一個只走物件與陣列的檢查 —— 一個 bulk delete 曾因此從無害的路徑名稱抵達黑名單索引。
+
+- **`_ingest` 與 `_tasks` 移出 shell 的 unscoped metadata 白名單**：pipeline 定義常內嵌憑證，詳細 task 列表會帶出執行中查詢的 request source。
+
+- **server-side script 的攔截點移到傳輸層，shell 不再繞過它。** `assertNoElasticsearchScript` 原本只掛在 `ElasticsearchAdapter.execute()`，而 shell 走的是另一個執行入口 `request()`。因此 `query-only` 可以用 `POST /<index>/_search` 帶 `script_fields` 在叢集上執行任意 Painless，並把黑名單欄位以請求自選的 key 讀回來（欄位遮罩看的是 key 名稱，所以遮不到）；`read-write` 則可用 `POST /<index>/_update/<id>` 的 `ctx._source` 直接改文件——同樣的操作走 `dbcli update` 一律被擋。檢查現在放在 `request()`，兩個入口共用。這也推翻了 ADR-0014 原本記下的一個「上限」：`doc['pass' + 'word']` 確實不是任何字面掃描擋得住的，但一律拒絕 `script` 鍵的控制本來就存在於這個倉庫裡。
+
+- **shell 在退出前把在飛的請求與 audit 排乾。** `readline` 不會 await `'line'` handler，所以 EOF 的 `'close'` 會在請求還沒回來、audit 還沒寫出時就 `process.exit(0)`：`printf 'DELETE /orders\n\n' | dbcli shell` 會把請求送到叢集而一列紀錄都不留。權限與黑名單檢查都在送出前同步完成，所以檢查會通過、封包會出去，唯一沒發生的就是稽核——也就是原始漏洞報告裡「不留 audit」的那一半。**SQL shell 有同一個缺陷**（它有序列化那一半，缺排乾那一半），一併修正。
+
+- **audit 在送出之前先記一筆 attempt，回應之後再記 outcome，而且每一列都說得出操作。** 只在回應後寫的紀錄描述不了一個沒有回來的請求：`_delete_by_query` 在 client 端逾時會 abort socket 而叢集把刪除做完，執行中被 SIGTERM 則連一列都沒有。同時每列補上 `<METHOD> <routed path>`——先前 `DELETE /orders`、`POST /orders/_update_by_query`、`PUT /orders/_mapping`、`POST /orders/_close` 產生的是四列一模一樣的紀錄。
+
+- **只設定 `blacklist.columns`、沒設定 `blacklist.tables` 時，指不出索引的路徑不再被放行。** 整段黑名單檢查原本以 `tables` 是否為空決定要不要跳過，連帶跳過了「路徑指不出索引就拒絕」那一道守門員——而那道守門員才是擋住 `_sql`、`_mget`、`_search/scroll` 的東西。`POST /_sql` 配 `SELECT * FROM users` 會把受保護欄位的值原文放在 `rows` 陣列裡回傳，而欄位名只出現在 `columns[].name` 的值裡、不是 key，所以回應遮罩結構上救不回來。
+
+- **query string 的欄位比對補上 Lucene 語法字元。** 切詞器只切 `[\s,:()"'[\]{}]`，於是 `?q=+password:hunter2` 通過而 `?q=password:hunter2` 被拒。`+`、`-`、`*`、`!`、`^`、`~`、`|`、`/`、`\` 一併視為分隔字元。
+
+- **搜尋的 size 上限改讀路由後的路徑。** 原本用 `path.includes('_search')` 判斷，所以 `PUT /<index>/_doc/_search`（id 剛好叫 `_search` 的寫入）與 `?routing=_search` 都被當成搜尋，把一個使用者從未輸入的 `size` 欄位寫進文件。這是檔案裡最後一處對原始路徑做子字串比對的地方。
+
+- **`dbcli audit tail` 與 `audit show` 的輸出逃脫控制字元。** ES shell 的 audit target 來自路徑，`%0A` 解碼後是真正的換行，因此一列紀錄能在表格輸出裡長成兩列、其中一列是偽造的。JSONL 檔本身不受影響。
+
+- **連線失敗訊息裡的 URL 帳密會被遮蔽。** `nodes` 常寫成 `https://elastic:hunter2@host:9243`，而該字串會整串進入 audit 的 error 欄；`redactSensitive` 原本只認 `keyword=value` 形式，一個字元都吃不到 URL 的 userinfo。
+
+- **server-side script 的比對改看形狀，不是兩個字面名稱。** 上一項把檢查點搬到傳輸層，但它認得的名字只有 `script` 與 `script_fields`，而 `scripted_metric` 聚合把四個 script 槽拼成 `init_script`、`map_script`、`combine_script`、`reduce_script`。`query-only` 因此仍可跑任意 Painless，並把黑名單欄位以 `aggregations.<name>.value` 這個請求自選的 key 讀回來。現在任何等於 `script`／`script_fields` 或以 `_script` 結尾的鍵都算——**一份名字清單擋不住一個會自己組名字的 API**。掃描另外加上深度上限，`'['.repeat(100000)` 這種合法 JSON 先前會讓它以 `RangeError` 收場。
+
+- **黑名單欄位名含 `-`、`*`、`|`、`/` 時重新擋得住。** 上一項把 Lucene 運算子加進 query string 的分隔字元集，卻讓 `user-password` 被切成 `user` 與 `password`——兩者都不在黑名單裡。ES 的欄位名本來就允許這些字元，而 `?sort=user-password:asc` 會把值原樣放在 `hits.hits[].sort`，遮罩摸不到。現在保守與加寬兩套切法都跑、取聯集：多切一次只多幾個不命中的 term，少切一次會漏掉一個受保護欄位。
+
+- **shell 的 block 在排入佇列的當下取快照。** 上一項把 `rl.on('line', async ...)` 改成 `queue.enqueue(submit)`，而 `submit` 是在任務跑起來時才讀共用的 `blockLines`；readline 會把管線送來的行在同一個 tick 全部同步發完，於是兩個命令被合併成一個 block，`parseEsRequest` 解析失敗，**兩個命令一個都沒送出**，audit 零列，exit code 仍是 0。互動模式下則是還沒打空行提交的內容被當成前一筆的 body 送進叢集。
+
+- **`attempt` 那一列不再宣稱成功。** 它原本硬寫 `success: true`，於是「還沒送出」與「送出並成功」在紀錄裡長得一樣——包含被傳輸層擋下、從未離開行程的請求——而且讓每個操作的成功計數翻倍。現在一律 `false`，真相由 `outcome` 那一列說。
+
+- **`audit tail --for-agent` 與 `--brief` 保留 statement 與 phase。** brief 原本只留 `ts`／`command`／`target`／`success`，所以「一列 audit 要說得出對誰做了什麼」只在 `audit show --no-brief` 修好了，agent 讀到的仍是兩筆一模一樣的紀錄。`audit tail` 的表格另外新增 `statement` 欄位。
+
+- **Elasticsearch 的 audit statement 不再套用 SQL 字面值遮罩。** `redactSql` 會把數字換成 `0`，於是 `DELETE /orders/_doc/12345` 記成 `DELETE /orders/_doc/0`、`POST /logs-2026.08.30/_delete_by_query` 記成 `POST /logs-0.0/...`——操作對象被遮罩吃掉。ES 的 statement 是路徑不是語句，改用一般的敏感字串遮罩。
+
+- **audit 表格的 cell 逃脫涵蓋非 C0 控制字元。** U+202E（RTL override）會讓該 cell 之後整段以右到左顯示，tier 與 success 欄可被視覺調換；U+2028／U+0085 在許多終端機裡同樣算換行。這是零權限的日誌注入——被 blacklist 拒絕的請求照樣寫紀錄，而 target 是攻擊者選的字串。
+
+- **URL 帳密的遮蔽貪婪到最後一個 `@`。** 密碼裡含字面 `@` 時（`https://elastic:p@ssw0rd@host`）先前只遮到第一個，尾巴留在紀錄裡。
+
+- **搜尋的 size 上限與分類器讀同一個路徑函式。** 先前 cap 不看 method 且讀解碼後的路徑，分類器看 method 且讀原始路徑，於是 `PUT /orders/_search` 與 `POST /orders/%5Fsearch` 上兩者給出不同答案。都不可利用，但「同一個請求、兩個函式、兩種答案」是前幾輪 CRITICAL 的形狀。
+
+- **`wrapper` query 一律拒絕。** 它帶的是 base64 編碼的 query，伺服器解碼後執行，而所有 body 側檢查都只走物件的鍵、碰不到字串內部。裡面可以放 `function_score.script_score`，於是黑名單欄位的數值原文會以每筆 hit 的 `_score` 回來——那不是受保護的鍵名，回應遮罩不會動它；黑名單詞比對也看不到 base64 裡的欄位名。這與已經拒絕的字串形式 body 和 `?source=` 是同一個原則：**dbcli 檢查不了的編碼 body 不放行**，解碼一種編碼只會邀請下一種。
+
+- **含 `.` 的黑名單欄位名重新生效。** `namesProtectedField` 先比整串相等，再把 term 拆成單一元件比對——而拆出來的元件永遠不含 `.`，所以 `blacklist.columns` 寫成 `user.password` 對整個檢查毫無作用。同一個函式也是回應遮罩的判斷，於是請求端放行 `?docvalue_fields=user.password.keyword`、回應端原樣返回 `_source.user.password`。ES 的 object field 一律以點分名稱呈現，那是最自然的設定寫法。比對改為**連續的點分元件區段**，遮罩則帶著走過的鍵路徑，才比對得到巢狀呈現的回應。扁平欄位名的行為完全不變——這正是這個缺陷七輪沒被發現的原因，每個測試用的都是扁平名稱。
+
+- **`_script` 後綴的比對縮回 `scripted_metric` 底下。** 無條件的後綴規則會讓 `deploy_script`、`build_script` 這種一般欄位名在 `query-only` 的唯讀查詢上被拒絕，訊息還說它「executes script code on the cluster」——`term`／`match`／`range`／`sort`／`exists` 都把欄位名放在鍵的位置。`scripted_metric` 是唯一內層沒有字面 `script` 鍵的聚合，其餘 script 載體都已被第一條規則接住。
+
+- **編碼後才出現的 `..` 一律拒絕。** `%2F` 原封不動通過位元組同一性檢查，但 `normalizeEsPath` 會先解碼再讓 `..` 刪掉前一段，跨過一個伺服器根本不存在的段界。`GET /secrets%2F..%2Fpublic/_search` 因此讓 `secrets` 從路徑區段檢查、index 抽取與 audit 三處同時消失。ES 是否解析得出那個 index expression 未經驗證——那正是拒絕而非正規化的理由。
+
+- **`exit` 之後排在佇列裡的命令不再執行。** `'line'` handler 在同一個 tick 把管線的所有行 enqueue 完，所以 `rl.close()` 執行時後面的 block 早已在鏈上，而 `'close'` 的排乾語意是「全部跑完」——`printf 'exit\n\nDELETE /orders\n\n'` 會把索引刪掉。兩個 shell 都補上關閉旗標。
+
+- **只有空白的行屬於 block 的內容，不是它的結尾。** 提交的判斷原本是 `trim()` 後為空，於是編輯器留下的空白會把 block 截斷、前半段以一個**沒有 body** 的請求送出——而 `POST /_update_by_query` 沒有 body 是合法的、作用範圍是整個索引，且 audit 寫下的字串與使用者本來要送的那筆逐字相同。改成只在真正的空行提交：反方向的代價是分隔行帶空白時命令會黏成一塊而解析失敗，但那個失敗可見且什麼都不會送出。
+
+- **shell 的錯誤訊息逃脫控制字元。** 訊息內嵌使用者寫的路徑，而 `ESC[2K ESC[1G` 會清掉整行並把游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功訊息。audit 檔與 `audit tail` 早已處理這件事，唯獨 shell 自己的 stderr 沒有；逃脫邏輯抽成共用的 `escapeControlCharacters`。
+
+- **BREAKING（對用管線或腳本驅動 ES shell 的呼叫端而言）：ES shell 的退出碼反映失敗。** 先前一律 `exit(0)`，所以 `dbcli shell < script.txt` 的呼叫端分不出「全部成功」與「一條都沒跑」——權限拒絕、blacklist 拒絕、strict-audit 拒絕全部只印一行紅字。**這會改變既有腳本的行為**：一個 session 內只要有任何一個請求失敗，`dbcli shell` 就以 `1` 結束，先前依賴它一律成功的 CI 步驟會開始紅。記在 ADR-0014 Decision 10。
+
+- **不含欄位名的 query 參數不再進入黑名單切詞器。** `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被誤擋，而 `routing`／`scroll`／`preference`／`filter_path` 的值沒有任何欄位名語意。
+
+- **i18n 插值不再讓值改寫訊息。** `MessageLoader.interpolate` 用的是 `String.replace(regex, value)`，而替換字串會展開 `$&`、`$'`、`` $` `` 與 `$1`。這條分支第一次把**操作者可控**的字串餵進去（ES shell 的路徑、命中的 index expression、被拒的欄位名），於是拒絕訊息以及由它組成的 audit `error` 欄位可以被被拒的那個人部分改寫：`GET /sec$&rets/_search` 記下來的索引名是 `sec{index}rets`，`$'` 則會把整句複製一份接在後面。改成單次掃描 `\{name\}` 加替換函式，順帶修掉「依序替換讓值裡的 `{other}` 被二次替換」。所有 `t_vars` 呼叫端一併受惠。
+
+- **ES shell 的訊息改走 i18n。** `src/commands/es-shell.ts` 的 i18n 呼叫數是 0，而同一層的 `src/commands/shell.ts` 是 14——CONTRIBUTING.md 明文寫「All user-facing messages must be translatable」，所以那是違規不是偏好。19 則訊息移進 `shell.es.*`，`blacklist table add` 這次新增的萬用字元拒絕訊息一併移進 `blacklist.refuse_wildcard`。`BlacklistRejection: ` 這個前綴刻意留在程式碼裡不翻譯：recovery 路徑與數個測試比對的是它，翻譯過的前綴是壞掉的比對器，不是翻譯過的訊息。
+
+- **`es-shell.ts` 拆成兩個檔案。** 894 行、`runEsRequest` 363 行，對照 CONTRIBUTING.md 的 800 與 50。成因寫在 ADR-0014 裡：九輪，每一輪都往同一個函式再塞一個檢查。切線沿著檢查本來就有的分界——`es-shell-guards.ts` 放「關於這個請求」的純函式（伺服器會路由到哪、指名了哪些索引與欄位、回應要遮掉什麼），不讀設定、不開連線、不寫 audit；session 檔留下讀取迴圈、tier gate 的呼叫、audit 接線與退出碼。行為沒有改變，5873 個測試全過。
+
+- **`audit.strict` 的強制點改在「效果發生前」的稽核寫入。** 先前只有 ES shell 讀這個鍵，但它放在全域 `audit` 區塊、文件也寫得像全域開關：設了 `strict: true` 再把 audit 目錄設成不可寫，`dbcli delete` 照樣執行。現在 ES shell 送出請求前那一列與 SQL 寫入閘門的決定紀錄都走 `writeAuditEntryBeforeEffect`。事後才寫的紀錄不在範圍內——那時拒絕擋不回任何東西，只會把一次已完成的操作回報成失敗。同時：`enabled: false` 配 `strict: true` 在讀設定時就失敗（那組合的語意是「不記錄、也不擋」）；`dbcli audit health` 印得出 strict 的狀態；沒有 sink 或 sink 回 `null`（舊版 `writeAuditEntry` 的失敗形狀）在 strict 下都算失敗。
+
+- **`recover` 與 `inspect` 的 audit 摘要跟上 statement 與 phase。** 第六輪修好了 `audit tail` 的 brief，但沒動 `briefifyForRecent`，於是這兩條路徑上一次成功的請求仍呈現為兩列只差 `success` 的紀錄。`topQueriedTable` 另外不再把 attempt 列重複計數，也不再把 `/_cat/indices` 這種路由路徑當成「最常查詢的資料表」。
+
+- **黑名單條目本身可以是萬用字元、逗號清單、`_all`、帶前後空白。** `indexExpressionReaches` 原本只展開**請求端**（逗號、萬用字元、date math、CCS、百分號編碼），把黑名單條目當純字面字串比對——於是 `blacklist.tables: ["secrets*"]` 對 Elasticsearch 完全無效，而 `["*"]` 這個讀起來像「全面封鎖」的寫法是零保護。加重因素是：**同一個 `blacklist.tables` 陣列在 Redis 連線上就是以 glob 執行的**，使用者文件也明文教 `dbcli blacklist table add 'secrets:*'`。依文件寫下的設定，在 Redis 擋、在 ES 靜默放行。`dbcli query --index` 走的 `checkIndexBlacklist` 與欄位遮罩的 `filterColumnsForIndexExpression` 有同樣的不對稱，一併修正。
+
+- **`dbcli blacklist table add` 接受真實的 Elasticsearch index 名。** 驗證規則原本是 SQL 識別字的形狀（`^[a-zA-Z_][a-zA-Z0-9_]*$`），拒絕 `my-index`、`logs-2026.08.30`、`.kibana`，等於 ES 使用者只能手編設定檔——而手編正是最容易把條目寫成 glob 的路徑，直接餵養上面那個缺陷。
+
+- **拼錯或用 ES 詞彙寫的黑名單不再被靜默忽略。** zod 預設剝掉未知鍵，所以 `blacklist.indices`、`blacklist.fields`，以及寫在**連線層級**的 `blacklist`（它只有頂層一份），解析後都是空黑名單且沒有任何警告——使用者看著設定檔以為有保護。這幾種形狀現在是解析錯誤。沒有改成全域 `.strict()`：那會拒絕無害的額外鍵。
+
+- **`blacklist add/remove` 不再把 v2 多連線設定壓成 v1。** 它讀設定走的是 v1 路徑（對 v2 檔案回傳「選中那條連線」的扁平化結果），寫回時以 v1 schema 整包覆寫。加一條黑名單因此會讓 `connections`、`default`、`envFile`、`environment` 全部消失，**而預設 permission 變成當時選中那條連線的值**——ES shell 的 tier gate 讀的正是它。整個過程走 `writeConfigWithIntegrity`，完整性紀錄同步更新，事後沒有 tamper 訊號。
+
+- **根層 `--config` 對 blacklist 指令生效。** 每個子指令自己宣告了一個**帶預設值**的 `--config`，所以 commander 永遠不會回落到根層那個：`dbcli --config /path blacklist table add x` 會改到 `.dbcli` 而不是 `/path`，並且回報成功。
+
+- **百分號編碼的路徑段不再改變分級。** `new URL().pathname` 不解百分號編碼，而 Elasticsearch 對路徑參數會解，於是 `GET /%2A` 是 `query-only` 的讀取而 `GET /*` 需要 `admin`——同一個請求兩個 tier，正是 `isBareIndexSegment` 的註解明文禁止的情形。路徑段現在在 `routedSegments` 解碼一次，且**不重新切分**：解碼後的 `/` 留在原段內，重新切分會複製第七輪修掉的 `%2F..%2F` 缺陷。
+
+- **無 index 的 metadata 白名單細到子資源。** 它原本只比對第一段，於是整個 `_cluster` 與 `_cat` 前綴放行——而 `_cluster/state` 回傳 `metadata.ingest.pipeline[]`（`_ingest` 被移出白名單的理由就是它常內嵌憑證）、`metadata.stored_scripts`、以及黑名單索引的完整 mapping；`_cat/tasks` 回傳執行中查詢的 source（`_tasks` 被移出的理由）。`_nodes/stats`、`_nodes/settings`、`_nodes/hot_threads` 同樣扣住。
+
+- **search template 端點一律拒絕。** template 的 `source` 是一段在叢集上渲染成完整 search body 的字串，stored template 的內容根本不在請求裡——所以指向黑名單索引的 terms lookup 對每一個 body 側檢查都是隱形的。與 `wrapper` 同一個原則。
+
+- **黑名單條目的前後空白不再讓它變成死設定。** ES 的 index 名與欄位名都不能帶空白，所以 `[" secrets "]` 保證無效，而先前沒有任何提示。
+
+- **audit 的 `target` 不再能由 SQL 註解或字串字面值指定。** 它原本走一條不剝註解、不剝字串的 regex，只取第一個 `FROM|INTO|UPDATE` 之後的識別字，所以 `/* FROM audit_decoy */ DELETE FROM users` 會以 `audit_decoy` 入帳。`target` 正是稽核者事後篩選用的主要欄位——找不到的紀錄與不存在的紀錄，對追查是同一件事。改成掃描：剝掉註解（含 PostgreSQL 的巢狀區塊註解）與字串字面值，保留引號識別字，並只在括號深度 0 比對關鍵字。順帶修好兩個日常誤記：`DELETE FROM public.users` 記成 `public`（schema 名）、`SELECT EXTRACT(MONTH FROM created_at) FROM salaries` 記成 `created_at`（欄位名）。
+
+- **經 `query` 執行的 DML 記成 `db-write` 而非 `readonly`。** `writeAuditEntry` 在沒拿到 `sideEffectTier` 時取命令的能力等級，而 `query` 的能力是 `readonly`。於是 `DELETE`／`UPDATE`／`INSERT`／`CREATE TABLE AS` 全部以 `readonly` 入帳，而被寫入閘門**拒絕**的 `DROP`／`TRUNCATE` 由 `recordGateDecision` 帶著 `db-write`——以 tier 篩選破壞性操作會找到被擋下的那些、漏掉真正發生的那些。「讀」的判定沿用既有的 tier 語意（在 `query-only` 下被允許的就是讀），而不是另外維護一份唯讀型別清單。
+
+- **`blacklist table add` 對 SQL 與 MongoDB 連線拒絕萬用字元條目。** 上一版為了 Elasticsearch 與 Redis 的名稱放寬了字元集，但沒有問「這個寫法對這個引擎有沒有意義」：那兩個引擎的黑名單比對是字面相等，`secret*` 這種條目永遠不會命中，而 CLI 回報成功。錯誤訊息會說出原因，不只是「名稱非法」。
+
+### Added
+
+- **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。
+
+### Changed
+
+- **BREAKING：`@carllee1983/dbcli/core` 不再匯出 `AdapterFactory`。** 它回傳的 adapter 的 `request()` 是 public，所以任何函式庫使用者都能拿到一條不經 permission、不經 blacklist、不寫 audit 的路徑。`QueryExecutor` 與 `DataExecutor` 保留——它們自己帶著閘門。CLI 使用者不受影響。
+
+- **`_update_by_query` 從 `read-write` 收緊為 `admin`**：它是獨立的區段，精確比對之下落到破壞性預設，而它確實會改寫索引裡的每一份文件。
+
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 
 The evidence subsystem shipped in v1.53.0 and, until this week, nobody had composed a pack outside its own tests. The first real use — a `verify safe-backfill --after-write` against a live PostgreSQL — came back `not_verified` on data that was correct, and the audit that followed found three more defects of the same kind: an evidence pack whose digest covered a random UUID, so the same claims never produced the same pack twice; a receipt "fingerprint" that was an unsalted SHA-256 over eight possible values; and a blacklist comparison with no identifier boundaries, so a protected column named `id` refused any claim containing the word "identifier". Fixing them changes both published formats, which is what makes this a major release: **packs written by 2.x will fail validation under 3.0.0, and `observation.fingerprint` no longer exists.** The reversal that authorized the repairs — known defects get fixed whether or not anyone is using the code — is recorded in `docs/adr/0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md`, superseding ADR 0011.

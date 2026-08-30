@@ -254,7 +254,8 @@
     "table_added": "✓ Table '{table}' added to blacklist",
     "table_removed": "✓ Table '{table}' removed from blacklist",
     "column_added": "✓ Column '{table}.{column}' added to blacklist",
-    "column_removed": "✓ Column '{table}.{column}' removed from blacklist"
+    "column_removed": "✓ Column '{table}.{column}' removed from blacklist",
+    "refuse_wildcard": "Refused: '{table}' contains wildcard characters, which are matched literally on {system} — the entry would never match anything. Write the exact name."
   },
   "security": {
     "columns_omitted": "Security: {count} column(s) were omitted based on your blacklist"

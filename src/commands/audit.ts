@@ -34,6 +34,7 @@ import {
   summarizeWriteGate,
   type WriteGateSummary,
 } from '@/core/audit/write-gate-summary'
+import { escapeControlCharacters } from '@/utils/redaction'
 import type { WriteGateReason } from '@/commands/write-gate'
 import type { GateOutcome } from '@/commands/write-gate-guard'
 
@@ -118,14 +119,31 @@ function parseTailN(raw: unknown): number {
   return requested
 }
 
-type BriefEntry = Pick<AuditEntry, 'ts' | 'command' | 'target' | 'success'>
+type BriefEntry = Pick<
+  AuditEntry,
+  'ts' | 'command' | 'target' | 'success' | 'side_effect_tier' | 'redacted_sql'
+> & { phase?: unknown }
 
+/**
+ * `--for-agent` 預設走這裡，所以它決定的是 agent 讀到什麼。
+ *
+ * 原本只留 ts / command / target / success，於是 `DELETE /orders` 與
+ * `PUT /orders/_mapping` 在 agent 眼中是同一列——「一列 audit 要說得出對誰做了
+ * 什麼」這件事只在 `audit show --no-brief` 修好了，在預設路徑上沒有。同理，
+ * 少了 phase 就分不出「送出前」與「回應後」那兩列，量的統計會整個翻倍。
+ *
+ * brief 的目的是省 token，不是省掉辨識操作所需的欄位。
+ */
 function briefify(entry: AuditEntry): BriefEntry {
+  const phase = (entry.metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
   return {
     ts: entry.ts,
     command: entry.command,
     target: entry.target,
     success: entry.success,
+    side_effect_tier: entry.side_effect_tier,
+    redacted_sql: entry.redacted_sql,
+    ...(phase !== undefined && { phase }),
   }
 }
 
@@ -134,7 +152,11 @@ function shortId(id: string | undefined): string {
   return id.length <= SHORT_ID_LEN ? id : id.slice(0, SHORT_ID_LEN)
 }
 
-function renderTable(rows: string[][], headers: string[]): string {
+/** 表格 cell 的內容有使用者可控的部分——見 `escapeControlCharacters`。 */
+const sanitizeCell = escapeControlCharacters
+
+function renderTable(rawRows: string[][], headers: string[]): string {
+  const rows = rawRows.map((row) => row.map((cell) => sanitizeCell(cell ?? '')))
   const allRows = [headers, ...rows]
   const widths = headers.map((_, col) => Math.max(...allRows.map((r) => (r[col] ?? '').length)))
   const fmt = (r: string[]): string =>
@@ -150,11 +172,14 @@ function renderTable(rows: string[][], headers: string[]): string {
 }
 
 function renderTailTable(entries: AuditEntry[]): string {
-  const headers = ['ts', 'command', 'target', 'tier', 'success', 'id', 'recovery_ref']
+  // `statement` 在表格裡：沒有它，四個不同的破壞性操作在 `audit tail` 上是
+  // 四列一模一樣的紀錄。
+  const headers = ['ts', 'command', 'target', 'statement', 'tier', 'success', 'id', 'recovery_ref']
   const rows = entries.map((e) => [
     e.ts,
     e.command,
     e.target,
+    e.redacted_sql ?? MISSING_PLACEHOLDER,
     e.side_effect_tier,
     String(e.success),
     shortId(e.id),
@@ -179,31 +204,47 @@ function renderTailAllTable(envelopes: Array<{ connection: string; entry: AuditE
 }
 
 // ── show helpers ──────────────────────────────────────────────────────────
-type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'>
+// `metadata` 不整個剝掉：`es_shell_phase` 是分辨 attempt 與 outcome 的唯一依據。
+type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'> & {
+  metadata?: { es_shell_phase?: unknown }
+}
 
 function briefifyShow(entry: AuditEntry): ShowEntry {
+  // `metadata` 整個剝掉會連 `es_shell_phase` 一起丟——那是分辨 attempt 與
+  // outcome 的唯一依據，留著。
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { metadata, redacted_query, ...rest } = entry
-  return rest
+  const phase = (metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
+  return phase === undefined ? rest : { ...rest, metadata: { es_shell_phase: phase } }
 }
 
 // Accept Partial<AuditEntry> so brief mode (which strips metadata + redacted_query)
 // does not render literal "undefined" lines. Only emit a row when the field is present.
+/** cell 同樣要逃脫——`audit show` 與 `audit tail` 讀的是同一批使用者可控字串。 */
 function renderEntryTable(entry: Partial<AuditEntry>): string {
   const lines: string[] = []
-  if (entry.id !== undefined) lines.push(`Id:                ${entry.id}`)
-  if (entry.ts !== undefined) lines.push(`Ts:                ${entry.ts}`)
-  if (entry.session_id !== undefined) lines.push(`Session id:        ${entry.session_id}`)
-  if (entry.engine !== undefined) lines.push(`Engine:            ${entry.engine}`)
-  if (entry.command !== undefined) lines.push(`Command:           ${entry.command}`)
+  if (entry.id !== undefined) lines.push(`Id:                ${sanitizeCell(String(entry.id))}`)
+  if (entry.ts !== undefined) lines.push(`Ts:                ${sanitizeCell(String(entry.ts))}`)
+  if (entry.session_id !== undefined)
+    lines.push(`Session id:        ${sanitizeCell(String(entry.session_id))}`)
+  if (entry.engine !== undefined)
+    lines.push(`Engine:            ${sanitizeCell(String(entry.engine))}`)
+  if (entry.command !== undefined)
+    lines.push(`Command:           ${sanitizeCell(String(entry.command))}`)
   if (entry.side_effect_tier !== undefined)
-    lines.push(`Side effect tier:  ${entry.side_effect_tier}`)
-  if (entry.target !== undefined) lines.push(`Target:            ${entry.target}`)
-  if (entry.success !== undefined) lines.push(`Success:           ${entry.success}`)
-  if (entry.recovery_ref !== undefined) lines.push(`Recovery ref:      ${entry.recovery_ref}`)
-  if (entry.redacted_query !== undefined) lines.push(`Redacted query:    ${entry.redacted_query}`)
-  if (entry.redacted_sql !== undefined) lines.push(`Redacted SQL:      ${entry.redacted_sql}`)
-  if (entry.error !== undefined) lines.push(`Error:             ${entry.error}`)
+    lines.push(`Side effect tier:  ${sanitizeCell(String(entry.side_effect_tier))}`)
+  if (entry.target !== undefined)
+    lines.push(`Target:            ${sanitizeCell(String(entry.target))}`)
+  if (entry.success !== undefined)
+    lines.push(`Success:           ${sanitizeCell(String(entry.success))}`)
+  if (entry.recovery_ref !== undefined)
+    lines.push(`Recovery ref:      ${sanitizeCell(String(entry.recovery_ref))}`)
+  if (entry.redacted_query !== undefined)
+    lines.push(`Redacted query:    ${sanitizeCell(String(entry.redacted_query))}`)
+  if (entry.redacted_sql !== undefined)
+    lines.push(`Redacted SQL:      ${sanitizeCell(String(entry.redacted_sql))}`)
+  if (entry.error !== undefined)
+    lines.push(`Error:             ${sanitizeCell(String(entry.error))}`)
   if (entry.metadata !== undefined)
     lines.push(`Metadata:          ${JSON.stringify(entry.metadata)}`)
   return lines.join('\n')
@@ -236,7 +277,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function renderHealthTable(h: AuditHealthReport): string {
+function renderHealthTable(h: AuditHealthReport & { strict?: boolean }): string {
   const sizePct = Math.round(h.rotationUsage.bytes.pct)
   const entriesPct = Math.round(h.rotationUsage.entries.pct)
   const lastWrite = h.lastWrite
@@ -248,6 +289,7 @@ function renderHealthTable(h: AuditHealthReport): string {
     : MISSING_PLACEHOLDER
   return [
     `Enabled:        ${h.enabled}`,
+    `Strict:         ${h.strict === true}`,
     `File:           ${h.currentFile}`,
     `Size:           ${formatBytes(h.currentSizeBytes)} / ${formatBytes(h.rotationUsage.bytes.max)} (${sizePct}%)`,
     `Entries:        ${h.currentEntryCount} / ${h.rotationUsage.entries.max} (${entriesPct}%)`,
@@ -708,9 +750,13 @@ auditCommand
     // health is exactly the tool to observe the enabled-state.
 
     const logger = await getAuditLogger(config as never, configPath)
-    const health = logger.getHealth()
+    // `strict` 住在設定裡而不是 logger 裡，但這個指令是使用者唯一能觀察稽核
+    // 狀態的地方。少了它，開了 strict 的人沒有任何管道確認它真的開著——而一個
+    // 無從確認的安全設定，跟沒開沒兩樣。
+    const strict = (config as { audit?: { strict?: boolean } }).audit?.strict === true
+    const health = { ...logger.getHealth(), strict }
     if (format === 'json') {
-      const payload: AuditHealthReport | BriefHealth = brief ? briefifyHealth(health) : health
+      const payload = brief ? { ...briefifyHealth(health), strict } : health
       console.log(JSON.stringify(payload, null, 2))
     } else if (brief) {
       const sizePct = Math.round(health.rotationUsage.bytes.pct)
@@ -719,6 +765,7 @@ auditCommand
         ? `${health.lastWrite.ts} (${health.lastWrite.success ? 'success' : 'failed'})`
         : MISSING_PLACEHOLDER
       console.log(`Enabled:        ${health.enabled}`)
+      console.log(`Strict:         ${health.strict}`)
       console.log(`Last write:     ${lastWriteLine}`)
       console.log(`Rotation usage: ${sizePct}% bytes, ${entriesPct}% entries`)
     } else {

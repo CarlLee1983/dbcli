@@ -82,7 +82,7 @@ test('Integration: Schema refresh detects changes', async () => {
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
-    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    audit: { strict: false, enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
 
   const configPath = join(testDir, 'config.json')
@@ -156,7 +156,7 @@ test('Integration: Error recovery restores on failure', async () => {
     schema: { test_table: { name: 'test', columns: [] } },
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
-    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    audit: { strict: false, enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
 
   const configPath = join(testDir, 'config.json')
@@ -285,7 +285,7 @@ test('Integration: Complete workflow with all components', async () => {
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
-    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    audit: { strict: false, enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
 
   // Add tables

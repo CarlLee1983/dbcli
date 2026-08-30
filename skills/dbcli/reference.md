@@ -2637,7 +2637,8 @@ Inside the shell:
 > not as the answer. Tier one (the y/N on ordinary writes) is deliberately not wired here — every line
 > is typed by a person. Piped input (`dbcli shell < script.sql`) has nobody to answer, so a
 > tier-two statement is refused and the remaining lines still run. Redis, MongoDB and
-> Elasticsearch shells are unaffected.
+> Elasticsearch shells do not use the write gate; their writes are bounded by the
+> connection's permission tier instead.
 >
 > dbcli **subcommands** typed in the shell (`query "..."`, `delete ...`) run as separate
 > processes with no stdin, so they cannot ask anything: a tier-two statement there is
@@ -3662,7 +3663,19 @@ GET /orders/_search
 ```
 
 - Enter a request line `<METHOD> /<path>`, then an optional multi-line JSON body; a **blank line** submits the block. Responses render as pretty-printed JSON.
-- Read-focused: index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
+- **The connection's permission tier applies, as it does to `dbcli query`.** The request is classified through the same classifier the query path uses, on the path the server will actually route — the query string is discarded and percent-encoding and dot segments are resolved first, so `?filter_path=...` cannot change the verdict.
+- **Reads are an allowlist; anything else needs `admin`.** Permitted below `admin`: `_search` and `_count` on an index or unscoped, `_doc` / `_source` reads, `_mapping` / `_settings` / `_alias` reads, `_cat/*` (except `_cat/aliases` and `_cat/tasks`), `_cluster/health`, and `GET` / `HEAD` of a bare index name. Writes to one document are the usual tiers. **Everything else — including any endpoint not listed here — requires `admin`**, so `DELETE /<index>`, `DELETE /_all`, `_delete_by_query`, `_update_by_query`, `_reindex`, `_aliases`, `PUT /<index>/_mapping`, `PUT /<index>/_settings`, `_sql`, `_scripts`, `_security`, `_snapshot`, `_nodes` and `_cluster/state` are all refused below it. The list is a floor, not a claim that everything absent from it is dangerous: a missing entry costs you an unnecessary `admin` requirement rather than a bypass. See [ADR-0014](https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0014-elasticsearch-reads-are-an-allowlist.md).
+- A path is refused unless it is **byte-identical** to what the URL parser produces — the same parser the request goes through — and the refusal tells you the canonical spelling to write instead. This is what stops a path that reads one way here and routes another way at the server: `#` truncates a path in transit (`POST /_reindex#/_count` reaches Elasticsearch as `POST /_reindex`), and tab, newline and `\` are rewritten too. A document id containing a space or a non-ASCII character must be written percent-encoded; the error message gives you the exact string.
+- A quoted string request body is refused; write the body as JSON. So is a `source=` query parameter — Elasticsearch accepts it in place of a body, where none of the body checks can see it. `_source`, `_source_includes` and `_source_excludes` are unaffected.
+- Blacklisted field names are refused in the query string as well as the body, because the URI-search form names fields directly (`?q=…`, `?sort=…`, `?docvalue_fields=…`). A name matches on any dot component, so `password.keyword` — the multi-field every `text` field gets by default — and `params._source.password` inside a script are both refused.
+- **Three limits worth knowing.** A mapping-level `alias` pointing at a protected field names it under a different word, which dbcli cannot resolve. A script that builds the name from pieces defeats any text scan. And a wildcard field expression is expanded by Elasticsearch after the request leaves, so `?q=pass*:hunter*` can be used to confirm a value from hit counts — the value itself is still stripped from the response, but the match is not hidden. Blacklist column rules remain a display filter, not an access control.
+- A refusal names the tier that would work, and the request is never sent.
+- Every request is written to the audit log whether it executed or was refused, tiered by what the request would do rather than by the command that issued it.
+- Index-level blacklist rejects protected indices at the front end; a `_search` whose body omits `size` is auto-capped at 1000 hits.
+
+> **Before v4.0.0 this path applied no permission check at all.** A `query-only`
+> Elasticsearch connection could delete documents, drop an index or rewrite a mapping
+> through the shell, and nothing was recorded. See the 4.0.0 entry in `CHANGELOG.md`.
 
 ### Doctor and diagnostics
 

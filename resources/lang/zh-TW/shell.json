@@ -18,5 +18,25 @@
   "timing_display": "耗時：{ms}ms",
   "rows_display": "{count} 筆資料",
   "unknown_command": "未知指令：'{command}'。輸入 '.help' 查看可用指令。",
-  "subcommand_prefix_hint": "這一行被當成 SQL，正在等分號。如果你要的是 dbcli 子指令，請改打 {command}。Ctrl-C 可取消。"
+  "subcommand_prefix_hint": "這一行被當成 SQL，正在等分號。如果你要的是 dbcli 子指令，請改打 {command}。Ctrl-C 可取消。",
+  "es": {
+    "parse_empty": "空的請求",
+    "parse_needs_method_path": "請求需要一個 method 與一個 path，例如 \"GET /index/_search\"",
+    "parse_needs_path": "請求需要一個 path",
+    "refuse_dot_segment": "已拒絕：'{path}' 解碼後含有 '..' 區段，dbcli 無法判斷 Elasticsearch 會把它路由到哪個路徑。請把路徑寫成不含 '..' 的形式。",
+    "refuse_unparseable": "已拒絕：'{path}' 不是伺服器會收到的那個請求。它無法被解析成一個路徑。",
+    "refuse_not_canonical": "已拒絕：'{path}' 不是伺服器會收到的那個請求。請寫成 '{canonical}'。",
+    "refuse_source_param": "已拒絕：query string 裡的 `source` 是另一條路徑上的 request body。請把 body 寫成 JSON。",
+    "refuse_search_template": "已拒絕：'{path}' 是 search template，它的 body 無法檢查——那是一個在叢集上算出來的字串，或者根本存在叢集裡。請把查詢完整寫出來。",
+    "refuse_string_body": "已拒絕：不支援以引號字串形式寫的 request body。請把 body 寫成 JSON。",
+    "refuse_audit_strict": "已拒絕：這個請求的稽核紀錄寫不出去，而 audit.strict 是開的。請修好稽核輸出端（磁碟空間、目錄權限、.dbcli/audit 裡殘留的 lockfile），或關掉 audit.strict 以接受沒有紀錄的請求。",
+    "blacklist_index": "索引 '{index}' 受黑名單保護",
+    "blacklist_unscoped": "'{path}' 指不出任何索引，因此無法對照黑名單檢查。請把請求限定到某個索引，例如 GET /<index>/_search。",
+    "blacklist_field": "欄位 '{field}' 受黑名單保護，不能出現在請求裡——對它排序、聚合或跑 script 都會把它的值取回來。",
+    "banner_title": "Elasticsearch shell —— Kibana Dev Tools 語法",
+    "banner_hint": "輸入 \"<METHOD> /<path>\"，接著寫可選的 JSON body；空一行送出。可以先試：GET /_cat/indices",
+    "banner_keys": "Ctrl+C 取消目前這個 block；Ctrl+D 或 \"exit\" 離開。",
+    "block_cancelled": "（block 已取消）",
+    "goodbye": "再見"
+  }
 }

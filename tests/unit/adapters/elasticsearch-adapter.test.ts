@@ -426,25 +426,84 @@ describe('ElasticsearchAdapter server-side script guard', () => {
     })
   }
 
+  // 這兩個測試原本 stub `request` 來斷言「沒有送出請求」。檢查點就在 request，
+  // 所以那個 stub 等於把待測的那一層 mock 掉——會漏掉第五輪那個 CRITICAL 的
+  // 測試長的就是那樣。改 stub `fetch`：唯一真的算「送出」的邊界。
   test('主查詢路徑的 script 被攔截，且沒有送出任何請求', async () => {
-    const es = adapter()
-    let requested = false
-    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => {
-      requested = true
-      return { hits: { hits: [] } }
+    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    )
+    try {
+      await expect(
+        adapter().execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
+      ).rejects.toThrow(/server-side script/i)
+      expect(mockFetch).not.toHaveBeenCalled()
+    } finally {
+      mockFetch.mockRestore()
     }
-
-    await expect(
-      es.execute('{"query":{"script":{"script":"doc[\'a\'].value > 1"}}}', ['logs'])
-    ).rejects.toThrow(/server-side script/i)
-    expect(requested).toBe(false)
   })
 
   test('一般 DSL 照常執行', async () => {
-    const es = adapter()
-    ;(es as unknown as { request: unknown }).request = async (): Promise<unknown> => ({
-      hits: { hits: [] },
+    const mockFetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    )
+    try {
+      await expect(adapter().execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    } finally {
+      mockFetch.mockRestore()
+    }
+  })
+})
+
+/**
+ * `execute()` 只發得出 `/<index>/_search`。
+ *
+ * `q` 與 `export` 的 Elasticsearch 路徑從不呼叫 `enforceElasticsearchPermission`，
+ * 目前無害**只因為**這件事——SELECT 在最低 tier 也放行，所以只要 `execute()`
+ * 發不出第二種端點，缺少 gate 就不構成缺口。那是一個隱性依賴，先前沒有任何
+ * 東西釘住它：`execute()` 一旦支援第二種端點，那兩處立刻變成現成的繞道。
+ *
+ * 這個測試不讓那個依賴繼續隱性。它紅掉的時候，要做的不是改測試，是去那兩處
+ * 補上 gate。
+ */
+describe('execute() 的請求形狀是那兩處缺少 gate 的唯一理由', () => {
+  function adapter(): ElasticsearchAdapter {
+    return new ElasticsearchAdapter({
+      system: 'elasticsearch',
+      protocol: 'http',
+      host: 'localhost',
+      port: 9200,
+      user: '',
+      password: '',
+      database: '',
     })
-    await expect(es.execute('{"query":{"match_all":{}}}', ['logs'])).resolves.toBeDefined()
+  }
+
+  test.each([
+    ['DSL 查詢', '{"query":{"match_all":{}}}'],
+    ['字串查詢', 'status:active'],
+    ['index 名稱含斜線與問號的嘗試', '{"query":{"match_all":{}}}'],
+  ])('%s 只送到 /<index>/_search', async (_label, query) => {
+    const seen: { method?: string; url?: string } = {}
+    const mockFetch = spyOn(globalThis, 'fetch').mockImplementation((async (
+      url: string,
+      init: { method?: string }
+    ) => {
+      seen.url = String(url)
+      seen.method = init?.method
+      return new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 })
+    }) as unknown as typeof fetch)
+
+    try {
+      await adapter().execute(query, ['logs/../secrets?x=1'])
+      const path = new URL(seen.url!).pathname
+      expect(path.endsWith('/_search')).toBe(true)
+      // index 是唯一的變動段，且必須是單一段——編碼過的 `/` 不得長出新段。
+      expect(path.split('/').filter((s) => s.length > 0)).toHaveLength(2)
+      expect(['GET', 'POST']).toContain(seen.method!)
+    } finally {
+      mockFetch.mockRestore()
+    }
   })
 })

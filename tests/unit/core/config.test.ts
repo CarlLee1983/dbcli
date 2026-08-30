@@ -167,7 +167,11 @@ describe('configModule', () => {
       schema: { table1: 'data' },
       metadata: { version: '1.0', createdAt: '2026-01-01T00:00:00Z' },
       blacklist: { tables: [], columns: {} },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      audit: {
+        strict: false,
+        enabled: true,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
     }
 
     test('應該返回新對象（不修改輸入）', () => {
@@ -211,7 +215,11 @@ describe('configModule', () => {
       const config: DbcliConfig = {
         ...baseConfig,
         metadata: { version: '1.0' },
-        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+        audit: {
+          strict: false,
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
       const result = configModule.merge(config, {})
@@ -500,7 +508,7 @@ describe('configModule', () => {
         schema: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
-        audit: { enabled: false },
+        audit: { strict: false, enabled: false },
       }
 
       await Bun.write(`${V2_CONFIG_PATH}/config.json`, JSON.stringify(v2Config, null, 2))
@@ -550,7 +558,11 @@ describe('configModule', () => {
         schema: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
-        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+        audit: {
+          strict: false,
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -576,7 +588,11 @@ describe('configModule', () => {
         schema: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
-        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+        audit: {
+          strict: false,
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)
@@ -637,7 +653,11 @@ describe('configModule', () => {
           schemaTableCount: 12,
         },
         blacklist: { tables: [], columns: {} },
-        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+        audit: {
+          strict: false,
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
       await configModule.write(TEST_CONFIG_PATH, config)

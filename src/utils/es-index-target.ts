@@ -140,15 +140,50 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * 黑名單條目本身也要展開。
+ *
+ * 條目與請求端的表達式**是同一種語言**：都可以是萬用字元、逗號清單、`_all`、
+ * 帶前後空白。先前只有請求端走 `expandIndexTargets`，條目被當成純字面字串，
+ * 於是 `["secrets*"]` 永遠不等於任何真實 index 名而完全無效，`["*"]` 是零保護。
+ *
+ * 使用者會這樣寫是有具體理由的：同一個 `blacklist.tables` 陣列在 Redis 連線上
+ * 就是以 glob 執行的，使用者文件也是那樣教的。依文件寫下的設定不該在一個引擎上
+ * 擋、在另一個引擎上靜默放行。
+ */
+function expandBlacklistEntries(blacklisted: string[]): { names: string[]; patterns: string[] } {
+  const names: string[] = []
+  const patterns: string[] = []
+  for (const entry of blacklisted) {
+    const { concrete, wildcards } = expandIndexTargets(entry)
+    names.push(...concrete)
+    patterns.push(...wildcards)
+  }
+  return { names, patterns }
+}
+
 /** Whether an index expression could reach any of `blacklisted`. */
 export function indexExpressionReaches(expression: string, blacklisted: string[]): boolean {
   if (blacklisted.length === 0) return false
   const { concrete, wildcards } = expandIndexTargets(expression)
+  const entries = expandBlacklistEntries(blacklisted)
+
+  const reachesName = (name: string): boolean =>
+    entries.names.some(
+      (entry) => entry.toLowerCase() === name.toLowerCase() || reachesByConvention(name, entry)
+    ) ||
+    // 條目是萬用字元時，比對方向反過來：條目是 pattern，請求的名稱是 subject。
+    entries.patterns.some((pattern) => matchesIndexGlob(pattern, name))
+
   return (
-    concrete.some((name) =>
-      blacklisted.some(
-        (entry) => entry.toLowerCase() === name.toLowerCase() || reachesByConvention(name, entry)
-      )
-    ) || wildcards.some((pattern) => blacklisted.some((entry) => matchesIndexGlob(pattern, entry)))
+    concrete.some(reachesName) ||
+    wildcards.some(
+      (pattern) =>
+        entries.names.some((entry) => matchesIndexGlob(pattern, entry)) ||
+        // 兩端都是萬用字元：`sec*` 與 `*ret*` 顯然可能指到同一個 index，而
+        // 沒有任何具體名稱可以拿來比。無法證明不相交時就擋——這個檢查的
+        // 錯誤方向只有 withholding 是可接受的。
+        entries.patterns.length > 0
+    )
   )
 }

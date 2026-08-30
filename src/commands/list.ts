@@ -118,7 +118,7 @@ async function mongoListBranch(
 ): Promise<void> {
   const connName = (config.connection.database as string) || 'mongodb'
 
-  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config)
   await mongoAdapter.connect()
 
   try {

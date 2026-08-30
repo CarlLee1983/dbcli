@@ -25,6 +25,11 @@ import { withResolvedTimeout } from '@/utils/connection-timeout'
  * without a config file — but it still carries both protections, which is the
  * point of taking a config at all.
  */
+export interface MongoAdapterConfig {
+  connection: ConnectionOptions | Record<string, unknown>
+  blacklist?: { columns?: Record<string, string[]> }
+}
+
 export interface RedisAdapterConfig {
   connection: ConnectionOptions | Record<string, unknown>
   blacklist?: { tables?: string[] }
@@ -89,11 +94,21 @@ export class AdapterFactory {
     }
   }
 
-  static createMongoDBAdapter(options: ConnectionOptions): QueryableAdapter {
+  /**
+   * Build a MongoDB adapter from the configuration.
+   *
+   * Same reason as `createRedisAdapter`: the field rules have to arrive with
+   * the adapter, because the check that uses them is on the request and every
+   * caller would otherwise have to remember to supply them.
+   */
+  static createMongoDBAdapter(config: MongoAdapterConfig): QueryableAdapter {
+    const options = config.connection as ConnectionOptions
     if (options.system !== 'mongodb') {
       throw new Error('createMongoDBAdapter requires system: mongodb')
     }
-    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+    const adapter = AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+    ;(adapter as unknown as MongoDBAdapter).setBlacklistColumns(config.blacklist?.columns ?? {})
+    return adapter
   }
 
   /**

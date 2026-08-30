@@ -691,7 +691,12 @@ export async function collectMongoDoctorResults(
     }
   }
 
-  const adapter = runtime.createMongoDBAdapter(config.connection as ConnectionOptions)
+  // doctor's `config` is the pre-resolution shape (values may still be `$env`
+  // references), so the connection is narrowed here rather than widening the
+  // factory's type to accept an unresolved one.
+  const adapter = runtime.createMongoDBAdapter({
+    connection: config.connection as unknown as ConnectionOptions,
+  })
 
   try {
     await adapter.connect()

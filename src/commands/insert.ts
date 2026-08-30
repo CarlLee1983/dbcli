@@ -289,7 +289,7 @@ export async function insertCommand(
         return
       }
 
-      const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+      const adapter = AdapterFactory.createMongoDBAdapter(config)
       await adapter.connect()
       try {
         const startedAt = performance.now()

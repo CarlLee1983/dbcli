@@ -149,7 +149,7 @@ describe('connection timeout', () => {
     test('全域覆寫會傳進 MongoDB adapter', () => {
       setGlobalConnectionTimeout(45000)
       const options = { ...base, system: 'mongodb' as const, port: 27017 }
-      const adapter = AdapterFactory.createMongoDBAdapter(options)
+      const adapter = AdapterFactory.createMongoDBAdapter({ connection: options })
       expect((adapter as unknown as { options: { timeout?: number } }).options.timeout).toBe(45000)
     })
 

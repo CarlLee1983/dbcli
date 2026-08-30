@@ -1216,6 +1216,19 @@ The dbcli config `blacklist.columns[<collection>]` accepts dotted paths and one 
 
 `profile.tokens.*` covers `profile.tokens` and every descendant. Wildcards anywhere other than the final segment are skipped with a warning at `dbcli blacklist list`. SQL connections ignore entries containing `.` or `*`.
 
+**A request that names a protected field is refused, not masked.** Masking
+matched the keys a document came back under, and in MongoDB the request chooses
+those keys: `[{"$project":{"leak":"$password"}}]` returned the value under
+`leak`, and `[{"$group":{"_id":"$password"}}]` returned it under `_id`, which
+masking exempts so that document references survive. Both ran at `query-only`
+before 3.0.2. So `password` appearing anywhere in a pipeline, filter or update —
+as a field path, an object key, or a plain string — is refused with
+`BlacklistRejection`, and masking stays for the ordinary document shape.
+
+This over-refuses in one direction on purpose: a filter whose *value* happens to
+equal a protected field name (`{"status": "password"}`) is refused too. Rename
+the query, or the rule.
+
 Note: streaming exports (`dbcli export`) buffer rows before masking. For very large exports, prefer narrower filters until streaming-aware masking is added.
 
 ### MongoDB schema sampling
@@ -1256,8 +1269,22 @@ dbcli query "HGETALL bighash" --no-limit  # full reply, no truncation
 dbcli blacklist table add 'secrets:*'
 dbcli query "GET secrets:api_key"   # rejected (BlacklistRejection); audited with matched_pattern
 dbcli query "KEYS secrets:*"        # rejected (pattern overlaps a rule)
+dbcli query "SCAN 0 MATCH secrets:*" # rejected (pattern overlaps a rule)
+dbcli query "SCAN 0"                 # runs; protected key names removed from the reply
+dbcli delete secrets:api_key         # rejected — globs cover writes, not just reads
 dbcli list                           # blacklisted keys filtered out
 ```
+
+The globs cover **writes as well as reads**. Before 3.0.2, `insert`, `update`
+and `delete` compared the key name literally, so a rule written `secrets:*` —
+the spelling above — protected `dbcli query` and let `dbcli delete
+secrets:api_key` through. `SCAN` was the other half: its `MATCH` pattern was
+never checked, so it enumerated protected key names at `query-only` while
+`KEYS` needed `admin`.
+
+A command dbcli has no key-arity entry for is now **refused** while a blacklist
+is configured, rather than passed through unchecked. With no blacklist
+configured nothing changes.
 
 **Masking (v1.22)** — where the key-glob blacklist *rejects*, masking instead *redacts*: matched reads return `[REDACTED]` so an agent can still run the command without ever seeing the sensitive value. Add an optional `redis.mask` block to your dbcli config:
 

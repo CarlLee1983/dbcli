@@ -432,7 +432,7 @@ async function mongoExportBranch(
     effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const adapter = AdapterFactory.createMongoDBAdapter(config)
   await adapter.connect()
   let formatted: string
   let rowCount: number

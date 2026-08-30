@@ -103,7 +103,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const isMongoDB = config.connection.system === 'mongodb'
   const isRedis = config.connection.system === 'redis'
   const connectionOpts = config.connection as ConnectionOptions
-  const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
+  const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(config) : null
   const redisInner = isRedis
     ? (AdapterFactory.createRedisAdapter(
         config

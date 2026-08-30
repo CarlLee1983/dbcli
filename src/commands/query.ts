@@ -805,7 +805,7 @@ async function mongoQueryBranch(
       ? effectiveLimit
       : undefined
 
-  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config)
   let executionError: unknown
   try {
     await mongoAdapter.connect()

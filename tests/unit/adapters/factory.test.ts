@@ -77,12 +77,12 @@ const mongoOptions: ConnectionOptions = {
 }
 
 test('createMongoDBAdapter returns MongoDBAdapter for mongodb system', () => {
-  const adapter = AdapterFactory.createMongoDBAdapter(mongoOptions)
+  const adapter = AdapterFactory.createMongoDBAdapter({ connection: mongoOptions })
   expect(adapter).toBeInstanceOf(MongoDBAdapter)
 })
 
 test('createMongoDBAdapter exposes full QueryableAdapter interface', () => {
-  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter(mongoOptions)
+  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter({ connection: mongoOptions })
   expect(adapter).toHaveProperty('connect')
   expect(adapter).toHaveProperty('disconnect')
   expect(adapter).toHaveProperty('execute')
@@ -93,7 +93,7 @@ test('createMongoDBAdapter exposes full QueryableAdapter interface', () => {
 
 test('createMongoDBAdapter throws for non-mongodb system', () => {
   expect(() => {
-    AdapterFactory.createMongoDBAdapter({ ...validOptions, system: 'postgresql' })
+    AdapterFactory.createMongoDBAdapter({ connection: { ...validOptions, system: 'postgresql' } })
   }).toThrow('createMongoDBAdapter requires system: mongodb')
 })
 

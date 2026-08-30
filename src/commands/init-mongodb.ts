@@ -247,9 +247,10 @@ export async function handleMongoDBInit(ctx: {
   // there is nothing to connect with — same as the SQL path above.
   if (!options.skipTest && !useFieldEnvRefs) {
     console.log(t('init.connection_testing'))
-    const mongoAdapter = AdapterFactory.createMongoDBAdapter(
-      mongoConfig as unknown as ConnectionOptions
-    )
+    // No blacklist yet — this runs while the connection is being created.
+    const mongoAdapter = AdapterFactory.createMongoDBAdapter({
+      connection: mongoConfig as unknown as ConnectionOptions,
+    })
     try {
       await mongoAdapter.connect()
       await mongoAdapter.testConnection()

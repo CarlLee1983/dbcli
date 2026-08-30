@@ -200,8 +200,7 @@ export async function blacklistTableAdd(tableName: string, configPath: string): 
     // 「名稱非法」會讓人以為是打錯字。
     if (isValidTableName(tableName)) {
       throw new Error(
-        `Refused: '${tableName}' contains wildcard characters, which are matched literally on ` +
-          `${system} — the entry would never match anything. Write the exact name.`
+        t_vars('blacklist.refuse_wildcard', { table: tableName, system: String(system) })
       )
     }
     throw new Error(t_vars('errors.invalid_table_name', { table: tableName }))

@@ -171,9 +171,12 @@ registers them all.
 
 6. **Elasticsearch / MongoDB / Redis** — `export` and `query` check the index or
    collection and mask fields on each engine's own path. The Elasticsearch shell
-   (`src/commands/es-shell.ts`) carries its own equivalent, since it calls
+   (`src/commands/es-shell.ts`, with the checks themselves in
+   `src/commands/es-shell-guards.ts`) carries its own equivalent, since it calls
    `adapter.request` rather than `execute`; that call site is registered in the
-   contract test like any other.
+   contract test like any other. Its object-scoped checks are skipped when
+   neither `blacklist.tables` nor `blacklist.columns` is configured — the
+   permission tier gate above them is not (ADR-0014 Decision 9).
 
 ## Error Messages
 
@@ -184,3 +187,10 @@ All messages are i18n-enabled. Override language with `DBCLI_LANG=zh-TW`.
 | `errors.table_blacklisted` | "Error: Table '{table}' is blacklisted for {operation} operations" |
 | `security.columns_omitted` | "Security: {count} column(s) were omitted based on your blacklist" |
 | `warnings.blacklist_override_used` | "Warning: Blacklist override enabled..." |
+| `shell.es.blacklist_index` | "index '{index}' is blacklist-protected" |
+| `shell.es.blacklist_unscoped` | "'{path}' names no index, so it cannot be checked against the blacklist..." |
+| `shell.es.blacklist_field` | "field '{field}' is blacklist-protected and cannot be named in a request..." |
+| `blacklist.refuse_wildcard` | "Refused: '{table}' contains wildcard characters, which are matched literally on {system}..." |
+
+The three `shell.es.*` refusals are prefixed in code with the untranslated
+`BlacklistRejection: ` token, which is what the recovery path matches on.

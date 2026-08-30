@@ -12,27 +12,38 @@ import {
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
 import { auditWriteFailed, writeAuditEntryResult } from '@/core/audit/integration-helper'
+import { t } from '@/i18n/message-loader'
+import {
+  assertNoBlacklistedIndexNamed,
+  assertNoProtectedFieldNamed,
+  assertNoSmuggledBody,
+  assertRequestTargetIsCanonical,
+  blacklistIsConfigured,
+  capSearchSize,
+  collectProtectedFields,
+  extractIndexFromPath,
+  parseRequestTarget,
+  redactFields,
+  type EsRequest,
+} from './es-shell-guards'
 
-export interface EsRequest {
-  method: string
-  path: string
-  body?: unknown
-}
+export { extractIndexFromPath } from './es-shell-guards'
+export type { EsRequest } from './es-shell-guards'
 
 /** Parse a Kibana Dev Tools block: first line "<METHOD> /<path>", remaining lines an optional JSON body. */
 export function parseEsRequest(block: string): EsRequest {
   const lines = block.replace(/\r\n/g, '\n').split('\n')
   const firstIdx = lines.findIndex((l) => l.trim() !== '')
-  if (firstIdx === -1) throw new Error('Empty request')
+  if (firstIdx === -1) throw new Error(t('shell.es.parse_empty'))
 
   const header = lines[firstIdx]!.trim()
   const spaceIdx = header.indexOf(' ')
   if (spaceIdx === -1) {
-    throw new Error('Request requires a method and a path, e.g. "GET /index/_search"')
+    throw new Error(t('shell.es.parse_needs_method_path'))
   }
   const method = header.slice(0, spaceIdx).toUpperCase()
   const path = header.slice(spaceIdx + 1).trim()
-  if (!path) throw new Error('Request requires a path')
+  if (!path) throw new Error(t('shell.es.parse_needs_path'))
 
   const bodyText = lines
     .slice(firstIdx + 1)
@@ -42,123 +53,13 @@ export function parseEsRequest(block: string): EsRequest {
   return { method, path, body: JSON.parse(bodyText) }
 }
 
-/** Return the index segment of a path, or undefined for non-index paths (leading "_"). */
-export function extractIndexFromPath(path: string): string | undefined {
-  const seg = path.replace(/^\//, '').split('/')[0] ?? ''
-  if (seg === '' || seg.startsWith('_')) return undefined
-  return seg.split('?')[0]
-}
 
-/**
- * Paths that return cluster or index *metadata* and never document contents.
- * An allow-list, not a deny-list: a request that cannot be scoped to an index
- * is refused unless it is known to be harmless.
- *
- * `_ingest` and `_tasks` were here and are not any more: pipeline definitions
- * routinely embed credentials, and a detailed task listing carries the request
- * source of running searches, including searches over blacklisted indices.
- *
- * This list answers a different question from the permission classifier's read
- * set — scoping, not tier — so a path must satisfy both. They overlap by
- * construction, not by coincidence.
- */
-const UNSCOPED_METADATA_PREFIXES = ['_cat', '_cluster', '_nodes', '_license']
 
-/**
- * 子資源層級的例外：前綴放行、這些不放行。
- *
- * 只比對第一段時，這份白名單放行了它自己明文拒絕過的資料。`_ingest` 與
- * `_tasks` 被移出去的理由就在上面，而：
- *
- * - `_cluster/state` 的 `metadata.ingest.pipeline[]` 是同一份 pipeline 定義，
- *   `metadata.stored_scripts` 是同一批 script，`metadata.indices.<name>.mappings`
- *   則給出黑名單索引的完整欄位清單——而 `_cat/indices/secrets`（只有統計）
- *   是明確被拒絕的。
- * - `_cat/tasks` 的 description 帶著執行中查詢的 index 與 source，正是
- *   `_tasks` 被拿掉的那份資料。分類器的 `CAT_WITHHELD` 已經擋住它，但那是
- *   tier 的問題；這裡是 scoping 的問題，兩道各自要成立。
- * - `_nodes/stats` 逐 index 回報文件數與大小，`_nodes/settings` 與
- *   `_nodes/hot_threads` 帶得出路徑、設定值與執行中的查詢文字。
- *
- * 關掉一扇門，旁邊那扇通往同一個房間的門不能開著。
- */
-const UNSCOPED_METADATA_WITHHELD: Record<string, ReadonlySet<string>> = {
-  _cluster: new Set(['state']),
-  _cat: new Set(['tasks']),
-  _nodes: new Set(['stats', 'settings', 'hot_threads']),
-}
-
-function isUnscopedMetadataPath(path: string): boolean {
-  const segments = path.replace(/^\//, '').split('?')[0]?.split('/') ?? []
-  const first = segments[0] ?? ''
-  if (!UNSCOPED_METADATA_PREFIXES.includes(first)) return false
-  const withheld = UNSCOPED_METADATA_WITHHELD[first]
-  if (withheld === undefined) return true
-  // `_nodes/<nodeId>/stats` 一樣要擋：被扣住的名稱出現在**任何**位置都算，
-  // 因為 node id 是使用者可寫的一段。
-  return !segments.slice(1).some((segment) => withheld.has(segment.toLowerCase()))
-}
-
-/**
- * Index names carried in a request *body*.
- *
- * `_mget` takes `docs[]._index`, a `terms` lookup takes `index`, and
- * `_reindex` takes `source.index`. Scanning for the key anywhere in the
- * document over-reports — an ordinary field called `index` becomes a candidate
- * — which refuses more rather than less.
- *
- * Objects and arrays only. A JSON *string* body is never walked, which is why
- * `runEsRequest` refuses one outright: `"{\"delete\":{\"_index\":\"secrets\"}}\n"`
- * is a legal JSON document that `parseEsRequest` turns into a JS string
- * carrying NDJSON, and it reached a blacklisted index from a path naming an
- * innocuous one. An earlier comment here claimed NDJSON bodies were
- * unreachable; they were not.
- */
-function findIndexNamesInBody(body: unknown): string[] {
-  const found: string[] = []
-  const walk = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item)
-      return
-    }
-    if (node === null || typeof node !== 'object') return
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      if (key === '_index' || key === 'index') {
-        // The value may be an array — `_msearch` headers and `_reindex`'s
-        // `source.index` both accept one, and a string never recurses.
-        for (const candidate of Array.isArray(value) ? value : [value]) {
-          if (typeof candidate === 'string' && candidate.length > 0) found.push(candidate)
-        }
-      }
-      walk(value)
-    }
-  }
-  walk(body)
-  return found
-}
 
 interface EsRequestCapable {
   request<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
-/**
- * The request target as the transport will send it, or `null` when it cannot be
- * parsed at all.
- *
- * Path *and* query together. Byte-identity against `canonical` is what keeps
- * every check in this file reading the same string Elasticsearch will, and it
- * has to cover the query string because that is where a request body can hide.
- */
-function parseRequestTarget(rawPath: string): { url: URL; canonical: string } | null {
-  try {
-    const url = new URL(rawPath, ES_PATH_PARSE_BASE)
-    return { url, canonical: `${url.pathname}${url.search}` }
-  } catch {
-    return null
-  }
-}
-
-const ES_PATH_PARSE_BASE = 'http://dbcli.invalid'
 
 const ES_SHELL_SIZE_CAP = 1000
 
@@ -273,23 +174,23 @@ export interface RunEsRequestOptions {
 }
 
 /**
- * Enforce the permission tier and the index blacklist, cap a search, then issue
- * the request.
+ * Everything about a request that every check below reads: the parsed target,
+ * the routed path, the index it names, the shape handed to the classifier, and
+ * the two audit fields derived from them.
  *
- * The permission check is new. `dbcli shell` forks to this module before
- * reaching the gate that covers its SQL and Redis branches, so a `query-only`
- * connection could delete every document in an index, drop the index, or
- * rewrite its mapping — each of them refused when the same request goes through
- * `dbcli query`. The classifier below is the one `query` uses; the shell hands
- * it the real method and path, where `query` can only synthesise a search.
+ * Derived once, in one place, because the defect this file kept producing was
+ * two checks reading two different spellings of the same request.
  */
-export async function runEsRequest(
-  req: EsRequest,
-  adapter: EsRequestCapable,
-  blacklistTables: string[],
-  blacklistColumns: Record<string, string[]> = {},
-  options: RunEsRequestOptions
-): Promise<unknown> {
+function describeEsRequest(req: EsRequest): {
+  target: { url: URL; canonical: string } | null
+  query: URLSearchParams
+  routedPath: string
+  index: string | undefined
+  esRequest: { method: string; rawPath: string; body: string | undefined }
+  tierOverride: 'db-write' | undefined
+  auditTarget: string
+  auditStatement: string
+} {
   // Resolved first: `/%5Fsearch` is `/_search`, `/secrets%2F_search` is
   // `/secrets/_search`, and `/_cat/../secrets/_search` resolves to
   // `/secrets/_search`. Checking the raw text answers a question about a
@@ -342,21 +243,36 @@ export async function runEsRequest(
   // object. The routed path is the object when no index can be named.
   const auditTarget = index ?? routedPath
   const auditStatement = `${req.method.toUpperCase()} ${routedPath}`
+  return {
+    target,
+    query,
+    routedPath,
+    index,
+    esRequest,
+    tierOverride,
+    auditTarget,
+    auditStatement,
+  }
+}
 
-  const audit = async (
-    phase: 'attempt' | 'outcome',
-    success: boolean,
-    error?: unknown
-  ): Promise<AuditSinkResult> => {
+/**
+ * The per-request audit writer. A closure over the sink and the fields every
+ * row carries, so a caller cannot write a row that names one and not the other.
+ */
+function createAuditRecorder(
+  options: RunEsRequestOptions,
+  fields: { target: string; statement: string; tierOverride: 'db-write' | undefined }
+): (phase: 'attempt' | 'outcome', success: boolean, error?: unknown) => Promise<AuditSinkResult> {
+  return async (phase, success, error) => {
     if (!options.audit) return undefined
     try {
       return await options.audit({
         phase,
         success,
         error,
-        target: auditTarget,
-        statement: auditStatement,
-        tierOverride,
+        target: fields.target,
+        statement: fields.statement,
+        tierOverride: fields.tierOverride,
       })
     } catch {
       // The sink's own errors are not this request's outcome — but a sink that
@@ -364,6 +280,34 @@ export async function runEsRequest(
       return { skipped: 'write-failed', error: 'audit sink threw' }
     }
   }
+}
+
+/**
+ * Enforce the permission tier and the index blacklist, cap a search, then issue
+ * the request.
+ *
+ * The permission check is new. `dbcli shell` forks to this module before
+ * reaching the gate that covers its SQL and Redis branches, so a `query-only`
+ * connection could delete every document in an index, drop the index, or
+ * rewrite its mapping — each of them refused when the same request goes through
+ * `dbcli query`. The classifier below is the one `query` uses; the shell hands
+ * it the real method and path, where `query` can only synthesise a search.
+ */
+export async function runEsRequest(
+  req: EsRequest,
+  adapter: EsRequestCapable,
+  blacklistTables: string[],
+  blacklistColumns: Record<string, string[]> = {},
+  options: RunEsRequestOptions
+): Promise<unknown> {
+  const { target, query, routedPath, index, esRequest, tierOverride, auditTarget, auditStatement } =
+    describeEsRequest(req)
+  const audit = createAuditRecorder(options, {
+    target: auditTarget,
+    statement: auditStatement,
+    tierOverride,
+  })
+
 
   try {
     return await execute()
@@ -373,245 +317,27 @@ export async function runEsRequest(
   }
 
   async function execute(): Promise<unknown> {
-    // Byte-identity against the parser the request will actually go through.
-    //
-    // Comparing against a dbcli-owned normaliser is what let `#` through:
-    // `POST /_reindex#/_count` read here as a two-segment count while `fetch`
-    // sent `POST /_reindex`, and tab, LF, CR and `\` are the same shape of gap.
-    // The rule is deliberately unforgiving — no resolution, no repair — because
-    // any softening reintroduces a second path function, which is the class of
-    // defect this removes. The canonical spelling is handed back so an operator
-    // who wrote a legitimate path with a space or a non-ASCII document id can
-    // copy the answer rather than guess at an encoding.
-    // 位元組同一性擋得住字面的 `..`（`/_cat/../secrets/_search` 的 canonical
-    // 不同），擋不住編碼的：`%2F` 原封不動留在 `url.pathname` 裡，所以
-    // `/secrets%2F..%2Fpublic/_search` 通得過。但 `normalizeEsPath` 會先把
-    // `%2F` 解碼成 `/` 再讓 `..` 刪掉前一段，於是 `secrets` 從路徑檢查、
-    // index 抽取與 audit 三處同時消失，而伺服器收到的是一整段 index
-    // expression。dbcli 分辨不出伺服器怎麼解讀它——所以拒絕，不正規化。
-    // 這與上面那條是同一個原則：不近似傳輸層的行為。
-    const decodedPath = ((): string => {
-      try {
-        return decodeURIComponent(target?.url.pathname ?? req.path)
-      } catch {
-        return target?.url.pathname ?? req.path
-      }
-    })()
-    if (decodedPath.split('/').includes('..')) {
-      throw new Error(
-        `Refused: '${req.path}' contains a '..' segment once decoded, and dbcli cannot tell ` +
-          `which path Elasticsearch would route it to. Write the path out without '..'.`
-      )
-    }
-
-    if (target === null || target.canonical !== req.path) {
-      throw new Error(
-        `Refused: '${req.path}' is not the request the server would receive. ` +
-          (target === null
-            ? 'It cannot be parsed as a path.'
-            : `Write it as '${target.canonical}'.`)
-      )
-    }
-
-    // Elasticsearch accepts `source=<json>&source_content_type=...` in place of
-    // a request body, and every body-side check here — protected fields, index
-    // names, the size cap — reads `req.body`. Refusing the parameter restores
-    // that invariant instead of teaching four checks about a second body.
-    if (query.has('source')) {
-      throw new Error(
-        'Refused: `source` in the query string is a request body by another route. ' +
-          'Write the body as JSON.'
-      )
-    }
-
-    // Search templates carry their body inside a string, or not at all.
-    //
-    // `{"source":"{\"query\":{\"terms\":{\"u\":{\"index\":\"secrets\"}}}}"}`
-    // renders server-side into a full search body, and every body-side check
-    // here walks objects — a string is never entered, so the index it names is
-    // invisible. A stored template (`{"id":"t"}`) is worse: the content is not
-    // in the request at all. Same rule as `wrapper` and as a quoted string body:
-    // what dbcli cannot inspect, it does not forward.
-    if (routedPath.split('/').some((segment) => segment.toLowerCase() === 'template')) {
-      throw new Error(
-        `Refused: '${req.path}' is a search template, whose body cannot be inspected — it is a ` +
-          `string rendered on the cluster, or stored there. Write the query out in full.`
-      )
-    }
-
-    // A JSON string body carries NDJSON past every check that walks objects.
-    // Nothing legitimate produces one — `parseEsRequest` yields a string only
-    // when the operator wrote a quoted literal — so it is refused rather than
-    // parsed.
-    if (typeof req.body === 'string') {
-      throw new Error(
-        'Refused: a quoted string request body is not supported. Write the body as JSON.'
-      )
-    }
+    assertRequestTargetIsCanonical(req, target)
+    assertNoSmuggledBody(req, query, routedPath)
 
     // The tier gate, which this path did not have. It runs before the blacklist
     // because it is the coarser question: whether this caller may perform this
-    // kind of operation at all, on any object.
+    // kind of operation at all, on any object. Unconditional — the gate below
+    // is not.
     enforceElasticsearchPermission(esRequest, options.permission)
 
-    // The rest of this block answers questions *about the blacklist* — a path
-    // that cannot be attributed to an index cannot be checked against one — so
-    // with nothing configured there is nothing to check and refusing would cost
-    // an ordinary query while protecting nothing.
-    //
-    // "Nothing configured" means *neither* list. Keying this on `blacklistTables`
-    // alone skipped the unscoped-path guard below for a columns-only blacklist,
-    // and that guard is what holds `_sql`, `_mget` and `_search/scroll` shut —
-    // `_sql` returns values in a `rows` array, so key-based redaction cannot
-    // reach them at all.
-    const columnsConfigured = Object.values(blacklistColumns).some((fields) => fields.length > 0)
-    if (blacklistTables.length === 0 && !columnsConfigured) return send()
-
-    if (blacklistTables.length > 0) {
-      // Any segment naming a blacklisted index is refused, whatever the endpoint
-      // — `/_cat/indices/secrets` reports on it without reading documents, and
-      // the blacklist is about the object, not only its contents.
-      const blacklistedSegment = routedPath
-        .split('/')
-        .find((segment) => segment.length > 0 && indexExpressionReaches(segment, blacklistTables))
-      if (blacklistedSegment !== undefined) {
-        throw new Error(`BlacklistRejection: index '${blacklistedSegment}' is blacklist-protected`)
-      }
-    }
-
-    if (index === undefined) {
-      // The path names no index. `GET /_search`, `/_all/_search`, `/_msearch`,
-      // `/_mget` and `/_sql` all read documents from every index, so a request
-      // that cannot be scoped cannot be checked. Endpoints that return only
-      // cluster metadata are listed rather than guessed at, because a deny-list
-      // here would have to enumerate every document-returning endpoint that
-      // exists now or later.
-      if (!isUnscopedMetadataPath(routedPath)) {
-        throw new Error(
-          `BlacklistRejection: '${req.path}' names no index, so it cannot be checked against ` +
-            `the blacklist. Scope the request to an index, e.g. GET /<index>/_search.`
-        )
-      }
-    }
-
-    // The body names indices too: `_mget`'s `docs[]._index`, `_bulk`'s action
-    // `_index`, and a `terms` lookup's `index`. Scoping the *path* to a
-    // harmless index is exactly what re-opened those endpoints.
-    const inBody = findIndexNamesInBody(req.body).find((name) =>
-      indexExpressionReaches(name, blacklistTables)
-    )
-    if (inBody !== undefined) {
-      throw new Error(`BlacklistRejection: index '${inBody}' is blacklist-protected`)
+    if (blacklistIsConfigured(blacklistTables, blacklistColumns)) {
+      assertNoBlacklistedIndexNamed({ req, routedPath, index, blacklistTables })
     }
 
     return send()
   }
 
   async function send(): Promise<unknown> {
-    // Removing protected keys from the response is not enough: Elasticsearch
-    // returns a field's value under a key the *request* chooses — `sort`,
-    // `aggs.*.field`, `script_fields`, `docvalue_fields`, a runtime field. So a
-    // request that names a protected field anywhere is refused. Any string in the
-    // body counts, which over-refuses (a document value that happens to equal a
-    // protected field name is refused too) in the direction that withholds data.
-    // trim：`{"users": [" password "]}` 這種寫法保證是死設定——ES 的欄位名不能
-    // 帶前後空白——卻沒有任何提示。index 那側由 `expandIndexTargets` 處理，
-    // 欄位這側先前沒有。
-    const protectedFields = new Set(
-      Object.values(blacklistColumns)
-        .flat()
-        .map((field) => field.trim())
-        .filter((field) => field.length > 0)
-    )
-    if (protectedFields.size > 0) {
-      // The URI-search form names fields in the query string rather than the
-      // body — `?q=password:*`, `?sort=password:asc`, `?docvalue_fields=`,
-      // `?_source_includes=` — and each returns the value under a key the
-      // request chose, which is the same disclosure the body check exists to
-      // stop. Values are split on the separators Elasticsearch accepts inside
-      // them so a field named among several is still seen.
-      // 兩套切法都跑，取聯集。
-      //
-      // Lucene 會把運算子貼在欄位名上（`+password`、`password*`、`!password`），
-      // 所以要有一套把那些字元當分隔符的切法；但 Elasticsearch 的欄位名**本身**
-      // 就允許 `-`、`*`、`|`、`/` 這些字元，`user-password` 是常見命名，只用
-      // 加寬的那套會把它切成 `user` 與 `password`——兩者都不在黑名單裡，於是
-      // 一個原本擋得住的欄位變成擋不住。
-      //
-      // 單獨任一套都有它擋不住的一半，而這裡的錯誤方向只有一種是可接受的：
-      // 多切一次只會多幾個不命中的 term，少切一次會漏掉一個受保護的欄位。
-      const CONSERVATIVE = /[\s,:()"'[\]{}]+/
-      const LUCENE_OPERATORS = /[\s,:()"'[\]{}+\-*!^~|;/\\]+/
-      // `routing` / `scroll` / `preference` / `filter_path` 的值不含欄位名，
-      // 而加寬的切法會把 `?routing=abc-name-1` 切出 `name`——黑名單欄位叫
-      // `name` 時那是純誤擋，路徑上沒有任何欄位名語意可言。
-      const NON_FIELD_PARAMS = new Set([
-        'routing',
-        'scroll',
-        'scroll_id',
-        'preference',
-        'filter_path',
-        'pipeline',
-        'refresh',
-        'timeout',
-        'wait_for_completion',
-      ])
-      const queryTerms = [...query.entries()]
-        .filter(([name]) => !NON_FIELD_PARAMS.has(name.toLowerCase()))
-        .flatMap(([, value]) =>
-          [value, ...value.split(CONSERVATIVE), ...value.split(LUCENE_OPERATORS)].filter(
-            (term) => term.length > 0
-          )
-        )
-      const named = [...findStrings(req.body), ...queryTerms].find((text) =>
-        namesProtectedField(text, protectedFields)
-      )
-      if (named !== undefined) {
-        throw new Error(
-          `BlacklistRejection: field '${named}' is blacklist-protected and cannot be named in a ` +
-            `request — sorting, aggregating or scripting on it would return its values.`
-        )
-      }
-    }
+    const protectedFields = collectProtectedFields(blacklistColumns)
+    assertNoProtectedFieldNamed(req, query, protectedFields)
+    const body = capSearchSize(req)
 
-    // A convenience default, not a control. `{"size": 100000}` is honoured
-    // because the cap is only injected when `size` is absent, and `from`,
-    // `search_after` and `scroll` are not bounded at all. What bounds disclosure
-    // on this path is the blacklist and the permission tier; this only stops an
-    // unqualified `_search` from filling a terminal.
-    //
-    // Read from the routed path, not a substring of the raw one: `PUT
-    // /orders/_doc/_search` is a write whose *id* is `_search`, and
-    // `?routing=_search` is not a path at all. Both used to be treated as
-    // searches here and had `size` written into the document — a check reading
-    // one set of bytes while another goes out, which is the shape of the two
-    // earlier CRITICALs. This was the last raw-path substring test in the file.
-    // 讀的是與 `classifyElasticsearchRequest` **同一個**路徑函式
-    // （`routedPathname`，不解碼），method 條件也與規則 2 相同。先前這裡讀
-    // `normalizeEsPath`（會解碼）又不看 method，於是 `PUT /orders/_search` 與
-    // `POST /orders/%5Fsearch` 上兩者給出不同答案。
-    //
-    // 刻意**不**完全等同規則 2：規則 2 也涵蓋 `_count`，而 `_count` 不吃 `size`，
-    // 注進去只會讓 Elasticsearch 回錯誤。差異寫在這裡，不寫成「一致」——上一輪
-    // 這句註解就是宣稱一致而實際不是，而錯的那一半沒人去查。
-    const searchSegments = routedPathname(req.path)
-      .split('/')
-      .filter((segment) => segment.length > 0)
-    const searchMethod = ['GET', 'HEAD', 'POST'].includes(req.method.toUpperCase())
-    const searchesDocuments =
-      searchMethod &&
-      searchSegments[searchSegments.length - 1]?.toLowerCase() === '_search' &&
-      searchSegments.length <= 2
-    let body = req.body
-    if (
-      searchesDocuments &&
-      body !== null &&
-      typeof body === 'object' &&
-      !Array.isArray(body) &&
-      (body as { size?: number }).size === undefined
-    ) {
-      body = { ...(body as Record<string, unknown>), size: ES_SHELL_SIZE_CAP }
-    }
 
     // Before the socket, not after: from here on the cluster may act on this
     // request whatever happens to this process, so a record that only exists on
@@ -629,11 +355,7 @@ export async function runEsRequest(
     const attempt = await audit('attempt', false)
     if (options.strictAudit && auditSinkFailed(attempt)) {
       // 稽核是這條路徑上的控制本身，不是佐證。寫不出來就等於沒有控制。
-      throw new Error(
-        'Refused: the audit entry for this request could not be written, and audit.strict is on. ' +
-          'Fix the audit sink (disk space, directory permissions, a stale lockfile in ' +
-          '.dbcli/audit) or turn audit.strict off to accept unrecorded requests.'
-      )
+      throw new Error(t('shell.es.refuse_audit_strict'))
     }
     const response = await adapter.request(req.method, req.path, body)
     await audit('outcome', true)
@@ -648,131 +370,107 @@ export async function runEsRequest(
   }
 }
 
-/** Every string in a request body, at any depth, including object keys. */
-function findStrings(node: unknown): string[] {
-  const found: string[] = []
-  const walk = (value: unknown): void => {
-    if (typeof value === 'string') {
-      found.push(value)
-      // `doc['password'].value` and `params.field` name the field inside a
-      // larger string, so the identifier-like pieces count too.
-      for (const piece of value.split(/[^A-Za-z0-9_.]+/)) {
-        if (piece.length > 0 && piece !== value) found.push(piece)
-      }
-      return
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-      return
-    }
-    if (value === null || typeof value !== 'object') return
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      found.push(key)
-      walk(nested)
-    }
-  }
-  walk(node)
-  return found
+
+/** The banner. Written to stderr so a piped session's stdout carries only responses. */
+function printEsShellBanner(): void {
+  console.error(pc.bold(t('shell.es.banner_title')))
+  console.error(pc.dim(t('shell.es.banner_hint')))
+  console.error(pc.dim(t('shell.es.banner_keys')))
+  console.error('')
 }
 
-/** Remove every occurrence of a protected field name, at any depth. */
+interface EsShellSession {
+  adapter: EsRequestCapable & { disconnect(): Promise<void> }
+  blacklistTables: string[]
+  blacklistColumns: Record<string, string[]>
+  permission: Permission
+  config: Awaited<ReturnType<typeof configModule.read>>
+  configPath: string
+}
+
 /**
- * Whether a term names a protected field anywhere in a dotted path.
+ * Run one submitted block: parse it, issue it, print the response.
  *
- * Exact matching was not enough in either direction. `password.keyword` is the
- * multi-field the standard dynamic mapping creates for every `text` field, so
- * `?docvalue_fields=password.keyword` returned the value in full while the
- * plain spelling was refused; and `params._source.password`, which is how a
- * Painless script in `script_fields` or `runtime_mappings` reads a field, puts
- * the protected name at the *end* of a dotted term, where a prefix rule would
- * miss it.
- *
- * So every component counts. `password_hash.keyword` is untouched — it shares
- * no component with `password` — and the one over-refusal this admits, an
- * unrelated field called `x.password`, errs toward withholding.
- *
- * **Ceilings, which no term rule can close.** A mapping-level `alias` field
- * naming the protected field under a different word is server-side knowledge,
- * the same class as alias-to-index resolution. A script that assembles the name
- * (`doc['pass' + 'word']`) defeats any literal scan. And a wildcard field
- * expression is expanded after the request leaves: `?q=pass*:hunter*` is a
- * match oracle over a protected column, because hit counts answer the question
- * without the value ever appearing in a response key. Wildcards that *return*
- * values are still caught, but by `redactFields` on the way back rather than
- * here — that backstop is load-bearing, not incidental. Chasing the oracle with
- * glob matching would mean guessing Elasticsearch's wildcard semantics, which
- * is the approximate-the-parser mistake in a third field.
+ * Returns whether it succeeded — the caller turns that into the session's exit
+ * code, which a piped caller reads and a human does not.
  */
+async function executeEsBlock(block: string, session: EsShellSession): Promise<boolean> {
+  const { adapter, blacklistTables, blacklistColumns, permission, config, configPath } = session
+  try {
+    const req = parseEsRequest(block)
+    const res = await runEsRequest(req, adapter, blacklistTables, blacklistColumns, {
+      permission,
+      strictAudit: config.audit?.strict ?? false,
+          audit: (record) =>
+            writeAuditEntryResult(
+              config,
+              'shell',
+              { config: configPath },
+              {
+                success: record.success,
+                error: record.error,
+                target: record.target,
+                // 操作本身。少了它，`DELETE /orders` 與 `PUT /orders/_mapping`
+                // 在紀錄裡是同一列。
+                sql: record.statement,
+                sideEffectTier: record.tierOverride,
+                metadata: { es_shell_phase: record.phase },
+              }
+            ),
+    })
+    console.log(JSON.stringify(res, null, 2))
+    return true
+  } catch (error) {
+      // 訊息內嵌使用者寫的路徑，而路徑可以帶 `ESC[2K ESC[1G`——那會清掉整行並把
+      // 游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功
+      // 訊息。audit 檔（JSONL）與 `audit tail`（表格）都已經處理這件事，
+      // 唯獨 shell 自己的 stderr 沒有。
+    console.error(pc.red(escapeControlCharacters((error as Error).message)))
+    return false
+  }
+}
+
 /**
- * 這個 term 有沒有指到受保護的欄位。
+ * Read the configuration, open the connection, and assemble everything a
+ * request needs from it.
  *
- * 比對的是**連續的點分元件區段**，不是整串相等、也不是單一元件。舊版先比整串
- * 再把 term 拆成單一元件逐一比對，而拆出來的元件永遠不含 `.`——所以一個含 `.`
- * 的黑名單設定（`user.password`）永遠不可能被任何元件命中，整條檢查對它毫無
- * 作用。ES 的 object field 一律以點分名稱呈現，那是最自然的設定寫法。
- *
- * 區段比對同時涵蓋兩端的擴充：`user.password.keyword` 是 multi-field 子欄位，
- * `params._source.user.password` 是 Painless 的讀法，受保護的名稱可以落在點分
- * 路徑的任一段。代價是過度比對——回應裡任何以 `user.password` 結尾的路徑都會
- * 被遮——而那是withholding 的方向。
+ * `runShell` forks to this module before the branch that gates SQL and Redis,
+ * so this is the only place the configured tier can enter the Elasticsearch
+ * path — which is why the wiring has a test of its own.
  */
-function namesProtectedField(term: string, protectedFields: ReadonlySet<string>): boolean {
-  if (protectedFields.has(term)) return true
-  const parts = term.split('.')
-  if (parts.length === 1) return false
-  for (let start = 0; start < parts.length; start += 1) {
-    for (let end = start + 1; end <= parts.length; end += 1) {
-      if (protectedFields.has(parts.slice(start, end).join('.'))) return true
-    }
-  }
-  return false
-}
-
-function redactFields(node: unknown, fields: Set<string>, trail: string[] = []): unknown {
-  // 陣列不進 trail：`hits.hits[]` 的索引不是欄位路徑的一部分。
-  if (Array.isArray(node)) return node.map((item) => redactFields(item, fields, trail))
-  if (node === null || typeof node !== 'object') return node
-
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    // Same rule as the request-side check. A dotted response key is a field
-    // path — a `fields`/`docvalue_fields` entry or an aggregation name — so
-    // there is no shape where `password.<something>` is unrelated data.
-    // `fields[password.keyword]` survived an exact-key match. This is also the
-    // backstop for a wildcard field expression, which expands server-side and
-    // comes back under the real field name.
-    //
-    // 帶著走過的鍵：ES 的 object field 在回應裡是**巢狀的**（`_source.user.password`），
-    // 但在設定與 `fields` 裡是點分的（`user.password`）。只看單一個鍵的話，
-    // 巢狀那一側的每一層都不等於任何黑名單項目，於是含 `.` 的設定對回應毫無
-    // 作用。信封鍵（`hits`、`_source`）留在 trail 裡無妨——比對只看結尾的
-    // 連續區段。
-    const path = [...trail, key]
-    if (namesProtectedField(path.join('.'), fields)) continue
-    out[key] = redactFields(value, fields, path)
-  }
-  return out
-}
-
-export async function runEsShell(configPath: string): Promise<void> {
+async function openEsShellSession(configPath: string): Promise<EsShellSession> {
   const config = await configModule.read(configPath)
   const adapter = AdapterFactory.createElasticsearchAdapter(config.connection as ConnectionOptions)
   await adapter.connect()
-  const blacklistTables = config.blacklist?.tables ?? []
-  const blacklistColumns = config.blacklist?.columns ?? {}
-  // `runShell` forks to this module before the branch that gates SQL and Redis,
-  // so this is the only place the configured tier can enter the Elasticsearch
-  // path.
-  const permission = resolveEsShellPermission(config)
+  return {
+    // `createElasticsearchAdapter` is typed as the shared `QueryableAdapter`,
+    // which does not declare `request()`. The cast is here, once, at the seam —
+    // rather than at every call, which is where it used to be as `as never`.
+    adapter: adapter as unknown as EsShellSession['adapter'],
+    blacklistTables: config.blacklist?.tables ?? [],
+    blacklistColumns: (config.blacklist?.columns ?? {}) as Record<string, string[]>,
+    permission: resolveEsShellPermission(config),
+    config,
+    configPath,
+  }
+}
 
-  console.error(pc.bold('Elasticsearch shell — Kibana Dev Tools syntax'))
-  console.error(
-    pc.dim(
-      'Enter "<METHOD> /<path>" then an optional JSON body; submit with a blank line. Try: GET /_cat/indices'
-    )
-  )
-  console.error(pc.dim('Ctrl+C cancels the current block; Ctrl+D or "exit" quits.'))
-  console.error('')
+/**
+ * The read loop.
+ *
+ * Longer than the 50-line guideline in CONTRIBUTING.md, deliberately: what is
+ * left after the session, the banner and the per-block work moved out is a
+ * state machine over three pieces of mutable state (`blockLines`, `closing`,
+ * `failed`) shared by four readline handlers. Splitting it further spreads that
+ * state across functions, and ADR-0014 pins where each piece may be read —
+ * `blockLines` only in the `'line'` handler that fills it, the drain only in
+ * `'close'`. Fewer lines there would cost the property the conditions protect.
+ */
+export async function runEsShell(configPath: string): Promise<void> {
+  const session = await openEsShellSession(configPath)
+  const { adapter } = session
+
+  printEsShellBanner()
 
   const rl = createInterface({
     input: process.stdin,
@@ -810,44 +508,9 @@ export async function runEsShell(configPath: string): Promise<void> {
       rl.close()
       return
     }
-    try {
-      const req = parseEsRequest(block)
-      const res = await runEsRequest(
-        req,
-        adapter as never,
-        blacklistTables,
-        blacklistColumns as Record<string, string[]>,
-        {
-          permission,
-          strictAudit: config.audit?.strict ?? false,
-          audit: (record) =>
-            writeAuditEntryResult(
-              config,
-              'shell',
-              { config: configPath },
-              {
-                success: record.success,
-                error: record.error,
-                target: record.target,
-                // 操作本身。少了它，`DELETE /orders` 與 `PUT /orders/_mapping`
-                // 在紀錄裡是同一列。
-                sql: record.statement,
-                sideEffectTier: record.tierOverride,
-                metadata: { es_shell_phase: record.phase },
-              }
-            ),
-        }
-      )
-      console.log(JSON.stringify(res, null, 2))
-    } catch (error) {
-      failed = true
-      // 訊息內嵌使用者寫的路徑，而路徑可以帶 `ESC[2K ESC[1G`——那會清掉整行並把
-      // 游標移回行首，用後續字元蓋掉「Refused」，讓操作者看到一則自己寫的假成功
-      // 訊息。audit 檔（JSONL）與 `audit tail`（表格）都已經處理這件事，
-      // 唯獨 shell 自己的 stderr 沒有。
-      console.error(pc.red(escapeControlCharacters((error as Error).message)))
-    }
+    if (!(await executeEsBlock(block, session))) failed = true
   }
+
 
   // readline 不 await 這個 handler，`'close'` 也不會等它——管線輸入下請求送得出去
   // 而 audit 寫不完，就是第五輪那個稽核逃逸。佇列同時管序列化與排乾。
@@ -881,14 +544,14 @@ export async function runEsShell(configPath: string): Promise<void> {
   rl.on('SIGINT', () => {
     blockLines = []
     rl.setPrompt(pc.cyan('es> '))
-    console.error(pc.dim('(block cancelled)'))
+    console.error(pc.dim(t('shell.es.block_cancelled')))
     rl.prompt()
   })
   rl.on('close', async () => {
     // 排乾必須在 disconnect 與 exit 之前：在飛的請求要落地，audit 要寫完。
     await queue.drain()
     await adapter.disconnect()
-    console.error(pc.dim('Goodbye'))
+    console.error(pc.dim(t('shell.es.goodbye')))
     process.exit(failed ? 1 : 0)
   })
 }

@@ -550,14 +550,45 @@ and it is marked as such in the changelog. It is recorded here rather than
 silently, because the spec forbids it in writing and a later reader finding the
 contradiction would otherwise be right to "fix" the code back.
 
+## Decision 11: the guards live apart from the session, and the messages leave the code
+
+Two standards violations this branch introduced, fixed together because the
+second is easier once the first has happened.
+
+**`src/commands/es-shell.ts` was 894 lines with a 363-line `runEsRequest`**
+against CONTRIBUTING.md's 800 and 50. The cause is visible in this record: nine
+rounds, and every round added one more check to the same function. The split is
+along the line the checks already had — `src/commands/es-shell-guards.ts` holds
+the functions that answer questions *about a request* (which path the server
+routes it to, which indices and fields it names, what to withhold), none of
+which reads configuration, opens a connection or writes an audit row; the
+session file keeps the loop, the tier gate call, the audit wiring and the exit
+code. `runEsShell` stays above 50 lines on purpose, and says why in a comment:
+what remains is a state machine over `blockLines`, `closing` and `failed` shared
+by four readline handlers, and the conditions below pin where each may be read.
+
+The move changes the file names in this record's falsification conditions, which
+is the disclosure working as intended rather than a reason not to move: the
+conditions have been rewritten to the new paths, so a later reader checking them
+lands on the code and not on an absence.
+
+**The Elasticsearch shell had zero i18n calls** while `src/commands/shell.ts`
+next to it had fourteen, and CONTRIBUTING.md says every user-facing message must
+be translatable. Nineteen messages now go through the catalogue under
+`shell.es.*`, plus the wildcard refusal `blacklist table add` gained on this
+branch. `BlacklistRejection: ` stays out of the catalogue and is concatenated in
+code: it is the prefix the recovery path and several tests match on, and a
+translated prefix is a broken matcher, not a translated message.
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
 positioned segment, or derives its path from anything but `new URL`; or the
-byte-identity refusal in `src/commands/es-shell.ts` becomes conditional on any
-configuration, stops covering the query string, or starts repairing a request
-instead of refusing it; or any check in that file reads a path or query derived
-from `String.split` rather than from the parsed `URL`; or
+byte-identity refusal in `assertRequestTargetIsCanonical`
+(`src/commands/es-shell-guards.ts`) becomes conditional on any configuration, stops covering the query string, or starts repairing a request
+instead of refusing it; or any check in `src/commands/es-shell.ts` or
+`src/commands/es-shell-guards.ts` reads a path or query derived from
+`String.split` rather than from the parsed `URL`; or
 `normalizeEsPath` from `src/utils/es-index-target.ts` is used again to decide
 where a request routes; or an unrecognised request stops classifying as `DROP`;
 or `assertNoElasticsearchScript` in `src/adapters/server-side-script.ts` is
@@ -570,16 +601,16 @@ or either shell's `'close'` handler in `src/commands/es-shell.ts` or
 `src/commands/shell-submit-queue.ts`; or `src/core/public.ts` exports
 `AdapterFactory`, or any other value from which an ungated adapter can be
 obtained; or `isElasticsearchScriptKey` in `src/adapters/server-side-script.ts`
-becomes a membership test over a fixed list again; or the query-value
-tokenisation in `src/commands/es-shell.ts` stops emitting both the conservative
-and the Lucene-operator splits; or `runEsShell` in that file reads `blockLines`
+becomes a membership test over a fixed list again; or `queryStringFieldTerms` in
+`src/commands/es-shell-guards.ts` stops emitting both the conservative and the
+Lucene-operator splits; or `runEsShell` in that file reads `blockLines`
 anywhere other than the `'line'` handler that fills it; or the `attempt` audit
 row is written with `success: true`; or `writeAuditEntryResult` in
 `src/core/audit/integration-helper.ts` stops distinguishing a disabled sink from
 a failed one; or `briefify` in `src/commands/audit.ts` drops the statement or
-the phase; or `namesProtectedField` in `src/commands/es-shell.ts` stops matching
-contiguous dotted-component runs, or `redactFields` there stops carrying the
-walked key path; or `ES_OPAQUE_BODY_KEYS` in
+the phase; or `namesProtectedField` in `src/commands/es-shell-guards.ts` stops
+matching contiguous dotted-component runs, or `redactFields` there stops
+carrying the walked key path; or `ES_OPAQUE_BODY_KEYS` in
 `src/adapters/server-side-script.ts` shrinks while Elasticsearch still accepts
 an encoded body under that name; or either shell stops discarding queued input
 after `exit`; or `runEsShell` submits on a line that is not empty before
@@ -589,12 +620,13 @@ trimming; or `audit.strict` is enforced anywhere other than
 blacklist entries as well as the request; or `routedSegments` in
 `src/core/permission/elasticsearch.ts` stops decoding segments, or starts
 re-splitting them after decoding; or `isUnscopedMetadataPath` in
-`src/commands/es-shell.ts` matches on the first path segment alone; or
+`src/commands/es-shell-guards.ts` matches on the first path segment alone; or
 `BlacklistConfigSchema` and `NamedConnectionSchema` in
 `src/utils/validation.ts` stop rejecting the blacklist shapes that parse to
 nothing; or `blacklist add`/`remove` writes a v2 config through the v1 writer; or
 `enforceElasticsearchPermission` in `src/commands/es-shell.ts` stops being
-called before the blacklist gate there, or becomes conditional on any
-configuration; or that gate stops being keyed on *both* `blacklist.tables` and
-`blacklist.columns` being empty; or `runEsShell` in that file exits `0` after a
+called before `assertNoBlacklistedIndexNamed`, or becomes conditional on any
+configuration; or `blacklistIsConfigured` in `src/commands/es-shell-guards.ts`
+stops requiring *both* `blacklist.tables` and `blacklist.columns` to be empty
+before the object-scoped checks are skipped; or `runEsShell` in that file exits `0` after a
 request in the session failed.

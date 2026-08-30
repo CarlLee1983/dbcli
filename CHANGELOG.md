@@ -91,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **不含欄位名的 query 參數不再進入黑名單切詞器。** `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被誤擋，而 `routing`／`scroll`／`preference`／`filter_path` 的值沒有任何欄位名語意。
 
+- **ES shell 的訊息改走 i18n。** `src/commands/es-shell.ts` 的 i18n 呼叫數是 0，而同一層的 `src/commands/shell.ts` 是 14——CONTRIBUTING.md 明文寫「All user-facing messages must be translatable」，所以那是違規不是偏好。19 則訊息移進 `shell.es.*`，`blacklist table add` 這次新增的萬用字元拒絕訊息一併移進 `blacklist.refuse_wildcard`。`BlacklistRejection: ` 這個前綴刻意留在程式碼裡不翻譯：recovery 路徑與數個測試比對的是它，翻譯過的前綴是壞掉的比對器，不是翻譯過的訊息。
+
+- **`es-shell.ts` 拆成兩個檔案。** 894 行、`runEsRequest` 363 行，對照 CONTRIBUTING.md 的 800 與 50。成因寫在 ADR-0014 裡：九輪，每一輪都往同一個函式再塞一個檢查。切線沿著檢查本來就有的分界——`es-shell-guards.ts` 放「關於這個請求」的純函式（伺服器會路由到哪、指名了哪些索引與欄位、回應要遮掉什麼），不讀設定、不開連線、不寫 audit；session 檔留下讀取迴圈、tier gate 的呼叫、audit 接線與退出碼。行為沒有改變，5873 個測試全過。
+
 - **`audit.strict` 的強制點改在「效果發生前」的稽核寫入。** 先前只有 ES shell 讀這個鍵，但它放在全域 `audit` 區塊、文件也寫得像全域開關：設了 `strict: true` 再把 audit 目錄設成不可寫，`dbcli delete` 照樣執行。現在 ES shell 送出請求前那一列與 SQL 寫入閘門的決定紀錄都走 `writeAuditEntryBeforeEffect`。事後才寫的紀錄不在範圍內——那時拒絕擋不回任何東西，只會把一次已完成的操作回報成失敗。同時：`enabled: false` 配 `strict: true` 在讀設定時就失敗（那組合的語意是「不記錄、也不擋」）；`dbcli audit health` 印得出 strict 的狀態；沒有 sink 或 sink 回 `null`（舊版 `writeAuditEntry` 的失敗形狀）在 strict 下都算失敗。
 
 - **`recover` 與 `inspect` 的 audit 摘要跟上 statement 與 phase。** 第六輪修好了 `audit tail` 的 brief，但沒動 `briefifyForRecent`，於是這兩條路徑上一次成功的請求仍呈現為兩列只差 `success` 的紀錄。`topQueriedTable` 另外不再把 attempt 列重複計數，也不再把 `/_cat/indices` 這種路由路徑當成「最常查詢的資料表」。

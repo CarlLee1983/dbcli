@@ -72,8 +72,7 @@ export function checkKeyArgs(command: string, args: string[], rules: string[]): 
     }
   }
 
-  const userPat = userPattern(spec.keyArity, args)
-  if (userPat !== undefined) {
+  for (const userPat of userPatterns(spec.keyArity, args)) {
     for (const pat of rules) {
       if (patternsOverlap(userPat, pat)) {
         return { ok: false, matchedKey: null, matchedPattern: pat }
@@ -83,16 +82,28 @@ export function checkKeyArgs(command: string, args: string[], rules: string[]): 
   return { ok: true }
 }
 
-/** The glob the *user* wrote, for the commands that take one. */
-function userPattern(arity: KeyArity, args: string[]): string | undefined {
-  if (arity.kind === 'pattern') return args[arity.argIndex]
-  if (arity.kind === 'pattern-after-token') {
-    // Case-insensitive, because Redis reads the option name that way — and an
-    // uppercase-only match would have made `scan 0 match secrets:*` the bypass.
-    const marker = args.findIndex((arg) => arg.toUpperCase() === arity.token)
-    return marker === -1 ? undefined : args[marker + 1]
+/**
+ * The globs the *user* wrote, for the commands that take one.
+ *
+ * Every position, not the first: Redis parses `SCAN`'s options in a loop, so
+ * `SCAN 0 MATCH benign:* MATCH secrets:*` sends the **last** one, and reading
+ * only the first checked a pattern that was never sent. Checking all of them
+ * also covers the case where the token appears as another option's value.
+ *
+ * Case-insensitive, because Redis reads the option name that way — an
+ * uppercase-only match would have made `scan 0 match secrets:*` the bypass.
+ */
+function userPatterns(arity: KeyArity, args: string[]): string[] {
+  if (arity.kind === 'pattern') {
+    const pattern = args[arity.argIndex]
+    return pattern === undefined ? [] : [pattern]
   }
-  return undefined
+  if (arity.kind !== 'pattern-after-token') return []
+  const found: string[] = []
+  for (let i = 0; i + 1 < args.length; i += 1) {
+    if (args[i]!.toUpperCase() === arity.token) found.push(args[i + 1]!)
+  }
+  return found
 }
 
 function expandKeyArity(arity: KeyArity, args: string[], argCount: number): number[] {

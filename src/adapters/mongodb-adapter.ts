@@ -451,6 +451,12 @@ export class MongoDBAdapter implements QueryableAdapter {
     data: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    // `insert` had neither check, while `execute`, `update` and `delete` had
+    // both — and #47's comment says every path is covered. What covered it was
+    // `checkColumnBlacklistOnWrite` in `src/commands/insert.ts`, at the call
+    // site, which is exactly the arrangement ADR-0015 Decision 1 removes.
+    assertNoMongoServerSideScript(data)
+    this.assertNoProtectedFieldNamed(data, collection)
     const result = await db.collection(collection).insertOne(data)
     return {
       rows: [],

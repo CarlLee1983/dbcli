@@ -17,6 +17,7 @@
 import { test, expect } from 'bun:test'
 import { RedisAdapter } from '@/adapters/redis-adapter'
 import { BlacklistRejection } from '@/adapters/redis/types'
+import { filterReturnedKeyNames } from '@/adapters/redis/returned-key-names'
 import type { ConnectionOptions } from '@/adapters/types'
 
 const options = {
@@ -88,4 +89,31 @@ test('a key the rules do not reach is written normally', async () => {
   const { adapter: a, sent } = adapter()
   await a.insert('public:motd', { value: 'hello' })
   expect(sent.length).toBeGreaterThan(0)
+})
+
+/**
+ * A reply shape the filter does not recognise is not a reply it may forward.
+ *
+ * `filterReturnedKeyNames` returned an unrecognised reply untouched, which is
+ * the fail-open this branch spent its other three fixes removing. Today the Bun
+ * client answers `SCAN` with `[cursor, string[]]` and the branch is never taken;
+ * the point is that if that ever changes, the default is to withhold.
+ */
+test('a SCAN reply in an unexpected shape is emptied rather than forwarded', () => {
+  const filtered = filterReturnedKeyNames(
+    'SCAN',
+    { cursor: '0', keys: ['secrets:x'] },
+    ['secrets:*']
+  )
+  expect(JSON.stringify(filtered)).not.toContain('secrets:x')
+})
+
+test('a non-string key in a recognised shape is dropped, not passed through', () => {
+  const filtered = filterReturnedKeyNames('SCAN', ['0', [Buffer.from('secrets:x')]], ['secrets:*'])
+  expect(filtered).toEqual(['0', []])
+})
+
+test('with no rules an unrecognised shape is left exactly as it was', () => {
+  const reply = { cursor: '0', keys: ['secrets:x'] }
+  expect(filterReturnedKeyNames('SCAN', reply, [])).toBe(reply)
 })

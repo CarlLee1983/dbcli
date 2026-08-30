@@ -44,10 +44,21 @@ noticed and an omission that cannot be written: changing
 `createRedisAdapter`'s signature produced eight compiler errors, each one a call
 site that had been missing a protection.
 
-**The limit, stated:** `tsconfig.json` includes only `src`, so the test tree is
-not type-checked. One test file kept the old signature and was found by running
-the suite, not by the compiler. The guarantee is real for production code and
-not for tests.
+**The limits, stated.** Two, because "the omission cannot be written" is
+stronger than what was built.
+
+`tsconfig.json` includes only `src`, so the test tree is not type-checked. One
+test file kept the old signature and was found by running the suite, not by the
+compiler.
+
+And the configuration's `blacklist` field is optional, so
+`createRedisAdapter({ connection })` still compiles — `doctor.ts` and
+`init-mongodb.ts` are written that way on purpose, because both connect without
+ever reading a document and `doctor` needs the real column names to check
+blacklist completeness against them. What the change actually bought is smaller
+than "impossible": passing a *connection* where a *config* belongs is now a type
+error, so the eight call sites that had lost their rules could not be missed. A
+caller that deliberately passes a config without a blacklist still can.
 
 ## Decision 2: a response-side mask cannot hold against a request that chooses the response's shape
 
@@ -68,6 +79,27 @@ what it is good at — the shape of an ordinary document. This is
 deliberately the same shape including the over-refusal: every string and every
 non-operator key in the request is a candidate, so a *value* equal to a
 protected field name is refused too. That direction withholds data.
+
+**Naming is not the only way to move a field.** The first version of this
+decision refused a request that spelled the field, and review found three that
+do not have to: `{"$project": {"all": "$$ROOT"}}` returns every field under a
+key of the request's choosing; `{"$objectToArray": "$$ROOT"}` turns the document
+into `[{k: "password", v: "p1"}]`, where the protected name is a *value* and no
+key-based mask can ever reach it; `$replaceRoot` / `$replaceWith` promote a
+subtree so that a rule anchored at `user.password` no longer describes where the
+field is. `$$ROOT` had in fact been *handled* — as a prefix to strip, so that
+`$$ROOT.password` would match — and `$$ROOT` standing alone was read as a path
+named `ROOT`.
+
+So the rule is: a request that moves the whole document, or reshapes it out of
+the mask's reach, names every protected field at once. `$getField` with a
+computed `field` joins them, because dbcli cannot tell what name it resolves to
+and does not forward what it cannot inspect. All of it fires only for a
+collection that has rules.
+
+The lesson is the one this repository keeps relearning: **an unreachability
+argument is only as good as the enumeration behind it**, and "the request must
+name the field" was an enumeration.
 
 ## Decision 3: the enumeration command is filtered, the naming command is refused
 
@@ -138,6 +170,14 @@ of `RedisAdapter.execute`; or `RedisAdapter.insert`, `update` or `delete` in
 `src/adapters/redis-adapter.ts` reaches the client without `assertKeyPermitted`;
 or `findProtectedFieldReference` in `src/core/mongo/request-fields.ts` starts
 matching by substring rather than by dotted component, or stops treating a
-non-operator object key as a field name; or `MongoDBAdapter` in
+non-operator object key as a field name, or stops treating a bare
+`WHOLE_DOCUMENT_VARIABLES` reference and the `RESHAPES_DOCUMENT` operators as
+naming every protected field; or `protectedFieldsForRequest` there compares a
+collection name case-sensitively while `findCaseInsensitive` in
+`src/core/mongo/field-masker.ts` does not; or `MongoDBAdapter` in
 `src/adapters/mongodb-adapter.ts` calls the driver on a path that has not run
-`assertNoProtectedFieldNamed` beside `assertNoMongoServerSideScript`.
+`assertNoProtectedFieldNamed` beside `assertNoMongoServerSideScript`; or
+`userPatterns` in `src/adapters/redis/blacklist-enforcer.ts` stops checking
+every occurrence of the marker token; or `filterReturnedKeyNames` in
+`src/adapters/redis/returned-key-names.ts` forwards a reply whose shape it does
+not recognise.

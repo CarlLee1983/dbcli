@@ -17,13 +17,49 @@
 
 /** Strip the `$` that marks a field reference in an aggregation expression. */
 function asFieldPath(text: string): string {
-  // `$$ROOT`, `$$NOW` and friends are system variables, not field paths, and
-  // `$$x` is a `$let` binding. None of them names a document field directly —
-  // but `$$ROOT.password` does, so the prefix is stripped rather than skipped.
+  // `$$ROOT`, `$$NOW` and friends are system variables, and `$$x` is a `$let`
+  // binding. None of them names a document field directly — but
+  // `$$ROOT.password` does, so the prefix is stripped rather than skipped.
   if (text.startsWith('$$')) return text.slice(2)
   if (text.startsWith('$')) return text.slice(1)
   return text
 }
+
+/**
+ * The variables that *are* the document.
+ *
+ * `$$ROOT` with a path behind it (`$$ROOT.password`) is handled by stripping
+ * the prefix. `$$ROOT` alone is not a path — it is every field at once, and
+ * `{"$project": {"all": "$$ROOT"}}` returns the protected value under a key the
+ * request chose. Neither end caught it: nothing in the request spells
+ * `password`, and the mask compares the full path `all.password` against a rule
+ * anchored as `password`.
+ */
+const WHOLE_DOCUMENT_VARIABLES = new Set(['ROOT', 'CURRENT'])
+
+/**
+ * Operators that hand back a document in a shape the response mask cannot read.
+ *
+ * `$objectToArray` is the clearest: it turns `{password: 'p1'}` into
+ * `[{k: 'password', v: 'p1'}]`, where the protected name is a *value*. A
+ * key-based mask has nothing to match on, and no amount of following values to
+ * their sources fixes that. `$replaceRoot` / `$replaceWith` promote a subtree to
+ * the top level, so a rule anchored at `user.password` no longer describes
+ * where the field is.
+ *
+ * Refused only for a collection that has field rules, and only when the operand
+ * could carry them — an over-refusal, in the direction that withholds.
+ */
+const RESHAPES_DOCUMENT = new Set(['$objectToArray', '$replaceRoot', '$replaceWith'])
+
+/**
+ * `$getField` names a field, and its `field` may be an expression.
+ *
+ * Whether a given server accepts a non-constant there varies by version. dbcli
+ * cannot tell what name it resolves to, so it does not forward it — the same
+ * rule the Elasticsearch path applies to a request body it cannot inspect.
+ */
+const NAMES_A_FIELD_DYNAMICALLY = '$getField'
 
 /**
  * Whether a path names a protected field.
@@ -59,9 +95,20 @@ export function findProtectedFieldReference(
   if (protectedFields.size === 0) return undefined
 
   const candidates: string[] = []
+  // A transfer that moves the whole document, or reshapes it out of the mask's
+  // reach, names every protected field at once. Recorded rather than returned
+  // immediately so the answer is stable: the first *named* field still wins,
+  // which keeps the refusal message specific when the request has both.
+  let movesWholeDocument = false
+
   const walk = (node: unknown): void => {
     if (typeof node === 'string') {
-      candidates.push(asFieldPath(node))
+      const path = asFieldPath(node)
+      if (node.startsWith('$$') && WHOLE_DOCUMENT_VARIABLES.has(path)) {
+        movesWholeDocument = true
+        return
+      }
+      candidates.push(path)
       return
     }
     if (Array.isArray(node)) {
@@ -70,6 +117,11 @@ export function findProtectedFieldReference(
     }
     if (node === null || typeof node !== 'object') return
     for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (RESHAPES_DOCUMENT.has(key)) movesWholeDocument = true
+      if (key === NAMES_A_FIELD_DYNAMICALLY) {
+        const named = (value as { field?: unknown })?.field ?? value
+        if (typeof named !== 'string') movesWholeDocument = true
+      }
       // An operator (`$match`, `$gt`) is not a field name. Everything else in
       // key position is one — including a dotted path and, in `$project`, an
       // output name the operator chose, which costs one needless refusal when
@@ -80,7 +132,13 @@ export function findProtectedFieldReference(
   }
   walk(request)
 
-  return candidates.find((path) => path.length > 0 && reachesProtectedField(path, protectedFields))
+  const named = candidates.find(
+    (path) => path.length > 0 && reachesProtectedField(path, protectedFields)
+  )
+  if (named !== undefined) return named
+  // Every protected field, so the message can say one — which one is arbitrary
+  // and the message says why it is arbitrary.
+  return movesWholeDocument ? [...protectedFields][0] : undefined
 }
 
 /**
@@ -111,9 +169,14 @@ export function protectedFieldsForRequest(
   }
   collectStrings(request)
 
+  // Lower-cased on both sides. `findCaseInsensitive` in `field-masker.ts` looks
+  // rules up that way, so an exact-match test here would have made the same
+  // configuration protect the response and not the request.
+  const namedLower = new Set([...named].map((value) => value.toLowerCase()))
   const fields = new Set<string>()
   for (const [name, rules] of Object.entries(columns)) {
-    const applies = name.toLowerCase() === collection.toLowerCase() || named.has(name)
+    const applies =
+      name.toLowerCase() === collection.toLowerCase() || namedLower.has(name.toLowerCase())
     if (!applies) continue
     for (const rule of rules) {
       const trimmed = rule.trim()

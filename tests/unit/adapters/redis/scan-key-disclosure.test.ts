@@ -81,3 +81,27 @@ test('with no blacklist configured SCAN is untouched', async () => {
   const returned = result.rows.map((r) => String(r.value)).join(' ')
   expect(returned).toContain('secrets:k')
 })
+
+/**
+ * Redis parses `SCAN`'s options in a loop, so a repeated option overwrites: in
+ * `SCAN 0 MATCH benign:* MATCH secrets:*` the glob the server uses is the last
+ * one. Reading only the first `MATCH` therefore checked a pattern that was
+ * never sent.
+ *
+ * The reply filter caught the keys anyway, so nothing leaked — but Decision 3
+ * in ADR-0015 turns on refusing a request that *names* protected keys, and this
+ * one named them without being refused.
+ */
+test('a repeated MATCH is checked at every position, not only the first', async () => {
+  const adapter = adapterReturning([])
+  await expect(
+    adapter.execute('SCAN 0 MATCH benign:* MATCH secrets:*')
+  ).rejects.toBeInstanceOf(BlacklistRejection)
+})
+
+test('MATCH appearing as another option value does not hide the real one', async () => {
+  const adapter = adapterReturning([])
+  await expect(adapter.execute('SCAN 0 TYPE MATCH MATCH secrets:*')).rejects.toBeInstanceOf(
+    BlacklistRejection
+  )
+})

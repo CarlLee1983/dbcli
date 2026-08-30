@@ -19,6 +19,16 @@ ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比�
 
 - **`SCAN` 不再列舉得出黑名單 key 名。** `SCAN 0 MATCH secrets:*` 只要 `query-only` 且完全不被檢查，而 `KEYS secrets:*` 要 `admin` 且被擋——低權限那條路才是通的。MATCH 現在會被找出來（不限位置、大小寫不敏感）並比對重疊；而只修 MATCH 擋不住裸 `SCAN 0`，所以 `SCAN` 與 `KEYS` 的回應也會把受保護的 key 名濾掉。cursor 不動。
 
+- **MongoDB 的整份文件轉移也擋得住。** 上一項只擋「請求裡指名了受保護欄位」，而 `[{"$project":{"all":"$$ROOT"}}]` 一個欄位名都沒提就把整份文件放到自選的鍵底下回傳，遮罩比對的是完整路徑 `all.password`、對不上錨定在 `password` 的規則。`{"$objectToArray":"$$ROOT"}` 更徹底：文件變成 `[{k:"password",v:"p1"}]`，受保護的名字成了**值**，任何看鍵名的遮罩結構上都追不到。`$replaceRoot`／`$replaceWith` 把子樹提到頂層，同樣讓 `user.password` 這種規則失去指涉。這些現在一律視為「一次指名了所有受保護欄位」；`$getField` 的 `field` 若是運算式而非字串常數也一併拒絕——dbcli 判斷不出它會解析成什麼名字，就不轉發。`$$ROOT` 原本**有**被處理，但是當成「要剝掉的前綴」（為了讓 `$$ROOT.password` 命中），單獨出現時被讀成一個叫 `ROOT` 的路徑。
+
+- **`SCAN` 的 `MATCH` 改為檢查每一個出現位置。** Redis 解析選項是後者覆寫前者，所以 `SCAN 0 MATCH benign:* MATCH secrets:*` 真正送出去的是 `secrets:*`，而只讀第一個等於檢查了一個從未送出的 pattern。回應過濾本來就會把 key 濾掉所以沒有洩漏，但「指名就拒絕」這條規則在這裡沒有成立。
+
+- **`filterReturnedKeyNames` 對認不得的回應形狀改為 fail-closed。** 原本原樣轉發，與同一批修補在 `checkKeyArgs` 選的預設相反。非字串的 key 同樣丟棄——無法與 glob 比對的東西，回答不了「這個受不受保護」。
+
+- **`MongoDBAdapter.insert` 補上兩個攔截點。** 它既沒有 `assertNoMongoServerSideScript` 也沒有欄位檢查，而 #47 的註解宣稱所有路徑一致受檢。實際蓋住它的是 `insert.ts` 的 `checkColumnBlacklistOnWrite`——掛在呼叫端的控制，正是 ADR-0015 Decision 1 要移除的安排。
+
+- **`$lookup` 帶進來的 collection 名改為大小寫不敏感比對。** 請求側是精確比對、遮罩側 (`findCaseInsensitive`) 不敏感，於是同一份設定在遮罩生效、在請求側拒絕不生效。
+
 - **MongoDB 的 `blacklist.columns` 擋得住換名了。** 遮罩只看回傳文件的鍵名，而 aggregation 自己決定那些鍵名：`$project:{"leak":"$password"}`、`$addFields`、`$set` 都把值搬到別的鍵下原文回傳，`query-only` 即可。`$group:{"_id":"$password"}` 更是保證出口——`_id` 為了保住文件參照而被無條件豁免。回應側追不完，所以改成**請求側拒絕**：請求裡指名受保護欄位就拒絕，與 Elasticsearch 的 `namesProtectedField` 同一個形狀，包含同樣的過度拒絕（值剛好等於受保護欄位名也會被拒）。檢查掛在 `assertNoMongoServerSideScript` 旁邊，那是所有 MongoDB 路徑本來就共用的攔截點。
 
 ## [3.0.1] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission

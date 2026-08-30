@@ -20,8 +20,8 @@
  * Like that one, this over-refuses — a string value that happens to equal a
  * protected field name is refused too — in the direction that withholds.
  */
-import { test, expect } from 'bun:test'
-import { findProtectedFieldReference } from '@/core/mongo/request-fields'
+import { describe, test, expect } from 'bun:test'
+import { findProtectedFieldReference, protectedFieldsForRequest } from '@/core/mongo/request-fields'
 
 const PROTECTED = new Set(['password'])
 
@@ -78,4 +78,91 @@ test('a field whose name merely contains a protected name is not caught', () => 
 
 test('no protected fields means nothing is refused', () => {
   expect(findProtectedFieldReference([{ $project: { l: '$password' } }], new Set())).toBeUndefined()
+})
+
+/**
+ * Round two on this file. The refusal above answers "does the request *name* a
+ * protected field" — and MongoDB has expressions that move a protected field's
+ * value without naming it, by moving the whole document.
+ *
+ * `{"$project":{"all":"$$ROOT"}}` returns every field of the document under a
+ * key the request chose. Neither end saw it: the request names only `$$ROOT`
+ * and `all`, and the mask compares the full path `all.password` against a rule
+ * anchored as `password`. `$objectToArray` is worse — it turns the document
+ * into `[{k:"password",v:"p1"}]`, where the protected name is a *value* and no
+ * key-based mask can ever reach it.
+ *
+ * The first version of this file treated `$$ROOT` as a path prefix to strip, so
+ * that `$$ROOT.password` would match. That was right for `$$ROOT.password` and
+ * wrong for `$$ROOT` alone, which is not a path at all.
+ */
+describe('whole-document transfers', () => {
+  test('$$ROOT on its own names every protected field', () => {
+    expect(findProtectedFieldReference([{ $project: { all: '$$ROOT' } }], PROTECTED)).toBe(
+      'password'
+    )
+  })
+
+  test('$$CURRENT is the same document under another name', () => {
+    expect(findProtectedFieldReference([{ $project: { all: '$$CURRENT' } }], PROTECTED)).toBe(
+      'password'
+    )
+  })
+
+  test('$$ROOT with a path still resolves through the path', () => {
+    // The reported path is what the request wrote, minus the `$$`. It reaches
+    // `password` by dotted component, which is what the refusal turns on.
+    expect(findProtectedFieldReference([{ $project: { p: '$$ROOT.password' } }], PROTECTED)).toBe(
+      'ROOT.password'
+    )
+  })
+
+  test('$objectToArray turns field names into values, so it is refused', () => {
+    expect(
+      findProtectedFieldReference([{ $project: { kv: { $objectToArray: '$user' } } }], PROTECTED)
+    ).toBeDefined()
+  })
+
+  test('$replaceWith and $replaceRoot are refused for the same reason', () => {
+    expect(findProtectedFieldReference([{ $replaceWith: { w: '$$ROOT' } }], PROTECTED)).toBeDefined()
+    expect(
+      findProtectedFieldReference([{ $replaceRoot: { newRoot: '$user' } }], PROTECTED)
+    ).toBeDefined()
+  })
+
+  test('$getField with a computed field name is refused, since the name cannot be read', () => {
+    // Whether the server accepts an expression here varies by version. dbcli
+    // cannot tell what name this resolves to, so it does not forward it — the
+    // same rule the Elasticsearch side applies to a body it cannot inspect.
+    expect(
+      findProtectedFieldReference(
+        [{ $project: { x: { $getField: { field: { $concat: ['pass', 'word'] } } } } }],
+        PROTECTED
+      )
+    ).toBeDefined()
+  })
+
+  test('none of this fires for a collection with no rules', () => {
+    expect(findProtectedFieldReference([{ $project: { all: '$$ROOT' } }], new Set())).toBeUndefined()
+    expect(
+      findProtectedFieldReference([{ $project: { kv: { $objectToArray: '$user' } } }], new Set())
+    ).toBeUndefined()
+  })
+
+  test('an ordinary pipeline is still not refused', () => {
+    expect(
+      findProtectedFieldReference([{ $project: { name: 1, email: 1 } }], PROTECTED)
+    ).toBeUndefined()
+  })
+})
+
+describe('the collection a $lookup names is matched case-insensitively', () => {
+  test('rules keyed with different casing than the request still apply', () => {
+    const fields = protectedFieldsForRequest(
+      [{ $lookup: { from: 'secrets', as: 's' } }],
+      'orders',
+      { Secrets: ['token'] }
+    )
+    expect([...fields]).toEqual(['token'])
+  })
 })

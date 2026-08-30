@@ -42,6 +42,10 @@ function adapterWithRules(): { adapter: MongoDBAdapter; ran: unknown[] } {
           ran.push(args)
           return { deletedCount: 0 }
         },
+        insertOne: async (...args: unknown[]) => {
+          ran.push(args)
+          return { acknowledged: true, insertedId: { toString: () => 'id' } }
+        },
       }),
     }),
   }
@@ -91,4 +95,31 @@ test('a collection with no rules is unaffected', async () => {
   const { adapter, ran } = adapterWithRules()
   await adapter.execute('[{"$project":{"leak":"$password"}}]', ['events'])
   expect(ran.length).toBe(1)
+})
+
+/**
+ * `insert` reached the driver with neither check.
+ *
+ * `assertNoMongoServerSideScript`'s comment claims every path is covered (#47)
+ * and `insert` was not one of them; the field check landed on `execute`,
+ * `update` and `delete` and missed it the same way. What covered it was
+ * `checkColumnBlacklistOnWrite` in `src/commands/insert.ts` — a control at the
+ * call site, which is the thing ADR-0015 Decision 1 exists to stop relying on.
+ */
+test('insert is refused when the document names a protected field', async () => {
+  const { adapter, ran } = adapterWithRules()
+  await expect(adapter.insert('users', { password: 'x' })).rejects.toThrow(/BlacklistRejection/)
+  expect(ran).toEqual([])
+})
+
+test('insert of an ordinary document still runs', async () => {
+  const { adapter, ran } = adapterWithRules()
+  await adapter.insert('users', { name: 'a' })
+  expect(ran.length).toBe(1)
+})
+
+test('insert carrying a server-side script is refused', async () => {
+  const { adapter, ran } = adapterWithRules()
+  await expect(adapter.insert('events', { $where: 'this.a > 1' })).rejects.toThrow()
+  expect(ran).toEqual([])
 })

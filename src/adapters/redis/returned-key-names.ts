@@ -36,8 +36,11 @@ export function filterReturnedKeyNames(command: string, reply: unknown, rules: s
   if (!returnsKeyNames(command)) return reply
 
   const regexes = rules.map((pattern) => globToRegex(pattern))
+  // A key that is not a string cannot be compared to a glob, so it is dropped
+  // rather than kept. Same reason as the unrecognised-shape case below: the
+  // question "is this protected" has no answer, and the reply is key names.
   const permitted = (key: unknown): boolean =>
-    typeof key !== 'string' || regexes.every((regex) => !regex.test(key))
+    typeof key === 'string' && regexes.every((regex) => !regex.test(key))
 
   // `SCAN` — `[cursor, keys[]]`.
   if (Array.isArray(reply) && reply.length === 2 && Array.isArray(reply[1])) {
@@ -45,5 +48,10 @@ export function filterReturnedKeyNames(command: string, reply: unknown, rules: s
   }
   // `KEYS` — a bare array of names.
   if (Array.isArray(reply)) return reply.filter(permitted)
-  return reply
+
+  // A shape this function does not recognise is not a shape it can filter, and
+  // this command's reply is key names. Today the client answers `SCAN` with
+  // `[cursor, string[]]` and this is unreachable; if that ever changes, the
+  // default here is the same one `checkKeyArgs` takes when it has no spec.
+  return []
 }

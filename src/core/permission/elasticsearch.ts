@@ -72,9 +72,29 @@ export function routedPathname(rawPath: string): string {
 const PATH_PARSE_BASE = 'http://dbcli.invalid'
 
 function routedSegments(rawPath: string): string[] {
-  return routedPathname(rawPath)
-    .split('/')
-    .filter((segment) => segment.length > 0)
+  return (
+    routedPathname(rawPath)
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      // 切分之後才解碼，而且**不重新切分**。
+      //
+      // `new URL().pathname` 不解百分號編碼，Elasticsearch 對路徑參數會解：
+      // `%5Fsearch` 是 `_search`、`%2A` 是 `*`、`%2C` 是 `,`。少了這一步，
+      // 同一個請求的兩種拼法會落在兩個 tier——`GET /%2A` 曾經是 query-only 的
+      // 讀取，而 `GET /*` 需要 admin。
+      //
+      // 不重新切分是關鍵：`secrets%2F..%2Fpublic` 解碼後含有 `/`，但伺服器把
+      // 它當成**一段** index expression。重新切分就會複製那個 `..` 跨段界的
+      // 缺陷（es-shell 對它另有拒絕）。解不開的編碼保持原樣：它不會等於任何
+      // 端點名稱，落到預設的那一級。
+      .map((segment) => {
+        try {
+          return decodeURIComponent(segment)
+        } catch {
+          return segment
+        }
+      })
+  )
 }
 
 /** An index expression, not an endpoint and not a multi-index spelling. */
@@ -85,6 +105,9 @@ function isBareIndexSegment(segment: string | undefined): boolean {
   // because `GET /*` returns every index's mappings and settings while the
   // identical `GET /_all` needs admin — two spellings of one request must not
   // land in two tiers.
+  //
+  // segment 到這裡時已由 `routedSegments` 解過碼，所以 `%2A` 與 `*` 在這裡
+  // 是同一個字串——兩種拼法不會再分到兩個 tier。
   return (
     segment !== undefined &&
     segment.length > 0 &&

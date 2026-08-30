@@ -64,9 +64,39 @@ export function extractIndexFromPath(path: string): string | undefined {
  */
 const UNSCOPED_METADATA_PREFIXES = ['_cat', '_cluster', '_nodes', '_license']
 
+/**
+ * 子資源層級的例外：前綴放行、這些不放行。
+ *
+ * 只比對第一段時，這份白名單放行了它自己明文拒絕過的資料。`_ingest` 與
+ * `_tasks` 被移出去的理由就在上面，而：
+ *
+ * - `_cluster/state` 的 `metadata.ingest.pipeline[]` 是同一份 pipeline 定義，
+ *   `metadata.stored_scripts` 是同一批 script，`metadata.indices.<name>.mappings`
+ *   則給出黑名單索引的完整欄位清單——而 `_cat/indices/secrets`（只有統計）
+ *   是明確被拒絕的。
+ * - `_cat/tasks` 的 description 帶著執行中查詢的 index 與 source，正是
+ *   `_tasks` 被拿掉的那份資料。分類器的 `CAT_WITHHELD` 已經擋住它，但那是
+ *   tier 的問題；這裡是 scoping 的問題，兩道各自要成立。
+ * - `_nodes/stats` 逐 index 回報文件數與大小，`_nodes/settings` 與
+ *   `_nodes/hot_threads` 帶得出路徑、設定值與執行中的查詢文字。
+ *
+ * 關掉一扇門，旁邊那扇通往同一個房間的門不能開著。
+ */
+const UNSCOPED_METADATA_WITHHELD: Record<string, ReadonlySet<string>> = {
+  _cluster: new Set(['state']),
+  _cat: new Set(['tasks']),
+  _nodes: new Set(['stats', 'settings', 'hot_threads']),
+}
+
 function isUnscopedMetadataPath(path: string): boolean {
-  const first = path.replace(/^\//, '').split('/')[0]?.split('?')[0] ?? ''
-  return UNSCOPED_METADATA_PREFIXES.includes(first)
+  const segments = path.replace(/^\//, '').split('?')[0]?.split('/') ?? []
+  const first = segments[0] ?? ''
+  if (!UNSCOPED_METADATA_PREFIXES.includes(first)) return false
+  const withheld = UNSCOPED_METADATA_WITHHELD[first]
+  if (withheld === undefined) return true
+  // `_nodes/<nodeId>/stats` 一樣要擋：被扣住的名稱出現在**任何**位置都算，
+  // 因為 node id 是使用者可寫的一段。
+  return !segments.slice(1).some((segment) => withheld.has(segment.toLowerCase()))
 }
 
 /**
@@ -394,6 +424,21 @@ export async function runEsRequest(
       )
     }
 
+    // Search templates carry their body inside a string, or not at all.
+    //
+    // `{"source":"{\"query\":{\"terms\":{\"u\":{\"index\":\"secrets\"}}}}"}`
+    // renders server-side into a full search body, and every body-side check
+    // here walks objects — a string is never entered, so the index it names is
+    // invisible. A stored template (`{"id":"t"}`) is worse: the content is not
+    // in the request at all. Same rule as `wrapper` and as a quoted string body:
+    // what dbcli cannot inspect, it does not forward.
+    if (routedPath.split('/').some((segment) => segment.toLowerCase() === 'template')) {
+      throw new Error(
+        `Refused: '${req.path}' is a search template, whose body cannot be inspected — it is a ` +
+          `string rendered on the cluster, or stored there. Write the query out in full.`
+      )
+    }
+
     // A JSON string body carries NDJSON past every check that walks objects.
     // Nothing legitimate produces one — `parseEsRequest` yields a string only
     // when the operator wrote a quoted literal — so it is refused rather than
@@ -469,7 +514,15 @@ export async function runEsRequest(
     // request that names a protected field anywhere is refused. Any string in the
     // body counts, which over-refuses (a document value that happens to equal a
     // protected field name is refused too) in the direction that withholds data.
-    const protectedFields = new Set(Object.values(blacklistColumns).flat())
+    // trim：`{"users": [" password "]}` 這種寫法保證是死設定——ES 的欄位名不能
+    // 帶前後空白——卻沒有任何提示。index 那側由 `expandIndexTargets` 處理，
+    // 欄位這側先前沒有。
+    const protectedFields = new Set(
+      Object.values(blacklistColumns)
+        .flat()
+        .map((field) => field.trim())
+        .filter((field) => field.length > 0)
+    )
     if (protectedFields.size > 0) {
       // The URI-search form names fields in the query string rather than the
       // body — `?q=password:*`, `?sort=password:asc`, `?docvalue_fields=`,

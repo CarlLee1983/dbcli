@@ -221,11 +221,46 @@ export const MetadataSchema = z
  * Blacklist configuration schema
  * Optional field for backward compatibility with existing .dbcli files
  */
+/**
+ * 看起來在設定安全性、實際什麼都不做的鍵。
+ *
+ * zod 預設剝掉未知鍵，於是拼成 Elasticsearch 詞彙的黑名單——`indices`、
+ * `fields`——會被靜靜丟掉，解析結果是空黑名單而沒有任何警告：使用者看著設定檔
+ * 以為有保護，實際完全沒有。與第七輪那個 CRITICAL 同一個形狀。
+ *
+ * 檢查必須在解析**之前**做，因為解析會先把它們剝掉——`superRefine` 拿到的是
+ * 剝完的物件，寫在那裡是一個永遠不會觸發的檢查（實測確認過）。
+ *
+ * 不改成全域 `.strict()`：那會拒絕無害的額外鍵，代價落在與安全無關的設定上。
+ */
+const BLACKLIST_KEY_ALIASES: Record<string, string> = {
+  indices: 'tables',
+  index: 'tables',
+  fields: 'columns',
+  keys: 'tables',
+}
+
 export const BlacklistConfigSchema = z
   .object({
     tables: z.array(z.string()).default([]),
     columns: z.record(z.array(z.string())).default({}),
   })
+  // `passthrough` 讓未知鍵活到 refine 那一步——預設的剝除發生在 refine 之前，
+  // 所以寫在 `superRefine` 裡的檢查永遠不會觸發（實測確認過）。看到之後再
+  // `transform` 掉，對外的型別與行為不變。
+  .passthrough()
+  .superRefine((value, ctx) => {
+    for (const [wrong, right] of Object.entries(BLACKLIST_KEY_ALIASES)) {
+      if (wrong in value) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [wrong],
+          message: `blacklist.${wrong} is not a setting and would be silently ignored — did you mean blacklist.${right}?`,
+        })
+      }
+    }
+  })
+  .transform((value) => ({ tables: value.tables, columns: value.columns }))
   .optional()
   .default({ tables: [], columns: {} })
 
@@ -351,12 +386,33 @@ const ElasticsearchNamedConnectionSchema = ElasticsearchConnectionConfigSchema.e
   environment: EnvironmentLabelSchema,
 })
 
-export const NamedConnectionSchema = z.union([
+const NamedConnectionUnion = z.union([
   SqlNamedConnectionSchema,
   MongoDBNamedConnectionSchema,
   RedisNamedConnectionSchema,
   ElasticsearchNamedConnectionSchema,
 ])
+// `permission` 是 per-connection 的，`blacklist` 不是——它只有頂層一份。
+// 寫在連線裡會被靜靜剝掉，而使用者文件說「每條連線各自帶著自己的 blacklist
+// filtering」，正好強化這個誤解。與其讓保護靜默消失，不如在讀設定時就說出來。
+//
+// 檢查的是 union **解析前**的原始輸入：union 的每個分支都會先剝掉未知鍵，
+// 所以 refine 拿到的物件裡不會再有 `blacklist`。
+
+export const NamedConnectionSchema = z.preprocess((raw, ctx) => {
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    if ('blacklist' in (raw as Record<string, unknown>)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['blacklist'],
+        message:
+          'blacklist is configured once at the top level, not per connection — a blacklist here ' +
+          'would be ignored. Move it to the top-level blacklist.',
+      })
+    }
+  }
+  return raw
+}, NamedConnectionUnion)
 
 /**
  * V2 config schema with multiple named connections

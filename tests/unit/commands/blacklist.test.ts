@@ -78,6 +78,31 @@ describe('isValidTableName()', () => {
     expect(isValidTableName('users!')).toBe(false)
     expect(isValidTableName('')).toBe(false)
   })
+
+  /**
+   * 第八輪 HIGH：這條規則拒絕了幾乎所有合法的 Elasticsearch index 名，於是
+   * `dbcli blacklist table add` 對 ES 使用者不可用，只能手編設定檔——而手編
+   * 正是最容易把條目寫成 glob 的路徑，直接餵養同一輪那個 CRITICAL。
+   *
+   * 含 `-` 與 `.` 的 index 名是 ES 的常態（`logs-2026.08.30`、`.kibana`），
+   * 而萬用字元與 `:` 是使用者文件在 Redis 那側明文教的寫法。
+   */
+  it('accepts the names Elasticsearch and Redis actually use', () => {
+    expect(isValidTableName('my-index')).toBe(true)
+    expect(isValidTableName('logs-2026.08.30')).toBe(true)
+    expect(isValidTableName('.kibana')).toBe(true)
+    expect(isValidTableName('secrets*')).toBe(true)
+    expect(isValidTableName('secrets:*')).toBe(true)
+    expect(isValidTableName('sec?ets')).toBe(true)
+  })
+
+  it('still rejects what would silently mean something else', () => {
+    // 逗號在條目裡會被展開成多個目標，但透過 CLI 一次加一個才說得清楚。
+    expect(isValidTableName('a,b')).toBe(false)
+    // 路徑分隔與空白：前者會讓條目看起來像路徑，後者是打字錯誤的常見形狀。
+    expect(isValidTableName('a/b')).toBe(false)
+    expect(isValidTableName(' secrets')).toBe(false)
+  })
 })
 
 describe('getOrInitBlacklist()', () => {

@@ -95,6 +95,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`recover` 與 `inspect` 的 audit 摘要跟上 statement 與 phase。** 第六輪修好了 `audit tail` 的 brief，但沒動 `briefifyForRecent`，於是這兩條路徑上一次成功的請求仍呈現為兩列只差 `success` 的紀錄。`topQueriedTable` 另外不再把 attempt 列重複計數，也不再把 `/_cat/indices` 這種路由路徑當成「最常查詢的資料表」。
 
+- **黑名單條目本身可以是萬用字元、逗號清單、`_all`、帶前後空白。** `indexExpressionReaches` 原本只展開**請求端**（逗號、萬用字元、date math、CCS、百分號編碼），把黑名單條目當純字面字串比對——於是 `blacklist.tables: ["secrets*"]` 對 Elasticsearch 完全無效，而 `["*"]` 這個讀起來像「全面封鎖」的寫法是零保護。加重因素是：**同一個 `blacklist.tables` 陣列在 Redis 連線上就是以 glob 執行的**，使用者文件也明文教 `dbcli blacklist table add 'secrets:*'`。依文件寫下的設定，在 Redis 擋、在 ES 靜默放行。`dbcli query --index` 走的 `checkIndexBlacklist` 與欄位遮罩的 `filterColumnsForIndexExpression` 有同樣的不對稱，一併修正。
+
+- **`dbcli blacklist table add` 接受真實的 Elasticsearch index 名。** 驗證規則原本是 SQL 識別字的形狀（`^[a-zA-Z_][a-zA-Z0-9_]*$`），拒絕 `my-index`、`logs-2026.08.30`、`.kibana`，等於 ES 使用者只能手編設定檔——而手編正是最容易把條目寫成 glob 的路徑，直接餵養上面那個缺陷。
+
+- **拼錯或用 ES 詞彙寫的黑名單不再被靜默忽略。** zod 預設剝掉未知鍵，所以 `blacklist.indices`、`blacklist.fields`，以及寫在**連線層級**的 `blacklist`（它只有頂層一份），解析後都是空黑名單且沒有任何警告——使用者看著設定檔以為有保護。這幾種形狀現在是解析錯誤。沒有改成全域 `.strict()`：那會拒絕無害的額外鍵。
+
+- **`blacklist add/remove` 不再把 v2 多連線設定壓成 v1。** 它讀設定走的是 v1 路徑（對 v2 檔案回傳「選中那條連線」的扁平化結果），寫回時以 v1 schema 整包覆寫。加一條黑名單因此會讓 `connections`、`default`、`envFile`、`environment` 全部消失，**而預設 permission 變成當時選中那條連線的值**——ES shell 的 tier gate 讀的正是它。整個過程走 `writeConfigWithIntegrity`，完整性紀錄同步更新，事後沒有 tamper 訊號。
+
+- **根層 `--config` 對 blacklist 指令生效。** 每個子指令自己宣告了一個**帶預設值**的 `--config`，所以 commander 永遠不會回落到根層那個：`dbcli --config /path blacklist table add x` 會改到 `.dbcli` 而不是 `/path`，並且回報成功。
+
+- **百分號編碼的路徑段不再改變分級。** `new URL().pathname` 不解百分號編碼，而 Elasticsearch 對路徑參數會解，於是 `GET /%2A` 是 `query-only` 的讀取而 `GET /*` 需要 `admin`——同一個請求兩個 tier，正是 `isBareIndexSegment` 的註解明文禁止的情形。路徑段現在在 `routedSegments` 解碼一次，且**不重新切分**：解碼後的 `/` 留在原段內，重新切分會複製第七輪修掉的 `%2F..%2F` 缺陷。
+
+- **無 index 的 metadata 白名單細到子資源。** 它原本只比對第一段，於是整個 `_cluster` 與 `_cat` 前綴放行——而 `_cluster/state` 回傳 `metadata.ingest.pipeline[]`（`_ingest` 被移出白名單的理由就是它常內嵌憑證）、`metadata.stored_scripts`、以及黑名單索引的完整 mapping；`_cat/tasks` 回傳執行中查詢的 source（`_tasks` 被移出的理由）。`_nodes/stats`、`_nodes/settings`、`_nodes/hot_threads` 同樣扣住。
+
+- **search template 端點一律拒絕。** template 的 `source` 是一段在叢集上渲染成完整 search body 的字串，stored template 的內容根本不在請求裡——所以指向黑名單索引的 terms lookup 對每一個 body 側檢查都是隱形的。與 `wrapper` 同一個原則。
+
+- **黑名單條目的前後空白不再讓它變成死設定。** ES 的 index 名與欄位名都不能帶空白，所以 `[" secrets "]` 保證無效，而先前沒有任何提示。
+
 ### Added
 
 - **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。

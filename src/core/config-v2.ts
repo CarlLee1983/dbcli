@@ -230,6 +230,45 @@ export async function patchConnectionSchema(
 }
 
 /**
+ * Patch only the top-level blacklist of a v2 config.
+ *
+ * `blacklist add/remove` 原本走 `configModule.read()` → `configModule.write()`。
+ * 前者對 v2 設定回傳的是「選中那一條連線」的扁平化 v1 形狀，後者以 v1 schema
+ * 驗證後整包覆寫——於是加一條 blacklist 會把整份多連線設定壓成單一連線，
+ * `connections`、`default`、`envFile`、`environment` 全部消失，而**預設 tier
+ * 變成當時 `--use` 的那一條連線的 tier**。加黑名單這個動作因此可以把 ES shell
+ * 的 gate 從 query-only 變成 admin，且完整性紀錄同步更新，事後沒有 tamper 訊號。
+ *
+ * 這個函式與 `patchConnectionSchema` 是同一個模式：讀 v2、只動一個欄位、寫回 v2。
+ */
+export async function patchBlacklist(
+  dbcliPath: string,
+  blacklist: { tables: string[]; columns: Record<string, string[]> }
+): Promise<void> {
+  const storagePath = await resolveConfigStoragePath(dbcliPath)
+  const v2Config = await readV2Config(storagePath)
+  await writeV2Config(storagePath, { ...v2Config, blacklist })
+}
+
+/**
+ * Whether the config at this path is v2, without parsing it as either shape.
+ *
+ * Callers that mutate config need this: the v1 write path is destructive to a
+ * v2 file, so "which shape is on disk" has to be answerable before writing.
+ */
+export async function isV2Config(dbcliPath: string): Promise<boolean> {
+  try {
+    const storagePath = await resolveConfigStoragePath(dbcliPath)
+    const file = Bun.file(join(storagePath, 'config.json'))
+    if (!(await file.exists())) return false
+    return detectConfigVersion(await file.json()) === 2
+  } catch {
+    // 讀不到或不是 JSON：交給既有的讀取路徑去報那個錯，這裡只回答形狀問題。
+    return false
+  }
+}
+
+/**
  * List all connection names in a v2 config
  */
 export function listConnections(config: DbcliConfigV2): Array<{

@@ -345,3 +345,41 @@ describe('the query path is unaffected', () => {
     }
   })
 })
+
+/**
+ * 第八輪 HIGH：index 位置的百分號編碼讓兩種拼法落在兩個 tier。
+ *
+ * `routedPathname` 用 `new URL().pathname`，它**不解**百分號編碼，而
+ * Elasticsearch 對 `{index}` 這種路徑參數會解碼。於是 `%2A`→`*`、
+ * `%5Fall`→`_all`、`%2C`→`,`：`GET /%2A` 在這裡是 SELECT（query-only 可讀
+ * 全叢集的 mapping／settings，包含黑名單索引的欄位名），而拼成 `GET /*` 的
+ * 同一個請求需要 admin。
+ *
+ * `isBareIndexSegment` 的註解自己寫了「兩種拼法不可以落在兩個 tier」——
+ * 這正是那句話所禁止的情形。
+ */
+describe('index 位置的百分號編碼不改變分級', () => {
+  test.each([
+    ['/%2A', '/*'],
+    ['/%5Fall', '/_all'],
+    ['/%2A/_mapping', '/*/_mapping'],
+    ['/%5Fall/_settings', '/_all/_settings'],
+    ['/a%2Cb', '/a,b'],
+  ])('%s 與 %s 分到同一級', (encoded, plain) => {
+    const a = classifyElasticsearchRequest({ method: 'GET', rawPath: encoded })
+    const b = classifyElasticsearchRequest({ method: 'GET', rawPath: plain })
+    expect(a.type).toBe(b.type)
+    expect(a.isDangerous).toBe(b.isDangerous)
+  })
+
+  test('一般索引名的編碼不受影響——仍然是讀取', () => {
+    const encoded = classifyElasticsearchRequest({ method: 'GET', rawPath: '/ord%65rs' })
+    expect(encoded.type).toBe('SELECT')
+  })
+
+  test('編碼的端點名稱與未編碼的分到同一級', () => {
+    const encoded = classifyElasticsearchRequest({ method: 'GET', rawPath: '/%5Fsearch' })
+    const plain = classifyElasticsearchRequest({ method: 'GET', rawPath: '/_search' })
+    expect(encoded.type).toBe(plain.type)
+  })
+})

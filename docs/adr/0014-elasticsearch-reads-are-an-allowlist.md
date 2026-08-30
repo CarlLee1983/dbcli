@@ -413,6 +413,93 @@ the escaping written for audit tables is now shared as
 happened, so `dbcli shell < script.txt` could not distinguish "all succeeded"
 from "every statement was refused".
 
+## Decision 8: a matcher normalises both sides, and a setting that means nothing is an error
+
+An eighth round aimed away from the recent patches, at surfaces no round had
+attacked directly. It found two CRITICALs, neither of them a regression — the
+same result as round seven, and together they settle what round six got wrong
+about where to look.
+
+**Blacklist entries are expanded the same way requests are.**
+`indexExpressionReaches` expanded the *request* — commas, wildcards, date math,
+cross-cluster prefixes, percent-encoding — and compared the result to entries by
+literal equality. So `blacklist.tables: ["secrets*"]` matched nothing, and
+`["*"]` — the spelling that reads as "block everything" — was zero protection.
+
+This is Decision 7's dotted-field defect one level up, and it has the same
+tell: every test used the simplest spelling. What makes it worse is that the
+spelling users are *taught* is the broken one. The same `blacklist.tables` array
+is enforced as glob patterns on Redis connections, and the user documentation
+says so. A setting written from the docs protected Redis and silently permitted
+Elasticsearch.
+
+Two supporting defects fed it. `dbcli blacklist table add` validated names
+against `^[a-zA-Z_][a-zA-Z0-9_]*$` — a SQL identifier — so `my-index`,
+`logs-2026.08.30` and `.kibana` were all rejected and Elasticsearch users had to
+hand-edit the config file, which is exactly where glob spellings come from. **A
+validation rule that pushes people around itself is worse than none.** And a
+misspelled or Elasticsearch-flavoured blacklist (`indices`, `fields`, or one
+placed inside a connection) was stripped by zod without a word, leaving an empty
+blacklist and a config file that looked protective. Those shapes are now parse
+errors. Not `.strict()` — that would reject harmless extra keys — only the ones
+that *look like they configure security and do nothing*.
+
+Note the mechanism, because it recurred while fixing it: zod strips unknown keys
+**before** `superRefine` runs, so a check written there never fires. The first
+version of this fix was a no-op and only a test caught it.
+
+**`blacklist add` no longer destroys a v2 config.** The command read config
+through the v1 path — which, for a v2 file, returns the *selected connection*
+flattened — and wrote it back with the v1 writer, which overwrites the whole
+file. Adding one blacklist entry collapsed a multi-connection config to a single
+connection: `connections`, `default`, `envFile` and `environment` gone, and the
+default permission tier silently replaced by whichever connection happened to be
+selected. The Elasticsearch shell's gate reads that value. The write went
+through `writeConfigWithIntegrity`, so the integrity record was updated too and
+nothing downstream could tell.
+
+While verifying this, two manual runs of the command edited the real project
+config on the reviewing machine, because the root `--config` flag is shadowed:
+every blacklist subcommand declares its own `--config` *with a default*, so
+commander never falls back to the root one. `dbcli --config /path blacklist
+table add x` edited `.dbcli` and reported success. **A configuration command
+that writes to a different target than the one named, and says it worked, is a
+correctness defect in its own right** — now fixed, and the accident is why it
+was found.
+
+**Two spellings of one request no longer land in two tiers.** `new URL().pathname`
+does not decode percent-encoding; Elasticsearch decodes path parameters. So
+`GET /%2A` classified as a read at `query-only` while `GET /*` required `admin`
+— the exact condition `isBareIndexSegment`'s own comment forbids. Segments are
+now decoded once, in `routedSegments`, and deliberately **not** re-split: a
+decoded `/` stays inside its segment, because re-splitting would recreate the
+`%2F..%2F` defect Decision 7 closed.
+
+**The unscoped-metadata allowlist reaches sub-resources.** It matched only the
+first path segment, so `_cluster` and `_cat` were permitted wholesale — and
+`_cluster/state` returns `metadata.ingest.pipeline[]` (the credentials-bearing
+pipeline definitions `_ingest` was removed for), `metadata.stored_scripts`, and
+the full mappings of blacklisted indices, while `_cat/tasks` returns the running
+search sources `_tasks` was removed for. Closing a door and leaving the one
+beside it open is not a policy. `_nodes/stats`, `_nodes/settings` and
+`_nodes/hot_threads` join them.
+
+**Search templates are refused.** A template's `source` is a string that renders
+into a full search body on the cluster, and a stored template's content is not
+in the request at all — so a `terms` lookup against a blacklisted index is
+invisible to every body-side check. Same rule as `wrapper`, and the third
+instance of it.
+
+### What this round settles about method
+
+Round six concluded that the reviews should target the newest patch, because
+that was where its CRITICALs were. Rounds seven and eight found four CRITICALs
+between them and **none** was a regression. The pattern was not "defects live in
+new code" but "reviewers look where they last looked". Both rounds got their
+results by aiming at code that had never been attacked directly, and the two
+worst findings came from asking the same question in a new place: *does this
+matcher normalise both of the things it compares?*
+
 **Falsified if:** `classifyElasticsearchRequest` in
 `src/core/permission/elasticsearch.ts` gains a rule that permits a request by
 method alone, or matches any endpoint token with `includes()` rather than as a
@@ -447,4 +534,12 @@ walked key path; or `ES_OPAQUE_BODY_KEYS` in
 an encoded body under that name; or either shell stops discarding queued input
 after `exit`; or `runEsShell` submits on a line that is not empty before
 trimming; or `audit.strict` is enforced anywhere other than
-`writeAuditEntryBeforeEffect` in `src/core/audit/integration-helper.ts`.
+`writeAuditEntryBeforeEffect` in `src/core/audit/integration-helper.ts`; or
+`indexExpressionReaches` in `src/utils/es-index-target.ts` stops expanding the
+blacklist entries as well as the request; or `routedSegments` in
+`src/core/permission/elasticsearch.ts` stops decoding segments, or starts
+re-splitting them after decoding; or `isUnscopedMetadataPath` in
+`src/commands/es-shell.ts` matches on the first path segment alone; or
+`BlacklistConfigSchema` and `NamedConnectionSchema` in
+`src/utils/validation.ts` stop rejecting the blacklist shapes that parse to
+nothing; or `blacklist add`/`remove` writes a v2 config through the v1 writer.

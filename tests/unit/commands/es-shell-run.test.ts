@@ -728,3 +728,111 @@ test('真正指名欄位的參數仍然被擋', async () => {
     })
   ).rejects.toThrow(/blacklist-protected/)
 })
+
+/**
+ * 第八輪 HIGH：白名單只比對第一段，於是它放行了自己明文拒絕過的資料。
+ *
+ * `_ingest` 與 `_tasks` 被移出白名單的理由寫在原始碼裡：pipeline 定義常內嵌
+ * 憑證，詳細 task 列表帶著執行中查詢的 request source。但 `_cluster/state` 的
+ * `metadata.ingest.pipeline[]` 就是同一份 pipeline 定義，`_cat/tasks?detailed`
+ * 的 description 就是同一份 task 來源——`_cluster` 與 `_cat` 是整個前綴放行的。
+ * 關掉一扇門，旁邊那扇通往同一個房間的門開著。
+ *
+ * `_cluster/state` 另外還給出黑名單索引的完整 mapping，而 `_cat/indices/secrets`
+ * （只有統計）是明確被拒絕的。
+ */
+describe('無 index 的 metadata 白名單要細到子資源', () => {
+  test.each([
+    ['/_cluster/state'],
+    ['/_cluster/state/metadata'],
+    ['/_cat/tasks'],
+    ['/_nodes/stats'],
+    ['/_nodes/stats/indices'],
+    ['/_nodes/hot_threads'],
+  ])('%s 在有黑名單時要被拒絕', async (path) => {
+    const captured: Record<string, unknown> = {}
+    await expect(run({ method: 'GET', path }, fakeAdapter(captured), ['secrets'])).rejects.toThrow(
+      /names no index|blacklist/i
+    )
+    expect(captured.path).toBeUndefined()
+  })
+
+  test.each([['/_cat/indices'], ['/_cluster/health'], ['/_license'], ['/_nodes']])(
+    '%s 仍然放行——它們不帶文件內容',
+    async (path) => {
+      const captured: Record<string, unknown> = {}
+      await run({ method: 'GET', path }, fakeAdapter(captured), ['secrets'])
+      expect(captured.path).toBe(path)
+    }
+  )
+
+  test('沒有設定黑名單時不受影響', async () => {
+    const captured: Record<string, unknown> = {}
+    await run({ method: 'GET', path: '/_cluster/state' }, fakeAdapter(captured), [])
+    expect(captured.path).toBe('/_cluster/state')
+  })
+})
+
+/**
+ * 第八輪 HIGH：`_search/template` 的 `source` 是字串，body 側的 index 掃描
+ * 從不進字串內部，所以裡面的 terms lookup 指到黑名單索引也看不見。
+ *
+ * ```
+ * POST /public/_search/template
+ * {"source":"{\"query\":{\"terms\":{\"u\":{\"index\":\"secrets\",...}}}}","params":{}}
+ * ```
+ * 同一個 terms lookup 直接寫在 `_search` body 裡是被拒絕的——差別只在它被包進
+ * 一個字串。stored template（`{"id":"t"}`）更徹底：內容根本不在請求裡。
+ *
+ * 這與 `wrapper` query 是同一個原則（ADR-0014 Decision 7）：dbcli 檢查不了的
+ * body 不放行。第六輪曾把「字串編碼 body」記為盲點，卻用 tier gate 論證它不可
+ * 觸發——那個論證只涵蓋了它列舉到的入口。
+ */
+describe('template 端點的 body 檢查不了，一律拒絕', () => {
+  test.each([
+    [
+      '/public/_search/template',
+      { source: '{"query":{"terms":{"u":{"index":"secrets","id":"1","path":"n"}}}}', params: {} },
+    ],
+    ['/public/_search/template', { id: 'stored-template', params: {} }],
+    ['/_search/template', { id: 't' }],
+    ['/_render/template', { id: 't' }],
+    ['/_msearch/template', { id: 't' }],
+  ])('拒絕 %s', async (path, body) => {
+    const captured: Record<string, unknown> = {}
+    await expect(
+      run({ method: 'POST', path, body }, fakeAdapter(captured), ['secrets'])
+    ).rejects.toThrow(/cannot be inspected|template/i)
+    expect(captured.path).toBeUndefined()
+  })
+
+  test('一般 _search 不受影響', async () => {
+    const captured: Record<string, unknown> = {}
+    await run(
+      { method: 'POST', path: '/public/_search', body: { query: { match_all: {} } } },
+      fakeAdapter(captured),
+      ['secrets']
+    )
+    expect(captured.path).toBe('/public/_search')
+  })
+})
+
+/**
+ * 第八輪 MEDIUM：黑名單條目帶前後空白時等於沒設，而且沒有任何提示。
+ * ES 的 index 名與欄位名都不能帶空白，所以這種條目保證是死設定。
+ */
+test('欄位黑名單的前後空白不影響比對', async () => {
+  const captured: Record<string, unknown> = {}
+  await expect(
+    run({ method: 'GET', path: '/orders/_search?sort=password:asc' }, fakeAdapter(captured), [], {
+      orders: [' password '],
+    })
+  ).rejects.toThrow(/blacklist-protected/)
+})
+
+test('index 黑名單的前後空白不影響比對', async () => {
+  const captured: Record<string, unknown> = {}
+  await expect(
+    run({ method: 'GET', path: '/secrets/_search' }, fakeAdapter(captured), [' secrets '])
+  ).rejects.toThrow(/blacklist-protected/)
+})

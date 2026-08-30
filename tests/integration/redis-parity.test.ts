@@ -62,7 +62,10 @@ describe('Redis parity pack — query path [v1.21.0]', () => {
   })
 
   function blacklisted(): QueryableAdapter {
-    return AdapterFactory.createRedisAdapter({ connection: options, blacklist: { tables: ['secrets:*'] } })
+    return AdapterFactory.createRedisAdapter({
+      connection: options,
+      blacklist: { tables: ['secrets:*'] },
+    })
   }
 
   test('GET on safe key returns value with no warnings', async () => {

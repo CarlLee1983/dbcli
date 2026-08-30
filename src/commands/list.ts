@@ -151,9 +151,7 @@ async function redisListBranch(
   format: string
 ): Promise<void> {
   const connName = (config.connection.database as string) || '0'
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config)
   await redisAdapter.connect()
 
   try {

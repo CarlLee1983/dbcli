@@ -896,9 +896,7 @@ async function redisQueryBranch(
   const { config } = context
   const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config)
   let executionError: unknown
   try {
     await redisAdapter.connect()

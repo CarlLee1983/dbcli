@@ -39,7 +39,9 @@ test('$addFields and $set are caught the same way', () => {
 })
 
 test('$group by a protected field is caught, which is the _id exit', () => {
-  expect(findProtectedFieldReference([{ $group: { _id: '$password' } }], PROTECTED)).toBe('password')
+  expect(findProtectedFieldReference([{ $group: { _id: '$password' } }], PROTECTED)).toBe(
+    'password'
+  )
 })
 
 test('a protected field named as an object key is caught', () => {
@@ -50,9 +52,9 @@ test('a dotted path reaching a protected component is caught', () => {
   expect(findProtectedFieldReference([{ $project: { l: '$user.password' } }], PROTECTED)).toBe(
     'user.password'
   )
-  expect(
-    findProtectedFieldReference({ 'user.password': { $gt: '' } }, PROTECTED)
-  ).toBe('user.password')
+  expect(findProtectedFieldReference({ 'user.password': { $gt: '' } }, PROTECTED)).toBe(
+    'user.password'
+  )
 })
 
 test('a field named through $getField, where it is not $-prefixed, is caught', () => {
@@ -124,7 +126,9 @@ describe('whole-document transfers', () => {
   })
 
   test('$replaceWith and $replaceRoot are refused for the same reason', () => {
-    expect(findProtectedFieldReference([{ $replaceWith: { w: '$$ROOT' } }], PROTECTED)).toBeDefined()
+    expect(
+      findProtectedFieldReference([{ $replaceWith: { w: '$$ROOT' } }], PROTECTED)
+    ).toBeDefined()
     expect(
       findProtectedFieldReference([{ $replaceRoot: { newRoot: '$user' } }], PROTECTED)
     ).toBeDefined()
@@ -143,7 +147,9 @@ describe('whole-document transfers', () => {
   })
 
   test('none of this fires for a collection with no rules', () => {
-    expect(findProtectedFieldReference([{ $project: { all: '$$ROOT' } }], new Set())).toBeUndefined()
+    expect(
+      findProtectedFieldReference([{ $project: { all: '$$ROOT' } }], new Set())
+    ).toBeUndefined()
     expect(
       findProtectedFieldReference([{ $project: { kv: { $objectToArray: '$user' } } }], new Set())
     ).toBeUndefined()

@@ -199,9 +199,7 @@ export async function updateCommand(
         return
       }
 
-      const adapter = AdapterFactory.createRedisAdapter(
-        config
-      )
+      const adapter = AdapterFactory.createRedisAdapter(config)
       await adapter.connect()
       try {
         const startedAt = performance.now()

@@ -100,11 +100,9 @@ test('a key the rules do not reach is written normally', async () => {
  * the point is that if that ever changes, the default is to withhold.
  */
 test('a SCAN reply in an unexpected shape is emptied rather than forwarded', () => {
-  const filtered = filterReturnedKeyNames(
-    'SCAN',
-    { cursor: '0', keys: ['secrets:x'] },
-    ['secrets:*']
-  )
+  const filtered = filterReturnedKeyNames('SCAN', { cursor: '0', keys: ['secrets:x'] }, [
+    'secrets:*',
+  ])
   expect(JSON.stringify(filtered)).not.toContain('secrets:x')
 })
 

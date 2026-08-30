@@ -94,9 +94,9 @@ test('with no blacklist configured SCAN is untouched', async () => {
  */
 test('a repeated MATCH is checked at every position, not only the first', async () => {
   const adapter = adapterReturning([])
-  await expect(
-    adapter.execute('SCAN 0 MATCH benign:* MATCH secrets:*')
-  ).rejects.toBeInstanceOf(BlacklistRejection)
+  await expect(adapter.execute('SCAN 0 MATCH benign:* MATCH secrets:*')).rejects.toBeInstanceOf(
+    BlacklistRejection
+  )
 })
 
 test('MATCH appearing as another option value does not hide the real one', async () => {

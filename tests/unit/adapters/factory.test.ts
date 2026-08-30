@@ -82,7 +82,9 @@ test('createMongoDBAdapter returns MongoDBAdapter for mongodb system', () => {
 })
 
 test('createMongoDBAdapter exposes full QueryableAdapter interface', () => {
-  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter({ connection: mongoOptions })
+  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter({
+    connection: mongoOptions,
+  })
   expect(adapter).toHaveProperty('connect')
   expect(adapter).toHaveProperty('disconnect')
   expect(adapter).toHaveProperty('execute')

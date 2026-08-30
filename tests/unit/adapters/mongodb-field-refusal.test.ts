@@ -54,9 +54,9 @@ function adapterWithRules(): { adapter: MongoDBAdapter; ran: unknown[] } {
 
 test('a $project that renames a protected field never reaches the driver', async () => {
   const { adapter, ran } = adapterWithRules()
-  await expect(
-    adapter.execute('[{"$project":{"leak":"$password"}}]', ['users'])
-  ).rejects.toThrow(/BlacklistRejection/)
+  await expect(adapter.execute('[{"$project":{"leak":"$password"}}]', ['users'])).rejects.toThrow(
+    /BlacklistRejection/
+  )
   expect(ran).toEqual([])
 })
 

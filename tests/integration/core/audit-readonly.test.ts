@@ -6,7 +6,7 @@
  * simulated main-command function.
  */
 import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test'
-import { chmod, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,6 +33,42 @@ function markedEntry(
     redacted_query: 'query test_table',
     metadata: marker,
   }
+}
+
+/**
+ * Whether `chmod 0o555` on a directory actually denies writes here.
+ *
+ * Every test below states its premise as "the audit directory cannot be written
+ * to", and reaches it through `chmod`. That is a POSIX permission model:
+ * Node's `chmod` on Windows toggles a file's read-only attribute and does
+ * nothing to a directory, and running as root ignores the mode entirely. In
+ * both cases the write succeeds and the assertions fail — not because
+ * `AuditLogger` regressed, but because the directory was never read-only.
+ *
+ * `windows-latest, latest` started failing this way while `windows-latest,
+ * 1.3.3` kept passing on identical code, which is the tell: the premise, not
+ * the behaviour, is what changed. So it is probed rather than assumed, and the
+ * suite says plainly when it is not asserting anything.
+ */
+async function readonlyDirectoriesAreEnforced(): Promise<boolean> {
+  const probeDir = await mkdtemp(join(tmpdir(), 'dbcli-ro-probe-'))
+  try {
+    await chmod(probeDir, 0o555)
+    await writeFile(join(probeDir, 'probe'), 'x')
+    return false
+  } catch {
+    return true
+  } finally {
+    await chmod(probeDir, 0o755).catch(() => {})
+    await rm(probeDir, { recursive: true, force: true })
+  }
+}
+
+const READONLY_ENFORCED = await readonlyDirectoriesAreEnforced()
+if (!READONLY_ENFORCED) {
+  console.error(
+    '⏭ chmod does not deny writes to a directory here (Windows, or running as root) — skipping the readonly-audit-dir tests'
+  )
 }
 
 let workDir: string
@@ -92,7 +128,7 @@ afterEach(async () => {
   await rm(workDir, { recursive: true, force: true })
 })
 
-describe('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
+describe.skipIf(!READONLY_ENFORCED)('AuditLogger readonly-dir integration (STORE-04 / D6)', () => {
   test('STORE-04 / criterion 4: write() on readonly audit dir returns skip marker, does NOT throw, emits ONE stderr warning over many failures', async () => {
     await makeReadonlyAuditDir()
     stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true)

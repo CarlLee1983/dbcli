@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Contract and release integrity
+## [4.0.0] - 2026-08-30 - Contract and release integrity
 
 Three numbers in this repository disagreed with reality and nothing checked any of them. The evidence pack and receipt formats still said `version: 1` after v3.0.0 broke both of them, so two mutually incompatible layouts shipped under one version number and an old artifact was reported as a tampered one. Five plugin manifests said `1.51.2` while the package said `3.0.0`. `SECURITY.md` promised fixes for `1.x`. Each is now stated once, derived from one source, and guarded by a check that fails on drift.
 

@@ -21,6 +21,9 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveEsShellPermission, runEsRequest, type EsRequest } from '@/commands/es-shell'
 import type { Permission } from '@/types'
+import { pinEnglishMessages } from '../../helpers/pin-english-messages'
+
+pinEnglishMessages()
 
 interface Captured {
   method?: string

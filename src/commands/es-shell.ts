@@ -61,8 +61,6 @@ interface EsRequestCapable {
 }
 
 
-const ES_SHELL_SIZE_CAP = 1000
-
 /**
  * The tier an Elasticsearch shell session runs under.
  *
@@ -508,7 +506,17 @@ export async function runEsShell(configPath: string): Promise<void> {
       rl.close()
       return
     }
-    if (!(await executeEsBlock(block, session))) failed = true
+    // `failed` is set in a `finally`, not after the call returns. If
+    // `executeEsBlock` throws on its way out — `console.error` onto a closed
+    // stderr pipe is the realistic one — the submit queue swallows the
+    // rejection, and setting the flag afterwards would leave a session that
+    // refused a request exiting `0`.
+    let ok = false
+    try {
+      ok = await executeEsBlock(block, session)
+    } finally {
+      if (!ok) failed = true
+    }
   }
 
 

@@ -1,4 +1,4 @@
-import { test, expect } from 'bun:test'
+import { describe, test, expect } from 'bun:test'
 import { MessageLoader, t, t_vars } from '@/i18n/message-loader'
 
 // Note: MessageLoader is a singleton, so these tests verify behavior
@@ -84,4 +84,50 @@ test('t_vars() with table name in message', () => {
 
   expect(message).toContain('5')
   expect(message).toContain('users')
+})
+
+/**
+ * `interpolate` used `String.replace(regex, value)`, whose replacement string
+ * honours `$&`, `$'`, `` $` `` and `$1`. Every caller before the Elasticsearch
+ * shell passed values that were effectively trusted; the shell passes the path
+ * an operator typed, the index expression that matched, and the field name that
+ * was refused. So a refusal message — and the `error` field of the audit row
+ * built from it — became partly writable by the person being refused.
+ *
+ * It also replaced one variable at a time, so a value containing another
+ * variable's placeholder was rewritten by the next pass.
+ */
+describe('interpolate does not let a value rewrite the message', () => {
+  test('a `$&` in a value is inserted literally, not expanded to the match', () => {
+    const rendered = MessageLoader.getInstance().interpolate('shell.es.blacklist_index', {
+      index: "sec$&rets",
+    })
+    expect(rendered).toContain("sec$&rets")
+    expect(rendered).not.toContain('{index}')
+  })
+
+  test("a `$'` in a value does not duplicate the rest of the message", () => {
+    const rendered = MessageLoader.getInstance().interpolate('shell.es.refuse_dot_segment', {
+      path: "/a$'b",
+    })
+    expect(rendered).toContain("/a$'b")
+    // The tail of the message must appear once, not twice.
+    expect(rendered.split('Elasticsearch').length - 1).toBe(1)
+  })
+
+  test('a value that looks like another placeholder is not substituted again', () => {
+    const rendered = MessageLoader.getInstance().interpolate('shell.es.refuse_not_canonical', {
+      path: '{canonical}',
+      canonical: '/x',
+    })
+    expect(rendered).toContain("'{canonical}'")
+    expect(rendered).toContain("'/x'")
+  })
+
+  test('an unsupplied placeholder is left alone', () => {
+    const rendered = MessageLoader.getInstance().interpolate('shell.es.refuse_not_canonical', {
+      path: '/a',
+    })
+    expect(rendered).toContain('{canonical}')
+  })
 })

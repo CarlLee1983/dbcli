@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'bun:test'
 import { parseEsRequest, runEsRequest, type EsRequest } from '@/commands/es-shell'
+import { pinEnglishMessages } from '../../helpers/pin-english-messages'
+
+pinEnglishMessages()
 
 /**
  * These tests are about the blacklist and the search size cap, so they run at

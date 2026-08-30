@@ -91,6 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **不含欄位名的 query 參數不再進入黑名單切詞器。** `?routing=abc-name-1` 在黑名單欄位叫 `name` 時被誤擋，而 `routing`／`scroll`／`preference`／`filter_path` 的值沒有任何欄位名語意。
 
+- **i18n 插值不再讓值改寫訊息。** `MessageLoader.interpolate` 用的是 `String.replace(regex, value)`，而替換字串會展開 `$&`、`$'`、`` $` `` 與 `$1`。這條分支第一次把**操作者可控**的字串餵進去（ES shell 的路徑、命中的 index expression、被拒的欄位名），於是拒絕訊息以及由它組成的 audit `error` 欄位可以被被拒的那個人部分改寫：`GET /sec$&rets/_search` 記下來的索引名是 `sec{index}rets`，`$'` 則會把整句複製一份接在後面。改成單次掃描 `\{name\}` 加替換函式，順帶修掉「依序替換讓值裡的 `{other}` 被二次替換」。所有 `t_vars` 呼叫端一併受惠。
+
 - **ES shell 的訊息改走 i18n。** `src/commands/es-shell.ts` 的 i18n 呼叫數是 0，而同一層的 `src/commands/shell.ts` 是 14——CONTRIBUTING.md 明文寫「All user-facing messages must be translatable」，所以那是違規不是偏好。19 則訊息移進 `shell.es.*`，`blacklist table add` 這次新增的萬用字元拒絕訊息一併移進 `blacklist.refuse_wildcard`。`BlacklistRejection: ` 這個前綴刻意留在程式碼裡不翻譯：recovery 路徑與數個測試比對的是它，翻譯過的前綴是壞掉的比對器，不是翻譯過的訊息。
 
 - **`es-shell.ts` 拆成兩個檔案。** 894 行、`runEsRequest` 363 行，對照 CONTRIBUTING.md 的 800 與 50。成因寫在 ADR-0014 裡：九輪，每一輪都往同一個函式再塞一個檢查。切線沿著檢查本來就有的分界——`es-shell-guards.ts` 放「關於這個請求」的純函式（伺服器會路由到哪、指名了哪些索引與欄位、回應要遮掉什麼），不讀設定、不開連線、不寫 audit；session 檔留下讀取迴圈、tier gate 的呼叫、audit 接線與退出碼。行為沒有改變，5873 個測試全過。

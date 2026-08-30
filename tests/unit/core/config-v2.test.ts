@@ -82,7 +82,11 @@ describe('config-v2', () => {
       schemas: {},
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      audit: {
+        strict: false,
+        enabled: true,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
     }
 
     test('should resolve default connection when no name given', () => {
@@ -150,7 +154,11 @@ describe('config-v2', () => {
         schemas: {},
         metadata: { version: '1.0' },
         blacklist: { tables: [], columns: {} },
-        audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+        audit: {
+          strict: false,
+          enabled: true,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
       }
 
       await writeV2Config(configPath, config)
@@ -190,7 +198,11 @@ describe('config-v2', () => {
       schemas: {},
       metadata: { version: '2.0' },
       blacklist: { tables: [], columns: {} },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      audit: {
+        strict: false,
+        enabled: true,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
     }
 
     test('writes schema to correct connection slot', async () => {
@@ -278,7 +290,7 @@ describe('config-v2', () => {
     test('Test 2: audit.enabled=false is preserved verbatim; rotation still uses defaults', () => {
       const parsed = DbcliConfigV2Schema.parse({
         ...BASE_V2,
-        audit: { enabled: false },
+        audit: { strict: false, enabled: false },
       })
       expect(parsed.audit.enabled).toBe(false)
       expect(parsed.audit.rotation.max_bytes).toBe(10485760)
@@ -289,6 +301,7 @@ describe('config-v2', () => {
       const parsed = DbcliConfigV2Schema.parse({
         ...BASE_V2,
         audit: {
+          strict: false,
           enabled: true,
           rotation: { max_bytes: 5_242_880, max_entries: 500 },
         },
@@ -302,7 +315,7 @@ describe('config-v2', () => {
       expect(() =>
         DbcliConfigV2Schema.parse({
           ...BASE_V2,
-          audit: { enabled: true, rotation: { max_bytes: 0, max_entries: 1000 } },
+          audit: { strict: false, enabled: true, rotation: { max_bytes: 0, max_entries: 1000 } },
         })
       ).toThrow()
     })
@@ -311,7 +324,7 @@ describe('config-v2', () => {
       expect(() =>
         DbcliConfigV2Schema.parse({
           ...BASE_V2,
-          audit: { enabled: true, rotation: { max_bytes: -1, max_entries: 1000 } },
+          audit: { strict: false, enabled: true, rotation: { max_bytes: -1, max_entries: 1000 } },
         })
       ).toThrow()
     })

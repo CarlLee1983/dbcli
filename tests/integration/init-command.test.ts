@@ -103,7 +103,11 @@ describe('Init Command Integration Tests', () => {
         createdAt: '2026-03-25T00:00:00Z',
       },
       blacklist: { tables: [], columns: {} },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      audit: {
+        strict: false,
+        enabled: true,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
     }
 
     // 合併新值
@@ -131,7 +135,11 @@ describe('Init Command Integration Tests', () => {
       schema: {},
       metadata: { version: '1.0' },
       blacklist: { tables: [], columns: {} },
-      audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+      audit: {
+        strict: false,
+        enabled: true,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
     }
 
     const originalCopy = JSON.stringify(original)

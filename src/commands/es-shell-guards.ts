@@ -409,7 +409,9 @@ export function assertNoBlacklistedIndexNamed(args: {
     indexExpressionReaches(name, blacklistTables)
   )
   if (inBody !== undefined) {
-    throw new Error(`${BLACKLIST_REJECTION}${t_vars('shell.es.blacklist_index', { index: inBody })}`)
+    throw new Error(
+      `${BLACKLIST_REJECTION}${t_vars('shell.es.blacklist_index', { index: inBody })}`
+    )
   }
 }
 
@@ -503,7 +505,6 @@ export function assertNoProtectedFieldNamed(
   }
 }
 
-
 /** The body to send: `req.body` with the shell's search size cap injected when it applies. */
 export function capSearchSize(req: EsRequest): unknown {
   // A convenience default, not a control. `{"size": 100000}` is honoured
@@ -546,4 +547,3 @@ export function capSearchSize(req: EsRequest): unknown {
   }
   return body
 }
-

@@ -31,7 +31,7 @@ export function makeTestConfig(overrides: ConfigOverrides = {}): DbcliConfig {
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: [], columns: {} },
-    audit: { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    audit: { strict: false, enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
   }
   return { ...base, ...rest }
 }

@@ -312,7 +312,11 @@ export function redactParams(params: unknown): unknown {
  * 寫進路徑裡的字元可以蓋掉一句「Refused」，讓操作者看到一則假的成功訊息。
  */
 export function escapeControlCharacters(text: string): string {
+  // The control characters are the subject, not an accident: this function
+  // exists to make them visible, so a rule that forbids naming them in a
+  // pattern has nothing to warn about here.
   return text.replace(
+    // eslint-disable-next-line no-control-regex
     /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g,
     (char) => {
       const named: Record<string, string> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' }

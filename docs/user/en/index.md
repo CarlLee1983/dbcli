@@ -1221,7 +1221,7 @@ matched the keys a document came back under, and in MongoDB the request chooses
 those keys: `[{"$project":{"leak":"$password"}}]` returned the value under
 `leak`, and `[{"$group":{"_id":"$password"}}]` returned it under `_id`, which
 masking exempts so that document references survive. Both ran at `query-only`
-before 3.0.2. So `password` appearing anywhere in a pipeline, filter or update —
+before 4.0.0. So `password` appearing anywhere in a pipeline, filter or update —
 as a field path, an object key, or a plain string — is refused with
 `BlacklistRejection`, and masking stays for the ordinary document shape.
 
@@ -1275,7 +1275,7 @@ dbcli delete secrets:api_key         # rejected — globs cover writes, not just
 dbcli list                           # blacklisted keys filtered out
 ```
 
-The globs cover **writes as well as reads**. Before 3.0.2, `insert`, `update`
+The globs cover **writes as well as reads**. Before 4.0.0, `insert`, `update`
 and `delete` compared the key name literally, so a rule written `secrets:*` —
 the spelling above — protected `dbcli query` and let `dbcli delete
 secrets:api_key` through. `SCAN` was the other half: its `MATCH` pattern was

@@ -4,6 +4,7 @@
  */
 
 import crypto from 'node:crypto' // Phase 25 D-51
+import { sideEffectTierForStatement } from '@/utils/engine-hints'
 import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { DEFAULT_TABLE_CELL_LIMIT } from '@/formatters/query-result-formatter'
@@ -630,6 +631,10 @@ async function executeConnectionQuery(
       success: true,
       sql: query,
       target: queryAuditTarget(system, query, options),
+      // 語句的效果，不是命令的能力。`query` 的能力是 readonly，所以少了這個
+      // 欄位，經由 query 執行的每一筆 DML 都以 readonly 入帳——而被閘門拒絕的
+      // DROP 由 `recordGateDecision` 帶著 db-write，兩者剛好顛倒。
+      ...(isSqlSystem(system) && { sideEffectTier: sideEffectTierForStatement(query) }),
       metadata: {
         rows_affected: execution.result.rowCount,
         execution_ms: execution.result.executionTimeMs ?? Math.round(performance.now() - start),
@@ -653,6 +658,9 @@ async function executeConnectionQuery(
         success: false,
         sql: query,
         target: queryAuditTarget(system, query, options),
+        // 被拒絕的寫入仍然是寫入：欄位說的是「這句話會做什麼」，`success`
+        // 說的是「它有沒有發生」。
+        ...(isSqlSystem(system) && { sideEffectTier: sideEffectTierForStatement(query) }),
         error,
         metadata,
       })
@@ -660,6 +668,11 @@ async function executeConnectionQuery(
     }
     throw error
   }
+}
+
+/** SQL 方言的引擎——只有它們的 `query` 參數是 SQL 語句。 */
+function isSqlSystem(system: ConnectionOptions['system']): boolean {
+  return system !== 'mongodb' && system !== 'redis' && system !== 'elasticsearch'
 }
 
 function queryAuditTarget(

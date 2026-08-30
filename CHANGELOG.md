@@ -113,6 +113,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **黑名單條目的前後空白不再讓它變成死設定。** ES 的 index 名與欄位名都不能帶空白，所以 `[" secrets "]` 保證無效，而先前沒有任何提示。
 
+- **audit 的 `target` 不再能由 SQL 註解或字串字面值指定。** 它原本走一條不剝註解、不剝字串的 regex，只取第一個 `FROM|INTO|UPDATE` 之後的識別字，所以 `/* FROM audit_decoy */ DELETE FROM users` 會以 `audit_decoy` 入帳。`target` 正是稽核者事後篩選用的主要欄位——找不到的紀錄與不存在的紀錄，對追查是同一件事。改成掃描：剝掉註解（含 PostgreSQL 的巢狀區塊註解）與字串字面值，保留引號識別字，並只在括號深度 0 比對關鍵字。順帶修好兩個日常誤記：`DELETE FROM public.users` 記成 `public`（schema 名）、`SELECT EXTRACT(MONTH FROM created_at) FROM salaries` 記成 `created_at`（欄位名）。
+
+- **經 `query` 執行的 DML 記成 `db-write` 而非 `readonly`。** `writeAuditEntry` 在沒拿到 `sideEffectTier` 時取命令的能力等級，而 `query` 的能力是 `readonly`。於是 `DELETE`／`UPDATE`／`INSERT`／`CREATE TABLE AS` 全部以 `readonly` 入帳，而被寫入閘門**拒絕**的 `DROP`／`TRUNCATE` 由 `recordGateDecision` 帶著 `db-write`——以 tier 篩選破壞性操作會找到被擋下的那些、漏掉真正發生的那些。「讀」的判定沿用既有的 tier 語意（在 `query-only` 下被允許的就是讀），而不是另外維護一份唯讀型別清單。
+
+- **`blacklist table add` 對 SQL 與 MongoDB 連線拒絕萬用字元條目。** 上一版為了 Elasticsearch 與 Redis 的名稱放寬了字元集，但沒有問「這個寫法對這個引擎有沒有意義」：那兩個引擎的黑名單比對是字面相等，`secret*` 這種條目永遠不會命中，而 CLI 回報成功。錯誤訊息會說出原因，不只是「名稱非法」。
+
 ### Added
 
 - **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。

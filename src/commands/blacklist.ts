@@ -56,6 +56,28 @@ const VALID_COLUMN_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 /**
  * Validate table name format
  */
+/** glob 字元只有在會被當成 glob 執行的引擎上才有意義。 */
+const GLOB_CHARS = /[*?[\]]/
+
+/**
+ * 名稱驗證，但問「這個寫法對這個引擎有沒有意義」。
+ *
+ * `isValidTableName` 在第八輪被放寬到接受 `-`、`.`、`:`、`*`——Elasticsearch 的
+ * index 名與 Redis 的 key glob 需要它們，而原本的 SQL 識別字規則把 ES 使用者
+ * 逼去手編設定檔。但放寬不看連線類型，於是 PostgreSQL 或 MongoDB 的使用者也能
+ * 加入 `secret*`，而那兩個引擎的黑名單比對是字面相等（`blacklist-manager.ts`
+ * 的 `Set.has`）——條目永遠不會命中，CLI 卻回報成功。
+ *
+ * 使用者以為設了、`blacklist list` 也說設了、實際零保護：這正是第八輪在修的
+ * 那一型缺陷，由第八輪的修補本身製造出來。
+ */
+export function isValidTableNameForSystem(name: string, system: string | undefined): boolean {
+  if (!isValidTableName(name)) return false
+  const literalMatching =
+    system === 'postgresql' || system === 'mysql' || system === 'mariadb' || system === 'mongodb'
+  return !(literalMatching && GLOB_CHARS.test(name))
+}
+
 export function isValidTableName(name: string): boolean {
   return VALID_TABLE_NAME.test(name)
 }
@@ -171,11 +193,20 @@ async function persistBlacklist(
  * Throws Error on validation failure (caller handles exit)
  */
 export async function blacklistTableAdd(tableName: string, configPath: string): Promise<void> {
-  if (!isValidTableName(tableName)) {
+  const config = await configModule.read(configPath)
+  const system = (config as { connection?: { system?: string } }).connection?.system
+  if (!isValidTableNameForSystem(tableName, system)) {
+    // 訊息要說得出為什麼：一個在別的引擎上合法、在這裡無效的寫法，只回
+    // 「名稱非法」會讓人以為是打錯字。
+    if (isValidTableName(tableName)) {
+      throw new Error(
+        `Refused: '${tableName}' contains wildcard characters, which are matched literally on ` +
+          `${system} — the entry would never match anything. Write the exact name.`
+      )
+    }
     throw new Error(t_vars('errors.invalid_table_name', { table: tableName }))
   }
 
-  const config = await configModule.read(configPath)
   const blacklist = getOrInitBlacklist(config)
 
   if (blacklist.tables.includes(tableName)) {

@@ -6,7 +6,6 @@ import { indexExpressionReaches, normalizeEsPath } from '@/utils/es-index-target
 import {
   classifyElasticsearchRequest,
   enforceElasticsearchPermission,
-  routedPathname,
 } from '@/core/permission/elasticsearch'
 import type { Permission } from '@/types'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
@@ -109,6 +108,25 @@ interface EsRequestCapable {
   request<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
+/**
+ * The request target as the transport will send it, or `null` when it cannot be
+ * parsed at all.
+ *
+ * Path *and* query together. Byte-identity against `canonical` is what keeps
+ * every check in this file reading the same string Elasticsearch will, and it
+ * has to cover the query string because that is where a request body can hide.
+ */
+function parseRequestTarget(rawPath: string): { url: URL; canonical: string } | null {
+  try {
+    const url = new URL(rawPath, ES_PATH_PARSE_BASE)
+    return { url, canonical: `${url.pathname}${url.search}` }
+  } catch {
+    return null
+  }
+}
+
+const ES_PATH_PARSE_BASE = 'http://dbcli.invalid'
+
 const ES_SHELL_SIZE_CAP = 1000
 
 /**
@@ -178,12 +196,21 @@ export async function runEsRequest(
   // `/secrets/_search`, and `/_cat/../secrets/_search` resolves to
   // `/secrets/_search`. Checking the raw text answers a question about a
   // request the server will never see.
-  const [pathOnly = req.path, queryString = ''] = req.path.split('?')
-  const query = new URLSearchParams(queryString)
+  // Parsed once, by the parser the request will go through. `req.path.split('?')`
+  // was here, and `String.split` splits at *every* `?` while the destructuring
+  // took only the second element — so everything after a second `?` vanished
+  // from the query these checks read, while the adapter was handed the path
+  // whole. `?filter_path=x?&source=<body>` therefore hid a smuggled request body
+  // from every check that exists to find one.
+  //
+  // This is round three's lesson one field over: the path stopped being
+  // approximated and the query string did not.
+  const target = parseRequestTarget(req.path)
+  const query = target?.url.searchParams ?? new URLSearchParams()
   // `normalizeEsPath` decodes, which is right for reading an index *name* and
   // wrong for deciding where a request routes. The classifier answers the
   // second question with the URL parser; this answers the first.
-  const routedPath = normalizeEsPath(pathOnly)
+  const routedPath = normalizeEsPath(target?.url.pathname ?? req.path)
   const index = extractIndexFromPath(routedPath)
 
   // `_bulk` is classified from its NDJSON body, which arrives here already
@@ -244,11 +271,12 @@ export async function runEsRequest(
     // defect this removes. The canonical spelling is handed back so an operator
     // who wrote a legitimate path with a space or a non-ASCII document id can
     // copy the answer rather than guess at an encoding.
-    const canonicalPath = routedPathname(pathOnly)
-    if (canonicalPath !== pathOnly) {
+    if (target === null || target.canonical !== req.path) {
       throw new Error(
-        `Refused: '${pathOnly}' is not the path the server would receive. ` +
-          `Write it as '${canonicalPath}'.`
+        `Refused: '${req.path}' is not the request the server would receive. ` +
+          (target === null
+            ? 'It cannot be parsed as a path.'
+            : `Write it as '${target.canonical}'.`)
       )
     }
 
@@ -341,7 +369,7 @@ export async function runEsRequest(
         value.split(/[\s,:()"'[\]{}]+/).filter((term) => term.length > 0)
       )
       const named = [...findStrings(req.body), ...queryTerms].find((text) =>
-        protectedFields.has(text)
+        namesProtectedField(text, protectedFields)
       )
       if (named !== undefined) {
         throw new Error(
@@ -408,13 +436,52 @@ function findStrings(node: unknown): string[] {
 }
 
 /** Remove every occurrence of a protected field name, at any depth. */
+/**
+ * Whether a term names a protected field anywhere in a dotted path.
+ *
+ * Exact matching was not enough in either direction. `password.keyword` is the
+ * multi-field the standard dynamic mapping creates for every `text` field, so
+ * `?docvalue_fields=password.keyword` returned the value in full while the
+ * plain spelling was refused; and `params._source.password`, which is how a
+ * Painless script in `script_fields` or `runtime_mappings` reads a field, puts
+ * the protected name at the *end* of a dotted term, where a prefix rule would
+ * miss it.
+ *
+ * So every component counts. `password_hash.keyword` is untouched — it shares
+ * no component with `password` — and the one over-refusal this admits, an
+ * unrelated field called `x.password`, errs toward withholding.
+ *
+ * **Ceilings, which no term rule can close.** A mapping-level `alias` field
+ * naming the protected field under a different word is server-side knowledge,
+ * the same class as alias-to-index resolution. A script that assembles the name
+ * (`doc['pass' + 'word']`) defeats any literal scan. And a wildcard field
+ * expression is expanded after the request leaves: `?q=pass*:hunter*` is a
+ * match oracle over a protected column, because hit counts answer the question
+ * without the value ever appearing in a response key. Wildcards that *return*
+ * values are still caught, but by `redactFields` on the way back rather than
+ * here — that backstop is load-bearing, not incidental. Chasing the oracle with
+ * glob matching would mean guessing Elasticsearch's wildcard semantics, which
+ * is the approximate-the-parser mistake in a third field.
+ */
+function namesProtectedField(term: string, protectedFields: ReadonlySet<string>): boolean {
+  if (protectedFields.has(term)) return true
+  if (!term.includes('.')) return false
+  return term.split('.').some((component) => protectedFields.has(component))
+}
+
 function redactFields(node: unknown, fields: Set<string>): unknown {
   if (Array.isArray(node)) return node.map((item) => redactFields(item, fields))
   if (node === null || typeof node !== 'object') return node
 
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    if (fields.has(key)) continue
+    // Same rule as the request-side check. A dotted response key is a field
+    // path — a `fields`/`docvalue_fields` entry or an aggregation name — so
+    // there is no shape where `password.<something>` is unrelated data.
+    // `fields[password.keyword]` survived an exact-key match. This is also the
+    // backstop for a wildcard field expression, which expands server-side and
+    // comes back under the real field name.
+    if (namesProtectedField(key, fields)) continue
     out[key] = redactFields(value, fields)
   }
   return out

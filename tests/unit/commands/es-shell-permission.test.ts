@@ -197,7 +197,7 @@ describe('the blacklist checks are scoped to a configured blacklist, and the tie
     const target = captured()
     await expect(
       run({ method: 'GET', path: '/_cat/../orders/_search' }, 'query-only', target, ['secrets'])
-    ).rejects.toThrow(/not the path the server would receive/)
+    ).rejects.toThrow(/not the request the server would receive/)
     expect(target.calls).toBe(0)
   })
 
@@ -421,7 +421,7 @@ describe('the two bypasses found in review stay closed', () => {
   ])('%s is refused: the server would not receive that path', async (path) => {
     const target = captured()
     await expect(run({ method: 'POST', path }, 'query-only', target)).rejects.toThrow(
-      /not the path the server would receive/
+      /not the request the server would receive/
     )
     expect(target.calls).toBe(0)
   })
@@ -431,7 +431,7 @@ describe('the two bypasses found in review stay closed', () => {
     async (path) => {
       const target = captured()
       await expect(run({ method: 'POST', path }, 'admin', target)).rejects.toThrow(
-        /not the path the server would receive/
+        /not the request the server would receive/
       )
       expect(target.calls).toBe(0)
     }
@@ -453,13 +453,138 @@ describe('the two bypasses found in review stay closed', () => {
       run(
         {
           method: 'GET',
-          path: '/public/_search?source={"sort":[{"password":"asc"}]}&source_content_type=application/json',
+          path: '/public/_search?source=%7B%22sort%22%3A%5B%7B%22password%22%3A%22asc%22%7D%5D%7D&source_content_type=application/json',
         },
         'query-only',
         target
       )
     ).rejects.toThrow(/`source` in the query string/)
     expect(target.calls).toBe(0)
+  })
+
+  // The unencoded spelling never reaches the `source` check: a `"` is not
+  // byte-identical to what the parser produces, so it is refused one step
+  // earlier. Both spellings are refused; only the reason differs.
+  test('an unencoded smuggled body is refused by byte-identity first', async () => {
+    const target = captured()
+    await expect(
+      run(
+        { method: 'GET', path: '/public/_search?source={"sort":[{"password":"asc"}]}' },
+        'query-only',
+        target
+      )
+    ).rejects.toThrow(/not the request the server would receive/)
+    expect(target.calls).toBe(0)
+  })
+
+  // CRITICAL-4: `String.split('?')` splits at every `?` and the destructuring
+  // took only the second element, so everything after a second `?` vanished
+  // from the query these checks read while the adapter was handed the path
+  // whole. Verified executed before the fix.
+  test.each([
+    ['/orders/_search?filter_path=x?&source=%7B%22a%22%3A1%7D'],
+    ['/orders/_search?a=1?b=2&source=%7B%22a%22%3A1%7D'],
+  ])('a second question mark cannot hide a smuggled body: %s', async (path) => {
+    const target = captured()
+    await expect(run({ method: 'GET', path }, 'query-only', target)).rejects.toThrow(
+      /`source` in the query string/
+    )
+    expect(target.calls).toBe(0)
+  })
+
+  test.each([
+    ['/orders/_search?filter_path=x?&q=password:secret'],
+    ['/orders/_search?filter_path=x?&sort=password:asc'],
+  ])('a second question mark cannot hide a protected field: %s', async (path) => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        { method: 'GET', path },
+        fakeAdapter(target) as never,
+        [],
+        { orders: ['password'] },
+        { permission: 'query-only' }
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+    expect(target.calls).toBe(0)
+  })
+
+  // A dotted subfield is a path into the same field. `password.keyword` is the
+  // multi-field the standard dynamic mapping creates for every `text` field, so
+  // exact matching let it through with no unusual configuration.
+  test.each([
+    ['/orders/_search?docvalue_fields=password.keyword'],
+    ['/orders/_search?stored_fields=password.keyword'],
+    ['/orders/_search?sort=password.keyword:asc'],
+  ])('a subfield of a protected field is refused: %s', async (path) => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        { method: 'GET', path },
+        fakeAdapter(target) as never,
+        [],
+        { orders: ['password'] },
+        { permission: 'query-only' }
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+    expect(target.calls).toBe(0)
+  })
+
+  // A Painless script reads a field as `params._source.password`, putting the
+  // protected name at the end of a dotted term where a prefix rule misses it.
+  test.each([
+    [
+      'a script field reading _source',
+      { script_fields: { leak: { script: 'params._source.password' } } },
+    ],
+    [
+      'a runtime field under an innocuous name',
+      { runtime_mappings: { x: { type: 'keyword', script: "emit(doc['password'].value)" } } },
+    ],
+  ])('%s is refused', async (_name, body) => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        { method: 'POST', path: '/orders/_search', body },
+        fakeAdapter(target) as never,
+        [],
+        { orders: ['password'] },
+        { permission: 'query-only' }
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+    expect(target.calls).toBe(0)
+  })
+
+  test('a subfield named in the body is refused too', async () => {
+    const target = captured()
+    await expect(
+      runEsRequest(
+        {
+          method: 'POST',
+          path: '/orders/_search',
+          body: { aggs: { leak: { terms: { field: 'password.keyword' } } } },
+        },
+        fakeAdapter(target) as never,
+        [],
+        { orders: ['password'] },
+        { permission: 'query-only' }
+      )
+    ).rejects.toThrow(/blacklist-protected/)
+    expect(target.calls).toBe(0)
+  })
+
+  // An unrelated field that merely starts with the same letters is not a
+  // subfield and must still be allowed.
+  test('a distinct field sharing a prefix is not refused', async () => {
+    const target = captured()
+    await runEsRequest(
+      { method: 'GET', path: '/orders/_search?docvalue_fields=password_hash' },
+      fakeAdapter(target) as never,
+      [],
+      { orders: ['password'] },
+      { permission: 'query-only' }
+    )
+    expect(target.calls).toBe(1)
   })
 
   // The parameter is matched as an exact key. `_source`, `_source_includes`

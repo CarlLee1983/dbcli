@@ -76,7 +76,7 @@ for (const path of unscopedDocumentPaths) {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   })
 }
@@ -105,7 +105,7 @@ test('blocks a comma list, a wildcard and an encoded wildcard', async () => {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   }
 })
@@ -133,7 +133,7 @@ for (const path of encodedPaths) {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   })
 }
@@ -157,7 +157,7 @@ for (const path of launderedPaths) {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   })
 }
@@ -177,7 +177,7 @@ for (const [path, body] of bodiesNamingSecrets) {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'POST', path, body }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   })
 }
@@ -236,7 +236,7 @@ for (const body of requestsNamingAProtectedField) {
       run({ method: 'POST', path: '/users/_search', body }, fakeAdapter(captured) as never, [], {
         users: ['password'],
       })
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   })
 }
@@ -263,7 +263,7 @@ test('refuses an array-valued index naming a blacklisted index', async () => {
       run({ method: 'POST', path: '/public/_search', body }, fakeAdapter(captured) as never, [
         'secrets',
       ])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   }
 })
@@ -273,7 +273,7 @@ test('refuses a data-stream backing index and a rollover index', async () => {
     const captured: Record<string, unknown> = {}
     await expect(
       run({ method: 'GET', path }, fakeAdapter(captured) as never, ['secrets'])
-    ).rejects.toThrow(/blacklist|not the path the server would receive/i)
+    ).rejects.toThrow(/blacklist|not the request the server would receive/i)
     expect(captured.path).toBeUndefined()
   }
 })

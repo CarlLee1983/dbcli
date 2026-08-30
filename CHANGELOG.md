@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`source` query 參數一律拒絕。** Elasticsearch 接受 `source=<json>&source_content_type=...` 取代 request body，而這條路徑上每個 body 側檢查都讀 `req.body` —— 被保護的欄位名稱寫在偷渡的 body 裡時，那個為此存在的檢查完全看不到。參數以精確鍵名比對，`_source`、`_source_includes`、`_source_excludes` 不受影響。
 
-- **黑名單欄位名稱在 query string 裡也會被拒絕**，因為 URI search 形式直接在參數裡指名欄位（`?q=password:*`、`?sort=password:asc`、`?docvalue_fields=`），而值會以請求自選的 key 回傳。
+- **黑名單欄位名稱在 query string 裡也會被拒絕**，因為 URI search 形式直接在參數裡指名欄位（`?q=password:*`、`?sort=password:asc`、`?docvalue_fields=`），而值會以請求自選的 key 回傳。比對改為看**點分元件**而非整串相等：`password.keyword` 是標準動態 mapping 對每個 `text` 欄位預設產生的 multi-field，而 `params._source.password` 是 Painless script 讀欄位的寫法——受保護的名稱可能落在點分路徑的任一端。回應遮罩套用同一條規則。
+
+- **path 與 query 都從同一個 `URL` 解析，不再用 `String.split('?')`。** `split` 會在每一個 `?` 切開，而解構只取第二個元素，所以第二個 `?` 之後的一切都從這些檢查讀到的 query 中消失，adapter 卻拿到完整路徑：`?filter_path=x?&source=<body>` 因此對每一個為了找出偷渡 body 而存在的檢查隱形。逐位元組相等也隨之擴及整個 request target，不再只有路徑。
 
 - **引號字串形式的 request body 一律拒絕。** JSON 字串字面值是合法的 body，卻能挾帶 NDJSON 通過每一個只走物件與陣列的檢查 —— 一個 bulk delete 曾因此從無害的路徑名稱抵達黑名單索引。
 

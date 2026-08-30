@@ -116,13 +116,20 @@ two-segment path; a document id is opaque and is never matched against anything.
 
 ## Consequences
 
-- The shell refuses any path that is not **byte-identical** to what
-  `new URL(...).pathname` produces. No resolution, no repair: any softening is a
+- The shell refuses any request target — path **and query string** — that is not
+  **byte-identical** to what `new URL(...)` produces. No resolution, no repair: any softening is a
   second path function, which is the class of defect being removed. The refusal
   hands back the canonical spelling, because the rule legitimately rejects a
   document id containing a space or a non-ASCII character and an operator should
   be able to copy the answer rather than guess an encoding. The adapter builds
   its URL with the same parser, so what was verified is what is sent.
+- Path and query are parsed from that one `URL`, never from `String.split('?')`.
+  `split` splits at every `?` and the destructuring took only the second
+  element, so everything after a second `?` vanished from the query these checks
+  read while the adapter was handed the path whole — `?filter_path=x?&source=…`
+  hid a smuggled body from every check that exists to find one. The path stopped
+  being approximated in round three and the query string did not; this is the
+  same defect one field over.
 - The shell refuses a `source` query parameter. Elasticsearch accepts
   `source=<json>&source_content_type=...` in place of a request body, and every
   body-side check reads `req.body` — so a protected field named in a smuggled
@@ -134,6 +141,22 @@ two-segment path; a document id is opaque and is never matched against anything.
 - The protected-field check also reads query-parameter values, because the
   URI-search form names fields directly (`?q=password:*`, `?sort=password:asc`,
   `?docvalue_fields=`) and returns their values under a key the request chose.
+  A term matches when any **dot component** of it is a protected field, not only
+  when it equals one: `password.keyword` is the multi-field every `text` field
+  gets by default, and `params._source.password` is how a Painless script reads
+  one, so a protected name can sit at either end of a dotted path.
+- **Three stated ceilings.** A mapping-level `alias` naming a protected field
+  under a different word is server-side knowledge, the same class as
+  alias-to-index resolution. A script that assembles the name
+  (`doc['pass' + 'word']`) defeats any literal scan. And a wildcard field
+  expression expands after the request leaves, so `?q=pass*:hunter*` is a match
+  oracle over a protected column — hit counts answer the question without the
+  value appearing anywhere. Wildcards that *return* values are still caught, but
+  by response redaction rather than by the request scan, which makes that
+  backstop load-bearing rather than incidental. None of the three is closed by
+  matching harder, and chasing the oracle with glob matching would mean guessing
+  Elasticsearch's wildcard semantics — the approximate-the-parser mistake in a
+  third field.
 - The byte-identity refusal is **unconditional**. Its ancestor was a blacklist
   check gated on a blacklist being configured, which left the classifier reading
   a string the server would not receive for the default configuration. It is now
@@ -158,6 +181,8 @@ two-segment path; a document id is opaque and is never matched against anything.
 method alone, or matches any endpoint token with `includes()` rather than as a
 positioned segment, or derives its path from anything but `new URL`; or the
 byte-identity refusal in `src/commands/es-shell.ts` becomes conditional on any
-configuration, or starts repairing a path instead of refusing it; or
+configuration, stops covering the query string, or starts repairing a request
+instead of refusing it; or any check in that file reads a path or query derived
+from `String.split` rather than from the parsed `URL`; or
 `normalizeEsPath` from `src/utils/es-index-target.ts` is used again to decide
 where a request routes; or an unrecognised request stops classifying as `DROP`.

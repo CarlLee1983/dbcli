@@ -106,10 +106,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
   const redisInner = isRedis
     ? (AdapterFactory.createRedisAdapter(
-        connectionOpts,
-        config.blacklist?.tables ?? [],
-        (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis
-          ?.mask ?? []
+        config
       ) as unknown as RedisAdapter)
     : null
   const adapter = isMongoDB

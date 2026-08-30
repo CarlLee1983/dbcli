@@ -10,6 +10,7 @@ import { ConnectionError } from './types'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { rewriteArgs, truncateResult } from './redis/size-guard'
 import { checkKeyArgs, globToRegex } from './redis/blacklist-enforcer'
+import { filterReturnedKeyNames, returnsKeyNames } from './redis/returned-key-names'
 import { BlacklistRejection } from './redis/types'
 import { getCommandSpec } from './redis/command-metadata'
 import { maskRedisRows } from './redis/value-masker'
@@ -261,7 +262,11 @@ export class RedisAdapter implements QueryableAdapter {
     const spec = getCommandSpec(head)
     if (spec?.sizeGuard.kind === 'truncate') {
       const client = this.requireClient()
-      const rawReply = await client.send(head, rw.rewritten)
+      const rawReply = filterReturnedKeyNames(
+        head,
+        await client.send(head, rw.rewritten),
+        this.blacklistRules
+      )
       const tr = truncateResult(head, rawReply, { noLimit })
       if (tr.warning) warnings.push(tr.warning)
       const rows = wrapReply<T>(head, tr.value)
@@ -269,12 +274,52 @@ export class RedisAdapter implements QueryableAdapter {
       return finishResult<T>(masked as T[], warnings)
     }
 
-    const rows = await this.dispatchCommand<T>(head, rw.rewritten)
+    // `SCAN` and `KEYS` answer with key *names*, so the reply is filtered
+    // before it is wrapped — the blacklist protects the name as well as the
+    // value, and a bare `SCAN 0` is how you enumerate a keyspace without naming
+    // anything a request-side check could match. Filtered rather than refused:
+    // see `returned-key-names.ts`.
+    const rows = returnsKeyNames(head)
+      ? wrapReply<T>(
+          head,
+          filterReturnedKeyNames(
+            head,
+            await this.requireClient().send(head, rw.rewritten),
+            this.blacklistRules
+          )
+        )
+      : await this.dispatchCommand<T>(head, rw.rewritten)
     const masked = maskRedisRows(head, rest, rows as Record<string, unknown>[], this.maskRules)
     return finishResult<T>(masked as T[], warnings)
   }
 
+  /**
+   * Refuse a key the blacklist reaches, before anything is sent.
+   *
+   * Mounted here, at the adapter, rather than in `insert` / `update` / `delete`
+   * one at a time. Those three used to reach the client with no check at all —
+   * their commands went through `BlacklistValidator`, which compares table
+   * names by literal equality and knows nothing about the globs the Redis
+   * documentation teaches — so `blacklist table add 'secrets:*'` protected a
+   * read and not a write.
+   *
+   * `execute` has its own `checkKeyArgs` on the parsed command, which is a
+   * different question (which arguments of this command are keys). This answers
+   * the simpler one the data-mutation API asks: may this key be touched.
+   */
+  private assertKeyPermitted(operation: string, keyName: string): void {
+    const blk = checkKeyArgs('GET', [keyName], this.blacklistRules)
+    if (blk.ok) return
+    throw new BlacklistRejection(
+      `BlacklistRejection: ${operation} on key '${keyName}' rejected\n  matched blacklist pattern: ${blk.matchedPattern}`,
+      operation,
+      blk.matchedKey ?? null,
+      blk.matchedPattern!
+    )
+  }
+
   async insert(keyName: string, data: Record<string, unknown>): Promise<ExecutionResult<unknown>> {
+    this.assertKeyPermitted('INSERT', keyName)
     const client = this.requireClient()
     const type = data.__type ?? 'string'
     if (type === 'string') {
@@ -321,6 +366,7 @@ export class RedisAdapter implements QueryableAdapter {
     _filter: Record<string, unknown>,
     update: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
+    this.assertKeyPermitted('UPDATE', keyName)
     const client = this.requireClient()
     const fields = update.fields as Record<string, string> | undefined
     if (fields) {
@@ -358,6 +404,7 @@ export class RedisAdapter implements QueryableAdapter {
     keyName: string,
     filter: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
+    this.assertKeyPermitted('DELETE', keyName)
     const client = this.requireClient()
     const field = filter.field as string | undefined
     if (field) {

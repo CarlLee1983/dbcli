@@ -42,9 +42,26 @@ export interface CheckResult {
 export function checkKeyArgs(command: string, args: string[], rules: string[]): CheckResult {
   if (rules.length === 0) return { ok: true }
   const spec = getCommandSpec(command)
-  if (!spec) return { ok: true }
+  if (!spec) {
+    // Fail-closed. This used to `return { ok: true }`, and the metadata table
+    // was maintained separately from the permission map, so every command the
+    // one allowed and the other had never heard of reached the server with its
+    // keys unchecked — `LPOP secrets:list` destroys a blacklisted key and hands
+    // back its value at `read-write`, `XRANGE secrets:stream - +` reads one at
+    // `query-only`.
+    //
+    // Reachable only with a blacklist configured (the empty-rules case returned
+    // above), so a user who protects nothing is not refused anything. What it
+    // costs a user who does: a command dbcli has no spec for is refused, and the
+    // refusal says so. `command-table-parity.test.ts` keeps that set empty.
+    return {
+      ok: false,
+      matchedKey: null,
+      matchedPattern: `${command.toUpperCase()} (no key-arity spec; refused because a blacklist is configured)`,
+    }
+  }
 
-  const keyIndexes = expandKeyArity(spec.keyArity, args.length)
+  const keyIndexes = expandKeyArity(spec.keyArity, args, args.length)
   for (const idx of keyIndexes) {
     const key = args[idx]
     if (key === undefined) continue
@@ -55,23 +72,34 @@ export function checkKeyArgs(command: string, args: string[], rules: string[]): 
     }
   }
 
-  if (spec.keyArity.kind === 'pattern') {
-    const userPat = args[spec.keyArity.argIndex]
-    if (userPat !== undefined) {
-      for (const pat of rules) {
-        if (patternsOverlap(userPat, pat)) {
-          return { ok: false, matchedKey: null, matchedPattern: pat }
-        }
+  const userPat = userPattern(spec.keyArity, args)
+  if (userPat !== undefined) {
+    for (const pat of rules) {
+      if (patternsOverlap(userPat, pat)) {
+        return { ok: false, matchedKey: null, matchedPattern: pat }
       }
     }
   }
   return { ok: true }
 }
 
-function expandKeyArity(arity: KeyArity, argCount: number): number[] {
+/** The glob the *user* wrote, for the commands that take one. */
+function userPattern(arity: KeyArity, args: string[]): string | undefined {
+  if (arity.kind === 'pattern') return args[arity.argIndex]
+  if (arity.kind === 'pattern-after-token') {
+    // Case-insensitive, because Redis reads the option name that way — and an
+    // uppercase-only match would have made `scan 0 match secrets:*` the bypass.
+    const marker = args.findIndex((arg) => arg.toUpperCase() === arity.token)
+    return marker === -1 ? undefined : args[marker + 1]
+  }
+  return undefined
+}
+
+function expandKeyArity(arity: KeyArity, args: string[], argCount: number): number[] {
   switch (arity.kind) {
     case 'no-key':
     case 'pattern':
+    case 'pattern-after-token':
       return []
     case 'single':
       return [arity.argIndex]
@@ -80,6 +108,13 @@ function expandKeyArity(arity: KeyArity, argCount: number): number[] {
     case 'multi-variable': {
       const indices: number[] = []
       for (let i = arity.startIndex; i < argCount; i += arity.step) indices.push(i)
+      return indices
+    }
+    case 'after-token': {
+      const marker = args.findIndex((arg) => arg.toUpperCase() === arity.token)
+      if (marker === -1) return []
+      const indices: number[] = []
+      for (let i = marker + 1; i < argCount; i += 1) indices.push(i)
       return indices
     }
   }

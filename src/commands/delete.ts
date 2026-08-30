@@ -196,8 +196,7 @@ export async function deleteCommand(
       }
 
       const adapter = AdapterFactory.createRedisAdapter(
-        config.connection as ConnectionOptions,
-        config.blacklist?.tables ?? []
+        config
       )
       await adapter.connect()
       try {

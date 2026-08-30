@@ -1,17 +1,17 @@
 import { test, expect } from 'bun:test'
-import { AdapterFactory } from '@/adapters'
-import type { ConnectionOptions } from '@/adapters/types'
 import { DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
 
-test('createRedisAdapter accepts and forwards mask rules', () => {
-  const opts = { system: 'redis', host: 'localhost', port: 6379 } as unknown as ConnectionOptions
-  const adapter = AdapterFactory.createRedisAdapter(
-    opts,
-    [],
-    [{ keyPattern: 'user:*', fields: ['pw'] }]
-  )
-  expect(typeof (adapter as unknown as { setMaskRules: unknown }).setMaskRules).toBe('function')
-})
+/**
+ * This file used to open with an assertion that `createRedisAdapter` returns an
+ * object with a `setMaskRules` method. That passed for the whole time
+ * `dbcli query` was returning plaintext for a masked key: the factory could
+ * forward rules, and six of eight call sites never gave it any.
+ *
+ * The behavioural assertion now lives in
+ * `tests/unit/adapters/redis-mask-from-config.test.ts`, and the omission it
+ * covered is unrepresentable since the factory started taking the config. What
+ * stays here is the other half — that the schemas keep `redis.mask` at all.
+ */
 
 test('DbcliConfigSchema preserves redis.mask block', () => {
   const parsed = DbcliConfigSchema.parse({

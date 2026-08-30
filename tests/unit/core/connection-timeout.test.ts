@@ -156,7 +156,7 @@ describe('connection timeout', () => {
     test('全域覆寫會傳進 Redis adapter', () => {
       setGlobalConnectionTimeout(45000)
       const options = { ...base, system: 'redis' as const, port: 6379 }
-      const adapter = AdapterFactory.createRedisAdapter(options)
+      const adapter = AdapterFactory.createRedisAdapter({ connection: options })
       expect((adapter as unknown as { options: { timeout?: number } }).options.timeout).toBe(45000)
     })
 

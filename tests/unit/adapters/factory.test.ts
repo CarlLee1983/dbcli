@@ -26,10 +26,10 @@ const validOptions: ConnectionOptions = {
 }
 
 test('factory injects blacklist rules into RedisAdapter', () => {
-  const adapter = AdapterFactory.createRedisAdapter(
-    { system: 'redis', host: 'h', port: 6379, user: '', password: '', database: '0' },
-    ['secrets:*']
-  )
+  const adapter = AdapterFactory.createRedisAdapter({
+    connection: { system: 'redis', host: 'h', port: 6379, user: '', password: '', database: '0' },
+    blacklist: { tables: ['secrets:*'] },
+  })
   expect((adapter as unknown as { blacklistRules: string[] }).blacklistRules).toEqual(['secrets:*'])
 })
 

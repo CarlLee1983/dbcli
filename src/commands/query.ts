@@ -897,8 +897,7 @@ async function redisQueryBranch(
   const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
 
   const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions,
-    config.blacklist?.tables ?? []
+    config
   )
   let executionError: unknown
   try {

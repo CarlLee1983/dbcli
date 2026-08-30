@@ -200,9 +200,7 @@ async function redisExportBranch(
   enforceRedisPermission(command, config.permission)
 
   const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions,
-    config.blacklist?.tables ?? [],
-    (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis?.mask ?? []
+    config
   )
   await redisAdapter.connect()
   let formatted: string

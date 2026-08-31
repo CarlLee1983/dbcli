@@ -126,9 +126,42 @@ blacklist 走 tokenizer（`query-executor.ts:133`），audit 走單一名稱推�
 return true`。也就是在 shell 打的 SELECT 與 tier-one 的 UPDATE／DELETE／INSERT
 完全沒有稽核列。
 
-**注意**：這是純讀碼結論，未端到端跑過互動 shell。ES shell 這側已經每個請求
-兩列（attempt / outcome），SQL shell 這側是這個狀態——落差很大，值得先端到端
-確認再動手。
+**已端到端驗證（2026-08-31，本機 MariaDB 10.11，`read-write` 連線，每次先清空
+audit）。結論成立，而且比讀碼看到的更嚴重。**
+
+| 路徑 | 執行結果 | 稽核列 |
+| --- | --- | --- |
+| `dbcli query "SELECT …"` | 回 2 列 | 1 |
+| shell `SELECT …` | 回 2 列 | **0** |
+| shell `UPDATE … WHERE id=2` | **實際改動了資料** | **0** |
+| shell `DELETE FROM …`（無 WHERE） | 被權限擋下 | **0** |
+| shell `UPDATE …`（無 WHERE） | 被寫入閘門拒絕 | 1 |
+
+一次真正生效的資料修改走完全程、改掉了資料，稽核裡沒有任何一列。
+
+**讀碼沒看出來的兩件事：**
+
+1. **tier-two 的覆蓋本身有缺口。** 無 WHERE 的 `DELETE` 在 `read-write` 下由
+   `repl-engine.ts` 的權限檢查擋下，發生在 `createShellWriteGate` 之前，所以
+   連唯一會寫的那種決策列也沒有。tier-two「有覆蓋」只在「權限放行、閘門拒絕」
+   這一種組合下成立。
+
+2. **拒絕訊息說要求已被滿足。**（已修，見下）
+
+### 11b. [已修] shell 的權限拒絕訊息寫死了 `required`
+
+`repl-engine.ts` 的 SQL 分支把 `required` 算成
+`classification.type === 'UNKNOWN' ? 'admin' : 'read-write'`——一個猜測，不是
+`checkPermission` 實際判定的等級。於是 `read-write` 使用者刪整張表會讀到
+`Permission denied. Required: read-write (current: read-write)`：一則宣稱自己
+的要求已被滿足的拒絕。實際需要的是 `data-admin`（`TIER_GRANTS`）。
+
+`permission-guard.ts` 的 `minimumPermissionFor` 註解記載這一類錯誤已在其他
+呼叫端修過（「Refusals used to name whichever tier sat one step above the one
+refusing」），shell 的 SQL 這處是漏掉的一站。同檔案的 Redis 分支
+（`checkRedisPermission`）本來就是對的，用 `cls.requiredPermission`。
+
+改為 `permResult.requiredPermission ?? 'admin'`。
 
 ### 12. `redactSql` 的界線沒寫下來（非缺陷）
 

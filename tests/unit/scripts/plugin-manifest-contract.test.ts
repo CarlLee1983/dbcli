@@ -63,6 +63,20 @@ function patchJson(dir: string, path: string, mutate: (value: Record<string, unk
   writeFileSync(join(dir, path), `${JSON.stringify(value, null, 2)}\n`)
 }
 
+/**
+ * A version, and a major, that the repository is guaranteed not to be on.
+ * Writing today's numbers in as the "drifted" value is how these two tests
+ * silently stopped testing anything the moment the package reached them.
+ */
+const PACKAGE_MAJOR = Number(
+  (
+    JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version: string }
+  ).version.split('.')[0]
+)
+/** Same major, so SECURITY.md stays valid and only the manifest check can fire. */
+const OTHER_VERSION = `${PACKAGE_MAJOR}.999.0`
+const OTHER_MAJOR = PACKAGE_MAJOR + 1
+
 afterEach(() => {
   for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
@@ -89,9 +103,12 @@ describe('plugin manifest drift guard', () => {
   test('fails when package.json moves and the manifests do not', () => {
     const dir = scratchRepo()
     patchJson(dir, 'package.json', (value) => {
-      value.version = '4.0.0'
+      value.version = OTHER_VERSION
     })
-    expect(runCheck(dir).code).toBe(1)
+    const { code, output } = runCheck(dir)
+    expect(code).toBe(1)
+    expect(output).toContain(OTHER_VERSION)
+    expect(output).toContain(MANIFESTS[0])
   })
 
   test('--write realigns the versions and the check then passes', () => {
@@ -142,10 +159,10 @@ describe('plugin manifest drift guard', () => {
 
   test('fails when SECURITY.md supports a major the package has left behind', () => {
     const dir = scratchRepo()
-    const security = readFileSync(join(dir, 'SECURITY.md'), 'utf8').replace(
-      '| **3.x** | :white_check_mark:',
-      '| **1.x** | :white_check_mark:'
-    )
+    const current = readFileSync(join(dir, 'SECURITY.md'), 'utf8')
+    const supported = new RegExp(`\\| \\*\\*${PACKAGE_MAJOR}\\.x\\*\\* \\| :white_check_mark:`)
+    expect(current).toMatch(supported)
+    const security = current.replace(supported, `| **${OTHER_MAJOR}.x** | :white_check_mark:`)
     writeFileSync(join(dir, 'SECURITY.md'), security)
     const { code, output } = runCheck(dir)
     expect(code).toBe(1)

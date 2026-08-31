@@ -4,12 +4,22 @@ This policy applies to **[dbcli](https://github.com/CarlLee1983/dbcli)** (npm: `
 
 ## Supported Versions
 
-We provide security fixes for the **current major version line** on the [default branch](https://github.com/CarlLee1983/dbcli) and backport **critical** fixes to the **latest published minor** when practical.
+We provide security fixes for the **current major version line only**, on the
+[default branch](https://github.com/CarlLee1983/dbcli). Within that line, **critical**
+fixes are backported to the **latest published minor** when practical.
 
-| Version   | Status |
-| --------- | ------ |
-| **1.x**   | :white_check_mark: **Supported** — use the latest 1.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
-| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **1.x**. |
+Once a major line is superseded it stops receiving fixes. There is no long-term
+support branch and none is promised: an older major is fixed by upgrading.
+
+| Version | Status |
+| ------- | ------ |
+| **3.x** | :white_check_mark: **Supported** — use the latest 3.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
+| **2.x** | :x: **Not supported** — superseded by 3.x; upgrade to **3.x**. |
+| **1.x** | :x: **Not supported** — superseded by 3.x; upgrade to **3.x**. |
+| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **3.x**. |
+
+The supported major above is checked against `package.json` by
+`bun run manifest:check`, so this table cannot silently fall behind a release.
 
 If you are unsure which release you run: `dbcli --version` or `npm list -g @carllee1983/dbcli`.
 

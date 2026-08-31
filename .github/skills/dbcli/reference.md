@@ -2752,6 +2752,22 @@ verification artifact later rotates, is cleared, disappears, or belongs to a dif
 active connection, output stays parseable with `integrity: "valid"` and
 `references: "source-expired"`, then exits `1`.
 
+`validate` first names the pack's artifact format, which carries its own `version`
+independent of the dbcli package version (ADR-0013). The current format is `version: 2`;
+dbcli 3.0.0 and earlier wrote `version: 1` in two incompatible layouts. The JSON report
+leads with `status` and `trust`:
+
+| `status` | `trust` | Meaning | Exit |
+|---|---|---|---|
+| `current-valid` | `current-valid` | Current format, digest verified, references resolvable. | `0` |
+| `current-references-expired` | `current-valid` | Current format and digest, a referenced source is gone. | `1` |
+| `recognized-legacy` | `not-current-valid` | Written by an older dbcli; `legacyFormat` and `producedBy` name which, `integrity` reports that format's own digest, references are not evaluated. | `1` |
+| `unsupported` | `not-current-valid` | Unknown version, or version and structure disagree. | `1` |
+
+A legacy pack is never silently treated as current-valid and is never migrated: a pack's
+`id` derives from its digest, so rewriting one would mint a new artifact carrying an old
+one's provenance. Compose a new pack from current evidence instead.
+
 #### `evidence render`
 
 ```bash

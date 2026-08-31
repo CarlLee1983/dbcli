@@ -32,10 +32,11 @@ bun run build
 step '8/9 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
 
-step '9/9 doc-presence'
+step '9/9 doc & manifest presence'
 bun run skill:check
 bun run platform:check
 bun run plugin:check
+bun run manifest:check
 bun run docs:check
 bun run contract:check
 PKG_VERSION=$(bun -p "require('./package.json').version")

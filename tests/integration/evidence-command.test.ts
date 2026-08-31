@@ -231,6 +231,10 @@ describe('dbcli evidence (CLI)', () => {
     )
     expect(validation.code).toBe(1)
     expect(JSON.parse(validation.stdout)).toEqual({
+      status: 'current-references-expired',
+      format: 'current',
+      formatVersion: 2,
+      trust: 'current-valid',
       integrity: 'valid',
       references: 'source-expired',
       expired: [{ kind: 'audit', id: AUDIT_ID }],

@@ -70,6 +70,8 @@
     "release:check": "bash scripts/release-check.sh",
     "plugin:sync": "bun run scripts/sync-plugin-assets.ts --write",
     "plugin:check": "bun run scripts/sync-plugin-assets.ts",
+    "manifest:sync": "bun run scripts/check-plugin-manifests.ts --write",
+    "manifest:check": "bun run scripts/check-plugin-manifests.ts",
     "test": "bun test --timeout 30000",
     "test:unit": "bun test tests/unit tests/core",
     "test:integration": "bun test tests/integration",

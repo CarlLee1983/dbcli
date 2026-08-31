@@ -127,6 +127,15 @@ decides every column rule and every table name. Widening the blast radius of a
 denial-of-service in the guard is not something to leave for a later branch, so
 it is fixed here even though the defect is older than this ADR.
 
+A name that is *not* a pattern has to be escaped before it is spliced into one.
+`maskMongoRowsForCollections` re-anchors a joined collection's rules under the
+`$lookup`'s `as` name, and that name is chosen by the request: `as: "\\x"` made
+the rule compile to `^x$` while the document carried `\x`, so the joined
+`password` came back in plaintext. `escapeGlob` in `src/utils/glob.ts` is the
+fix, and the shape is worth naming — every literal spliced into a pattern is
+this bug waiting to happen, and `\` is the one metacharacter that does not
+accidentally match itself.
+
 `globToRegex` stays for callers that genuinely need a `RegExp` object, and the
 two are held to the same answers by exhaustive comparison over a small alphabet
 rather than by a sampled list — a drift between them would be a silent hole.
@@ -163,4 +172,10 @@ the operation; or `isTableBlacklisted` in `src/core/blacklist-manager.ts`
 compares a collection name with a literal `Set.has` alone; or any blacklist
 comparison calls `globToRegex(...).test(...)` where `globMatches` from
 `src/utils/glob.ts` would answer, or the two stop being held to identical
-answers by the exhaustive comparison in `tests/unit/utils/glob.test.ts`.
+answers by the exhaustive comparison in `tests/unit/utils/glob.test.ts`; or
+`maskMongoRowsForCollections` in `src/core/mongo/field-masker.ts` splices a
+`$lookup` prefix into a rule without `escapeGlob`; or the wildcard loop in
+`filterColumnsForTables` stops walking ancestors while the literal loop does; or
+any `compilePatterns` caller drops its `rejected` list; or
+`isValidTableNameForSystem` in `src/commands/blacklist.ts` refuses a glob for an
+engine whose matcher accepts one.

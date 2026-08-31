@@ -1,5 +1,6 @@
 import { BlacklistError, type BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { escapeGlob } from '@/utils/glob'
 import { globMatches } from '@/utils/glob'
 import type { MongoCollectionScope } from './collection-references'
 
@@ -28,12 +29,18 @@ export function maskMongoRowsForCollections(
     const rules = columns[scope.collection] ?? findCaseInsensitive(columns, scope.collection)
     if (!rules || rules.length === 0) return atTopLevel
 
-    // Same rules, re-anchored under the embedding path. Keyed by a name that
-    // cannot collide with a real collection.
+    // Same rules, re-anchored under the embedding path. The prefix is the
+    // request's `as` name, not a pattern, so it is escaped before being spliced
+    // into one — a `\` in it read as glob syntax and disabled the rule
+    // (ADR-0019 Decision 5). Keyed by a name that cannot collide with a real
+    // collection.
     const prefixKey = `\u0000${scope.collection}@${scope.prefix}`
     return maskMongoRows(atTopLevel, prefixKey, {
       ...blacklist,
-      columns: { ...columns, [prefixKey]: rules.map((rule) => `${scope.prefix}.${rule}`) },
+      columns: {
+        ...columns,
+        [prefixKey]: rules.map((rule) => `${escapeGlob(scope.prefix as string)}.${rule}`),
+      },
     })
   }, rows)
 }

@@ -30,6 +30,8 @@ export type QueryRiskFactorCode =
   | 'schema_cache_missing'
   | 'schema_table_unknown'
   | 'blacklisted_column'
+  /** A blacklist entry the matcher cannot read — ADR-0019 Decision 3. */
+  | 'blacklist_unreadable'
   | 'partial_schema_coverage'
   | 'nonsql_filter_empty'
   | 'nonsql_filter_broad'

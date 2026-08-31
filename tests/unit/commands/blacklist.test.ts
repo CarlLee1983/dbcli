@@ -370,10 +370,22 @@ describe('isValidTableNameForSystem()', () => {
     expect(isValidTableNameForSystem('logs-2026.08.30', 'elasticsearch')).toBe(true)
   })
 
-  it('SQL 與 MongoDB 拒絕 glob——那裡的比對是字面相等', () => {
-    expect(isValidTableNameForSystem('secret*', 'postgresql')).toBe(false)
-    expect(isValidTableNameForSystem('secret?', 'mysql')).toBe(false)
-    expect(isValidTableNameForSystem('sec[a-z]', 'mongodb')).toBe(false)
+  // 這一則原本斷言 SQL 與 MongoDB 拒絕 glob，理由是那裡的比對是字面相等。
+  // ADR-0019 Decision 4 讓 `isTableBlacklisted` 對所有引擎都走 glob，所以那個
+  // 理由消失了，拒絕只會把人逼回手編設定檔。
+  it('SQL 與 MongoDB 也接受 glob——比對已對所有引擎統一', () => {
+    expect(isValidTableNameForSystem('secret*', 'postgresql')).toBe(true)
+    expect(isValidTableNameForSystem('secret?', 'mysql')).toBe(true)
+    expect(isValidTableNameForSystem('sec[a-z]', 'mongodb')).toBe(true)
+    // 逃逸回字面名稱也要進得來（ADR-0019 Decision 4 的那句承諾）。
+    expect(isValidTableNameForSystem('report\\*', 'postgresql')).toBe(true)
+  })
+
+  it('欄位項接受 glob，仍拒絕會靜靜變成別的意思的形狀', () => {
+    expect(parseColumnIdentifier('users.pass*')).toEqual({ table: 'users', column: 'pass*' })
+    expect(parseColumnIdentifier('users.sec?et')).toEqual({ table: 'users', column: 'sec?et' })
+    expect(parseColumnIdentifier('users.pass word')).toBeNull()
+    expect(parseColumnIdentifier('users.a,b')).toBeNull()
   })
 
   it('SQL 與 MongoDB 的一般名稱照常接受', () => {

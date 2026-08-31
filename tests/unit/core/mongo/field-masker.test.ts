@@ -1,5 +1,5 @@
 import { describe, test, expect, spyOn } from 'bun:test'
-import { maskMongoRows } from '@/core/mongo/field-masker'
+import { maskMongoRows, maskMongoRowsForCollections } from '@/core/mongo/field-masker'
 
 const cfg = (cols: Record<string, string[]>) => ({ tables: [], columns: cols })
 
@@ -93,5 +93,37 @@ describe('an uncompilable rule refuses rather than passes documents through', ()
   test('a collection with no rules is untouched, not refused', () => {
     const rows = [{ _id: 'x', password: 's3cret' }]
     expect(maskMongoRows(rows, 'orders', cfg({ users: ['a..b'] }))).toBe(rows)
+  })
+})
+
+/**
+ * A `$lookup`'s `as` name is chosen by the request, and the joined
+ * collection's rules are re-anchored under it. Since ADR-0019 those rules are
+ * globs, so an `as` holding a glob metacharacter was read as syntax rather
+ * than as the field name it is — and `\` is the one that does not accidentally
+ * match itself, so it silently disabled the rule.
+ */
+describe('a $lookup prefix is a literal field name, not a pattern', () => {
+  const lookupRows = (prefix: string) => [{ _id: 1, [prefix]: { password: 'p1' } }]
+
+  for (const prefix of ['\\x', '*x', '?x', '[x', 'plain']) {
+    test(`masks beneath a prefix spelled ${JSON.stringify(prefix)}`, () => {
+      const out = maskMongoRowsForCollections(
+        lookupRows(prefix),
+        [{ collection: 'users' }, { collection: 'secrets', prefix }],
+        cfg({ secrets: ['password'] })
+      )
+      expect(out).toEqual([{ _id: 1, [prefix]: { password: '[REDACTED]' } }])
+    })
+  }
+
+  test('a prefix does not match a different name that its metacharacters would', () => {
+    // `*x` as a pattern would also cover `zzx`; as a name it covers only itself.
+    const out = maskMongoRowsForCollections(
+      [{ _id: 1, zzx: { password: 'p1' } }],
+      [{ collection: 'users' }, { collection: 'secrets', prefix: '*x' }],
+      cfg({ secrets: ['password'] })
+    )
+    expect(out).toEqual([{ _id: 1, zzx: { password: 'p1' } }])
   })
 })

@@ -69,11 +69,25 @@ export interface FilterColumnsResult {
  */
 function compileGlobRules(
   rules: ReadonlyArray<string>,
-  fold: (value: string) => string
+  fold: (value: string) => string,
+  table: string,
+  operation: string
 ): MongoPathPattern[] {
   const globbed = rules.filter((rule) => /[*?[\\]/.test(rule))
   if (globbed.length === 0) return []
-  return compilePatterns(globbed.map(fold)).patterns
+  const { patterns, rejected } = compilePatterns(globbed.map(fold))
+  // ADR-0019 Decision 3, on the paths that have no read mask behind them: a
+  // rule the matcher cannot read protects nothing, and dropping it here made
+  // SQL answer the request as though the operator had never written it.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    throw new BlacklistError(
+      `blacklist.columns for '${table}' has entries this matcher cannot read: ${detail}`,
+      table,
+      operation
+    )
+  }
+  return patterns
 }
 
 /**
@@ -223,7 +237,12 @@ export class BlacklistValidator {
     // Rules carrying a wildcard are compiled once and matched through the same
     // path matcher the MongoDB read mask uses, so a rule cannot mean one thing
     // to a write and another to a read. ADR-0019 Decision 2.
-    const globs = compileGlobRules(blacklisted, (value) => value.toLowerCase())
+    const globs = compileGlobRules(
+      blacklisted,
+      (value) => value.toLowerCase(),
+      tableName,
+      operation
+    )
     const conflicts = fields.filter((field) => {
       const name = field.toLowerCase()
       if (protectedPaths.has(name)) return true
@@ -369,7 +388,12 @@ export class BlacklistValidator {
       return dot < 0 ? path.toLowerCase() : path.slice(0, dot).toLowerCase() + path.slice(dot)
     }
     const protectedPaths = new Set(blacklistedColumns.map(foldHead))
-    const globRules = compileGlobRules(blacklistedColumns, foldHead)
+    const globRules = compileGlobRules(
+      blacklistedColumns,
+      foldHead,
+      tables[0] ?? 'unknown',
+      'SELECT'
+    )
     // Folded name -> the name as the row actually carries it, which is what has
     // to be removed from the rows.
     const presentByFolded = new Map<string, string>()
@@ -420,9 +444,27 @@ export class BlacklistValidator {
     // Wildcard rules, matched against the names the rows actually carry. Kept
     // out of the two loops above so a blacklist without a wildcard — nearly all
     // of them — pays nothing for this. ADR-0019 Decision 2.
+    //
+    // The ancestor walk is the same one the literal loop above makes, and it is
+    // not optional: `flattenSource` emits `profile.email` as a top-level key
+    // with no `profile` key anywhere, so a rule `pro*` matched nothing there
+    // while `profile` matched — one rule set, two answers, which is what this
+    // whole record exists to remove.
     if (globRules.length > 0) {
       for (const column of presentColumns) {
-        if (matchAny(foldHead(column), globRules)) omitted.add(column)
+        const folded = foldHead(column)
+        if (matchAny(folded, globRules)) {
+          omitted.add(column)
+          continue
+        }
+        let dot = folded.indexOf('.')
+        while (dot >= 0) {
+          if (dot > 0 && matchAny(folded.slice(0, dot), globRules)) {
+            omitted.add(column)
+            break
+          }
+          dot = folded.indexOf('.', dot + 1)
+        }
       }
     }
     const omittedColumns = Array.from(omitted)

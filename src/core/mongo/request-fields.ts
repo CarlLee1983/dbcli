@@ -72,7 +72,14 @@ const NAMES_A_FIELD_DYNAMICALLY = '$getField'
 function globRulesOf(protectedFields: ReadonlySet<string>): MongoPathPattern[] {
   const globbed = [...protectedFields].filter((rule) => /[*?[\\]/.test(rule))
   if (globbed.length === 0) return []
-  return compilePatterns(globbed).patterns
+  const { patterns, rejected } = compilePatterns(globbed)
+  // ADR-0019 Decision 3. Dropping these made a malformed rule mean "no rule",
+  // and this is the check that stands between a `$project` and the plaintext.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    throw new Error(`BlacklistRejection: blacklist entries this matcher cannot read: ${detail}`)
+  }
+  return patterns
 }
 
 /**

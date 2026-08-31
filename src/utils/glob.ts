@@ -224,3 +224,15 @@ export function globMatches(glob: string, text: string): boolean {
   }
   return true
 }
+
+/**
+ * Escape a literal string so `globMatches` treats it as the name it is.
+ *
+ * Needed wherever a name that is *not* a pattern is spliced into one — a
+ * `$lookup`'s `as`, for instance, which the request chooses. Without it `\`
+ * silently disabled the rule built around it, since a backslash is the one
+ * metacharacter that does not accidentally match itself.
+ */
+export function escapeGlob(literal: string): string {
+  return literal.replace(/[*?[\]\\]/g, '\\$&')
+}

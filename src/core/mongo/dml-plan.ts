@@ -288,7 +288,19 @@ function applyColumnBlacklist(
     }
   }
   if (raw.length === 0) return
-  const { patterns } = compilePatterns(raw)
+  const { patterns, rejected } = compilePatterns(raw)
+  // ADR-0019 Decision 3: a rule the matcher cannot read is not a reason to
+  // plan the write as though it were unprotected.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    pushFactor(
+      factors,
+      'blacklist_unreadable',
+      'block',
+      `blacklist.columns for '${target}' has entries this matcher cannot read: ${detail}`
+    )
+    return
+  }
   if (patterns.length === 0) return
   for (const field of fields) {
     if (matchAny(field, patterns)) {

@@ -204,3 +204,12 @@ describe('a rule is a glob on the request side too', () => {
     ).toBeUndefined()
   })
 })
+
+// ADR-0019 Decision 3 on the request side: dropping `rejected` here made a
+// malformed wildcard rule mean "no rule", which is the one answer a blacklist
+// must never give silently.
+test('an uncompilable wildcard rule refuses the request', () => {
+  expect(() => findProtectedFieldReference([{ $match: { a: 1 } }], new Set(['a..b*']))).toThrow(
+    /a\.\.b\*/
+  )
+})

@@ -189,6 +189,17 @@ Every audit entry includes non-secret `metadata.connection_name` and
 `metadata.environment` from the resolved connection. It never records connection
 credentials or endpoint secrets.
 
+A SQL entry also carries `metadata.blacklist_checked` — every identifier the
+blacklist compared this statement against. `target` names one table, derived
+separately, and for a JOIN it is whichever table came first: a statement refused
+because it reached `salaries` could be filed under `target: "a"`, so asking the
+log "did anyone reach the protected table" by `target` found nothing. Query
+`metadata.blacklist_checked` for that question. It is stored exactly as the
+blacklist saw it, which means it deliberately contains more than table names —
+aliases, qualified column references, and SQL keywords such as `CREATE` — because
+an extra identifier can only make the blacklist refuse more, and filtering the
+list for display would be a second parser disagreeing with the first.
+
 ### Read-only query fan-out
 
 An explicit comma-separated `--use` can run one read-only query against several

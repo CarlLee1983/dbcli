@@ -168,6 +168,14 @@ agent mode 也會拒絕 legacy 單檔 `.dbcli` 設定；請先由人類／管理
 若要防護同一 OS 使用者的惡意 process，請將 `DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR` 設為由 host
 保護或唯讀掛載的目錄，讓 detached digest 不會和工作區檔案一起被替換。
 
+SQL 的紀錄另外帶 `metadata.blacklist_checked`——黑名單拿這句語句去比對過的每一個
+識別子。`target` 只有一個表名、由另一套推導產生，遇到 JOIN 取的是排在前面那張：
+一句因為碰到 `salaries` 而被拒絕的語句，紀錄可能填 `target: "a"`，於是用 `target`
+去問「有沒有人碰受保護的表」會查不到。那個問題要查 `metadata.blacklist_checked`。
+它原樣保存黑名單看到的東西，所以刻意不只有表名——別名、含點的欄位參照、以及
+`CREATE` 這類 SQL 關鍵字都在裡面。多一個識別子只會讓黑名單多拒絕，而為了好看去
+過濾這份清單，等於再造一套與原本那套對不起來的解析。
+
 每筆 audit entry 都會從解析後的連線寫入非機密的 `metadata.connection_name` 與
 `metadata.environment`，絕不記錄連線憑證或 endpoint secret。
 

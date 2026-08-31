@@ -14,7 +14,7 @@ audit `target` 可被 SQL 註解偽造、`query` 的 DML 記成 `readonly`、以
 **狀態**：MongoDB 的第 1、2 則（兩個 CRITICAL）已於
 `fix/cross-engine-blacklist-gaps` 修復——請求側拒絕指名受保護欄位，記在
 ADR-0015 Decision 2。audit 的第 11 則（含驗證中發現的 11b）已於 5.0.0 修復，
-記在 ADR-0016。其餘（MongoDB 3-6、SQL 7-9、audit 10、12）未修。
+記在 ADR-0016。其餘（MongoDB 3-6、SQL 7-9、audit 12）未修；第 10 則已於 ADR-0017 處置。
 
 ## MongoDB
 
@@ -105,7 +105,7 @@ MongoDB 沒有請求端的欄位檢查——ES 那側第七輪修的 `namesProte
 
 ## audit（其餘）
 
-### 10. [HIGH] audit 的 target 與 blacklist 的表名列舉不是同一套解析
+### 10. [HIGH][已修] audit 的 target 與 blacklist 的表名列舉不是同一套解析
 
 blacklist 走 tokenizer（`query-executor.ts:133`），audit 走單一名稱推導：
 
@@ -116,9 +116,18 @@ blacklist 走 tokenizer（`query-executor.ts:133`），audit 走單一名稱推�
 - `INSERT INTO staging SELECT * FROM salaries` → target `staging`，讀到的
   `salaries` 不見。
 
-第九輪已修掉「target 可被註解偽造」那一半；**「哪一張表才是 target」這個設計
-問題沒有修**。修法方向是兩邊共用 `extractTableReferences`，target 取首張並把
-其餘放進 `metadata.tables`。
+第九輪已修掉「target 可被註解偽造」那一半；「哪一張表才是 target」這個設計
+問題已於 ADR-0017 處置——但**不是照這裡原本提的方向**。
+
+原本的建議是「兩邊共用 `extractTableReferences`，target 取首張並把其餘放進
+`metadata.tables`」。實際跑過之後兩處都不成立：`extractTableReferences` 是刻意
+過度收集的（`["dump","salaries","CREATE","TABLE"]`），所以 `metadata.tables` 會
+把 `CREATE` 當成表名；而改動 `target` 的取值會在沒有人被告知的情況下改變下游
+既有查詢的結果。實際做法是 `target` 維持原樣，新增 `metadata.blacklist_checked`
+原樣保存黑名單比對過的識別子。
+
+驗證時另外量到一則這裡沒寫的：把受保護的表放進黑名單後跑那句 JOIN，拒絕是對的，
+而該次拒絕的稽核列 `target` 指向沒被擋的那張表。
 
 ### 11. [HIGH][已修] `dbcli shell` 只有 tier-two 的閘門決策會進 audit
 

@@ -135,7 +135,7 @@ type BriefEntry = Pick<
  * brief 的目的是省 token，不是省掉辨識操作所需的欄位。
  */
 function briefify(entry: AuditEntry): BriefEntry {
-  const phase = (entry.metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
+  const phase = (entry.metadata as { shell_phase?: unknown } | undefined)?.shell_phase
   return {
     ts: entry.ts,
     command: entry.command,
@@ -204,18 +204,18 @@ function renderTailAllTable(envelopes: Array<{ connection: string; entry: AuditE
 }
 
 // ── show helpers ──────────────────────────────────────────────────────────
-// `metadata` 不整個剝掉：`es_shell_phase` 是分辨 attempt 與 outcome 的唯一依據。
+// `metadata` 不整個剝掉：`shell_phase` 是分辨 attempt 與 outcome 的唯一依據。
 type ShowEntry = Omit<AuditEntry, 'metadata' | 'redacted_query'> & {
-  metadata?: { es_shell_phase?: unknown }
+  metadata?: { shell_phase?: unknown }
 }
 
 function briefifyShow(entry: AuditEntry): ShowEntry {
-  // `metadata` 整個剝掉會連 `es_shell_phase` 一起丟——那是分辨 attempt 與
+  // `metadata` 整個剝掉會連 `shell_phase` 一起丟——那是分辨 attempt 與
   // outcome 的唯一依據，留著。
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { metadata, redacted_query, ...rest } = entry
-  const phase = (metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
-  return phase === undefined ? rest : { ...rest, metadata: { es_shell_phase: phase } }
+  const phase = (metadata as { shell_phase?: unknown } | undefined)?.shell_phase
+  return phase === undefined ? rest : { ...rest, metadata: { shell_phase: phase } }
 }
 
 // Accept Partial<AuditEntry> so brief mode (which strips metadata + redacted_query)

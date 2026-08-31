@@ -202,7 +202,15 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
       })
     : null
 
-  const engine = new ReplEngine(adapter, context, HISTORY_PATH, config, writeGate)
+  // Every statement, not only the tier-two gate decisions the write gate
+  // records: ADR-0016. Before this the shell was the one SQL entry point where
+  // a completed write left nothing behind.
+  const auditSink = (await import('./shell-audit-sink')).createShellAuditSink({
+    config,
+    configPath,
+  })
+
+  const engine = new ReplEngine(adapter, context, HISTORY_PATH, config, writeGate, auditSink)
   const complete = createCompleter(context)
 
   // Welcome message

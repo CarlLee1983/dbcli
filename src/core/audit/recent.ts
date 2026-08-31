@@ -32,7 +32,7 @@ export function shouldEmbedRecent(opts: { forAgent?: boolean; format: string }):
  * 只是換到另一條輸出路徑。改動 `briefify` 時要一起改這裡。
  */
 function briefifyForRecent(entry: AuditEntry): AuditEntryBrief {
-  const phase = (entry.metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
+  const phase = (entry.metadata as { shell_phase?: unknown } | undefined)?.shell_phase
   return {
     id: entry.id,
     ts: entry.ts,

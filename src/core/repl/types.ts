@@ -60,7 +60,7 @@ export type ReplAuditSink = (record: {
   phase: 'attempt' | 'outcome'
   success: boolean
   statement: string
-}) => Promise<{ written: boolean }>
+}) => Promise<import('../audit/logger').AuditWriteResult>
 
 export interface MetaCommandResult {
   readonly action: 'continue' | 'quit' | 'clear'

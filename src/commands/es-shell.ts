@@ -404,7 +404,7 @@ async function executeEsBlock(block: string, session: EsShellSession): Promise<b
             // 在紀錄裡是同一列。
             sql: record.statement,
             sideEffectTier: record.tierOverride,
-            metadata: { es_shell_phase: record.phase },
+            metadata: { shell_phase: record.phase },
           }
         ),
     })

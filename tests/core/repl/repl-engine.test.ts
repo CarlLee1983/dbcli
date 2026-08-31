@@ -314,7 +314,7 @@ describe('ReplEngine', () => {
       null,
       async (row) => {
         rows.push({ phase: row.phase, success: row.success, statement: row.statement })
-        return { written: true }
+        return { success: true, rotated: false, id: 'a' }
       }
     )
 
@@ -334,7 +334,7 @@ describe('ReplEngine', () => {
     ) as unknown as DatabaseAdapter['execute']
     const engine = new ReplEngine(adapter, mockContext, historyPath, null, null, async (row) => {
       rows.push({ phase: row.phase, success: row.success })
-      return { written: true }
+      return { success: true, rotated: false, id: 'a' }
     })
 
     await engine.processInput("UPDATE users SET name = 'Bob' WHERE id = 1;")
@@ -357,7 +357,7 @@ describe('ReplEngine', () => {
     adapter.connect = mock(() => Promise.reject(new Error('still down')))
     const engine = new ReplEngine(adapter, mockContext, historyPath, null, null, async (row) => {
       rows.push({ phase: row.phase, success: row.success })
-      return { written: true }
+      return { success: true, rotated: false, id: 'a' }
     })
 
     await engine.processInput("UPDATE users SET name = 'Bob' WHERE id = 1;")
@@ -381,7 +381,7 @@ describe('ReplEngine', () => {
       null,
       async (row) => {
         rows.push({ phase: row.phase, success: row.success })
-        return { written: true }
+        return { success: true, rotated: false, id: 'a' }
       }
     )
 
@@ -406,7 +406,7 @@ describe('ReplEngine', () => {
       null,
       async (row) => {
         rows.push({ phase: row.phase, success: row.success })
-        return { written: true }
+        return { success: true, rotated: false, id: 'a' }
       }
     )
 
@@ -430,7 +430,7 @@ describe('ReplEngine', () => {
       async () => false,
       async (row) => {
         rows.push({ phase: row.phase, success: row.success })
-        return { written: true }
+        return { success: true, rotated: false, id: 'a' }
       }
     )
 

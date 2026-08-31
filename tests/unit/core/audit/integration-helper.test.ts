@@ -9,6 +9,7 @@ import { join } from 'node:path'
 
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
+import { extractTableReferences } from '@/utils/sql-tables'
 
 function makeConfig(enabled: boolean): DbcliConfig {
   return {
@@ -143,5 +144,56 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     })
     expect(JSON.stringify(last.metadata)).not.toContain('localhost')
     expect(JSON.stringify(last.metadata)).not.toContain('password')
+  })
+})
+
+describe('every table a statement references reaches the record (ADR-0017)', () => {
+  let workDir: string
+
+  beforeEach(async () => {
+    workDir = await mkdtemp(join(tmpdir(), 'dbcli-audit-tables-'))
+    await mkdir(join(workDir, '.dbcli'), { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(workDir, { recursive: true, force: true })
+  })
+
+  async function entryFor(sql: string): Promise<Record<string, unknown>> {
+    await writeAuditEntry(makeConfig(true), 'query', { config: workDir }, { success: true, sql })
+    const file = Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl'))
+    const lines = (await file.text()).trim().split('\n')
+    return JSON.parse(lines[lines.length - 1]!) as Record<string, unknown>
+  }
+
+  const checked = (entry: Record<string, unknown>): string[] =>
+    (entry.metadata as { blacklist_checked?: string[] })?.blacklist_checked ?? []
+
+  test('a JOIN records the joined table, which target alone never named', async () => {
+    // Measured before the fix: with `salaries` blacklisted this statement was
+    // correctly refused and the refusal was filed under `target: "a"`, so the
+    // record could not answer "did anyone reach the protected table".
+    const entry = await entryFor('SELECT * FROM a JOIN salaries s ON s.id = a.id')
+    expect(checked(entry)).toContain('salaries')
+    // Unchanged on purpose — ADR-0017 keeps the field downstream filters on.
+    expect(entry.target).toBe('a')
+  })
+
+  test('a CREATE TABLE AS SELECT records the table it creates', async () => {
+    const entry = await entryFor('CREATE TABLE dump AS SELECT * FROM salaries')
+    expect(checked(entry)).toContain('dump')
+    expect(checked(entry)).toContain('salaries')
+  })
+
+  test('the list is stored exactly as the blacklist saw it, keywords and all', async () => {
+    // ADR-0017 Decision 2. Filtering here would be a third parser, and two
+    // parsers disagreeing is the defect this closes. The field name, not a
+    // cleanup pass, is what stops `CREATE` being read as a table.
+    const entry = await entryFor('CREATE TABLE dump AS SELECT * FROM salaries')
+    expect(checked(entry)).toEqual(
+      extractTableReferences('CREATE TABLE dump AS SELECT * FROM salaries', {
+        dialect: 'postgresql',
+      })
+    )
   })
 })

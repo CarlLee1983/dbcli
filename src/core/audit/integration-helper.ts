@@ -8,6 +8,20 @@ import { getGlobalConnectionName } from '../config'
 import type { DbcliConfig } from '../../utils/validation'
 import type { DatabaseSystem } from '../../adapters/types'
 import { getEngineCapability, type SideEffectTier } from '../../adapters/capabilities'
+import { extractTableReferences, type SqlTablesDialect } from '../../utils/sql-tables'
+
+/**
+ * The engines whose statements are SQL, and so have identifiers to enumerate.
+ * Typed as the tokenizer's own dialect union so the narrowing is the compiler's
+ * job rather than a second list that can drift from it.
+ */
+const SQL_AUDIT_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
+
+function sqlDialectFor(engine: DatabaseSystem): SqlTablesDialect | null {
+  return (SQL_AUDIT_DIALECTS as readonly string[]).includes(engine)
+    ? (engine as SqlTablesDialect)
+    : null
+}
 import {
   redactArgv,
   redactArgvSensitiveText,
@@ -173,6 +187,19 @@ export async function writeAuditEntryResult(
     // 1. Resolve Target
     const target = outcome.target || getOperationTarget(engine, commandName, options, outcome.sql)
 
+    // 1b. The identifiers the blacklist compared against, from the tokenizer it
+    // uses. `target` is one name derived by a second, simpler parser, so a JOIN
+    // filed a refusal under the table that was *not* blacklisted and a CTAS
+    // never named the table it created. ADR-0017 keeps `target` as it is —
+    // downstream filters on it — and records the comparison beside it. Stored
+    // unmodified: the tokenizer over-collects on purpose (aliases, qualified
+    // columns, `CREATE`), which is right for a blacklist, and filtering it here
+    // would be the third parser.
+    const auditDialect = sqlDialectFor(engine)
+    const blacklistChecked = auditDialect
+      ? extractTableReferences(outcome.sql ?? '', { dialect: auditDialect })
+      : []
+
     // 2. Resolve Side Effect Tier
     let tier = outcome.sideEffectTier ?? getEngineCapability(engine, commandName as any).tier
     if (options.dryRun || options.plan) {
@@ -211,6 +238,7 @@ export async function writeAuditEntryResult(
       // across environments without reading endpoint or credential fields.
       metadata: {
         ...(outcome.metadata ?? {}),
+        ...(blacklistChecked.length > 0 && { blacklist_checked: blacklistChecked }),
         connection_name: connectionName,
         environment: (config as { effectiveEnvironment?: string }).effectiveEnvironment ?? null,
       },

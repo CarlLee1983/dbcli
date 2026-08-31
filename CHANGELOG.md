@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
+
+`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 10 則。設計決策記在 `docs/adr/0017-the-audit-target-stays-wrong-and-the-record-stops-depending-on-it.md`。
+
+### Added
+
+- **SQL 的稽核紀錄帶 `metadata.blacklist_checked`：黑名單拿這句語句比對過的每一個識別子。** 黑名單走 tokenizer（`extractTableReferences`），稽核的 `target` 走另一套單名推導（`extractTableName`），兩份解析給出兩個答案。實測：`SELECT * FROM a JOIN salaries s …` 的 `target` 只有 `a`；`CREATE TABLE dump AS SELECT * FROM salaries` 的 `target` 是被讀的 `salaries`，被建立的 `dump` 不在紀錄裡；`INSERT INTO staging SELECT * FROM salaries` 的 `target` 是 `staging`，被讀的 `salaries` 不見。最尖銳的一則規格沒寫：把 `salaries` 設進黑名單後跑那句 JOIN，拒絕是對的，而**那次拒絕的稽核列 `target` 是 `a`**——用 `target` 去查「有沒有人試圖碰受保護的表」查不到，真正的表名只活在 `error` 的自由文字裡。
+
+- **這份清單原樣保存，不做過濾。** `extractTableReferences` 是刻意過度收集的：那句 JOIN 回傳 `["a","salaries","s","id","s.id","a.id"]`，那句 CTAS 回傳 `["dump","salaries","CREATE","TABLE"]`——別名、含點的欄位參照、SQL 關鍵字都在裡面。對黑名單而言這是對的，多一個識別子只會讓它多拒絕。規格原本提的 `metadata.tables` 因此會把 `CREATE` 當成表名寫進稽核；改為以欄位名說明實情，而不是再造一套與黑名單對不起來的解析。
+
+### Changed
+
+- **`target` 維持原樣，刻意不改。** 它是下游拿來 filter 的欄位，而兩種候選修法（改成「被作用的那張表」、或改成 tokenizer 的首張）都會在沒有人被告知的情況下改變既有查詢的結果。這次修的是「有一張表完全不在紀錄裡」，把還在的那個欄位一起搬動並不會讓缺席修得更好。`target` 與 `blacklist_checked` 對某些語句會不一致，那是刻意的，不是待清理的 bug。
+
 ## [5.0.0] - 2026-08-31 - shell 裡一句真的改了資料的 UPDATE，稽核裡沒有任何一列
 
 `docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 11 則自己註明是純讀碼結論、值得先端到端確認。確認了，結論成立，而且比讀碼看到的更嚴重。本機 MariaDB、`read-write` 連線、每次先清空 audit：`dbcli query "SELECT …"` 寫一列，而在 `dbcli>` 提示符打的同一句寫零列；一句帶 WHERE 的 `UPDATE` 走完全程、改掉了資料，同樣零列。設計決策記在 `docs/adr/0016-the-sql-shell-audits-every-statement-in-two-rows.md`。

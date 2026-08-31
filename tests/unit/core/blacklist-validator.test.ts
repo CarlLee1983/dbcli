@@ -904,3 +904,42 @@ describe('an uncompilable wildcard rule refuses on every path (ADR-0019 Decision
     expect(out.omittedColumns).toEqual(['secret'])
   })
 })
+
+/**
+ * MEDIUM-1 from review: the write side's ancestor walk consulted the literal
+ * rules only, so `pass_data.x` was refused under a rule `pass_data` and
+ * permitted under `pass*`. The request-side check happens to catch it today,
+ * which by ADR-0019 Decision 2's own standard is not a reason to leave it.
+ */
+describe('the write side walks ancestors for glob rules too', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  it('refuses a write to a child of a glob-named parent', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['pass_data.x'])).toThrow()
+  })
+
+  it('matches what the literal rule already does', () => {
+    const validator = validatorFor({ users: ['pass_data'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['pass_data.x'])).toThrow()
+  })
+
+  it('does not refuse an unrelated path', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['other.x'])).not.toThrow()
+  })
+})

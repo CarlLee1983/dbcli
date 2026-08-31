@@ -246,12 +246,21 @@ export class BlacklistValidator {
     const conflicts = fields.filter((field) => {
       const name = field.toLowerCase()
       if (protectedPaths.has(name)) return true
+      if (matchAny(name, globs)) return true
+      // One walk, both rule kinds. Consulting the literal set alone refused
+      // `pass_data.x` under `pass_data` and permitted it under `pass*` — the
+      // request-side check happens to catch that today, which by this record's
+      // own standard is not a reason to leave it.
       let dot = name.indexOf('.')
       while (dot >= 0) {
-        if (dot > 0 && protectedPaths.has(name.slice(0, dot))) return true
+        if (dot > 0) {
+          const ancestor = name.slice(0, dot)
+          if (protectedPaths.has(ancestor)) return true
+          if (matchAny(ancestor, globs)) return true
+        }
         dot = name.indexOf('.', dot + 1)
       }
-      return matchAny(name, globs)
+      return false
     })
     if (conflicts.length === 0) {
       return

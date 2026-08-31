@@ -160,6 +160,25 @@ A wildcard-heavy blacklist stops being a way to hang the guard. That was already
 true of Redis and Elasticsearch configs before this branch; it is fixed here
 rather than left, because these decisions put every engine's rules on that path.
 
+**The title overstates one dimension.** Case folding is still three rules, not
+one: the write side lower-cases a whole path, the SQL and Elasticsearch read
+side folds the first segment only (ADR-0018 Decision 1), and the MongoDB read
+mask and request side do not fold at all. That asymmetry predates this record —
+ADR-0018 chose it deliberately, because a segment after the first is a nested
+object key where case is significant — and glob rules inherit it rather than
+introduce it. Measured consequences, both silent:
+
+| configuration | field in the data | write | read |
+| --- | --- | --- | --- |
+| `columns: {users: ["profile.ss*"]}` | `profile.SS_num` | refused | **returned** |
+| `columns: {users: ["PASS*"]}` | `password` (MongoDB) | refused | **returned** |
+
+Wildcards make nested rules far easier to write, so this trap will be reached
+more often than it was. Folding it into `path-matcher` alongside the pattern
+syntax is the obvious next step and is deliberately not taken here: it would
+change what ADR-0018 decided, which is a decision of its own and not a
+consequence of this one.
+
 **Falsified if:** `compilePatterns` in `src/core/mongo/path-matcher.ts` compiles
 a segment without `globMatches` from `src/utils/glob.ts`, or drops the tail
 meaning of a final `*`; or `reachesProtectedField` in

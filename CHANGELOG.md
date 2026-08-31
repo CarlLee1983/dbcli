@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
+## [5.1.0] - 2026-08-31 - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
 
 `docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 10 則。設計決策記在 `docs/adr/0017-the-audit-target-stays-wrong-and-the-record-stops-depending-on-it.md`。
 

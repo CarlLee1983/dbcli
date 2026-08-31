@@ -96,15 +96,18 @@ describe('BlacklistManager', () => {
       expect(manager.isColumnBlacklisted('users', 'password')).toBe(false)
     })
 
-    it('is case-sensitive for column names', () => {
+    it('is case-insensitive for column names', () => {
       const config = makeConfig({
         tables: [],
         columns: { users: ['password'] },
       })
       const manager = new BlacklistManager(config)
-      // Column names are case-sensitive
-      expect(manager.isColumnBlacklisted('users', 'PASSWORD')).toBe(false)
-      expect(manager.isColumnBlacklisted('users', 'Password')).toBe(false)
+      // Reversed by ADR-0018 Decision 1. Case sensitivity was documented as
+      // deliberate, but it made `SELECT password AS "PASSWORD"` a bypass any
+      // query-only connection could use, and made a rule spelled in the other
+      // case protect nothing without saying so.
+      expect(manager.isColumnBlacklisted('users', 'PASSWORD')).toBe(true)
+      expect(manager.isColumnBlacklisted('users', 'Password')).toBe(true)
     })
   })
 
@@ -196,5 +199,49 @@ describe('BlacklistManager Hardening', () => {
     const manager = new BlacklistManager(config as any)
     expect(manager.isColumnBlacklisted('users', 'profile.email')).toBe(true)
     expect(manager.isColumnBlacklisted('users', 'name')).toBe(false)
+  })
+})
+
+describe('a rule the code cannot use fails loudly (ADR-0018)', () => {
+  it('folds column names, so a rule written in the other case still matches', () => {
+    // Measured 2026-08-31: `probe_users (Password)` with the rule spelled
+    // `password` returned `s3cret` in full. Seven of eight configurations did.
+    const m = new BlacklistManager(makeConfig({ tables: [], columns: { users: ['password'] } }))
+    expect(m.isColumnBlacklisted('users', 'Password')).toBe(true)
+    expect(m.isColumnBlacklisted('users', 'PASSWORD')).toBe(true)
+    expect(m.isColumnBlacklisted('users', 'password')).toBe(true)
+  })
+
+  it('strips surrounding whitespace and quotes from entries and keys', () => {
+    const m = new BlacklistManager(
+      makeConfig({ tables: [], columns: { ' users ': [' password ', '"secret"', '`token`'] } })
+    )
+    for (const column of ['password', 'secret', 'token']) {
+      expect(m.isColumnBlacklisted('users', column)).toBe(true)
+    }
+  })
+
+  it('refuses a column entry qualified with its own table, rather than accepting a dead rule', () => {
+    // A dot in a column entry already means a nested path (`profile.ssn`), so
+    // this cannot be rewritten silently. Comparing the first segment with the
+    // key is the one test that separates the two without guessing.
+    expect(
+      () => new BlacklistManager(makeConfig({ tables: [], columns: { users: ['users.password'] } }))
+    ).toThrow(/users\.password/)
+  })
+
+  it('keeps a nested path, which is not a qualified name', () => {
+    const m = new BlacklistManager(makeConfig({ tables: [], columns: { users: ['profile.ssn'] } }))
+    expect(m.getBlacklistedColumns('users')).toContain('profile.ssn')
+  })
+
+  it('finds a table rule by the qualified name and by its last segment', () => {
+    const qualified = new BlacklistManager(
+      makeConfig({ tables: [], columns: { 'public.users': ['password'] } })
+    )
+    expect(qualified.isColumnBlacklisted('users', 'password')).toBe(true)
+
+    const bare = new BlacklistManager(makeConfig({ tables: [], columns: { users: ['password'] } }))
+    expect(bare.isColumnBlacklisted('public.users', 'password')).toBe(true)
   })
 })

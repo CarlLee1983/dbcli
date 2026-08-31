@@ -1,4 +1,4 @@
-import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory } from '@/adapters'
 import { BlacklistManager } from '@/core/blacklist-manager'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import { maskMongoRowsForCollections } from '@/core/mongo/field-masker'
@@ -64,7 +64,7 @@ export async function qMongoBranch(
     return
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const adapter = AdapterFactory.createMongoDBAdapter(config)
   await adapter.connect()
   try {
     const start = performance.now()

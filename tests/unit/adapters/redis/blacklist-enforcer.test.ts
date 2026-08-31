@@ -88,6 +88,17 @@ test('no-key commands always pass', () => {
   expect(checkKeyArgs('PING', [], RULES).ok).toBe(true)
 })
 
-test('unknown command passes (treated as no-arity)', () => {
-  expect(checkKeyArgs('NONSENSE', [], RULES).ok).toBe(true)
+test('unknown command is refused, not treated as no-arity', () => {
+  // This asserted `.ok === true` — the fail-open that made every gap between
+  // the permission map and the metadata table a blacklist bypass. dbcli cannot
+  // say where an unknown command's keys are, so with a blacklist configured it
+  // does not forward it.
+  expect(checkKeyArgs('NONSENSE', [], RULES).ok).toBe(false)
+})
+
+test('an unknown command with no blacklist configured is not refused', () => {
+  // Fail-closed applies to a user who has asked for protection. One who has
+  // not configured a blacklist keeps every command dbcli's permission tier
+  // allows, whether or not this table has a spec for it.
+  expect(checkKeyArgs('NONSENSE', [], []).ok).toBe(true)
 })

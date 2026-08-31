@@ -199,11 +199,7 @@ async function redisExportBranch(
   const { enforceRedisPermission } = await import('@/core/permission/redis')
   enforceRedisPermission(command, config.permission)
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions,
-    config.blacklist?.tables ?? [],
-    (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis?.mask ?? []
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config)
   await redisAdapter.connect()
   let formatted: string
   let rowCount: number
@@ -434,7 +430,7 @@ async function mongoExportBranch(
     effectiveLimit = DEFAULT_QUERY_ONLY_LIMIT
   }
 
-  const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const adapter = AdapterFactory.createMongoDBAdapter(config)
   await adapter.connect()
   let formatted: string
   let rowCount: number

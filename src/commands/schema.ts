@@ -213,10 +213,7 @@ async function schemaAction(
       if (!table) {
         throw new Error('Redis schema inspection requires a key name: dbcli schema <key>')
       }
-      const redisAdapter = AdapterFactory.createRedisAdapter(
-        config.connection as ConnectionOptions,
-        config.blacklist?.tables ?? []
-      )
+      const redisAdapter = AdapterFactory.createRedisAdapter(config)
       await redisAdapter.connect()
       try {
         if (!redisAdapter.getTableSchema) {

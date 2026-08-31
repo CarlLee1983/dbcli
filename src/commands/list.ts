@@ -118,7 +118,7 @@ async function mongoListBranch(
 ): Promise<void> {
   const connName = (config.connection.database as string) || 'mongodb'
 
-  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config)
   await mongoAdapter.connect()
 
   try {
@@ -151,10 +151,7 @@ async function redisListBranch(
   format: string
 ): Promise<void> {
   const connName = (config.connection.database as string) || '0'
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions,
-    config.blacklist?.tables ?? []
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config)
   await redisAdapter.connect()
 
   try {

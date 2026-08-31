@@ -8,171 +8,145 @@ export const REDIS_COMMAND_TABLE: Readonly<Record<string, RedisCommandSpec>> = O
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'query-only',
   }),
   INFO: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'query-only',
   }),
   DBSIZE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'query-only',
   }),
   TYPE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   EXISTS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-variable', startIndex: 0, step: 1 },
-    permissionTier: 'query-only',
   }),
   TTL: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   GET: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   MGET: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-variable', startIndex: 0, step: 1 },
-    permissionTier: 'query-only',
   }),
   STRLEN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HGET: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HEXISTS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HLEN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HMGET: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   LLEN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   LINDEX: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   SCARD: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   SISMEMBER: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZCARD: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZSCORE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   XLEN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
 
   // ---- read-only, rewrite ----
   SCAN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-count', argIndex: 0 },
-    keyArity: { kind: 'no-key' },
-    permissionTier: 'query-only',
+    // `no-key` was true and useless: `SCAN` names no key, but it *takes a glob*
+    // and returns key names, which is the disclosure `KEYS` is gated for.
+    keyArity: { kind: 'pattern-after-token', token: 'MATCH' },
   }),
   HSCAN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-count', argIndex: 1 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   SSCAN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-count', argIndex: 1 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZSCAN: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-count', argIndex: 1 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   LRANGE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-stop', argIndex: 2 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZRANGE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-stop', argIndex: 2 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZREVRANGE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-stop', argIndex: 2 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   ZRANGEBYSCORE: tbl({
     readOnly: true,
     sizeGuard: { kind: 'rewrite-limit', argIndex: 3 },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
 
   // ---- read-only, truncate ----
@@ -180,31 +154,26 @@ export const REDIS_COMMAND_TABLE: Readonly<Record<string, RedisCommandSpec>> = O
     readOnly: true,
     sizeGuard: { kind: 'truncate' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HKEYS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'truncate' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   HVALS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'truncate' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   SMEMBERS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'truncate' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
   KEYS: tbl({
     readOnly: true,
     sizeGuard: { kind: 'truncate' },
     keyArity: { kind: 'pattern', argIndex: 0 },
-    permissionTier: 'query-only',
   }),
 
   // ---- writes ----
@@ -212,109 +181,91 @@ export const REDIS_COMMAND_TABLE: Readonly<Record<string, RedisCommandSpec>> = O
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   SETEX: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   MSET: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-variable', startIndex: 0, step: 2 },
-    permissionTier: 'read-write',
   }),
   HSET: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   HMSET: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   HDEL: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   RPUSH: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   LPUSH: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   LREM: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   SADD: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   SREM: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   ZADD: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   ZREM: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   DEL: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-variable', startIndex: 0, step: 1 },
-    permissionTier: 'read-write',
   }),
   UNLINK: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-variable', startIndex: 0, step: 1 },
-    permissionTier: 'read-write',
   }),
   EXPIRE: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   PERSIST: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'single', argIndex: 0 },
-    permissionTier: 'read-write',
   }),
   RENAME: tbl({
     readOnly: false,
     sizeGuard: { kind: 'unbounded' },
     keyArity: { kind: 'multi-fixed', argIndices: [0, 1] },
-    permissionTier: 'read-write',
   }),
 
   // ---- admin reject ----
@@ -322,31 +273,190 @@ export const REDIS_COMMAND_TABLE: Readonly<Record<string, RedisCommandSpec>> = O
     readOnly: false,
     sizeGuard: { kind: 'reject', reason: 'FLUSHDB destroys data' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'admin',
   }),
   FLUSHALL: tbl({
     readOnly: false,
     sizeGuard: { kind: 'reject', reason: 'FLUSHALL destroys data' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'admin',
   }),
   SHUTDOWN: tbl({
     readOnly: false,
     sizeGuard: { kind: 'reject', reason: 'SHUTDOWN stops the server' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'admin',
   }),
   DEBUG: tbl({
     readOnly: false,
     sizeGuard: { kind: 'reject', reason: 'DEBUG is unsafe' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'admin',
+  }),
+  // ---- added when the two tables were reconciled ----
+  //
+  // Every one of these was in `REDIS_COMMAND_PERMISSION` and not here, so
+  // `checkKeyArgs` had no idea where their keys were and let them through. The
+  // size guards are all `unbounded`, which is what a missing spec already
+  // meant: this change is about *where the keys are*, and widening or narrowing
+  // a response cap at the same time would hide which of the two did what.
+  PTTL: tbl({
+    readOnly: true,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  SETNX: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  PSETEX: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  APPEND: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  INCR: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  INCRBY: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  DECR: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  DECRBY: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  HSETNX: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  HINCRBY: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  LPOP: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  RPOP: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  LSET: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  XADD: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  XDEL: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  XRANGE: tbl({
+    readOnly: true,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  XREVRANGE: tbl({
+    readOnly: true,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  EXPIREAT: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  PEXPIRE: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'single', argIndex: 0 },
+  }),
+  MSETNX: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'multi-variable', startIndex: 0, step: 2 },
+  }),
+  // `XREAD [COUNT n] [BLOCK ms] STREAMS <key...> <id...>` — the keys start after
+  // the `STREAMS` token and there is no fixed index for them.
+  XREAD: tbl({
+    readOnly: true,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'after-token', token: 'STREAMS' },
+  }),
+  ECHO: tbl({
+    readOnly: true,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  CONFIG: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  CLIENT: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  MONITOR: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  SAVE: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  BGSAVE: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  BGREWRITEAOF: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  REPLICAOF: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  SLAVEOF: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
+  }),
+  ACL: tbl({
+    readOnly: false,
+    sizeGuard: { kind: 'unbounded' },
+    keyArity: { kind: 'no-key' },
   }),
   'CONFIG SET': tbl({
     readOnly: false,
     sizeGuard: { kind: 'reject', reason: 'CONFIG SET mutates server state' },
     keyArity: { kind: 'no-key' },
-    permissionTier: 'admin',
   }),
 })
 

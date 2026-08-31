@@ -805,7 +805,7 @@ async function mongoQueryBranch(
       ? effectiveLimit
       : undefined
 
-  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+  const mongoAdapter = AdapterFactory.createMongoDBAdapter(config)
   let executionError: unknown
   try {
     await mongoAdapter.connect()
@@ -896,10 +896,7 @@ async function redisQueryBranch(
   const { config } = context
   const head = command.trim().split(/\s+/)[0]?.toUpperCase() ?? ''
 
-  const redisAdapter = AdapterFactory.createRedisAdapter(
-    config.connection as ConnectionOptions,
-    config.blacklist?.tables ?? []
-  )
+  const redisAdapter = AdapterFactory.createRedisAdapter(config)
   let executionError: unknown
   try {
     await redisAdapter.connect()

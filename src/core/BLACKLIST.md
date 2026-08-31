@@ -178,6 +178,15 @@ registers them all.
    neither `blacklist.tables` nor `blacklist.columns` is configured — the
    permission tier gate above them is not (ADR-0014 Decision 9).
 
+   Redis and MongoDB carry their rules on the adapter, set by the factory from
+   the configuration, so a command cannot reach either engine without them
+   (ADR-0015 Decision 1). On Redis that covers `execute`'s parsed command and
+   the `insert` / `update` / `delete` API, and `SCAN` / `KEYS` replies have
+   protected key *names* removed (Decision 3). On MongoDB a request that names a
+   protected field is refused rather than masked, because `$project`, `$set`,
+   `$addFields` and `$group` all choose the key a value comes back under
+   (Decision 2).
+
 ## Error Messages
 
 All messages are i18n-enabled. Override language with `DBCLI_LANG=zh-TW`.

@@ -11,6 +11,10 @@ audit `target` 可被 SQL 註解偽造、`query` 的 DML 記成 `readonly`、以
 
 ---
 
+**狀態**：MongoDB 的第 1、2 則（兩個 CRITICAL）已於
+`fix/cross-engine-blacklist-gaps` 修復——請求側拒絕指名受保護欄位，記在
+ADR-0015 Decision 2。其餘（MongoDB 3-6、SQL 7-9、audit 10-12）未修。
+
 ## MongoDB
 
 ### 1. [CRITICAL] aggregation 換名讓 `blacklist.columns` 完全失效

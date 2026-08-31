@@ -26,10 +26,10 @@ const validOptions: ConnectionOptions = {
 }
 
 test('factory injects blacklist rules into RedisAdapter', () => {
-  const adapter = AdapterFactory.createRedisAdapter(
-    { system: 'redis', host: 'h', port: 6379, user: '', password: '', database: '0' },
-    ['secrets:*']
-  )
+  const adapter = AdapterFactory.createRedisAdapter({
+    connection: { system: 'redis', host: 'h', port: 6379, user: '', password: '', database: '0' },
+    blacklist: { tables: ['secrets:*'] },
+  })
   expect((adapter as unknown as { blacklistRules: string[] }).blacklistRules).toEqual(['secrets:*'])
 })
 
@@ -77,12 +77,14 @@ const mongoOptions: ConnectionOptions = {
 }
 
 test('createMongoDBAdapter returns MongoDBAdapter for mongodb system', () => {
-  const adapter = AdapterFactory.createMongoDBAdapter(mongoOptions)
+  const adapter = AdapterFactory.createMongoDBAdapter({ connection: mongoOptions })
   expect(adapter).toBeInstanceOf(MongoDBAdapter)
 })
 
 test('createMongoDBAdapter exposes full QueryableAdapter interface', () => {
-  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter(mongoOptions)
+  const adapter: QueryableAdapter = AdapterFactory.createMongoDBAdapter({
+    connection: mongoOptions,
+  })
   expect(adapter).toHaveProperty('connect')
   expect(adapter).toHaveProperty('disconnect')
   expect(adapter).toHaveProperty('execute')
@@ -93,7 +95,7 @@ test('createMongoDBAdapter exposes full QueryableAdapter interface', () => {
 
 test('createMongoDBAdapter throws for non-mongodb system', () => {
   expect(() => {
-    AdapterFactory.createMongoDBAdapter({ ...validOptions, system: 'postgresql' })
+    AdapterFactory.createMongoDBAdapter({ connection: { ...validOptions, system: 'postgresql' } })
   }).toThrow('createMongoDBAdapter requires system: mongodb')
 })
 

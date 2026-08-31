@@ -103,14 +103,9 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   const isMongoDB = config.connection.system === 'mongodb'
   const isRedis = config.connection.system === 'redis'
   const connectionOpts = config.connection as ConnectionOptions
-  const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(connectionOpts) : null
+  const mongoInner = isMongoDB ? AdapterFactory.createMongoDBAdapter(config) : null
   const redisInner = isRedis
-    ? (AdapterFactory.createRedisAdapter(
-        connectionOpts,
-        config.blacklist?.tables ?? [],
-        (config as { redis?: { mask?: import('@/types/blacklist').RedisMaskRule[] } }).redis
-          ?.mask ?? []
-      ) as unknown as RedisAdapter)
+    ? (AdapterFactory.createRedisAdapter(config) as unknown as RedisAdapter)
     : null
   const adapter = isMongoDB
     ? new MongoShellAdapter(mongoInner!)

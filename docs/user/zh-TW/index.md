@@ -1124,6 +1124,10 @@ dbcli 設定內的 `blacklist.columns[<collection>]` 接受點分路徑與一個
 
 `profile.tokens.*` 涵蓋 `profile.tokens` 與其所有後裔。萬用字元若不在最後一段會被略過，並在 `dbcli blacklist list` 時提出警告。SQL 連線會忽略含 `.` 或 `*` 的條目。
 
+**指名受保護欄位的請求會被拒絕，而不是被遮罩。** 遮罩比對的是文件回來時所在的鍵名，而在 MongoDB 裡那些鍵名是請求自己決定的：`[{"$project":{"leak":"$password"}}]` 把值放在 `leak` 底下回傳，`[{"$group":{"_id":"$password"}}]` 放在 `_id` 底下——而 `_id` 為了保住文件參照本來就被遮罩豁免。4.0.0 之前兩者在 `query-only` 下都跑得動。所以 `password` 出現在 pipeline、filter 或 update 的任何位置——欄位路徑、物件鍵、或單純一個字串——都會以 `BlacklistRejection` 拒絕，遮罩則留給一般的文件形狀。
+
+這個方向刻意過度拒絕：filter 的**值**剛好等於受保護欄位名（`{"status": "password"}`）也會被拒。改查詢的寫法，或改規則。
+
 備註：串流匯出（`dbcli export`）會先緩衝整批列才遮罩。超大匯出建議先以較窄的條件查詢，等待 streaming-aware 遮罩支援。
 
 ### MongoDB schema 採樣
@@ -1164,8 +1168,15 @@ dbcli query "HGETALL bighash" --no-limit  # 完整回覆,不截斷
 dbcli blacklist table add 'secrets:*'
 dbcli query "GET secrets:api_key"   # 拒絕(BlacklistRejection);稽核記錄含 matched_pattern
 dbcli query "KEYS secrets:*"        # 拒絕(pattern 與規則重疊)
+dbcli query "SCAN 0 MATCH secrets:*" # 拒絕(pattern 與規則重疊)
+dbcli query "SCAN 0"                 # 照跑；受保護的 key 名從回應裡濾掉
+dbcli delete secrets:api_key         # 拒絕 —— glob 涵蓋寫入，不只讀取
 dbcli list                           # 黑名單 keys 被濾掉
 ```
+
+glob **對寫入與讀取一樣有效**。4.0.0 之前，`insert`、`update`、`delete` 是逐字比對 key 名，所以上面那條 `secrets:*` 只保護得了 `dbcli query`，`dbcli delete secrets:api_key` 照樣穿過去。`SCAN` 是另一半：它的 `MATCH` 從來不被檢查，於是 `query-only` 就列舉得出受保護的 key 名，而同樣的事 `KEYS` 需要 `admin`。
+
+有設黑名單時，dbcli 沒有 key 位置定義的指令現在會被**拒絕**，而不是不檢查就放行。沒設黑名單則一切照舊。
 
 **遮罩(Masking,v1.22)** — key glob 黑名單是「拒絕」,遮罩則是「屏蔽」:命中的讀取會回傳 `[REDACTED]`,讓 AI 代理仍能執行指令,但永遠看不到敏感值。在 dbcli 設定中加入選用的 `redis.mask` 區塊:
 

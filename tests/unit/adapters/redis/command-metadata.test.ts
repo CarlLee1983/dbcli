@@ -33,10 +33,9 @@ test('LRANGE rewrites stop arg', () => {
   expect(spec.sizeGuard).toEqual({ kind: 'rewrite-stop', argIndex: 2 })
 })
 
-test('FLUSHDB is admin reject', () => {
+test('FLUSHDB is a reject with no read-only claim', () => {
   const spec = getCommandSpec('FLUSHDB')!
   expect(spec.sizeGuard.kind).toBe('reject')
-  expect(spec.permissionTier).toBe('admin')
   expect(spec.readOnly).toBe(false)
 })
 
@@ -44,9 +43,12 @@ test('unknown commands return undefined', () => {
   expect(getCommandSpec('NONSENSE')).toBeUndefined()
 })
 
-test('every entry in the table has a valid permissionTier', () => {
-  const valid = new Set(['query-only', 'read-write', 'admin'])
+test('the table carries no permission tier of its own', () => {
+  // The tier has one owner, `REDIS_COMMAND_PERMISSION`. A second copy here went
+  // unenforced and drifted on five commands — `KEYS` and `INFO` were recorded
+  // as `query-only` while the enforcing map required `admin`, and the type
+  // could not spell `data-admin` at all, so `DEL` read as `read-write`.
   for (const spec of Object.values(REDIS_COMMAND_TABLE)) {
-    expect(valid.has(spec.permissionTier)).toBe(true)
+    expect(spec).not.toHaveProperty('permissionTier')
   }
 })

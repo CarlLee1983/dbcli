@@ -1,6 +1,9 @@
 # Redis 的黑名單與遮罩缺口（第九輪對抗式複查）
 
-**狀態**：已確認，未修復。刻意不在
+**狀態**：第 1-4 則已於 `fix/cross-engine-blacklist-gaps` 修復（ADR-0015），
+第 5 則（glob 對含換行的 key）未修，仍是 MEDIUM。原始狀態如下。
+
+**狀態（原始）**：已確認，未修復。刻意不在
 `fix/es-shell-permission-enforcement` 上修——那條分支已跑九輪且只談
 Elasticsearch，把第二個子系統推進去會讓兩邊都難審。這份文件是給後續分支的
 輸入。

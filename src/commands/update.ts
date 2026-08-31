@@ -199,10 +199,7 @@ export async function updateCommand(
         return
       }
 
-      const adapter = AdapterFactory.createRedisAdapter(
-        config.connection as ConnectionOptions,
-        config.blacklist?.tables ?? []
-      )
+      const adapter = AdapterFactory.createRedisAdapter(config)
       await adapter.connect()
       try {
         const startedAt = performance.now()
@@ -315,7 +312,7 @@ export async function updateCommand(
         return
       }
 
-      const adapter = AdapterFactory.createMongoDBAdapter(config.connection as ConnectionOptions)
+      const adapter = AdapterFactory.createMongoDBAdapter(config)
       await adapter.connect()
       try {
         const startedAt = performance.now()

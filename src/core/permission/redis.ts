@@ -13,8 +13,15 @@ import {
 /**
  * Mapping from Redis command (uppercased) to the lowest permission tier
  * that may run it. Anything not in this map is denied by default.
+ *
+ * The single owner of a Redis command's tier. `RedisCommandSpec` used to carry
+ * a second copy that nothing enforced and that had drifted on five commands;
+ * it has been removed rather than corrected. Exported so
+ * `tests/unit/adapters/redis/command-table-parity.test.ts` can hold the one
+ * relationship that has to be true: everything allowed here has a key-arity
+ * spec in `REDIS_COMMAND_TABLE`, so the blacklist can always find its keys.
  */
-const REDIS_COMMAND_PERMISSION: Record<string, Permission> = {
+export const REDIS_COMMAND_PERMISSION: Record<string, Permission> = {
   GET: 'query-only',
   MGET: 'query-only',
   STRLEN: 'query-only',

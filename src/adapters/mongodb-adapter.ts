@@ -2,6 +2,7 @@ import type { MongoClient as MongoClientType, Db } from 'mongodb'
 import { resolveSrv, resolveTxt } from 'node:dns/promises'
 import { ConnectionError } from './types'
 import { assertNoMongoServerSideScript } from './server-side-script'
+import { findProtectedFieldReference, protectedFieldsForRequest } from '@/core/mongo/request-fields'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 
 type MongoClientConstructor = new (uri: string, opts?: object) => MongoClientType
@@ -9,6 +10,39 @@ type SrvRecord = { name?: string; target?: string; port: number }
 
 export class MongoDBAdapter implements QueryableAdapter {
   private client: MongoClientType | null = null
+  /**
+   * `blacklist.columns`, as configured.
+   *
+   * Held by the adapter rather than read at each call site: the field rules
+   * used to be applied only by the three commands that remembered to mask their
+   * rows, and masking is the half that a request can defeat by renaming.
+   */
+  private blacklistColumns: Record<string, string[]> = {}
+
+  setBlacklistColumns(columns: Record<string, string[]>): void {
+    this.blacklistColumns = columns
+  }
+
+  /**
+   * Refuse a request that names a protected field.
+   *
+   * Mounted beside `assertNoMongoServerSideScript`, which is already the point
+   * every path goes through (#47), for the same reason: `$project`,
+   * `$addFields`, `$set` and `$group` all return a field's value under a key
+   * the *request* chose, so the response-side mask never sees the name it is
+   * looking for. `$group` is the worst of them — its output key is always
+   * `_id`, which the mask exempts unconditionally to preserve document
+   * references.
+   */
+  private assertNoProtectedFieldNamed(request: unknown, collection: string): void {
+    const fields = protectedFieldsForRequest(request, collection, this.blacklistColumns)
+    const named = findProtectedFieldReference(request, fields)
+    if (named === undefined) return
+    throw new Error(
+      `BlacklistRejection: field '${named}' is blacklist-protected and cannot be named in a ` +
+        `request — projecting, grouping or sorting on it would return its values.`
+    )
+  }
 
   constructor(
     private options: ConnectionOptions,
@@ -299,6 +333,7 @@ export class MongoDBAdapter implements QueryableAdapter {
 
     // 所有呼叫路徑共用的攔截點（#47）：$where 等於在資料庫上跑任意 JS
     assertNoMongoServerSideScript(parsed)
+    this.assertNoProtectedFieldNamed(parsed, collectionName)
 
     const limit = options?.limit
     let docs: T[]
@@ -416,6 +451,12 @@ export class MongoDBAdapter implements QueryableAdapter {
     data: Record<string, unknown>
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
+    // `insert` had neither check, while `execute`, `update` and `delete` had
+    // both — and #47's comment says every path is covered. What covered it was
+    // `checkColumnBlacklistOnWrite` in `src/commands/insert.ts`, at the call
+    // site, which is exactly the arrangement ADR-0015 Decision 1 removes.
+    assertNoMongoServerSideScript(data)
+    this.assertNoProtectedFieldNamed(data, collection)
     const result = await db.collection(collection).insertOne(data)
     return {
       rows: [],
@@ -433,6 +474,8 @@ export class MongoDBAdapter implements QueryableAdapter {
     // filter 與 update 都可能夾帶 $where / $function（#47：所有路徑一致受檢）
     assertNoMongoServerSideScript(filter)
     assertNoMongoServerSideScript(update)
+    this.assertNoProtectedFieldNamed(filter, collection)
+    this.assertNoProtectedFieldNamed(update, collection)
     const result = await db.collection(collection).updateMany(filter, update)
     return {
       rows: [],
@@ -446,6 +489,7 @@ export class MongoDBAdapter implements QueryableAdapter {
   ): Promise<ExecutionResult<unknown>> {
     const db = this.getDatabase()
     assertNoMongoServerSideScript(filter)
+    this.assertNoProtectedFieldNamed(filter, collection)
     const result = await db.collection(collection).deleteMany(filter)
     return {
       rows: [],

@@ -5,6 +5,7 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll } from 'bun:test'
 import { configModule } from '@/core/config'
 import { ConfigError } from '@/utils/errors'
+import { DEFAULT_AUDIT_ROTATION } from '@/utils/validation'
 import type { DbcliConfig } from '@/utils/validation'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -487,7 +488,7 @@ describe('configModule', () => {
 
       expect(result.audit.enabled).toBe(true)
       expect(result.audit.rotation.max_bytes).toBe(10_485_760)
-      expect(result.audit.rotation.max_entries).toBe(1000)
+      expect(result.audit.rotation.max_entries).toBe(DEFAULT_AUDIT_ROTATION.max_entries)
     })
 
     test('CONFIG-02: V2 .dbcli with audit.enabled=false preserves false through V2->V1 mapping', async () => {
@@ -539,7 +540,7 @@ describe('configModule', () => {
 
       expect(result.audit.enabled).toBe(true)
       expect(result.audit.rotation.max_bytes).toBe(10_485_760)
-      expect(result.audit.rotation.max_entries).toBe(1000)
+      expect(result.audit.rotation.max_entries).toBe(DEFAULT_AUDIT_ROTATION.max_entries)
     })
   })
 

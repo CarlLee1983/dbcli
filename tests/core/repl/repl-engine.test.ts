@@ -299,6 +299,147 @@ describe('ReplEngine', () => {
     expect(result.output).toBeDefined()
   })
 
+  test('a statement that executes writes an attempt row before it and an outcome row after', async () => {
+    // Measured 2026-08-31 against a local MariaDB: an UPDATE typed at the
+    // prompt changed a row and left nothing in the audit, while the same
+    // statement through `dbcli query` wrote one. ADR-0016 Decision 2 takes the
+    // Elasticsearch shell's pair — a row written only on the way back cannot
+    // describe a statement that never came back.
+    const rows: Array<{ phase: string; success: boolean; statement: string }> = []
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      mockContext,
+      historyPath,
+      null,
+      null,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success, statement: row.statement })
+        return { success: true, rotated: false, id: 'a' }
+      }
+    )
+
+    await engine.processInput("UPDATE users SET name = 'Bob' WHERE id = 1;")
+
+    expect(rows.map((r) => r.phase)).toEqual(['attempt', 'outcome'])
+    expect(rows[0]?.statement).toContain('UPDATE')
+  })
+
+  test('a statement that throws still writes an outcome row, marked failed', async () => {
+    // The attempt row alone would say a statement was sent and never say what
+    // came back — the same silence the whole record exists to remove.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const adapter = createMockAdapter()
+    adapter.execute = mock(() =>
+      Promise.reject(new Error('relation "users" does not exist'))
+    ) as unknown as DatabaseAdapter['execute']
+    const engine = new ReplEngine(adapter, mockContext, historyPath, null, null, async (row) => {
+      rows.push({ phase: row.phase, success: row.success })
+      return { success: true, rotated: false, id: 'a' }
+    })
+
+    await engine.processInput("UPDATE users SET name = 'Bob' WHERE id = 1;")
+
+    expect(rows.map((r) => r.phase)).toEqual(['attempt', 'outcome'])
+    expect(rows[1]?.success).toBe(false)
+  })
+
+  test('a failed reconnect closes its attempt row rather than leaving it open', async () => {
+    // The connection-error branch returns without reaching the generic failure
+    // path, so this is the one exit that could leave an attempt with no
+    // outcome — a record saying a statement was sent and never saying what
+    // happened to it.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const adapter = createMockAdapter()
+    const lost = Object.assign(new Error('server closed the connection'), {
+      code: 'ECONNRESET',
+    })
+    adapter.execute = mock(() => Promise.reject(lost)) as unknown as DatabaseAdapter['execute']
+    adapter.connect = mock(() => Promise.reject(new Error('still down')))
+    const engine = new ReplEngine(adapter, mockContext, historyPath, null, null, async (row) => {
+      rows.push({ phase: row.phase, success: row.success })
+      return { success: true, rotated: false, id: 'a' }
+    })
+
+    await engine.processInput("UPDATE users SET name = 'Bob' WHERE id = 1;")
+
+    expect(rows.map((r) => r.phase)).toEqual(['attempt', 'outcome'])
+    expect(rows[1]?.success).toBe(false)
+  })
+
+  test('a statement refused by permission writes one outcome row and no attempt', async () => {
+    // ADR-0016: a refused statement was never attempted, so the pair collapses
+    // to the half that happened. Measured before the fix, a read-write DELETE
+    // left nothing at all — the permission check returns before the write gate,
+    // which was the only thing on this path that recorded anything.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const ctx: ReplContext = { ...mockContext, permission: 'read-write' }
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      ctx,
+      historyPath,
+      null,
+      null,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { success: true, rotated: false, id: 'a' }
+      }
+    )
+
+    await engine.processInput('DELETE FROM users;')
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
+  test('a statement refused by the blacklist writes one outcome row', async () => {
+    // The other pre-execution exit. A read of a protected table is exactly the
+    // event a record is kept for, and it left nothing.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const config = {
+      blacklist: { tables: ['users'], columns: {} },
+    } as unknown as DbcliConfig
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      mockContext,
+      historyPath,
+      config,
+      null,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { success: true, rotated: false, id: 'a' }
+      }
+    )
+
+    await engine.processInput('SELECT * FROM users;')
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
+  test('a statement the write gate refuses writes one outcome row', async () => {
+    // The gate keeps its own decision row (`recordGateDecision`), which answers
+    // "was a full-table write confirmed or declined". That is a different
+    // question from "what did this session do", and only ADR-0016's row
+    // answers the second for every statement the same way.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      mockContext,
+      historyPath,
+      null,
+      async () => false,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { success: true, rotated: false, id: 'a' }
+      }
+    )
+
+    await engine.processInput("UPDATE users SET name = 'Bob';")
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
   test('a refusal names the level that would have worked, not the one already held', async () => {
     // `required` was a hardcoded guess — 'admin' for UNKNOWN, 'read-write' for
     // everything else — so a read-write user deleting a table read

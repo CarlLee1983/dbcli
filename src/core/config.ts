@@ -10,7 +10,12 @@
  * 2. File mode (legacy): .dbcli (single JSON file)
  */
 
-import { type DbcliConfig, DbcliConfigSchema, DbcliConfigV2Schema } from '@/utils/validation'
+import {
+  type DbcliConfig,
+  DbcliConfigSchema,
+  DbcliConfigV2Schema,
+  DEFAULT_AUDIT_ROTATION,
+} from '@/utils/validation'
 import { ConfigError } from '@/utils/errors'
 import { formatConfigValidationError, isZodError } from '@/utils/config-error-format'
 import {
@@ -124,7 +129,7 @@ const DEFAULT_CONFIG: DbcliConfig = {
   audit: {
     enabled: true,
     strict: false,
-    rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+    rotation: { ...DEFAULT_AUDIT_ROTATION },
   },
 }
 

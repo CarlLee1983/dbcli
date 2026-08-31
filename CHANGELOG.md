@@ -5,6 +5,28 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-08-31 - shell 裡一句真的改了資料的 UPDATE，稽核裡沒有任何一列
+
+`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 11 則自己註明是純讀碼結論、值得先端到端確認。確認了，結論成立，而且比讀碼看到的更嚴重。本機 MariaDB、`read-write` 連線、每次先清空 audit：`dbcli query "SELECT …"` 寫一列，而在 `dbcli>` 提示符打的同一句寫零列；一句帶 WHERE 的 `UPDATE` 走完全程、改掉了資料，同樣零列。設計決策記在 `docs/adr/0016-the-sql-shell-audits-every-statement-in-two-rows.md`。
+
+### Changed
+
+- **BREAKING（對解析 audit 紀錄的下游而言）：`metadata.es_shell_phase` 改名為 `metadata.shell_phase`。** 兩個 shell 現在共用同一個鍵。ADR-0016 Decision 2 的理由是讀 audit 的人不該需要先知道一列是哪個引擎產生的，而兩個鍵名正是那件事。任何在 4.0.0 上解析 `es_shell_phase` 的東西都會斷。
+
+- **SQL shell 為每一句語句寫稽核列，讀取也不例外。** 先前只有 tier-two 的寫入閘門決策會進 audit（`createShellWriteGate` 對非 tier-two 直接 return，而 `repl-engine.ts` 自己沒有任何稽核呼叫），所以提示符打的 `SELECT` 與一句真的改了資料的 `UPDATE` 同樣不留痕跡。較窄的方案（只記寫入與拒絕）被否決：一旦「沒有紀錄」有第二種解釋——走了哪個入口——它對任何一個入口都不再有意義。
+
+- **形狀與 Elasticsearch shell 相同：送出前 `attempt`、回來或拋出後 `outcome`。** 理由沿用 `EsShellAuditSink` 寫在型別註解裡的那句：只在回程寫的一列描述不了一個沒有回程的語句——被中斷的長 `UPDATE`、`SIGTERM`、client 端逾時而伺服器仍在跑。被拒絕的語句只寫 `outcome`，因為它從未被嘗試。三個拒絕出口（權限、黑名單、寫入閘門）各自補上，其中權限那個出口先前連 tier-two 的決策列都沒有——無 WHERE 的 `DELETE` 在 `read-write` 下由權限檢查擋下，發生在寫入閘門之前。
+
+- **稽核輪替的筆數上限從 1000 提高到 10000。** 在上面兩項之下，一次認真的互動 session 就能自己跑到 1000 列，然後輪替會丟掉寫入、留下讀取——剛好把這份檔案的價值反轉。位元組上限不變，它管的是磁碟。這個值先前有五份寫死的副本（schema、schema 自己的 `.default`、v1→v2 遷移、`config.ts`、`init-shared.ts`），已收成單一常數 `DEFAULT_AUDIT_ROTATION`。
+
+### Fixed
+
+- **shell 的權限拒絕訊息不再宣稱要求的等級是使用者已經持有的那個。** `repl-engine.ts` 把 `required` 算成 `classification.type === 'UNKNOWN' ? 'admin' : 'read-write'`——一個猜測，不是 `checkPermission` 實際判定的等級。於是 `read-write` 使用者刪整張表讀到 `Permission denied. Required: read-write (current: read-write)`，實際需要的是 `data-admin`。`minimumPermissionFor` 的註解記載這一類錯誤已在其他呼叫端修過，shell 的 SQL 這處是漏掉的一站。
+
+### Note
+
+`audit.strict: true` 現在也涵蓋 shell 裡的讀取：送出前那一列寫不出去就拒絕執行。這與 `dbcli query` 和 Elasticsearch shell 既有的行為一致，但 shell 的讀取路徑先前沒有這個失敗模式。不需要這個的人維持 `strict` 關閉即可——那是預設，寫失敗只留一行警告。
+
 ## [4.0.0] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission，同樣的形狀在 Redis 與 MongoDB 也成立，以及三個沒人比對的版本契約
 
 **建議所有把 Elasticsearch 連線交給 AI agent 操作的使用者升級。** `dbcli shell` 連到 Elasticsearch 時，完全沒有檢查連線設定的 permission 等級就把請求送到叢集：`shell.ts` 在到達 SQL 與 Redis 共用的那道閘門之前就分支到 `es-shell.ts`。因此 `permission: query-only` 的連線可以送出 `POST /<index>/_delete_by_query` 清空索引、`DELETE /<index>` 刪掉索引、`PUT /<index>/_mapping` 改寫 schema —— 同樣這些請求走 `dbcli query` 一律會被拒絕。這條路徑也不寫任何 audit 紀錄，所以受影響的人事後無從查證發生過什麼。

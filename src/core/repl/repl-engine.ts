@@ -1,6 +1,6 @@
 // src/core/repl/repl-engine.ts
 import type { DatabaseAdapter } from '../../adapters/types'
-import type { ReplContext, ReplState, ReplWriteGate } from './types'
+import type { ReplAuditSink, ReplContext, ReplState, ReplWriteGate } from './types'
 import type { DbcliConfig } from '../../types'
 import { isTransportFailure } from '@/utils/connection-error-message'
 import { classifyInput, COMMAND_PREFIX } from './input-classifier'
@@ -55,7 +55,12 @@ export class ReplEngine {
      * gate — Redis and MongoDB statements have a different shape and their own
      * permission guards (#78).
      */
-    private readonly writeGate: ReplWriteGate | null = null
+    private readonly writeGate: ReplWriteGate | null = null,
+    /**
+     * Absent means no audit, which is what every caller but the SQL shell
+     * passes today. ADR-0016.
+     */
+    private readonly auditSink: ReplAuditSink | null = null
   ) {
     this.state = { format: 'table', timing: false, connected: true, noLimit: false }
     this.buffer = new MultilineBuffer()
@@ -280,6 +285,9 @@ export class ReplEngine {
         SQL_DIALECTS.find((dialect) => dialect === this.context.system)
       )
       if (!permResult.allowed) {
+        // Refused, so it was never attempted: the pair collapses to the half
+        // that happened. ADR-0016.
+        await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
         return {
           action: 'continue',
           output: pc.red(
@@ -311,6 +319,7 @@ export class ReplEngine {
         blacklistValidator.checkTablesBlacklist('SELECT', referencedTables)
       } catch (error) {
         if (!(error instanceof BlacklistError)) throw error
+        await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
         return {
           action: 'continue',
           output: pc.red(t_vars('shell.error_blacklisted', { table: error.message })),
@@ -325,7 +334,10 @@ export class ReplEngine {
     // why nothing ran, and it is the only half that can tell a decline from a
     // refusal. A second line from here would repeat it on stdout, which is the
     // channel ADR 0009 keeps clear for results.
-    if (this.writeGate && !(await this.writeGate(sql))) return { action: 'continue' }
+    if (this.writeGate && !(await this.writeGate(sql))) {
+      await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
+      return { action: 'continue' }
+    }
 
     return this.runStatement(sql, blacklistValidator, referencedTables)
   }
@@ -340,6 +352,10 @@ export class ReplEngine {
     referencedTables: string[]
   ): Promise<ProcessResult> {
     const startTime = Date.now()
+
+    // Before the adapter, not after: a statement killed mid-flight still
+    // changed the data, and the outcome row is the one that will be missing.
+    await this.auditSink?.({ phase: 'attempt', success: true, statement: sql })
 
     try {
       const result = await this.adapter.execute<Record<string, unknown>>(sql, undefined, {
@@ -375,6 +391,7 @@ export class ReplEngine {
       }
 
       this.state = { ...this.state, connected: true }
+      await this.auditSink?.({ phase: 'outcome', success: true, statement: sql })
       return { action: 'continue', output }
     } catch (error) {
       // Attempt auto-reconnect once on connection errors
@@ -390,6 +407,10 @@ export class ReplEngine {
           // reconnect would make one typed statement two questions.
           return this.runStatement(sql, blacklistValidator, referencedTables)
         } catch (reconnectError) {
+          // This branch returns without reaching the generic failure exit
+          // below, so without its own row the attempt written above would
+          // never be closed.
+          await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
           return {
             action: 'continue',
             output: pc.red(
@@ -399,6 +420,7 @@ export class ReplEngine {
         }
       }
 
+      await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
       return {
         action: 'continue',
         output: pc.red(t_vars('shell.error_sql_failed', { message: (error as Error).message })),

@@ -44,6 +44,24 @@ export interface ReplContext {
  */
 export type ReplWriteGate = (sql: string) => Promise<boolean>
 
+/**
+ * The audit sink, asked to record a statement before and after it runs.
+ *
+ * A callback for the same reason `ReplWriteGate` is one: ADR 0009 keeps every
+ * stream and file write out of `src/core`, so the engine states what happened
+ * and `src/commands/shell.ts` decides where it lands.
+ *
+ * `attempt` is written before the statement reaches the adapter and `outcome`
+ * after it returns or throws — the pair `EsShellAuditSink` already writes, for
+ * the reason recorded there: a row written only on the way back cannot
+ * describe a statement that never came back. ADR-0016.
+ */
+export type ReplAuditSink = (record: {
+  phase: 'attempt' | 'outcome'
+  success: boolean
+  statement: string
+}) => Promise<import('../audit/logger').AuditWriteResult>
+
 export interface MetaCommandResult {
   readonly action: 'continue' | 'quit' | 'clear'
   readonly output?: string

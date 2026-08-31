@@ -9,6 +9,7 @@ import {
   PermissionSchema,
   NamedConnectionSchema,
   DbcliConfigV2Schema,
+  AuditRotationConfigSchema,
 } from '@/utils/validation'
 import { ZodError } from 'zod'
 
@@ -477,5 +478,19 @@ describe('validation', () => {
         expect(result.connections.search!.permission).toBe('query-only')
       })
     })
+  })
+})
+
+describe('audit rotation defaults', () => {
+  test('the entry ceiling outlasts a single interactive session', () => {
+    // ADR-0016 makes the SQL shell audit every statement in two rows. At the
+    // old ceiling of 1000 a working session could fill the file on its own,
+    // and rotation would then discard the writes to keep the reads — exactly
+    // inverting what the file is for.
+    const parsed = AuditRotationConfigSchema.parse(undefined)
+    expect(parsed.max_entries).toBe(10_000)
+    // Unchanged: this is the one that bounds disk use, and nothing here makes
+    // an individual row larger.
+    expect(parsed.max_bytes).toBe(10_485_760)
   })
 })

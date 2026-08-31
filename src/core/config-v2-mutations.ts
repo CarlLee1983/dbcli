@@ -1,3 +1,4 @@
+import { DEFAULT_AUDIT_ROTATION } from '@/utils/validation'
 import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
 export type SqlSystem = 'postgresql' | 'mysql' | 'mariadb'
@@ -80,7 +81,7 @@ export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
     schemas: {},
     metadata: v1.metadata ?? { version: '2.0' },
     blacklist: v1.blacklist ?? { tables: [], columns: {} },
-    audit: v1.audit ?? { enabled: true, rotation: { max_bytes: 10_485_760, max_entries: 1000 } },
+    audit: v1.audit ?? { enabled: true, rotation: { ...DEFAULT_AUDIT_ROTATION } },
   } as DbcliConfigV2
 }
 

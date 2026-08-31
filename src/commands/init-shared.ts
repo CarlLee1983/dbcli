@@ -12,6 +12,7 @@ import { configModule } from '@/core/config'
 import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
 import { promptUser } from '@/utils/prompts'
 import type { ConnectionConfig } from '@/types'
+import { DEFAULT_AUDIT_ROTATION } from '@/utils/validation'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import {
   getProjectStoragePath,
@@ -187,7 +188,7 @@ export async function writeV2InitConfig(
         audit: {
           enabled: true,
           strict: false,
-          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+          rotation: { ...DEFAULT_AUDIT_ROTATION },
         },
       }
 

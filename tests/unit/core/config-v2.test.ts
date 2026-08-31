@@ -284,7 +284,7 @@ describe('config-v2', () => {
       const parsed = DbcliConfigV2Schema.parse({ ...BASE_V2 })
       expect(parsed.audit.enabled).toBe(true)
       expect(parsed.audit.rotation.max_bytes).toBe(10485760)
-      expect(parsed.audit.rotation.max_entries).toBe(1000)
+      expect(parsed.audit.rotation.max_entries).toBe(10_000)
     })
 
     test('Test 2: audit.enabled=false is preserved verbatim; rotation still uses defaults', () => {
@@ -294,7 +294,7 @@ describe('config-v2', () => {
       })
       expect(parsed.audit.enabled).toBe(false)
       expect(parsed.audit.rotation.max_bytes).toBe(10485760)
-      expect(parsed.audit.rotation.max_entries).toBe(1000)
+      expect(parsed.audit.rotation.max_entries).toBe(10_000)
     })
 
     test('Test 3: custom audit values are preserved end-to-end', () => {

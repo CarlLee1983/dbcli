@@ -287,18 +287,30 @@ export const RedisConfigSchema = z
  * Audit rotation thresholds schema (D-11)
  * Both thresholds default to the locked values; either trigger triggers rotation (OR relationship).
  */
+/**
+ * The rotation ceilings, in one place.
+ *
+ * They were written out at five call sites — the schema, its own `.default`,
+ * the v1→v2 migration, `config.ts` and `init-shared.ts` — so raising one raised
+ * one. ADR-0015's shape: a value copied per call site is a value that drifts.
+ */
+export const DEFAULT_AUDIT_ROTATION = { max_bytes: 10_485_760, max_entries: 10_000 } as const
+
 export const AuditRotationConfigSchema = z
   .object({
-    max_bytes: z.number().int().positive().default(10_485_760), // 10 MiB (D-11)
-    max_entries: z.number().int().positive().default(1000), // D-11
+    max_bytes: z.number().int().positive().default(DEFAULT_AUDIT_ROTATION.max_bytes),
+    // D-11 set this at 1000. ADR-0016 makes the SQL shell audit every
+    // statement in two rows, and a working interactive session reaches 1000 on
+    // its own — rotation would then discard the writes to keep the reads.
+    max_entries: z.number().int().positive().default(DEFAULT_AUDIT_ROTATION.max_entries),
   })
   .optional()
-  .default({ max_bytes: 10_485_760, max_entries: 1000 })
+  .default({ ...DEFAULT_AUDIT_ROTATION })
 
 /**
  * Audit configuration schema (CONFIG-01)
  * D-01: default enabled (opt-out).
- * D-11: rotation thresholds default to 10 MiB / 1000 entries.
+ * D-11: rotation thresholds default to 10 MiB / 10,000 entries (ADR-0016).
  * Missing `audit` key in an upgraded .dbcli (CONFIG-03) is auto-filled by the zod default.
  */
 export const AuditConfigSchema = z
@@ -336,7 +348,7 @@ export const AuditConfigSchema = z
   .default({
     enabled: true,
     strict: false,
-    rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+    rotation: { ...DEFAULT_AUDIT_ROTATION },
   })
 
 /**

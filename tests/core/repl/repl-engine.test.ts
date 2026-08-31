@@ -299,6 +299,19 @@ describe('ReplEngine', () => {
     expect(result.output).toBeDefined()
   })
 
+  test('a refusal names the level that would have worked, not the one already held', async () => {
+    // `required` was a hardcoded guess — 'admin' for UNKNOWN, 'read-write' for
+    // everything else — so a read-write user deleting a table read
+    // "Required: read-write (current: read-write)": a refusal stating its own
+    // requirement was already met. DELETE is granted by data-admin
+    // (permission-guard TIER_GRANTS), and that is what the line has to say.
+    const ctx: ReplContext = { ...mockContext, permission: 'read-write' }
+    const engine = new ReplEngine(createMockAdapter(), ctx, historyPath)
+    const result = await engine.processInput('DELETE FROM users;')
+    expect(result.output ?? '').toContain('data-admin')
+    expect(result.output ?? '').not.toMatch(/Required: read-write/)
+  })
+
   test('state updates from meta commands persist', async () => {
     const adapter = createMockAdapter()
     const engine = new ReplEngine(adapter, mockContext, historyPath)

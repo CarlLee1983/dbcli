@@ -284,7 +284,11 @@ export class ReplEngine {
           action: 'continue',
           output: pc.red(
             t_vars('shell.error_permission', {
-              required: permResult.classification.type === 'UNKNOWN' ? 'admin' : 'read-write',
+              // checkPermission already derives the lowest level that grants
+              // this statement, from the same table the decision uses. Guessing
+              // here instead told a read-write user that DELETE "Required:
+              // read-write" — a refusal whose stated requirement was already met.
+              required: permResult.requiredPermission ?? 'admin',
               current: this.context.permission,
             })
           ),

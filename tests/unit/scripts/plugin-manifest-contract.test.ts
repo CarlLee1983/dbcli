@@ -76,6 +76,7 @@ const PACKAGE_MAJOR = Number(
 /** Same major, so SECURITY.md stays valid and only the manifest check can fire. */
 const OTHER_VERSION = `${PACKAGE_MAJOR}.999.0`
 const OTHER_MAJOR = PACKAGE_MAJOR + 1
+const FIRST_MANIFEST = MANIFESTS[0]!
 
 afterEach(() => {
   for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true })
@@ -108,7 +109,7 @@ describe('plugin manifest drift guard', () => {
     const { code, output } = runCheck(dir)
     expect(code).toBe(1)
     expect(output).toContain(OTHER_VERSION)
-    expect(output).toContain(MANIFESTS[0])
+    expect(output).toContain(FIRST_MANIFEST)
   })
 
   test('--write realigns the versions and the check then passes', () => {

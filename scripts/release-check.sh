@@ -19,6 +19,9 @@ bun run agent-core:check
 
 step '4/9 typecheck'
 bun run typecheck
+# CI typechecks the test tree as its own step; a release:check that skips it is
+# not the superset of CI it is used as.
+bun run typecheck:tests
 
 step '5/9 lint'
 bun run lint

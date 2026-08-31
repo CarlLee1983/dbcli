@@ -729,3 +729,27 @@ describe('BlacklistValidator', () => {
     })
   })
 })
+
+describe('the write side walks ancestors as the read side does (ADR-0018 Decision 4)', () => {
+  it('refuses a write to a child of a protected path', () => {
+    // Under a rule `profile`, `profile.ssn` could be written and could not be
+    // read. There is no reading of "blacklisted" under which that is right.
+    const validator = new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns: { users: ['profile'] } },
+      } as never)
+    )
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['profile.ssn'])).toThrow()
+    // Unchanged: a merely similar name is not a child.
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['profile_name'])).not.toThrow()
+  })
+})

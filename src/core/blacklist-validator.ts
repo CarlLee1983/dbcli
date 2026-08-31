@@ -199,7 +199,19 @@ export class BlacklistValidator {
     if (blacklisted.length === 0 || fields.length === 0) {
       return
     }
-    const conflicts = fields.filter((f) => blacklisted.includes(f))
+    // The same ancestor walk `filterColumnsForTables` uses: under a rule
+    // `profile`, `profile.ssn` was writable and unreadable. ADR-0018 Decision 4.
+    const protectedPaths = new Set(blacklisted.map((name) => name.toLowerCase()))
+    const conflicts = fields.filter((field) => {
+      const name = field.toLowerCase()
+      if (protectedPaths.has(name)) return true
+      let dot = name.indexOf('.')
+      while (dot >= 0) {
+        if (dot > 0 && protectedPaths.has(name.slice(0, dot))) return true
+        dot = name.indexOf('.', dot + 1)
+      }
+      return false
+    })
     if (conflicts.length === 0) {
       return
     }
@@ -258,8 +270,9 @@ export class BlacklistValidator {
     rows: Record<string, unknown>[],
     columnList: string[]
   ): FilterColumnsResult {
-    // Column names are matched case-sensitively, so they are deduplicated
-    // exactly — unlike table names, which the manager looks up case-insensitively.
+    // Deduplicated exactly. Matching folds a name's first segment (ADR-0018),
+    // but two rules differing only in case are still two entries here, and the
+    // fold below makes them collapse to one comparison rather than two rules.
     //
     // An empty list means the scan could not name a table, which is not the
     // same as "this statement has no rules". Treating it as the latter would
@@ -325,15 +338,28 @@ export class BlacklistValidator {
       collect(row)
     }
 
-    const protectedPaths = new Set(blacklistedColumns)
+    // A rule and a returned column name are compared case-insensitively on their
+    // *first* segment: that segment is a SQL identifier, and `SELECT password AS
+    // "PASSWORD"` chose the key masking compares against. Later segments are
+    // nested object keys and keep their case. ADR-0018 Decision 1.
+    const foldHead = (path: string): string => {
+      const dot = path.indexOf('.')
+      return dot < 0 ? path.toLowerCase() : path.slice(0, dot).toLowerCase() + path.slice(dot)
+    }
+    const protectedPaths = new Set(blacklistedColumns.map(foldHead))
+    // Folded name -> the name as the row actually carries it, which is what has
+    // to be removed from the rows.
+    const presentByFolded = new Map<string, string>()
+    for (const column of presentColumns) presentByFolded.set(foldHead(column), column)
 
     const omitted = new Set<string>()
     for (const path of blacklistedColumns) {
       // `presentColumns` first: it is a Set lookup, while the nested probe walks
       // every row. The fail-safe branch above can hand this loop the whole rule set
       // with almost nothing matching, which is exactly the shape that probe is worst at.
-      if (presentColumns.has(path)) {
-        omitted.add(path)
+      const present = presentByFolded.get(foldHead(path))
+      if (present !== undefined) {
+        omitted.add(present)
         continue
       }
       // Everything the probe could still find is reachable only by descending from a
@@ -361,7 +387,7 @@ export class BlacklistValidator {
       // ancestor, so a rule for `.profile` never reached `.profile.ssn`.
       let dot = column.indexOf('.')
       while (dot >= 0) {
-        if (dot > 0 && protectedPaths.has(column.slice(0, dot))) {
+        if (dot > 0 && protectedPaths.has(column.slice(0, dot).toLowerCase())) {
           omitted.add(column)
           break
         }

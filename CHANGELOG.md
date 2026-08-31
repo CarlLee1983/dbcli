@@ -5,6 +5,24 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 八種黑名單寫法，七種靜默無效
+
+規格 SQL 第 7、8、9 則。設計決策記在 `docs/adr/0018-a-blacklist-rule-that-does-not-match-fails-loudly.md`。本機 MariaDB、表 `probe_users (id, Password, note)`、值 `s3cret`，八種設定裡七種洩漏，而全部都被設定載入器無聲接受——操作者「規則有效」的唯一證據是 dbcli 沒有抱怨。
+
+### Changed
+
+- **BREAKING：欄位規則與回傳欄位名比對時，第一段摺成小寫。** 先前規則 `password` 對欄位 `Password` 完全不命中，而最嚴重的一則不是設定寫錯：規則大小寫**寫對了**，`SELECT Password AS PASSWORD` 照樣把值送回來，`query-only` 就做得到——遮罩比對的是回傳時的鍵名，而別名選了那個鍵名，與 ADR-0015 為 MongoDB `$project` 關掉的是同一個形狀，只是這裡經由大小寫抵達。只摺第一段：後面的段落是巢狀物件的鍵（JSON 欄位裡的 `profile.SSN`），不是 SQL 識別字。代價是 PostgreSQL 允許 `"Password"` 與 `"password"` 並存於同一張表，規則寫其中一個現在兩個都遮——過度拒絕，與 ADR-0014、0015 同一個方向。
+
+- **BREAKING：以自己的表限定的欄位項改為載入失敗。** `{"users": ["users.password"]}` 從來沒有命中過任何東西。它不能被靜默改寫，因為欄位項裡的點號已經有第二個合法意思——`profile.ssn` 是巢狀路徑，正是第 8 則那個祖先走訪存在的理由。比對第一段是否等於它所在的表名鍵，是唯一不需要猜測就能分辨兩者的判準。**含有這種條目的設定會停止載入，直到改掉為止。**
+
+- **寫入側改為與讀取側相同的祖先走訪。** `checkColumnBlacklistOnWrite` 是字面 `includes`，而 `filterColumnsForTables` 會沿點號向上走，於是規則 `profile` 之下 `profile.ssn` 能寫不能讀。沒有任何一種「被列入黑名單」的讀法能容許這件事。
+
+### Fixed
+
+- **設定裡的前後空白與外層引號會被去掉。** `[" password "]`、`["\"password\""]`、``["`password`"]``、鍵 `" users "` 全部靜默無效。ES 那側的 `es-index-target.ts` 早就 trim 兼解引號，SQL 側沒有。
+
+- **表規則同時以完整名稱與最後一段查找。** `{"public.users": …}` 對 `SELECT * FROM users` 不生效，反向也一樣——`extractTableReferences` 會保留限定名稱的完整字串，所以每個鍵只對它被寫成的那一種拼法生效。這是查找的改動而非解析時的猜測：沒有任何地方決定操作者指的是哪一種拼法，同一張表的兩種拼法解析到同一份規則。
+
 ## [5.1.0] - 2026-08-31 - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
 
 `docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 10 則。設計決策記在 `docs/adr/0017-the-audit-target-stays-wrong-and-the-record-stops-depending-on-it.md`。

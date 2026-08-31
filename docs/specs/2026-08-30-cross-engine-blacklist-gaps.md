@@ -14,7 +14,7 @@ audit `target` 可被 SQL 註解偽造、`query` 的 DML 記成 `readonly`、以
 **狀態**：MongoDB 的第 1、2 則（兩個 CRITICAL）已於
 `fix/cross-engine-blacklist-gaps` 修復——請求側拒絕指名受保護欄位，記在
 ADR-0015 Decision 2。audit 的第 11 則（含驗證中發現的 11b）已於 5.0.0 修復，
-記在 ADR-0016。其餘（MongoDB 3-6、SQL 7-9、audit 12）未修；第 10 則已於 ADR-0017 處置。
+記在 ADR-0016。其餘（MongoDB 3-6、audit 12）未修；第 10 則已於 ADR-0017 處置，SQL 7-9 於 ADR-0018。
 
 ## MongoDB
 
@@ -78,7 +78,7 @@ MongoDB 沒有請求端的欄位檢查——ES 那側第七輪修的 `namesProte
 
 ## SQL
 
-### 7. [HIGH] 欄位比對大小寫敏感、表名不敏感，兩端沒有共同的摺疊規則
+### 7. [HIGH][已修] 欄位比對大小寫敏感、表名不敏感，兩端沒有共同的摺疊規則
 
 `blacklist-manager.ts:86` 存欄位原樣、`:95` 表名 `toLowerCase()`、`:129` 用
 `columnSet.has(columnName)`。`blacklist column add users.Password` 在 PostgreSQL
@@ -88,13 +88,13 @@ MongoDB 沒有請求端的欄位檢查——ES 那側第七輪修的 `namesProte
 註解說「column names are case-sensitive」是刻意設計，但那個設計只在兩端摺疊
 規則一致時成立，而設定端沒有任何摺疊或提示。
 
-### 8. [MEDIUM-HIGH] 寫入側不做祖先比對
+### 8. [MEDIUM-HIGH][已修] 寫入側不做祖先比對
 
 `checkColumnBlacklistOnWrite`（`blacklist-validator.ts:202`）是純字面
 `includes`，讀取側 `filterColumnsForTables:357-370` 會沿祖先走。於是規則
 `profile` 之下，`$set: {"profile.ssn": …}` **能寫不能讀**。
 
-### 9. [MEDIUM] 設定端不 trim、不解引號
+### 9. [MEDIUM][已修] 設定端不 trim、不解引號
 
 `blacklist-manager.ts:51/86/95` 對條目與鍵都不 `trim()`。`[" password "]`、
 `[" users "]`、`['"password"']`、``['`password`']``、`["users.password"]`

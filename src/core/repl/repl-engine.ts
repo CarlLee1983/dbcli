@@ -285,6 +285,9 @@ export class ReplEngine {
         SQL_DIALECTS.find((dialect) => dialect === this.context.system)
       )
       if (!permResult.allowed) {
+        // Refused, so it was never attempted: the pair collapses to the half
+        // that happened. ADR-0016.
+        await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
         return {
           action: 'continue',
           output: pc.red(
@@ -316,6 +319,7 @@ export class ReplEngine {
         blacklistValidator.checkTablesBlacklist('SELECT', referencedTables)
       } catch (error) {
         if (!(error instanceof BlacklistError)) throw error
+        await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
         return {
           action: 'continue',
           output: pc.red(t_vars('shell.error_blacklisted', { table: error.message })),
@@ -330,7 +334,10 @@ export class ReplEngine {
     // why nothing ran, and it is the only half that can tell a decline from a
     // refusal. A second line from here would repeat it on stdout, which is the
     // channel ADR 0009 keeps clear for results.
-    if (this.writeGate && !(await this.writeGate(sql))) return { action: 'continue' }
+    if (this.writeGate && !(await this.writeGate(sql))) {
+      await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
+      return { action: 'continue' }
+    }
 
     return this.runStatement(sql, blacklistValidator, referencedTables)
   }

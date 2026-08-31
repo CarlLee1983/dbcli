@@ -366,6 +366,80 @@ describe('ReplEngine', () => {
     expect(rows[1]?.success).toBe(false)
   })
 
+  test('a statement refused by permission writes one outcome row and no attempt', async () => {
+    // ADR-0016: a refused statement was never attempted, so the pair collapses
+    // to the half that happened. Measured before the fix, a read-write DELETE
+    // left nothing at all — the permission check returns before the write gate,
+    // which was the only thing on this path that recorded anything.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const ctx: ReplContext = { ...mockContext, permission: 'read-write' }
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      ctx,
+      historyPath,
+      null,
+      null,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { written: true }
+      }
+    )
+
+    await engine.processInput('DELETE FROM users;')
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
+  test('a statement refused by the blacklist writes one outcome row', async () => {
+    // The other pre-execution exit. A read of a protected table is exactly the
+    // event a record is kept for, and it left nothing.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const config = {
+      blacklist: { tables: ['users'], columns: {} },
+    } as unknown as DbcliConfig
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      mockContext,
+      historyPath,
+      config,
+      null,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { written: true }
+      }
+    )
+
+    await engine.processInput('SELECT * FROM users;')
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
+  test('a statement the write gate refuses writes one outcome row', async () => {
+    // The gate keeps its own decision row (`recordGateDecision`), which answers
+    // "was a full-table write confirmed or declined". That is a different
+    // question from "what did this session do", and only ADR-0016's row
+    // answers the second for every statement the same way.
+    const rows: Array<{ phase: string; success: boolean }> = []
+    const engine = new ReplEngine(
+      createMockAdapter(),
+      mockContext,
+      historyPath,
+      null,
+      async () => false,
+      async (row) => {
+        rows.push({ phase: row.phase, success: row.success })
+        return { written: true }
+      }
+    )
+
+    await engine.processInput("UPDATE users SET name = 'Bob';")
+
+    expect(rows.map((r) => r.phase)).toEqual(['outcome'])
+    expect(rows[0]?.success).toBe(false)
+  })
+
   test('a refusal names the level that would have worked, not the one already held', async () => {
     // `required` was a hardcoded guess — 'admin' for UNKNOWN, 'read-write' for
     // everything else — so a read-write user deleting a table read

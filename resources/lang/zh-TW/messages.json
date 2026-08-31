@@ -254,7 +254,8 @@
     "table_added": "✓ 表格 '{table}' 已新增至黑名單",
     "table_removed": "✓ 表格 '{table}' 已從黑名單移除",
     "column_added": "✓ 欄位 '{table}.{column}' 已新增至黑名單",
-    "column_removed": "✓ 欄位 '{table}.{column}' 已從黑名單移除"
+    "column_removed": "✓ 欄位 '{table}.{column}' 已從黑名單移除",
+    "refuse_wildcard": "已拒絕：'{table}' 含有萬用字元，而 {system} 上的比對是逐字進行的——這筆設定永遠不會命中任何東西。請寫出確切的名稱。"
   },
   "security": {
     "columns_omitted": "安全: {count} 個欄位根據你的黑名單已被隱藏"

@@ -251,9 +251,19 @@ export function redactArgvSensitiveText(text: string, argv: string[]): string {
  * Redact sensitive patterns (password=..., token=..., etc.) from arbitrary strings.
  */
 export function redactSensitive(text: string): string {
-  return text.replace(
-    /\b(password|token|apiKey|secret|key|token|auth|credential|pass|pwd|sid)([:=]|\s+)([^\s"';,]+)/gi,
-    '$1$2<redacted>'
+  return (
+    text
+      // URL 的 userinfo：`https://elastic:hunter2@host:9243`。keyword=value 的
+      // 規則一個字元都吃不到它，而連線字串常常就是這樣寫的——ES 連線失敗的
+      // 錯誤訊息把整串 baseUrl 帶進 audit 的 error 欄。
+      // `[^/\s]*@` 而不是 `[^/@\s]+@`：貪婪到 authority 段的**最後**一個 `@`。
+      // 密碼裡含字面 `@` 時，停在第一個會把尾巴留在紀錄裡。`[^/\s]` 保證不會
+      // 越過 authority 段，所以路徑裡的 `@`（文件 id）不受影響。
+      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/gi, '$1<redacted>@')
+      .replace(
+        /\b(password|token|apiKey|secret|key|token|auth|credential|pass|pwd|sid)([:=]|\s+)([^\s"';,]+)/gi,
+        '$1$2<redacted>'
+      )
   )
 }
 
@@ -289,4 +299,28 @@ export function redactParams(params: unknown): unknown {
     return out
   }
   return '<redacted>'
+}
+
+/**
+ * 把控制字元換成可見的跳脫寫法，供任何要把使用者可控字串印給人看的地方使用。
+ *
+ * C0 與 DEL 之外還涵蓋：雙向控制字元（U+202E 之類，會讓其後整段以右到左顯示，
+ * 足以把一行訊息重排成另一個意思）、U+2028／U+2029／U+0085（在多數終端機與
+ * 編輯器裡就是換行）、零寬字元（讓兩個看起來相同的字串其實不同）。
+ *
+ * 這不是排版問題：`ESC[2K ESC[1G` 會清掉整行並把游標移回行首，於是使用者自己
+ * 寫進路徑裡的字元可以蓋掉一句「Refused」，讓操作者看到一則假的成功訊息。
+ */
+export function escapeControlCharacters(text: string): string {
+  // The control characters are the subject, not an accident: this function
+  // exists to make them visible, so a rule that forbids naming them in a
+  // pattern has nothing to warn about here.
+  return text.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g,
+    (char) => {
+      const named: Record<string, string> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' }
+      return named[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+    }
+  )
 }

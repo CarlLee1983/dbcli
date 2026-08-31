@@ -118,12 +118,12 @@ describe('the same rule applies to statements nobody assembled', () => {
 
 describe('elasticsearch refusals answer the same question', () => {
   const ES_CASES = [
-    { request: { method: 'POST', apiPath: '/users/_doc' }, permission: 'query-only' as const },
-    { request: { method: 'DELETE', apiPath: '/users/_doc/1' }, permission: 'read-write' as const },
+    { request: { method: 'POST', rawPath: '/users/_doc' }, permission: 'query-only' as const },
+    { request: { method: 'DELETE', rawPath: '/users/_doc/1' }, permission: 'read-write' as const },
     // A request the classifier cannot place lands on DROP, which no tier below
     // admin grants.
     {
-      request: { method: 'PUT', apiPath: '/_cluster/settings' },
+      request: { method: 'PUT', rawPath: '/_cluster/settings' },
       permission: 'data-admin' as const,
     },
   ]
@@ -148,7 +148,7 @@ describe('elasticsearch refusals answer the same question', () => {
   test('the refusal names the level rather than "a higher tier"', () => {
     let message = ''
     try {
-      enforceElasticsearchPermission({ method: 'DELETE', apiPath: '/users/_doc/1' }, 'read-write')
+      enforceElasticsearchPermission({ method: 'DELETE', rawPath: '/users/_doc/1' }, 'read-write')
     } catch (error) {
       message = (error as PermissionError).message
     }

@@ -90,21 +90,48 @@ export class MessageLoader {
   }
 
   /**
+   * Switch the catalogue this loader reads.
+   *
+   * `DBCLI_LANG` is read once, in the constructor, and the module-level `t` /
+   * `t_vars` close over one instance — so replacing the singleton does not
+   * reach them. Anything that needs a different language after start-up needs
+   * this. Today that is the test suite, which asserts on English wording to
+   * establish *which* refusal fired and must do so whatever `DBCLI_LANG` the
+   * run inherited.
+   */
+  setLanguage(lang: string): void {
+    this.currentLang = lang
+    this.messages = {}
+    this.loadMessages()
+  }
+
+  /**
    * Interpolate variables in a message.
    * Replaces {varName} with values from vars object.
    * Supports multiple variables.
    */
   interpolate(key: string, vars: Record<string, string | number>): string {
-    let message = this.t(key)
-
-    for (const [varName, value] of Object.entries(vars)) {
-      // Escape special regex characters in varName
-      const escapedVarName = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const regex = new RegExp(`{${escapedVarName}}`, 'g')
-      message = message.replace(regex, String(value))
-    }
-
-    return message
+    // One pass over the message, with a replacer *function*.
+    //
+    // Two defects the previous shape had, both reachable from values a user
+    // controls — an Elasticsearch shell refusal interpolates the path the
+    // operator typed, the index expression that matched and the field name that
+    // was refused, and the same string becomes the audit row's `error`:
+    //
+    // 1. `String.replace(re, value)` honours `$&`, `$'`, `` $` `` and `$1` in
+    //    the *replacement*, so a value containing them rewrote the message
+    //    around itself. `sec$&rets` came out as `sec{index}rets`, which named
+    //    an index nobody asked for, in the record of what was refused.
+    // 2. Variables were substituted one at a time, so a value that happened to
+    //    spell another variable's placeholder was substituted again by the
+    //    next pass.
+    //
+    // A replacer function receives the name and returns the value verbatim, and
+    // a single pass never revisits what it has written. An unknown placeholder
+    // is left as it was found, which is what the per-variable loop did.
+    return this.t(key).replace(/\{([^{}]+)\}/g, (match, name: string) =>
+      Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
+    )
   }
 }
 

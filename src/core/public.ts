@@ -7,7 +7,14 @@
  */
 
 // ── Engine ───────────────────────────────────────────────
-export { AdapterFactory, ConnectionError } from '@/adapters'
+// `AdapterFactory` 曾經在這裡。它回傳的 adapter 的 `request()` / `execute()`
+// 是 public，所以拿到它就等於拿到一條不經 permission、不經 blacklist、
+// 不寫 audit 的路徑——CLI 的每一道門都繞過去了。`QueryExecutor` 與
+// `DataExecutor` 才是這個表面該給的東西：它們自己帶著 gate。
+//
+// 未來要重新開放建構 adapter 的能力時，開放的必須是包好 gate 的 façade，
+// 不是工廠本身。
+export { ConnectionError } from '@/adapters'
 export { QueryExecutor } from '@/core/query-executor'
 export { DataExecutor } from '@/core/data-executor'
 export { SchemaLayeredLoader } from '@/core/schema-loader'

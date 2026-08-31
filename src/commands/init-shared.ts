@@ -186,6 +186,7 @@ export async function writeV2InitConfig(
         blacklist: { tables: [], columns: {} },
         audit: {
           enabled: true,
+          strict: false,
           rotation: { max_bytes: 10_485_760, max_entries: 1000 },
         },
       }

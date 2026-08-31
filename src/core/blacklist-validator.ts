@@ -9,7 +9,11 @@ import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
 import { hasFieldPath, omitFieldPaths } from './field-projection'
-import { expandIndexTargets, matchesIndexGlob } from '@/utils/es-index-target'
+import {
+  expandIndexTargets,
+  indexExpressionReaches,
+  matchesIndexGlob,
+} from '@/utils/es-index-target'
 
 /**
  * Deduplicate table names case-insensitively, keeping the first spelling.
@@ -127,24 +131,22 @@ export class BlacklistValidator {
    * @throws BlacklistError if any named or matchable index is blacklisted
    */
   checkIndexBlacklist(operation: string, target: string): void {
-    const { concrete, wildcards } = expandIndexTargets(target)
-    this.checkTablesBlacklist(operation, concrete)
-
-    if (wildcards.length === 0 || this.manager.canOverrideBlacklist()) return
+    if (this.manager.canOverrideBlacklist()) return
 
     const blacklisted = Array.from(this.manager.getState().tables)
     if (blacklisted.length === 0) return
 
-    const reachable = wildcards.filter((pattern) =>
-      blacklisted.some((entry) => matchesIndexGlob(pattern, entry))
-    )
-    if (reachable.length === 0) return
+    // `indexExpressionReaches` 展開**兩端**——請求端與黑名單條目。先前這裡把
+    // concrete 名稱交給 `isTableBlacklisted`（Set 的字面查表），所以黑名單寫成
+    // `secrets*` 時 `--index secrets-2026` 完全不擋，而使用者依 Redis 那側的
+    // 文件正是那樣寫的。
+    if (!indexExpressionReaches(target, blacklisted)) return
 
     const message = t_vars('errors.table_blacklisted', {
-      table: reachable.join(', '),
+      table: target,
       operation,
     })
-    throw new BlacklistError(message, reachable[0] as string, operation)
+    throw new BlacklistError(message, target, operation)
   }
 
   /**
@@ -167,8 +169,12 @@ export class BlacklistValidator {
   ): FilterColumnsResult {
     const { concrete, wildcards } = expandIndexTargets(target)
     const ruleKeys = Array.from(this.manager.getState().columns.keys())
-    const reachable = ruleKeys.filter((key) =>
-      wildcards.some((pattern) => matchesIndexGlob(pattern, key))
+    // 兩個方向都要比：規則鍵是萬用字元時（`users*`）要能套到具體的請求名稱，
+    // 請求是萬用字元時要能套到具體的規則鍵。先前只有後者。
+    const reachable = ruleKeys.filter(
+      (key) =>
+        wildcards.some((pattern) => matchesIndexGlob(pattern, key)) ||
+        concrete.some((name) => indexExpressionReaches(name, [key]))
     )
     return this.filterColumnsForTables([...concrete, ...reachable], rows, columnList)
   }

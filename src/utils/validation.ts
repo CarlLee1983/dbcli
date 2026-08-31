@@ -221,11 +221,46 @@ export const MetadataSchema = z
  * Blacklist configuration schema
  * Optional field for backward compatibility with existing .dbcli files
  */
+/**
+ * 看起來在設定安全性、實際什麼都不做的鍵。
+ *
+ * zod 預設剝掉未知鍵，於是拼成 Elasticsearch 詞彙的黑名單——`indices`、
+ * `fields`——會被靜靜丟掉，解析結果是空黑名單而沒有任何警告：使用者看著設定檔
+ * 以為有保護，實際完全沒有。與第七輪那個 CRITICAL 同一個形狀。
+ *
+ * 檢查必須在解析**之前**做，因為解析會先把它們剝掉——`superRefine` 拿到的是
+ * 剝完的物件，寫在那裡是一個永遠不會觸發的檢查（實測確認過）。
+ *
+ * 不改成全域 `.strict()`：那會拒絕無害的額外鍵，代價落在與安全無關的設定上。
+ */
+const BLACKLIST_KEY_ALIASES: Record<string, string> = {
+  indices: 'tables',
+  index: 'tables',
+  fields: 'columns',
+  keys: 'tables',
+}
+
 export const BlacklistConfigSchema = z
   .object({
     tables: z.array(z.string()).default([]),
     columns: z.record(z.array(z.string())).default({}),
   })
+  // `passthrough` 讓未知鍵活到 refine 那一步——預設的剝除發生在 refine 之前，
+  // 所以寫在 `superRefine` 裡的檢查永遠不會觸發（實測確認過）。看到之後再
+  // `transform` 掉，對外的型別與行為不變。
+  .passthrough()
+  .superRefine((value, ctx) => {
+    for (const [wrong, right] of Object.entries(BLACKLIST_KEY_ALIASES)) {
+      if (wrong in value) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [wrong],
+          message: `blacklist.${wrong} is not a setting and would be silently ignored — did you mean blacklist.${right}?`,
+        })
+      }
+    }
+  })
+  .transform((value) => ({ tables: value.tables, columns: value.columns }))
   .optional()
   .default({ tables: [], columns: {} })
 
@@ -269,11 +304,38 @@ export const AuditRotationConfigSchema = z
 export const AuditConfigSchema = z
   .object({
     enabled: z.boolean().default(true), // D-01: opt-out default ON
+    /**
+     * 稽核寫不出來就不要動資料庫。
+     *
+     * audit 一直是 best-effort：磁碟滿、目錄不可寫、lock budget 耗盡時，操作
+     * 照樣執行而紀錄不存在，只有一行 stderr 警告（一個 process 只印一次，
+     * 管線模式通常看不到）。對多數使用者這是對的取捨——遺失一列紀錄不該讓
+     * 工具停擺。但把稽核當成控制本身的人（ES shell 的 permission 就是這種
+     * 情形）需要能表達相反的取捨，而先前連表達都表達不了。
+     *
+     * 強制點是「效果發生前」的稽核寫入（`writeAuditEntryBeforeEffect`）：
+     * ES shell 送出請求前的那一列，與 SQL 的 gate decision。效果已經發生之後
+     * 才寫的紀錄不在範圍內——那時拒絕擋不回任何東西，只會把一次成功的操作
+     * 回報成失敗。
+     *
+     * 預設關閉：這改的是既有行為，開啟與否是使用者的判斷。
+     */
+    strict: z.boolean().default(false),
     rotation: AuditRotationConfigSchema,
+  })
+  // `enabled: false` 配 `strict: true` 的語意是「不記錄、也不擋」，與寫下
+  // strict 的人想要的完全相反。這種組合是打字錯誤或誤解，不是取捨——
+  // 讓它在讀設定時就失敗，而不是在需要它的那一刻靜靜地什麼都不做。
+  .refine((audit) => !(audit.strict && !audit.enabled), {
+    message:
+      'audit.strict requires audit.enabled: with audit off there is nothing to write, so ' +
+      'strict would refuse nothing. Enable audit, or turn strict off.',
+    path: ['strict'],
   })
   .optional()
   .default({
     enabled: true,
+    strict: false,
     rotation: { max_bytes: 10_485_760, max_entries: 1000 },
   })
 
@@ -324,12 +386,33 @@ const ElasticsearchNamedConnectionSchema = ElasticsearchConnectionConfigSchema.e
   environment: EnvironmentLabelSchema,
 })
 
-export const NamedConnectionSchema = z.union([
+const NamedConnectionUnion = z.union([
   SqlNamedConnectionSchema,
   MongoDBNamedConnectionSchema,
   RedisNamedConnectionSchema,
   ElasticsearchNamedConnectionSchema,
 ])
+// `permission` 是 per-connection 的，`blacklist` 不是——它只有頂層一份。
+// 寫在連線裡會被靜靜剝掉，而使用者文件說「每條連線各自帶著自己的 blacklist
+// filtering」，正好強化這個誤解。與其讓保護靜默消失，不如在讀設定時就說出來。
+//
+// 檢查的是 union **解析前**的原始輸入：union 的每個分支都會先剝掉未知鍵，
+// 所以 refine 拿到的物件裡不會再有 `blacklist`。
+
+export const NamedConnectionSchema = z.preprocess((raw, ctx) => {
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    if ('blacklist' in (raw as Record<string, unknown>)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['blacklist'],
+        message:
+          'blacklist is configured once at the top level, not per connection — a blacklist here ' +
+          'would be ignored. Move it to the top-level blacklist.',
+      })
+    }
+  }
+  return raw
+}, NamedConnectionUnion)
 
 /**
  * V2 config schema with multiple named connections

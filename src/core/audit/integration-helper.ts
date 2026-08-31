@@ -1,7 +1,7 @@
 /**
  * AuditIntegrationHelper — centralized entry point for wiring audit logs into commands.
  */
-import { AuditLogger } from './logger'
+import { AuditLogger, type AuditWriteResult } from './logger'
 import { SessionIdService } from './session-id'
 import { resolveConfigStoragePath } from '../config-binding'
 import { getGlobalConnectionName } from '../config'
@@ -99,6 +99,68 @@ export async function writeAuditEntry(
   options: { config?: string; [key: string]: unknown },
   outcome: AuditOutcome
 ): Promise<string | null> {
+  const result = await writeAuditEntryResult(config, commandName, options, outcome)
+  return 'success' in result ? result.id : null
+}
+
+/** 稽核在這個位置是控制本身，而它寫不出來。 */
+export class AuditRequiredError extends Error {
+  constructor(detail: string) {
+    super(
+      `Refused: the audit entry for this operation could not be written (${detail}), and ` +
+        `audit.strict is on. Fix the audit sink (disk space, directory permissions, a stale ` +
+        `lockfile under .dbcli/audit) or turn audit.strict off to accept unrecorded operations.`
+    )
+    this.name = 'AuditRequiredError'
+    Object.setPrototypeOf(this, AuditRequiredError.prototype)
+  }
+}
+
+/** 只有真正的寫入失敗算失敗：關閉是使用者的選擇，不是控制失效。 */
+export function auditWriteFailed(result: AuditWriteResult): boolean {
+  return !('success' in result) && result.skipped !== 'disabled'
+}
+
+/**
+ * 效果發生**之前**的稽核寫入點。`audit.strict` 只在這裡有意義。
+ *
+ * audit 呼叫分兩種位置：效果發生前（ES shell 送出請求前的 attempt、SQL 的
+ * gate decision）與效果發生後（outcome）。strict 的語意是「稽核寫不出來就別
+ * 動資料庫」，而那個「別動」只有在前一種位置說得出口——效果已經發生之後，
+ * 拒絕擋不回任何東西，只會把一次成功的操作回報成失敗。
+ *
+ * 所以強制點是這個函式，不是每一個 `writeAuditEntry` 呼叫端。加一個新的
+ * 效果前寫入點時要呼叫它；那也是唯一需要記住的規則。
+ *
+ * @throws {AuditRequiredError} `audit.strict` 開啟且這一列寫不出去
+ */
+export async function writeAuditEntryBeforeEffect(
+  config: DbcliConfig,
+  commandName: string,
+  options: { config?: string; [key: string]: unknown },
+  outcome: AuditOutcome
+): Promise<AuditWriteResult> {
+  const result = await writeAuditEntryResult(config, commandName, options, outcome)
+  if (config.audit?.strict === true && auditWriteFailed(result)) {
+    throw new AuditRequiredError('skipped' in result ? result.skipped : 'unknown')
+  }
+  return result
+}
+
+/**
+ * 同 `writeAuditEntry`，但回傳完整的 `AuditWriteResult`。
+ *
+ * `writeAuditEntry` 把「audit 關閉」與「audit 寫失敗」一起收斂成 `null`，
+ * 於是想要 fail-closed 的呼叫端分不出這兩件事——而它們的正確反應完全相反：
+ * 關閉是使用者的選擇，寫失敗是控制失效。`config.audit.strict` 要能成立，
+ * 這個區別必須留到呼叫端手上。
+ */
+export async function writeAuditEntryResult(
+  config: DbcliConfig,
+  commandName: string,
+  options: { config?: string; [key: string]: unknown },
+  outcome: AuditOutcome
+): Promise<AuditWriteResult> {
   try {
     const connectionName =
       (typeof options.connectionName === 'string' && options.connectionName) ||
@@ -133,7 +195,15 @@ export async function writeAuditEntry(
       target,
       success: outcome.success,
       redacted_query: redactArgv(process.argv),
-      ...(outcome.sql && { redacted_sql: redactSql(outcome.sql) }),
+      // `redactSql` 是 SQL 字面值遮罩：它會把數字換成 `0`、吃掉引號之間的東西。
+      // 套在 Elasticsearch 的 `<METHOD> <path>` 上會吃掉操作對象本身——
+      // `DELETE /orders/_doc/12345` 變成 `DELETE /orders/_doc/0`，
+      // `POST /logs-2026.08.30/_delete_by_query` 變成 `POST /logs-0.0/...`。
+      // ES 的 statement 是路徑不是語句，改用一般的敏感字串遮罩。
+      ...(outcome.sql && {
+        redacted_sql:
+          engine === 'elasticsearch' ? redactSensitive(outcome.sql) : redactSql(outcome.sql),
+      }),
       ...(errorMessage && { error: errorMessage }),
       ...(outcome.recovery_ref && { recovery_ref: outcome.recovery_ref }),
       // The resolved runtime identity is authoritative.  Keep it in every
@@ -146,13 +216,13 @@ export async function writeAuditEntry(
       },
     }
 
-    const result = await logger.write(entry)
-    // Phase 25 D-K / L5: 'success' in result discriminator — only the success
-    // variant of AuditWriteResult exposes the entry id.
-    return 'success' in result ? result.id : null
-  } catch {
+    return await logger.write(entry)
+  } catch (error) {
     // D6: Never throw from audit integration.
     // Logger already prints to stderr once if write fails.
-    return null
+    return {
+      skipped: 'write-failed',
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }

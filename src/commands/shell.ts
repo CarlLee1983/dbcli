@@ -17,6 +17,7 @@ import { RedisShellAdapter } from '@/adapters/redis-shell-adapter'
 import * as esShell from '@/commands/es-shell'
 import type { RedisAdapter } from '@/adapters/redis-adapter'
 import type { QueryableAdapter } from '@/adapters/types'
+import { createSubmitQueue } from './shell-submit-queue'
 
 function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
   if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
@@ -263,6 +264,10 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
 
   rl.prompt()
 
+  // `.quit` 之後排在佇列裡的行不再執行。宣告在 `handleLine` 之前，因為兩邊
+  // 都讀它：設旗標的是 quit 分支，擋下 enqueue 的是 `'line'` handler。
+  let isClosing = false
+
   const handleLine = async (line: string): Promise<void> => {
     // Paused while the statement runs so that a prompt raised from inside —
     // the tier-two write gate is the only one today — owns stdin alone.
@@ -287,6 +292,7 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
     switch (result.action) {
       case 'quit':
         if (result.output) console.error(result.output)
+        isClosing = true
         rl.close()
         return
 
@@ -323,12 +329,17 @@ export async function runShell(options: { sql?: boolean }, configPath: string): 
   // readline emits them all before the handler's first `await` returns. Without
   // this queue those handlers run concurrently through one `ReplEngine`, sharing
   // its multiline buffer and its `.format` / `.no-limit` state.
-  let pending: Promise<void> = Promise.resolve()
+  // 序列化只是一半。`'close'` 不等這條鏈就 `process.exit(0)`，於是管線輸入的
+  // 最後一筆會送得出去而 audit 寫不完——與 ES shell 上第五輪找到的是同一個洞。
+  const queue = createSubmitQueue()
   rl.on('line', (line: string) => {
-    pending = pending.then(() => handleLine(line))
+    // `.quit` 之後排在佇列裡的行不再執行——與 ES shell 的 `exit` 同一個形狀。
+    if (isClosing) return
+    queue.enqueue(() => handleLine(line))
   })
 
   rl.on('close', async () => {
+    await queue.drain()
     console.error(pc.dim(t('shell.goodbye')))
     await engine.saveHistory()
     await adapter.disconnect()

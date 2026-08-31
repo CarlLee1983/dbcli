@@ -14,6 +14,7 @@ import {
   getOrInitBlacklist,
   parseColumnIdentifier,
   isValidTableName,
+  isValidTableNameForSystem,
 } from '@/commands/blacklist'
 
 // Create a temp .dbcli file for testing
@@ -77,6 +78,31 @@ describe('isValidTableName()', () => {
     expect(isValidTableName('user table')).toBe(false)
     expect(isValidTableName('users!')).toBe(false)
     expect(isValidTableName('')).toBe(false)
+  })
+
+  /**
+   * 第八輪 HIGH：這條規則拒絕了幾乎所有合法的 Elasticsearch index 名，於是
+   * `dbcli blacklist table add` 對 ES 使用者不可用，只能手編設定檔——而手編
+   * 正是最容易把條目寫成 glob 的路徑，直接餵養同一輪那個 CRITICAL。
+   *
+   * 含 `-` 與 `.` 的 index 名是 ES 的常態（`logs-2026.08.30`、`.kibana`），
+   * 而萬用字元與 `:` 是使用者文件在 Redis 那側明文教的寫法。
+   */
+  it('accepts the names Elasticsearch and Redis actually use', () => {
+    expect(isValidTableName('my-index')).toBe(true)
+    expect(isValidTableName('logs-2026.08.30')).toBe(true)
+    expect(isValidTableName('.kibana')).toBe(true)
+    expect(isValidTableName('secrets*')).toBe(true)
+    expect(isValidTableName('secrets:*')).toBe(true)
+    expect(isValidTableName('sec?ets')).toBe(true)
+  })
+
+  it('still rejects what would silently mean something else', () => {
+    // 逗號在條目裡會被展開成多個目標，但透過 CLI 一次加一個才說得清楚。
+    expect(isValidTableName('a,b')).toBe(false)
+    // 路徑分隔與空白：前者會讓條目看起來像路徑，後者是打字錯誤的常見形狀。
+    expect(isValidTableName('a/b')).toBe(false)
+    expect(isValidTableName(' secrets')).toBe(false)
   })
 })
 
@@ -320,5 +346,39 @@ describe('blacklistColumnRemove()', () => {
   it('rejects invalid format', async () => {
     const configPath = await createTempConfig()
     await expect(blacklistColumnRemove('invalid-format', configPath)).rejects.toThrow()
+  })
+})
+
+/**
+ * 第九輪：第八輪放寬 `VALID_TABLE_NAME` 是為了 Elasticsearch 與 Redis 的名稱
+ * （`my-index`、`secrets:*`），但驗證不看連線類型。於是 SQL 與 MongoDB 的
+ * 使用者也能加入一個 glob 條目——而那兩個引擎的比對是字面相等，條目永遠不會
+ * 命中，CLI 卻回報成功。
+ *
+ * 這是我在第八輪造成的迴歸，而它的形狀正是第八輪自己在修的那一種：**使用者
+ * 以為設了，實際完全無效**。放寬本身是對的，少的是「這個寫法對這個引擎有沒有
+ * 意義」那一問。
+ */
+describe('isValidTableNameForSystem()', () => {
+  it('ES 與 Redis 接受 glob', () => {
+    expect(isValidTableNameForSystem('secrets*', 'elasticsearch')).toBe(true)
+    expect(isValidTableNameForSystem('secrets:*', 'redis')).toBe(true)
+    expect(isValidTableNameForSystem('logs-2026.08.30', 'elasticsearch')).toBe(true)
+  })
+
+  it('SQL 與 MongoDB 拒絕 glob——那裡的比對是字面相等', () => {
+    expect(isValidTableNameForSystem('secret*', 'postgresql')).toBe(false)
+    expect(isValidTableNameForSystem('secret?', 'mysql')).toBe(false)
+    expect(isValidTableNameForSystem('sec[a-z]', 'mongodb')).toBe(false)
+  })
+
+  it('SQL 與 MongoDB 的一般名稱照常接受', () => {
+    expect(isValidTableNameForSystem('users', 'postgresql')).toBe(true)
+    expect(isValidTableNameForSystem('audit_logs', 'mongodb')).toBe(true)
+    expect(isValidTableNameForSystem('logs.2026', 'mongodb')).toBe(true)
+  })
+
+  it('未知或未指定的引擎沿用寬鬆規則', () => {
+    expect(isValidTableNameForSystem('secrets*', undefined)).toBe(true)
   })
 })

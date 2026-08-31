@@ -18,5 +18,25 @@
   "timing_display": "Time: {ms}ms",
   "rows_display": "{count} row(s)",
   "unknown_command": "Unknown command: '{command}'. Type '.help' for available commands.",
-  "subcommand_prefix_hint": "This line is being read as SQL and is waiting for its `;`. If you meant the dbcli subcommand, type {command} instead. Ctrl-C cancels."
+  "subcommand_prefix_hint": "This line is being read as SQL and is waiting for its `;`. If you meant the dbcli subcommand, type {command} instead. Ctrl-C cancels.",
+  "es": {
+    "parse_empty": "Empty request",
+    "parse_needs_method_path": "Request requires a method and a path, e.g. \"GET /index/_search\"",
+    "parse_needs_path": "Request requires a path",
+    "refuse_dot_segment": "Refused: '{path}' contains a '..' segment once decoded, and dbcli cannot tell which path Elasticsearch would route it to. Write the path out without '..'.",
+    "refuse_unparseable": "Refused: '{path}' is not the request the server would receive. It cannot be parsed as a path.",
+    "refuse_not_canonical": "Refused: '{path}' is not the request the server would receive. Write it as '{canonical}'.",
+    "refuse_source_param": "Refused: `source` in the query string is a request body by another route. Write the body as JSON.",
+    "refuse_search_template": "Refused: '{path}' is a search template, whose body cannot be inspected — it is a string rendered on the cluster, or stored there. Write the query out in full.",
+    "refuse_string_body": "Refused: a quoted string request body is not supported. Write the body as JSON.",
+    "refuse_audit_strict": "Refused: the audit entry for this request could not be written, and audit.strict is on. Fix the audit sink (disk space, directory permissions, a stale lockfile in .dbcli/audit) or turn audit.strict off to accept unrecorded requests.",
+    "blacklist_index": "index '{index}' is blacklist-protected",
+    "blacklist_unscoped": "'{path}' names no index, so it cannot be checked against the blacklist. Scope the request to an index, e.g. GET /<index>/_search.",
+    "blacklist_field": "field '{field}' is blacklist-protected and cannot be named in a request — sorting, aggregating or scripting on it would return its values.",
+    "banner_title": "Elasticsearch shell — Kibana Dev Tools syntax",
+    "banner_hint": "Enter \"<METHOD> /<path>\" then an optional JSON body; submit with a blank line. Try: GET /_cat/indices",
+    "banner_keys": "Ctrl+C cancels the current block; Ctrl+D or \"exit\" quits.",
+    "block_cancelled": "(block cancelled)",
+    "goodbye": "Goodbye"
+  }
 }

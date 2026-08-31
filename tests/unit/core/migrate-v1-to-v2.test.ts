@@ -24,7 +24,7 @@ function v1(): DbcliConfig {
     schema: {},
     metadata: { version: '1.0' },
     blacklist: { tables: ['secrets'], columns: { users: ['ssn'] } },
-    audit: { enabled: true, rotation: { max_bytes: 10485760, max_entries: 1000 } },
+    audit: { strict: false, enabled: true, rotation: { max_bytes: 10485760, max_entries: 1000 } },
   } as DbcliConfig
 }
 

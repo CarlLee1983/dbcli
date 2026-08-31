@@ -22,13 +22,25 @@ export function shouldEmbedRecent(opts: { forAgent?: boolean; format: string }):
   return opts.forAgent === true || opts.format === 'json'
 }
 
+/**
+ * 與 `src/commands/audit.ts` 的 `briefify` 是同一個決定的兩個實作點。
+ *
+ * `recover --format json` 與 `inspect --for-agent` 走這裡。少了 statement，
+ * `DELETE /orders` 與 `PUT /orders/_mapping` 在 agent 眼中是同一列；少了 phase，
+ * 一次成功的請求呈現為兩列只差 `success` 的紀錄，其中 `success: false` 那列
+ * 讀起來就是一次失敗——那正是 attempt 改成 `success: false` 想避免的誤讀，
+ * 只是換到另一條輸出路徑。改動 `briefify` 時要一起改這裡。
+ */
 function briefifyForRecent(entry: AuditEntry): AuditEntryBrief {
+  const phase = (entry.metadata as { es_shell_phase?: unknown } | undefined)?.es_shell_phase
   return {
     id: entry.id,
     ts: entry.ts,
     command: entry.command,
     target: entry.target,
     success: entry.success,
+    ...(entry.redacted_sql !== undefined && { redacted_sql: entry.redacted_sql }),
+    ...(phase !== undefined && { phase }),
   }
 }
 

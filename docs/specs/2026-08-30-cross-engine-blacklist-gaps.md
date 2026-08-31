@@ -13,7 +13,8 @@ audit `target` 可被 SQL 註解偽造、`query` 的 DML 記成 `readonly`、以
 
 **狀態**：MongoDB 的第 1、2 則（兩個 CRITICAL）已於
 `fix/cross-engine-blacklist-gaps` 修復——請求側拒絕指名受保護欄位，記在
-ADR-0015 Decision 2。其餘（MongoDB 3-6、SQL 7-9、audit 10-12）未修。
+ADR-0015 Decision 2。audit 的第 11 則（含驗證中發現的 11b）已於 5.0.0 修復，
+記在 ADR-0016。其餘（MongoDB 3-6、SQL 7-9、audit 10、12）未修。
 
 ## MongoDB
 
@@ -119,15 +120,17 @@ blacklist 走 tokenizer（`query-executor.ts:133`），audit 走單一名稱推�
 問題沒有修**。修法方向是兩邊共用 `extractTableReferences`，target 取首張並把
 其餘放進 `metadata.tables`。
 
-### 11. [HIGH] `dbcli shell` 只有 tier-two 的閘門決策會進 audit
+### 11. [HIGH][已修] `dbcli shell` 只有 tier-two 的閘門決策會進 audit
 
 `src/core/repl/repl-engine.ts` 內沒有任何 `writeAuditEntry`，唯一的稽核來自
 `shell-write-gate.ts` 的 `recordGateDecision`，而它 `if (verdict.tier !== 'two')
 return true`。也就是在 shell 打的 SELECT 與 tier-one 的 UPDATE／DELETE／INSERT
 完全沒有稽核列。
 
-**已端到端驗證（2026-08-31，本機 MariaDB 10.11，`read-write` 連線，每次先清空
-audit）。結論成立，而且比讀碼看到的更嚴重。**
+**已端到端驗證並修復**（ADR-0016，5.0.0）。驗證於 2026-08-31，本機 MariaDB
+10.11、`read-write` 連線、每次先清空 audit。結論成立，而且比讀碼看到的更嚴重。
+修復後同樣四條路徑：shell `SELECT` 兩列、帶 WHERE 的 `UPDATE` 兩列、權限拒絕
+一列、閘門拒絕兩列（閘門自己的決策列加新的 `outcome`）。
 
 | 路徑 | 執行結果 | 稽核列 |
 | --- | --- | --- |

@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>*{box-sizing:border-box}body,h1,h2,h3,p,dd,figure{margin:0}body{min-height:100vh}</style>
+<title>資料庫門口的警衛</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    --paper: #EDF0F3;
+    --surface: #FFFFFF;
+    --surface-2: #E3E8ED;
+    --ink: #1A222C;
+    --ink-soft: #56646F;
+    --line: #C9D2DA;
+    --steel: #2F5D7C;
+    --steel-soft: #DCE7EF;
+    --amber: #B26F12;
+    --amber-soft: #F6E9D2;
+    --moss: #3A7355;
+    --moss-soft: #DDEAE1;
+    --clay: #A03E2B;
+    --clay-soft: #F3DED8;
+    --shadow: 0 1px 0 rgba(26,34,44,.05), 0 12px 28px -18px rgba(26,34,44,.45);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #121920;
+      --surface: #1A232C;
+      --surface-2: #232E39;
+      --ink: #E4EBF1;
+      --ink-soft: #94A3AF;
+      --line: #33404C;
+      --steel: #7FB3D5;
+      --steel-soft: #1E2E3B;
+      --amber: #E0A452;
+      --amber-soft: #33281A;
+      --moss: #7FBE9A;
+      --moss-soft: #1B2C23;
+      --clay: #E0836C;
+      --clay-soft: #33201B;
+      --shadow: 0 1px 0 rgba(0,0,0,.3), 0 14px 30px -20px rgba(0,0,0,.9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #121920;
+    --surface: #1A232C;
+    --surface-2: #232E39;
+    --ink: #E4EBF1;
+    --ink-soft: #94A3AF;
+    --line: #33404C;
+    --steel: #7FB3D5;
+    --steel-soft: #1E2E3B;
+    --amber: #E0A452;
+    --amber-soft: #33281A;
+    --moss: #7FBE9A;
+    --moss-soft: #1B2C23;
+    --clay: #E0836C;
+    --clay-soft: #33201B;
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 14px 30px -20px rgba(0,0,0,.9);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: clamp(32px, 6vw, 76px) clamp(18px, 5vw, 40px) 96px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(56px, 8vw, 92px);
+  }
+
+  h1, h2, h3, .display {
+    font-family: Archivo, "Noto Sans TC", sans-serif;
+    font-variation-settings: "wdth" 112;
+    text-wrap: balance;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--steel);
+    margin: 0 0 14px;
+  }
+
+  h1 { font-size: clamp(38px, 7.5vw, 66px); font-weight: 800; letter-spacing: -.01em; }
+  h2 { font-size: clamp(25px, 4vw, 34px); font-weight: 700; }
+  h3 { font-size: 19px; font-weight: 700; }
+
+  p { margin: 0; }
+  .lede { font-size: clamp(19px, 2.4vw, 22px); color: var(--ink-soft); max-width: 32em; margin-top: 22px; }
+  .note { color: var(--ink-soft); font-size: 15.5px; }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .86em;
+  }
+  code {
+    background: var(--surface-2);
+    padding: .1em .4em;
+    border-radius: 3px;
+  }
+  .src {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    letter-spacing: .01em;
+    word-break: break-all;
+  }
+
+  section { display: flex; flex-direction: column; gap: 26px; }
+  .sec-head { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---- hero diagram ---- */
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    padding: clamp(16px, 3vw, 30px);
+    overflow-x: auto;
+  }
+  .stage svg { display: block; width: 100%; min-width: 560px; height: auto; }
+  .stage.mirror { border-left: 4px solid var(--amber); }
+
+  /* ---- spec strip ---- */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .strip div {
+    background: var(--surface);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .strip dt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .strip dd {
+    margin: 0;
+    font-family: Archivo, "Noto Sans TC", sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- gates ---- */
+  .gates { display: flex; flex-direction: column; gap: 14px; }
+  .gate {
+    display: grid;
+    grid-template-columns: 68px 1fr;
+    gap: clamp(14px, 3vw, 26px);
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--steel);
+    border-radius: 3px;
+    padding: 22px clamp(16px, 3vw, 26px);
+    box-shadow: var(--shadow);
+  }
+  .gate .num {
+    font-family: Archivo, sans-serif;
+    font-variation-settings: "wdth" 100;
+    font-weight: 800;
+    font-size: 46px;
+    line-height: 1;
+    color: var(--steel);
+    font-variant-numeric: tabular-nums;
+  }
+  .gate .body { display: flex; flex-direction: column; gap: 8px; }
+  .gate.block { border-left-color: var(--clay); }
+  .gate.block .num { color: var(--clay); }
+  .gate.pass { border-left-color: var(--moss); }
+  .gate.pass .num { color: var(--moss); }
+  .gate.warn { border-left-color: var(--amber); }
+  .gate.warn .num { color: var(--amber); }
+
+  /* ---- key cards ---- */
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .key {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: var(--shadow);
+  }
+  .key .tag {
+    align-self: flex-start;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 100px;
+  }
+  .k1 .tag { background: var(--moss-soft); color: var(--moss); }
+  .k2 .tag { background: var(--steel-soft); color: var(--steel); }
+  .k3 .tag { background: var(--amber-soft); color: var(--amber); }
+  .k4 .tag { background: var(--clay-soft); color: var(--clay); }
+  .key strong { font-size: 17px; }
+  .key p { font-size: 15px; color: var(--ink-soft); line-height: 1.7; }
+
+  /* ---- floors ---- */
+  .floors { display: flex; flex-direction: column; gap: 10px; }
+  .floor {
+    display: grid;
+    grid-template-columns: minmax(120px, 170px) 1fr;
+    gap: clamp(12px, 3vw, 24px);
+    align-items: baseline;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px clamp(16px, 3vw, 24px);
+  }
+  .floor .who {
+    font-family: Archivo, sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--steel);
+  }
+  .floor .who span { display: block; }
+  .floor .what { font-size: 15.5px; color: var(--ink-soft); line-height: 1.75; }
+  .floor .what b { color: var(--ink); font-weight: 500; }
+
+  /* ---- pull quote ---- */
+  .pull {
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    padding: 30px 0;
+    font-family: Archivo, "Noto Sans TC", sans-serif;
+    font-variation-settings: "wdth" 108;
+    font-weight: 700;
+    font-size: clamp(21px, 3.4vw, 30px);
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .pull em { font-style: normal; color: var(--clay); }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 22px;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+
+  @media (max-width: 560px) {
+    .gate { grid-template-columns: 52px 1fr; }
+    .gate .num { font-size: 34px; }
+    .floor { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">dbcli · 用五歲小孩聽得懂的話</p>
+    <h1>資料庫門口<br>站著一個警衛</h1>
+    <p class="lede">AI 助理想拿公司資料庫的資料。它不能自己開門，得先跟警衛講。警衛叫 <strong>dbcli</strong>。<br><br>這個警衛還有第二個身分：他也可以搬張椅子坐在走廊旁邊，<strong>什麼都不管，只記下誰走過去</strong>。</p>
+  </header>
+
+  <section>
+    <div class="stage">
+      <svg viewBox="0 0 900 300" role="img" aria-label="AI 助理透過 dbcli 警衛亭連到六種資料庫">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--steel)"></path>
+          </marker>
+        </defs>
+
+        <!-- AI -->
+        <rect x="10" y="95" width="180" height="110" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+        <text x="100" y="140" text-anchor="middle" font-family="Archivo, sans-serif" font-size="22" font-weight="800" fill="var(--ink)">AI 助理</text>
+        <text x="100" y="170" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink-soft)">Claude / Cursor</text>
+
+        <line x1="196" y1="150" x2="322" y2="150" stroke="var(--steel)" stroke-width="2.5" marker-end="url(#ar)"></line>
+        <text x="259" y="136" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink-soft)">「給我資料」</text>
+
+        <!-- gate -->
+        <rect x="332" y="35" width="200" height="230" rx="4" fill="var(--steel-soft)" stroke="var(--steel)" stroke-width="2"></rect>
+        <text x="432" y="90" text-anchor="middle" font-family="Archivo, sans-serif" font-size="30" font-weight="800" fill="var(--steel)">dbcli</text>
+        <text x="432" y="116" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink-soft)">警衛亭</text>
+        <line x1="356" y1="134" x2="508" y2="134" stroke="var(--steel)" stroke-width="1" opacity=".45"></line>
+        <text x="432" y="163" text-anchor="middle" font-family="Noto Sans TC, sans-serif" font-size="15" fill="var(--ink)">看鑰匙</text>
+        <text x="432" y="193" text-anchor="middle" font-family="Noto Sans TC, sans-serif" font-size="15" fill="var(--ink)">查黑名單</text>
+        <text x="432" y="223" text-anchor="middle" font-family="Noto Sans TC, sans-serif" font-size="15" fill="var(--ink)">遮敏感欄位</text>
+        <text x="432" y="250" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-soft)">全程寫進 audit log</text>
+
+        <line x1="538" y1="150" x2="664" y2="150" stroke="var(--steel)" stroke-width="2.5" marker-end="url(#ar)"></line>
+        <text x="601" y="136" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink-soft)">只放安全的過去</text>
+
+        <!-- databases -->
+        <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink)">
+          <rect x="674" y="28" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="50">PostgreSQL</text>
+          <rect x="674" y="68" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="90">MySQL</text>
+          <rect x="674" y="108" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="130">MariaDB</text>
+          <rect x="674" y="148" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="170">MongoDB</text>
+          <rect x="674" y="188" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="210">Redis</text>
+          <rect x="674" y="228" width="216" height="34" rx="3" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="692" y="250">Elasticsearch</text>
+        </g>
+      </svg>
+    </div>
+    <p class="note">六種資料庫、六種講話方式。AI 只要學一種：跟警衛講。<span class="src">src/adapters/factory.ts</span></p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">四把鑰匙</p>
+      <h2>你拿到哪一把，就只能做那麼多事</h2>
+      <p class="note">鑰匙寫在設定檔裡。沒設定的話，預設是最小的那一把。<span class="src">src/types/index.ts:L101 · src/core/config.ts:L118</span></p>
+    </div>
+    <div class="keys">
+      <div class="key k1">
+        <span class="tag">query-only</span>
+        <strong>只能看</strong>
+        <p>只能讀，而且一次最多端 1000 筆出來，免得整鍋被搬走。</p>
+      </div>
+      <div class="key k2">
+        <span class="tag">read-write</span>
+        <strong>可以改資料</strong>
+        <p>新增、修改、刪除資料列。但不能動桌子本身。</p>
+      </div>
+      <div class="key k3">
+        <span class="tag">data-admin</span>
+        <strong>可以搬資料</strong>
+        <p>比較粗重的資料活。仍然不是萬能鑰匙。</p>
+      </div>
+      <div class="key k4">
+        <span class="tag">admin</span>
+        <strong>什麼都能</strong>
+        <p>連拆桌子（DROP、TRUNCATE）都行。警衛只會先喊一聲「你確定？」</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">一句 SQL 的旅程</p>
+      <h2>要走過五道關卡，<br>才會變成你看到的答案</h2>
+      <p class="note">這是真的有先後順序的一條走廊，每一關都在同一個檔案裡照著跑。<span class="src">src/core/query-executor.ts:L79–L200</span></p>
+    </div>
+
+    <div class="gates">
+      <div class="gate block">
+        <div class="num">1</div>
+        <div class="body">
+          <h3>你的鑰匙夠不夠？</h3>
+          <p>警衛先看這句話想做什麼：讀？寫？拆桌子？只放行「看得懂而且明確安全」的那些。<strong>看不懂就擋下來</strong>——寧可誤擋，不可誤放。</p>
+          <p class="src">src/core/permission-guard.ts — whitelist approach</p>
+        </div>
+      </div>
+
+      <div class="gate warn">
+        <div class="num">2</div>
+        <div class="body">
+          <h3>偷偷幫你加上 LIMIT 1000</h3>
+          <p>拿著「只能看」鑰匙又沒自己寫上限時，警衛替你加。不然一句 <code>SELECT *</code> 就把一千萬筆倒進 AI 的腦袋。</p>
+        </div>
+      </div>
+
+      <div class="gate block">
+        <div class="num">3</div>
+        <div class="body">
+          <h3>這張桌子在黑名單上嗎？</h3>
+          <p>不是只看第一張桌子——<strong>JOIN、逗號、UNION 牽到的每一張都要查</strong>。從側門繞進去也不行。</p>
+          <p class="src">src/core/blacklist-validator.ts · issue #23</p>
+        </div>
+      </div>
+
+      <div class="gate pass">
+        <div class="num">4</div>
+        <div class="body">
+          <h3>好，去拿資料</h3>
+          <p>到這裡才真的碰到資料庫。翻譯機（adapter）把同一句話講成那個資料庫聽得懂的版本。</p>
+        </div>
+      </div>
+
+      <div class="gate block">
+        <div class="num">5</div>
+        <div class="body">
+          <h3>把敏感欄位塗黑再交出去</h3>
+          <p>密碼、身分證、信用卡——資料回來了也不給看。而且<strong>黑名單最大</strong>：就算你用 <code>--fields</code> 點名要那一欄，也救不回來。</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="pull">五關全過，你才拿得到答案。<br>任何一關說不行，<em>就是不行</em>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">另一條路 · proxy/</p>
+      <h2>單面鏡：站旁邊看，<br>但絕對不伸手</h2>
+      <p class="lede" style="margin-top:6px">前面那五道關卡，是 AI 主動來敲門。可是你自己的程式（網站、後端服務）不會來敲門——它直接連資料庫。想知道它到底送了什麼句子出去？把 dbcli 放中間當一面單面鏡。</p>
+    </div>
+
+    <div class="stage mirror">
+      <svg viewBox="0 0 900 250" role="img" aria-label="你的程式經過 dbcli proxy 連到資料庫，proxy 把觀察到的事件寫成 events.jsonl，再由 QueryLens 產出報告">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--steel)"></path>
+          </marker>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--amber)"></path>
+          </marker>
+        </defs>
+
+        <rect x="10" y="20" width="170" height="86" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+        <text x="95" y="55" text-anchor="middle" font-family="Archivo, sans-serif" font-size="19" font-weight="800" fill="var(--ink)">你的程式</text>
+        <text x="95" y="80" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink-soft)">網站 / 後端</text>
+
+        <line x1="186" y1="63" x2="316" y2="63" stroke="var(--steel)" stroke-width="2.5" marker-end="url(#ar2)"></line>
+
+        <rect x="326" y="20" width="200" height="86" rx="4" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"></rect>
+        <text x="426" y="52" text-anchor="middle" font-family="Archivo, sans-serif" font-size="19" font-weight="800" fill="var(--amber)">dbcli proxy</text>
+        <text x="426" y="76" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ink-soft)">先轉發，再看</text>
+
+        <line x1="532" y1="63" x2="662" y2="63" stroke="var(--steel)" stroke-width="2.5" marker-end="url(#ar2)"></line>
+
+        <rect x="672" y="20" width="218" height="86" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+        <text x="781" y="55" text-anchor="middle" font-family="Archivo, sans-serif" font-size="19" font-weight="800" fill="var(--ink)">資料庫</text>
+        <text x="781" y="80" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--ink-soft)">MySQL · MariaDB · PostgreSQL</text>
+
+        <!-- side channel -->
+        <path d="M426 110 L426 155" stroke="var(--amber)" stroke-width="2.5" stroke-dasharray="5 4" marker-end="url(#ar3)"></path>
+        <rect x="286" y="163" width="280" height="60" rx="3" fill="var(--surface-2)" stroke="var(--amber)" stroke-dasharray="4 3"></rect>
+        <text x="426" y="190" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink)">.dbcli/proxy/events.jsonl</text>
+        <text x="426" y="211" text-anchor="middle" font-family="Noto Sans TC, sans-serif" font-size="12.5" fill="var(--ink-soft)">一行一件事，寫完就不動它</text>
+
+        <line x1="572" y1="193" x2="662" y2="193" stroke="var(--amber)" stroke-width="2.5" marker-end="url(#ar3)"></line>
+        <rect x="672" y="163" width="218" height="60" rx="3" fill="var(--surface)" stroke="var(--line)"></rect>
+        <text x="781" y="188" text-anchor="middle" font-family="Archivo, sans-serif" font-size="17" font-weight="800" fill="var(--ink)">QueryLens</text>
+        <text x="781" y="209" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--ink-soft)">一份可以貼進 PR 的報告</text>
+      </svg>
+    </div>
+
+    <div class="gates">
+      <div class="gate warn">
+        <div class="num">→</div>
+        <div class="body">
+          <h3>先轉發，再看</h3>
+          <p>封包<strong>先送出去</strong>，才輪到分析器讀它。而且分析器被包了一層——它就算炸掉，也絕對不會害你的程式連不上資料庫。看的人不准擋路。</p>
+          <p class="src">src/proxy/relay.ts — relay-first contract</p>
+        </div>
+      </div>
+      <div class="gate warn">
+        <div class="num">✎</div>
+        <div class="body">
+          <h3>看到的東西寫成一行一行</h3>
+          <p>誰連進來、跑了哪句、跑多久、回幾筆、錯在哪，各是一行 JSON。檔案太大會自己換一本；有壞掉的行就跳過、記個數，不會整份報錯。</p>
+          <p class="src">src/proxy/events.ts · src/proxy/event-reader.ts</p>
+        </div>
+      </div>
+      <div class="gate warn">
+        <div class="num">?</div>
+        <div class="body">
+          <h3>事後才算帳，而且不碰資料庫</h3>
+          <p><code>dbcli proxy analyze</code> 只讀那個檔案。算出 p50 / p95 / p99、哪些句子最慢最花時間，還會抓 <strong>N+1</strong>——同一個連線裡同一句話重複跑十次以上，通常是程式在迴圈裡查資料庫。</p>
+          <p class="src">src/proxy/analyze.ts:L360 · src/commands/proxy.ts</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div><dt>看得懂的協定</dt><dd>3 種</dd></div>
+      <div><dt>會不會改你的流量</dt><dd>不會</dd></div>
+      <div><dt>分析時要連 DB 嗎</dt><dd>不用</dd></div>
+      <div><dt>N+1 門檻</dt><dd>10 次</dd></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">最後一層 · querylens/</p>
+      <h2>把數字翻成人話，<br>而且先把秘密塗掉</h2>
+    </div>
+    <p class="lede" style="margin-top:0">
+      QueryLens 是報告產生器：同一份分析結果，輸出成一頁可以直接貼進 Pull Request 的 Markdown。
+    </p>
+    <div class="gate block">
+      <div class="num">!</div>
+      <div class="body">
+        <h3>它永遠分析「影本」，不是正本</h3>
+        <p>動手算之前，先把 SQL 裡的<strong>字面值全部拿掉</strong>——電話、Email、金額都不見，只留下句子的骨架。原始 log 一個字都沒改，但產出的報告從第一行就是安全的。</p>
+        <p class="src">src/querylens/analyze.ts — redactEventsForAnalysis()</p>
+      </div>
+    </div>
+    <p class="note">為什麼要多這一層？因為報告會被貼到 GitHub 上。「事後記得遮」會忘記，「先遮再算」不會。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">警衛亭的內部</p>
+      <h2>六個房間，各做一件事</h2>
+    </div>
+    <div class="floors">
+      <div class="floor">
+        <div class="who"><span>commands/</span></div>
+        <p class="what"><b>櫃檯</b>。67 個窗口：<code>query</code>、<code>schema</code>、<code>export</code>、<code>blacklist</code>…… 負責聽懂你要辦什麼，不負責決定能不能辦。</p>
+      </div>
+      <div class="floor">
+        <div class="who"><span>core/</span></div>
+        <p class="what"><b>腦袋</b>。所有規則都在這裡：權限、黑名單、SQL 拆解、稽核紀錄。上面那五道關卡就住這一層。</p>
+      </div>
+      <div class="floor">
+        <div class="who"><span>adapters/</span></div>
+        <p class="what"><b>翻譯機</b>。六種資料庫各一台。核心只認識一種講法，剩下的交給翻譯。</p>
+      </div>
+      <div class="floor">
+        <div class="who"><span>formatters/</span></div>
+        <p class="what"><b>打扮</b>。同一份結果，要表格、要 JSON、還是要一張 HTML 報表，出門前換衣服。</p>
+      </div>
+      <div class="floor">
+        <div class="who"><span>proxy/</span></div>
+        <p class="what"><b>單面鏡</b>。轉發、看懂協定、把事情寫成一行一行。它不屬於前面那五道關卡——那是另一條路。</p>
+      </div>
+      <div class="floor">
+        <div class="who"><span>querylens/</span></div>
+        <p class="what"><b>寫報告的</b>。讀那些行，先遮掉字面值，再算成一份給人看的 Markdown。</p>
+      </div>
+    </div>
+    <p class="note">還有 <code>i18n/</code> 決定警衛講中文還是英文（<code>DBCLI_LANG</code>），以及 <code>agent-core/</code>——把警衛的判斷力包成套件，讓別的程式也能借去用。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">一個小細節</p>
+      <h2>問「你幾歲」的時候，<br>警衛不會先把六台翻譯機扛出來</h2>
+    </div>
+    <p class="note" style="max-width:34em">
+      執行 <code>dbcli --version</code> 只是要一個數字。程式進門先看一眼：如果只是問版本，就直接答，完全不去載那些資料庫驅動。
+      套件管理器和健康檢查一天問幾百次，這一眼省下的是真的時間。<br>
+      <span class="src">src/cli.ts — isStandaloneVersionRequest()</span>
+    </p>
+  </section>
+
+  <footer>
+    <p>dbcli v3.0.0 · 一個給 AI 助理用的資料庫命令列工具。內容取自本專案原始碼，檔名與行號附在各段落。</p>
+  </footer>
+
+</div>
+</body>
+</html>

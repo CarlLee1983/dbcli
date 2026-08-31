@@ -1,7 +1,7 @@
 # Redis 的黑名單與遮罩缺口（第九輪對抗式複查）
 
 **狀態**：第 1-4 則已於 `fix/cross-engine-blacklist-gaps` 修復（ADR-0015），
-第 5 則（glob 對含換行的 key）未修，仍是 MEDIUM。原始狀態如下。
+第 5 則已修（見該節）。原始狀態如下。
 
 **狀態（原始）**：已確認，未修復。刻意不在
 `fix/es-shell-permission-enforcement` 上修——那條分支已跑九輪且只談
@@ -91,7 +91,7 @@ Redis 幾乎沒有人這樣設。
 不要讓每個 call site 各自記得傳。這是 ES 分支第五輪那個教訓的翻版——控制掛在
 呼叫端，等於下一個呼叫端不會有。
 
-## 5. glob 對含換行的 key 與 Redis 不一致（MEDIUM）
+## 5. [已修] glob 對含換行的 key 與 Redis 不一致（MEDIUM）
 
 `globToRegex`（`src/utils/glob.ts:18-19`）把 `*` 譯成 `.*`，而 JS 的 `.` 不
 匹配 `\n`；Redis 的 `stringmatchlen` 逐位元組比對，`*` 吃任何位元組。所以
@@ -100,7 +100,12 @@ Redis 幾乎沒有人這樣設。
 換行，所以這條路可達。同一組 regex 也用在 `sampleKeyNames`，因此 `dbcli list`
 也會顯示這種 key。
 
-**修法方向**：`new RegExp(out, 's')`，並確認 `$` 不會在尾端 `\n` 前提早收尾。
+**已修**（`new RegExp(out, 's')`）。`$` 那半經查證不成立：JavaScript 把 `$`
+錨在輸入結尾，不像 Perl 允許尾端換行，所以 `globToRegex('secrets:x')` 對
+`'secrets:x\n'` 本來就回 false——而那也是 Redis 的答案。
+
+端到端在本機 Redis 複驗：`GET` 一般 key 與含換行的 key 都被擋，`dbcli list`
+只列出不受保護的那個 key（總數仍誠實回報）。
 
 ---
 

@@ -37,7 +37,14 @@ export function globToRegex(glob: string): RegExp {
     }
   }
   out += '$'
-  return new RegExp(out)
+  // `s` (dotAll): Redis's `stringmatchlen` compares byte by byte, so its `*`
+  // and `?` eat a newline like any other byte. Without the flag JavaScript's
+  // `.` stops at `\n`, and `secrets:*` left `secrets:\nx` unprotected while
+  // `parseRedisCommand` happily carried that key through a quoted argument.
+  // `$` needs no companion change: JavaScript anchors it at end of input,
+  // unlike Perl, so a literal pattern still refuses a key with a trailing
+  // newline — which is also what Redis answers.
+  return new RegExp(out, 's')
 }
 
 /** Index of the `]` closing the class opened at `open`, honouring backslash escapes. */

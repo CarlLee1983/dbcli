@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **glob 的萬用字元涵蓋換行，與 Redis 一致。** `globToRegex` 把 `*` 譯成 `.*`，而 JavaScript 的 `.` 在沒有 dotAll 時不匹配 `\n`；Redis 的 `stringmatchlen` 逐位元組比對，`*` 吃任何位元組。於是 `secrets:*` 保護不到 `secrets:\nx`，而 `parseRedisCommand` 在引號內保留換行，這條路是可達的；同一組 regex 也驅動 `sampleKeyNames`，所以 `dbcli list` 也照樣顯示那個 key。`$` 不需要配套改動：JavaScript 把它錨在輸入結尾（不像 Perl 允許結尾換行），所以字面 pattern 仍然不匹配尾端多一個換行的 key——那也正是 Redis 的答案。同一個函式也用於 Elasticsearch 的 index 運算式，那裡 index 名不含換行，因此不受影響。
+
 - **設定裡的前後空白與外層引號會被去掉。** `[" password "]`、`["\"password\""]`、``["`password`"]``、鍵 `" users "` 全部靜默無效。ES 那側的 `es-index-target.ts` 早就 trim 兼解引號，SQL 側沒有。
 
 - **表規則同時以完整名稱與最後一段查找。** `{"public.users": …}` 對 `SELECT * FROM users` 不生效，反向也一樣——`extractTableReferences` 會保留限定名稱的完整字串，所以每個鍵只對它被寫成的那一種拼法生效。這是查找的改動而非解析時的猜測：沒有任何地方決定操作者指的是哪一種拼法，同一張表的兩種拼法解析到同一份規則。

@@ -169,7 +169,8 @@ export class BlacklistValidator {
     if (blacklisted.length === 0) return
 
     // `indexExpressionReaches` 展開**兩端**——請求端與黑名單條目。先前這裡把
-    // concrete 名稱交給 `isTableBlacklisted`（Set 的字面查表），所以黑名單寫成
+    // concrete 名稱交給 `isTableBlacklisted`，而它當時是 Set 的字面查表
+    //（ADR-0019 Decision 4 之後它也走 glob 了），所以黑名單寫成
     // `secrets*` 時 `--index secrets-2026` 完全不擋，而使用者依 Redis 那側的
     // 文件正是那樣寫的。
     if (!indexExpressionReaches(target, blacklisted)) return

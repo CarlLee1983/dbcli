@@ -127,3 +127,30 @@ describe('segment globs', () => {
     expect(compilePatterns(['']).rejected.length).toBe(1)
   })
 })
+
+// Review LOW-1 and LOW-5: shapes that compile and then protect nothing. The
+// same class ADR-0018 Decision 2 and ADR-0019 Decision 3 exist to refuse,
+// hiding inside glob syntax rather than inside path syntax.
+describe('a rule that compiles but can never match is refused', () => {
+  test('an empty character class', () => {
+    const out = compilePatterns(['secret[]'])
+    expect(out.patterns).toEqual([])
+    expect(out.rejected[0]?.raw).toBe('secret[]')
+  })
+
+  test('an unclosed character class', () => {
+    // Degrades to the literal name `secret[abc`, which is not what was written.
+    const out = compilePatterns(['secret[abc'])
+    expect(out.rejected[0]?.raw).toBe('secret[abc')
+  })
+
+  test('`**`, which reads as globstar and is not', () => {
+    // Only covers one segment, so `**` never means "everything nested".
+    const out = compilePatterns(['**'])
+    expect(out.rejected[0]?.reason).toMatch(/\*/)
+  })
+
+  test('a closed class and a plain star still compile', () => {
+    expect(compilePatterns(['secret[abc]', 'pass*', 'user.*']).rejected).toEqual([])
+  })
+})

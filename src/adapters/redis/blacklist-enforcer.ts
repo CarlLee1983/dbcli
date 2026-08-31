@@ -1,8 +1,6 @@
 import { getCommandSpec } from './command-metadata'
 import type { KeyArity } from './types'
-import { globMatches, globToRegex } from '@/utils/glob'
-
-export { globToRegex }
+import { globMatches } from '@/utils/glob'
 
 /** Heuristic intersection probe — sound for `prefix:*`, literals, and most agent-written rules. */
 export function patternsOverlap(a: string, b: string): boolean {

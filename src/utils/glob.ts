@@ -3,7 +3,15 @@
  * targets: Redis key patterns and Elasticsearch index expressions.
  */
 
-/** Convert a glob (`*`, `?`, `[abc]`, `[a-z]`) to a RegExp anchored on the whole string. */
+/**
+ * Convert a glob (`*`, `?`, `[abc]`, `[a-z]`) to a RegExp anchored on the whole string.
+ *
+ * @deprecated For a boolean answer use `globMatches`, which decides the same
+ * question in linear time. Several `*` in one pattern compile to several `.*`,
+ * and against a non-matching string that backtracks catastrophically — this is
+ * only for a caller that genuinely needs a `RegExp` object, and never with a
+ * pattern or subject of untrusted length. ADR-0019 Decision 5.
+ */
 export function globToRegex(glob: string): RegExp {
   let out = '^'
   for (let i = 0; i < glob.length; i++) {
@@ -260,4 +268,35 @@ export function globMatches(glob: string, text: string): boolean {
  */
 export function escapeGlob(literal: string): string {
   return literal.replace(/[*?[\]\\]/g, '\\$&')
+}
+
+/**
+ * Why this glob can never match anything, or `null` if it can.
+ *
+ * `globMatches` accepts these shapes and answers `false` forever, which is the
+ * right answer for a Redis key pattern typed at a prompt and the wrong one for
+ * a blacklist rule: the entry loads, `blacklist list` reports it, and it guards
+ * nothing. Callers that hold rules rather than one-off patterns should refuse
+ * on a non-null result.
+ */
+export function globNeverMatches(glob: string): string | null {
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]!
+    if (c === '\\') {
+      i++
+      continue
+    }
+    if (c !== '[') continue
+    const end = findClassEnd(glob, i)
+    if (end === -1) {
+      // Degrades to a literal `[`, so the rule protects a field whose name
+      // contains the bracket rather than the one that was meant.
+      return 'unclosed character class'
+    }
+    const body = glob.slice(i, end + 1)
+    if (body === '[]' || body === '[^]') return 'empty character class matches nothing'
+    if (!isValidCharacterClass(body)) return 'invalid character class'
+    i = end
+  }
+  return null
 }

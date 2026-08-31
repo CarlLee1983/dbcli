@@ -1,31 +1,34 @@
 import { test, expect } from 'bun:test'
-import { globToRegex, patternsOverlap, checkKeyArgs } from '@/adapters/redis/blacklist-enforcer'
+import { patternsOverlap, checkKeyArgs } from '@/adapters/redis/blacklist-enforcer'
+// The enforcement module no longer re-exports a matcher; the key comparison it
+// makes is `globMatches`. ADR-0019 Decision 5.
+import { globMatches } from '@/utils/glob'
 
 const RULES = ['user:*:password', 'secrets:*']
 
 test('* matches any chars', () => {
-  expect(globToRegex('user:*').test('user:42')).toBe(true)
-  expect(globToRegex('user:*').test('order:42')).toBe(false)
+  expect(globMatches('user:*', 'user:42')).toBe(true)
+  expect(globMatches('user:*', 'order:42')).toBe(false)
 })
 
 test('? matches one char', () => {
-  expect(globToRegex('k?').test('ka')).toBe(true)
-  expect(globToRegex('k?').test('kab')).toBe(false)
+  expect(globMatches('k?', 'ka')).toBe(true)
+  expect(globMatches('k?', 'kab')).toBe(false)
 })
 
 test('[abc] matches one of', () => {
-  expect(globToRegex('k[ab]').test('ka')).toBe(true)
-  expect(globToRegex('k[ab]').test('kc')).toBe(false)
+  expect(globMatches('k[ab]', 'ka')).toBe(true)
+  expect(globMatches('k[ab]', 'kc')).toBe(false)
 })
 
 test('[a-z] matches range', () => {
-  expect(globToRegex('k[a-z]').test('km')).toBe(true)
-  expect(globToRegex('k[a-z]').test('k0')).toBe(false)
+  expect(globMatches('k[a-z]', 'km')).toBe(true)
+  expect(globMatches('k[a-z]', 'k0')).toBe(false)
 })
 
 test('special regex chars are escaped', () => {
-  expect(globToRegex('a.b').test('a.b')).toBe(true)
-  expect(globToRegex('a.b').test('axb')).toBe(false)
+  expect(globMatches('a.b', 'a.b')).toBe(true)
+  expect(globMatches('a.b', 'axb')).toBe(false)
 })
 
 test('patternsOverlap: identical', () => {

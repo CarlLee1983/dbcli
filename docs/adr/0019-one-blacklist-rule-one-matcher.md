@@ -198,3 +198,10 @@ answers by the exhaustive comparison in `tests/unit/utils/glob.test.ts`; or
 any `compilePatterns` caller drops its `rejected` list; or
 `isValidTableNameForSystem` in `src/commands/blacklist.ts` refuses a glob for an
 engine whose matcher accepts one.
+
+**The case-folding limitation above is falsified if:** `maskMongoRows` in
+`src/core/mongo/field-masker.ts` or `globRulesOf` in
+`src/core/mongo/request-fields.ts` starts folding rule case, or the two
+`compileGlobRules` call sites in `src/core/blacklist-validator.ts` pass the same
+`fold` — any of which means the three folding rules have become fewer, and this
+record's account of them is out of date.

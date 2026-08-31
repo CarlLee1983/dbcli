@@ -17,7 +17,7 @@
  * protecting `profile` itself, silently narrowing rules already deployed.
  */
 
-import { globMatches } from '@/utils/glob'
+import { globMatches, globNeverMatches } from '@/utils/glob'
 
 export interface MongoPathPattern {
   readonly raw: string
@@ -42,6 +42,24 @@ export function compilePatterns(raw: ReadonlyArray<unknown>): CompileResult {
     const segments = entry.split('.')
     if (segments.some((s) => s.length === 0)) {
       rejected.push({ raw: entry, reason: 'empty path segment' })
+      continue
+    }
+    // `**` reads as a globstar to anyone arriving from gitignore or bash, and
+    // it is not one: it falls through to an ordinary segment glob and covers a
+    // single segment, exactly as `*` does. Refused rather than silently
+    // narrowed — ADR-0019 Decision 3.
+    const globstar = segments.find((seg) => seg.includes('**'))
+    if (globstar !== undefined) {
+      rejected.push({
+        raw: entry,
+        reason: '`**` matches one segment, not a subtree; write `*` or a longer path',
+      })
+      continue
+    }
+    // A class that can never match makes the whole rule dead on arrival.
+    const dead = segments.map((seg) => globNeverMatches(seg)).find((r) => r !== null)
+    if (dead !== undefined && dead !== null) {
+      rejected.push({ raw: entry, reason: dead })
       continue
     }
     // A trailing bare `*` under a parent is the tail form; a lone `*` is an

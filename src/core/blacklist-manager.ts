@@ -57,6 +57,7 @@ export class BlacklistManager {
   ) {
     this.overrideEnabled = (overrideEnvValue ?? Bun.env.DBCLI_OVERRIDE_BLACKLIST ?? '') === 'true'
     this.state = this.loadBlacklist()
+    this.wildcardTables = [...this.state.tables].filter((entry) => /[*?[\\]/.test(entry))
   }
 
   /**
@@ -156,21 +157,21 @@ export class BlacklistManager {
   isTableBlacklisted(tableName: string): boolean {
     const name = tableName.toLowerCase()
     if (this.state.tables.has(name)) return true
-    for (const pattern of this.tableGlobs()) {
+    for (const pattern of this.wildcardTables) {
       if (globMatches(pattern, name)) return true
     }
     return false
   }
 
-  /** Table entries carrying glob metacharacters, collected once. */
-  private tableGlobs(): ReadonlyArray<string> {
-    if (this.wildcardTables === undefined) {
-      this.wildcardTables = [...this.state.tables].filter((entry) => /[*?[\\]/.test(entry))
-    }
-    return this.wildcardTables
-  }
-
-  private wildcardTables: ReadonlyArray<string> | undefined
+  /**
+   * Table entries carrying glob metacharacters.
+   *
+   * Computed with `state` rather than lazily: `getState()` hands the same `Set`
+   * out, and a lazy cache filled after someone added to it would leave `Set.has`
+   * seeing the new entry and the glob scan not — fail-open, and silently.
+   * Nothing mutates it today; the point is that nothing can start to.
+   */
+  private readonly wildcardTables: ReadonlyArray<string>
 
   /**
    * Check if a specific column in a table is blacklisted.

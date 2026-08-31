@@ -1,17 +1,15 @@
 import { getCommandSpec } from './command-metadata'
 import type { KeyArity } from './types'
-import { globToRegex } from '@/utils/glob'
+import { globMatches, globToRegex } from '@/utils/glob'
 
 export { globToRegex }
 
 /** Heuristic intersection probe — sound for `prefix:*`, literals, and most agent-written rules. */
 export function patternsOverlap(a: string, b: string): boolean {
-  const ra = globToRegex(a)
-  const rb = globToRegex(b)
   const probeA = sampleFromGlob(a)
   const probeB = sampleFromGlob(b)
-  if (probeA !== null && rb.test(probeA)) return true
-  if (probeB !== null && ra.test(probeB)) return true
+  if (probeA !== null && globMatches(b, probeA)) return true
+  if (probeB !== null && globMatches(a, probeB)) return true
   return false
 }
 
@@ -66,7 +64,7 @@ export function checkKeyArgs(command: string, args: string[], rules: string[]): 
     const key = args[idx]
     if (key === undefined) continue
     for (const pat of rules) {
-      if (globToRegex(pat).test(key)) {
+      if (globMatches(pat, key)) {
         return { ok: false, matchedKey: key, matchedPattern: pat }
       }
     }

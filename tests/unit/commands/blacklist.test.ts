@@ -152,7 +152,9 @@ describe('blacklistList()', () => {
   it('returns rejected Mongo patterns as structured JSON warnings', async () => {
     const configPath = await createTempConfig({
       tables: [],
-      columns: { events: ['profile.*.token'] },
+      // `profile..token` — an empty segment. `profile.*.token` was rejected
+      // before ADR-0019 Decision 1 and compiles as a segment glob now.
+      columns: { events: ['profile..token'] },
     })
     const output: string[] = []
     const errorOutput: string[] = []
@@ -171,8 +173,8 @@ describe('blacklistList()', () => {
     expect(JSON.parse(output[0]!).warnings).toEqual([
       {
         collection: 'events',
-        raw: 'profile.*.token',
-        reason: 'wildcard must be the final segment',
+        raw: 'profile..token',
+        reason: 'empty path segment',
       },
     ])
     expect(errorOutput).toEqual([])
@@ -181,7 +183,9 @@ describe('blacklistList()', () => {
   it('keeps rejected Mongo pattern warnings on stderr in text mode', async () => {
     const configPath = await createTempConfig({
       tables: [],
-      columns: { events: ['profile.*.token'] },
+      // `profile..token` — an empty segment. `profile.*.token` was rejected
+      // before ADR-0019 Decision 1 and compiles as a segment glob now.
+      columns: { events: ['profile..token'] },
     })
     const errorOutput: string[] = []
     const origError = console.error
@@ -194,7 +198,7 @@ describe('blacklistList()', () => {
     }
 
     expect(errorOutput).toEqual([
-      '⚠  blacklist.columns["events"]: \'profile.*.token\' is ignored on mongo connections (wildcard must be the final segment).',
+      '⚠  blacklist.columns["events"]: \'profile..token\' is ignored on mongo connections (empty path segment).',
     ])
   })
 

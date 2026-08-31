@@ -35,7 +35,7 @@
 `dbcli` 的設計初衷是「安全第一」，特別專注於防止 AI 代理在操作過程中意外洩漏或損壞敏感資料。
 
 *   **權限守衛 (Permission Guard)**：提供四層存取控制（`query-only`、`read-write`、`data-admin`、`admin`）。語句以「實際會做什麼」判定，而非開頭關鍵字：`admin` 以下拒絕多語句 SQL（因為只有第一句會決定權限判定）；saved snippet 只要含任何寫入或 DDL 關鍵字即拒絕，因此 data-modifying CTE 與 `SELECT … INTO` 無法躲在 `SELECT`／`WITH` 開頭後面；MongoDB `$out`／`$merge` 在 `query` 需要 `data-admin`，在 snippet 與 `export` 一律拒絕。 Elasticsearch 的請求以「影響範圍」判定，而非它指名的資源：刪除單一文件是 `data-admin`，刪除 index、萬用字元、`_all`、template 或 alias，以及改寫 `_mapping`／`_settings`，都是 `admin`——也就是 `DROP TABLE` 需要的層級。
-*   **黑名單管理器 (Blacklist Manager)**：從所有查詢結果中自動屏蔽敏感資料表與欄位。判定涵蓋語句參照到的**每一張**表，不只排在最前面那張：`JOIN`、逗號、`UNION` 或子查詢帶進來的黑名單表一樣會被擋下，`query` / `export` / `q` / `report` / shell 皆同。從 5.2.0 起，欄位規則與回傳欄位名比對時第一段會摺成小寫，所以 `SELECT Password AS PASSWORD` 不再繞得過寫成 `password` 的規則——但改成完全不相干的別名仍然繞得過，欄位規則是顯示過濾而非存取控制這句話不受影響。設定裡的前後空白與引號會被去掉（`" password "`、`"\"password\""`），以自己的表限定的規則（`{"users": ["users.password"]}`）現在會載入失敗而不是靜默不命中，寫在 `public.users` 底下的規則也會套用到 `SELECT * FROM users`，反向亦然。遮罩以所有被參照的表的欄位規則聯集計算 —— JOIN 結果的欄位名不帶表限定，無法反推歸屬，因此從嚴。表名列舉刻意過度回報：語句中每個非保留字的識別字都算候選，所以欄位名或別名若與黑名單資料表同名，該語句會被擋（訊息會指出命中的名稱）。Elasticsearch 的 `--index` 是運算式（逗號清單、萬用字元、`_all`、date math、跨叢集限定），會正規化後逐一比對，萬用字元在可能命中黑名單 index 時拒絕；ES shell 依伺服器實際路由的路徑逐段檢查、檢查 request body 指名的 index（`_mget` / `_bulk` / `terms` lookup），並從回應中移除受保護欄位；無法界定 index 的請求（`GET /_search` 等）在有黑名單時一律拒絕。遮罩比對的是回傳欄位名，`SELECT password_hash AS x` 這類改名仍會回傳該值 —— **資料表層級的項目可強制執行，欄位層級的項目是顯示過濾，不是存取控制**。
+*   **黑名單管理器 (Blacklist Manager)**：從所有查詢結果中自動屏蔽敏感資料表與欄位。判定涵蓋語句參照到的**每一張**表，不只排在最前面那張：`JOIN`、逗號、`UNION` 或子查詢帶進來的黑名單表一樣會被擋下，`query` / `export` / `q` / `report` / shell 皆同。從 5.2.0 起，欄位規則與回傳欄位名比對時第一段會摺成小寫，所以 `SELECT Password AS PASSWORD` 不再繞得過寫成 `password` 的規則——但改成完全不相干的別名仍然繞得過，欄位規則是顯示過濾而非存取控制這句話不受影響。設定裡的前後空白與引號會被去掉（`" password "`、`"\"password\""`），以自己的表限定的規則（`{"users": ["users.password"]}`）現在會載入失敗而不是靜默不命中，寫在 `public.users` 底下的規則也會套用到 `SELECT * FROM users`，反向亦然。`blacklist.tables` 現在對所有引擎都是 glob，不再只有 Redis 與 Elasticsearch——`tables: ["secrets*"]` 會擋下 MongoDB collection `secrets_2026`，也會擋下 SQL 資料表 `secrets_2026`；這是 breaking change，真的叫 `report*` 的表要寫成 `report\*` 才能回到字面比對。遮罩以所有被參照的表的欄位規則聯集計算 —— JOIN 結果的欄位名不帶表限定，無法反推歸屬，因此從嚴。表名列舉刻意過度回報：語句中每個非保留字的識別字都算候選，所以欄位名或別名若與黑名單資料表同名，該語句會被擋（訊息會指出命中的名稱）。Elasticsearch 的 `--index` 是運算式（逗號清單、萬用字元、`_all`、date math、跨叢集限定），會正規化後逐一比對，萬用字元在可能命中黑名單 index 時拒絕；ES shell 依伺服器實際路由的路徑逐段檢查、檢查 request body 指名的 index（`_mget` / `_bulk` / `terms` lookup），並從回應中移除受保護欄位；無法界定 index 的請求（`GET /_search` 等）在有黑名單時一律拒絕。遮罩比對的是回傳欄位名，`SELECT password_hash AS x` 這類改名仍會回傳該值 —— **資料表層級的項目可強制執行，欄位層級的項目是顯示過濾，不是存取控制**。
 *   **查詢風險分析器 (`plan`)**：在不連線資料庫的情況下分析 SQL 風險。
 *   **Antigravity 協議**：將工作流程拆分為 **Architect (架構師/規劃)** 與 **Builder (建設者/執行)**，確保行動前必有策略。
 
@@ -1118,19 +1118,19 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 ### MongoDB 巢狀黑名單
 
-dbcli 設定內的 `blacklist.columns[<collection>]` 接受點分路徑與一個結尾萬用字元：
+dbcli 設定內的 `blacklist.columns[<collection>]` 接受點分路徑，每一段都是 glob（`*`、`?`、字元類別如 `[abc]`）：
 
 ```json
 {
   "blacklist": {
     "columns": {
-      "users": ["password", "profile.email", "profile.tokens.*"]
+      "users": ["password", "profile.email", "profile.tokens.*", "pass*"]
     }
   }
 }
 ```
 
-`profile.tokens.*` 涵蓋 `profile.tokens` 與其所有後裔。萬用字元若不在最後一段會被略過，並在 `dbcli blacklist list` 時提出警告。SQL 連線會忽略含 `.` 或 `*` 的條目。
+`pass*` 匹配 `password`；萬用字元不跨點號，`pass*` 不會匹配 `user.password`。中間段的萬用字元一樣合法，`profile.*.email` 匹配 `profile.<任一段>.email`。結尾整段的 `*` 保留原本的特殊意思：`profile.tokens.*` 涵蓋 `profile.tokens` 自己與其下所有後裔。無法編譯的規則——空路徑段（`a..b`）、空字串、非字串——會中止操作並拋出錯誤，訊息會指出是哪個條目、原因為何；先前這類規則會被靜默略過，CLI 仍照樣印出「Some fields may have been redacted」。讀取遮罩、`$project` / `$group` 等請求檢查、`insert` 與 `update`（涵蓋所有 update 運算子，不只 `$set` / `$unset`）現在都比對同一份已編譯規則，不會再出現規則擋得住讀卻擋不住寫的落差。SQL 連線會忽略含 `.` 的條目。
 
 **指名受保護欄位的請求會被拒絕，而不是被遮罩。** 遮罩比對的是文件回來時所在的鍵名，而在 MongoDB 裡那些鍵名是請求自己決定的：`[{"$project":{"leak":"$password"}}]` 把值放在 `leak` 底下回傳，`[{"$group":{"_id":"$password"}}]` 放在 `_id` 底下——而 `_id` 為了保住文件參照本來就被遮罩豁免。4.0.0 之前兩者在 `query-only` 下都跑得動。所以 `password` 出現在 pipeline、filter 或 update 的任何位置——欄位路徑、物件鍵、或單純一個字串——都會以 `BlacklistRejection` 拒絕，遮罩則留給一般的文件形狀。
 
@@ -1391,7 +1391,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 
 ### C. 特定引擎情境
 
-- **MongoDB**:schema 採 `$sample` 抽樣(dot-path 帶 `presence` / `redacted`);blacklist 接受 dotted path 與尾端萬用字元(`profile.tokens.*`)。寫入在沒有明確運算子(`$inc` / `$push` / …)時自動包成 `$set`。
+- **MongoDB**:schema 採 `$sample` 抽樣(dot-path 帶 `presence` / `redacted`);blacklist 的每一段路徑都是 glob(`pass*`、`profile.*.email`),結尾 `*` 仍涵蓋整個子樹(`profile.tokens.*`),讀取遮罩與 insert/update 寫入比對同一份規則。寫入在沒有明確運算子(`$inc` / `$push` / …)時自動包成 `$set`。
 - **Redis**:`q @snippet` 只能跑**唯讀**命令;`delete` 涵蓋 `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`(需 `data-admin`);用 key glob blacklist(`secrets:*`)加上可選的值遮罩保護 key。`query` 沒有 `--dry-run`——安全來自權限閘門;要預覽刪除請用 `delete <key> --dry-run`。
 - **Elasticsearch**:用 DSL body 或 Lucene 字串查詢(`--collection <index>`);用 `match_all` scroll `export` 整個 index;`shell` 開啟 Kibana Dev Tools 風格 REPL。
 

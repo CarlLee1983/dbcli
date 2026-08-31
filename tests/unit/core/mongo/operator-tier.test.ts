@@ -35,7 +35,12 @@ describe('mongo operator tier classification', () => {
 
   test('RENAME tier emits factor', () => {
     const r = analyzeMongoDmlRisk(updateIntent({ $rename: { old: 'newer' } }), baseContext())
-    expect(r.riskFactors.find((f) => f.code === 'mongo_rename_operator')).toBeDefined()
+    const factor = r.riskFactors.find((f) => f.code === 'mongo_rename_operator')
+    expect(factor).toBeDefined()
+    // A renamed field's value survives under the new name, which the read mask
+    // does not recognize — this is not a safe, non-exfiltrating operation.
+    expect(factor?.message).not.toContain('does not exfiltrate')
+    expect(factor?.message).toContain('read mask')
   })
 
   test('ARITHMETIC tier emits warn factor, decision WARN', () => {

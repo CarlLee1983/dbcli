@@ -9,7 +9,8 @@ import type { RedisClient } from 'bun'
 import { ConnectionError } from './types'
 import type { ConnectionOptions, ExecutionResult, QueryableAdapter, TableSchema } from './types'
 import { rewriteArgs, truncateResult } from './redis/size-guard'
-import { checkKeyArgs, globToRegex } from './redis/blacklist-enforcer'
+import { checkKeyArgs } from './redis/blacklist-enforcer'
+import { globMatches } from '@/utils/glob'
 import { filterReturnedKeyNames, returnsKeyNames } from './redis/returned-key-names'
 import { BlacklistRejection } from './redis/types'
 import { getCommandSpec } from './redis/command-metadata'
@@ -168,9 +169,8 @@ export class RedisAdapter implements QueryableAdapter {
   async sampleKeyNames(limit: number): Promise<{ names: string[]; truncated: boolean }> {
     const client = this.requireClient()
     const rules = this.blacklistRules
-    const regexes = rules.map((p) => globToRegex(p))
     const { keys, scanned } = await scanAllKeys(client, '*', limit, limit, (key) =>
-      regexes.every((r) => !r.test(key))
+      rules.every((rule) => !globMatches(rule, key))
     )
     return { names: keys, truncated: scanned >= limit }
   }

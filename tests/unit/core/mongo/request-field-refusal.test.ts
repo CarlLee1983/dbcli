@@ -172,3 +172,35 @@ describe('the collection a $lookup names is matched case-insensitively', () => {
     expect([...fields]).toEqual(['token'])
   })
 })
+
+// ADR-0019 Decision 2: the request side reads a rule the same way the read
+// mask does. Before this, `user.*` protected a read and named nothing here.
+describe('a rule is a glob on the request side too', () => {
+  test('a segment glob catches the field it names', () => {
+    const rules = new Set(['pass*'])
+    expect(findProtectedFieldReference([{ $project: { leak: '$password' } }], rules)).toBe(
+      'password'
+    )
+    expect(findProtectedFieldReference([{ $project: { keep: '$name' } }], rules)).toBeUndefined()
+  })
+
+  test('a tail wildcard catches a field beneath it', () => {
+    const rules = new Set(['user.*'])
+    expect(findProtectedFieldReference([{ $project: { leak: '$user.password' } }], rules)).toBe(
+      'user.password'
+    )
+    expect(
+      findProtectedFieldReference([{ $project: { keep: '$username' } }], rules)
+    ).toBeUndefined()
+  })
+
+  test('a literal rule still matches by dotted component, not substring', () => {
+    const rules = new Set(['password'])
+    expect(findProtectedFieldReference([{ $project: { leak: '$user.password' } }], rules)).toBe(
+      'user.password'
+    )
+    expect(
+      findProtectedFieldReference([{ $project: { keep: '$passwordless' } }], rules)
+    ).toBeUndefined()
+  })
+})

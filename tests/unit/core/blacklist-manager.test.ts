@@ -62,6 +62,28 @@ describe('BlacklistManager', () => {
       expect(manager.isTableBlacklisted('users')).toBe(false)
     })
 
+    // ADR-0019 Decision 4: the same array is a glob for every engine.
+    it('matches a glob entry against a concrete name', () => {
+      const config = makeConfig({ tables: ['secrets*'], columns: {} })
+      const manager = new BlacklistManager(config)
+      expect(manager.isTableBlacklisted('secrets_2026')).toBe(true)
+      expect(manager.isTableBlacklisted('secrets')).toBe(true)
+      expect(manager.isTableBlacklisted('public_orders')).toBe(false)
+    })
+
+    it('folds case on both sides of a glob entry', () => {
+      const config = makeConfig({ tables: ['Sec*'], columns: {} })
+      const manager = new BlacklistManager(config)
+      expect(manager.isTableBlacklisted('SECRETS')).toBe(true)
+    })
+
+    it('treats an escaped star as a literal name', () => {
+      const config = makeConfig({ tables: ['report\\*'], columns: {} })
+      const manager = new BlacklistManager(config)
+      expect(manager.isTableBlacklisted('report*')).toBe(true)
+      expect(manager.isTableBlacklisted('reports')).toBe(false)
+    })
+
     it('is case-insensitive for table names', () => {
       const config = makeConfig({ tables: ['Users'], columns: {} })
       const manager = new BlacklistManager(config)

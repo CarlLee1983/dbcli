@@ -248,17 +248,18 @@ export async function updateCommand(
       const updateDoc = hasOperator ? setData : { $set: setData }
 
       // Collect top-level field names actually being written.
-      // For operator docs we look inside $set / $unset (those write fields).
+      // For operator docs we look inside every $-operator payload, since each
+      // one writes the fields named by its keys ($rename's values are the new
+      // names, not fields being written here — that's covered by request-side checks).
       const writtenFields = new Set<string>()
       if (hasOperator) {
         const operators = updateDoc as Record<string, unknown>
         for (const [op, payload] of Object.entries(operators)) {
-          if (
-            (op === '$set' || op === '$unset') &&
-            payload &&
-            typeof payload === 'object' &&
-            !Array.isArray(payload)
-          ) {
+          if (!op.startsWith('$')) {
+            writtenFields.add(op)
+            continue
+          }
+          if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
             for (const k of Object.keys(payload as Record<string, unknown>)) writtenFields.add(k)
           }
         }

@@ -13,7 +13,7 @@
  * class of defect.
  */
 
-import { globToRegex } from './glob'
+import { globMatches } from './glob'
 
 /** Percent-decoding and `.`/`..` resolution, applied until the path stops changing. */
 const MAX_DECODE_PASSES = 4
@@ -108,7 +108,7 @@ export function expandIndexTargets(target: string): EsIndexTargets {
 export function matchesIndexGlob(pattern: string, name: string): boolean {
   const normalized = pattern.toLowerCase() === '_all' ? '*' : pattern.toLowerCase()
   try {
-    return globToRegex(normalized).test(name.toLowerCase())
+    return globMatches(normalized, name.toLowerCase())
   } catch {
     // An unparseable pattern is not a licence to allow it.
     return true

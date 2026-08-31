@@ -14,7 +14,9 @@ audit `target` 可被 SQL 註解偽造、`query` 的 DML 記成 `readonly`、以
 **狀態**：MongoDB 的第 1、2 則（兩個 CRITICAL）已於
 `fix/cross-engine-blacklist-gaps` 修復——請求側拒絕指名受保護欄位，記在
 ADR-0015 Decision 2。audit 的第 11 則（含驗證中發現的 11b）已於 5.0.0 修復，
-記在 ADR-0016。其餘（MongoDB 3-6、audit 12）未修；第 10 則已於 ADR-0017 處置，SQL 7-9 於 ADR-0018。
+記在 ADR-0016。MongoDB 3-6 已於 `fix/mongodb-blacklist-matcher-parity` 處置，記在 ADR-0019——
+第 3 則實測後不成立（見該則的更新），另外三則成立且已修。audit 12 已補註解；
+第 10 則已於 ADR-0017 處置，SQL 7-9 於 ADR-0018。
 
 ## MongoDB
 
@@ -39,7 +41,18 @@ MongoDB 沒有請求端的欄位檢查——ES 那側第七輪修的 `namesProte
 
 即使第 1 則改成「比對值的來源」，這條路仍在：`$group` 的輸出鍵必定是 `_id`。
 
-### 3. [HIGH] `$rename` 把值搬出黑名單名稱，而 planner 明說它不外洩
+### 3. [HIGH][規格不成立] `$rename` 把值搬出黑名單名稱，而 planner 明說它不外洩
+
+**2026-08-31 實測（MongoDB 7.0.31，本機容器）：這一則的前半不成立。**
+`$rename`、`$unset`、`$set`、`$inc`、`$mul`、`$push`、`$addToSet`、`$setOnInsert`、
+`$currentDate`、`$bit`、`$max`、`$min`、`$pop`、`$pull` 十四個 operator **全部被擋**——
+擋它們的是 ADR-0015 的請求側檢查，不是這裡說的寫入側收集。`update.ts` 的
+`writtenFields` 確實仍然只看 `$set` / `$unset`，但那個缺口被外層的嚴格檢查蓋住，
+從 CLI 觀察不到。已照 ADR-0019 Decision 2 補齊（深度防禦），而後半——
+`dml-plan.ts` 那句「field rename does not exfiltrate data」——是真的錯，已改。
+
+原始描述保留於下：
+
 
 `update --set '{"$rename":{"password":"pw"}}'`。`src/commands/update.ts:258-270`
 只從 `$set` / `$unset` 收集 `writtenFields`，所以檢查拿到空集合。`$inc`、`$mul`、
@@ -175,13 +188,14 @@ refusing」），shell 的 SQL 這處是漏掉的一站。同檔案的 Redis 分
 
 改為 `permResult.requiredPermission ?? 'admin'`。
 
-### 12. `redactSql` 的界線沒寫下來（非缺陷）
+### 12. [已補] `redactSql` 的界線沒寫下來（非缺陷）
 
 `DELETE FROM users WHERE id = 12345` → `redacted_sql` 的 `id = 0`，
 `IN (1,2,3)` → `(0,0,0)`。紀錄說得出「對 users 做了 DELETE」，說不出「刪了
 哪一列」。這是合理的隱私取捨，但 `integration-helper.ts:198-206` 的註解只解釋了
 Elasticsearch 的例外，沒寫下「SQL 的 statement 刻意不足以識別受影響的列」。
-補一句即可。
+**已補**：那段註解現在寫明這是刻意的界線、為什麼（WHERE 裡的字面值本身經常
+就是個資），以及要重建「動到哪些列」的人該去看什麼。
 
 ---
 

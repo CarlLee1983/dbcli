@@ -9,6 +9,7 @@ import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
 import { hasFieldPath, omitFieldPaths } from './field-projection'
+import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
 import {
   expandIndexTargets,
   indexExpressionReaches,
@@ -56,6 +57,23 @@ function dedupe(values: string[]): string[] {
 export interface FilterColumnsResult {
   filteredRows: Record<string, unknown>[]
   omittedColumns: string[]
+}
+
+/**
+ * The rules carrying glob metacharacters, compiled through the same matcher
+ * the MongoDB read mask uses. ADR-0019 Decision 2.
+ *
+ * Literal rules are left to the caller's own comparison: they are answered by a
+ * Set lookup or an ancestor walk that this would only duplicate, and the
+ * overwhelmingly common blacklist has no wildcard in it at all.
+ */
+function compileGlobRules(
+  rules: ReadonlyArray<string>,
+  fold: (value: string) => string
+): MongoPathPattern[] {
+  const globbed = rules.filter((rule) => /[*?[\\]/.test(rule))
+  if (globbed.length === 0) return []
+  return compilePatterns(globbed.map(fold)).patterns
 }
 
 /**
@@ -202,6 +220,10 @@ export class BlacklistValidator {
     // The same ancestor walk `filterColumnsForTables` uses: under a rule
     // `profile`, `profile.ssn` was writable and unreadable. ADR-0018 Decision 4.
     const protectedPaths = new Set(blacklisted.map((name) => name.toLowerCase()))
+    // Rules carrying a wildcard are compiled once and matched through the same
+    // path matcher the MongoDB read mask uses, so a rule cannot mean one thing
+    // to a write and another to a read. ADR-0019 Decision 2.
+    const globs = compileGlobRules(blacklisted, (value) => value.toLowerCase())
     const conflicts = fields.filter((field) => {
       const name = field.toLowerCase()
       if (protectedPaths.has(name)) return true
@@ -210,7 +232,7 @@ export class BlacklistValidator {
         if (dot > 0 && protectedPaths.has(name.slice(0, dot))) return true
         dot = name.indexOf('.', dot + 1)
       }
-      return false
+      return matchAny(name, globs)
     })
     if (conflicts.length === 0) {
       return
@@ -347,6 +369,7 @@ export class BlacklistValidator {
       return dot < 0 ? path.toLowerCase() : path.slice(0, dot).toLowerCase() + path.slice(dot)
     }
     const protectedPaths = new Set(blacklistedColumns.map(foldHead))
+    const globRules = compileGlobRules(blacklistedColumns, foldHead)
     // Folded name -> the name as the row actually carries it, which is what has
     // to be removed from the rows.
     const presentByFolded = new Map<string, string>()
@@ -392,6 +415,14 @@ export class BlacklistValidator {
           break
         }
         dot = column.indexOf('.', dot + 1)
+      }
+    }
+    // Wildcard rules, matched against the names the rows actually carry. Kept
+    // out of the two loops above so a blacklist without a wildcard — nearly all
+    // of them — pays nothing for this. ADR-0019 Decision 2.
+    if (globRules.length > 0) {
+      for (const column of presentColumns) {
+        if (matchAny(foldHead(column), globRules)) omitted.add(column)
       }
     }
     const omittedColumns = Array.from(omitted)

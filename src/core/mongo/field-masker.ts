@@ -1,5 +1,6 @@
-import type { BlacklistConfig } from '@/types/blacklist'
+import { BlacklistError, type BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { globMatches } from '@/utils/glob'
 import type { MongoCollectionScope } from './collection-references'
 
 const REDACTED = '[REDACTED]'
@@ -46,11 +47,24 @@ export function maskMongoRows(
   const raw = columns[collection] ?? findCaseInsensitive(columns, collection)
   if (!raw || raw.length === 0) return rows
 
-  const { patterns } = compilePatterns(raw)
+  const { patterns, rejected } = compilePatterns(raw)
+  // A rule the matcher cannot read is a rule that protects nothing, and the
+  // caller prints "Some fields may have been redacted" either way — the notice
+  // was the operator's only evidence the blacklist worked. ADR-0019 Decision 3.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    throw new BlacklistError(
+      `blacklist.columns for '${collection}' has entries this matcher cannot read: ${detail}`,
+      collection,
+      'READ'
+    )
+  }
   if (patterns.length === 0) return rows
 
+  // A segment is a glob since ADR-0019, so this asks whether the pattern
+  // covers `_id` rather than comparing its text.
   const idAffected = patterns.some(
-    (p) => p.segments.length === 1 && p.segments[0] === '_id' && !p.wildcardTail
+    (p) => p.segments.length === 1 && !p.wildcardTail && globMatches(p.segments[0]!, '_id')
   )
   if (idAffected) {
     console.error(

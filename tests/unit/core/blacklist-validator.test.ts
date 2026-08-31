@@ -753,3 +753,54 @@ describe('the write side walks ancestors as the read side does (ADR-0018 Decisio
     expect(() => validator.checkColumnBlacklistOnWrite('users', ['profile_name'])).not.toThrow()
   })
 })
+
+describe('one rule, one matcher (ADR-0019 Decision 2)', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  it('refuses a write to a field a segment glob names', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['password'])).toThrow()
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['name'])).not.toThrow()
+  })
+
+  it('refuses a write beneath a tail wildcard', () => {
+    const validator = validatorFor({ users: ['user.*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['user.password'])).toThrow()
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['username'])).not.toThrow()
+  })
+
+  it('omits a read a segment glob names', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    const out = validator.filterColumnsForTables(
+      ['users'],
+      [{ id: 1, password: 's3cret', name: 'a' }],
+      ['id', 'password', 'name']
+    )
+    expect(out.omittedColumns).toEqual(['password'])
+    expect(out.filteredRows[0]).toEqual({ id: 1, name: 'a' })
+  })
+
+  it('leaves a literal rule set on the fast path untouched', () => {
+    const validator = validatorFor({ users: ['password'] })
+    const out = validator.filterColumnsForTables(
+      ['users'],
+      [{ id: 1, password: 's3cret' }],
+      ['id', 'password']
+    )
+    expect(out.omittedColumns).toEqual(['password'])
+  })
+})

@@ -66,9 +66,32 @@ describe('maskMongoRows', () => {
     expect(out).toBe(rows)
   })
 
-  test('rejected patterns (middle *) are ignored', () => {
+  // Was 'rejected patterns (middle *) are ignored'. ADR-0019 Decision 1 makes
+  // every segment a glob, so this rule now compiles and protects the value it
+  // names.
+  test('a mid-path wildcard masks the field it reaches', () => {
     const rows = [{ _id: 'x', a: { b: { c: 'v' } } }]
     const out = maskMongoRows(rows, 'users', cfg({ users: ['a.*.c'] }))
-    expect(out).toEqual([{ _id: 'x', a: { b: { c: 'v' } } }])
+    expect(out).toEqual([{ _id: 'x', a: { b: { c: '[REDACTED]' } } }])
+  })
+})
+
+// ADR-0019 Decision 3: a rule the matcher cannot compile stops the operation.
+// It used to return the documents untouched while the CLI printed "Some fields
+// may have been redacted" over the plaintext.
+describe('an uncompilable rule refuses rather than passes documents through', () => {
+  test('throws naming the entry and the reason', () => {
+    const rows = [{ _id: 'x', password: 's3cret' }]
+    expect(() => maskMongoRows(rows, 'users', cfg({ users: ['a..b'] }))).toThrow(/a\.\.b/)
+  })
+
+  test('throws even when another rule in the same list compiles', () => {
+    const rows = [{ _id: 'x', password: 's3cret' }]
+    expect(() => maskMongoRows(rows, 'users', cfg({ users: ['password', 'a..b'] }))).toThrow()
+  })
+
+  test('a collection with no rules is untouched, not refused', () => {
+    const rows = [{ _id: 'x', password: 's3cret' }]
+    expect(maskMongoRows(rows, 'orders', cfg({ users: ['a..b'] }))).toBe(rows)
   })
 })

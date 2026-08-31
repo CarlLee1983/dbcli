@@ -8,6 +8,7 @@
 
 import type { DbcliConfig } from '@/types'
 import type { BlacklistConfig, BlacklistState } from '@/types/blacklist'
+import { globMatches } from '@/utils/glob'
 
 /**
  * Manager class for loading and querying blacklist rules.
@@ -143,14 +144,33 @@ export class BlacklistManager {
 
   /**
    * Check if a table is blacklisted.
-   * Case-insensitive comparison.
+   *
+   * Case-insensitive, and each entry is a glob: `secrets*` covers
+   * `secrets_2026`. The same array is already a glob for Redis keys and
+   * Elasticsearch index expressions, and one config file gets one answer
+   * (ADR-0019 Decision 4). `report\*` escapes back to a literal name.
    *
    * @param tableName Table name to check
    * @returns true if the table is blacklisted
    */
   isTableBlacklisted(tableName: string): boolean {
-    return this.state.tables.has(tableName.toLowerCase())
+    const name = tableName.toLowerCase()
+    if (this.state.tables.has(name)) return true
+    for (const pattern of this.tableGlobs()) {
+      if (globMatches(pattern, name)) return true
+    }
+    return false
   }
+
+  /** Table entries carrying glob metacharacters, collected once. */
+  private tableGlobs(): ReadonlyArray<string> {
+    if (this.wildcardTables === undefined) {
+      this.wildcardTables = [...this.state.tables].filter((entry) => /[*?[\\]/.test(entry))
+    }
+    return this.wildcardTables
+  }
+
+  private wildcardTables: ReadonlyArray<string> | undefined
 
   /**
    * Check if a specific column in a table is blacklisted.

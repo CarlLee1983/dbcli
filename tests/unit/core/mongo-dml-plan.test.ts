@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildMongoDmlPlan } from '@/core/mongo/dml-plan'
+import { buildMongoDmlPlan, flattenInsertPaths } from '@/core/mongo/dml-plan'
 
 describe('buildMongoDmlPlan', () => {
   test('insert intent passes data through', () => {
@@ -240,5 +240,17 @@ describe('analyzeMongoDmlRisk', () => {
     )
     expect(result.decision).toBe('WARN')
     expect(result.riskFactors.map((f) => f.code)).toContain('schema_cache_missing')
+  })
+})
+
+describe('flattenInsertPaths', () => {
+  test('for a flat object (e.g. SQL insert data), the result equals Object.keys', () => {
+    const data = { name: 'Alice', age: 30, active: true }
+    expect(flattenInsertPaths(data).sort()).toEqual(Object.keys(data).sort())
+  })
+
+  test('includes both the parent key and dotted child paths for a nested object', () => {
+    const data = { user: { password: 'secret' }, name: 'Alice' }
+    expect(flattenInsertPaths(data).sort()).toEqual(['name', 'user', 'user.password'].sort())
   })
 })

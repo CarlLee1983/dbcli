@@ -193,7 +193,7 @@ function classifyMongoUpdate(setDoc: Record<string, unknown>): MongoOperatorClas
       tierFactors.push({
         code: 'mongo_rename_operator',
         severity: 'warn',
-        message: `Update uses ${ops.join(', ')}; field rename does not exfiltrate data but can break readers.`,
+        message: `Update uses ${ops.join(', ')}; a renamed field keeps its value under a name the read mask does not know.`,
       })
     } else if (tier === 'ARITHMETIC') {
       tierFactors.push({
@@ -364,7 +364,7 @@ function buildSuggestedCommands(target: string, factors: QueryRiskFactor[]): str
   return []
 }
 
-function flattenInsertPaths(data: Record<string, unknown>, prefix = ''): string[] {
+export function flattenInsertPaths(data: Record<string, unknown>, prefix = ''): string[] {
   const out: string[] = []
   for (const [k, v] of Object.entries(data)) {
     const path = prefix === '' ? k : `${prefix}.${k}`

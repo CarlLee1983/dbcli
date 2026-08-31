@@ -15,6 +15,8 @@
  * data; the other one discloses it.
  */
 
+import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+
 /** Strip the `$` that marks a field reference in an aggregation expression. */
 function asFieldPath(text: string): string {
   // `$$ROOT`, `$$NOW` and friends are system variables, and `$$x` is a `$let`
@@ -62,20 +64,40 @@ const RESHAPES_DOCUMENT = new Set(['$objectToArray', '$replaceRoot', '$replaceWi
 const NAMES_A_FIELD_DYNAMICALLY = '$getField'
 
 /**
+ * The wildcard rules among `protectedFields`, compiled through the matcher the
+ * read mask uses. A rule that protects a read has to name a field here too, or
+ * `user.*` masks a response and permits the request that reshapes it.
+ * ADR-0019 Decision 2.
+ */
+function globRulesOf(protectedFields: ReadonlySet<string>): MongoPathPattern[] {
+  const globbed = [...protectedFields].filter((rule) => /[*?[\\]/.test(rule))
+  if (globbed.length === 0) return []
+  return compilePatterns(globbed).patterns
+}
+
+/**
  * Whether a path names a protected field.
  *
  * Matched by contiguous dotted components, not by substring or whole-string
  * equality: `user.password` and `password.keyword` both reach `password`, while
  * `passwordless` does not. A substring test would refuse `passwordless`; a
- * whole-string test would miss `user.password`.
+ * whole-string test would miss `user.password`. A wildcard rule is matched the
+ * same way — per component, never across the whole string.
  */
-function reachesProtectedField(path: string, protectedFields: ReadonlySet<string>): boolean {
+function reachesProtectedField(
+  path: string,
+  protectedFields: ReadonlySet<string>,
+  globs: ReadonlyArray<MongoPathPattern>
+): boolean {
   if (protectedFields.has(path)) return true
+  if (globs.length > 0 && matchAny(path, globs)) return true
   const parts = path.split('.')
   if (parts.length === 1) return false
   for (let start = 0; start < parts.length; start += 1) {
     for (let end = start + 1; end <= parts.length; end += 1) {
-      if (protectedFields.has(parts.slice(start, end).join('.'))) return true
+      const candidate = parts.slice(start, end).join('.')
+      if (protectedFields.has(candidate)) return true
+      if (globs.length > 0 && matchAny(candidate, globs)) return true
     }
   }
   return false
@@ -93,6 +115,7 @@ export function findProtectedFieldReference(
   protectedFields: ReadonlySet<string>
 ): string | undefined {
   if (protectedFields.size === 0) return undefined
+  const globs = globRulesOf(protectedFields)
 
   const candidates: string[] = []
   // A transfer that moves the whole document, or reshapes it out of the mask's
@@ -133,7 +156,7 @@ export function findProtectedFieldReference(
   walk(request)
 
   const named = candidates.find(
-    (path) => path.length > 0 && reachesProtectedField(path, protectedFields)
+    (path) => path.length > 0 && reachesProtectedField(path, protectedFields, globs)
   )
   if (named !== undefined) return named
   // Every protected field, so the message can say one — which one is arbitrary

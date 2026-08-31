@@ -673,6 +673,19 @@ dbcli verification prune --older-than 30d --keep-latest 20 --execute --force</co
 dbcli evidence validate --file .dbcli/evidence/review.json --format json
 dbcli evidence render --file .dbcli/evidence/review.json</code></pre>
 
+            <h4 class="mt-6 mb-2 font-bold">Artifact 格式版本</h4>
+            <p class="text-text-muted mb-4">Pack 與 receipt 帶有自己的 <code>version</code>，那<strong>不是</strong> dbcli 套件版本（見 <a href="https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md">ADR-0013</a>）。目前格式為 <code>version: 2</code>；dbcli 3.0.0 以前寫出的是 <code>version: 1</code>，而且是兩種彼此不相容的結構。<code>validate --format json</code> 會在 <code>status</code> 回報三種答案之一，只有第一種代表這個 pack 可以採信。</p>
+            <table class="mb-4">
+                <thead><tr><th><code>status</code></th><th><code>trust</code></th><th>意義</th><th>退出碼</th></tr></thead>
+                <tbody>
+                    <tr><td><code>current-valid</code></td><td><code>current-valid</code></td><td>目前格式、digest 通過、參照可解析。</td><td><code>0</code></td></tr>
+                    <tr><td><code>current-references-expired</code></td><td><code>current-valid</code></td><td>格式與 digest 都沒問題，但某個來源已不在。</td><td><code>1</code></td></tr>
+                    <tr><td><code>recognized-legacy</code></td><td><code>not-current-valid</code></td><td>舊版 dbcli 寫出的 pack。<code>legacyFormat</code> 與 <code>producedBy</code> 指出是哪一種；<code>integrity</code> 回報該格式自己的 digest 是否仍然吻合。參照<strong>不會</strong>被評估。</td><td><code>1</code></td></tr>
+                    <tr><td><code>unsupported</code></td><td><code>not-current-valid</code></td><td>版本未知，或版本與結構不一致。</td><td><code>1</code></td></tr>
+                </tbody>
+            </table>
+            <p class="text-text-muted mb-4">舊格式的 pack 與 receipt 可讀、可驗 integrity，但永遠不會被當成 current-valid，而且沒有 migration：pack 的識別碼由 digest 推導而來，改寫它等於用舊 artifact 的來源憑證鑄造一份新的 artifact。需要目前格式時，請用現有證據重新 compose 一份。</p>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — 本機觀察型 Proxy</h3>
             <p class="text-text-muted mb-4">本機開發觀察型 Proxy — 將現有應用程式指向 Proxy 埠號，<code>dbcli</code> 便會將所有查詢轉發至真實資料庫，同時記錄查詢文字、延遲、位元組數、資料列數及錯誤事件。<strong>這不是正式環境閘道器。</strong> 僅限本機開發環境使用。</p>

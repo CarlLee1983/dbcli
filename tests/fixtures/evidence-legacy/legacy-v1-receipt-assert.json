@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "evr_legacy_assert_0001",
+  "createdAt": "2026-08-10T00:00:00.000Z",
+  "operation": "assert",
+  "outcome": "failed",
+  "context": {
+    "engine": "postgres",
+    "connectionName": "primary",
+    "environment": "staging",
+    "schemaFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "semanticFingerprint": null
+  },
+  "provenance": {
+    "command": "dbcli assert --table <redacted> --query <redacted>",
+    "commandHash": "sha256:c76d01cb9d58b24d573a85dae0c41144221f615ffd7635038b27dfd26d2fc6ff",
+    "auditRef": "aud_0001",
+    "verificationArtifactRef": null
+  },
+  "replay": {
+    "status": "context-required"
+  },
+  "observation": {
+    "kind": "assert-verdict",
+    "fingerprint": "sha256:278f256bda310a15809ad2939b75f7b48d53ee7fc2bc30b342390e63227086bc"
+  }
+}

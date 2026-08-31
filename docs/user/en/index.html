@@ -673,6 +673,19 @@ dbcli verification prune --older-than 30d --keep-latest 20 --execute --force</co
 dbcli evidence validate --file .dbcli/evidence/review.json --format json
 dbcli evidence render --file .dbcli/evidence/review.json</code></pre>
 
+            <h4 class="mt-6 mb-2 font-bold">Artifact format versions</h4>
+            <p class="text-text-muted mb-4">Packs and receipts carry their own <code>version</code>, which is <strong>not</strong> the dbcli package version (see <a href="https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md">ADR-0013</a>). The current format is <code>version: 2</code>; dbcli 3.0.0 and earlier wrote <code>version: 1</code> in two mutually incompatible layouts. <code>validate --format json</code> reports one of three answers in <code>status</code>, and only the first means the pack can be relied on.</p>
+            <table class="mb-4">
+                <thead><tr><th><code>status</code></th><th><code>trust</code></th><th>Meaning</th><th>Exit</th></tr></thead>
+                <tbody>
+                    <tr><td><code>current-valid</code></td><td><code>current-valid</code></td><td>Current format, digest verified, references resolvable.</td><td><code>0</code></td></tr>
+                    <tr><td><code>current-references-expired</code></td><td><code>current-valid</code></td><td>Current format and digest, but a referenced source is gone.</td><td><code>1</code></td></tr>
+                    <tr><td><code>recognized-legacy</code></td><td><code>not-current-valid</code></td><td>Written by an older dbcli. <code>legacyFormat</code> and <code>producedBy</code> say which; <code>integrity</code> reports whether that format's own digest still verifies. References are <strong>not</strong> evaluated.</td><td><code>1</code></td></tr>
+                    <tr><td><code>unsupported</code></td><td><code>not-current-valid</code></td><td>The version is unknown, or the version and the structure disagree.</td><td><code>1</code></td></tr>
+                </tbody>
+            </table>
+            <p class="text-text-muted mb-4">Legacy packs and receipts are readable and integrity-checkable but are never treated as current-valid, and there is no migration: a pack's identity is derived from its digest, so rewriting one would mint a new artifact wearing an old one's provenance. Compose a new pack from current evidence instead.</p>
+
             <!-- doc-key: proxy -->
             <h3 id="proxy">dbcli proxy — Local Observability Proxy</h3>
             <p class="text-text-muted mb-4">A local development observability proxy — point an existing application at the proxy port and <code>dbcli</code> relays every query to the real database while recording query text, latency, byte counts, row counts, and error events. <strong>This is NOT a production gateway.</strong> Use it during local development only.</p>

@@ -799,9 +799,28 @@ verification summary 或憑證複製進包內。Claim 是外部提供的陳述�
   claim 都含 `id` 與自然語言 `text`。Claim 文字不得含 SQL、憑證、錯誤內容或黑名單識別字。
   輸出必須留在目前工作區內，且絕不覆寫既有檔案。
 - `dbcli evidence validate --file <path> [--format json|markdown]`
-  — 驗證 SHA-256 integrity digest，並檢查來源證據是否仍可取得。已保留的 pack 若對應的
-  audit/artifact 之後輪替、清除或消失，會回傳 `references: "source-expired"` 並以 `1` 退出；
-  但仍可 render。
+  — 先辨識 pack 的格式，再驗證 SHA-256 integrity digest，並檢查來源證據是否仍可取得。已保留的
+  pack 若對應的 audit/artifact 之後輪替、清除或消失，會回傳 `references: "source-expired"`
+  並以 `1` 退出；但仍可 render。
+
+#### Artifact 格式版本
+
+Pack 與 receipt 帶有自己的 `version`，那**不是** dbcli 套件版本——見
+[ADR-0013](https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md)。
+目前格式為 `version: 2`；dbcli 3.0.0 以前寫出的是 `version: 1`，而且是兩種彼此不相容的結構。
+
+`validate --format json` 會在 `status` 回報三種答案之一，只有第一種代表這個 pack 可以採信：
+
+| `status` | `trust` | 意義 | 退出碼 |
+| --- | --- | --- | --- |
+| `current-valid` | `current-valid` | 目前格式、digest 通過、參照可解析。 | `0` |
+| `current-references-expired` | `current-valid` | 格式與 digest 都沒問題，但某個來源已不在。 | `1` |
+| `recognized-legacy` | `not-current-valid` | 舊版 dbcli 寫出的 pack。`legacyFormat` 與 `producedBy` 指出是哪一種；`integrity` 回報該格式自己的 digest 是否仍然吻合。參照**不會**被評估。 | `1` |
+| `unsupported` | `not-current-valid` | 版本未知，或版本與結構不一致。 | `1` |
+
+舊格式的 pack 與 receipt 可讀、可驗 integrity，但永遠不會被當成 current-valid，而且沒有
+migration：pack 的識別碼由 digest 推導而來，改寫它等於用舊 artifact 的來源憑證鑄造一份新的
+artifact。需要目前格式時，請用現有證據重新 compose 一份。
 - `dbcli evidence render --file <path> [--format json|markdown]`
   — 驗證目前的黑名單政策後，不重讀原始參照就輸出有效 pack，因此來源的保留期屆滿後仍可供
   歷史審閱。

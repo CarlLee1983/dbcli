@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "evr_v3_verify_0001",
+  "createdAt": "2026-08-20T00:00:00.000Z",
+  "operation": "verify",
+  "outcome": "succeeded",
+  "context": {
+    "engine": "postgres",
+    "connectionName": "primary",
+    "environment": "staging",
+    "schemaFingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "semanticFingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "provenance": {
+    "command": "dbcli verify safe-backfill --after-write",
+    "commandHash": "sha256:207015534dfc923fb8084bde26eb1d3ef24c15ade3b2e49e62c4cc3c994f47e4",
+    "auditRef": null,
+    "verificationArtifactRef": "ver_0001"
+  },
+  "replay": {
+    "status": "context-required"
+  },
+  "observation": {
+    "kind": "verify-outcome",
+    "status": "verified"
+  }
+}

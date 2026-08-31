@@ -7,12 +7,16 @@ import { getGlobalConnectionName, configModule } from '@/core/config'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import {
   buildEvidencePack,
+  classifyEvidencePackArtifact,
+  describeEvidencePackClassification,
   EvidencePackValidationError,
   parseEvidenceClaimsInput,
+  parseEvidencePack,
   readEvidencePack,
   renderEvidencePackMarkdown,
   writeEvidencePack,
   type EvidencePack,
+  type EvidencePackClassification,
   type EvidenceReference,
 } from '@/core/evidence-pack'
 import {
@@ -289,6 +293,102 @@ async function expiredReferences(
   )
 }
 
+/**
+ * The three answers `validate` may give, kept apart on purpose.
+ *
+ * `current-valid` is the only one that means the pack can be relied on. A
+ * recognised legacy pack reports what it is and what produced it; anything else
+ * is unsupported. Collapsing the middle case into "invalid" is what made an old
+ * artifact indistinguishable from a tampered one.
+ */
+type EvidenceValidationStatus =
+  | 'current-valid'
+  | 'current-references-expired'
+  | 'recognized-legacy'
+  | 'unsupported'
+
+interface EvidenceValidationResult {
+  status: EvidenceValidationStatus
+  format: 'current' | 'legacy' | 'unsupported'
+  formatVersion: number | null
+  /** Never `current-valid` for anything but a current pack. */
+  trust: 'current-valid' | 'not-current-valid'
+  integrity: string
+  references: 'valid' | 'source-expired' | 'not-evaluated'
+  expired: Array<{ kind: string; id: string }>
+  legacyFormat?: string
+  producedBy?: string
+  detail?: string
+}
+
+async function readEvidenceArtifactJson(filePath: string): Promise<unknown> {
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) throw new EvidencePackValidationError('evidence pack file not found')
+  if (file.size > MAX_INPUT_BYTES)
+    throw new EvidencePackValidationError('evidence pack file exceeds 256 KiB')
+  try {
+    return JSON.parse(await file.text())
+  } catch {
+    throw new EvidencePackValidationError('evidence pack must contain valid JSON')
+  }
+}
+
+/**
+ * Report a pack the current format does not own.
+ *
+ * References are deliberately `not-evaluated`: resolving them would put a
+ * legacy pack's claims through the current trust path and let a caller read
+ * "references: valid" as an endorsement of the pack.
+ */
+function nonCurrentValidation(
+  classification: EvidencePackClassification
+): EvidenceValidationResult {
+  if (classification.format === 'legacy') {
+    return {
+      status: 'recognized-legacy',
+      format: 'legacy',
+      formatVersion: classification.formatVersion,
+      trust: 'not-current-valid',
+      integrity: classification.integrity,
+      references: 'not-evaluated',
+      expired: [],
+      legacyFormat: classification.legacyFormat,
+      producedBy: classification.producedBy,
+      detail: describeEvidencePackClassification(classification),
+    }
+  }
+  return {
+    status: 'unsupported',
+    format: 'unsupported',
+    formatVersion: classification.formatVersion,
+    trust: 'not-current-valid',
+    integrity: 'not-evaluated',
+    references: 'not-evaluated',
+    expired: [],
+    detail: describeEvidencePackClassification(classification),
+  }
+}
+
+function printValidation(result: EvidenceValidationResult, format: EvidenceFormat): void {
+  if (format === 'json') {
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+  if (result.status === 'current-valid') {
+    console.log('Evidence pack is valid.')
+    return
+  }
+  if (result.status === 'current-references-expired') {
+    console.log(
+      `Evidence references expired: ${result.expired.map((item) => `${item.kind}:${item.id}`).join(', ')}`
+    )
+    return
+  }
+  console.log(
+    `${result.detail ?? 'Evidence pack is not current-valid.'} (integrity: ${result.integrity})`
+  )
+}
+
 function printCompose(pack: EvidencePack, path: string, format: EvidenceFormat): void {
   if (format === 'json') {
     console.log(JSON.stringify({ path, id: pack.id, digest: pack.integrity.digest }, null, 2))
@@ -354,24 +454,31 @@ evidenceCommand
       const format = options.format as EvidenceFormat
       validateFormat(format, FORMATS, 'evidence validate')
       const { configPath, config } = await readConfig(command)
-      const pack = await readEvidencePack(String(options.file))
+      const raw = await readEvidenceArtifactJson(String(options.file))
+      const classification = classifyEvidencePackArtifact(raw)
+      if (classification.format !== 'current') {
+        printValidation(nonCurrentValidation(classification), format)
+        process.exitCode = 1
+        return
+      }
+      const pack = parseEvidencePack(raw)
       assertClaimsSafe(
         { subject: pack.subject, claims: pack.claims.map(({ id, text }) => ({ id, text })) },
         blockedTerms(config)
       )
       const expired = await expiredReferences(pack, configPath, config)
-      const result = {
-        integrity: 'valid',
-        references: expired.length === 0 ? 'valid' : 'source-expired',
-        expired,
-      }
-      if (format === 'json') console.log(JSON.stringify(result, null, 2))
-      else
-        console.log(
-          expired.length === 0
-            ? 'Evidence pack is valid.'
-            : `Evidence references expired: ${expired.map((item) => `${item.kind}:${item.id}`).join(', ')}`
-        )
+      printValidation(
+        {
+          status: expired.length === 0 ? 'current-valid' : 'current-references-expired',
+          format: 'current',
+          formatVersion: classification.formatVersion,
+          trust: 'current-valid',
+          integrity: 'valid',
+          references: expired.length === 0 ? 'valid' : 'source-expired',
+          expired,
+        },
+        format
+      )
       if (expired.length > 0) process.exitCode = 1
     } catch (error) {
       console.error(safeMessage(error))

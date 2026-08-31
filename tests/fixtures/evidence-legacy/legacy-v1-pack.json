@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "id": "evp_legacy_pack_0001",
+  "createdAt": "2026-08-10T00:00:00.000Z",
+  "subject": {
+    "kind": "table",
+    "name": "orders snapshot"
+  },
+  "claims": [
+    {
+      "id": "claim-a",
+      "text": "The reviewed window matches the change request.",
+      "evidence": [
+        {
+          "kind": "audit",
+          "id": "aud_0001",
+          "createdAt": "2026-08-09T12:00:01.000Z",
+          "connectionName": "primary",
+          "command": "verify",
+          "success": true
+        },
+        {
+          "kind": "verification-artifact",
+          "id": "ver_0001",
+          "createdAt": "2026-08-09T12:00:00.000Z",
+          "status": "verified",
+          "subjectKind": "table"
+        }
+      ]
+    },
+    {
+      "id": "claim-b",
+      "text": "The backfill completed for the reviewed window.",
+      "evidence": [
+        {
+          "kind": "audit",
+          "id": "aud_0001",
+          "createdAt": "2026-08-09T12:00:01.000Z",
+          "connectionName": "primary",
+          "command": "verify",
+          "success": true
+        },
+        {
+          "kind": "verification-artifact",
+          "id": "ver_0001",
+          "createdAt": "2026-08-09T12:00:00.000Z",
+          "status": "verified",
+          "subjectKind": "table"
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "completeForDeclaredEvidence": true,
+    "gaps": []
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "2cc869b444c4ebd78afb798a62b7966cc4f1e7e92f723f2dc3191960db720bba"
+  }
+}

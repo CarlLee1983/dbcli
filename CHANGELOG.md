@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.0.0] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission，同兩個形狀在 Redis 與 MongoDB 也成立
+## [4.0.0] - 2026-08-30 - Elasticsearch 的 shell 從來沒有問過 permission，同樣的形狀在 Redis 與 MongoDB 也成立，以及三個沒人比對的版本契約
 
 **建議所有把 Elasticsearch 連線交給 AI agent 操作的使用者升級。** `dbcli shell` 連到 Elasticsearch 時，完全沒有檢查連線設定的 permission 等級就把請求送到叢集：`shell.ts` 在到達 SQL 與 Redis 共用的那道閘門之前就分支到 `es-shell.ts`。因此 `permission: query-only` 的連線可以送出 `POST /<index>/_delete_by_query` 清空索引、`DELETE /<index>` 刪掉索引、`PUT /<index>/_mapping` 改寫 schema —— 同樣這些請求走 `dbcli query` 一律會被拒絕。這條路徑也不寫任何 audit 紀錄，所以受影響的人事後無從查證發生過什麼。
 
@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 影響範圍是所有 Elasticsearch 連線，`1.22`（ES shell 首次出現）起至 `3.0.0` 止。SQL、Redis、MongoDB 的 shell 不受影響 —— 它們走的是有閘門的那一條分支。沒有任何生產事故的紀錄，但這是從缺席推論出來的，而這條路徑本來就不寫 audit，受影響的操作者本來就無從發現。
 
 ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比的兩樣東西都正規化？」問到其他引擎上，找到 Redis 四個、MongoDB 兩個 CRITICAL。設計決策記在 ADR-0015。
+
+Three numbers in this repository disagreed with reality and nothing checked any of them. The evidence pack and receipt formats still said `version: 1` after v3.0.0 broke both of them, so two mutually incompatible layouts shipped under one version number and an old artifact was reported as a tampered one. Five plugin manifests said `1.51.2` while the package said `3.0.0`. `SECURITY.md` promised fixes for `1.x`. Each is now stated once, derived from one source, and guarded by a check that fails on drift.
 
 ### Fixed
 
@@ -151,11 +153,25 @@ ES shell 那條分支第九輪把「一個比對函式，有沒有把它要比�
 
 - **`audit.strict` 設定（預設 `false`）。** 開啟時，送出前那一列 audit 寫不出去就拒絕執行請求。audit 一直是 best-effort——磁碟滿、目錄不可寫、lock budget 耗盡（可被刻意耗盡）時操作照樣執行、零紀錄，只有一行 stderr 警告，而管線模式通常看不到。對多數指令這是對的取捨；但 ES shell 這條路徑上 audit 就是控制本身，而先前連相反的取捨都無法表達。只管送出前那一列：`outcome` 寫不出去時請求已經在叢集上了。
 
+- **`bun run manifest:check` (and `manifest:sync`) makes manifest drift fail the build.** It checks every manifest's version against `package.json`, the plugin name, that declared skill directories and entry files exist, that the root and portable copies agree, that the marketplace listing names the plugin, and that `SECURITY.md`'s supported major matches the package. Blocking in CI's drift job and in `release:check`. `tests/unit/scripts/plugin-manifest-contract.test.ts` breaks one thing at a time in a scratch tree and asserts the script goes red, because a guard only ever run against a correct tree is how five manifests drifted through a green build.
+
+- **Frozen legacy artifact fixtures under `tests/fixtures/evidence-legacy/`.** Six files produced by the code that actually shipped — v2.1.0's builder and v3.0.0's — never regenerated. A test that builds its own "legacy" input proves the builder agrees with itself, which is precisely the check that would have caught none of this.
+
+- **CI runs a dependency audit and installs from a frozen lockfile.** `bun audit` ran only inside `release:check`, by hand, shortly before a release; it is now its own blocking job on every push. Every job installs with `--frozen-lockfile`, and the workflow declares `permissions: contents: read`.
+
 ### Changed
 
 - **BREAKING：`@carllee1983/dbcli/core` 不再匯出 `AdapterFactory`。** 它回傳的 adapter 的 `request()` 是 public，所以任何函式庫使用者都能拿到一條不經 permission、不經 blacklist、不寫 audit 的路徑。`QueryExecutor` 與 `DataExecutor` 保留——它們自己帶著閘門。CLI 使用者不受影響。
 
 - **`_update_by_query` 從 `read-write` 收緊為 `admin`**：它是獨立的區段，精確比對之下落到破壞性預設，而它確實會改寫索引裡的每一份文件。
+
+- **BREAKING (artifact format): evidence packs and receipts are `version: 2`, and the format version is no longer tied to the package version.** v3.0.0 changed the pack digest input, the id derivation, the `coverage` field and the receipt `observation` while leaving both constants at `1` — ADR-0012 decided to amend the schema in place, which was right about the repairs and wrong about the number. A reader now classifies an artifact by version *and* structure before computing anything: `v1-coverage` (2.1.0 and earlier), `v1-untagged-v3` (3.0.0), current, or unsupported. Both legacy formats stay readable and integrity-checkable through frozen reimplementations of their own digests, and neither is ever `trust: "current-valid"`. There is no migration and cannot be one — a pack's id derives from its digest, so rewriting an old pack would mint a new artifact wearing an old one's provenance, and a v2.1.0 receipt's hashed `observation` can only be "recovered" by inverting it, which is a guess and not a record. Recorded in `docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`, amending ADR-0012.
+
+- **`evidence validate --format json` distinguishes three answers where it used to give one.** `status` is `current-valid`, `current-references-expired`, `recognized-legacy`, or `unsupported`, with `trust` stating plainly whether the pack may be relied on; `recognized-legacy` also carries `legacyFormat`, `producedBy`, and that format's own `integrity`. An unknown version fails closed. Previously every one of these arrived as `evidence pack digest mismatch`, which tells the holder of a two-week-old file that someone tampered with it.
+
+- **`SECURITY.md` documents the major line that actually exists.** It listed `1.x` as supported against a `3.0.0` package — a security document making a false promise about which releases get fixes. `3.x` is supported; `2.x` and `1.x` are explicitly not, with no backport commitment invented to soften it.
+
+- **Plugin and extension manifests carry the package version.** `.claude-plugin`, `.codex-plugin`, `.cursor-plugin`, `gemini-extension.json` and the portable `plugins/dbcli-agent` copy all read `1.51.2` — two majors behind what a user installing from a marketplace would receive.
 
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 
@@ -367,16 +383,23 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **The CLI loads what a command actually needs.** Subcommands register lazily, SQL drivers load at connection time rather than at import, and `node-sql-parser` is both deferred and externalized from the bundle — measured at roughly 8ms off startup for the lazy registration alone.
+
 - **Full-schema scans cost less.** Per-table queries are merged, row estimates replace `COUNT(*)`, and remaining work runs with bounded parallelism. The query path no longer loads the layered schema in full — it fetches the single table it needs.
+
 - **Repeated lookups are cached within a process.** Config binding files are read and validated once per process, and the skill update check keeps a TTL cache instead of re-checking on every invocation. Redis and Elasticsearch list operations were narrowed to what the caller asked for.
+
 - **Identifier quoting and error classification each have one implementation.** Quote/encode helpers were consolidated into a shared utility, and driver errors are now classified by error code first rather than by matching message text.
+
 - **Server-side script protection lives in the adapter layer**, so every caller is covered by the same guard rather than each command re-implementing it.
 
 ### Fixed
 
 - **`bun run build` was non-deterministic.** Consecutive builds of identical sources alternated between two `dist/cli-runtime.mjs` outputs about 690KB apart, depending on whether the bundler pulled in 48 `@inquirer/*` modules. `@inquirer/prompts` is now external, which also removes a silent degradation path where the prompt implementation quietly changed between builds. `bun run build:determinism` checks this in CI.
+
 - **One CLI query writes exactly one audit entry.** Some paths recorded the same query more than once.
+
 - **Windows CI is green again.** Path separator assumptions, CRLF handling in test fixtures, and CRLF frontmatter stripping in skill sources were all Unix-only.
+
 - **The startup benchmark measures the noise floor rather than the median**, which is what actually distinguishes a regression from scheduler jitter, and a guide test no longer flakes on a random UUID colliding with `'5432'`.
 
 ## [1.53.0] - 2026-08-09 - Offline evidence, semantic contracts, and impact assessment
@@ -384,13 +407,17 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Offline evidence packs.** `dbcli evidence compose`, `validate`, and `render` create, verify, and render workspace-contained evidence packs from safe claim text plus existing verification artifacts, audit entries, and optional assert receipts. Packs omit SQL, rows, targets, credentials, audit metadata, and verification summaries; source retention loss remains visible without preventing historical rendering.
+
 - **Evidence receipts for post-write assertions.** `assert --evidence-receipt <path>` atomically records safe provenance only after the verdict, audit attempt, and optional verification artifact are authoritative. Receipts are workspace-contained, contain no SQL or returned data, cannot be used as execution approval, and may be composed into an evidence pack.
+
 - **Reviewable semantic contracts.** `dbcli contract validate|context|search|drift` governs optional `dbcli.contracts.json` evidence expectations for canonical semantic terms. The commands are offline and read-only; only valid approved contracts enter ordinary agent context.
+
 - **Offline impact assessment.** `dbcli impact assess` creates a declared-coverage report for a design change against exactly one local schema-cache or ORM baseline, optionally incorporating reviewed data-access metadata and redaction-first proxy workload evidence. It never connects, executes SQL, or claims complete coverage.
 
 ### Changed
 
 - **Shared execution and adapter boundaries.** Query execution now uses an injectable command runtime, SQL adapters share readiness and driver-error handling, and doctor accepts a non-SQL collector runtime. These internal changes keep the CLI behavior stable while making offline evidence and impact workflows testable.
+
 - **Documentation and agent skills cover the new surfaces.** English and Traditional Chinese Markdown and HTML guides, installed skill copies, and reference material document evidence packs, assert receipts, semantic contracts, and impact assessment.
 
 ### Fixed
@@ -402,10 +429,15 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **The skill documented three flags that do not exist.** `q --use` (the global `dbcli --use <name> q` form is the real one), `q --collection` (a MongoDB snippet's `target:` is the only collection source), and `audit tail --recovery-ref` (it lives on `audit show`). The same wrong `audit tail --recovery-ref` is corrected in `docs/user` (en/zh, Markdown and HTML).
+
 - **The `design` artifact example failed its own validator.** It is replaced with one that validates clean, and the naming rules it has to satisfy are now documented: lowercase kebab-case for design names versus SQL identifiers for tables and columns, endpoints referencing a model rather than a table, strict objects, descriptions that must not contain SQL keywords, and the size limits. Structural violations report `INVALID_ARTIFACT`, a code the severity table did not list.
+
 - **Stale lists corrected against the CLI.** `--recovery` covers `lint` and `diff`; verification subject kinds include `table` (what `verify constraint` writes); the Redis permission table includes `XLEN` / `XREAD` / `XRANGE` / `XREVRANGE` / `XADD` / `XDEL` / `LREM`; `audit show` lists `--brief` and `--for-agent`; the snippet guard emits `LIMIT 1001`, fetching one extra row to detect truncation. Elasticsearch supports `q`, and the 10 000 bound belongs to `query` — `export --no-limit` streams via the scroll API. `schema --help` claimed `--sample-size` defaults to 50; it is 100.
+
 - **`design` was unreachable from the skill entry point.** `SKILL.md` did not mention it at all, so an agent asked to design or review a schema would hand-write DDL and bypass the review-only `propose` contract. It now has a command row, both workflows, and a guardrail that a proposed plan is never executed.
+
 - **Six drifts between the English and Traditional Chinese skills.** The most serious dropped the permission-tier semantics (multi-statement SQL rejected below `admin`, snippets free of write and DDL keywords, `$out` / `$merge` requiring `data-admin`). The MongoDB connection guidance also disagreed between languages — field-by-field is the recommendation, full URI the escape hatch — and the zh-TW side was missing the env-refs MongoDB exception, the `uri`-wins-silently gotcha, `--slow-ms` on `query` and `q`, and the `proxy analyze` action guidance.
+
 - **Cursor and Windsurf installs were the Claude skill verbatim.** Windsurf does not parse frontmatter, so roughly 900 characters of `description:` were read as rule text; Cursor reads `description` / `globs` / `alwaysApply` and received none of them. Both platforms keep `reference.md` outside the primary file's directory, so every mention of it resolved to nothing. `dbcli skill --install` now shapes the file per platform — Cursor as an Agent Requested rule, Windsurf with the frontmatter stripped and the description kept as prose — and repoints the reference path. Recognizing an existing dbcli install no longer depends on the frontmatter, so a Windsurf reinstall stops backing up dbcli's own file. See ADR 0006.
 
 ### Added
@@ -415,6 +447,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **The bilingual parity gate compares content, not just shape.** It checked heading levels, fence counts, table rows, and a curated token list for mere presence — every drift above kept that structure intact. It now compares per-section counts of every code token and list item; run against 1.52.0 it reports 48 problems it used to pass. Its success message no longer reads as "the docs are aligned" when it only checked the skeleton.
+
 - **The skill entry point carries less that an agent cannot act on.** The always-loaded `description` drops from 990 to 626 characters with every trigger branch intact, release markers such as `(v1.23)` and an internal ticket id are gone (an agent has exactly one installed version), and the `proxy` row's flag wall becomes an anchor.
 
 ## [1.52.0] - 2026-08-07 - Offline database design assistant and slow-query hints
@@ -422,8 +455,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Offline database design assistant.** `dbcli design init|validate|render|diff|propose` authors and reviews a version-controlled `dbcli.design.json` beside the code. Every subcommand is offline: none opens a connection, executes DDL, or calls a provider, and `design init` is the only writer — to the explicit `--output` path, refusing to overwrite. `validate` is fail-closed, so `render`, `diff`, and `propose` refuse to work while `error` findings remain; `render` emits `json`, `markdown`, or `mermaid`.
+
 - **Design drift comparison and review-only proposals.** `design diff` and `design propose` compare the artifact against the local schema cache (`--against-cache`) or local ORM definitions (`--against-orm`, supporting Prisma, DDL, Drizzle, TypeORM, Sequelize, and JSON), with `--orm-format` and `--ignore` for control. `propose` turns drift into a plan a human reviews and never applies a write: each entry carries a `dry-run` or `migration-review` safety level plus `preflight`, `rollback`, and `verification` steps.
+
 - **Two further design review rules.** `REVERSE_RELATIONSHIP` (error) fires when the same endpoints are declared again in the opposite direction, and `PREFIX_REDUNDANT_INDEX` (warn) fires when a non-unique index is a leading-column prefix of a longer index.
+
 - **Passive slow-query hint on `query` and `q`.** At or above `--slow-ms` (default 1000, `0` disables), a finished query gains a Performance hint footer and `metadata.performanceAdvisory`. It reuses the execution time already measured — no `EXPLAIN`, no schema read, no second request. The recommendation is engine-aware: PostgreSQL, MySQL, MariaDB, and Redis are pointed at `guide slow-query`; MongoDB and Elasticsearch state the timing instead. `--recovery` suppresses the hint so that envelope keeps its contract.
 
 ### Changed
@@ -455,8 +491,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Business semantic context commands.** Add the offline, read-only `dbcli semantic validate`, `context`, `search`, `drift`, and `migrate` commands for a reviewable `dbcli.semantic.json`. Semantic models, metrics, aliases, and v2 relationships are checked against the cached visible schema and saved-query names; v1 files remain supported and `migrate --to 2` writes only to stdout.
+
 - **Deterministic governed semantic search and relationship drift checks.** `semantic search` returns only reviewed metadata, removes blacklist names from free-text results, and supports bounded result counts. `semantic drift` identifies stale, invalid, or unavailable local semantic evidence, including relationship references that no longer match declared visible fields.
+
 - **Offline validation boundary for agent query drafts.** `dbcli semantic draft validate --input <file|->` accepts an explicit untrusted JSON draft and validates its references and read-only SQL without executing it, persisting it, or calling a provider. Reports contain hashes, canonical references, and safe violation codes rather than candidate SQL; a successful validation is explicitly not permission to execute.
+
 - **Semantic context in agent-facing skill context.** `dbcli skill context` includes the validated semantic context when present, after blacklist filtering, so agents receive only governed schema and semantic metadata.
 
 ## [1.50.0] - 2026-08-06 - QueryLens proxy query analysis
@@ -504,32 +543,59 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Security
 
 - **blacklist 只檢查 SQL 的第一張表。** 擋下與遮罩都以單次 regex match 取得的單一表名為準，因此只要敏感表是經由 `JOIN`、逗號、`UNION` 或子查詢進入查詢，它既不會被擋、欄位也不會被遮罩。在 `users` 已列入 blacklist 的設定下，`SELECT * FROM users` 會被擋，但 `SELECT o.id, u.password_hash FROM orders o JOIN users u ON u.id = o.user_id` 會照常回傳 `users` 的敏感欄位。繞過不需要任何特殊語法，一個 `JOIN` 就夠，且在 `query-only` 權限下即可利用。影響 `query` / `export` / `q` / REPL 等所有 SQL 路徑。
+
 - **`export` 的 SQL 路徑完全沒有套用 blacklist。** 該路徑建立 `QueryExecutor` 時把 validator 傳成 `undefined`，因此連單表的情況都不擋、不遮罩：`dbcli export "SELECT * FROM users" --format json` 會把已宣告為敏感的欄位原樣寫進檔案。
+
 - **`export` 的 Elasticsearch 路徑檢查 index 但不遮罩欄位。** 同一個 index 上 `dbcli query` 會遮蔽的欄位，`dbcli export` 會寫進檔案。
+
 - **`dbcli report` 完全沒有套用 blacklist。** 它直接呼叫 adapter 執行 snippet，而 collector 會載入使用者可寫的 snippet 目錄（不只內建），回傳的 rows 會被嵌進報告。既不擋黑名單資料表，也不遮罩欄位。
+
 - **`dbcli q --verify` 的第二段查詢未經檢查。** blacklist 只套用在 snippet 本體，frontmatter 的 `verify.query` 是另一段直接送到 adapter 的 SQL。
+
 - **互動式 shell 從未套用 `blacklist.columns`。** REPL 不走 `QueryExecutor`，它把 adapter 回傳的 rows 直接格式化輸出，因此 `dbcli shell` 裡的 `SELECT * FROM users` 會完整回傳 `dbcli query` 會遮蔽的欄位。
+
 - **MongoDB 的 `$lookup` / `$unionWith` 從未被檢查。** 這是 #23 的 MongoDB 寫法：指令指定一個 collection，pipeline 卻讀另一個。`query` / `export` / `q` 三條路徑都只檢查被指名的那個 collection，因此 `$lookup: { from: 'secrets' }` 既不被擋，嵌入的欄位也不被遮罩。現在會遞迴讀取 `$lookup.from`、`$unionWith.coll`、`$graphLookup.from`、`$out`、`$merge.into`（含 sub-pipeline），並把來源 collection 的欄位規則重新錨定到 `as` 指定的巢狀路徑。
+
 - **字串常值的反斜線解讀會讓掃描器失步。** 表名列舉先前假定反斜線不轉義引號，理由是「提早結束字串只會讓更多文字可見」—— 這個推理是錯的：提早結束會翻轉引號奇偶性，於是下一個引號開啟一段直到輸入結尾的偽字串，把整個 `FROM` 子句藏起來。`SELECT E'\'' AS x, * FROM secrets` 在 `query-only` 下即可取回整張黑名單資料表。現在兩種解讀都掃描並取聯集。
+
 - **PostgreSQL 的 `U&"\0073ecrets"` 未解碼。** 回報的是原始文字，而伺服器解析出的是 `secrets`，因此擋下與遮罩都被繞過。`UESCAPE` 允許以幾乎任何字元代替反斜線（只要不是十六進位數字、`+`、引號或空白），包含一般字母，因此 `U&"x0073ecrets" UESCAPE 'x'` 是純英數字串；現在會對每個合法的 escape 字元各解碼一次。
+
 - **⚠️ 非 ASCII 的 dollar-quote 標籤造成權限繞過（不只 blacklist）。** dollar-quote 的標籤依「未加引號的識別字」規則，而 PostgreSQL 識別字接受高位元組，因此 `$é$ … $é$` 是真正的字串；但語句剖析器的標籤樣式只接受 ASCII，於是該區段被當成一般文字，裡面的 `'` 開啟一段直到輸入結尾的字串，把後面整批語句藏起來。**在 `permission: query-only` 下，`SELECT $é$ ' $é$ ; DROP TABLE users; -- ` 會通過權限判定並送到資料庫。** 這條在 1.47.0 以前就存在，與 1.47.1 修掉的 `a$q$` 是同一族 —— 當時修了識別字延續字元的判定，沒有修標籤本身。詞法邊界規則已抽到 `src/utils/sql-lexical.ts` 由兩個掃描器共用，因為同一條規則已經三次在一個檔案修、另一個沒修。
+
 - **Elasticsearch 的 `--index` 是運算式而非名稱。** 它接受逗號清單、萬用字元、`_all`、百分比編碼（`%2A`）、date math（`<logs-{now/d}>`）與跨叢集限定（`cluster:index`），因此 `--index "secrets,orders"`、`"*"`、`"sec*"`、`"_all"`、`"<secrets>"`、`"*:secrets"`、`"%2A"` 全都能讀取黑名單 index 而不與任何黑名單項目相等。`query` / `export` / `q` / ES shell **四條**路徑皆受影響。現在會正規化運算式後逐一檢查具名 index，萬用字元則在「可能匹配到黑名單 index」時拒絕。
+
 - **同一個問題也讓欄位遮罩整個失效。** 遮罩仍以原始運算式做等值查表，因此 `--index "us*"` 或 `"users,orders"` 匹配不到任何欄位規則 —— 在只設定欄位黑名單（資料表本身未列入）時，`checkIndexBlacklist` 會放行，然後所有受保護欄位原樣回傳，`export` 更會寫進檔案。現在改以「該運算式可能觸及的所有 index 的規則聯集」遮罩。
+
 - **ES 目標的比對讀的是原始文字，不是伺服器實際路由的路徑。** `%5F` 是 `_`、`%2F` 是 `/`、`..` 會退一層，因此 `GET /%5Fsearch`（實為 `/_search`）、`/secrets%2F_search`（實為 `/secrets/_search`）、`/_cat/../secrets/_search` 全都通過檢查。另有 `_ALL` 大小寫、`%252A` 雙重編碼、`<<secrets>>`、`c:d:secrets`、`secrets:` 等拼法在 `--index` 上同樣繞過。現在路徑會先解碼並解析（重複至穩定）再檢查，且**任何一段**命中黑名單 index 就拒絕 —— `/_cat/indices/secrets` 不讀文件，但黑名單保護的是物件本身。正規化規則抽到 `src/utils/es-index-target.ts` 由 validator 與 shell 共用。
+
 - **ES shell 只看路徑，request body 指名的 index 完全未檢查。** `_mget` 的 `docs[]._index`、`_bulk` action 的 `_index`、`terms` lookup 的 `index` 都能指向黑名單 index —— 把路徑指向無害的 index，正好讓這些端點重新打開。
+
 - **ES shell 的「未指名 index 即拒絕」讀的是原始路徑，其餘檢查讀的是解析後路徑。** 因此 `GET /_cat/../_search`、`/_ingest/../_sql`、`/_license/../_msearch` 只要前綴在允許清單內就放行，而 HTTP 客戶端會把 `..` 解掉，實際送出的是未界定的 `_search`。現在檢查與送出的是同一個字串，且路徑的文字與路由結果不一致時直接拒絕。
+
 - **ES shell 的欄位遮罩保護的是鍵名，不是值。** Elasticsearch 會把欄位值放在**請求指定**的鍵底下回傳：`{"sort":["password"]}` 一個請求就能依序取回整欄，`aggs.*.field`、`script_fields`、`docvalue_fields`、runtime field 同理，都不需要 scripting 權限。現在請求本體中只要出現受保護欄位名（含字串內以非識別字切出的片段）即拒絕，遮罩回應則作為第二道。
+
 - **Elasticsearch data stream 與 rollover 的支撐 index 名稱不同，等值比對蓋不到。** `.ds-secrets-2026.08.05-000001`、`secrets-000001` 都能讀到 `secrets` 的資料。現在依命名慣例一併涵蓋。**alias 仍是天花板** —— alias 指向哪個 index 是伺服器端知識，且 `GET /_cat/aliases` 會揭露對應關係；已記入威脅模型。
+
 - **request body 中陣列型的 `index` / `_index` 未被檢查**（`_msearch` 標頭、`_reindex` 的 `source.index` 都接受陣列）。
+
 - **`globToRegex` 的字元類別掃描不理會轉義**，`[a\]b]` 被讀成字面字串而非「a、]、b 三選一」的類別。
+
 - **ES shell 完全沒有欄位遮罩。** `dbcli query --index users` 會遮蔽的欄位，ES shell 原樣回傳。現在回應中任何名稱命中欄位黑名單的鍵一律移除（不論深度）—— ES 回應是任意文件結構，與其為 `hits.hits` 等各種外層建模，不如從嚴。
+
 - **ES shell 對任何未指名 index 的路徑完全跳過檢查。** 路徑第一段以 `_` 開頭時取不到 index，於是 `GET /_all/_search`、`/_search`、`/_msearch`、`/_mget`、`/_sql` 全都放行 —— 它們都會讀到黑名單 index 的文件。現在：有設定黑名單時，無法界定 index 的請求一律拒絕，僅以**允許清單**放行純叢集中繼資料端點（`_cat`、`_cluster`、`_nodes`、`_tasks`、`_ingest`、`_license`），因為改用拒絕清單就得窮舉現在與未來所有會回傳文件的端點。
+
 - **`export` 的 ES 路徑先取資料才檢查 blacklist。** 雖然不會寫出檔案，但黑名單 index 已被查詢、scroll context 已被開啟。檢查已移到抓取之前。
+
 - **MongoDB 巢狀 `$lookup` 的遮罩前綴不含巢狀層級。** `$facet` 分支或 `$lookup.pipeline` 內的 `$lookup`，文件實際落在 `fb.sec.*` / `outer.sec.*`，規則卻被錨定在 `sec.*`，因此不會遮罩。
+
 - **同一個 collection 被 join 兩次時只有第一次被遮罩。** 前綴是以「尚未見過的 collection」為單位記錄的，因此 `$lookup ... as: 'first'` 與 `$lookup ... as: 'second'` 只產生一組前綴，`second.token` 外洩。
+
 - **⚠️ 修復本身引入的回歸（已修）：dollar-quote 判定改為「必須以可起始識別字的字元開頭」之後，數字後接識別字的情況被誤判。** `1a$q$` 在 PostgreSQL 是數值常值 `1` 加上識別字 `a$q$`（`$` 被吸收、不開引號），但新規則只看第一個字元、把整串當成數字，於是**憑空造出一個 dollar-quote**，`SELECT 1a$q$ ; DELETE FROM secrets ; SELECT 1 AS z$q$` 在 `query-only` 下通過。判定改為：以識別字字元開頭則吸收；`$` 開頭是位置參數；數字開頭則先吃掉數值前綴，若其後仍有識別字字元就吸收。
+
 - **PostgreSQL 中 dollar-quote 接在位置參數之後未被識別。** `$1$q$` 裡的 `$1` 是參數而非識別字，但判定只排除「以數字開頭」的字元串，`$` 開頭的被當成識別字，於是 `$q$` 未被識別、裡面的 `'` 再次讓掃描失步。判定改為「該字元串必須以可*起始*識別字的字元開頭」。目前不可利用（`query.ts` 一律傳空參數，`$1` 在伺服器端是語法錯誤），支援參數綁定後即會成為實洞。
+
 - **`globToRegex` 對轉義的字面量比對過少。** `sec\*` 應保護鍵 `sec*`，卻編譯成可比對 `sec\x` 而比不到 `sec*` —— Redis key 黑名單的樣式在這個方向上是會洩漏的。
+
 - **PostgreSQL 中 dollar-quote 接在數字之後未被識別。** 只有*識別字*會吸收後面的 `$`：`1$q$` 是數值常值加上真正的 dollar-quote，`a1$q$` 則是單一識別字。原本只看前一個字元，兩者分不開，於是該引號未被識別、裡面的 `'` 再次讓掃描失步。
 
 除前兩條外，其餘皆是在修 #23 的過程中、經由列舉「哪些路徑直接呼叫 adapter」與七輪對抗性審查找出來的 —— 與 1.47.1 的教訓相同：這類缺陷表現為**未設防的路徑**，不是缺少機制。
@@ -537,19 +603,29 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **⚠️ 行為收緊：語句只要參照到任何一張黑名單資料表就會被擋下。** 過去只有排在最前面的那張表算數。升級後，先前能執行的跨表查詢（JOIN / 逗號 / UNION / 子查詢帶進黑名單表）會開始被拒絕 —— 那正是原本應該被擋的行為。
+
 - **⚠️ 遮罩改以「所有被參照的表」的欄位規則聯集計算。** JOIN 結果的欄位名不帶表限定（`u.password_hash` 回傳成 `password_hash`），無法從結果反推欄位屬於哪張表，因此只要**任何一張**被參照的表把該欄位列入黑名單就遮蔽。
+
 - **⚠️ 表名列舉刻意過度回報，可能誤擋。** 新的 `src/utils/sql-tables.ts` 除了走訪 `FROM` / `JOIN` / `INTO` / `UPDATE` / `USING` / `TRUNCATE` / `COPY` / `STRAIGHT_JOIN` 等位置，**還會把語句中每一個非保留字的識別字都列為候選表名**。這表示：若某個欄位名、別名或函式名剛好等於一張黑名單資料表的名稱，該語句會被擋下。這是刻意的取捨 —— 歷次對抗性審查各自都在「精確走訪」版本裡找到新的文法角落（`{ oj … }`、`STRAIGHT_JOIN`、`FROM a USE INDEX (i), secrets`、`ANALYZE t`、`U&"t"`），與 1.47.1 記錄的天花板是同一個模式，因此保證不建立在走訪完整之上，而建立在「表名是識別字，而每個識別字都會被回報」。被擋時錯誤訊息會指出是哪個名稱命中 —— 實務上會遇到的情形是：黑名單有一張叫 `token` 的資料表時，`SELECT t.token FROM api_keys t` 會被拒絕。
+
 - **保留字清單只留三種方言都保留的字**（38 個）。 這是列舉唯一會 fail-open 的地方：清單裡的字若在某個方言其實可當未加引號的表名，那張表就隱形。`FILTER` / `PARTITION` / `SET` / `CURRENT` / `UPDATE` / `DELETE` / `INSERT` / `NULLS` / `OVER` / `EXISTS`、`RLIKE` / `XOR` / `ILIKE` / `STRAIGHT_JOIN`，以及 `BETWEEN`（PostgreSQL 的 `col_name_keyword`，`ColId` 接受）與 `EXCEPT` / `INTERSECT`（MySQL 8.0.31、MariaDB 10.3 才成為保留字）皆已移除 —— 每一個都在某個支援的方言裡是合法表名。
+
 - **語句在所有歧義解讀下各掃描一次並取聯集。** 反斜線是否轉義引號取決於伺服器模式，未宣告方言時註解規則也不同。挑一種解讀正是失步繞過的成因。
+
 - **無法辨識出資料表時，遮罩套用全部欄位規則而非不套用。** 過去（以及本次修復的第一版）在表名解析不出來時直接跳過遮罩，等於把任何解析缺口變成洩漏。
+
 - **`query` 的大小防護不再對 schema 限定名靜默失效。** 舊的單次比對對 `FROM public.users` 回傳 `public`，那不是 schema 快取的鍵，於是防護整段被跳過。
 
 ### Fixed
 
 - **`snapshot` 記錄的 redacted 欄位清單過去只取第一張表**，與實際遮罩的範圍不一致。
+
 - **表名列舉在長 dotted chain 上是二次成長**（16 KB 的 `a.a.a…` 要 320ms，125 KB 要 22 秒）。改為單趟走訪後同一輸入為 2ms。
+
 - **`decodedVariants` 對「相異字元數」是二次成長**（40 KB 的識別字要 3.4 秒）。改為單趟同時解碼所有合法 escape 字元後，同一輸入為 4ms。
+
 - **`globToRegex` 遇到無法解析的字元類別（`[\]*`）會拋 `SyntaxError`**，從安全檢查裡竄出去而不是回答它。
+
 - **識別字中超出 Unicode 上限的 escape 會讓掃描整個拋例外。** `\+FFFFFF` 是 16777215，`String.fromCodePoint` 會丟 `RangeError`；而 `"` 在所有方言都被當識別字引號，因此任何含該樣式的 MySQL 字串（例如 Windows 路徑）都會讓指令中斷。
 
 ### Known limits
@@ -571,10 +647,15 @@ Automation that performs unqualified full-table writes stops working. Three shap
 修復六個「看起來是讀、實際會寫」的繞過，它們都能在設定為 `permission: query-only` 的連線上寫入資料。**建議所有把資料庫交給 AI agent 操作的使用者升級。**
 
 - **MongoDB `$out` / `$merge` 未被擋下（`query`、`q`、`export`）。** 這兩個 aggregation stage 只在多連線 fan-out 路徑被檢查，單連線 `dbcli query`、saved snippet、以及 `dbcli export` 全都會執行它們，不論 permission 等級。`$out` 可覆寫任意 collection。`--dry-run` 會把這種 pipeline 預覽成安全操作。影響 MongoDB 連線。
+
 - **PostgreSQL 多語句堆疊。** 權限分類只讀第一個關鍵字，而 PostgreSQL 的 simple query protocol 會執行字串裡每一個以分號分隔的語句，因此 `SELECT 1 LIMIT 1; DELETE FROM users` 會以 SELECT 的身分通過 `query-only`。影響 PostgreSQL；MySQL / MariaDB 走 prepared statement，不受影響。
+
 - **snippet 的偽唯讀語句。** snippet 只要求開頭是 `SELECT` 或 `WITH`，因此 `WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x` 與 `SELECT … INTO` 都能通過。一個 commit 進 repo、看起來是唯讀報表的 `.sql` 檔可以寫入資料庫。影響 PostgreSQL / MariaDB。
+
 - **snippet frontmatter 的 `verify.query` 未經驗證。** 過去只檢查它是非空字串，然後由 `dbcli q <name> --verify` 原封執行。
+
 - **唯讀證明只接在多連線 fan-out 上，單連線 `query` / `export` / REPL 沒有。** 權限判定只看第一個關鍵字，因此 `query-only` 連線接受並執行下列語句：`WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone`（data-modifying CTE）、`SELECT * INTO evil_copy FROM users`（建表）、`EXPLAIN ANALYZE DELETE FROM users`（`EXPLAIN ANALYZE` 會真的執行該語句）。同一句 SQL 加上 `--use a,b` 會被擋，不加就執行。auto-limit 補的 `LIMIT 1000` 對 CTE 無效，整張表仍會被刪。**這條在 1.47.0 以前就存在**，且不需要任何特殊語法。影響 PostgreSQL 與 MariaDB。
+
 - **PostgreSQL 識別字中的 `$` 被誤判為 dollar-quote 起點。** PostgreSQL 的識別字從第二個字元起允許 `$`，因此 `a$q$` 是**一個識別字**；但語句剖析器把它讀成字串起點，於是 `SELECT 1 AS a$q$ LIMIT 1; DELETE FROM users; SELECT 1 AS b$q$` 中間整段對所有安全檢查隱形，資料庫卻照常執行三段。**這條在 1.47.0 以前就存在**：多連線 fan-out 的唯讀斷言（`dbcli query --use a,b`）用的正是同一個剖析器，因此可被此手法繞過。影響 PostgreSQL。
 
 利用這些繞過需要能下達指令的一方送出 payload，也就是 agent 本身 —— 而 dbcli 的威脅模型前提正是 agent 不完全可信，因此這些屬於權限繞過，不以「使用者自己下的指令」論。
@@ -582,10 +663,15 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **⚠️ 行為收緊：開頭讀取但夾帶寫入的語句一律需要 `admin`。** 例如 `WITH x AS (INSERT … RETURNING *) SELECT …`、`SELECT … INTO`、`EXPLAIN ANALYZE <寫入>`、`DESCRIBE ANALYZE <寫入>`（`DESCRIBE` 在 MySQL/MariaDB 是 `EXPLAIN` 的同義字）。過去這些一律不檢查；中間曾嘗試「比照該寫入的等級」，但那需要為 `INSERT INTO` 的 `INTO` 加文字例外，而例外之間會互相作用出新的繞過，因此改為單一規則。**升級後需要改用 `admin` 的用法有三類**：`data-admin` 連線上的可寫 CTE；對寫入語句做 `EXPLAIN ANALYZE` / `DESCRIBE ANALYZE` 效能分析（它會真的執行該語句）；以及 MySQL/MariaDB 的 `SELECT … INTO @variable`——後者其實是純讀取，只是與 PostgreSQL 會建表的 `SELECT … INTO <table>` 共用關鍵字，為它加例外正是本次反覆出問題的來源，因此選擇留下這個誤擋。被擋時的錯誤訊息會指出是哪一個關鍵字觸發的。 不含 `ANALYZE` 的 `EXPLAIN` 只做計畫、不執行，維持唯讀；`SHOW` / `DESCRIBE` 不接受子查詢，因此 `SHOW CREATE TABLE users` 仍是讀取；`replace()` / `TRUNCATE()` / `INSERT()` 是函式不是語句，維持唯讀。
+
 - **admin 以下的權限等級拒絕多語句 SQL。** 因為只有第一個語句會決定權限判定。`admin` 不受影響（它本來就允許所有語句類型）。分隔符依**該連線實際的方言**判定：`$$…$$` 只在 PostgreSQL 是字串、反引號只在 MySQL/MariaDB 引號化識別字、`#` 只在 MySQL/MariaDB 起始註解（在 PostgreSQL 是運算子）。方言未知時從嚴。
+
 - **snippet 的唯讀證明依 `engine` 宣告的方言判定。** 因此 `SELECT \`update\` FROM t`（MySQL 反引號識別字）、`# drop …` 註解、`a.create` 這類欄位名不再被誤判為寫入；`FOR UPDATE` / `FOR SHARE` 是取鎖的讀取，同樣不算寫入。
+
 - **無法解析的 snippet 只跳過該檔並發出警告，不再讓整個 snippet 目錄失效。** `queries check` 仍會回報它們並以 exit 1 結束。
+
 - **snippet 一律拒絕寫入關鍵字。** snippet 依合約唯讀，這條規則不看 permission 等級，`admin` 連線亦然。
+
 - **MongoDB 寫入 stage 在單連線 `query` 需要 `data-admin` 以上；在 snippet 與 `export` 一律拒絕。**
 
 ### Added
@@ -599,11 +685,13 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **新的 root-level 全域旗標 `--timeout <ms>`。** 覆寫連線設定中的 `timeout`；兩者都沒有時沿用各 adapter 內建的 5000ms。合法值為 100～600000 的整數，須放在子指令之前（和 `--global` / `--use` 一樣是 root-level flag）。對所有引擎有效，典型用途是 MongoDB 跨 VPN 或連 Atlas 時，預設 5 秒的 server selection timeout 太緊：`dbcli --timeout 20000 --use <conn> list`。這個覆寫只在建立連線時套用，不會寫回設定檔；要永久生效請在連線設定裡寫 `timeout` 欄位。
+
 - **連線設定檔新增 `timeout` 欄位。** 四種連線 schema 皆支援，毫秒、100～600000 整數、可省略。
 
 ### Changed
 
 - **設定檔驗證失敗的錯誤訊息改為可讀格式。** 過去會吐出整包 Zod `unionErrors` 巢狀 JSON；現在只列出與該連線 `system` 相符的分支問題，逐欄列出欄位路徑。
+
 - **文件明確禁止 `2>&1`。** 診斷訊息走 stderr、結果走 stdout，合併兩者會讓 `--format json` 的輸出無法解析；SKILL 與 reference 都補上導管寫法。
 
 ## [1.46.0] - 2026-08-04 - MongoDB 逐欄連線設定
@@ -613,20 +701,27 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **⚠️ BREAKING（互動流程）：`dbcli init` 對 MongoDB 改為先問「連線設定方式」。** 過去第一個提問是 MongoDB URI，留空才退回逐欄詢問 —— 於是逐欄路徑事實上沒人走，所有文件也只教「整條 URI 貼進去」。現在預設是「逐欄填寫」，貼 URI 降為明示的進階選項。**設定檔格式向下相容**，既有含 `uri` 的設定不需修改；`--uri`、`--no-interactive` 等非互動用法行為完全不變，只有互動提問的順序改變。
+
 - **逐欄模式在有帳號時會明確寫出 `authSource`。** 過去只有帶 `--auth-source` 才會（而且寫了也會被 schema 丟掉），現在未指定時會寫入 `admin`。連線結果與過去等價（adapter 本來就以 `admin` 為預設），但設定檔內容會多這一行 —— 包含 `--no-interactive` 的既有腳本。
+
 - **`uri` 與逐欄欄位仍是 `uri` 優先，但不再靜默。** 兩者同時存在時 `dbcli doctor` 會發出 warning 指出逐欄值被忽略；`srv: true` 又指定非預設 `port` 也會 warning。這兩種設定過去都是「改了欄位卻沒生效」而無從診斷。
 
 ### Added
 
 - **MongoDB 連線設定新增 `authSource` / `replicaSet` / `tls` / `srv` 四個欄位。** 過去這些選項只能塞進 `uri` 的 query string —— 這正是逐欄路徑不堪用的根因。其中 `authSource` 更微妙：runtime 型別與 `init --auth-source` flag 都存在，但 zod schema 沒有此鍵，`z.object` 會 strip 掉未知欄位，於是它落盤即遺失，只有 init 當下那次連線測試吃得到，等同一個死 flag。`srv: true` 會組出 `mongodb+srv://` 並沿用既有的 DNS SRV 展開（含 DoH fallback），讓 Atlas 這類最常見的雲端場景也能逐欄設定。`authSource` 與 `replicaSet` 支援 `{"$env": "..."}` 參照。
+
 - **MongoDB 逐欄分支支援 `--use-env-refs`。** 過去 mongo 在 init 的 early-return 發生在 env-ref 分支之前，想用環境變數參照只能手改 `config.json`。現在五個 `--env-*` 旗標對 mongo 全部生效，密碼不必明文落盤。與 SQL 路徑的差異：mongo 只要求 `--env-host`，其餘留空即寫入字面值而不產生 `$env` —— 因為未定義的 `$env` 會讓之後每一個指令 fail closed，對無認證連線而言那是壞掉的設定。env-ref 模式同樣跳過連線測試（參照此時還沒有值可連），與 SQL 路徑一致。
+
 - **連線失敗訊息按成因分類。** 認證失敗提示檢查 `authSource`（並說明 Atlas 與多數自架環境為 `admin`）、DNS/SRV 解析失敗提示 `srv` 設定與網路 DNS、TLS 握手失敗提示 `tls` 欄位與自簽憑證情境。原本三種情況共用同兩條泛用訊息。
 
 ### Fixed
 
 - **逐欄模式的連線字串跳脫不完整。** `buildUri()` 原本只對 `password` 做 `encodeURIComponent`，`user` 與 `database` 直接字串拼接 —— 帳號含 `@`、資料庫名含 `/` 都會讓 driver 把 authority 切在錯的位置。現在三者一致跳脫，`host` 則改為驗證不含 `/@?#` 並在違反時明確報錯。
+
 - **`host` 為空字串或含埠號、空白時會產出壞掉的連線字串。** `mongodb://:27017/db` 與 `mongodb://h:1234:27017/db` 過去都會被送進 driver，換來一個難懂的錯誤。現在在組字串前就擋下並說明埠號該填在 `port` 欄位。IPv6 位址需加方括號（`[::1]`），與 driver 的要求一致 —— 未加方括號的 `::1` 過去會組出 `mongodb://::1:27017/db`。同理 `authSource` 為空字串時會退回 `admin`，不再送出 `authSource=`。
+
 - **連線失敗分類會被連線字串本身誤導。** driver 的錯誤訊息經常回吐原始 URI，而 `mongodb+srv://` 與這次新增的 `?tls=true` 正好含有 `SRV` 與 `TLS` 字樣 —— 用裸字串比對會讓一個單純的連線被拒歸類成 DNS 或 TLS 問題。改為優先讀 driver 的結構化 error code，訊息比對則收斂成 driver 實際會產生的片語。
+
 - **只填 `user` 沒填 `password` 會靜默降級成無認證連線。** 原本的 `if (user && password)` 在密碼缺漏時直接落到無認證分支，錯誤會延後到伺服器端才浮現、且看起來像是權限問題。現在直接拋 `ConnectionError`，訊息說明補上密碼或一併清空 `user`。
 
 ## [1.45.1] - 2026-08-04 - Windows 上的 agent mode 修復
@@ -638,6 +733,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **移除 schema loader 的牆鐘時間斷言。** `initialize` 的 `loadTime < 200ms` 跑在阻擋性的 `bun test` 裡，但共用 CI runner 不是量測儀器（Windows 冷啟動 270ms 就紅，程式本身無異常）。改為斷言合約（有量到並回報 loadTime），時間預算歸 `tests/perf/*.bench.ts` —— CI 對該套件本來就設 `continue-on-error`，正因為 timing 依環境而定。
+
 - **`docs/security-threat-model.md` 補上平台差異。** POSIX 用 `0o700`/`0o600` 保護設定，Windows 沒有等價 mode bits，機密性靠 profile ACL；竄改偵測兩邊一致。
 - 這兩項修復讓 `windows-latest` CI job 自 v1.40.0 以來首次通過（6 個 matrix job + docs-parity 全綠）。
 
@@ -646,11 +742,13 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **root-level `--global` 旗標。** 原本每條連線都綁在專案上：`init` 會在 `./.dbcli/config.json` 寫 binding stub，真正的設定落在 `~/.config/dbcli/projects/<project-id>/`。要在多個專案共用同一條連線，只能在每個 repo 重跑一次 `init`，或手動複製設定。`--global` 讓 `~/.config/dbcli/config.json` 成為一個獨立的 v2 registry：`dbcli --global init --conn-name shared ...` 直接寫進去、不建立也不修改專案 binding，`dbcli --global use --list` / `--global query` 則在不依賴當前目錄的情況下操作它。scope 必須明確選取 —— 未帶 `--global` 時一切照舊走專案 binding，避免在不相關的專案裡誤用全域連線。全域檔案沿用與 home storage 專案設定相同的私有檔案權限與 integrity record。
+
 - **`getDbcliConfigHome()` / `getGlobalConfigPath()` / `isGlobalConfigPath()` 加入 `public.ts`。** 前者把 per-user root 改為延遲解析並支援 `DBCLI_CONFIG_HOME` 覆寫，測試與 embedder 不必 reload module 就能隔離 config home。
 
 ### Changed
 
 - **`migrate` 與 `queries` 子指令補上 Commander `command` 傳遞。** 這兩處原本以 `resolveConfigPath(undefined, opts)` 解析設定路徑，看不到 ancestor 的 root-level 旗標 —— 沒有 `--global` 時症狀被 `.dbcli` 預設值蓋掉，加上 `--global` 後就會靜默讀錯 registry。現在 36 個 `resolveConfigPath` 呼叫點全部傳入 command。
+
 - **`resolveConfigPath` 的優先序明確化。** 顯式 `--config` 仍最優先（`--global --config <path>` 因此是確定的），其次是顯式 `--global`，最後才是 `.dbcli` 預設值。
 
 ## [1.44.1] - 2026-08-02 - `agent-core` 的 `loadEnvFile` 改用 node:fs，可在 Node 執行
@@ -678,31 +776,49 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **穩定的 `./agent-core` 子路徑匯出。** 以五個 runtime functions（env 載入、env reference、連線選取、名稱解析、lookahead 截斷）與三個型別形成 agent CLI 共用的 semver interface；`./core` 仍是 dbcli 專用介面。建置同時產出 ESM 與型別宣告，CI purity gate 禁止資料庫、adapter 或 CLI framework 相依滲入。
+
 - **欄位投影 `--fields`。** SQL 與 MongoDB 通用；`--fields a,b` 取用、`--fields=-raw_response` 排除，兩種形式不可混用。MongoDB 會把 `projection`（find）或 `$project`（aggregate）下推給 driver，未明確指定時不回傳 `_id`。黑名單欄位不會因為被 `--fields` 點名而洩漏。
+
 - **欄位值截斷 `--truncate`。** table 輸出預設在 120 個 Unicode code point 截斷並標記 `…(+N chars)`，以 code point 計數所以不會切壞中文與 emoji；`--no-truncate` 可關閉。`--format json` / `csv` 會拒絕此旗標而非靜默忽略。
+
 - **從檔案或 stdin 讀查詢 `-f, --query-file`。** `-f -` 讀 stdin，可用 heredoc 傳含 `$regex`、巢狀日期物件的 MongoDB pipeline，完全避開 shell 引號問題。同時給檔案與位置參數會明確報錯。
+
 - **單次連線指定。** 新增 `DBCLI_CONNECTION` 環境變數，`query` / `list` / `schema` / `export` / `check` 也接受子指令層級的 `--use`。優先序為 `--use` > `DBCLI_CONNECTION` > 儲存的預設值，兩者都不會改寫 `.dbcli/config.json`，因此平行執行不會互相污染。
+
 - **唯讀多連線扇出 `--use a,b`。** 同一查詢對多個連線執行，JSON 回傳 `results` 陣列並逐一標示 `ok` / `error`，table 則分段標註連線名。單一連線失敗不會取消其他連線。彙總 exit code：全成功 `0`、部分失敗 `2`、全失敗或執行前拒絕 `1`。寫入語句、`--recovery`、`--ui` 與 CSV/HTML 輸出在扇出下一律拒絕。
 
 ### Changed
 
 - **HTML dashboard 明示不完整與遮蔽結果。** `query`、`q` 與 HTML export 會把既有的截斷與 security metadata 傳入 dashboard；在 KPI、圖表與 raw table 之前顯示醒目提示，避免使用不完整資料得出結論。
+
 - **截斷改為出現在結果本身。** dbcli 擁有的 row cap 會多取一列前瞻，因此能區分「剛好 N 筆」與「被砍到 N 筆」：table footer 顯示 `Rows: N (truncated; limit N)`、`--format json` 帶 `metadata.truncated` 與 `metadata.limit_applied`、CSV 附加 `# truncated; limit N` 註解行。`dbcli q` 的 snippet size guard 同樣依此回報，不再讓整數列數被誤讀為全集。
+
 - **`dbcli export` 撞到 auto-limit 改為 fail closed。** 匯出檔沒有地方記錄資料被丟掉（jsonl 是一行一筆、MongoDB `--format json` 是裸陣列），stderr 警告又會在重導向後消失，因此改為 exit `1` 且不寫檔，要求以 `--no-limit` 或 `--limit N` 明確表態。Elasticsearch 匯出的 1000 筆上限同此處理。
+
 - **CLI 錯誤輸出收斂。** 連線類錯誤在所有指令路徑都會被頂層 handler 攔截並格式化，stderr 首行即為人類可讀訊息，不再由 Bun 印出打包後的 code frame 與未解碼的中文跳脫序列。stack 改掛在 `-v` / `-vv` 之下，預設不輸出。
 
 ### Fixed
 
 - **MySQL 8 schema introspection 相容預設 `ONLY_FULL_GROUP_BY`。** 外鍵查詢現在完整分組 referenced table，不再讓 `dbcli schema <table>` 在原廠預設設定下失敗。
+
 - **已分類的連線錯誤不再被巢狀 adapter catch 重包。** `mapError` 直接保留既有 `ConnectionError` 的 identity、code、message 與 hints，消除 `Connection failed: Connection failed:` 重複前綴與分類退化。
+
 - **stdout 管線與 Windows CI 修復。** redirected stdout 以完整同步寫入避免 64KB 截斷；測試 filesystem 與換行處理改為跨平台實作，Windows matrix 恢復全綠。
+
 - **發布依賴安全更新。** 將 PostCSS 鎖定至 `8.5.25`、`brace-expansion` 鎖定至 `5.0.9`，清除 release gate 回報的 3 個 high-severity advisories；並統一 Prettier 格式，讓完整 9 階段發布檢查恢復全綠。
+
 - **`--no-limit` 過去被靜默忽略。** Commander 會把 `--no-limit` 折進 `limit` 屬性（設為 `false`）而不會產生 `noLimit`，但 `query` / `q` / `export` 都讀 `options.noLimit`，導致這個旗標自始無效——`query` 仍套用 1000 筆上限，`q` 仍包 size guard。CLI 邊界現在會把 Commander 的否定形式轉回指令實際讀取的形狀。
+
 - **`dbcli export` 的 SQL 路徑忽略 `--limit` 與 `--no-limit`。** 該分支未把選項傳給 QueryExecutor，任何 `--limit N` 都不生效。
+
 - **`-v` / `-vv` 的 stack 開關過去對 `q` / `insert` / `update` / `delete` 無效。** 這四個指令自行輸出在地化訊息、繞過共用的錯誤呈現層，因此 verbose 對它們不會多印任何東西。改為共用同一個呈現函式：措辭維持不變，但 verbose 下會補上 stack。
+
 - **Redis 的 size-guard warning 在 `query` 被丟棄。** adapter 早已算出 `REDIS_SIZE_TRUNCATE` / `REDIS_SIZE_REWRITE` / `REDIS_BLACKLIST_FILTERED`，但 `query` 分支完全沒讀 `result.warnings`——文件卻聲稱結果會帶 `warnings[]`。現在每則 warning 都會印到 stderr，且被裁切的回覆會回報 `truncated` / `limit_applied`，與其他引擎一致。
+
 - **`--query-file -` 在互動式終端會無提示空等。** 改為立即拒絕並說明需要 piped input，與 repo 中其他 stdin 消費端（`insert`、`shell`、`audit`）既有的 TTY 檢查一致。
+
 - **單一連線 (v1) 設定會靜默忽略 `--use` / `DBCLI_CONNECTION`。** v1 沒有具名連線可選，過去卻照樣執行那唯一的連線，讓使用者以為切換成功——正是 issue #7 要避免的情境。現在會明確報錯並指出升級為 v2 的方式。
+
 - **skill assets 與 reference 補齊。** `assets/SKILL.md`、`SKILL.zh-TW.md` 與 `reference.md` 新增查詢工作流程旗標章節；`reference.md` 原本記載「MongoDB 不套用 auto-limit」與實際行為不符，已更正為套用於 filter 與未自帶 `$limit` 的 pipeline。
 
 ## [1.42.0] - 2026-07-20 - Drizzle Snapshot 與 ORM DDL 工作流擴充
@@ -710,16 +826,19 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Drizzle Kit snapshot 可直接用於 ORM drift 比對。** `dbcli diff --against-orm` 新增 Drizzle snapshot 格式偵測與 `NormalizedSchema` adapter，支援 PostgreSQL v7 snapshot 的 table、column、primary key、unique constraint、index 與 foreign key metadata。
+
 - **TypeORM／Sequelize DDL alias。** `--orm-format typeorm`、`typeorm-ddl`、`sequelize` 與 `sequelize-ddl` 可直接走既有 DDL adapter；自動忽略 `typeorm_metadata` 與 `SequelizeMeta` bookkeeping table，並補上 source-file 使用者的可執行匯出／比對指引。
 
 ### Changed
 
 - **ORM drift 文件完整同步。** 英文／繁體中文的 Markdown 與 HTML 使用者文件、skill assets、各平台 plugin 副本及 reference 已補上 Drizzle snapshot、TypeORM／Sequelize DDL 的格式、限制與操作範例。
+
 - **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.42.0`。
 
 ### Fixed
 
 - **不支援的 ORM 輸入改為 fail closed。** Drizzle snapshot 會拒絕不支援的版本／dialect、generated／identity／enum／composite primary key 等結構，以及無法無損轉換的 column default；TypeORM／Sequelize source file 則回報完整的匯出 DDL recipe，不再被 JSON／DDL fallback 誤解析。
+
 - **Qualified ignore identity 保留完整。** ORM drift 的 ignore 比對不再把 schema-qualified identity 降成 bare table name，避免同名 table 跨 schema 時被錯誤忽略；ORM DDL alias 也會正確沿用 DDL 輸入處理與 bookkeeping ignore。
 
 ## [1.41.0] - 2026-07-19 - ORM Drift 比對與無損 Schema Identity
@@ -727,18 +846,23 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli diff --against-orm` ORM drift 比對。** 可將 Prisma schema、DDL／migration SQL 或 normalized JSON 與既有 SQL schema cache 比對；支援多檔 DDL、filesystem glob、格式自動偵測、大小寫敏感的 `--ignore` pattern，以及 JSON、table、Markdown 輸出。比對只讀本地 cache，不連線、不更新 cache，也不執行提案。
+
 - **結構化 drift 分類與安全提案。** 報告區分 `missing_in_db`、`missing_in_orm`、`mismatch`、`unmanaged` 與 `unparsed`；只有計分後的 error 會使 drift exit code 為 `1`。可無損表達的缺漏欄位／index 會產生 shell-safe、預設 dry-run 的 `migrate` 提案，其餘情況升級至 `migration-review`。
+
 - **`orm-drift-review` agent task pack。** 工作流依序執行 blacklist 檢查、schema cache 更新與 ORM drift JSON 比對，並要求將 dry-run DDL 與精確目標交給獨立 migration review。
 
 ### Changed
 
 - **Schema identity 改為精確保存。** PostgreSQL schema／table 名稱不再正規化為小寫；quoted 與 unquoted identifier 依 SQL 規則解析，qualified name、ignore pattern、foreign key 與 drift output 都保留大小寫與 schema identity。
+
 - **ORM drift 文件完整同步。** 英文／繁體中文的 Markdown 與 HTML 使用者文件、skill assets、各平台 plugin 副本及 reference 已補上格式、exit code、安全邊界與操作流程。
+
 - **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.41.0`。
 
 ### Fixed
 
 - **Lossy ORM drift proposal 改為 fail closed。** Schema-qualified target、dash-leading positional、無法無損表達的 index column、identity collision 與不支援語法不再輸出可能損壞的指令，而是阻擋或升級人工審查。
+
 - **DDL／Prisma adapter identity 與語意硬化。** 多檔 DDL 共用 deterministic context，foreign key pairing、default schema resolution、table option／partition 阻擋、重複 index 去重與 Unicode code-point 穩定排序皆保留來源語意。
 
 ## [1.40.0] - 2026-07-19 - SQL Lint、安全強化與 Agent 工作流擴充
@@ -746,19 +870,25 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **新增唯讀 `dbcli lint` 靜態 SQL 顧問。** 支援 inline SQL、saved query、SQL 檔案與 glob／混合批次輸入，提供 text、JSON、Markdown 輸出、最低嚴重度篩選、`--no-schema` 與 `--recovery`；指令不連線、不執行 SQL，也不會自動套用 rewrite。
+
 - **九條結構與 schema-aware lint 規則。** 涵蓋 `SELECT *`、未錨定 `LIKE`、深度 `OFFSET`、non-sargable predicate、`OR`／subquery 改寫機會、重複 `DISTINCT` + `GROUP BY`、implicit cast，以及 `NOT IN` 右側 NULL 風險；finding 可附 confidence 標籤的草稿與 shell-safe 驗證指令。
+
 - **MongoDB agent task packs。** 新增 `mongo-safe-backfill` 與 `mongo-schema-drift-review`，補上 MongoDB 安全回填與 schema drift 檢視工作流。
 
 ### Changed
 
 - **Slow-query guide 納入 lint。** `guide slow-query` 現在會先安排本機靜態分析，再銜接 explain 與診斷 snippets，brief plan 也保留執行 metadata。
+
 - **Agent 與使用者文件完整同步。** `lint` 已寫入 skill assets、platform plugin 副本及英文／繁體中文 Markdown 與 HTML 文件；GitHub Pages 產品介紹頁同步完成雙語、可及性與行動裝置導覽重構。
+
 - **跨平台發版 metadata 對齊。** npm package、Codex／Claude／Cursor plugin、packaged Codex plugin 與 Gemini extension 統一為 `1.40.0`。
 
 ### Fixed
 
 - **Lint 採 fail-closed 安全邊界。** 解析失敗、schema binding 不明、identifier 大小寫碰撞、CTE／derived／qualified relation 與不安全 rewrite proof 會阻擋對應建議，不再借用不可靠的 cache facts。
+
 - **`NOT IN` NULL 分析補齊 scope 與 provenance。** 遞迴處理巢狀 SELECT、CTE、derived statement、JOIN `ON`、`WHERE`、`HAVING`、outer-join null extension、nullable 投影與 CASE／cast／aggregate，並保留正確 traversal order。
+
 - **Lint audit／recovery 遮蔽與驗證指令硬化。** positional、global、bulk 與 `--` 後的 SQL 都會遮蔽；只有結構上已證明唯讀的 SQL 才建議 `explain --analyze`，session assignment 與 function-bearing statement 會保守退回 plain explain。
 
 ## [1.39.2] - 2026-07-03 - Windows 跨平台、skill 安裝安全與 plugin 版本對齊
@@ -768,13 +898,17 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **Windows 跨平台修復（Windows CI 首次全綠）。** filesystem 操作與 path 檢查改為跨平台實作、修正 `emit` 子行程 import 與殘留的 path assertion，並以 portable `node:fs` 取代僅限 unix 的 coreutils spawns。此前 Windows job 從未通過（fail-fast 總是先取消它）。
+
 - **Skill 安裝安全強化。** 修正 output / install 旗標衝突、強化安裝安全檢查與 task 過濾條件。
+
 - **zh-TW skill 安裝不再被誤判為永遠過期。**
+
 - **Skill 參考修正。** 移除文件中不存在的 `blacklist add`、補回缺漏的 reference flags。
 
 ### Changed
 
 - **文件補齊。** 明示 `--where` 僅支援等值比較、補上 Redis / Elasticsearch 寫入模型說明、記錄 home-storage 綁定並重新同步 md/html parity、對齊 config-location-policy 與實作綁定模型。
+
 - **Plugin manifest 版本對齊。** `.claude-plugin` / `.cursor-plugin` / `.codex-plugin` 及 `plugins/dbcli-agent` 的 `plugin.json` 版本更新為 1.39.2（先前漂移在 1.37.1 / 1.31.0，未跟上主版本；`plugin:sync` / `plugin:check` 只同步 skill 內容不同步版本）。
 
 ### Internal
@@ -828,6 +962,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli verify rollback` 情境執行器(第三個內建 verify 情境)。** 透過已穩定的 scenario registry 註冊,以 preflight / after-write 兩種模式驗證「還原變更後資料庫是否回到預期的先前狀態」,且**永遠不執行**還原寫入 / DDL——只分析 `--statement` 並執行回讀斷言。以必填的 `--kind <ddl|dml>` 選擇還原語句文法:`ddl` 複用 `migration` 的單語句 `ALTER TABLE` 契約,`dml` 複用 `safe-backfill` 的 `UPDATE` plan 契約。安全邏輯完全複用兩個 sibling 情境的 classifier,無重複實作。artifact 沿用既有 subject kind(`ddl→migration`、`dml→backfill`)並以 `subject.command = 'verify rollback'` 記錄出處,因此 artifact schema 與版本不變。
+
 - **巢狀 bash / zsh / fish shell 補全。** 以遞迴 command-tree metadata model 從指令樹生成巢狀子指令與旗標補全,並由共用 registry 驅動 REPL 的補全與分派;補全會排除 denylisted 指令。
 
 ### Changed
@@ -839,8 +974,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli verify safe-backfill` 情境執行器。** 以 preflight / after-write 兩種模式驗證安全回填工作流，並**永遠不執行回填寫入**：preflight 依序跑黑名單、schema、目標表與唯讀 verify-query 防護後回傳 `ready` / `blocked` 並印出精確的 after-write 指令；after-write 重跑防護、執行回讀斷言，並寫入 v1 `VerificationArtifact`（狀態對應 `verified` / `not_verified` / `indeterminate`，防護失敗為 `blocked`）。
+
 - **`dbcli verify migration` 情境執行器。** 對 schema migration 做 preflight / after-write 驗證，且**永遠不執行 DDL**：分析提案的 `ALTER TABLE`、跑唯讀防護、要求 DDL 目標與 `--table` 相符（schema-aware），after-write 後記錄 `migration` 主體的證據。MVP 僅接受單語句 `ALTER TABLE`，並阻擋 `CREATE TABLE` / `DROP TABLE` / `CREATE INDEX` 及多語句 DDL。
+
 - **`ALTER TABLE` 目標識別字契約。** `verify migration` 的目標擷取改用 quote-aware tokenizer：支援 `table` / `schema.table` / `catalog.schema.table`，每區段可為未加引號名稱或雙引號 / 反引號 / 方括號識別字（含 `""`、`]]` 跳脫），因此 `"user accounts"`、`"tenant-1"."orders"` 等含空白或連字號的名稱皆可接受。無法完整解析的目標（未封閉引號、不支援的跳脫、超過三段）會 fail closed 並以「目標無法解析」為由阻擋，與 `must match --table` 的不符原因明確區分。
+
 - **`verification summary --latest-only` 交接選項。** 於既有 summary 輸出之上額外回傳最新一筆有效 artifact，方便 agent 在交接時直接引用最新證據；無 artifact 時回傳 `latest: null` 並維持 exit 0，無效檔案不會被升入 `latest`。
 
 ### Changed
@@ -852,8 +990,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli assert --write-verification-artifact` 橋接（opt-in）。** `assert` 的判定結果（verdict）現在可選擇性地寫成一份結果型 `VerificationArtifact`：透過 subject 解析器將斷言主體對應到 artifact 的 `subject`、依 pass/fail 對應驗證狀態，並以既有的原子寫入器落地於 `.dbcli/verification/`。省略旗標時行為完全不變、不寫入任何檔案；`safe-backfill-verify` 仍維持 plan-only。artifact 路徑一律相對於 cwd，與 `--config` 無關。
+
 - **唯讀 `verification` 指令介面（inspect + 生命週期）。** 新增核心 artifact 讀取器（含 schema 驗證、filter / summarize / find 輔助函式），並以此建構出 `verification list`（表格輸出，支援 subject-kind 篩選）、`verification show`、`verification summary` 等唯讀檢視指令，讓 agent 能直接讀取與彙整既有驗證證據，而非自行解析檔案。
+
 - **`verification prune` 保留期清理。** 依保留期（duration 解析）與全域 `--keep-latest` 規則挑選清理候選，全域 keep-latest 優先於各項篩選；具刪除安全防護（缺少 mtime 的檔案排除在外、預設 dry-run 預覽、`--execute` 才實際刪除），並在 execute 模式輸出 deleted / skipped 明細表。
+
 - **完整 v1 證據驗證。** 對 `subject` / `evidence` / 選用欄位進行完整驗證，並加入執行期 evidence-kind 防護，確保讀取與寫入兩端對 schema v1 的解讀一致。
 
 ## [1.34.0] - 2026-06-18 - Verification Artifact Writer
@@ -861,8 +1002,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **驗證證據建構器（`buildVerificationArtifact`）。** 純函式，產生 schema v1 的 `VerificationArtifact`：可注入 `now` / `idFactory` 以利測試確定性、證據文字欄位上限 2000 字元（超過截斷並標註）、證據筆數上限 20（超過保留前 19 筆並補一筆 `manual` 截斷標記）；拒絕非法狀態、空白 summary、空證據。集中化證據裁切,讓後續寫入器與指令介面不必各自重複截斷決策。
+
 - **`safe-backfill-verify` 計畫的「已規劃」驗證中繼資料。** `dbcli skill tasks plan safe-backfill-verify --format json` 現在輸出一個 `verification` 區塊（`status: "planned"`,取計畫中最後一個 `assert` 步驟作為證據)。此為**已規劃**證據,**不代表**驗證已執行或通過,與結果型 `VerificationArtifact` 明確區隔。其他 task pack 不受影響。
+
 - **驗證證據寫入器（`writeVerificationArtifact`）。** 將建構出的 artifact 以原子方式寫入 `.dbcli/verification/verification-<YYYYMMDD-HHMMSS>-<short-id>.json`：檔名完全由 artifact 內部產生（UTC 時間戳 + `[a-z0-9]` 淨化短 id,杜絕路徑穿越)、缺少目錄時自動建立、以 `link()` 獨佔建立確保不會靜默覆寫既有檔案、回傳寫入路徑。
+
 - **`recover --apply --write-verification-artifact`（opt-in)。** 僅在 verify 步驟實際執行時,將 recovery 驗證結果寫成一份 `recovery-verify` artifact（狀態取合約 `verificationStatus`,附 `recoveryRef`)。省略旗標時行為完全不變、不寫入任何檔案;寫入失敗只記到 stderr,不影響結束碼。保留既有 `verifyStatus`、不嵌入任何指令輸出或機密。
 
 ## [1.33.0] - 2026-06-18 - Workflow Pack Expansion
@@ -870,6 +1014,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **4 個新的 plan-only Agent Task Pack（皆唯讀)。** `pr-database-review`（PR 變更持久化路徑、查詢、migration 的資料庫風險審查)、`migration-review`（在套用 DDL 前擷取變更前 schema 證據並預覽 migration)、`safe-backfill-verify`（規劃安全 backfill 並產生 read-back `assert` 驗證指令)、`slow-endpoint-investigation`（串接 proxy / explain / missing-index 證據調查慢端點)。每個 pack 都以 `safety.mode: plan-only`、`risk: readonly` 步驟組成,只產生計畫、永不寫入;SQL 類 pack 先支援 `postgres` 與 `mysql`。
+
 - **Skill 路由更新（en / zh-TW)。** 在 `SKILL.md` 與 `SKILL.zh-TW.md` 的 Agent Task Packs 段落各加入一段精簡導引,讓 agent 在自行組合手動的審查、migration、backfill、效能流程前,先選擇對應的 workflow pack;已重新同步所有 plugin / platform skill 副本。
 
 ## [1.32.0] - 2026-06-18 - Agent Task Packs Expansion & Skill Parity Guards
@@ -877,8 +1022,11 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **4 個新的內建 Agent Task Pack（皆 `plan-only` 唯讀）。** `audit-permissions`（權限等級與 blacklist 覆蓋稽核）、`safe-backfill`（在寫入前做 blacklist + schema + 風險檢查的回填計畫）、`schema-drift-review`（快取/committed schema 與線上 schema 的漂移比對）、`connection-health`（連線可達性 / 設定 / 容量分級三步診斷）。皆走確定存在的唯讀指令;用 `dbcli skill tasks list` 瀏覽完整清單。
+
 - **平台清單 parity 檢查（`scripts/check-platform-parity.ts`，`bun run platform:check`）。** 以 `SUPPORTED_PLATFORMS` 為單一真實來源，驗證 README、SKILL.md、SKILL.zh-TW.md、reference.md 與 CLI `--install` 選項描述的平台列舉完全一致（缺項或多項皆報錯），並掛進 `release-check.sh`。
+
 - **語意 parity 守門。** `scripts/check-skill-parity.ts` 在結構比對外，新增 14 個語言不變的安全/命令 token（`query`/`insert`/`update`/`delete`/`export`/`schema`、`blacklist`、`--dry-run`/`--no-limit`/`--recovery`、`LIMIT 1000`、三個權限等級）在 EN 與 zh-TW 皆須對稱出現的檢查。
+
 - **安裝與 context CLI 測試覆蓋。** 新增 `skill --install` 對 7 個平台寫入 temp HOME/cwd 的 smoke 測試（含 cursor/windsurf 的 root-rule + reference 雙檔結構），以及 `skill context` 的 xml/json/markdown、預設格式、無效格式與 blacklist 不外洩的 CLI 入口測試。
 
 ### Fixed
@@ -890,7 +1038,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`@carllee1983/dbcli/core` 公開匯出 `DataExecutor` 與資料執行型別。** 在 `./core` barrel 開出資料編輯介面（insert/update/delete 執行面），讓外部消費者（如 `dbcli-gui` sidecar）能重用與 CLI 同源的資料寫入能力，不必重寫 adapter 邏輯。CLI 行為不變。
+
 - **Agent plugin 打包與 marketplace 安裝。** 將 dbcli 打包為 agent plugin（Ponytail 風格 marketplace install），新增 GitHub Copilot CLI plugin 支援與 Cursor plugin 安裝（add-plugin metadata、marketplace 提交路徑），並依各 agent 拆分安裝指令與文件。
+
 - **開發者工作流 skill 指引（en/zh-TW）。** 在 dbcli skill 新增「Developer workflows」段落，把資料庫影響隱含於開發任務時的最小安全路徑（DB-backed 功能、資料錯誤排查、ORM/migration、PR 審查、慢查詢、回填、環境驗證）寫入 SKILL en/zh-TW 與各平台副本，並以可執行的指令錨點取代不可執行的 migrate 範例。
 
 ## [1.30.0] - 2026-06-09 - Connection Writer API
@@ -902,6 +1052,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **`writeV2Config` 改為 atomic temp+rename 寫入**，避免寫入中斷時破壞設定庫。
+
 - **`migrateV1ToV2` 對非 SQL 的 v1 連線 fail-loud 拒絕**，防止把不相容連線寫進 v2 設定庫。
 
 ## [1.29.0] - 2026-06-08 - Core Config-Read Entrypoint
@@ -941,6 +1092,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli snapshot <query>` — 結果指紋。** 將任一查詢結果轉成確定性、黑名單安全的 `ResultSnapshot`(`rowCount` + 每欄聚合:null/distinct 計數、min/max/sum、順序無關的 checksum)。預設落檔至 `.dbcli/snapshots/snap-<timestamp>.json`,亦支援 `--out`、`--stdout`、`--rows`(連同遮罩後的列一併存檔)、`--format`、`--no-limit`。
+
 - **`dbcli assert <query>` — 行內不變量檢查。** 三種模式:`--expect`(`rows > 0`、`value == 5000`、`col:email not null`、`col:id unique`、`col:amount between 0 and 100`、`col:age >= 18`)、`--vs <query> --compare rows|value`(跨查詢對帳)、`--against <snapshot> --tolerance <pct>`(對既有快照基準比對)。預設失敗時 `exit 1`,可用 `--no-fail` 僅報告不改變 exit code。
 - 兩個指令均沿用既有 adapter / QueryExecutor / blacklist / audit 堆疊,黑名單欄位由 QueryExecutor 在源頭遮罩,指紋天生安全。目前支援 SQL 引擎(PostgreSQL / MySQL / MariaDB)。
 
@@ -965,7 +1117,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **`dbcli explain` 一級指令。** 把 `EXPLAIN` / `ANALYZE SELECT` / `EXPLAIN (ANALYZE, BUFFERS) SELECT` 包成統一介面,單條 query、`@saved-query`、`@file.sql`、`@glob/*` 通吃。輸出統一的 `ExplainRow` schema,附 5 條 actionable annotations(`full-scan` / `temp-table` / `filesort` / `cost-estimate-skew` / `nested-loop-large`)。輸出格式 markdown(預設)/ json / table。支援 `--bulk` 多筆批次。MariaDB + MySQL + PostgreSQL。(v1.23 P2)
+
 - **`dbcli guide missing-index-for` 單條 query 複合索引顧問。** 解析一條 `SELECT`,結合真實 `EXPLAIN` 計畫與既有索引,輸出帶 `confidence`(high/medium/low)與 `reason` 的索引候選;偵測既有索引碰撞(single-col 可擴成 composite),並把函式/運算式欄位與無法解析的 SQL 列為 `warnings`。輸出格式 yaml(預設)/ json / markdown,支援 `--min-confidence` 過濾。唯讀(僅 EXPLAIN + 索引內省)。(v1.23 P3)
+
 - **`dbcli inspect` 情境感知 `suggestedCommands` 與新的 `hints` 欄位。** `suggestedCommands` 改為三層加權(bootstrap / context-aware / discovery):collector 讀近 10 條 audit 找出最熱門資料表,有 task pack 時自動建議 `skill tasks plan analyze-table-perf --param table=<table>` 與 `skill tasks list`。新增與 `suggestedCommands` 平行的 `hints` 欄位(JSON 機器可讀 + markdown `## Hints`),提示最熱門資料表、可用 task pack 數量與 schema 快取概況。新增內建 task pack `analyze-table-perf`(唯讀 `plan-only`,吃必填 `table` 參數)。audit 讀取唯讀且永不 throw。(v1.23 P4)
 
 ### Fixed
@@ -985,7 +1139,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Elasticsearch interactive shell.** `dbcli shell` 對 ES 連線開啟 Kibana Dev Tools 風格 REPL:輸入請求行 `<METHOD> /<path>` 加上可選的多行 JSON body,以空白行送出整個區塊,回應以美化 JSON 呈現。以讀取為主 — index 層級黑名單於前端直接拒絕受保護 index;`_search` 若 body 未指定 `size` 自動上限 1000 筆。(P1)
+
 - **Elasticsearch export.** `dbcli export` 對 ES 連線支援兩種形式:傳入 search DSL 並以 `--index` 指定索引以匯出命中結果,或直接以 index 名稱當作查詢、透過 `match_all` + scroll 匯出整個索引。輸出 JSON / JSONL / CSV,預設上限 1000 筆(`--no-limit` 匯出全索引,以 scroll 分批串流)。匯出前套用索引層級黑名單檢查,並寫入稽核紀錄。(P2)
+
 - **Redis value / hash-field 遮罩。** 新增 `.dbcli` `redis.mask` 設定區塊:key 命中 `keyPattern` glob 者,其值(或指定的 hash `fields`)於讀取時(`GET`、`GETRANGE`、`HGETALL`、`HGET`、`HMGET`、`HVALS`)回傳 `[REDACTED]`。遮罩與既有 key-glob 拒絕黑名單並存,且**拒絕一律優先於遮罩**。(P3)
 
 ### Fixed
@@ -1005,7 +1161,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Redis shell.** `dbcli shell` 現對 Redis 連線開啟互動式 REPL,具備歷史、readline、tab 補全(指令 + key 前綴)與 `.no-limit on/off` meta 指令。單行語意。
+
 - **Redis size guard.** `SCAN` / `HSCAN` / `SSCAN` / `ZSCAN` 在缺少時補上 `COUNT 1000`;`LRANGE` / `ZRANGE` / `ZREVRANGE` 夾限 `stop`;`ZRANGEBYSCORE` 補上 `LIMIT 0 1000`。`HGETALL` / `HKEYS` / `HVALS` / `SMEMBERS` / `KEYS` 的無上限回覆在 client 端截斷至 1000 並帶 `REDIS_SIZE_TRUNCATE` 警告。`--no-limit` 略過所有防護。
+
 - **Redis blacklist 強制。** `dbcli blacklist add 'pattern'` 現會封鎖 key 命中的 Redis 讀寫。採 Redis 原生 glob(`*`、`?`、`[abc]`、`[a-z]`)。與黑名單重疊的 `KEYS` / `SCAN MATCH` 會被拒絕;未重疊的掃描則濾掉黑名單 keys 並帶 `REDIS_BLACKLIST_FILTERED` 警告。稽核記錄含 `metadata.rejection_reason: 'blacklist'` 與 `matched_pattern`。
 
 ### Changed
@@ -1022,14 +1180,19 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **MongoDB MVP 全套支援。** `q` 指令現以 limited-supported 等級納入 MongoDB（`find` / `aggregate` 兩種 snippet body），路由經過專屬分支與 field-masker；`schema` 採 `$sample` + 遞迴 path 偵測（含 BSON 型別），新增 `--sample-method` 旗標；`query` / `export` 套用 `maskMongoRows` 對巢狀結構遞迴遮罩。
+
 - **MongoDB blacklist 強化。** 新增 path-matcher（exact / dotted / suffix-wildcard）、field-masker 遞迴遮罩、insert / update 在寫入前強制套用 nested-path blacklist；`blacklist list` 對 collection 上的 middle-`*` pattern 發出警告。
+
 - **MongoDB 安全模型升級。** update operator 從硬性 allowlist 改為分級安全（tiered operator safety）；schema 對 blacklist 欄位直接 redact；`cache` / `doctor` 暴露 `sampleMethod`。
+
 - **MongoDB snippets 一級公民化。** 內建 reference snippets（find + aggregate）、`queries list/search/suggest` 將 MongoDB snippets 與 SQL 引擎並列；`mongoStrategy` 驗證 body 與 params 並支援 map 形式插值。
+
 - **Recovery — per-code branching for connection codes (MVP)。** `recover --next` 對 connection 類錯誤碼支援多 branch 派發：新增 `buildConnectionBranches` factory（4 個 connection branch）、`matchConnectionBranch` resolver、`classify` emit `branches` / `branchFork`，並提供 `--branch <id>` 旗標讓 agent 顯式選擇 branch。輸出 `NextResult.branchId` 與 markdown 中的 branchId/description 一併呈現。
 
 ### Changed
 
 - **MongoDB `q` 文件升級。** `docs/feature-matrix.md` / 雙語 user docs 將 MongoDB `q` 從 unsupported 改為 limited supported（記載目前支援的 body 形式與限制）。
+
 - **Recovery schema 新增 `branches` / `branchFork`。** 行為向下相容（無 branch 時與舊版一致）；`GuideStep` / `NextResult` / `NextStepOutput` 全鏈打通 `branchId`；`shellQuote` 抽離為共用模組。
 
 ### Security
@@ -1060,7 +1223,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **Phase 23-04 follow-up closure — full DML/DDL audit coverage.** `insert / update / delete / export / q / schema` now invoke `writeAuditEntry` on every happy / failure / rejection branch (BlacklistError / PermissionError / ConnectionError / validation all flow through the wired catch block). This closes the v1.20.0 INTEGRATE-01 / INTEGRATE-04 partial gap noted in v1.20.0's Known limitation paragraph.
+
 - **Bi-directional `audit_ref` ⇄ `recovery_ref` linkage on every `--recovery`-capable command.** When any of the 6 newly-wired commands fails with `--recovery`, the audit entry's `recovery_ref` and the recovery envelope's `audit_ref` carry matching UUIDs — identical in shape to the Phase 25 `query` / `inspect` round-trip wiring. Agents can pivot from `.dbcli/last-recovery.json` to the audit entry via `dbcli audit tail --recovery-ref <id>`.
+
 - **AI-agent skill docs (`assets/SKILL.md`, `assets/SKILL.zh-TW.md`, `assets/reference.md`)** updated to advertise full 8-command bi-directional coverage; bilingual user docs (`docs/user/en/index.{md,html}`, `docs/user/zh-TW/index.{md,html}`) gained a `--recovery` row noting the cross-command linkage.
 
 ### Tests
@@ -1127,7 +1292,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Added
 
 - **Expanded Antigravity Protocol**: Added Phase 0 (Scout) for research and Phase 3 (Auditor) for validation to the core agentic workflow.
+
 - **Enhanced Agent Support**: `dbcli skill --install` now supports **Codex (OMX)** and **Windsurf**.
+
 - **Cursor Rules Update**: `dbcli skill --install cursor` now uses the modern `.cursor/rules/*.mdc` project-local format.
 - New `GEMINI.md` project-level instruction file with full Antigravity lifecycle guidance.
 
@@ -1272,11 +1439,13 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **Packaged `dist/cli.mjs` 找不到 assets**：1.10.0 bundle 在 `task-paths.ts` / `snippet-paths.ts` 用 `import.meta.dir + ../../../` 解析 builtin 目錄，bundle 後三層往上會跳出 package root，npm 全域安裝的使用者執行 `dbcli queries list` / `dbcli skill tasks list` 讀不到資源。抽出 `src/utils/package-root.ts` 以 `package.json` 走訪定位 root，dev 與 bundle 都正確；`skill.ts` 內既有的 `findPackageRoot` 也收斂到同一處。
+
 - **`dbcli q` 略過 blacklist 檢查（安全）**：`q.ts` 把空字串當作 `tableName` 傳給 `BlacklistValidator.filterColumns`，column-level redaction 永遠不命中；同時也沒呼叫 `checkTableBlacklist`，使用者可以透過 saved snippet 直接 SELECT 黑名單表/欄位繞開保護。改為從 `prepared.rewrittenSql` 抽出主表（SQL）或 `prepared.execHints.index`（ES），執行前先 `checkTableBlacklist('SELECT', target)`，並把真正的 `tableName` 餵給 `filterColumns`；Redis 維持原樣。
 
 ### Added
 
 - **dist/ 整合 smoke 測試**：`tests/integration/dist-smoke.test.ts` 從 OS tmpdir 執行 `dist/cli.mjs`，覆蓋 `--version`、`skill --output`、`queries list`、`skill tasks list`，守住 packaged assets path 不再回退。
+
 - **`q` blacklist 迴歸測試**：`tests/unit/commands/q-blacklist.test.ts` 覆蓋黑名單表阻擋、欄位 redact、未受影響 snippet 三種情境。
 
 ### Changed
@@ -1306,7 +1475,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **Redis 驅動**：改用 Bun 內建 `RedisClient`，移除外部 `ioredis` 依賴。
+
 - **Elasticsearch adapter**：refactor 並收斂錯誤訊息與 ExecutionResult 形狀，與 SQL / Mongo / Redis 對齊。
+
 - **文件**：`assets/SKILL.md` 與 `assets/reference.md` 補上 ES / Redis snippet 工作流；`docs/feature-matrix.md` 更新 saved-queries 欄位。
 
 ### Fixed
@@ -1353,6 +1524,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **`insert` / `update` / `delete` / `export` / `diff` 對 Redis / Elasticsearch 的早期錯誤訊息**：先前會落入 SQL DataExecutor 出現「Column ... not found in table」之類誤導訊息，現在直接回傳明確的「不支援」JSON，並指引正確替代路徑（Redis 改用 `query`、Elasticsearch 改用外部工具或 `query --index`）。
+
 - **TypeScript 嚴格度**：`bun run typecheck` 從 43 個錯誤降為 0。
   - `ConnectionConfig` union 加入 `ElasticsearchConnectionConfig`。
   - `ResolvedConnection.connection.system`、`ReplContext.system` 涵蓋 `'elasticsearch'`。
@@ -1381,6 +1553,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
   - Discovery: Implemented schema inspection for MongoDB collections.
   - Diagnostics: Added comprehensive MongoDB environment and connection diagnostics to `dbcli doctor`.
 - **Improved AI Skill Installation**: `dbcli skill --install` now deploys both `SKILL.md` (high-level workflow) and `reference.md` (full command syntax and examples) to target platforms (Claude Code, Gemini CLI, Copilot, Cursor).
+
 - **Security model enhancement**: `dbcli init` now defaults to a more secure storage model, placing sensitive connection details in `~/.config/dbcli/` rather than the local project workspace.
 
 ### Changed
@@ -1392,6 +1565,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **Doctor diagnostics for MongoDB SRV**: `dbcli doctor` now reports whether the current execution environment can resolve `mongodb+srv://` connections directly or only through the DNS-over-HTTPS fallback used by the MongoDB adapter.
+
 - **Documentation**: Clarified the new MongoDB SRV environment diagnostic in README, README.zh-TW, and `assets/SKILL.md`.
 
 ## [1.5.1] - 2026-04-22
@@ -1399,6 +1573,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Fixed
 
 - **MongoDB SRV Connections**: `mongodb+srv://` URIs are now expanded and connected through the MongoDB adapter, and MongoDB operations consistently use the configured database.
+
 - **MongoDB Documentation**: Clarified SRV URI support and configured-database behavior in README, README.zh-TW, and `assets/SKILL.md`.
 
 ## [1.5.0] - 2026-04-21
@@ -1410,6 +1585,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
   - Layered schema loading (Hot/Cold) integrated into `configModule`.
   - Per-connection isolation: Each connection now has its own schema directory (`.dbcli/schemas/<connection>/`).
 - **Improved Migration UX**: Added proactive hints during schema migration to ensure data consistency.
+
 - **Documentation Update**: Added per-connection schema isolation details to `SKILL.md` for AI agents.
   - Clarified schema storage layout in `.dbcli/schemas/`.
   - Added usage examples for `--use <connection>` with schema commands.
@@ -1444,6 +1620,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
   - Intelligent SQL generation per database dialect.
   - Default dry-run mode for safety.
 - **Enhanced Data Health Checks**: Added `rowCount` and `size` checks to the `dbcli check` command.
+
 - **Comprehensive Documentation**: Updated README (en/zh-TW) with Internals & Strategy sections and new command references.
 
 ### Changed
@@ -1459,7 +1636,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 ### Changed
 
 - **Adapter `execute()` 回傳型別重構**: 從 `T[]` 改為 `ExecutionResult<T>`，包含 `rows`、`affectedRows`、`lastInsertId` 欄位，DML 操作（INSERT/UPDATE/DELETE）現在回傳正確的 affected rows 計數
+
 - **Export 覆寫確認**: `export --output` 寫入已存在檔案時會提示確認，可用 `--force` 跳過
+
 - **`ExecutionResult<T>` 介面**: 新增統一的查詢結果型別定義於 `src/adapters/types.ts`
 
 ---
@@ -1471,7 +1650,9 @@ Automation that performs unqualified full-table writes stops working. Three shap
 dbcli v1.0.0 is the first stable release. All three milestones are complete:
 
 - **M1 (v0.6.0):** Smart REPL — interactive shell with SQL + dbcli commands
+
 - **M2 (v0.8.0):** Schema DDL — CREATE/DROP/ALTER TABLE, INDEX, CONSTRAINT, ENUM
+
 - **M3 (v1.0.0):** Stabilization — documentation, permission matrix, known limitations update
 
 ### Added
@@ -1487,22 +1668,31 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
   - PostgreSQL: SERIAL, native ENUM types, ALTER COLUMN TYPE, double-quote identifiers
   - MySQL: AUTO_INCREMENT, inline ENUM, MODIFY COLUMN, backtick identifiers
 - **DDLExecutor**: Unified execution pipeline — admin permission check → blacklist protection → SQL generation → dry-run/execute → schema cache auto-refresh
+
 - **Default dry-run for DDL**: All `migrate` commands preview SQL without `--execute`. Destructive operations also require `--force`
+
 - **142 new tests**: column-parser (17), PG DDL (35), MySQL DDL (25), factory (5), DDL executor (22), schema cache DDL (6), CLI migrate (26), live-db migrate lifecycle (6)
 
 ### Fixed
 
 - **Schema comment encoding**: Fixed double-encoded UTF-8 comments from MySQL/MariaDB `information_schema` (e.g., `å¸³è™Ÿ` → `帳號`)
+
 - **MySQL connection charset**: Added `charset: utf8mb4` and `SET NAMES utf8mb4`
+
 - **DDL multi-line SQL execution**: Fixed statement splitting to use `;\n` instead of `\n`
+
 - **MySQL DROP INDEX**: Added `--table` option (MariaDB requires `ON <table>`)
 
 ### Changed
 
 - **Permission model**: 4 levels — query-only, read-write, data-admin, admin (DDL requires admin)
+
 - **Known Limitations**: Removed "Read-only schema" and "CLI-only" (both resolved). Added "No migration version tracking" as post-v1.0 item
+
 - **Test infrastructure**: `docker-compose.test.yml` for MySQL 8 + PostgreSQL 16 integration testing
+
 - **Package scripts**: Added `test:unit`, `test:integration`, `test:docker`
+
 - **SKILL.md**: Updated with full `migrate` command reference and AI agent guidelines
 
 ### Test Results (v1.0.0)
@@ -1520,14 +1710,19 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
 ### Fixed
 
 - **Schema comment encoding**: Fixed double-encoded UTF-8 comments from MySQL/MariaDB `information_schema`. Comments stored through latin1 (cp1252) connections now correctly display CJK characters (e.g., `å¸³è™Ÿ` → `帳號`)
+
 - **MySQL connection charset**: Added `charset: utf8mb4` and `SET NAMES utf8mb4` to MySQL adapter connections
 
 ### Added
 
 - **`fixDoubleEncodedUtf8()` utility** (`src/utils/encoding.ts`): Detects and reverses cp1252-to-UTF-8 double encoding with full cp1252 reverse mapping table. Applied to schema comments in both MySQL and PostgreSQL adapters
+
 - **`docker-compose.test.yml`**: MySQL 8.4 (port 3307) + PostgreSQL 16 (port 5433) for integration testing, with health checks and tmpfs for fast ephemeral storage
+
 - **Environment-driven adapter tests**: `mysql.test.ts` and `postgresql.test.ts` now read connection from `MYSQL_*` / `PG_*` env vars, falling back to docker-compose defaults. Auto-skip when DB is unreachable
+
 - **`live-db.test.ts`**: 55 comprehensive CLI-level integration tests covering all commands against live MariaDB — list, schema, query, blacklist CRUD, insert/update/delete lifecycle, export, check, diff, status, doctor, shell, format validation, SQL injection protection
+
 - **New test scripts**: `test:unit`, `test:integration`, `test:docker` in package.json
 
 ### Test Results
@@ -1545,16 +1740,27 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
 ### Added
 
 - **`dbcli shell` command:** Interactive database shell with SQL execution and dbcli command dispatch
+
 - **SQL-only mode:** `--sql` flag restricts to SQL statements only
+
 - **Auto-completion (Tab):** Context-aware completion for SQL keywords, table names, column names, and dbcli commands
+
 - **Multi-line SQL:** Accumulates input until `;` is found, with `...>` continuation prompt
+
 - **SQL syntax highlighting:** Real-time colorization of keywords, strings, and numbers in verbose mode
+
 - **Meta commands:** `.help`, `.quit`/`.exit`, `.clear`, `.format`, `.history`, `.timing`
+
 - **Persistent history:** Stored in `~/.dbcli_history` (max 1000 entries), with up/down navigation and Ctrl+R search
+
 - **Permission & blacklist integration:** Full enforcement within REPL session — SQL goes through PermissionGuard, query results go through blacklist filtering
+
 - **Auto-reconnect:** Attempts to reconnect once on connection errors, then displays error without crashing the session
+
 - **Error resilience:** SQL/permission/connection errors never crash the session
+
 - **i18n support:** All shell messages available in English and Traditional Chinese
+
 - **102 new tests:** input-classifier (25), multiline-buffer (10), meta-commands (15), completer (17), history-manager (8), command-dispatcher (12), repl-engine (12), shell-command (3)
 
 ---
@@ -1564,9 +1770,13 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
 ### Fixed
 
 - **`init --use-env-refs` permission bug**: Interactive env-ref mode now correctly offers all 4 permission levels (was missing `data-admin`)
+
 - **`init` i18n completeness**: All 10 hardcoded English messages replaced with i18n keys (supports en/zh-TW)
+
 - **`init` duplicate code**: Extracted shared `.dbcli exists` overwrite check into `checkOverwrite()` helper
+
 - **`--use-env-refs` help text**: Improved option description to clarify CI/CD and multi-env use case
+
 - **Documentation**: Added `--use-env-refs` to README (en/zh-TW), CHANGELOG, and SKILL.md with AI agent guidance
 
 ---
@@ -1576,13 +1786,17 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
 ### Added
 
 - **Database version check**: Warns on stderr when connected database version is below minimum supported (PostgreSQL 12+, MySQL 8.0+, MariaDB 10.5+). Non-blocking — connection proceeds normally.
+
 - **`dbcli doctor` DB version check**: New "Database version" item in Connection & Data group.
+
 - **`dbcli init --use-env-refs`**: Store environment variable references (`{"$env": "DB_HOST"}`) in config instead of actual values. Supports interactive and non-interactive modes with `--env-host`, `--env-port`, `--env-user`, `--env-password`, `--env-database` options. Suitable for CI/CD and multi-environment deployments.
 
 ### Fixed
 
 - **`init` permission bug**: Interactive env-ref mode now correctly offers all 4 permission levels (was missing `data-admin`)
+
 - **`init` i18n**: All hardcoded English messages in init command replaced with i18n keys (10 messages)
+
 - **`init` duplicate code**: Extracted shared `.dbcli exists` overwrite check into `checkOverwrite()` helper
 
 ---
@@ -1594,16 +1808,27 @@ dbcli v1.0.0 is the first stable release. All three milestones are complete:
 ### Added
 
 - **Color system** (`picocolors`): Semantic color helpers (`success`/`error`/`warn`/`info`/`dim`/`bold`) with automatic `NO_COLOR` support
+
 - **SQL syntax highlighting**: Keywords (blue bold), strings (green), numbers (yellow) — applied in verbose mode and dry-run preview
+
 - **Leveled logger**: Four levels — quiet (`-q`), normal (default), verbose (`-v`), debug (`-vv`) — all output to stderr to keep stdout clean for structured data
+
 - **`--no-color` global flag**: Disable colored output; also respects `NO_COLOR` environment variable (<https://no-color.org/>)
+
 - **`-v, --verbose` global flag**: Increase verbosity (`-v` = verbose, `-vv` = debug)
+
 - **`-q, --quiet` global flag**: Suppress non-essential output
+
 - **`dbcli doctor` command**: Full self-diagnostic — checks Bun version, dbcli version (npm registry), config validity, permission level, blacklist completeness (detects unprotected sensitive columns like `password`/`token`/`secret`), database connectivity, schema cache freshness, and large table warnings (> 1M rows). Supports `--format json` for AI agents. Exits with code 1 on errors.
+
 - **`dbcli completion` command**: Shell auto-completion script generation for bash, zsh, and fish. `--install` flag auto-writes to the shell rc file using idempotent marker blocks.
+
 - **`dbcli upgrade` command**: Self-update from npm registry. `--check` flag for check-only mode.
+
 - **Background version check**: Every command silently checks the npm registry (at most once per 24 hours, cached in `.dbcli/version-check.json`). Shows a one-line hint to stderr after the command completes if a newer version is available. Suppressed by `--quiet`.
+
 - **Table formatter colorization**: Table headers now display in bold
+
 - **62 new tests**: colors (7), sql-highlight (6), logger (10), doctor (12), completion (8), upgrade/version-check (19)
 
 ### Dependencies
@@ -1625,12 +1850,19 @@ Added table and column-level blacklisting to protect sensitive data from AI agen
   - `blacklist table add/remove <table>` — manage table-level blacklist
   - `blacklist column add/remove <table>.<column>` — manage column-level blacklist
 - **Table-level blacklisting:** Reject all operations (query, insert, update, delete) on blacklisted tables
+
 - **Column-level blacklisting:** Automatically omit blacklisted columns from SELECT results
+
 - **Security notifications:** Footer in table/CSV/JSON output when columns are filtered (e.g., "Security: 2 column(s) were omitted based on your blacklist")
+
 - **Context-aware override:** `DBCLI_OVERRIDE_BLACKLIST=true` environment variable for temporary bypass with warning
+
 - **i18n support:** Blacklist messages in English and Traditional Chinese
+
 - **Performance:** < 1ms overhead per query (O(1) Set/Map lookups)
+
 - **103 new tests:** 83 core + 12 CLI wiring + 8 formatter security tests
+
 - **`dbcli schema --reset`:** Clear all existing schema data and re-fetch from database — solves stale schema after switching DB connections
 
 ### Configuration
@@ -1665,9 +1897,13 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 1: Project Scaffold
 
 - **Foundation established:** CLI framework with Commander.js v13.0+
+
 - **Build process:** Bun bundler with native TypeScript support (1.1MB binary, <100ms startup)
+
 - **Test infrastructure:** Vitest with 80%+ coverage target
+
 - **Cross-platform CI:** GitHub Actions matrix testing (ubuntu, macos, windows)
+
 - **Code quality:** ESLint + Prettier configured
 
 **Status:** ✅ Complete
@@ -1677,10 +1913,15 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 2: Init & Config
 
 - **`dbcli init` command:** Interactive configuration with `.env` parsing
+
 - **Hybrid initialization:** Auto-fills from .env, prompts only for missing values
+
 - **Config management:** `.dbcli` JSON file with immutable copy-on-write semantics
+
 - **Database support preparation:** Multi-database adapter layer foundation
+
 - **RFC 3986 percent-decoding:** Handles special characters in DATABASE_URL passwords
+
 - **Validation:** Zod schemas for type-safe configuration
 
 **Status:** ✅ Complete
@@ -1692,9 +1933,13 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 3: DB Connection
 
 - **Multi-database support:** PostgreSQL, MySQL, MariaDB via unified adapter interface
+
 - **Bun.sql integration:** Native SQL API (zero npm dependencies for drivers)
+
 - **Connection testing:** Validates credentials before saving config
+
 - **Error mapping:** Categorized error messages with troubleshooting hints (5 categories: ECONNREFUSED, ETIMEDOUT, AUTH_FAILED, ENOTFOUND, UNKNOWN)
+
 - **Adapter pattern:** Clean abstraction enabling driver swaps without CLI changes
 
 **Status:** ✅ Complete
@@ -1706,9 +1951,13 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 4: Permission Model
 
 - **Three-tier permission system:** Query-only, Read-Write, Admin
+
 - **SQL classification:** Character state machine for robust SQL analysis (handles comments, strings, CTEs, subqueries)
+
 - **Permission enforcement:** Coarse-grained checks (no per-table/column fine-grained control in V1)
+
 - **Default-deny approach:** Uncertain operations require Admin mode
+
 - **Zero external dependencies:** Pure TypeScript string processing
 
 **Status:** ✅ Complete
@@ -1720,10 +1969,15 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 5: Schema Discovery
 
 - **`dbcli list` command:** Display all tables with metadata
+
 - **`dbcli schema [table]` command:** Show single table structure or scan entire database
+
 - **Foreign key extraction:** PostgreSQL FK metadata from pg_stat_user_tables; MySQL from REFERENTIAL_CONSTRAINTS
+
 - **Output formatters:** Table (ASCII) and JSON (AI-parseable)
+
 - **Schema storage:** Complete metadata in `.dbcli` for offline AI reference
+
 - **Column details:** Type, constraints, nullable, defaults, primary keys, foreign keys
 
 **Status:** ✅ Complete
@@ -1737,10 +1991,15 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 6: Query Operations
 
 - **`dbcli query "SQL"` command:** Direct SQL execution with permission enforcement
+
 - **Output formatters:** Table (human-readable), JSON (AI-parseable), CSV (RFC 4180 compliant)
+
 - **Auto-limiting:** Query-only mode limits to 1000 rows (with user notification)
+
 - **Helpful errors:** Levenshtein distance table suggestions for typos
+
 - **Structured results:** Metadata including row count, execution time, columns
+
 - **Permission guarding:** Blocks write operations in Query-only/Read-Write modes
 
 **Status:** ✅ Complete
@@ -1756,11 +2015,17 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 7: Data Modification
 
 - **`dbcli insert [table]` command:** Insert rows with parameterized queries
+
 - **`dbcli update [table]` command:** Update existing rows with WHERE clause and SET columns
+
 - **`dbcli delete [table]` command:** Delete rows (Admin-only for safety)
+
 - **Parameterized SQL:** Prevents SQL injection across all modification commands
+
 - **Confirmation flows:** --force flag for bypass; default prompts user
+
 - **Dry-run mode:** `--dry-run` shows SQL without executing
+
 - **Permission enforcement:** Insert/Update require Read-Write+; Delete requires Admin
 
 **Status:** ✅ Complete
@@ -1774,11 +2039,17 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 8: Schema Refresh & Export
 
 - **`dbcli schema --refresh` command:** Detect and apply schema changes incrementally
+
 - **`dbcli export "SQL"` command:** Export query results as JSON or CSV
+
 - **SchemaDiffEngine:** Two-phase diff algorithm (table-level, column-level)
+
 - **Type normalization:** Case-insensitive comparison for column types
+
 - **Immutable merge:** Preserves metadata.createdAt, updates schemaLastUpdated
+
 - **Streaming output:** CSV generated line-by-line; JSON buffered for validity
+
 - **File output:** `--output file` support for both export and schema refresh
 
 **Status:** ✅ Complete
@@ -1792,11 +2063,17 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 9: AI Integration
 
 - **`dbcli skill` command:** Generate AI-consumable skill documentation
+
 - **SkillGenerator class:** Runtime CLI introspection (collects commands dynamically)
+
 - **Permission-based filtering:** Query-only hides insert/update/delete; Read-Write hides delete
+
 - **SKILL.md format:** YAML frontmatter + markdown (compatible with Claude Code, Gemini, Copilot, Cursor)
+
 - **Platform installation:** `dbcli skill --install {claude|gemini|copilot|cursor}`
+
 - **Cross-platform paths:** Installs to correct location per platform (.claude/, .local/share/gemini/, etc.)
+
 - **Dynamic updates:** Skill regenerates as CLI evolves; no manual documentation maintenance
 
 **Status:** ✅ Complete
@@ -1810,9 +2087,13 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ### Phase 10: Polish & Distribution
 
 - **npm publication:** `files` whitelist, `engines` constraints, `prepublishOnly` hook
+
 - **Cross-platform validation:** Windows CI matrix with .cmd wrapper verification
+
 - **Comprehensive documentation:** API reference, permission model, AI guide, troubleshooting
+
 - **Performance benchmarking:** CLI startup < 200ms, query overhead < 50ms
+
 - **Release readiness:** v1.0.0 quality gates met, all requirements satisfied
 
 **Status:** ✅ Complete
@@ -1822,7 +2103,9 @@ dbcli v0.1.0-beta is a complete, production-ready CLI tool enabling AI agents an
 ## Known Limitations
 
 - **Single database per project:** Each directory uses one `.dbcli` config. For multi-database setups, use separate directories or `--config` flag. This is by design, not a technical limitation.
+
 - **No audit logging:** WHO/WHAT/WHEN tracking deferred to post-v1.0
+
 - **No migration version tracking:** `migrate` commands execute DDL directly without version history or rollback. The `migrate` namespace is reserved for future migration tracking support.
 
 ---

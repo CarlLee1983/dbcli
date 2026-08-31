@@ -2,8 +2,31 @@ import { createHash, randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { sqlParser } from '@/core/sql-parser'
+import {
+  classifyEvidencePackArtifact,
+  describeEvidencePackClassification,
+  EVIDENCE_PACK_CURRENT_VERSION,
+  type EvidencePackClassification,
+} from '@/core/evidence-pack/legacy'
 
-export const EVIDENCE_PACK_VERSION = 1 as const
+export {
+  classifyEvidencePackArtifact,
+  describeEvidencePackClassification,
+  EVIDENCE_PACK_CURRENT_VERSION,
+  KNOWN_EVIDENCE_PACK_VERSIONS,
+  type EvidencePackClassification,
+  type EvidencePackLegacyFormat,
+  type EvidencePackLegacyIntegrity,
+} from '@/core/evidence-pack/legacy'
+
+/**
+ * The artifact format version, which is not the package version.
+ *
+ * It went to 2 because v3.0.0 changed the digest input, the id derivation and
+ * the claim layout while leaving this constant at 1 — producing two
+ * incompatible layouts that both declared `version: 1`. See ADR-0013.
+ */
+export const EVIDENCE_PACK_VERSION = EVIDENCE_PACK_CURRENT_VERSION
 
 export type VerificationEvidenceStatus = 'verified' | 'not_verified' | 'indeterminate' | 'blocked'
 
@@ -90,6 +113,23 @@ export class EvidencePackValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'EvidencePackValidationError'
+  }
+}
+
+/**
+ * A pack the reader recognises and refuses to treat as current.
+ *
+ * Distinct from a plain validation error so a caller can say "this is an old
+ * artifact" instead of "this digest is wrong" — the two mean opposite things to
+ * whoever is holding the file.
+ */
+export class EvidencePackLegacyFormatError extends EvidencePackValidationError {
+  constructor(
+    message: string,
+    readonly classification: EvidencePackClassification
+  ) {
+    super(message)
+    this.name = 'EvidencePackLegacyFormatError'
   }
 }
 
@@ -396,15 +436,24 @@ export function buildEvidencePack(
 }
 
 export function parseEvidencePack(raw: unknown): EvidencePack {
+  // Classify before validating. A legacy pack fails every current structural
+  // rule for reasons that have nothing to do with the pack being wrong.
+  const classification = classifyEvidencePackArtifact(raw)
+  if (classification.format === 'legacy') {
+    throw new EvidencePackLegacyFormatError(
+      describeEvidencePackClassification(classification),
+      classification
+    )
+  }
+  if (classification.format === 'unsupported') {
+    throw new EvidencePackValidationError(describeEvidencePackClassification(classification))
+  }
   if (!isRecord(raw)) throw new EvidencePackValidationError('evidence pack must be an object')
   requireExactKeys(
     raw,
     ['version', 'id', 'createdAt', 'subject', 'claims', 'integrity'],
     'evidence pack'
   )
-  if (raw.version !== EVIDENCE_PACK_VERSION) {
-    throw new EvidencePackValidationError(`evidence pack version must be ${EVIDENCE_PACK_VERSION}`)
-  }
   if (!isRecord(raw.integrity)) throw new EvidencePackValidationError('integrity must be an object')
   requireExactKeys(raw.integrity, ['algorithm', 'digest'], 'integrity')
   if (raw.integrity.algorithm !== 'sha256')

@@ -13,10 +13,11 @@ support branch and none is promised: an older major is fixed by upgrading.
 
 | Version | Status |
 | ------- | ------ |
-| **3.x** | :white_check_mark: **Supported** — use the latest 3.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
-| **2.x** | :x: **Not supported** — superseded by 3.x; upgrade to **3.x**. |
-| **1.x** | :x: **Not supported** — superseded by 3.x; upgrade to **3.x**. |
-| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **3.x**. |
+| **4.x** | :white_check_mark: **Supported** — use the latest 4.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
+| **3.x** | :x: **Not supported** — superseded by 4.x; upgrade to **4.x**. |
+| **2.x** | :x: **Not supported** — superseded by 4.x; upgrade to **4.x**. |
+| **1.x** | :x: **Not supported** — superseded by 4.x; upgrade to **4.x**. |
+| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **4.x**. |
 
 The supported major above is checked against `package.json` by
 `bun run manifest:check`, so this table cannot silently fall behind a release.

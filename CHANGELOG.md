@@ -5,9 +5,15 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 八種黑名單寫法，七種靜默無效
+## [Unreleased] - 一份黑名單設定，四個互不相同的比對器
 
-規格 SQL 第 7、8、9 則。設計決策記在 `docs/adr/0018-a-blacklist-rule-that-does-not-match-fails-loudly.md`。本機 MariaDB、表 `probe_users (id, Password, note)`、值 `s3cret`，八種設定裡七種洩漏，而全部都被設定載入器無聲接受——操作者「規則有效」的唯一證據是 dbcli 沒有抱怨。
+規格 SQL 第 7、8、9 則與 MongoDB 第 3–6 則。設計決策記在
+`docs/adr/0018-a-blacklist-rule-that-does-not-match-fails-loudly.md` 與
+`docs/adr/0019-one-blacklist-rule-one-matcher.md`。
+
+SQL 那半：本機 MariaDB、表 `probe_users (id, Password, note)`、值 `s3cret`，八種設定裡七種洩漏，而全部都被設定載入器無聲接受——操作者「規則有效」的唯一證據是 dbcli 沒有抱怨。
+
+MongoDB 那半（本機容器 MongoDB 7.0.31 實測）：同一組規則被四個比對器讀，沒有兩個一致——請求側是字面的點號成分比對、讀取遮罩懂 `foo.*`、寫入側是祖先走訪、集合名是 `Set.has`。於是 `user.*` 擋得住讀擋不住寫，`pass*` 到處都不生效卻仍印出「可能已遮罩」的提示，`secrets*` 沒有任何一個比對器認得。規格第 3 則實測後不成立：十四個 update operator 全被 ADR-0015 的請求側檢查擋下，寫入側那個缺口是真的但被外層蓋住——仍然照深度防禦補齊。
 
 ### Changed
 
@@ -17,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **寫入側改為與讀取側相同的祖先走訪。** `checkColumnBlacklistOnWrite` 是字面 `includes`，而 `filterColumnsForTables` 會沿點號向上走，於是規則 `profile` 之下 `profile.ssn` 能寫不能讀。沒有任何一種「被列入黑名單」的讀法能容許這件事。
 
+- **BREAKING：`blacklist.tables` 的每個條目都是 glob，對所有引擎皆然。** 先前 `isTableBlacklisted` 是 `Set.has`，`tables: ["secrets*"]` 在 MongoDB 與 SQL 完全不擋，而使用者依 Redis 那側的文件正是那樣寫的（`blacklist-validator.ts` 裡 ES 的註解已經記下同一件事）。同一個鍵不該在 Redis 是 glob、在 ES 是 glob、在 SQL 是字面。代價是含 `*` 的設定在 SQL 連線上開始擋東西；方向只會多拒絕不會少拒絕，字面名稱仍匹配它自己。真的叫 `report*` 的表寫成 `report\*` 可回到字面比對。
+
+- **BREAKING：`blacklist.columns` 的每一段都是 glob。** `pass*` 現在真的遮 `password`，先前它被 `compilePatterns` 拒絕，而被拒絕的結果是整份文件原樣回傳。萬用字元不跨點號：`pass*` 不匹配 `user.password`。唯一保留的特例是結尾整段的 `*`——`user.*` 仍然涵蓋 `user` 自己與它底下的一切，照純段落 glob 讀會變成只匹配 `user.<一段>`，那會讓已經部署的規則無聲縮小。
+
+- **BREAKING：無法編譯的欄位規則改為中止操作。** 先前 `field-masker.ts` 看到 `patterns.length === 0` 就原樣回傳整份文件，而 CLI 照樣印「Some fields may have been redacted」——那句提示是操作者手上唯一的證據，而它是錯的。ADR-0019 Decision 3 與 ADR-0018 Decision 2 同一個理由。`a.*.b` 這種先前被拒的寫法現在合法，留下來會被拒的是真的壞掉的條目（空段落、空字串）。
+
+- **請求側、讀取側、寫入側改用同一個比對器。** `reachesProtectedField` 與 `checkColumnBlacklistOnWrite` 現在走 `path-matcher`，所以帶萬用字元的規則在三個端點是同一個意思。仍然逐點號成分比對，不是子字串比對——`passwordless` 不會被 `password` 誤傷。
+
+- **`insert` 傳扁平化的欄位路徑，不再是頂層鍵。** `insert --data '{"user":{"password":"x"}}'` 在規則 `user.password` 之下寫得進去（實測確認），因為 `Object.keys(data)` 只看得到 `user`。SQL 的扁平 data 扁平化後結果相同，行為不變。
+
+- **`update` 的寫入欄位收集涵蓋所有 operator。** 先前只看 `$set` / `$unset`，`$rename`、`$inc`、`$push`、`$bit` 等十二個 operator 寫的欄位不進黑名單檢查。實測那些 operator 全被請求側擋下，所以這是補一個構不到的洞——一個只因為另一個控制夠嚴才擋得住的控制不算控制，與 ADR-0015 同一個理由。
+
 ### Fixed
 
 - **glob 的萬用字元涵蓋換行，與 Redis 一致。** `globToRegex` 把 `*` 譯成 `.*`，而 JavaScript 的 `.` 在沒有 dotAll 時不匹配 `\n`；Redis 的 `stringmatchlen` 逐位元組比對，`*` 吃任何位元組。於是 `secrets:*` 保護不到 `secrets:\nx`，而 `parseRedisCommand` 在引號內保留換行，這條路是可達的；同一組 regex 也驅動 `sampleKeyNames`，所以 `dbcli list` 也照樣顯示那個 key。`$` 不需要配套改動：JavaScript 把它錨在輸入結尾（不像 Perl 允許結尾換行），所以字面 pattern 仍然不匹配尾端多一個換行的 key——那也正是 Redis 的答案。同一個函式也用於 Elasticsearch 的 index 運算式，那裡 index 名不含換行，因此不受影響。
@@ -24,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **設定裡的前後空白與外層引號會被去掉。** `[" password "]`、`["\"password\""]`、``["`password`"]``、鍵 `" users "` 全部靜默無效。ES 那側的 `es-index-target.ts` 早就 trim 兼解引號，SQL 側沒有。
 
 - **表規則同時以完整名稱與最後一段查找。** `{"public.users": …}` 對 `SELECT * FROM users` 不生效，反向也一樣——`extractTableReferences` 會保留限定名稱的完整字串，所以每個鍵只對它被寫成的那一種拼法生效。這是查找的改動而非解析時的猜測：沒有任何地方決定操作者指的是哪一種拼法，同一張表的兩種拼法解析到同一份規則。
+
+- **`$rename` 的風險說明不再宣稱它不外洩。** `dml-plan.ts` 的 RENAME tier 訊息寫著 `field rename does not exfiltrate data`，那是錯的：改名之後受保護欄位的值躺在讀取遮罩不認得的名字底下。程式碼裡的斷言本身要當成待驗證的宣稱。
+
+- **glob 比對改為線性時間，不再走 regex。** `globToRegex` 把每個 `*` 譯成 `.*`，而多個 `.*` 對**不匹配**的名稱會災難性回溯：`'a' + '*'.repeat(50) + 'b'` 比對一個 300 字元的字串，跑三分鐘沒有回來（2026-08-31 實測），改用 `globMatches` 之後同一則 0.23ms。每一次黑名單判定都走這條路——Redis key 規則、Elasticsearch index 運算式，而在本輪之後還加上所有引擎的欄位規則與表名。設定不必有惡意就踩得到（`*_*_*_*` 是很自然的寫法），而可達的輸入包含來自資料庫而非操作者的 Redis key 名稱。這個缺陷比本輪更早，本輪把它的影響面從兩條路徑擴大到全部，所以在這裡一起修掉。`globToRegex` 保留給真的需要 `RegExp` 物件的呼叫端，兩者以小字母表的**窮舉**比對釘住答案一致——那個窮舉當場就抓到第一版的一個真 bug：`*` 之後的跳脫字元沒有清掉尾綴萬用字元旗標，於是 `*\a` 會匹配 `ab`。
 
 ## [5.1.0] - 2026-08-31 - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
 

@@ -223,6 +223,14 @@ export async function writeAuditEntryResult(
       success: outcome.success,
       redacted_query: redactArgv(process.argv),
       // `redactSql` 是 SQL 字面值遮罩：它會把數字換成 `0`、吃掉引號之間的東西。
+      //
+      // 這裡有一個刻意的界線：遮罩後的 SQL **不足以識別受影響的那幾列**。
+      // `DELETE FROM users WHERE id = 12345` 記成 `id = 0`，`IN (1,2,3)` 記成
+      // `(0,0,0)`——稽核列說得出「對 users 做了 DELETE」，說不出刪掉哪一列。
+      // 那是隱私取捨，不是待補的缺口：WHERE 裡的字面值本身經常就是個資。要重建
+      // 「動到哪些列」的人應該看 `redacted_query` 的指令與資料庫自己的 binlog，
+      // 不是這個欄位。
+      //
       // 套在 Elasticsearch 的 `<METHOD> <path>` 上會吃掉操作對象本身——
       // `DELETE /orders/_doc/12345` 變成 `DELETE /orders/_doc/0`，
       // `POST /logs-2026.08.30/_delete_by_query` 變成 `POST /logs-0.0/...`。

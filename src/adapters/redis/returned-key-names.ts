@@ -1,4 +1,4 @@
-import { globToRegex } from '@/utils/glob'
+import { globMatches } from '@/utils/glob'
 
 /**
  * Commands whose reply *is* a list of key names.
@@ -35,12 +35,11 @@ export function filterReturnedKeyNames(command: string, reply: unknown, rules: s
   if (rules.length === 0) return reply
   if (!returnsKeyNames(command)) return reply
 
-  const regexes = rules.map((pattern) => globToRegex(pattern))
   // A key that is not a string cannot be compared to a glob, so it is dropped
   // rather than kept. Same reason as the unrecognised-shape case below: the
   // question "is this protected" has no answer, and the reply is key names.
   const permitted = (key: unknown): boolean =>
-    typeof key === 'string' && regexes.every((regex) => !regex.test(key))
+    typeof key === 'string' && rules.every((rule) => !globMatches(rule, key))
 
   // `SCAN` — `[cursor, keys[]]`.
   if (Array.isArray(reply) && reply.length === 2 && Array.isArray(reply[1])) {

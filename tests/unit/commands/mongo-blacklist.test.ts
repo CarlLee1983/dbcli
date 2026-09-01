@@ -178,6 +178,49 @@ describe('MongoDB write-path blacklist enforcement', () => {
     expect(out).toContain('secrets')
   })
 
+  test('insert: blacklisted column under a nested path is rejected (flattened paths, not top-level keys)', async () => {
+    configSpy = spyOn(configModule, 'read').mockResolvedValue({
+      connection: baseMongoConnection,
+      permission: 'read-write',
+      blacklist: { tables: [], columns: { users: ['user.password'] } },
+    } as any)
+
+    const { insertCommand } = await import('@/commands/insert')
+    try {
+      await insertCommand('users', { data: '{"user":{"password":"secret"}}' })
+    } catch {
+      /* exit */
+    }
+
+    expect(mockAdapter.state.insertCalled).toBe(false)
+    const out = logged.join('\n')
+    expect(out).toContain('"status": "error"')
+    expect(out).toContain('user.password')
+  })
+
+  test('update: blacklisted column written via $inc is rejected (not just $set/$unset)', async () => {
+    configSpy = spyOn(configModule, 'read').mockResolvedValue({
+      connection: baseMongoConnection,
+      permission: 'read-write',
+      blacklist: { tables: [], columns: { users: ['balance'] } },
+    } as any)
+
+    const { updateCommand } = await import('@/commands/update')
+    try {
+      await updateCommand('users', {
+        where: '{"id":"1"}',
+        set: '{"$inc":{"balance":100}}',
+      })
+    } catch {
+      /* exit */
+    }
+
+    expect(mockAdapter.state.updateCalled).toBe(false)
+    const out = logged.join('\n')
+    expect(out).toContain('"status": "error"')
+    expect(out).toContain('balance')
+  })
+
   test('insert: clean payload passes through and reaches adapter.insert', async () => {
     configSpy = spyOn(configModule, 'read').mockResolvedValue({
       connection: baseMongoConnection,

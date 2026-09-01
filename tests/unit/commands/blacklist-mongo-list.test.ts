@@ -6,14 +6,22 @@ describe('auditBlacklistPatterns', () => {
     const out = auditBlacklistPatterns({
       tables: [],
       columns: {
-        users: ['password', 'profile.email', 'profile.tokens.*', 'profile.*.email'],
+        // `profile..email` has an empty segment; `profile.*.email` compiles as
+        // a segment glob since ADR-0019 Decision 1.
+        users: [
+          'password',
+          'profile.email',
+          'profile.tokens.*',
+          'profile.*.email',
+          'profile..email',
+        ],
       },
     })
     expect(out.warnings).toEqual([
       {
         collection: 'users',
-        raw: 'profile.*.email',
-        reason: 'wildcard must be the final segment',
+        raw: 'profile..email',
+        reason: 'empty path segment',
       },
     ])
   })

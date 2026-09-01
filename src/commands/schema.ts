@@ -30,7 +30,16 @@ export function markRedactedColumns(
 ): ColumnSchema[] {
   const raw = (blacklist.columns ?? {})[collection]
   if (!raw || raw.length === 0) return cols
-  const { patterns } = compilePatterns(raw)
+  const { patterns, rejected } = compilePatterns(raw)
+  // ADR-0019 Decision 3. Showing the schema unmarked tells the operator the
+  // column is not protected, which is the same false assurance the read mask's
+  // redaction notice used to give.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    throw new Error(
+      `blacklist.columns for '${collection}' has entries this matcher cannot read: ${detail}`
+    )
+  }
   if (patterns.length === 0) return cols
   return cols.map((c) => (matchAny(c.name, patterns) ? { ...c, redacted: true } : c))
 }

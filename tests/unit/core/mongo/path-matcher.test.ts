@@ -18,18 +18,20 @@ describe('compilePatterns', () => {
     expect(out.patterns.length).toBe(1)
   })
 
-  test('rejects middle wildcard', () => {
+  // Both entries below were rejected before ADR-0019 Decision 1, when a
+  // wildcard was only legal as a whole final segment. Every segment is a glob
+  // now, so each compiles and matches per segment.
+  test('a mid-path wildcard is a segment glob, not a rejection', () => {
     const out = compilePatterns(['profile.*.email'])
-    expect(out.patterns.length).toBe(0)
-    expect(out.rejected).toEqual([
-      { raw: 'profile.*.email', reason: 'wildcard must be the final segment' },
-    ])
+    expect(out.rejected).toEqual([])
+    expect(matchAny('profile.work.email', out.patterns)).toBe(true)
+    expect(matchAny('profile.email', out.patterns)).toBe(false)
   })
 
-  test('rejects bare *', () => {
+  test('a bare * is a segment glob over the top level', () => {
     const out = compilePatterns(['*'])
-    expect(out.patterns.length).toBe(0)
-    expect(out.rejected[0]?.reason).toMatch(/wildcard/)
+    expect(out.rejected).toEqual([])
+    expect(matchAny('anything', out.patterns)).toBe(true)
   })
 
   test('skips empty / non-string entries with a reason', () => {
@@ -67,5 +69,88 @@ describe('matchAny', () => {
 
   test('empty pattern list never matches', () => {
     expect(matchAny('anything', [])).toBe(false)
+  })
+})
+
+// ADR-0019 Decision 1: a rule segment is a glob, and a final `*` keeps its
+// tail meaning.
+describe('segment globs', () => {
+  test('accepts a wildcard inside a segment', () => {
+    const out = compilePatterns(['pass*'])
+    expect(out.rejected).toEqual([])
+    expect(out.patterns.length).toBe(1)
+  })
+
+  test('a segment glob matches the field it names', () => {
+    const { patterns } = compilePatterns(['pass*'])
+    expect(matchAny('password', patterns)).toBe(true)
+    expect(matchAny('pass', patterns)).toBe(true)
+  })
+
+  test('a segment glob does not cross a dot', () => {
+    const { patterns } = compilePatterns(['pass*'])
+    expect(matchAny('user.password', patterns)).toBe(false)
+    expect(matchAny('password.hash', patterns)).toBe(false)
+  })
+
+  test('a segment glob applies at any depth of the rule', () => {
+    const { patterns } = compilePatterns(['user.*_token', 'sec?et'])
+    expect(matchAny('user.access_token', patterns)).toBe(true)
+    expect(matchAny('user.name', patterns)).toBe(false)
+    expect(matchAny('secret', patterns)).toBe(true)
+    expect(matchAny('secrets', patterns)).toBe(false)
+  })
+
+  test('a lone * protects every field at that level', () => {
+    const out = compilePatterns(['*'])
+    const { patterns } = out
+    expect(out.rejected).toEqual([])
+    expect(matchAny('anything', patterns)).toBe(true)
+    expect(matchAny('nested.field', patterns)).toBe(false)
+  })
+
+  test('a final * still covers the parent path and its descendants', () => {
+    const { patterns } = compilePatterns(['user.*'])
+    expect(matchAny('user', patterns)).toBe(true)
+    expect(matchAny('user.password', patterns)).toBe(true)
+    expect(matchAny('user.a.b', patterns)).toBe(true)
+  })
+
+  test('an escaped star is a literal star', () => {
+    const { patterns } = compilePatterns(['pass\\*'])
+    expect(matchAny('pass*', patterns)).toBe(true)
+    expect(matchAny('password', patterns)).toBe(false)
+  })
+
+  test('still rejects a malformed path', () => {
+    expect(compilePatterns(['a..b']).rejected.length).toBe(1)
+    expect(compilePatterns(['']).rejected.length).toBe(1)
+  })
+})
+
+// Review LOW-1 and LOW-5: shapes that compile and then protect nothing. The
+// same class ADR-0018 Decision 2 and ADR-0019 Decision 3 exist to refuse,
+// hiding inside glob syntax rather than inside path syntax.
+describe('a rule that compiles but can never match is refused', () => {
+  test('an empty character class', () => {
+    const out = compilePatterns(['secret[]'])
+    expect(out.patterns).toEqual([])
+    expect(out.rejected[0]?.raw).toBe('secret[]')
+  })
+
+  test('an unclosed character class', () => {
+    // Degrades to the literal name `secret[abc`, which is not what was written.
+    const out = compilePatterns(['secret[abc'])
+    expect(out.rejected[0]?.raw).toBe('secret[abc')
+  })
+
+  test('`**`, which reads as globstar and is not', () => {
+    // Only covers one segment, so `**` never means "everything nested".
+    const out = compilePatterns(['**'])
+    expect(out.rejected[0]?.reason).toMatch(/\*/)
+  })
+
+  test('a closed class and a plain star still compile', () => {
+    expect(compilePatterns(['secret[abc]', 'pass*', 'user.*']).rejected).toEqual([])
   })
 })

@@ -7,6 +7,21 @@ import type {
   NormalizedTableIdentity,
 } from '@/core/orm-drift/normalized-schema'
 import { qualifiedTableName, tableIdentityKey } from '@/core/orm-drift/table-identity'
+import { globMatches } from '@/utils/glob'
+
+/**
+ * An orm-drift ignore glob, in the syntax it has always had: `*` is the only
+ * wildcard and every other metacharacter is literal.
+ *
+ * Escaping the rest and handing it to `globMatches` keeps that syntax exactly
+ * while dropping the `* -> .*` compilation these files used, which backtracks
+ * the same way ADR-0019 Decision 5 removed elsewhere. Reading the pattern as a
+ * full glob instead would silently change what an existing `ignore` entry
+ * matches — `[202*]` is a literal bracket here, not a character class.
+ */
+function starOnlyGlob(glob: string): string {
+  return glob.replace(/[?[\]\\]/g, '\\$&')
+}
 
 const DEFAULT_IGNORE = ['_prisma_migrations']
 
@@ -175,7 +190,7 @@ function ignoredTableKeys(
   baseline: Map<string, ResolvedTable>,
   gaps: NormalizedChangeCoverageGap[]
 ): Set<string> {
-  const patterns = [...DEFAULT_IGNORE, ...(input.ignore ?? [])].map(globToRegex)
+  const patterns = [...DEFAULT_IGNORE, ...(input.ignore ?? [])]
   const ignored = new Set<string>()
   for (const [side, tables] of [
     ['declared', declared],
@@ -183,7 +198,13 @@ function ignoredTableKeys(
   ] as const) {
     for (const [key, resolved] of tables) {
       const name = qualifiedTableName(resolved.identity)
-      if (!patterns.some((pattern) => pattern.test(name) || pattern.test(resolved.identity.table)))
+      if (
+        !patterns.some(
+          (pattern) =>
+            globMatches(starOnlyGlob(pattern), name) ||
+            globMatches(starOnlyGlob(pattern), resolved.identity.table)
+        )
+      )
         continue
       if (ignored.has(key)) continue
       ignored.add(key)
@@ -485,11 +506,6 @@ function unparsedGaps(schema: NormalizedSchema, side: Side): NormalizedChangeCov
     location: entry.location,
     reason: entry.reason,
   }))
-}
-
-function globToRegex(glob: string): RegExp {
-  const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-  return new RegExp(`^${escaped}$`)
 }
 
 function gapOrder(left: NormalizedChangeCoverageGap, right: NormalizedChangeCoverageGap): number {

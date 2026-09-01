@@ -1,4 +1,4 @@
-import { globToRegex } from './blacklist-enforcer'
+import { globMatches } from '@/utils/glob'
 import type { RedisMaskRule } from '@/types/blacklist'
 
 const REDACTED = '[REDACTED]'
@@ -12,7 +12,7 @@ interface MatchPlan {
 }
 
 function planFor(key: string, rules: RedisMaskRule[]): MatchPlan | null {
-  const matched = rules.filter((r) => globToRegex(r.keyPattern).test(key))
+  const matched = rules.filter((r) => globMatches(r.keyPattern, key))
   if (matched.length === 0) return null
   const wholeValue = matched.some((r) => !r.fields || r.fields.length === 0)
   const fields = new Set(matched.flatMap((r) => r.fields ?? []))

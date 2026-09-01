@@ -973,7 +973,8 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
             </ul>
 
             <h3 class="mt-8">MongoDB 巢狀黑名單</h3>
-            <p>dbcli 設定的 <code>blacklist.columns[&lt;collection&gt;]</code> 接受點分路徑與一個結尾萬用字元，例如 <code>profile.tokens.*</code>。萬用字元若不在最後一段會被略過，並在 <code>dbcli blacklist list</code> 時提出警告。</p>
+            <p>dbcli 設定的 <code>blacklist.columns[&lt;collection&gt;]</code> 接受點分路徑，每一段都是 glob（<code>*</code>、<code>?</code>、字元類別如 <code>[abc]</code>）。<code>pass*</code> 匹配 <code>password</code>，萬用字元不跨點號，<code>pass*</code> 不會匹配 <code>user.password</code>；中間段的萬用字元也合法，<code>profile.*.email</code> 匹配 <code>profile.&lt;任一段&gt;.email</code>。結尾整段的 <code>*</code> 保留原本的特殊意思：<code>profile.tokens.*</code> 涵蓋 <code>profile.tokens</code> 自己與其下所有後裔。無法編譯的規則（空路徑段、空字串、非字串）會中止操作並拋出錯誤，指出條目與原因，不再靜默略過；讀取遮罩、請求檢查與 <code>insert</code> / <code>update</code>（涵蓋所有 update 運算子）現在比對同一份已編譯規則。</p>
+            <p><strong><code>blacklist.tables</code> 對所有引擎都是 glob。</strong> 先前只有 Redis 與 Elasticsearch 展開萬用字元，<code>tables: ["secrets*"]</code> 在 MongoDB 與 SQL 完全不擋。現在 <code>secrets*</code> 會擋下 collection <code>secrets_2026</code>，SQL 資料表同名者亦然——這是 breaking change，真的叫 <code>report*</code> 的物件要寫成 <code>report\*</code> 才能回到字面比對。</p>
             <p><strong>指名受保護欄位的請求會被拒絕，而不是被遮罩。</strong> 遮罩比對的是文件回來時所在的鍵名，而在 MongoDB 裡那些鍵名是請求自己決定的：<code>[{"$project":{"leak":"$password"}}]</code> 把值放在 <code>leak</code> 底下回傳，<code>[{"$group":{"_id":"$password"}}]</code> 放在 <code>_id</code> 底下——而 <code>_id</code> 為了保住文件參照本來就被遮罩豁免。4.0.0 之前兩者在 <code>query-only</code> 下都跑得動。所以 <code>password</code> 出現在 pipeline、filter 或 update 的任何位置——欄位路徑、物件鍵、或單純一個字串——都會以 <code>BlacklistRejection</code> 拒絕，遮罩則留給一般的文件形狀。這個方向刻意過度拒絕：filter 的<strong>值</strong>剛好等於受保護欄位名（<code>{"status": "password"}</code>）也會被拒。</p>
 
             <h3 class="mt-8">MongoDB schema 採樣</h3>
@@ -1153,7 +1154,7 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
 
             <h3 class="mt-10">C. 特定引擎情境</h3>
             <ul>
-                <li><strong>MongoDB</strong>：schema 採 <code>$sample</code> 抽樣（dot-path 帶 <code>presence</code> / <code>redacted</code>）；blacklist 接受 dotted path 與尾端萬用字元（<code>profile.tokens.*</code>）。寫入在沒有明確運算子（<code>$inc</code> / <code>$push</code> / …）時自動包成 <code>$set</code>。</li>
+                <li><strong>MongoDB</strong>：schema 採 <code>$sample</code> 抽樣（dot-path 帶 <code>presence</code> / <code>redacted</code>）；blacklist 的每一段路徑都是 glob（<code>pass*</code>、<code>profile.*.email</code>），結尾 <code>*</code> 仍涵蓋整個子樹（<code>profile.tokens.*</code>），讀取遮罩與 insert／update 寫入比對同一份規則。寫入在沒有明確運算子（<code>$inc</code> / <code>$push</code> / …）時自動包成 <code>$set</code>。</li>
                 <li><strong>Redis</strong>：<code>q @snippet</code> 只能跑<strong>唯讀</strong>命令；<code>delete</code> 涵蓋 <code>DEL</code> / <code>HDEL</code> / <code>LREM</code> / <code>SREM</code> / <code>ZREM</code>（需 <code>data-admin</code>）；用 key glob blacklist（<code>secrets:*</code>）加上可選值遮罩保護 key。<code>query</code> 沒有 <code>--dry-run</code>——安全來自權限閘門；要預覽刪除請用 <code>delete &lt;key&gt; --dry-run</code>。</li>
                 <li><strong>Elasticsearch</strong>：用 DSL body 或 Lucene 字串查詢（<code>--collection &lt;index&gt;</code>）；用 <code>match_all</code> scroll <code>export</code> 整個 index；<code>shell</code> 開啟 Kibana Dev Tools 風格 REPL。</li>
             </ul>

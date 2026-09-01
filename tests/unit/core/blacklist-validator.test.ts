@@ -753,3 +753,193 @@ describe('the write side walks ancestors as the read side does (ADR-0018 Decisio
     expect(() => validator.checkColumnBlacklistOnWrite('users', ['profile_name'])).not.toThrow()
   })
 })
+
+describe('one rule, one matcher (ADR-0019 Decision 2)', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  it('refuses a write to a field a segment glob names', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['password'])).toThrow()
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['name'])).not.toThrow()
+  })
+
+  it('refuses a write beneath a tail wildcard', () => {
+    const validator = validatorFor({ users: ['user.*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['user.password'])).toThrow()
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['username'])).not.toThrow()
+  })
+
+  it('omits a read a segment glob names', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    const out = validator.filterColumnsForTables(
+      ['users'],
+      [{ id: 1, password: 's3cret', name: 'a' }],
+      ['id', 'password', 'name']
+    )
+    expect(out.omittedColumns).toEqual(['password'])
+    expect(out.filteredRows[0]).toEqual({ id: 1, name: 'a' })
+  })
+
+  it('leaves a literal rule set on the fast path untouched', () => {
+    const validator = validatorFor({ users: ['password'] })
+    const out = validator.filterColumnsForTables(
+      ['users'],
+      [{ id: 1, password: 's3cret' }],
+      ['id', 'password']
+    )
+    expect(out.omittedColumns).toEqual(['password'])
+  })
+})
+
+/**
+ * A glob rule has to reach a child the way a literal one does. Elasticsearch's
+ * `flattenSource` emits `profile.email` as a top-level key with no `profile`
+ * key anywhere, which is exactly what the ancestor walk exists for — and the
+ * walk consults the literal rules only, so `pro*` protected nothing there while
+ * `profile` protected the same document.
+ */
+describe('a glob rule walks ancestors as a literal one does (ADR-0019)', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  const flattened = [{ id: 1, 'profile.email': 'a@b', note: 'keep' }]
+
+  it('omits a flattened child of a glob-named parent', () => {
+    const out = validatorFor({ logs: ['pro*'] }).filterColumnsForTables(['logs'], flattened, [
+      'id',
+      'profile.email',
+      'note',
+    ])
+    expect(out.omittedColumns).toEqual(['profile.email'])
+  })
+
+  it('matches what the literal rule already does', () => {
+    const out = validatorFor({ logs: ['profile'] }).filterColumnsForTables(['logs'], flattened, [
+      'id',
+      'profile.email',
+      'note',
+    ])
+    expect(out.omittedColumns).toEqual(['profile.email'])
+  })
+
+  it('does not omit a merely similar name', () => {
+    const out = validatorFor({ logs: ['pro*'] }).filterColumnsForTables(
+      ['logs'],
+      [{ id: 1, other_field: 'x' }],
+      ['id', 'other_field']
+    )
+    expect(out.omittedColumns).toEqual([])
+  })
+})
+
+/**
+ * ADR-0019 Decision 3 says an uncompilable rule stops the operation. The read
+ * mask enforced it; the two paths that compile only the wildcard subset dropped
+ * the `rejected` list on the floor, so on SQL — which has no read mask — a
+ * malformed wildcard rule was silently no rule at all.
+ */
+describe('an uncompilable wildcard rule refuses on every path (ADR-0019 Decision 3)', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  it('refuses a write rather than ignoring the rule', () => {
+    const validator = validatorFor({ users: ['a..b*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['anything'])).toThrow(/a\.\.b\*/)
+  })
+
+  it('refuses a read rather than returning the rows', () => {
+    const validator = validatorFor({ users: ['a..b*'] })
+    expect(() =>
+      validator.filterColumnsForTables(['users'], [{ id: 1, secret: 'x' }], ['id', 'secret'])
+    ).toThrow(/a\.\.b\*/)
+  })
+
+  it('leaves a well-formed wildcard rule working', () => {
+    const validator = validatorFor({ users: ['sec*'] })
+    const out = validator.filterColumnsForTables(
+      ['users'],
+      [{ id: 1, secret: 'x' }],
+      ['id', 'secret']
+    )
+    expect(out.omittedColumns).toEqual(['secret'])
+  })
+})
+
+/**
+ * MEDIUM-1 from review: the write side's ancestor walk consulted the literal
+ * rules only, so `pass_data.x` was refused under a rule `pass_data` and
+ * permitted under `pass*`. The request-side check happens to catch it today,
+ * which by ADR-0019 Decision 2's own standard is not a reason to leave it.
+ */
+describe('the write side walks ancestors for glob rules too', () => {
+  const validatorFor = (columns: Record<string, string[]>) =>
+    new BlacklistValidator(
+      new BlacklistManager({
+        connection: {
+          system: 'postgresql',
+          host: 'h',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+        },
+        permission: 'admin',
+        blacklist: { tables: [], columns },
+      } as never)
+    )
+
+  it('refuses a write to a child of a glob-named parent', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['pass_data.x'])).toThrow()
+  })
+
+  it('matches what the literal rule already does', () => {
+    const validator = validatorFor({ users: ['pass_data'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['pass_data.x'])).toThrow()
+  })
+
+  it('does not refuse an unrelated path', () => {
+    const validator = validatorFor({ users: ['pass*'] })
+    expect(() => validator.checkColumnBlacklistOnWrite('users', ['other.x'])).not.toThrow()
+  })
+})

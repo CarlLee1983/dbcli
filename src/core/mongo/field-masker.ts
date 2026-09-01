@@ -1,5 +1,7 @@
-import type { BlacklistConfig } from '@/types/blacklist'
+import { BlacklistError, type BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { escapeGlob } from '@/utils/glob'
+import { globMatches } from '@/utils/glob'
 import type { MongoCollectionScope } from './collection-references'
 
 const REDACTED = '[REDACTED]'
@@ -27,12 +29,18 @@ export function maskMongoRowsForCollections(
     const rules = columns[scope.collection] ?? findCaseInsensitive(columns, scope.collection)
     if (!rules || rules.length === 0) return atTopLevel
 
-    // Same rules, re-anchored under the embedding path. Keyed by a name that
-    // cannot collide with a real collection.
+    // Same rules, re-anchored under the embedding path. The prefix is the
+    // request's `as` name, not a pattern, so it is escaped before being spliced
+    // into one — a `\` in it read as glob syntax and disabled the rule
+    // (ADR-0019 Decision 5). Keyed by a name that cannot collide with a real
+    // collection.
     const prefixKey = `\u0000${scope.collection}@${scope.prefix}`
     return maskMongoRows(atTopLevel, prefixKey, {
       ...blacklist,
-      columns: { ...columns, [prefixKey]: rules.map((rule) => `${scope.prefix}.${rule}`) },
+      columns: {
+        ...columns,
+        [prefixKey]: rules.map((rule) => `${escapeGlob(scope.prefix as string)}.${rule}`),
+      },
     })
   }, rows)
 }
@@ -46,11 +54,24 @@ export function maskMongoRows(
   const raw = columns[collection] ?? findCaseInsensitive(columns, collection)
   if (!raw || raw.length === 0) return rows
 
-  const { patterns } = compilePatterns(raw)
+  const { patterns, rejected } = compilePatterns(raw)
+  // A rule the matcher cannot read is a rule that protects nothing, and the
+  // caller prints "Some fields may have been redacted" either way — the notice
+  // was the operator's only evidence the blacklist worked. ADR-0019 Decision 3.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    throw new BlacklistError(
+      `blacklist.columns for '${collection}' has entries this matcher cannot read: ${detail}`,
+      collection,
+      'READ'
+    )
+  }
   if (patterns.length === 0) return rows
 
+  // A segment is a glob since ADR-0019, so this asks whether the pattern
+  // covers `_id` rather than comparing its text.
   const idAffected = patterns.some(
-    (p) => p.segments.length === 1 && p.segments[0] === '_id' && !p.wildcardTail
+    (p) => p.segments.length === 1 && !p.wildcardTail && globMatches(p.segments[0]!, '_id')
   )
   if (idAffected) {
     console.error(

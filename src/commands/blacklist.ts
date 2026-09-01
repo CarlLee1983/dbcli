@@ -48,34 +48,37 @@ const DEFAULT_CONFIG_PATH = '.dbcli'
  * 仍然拒絕的是**會靜靜變成別的意思**的形狀：逗號（條目會被展開成多個目標，
  * 一次加一個才說得清楚）、路徑分隔、空白。
  */
-const VALID_TABLE_NAME = /^[a-zA-Z0-9_.*?:@[\]-]+$/
+const VALID_TABLE_NAME = /^[a-zA-Z0-9_.*?:@[\]\\-]+$/
 
-/** Valid column name regex (alphanumeric + underscore) */
-const VALID_COLUMN_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+/**
+ * Valid column entry: an identifier, or a glob over one (ADR-0019 Decision 1).
+ *
+ * `pass*` is a working rule now, so refusing it here would send the operator to
+ * hand-edit the config — the failure the table-name rule below already records.
+ * A dot is still refused: `parseColumnIdentifier` needs it to separate the
+ * table from the column, and a nested path (`profile.ssn`) written on this side
+ * would be indistinguishable from a schema-qualified table.
+ */
+const VALID_COLUMN_NAME = /^[a-zA-Z0-9_*?[\]\\-]+$/
 
 /**
  * Validate table name format
  */
-/** glob 字元只有在會被當成 glob 執行的引擎上才有意義。 */
-const GLOB_CHARS = /[*?[\]]/
-
 /**
  * 名稱驗證，但問「這個寫法對這個引擎有沒有意義」。
  *
  * `isValidTableName` 在第八輪被放寬到接受 `-`、`.`、`:`、`*`——Elasticsearch 的
- * index 名與 Redis 的 key glob 需要它們，而原本的 SQL 識別字規則把 ES 使用者
- * 逼去手編設定檔。但放寬不看連線類型，於是 PostgreSQL 或 MongoDB 的使用者也能
- * 加入 `secret*`，而那兩個引擎的黑名單比對是字面相等（`blacklist-manager.ts`
+ * index 名與 Redis 的 key glob 需要它們。第九輪之後這裡曾經反過來，對 SQL 與
+ * MongoDB 拒絕 glob，理由是那兩個引擎的比對是字面相等（`blacklist-manager.ts`
  * 的 `Set.has`）——條目永遠不會命中，CLI 卻回報成功。
  *
- * 使用者以為設了、`blacklist list` 也說設了、實際零保護：這正是第八輪在修的
- * 那一型缺陷，由第八輪的修補本身製造出來。
+ * **ADR-0019 Decision 4 把那個理由取消了**：`isTableBlacklisted` 現在對所有引擎
+ * 都走 glob，所以 `secrets*` 在 PostgreSQL 與 MongoDB 上都是有效規則，拒絕它只
+ * 會把人逼回手編設定檔。程式碼裡的斷言本身要當成待驗證的宣稱——這一段的前一個
+ * 版本就是活生生的例子。
  */
-export function isValidTableNameForSystem(name: string, system: string | undefined): boolean {
-  if (!isValidTableName(name)) return false
-  const literalMatching =
-    system === 'postgresql' || system === 'mysql' || system === 'mariadb' || system === 'mongodb'
-  return !(literalMatching && GLOB_CHARS.test(name))
+export function isValidTableNameForSystem(name: string, _system: string | undefined): boolean {
+  return isValidTableName(name)
 }
 
 export function isValidTableName(name: string): boolean {

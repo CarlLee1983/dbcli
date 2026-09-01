@@ -1,4 +1,5 @@
 import { typeFamily } from '@/core/orm-drift/normalized-schema'
+import { globMatches } from '@/utils/glob'
 import type {
   NormalizedColumn,
   NormalizedForeignKey,
@@ -32,9 +33,18 @@ export interface DriftReport {
 
 const DEFAULT_IGNORE = ['_prisma_migrations']
 
-function globToRegex(glob: string): RegExp {
-  const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-  return new RegExp(`^${escaped}$`)
+/**
+ * An orm-drift ignore glob, in the syntax it has always had: `*` is the only
+ * wildcard and every other metacharacter is literal.
+ *
+ * Escaping the rest and handing it to `globMatches` keeps that syntax exactly
+ * while dropping the `* -> .*` compilation these files used, which backtracks
+ * the same way ADR-0019 Decision 5 removed elsewhere. Reading the pattern as a
+ * full glob instead would silently change what an existing `ignore` entry
+ * matches — `[202*]` is a literal bracket here, not a character class.
+ */
+function starOnlyGlob(glob: string): string {
+  return glob.replace(/[?[\]\\]/g, '\\$&')
 }
 
 function tableMap(schema: NormalizedSchema, defaultSchema?: string): Map<string, NormalizedTable> {
@@ -92,7 +102,7 @@ export function compareNormalized(
   const tableKeys = new Set([...ormTables.keys(), ...dbTables.keys()])
   const extraDefaultIgnore = opts.extraDefaultIgnore ?? []
   const defaultIgnore = [...DEFAULT_IGNORE, ...extraDefaultIgnore]
-  const ignorePatterns = opts.ignore.map(globToRegex)
+  const ignorePatterns = opts.ignore
   const targetLabel = opts.targetLabel ?? 'database'
   const entries: DriftEntry[] = []
 
@@ -104,7 +114,10 @@ export function compareNormalized(
     const table = qualifiedTableName(normalizedTable.identity)
     const isDefaultIgnored = defaultIgnore.includes(normalizedTable.identity.table)
 
-    if (isDefaultIgnored || ignorePatterns.some((pattern) => pattern.test(table))) {
+    if (
+      isDefaultIgnored ||
+      ignorePatterns.some((pattern) => globMatches(starOnlyGlob(pattern), table))
+    ) {
       entries.push(
         entryWithProposals({
           category: 'unmanaged',

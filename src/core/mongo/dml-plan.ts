@@ -193,7 +193,7 @@ function classifyMongoUpdate(setDoc: Record<string, unknown>): MongoOperatorClas
       tierFactors.push({
         code: 'mongo_rename_operator',
         severity: 'warn',
-        message: `Update uses ${ops.join(', ')}; field rename does not exfiltrate data but can break readers.`,
+        message: `Update uses ${ops.join(', ')}; a renamed field keeps its value under a name the read mask does not know.`,
       })
     } else if (tier === 'ARITHMETIC') {
       tierFactors.push({
@@ -288,7 +288,19 @@ function applyColumnBlacklist(
     }
   }
   if (raw.length === 0) return
-  const { patterns } = compilePatterns(raw)
+  const { patterns, rejected } = compilePatterns(raw)
+  // ADR-0019 Decision 3: a rule the matcher cannot read is not a reason to
+  // plan the write as though it were unprotected.
+  if (rejected.length > 0) {
+    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+    pushFactor(
+      factors,
+      'blacklist_unreadable',
+      'block',
+      `blacklist.columns for '${target}' has entries this matcher cannot read: ${detail}`
+    )
+    return
+  }
   if (patterns.length === 0) return
   for (const field of fields) {
     if (matchAny(field, patterns)) {
@@ -364,7 +376,7 @@ function buildSuggestedCommands(target: string, factors: QueryRiskFactor[]): str
   return []
 }
 
-function flattenInsertPaths(data: Record<string, unknown>, prefix = ''): string[] {
+export function flattenInsertPaths(data: Record<string, unknown>, prefix = ''): string[] {
   const out: string[] = []
   for (const [k, v] of Object.entries(data)) {
     const path = prefix === '' ? k : `${prefix}.${k}`

@@ -30,6 +30,7 @@ import { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import { resolveConfigPath } from '@/utils/config-path'
 import { previewInsert } from '@/core/mongo/dry-run-formatter'
+import { flattenInsertPaths } from '@/core/mongo/dml-plan'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
@@ -171,7 +172,7 @@ export async function insertCommand(
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       blacklistValidator.checkTableBlacklist('INSERT', table, [])
-      blacklistValidator.checkColumnBlacklistOnWrite(table, Object.keys(data), 'INSERT')
+      blacklistValidator.checkColumnBlacklistOnWrite(table, flattenInsertPaths(data), 'INSERT')
 
       const preview = `SET ${table} ... (Redis Insert)`
 
@@ -253,7 +254,7 @@ export async function insertCommand(
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)
       blacklistValidator.checkTableBlacklist('INSERT', table, [])
-      blacklistValidator.checkColumnBlacklistOnWrite(table, Object.keys(data), 'INSERT')
+      blacklistValidator.checkColumnBlacklistOnWrite(table, flattenInsertPaths(data), 'INSERT')
 
       const preview = previewInsert(table, data)
 

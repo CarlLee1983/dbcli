@@ -1,6 +1,6 @@
 # Elasticsearch shell enforces the permission tier
 
-**Status:** ready-for-agent
+**Status:** Delivered in 4.0.0 (2026-08-30); retained as a design record
 **Date:** 2026-08-30
 **Severity:** Critical — permission tier bypass in the current supported major (3.x)
 **Target release:** 4.0.0, with a user advisory

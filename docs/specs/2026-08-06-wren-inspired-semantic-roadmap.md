@@ -1,8 +1,11 @@
 # WrenAI 借鑑功能：語意層後續規格
 
 **Date:** 2026-08-06
-**Status:** Slices 1–2 implemented; Slice 3 specification refined, with no
-implementation authorized yet
+**Status:** Slices 1–2 implemented. Slice 3's agent-driven half is delivered —
+SQD-01 through SQD-04, including `dbcli semantic draft validate` — and its
+provider-driven half (SQD-05, SQD-06) is not awaiting engineering: ADR-0005
+defers it as a settled fail-closed policy, reopened only by an approved product
+and security record clearing that ADR's checklist.
 **Depends on:**
 [`2026-08-06-semantic-context-mvp-design.md`](2026-08-06-semantic-context-mvp-design.md)
 and [`docs/adr/0004-database-access-stays-a-cli-surface.md`](../adr/0004-database-access-stays-a-cli-surface.md).

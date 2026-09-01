@@ -1,6 +1,13 @@
 # MongoDB 與 SQL 的黑名單缺口，以及 audit 的其餘問題（第九輪）
 
-**狀態**：已確認，未修復。與
+**狀態（2026-09-01）**：全部十二則已處置——MongoDB 1–2 於 ADR-0015，3–6 於
+ADR-0019（第 3 則實測後不成立，見該則的更新），SQL 7–9 於 ADR-0018，audit 10 於
+ADR-0017、11 與 11b 於 ADR-0016、12 補上註解。大小寫折疊的跨引擎不對稱由 ADR-0020
+收尾，驗證過程另外找到的巢狀 glob 缺口記在
+`docs/specs/2026-09-01-nested-glob-rules-on-the-sql-read-path.md`，也已修復。
+以下保留原始記錄。
+
+**狀態（原始）**：已確認，未修復。與
 `docs/specs/2026-08-30-redis-blacklist-gaps.md` 同一輪、同一個理由——那一輪的
 問題是「**一個比對函式，有沒有把它要比的兩樣東西都正規化？**」，而
 `fix/es-shell-permission-enforcement` 只收 Elasticsearch 這條線的修補。

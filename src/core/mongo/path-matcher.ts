@@ -89,6 +89,16 @@ export function compilePatterns(raw: ReadonlyArray<unknown>): CompileResult {
  */
 const FOLD_CASE = { caseInsensitive: true } as const
 
+/**
+ * Whether one pattern segment matches one path segment, folded.
+ *
+ * Exported so a caller walking a record level by level asks the same question
+ * `matchAny` asks, rather than restating the fold or the glob semantics.
+ */
+export function matchSegment(pattern: string, segment: string): boolean {
+  return globMatches(pattern, segment, FOLD_CASE)
+}
+
 export function matchAny(path: string, patterns: ReadonlyArray<MongoPathPattern>): boolean {
   if (patterns.length === 0) return false
   const pathSegments = path.split('.')

@@ -127,3 +127,12 @@ describe('a $lookup prefix is a literal field name, not a pattern', () => {
     expect(out).toEqual([{ _id: 1, zzx: { password: 'p1' } }])
   })
 })
+
+// An array is a container, not a path segment, at whatever depth: an element
+// that was itself an array used to be returned untouched, so a document held
+// its plaintext under a rule the SQL read path masked.
+test('masking descends through nested arrays', () => {
+  const blacklist = { enabled: true, tables: [], columns: { users: ['list.ss*'] } }
+  const out = maskMongoRows([{ _id: 1, list: [[{ ssn: 'SECRET' }]] }], 'users', blacklist as never)
+  expect(JSON.stringify(out)).not.toContain('SECRET')
+})

@@ -298,6 +298,84 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed).toBeLessThan(400)
   })
 
+  it('Column filtering (nested wildcard rules over a nested column): < 60ms per call', () => {
+    // The walk added so a dotted wildcard rule reaches a nested key: a rule set
+    // with one dotted wildcard in it makes the masker enumerate the paths below
+    // every top-level key that holds a record. Bounded twice — only such rules
+    // trigger it, and only to the depth the longest of them could reach — but a
+    // `jsonb` column of 20 keys over 1000 rows is the shape it costs on.
+    const rows = Array.from({ length: 1000 }, (_, r) => {
+      const profile: Record<string, unknown> = {}
+      for (let k = 0; k < 20; k++) profile[`k${k}`] = r
+      return { id: r, profile }
+    })
+    const columns = Array.from({ length: 10 }, (_, i) => `profile.miss${i}*`)
+    const config = { ...baseConfig, blacklist: { tables: [], columns: { users: columns } } }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('users', rows, ['id', 'profile']).filteredRows
+    )
+
+    // 4-10ms locally depending on load; 35ms keeps the same ~3x CI margin the
+    // other cases in this file are set with, measured from the slower end.
+    // Ten rules that match nothing are carried through every key of every row,
+    // which depth narrowing cannot help with — they all match the head. What
+    // makes it cheap is the transition memo: the same (rule set, key) question
+    // is asked once per result rather than once per row. Without it this shape
+    // measured 43ms, and 50 such rules 190ms.
+    report('Column filtering (nested wildcard rules, all miss)', elapsed, 35)
+    expect(elapsed).toBeLessThan(35)
+  })
+
+  it('Column filtering (nested wildcard rule matching every row): < 60ms per call', () => {
+    // The half the miss case cannot see. A matching rule makes the walk find
+    // something, which is where the removal happens, and the removal used to be
+    // driven by the *keys* it found: this shape has 20 of them per row.
+    const rows = Array.from({ length: 1000 }, (_, r) => {
+      const profile: Record<string, unknown> = {}
+      for (let k = 0; k < 20; k++) profile[`k${k}`] = r
+      return { id: r, profile }
+    })
+    const config = {
+      ...baseConfig,
+      blacklist: { tables: [], columns: { users: ['profile.k*'] } },
+    }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('users', rows, ['id', 'profile']).filteredRows
+    )
+
+    report('Column filtering (nested wildcard rule, all hit)', elapsed, 25)
+    expect(elapsed).toBeLessThan(25)
+  })
+
+  it('Column filtering (nested wildcard rule hitting a different key per row): < 80ms per call', () => {
+    // The shape that made the first implementation quadratic: the rule matches
+    // a key that is unique to each row, so listing the keys it hit grew a set
+    // with one entry per key per row and rebuilt every record once per entry.
+    // 200 rows measured 1.8s that way, and 1000 rows a full minute; matching on
+    // the rule instead makes this linear.
+    const rows = Array.from({ length: 1000 }, (_, r) => {
+      const profile: Record<string, unknown> = {}
+      for (let k = 0; k < 20; k++) profile[`u${r}_secret${k}`] = r
+      return { id: r, profile }
+    })
+    const config = {
+      ...baseConfig,
+      blacklist: { tables: [], columns: { users: ['profile.u*'] } },
+    }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('users', rows, ['id', 'profile']).filteredRows
+    )
+
+    report('Column filtering (nested wildcard rule, key per row)', elapsed, 40)
+    expect(elapsed).toBeLessThan(40)
+  })
+
   it('Config loading - typical blacklist: < 5ms', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 

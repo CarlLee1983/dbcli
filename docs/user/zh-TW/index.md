@@ -1130,7 +1130,7 @@ dbcli 設定內的 `blacklist.columns[<collection>]` 接受點分路徑，每一
 }
 ```
 
-`pass*` 匹配 `password`；萬用字元不跨點號，`pass*` 不會匹配 `user.password`。中間段的萬用字元一樣合法，`profile.*.email` 匹配 `profile.<任一段>.email`。結尾整段的 `*` 保留原本的特殊意思：`profile.tokens.*` 涵蓋 `profile.tokens` 自己與其下所有後裔。無法編譯的規則——空路徑段（`a..b`）、空字串、非字串——會中止操作並拋出錯誤，訊息會指出是哪個條目、原因為何；先前這類規則會被靜默略過，CLI 仍照樣印出「Some fields may have been redacted」。讀取遮罩、`$project` / `$group` 等請求檢查、`insert` 與 `update`（涵蓋所有 update 運算子，不只 `$set` / `$unset`）現在都比對同一份已編譯規則，不會再出現規則擋得住讀卻擋不住寫的落差。SQL 連線會忽略含 `.` 的條目。
+`pass*` 匹配 `password`；萬用字元不跨點號，`pass*` 不會匹配 `user.password`。中間段的萬用字元一樣合法，`profile.*.email` 匹配 `profile.<任一段>.email`。結尾整段的 `*` 保留原本的特殊意思：`profile.tokens.*` 涵蓋 `profile.tokens` 自己與其下所有後裔。無法編譯的規則——空路徑段（`a..b`）、空字串、非字串——會中止操作並拋出錯誤，訊息會指出是哪個條目、原因為何；先前這類規則會被靜默略過，CLI 仍照樣印出「Some fields may have been redacted」。讀取遮罩、`$project` / `$group` 等請求檢查、`insert` 與 `update`（涵蓋所有 update 運算子，不只 `$set` / `$unset`）現在都比對同一份已編譯規則，不會再出現規則擋得住讀卻擋不住寫的落差。SQL 與 Elasticsearch 連線同樣認得含 `.` 的條目：字面的（`profile.ssn`）與帶萬用字元的（`profile.ss*`）都會下潛巢狀記錄——PostgreSQL 的 `jsonb` 欄位、Elasticsearch 的 `_source` 物件——把命中的鍵拿掉，其餘鍵保留。Elasticsearch 攤平後產生的點號鍵（`profile.ssn` 直接是頂層鍵名）也照樣命中。
 
 **指名受保護欄位的請求會被拒絕，而不是被遮罩。** 遮罩比對的是文件回來時所在的鍵名，而在 MongoDB 裡那些鍵名是請求自己決定的：`[{"$project":{"leak":"$password"}}]` 把值放在 `leak` 底下回傳，`[{"$group":{"_id":"$password"}}]` 放在 `_id` 底下——而 `_id` 為了保住文件參照本來就被遮罩豁免。4.0.0 之前兩者在 `query-only` 下都跑得動。所以 `password` 出現在 pipeline、filter 或 update 的任何位置——欄位路徑、物件鍵、或單純一個字串——都會以 `BlacklistRejection` 拒絕，遮罩則留給一般的文件形狀。
 

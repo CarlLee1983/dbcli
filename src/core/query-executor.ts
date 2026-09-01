@@ -153,7 +153,7 @@ export class QueryExecutor {
       // 6. Apply blacklist column filtering if validator is present
       let filteredRows = rows
       let securityNotification: string | undefined
-      let omittedColumns: string[] = []
+      let reachesOmitted: (path: string) => boolean = () => false
 
       // No length check: an empty reference list is handled by the validator as
       // "could not identify the tables", which applies every column rule rather
@@ -166,7 +166,7 @@ export class QueryExecutor {
         )
         filteredRows = filterResult.filteredRows
         if (filterResult.omittedColumns.length > 0) {
-          omittedColumns = filterResult.omittedColumns
+          reachesOmitted = filterResult.reachesOmitted
           columnNames = columnNames.filter((col) => !filterResult.omittedColumns.includes(col))
           securityNotification = this.blacklistValidator.buildSecurityNotification(
             referencedTables[0] ?? '',
@@ -182,12 +182,12 @@ export class QueryExecutor {
           options.fieldSelection.mode === 'include'
             ? {
                 mode: 'include' as const,
-                paths: options.fieldSelection.paths.filter(
-                  (path) =>
-                    !omittedColumns.some(
-                      (omitted) => path === omitted || path.startsWith(`${omitted}.`)
-                    )
-                ),
+                // Asked of the result rather than compared against its strings:
+                // a wildcard rule is named in `omittedColumns` by its text, and
+                // `--fields profile.SS_num` under `profile.ss*` would otherwise
+                // survive this filter and come back as `null` where the literal
+                // form of the same rule drops the field entirely.
+                paths: options.fieldSelection.paths.filter((path) => !reachesOmitted(path)),
               }
             : options.fieldSelection
         const projection = projectRows(filteredRows, fieldSelection)

@@ -159,7 +159,9 @@ that path enforced no wildcard rule at all, so its 35ms bought nothing. 74ms is
 what enforcing costs, after the response's trail is folded once per level rather
 than per key.
 
-**A gap this work found and did not close.** On the SQL and Elasticsearch read
+**A gap this work found and did not close.** *(Closed on 2026-09-01, in the
+branch that followed this one; the paragraph is left as written because it is
+what the measurement said at the time.)* On the SQL and Elasticsearch read
 path a dotted rule reaches a nested key only when it is literal: verified
 against PostgreSQL 16, `profile.SS_num` masks and `profile.ss*` returns the
 value, while `profile.*` masks the whole column. The MongoDB read mask handles

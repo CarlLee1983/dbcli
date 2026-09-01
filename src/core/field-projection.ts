@@ -1,3 +1,5 @@
+import { matchSegment, type MongoPathPattern } from './mongo/path-matcher'
+
 export type FieldSelection =
   | { mode: 'include'; paths: readonly string[] }
   | { mode: 'exclude'; paths: readonly string[] }
@@ -84,6 +86,22 @@ export function hasFieldPath(
  * `--fields` path is the operator naming keys of the document in front of them.
  * ADR-0020.
  */
+export interface OmitFieldOptions extends FieldPathOptions {
+  /**
+   * Wildcard rules to remove as well, decided during one walk of each row.
+   *
+   * A dotted wildcard rule can match a different key in every row, so listing
+   * the keys it hit and removing them by name meant one full record rebuild per
+   * key per row: 200 rows of 20 row-specific keys measured 1.8s. The pattern
+   * removes what it matches where the walk already is.
+   *
+   * These are rules that name something *below* a top-level key. A single-
+   * segment pattern here would remove top-level keys, which `paths` already
+   * covers by name.
+   */
+  readonly patterns?: ReadonlyArray<MongoPathPattern>
+}
+
 export interface FieldPathOptions {
   readonly caseInsensitive?: boolean
   /**
@@ -93,12 +111,221 @@ export interface FieldPathOptions {
   readonly alreadyFolded?: boolean
 }
 
+/**
+ * A rule as the walk carries it: the segments still to match, and the rule it
+ * came from so a match can be reported against the entry the operator wrote.
+ */
+interface LiveRule {
+  readonly root: MongoPathPattern
+  /** Which rule, and how much of it is consumed — the pair that names a state. */
+  readonly rootIndex: number
+  readonly offset: number
+  readonly segments: ReadonlyArray<string>
+  readonly wildcardTail: boolean
+}
+
+/**
+ * The rules still live one level down from `key`, and whether `key` is itself
+ * the path one of them names.
+ *
+ * A key consumes as many segments as it has dot-separated parts, not one: a
+ * record's key may itself contain a dot — `flattenSource` produces exactly
+ * that, and `readPath` and `omitPath` each carry a branch for it — so asking
+ * `matchSegment('b', 'b.c')` would decide no rule can reach that branch and
+ * copy it untouched. The rule was still reported as omitted, so the value came
+ * back in full under a heading that said it had been removed.
+ */
+function narrow(rules: ReadonlyArray<LiveRule>, key: string): { drop: boolean; live: LiveRule[] } {
+  const parts = key.includes('.') ? key.split('.') : [key]
+  const live: LiveRule[] = []
+  for (const rule of rules) {
+    const remaining = rule.segments.length
+    if (remaining < parts.length && !rule.wildcardTail) continue
+    let matches = true
+    for (let i = 0; i < Math.min(remaining, parts.length); i++) {
+      if (!matchSegment(rule.segments[i]!, parts[i]!)) {
+        matches = false
+        break
+      }
+    }
+    if (!matches) continue
+    // The rule's segments are used up at this node, so this node is the path it
+    // names — and for the tail form, everything beneath it as well.
+    if (remaining <= parts.length) return { drop: true, live: [] }
+    live.push({
+      root: rule.root,
+      rootIndex: rule.rootIndex,
+      offset: rule.offset + parts.length,
+      segments: rule.segments.slice(parts.length),
+      wildcardTail: rule.wildcardTail,
+    })
+  }
+  return { drop: false, live }
+}
+
+function liveRulesOf(patterns: ReadonlyArray<MongoPathPattern>): LiveRule[] {
+  return patterns.map((pattern, index) => ({
+    root: pattern,
+    rootIndex: index,
+    offset: 0,
+    segments: pattern.segments,
+    wildcardTail: pattern.wildcardTail,
+  }))
+}
+
+/**
+ * `narrow` memoised as state transitions, which is what makes a wide result set
+ * cheap.
+ *
+ * `narrow` is a pure function of (rule set, key), and a result set repeats the
+ * same key names row after row, so the same question is asked thousands of
+ * times. Interning each rule set as a state turns the walk into a table lookup:
+ * a rule set is identified by which rules are in it and how far each has been
+ * consumed, so the answer for `(state, key)` is computed once for the whole
+ * call. Without it, 1000 rows x 20 keys x 10 rules that all match the head
+ * measured 43ms, and 50 such rules 190ms — the shape a real blacklist has, with
+ * many rules hanging off one head.
+ *
+ * The cap is on the transition table, which is what grows with the data. The
+ * interned states are bounded by the rule set itself — a state is a subset of
+ * the rules with an offset each — and clearing the table only costs speed,
+ * since the function behind it is pure and re-derives the same answers.
+ */
+const NARROW_STATE_LIMIT = 4096
+
+/**
+ * The answer for one `(state, key)` step. A discriminated union rather than a
+ * `next` that is meaningless when `drop` is set: reading a sentinel state id by
+ * mistake would return an empty rule set, which means "copy this untouched" to
+ * the remover and "stop walking" to the detector — both fail open. The type
+ * makes that unreachable instead of unlikely.
+ */
+type NarrowStep = { readonly drop: true } | { readonly drop: false; readonly next: number }
+
+class NarrowStates {
+  private readonly states: LiveRule[][] = []
+  private readonly ids = new Map<string, number>()
+  private transitions = new Map<string, NarrowStep>()
+
+  constructor(rules: LiveRule[]) {
+    this.intern(rules)
+  }
+
+  rules(state: number): ReadonlyArray<LiveRule> {
+    const rules = this.states[state]
+    // An unknown state is a bug in this file, not an input; answering it with
+    // an empty rule set would silently stop masking.
+    if (rules === undefined) throw new Error(`unknown nested-rule state ${state}`)
+    return rules
+  }
+
+  step(state: number, key: string): NarrowStep {
+    // `state` is a decimal number, so the first NUL is always the separator
+    // even when the key contains one.
+    const memoKey = `${state}\u0000${key}`
+    const memo = this.transitions.get(memoKey)
+    if (memo !== undefined) return memo
+    const { drop, live } = narrow(this.rules(state), key)
+    const step: NarrowStep = drop ? { drop: true } : { drop: false, next: this.intern(live) }
+    if (this.transitions.size >= NARROW_STATE_LIMIT) this.transitions = new Map()
+    this.transitions.set(memoKey, step)
+    return step
+  }
+
+  private intern(rules: LiveRule[]): number {
+    // `(rootIndex, offset)` names a live rule completely: its segments are
+    // always `root.segments.slice(offset)`, and the rest is a property of the
+    // rule it came from. The encoding is a canonical form only because `narrow`
+    // filters and never reorders, so `live` is a subsequence of the initial
+    // order — sorting or deduplicating there would give one rule set two ids,
+    // which costs memo hits rather than correctness.
+    const key = rules.map((rule) => `${rule.rootIndex}:${rule.offset}`).join(',')
+    const existing = this.ids.get(key)
+    if (existing !== undefined) return existing
+    const id = this.states.length
+    this.states.push(rules)
+    this.ids.set(key, id)
+    return id
+  }
+}
+
+/**
+ * Report which of `pending` reach something below `row`'s top-level keys.
+ *
+ * The masker compares wildcard rules against the names a result actually
+ * carries. Top-level names it already has; a nested record's keys are not names
+ * anywhere until something walks for them, which is why `profile.ss*` matched
+ * nothing on a PostgreSQL `jsonb` column while `profile.SS_num` matched — the
+ * literal form descends through `hasFieldPath` and the wildcard form had
+ * nothing to compare against.
+ *
+ * Narrowed level by level, the same way `omitMatching` narrows, so a branch no
+ * rule can still reach is never entered: building a dotted path string for
+ * every node and testing it against every rule measured 145ms on 1000
+ * documents of depth 4 where the literal form of the same rule measured 7ms.
+ *
+ * Arrays are transparent, as they are to `readPath`. `isPlainRecord`, not
+ * `isRecord`: a `bytea` column arrives as a Buffer, whose own property names
+ * are every byte index — enumerating those cost 1.3s for a single 1MB value —
+ * and it is also the test `omitPath` and `omitMatching` use to decide what they
+ * can descend into, so a path this reported and they could not remove would be
+ * named in "columns omitted" with its value returned in full.
+ */
+export function collectNestedMatches(
+  row: Record<string, unknown>,
+  states: NestedRuleStates,
+  pending: Set<MongoPathPattern>,
+  onMatch: (pattern: MongoPathPattern) => void
+): void {
+  if (pending.size === 0) return
+  const walk = (value: unknown, state: number, depth: number): void => {
+    if (pending.size === 0 || states.rules(state).length === 0) return
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, state, depth)
+      return
+    }
+    if (!isPlainRecord(value)) return
+    for (const key of Object.getOwnPropertyNames(value)) {
+      const step = states.step(state, key)
+      if (step.drop) {
+        // A top-level key is already answered by name — the caller compares
+        // every rule against the names the result carries — so reporting it
+        // here would add a second entry for one column, and only when the row
+        // happened to hold a nested record elsewhere.
+        if (depth > 0) {
+          // `step` stops at the first rule whose segments are used up, so the
+          // node is reported against every rule that could name it, not one.
+          for (const rule of states.rules(state)) {
+            if (!pending.has(rule.root)) continue
+            if (!narrow([rule], key).drop) continue
+            pending.delete(rule.root)
+            onMatch(rule.root)
+          }
+        }
+        continue
+      }
+      walk(value[key], step.next, depth + 1)
+    }
+  }
+  walk(row, 0, 0)
+}
+
+/** The interned rule set a nested walk steps through. */
+export type NestedRuleStates = NarrowStates
+
+/** Prepare `patterns` for `collectNestedMatches`, once for the whole result. */
+export function compileNestedRules(patterns: ReadonlyArray<MongoPathPattern>): NestedRuleStates {
+  return new NarrowStates(liveRulesOf(patterns))
+}
+
 export function omitFieldPaths(
   rows: readonly Record<string, unknown>[],
   paths: readonly string[],
-  options?: FieldPathOptions
+  options?: OmitFieldOptions
 ): Record<string, unknown>[] {
   const caseInsensitive = options?.caseInsensitive === true
+  const nestedPatterns = options?.patterns ?? []
+  const nestedStates = nestedPatterns.length > 0 ? compileNestedRules(nestedPatterns) : undefined
   // `omitPath` rebuilds the whole record, so running it once per path made this
   // O(rows × paths) full copies — 100 rows against a 50-column blacklist cost 5000
   // rebuilds and ~35ms, which is why the masking benchmark had never met its 5ms
@@ -135,6 +362,12 @@ export function omitFieldPaths(
       if (value !== null && typeof value === 'object') {
         projected = omitPath(projected, segments, caseInsensitive)
       }
+    }
+    // Per row, not per result set: the same reasoning the dotted branch above
+    // records. A single nested row in a thousand would otherwise put every row
+    // through this walk.
+    if (nestedStates !== undefined && hasNestedRecord(row)) {
+      projected = omitMatching(projected, nestedStates, 0)
     }
     return projected as Record<string, unknown>
   }
@@ -260,6 +493,37 @@ function readPath(
   const headKey = ownKey(value, head!, caseInsensitive)
   if (headKey === undefined) return { found: false }
   return readPath(value[headKey], tail, caseInsensitive)
+}
+
+/**
+ * Rebuild `value` without the paths `patterns` match, in one walk.
+ *
+ * Narrowed level by level by the same `narrow` the detection walk uses, so a
+ * branch no rule can still reach is copied without being entered and a key
+ * carrying a dot consumes the segments it spells. Testing every node against
+ * every rule instead measured 842ms on 1000 documents of depth 4 against 7ms
+ * for the literal form of the same rule.
+ */
+function omitMatching(value: unknown, states: NarrowStates, state: number): unknown {
+  if (states.rules(state).length === 0) return value
+  if (Array.isArray(value)) return value.map((item) => omitMatching(item, states, state))
+  if (!isPlainRecord(value)) return value
+  const out: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(value)) {
+    const step = states.step(state, key)
+    if (step.drop) continue
+    defineData(out, key, omitMatching(child, states, step.next))
+  }
+  return out
+}
+
+/** Whether a row holds anything `omitMatching` could descend into. */
+function hasNestedRecord(row: Record<string, unknown>): boolean {
+  for (const key of Object.getOwnPropertyNames(row)) {
+    const value = row[key]
+    if (Array.isArray(value) || isPlainRecord(value)) return true
+  }
+  return false
 }
 
 function omitPath(value: unknown, segments: readonly string[], caseInsensitive: boolean): unknown {

@@ -5,6 +5,7 @@
  * Uses BlacklistManager for lookups and i18n for user-facing messages.
  */
 
+import { isGlobPattern } from '@/utils/glob'
 import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
@@ -82,7 +83,7 @@ function compileGlobRules(
   table: string,
   operation: string
 ): MongoPathPattern[] {
-  const globbed = rules.filter((rule) => /[*?[\\]/.test(rule))
+  const globbed = rules.filter(isGlobPattern)
   if (globbed.length === 0) return []
   // The pattern's text is handed over untouched. `matchAny` folds inside the
   // matcher, where a character class keeps its meaning; lower-casing the text

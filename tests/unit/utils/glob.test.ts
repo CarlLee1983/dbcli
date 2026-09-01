@@ -192,3 +192,16 @@ test('matchesIndexGlob folds without rewriting the pattern', async () => {
   expect(matchesIndexGlob('_all', 'anything')).toBe(true)
   expect(matchesIndexGlob('log-*', 'orders-1')).toBe(false)
 })
+
+// The predicate that decides whether a blacklist entry is handed to the glob
+// matcher or compared as a literal. `]` is deliberately not in it while
+// `escapeGlob` does escape it — a `]` with no `[` before it is a literal to
+// `parseGlob`, so both routes answer the same, and the asymmetry is what stops
+// a future "tidy-up" from moving such names onto the compiled path for nothing.
+test('isGlobPattern names the four metacharacters, and a lone `]` is not one', async () => {
+  const { isGlobPattern, globMatches } = await import('@/utils/glob')
+  expect(['a*', 'a?', 'a[bc]', 'a\\b'].every(isGlobPattern)).toBe(true)
+  expect(isGlobPattern('a]b')).toBe(false)
+  expect(globMatches('a]b', 'a]b')).toBe(true)
+  expect(isGlobPattern('plain_name')).toBe(false)
+})

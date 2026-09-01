@@ -120,8 +120,10 @@ interface ParsedGlob {
  * filtered against the key rules, a table name against every entry — lost that
  * hoist when they moved to `globMatches`, which re-parsed per comparison
  * (measured 6x on 10,000 keys x 5 rules). Memoising here restores it for every
- * caller instead of asking each to hold a compiled form. The keys are blacklist
- * entries, so the map is bounded by the config file.
+ * caller instead of asking each to hold a compiled form. Blacklist entries are
+ * bounded by the config file, but not every pattern comes from one: an
+ * Elasticsearch `--index` expression and a Redis key pattern are supplied by
+ * the request, so the map carries a ceiling — see `PARSED_GLOB_LIMIT`.
  */
 const parsedGlobs = new Map<string, ParsedGlob>()
 
@@ -309,6 +311,24 @@ export function globMatches(glob: string, text: string, options?: GlobMatchOptio
  * silently disabled the rule built around it, since a backslash is the one
  * metacharacter that does not accidentally match itself.
  */
+/**
+ * Whether a string is a glob rather than a literal name.
+ *
+ * `]` is deliberately absent, and the asymmetry with `escapeGlob` — which does
+ * escape it — is load-bearing rather than an oversight: a `]` with no `[` before
+ * it is a literal to `parseGlob`, so a name containing one answers the same
+ * either way, while treating it as a metacharacter would move such a name out
+ * of the literal set and into the compiled one for no gain. Escaping is the
+ * conservative side of the same fact and may cover more.
+ *
+ * One predicate, because the answer decides which of two matchers a rule is
+ * given to: a rule read as a glob by one caller and a literal by another is the
+ * split ADR-0019 and ADR-0020 exist to remove.
+ */
+export function isGlobPattern(value: string): boolean {
+  return /[*?[\\]/.test(value)
+}
+
 export function escapeGlob(literal: string): string {
   return literal.replace(/[*?[\]\\]/g, '\\$&')
 }

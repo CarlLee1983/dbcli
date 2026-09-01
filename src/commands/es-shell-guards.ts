@@ -1,3 +1,4 @@
+import { isGlobPattern } from '@/utils/glob'
 import { t, t_vars } from '@/i18n/message-loader'
 import { indexExpressionReaches } from '@/utils/es-index-target'
 import { routedPathname } from '@/core/permission/elasticsearch'
@@ -271,7 +272,7 @@ function compiledRules(protectedFields: ReadonlySet<string>): CompiledRules {
   const globbed: string[] = []
   const literals = new Set<string>()
   for (const rule of protectedFields) {
-    if (HAS_GLOB_METACHARACTER.test(rule)) globbed.push(rule)
+    if (isGlobPattern(rule)) globbed.push(rule)
     else literals.add(foldFieldPath(rule))
   }
   let globs: MongoPathPattern[] = []
@@ -287,8 +288,6 @@ function compiledRules(protectedFields: ReadonlySet<string>): CompiledRules {
   compiledRuleSets.set(protectedFields, rules)
   return rules
 }
-
-const HAS_GLOB_METACHARACTER = /[*?[\\]/
 
 export function redactFields(node: unknown, fields: Set<string>, trail: string[] = []): unknown {
   return redactWithGlobs(node, compiledRules(fields), trail.map(foldFieldPath))

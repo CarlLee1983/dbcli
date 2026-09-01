@@ -48,7 +48,9 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
 
 - **BREAKING：Elasticsearch shell 遇到讀不懂的欄位規則改為拒絕請求。** 先前
   `pass[word`、`a.**` 這類條目在 ES shell 這條路上被靜默當成字面名稱，於是保護零個
-  欄位；現在它們會讓每一個 `dbcli es` 請求失敗，直到設定改掉為止。拒絕發生在收集
+  欄位；現在它們會讓每一個 `dbcli es` 請求失敗，直到設定改掉為止。同一則的另一半是
+  反斜線：`back\slash` 先前在 ES shell 上遮的是回應鍵 `back\slash`（字面），現在
+  `\` 是跳脫字元，這條規則讀成 `backslash`——與其他引擎一致，但既有設定的意思變了。拒絕發生在收集
   規則的當下，早於送出——擋在回程等於 cluster 已經執行過那個請求。與
   `compileGlobRules`、`maskMongoRows` 同一個理由（ADR-0019 Decision 3）。
 

@@ -15,6 +15,7 @@
  * data; the other one discloses it.
  */
 
+import { isGlobPattern } from '@/utils/glob'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
 import { foldFieldPath } from '@/core/blacklist-fold'
 
@@ -71,7 +72,7 @@ const NAMES_A_FIELD_DYNAMICALLY = '$getField'
  * ADR-0019 Decision 2.
  */
 function globRulesOf(protectedFields: ReadonlySet<string>): MongoPathPattern[] {
-  const globbed = [...protectedFields].filter((rule) => /[*?[\\]/.test(rule))
+  const globbed = [...protectedFields].filter(isGlobPattern)
   if (globbed.length === 0) return []
   const { patterns, rejected } = compilePatterns(globbed)
   // ADR-0019 Decision 3. Dropping these made a malformed rule mean "no rule",

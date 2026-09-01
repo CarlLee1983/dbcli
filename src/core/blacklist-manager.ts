@@ -8,7 +8,7 @@
 
 import type { DbcliConfig } from '@/types'
 import type { BlacklistConfig, BlacklistState } from '@/types/blacklist'
-import { globMatches } from '@/utils/glob'
+import { globMatches, isGlobPattern } from '@/utils/glob'
 import { foldFieldPath } from './blacklist-fold'
 import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
 
@@ -72,7 +72,7 @@ export class BlacklistManager {
     // a character class — `[A-z]` becomes `[a-z]` and loses the six ASCII
     // characters between `Z` and `a` — so the glob scan takes the raw entry and
     // folds inside the matcher instead. ADR-0020 Decision 2.
-    this.wildcardTables = this.rawTables.filter((entry) => /[*?[\\]/.test(entry))
+    this.wildcardTables = this.rawTables.filter(isGlobPattern)
   }
 
   /**
@@ -274,7 +274,7 @@ export class BlacklistManager {
       // A metacharacter makes the entry a pattern and nothing else: leaving it
       // in the literal set as well let equality answer a question the glob
       // semantics answer differently.
-      if (/[*?[\\]/.test(rule)) globbed.push(rule)
+      if (isGlobPattern(rule)) globbed.push(rule)
       else literals.add(foldFieldPath(rule))
     }
     // Rejected entries are not this function's to report: it answers a boolean

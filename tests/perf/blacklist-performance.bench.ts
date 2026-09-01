@@ -267,6 +267,37 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed).toBeLessThan(6)
   })
 
+  it('Column filtering (wide rows, dotted rules that miss on a real nested head): < 60ms per call', () => {
+    // The shape the existing dotted-miss case cannot see. There the rules' heads
+    // (`ns0`..`ns59`) are absent, so `nestedHeads` rejects every one before a row is
+    // touched. Here the head is a real nested object — a PostgreSQL `jsonb` column,
+    // an Elasticsearch `_source` — so every rule reaches `hasFieldPath` and walks all
+    // the rows, which is exactly where case folding could turn a key lookup into a
+    // scan of the row's width. Measured on this machine: 45ms before folding, 417ms
+    // with a scan per lookup, 85ms with the per-record key index.
+    const rows = Array.from({ length: 2000 }, (_, r) => {
+      const row: Record<string, unknown> = { profile: { a: 1, b: 2 } }
+      for (let c = 0; c < 80; c++) row[`c${c}`] = r
+      return row
+    })
+    const columns = Array.from({ length: 40 }, (_, i) => `profile.missing_${i}`)
+    const config = { ...baseConfig, blacklist: { tables: [], columns: { users: columns } } }
+    const validator = new BlacklistValidator(new BlacklistManager(config as any))
+    const columnList = Object.keys(rows[0] ?? {})
+
+    const elapsed = medianElapsed(
+      () => validator.filterColumns('users', rows, columnList).filteredRows
+    )
+
+    // ~70ms locally after folding against ~44ms before it: the fold costs about
+    // 1.6x here. Scaled the same way as the cases above (a CI runner costs roughly
+    // 3x this machine) that is ~210ms there, so the budget is 400ms: it clears CI
+    // with margin and still fails loudly on the 417ms shape this guards, which is
+    // what one uncached key scan per lookup measured.
+    report('Column filtering (wide rows, dotted misses on a real head)', elapsed, 400)
+    expect(elapsed).toBeLessThan(400)
+  })
+
   it('Config loading - typical blacklist: < 5ms', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 

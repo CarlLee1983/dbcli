@@ -147,3 +147,61 @@ test('globMatches and globToRegex agree on escapes and character classes', () =>
   }
   expect(disagreements).toEqual([])
 })
+
+// ADR-0020: the blacklist compares a rule with a name case-insensitively, and
+// it does so *at comparison* rather than by lower-casing the pattern text. The
+// difference is visible in a character class: lower-casing `[A-z]` narrows the
+// set it stands for, while matching case-insensitively does not.
+describe('globMatches case-insensitive option', () => {
+  test('literal runs fold both ways', () => {
+    expect(globMatches('PASS*', 'password', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('pass*', 'PASSWORD', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('PASS*', 'password')).toBe(false)
+  })
+
+  test('a character class matches either case of its members', () => {
+    expect(globMatches('[A-Z]ass', 'pass', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('[a-z]ass', 'Pass', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('[A-Z]ass', 'pass')).toBe(false)
+  })
+
+  test('a negated class stays the complement of the folded set', () => {
+    expect(globMatches('[^a-z]bc', 'Abc', { caseInsensitive: true })).toBe(false)
+    expect(globMatches('[^a-z]bc', '1bc', { caseInsensitive: true })).toBe(true)
+  })
+
+  test('the escaped form of a metacharacter folds too', () => {
+    expect(globMatches('\\A*', 'ab', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('\\A*', 'ab')).toBe(false)
+  })
+
+  test('the two modes do not share a memo entry', () => {
+    expect(globMatches('ABC', 'abc', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('ABC', 'abc')).toBe(false)
+    expect(globMatches('ABC', 'abc', { caseInsensitive: true })).toBe(true)
+  })
+})
+
+// An Elasticsearch index expression is matched against blacklist entries, and
+// the entry is the pattern: lower-casing its text narrowed a character class
+// and the entry stopped reaching an index it covers as written. ADR-0020.
+test('matchesIndexGlob folds without rewriting the pattern', async () => {
+  const { matchesIndexGlob } = await import('@/utils/es-index-target')
+  expect(matchesIndexGlob('[A-z]og-secrets*', '_og-secrets-1')).toBe(true)
+  expect(matchesIndexGlob('LOG-secrets*', 'log-secrets-1')).toBe(true)
+  expect(matchesIndexGlob('_all', 'anything')).toBe(true)
+  expect(matchesIndexGlob('log-*', 'orders-1')).toBe(false)
+})
+
+// The predicate that decides whether a blacklist entry is handed to the glob
+// matcher or compared as a literal. `]` is deliberately not in it while
+// `escapeGlob` does escape it — a `]` with no `[` before it is a literal to
+// `parseGlob`, so both routes answer the same, and the asymmetry is what stops
+// a future "tidy-up" from moving such names onto the compiled path for nothing.
+test('isGlobPattern names the four metacharacters, and a lone `]` is not one', async () => {
+  const { isGlobPattern, globMatches } = await import('@/utils/glob')
+  expect(['a*', 'a?', 'a[bc]', 'a\\b'].every(isGlobPattern)).toBe(true)
+  expect(isGlobPattern('a]b')).toBe(false)
+  expect(globMatches('a]b', 'a]b')).toBe(true)
+  expect(isGlobPattern('plain_name')).toBe(false)
+})

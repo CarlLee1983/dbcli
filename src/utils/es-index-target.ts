@@ -13,6 +13,7 @@
  * class of defect.
  */
 
+import { foldFieldPath } from '@/core/blacklist-fold'
 import { globMatches } from './glob'
 
 /** Percent-decoding and `.`/`..` resolution, applied until the path stops changing. */
@@ -106,9 +107,14 @@ export function expandIndexTargets(target: string): EsIndexTargets {
 
 /** Whether an index pattern could resolve to `name`. Never throws on a hostile pattern. */
 export function matchesIndexGlob(pattern: string, name: string): boolean {
-  const normalized = pattern.toLowerCase() === '_all' ? '*' : pattern.toLowerCase()
+  // The pattern's text is not rewritten. Lower-casing it folded `[A-z]` down to
+  // `[a-z]`, which drops the six ASCII characters between `Z` and `a` from the
+  // class — a blacklist entry that reaches an index name stopped reaching it,
+  // in the fail-open direction. The fold belongs inside the matcher, where a
+  // class keeps its meaning. ADR-0020 Decision 2.
+  const normalized = pattern.toLowerCase() === '_all' ? '*' : pattern
   try {
-    return globMatches(normalized, name.toLowerCase())
+    return globMatches(normalized, name, { caseInsensitive: true })
   } catch {
     // An unparseable pattern is not a licence to allow it.
     return true
@@ -170,7 +176,7 @@ export function indexExpressionReaches(expression: string, blacklisted: string[]
 
   const reachesName = (name: string): boolean =>
     entries.names.some(
-      (entry) => entry.toLowerCase() === name.toLowerCase() || reachesByConvention(name, entry)
+      (entry) => foldFieldPath(entry) === foldFieldPath(name) || reachesByConvention(name, entry)
     ) ||
     // 條目是萬用字元時，比對方向反過來：條目是 pattern，請求的名稱是 subject。
     entries.patterns.some((pattern) => matchesIndexGlob(pattern, name))

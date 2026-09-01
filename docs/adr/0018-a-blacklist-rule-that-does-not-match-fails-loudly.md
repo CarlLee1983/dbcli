@@ -41,6 +41,14 @@ while `filterColumnsForTables` walks dotted ancestors, so under a rule
 
 ## Decision 1: a column name's first segment folds, at comparison rather than at storage
 
+> **Superseded in part by ADR-0020 (2026-09-01).** The whole path folds now, not
+> the first segment alone. What stands is everything below about folding *at
+> comparison* rather than at storage — including the failed first attempt, which
+> is why that boundary is load-bearing. What ADR-0020 reverses is the scope: the
+> write side folded the whole path regardless, so keeping later segments
+> case-sensitive on the read side was an accident rather than a position, and it
+> resolved fail-open on every read.
+
 The rule and the returned column name have their first dot-separated segment
 lower-cased before comparison. That segment is the SQL identifier; it matches
 what table names already do (`blacklist-manager.ts` stores them

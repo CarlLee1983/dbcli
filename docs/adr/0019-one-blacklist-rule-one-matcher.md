@@ -160,7 +160,10 @@ A wildcard-heavy blacklist stops being a way to hang the guard. That was already
 true of Redis and Elasticsearch configs before this branch; it is fixed here
 rather than left, because these decisions put every engine's rules on that path.
 
-**The title overstates one dimension.** Case folding is still three rules, not
+**The title overstates one dimension.** *(Closed by ADR-0020 on 2026-09-01:
+there is one fold rule now, applied over the whole path by every matcher. The
+paragraph below is left as written, because the table under it is the
+measurement that record was built from.)* Case folding is still three rules, not
 one: the write side lower-cases a whole path, the SQL and Elasticsearch read
 side folds the first segment only (ADR-0018 Decision 1), and the MongoDB read
 mask and request side do not fold at all. That asymmetry predates this record —

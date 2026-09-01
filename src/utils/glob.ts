@@ -87,6 +87,15 @@ type GlobToken =
   | { kind: 'any' }
   | { kind: 'class'; test: RegExp }
 
+/**
+ * How `globMatches` compares. `caseInsensitive` folds both sides at comparison
+ * — the blacklist's rule for column and field names, where the request chooses
+ * the case of the name the mask sees. ADR-0020.
+ */
+export interface GlobMatchOptions {
+  readonly caseInsensitive?: boolean
+}
+
 /** A `*`-free run of tokens. `globMatches` slides these along the input. */
 type GlobRun = ReadonlyArray<GlobToken>
 
@@ -111,20 +120,41 @@ interface ParsedGlob {
  * filtered against the key rules, a table name against every entry — lost that
  * hoist when they moved to `globMatches`, which re-parsed per comparison
  * (measured 6x on 10,000 keys x 5 rules). Memoising here restores it for every
- * caller instead of asking each to hold a compiled form. The keys are blacklist
- * entries, so the map is bounded by the config file.
+ * caller instead of asking each to hold a compiled form. Blacklist entries are
+ * bounded by the config file, but not every pattern comes from one: an
+ * Elasticsearch `--index` expression and a Redis key pattern are supplied by
+ * the request, so the map carries a ceiling — see `PARSED_GLOB_LIMIT`.
  */
 const parsedGlobs = new Map<string, ParsedGlob>()
 
-function parseGlob(glob: string): ParsedGlob {
-  const memo = parsedGlobs.get(glob)
+/**
+ * A ceiling on the memo, because not every pattern comes from a config file.
+ *
+ * An Elasticsearch index expression is a pattern the *request* supplies, so a
+ * long-lived shell session would otherwise grow this map with one entry per
+ * expression an operator ever typed. Cleared wholesale rather than evicted one
+ * at a time: the map exists to hoist a parse out of a loop, and a loop refills
+ * what it needs on its next pass.
+ */
+const PARSED_GLOB_LIMIT = 4096
+
+/**
+ * The two modes parse to different tokens — a folded literal, a class compiled
+ * with `i` — so they cannot share a memo entry. `\u0000` cannot appear in a
+ * glob that reached here as a config entry, and even if it did the prefix keeps
+ * the two namespaces apart.
+ */
+function parseGlob(glob: string, caseInsensitive: boolean): ParsedGlob {
+  const key = caseInsensitive ? `i\u0000${glob}` : glob
+  const memo = parsedGlobs.get(key)
   if (memo !== undefined) return memo
-  const parsed = parseGlobUncached(glob)
-  parsedGlobs.set(glob, parsed)
+  const parsed = parseGlobUncached(glob, caseInsensitive)
+  if (parsedGlobs.size >= PARSED_GLOB_LIMIT) parsedGlobs.clear()
+  parsedGlobs.set(key, parsed)
   return parsed
 }
 
-function parseGlobUncached(glob: string): ParsedGlob {
+function parseGlobUncached(glob: string, caseInsensitive: boolean): ParsedGlob {
   const runs: GlobRun[] = []
   let current: GlobToken[] = []
   let leadingStar = false
@@ -140,7 +170,7 @@ function parseGlobUncached(glob: string): ParsedGlob {
     const c = glob[i]!
     if (c === '\\' && i + 1 < glob.length) {
       trailingStar = false
-      current.push({ kind: 'literal', char: glob[++i] as string })
+      current.push(literalToken(glob[++i] as string, caseInsensitive))
       continue
     }
     if (c === '*') {
@@ -162,28 +192,42 @@ function parseGlobUncached(glob: string): ParsedGlob {
       // that is not a valid class, is the literal `[`. An unparseable pattern
       // must not throw out of a security check.
       if (body !== '' && isValidCharacterClass(body)) {
-        current.push({ kind: 'class', test: new RegExp(`^${body}$`, 's') })
+        current.push({
+          kind: 'class',
+          test: new RegExp(`^${body}$`, caseInsensitive ? 'si' : 's'),
+        })
         i = end
         continue
       }
-      current.push({ kind: 'literal', char: '[' })
+      current.push(literalToken('[', caseInsensitive))
       continue
     }
-    current.push({ kind: 'literal', char: c })
+    current.push(literalToken(c, caseInsensitive))
   }
   endRun()
 
   return { runs, leadingStar, trailingStar, anchored: !sawStar }
 }
 
+/**
+ * A literal token, folded now rather than at every comparison.
+ *
+ * The fold lives in the token, not in the pattern text: rewriting the text
+ * would also rewrite a character class, and `[A-z]` lower-cased stands for a
+ * smaller set than it did. ADR-0020.
+ */
+function literalToken(char: string, caseInsensitive: boolean): GlobToken {
+  return { kind: 'literal', char: caseInsensitive ? char.toLowerCase() : char }
+}
+
 /** Whether `run` matches `text` starting at `at`. */
-function runMatchesAt(run: GlobRun, text: string, at: number): boolean {
+function runMatchesAt(run: GlobRun, text: string, at: number, caseInsensitive: boolean): boolean {
   if (at + run.length > text.length) return false
   for (let i = 0; i < run.length; i++) {
     const token = run[i]!
     const ch = text[at + i]!
     if (token.kind === 'literal') {
-      if (token.char !== ch) return false
+      if (token.char !== (caseInsensitive ? ch.toLowerCase() : ch)) return false
     } else if (token.kind === 'class') {
       if (!token.test.test(ch)) return false
     }
@@ -213,12 +257,13 @@ function runMatchesAt(run: GlobRun, text: string, at: number): boolean {
  * a reader expecting "one `?` is one character" would be wrong about both. Prefer this to `globToRegex` wherever the answer is a
  * boolean; the compiled form is only for callers that genuinely need a RegExp.
  */
-export function globMatches(glob: string, text: string): boolean {
-  const { runs, leadingStar, trailingStar, anchored } = parseGlob(glob)
+export function globMatches(glob: string, text: string, options?: GlobMatchOptions): boolean {
+  const caseInsensitive = options?.caseInsensitive === true
+  const { runs, leadingStar, trailingStar, anchored } = parseGlob(glob, caseInsensitive)
 
   if (anchored) {
     const run = runs[0] ?? []
-    return text.length === run.length && runMatchesAt(run, text, 0)
+    return text.length === run.length && runMatchesAt(run, text, 0, caseInsensitive)
   }
   if (runs.length === 0) return true // the glob is nothing but wildcards
 
@@ -228,14 +273,14 @@ export function globMatches(glob: string, text: string): boolean {
 
   if (!leadingStar) {
     const head = runs[0]!
-    if (!runMatchesAt(head, text, 0)) return false
+    if (!runMatchesAt(head, text, 0, caseInsensitive)) return false
     cursor = head.length
     first = 1
   }
   if (!trailingStar) {
     const tail = runs[last - 1]!
     const at = text.length - tail.length
-    if (at < cursor || !runMatchesAt(tail, text, at)) return false
+    if (at < cursor || !runMatchesAt(tail, text, at, caseInsensitive)) return false
     last -= 1
   }
 
@@ -247,7 +292,7 @@ export function globMatches(glob: string, text: string): boolean {
     const run = runs[r]!
     let found = -1
     for (let at = cursor; at + run.length <= limit; at++) {
-      if (runMatchesAt(run, text, at)) {
+      if (runMatchesAt(run, text, at, caseInsensitive)) {
         found = at
         break
       }
@@ -266,6 +311,24 @@ export function globMatches(glob: string, text: string): boolean {
  * silently disabled the rule built around it, since a backslash is the one
  * metacharacter that does not accidentally match itself.
  */
+/**
+ * Whether a string is a glob rather than a literal name.
+ *
+ * `]` is deliberately absent, and the asymmetry with `escapeGlob` — which does
+ * escape it — is load-bearing rather than an oversight: a `]` with no `[` before
+ * it is a literal to `parseGlob`, so a name containing one answers the same
+ * either way, while treating it as a metacharacter would move such a name out
+ * of the literal set and into the compiled one for no gain. Escaping is the
+ * conservative side of the same fact and may cover more.
+ *
+ * One predicate, because the answer decides which of two matchers a rule is
+ * given to: a rule read as a glob by one caller and a literal by another is the
+ * split ADR-0019 and ADR-0020 exist to remove.
+ */
+export function isGlobPattern(value: string): boolean {
+  return /[*?[\\]/.test(value)
+}
+
 export function escapeGlob(literal: string): string {
   return literal.replace(/[*?[\]\\]/g, '\\$&')
 }

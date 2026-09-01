@@ -71,7 +71,10 @@ export function maskMongoRows(
   // A segment is a glob since ADR-0019, so this asks whether the pattern
   // covers `_id` rather than comparing its text.
   const idAffected = patterns.some(
-    (p) => p.segments.length === 1 && !p.wildcardTail && globMatches(p.segments[0]!, '_id')
+    (p) =>
+      p.segments.length === 1 &&
+      !p.wildcardTail &&
+      globMatches(p.segments[0]!, '_id', { caseInsensitive: true })
   )
   if (idAffected) {
     console.error(

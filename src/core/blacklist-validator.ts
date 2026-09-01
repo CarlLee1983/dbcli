@@ -5,16 +5,27 @@
  * Uses BlacklistManager for lookups and i18n for user-facing messages.
  */
 
+import { isGlobPattern } from '@/utils/glob'
 import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
 import { hasFieldPath, omitFieldPaths } from './field-projection'
 import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
+import { foldFieldPath } from './blacklist-fold'
 import {
   expandIndexTargets,
   indexExpressionReaches,
   matchesIndexGlob,
 } from '@/utils/es-index-target'
+
+/**
+ * Every comparison between a rule and a name folds case, rules and names
+ * alike — the same option the MongoDB matcher applies. ADR-0020.
+ */
+const FOLD_CASE = { caseInsensitive: true } as const
+
+/** The same comparison, told that the caller already folded the path it passes. */
+const PRE_FOLDED = { caseInsensitive: true, alreadyFolded: true } as const
 
 /**
  * Deduplicate table names case-insensitively, keeping the first spelling.
@@ -69,13 +80,16 @@ export interface FilterColumnsResult {
  */
 function compileGlobRules(
   rules: ReadonlyArray<string>,
-  fold: (value: string) => string,
   table: string,
   operation: string
 ): MongoPathPattern[] {
-  const globbed = rules.filter((rule) => /[*?[\\]/.test(rule))
+  const globbed = rules.filter(isGlobPattern)
   if (globbed.length === 0) return []
-  const { patterns, rejected } = compilePatterns(globbed.map(fold))
+  // The pattern's text is handed over untouched. `matchAny` folds inside the
+  // matcher, where a character class keeps its meaning; lower-casing the text
+  // here narrowed `[A-z]` to `[a-z]` and a rule that masked a column on `main`
+  // returned it in full with an empty `omittedColumns`. ADR-0020 Decision 2.
+  const { patterns, rejected } = compilePatterns(globbed)
   // ADR-0019 Decision 3, on the paths that have no read mask behind them: a
   // rule the matcher cannot read protects nothing, and dropping it here made
   // SQL answer the request as though the operator had never written it.
@@ -234,18 +248,13 @@ export class BlacklistValidator {
     }
     // The same ancestor walk `filterColumnsForTables` uses: under a rule
     // `profile`, `profile.ssn` was writable and unreadable. ADR-0018 Decision 4.
-    const protectedPaths = new Set(blacklisted.map((name) => name.toLowerCase()))
+    const protectedPaths = new Set(blacklisted.map(foldFieldPath))
     // Rules carrying a wildcard are compiled once and matched through the same
     // path matcher the MongoDB read mask uses, so a rule cannot mean one thing
     // to a write and another to a read. ADR-0019 Decision 2.
-    const globs = compileGlobRules(
-      blacklisted,
-      (value) => value.toLowerCase(),
-      tableName,
-      operation
-    )
+    const globs = compileGlobRules(blacklisted, tableName, operation)
     const conflicts = fields.filter((field) => {
-      const name = field.toLowerCase()
+      const name = foldFieldPath(field)
       if (protectedPaths.has(name)) return true
       if (matchAny(name, globs)) return true
       // One walk, both rule kinds. Consulting the literal set alone refused
@@ -373,7 +382,9 @@ export class BlacklistValidator {
         presentColumns.add(key)
         if (!probeNested) continue
         const value = record[key]
-        if (value !== null && typeof value === 'object') nestedHeads.add(key)
+        // Folded, because the rule this is consulted with is folded: a head
+        // key `Profile` skipped the probe for a rule `profile.ssn`. ADR-0020.
+        if (value !== null && typeof value === 'object') nestedHeads.add(foldFieldPath(key))
       }
     }
     for (const row of rows) {
@@ -389,34 +400,35 @@ export class BlacklistValidator {
       collect(row)
     }
 
-    // A rule and a returned column name are compared case-insensitively on their
-    // *first* segment: that segment is a SQL identifier, and `SELECT password AS
-    // "PASSWORD"` chose the key masking compares against. Later segments are
-    // nested object keys and keep their case. ADR-0018 Decision 1.
-    const foldHead = (path: string): string => {
-      const dot = path.indexOf('.')
-      return dot < 0 ? path.toLowerCase() : path.slice(0, dot).toLowerCase() + path.slice(dot)
+    // A rule and a returned column name are compared case-insensitively over
+    // the whole path: the first segment is a SQL identifier and `SELECT
+    // password AS "PASSWORD"` chose the key masking compares against, and the
+    // later segments fold too so this side answers what the write side answers.
+    // ADR-0020, superseding ADR-0018 Decision 1.
+    const protectedPaths = new Set(blacklistedColumns.map(foldFieldPath))
+    const globRules = compileGlobRules(blacklistedColumns, tables[0] ?? 'unknown', 'SELECT')
+    // Folded name -> every name the rows actually carry that folds to it, which
+    // is what has to be removed. A list rather than one entry: a result holding
+    // both `Password` and `password` had both masked but only one reported, and
+    // the caller filters its header row by exact name — so the other column came
+    // back as an empty column rather than a redacted one, which is the opposite
+    // of what the notification is for.
+    const presentByFolded = new Map<string, string[]>()
+    for (const column of presentColumns) {
+      const folded = foldFieldPath(column)
+      const names = presentByFolded.get(folded)
+      if (names === undefined) presentByFolded.set(folded, [column])
+      else names.push(column)
     }
-    const protectedPaths = new Set(blacklistedColumns.map(foldHead))
-    const globRules = compileGlobRules(
-      blacklistedColumns,
-      foldHead,
-      tables[0] ?? 'unknown',
-      'SELECT'
-    )
-    // Folded name -> the name as the row actually carries it, which is what has
-    // to be removed from the rows.
-    const presentByFolded = new Map<string, string>()
-    for (const column of presentColumns) presentByFolded.set(foldHead(column), column)
 
     const omitted = new Set<string>()
     for (const path of blacklistedColumns) {
       // `presentColumns` first: it is a Set lookup, while the nested probe walks
       // every row. The fail-safe branch above can hand this loop the whole rule set
       // with almost nothing matching, which is exactly the shape that probe is worst at.
-      const present = presentByFolded.get(foldHead(path))
+      const present = presentByFolded.get(foldFieldPath(path))
       if (present !== undefined) {
-        omitted.add(present)
+        for (const name of present) omitted.add(name)
         continue
       }
       // Everything the probe could still find is reachable only by descending from a
@@ -426,11 +438,16 @@ export class BlacklistValidator {
       // heuristic: it is the same condition `readPath` would evaluate, decided once
       // per rule instead of once per row. 60 dotted misses over 1000 rows measured
       // 12.1ms before and 0.2ms after, and only then is `split` worth hoisting.
+      // Both numbers predate case folding, which is why the benchmark file also
+      // carries a wide-row case whose rule heads *do* exist: this check cannot
+      // skip those, and folding is what makes the probe behind it expensive.
       const dot = path.indexOf('.')
       if (dot < 0) continue
-      if (!nestedHeads.has(path.slice(0, dot))) continue
-      const segments = path.split('.')
-      if (rows.some((row) => hasFieldPath(row, segments))) omitted.add(path)
+      if (!nestedHeads.has(foldFieldPath(path.slice(0, dot)))) continue
+      // Folded here, not inside `hasFieldPath`: the probe asks the same rule of
+      // every row, and folding at the entry allocated one array per row.
+      const segments = path.split('.').map(foldFieldPath)
+      if (rows.some((row) => hasFieldPath(row, segments, PRE_FOLDED))) omitted.add(path)
     }
     // Walk each column up to its ancestors rather than testing every rule against
     // every column: `a.b.c` only has to ask about `a` and `a.b`. The other direction
@@ -444,7 +461,7 @@ export class BlacklistValidator {
       // ancestor, so a rule for `.profile` never reached `.profile.ssn`.
       let dot = column.indexOf('.')
       while (dot >= 0) {
-        if (dot > 0 && protectedPaths.has(column.slice(0, dot).toLowerCase())) {
+        if (dot > 0 && protectedPaths.has(foldFieldPath(column.slice(0, dot)))) {
           omitted.add(column)
           break
         }
@@ -462,7 +479,7 @@ export class BlacklistValidator {
     // whole record exists to remove.
     if (globRules.length > 0) {
       for (const column of presentColumns) {
-        const folded = foldHead(column)
+        const folded = foldFieldPath(column)
         if (matchAny(folded, globRules)) {
           omitted.add(column)
           continue
@@ -484,7 +501,7 @@ export class BlacklistValidator {
     }
 
     // Create new row objects without blacklisted top-level or dotted fields.
-    const filteredRows = omitFieldPaths(rows, omittedColumns)
+    const filteredRows = omitFieldPaths(rows, omittedColumns, FOLD_CASE)
 
     return { filteredRows, omittedColumns }
   }

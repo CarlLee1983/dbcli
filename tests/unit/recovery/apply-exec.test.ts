@@ -44,7 +44,11 @@ describe('executeStep', () => {
     })
     expect(r.timedOut).toBe(true)
     expect(r.exitCode).not.toBe(0)
-    expect(r.durationMs).toBeGreaterThanOrEqual(200)
+    // 要驗的是「被逾時砍掉」，不是「剛好等滿 200 ms」。`setTimeout` 可能比
+    // `performance.now()` 的時鐘早一點點觸發——Windows 的計時器粒度約 15.6 ms，
+    // CI 上量到 199 就是這個假象。沒逾時的話這裡會是 5000。
+    expect(r.durationMs).toBeGreaterThanOrEqual(150)
+    expect(r.durationMs).toBeLessThan(5_000)
   })
 
   test('child stdin is closed (does not hang on stdin-reading commands)', async () => {

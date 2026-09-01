@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。
 設計決策記在 `docs/adr/0020-one-fold-rule-for-every-blacklist-comparison.md`。
 
+### Security
+
+- **Redis 的 `dbcli q` 與 `dbcli report` 不再繞過 blacklist。** 自 saved query
+  功能加入後，這兩條路徑用只有 connection、沒有規則的 generic adapter；同時命令層
+  對 Redis 產生空 target，所以 `q @snippet` 可讀出受保護 key 的明文，report 的內建
+  `@diag/redis-key-stats` 也可能把受保護 key 名稱寫進持久報告。現在 generic factory
+  預設接完整 config，Redis target 重用既有 command metadata；確實只測連線的呼叫端
+  必須明寫 `createAdapterWithoutRules`。`inspect` 也先改走安全預設，避免未來加入 Redis
+  物件列舉時重開同一個洞。修補版為 7.0.0；設計取捨見 ADR-0021。
+
 2026-09-01 直接呼叫四個比對器量到的起點——除了最後一列，每一列都是「寫入被拒、
 讀取原文回傳」的設定，而操作者確認規則有效的方式，通常就是看寫入被擋下來：
 

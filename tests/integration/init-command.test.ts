@@ -308,7 +308,7 @@ describe('Init Command Integration Tests', () => {
       database: PG_DATABASE,
     }
 
-    const adapter = AdapterFactory.createAdapter(config)
+    const adapter = AdapterFactory.createAdapterWithoutRules(config)
     try {
       await adapter.connect()
       const isHealthy = await adapter.testConnection()
@@ -342,7 +342,7 @@ describe('Init Command Integration Tests', () => {
       database: PG_DATABASE,
     }
 
-    const adapter = AdapterFactory.createAdapter(config)
+    const adapter = AdapterFactory.createAdapterWithoutRules(config)
     try {
       await adapter.connect()
       expect(false).toBe(true) // 不應該到達這裡
@@ -379,7 +379,7 @@ describe('Init Command Integration Tests', () => {
       timeout: 1000,
     }
 
-    const adapter = AdapterFactory.createAdapter(config)
+    const adapter = AdapterFactory.createAdapterWithoutRules(config)
     try {
       await adapter.connect()
       expect(false).toBe(true) // 不應該到達這裡

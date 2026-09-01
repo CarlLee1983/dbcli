@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { runDiagnostic } from '@/core/report/run-diagnostic'
 import type { ResolvedSnippet } from '@/core/saved-queries'
 import type { DatabaseAdapter, ExecutionResult } from '@/adapters/types'
+import { BlacklistRejection } from '@/adapters/redis/types'
 
 function snippet(meta: Partial<ResolvedSnippet['query']['meta']> = {}): ResolvedSnippet {
   return {
@@ -88,6 +89,26 @@ describe('runDiagnostic', () => {
     })
     expect(ev.status).toBe('error')
     expect(ev.reason).toContain('boom')
+    expect(ev.rows).toEqual([])
+  })
+
+  test('returns skipped when Redis refuses a protected key pattern', async () => {
+    const adapter: DatabaseAdapter = {
+      ...adapterReturning({ rows: [], affectedRows: 0 }),
+      execute: async () => {
+        throw new BlacklistRejection('protected', 'SCAN', null, 'secrets:*')
+      },
+    }
+    const redisSnippet = snippet({ engine: ['redis'] })
+    redisSnippet.query.sqlBody = 'SCAN 0 MATCH * COUNT 100'
+    const ev = await runDiagnostic({
+      snippet: redisSnippet,
+      adapter,
+      engine: 'redis',
+      timeoutMs: 1000,
+      maxRows: 10,
+    })
+    expect(ev.status).toBe('skipped')
     expect(ev.rows).toEqual([])
   })
 
@@ -198,5 +219,52 @@ describe('runDiagnostic', () => {
     expect(executed).toBe(false)
     expect(ev.status).toBe('skipped')
     expect(ev.reason).toMatch(/secrets/)
+  })
+
+  test('refuses Redis evidence that reads a blacklisted key', async () => {
+    const { BlacklistManager } = await import('@/core/blacklist-manager')
+    const { BlacklistValidator } = await import('@/core/blacklist-validator')
+    const manager = new BlacklistManager({
+      connection: {
+        system: 'redis',
+        host: 'h',
+        port: 6379,
+        user: '',
+        password: '',
+        database: '0',
+      },
+      permission: 'query-only',
+      blacklist: { tables: ['secrets:*'], columns: {} },
+    } as never)
+    const redis = snippet({
+      name: '@diag/secret',
+      key: '@diag/secret',
+      engine: ['redis'],
+    })
+    let executed = false
+
+    const ev = await runDiagnostic({
+      snippet: {
+        ...redis,
+        query: { ...redis.query, sqlBody: 'GET secrets:api_key' },
+      },
+      adapter: {
+        ...adapterReturning({ rows: [{ value: 'PLAINTEXT' }], affectedRows: 1 }),
+        execute: async () => {
+          executed = true
+          return { rows: [{ value: 'PLAINTEXT' }], affectedRows: 1 } as never
+        },
+      },
+      engine: 'redis',
+      timeoutMs: 1000,
+      maxRows: 10,
+      blacklistValidator: new BlacklistValidator(manager),
+    })
+
+    expect(executed).toBe(false)
+    expect(ev.status).toBe('skipped')
+    expect(JSON.stringify(ev.rows)).not.toContain('PLAINTEXT')
+    expect(JSON.stringify(ev)).not.toContain('secrets:api_key')
+    expect(JSON.stringify(ev)).not.toContain('secrets:*')
   })
 })

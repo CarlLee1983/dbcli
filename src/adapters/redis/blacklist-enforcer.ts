@@ -35,6 +35,17 @@ export interface CheckResult {
   matchedPattern?: string
 }
 
+export function redisCommandTargets(command: string, args: string[]): string[] {
+  const spec = getCommandSpec(command)
+  if (!spec) return []
+  return [
+    ...expandKeyArity(spec.keyArity, args, args.length)
+      .map((index) => args[index])
+      .filter((key): key is string => key !== undefined),
+    ...userPatterns(spec.keyArity, args),
+  ]
+}
+
 export function checkKeyArgs(command: string, args: string[], rules: string[]): CheckResult {
   if (rules.length === 0) return { ok: true }
   const spec = getCommandSpec(command)

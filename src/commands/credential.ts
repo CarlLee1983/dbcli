@@ -80,7 +80,7 @@ async function verifyNewPassword(
 
   try {
     const config = await configModule.read(storagePath, connectionName)
-    const adapter = AdapterFactory.createAdapter({
+    const adapter = AdapterFactory.createAdapterWithoutRules({
       ...(config.connection as ConnectionOptions),
       password,
     })

@@ -12,6 +12,10 @@ import { globMatches, isGlobPattern } from '@/utils/glob'
 import { foldFieldPath } from './blacklist-fold'
 import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
 
+export function isBlacklistOverrideEnabled(value?: string): boolean {
+  return (value ?? Bun.env.DBCLI_OVERRIDE_BLACKLIST ?? '') === 'true'
+}
+
 /** A table's column rules, split the way comparison needs them. */
 interface CompiledColumnRules {
   readonly literals: ReadonlySet<string>
@@ -65,7 +69,7 @@ export class BlacklistManager {
     private config: DbcliConfig,
     overrideEnvValue?: string
   ) {
-    this.overrideEnabled = (overrideEnvValue ?? Bun.env.DBCLI_OVERRIDE_BLACKLIST ?? '') === 'true'
+    this.overrideEnabled = isBlacklistOverrideEnabled(overrideEnvValue)
     this.state = this.loadBlacklist()
     // Built from the entries as written, not from `state.tables`, which holds
     // them lower-cased for the exact lookup. Folding a pattern's *text* narrows

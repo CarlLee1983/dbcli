@@ -1,5 +1,5 @@
 import { collectInspect } from '@/core/inspect/collector'
-import { AdapterFactory, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory } from '@/adapters'
 import type { DatabaseAdapter } from '@/adapters/types'
 import { configModule } from '@/core/config'
 import {
@@ -82,9 +82,7 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
     warnings.push({ severity: 'warn', message: 'connection config missing after probe' })
     return finalize({ context, sections: [], warnings, generatedAt })
   }
-  const adapter = AdapterFactory.createAdapter(
-    config.connection as ConnectionOptions
-  ) as DatabaseAdapter
+  const adapter = AdapterFactory.createAdapter(config) as DatabaseAdapter
 
   // Report evidence is rendered into the output and the snippets come from
   // user-writable directories, so the blacklist has to reach this path.

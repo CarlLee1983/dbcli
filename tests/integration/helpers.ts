@@ -125,7 +125,7 @@ export async function shouldSkipTests(options: ConnectionOptions): Promise<boole
 
   try {
     const { AdapterFactory } = await import('src/adapters')
-    const adapter = AdapterFactory.createAdapter(options)
+    const adapter = AdapterFactory.createAdapterWithoutRules(options)
     await adapter.connect()
     await adapter.disconnect()
     return false

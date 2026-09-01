@@ -10,6 +10,13 @@ import type { DbcliConfig } from '@/types'
 import type { BlacklistConfig, BlacklistState } from '@/types/blacklist'
 import { globMatches } from '@/utils/glob'
 import { foldFieldPath } from './blacklist-fold'
+import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
+
+/** A table's column rules, split the way comparison needs them. */
+interface CompiledColumnRules {
+  readonly literals: ReadonlySet<string>
+  readonly globs: ReadonlyArray<MongoPathPattern>
+}
 
 /**
  * Manager class for loading and querying blacklist rules.
@@ -21,7 +28,7 @@ import { foldFieldPath } from './blacklist-fold'
  * this for Elasticsearch index names; measured 2026-08-31, the SQL side did
  * not, so `[" password "]` and `['"password"']` were accepted and dead.
  */
-function normalizeBlacklistEntry(raw: string): string {
+export function normalizeBlacklistEntry(raw: string): string {
   const trimmed = raw.trim()
   const quote = trimmed[0]
   if ((quote === '"' || quote === '`') && trimmed.length > 1 && trimmed.endsWith(quote)) {
@@ -51,6 +58,8 @@ function assertNotTableQualified(tableKey: string, column: string): void {
 export class BlacklistManager {
   private state: BlacklistState
   private overrideEnabled: boolean
+  /** Table entries as the config wrote them, for the glob scan. */
+  private readonly rawTables: string[] = []
 
   constructor(
     private config: DbcliConfig,
@@ -58,17 +67,28 @@ export class BlacklistManager {
   ) {
     this.overrideEnabled = (overrideEnvValue ?? Bun.env.DBCLI_OVERRIDE_BLACKLIST ?? '') === 'true'
     this.state = this.loadBlacklist()
-    this.wildcardTables = [...this.state.tables].filter((entry) => /[*?[\\]/.test(entry))
+    // Built from the entries as written, not from `state.tables`, which holds
+    // them lower-cased for the exact lookup. Folding a pattern's *text* narrows
+    // a character class — `[A-z]` becomes `[a-z]` and loses the six ASCII
+    // characters between `Z` and `a` — so the glob scan takes the raw entry and
+    // folds inside the matcher instead. ADR-0020 Decision 2.
+    this.wildcardTables = this.rawTables.filter((entry) => /[*?[\\]/.test(entry))
   }
 
   /**
    * Deserialize config.blacklist JSON into efficient Set/Map structures.
    * Case-insensitive table names (stored as lowercase). Column entries are
-   * stored as written and folded where they are compared — see ADR-0018.
+   * stored as written and folded where they are compared — see ADR-0018 and
+   * ADR-0020. Table entries are kept twice: lower-cased in `tables` for the
+   * exact lookup, and as written in `rawTables` for the glob scan, because
+   * folding a pattern's text narrows a character class.
    *
    * @returns BlacklistState with Set<string> for tables, Map<string, Set<string>> for columns
    */
   loadBlacklist(): BlacklistState {
+    // Reset rather than append: this method is public, and a second call used to
+    // grow `rawTables` with a duplicate of every entry.
+    this.rawTables.length = 0
     const tables = new Set<string>()
     const columns = new Map<string, Set<string>>()
 
@@ -84,7 +104,9 @@ export class BlacklistManager {
     if (Array.isArray(blacklistConfig.tables)) {
       for (const tableName of blacklistConfig.tables) {
         if (typeof tableName === 'string') {
-          tables.add(normalizeBlacklistEntry(tableName).toLowerCase())
+          const entry = normalizeBlacklistEntry(tableName)
+          this.rawTables.push(entry)
+          tables.add(entry.toLowerCase())
         } else {
           console.warn(
             `[BlacklistManager] Invalid table name in blacklist config: ${JSON.stringify(tableName)}`
@@ -122,9 +144,11 @@ export class BlacklistManager {
             const entry = normalizeBlacklistEntry(col)
             assertNotTableQualified(normalizeBlacklistEntry(tableName), entry)
             // Stored as written. Folding happens where names are *compared*
-            // (ADR-0018 Decision 1) rather than here, because an entry's later
-            // segments are nested object keys — `profile.SSN` in a JSON column
-            // is not a SQL identifier and case-folding it would be wrong.
+            // (ADR-0018 Decision 1, kept by ADR-0020) rather than here: a rule
+            // folded on the way in is compared against a returned name that was
+            // not, which is the failure both records exist to remove. What
+            // ADR-0020 changed is how much of a path folds — the whole of it,
+            // later segments included — not where.
             columnSet.add(entry)
           } else {
             console.warn(
@@ -159,7 +183,7 @@ export class BlacklistManager {
     const name = tableName.toLowerCase()
     if (this.state.tables.has(name)) return true
     for (const pattern of this.wildcardTables) {
-      if (globMatches(pattern, name)) return true
+      if (globMatches(pattern, tableName, { caseInsensitive: true })) return true
     }
     return false
   }
@@ -176,8 +200,9 @@ export class BlacklistManager {
 
   /**
    * Check if a specific column in a table is blacklisted.
-   * Both are case-insensitive on their first segment. A column entry's later
-   * segments are nested object keys and keep their case (ADR-0018).
+   * Rule and name are compared case-insensitively over the whole dotted path,
+   * and a rule carrying a wildcard is matched through the shared matcher
+   * (ADR-0020).
    *
    * @param tableName Table name
    * @param columnName Column name
@@ -223,11 +248,43 @@ export class BlacklistManager {
     // Both sides folded by the one function every matcher calls. Folding only
     // the name asked about, against rules stored as written, made a rule
     // `Password` answer `false` for the column it names. ADR-0020.
+    //
+    // The folded view is derived and cached per rule set, not stored in place
+    // of it: `state.columns` still holds the entries as the config wrote them,
+    // which is what ADR-0018's storage-side boundary is about. Rebuilding it
+    // per call turned a `Set.has` into a scan — 1000 lookups measured 0.3ms
+    // before and 1.7ms after; with the cache it is back to 0.3ms.
     const target = foldFieldPath(normalizeBlacklistEntry(columnName))
+    const compiled = this.foldedColumnsFor(columnSet)
+    if (compiled.literals.has(target)) return true
+    // Wildcard rules count here too. Without them `compactVisibleSchema` and
+    // `dbcli schema` gave different answers for `pass*` — the summary an agent
+    // reads listed a column the masker redacts. ADR-0019 Decision 2.
+    return compiled.globs.length > 0 && matchAny(target, compiled.globs)
+  }
+
+  private readonly foldedColumns = new WeakMap<Set<string>, CompiledColumnRules>()
+
+  private foldedColumnsFor(columnSet: Set<string>): CompiledColumnRules {
+    const memo = this.foldedColumns.get(columnSet)
+    if (memo !== undefined) return memo
+    const literals = new Set<string>()
+    const globbed: string[] = []
     for (const rule of columnSet) {
-      if (foldFieldPath(rule) === target) return true
+      // A metacharacter makes the entry a pattern and nothing else: leaving it
+      // in the literal set as well let equality answer a question the glob
+      // semantics answer differently.
+      if (/[*?[\\]/.test(rule)) globbed.push(rule)
+      else literals.add(foldFieldPath(rule))
     }
-    return false
+    // Rejected entries are not this function's to report: it answers a boolean
+    // for a schema summary, and the paths that mask data raise on them first.
+    const folded: CompiledColumnRules = {
+      literals,
+      globs: globbed.length > 0 ? compilePatterns(globbed).patterns : [],
+    }
+    this.foldedColumns.set(columnSet, folded)
+    return folded
   }
 
   /**

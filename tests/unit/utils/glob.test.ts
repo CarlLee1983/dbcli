@@ -181,3 +181,14 @@ describe('globMatches case-insensitive option', () => {
     expect(globMatches('ABC', 'abc', { caseInsensitive: true })).toBe(true)
   })
 })
+
+// An Elasticsearch index expression is matched against blacklist entries, and
+// the entry is the pattern: lower-casing its text narrowed a character class
+// and the entry stopped reaching an index it covers as written. ADR-0020.
+test('matchesIndexGlob folds without rewriting the pattern', async () => {
+  const { matchesIndexGlob } = await import('@/utils/es-index-target')
+  expect(matchesIndexGlob('[A-z]og-secrets*', '_og-secrets-1')).toBe(true)
+  expect(matchesIndexGlob('LOG-secrets*', 'log-secrets-1')).toBe(true)
+  expect(matchesIndexGlob('_all', 'anything')).toBe(true)
+  expect(matchesIndexGlob('log-*', 'orders-1')).toBe(false)
+})

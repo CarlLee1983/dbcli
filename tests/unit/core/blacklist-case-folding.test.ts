@@ -76,6 +76,28 @@ describe('a rule and a field name are compared case-insensitively everywhere', (
     }).toEqual({ sqlRead: true, mongoRead: true, request: true, write: true })
   })
 
+  // A pattern's *text* must never be lower-cased: `[A-z]` folded to `[a-z]`
+  // loses the six ASCII characters between `Z` and `a`, so the rule quietly
+  // protects less than it says. ADR-0020 Decision 2. This branch broke it on
+  // the SQL read and write sides before the rule was folded inside the matcher
+  // instead — `profile._sn` came back in full with an empty `omittedColumns`.
+  test('a character class in a rule is not narrowed by folding', () => {
+    const result = validatorFor('profile.[A-z]sn').filterColumnsForTables(
+      ['users'],
+      [{ id: 1, 'profile._sn': 'plain' }],
+      ['id', 'profile._sn']
+    )
+    expect(result.omittedColumns).toEqual(['profile._sn'])
+    expect(JSON.stringify(result.filteredRows)).not.toContain('plain')
+  })
+
+  test('a character class rule refuses the same write it masks', () => {
+    expect(writeRefuses('[A-z]assword', '_assword')).toBe(true)
+    expect(mongoReadMasks('[A-z]assword', '_assword')).toBe(true)
+    expect(requestRefuses('[A-z]assword', '_assword')).toBe(true)
+    expect(sqlReadMasks('[A-z]assword', '_assword')).toBe(true)
+  })
+
   test('a name that is not the rule is still not protected', () => {
     expect(sqlReadMasks('password', 'passwordless')).toBe(false)
     expect(mongoReadMasks('password', 'passwordless')).toBe(false)
@@ -102,11 +124,45 @@ describe('a rule and a field name are compared case-insensitively everywhere', (
     expect(nestedMasks('profile.city_name')).toBe(false)
   })
 
+  // Same defect on the table side: entries are stored lower-cased for the exact
+  // lookup, and the glob scan used to read them from there.
+  // Both columns are masked either way; the notification is the operator's only
+  // evidence the blacklist worked, and the caller filters its header row by
+  // exact name, so a name left out of it comes back as an empty column.
+  test('every column a rule folds onto is reported, not just one', () => {
+    const result = validatorFor('password').filterColumnsForTables(
+      ['users'],
+      [{ id: 1, Password: 'a', password: 'b' }],
+      ['id', 'Password', 'password']
+    )
+    expect(result.omittedColumns.sort()).toEqual(['Password', 'password'])
+    expect(JSON.stringify(result.filteredRows)).toBe('[{"id":1}]')
+  })
+
+  test('a table rule with a character class is not narrowed by folding', () => {
+    const manager = new BlacklistManager({
+      blacklist: { enabled: true, tables: ['[A-z]og-secrets*'], columns: {} },
+    } as never)
+    expect(manager.isTableBlacklisted('_og-secrets-1')).toBe(true)
+    expect(manager.isTableBlacklisted('LOG-SECRETS-1')).toBe(true)
+    expect(manager.isTableBlacklisted('orders')).toBe(false)
+  })
+
   test('isColumnBlacklisted folds the rule as well as the name', () => {
     const blacklist = { enabled: true, tables: [], columns: { users: ['Password'] } }
     const manager = new BlacklistManager({ blacklist } as never)
     expect(manager.isColumnBlacklisted('users', 'password')).toBe(true)
     expect(manager.isColumnBlacklisted('users', 'PASSWORD')).toBe(true)
+    expect(manager.isColumnBlacklisted('users', 'note')).toBe(false)
+  })
+
+  // This answers the schema summary an agent reads. Consulting only the literal
+  // rules listed a column the read mask redacts — one rule, two answers.
+  test('isColumnBlacklisted answers wildcard rules too', () => {
+    const blacklist = { enabled: true, tables: [], columns: { users: ['PASS*'] } }
+    const manager = new BlacklistManager({ blacklist } as never)
+    expect(manager.isColumnBlacklisted('users', 'password')).toBe(true)
+    expect(manager.isColumnBlacklisted('users', 'Password_hash')).toBe(true)
     expect(manager.isColumnBlacklisted('users', 'note')).toBe(false)
   })
 })

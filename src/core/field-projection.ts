@@ -65,7 +65,15 @@ export function hasFieldPath(
   segments: readonly string[],
   options?: FieldPathOptions
 ): boolean {
-  return readPath(row, segments, options?.caseInsensitive === true).found
+  const caseInsensitive = options?.caseInsensitive === true
+  // Folded once here rather than at every level of every row: the masker asks
+  // this question once per dotted rule per row, so folding inside `readPath`
+  // repeated the same `toLowerCase` tens of thousands of times.
+  const folded =
+    caseInsensitive && options?.alreadyFolded !== true
+      ? segments.map((segment) => segment.toLowerCase())
+      : segments
+  return readPath(row, folded, caseInsensitive).found
 }
 
 /**
@@ -78,6 +86,11 @@ export function hasFieldPath(
  */
 export interface FieldPathOptions {
   readonly caseInsensitive?: boolean
+  /**
+   * The segments passed in are already folded. Lets a caller asking the same
+   * rule of many rows fold it once instead of once per row.
+   */
+  readonly alreadyFolded?: boolean
 }
 
 export function omitFieldPaths(
@@ -181,10 +194,35 @@ function validatePath(path: string): void {
 /** The row's value at `head`, found case-insensitively when asked. */
 function headValue(row: Record<string, unknown>, head: string, caseInsensitive: boolean): unknown {
   if (!caseInsensitive) return row[head]
-  for (const key of Object.keys(row)) {
-    if (key.toLowerCase() === head) return row[key]
+  const key = foldedKeys(row).get(head)
+  return key === undefined ? undefined : row[key]
+}
+
+/**
+ * A record's own keys indexed by their folded form, built once per record.
+ *
+ * Scanning the keys per lookup made the masker's nested probe quadratic in a
+ * row's width: it asks `readPath` once per dotted rule per row and `readPath`
+ * asks twice per level, so 2000 rows x 81 columns x 40 missing rules measured
+ * 45ms unfolded and 417ms folded. The index restores the constant-time lookup
+ * `hasOwnProperty` gave.
+ *
+ * Keyed weakly on the record, which every caller here treats as immutable —
+ * masking returns new objects rather than editing a row in place. A record
+ * mutated after it was indexed would be matched against its former key names.
+ */
+const foldedKeyIndex = new WeakMap<object, Map<string, string>>()
+
+function foldedKeys(value: Record<string, unknown>): Map<string, string> {
+  const memo = foldedKeyIndex.get(value)
+  if (memo !== undefined) return memo
+  const index = new Map<string, string>()
+  for (const key of Object.getOwnPropertyNames(value)) {
+    const folded = key.toLowerCase()
+    if (!index.has(folded)) index.set(folded, key)
   }
-  return undefined
+  foldedKeyIndex.set(value, index)
+  return index
 }
 
 /** The record's own key equal to `name`, folded when asked, or `undefined`. */
@@ -193,14 +231,12 @@ function ownKey(
   name: string,
   caseInsensitive: boolean
 ): string | undefined {
-  if (!caseInsensitive) {
-    return Object.prototype.hasOwnProperty.call(value, name) ? name : undefined
-  }
-  const target = name.toLowerCase()
-  for (const key of Object.getOwnPropertyNames(value)) {
-    if (key.toLowerCase() === target) return key
-  }
-  return undefined
+  // The exact key first, in both modes: a rule whose case already matches the
+  // data — the common shape — never builds an index. In the folded mode `name`
+  // arrives lower-cased from `hasFieldPath`, so this compares folded to folded.
+  if (Object.prototype.hasOwnProperty.call(value, name)) return name
+  if (!caseInsensitive) return undefined
+  return foldedKeys(value).get(name)
 }
 
 function readPath(

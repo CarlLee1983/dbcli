@@ -46,6 +46,41 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
 
 ### Fixed
 
+- **BREAKING：Elasticsearch shell 遇到讀不懂的欄位規則改為拒絕請求。** 先前
+  `pass[word`、`a.**` 這類條目在 ES shell 這條路上被靜默當成字面名稱，於是保護零個
+  欄位；現在它們會讓每一個 `dbcli es` 請求失敗，直到設定改掉為止。拒絕發生在收集
+  規則的當下，早於送出——擋在回程等於 cluster 已經執行過那個請求。與
+  `compileGlobRules`、`maskMongoRows` 同一個理由（ADR-0019 Decision 3）。
+
+- **Elasticsearch shell 是同一份設定的第五個比對器。** `namesProtectedField` 與
+  `redactFields` 只做精確字串比對，也完全不編譯 glob，於是 `columns: {users: ["Password"]}`
+  （或 `["pass*"]`、`["profile.ssn"]`）之下，`dbcli es` 把 `dbcli query --index` 遮掉的
+  明文原樣送回來。兩者現在走同一個折疊函式與同一個 `compilePatterns` / `matchAny`；
+  無法解析的規則改為在收集規則時就拒絕，而不是在回應的第一個鍵上——擋在回程等於
+  cluster 已經執行過那個請求了。
+
+- **`blacklist.tables` 的 glob 掃描讀的是小寫化過的條目。** `tables: ["[A-z]ecrets"]`
+  認不得 `_ecrets`：字元類別在儲存時被折小寫，`Z` 與 `a` 之間六個 ASCII 字元離開了
+  集合。改為保留原樣條目建 glob 清單，折疊留在比對。同一型的第三處在
+  `matchesIndexGlob`，ES 的 index 運算式比對也是拿黑名單條目本身當 pattern。
+
+- **含跳脫字元的規則在 ES shell 上曾因大小寫給出相反的答案。** 含 metachar 的條目
+  同時留在字面集合裡，於是 `back\slash` 靠字串相等命中自己（原文剛好已是小寫），
+  而 `Back\Slash` 兩邊都接不到——glob 語意把 `\S` 讀成字面 `S`，字面比對又比不過
+  折疊後的名稱。含 metachar 的條目現在只當 pattern。
+
+- **一條規則折到多個回傳欄位時，只有一個被列進 `omittedColumns`。** 結果同時有
+  `Password` 與 `password` 時兩欄都被遮，但通知只列一個，而呼叫端用精確名稱過濾
+  表頭，於是另一欄以空白欄位回來，看起來像 NULL 而不是「被遮蔽」。那份通知是操作者
+  判斷黑名單有沒有生效的唯一證據。
+
+- **`isColumnBlacklisted` 完全不看萬用字元規則。** 它回答的是 `compactVisibleSchema`
+  與 `dbcli schema` 給 agent 看的那份摘要，於是 `pass*` 之下摘要照列 `password`，而讀取
+  遮罩會把它遮掉——同一條規則，兩個答案。現在走同一個 `compilePatterns` / `matchAny`。
+
+- **ES shell 的規則不走設定載入器的正規化。** `'"Token"'` 在其他引擎上有效，在
+  `dbcli es` 上是死規則，因為這裡只做 `trim()`。改為共用 `normalizeBlacklistEntry`。
+
 - **`isColumnBlacklisted` 折了被問的欄位名，沒折規則。** 規則 `Password` 對它自己
   指名的欄位回答 `false`——比對的兩側折得不一樣，正是 ADR-0018 記下的那個失敗形狀。
   這條路徑餵的是 `context` 的 schema 摘要。

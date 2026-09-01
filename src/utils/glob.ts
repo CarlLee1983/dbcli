@@ -126,6 +126,17 @@ interface ParsedGlob {
 const parsedGlobs = new Map<string, ParsedGlob>()
 
 /**
+ * A ceiling on the memo, because not every pattern comes from a config file.
+ *
+ * An Elasticsearch index expression is a pattern the *request* supplies, so a
+ * long-lived shell session would otherwise grow this map with one entry per
+ * expression an operator ever typed. Cleared wholesale rather than evicted one
+ * at a time: the map exists to hoist a parse out of a loop, and a loop refills
+ * what it needs on its next pass.
+ */
+const PARSED_GLOB_LIMIT = 4096
+
+/**
  * The two modes parse to different tokens — a folded literal, a class compiled
  * with `i` — so they cannot share a memo entry. `\u0000` cannot appear in a
  * glob that reached here as a config entry, and even if it did the prefix keeps
@@ -136,6 +147,7 @@ function parseGlob(glob: string, caseInsensitive: boolean): ParsedGlob {
   const memo = parsedGlobs.get(key)
   if (memo !== undefined) return memo
   const parsed = parseGlobUncached(glob, caseInsensitive)
+  if (parsedGlobs.size >= PARSED_GLOB_LIMIT) parsedGlobs.clear()
   parsedGlobs.set(key, parsed)
   return parsed
 }

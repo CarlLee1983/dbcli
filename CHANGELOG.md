@@ -8,17 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 一條規則擋得住寫、擋不住讀，差別只在大小寫
 
 ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。
-設計決策記在 `docs/adr/0020-one-fold-rule-for-every-blacklist-comparison.md`。
-
-### Security
-
-- **Redis 的 `dbcli q` 與 `dbcli report` 不再繞過 blacklist。** 自 saved query
-  功能加入後，這兩條路徑用只有 connection、沒有規則的 generic adapter；同時命令層
-  對 Redis 產生空 target，所以 `q @snippet` 可讀出受保護 key 的明文，report 的內建
-  `@diag/redis-key-stats` 也可能把受保護 key 名稱寫進持久報告。現在 generic factory
-  預設接完整 config，Redis target 重用既有 command metadata；確實只測連線的呼叫端
-  必須明寫 `createAdapterWithoutRules`。`inspect` 也先改走安全預設，避免未來加入 Redis
-  物件列舉時重開同一個洞。修補版為 7.0.0；設計取捨見 ADR-0021。
+這一版把它收成一套，並在收的過程中發現同一份設定還有一條完全繞過它的路——規則從來
+沒有抵達 `dbcli q` 與 `dbcli report` 用的那個 adapter。設計決策記在
+`docs/adr/0020-one-fold-rule-for-every-blacklist-comparison.md` 與
+`docs/adr/0021-connection-only-adapters-say-without-rules.md`。
 
 2026-09-01 直接呼叫四個比對器量到的起點——除了最後一列，每一列都是「寫入被拒、
 讀取原文回傳」的設定，而操作者確認規則有效的方式，通常就是看寫入被擋下來：
@@ -31,6 +24,23 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
 | `profile.ssn` | `profile.SSN` | **returned** | **returned** | **allowed** | refused |
 | `profile.ss*` | `profile.SS_num` | **returned** | **returned** | **allowed** | refused |
 | `pass*` | `password` | masked | masked | refused | refused |
+
+### Security
+
+- **Redis 的 `dbcli q` 與 `dbcli report` 不再繞過 blacklist。** 自 saved query
+  功能加入後，這兩條路徑用的是只有 connection、沒有規則的 generic adapter，命令層
+  同時對 Redis 產生空 target：`q @snippet` 讀得出受保護 key 的明文，內建的
+  `@diag/redis-key-stats` 會把受保護 key 名稱寫進持久報告。上面那張表量的是折疊，
+  這一條連折疊都到不了——規則根本不在那個 adapter 上。generic factory 現在預設接
+  完整 config，Redis target 重用既有的 command metadata；確實只測連線的呼叫端
+  （`init` 的設定測試、credential 輪替的密碼驗證）必須明寫
+  `createAdapterWithoutRules`。`inspect` 目前不列舉 Redis 物件，一併改走安全預設是
+  為了之後加上時不會重開同一個洞。設計取捨見 ADR-0021。
+
+- **開發相依的三筆勸告釘到範圍外。** `autoprefixer > browserslist`（兩筆 high）與
+  `tailwindcss > postcss-nested > postcss-selector-parser`（一筆 low）都只在
+  devDependencies 的傳遞相依裡，上游的版本範圍還沒放寬，改用既有的 `overrides` 釘住。
+  不影響安裝 dbcli 的人拿到的相依樹。
 
 ### Changed
 
@@ -55,6 +65,18 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
   鍵是他們可能真的要分開處理的兩個欄位。
 
 ### Fixed
+
+- **一套折疊規則沒有走到巢狀下潛與規則挑選。** 折疊改成 `foldCase` 之後（`ς`→`σ`、
+  `İ`→`i`），剩下的裸 `toLowerCase` 就不再是同一套：規則 `profile.ΑΣ` 在巢狀下潛時
+  回傳它指名的鍵、遮掉它沒指名的；設定在 `ασ` 底下的規則對 collection `ΑΣ` 查不到，
+  而查不到的意思是「沒有規則」——明文原樣回傳；Elasticsearch 條目 `ΑΣ` 構得到 index
+  `ασ`、構不到它的 backing index `.ds-ασ-2026`，擋不住 backing index 就是擋不住讀取。
+  `dbcli check` 另有一個獨立的形狀：它從 `BlacklistManager` 的私有 state 撈 Set 自己
+  比對，那份 Set 只有字面條目，萬用字元規則對這條路徑等於不存在（ADR-0019 Decision 4），
+  現在問 `isTableBlacklisted`。`dbcli doctor` 的未保護欄位報告先前完全不折，規則換個
+  大小寫寫就漏報。`blacklist-validator` 的 dedupe 與三個 `dml-plan`、
+  `query-risk-analyzer` 的顧問輸出不會放行（強制執行仍在 `BlacklistManager`），一併
+  收攏——一套折疊規則就是一套。
 
 - **折疊本身仍然是兩套規則，差別只在一個希臘字母。** `foldFieldPath` 折整串、
   `globMatches` 折每個字元，而 `String.prototype.toLowerCase` 的 `Final_Sigma`

@@ -1,4 +1,7 @@
 import type { DatabaseAdapter } from '@/adapters/types'
+import { parseRedisCommand } from '@/adapters/redis-adapter'
+import { redisCommandTargets } from '@/adapters/redis/blacklist-enforcer'
+import { BlacklistRejection } from '@/adapters/redis/types'
 import {
   prepareExecution,
   SavedQueryError,
@@ -46,8 +49,12 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
   }
 
   let prepared
+  let redisTokens: string[] = []
   try {
     prepared = prepareExecution(input.snippet, { engine: input.engine, noLimit: false }, {}, {})
+    if (engineFamily(input.engine) === 'redis') {
+      redisTokens = parseRedisCommand(prepared.rewrittenSql)
+    }
   } catch (err) {
     const reason =
       err instanceof SavedQueryError ? err.message : `prepare failed: ${(err as Error).message}`
@@ -66,7 +73,9 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
         })
       : family === 'es' && prepared.execHints?.index
         ? [prepared.execHints.index]
-        : []
+        : family === 'redis' && redisTokens.length > 0
+          ? redisCommandTargets(redisTokens[0]!, redisTokens.slice(1))
+          : []
   if (input.blacklistValidator && referencedTables.length > 0) {
     try {
       input.blacklistValidator.checkTablesBlacklist('SELECT', referencedTables)
@@ -77,7 +86,7 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
         rowCount: 0,
         rows: [],
         status: 'skipped',
-        reason: err.message,
+        reason: family === 'redis' ? 'Redis diagnostic skipped by blacklist' : err.message,
         durationMs: 0,
       }
     }
@@ -97,15 +106,18 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
     setTimeout(() => resolve('timeout'), input.timeoutMs)
   )
 
-  let outcome: { rows: Array<Record<string, unknown>> } | 'timeout' | 'error'
+  let outcome: { rows: Array<Record<string, unknown>> } | 'timeout' | 'error' | 'skipped'
   let errorMessage: string | null = null
   try {
     outcome = (await Promise.race([exec, timer])) as
       | { rows: Array<Record<string, unknown>> }
       | 'timeout'
   } catch (err) {
-    outcome = 'error'
-    errorMessage = (err as Error).message
+    outcome = err instanceof BlacklistRejection ? 'skipped' : 'error'
+    errorMessage =
+      err instanceof BlacklistRejection
+        ? 'Redis diagnostic skipped by blacklist'
+        : (err as Error).message
   }
 
   const durationMs = Math.round(performance.now() - start)
@@ -120,12 +132,12 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
       durationMs,
     }
   }
-  if (outcome === 'error') {
+  if (outcome === 'error' || outcome === 'skipped') {
     return {
       ...base,
       rowCount: 0,
       rows: [],
-      status: 'error',
+      status: outcome,
       reason: errorMessage ?? 'unknown error',
       durationMs,
     }

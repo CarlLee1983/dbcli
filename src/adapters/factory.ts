@@ -16,6 +16,8 @@ import { MongoDBAdapter } from './mongodb-adapter'
 import { RedisAdapter } from './redis-adapter'
 import { ElasticsearchAdapter } from './elasticsearch-adapter'
 import type { RedisMaskRule } from '@/types/blacklist'
+import { isBlacklistOverrideEnabled } from '@/core/blacklist-manager'
+import { t } from '@/i18n/message-loader'
 import { withResolvedTimeout } from '@/utils/connection-timeout'
 
 /**
@@ -25,14 +27,20 @@ import { withResolvedTimeout } from '@/utils/connection-timeout'
  * without a config file — but it still carries both protections, which is the
  * point of taking a config at all.
  */
+export interface AdapterConfig {
+  connection: ConnectionOptions | object
+  blacklist: { tables: string[]; columns: Record<string, string[]> }
+  redis?: { mask?: RedisMaskRule[] }
+}
+
 export interface MongoAdapterConfig {
-  connection: ConnectionOptions | Record<string, unknown>
+  connection: ConnectionOptions | object
   blacklist?: { columns?: Record<string, string[]> }
 }
 
 export interface RedisAdapterConfig {
-  connection: ConnectionOptions | Record<string, unknown>
-  blacklist?: { tables?: string[] }
+  connection: ConnectionOptions | object
+  blacklist?: { tables?: string[]; columns?: Record<string, string[]> }
   redis?: { mask?: RedisMaskRule[] }
 }
 
@@ -60,7 +68,9 @@ export class AdapterFactory {
     }
   }
 
-  static createQueryableAdapter(rawOptions: QueryableConnectionOptions): QueryableAdapter {
+  private static createQueryableAdapterWithoutRules(
+    rawOptions: QueryableConnectionOptions
+  ): QueryableAdapter {
     const options = withResolvedTimeout(rawOptions)
     switch (options.system) {
       case 'mongodb':
@@ -71,15 +81,33 @@ export class AdapterFactory {
         return new ElasticsearchAdapter(options)
       default:
         throw new Error(
-          `createQueryableAdapter requires a non-SQL queryable system, got: ${(options as { system?: string }).system}`
+          `createQueryableAdapterWithoutRules requires a non-SQL queryable system, got: ${(options as { system?: string }).system}`
         )
     }
   }
 
-  static createAdapter(options: SqlConnectionOptions): DatabaseAdapter
-  static createAdapter(options: QueryableConnectionOptions): QueryableAdapter
-  static createAdapter(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter
-  static createAdapter(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter {
+  static createAdapter(config: AdapterConfig): DatabaseAdapter | QueryableAdapter {
+    const options = config.connection as ConnectionOptions
+    switch (options.system) {
+      case 'postgresql':
+      case 'mysql':
+      case 'mariadb':
+        return AdapterFactory.createSqlAdapter(options as SqlConnectionOptions)
+      case 'redis':
+        return AdapterFactory.createRedisAdapter(config)
+      case 'mongodb':
+        return AdapterFactory.createMongoDBAdapter(config)
+      case 'elasticsearch':
+        return AdapterFactory.createElasticsearchAdapter(options)
+      default:
+        throw new Error(`Unsupported database system: ${(options as { system?: string }).system}`)
+    }
+  }
+
+  static createAdapterWithoutRules(options: SqlConnectionOptions): DatabaseAdapter
+  static createAdapterWithoutRules(options: QueryableConnectionOptions): QueryableAdapter
+  static createAdapterWithoutRules(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter
+  static createAdapterWithoutRules(options: ConnectionOptions): DatabaseAdapter | QueryableAdapter {
     switch (options.system) {
       case 'postgresql':
       case 'mysql':
@@ -88,7 +116,9 @@ export class AdapterFactory {
       case 'mongodb':
       case 'redis':
       case 'elasticsearch':
-        return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+        return AdapterFactory.createQueryableAdapterWithoutRules(
+          options as QueryableConnectionOptions
+        )
       default:
         throw new Error(`Unsupported database system: ${(options as { system?: string }).system}`)
     }
@@ -106,7 +136,9 @@ export class AdapterFactory {
     if (options.system !== 'mongodb') {
       throw new Error('createMongoDBAdapter requires system: mongodb')
     }
-    const adapter = AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+    const adapter = AdapterFactory.createQueryableAdapterWithoutRules(
+      options as QueryableConnectionOptions
+    )
     ;(adapter as unknown as MongoDBAdapter).setBlacklistColumns(config.blacklist?.columns ?? {})
     return adapter
   }
@@ -134,7 +166,12 @@ export class AdapterFactory {
     }
     const options = withResolvedTimeout(rawOptions)
     const adapter = new RedisAdapter(options as QueryableConnectionOptions)
-    adapter.setBlacklistRules(config.blacklist?.tables ?? [])
+    const blacklistRules = config.blacklist?.tables ?? []
+    const overrideEnabled = isBlacklistOverrideEnabled()
+    if (overrideEnabled && blacklistRules.length > 0) {
+      console.error(t('warnings.redis_blacklist_override_active'))
+    }
+    adapter.setBlacklistRules(overrideEnabled ? [] : blacklistRules)
     adapter.setMaskRules(config.redis?.mask ?? [])
     return adapter
   }
@@ -143,7 +180,7 @@ export class AdapterFactory {
     if (options.system !== 'elasticsearch') {
       throw new Error('createElasticsearchAdapter requires system: elasticsearch')
     }
-    return AdapterFactory.createQueryableAdapter(options as QueryableConnectionOptions)
+    return AdapterFactory.createQueryableAdapterWithoutRules(options as QueryableConnectionOptions)
   }
 }
 

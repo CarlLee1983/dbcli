@@ -175,6 +175,7 @@
     "unsupported_lang": "Language '{lang}' not supported, using English",
     "invalid_json": "Invalid JSON: {message}",
     "table_blacklisted": "Error: Table '{table}' is blacklisted for {operation} operations",
+    "redis_target_blacklisted": "Redis command refused by blacklist",
     "column_blacklisted_write": "Error: {operation} on table '{table}' touches blacklisted columns: {columns}",
     "table_already_blacklisted": "Error: Table '{table}' is already blacklisted",
     "table_not_in_blacklist": "Error: Table '{table}' is not in the blacklist",
@@ -261,7 +262,8 @@
     "columns_omitted": "Security: {count} column(s) were omitted based on your blacklist"
   },
   "warnings": {
-    "blacklist_override_used": "Warning: Blacklist override enabled (DBCLI_OVERRIDE_BLACKLIST=true). Executing {operation} on blacklisted table '{table}'"
+    "blacklist_override_used": "Warning: Blacklist override enabled (DBCLI_OVERRIDE_BLACKLIST=true). Executing {operation} on blacklisted table '{table}'",
+    "redis_blacklist_override_active": "Warning: Redis blacklist enforcement disabled by DBCLI_OVERRIDE_BLACKLIST=true"
   },
   "version": {
     "unsupported_warning": "{system} {version} is below minimum supported version {minVersion}. Some features may not work correctly.",

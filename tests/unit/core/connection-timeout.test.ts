@@ -142,7 +142,10 @@ describe('connection timeout', () => {
     test('全域覆寫會傳進 SQL adapter', () => {
       setGlobalConnectionTimeout(45000)
       const options = { ...base, system: 'postgresql' as const, port: 5432 }
-      const adapter = AdapterFactory.createAdapter(options)
+      const adapter = AdapterFactory.createAdapter({
+        connection: options,
+        blacklist: { tables: [], columns: {} },
+      })
       expect((adapter as unknown as { options: { timeout?: number } }).options.timeout).toBe(45000)
     })
 
@@ -162,14 +165,20 @@ describe('connection timeout', () => {
 
     test('沒有覆寫時沿用設定檔帶進來的值', () => {
       const options = { ...base, system: 'postgresql' as const, port: 5432, timeout: 12000 }
-      const adapter = AdapterFactory.createAdapter(options)
+      const adapter = AdapterFactory.createAdapter({
+        connection: options,
+        blacklist: { tables: [], columns: {} },
+      })
       expect((adapter as unknown as { options: { timeout?: number } }).options.timeout).toBe(12000)
     })
 
     test('不修改傳入的 options 物件', () => {
       setGlobalConnectionTimeout(45000)
       const options = { ...base, system: 'postgresql' as const, port: 5432 }
-      AdapterFactory.createAdapter(options)
+      AdapterFactory.createAdapter({
+        connection: options,
+        blacklist: { tables: [], columns: {} },
+      })
       expect((options as { timeout?: number }).timeout).toBeUndefined()
     })
   })

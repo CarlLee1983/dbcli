@@ -15,6 +15,7 @@ import type { DatabaseAdapter, ExecutionResult } from '@/adapters/types'
 import { AdapterFactory } from '@/adapters'
 import { configModule } from '@/core/config'
 import { qCommand } from '@/commands/q'
+import { BlacklistRejection } from '@/adapters/redis/types'
 
 class MockAdapter implements DatabaseAdapter {
   public lastSql = ''
@@ -173,6 +174,66 @@ describe('dbcli q', () => {
   test('unknown @name → exits 1', async () => {
     await qCommand('@missing', {})
     expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
+  test('refuses a Redis snippet that reads a blacklisted key', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/secret.sql'),
+      `-- ---\n-- name: secret\n-- engine: redis\n-- ---\nGET secrets:api_key`
+    )
+    spyOn(configModule, 'read').mockResolvedValueOnce({
+      connection: {
+        system: 'redis',
+        host: 'h',
+        port: 6379,
+        user: '',
+        password: '',
+        database: '0',
+      },
+      permission: 'query-only',
+      schema: {},
+      metadata: { version: '1.0' },
+      blacklist: { tables: ['secrets:*'], columns: {} },
+    } as any)
+
+    await qCommand('@secret', { format: 'json', noLimit: true })
+
+    expect(mock.lastSql).toBe('')
+    expect(exitSpy).toHaveBeenCalledWith(1)
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toContain('secrets:api_key')
+    errorSpy.mockRestore()
+  })
+
+  test('does not expose a protected Redis pattern rejected by the adapter', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/scan.sql'),
+      `-- ---\n-- name: scan\n-- engine: redis\n-- ---\nSCAN 0 MATCH *`
+    )
+    spyOn(configModule, 'read').mockResolvedValueOnce({
+      connection: {
+        system: 'redis',
+        host: 'h',
+        port: 6379,
+        user: '',
+        password: '',
+        database: '0',
+      },
+      permission: 'query-only',
+      schema: {},
+      metadata: { version: '1.0' },
+      blacklist: { tables: ['secrets:*'], columns: {} },
+    } as any)
+    spyOn(mock, 'execute').mockRejectedValueOnce(
+      new BlacklistRejection('pattern overlaps secrets:*', 'SCAN', null, 'secrets:*')
+    )
+
+    await qCommand('@scan', { format: 'json', noLimit: true })
+
+    expect(exitSpy).toHaveBeenCalledWith(1)
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toContain('secrets:*')
+    errorSpy.mockRestore()
   })
 
   describe('snippet guard truncation is reported in the result itself', () => {

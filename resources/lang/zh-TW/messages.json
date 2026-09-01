@@ -175,6 +175,7 @@
     "unsupported_lang": "不支援的語言 '{lang}'，使用英文",
     "invalid_json": "無效的 JSON：{message}",
     "table_blacklisted": "錯誤: 表格 '{table}' 的 {operation} 操作已被黑名單",
+    "redis_target_blacklisted": "Redis 指令已被黑名單拒絕",
     "column_blacklisted_write": "錯誤: 表格 '{table}' 的 {operation} 操作包含黑名單欄位: {columns}",
     "table_already_blacklisted": "錯誤: 表格 '{table}' 已在黑名單中",
     "table_not_in_blacklist": "錯誤: 表格 '{table}' 不在黑名單中",
@@ -261,7 +262,8 @@
     "columns_omitted": "安全: {count} 個欄位根據你的黑名單已被隱藏"
   },
   "warnings": {
-    "blacklist_override_used": "警告: 已啟用黑名單覆蓋 (DBCLI_OVERRIDE_BLACKLIST=true)。執行 {operation} 在已黑名單的表格 '{table}' 上"
+    "blacklist_override_used": "警告: 已啟用黑名單覆蓋 (DBCLI_OVERRIDE_BLACKLIST=true)。執行 {operation} 在已黑名單的表格 '{table}' 上",
+    "redis_blacklist_override_active": "警告: DBCLI_OVERRIDE_BLACKLIST=true 已停用 Redis 黑名單強制執行"
   },
   "version": {
     "unsupported_warning": "{system} {version} 低於最低支援版本 {minVersion}。部分功能可能無法正常運作。",

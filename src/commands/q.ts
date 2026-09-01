@@ -1,6 +1,9 @@
 import crypto from 'node:crypto'
 import { t, t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import { AdapterFactory, ConnectionError } from '@/adapters'
+import { parseRedisCommand } from '@/adapters/redis-adapter'
+import { redisCommandTargets } from '@/adapters/redis/blacklist-enforcer'
+import { BlacklistRejection } from '@/adapters/redis/types'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -131,6 +134,32 @@ export async function qCommand(
         ? enforcePermission(prepared.rewrittenSql, config.permission, sqlDialect)
         : undefined
 
+    const blacklistManager = new BlacklistManager(config)
+    const blacklistValidator = new BlacklistValidator(blacklistManager)
+    const redisTokens = family === 'redis' ? parseRedisCommand(prepared.rewrittenSql) : []
+    const targets: string[] =
+      family === 'sql'
+        ? extractTableReferences(prepared.rewrittenSql, {
+            ...(sqlDialect ? { dialect: sqlDialect } : {}),
+          })
+        : family === 'es'
+          ? [prepared.execHints?.index ?? '']
+          : family === 'redis' && redisTokens.length > 0
+            ? redisCommandTargets(redisTokens[0]!, redisTokens.slice(1))
+            : []
+    const targetName: string = targets[0] ?? ''
+
+    targetNameForAudit = family === 'redis' ? name : targetName || name
+
+    if (family === 'es') {
+      blacklistValidator.checkIndexBlacklist('SELECT', targetName)
+    } else if ((classification || family === 'redis') && targets.length > 0) {
+      blacklistValidator.checkTablesBlacklist(
+        classification?.type ?? redisTokens[0] ?? 'READ',
+        targets
+      )
+    }
+
     if (options.dryRun) {
       console.log(
         formatDryRun({
@@ -156,40 +185,7 @@ export async function qCommand(
       return
     }
 
-    const blacklistManager = new BlacklistManager(config)
-    const blacklistValidator = new BlacklistValidator(blacklistManager)
-    // A snippet is checked against every table it references, not just the
-    // first one — a JOIN, a comma, or a UNION branch reaches a table the
-    // leading FROM never names (issue #23).
-    const targets: string[] =
-      family === 'sql'
-        ? extractTableReferences(prepared.rewrittenSql, {
-            // The dialect decides which comment and quoting forms are
-            // executable; without it the scan has to guess and can guess in the
-            // direction that hides a table. Take it from the connection, which
-            // is what the statement will actually run under.
-            ...(sqlDialect ? { dialect: sqlDialect } : {}),
-          })
-        : family === 'es'
-          ? [prepared.execHints?.index ?? '']
-          : []
-    const targetName: string = targets[0] ?? ''
-
-    targetNameForAudit = targetName || name
-
-    if (family === 'es') {
-      // `index:` in a snippet's frontmatter is an expression too — comma lists
-      // and wildcards reach an index that equality never matches.
-      blacklistValidator.checkIndexBlacklist('SELECT', targetName)
-    } else if (classification && targets.length > 0) {
-      // Gated on the classification rather than on the family, so the operation
-      // label is the statement type the guard actually read. Hardcoding 'SELECT'
-      // wrote the snippet contract into this call site a second time, where it
-      // would have gone on saying SELECT if that contract ever widened.
-      blacklistValidator.checkTablesBlacklist(classification.type, targets)
-    }
-
-    const adapter = AdapterFactory.createAdapter(config.connection as ConnectionOptions)
+    const adapter = AdapterFactory.createAdapter(config)
     await adapter.connect()
     try {
       if (!options.ui && options.format !== 'html') {
@@ -355,6 +351,16 @@ async function handleQError(
   options: QCommandOptions,
   config: DbcliConfig | undefined
 ): Promise<void> {
+  const redisBlacklistRejection =
+    config?.connection?.system === 'redis' &&
+    (error instanceof BlacklistError || error instanceof BlacklistRejection)
+  const reportedError = redisBlacklistRejection
+    ? new BlacklistError(
+        t('errors.redis_target_blacklisted'),
+        '[REDACTED]',
+        error instanceof BlacklistError ? error.operation : error.command
+      )
+    : error
   let auditId: string | null = null
   let envelopeId: string | undefined
   if (options.recovery === true) {
@@ -365,7 +371,7 @@ async function handleQError(
     auditId = await writeAuditEntry(config, 'q', options, {
       success: false,
       target: snippetName,
-      error,
+      error: reportedError,
       ...(envelopeId && { recovery_ref: envelopeId }),
     })
   }
@@ -373,7 +379,7 @@ async function handleQError(
   if (envelopeId !== undefined) {
     const { emitRecoveryEnvelope } = await import('@/core/recovery')
     emitRecoveryEnvelope(
-      error,
+      reportedError,
       { operation: 'q', snippet: snippetName },
       { envelopeId, auditRef: auditId ?? undefined }
     )
@@ -383,9 +389,10 @@ async function handleQError(
     printLocalizedCliError(error.message, error)
     process.exit(1)
   }
-  if (error instanceof BlacklistError) {
-    printLocalizedCliError(error.message, error)
+  if (error instanceof BlacklistError || error instanceof BlacklistRejection) {
+    printLocalizedCliError((reportedError as Error).message, reportedError as Error)
     process.exit(1)
+    return
   }
   if (error instanceof PermissionError) {
     printLocalizedCliError(

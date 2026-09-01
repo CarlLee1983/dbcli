@@ -502,7 +502,7 @@ async function initCommandHandler(
       database: String(resolveValue(newConfig.connection.database, 'database')),
     }
 
-    const adapter = AdapterFactory.createAdapter(testConnection)
+    const adapter = AdapterFactory.createAdapterWithoutRules(testConnection)
 
     try {
       await adapter.connect()

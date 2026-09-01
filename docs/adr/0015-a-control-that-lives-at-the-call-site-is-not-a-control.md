@@ -156,9 +156,13 @@ Accepted costs, in the order an operator meets them:
 - `SCAN` and `KEYS` replies lose the key names the blacklist protects. A caller
   paginating with the returned cursor is unaffected; the cursor is untouched.
 
+ADR-0021 supersedes Decision 1's system-neutral construction boundary: an
+explicitly named connection-only probe remains possible, while the default
+factory now requires the resolved rules.
+
 **Falsified if:** `AdapterFactory.createRedisAdapter` or `createMongoDBAdapter`
-in `src/adapters/factory.ts` grows a second entry point that takes a connection
-without its rules; or `checkKeyArgs` in
+in `src/adapters/factory.ts` gains an unnamed ruleless alternative outside the
+explicit boundary in ADR-0021; or `checkKeyArgs` in
 `src/adapters/redis/blacklist-enforcer.ts` returns `ok` for a command with no
 spec; or `RedisCommandSpec` in `src/adapters/redis/types.ts` regains a
 permission tier; or `REDIS_COMMAND_TABLE` in

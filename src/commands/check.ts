@@ -61,14 +61,16 @@ async function checkAction(
     const checker = new HealthChecker(adapter)
     const blacklistManager = new BlacklistManager(config)
     const blacklistedColumns = getBlacklistedColumnSet(blacklistManager)
-    const blacklistedTables = getBlacklistedTableSet(blacklistManager)
 
     const checkTypes = options.checks ? (options.checks.split(',') as CheckType[]) : undefined
 
     const sampleSize = parseInt(options.sample, 10) || 10_000
 
     if (table) {
-      if (blacklistedTables.has(table.toLowerCase())) {
+      // 問 manager，不要自己查它的私有 state：那份 Set 只有字面條目、而且是用
+      // `foldFieldPath` 折的，這裡卻用裸的 `toLowerCase` 查。萬用字元規則因此
+      // 對這條路徑完全不存在（ADR-0019 Decision 4），折疊也對不上（ADR-0020）。
+      if (blacklistManager.isTableBlacklisted(table)) {
         throw new Error(`Table "${table}" is blacklisted`)
       }
 
@@ -86,7 +88,7 @@ async function checkAction(
       const skipped: string[] = []
 
       for (const t of tables) {
-        if (blacklistedTables.has(t.name.toLowerCase())) {
+        if (blacklistManager.isTableBlacklisted(t.name)) {
           skipped.push(`${t.name} (blacklisted)`)
           continue
         }
@@ -169,11 +171,4 @@ function getBlacklistedColumnSet(manager: BlacklistManager): Set<string> {
     }
   }
   return result
-}
-
-function getBlacklistedTableSet(manager: BlacklistManager): Set<string> {
-  const state = (
-    manager as unknown as { state: { columns: Map<string, Set<string>>; tables: Set<string> } }
-  ).state
-  return state?.tables || new Set<string>()
 }

@@ -1,4 +1,5 @@
 import { parseWhereClause } from '@/utils/where-parser'
+import { foldFieldPath } from '@/core/blacklist-fold'
 import type { DmlPlanIntent } from '@/core/dml-plan'
 
 export type ElasticsearchBuildInput =
@@ -125,8 +126,10 @@ function applyTableBlacklist(
   context: NonSqlAnalyzerContext,
   factors: QueryRiskFactor[]
 ): void {
-  const blacklisted = (context.blacklist.tables ?? []).map((t) => t.toLowerCase())
-  if (blacklisted.includes(target.toLowerCase())) {
+  // 同一個折疊函式。這條路徑是風險規劃的顧問輸出，`BlacklistManager` 仍會另外
+  // 強制執行，所以折錯只是少報一項風險因子而不是放行——但一套折疊規則就是一套。
+  const blacklisted = (context.blacklist.tables ?? []).map(foldFieldPath)
+  if (blacklisted.includes(foldFieldPath(target))) {
     pushFactor(
       factors,
       'table_blacklisted',
@@ -143,10 +146,10 @@ function applyColumnBlacklist(
   factors: QueryRiskFactor[]
 ): void {
   const columns = context.blacklist.columns ?? {}
-  const lower = target.toLowerCase()
+  const lower = foldFieldPath(target)
   let blacklistedFields: string[] = []
   for (const [t, cols] of Object.entries(columns)) {
-    if (t.toLowerCase() === lower) {
+    if (foldFieldPath(t) === lower) {
       blacklistedFields = cols
       break
     }

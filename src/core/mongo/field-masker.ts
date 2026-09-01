@@ -1,5 +1,6 @@
 import { BlacklistError, type BlacklistConfig } from '@/types/blacklist'
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { foldFieldPath } from '@/core/blacklist-fold'
 import { escapeGlob } from '@/utils/glob'
 import { globMatches } from '@/utils/glob'
 import type { MongoCollectionScope } from './collection-references'
@@ -125,13 +126,20 @@ function maskValue(
   return value
 }
 
+/**
+ * 挑選規則也是一次名稱比對，所以走同一個折疊函式。
+ *
+ * 裸的 `toLowerCase` 曾與 `foldFieldPath` 一致——因為那時 `foldFieldPath` 就是
+ * `toLowerCase`。ADR-0020 Decision 4 讓它不再是，於是設定在 `ασ` 底下的規則
+ * 對 collection `ΑΣ` 查不到，而查不到的意思是「沒有規則」：明文原樣回傳。
+ */
 function findCaseInsensitive(
   columns: Record<string, string[]>,
   name: string
 ): string[] | undefined {
-  const target = name.toLowerCase()
+  const target = foldFieldPath(name)
   for (const [k, v] of Object.entries(columns)) {
-    if (k.toLowerCase() === target) return v
+    if (foldFieldPath(k) === target) return v
   }
   return undefined
 }

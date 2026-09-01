@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 一份黑名單設定，四個互不相同的比對器
+## [6.0.0] - 2026-09-01 - 一份黑名單設定，四個互不相同的比對器
 
 規格 SQL 第 7、8、9 則與 MongoDB 第 3–6 則。設計決策記在
 `docs/adr/0018-a-blacklist-rule-that-does-not-match-fails-loudly.md` 與

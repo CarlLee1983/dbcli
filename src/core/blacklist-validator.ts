@@ -9,7 +9,12 @@ import { isGlobPattern } from '@/utils/glob'
 import { BlacklistError } from '@/types/blacklist'
 import { t_vars } from '@/i18n/message-loader'
 import type { BlacklistManager } from './blacklist-manager'
-import { hasFieldPath, omitFieldPaths } from './field-projection'
+import {
+  collectNestedMatches,
+  compileNestedRules,
+  hasFieldPath,
+  omitFieldPaths,
+} from './field-projection'
 import { compilePatterns, matchAny, type MongoPathPattern } from './mongo/path-matcher'
 import { foldFieldPath } from './blacklist-fold'
 import {
@@ -68,6 +73,21 @@ function dedupe(values: string[]): string[] {
 export interface FilterColumnsResult {
   filteredRows: Record<string, unknown>[]
   omittedColumns: string[]
+  /**
+   * Whether a caller-supplied field path is covered by what was omitted.
+   *
+   * `omittedColumns` names a wildcard rule by its text, so a consumer comparing
+   * strings could not tell that `--fields profile.SS_num` asks for something
+   * `profile.ss*` removed: the literal form of the same rule dropped the field
+   * from the output while the wildcard form returned it as `null`. This answers
+   * with the compiled rule.
+   */
+  reachesOmitted: (path: string) => boolean
+}
+
+/** The plain-string half of `reachesOmitted`, used when no rule was compiled. */
+function omittedByName(omittedColumns: readonly string[], path: string): boolean {
+  return omittedColumns.some((omitted) => path === omitted || path.startsWith(`${omitted}.`))
 }
 
 /**
@@ -344,7 +364,7 @@ export class BlacklistValidator {
         : Array.from(new Set(tables.flatMap((table) => this.manager.getBlacklistedColumns(table))))
 
     if (blacklistedColumns.length === 0) {
-      return { filteredRows: rows, omittedColumns: [] }
+      return { filteredRows: rows, omittedColumns: [], reachesOmitted: () => false }
     }
 
     // SQL adapters normally return a uniform top-level column set, but JSON
@@ -449,6 +469,37 @@ export class BlacklistValidator {
       const segments = path.split('.').map(foldFieldPath)
       if (rows.some((row) => hasFieldPath(row, segments, PRE_FOLDED))) omitted.add(path)
     }
+    // Wildcard rules that name something below a top-level key. The loop above
+    // compares against the names a row carries at the top — which on the
+    // Elasticsearch path is every name, since `flattenSource` emits dotted keys
+    // — but a PostgreSQL `jsonb` column arrives as an object, and its keys are
+    // not names anywhere until something walks for them. The literal form
+    // descends through `hasFieldPath`; without this the wildcard form had
+    // nothing to compare against, so `profile.SS_num` masked and `profile.ss*`
+    // returned the value.
+    //
+    // Confined to the rules that need it and the heads that can hold them: a
+    // blacklist with no dotted wildcard rule, or a result with no nested
+    // record, walks nothing.
+    const nestedGlobs = globRules.filter((pattern) => pattern.segments.length > 1)
+    const matchedNested: MongoPathPattern[] = []
+    if (nestedGlobs.length > 0 && nestedHeads.size > 0) {
+      // Which *rules* match, not which keys: a rule can hit a different key in
+      // every row, and collecting the keys made the removal below rebuild each
+      // record once per key per row — 200 rows of 20 row-specific keys measured
+      // 1.8s. The walk narrows the rule set as it descends and stops as soon as
+      // every rule has been accounted for.
+      const pending = new Set(nestedGlobs)
+      const states = compileNestedRules(nestedGlobs)
+      for (const row of rows) {
+        if (pending.size === 0) break
+        if (row === null || typeof row !== 'object') continue
+        collectNestedMatches(row as Record<string, unknown>, states, pending, (pattern) => {
+          matchedNested.push(pattern)
+          omitted.add(pattern.raw)
+        })
+      }
+    }
     // Walk each column up to its ancestors rather than testing every rule against
     // every column: `a.b.c` only has to ask about `a` and `a.b`. The other direction
     // is O(columns × rules), which on a wide sparse result set with a large blacklist
@@ -497,13 +548,46 @@ export class BlacklistValidator {
     const omittedColumns = Array.from(omitted)
 
     if (omittedColumns.length === 0) {
-      return { filteredRows: rows, omittedColumns: [] }
+      return { filteredRows: rows, omittedColumns: [], reachesOmitted: () => false }
     }
 
     // Create new row objects without blacklisted top-level or dotted fields.
-    const filteredRows = omitFieldPaths(rows, omittedColumns, FOLD_CASE)
+    // The rule texts go to the caller as the reason, not to the remover as
+    // paths: a rule is removed by its compiled form, and leaving `profile.ss*`
+    // in the literal list made every row rebuilt once more per matched rule,
+    // hunting a key spelled with a star. 1000 rows x 20 keys measured 20.5ms
+    // with one matched rule and 82ms with twenty.
+    const removalPaths =
+      matchedNested.length === 0
+        ? omittedColumns
+        : omittedColumns.filter((path) => !matchedNested.some((p) => p.raw === path))
+    const filteredRows = omitFieldPaths(
+      rows,
+      removalPaths,
+      matchedNested.length > 0 ? { ...FOLD_CASE, patterns: matchedNested } : FOLD_CASE
+    )
 
-    return { filteredRows, omittedColumns }
+    return {
+      filteredRows,
+      omittedColumns,
+      reachesOmitted: (path) => {
+        if (omittedByName(removalPaths, path)) return true
+        if (matchedNested.length === 0) return false
+        // Ancestors too, the way `omittedByName` does with `startsWith`: under
+        // a rule `a.b*` the whole of `a.b` is gone, so asking for `a.b.c1`
+        // asks for something that is not there. Without this the literal form
+        // of a rule dropped the field from the output while the wildcard form
+        // returned it as `null`.
+        const folded = foldFieldPath(path)
+        if (matchAny(folded, matchedNested)) return true
+        let dot = folded.indexOf('.')
+        while (dot > 0) {
+          if (matchAny(folded.slice(0, dot), matchedNested)) return true
+          dot = folded.indexOf('.', dot + 1)
+        }
+        return false
+      },
+    }
   }
 
   /**

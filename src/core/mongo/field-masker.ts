@@ -113,11 +113,11 @@ function maskValue(
 ): unknown {
   if (value === null || value === undefined) return value
   if (Array.isArray(value)) {
-    return value.map((item) =>
-      item && typeof item === 'object' && !Array.isArray(item)
-        ? maskRecord(item as Record<string, unknown>, path, patterns)
-        : item
-    )
+    // Through nested arrays too: an element that was itself an array used to be
+    // returned untouched, so `{list: [[{ssn: …}]]}` kept its plaintext under a
+    // rule `list.ss*` that the SQL read path masked. An array is a container,
+    // not a path segment, at whatever depth it appears.
+    return value.map((item) => maskValue(item, path, patterns))
   }
   if (typeof value === 'object') {
     return maskRecord(value as Record<string, unknown>, path, patterns)

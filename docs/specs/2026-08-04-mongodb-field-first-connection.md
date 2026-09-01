@@ -1,6 +1,6 @@
 # MongoDB 逐欄連線設定
 
-**狀態**：Ready for implementation
+**狀態**：已於 v1.46.0（2026-08-04）交付；保留為設計記錄
 **決策依據**：`docs/adr/0002-mongodb-connection-field-first-config.md`
 **基準版本**：v1.45.1
 

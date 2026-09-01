@@ -60,14 +60,32 @@ export function projectRows(
 // for the same path pays `split` once instead of once per row: the masker's fail-safe
 // branch applies every rule in the config, so "many paths, almost no matches" is its
 // normal shape, and the splitting alone measured a third of that branch's cost.
-export function hasFieldPath(row: Record<string, unknown>, segments: readonly string[]): boolean {
-  return readPath(row, segments).found
+export function hasFieldPath(
+  row: Record<string, unknown>,
+  segments: readonly string[],
+  options?: FieldPathOptions
+): boolean {
+  return readPath(row, segments, options?.caseInsensitive === true).found
+}
+
+/**
+ * How a path is matched against a row's keys.
+ *
+ * `caseInsensitive` is what the blacklist masker passes and `--fields` does
+ * not: a rule is compared to a name the request chose the case of, while a
+ * `--fields` path is the operator naming keys of the document in front of them.
+ * ADR-0020.
+ */
+export interface FieldPathOptions {
+  readonly caseInsensitive?: boolean
 }
 
 export function omitFieldPaths(
   rows: readonly Record<string, unknown>[],
-  paths: readonly string[]
+  paths: readonly string[],
+  options?: FieldPathOptions
 ): Record<string, unknown>[] {
+  const caseInsensitive = options?.caseInsensitive === true
   // `omitPath` rebuilds the whole record, so running it once per path made this
   // O(rows × paths) full copies — 100 rows against a 50-column blacklist cost 5000
   // rebuilds and ~35ms, which is why the masking benchmark had never met its 5ms
@@ -91,16 +109,19 @@ export function omitFieldPaths(
   // a thousand, over the benchmark's budget, for traversal 999 rows cannot use.
   //
   // Ceiling: a genuinely nested row still costs one rebuild per path that reaches it.
-  const topLevel = new Set<string>(paths)
+  const fold = (value: string): string => (caseInsensitive ? value.toLowerCase() : value)
+  const topLevel = new Set<string>(paths.map(fold))
   const dotted = paths
     .filter((path) => path.includes('.'))
-    .map((path) => ({ head: path.slice(0, path.indexOf('.')), segments: path.split('.') }))
+    .map((path) => ({ head: fold(path.slice(0, path.indexOf('.'))), segments: path.split('.') }))
 
   const maskRecord = (row: Record<string, unknown>): Record<string, unknown> => {
-    let projected: unknown = cloneRecord(row, topLevel)
+    let projected: unknown = cloneRecord(row, topLevel, caseInsensitive)
     for (const { head, segments } of dotted) {
-      const value = row[head]
-      if (value !== null && typeof value === 'object') projected = omitPath(projected, segments)
+      const value = headValue(row, head, caseInsensitive)
+      if (value !== null && typeof value === 'object') {
+        projected = omitPath(projected, segments, caseInsensitive)
+      }
     }
     return projected as Record<string, unknown>
   }
@@ -157,13 +178,39 @@ function validatePath(path: string): void {
   if (unsafe) throw new Error(`--fields contains an unsafe field segment: ${unsafe}`)
 }
 
+/** The row's value at `head`, found case-insensitively when asked. */
+function headValue(row: Record<string, unknown>, head: string, caseInsensitive: boolean): unknown {
+  if (!caseInsensitive) return row[head]
+  for (const key of Object.keys(row)) {
+    if (key.toLowerCase() === head) return row[key]
+  }
+  return undefined
+}
+
+/** The record's own key equal to `name`, folded when asked, or `undefined`. */
+function ownKey(
+  value: Record<string, unknown>,
+  name: string,
+  caseInsensitive: boolean
+): string | undefined {
+  if (!caseInsensitive) {
+    return Object.prototype.hasOwnProperty.call(value, name) ? name : undefined
+  }
+  const target = name.toLowerCase()
+  for (const key of Object.getOwnPropertyNames(value)) {
+    if (key.toLowerCase() === target) return key
+  }
+  return undefined
+}
+
 function readPath(
   value: unknown,
-  segments: readonly string[]
+  segments: readonly string[],
+  caseInsensitive = false
 ): { found: boolean; value?: unknown } {
   if (segments.length === 0) return { found: true, value }
   if (Array.isArray(value)) {
-    const results = value.map((item) => readPath(item, segments))
+    const results = value.map((item) => readPath(item, segments, caseInsensitive))
     return {
       found: results.some((result) => result.found),
       value: results.map((result) => (result.found ? result.value : undefined)),
@@ -171,27 +218,29 @@ function readPath(
   }
   if (!isRecord(value)) return { found: false }
 
-  const exactPath = segments.join('.')
-  if (Object.prototype.hasOwnProperty.call(value, exactPath)) {
-    return { found: true, value: value[exactPath] }
-  }
+  const exact = ownKey(value, segments.join('.'), caseInsensitive)
+  if (exact !== undefined) return { found: true, value: value[exact] }
   const [head, ...tail] = segments
-  if (!Object.prototype.hasOwnProperty.call(value, head!)) return { found: false }
-  return readPath(value[head!], tail)
+  const headKey = ownKey(value, head!, caseInsensitive)
+  if (headKey === undefined) return { found: false }
+  return readPath(value[headKey], tail, caseInsensitive)
 }
 
-function omitPath(value: unknown, segments: readonly string[]): unknown {
+function omitPath(value: unknown, segments: readonly string[], caseInsensitive: boolean): unknown {
   if (segments.length === 0) return value
-  if (Array.isArray(value)) return value.map((item) => omitPath(item, segments))
+  if (Array.isArray(value)) return value.map((item) => omitPath(item, segments, caseInsensitive))
   if (!isPlainRecord(value)) return value
 
-  const exactPath = segments.join('.')
-  const [head, ...tail] = segments
+  const fold = (name: string): string => (caseInsensitive ? name.toLowerCase() : name)
+  const exactPath = fold(segments.join('.'))
+  const head = fold(segments[0]!)
+  const tail = segments.slice(1)
   const out: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(value)) {
-    if (key === exactPath) continue
-    if (key === head) {
-      if (tail.length > 0) defineData(out, key, omitPath(child, tail))
+    const folded = fold(key)
+    if (folded === exactPath) continue
+    if (folded === head) {
+      if (tail.length > 0) defineData(out, key, omitPath(child, tail, caseInsensitive))
       continue
     }
     defineData(out, key, child)
@@ -203,11 +252,12 @@ function omitPath(value: unknown, segments: readonly string[]): unknown {
 // fail-open direction of a forgotten argument (keep every key) is the wrong default.
 function cloneRecord(
   value: Record<string, unknown>,
-  omittedKeys: ReadonlySet<string>
+  omittedKeys: ReadonlySet<string>,
+  caseInsensitive = false
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(value)) {
-    if (!omittedKeys.has(key)) defineData(out, key, child)
+    if (!omittedKeys.has(caseInsensitive ? key.toLowerCase() : key)) defineData(out, key, child)
   }
   return out
 }

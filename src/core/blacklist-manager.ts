@@ -9,6 +9,7 @@
 import type { DbcliConfig } from '@/types'
 import type { BlacklistConfig, BlacklistState } from '@/types/blacklist'
 import { globMatches } from '@/utils/glob'
+import { foldFieldPath } from './blacklist-fold'
 
 /**
  * Manager class for loading and querying blacklist rules.
@@ -219,7 +220,14 @@ export class BlacklistManager {
     if (!columnSet) {
       return false
     }
-    return columnSet.has(normalizeBlacklistEntry(columnName).toLowerCase())
+    // Both sides folded by the one function every matcher calls. Folding only
+    // the name asked about, against rules stored as written, made a rule
+    // `Password` answer `false` for the column it names. ADR-0020.
+    const target = foldFieldPath(normalizeBlacklistEntry(columnName))
+    for (const rule of columnSet) {
+      if (foldFieldPath(rule) === target) return true
+    }
+    return false
   }
 
   /**

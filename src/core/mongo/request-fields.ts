@@ -16,6 +16,7 @@
  */
 
 import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { foldFieldPath } from '@/core/blacklist-fold'
 
 /** Strip the `$` that marks a field reference in an aggregation expression. */
 function asFieldPath(text: string): string {
@@ -96,9 +97,10 @@ function reachesProtectedField(
   protectedFields: ReadonlySet<string>,
   globs: ReadonlyArray<MongoPathPattern>
 ): boolean {
-  if (protectedFields.has(path)) return true
-  if (globs.length > 0 && matchAny(path, globs)) return true
-  const parts = path.split('.')
+  const folded = foldFieldPath(path)
+  if (protectedFields.has(folded)) return true
+  if (globs.length > 0 && matchAny(folded, globs)) return true
+  const parts = folded.split('.')
   if (parts.length === 1) return false
   for (let start = 0; start < parts.length; start += 1) {
     for (let end = start + 1; end <= parts.length; end += 1) {
@@ -122,6 +124,12 @@ export function findProtectedFieldReference(
   protectedFields: ReadonlySet<string>
 ): string | undefined {
   if (protectedFields.size === 0) return undefined
+  // Both sides fold, by the one function every other matcher calls: the request
+  // chooses the case it writes a field name in, so a check comparing it as
+  // written is defeated by a rule that was written correctly. Literal rules
+  // fold here; glob rules fold inside the matcher, where their text is not
+  // rewritten. ADR-0020.
+  const literalRules = new Set([...protectedFields].map(foldFieldPath))
   const globs = globRulesOf(protectedFields)
 
   const candidates: string[] = []
@@ -163,7 +171,7 @@ export function findProtectedFieldReference(
   walk(request)
 
   const named = candidates.find(
-    (path) => path.length > 0 && reachesProtectedField(path, protectedFields, globs)
+    (path) => path.length > 0 && reachesProtectedField(path, literalRules, globs)
   )
   if (named !== undefined) return named
   // Every protected field, so the message can say one — which one is arbitrary

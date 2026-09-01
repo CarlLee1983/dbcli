@@ -76,6 +76,19 @@ export function compilePatterns(raw: ReadonlyArray<unknown>): CompileResult {
   return { patterns, rejected }
 }
 
+/**
+ * Every segment is compared case-insensitively, rules and names alike.
+ *
+ * A field name is chosen by the request — `$project: {PASSWORD: "$password"}`,
+ * `SELECT password AS "PASSWORD"` — so a mask that compares case-sensitively is
+ * defeated by a rule that was written correctly. Folding covers the whole path
+ * rather than the first segment alone, so one rule cannot mean one thing to a
+ * write and another to a read; the cost is that a document holding both
+ * `profile.SSN` and `profile.ssn` has both redacted by a rule naming either.
+ * ADR-0020, which supersedes ADR-0018 Decision 1 on this point.
+ */
+const FOLD_CASE = { caseInsensitive: true } as const
+
 export function matchAny(path: string, patterns: ReadonlyArray<MongoPathPattern>): boolean {
   if (patterns.length === 0) return false
   const pathSegments = path.split('.')
@@ -87,7 +100,7 @@ export function matchAny(path: string, patterns: ReadonlyArray<MongoPathPattern>
     }
     let ok = true
     for (let i = 0; i < pat.segments.length; i++) {
-      if (!globMatches(pat.segments[i]!, pathSegments[i]!)) {
+      if (!globMatches(pat.segments[i]!, pathSegments[i]!, FOLD_CASE)) {
         ok = false
         break
       }

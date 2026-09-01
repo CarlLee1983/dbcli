@@ -147,3 +147,37 @@ test('globMatches and globToRegex agree on escapes and character classes', () =>
   }
   expect(disagreements).toEqual([])
 })
+
+// ADR-0020: the blacklist compares a rule with a name case-insensitively, and
+// it does so *at comparison* rather than by lower-casing the pattern text. The
+// difference is visible in a character class: lower-casing `[A-z]` narrows the
+// set it stands for, while matching case-insensitively does not.
+describe('globMatches case-insensitive option', () => {
+  test('literal runs fold both ways', () => {
+    expect(globMatches('PASS*', 'password', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('pass*', 'PASSWORD', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('PASS*', 'password')).toBe(false)
+  })
+
+  test('a character class matches either case of its members', () => {
+    expect(globMatches('[A-Z]ass', 'pass', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('[a-z]ass', 'Pass', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('[A-Z]ass', 'pass')).toBe(false)
+  })
+
+  test('a negated class stays the complement of the folded set', () => {
+    expect(globMatches('[^a-z]bc', 'Abc', { caseInsensitive: true })).toBe(false)
+    expect(globMatches('[^a-z]bc', '1bc', { caseInsensitive: true })).toBe(true)
+  })
+
+  test('the escaped form of a metacharacter folds too', () => {
+    expect(globMatches('\\A*', 'ab', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('\\A*', 'ab')).toBe(false)
+  })
+
+  test('the two modes do not share a memo entry', () => {
+    expect(globMatches('ABC', 'abc', { caseInsensitive: true })).toBe(true)
+    expect(globMatches('ABC', 'abc')).toBe(false)
+    expect(globMatches('ABC', 'abc', { caseInsensitive: true })).toBe(true)
+  })
+})

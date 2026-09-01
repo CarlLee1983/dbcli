@@ -154,3 +154,37 @@ describe('a rule that compiles but can never match is refused', () => {
     expect(compilePatterns(['secret[abc]', 'pass*', 'user.*']).rejected).toEqual([])
   })
 })
+
+// ADR-0020: one fold rule for the whole path. Before this, the write side
+// lower-cased an entire path while both read sides compared as written, so
+// `profile.ssn` refused a write of `profile.SSN` and returned it on read.
+describe('case folding', () => {
+  test('a literal rule matches a name differing only in case', () => {
+    const { patterns } = compilePatterns(['Password'])
+    expect(matchAny('password', patterns)).toBe(true)
+    expect(matchAny('PASSWORD', patterns)).toBe(true)
+  })
+
+  test('every segment folds, not only the first', () => {
+    const { patterns } = compilePatterns(['profile.ssn'])
+    expect(matchAny('profile.SSN', patterns)).toBe(true)
+    expect(matchAny('PROFILE.ssn', patterns)).toBe(true)
+  })
+
+  test('a wildcard segment folds too', () => {
+    const { patterns } = compilePatterns(['profile.ss*'])
+    expect(matchAny('profile.SS_num', patterns)).toBe(true)
+    expect(matchAny('PROFILE.SS_num', patterns)).toBe(true)
+  })
+
+  test('the tail form folds', () => {
+    const { patterns } = compilePatterns(['User.*'])
+    expect(matchAny('user.password', patterns)).toBe(true)
+    expect(matchAny('USER', patterns)).toBe(true)
+  })
+
+  test('folding does not widen a rule past its segment boundary', () => {
+    const { patterns } = compilePatterns(['pass*'])
+    expect(matchAny('USER.PASSWORD', patterns)).toBe(false)
+  })
+})

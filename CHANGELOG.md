@@ -5,6 +5,56 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 一條規則擋得住寫、擋不住讀，差別只在大小寫
+
+ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。
+設計決策記在 `docs/adr/0020-one-fold-rule-for-every-blacklist-comparison.md`。
+
+2026-09-01 直接呼叫四個比對器量到的起點——除了最後一列，每一列都是「寫入被拒、
+讀取原文回傳」的設定，而操作者確認規則有效的方式，通常就是看寫入被擋下來：
+
+| 規則 | 欄位 | SQL 讀 | MongoDB 讀 | 請求側 | 寫入 |
+| --- | --- | --- | --- | --- | --- |
+| `Password` | `password` | masked | **returned** | **allowed** | refused |
+| `password` | `PASSWORD` | masked | **returned** | **allowed** | refused |
+| `PASS*` | `password` | masked | **returned** | **allowed** | refused |
+| `profile.ssn` | `profile.SSN` | **returned** | **returned** | **allowed** | refused |
+| `profile.ss*` | `profile.SS_num` | **returned** | **returned** | **allowed** | refused |
+| `pass*` | `password` | masked | masked | refused | refused |
+
+### Changed
+
+- **BREAKING：規則與欄位名的比對整條路徑都不分大小寫。** 先前只有第一段折疊，
+  而且只在 SQL 與 Elasticsearch 的讀取側折——MongoDB 的讀取遮罩與請求側完全不折，
+  於是規則 `Password` 之下 `$project: {"leak": "$password"}` 被放行，明文原樣回傳。
+  那正是 ADR-0018 Decision 1 要關掉的別名繞道，只是換了一個引擎抵達：欄位名的
+  大小寫由請求方選定，設定端再怎麼驗證也擋不住，因為那條規則本身就是對的。
+  代價與 ADR-0014、0015、0018 選的方向一致：PostgreSQL 允許 `"Password"` 與
+  `"password"` 並存、MongoDB 允許一份文件同時有 `profile.SSN` 與 `profile.ssn`，
+  規則寫其中一個現在兩個都遮。過度拒絕可以用更精確的規則收回來，反過來——受保護的
+  欄位因為請求換個大小寫就回傳——沒有任何東西會告訴你它發生過。
+
+- **BREAKING：折疊涵蓋第一段之後的段落。** ADR-0018 刻意只折第一段，理由是後面的
+  段落是巢狀物件的鍵、大小寫有意義。那個理由對資料是成立的，對系統不成立：寫入側
+  本來就整條路徑小寫，所以「讀取側保持大小寫敏感」不是一個立場而是一個意外，而它
+  在每一次讀取上都往 fail-open 的方向解決。PostgreSQL 16 的 `jsonb` 欄位實測，
+  規則 `profile.ss_num` 與 `PROFILE.SS_num` 先前都原文回傳，現在都省略。
+
+- **`--fields` 維持精確比對，不受這次改動影響。** 黑名單規則比對的是請求方選定
+  大小寫的名稱；`--fields` 的路徑是操作者指名眼前這份文件的鍵，兩個只差大小寫的
+  鍵是他們可能真的要分開處理的兩個欄位。
+
+### Fixed
+
+- **`isColumnBlacklisted` 折了被問的欄位名，沒折規則。** 規則 `Password` 對它自己
+  指名的欄位回答 `false`——比對的兩側折得不一樣，正是 ADR-0018 記下的那個失敗形狀。
+  這條路徑餵的是 `context` 的 schema 摘要。
+
+- **glob 規則在比對時折疊，而不是把 pattern 的文字改小寫。** 把 `[A-z]` 小寫成
+  `[a-z]` 會讓它代表的字元集合悄悄變小（`Z` 與 `a` 之間那六個 ASCII 字元離開了
+  字元類別），規則保護的東西會比它寫的少。`globMatches` 新增 `caseInsensitive`
+  選項，在字元比對的地方折，pattern 的文字一個字都不動。
+
 ## [6.0.0] - 2026-09-01 - 一份黑名單設定，四個互不相同的比對器
 
 規格 SQL 第 7、8、9 則與 MongoDB 第 3–6 則。設計決策記在

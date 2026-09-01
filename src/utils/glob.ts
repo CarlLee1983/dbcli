@@ -3,6 +3,8 @@
  * targets: Redis key patterns and Elasticsearch index expressions.
  */
 
+import { foldCase } from './case-fold'
+
 /**
  * Convert a glob (`*`, `?`, `[abc]`, `[a-z]`) to a RegExp anchored on the whole string.
  *
@@ -139,13 +141,19 @@ const parsedGlobs = new Map<string, ParsedGlob>()
 const PARSED_GLOB_LIMIT = 4096
 
 /**
- * The two modes parse to different tokens — a folded literal, a class compiled
- * with `i` — so they cannot share a memo entry. `\u0000` cannot appear in a
- * glob that reached here as a config entry, and even if it did the prefix keeps
- * the two namespaces apart.
+ * 兩種模式解析出不同的 token——折過的字面、帶 `i` 編譯的字元類——所以不能共用
+ * 同一筆記憶。**兩種模式都要加前綴**：只加一邊會讓兩個命名空間重疊。先前的鍵是
+ * `caseInsensitive ? 'i' + NUL + glob : glob`，於是一個字面以 `i` 加 NUL 開頭的
+ * 非折疊 pattern 會佔走它自己後綴在折疊模式下的那一格，而那條規則接下來整個
+ * process 都答錯。
+ *
+ * 這不只是設定檔的問題。`patternsOverlap` 把使用者 `SCAN … MATCH` 的 pattern 當成
+ * 第一個引數、以非折疊模式傳進來（`src/adapters/redis/blacklist-enforcer.ts`），
+ * 所以那一格是請求方指定得到的。原本的註解說設定檔項目裡不會有 NUL，那是對的但
+ * 不相干：ES 的 index 運算式與 Redis 的 key pattern 都不來自設定檔。
  */
 function parseGlob(glob: string, caseInsensitive: boolean): ParsedGlob {
-  const key = caseInsensitive ? `i\u0000${glob}` : glob
+  const key = `${caseInsensitive ? 'i' : 'c'}\u0000${glob}`
   const memo = parsedGlobs.get(key)
   if (memo !== undefined) return memo
   const parsed = parseGlobUncached(glob, caseInsensitive)
@@ -170,7 +178,9 @@ function parseGlobUncached(glob: string, caseInsensitive: boolean): ParsedGlob {
     const c = glob[i]!
     if (c === '\\' && i + 1 < glob.length) {
       trailingStar = false
-      current.push(literalToken(glob[++i] as string, caseInsensitive))
+      const escaped = String.fromCodePoint(glob.codePointAt(++i)!)
+      i += escaped.length - 1
+      current.push(...literalToken(escaped, caseInsensitive))
       continue
     }
     if (c === '*') {
@@ -199,10 +209,13 @@ function parseGlobUncached(glob: string, caseInsensitive: boolean): ParsedGlob {
         i = end
         continue
       }
-      current.push(literalToken('[', caseInsensitive))
+      current.push(...literalToken('[', caseInsensitive))
       continue
     }
-    current.push(literalToken(c, caseInsensitive))
+    // 以碼點而不是碼元前進：`c` 是 `glob[i]`，對 astral 字元是半個代理對。
+    const literal = String.fromCodePoint(glob.codePointAt(i)!)
+    i += literal.length - 1
+    current.push(...literalToken(literal, caseInsensitive))
   }
   endRun()
 
@@ -210,26 +223,58 @@ function parseGlobUncached(glob: string, caseInsensitive: boolean): ParsedGlob {
 }
 
 /**
- * A literal token, folded now rather than at every comparison.
+ * The literal tokens one pattern **code point** contributes, folded now rather
+ * than at every comparison.
  *
  * The fold lives in the token, not in the pattern text: rewriting the text
  * would also rewrite a character class, and `[A-z]` lower-cased stands for a
  * smaller set than it did. ADR-0020.
+ *
+ * 兩件事在這裡交會，缺一個就是 fail-open。
+ *
+ * 進來的必須是**完整的碼點**：`foldCase` 對半個代理對是恆等函式，而
+ * `globMatches` 比對的文字是整串折過的，那一側會把碼點真的映成小寫。兩側折的
+ * 粒度不同時，規則 `𐐀` 比不上欄位 `𐐀`——它連自己都命不中。舊版兩側都沒折
+ * 碼點，靠一起不折而碰巧相等。
+ *
+ * 出去的必須是**逐碼元**的 token：`runMatchesAt` 用 `text[at + i]` 取字，那是
+ * 碼元。一個 astral 字元折出來是兩個碼元，塞進一個 token 就永遠不等於任何單一
+ * 碼元。`foldCase` 保長（見 `case-fold.ts`）保證的是碼元數不變，不是「一個字元
+ * 一個 token」。
  */
-function literalToken(char: string, caseInsensitive: boolean): GlobToken {
-  return { kind: 'literal', char: caseInsensitive ? char.toLowerCase() : char }
+function literalToken(codePoint: string, caseInsensitive: boolean): GlobToken[] {
+  const folded = caseInsensitive ? foldCase(codePoint) : codePoint
+  return folded.split('').map((unit) => ({ kind: 'literal', char: unit }) as const)
 }
 
-/** Whether `run` matches `text` starting at `at`. */
-function runMatchesAt(run: GlobRun, text: string, at: number, caseInsensitive: boolean): boolean {
+/**
+ * Whether `run` matches `text` starting at `at`.
+ *
+ * `text` is already folded when the caller asked for it — `globMatches` folds
+ * the whole string once — so a literal token compares as it stands. Folding
+ * here instead, one character at a time, was the divergence: `toLowerCase`'s
+ * `Final_Sigma` rule reads the characters around the one it is folding, and a
+ * single character never has any.
+ */
+function runMatchesAt(run: GlobRun, text: string, raw: string, at: number): boolean {
   if (at + run.length > text.length) return false
   for (let i = 0; i < run.length; i++) {
     const token = run[i]!
-    const ch = text[at + i]!
     if (token.kind === 'literal') {
-      if (token.char !== (caseInsensitive ? ch.toLowerCase() : ch)) return false
+      if (token.char !== text[at + i]!) return false
     } else if (token.kind === 'class') {
-      if (!token.test.test(ch)) return false
+      // 字元類比對的是**未折疊**的文字，和折疊之前一樣。類別自己帶 `i` 旗標，
+      // 所以折過再比對在 BMP 上不多做任何事，卻會把 astral 字元的低位代理換掉
+      // ——`[𐐀]` 於是比不上 `𐐀`。大小寫由 `i` 回答是 ADR-0020 Decision 2 的
+      // 立場：pattern 的文字一個字都不改寫。
+      const rawChar = raw[at + i]
+      // 折疊保長，所以這裡永遠取得到；取不到就是那個不變量壞了，而
+      // `test.test(undefined)` 會去比對字串 `"undefined"`——`[a-z]` 命中它，於是
+      // 一個壞掉的不變量會以「命中」的形式安靜地答錯。
+      if (rawChar === undefined) {
+        throw new Error('globMatches: folded and unfolded subject lengths disagree')
+      }
+      if (!token.test.test(rawChar)) return false
     }
     // `any` matches whatever is there, newline included — Redis's `?` eats a
     // byte without asking what it is.
@@ -257,13 +302,18 @@ function runMatchesAt(run: GlobRun, text: string, at: number, caseInsensitive: b
  * a reader expecting "one `?` is one character" would be wrong about both. Prefer this to `globToRegex` wherever the answer is a
  * boolean; the compiled form is only for callers that genuinely need a RegExp.
  */
-export function globMatches(glob: string, text: string, options?: GlobMatchOptions): boolean {
+export function globMatches(glob: string, subject: string, options?: GlobMatchOptions): boolean {
   const caseInsensitive = options?.caseInsensitive === true
   const { runs, leadingStar, trailingStar, anchored } = parseGlob(glob, caseInsensitive)
+  // 整串折一次，和 `foldFieldPath` 折的是同一件事。呼叫端多半已經折過，而
+  // `foldCase` 是冪等的，所以重折不改變答案。
+  // `foldCase` 保長，所以 `text` 與 `subject` 的碼元索引一一對應——字元類才能
+  // 用同一個 `at + i` 去看未折疊的那一份。
+  const text = caseInsensitive ? foldCase(subject) : subject
 
   if (anchored) {
     const run = runs[0] ?? []
-    return text.length === run.length && runMatchesAt(run, text, 0, caseInsensitive)
+    return text.length === run.length && runMatchesAt(run, text, subject, 0)
   }
   if (runs.length === 0) return true // the glob is nothing but wildcards
 
@@ -273,14 +323,14 @@ export function globMatches(glob: string, text: string, options?: GlobMatchOptio
 
   if (!leadingStar) {
     const head = runs[0]!
-    if (!runMatchesAt(head, text, 0, caseInsensitive)) return false
+    if (!runMatchesAt(head, text, subject, 0)) return false
     cursor = head.length
     first = 1
   }
   if (!trailingStar) {
     const tail = runs[last - 1]!
     const at = text.length - tail.length
-    if (at < cursor || !runMatchesAt(tail, text, at, caseInsensitive)) return false
+    if (at < cursor || !runMatchesAt(tail, text, subject, at)) return false
     last -= 1
   }
 
@@ -292,7 +342,7 @@ export function globMatches(glob: string, text: string, options?: GlobMatchOptio
     const run = runs[r]!
     let found = -1
     for (let at = cursor; at + run.length <= limit; at++) {
-      if (runMatchesAt(run, text, at, caseInsensitive)) {
+      if (runMatchesAt(run, text, subject, at)) {
         found = at
         break
       }

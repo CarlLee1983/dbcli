@@ -1,10 +1,14 @@
-import { isGlobPattern } from '@/utils/glob'
 import { t, t_vars } from '@/i18n/message-loader'
 import { indexExpressionReaches } from '@/utils/es-index-target'
 import { routedPathname } from '@/core/permission/elasticsearch'
 import { foldFieldPath } from '@/core/blacklist-fold'
 import { normalizeBlacklistEntry } from '@/core/blacklist-manager'
-import { compilePatterns, matchAny, type MongoPathPattern } from '@/core/mongo/path-matcher'
+import {
+  contiguousRulesFor,
+  reachesProtectedPath,
+  reachesProtectedSegments,
+  type ContiguousRules,
+} from '@/core/mongo/path-matcher'
 
 /**
  * The machine-readable half of a blacklist refusal.
@@ -220,77 +224,21 @@ export function namesProtectedField(term: string, protectedFields: ReadonlySet<s
   // paths use. Byte-for-byte comparison made this the fifth matcher of one
   // config: `dbcli es` returned under a rule `Password` or `pass*` what
   // `dbcli query --index` masked. ADR-0020 Decision 1, ADR-0019 Decision 2.
-  return reachesProtected(foldFieldPath(term), compiledRules(protectedFields))
+  return reachesProtected(foldFieldPath(term), contiguousRulesFor(protectedFields))
 }
 
 /** The same question with the fold and the glob compilation already done. */
-function reachesProtected(folded: string, rules: CompiledRules): boolean {
-  const { literals, globs } = rules
-  if (literals.has(folded)) return true
-  if (globs.length > 0 && matchAny(folded, globs)) return true
-  const parts = folded.split('.')
-  if (parts.length === 1) return false
-  for (let start = 0; start < parts.length; start += 1) {
-    for (let end = start + 1; end <= parts.length; end += 1) {
-      const candidate = parts.slice(start, end).join('.')
-      if (literals.has(candidate)) return true
-      if (globs.length > 0 && matchAny(candidate, globs)) return true
-    }
-  }
-  return false
-}
-
-/**
- * The rule set split the way comparison needs it: literals folded, patterns
- * compiled, and no entry in both halves.
- *
- * An entry carrying a metacharacter is a pattern and nothing else. Leaving it
- * in the literal set as well let equality answer a question the glob semantics
- * answer differently: `back\\slash` matched itself by string equality — the raw
- * entry happened to be lower-case already — while `Back\\Slash` matched nothing,
- * since the compiled pattern reads `\\S` as a literal `S` and the folded term
- * never equals the raw entry. One rule, two answers, decided by its case.
- */
-interface CompiledRules {
-  readonly literals: ReadonlySet<string>
-  readonly globs: ReadonlyArray<MongoPathPattern>
-}
-
-/**
- * Memoised per rule set: `redactFields` walks every key of a response and asks
- * this question at each one.
- *
- * A rule the matcher cannot read is not silently dropped — that turned a
- * malformed entry into "no rule" everywhere else in the blacklist, and this
- * path has no second mask behind it. ADR-0019 Decision 3.
- */
-const compiledRuleSets = new WeakMap<ReadonlySet<string>, CompiledRules>()
-
-function compiledRules(protectedFields: ReadonlySet<string>): CompiledRules {
-  const memo = compiledRuleSets.get(protectedFields)
-  if (memo !== undefined) return memo
-  const globbed: string[] = []
-  const literals = new Set<string>()
-  for (const rule of protectedFields) {
-    if (isGlobPattern(rule)) globbed.push(rule)
-    else literals.add(foldFieldPath(rule))
-  }
-  let globs: MongoPathPattern[] = []
-  if (globbed.length > 0) {
-    const compiled = compilePatterns(globbed)
-    if (compiled.rejected.length > 0) {
-      const detail = compiled.rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
-      throw new Error(`BlacklistRejection: blacklist entries this matcher cannot read: ${detail}`)
-    }
-    globs = compiled.patterns
-  }
-  const rules: CompiledRules = { literals, globs }
-  compiledRuleSets.set(protectedFields, rules)
-  return rules
+function reachesProtected(folded: string, rules: ContiguousRules): boolean {
+  return reachesProtectedPath(folded, rules)
 }
 
 export function redactFields(node: unknown, fields: Set<string>, trail: string[] = []): unknown {
-  return redactWithGlobs(node, compiledRules(fields), trail.map(foldFieldPath))
+  // 與走訪時同一條規則：trail 的每一段也可能是點分的，展開成元件而不是當成一段。
+  return redactWithGlobs(
+    node,
+    contiguousRulesFor(fields),
+    trail.flatMap((entry) => foldFieldPath(entry).split('.'))
+  )
 }
 
 /**
@@ -300,7 +248,7 @@ export function redactFields(node: unknown, fields: Set<string>, trail: string[]
  * A response is walked key by key, so folding the trail per key and recompiling
  * the rules per key measured 2.4x on 1000 hits x 20 fields.
  */
-function redactWithGlobs(node: unknown, rules: CompiledRules, trail: string[]): unknown {
+function redactWithGlobs(node: unknown, rules: ContiguousRules, trail: string[]): unknown {
   // 陣列不進 trail：`hits.hits[]` 的索引不是欄位路徑的一部分。
   if (Array.isArray(node)) return node.map((item) => redactWithGlobs(item, rules, trail))
   if (node === null || typeof node !== 'object') return node
@@ -319,8 +267,12 @@ function redactWithGlobs(node: unknown, rules: CompiledRules, trail: string[]): 
     // 巢狀那一側的每一層都不等於任何黑名單項目，於是含 `.` 的設定對回應毫無
     // 作用。信封鍵（`hits`、`_source`）留在 trail 裡無妨——比對只看結尾的
     // 連續區段。
-    const path = [...trail, foldFieldPath(key)]
-    if (reachesProtected(path.join('.'), rules)) continue
+    // 鍵自己就可能是點分的（`fields` 的 `user.password.keyword`、一個聚合的
+    // 名稱）。這裡展開成元件是為了**維持**先前的答案而不是改變它：舊版
+    // `join('.')` 完馬上在比對裡 `split('.')` 回去，等於已經把這種鍵切開了。
+    // 少了這一行，比對會把整個鍵當成一段，`user.password` 就構不到它。
+    const path = [...trail, ...foldFieldPath(key).split('.')]
+    if (reachesProtectedSegments(path, rules)) continue
     out[key] = redactWithGlobs(value, rules, path)
   }
   return out
@@ -513,8 +465,8 @@ export function assertNoBlacklistedIndexNamed(args: {
 export function collectProtectedFields(blacklistColumns: Record<string, string[]>): Set<string> {
   // Normalised by the config loader's own function, so a quoted or padded entry
   // means here what it means everywhere else. Folding and glob compilation
-  // happen in `compiledRules`, which keeps the two halves apart; a pattern's
-  // text is never rewritten. ADR-0020.
+  // happen in `contiguousRulesFor`, which keeps the two halves apart; a
+  // pattern's text is never rewritten. ADR-0020.
   const fields = new Set(
     Object.values(blacklistColumns)
       .flat()
@@ -526,7 +478,7 @@ export function collectProtectedFields(blacklistColumns: Record<string, string[]
   // request, and refusing it on the way back means the cluster already acted on
   // it. Every other path in the blacklist rejects before it does any work —
   // ADR-0019 Decision 3.
-  compiledRules(fields)
+  contiguousRulesFor(fields)
   return fields
 }
 

@@ -59,7 +59,9 @@ function dedupe(values: string[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []
   for (const value of values) {
-    const key = value.toLowerCase()
+    // 同一個折疊函式。這裡不折反而會多留條目（往檢查更多的方向），所以不是
+    // fail-open，但一套折疊規則就是一套。
+    const key = foldFieldPath(value)
     if (value.length === 0 || seen.has(key)) continue
     seen.add(key)
     result.push(value)

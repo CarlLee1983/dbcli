@@ -134,8 +134,11 @@ export function matchesIndexGlob(pattern: string, name: string): boolean {
  * documented ceiling.
  */
 function reachesByConvention(name: string, entry: string): boolean {
-  const lower = name.toLowerCase()
-  const target = entry.toLowerCase()
+  // 與 `indexExpressionReaches` 的精確比對那一半折得一樣。裸的 `toLowerCase` 曾是
+  // 同一個函式裡的第二套折疊，於是條目 `ΑΣ` 構得到 index `ασ`、構不到它的 backing
+  // index `.ds-ασ-2026`——擋不住 backing index 就是擋不住讀取。ADR-0020。
+  const lower = foldFieldPath(name)
+  const target = foldFieldPath(entry)
   return (
     new RegExp(`^\\.ds-${escapeRegExp(target)}-`).test(lower) ||
     new RegExp(`^${escapeRegExp(target)}-\\d+$`).test(lower)

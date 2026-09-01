@@ -1,4 +1,5 @@
 import { matchSegment, type MongoPathPattern } from './mongo/path-matcher'
+import { foldCase } from '@/utils/case-fold'
 
 export type FieldSelection =
   | { mode: 'include'; paths: readonly string[] }
@@ -70,11 +71,14 @@ export function hasFieldPath(
   const caseInsensitive = options?.caseInsensitive === true
   // Folded once here rather than at every level of every row: the masker asks
   // this question once per dotted rule per row, so folding inside `readPath`
-  // repeated the same `toLowerCase` tens of thousands of times.
+  // repeated the same fold tens of thousands of times.
+  //
+  // `foldCase`, not a bare `toLowerCase`: the rule's segments arrive folded by
+  // `foldFieldPath`, and the two agreed only while `foldFieldPath` *was*
+  // `toLowerCase`. Once it stopped being that, a rule `profile.ΑΣ` returned the
+  // key it names and masked the one it does not. ADR-0020, first clause.
   const folded =
-    caseInsensitive && options?.alreadyFolded !== true
-      ? segments.map((segment) => segment.toLowerCase())
-      : segments
+    caseInsensitive && options?.alreadyFolded !== true ? segments.map(foldCase) : segments
   return readPath(row, folded, caseInsensitive).found
 }
 
@@ -349,7 +353,7 @@ export function omitFieldPaths(
   // a thousand, over the benchmark's budget, for traversal 999 rows cannot use.
   //
   // Ceiling: a genuinely nested row still costs one rebuild per path that reaches it.
-  const fold = (value: string): string => (caseInsensitive ? value.toLowerCase() : value)
+  const fold = (value: string): string => (caseInsensitive ? foldCase(value) : value)
   const topLevel = new Set<string>(paths.map(fold))
   const dotted = paths
     .filter((path) => path.includes('.'))
@@ -451,7 +455,7 @@ function foldedKeys(value: Record<string, unknown>): Map<string, string> {
   if (memo !== undefined) return memo
   const index = new Map<string, string>()
   for (const key of Object.getOwnPropertyNames(value)) {
-    const folded = key.toLowerCase()
+    const folded = foldCase(key)
     if (!index.has(folded)) index.set(folded, key)
   }
   foldedKeyIndex.set(value, index)
@@ -531,7 +535,7 @@ function omitPath(value: unknown, segments: readonly string[], caseInsensitive: 
   if (Array.isArray(value)) return value.map((item) => omitPath(item, segments, caseInsensitive))
   if (!isPlainRecord(value)) return value
 
-  const fold = (name: string): string => (caseInsensitive ? name.toLowerCase() : name)
+  const fold = (name: string): string => (caseInsensitive ? foldCase(name) : name)
   const exactPath = fold(segments.join('.'))
   const head = fold(segments[0]!)
   const tail = segments.slice(1)
@@ -557,7 +561,7 @@ function cloneRecord(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(value)) {
-    if (!omittedKeys.has(caseInsensitive ? key.toLowerCase() : key)) defineData(out, key, child)
+    if (!omittedKeys.has(caseInsensitive ? foldCase(key) : key)) defineData(out, key, child)
   }
   return out
 }

@@ -167,14 +167,16 @@ export function protectedFieldsForRequest(
   }
   collectStrings(request)
 
-  // Lower-cased on both sides. `findCaseInsensitive` in `field-masker.ts` looks
-  // rules up that way, so an exact-match test here would have made the same
-  // configuration protect the response and not the request.
-  const namedLower = new Set([...named].map((value) => value.toLowerCase()))
+  // 折疊過的兩側，用的是每個比對器都呼叫的那個函式。`findCaseInsensitive` 在
+  // `field-masker.ts` 以同一種方式查規則，所以這裡若用精確比對，同一份設定會
+  // 保護回應而不保護請求。裸的 `toLowerCase` 是同樣的問題換一個字母——
+  // `foldFieldPath` 不再是 `toLowerCase` 之後，`ασ` 底下的規則對 `ΑΣ` 查不到。
+  const namedFolded = new Set([...named].map(foldFieldPath))
+  const collectionFolded = foldFieldPath(collection)
   const fields = new Set<string>()
   for (const [name, rules] of Object.entries(columns)) {
-    const applies =
-      name.toLowerCase() === collection.toLowerCase() || namedLower.has(name.toLowerCase())
+    const folded = foldFieldPath(name)
+    const applies = folded === collectionFolded || namedFolded.has(folded)
     if (!applies) continue
     for (const rule of rules) {
       const trimmed = rule.trim()

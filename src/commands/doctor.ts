@@ -1,4 +1,5 @@
 import { Command } from 'commander'
+import { foldFieldPath } from '@/core/blacklist-fold'
 import { colors } from '@/utils/colors'
 import { configModule } from '@/core/config'
 import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
@@ -341,9 +342,14 @@ export const runDoctorChecks = {
     for (const [table, columns] of tableColumns) {
       const blacklisted = blacklistedColumns.get(table) ?? new Set()
       for (const col of columns) {
+        // 兩個不同的問題，兩種折疊，刻意如此。`SENSITIVE_PATTERNS` 是 ASCII 的
+        // 啟發式子字串，`toLowerCase` 就夠；`blacklisted` 這一半是拿名稱去比對
+        // 規則，走的必須是同一個折疊函式——先前完全不折，於是規則換個大小寫寫，
+        // 這份報告就說那個欄位沒有受保護。
         const colLower = col.toLowerCase()
         const isSensitive = SENSITIVE_PATTERNS.some((p) => colLower.includes(p))
-        if (isSensitive && !blacklisted.has(col)) {
+        const foldedRules = new Set([...blacklisted].map(foldFieldPath))
+        if (isSensitive && !foldedRules.has(foldFieldPath(col))) {
           unprotected.push(`${table}.${col}`)
         }
       }

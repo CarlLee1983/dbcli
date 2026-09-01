@@ -1,4 +1,5 @@
 import type { TableSchema } from '@/adapters/types'
+import { foldFieldPath } from '@/core/blacklist-fold'
 import { checkPermission, classifyStatement } from '@/core/permission-guard'
 import { getSizeCategory } from '@/core/size-category'
 import type { BlacklistConfig } from '@/types/blacklist'
@@ -316,10 +317,11 @@ function applyBlacklistRules(
   blacklist: BlacklistConfig,
   factors: QueryRiskFactor[]
 ): void {
-  const blacklistedTables = new Set((blacklist.tables ?? []).map((table) => table.toLowerCase()))
+  // 同一個折疊函式——顧問輸出，但一套折疊規則就是一套。
+  const blacklistedTables = new Set((blacklist.tables ?? []).map(foldFieldPath))
 
   for (const table of facts.targetTables) {
-    if (blacklistedTables.has(table.toLowerCase())) {
+    if (blacklistedTables.has(foldFieldPath(table))) {
       pushFactor(factors, 'table_blacklisted', 'block', `Target table ${table} is blacklisted.`)
     }
   }
@@ -342,7 +344,7 @@ function applyBlacklistRules(
 function findBlacklistedColumnsForTable(blacklist: BlacklistConfig, table: string): Set<string> {
   const columns = blacklist.columns ?? {}
   for (const [tableName, columnNames] of Object.entries(columns)) {
-    if (tableName.toLowerCase() === table.toLowerCase()) {
+    if (foldFieldPath(tableName) === foldFieldPath(table)) {
       return new Set(columnNames)
     }
   }

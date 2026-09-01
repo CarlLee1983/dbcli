@@ -17,7 +17,8 @@
  * protecting `profile` itself, silently narrowing rules already deployed.
  */
 
-import { globMatches, globNeverMatches } from '@/utils/glob'
+import { globMatches, globNeverMatches, isGlobPattern } from '@/utils/glob'
+import { foldFieldPath } from '@/core/blacklist-fold'
 
 export interface MongoPathPattern {
   readonly raw: string
@@ -118,4 +119,121 @@ export function matchAny(path: string, patterns: ReadonlyArray<MongoPathPattern>
     if (ok) return true
   }
   return false
+}
+
+/**
+ * 規則集拆成比對需要的形狀：字面規則、編譯過的樣式，以及字面規則有幾種寬度。
+ *
+ * 寬度是這裡唯一的新資訊，也是整個改動的重點。一條字面規則的點分元件數是固定
+ * 的，只有同寬度的區段可能等於它，所以列舉全部 O(n²) 個區段裡有 O(n²) 個從一
+ * 開始就不可能命中。樣式同理：`MongoPathPattern` 的 `segments.length` 決定它
+ * 只看得到那個寬度的窗口，而尾端 `*` 的樣式只取決於窗口的**起點**——最短的那個
+ * 窗口命中，更長的也命中——所以同樣只需要試一次。
+ */
+export interface ContiguousRules {
+  readonly literals: ReadonlySet<string>
+  readonly globs: ReadonlyArray<MongoPathPattern>
+  /** 字面規則出現過的點分元件數，去重後由小到大。 */
+  readonly literalWidths: ReadonlyArray<number>
+}
+
+export function contiguousRules(
+  literals: ReadonlySet<string>,
+  globs: ReadonlyArray<MongoPathPattern>
+): ContiguousRules {
+  const widths = new Set<number>()
+  for (const rule of literals) widths.add(rule.split('.').length)
+  return { literals, globs, literalWidths: [...widths].sort((a, b) => a - b) }
+}
+
+/**
+ * 這條點分路徑有沒有任何**連續區段**命中規則集。
+ *
+ * 比的是區段而不是整串相等、也不是單一元件：`user.password` 與
+ * `password.keyword` 都構得到 `password`，`passwordless` 則否。子字串比對會誤
+ * 拒 `passwordless`，整串比對會漏掉 `user.password`。
+ *
+ * 路徑以**已折疊的元件陣列**傳進來，不是字串：呼叫端本來就是一層一層往下走
+ * 的，先 `join('.')` 再在這裡 `split('.')` 回去，是把已知的結構丟掉再猜一次。
+ *
+ * 舊版對每個起點列舉每個終點並組出字串，是 O(depth³)；量到深度 5→40 的成本
+ * 差 175 倍（2026-09-01）。回應的巢狀深度由叢集決定，不由設定決定。
+ */
+export function reachesProtectedSegments(
+  segments: ReadonlyArray<string>,
+  rules: ContiguousRules
+): boolean {
+  const { literals, globs, literalWidths } = rules
+  const depth = segments.length
+  for (let start = 0; start < depth; start++) {
+    for (const width of literalWidths) {
+      const end = start + width
+      if (end > depth) break // 寬度已排序，後面的只會更長
+      const candidate = width === 1 ? segments[start]! : segments.slice(start, end).join('.')
+      if (literals.has(candidate)) return true
+    }
+    for (const pattern of globs) {
+      const width = pattern.segments.length
+      if (start + width > depth) continue
+      let matched = true
+      for (let i = 0; i < width; i++) {
+        if (!matchSegment(pattern.segments[i]!, segments[start + i]!)) {
+          matched = false
+          break
+        }
+      }
+      if (matched) return true
+    }
+  }
+  return false
+}
+
+/** 同一個問題，路徑還是字串時的入口。 */
+export function reachesProtectedPath(path: string, rules: ContiguousRules): boolean {
+  return reachesProtectedSegments(path.split('.'), rules)
+}
+
+/**
+ * 一組黑名單規則編譯成比對用的形狀，依規則集記憶。
+ *
+ * 記憶是必要的而不是最佳化：`redactFields` 走過回應的每一個鍵、
+ * `findProtectedFieldReference` 走過請求的每一個候選名稱，都會問同一個問題。
+ * 後者原本每次呼叫都重折一次規則、重編一次樣式。
+ *
+ * 帶有 metacharacter 的項目**只**進樣式那一半。同時留在字面集合裡會讓相等比對
+ * 回答一個 glob 語意答得不一樣的問題：`back\\slash` 靠字串相等命中自己——原始
+ * 項目剛好已經是小寫——而 `Back\\Slash` 什麼都命不中，因為編譯後的樣式把 `\\S`
+ * 讀成字面的 `S`，折疊後的名稱又永遠不等於原始項目。一條規則兩個答案，由它的
+ * 大小寫決定。ADR-0020 的 falsification 段落點名這一條。
+ *
+ * 讀不懂的規則不會被默默丟掉——那會讓一個寫壞的項目在別處等於「沒有規則」，而
+ * 這條路徑後面沒有第二層遮罩。ADR-0019 Decision 3。
+ *
+ * 傳進來的 Set 一旦被記憶就視為不可變。兩個生產呼叫端
+ * （`collectProtectedFields`、`protectedFieldsForRequest`）都回傳全新且之後不再
+ * 變動的 Set；一個會在遮罩開始後才加規則的呼叫端，加進去的那條不會生效。
+ */
+const compiledRuleSets = new WeakMap<ReadonlySet<string>, ContiguousRules>()
+
+export function contiguousRulesFor(protectedFields: ReadonlySet<string>): ContiguousRules {
+  const memo = compiledRuleSets.get(protectedFields)
+  if (memo !== undefined) return memo
+  const globbed: string[] = []
+  const literals = new Set<string>()
+  for (const rule of protectedFields) {
+    if (isGlobPattern(rule)) globbed.push(rule)
+    else literals.add(foldFieldPath(rule))
+  }
+  let globs: MongoPathPattern[] = []
+  if (globbed.length > 0) {
+    const compiled = compilePatterns(globbed)
+    if (compiled.rejected.length > 0) {
+      const detail = compiled.rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
+      throw new Error(`BlacklistRejection: blacklist entries this matcher cannot read: ${detail}`)
+    }
+    globs = compiled.patterns
+  }
+  const rules = contiguousRules(literals, globs)
+  compiledRuleSets.set(protectedFields, rules)
+  return rules
 }

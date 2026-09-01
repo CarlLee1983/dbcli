@@ -65,6 +65,14 @@ describe('a rule and a field name are compared case-insensitively everywhere', (
     ['profile.ssn', 'profile.SSN'],
     ['profile.ss*', 'profile.SS_num'],
     ['PROFILE.*', 'profile.ssn'],
+    // 希臘文尾字 sigma：`foldFieldPath` 折整串，`Σ` 在非字母前變 `ς`；
+    // `globMatches` 逐字折，同一個 `Σ` 變 `σ`。一份設定兩種折疊，而分歧
+    // 落在 fail-open 的那一邊——規則指名的欄位原文回傳。
+    ['ΑΣ*', 'ΑΣ_num'],
+    ['*ΑΣ', 'user_ΑΣ'],
+    // U+0130 小寫成兩個碼元（`i` + U+0307）。整串折得到兩個碼元，逐字折的
+    // token 卻仍佔一格，於是固定寬度的比對永遠對不齊。
+    ['İ*', 'İd'],
   ]
 
   test.each(cases)('rule %p protects %p on all four matchers', (rule, field) => {

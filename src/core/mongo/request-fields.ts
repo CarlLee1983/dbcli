@@ -15,8 +15,7 @@
  * data; the other one discloses it.
  */
 
-import { isGlobPattern } from '@/utils/glob'
-import { compilePatterns, matchAny, type MongoPathPattern } from './path-matcher'
+import { contiguousRulesFor, reachesProtectedPath } from './path-matcher'
 import { foldFieldPath } from '@/core/blacklist-fold'
 
 /** Strip the `$` that marks a field reference in an aggregation expression. */
@@ -66,54 +65,6 @@ const RESHAPES_DOCUMENT = new Set(['$objectToArray', '$replaceRoot', '$replaceWi
 const NAMES_A_FIELD_DYNAMICALLY = '$getField'
 
 /**
- * The wildcard rules among `protectedFields`, compiled through the matcher the
- * read mask uses. A rule that protects a read has to name a field here too, or
- * `user.*` masks a response and permits the request that reshapes it.
- * ADR-0019 Decision 2.
- */
-function globRulesOf(protectedFields: ReadonlySet<string>): MongoPathPattern[] {
-  const globbed = [...protectedFields].filter(isGlobPattern)
-  if (globbed.length === 0) return []
-  const { patterns, rejected } = compilePatterns(globbed)
-  // ADR-0019 Decision 3. Dropping these made a malformed rule mean "no rule",
-  // and this is the check that stands between a `$project` and the plaintext.
-  if (rejected.length > 0) {
-    const detail = rejected.map((r) => `'${r.raw}' (${r.reason})`).join(', ')
-    throw new Error(`BlacklistRejection: blacklist entries this matcher cannot read: ${detail}`)
-  }
-  return patterns
-}
-
-/**
- * Whether a path names a protected field.
- *
- * Matched by contiguous dotted components, not by substring or whole-string
- * equality: `user.password` and `password.keyword` both reach `password`, while
- * `passwordless` does not. A substring test would refuse `passwordless`; a
- * whole-string test would miss `user.password`. A wildcard rule is matched the
- * same way — per component, never across the whole string.
- */
-function reachesProtectedField(
-  path: string,
-  protectedFields: ReadonlySet<string>,
-  globs: ReadonlyArray<MongoPathPattern>
-): boolean {
-  const folded = foldFieldPath(path)
-  if (protectedFields.has(folded)) return true
-  if (globs.length > 0 && matchAny(folded, globs)) return true
-  const parts = folded.split('.')
-  if (parts.length === 1) return false
-  for (let start = 0; start < parts.length; start += 1) {
-    for (let end = start + 1; end <= parts.length; end += 1) {
-      const candidate = parts.slice(start, end).join('.')
-      if (protectedFields.has(candidate)) return true
-      if (globs.length > 0 && matchAny(candidate, globs)) return true
-    }
-  }
-  return false
-}
-
-/**
  * The first protected field this request names, or `undefined`.
  *
  * Returns the path rather than a boolean so the refusal can say which field it
@@ -128,10 +79,18 @@ export function findProtectedFieldReference(
   // Both sides fold, by the one function every other matcher calls: the request
   // chooses the case it writes a field name in, so a check comparing it as
   // written is defeated by a rule that was written correctly. Literal rules
-  // fold here; glob rules fold inside the matcher, where their text is not
+  // fold there; glob rules fold inside the matcher, where their text is not
   // rewritten. ADR-0020.
-  const literalRules = new Set([...protectedFields].map(foldFieldPath))
-  const globs = globRulesOf(protectedFields)
+  //
+  // 與 ES shell 共用同一個編譯：舊版在這裡自己折一次規則、自己編一次樣式，而
+  // 那份拷貝把帶 metacharacter 的項目**也**放進字面集合——正是 ADR-0020 的
+  // falsification 段落對 ES shell 點名、卻沒人檢查這一側的形狀。
+  //
+  // `contiguousRulesFor` 的記憶在這條路徑上不會命中：`protectedFieldsForRequest`
+  // 每個請求都建一個新的 Set，所以每次都是新的 key。省下的是那份重複的編譯，
+  // 不是跨呼叫的快取——舊版也已經是一次呼叫編譯一次。記憶對 ES shell 那側才
+  // 有用，那裡 `collectProtectedFields` 的同一個 Set 實例會餵給每一個鍵。
+  const rules = contiguousRulesFor(protectedFields)
 
   const candidates: string[] = []
   // A transfer that moves the whole document, or reshapes it out of the mask's
@@ -172,7 +131,7 @@ export function findProtectedFieldReference(
   walk(request)
 
   const named = candidates.find(
-    (path) => path.length > 0 && reachesProtectedField(path, literalRules, globs)
+    (path) => path.length > 0 && reachesProtectedPath(foldFieldPath(path), rules)
   )
   if (named !== undefined) return named
   // Every protected field, so the message can say one — which one is arbitrary

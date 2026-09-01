@@ -46,6 +46,97 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
 
 ### Fixed
 
+- **折疊本身仍然是兩套規則，差別只在一個希臘字母。** `foldFieldPath` 折整串、
+  `globMatches` 折每個字元，而 `String.prototype.toLowerCase` 的 `Final_Sigma`
+  是 Unicode 預設大小寫轉換裡唯一看上下文的規則：`Σ` 前面是字母、後面不是字母時
+  折成 `ς`，其餘位置折成 `σ`。於是規則 `ΑΣ*` 對它自己指名的欄位 `ΑΣ_num` 回答
+  `false`，明文原樣回傳。ADR-0020 要的是一套折疊規則，這是它還沒真的成立的地方
+  ——寫入側從來不受影響，分歧只在讀取側往 fail-open 解決。
+
+  折疊改由 `foldCase`（`src/utils/case-fold.ts`）一個函式回答，並把 `ς` 併回
+  `σ` 讓它不再看上下文；`globMatches` 的 `caseInsensitive` 改成整串折文字一次。
+  折疊同時必須**保長**：`?` 與每個 `*`-free 區段都是固定寬度的窗口，而
+  `toLowerCase` 有唯一一個會變長的字元 `İ`（U+0130 → `i` + U+0307），所以它映成
+  `i`——那也是土耳其文給它的大小寫關係。掃過 U+0000–U+2FFFF 驗證：0 個碼位改變
+  長度、0 處上下文分歧、冪等；三項都寫成測試留在
+  `tests/unit/core/contiguous-section-matcher.test.ts`。
+
+  兩側折的**粒度**也要一樣：pattern 是逐碼元讀的，所以 astral 字元進到 token
+  時是半個代理對，而 `foldCase` 對半個代理對是恆等函式——文字那一側卻真的把碼點
+  映成了小寫。折疊之前兩側一起不折而碰巧相等；折了一側才露出來。規則 `𐐀` 於是
+  比不上欄位 `𐐀`，連自己都命不中，涵蓋每一種有大小寫的 astral 文字（Adlam 在
+  內），而 `maskMongoRows` 把所有欄位規則都送進這個比對器，所以純字面的 MongoDB
+  規則同樣受影響。parser 改為逐碼點前進，token 仍是一個碼元。字元類則改回比對
+  **未折疊**的名稱——它的大小寫由 regex 自己的 `i` 旗標回答（Decision 2），折過
+  再比在 BMP 上不多做任何事，卻會換掉 astral 字元的低位代理。
+
+  兩個既有限制不變，也不是這一則造成的：`?` 吃一個碼元，所以它從來就吃不下一個
+  完整的 astral 字元；字元類編譯時沒有 `u` 旗標，所以 astral 範圍是碼元的集合而
+  不是碼點的集合。
+
+  `İ` 映成 `i` 有一項**不是**過度拒絕的代價，而且是被迫的：字面規則 `İ` 在 main
+  上構得到拼成 `i` + U+0307 的欄位（`toLowerCase` 把兩者都送到那個序列），現在
+  雙向都構不到。對照 main 量到的：
+
+  | 規則 | 欄位 | main | 這個分支 |
+  | --- | --- | --- | --- |
+  | `İ` | `i` + U+0307 | 受保護 | **原文回傳** |
+  | `i` + U+0307 | `İ` | 受保護 | **原文回傳** |
+  | `İ` | `i`、`I` | 原文回傳 | 受保護 |
+  | `İ` | `İ` | 受保護 | 受保護 |
+
+  沒有第三個選項：保長要求 `foldCase(x).length === x.length`，而 `İ` 是一個碼元、
+  `i` + U+0307 是兩個，任何保長的折疊都不可能把兩者映成同一個字串。另一邊是上面
+  那個 `?` 對不齊——它在 `isTableBlacklisted` 上對**每一條**用到 `?` 的規則都是
+  fail-open，不是一對字元——所以這個 trade 的方向和這份記錄其餘部分一致。黑名單
+  在任何地方都不做 Unicode 正規化，兩種拼法就是兩個名字；需要兩種拼法的部署就
+  寫兩條規則。失去的是字面那條路徑，不是 glob：規則 `İ*` 在 main 上構得到 `İd`，
+  現在也構得到。
+
+- **表格名稱是這份設定的第二套折疊。** `BlacklistManager` 用裸的 `.toLowerCase()`
+  折表格名，欄位卻走 `foldFieldPath`，於是同一個 `isTableBlacklisted` 裡精確比對
+  那一半與 `wildcardTables` 那一半折得不一樣——一條規則對 `Σ` 與 `İ` 有兩個答案，
+  取決於它有沒有帶 metachar。兩半現在都是 `foldFieldPath`。這會把上面那則 `İ` 的
+  代價一併帶到表格與 collection 名稱上，而那正是重點：一條路徑只因為沒拿到新的
+  折疊而保住舊答案，那是意外不是保護。
+
+  另有一則記錄而非修正：`globMatches('İ','i')` 為真而 `globMatches('[İ]','i')`
+  為假——字元類的大小寫由 regex 的 `i` 旗標回答（Decision 2 不許改寫 pattern 的
+  文字）。兩者都仍然命中 `İ` 自己，所以不是 fail-open，但那是同一個比對器裡的
+  第二個答案。
+
+  其餘代價與 ADR-0020 選的方向一致——一份文件同時有 `ς` 與 `σ` 結尾的兩個欄位、
+  或同時有 `İd` 與 `id` 時，指名其一的規則兩個都遮。
+
+- **連續區段比對是 O(depth³)，而深度由回應決定不由設定決定。** `namesProtectedField`、
+  `redactFields` 與 MongoDB 的 `findProtectedFieldReference` 都對每個起點列舉每個
+  終點、每個候選再 `slice().join('.')` 組成字串。一條規則的點分元件數是固定的，
+  所以那些區段裡有 O(n²) 個從一開始就不可能命中。改為依規則寬度取窗口，並讓呼叫端
+  把已經走過的元件陣列直接傳進去，而不是 `join` 完再 `split` 回來。三個呼叫端現在
+  共用 `path-matcher.ts` 的 `reachesProtectedSegments`；規則集的折疊與編譯也共用
+  一份依規則集記憶的結果，`findProtectedFieldReference` 先前每次呼叫都重做一遍。
+
+  同一台機器、`git worktree` 建的 main 對照組、同一輪、五次取中位數：
+
+  | shape | main | 這個分支 |
+  | --- | --- | --- |
+  | `redactFields` 1000 hits x 20 fields | 79ms | 25ms |
+  | `redactFields` 5000 hits x 20 fields | 387ms | 119ms |
+  | `namesProtectedField` depth=5 x10000 | 34ms | 14ms |
+  | `namesProtectedField` depth=40 x10000 | 6175ms | 103ms |
+  | `findProtectedFieldReference` depth=40 x10000 | 6206ms | 90ms |
+
+  深度 5→40 是 8 倍，成本先前是 182 倍，現在是 7.4 倍。
+
+- **MongoDB 的請求檢查把帶 metachar 的條目同時放進字面集合。** 那正是 ADR-0020 的
+  falsification 段落對 ES shell 點名的形狀，只是在 `findProtectedFieldReference`
+  上沒被檢查到：`back\slash` 靠字串相等命中自己，`Back\Slash` 什麼都命不中。
+  兩條路徑現在共用同一個 `contiguousRulesFor`，含 metachar 的條目只當 pattern。
+  淨結果是這類規則在 MongoDB 上不再保護任何東西：讀取遮罩（`field-masker.ts`）
+  本來就只走 `compilePatterns`，所以請求端那層字面拒絕擋不住 `find()`，是一層看
+  得見卻不成立的保護。要保護一個名字裡真的有 `[` 或 `\` 的欄位，規則要寫成
+  跳脫形式（`col\[1\]`）。
+
 - **帶萬用字元的點分規則碰不到巢狀鍵。** SQL 與 Elasticsearch 的讀取路徑上，
   `profile.SS_num` 遮得掉 PostgreSQL `jsonb` 欄位裡的那個鍵，`profile.ss*` 原文回傳
   ——字面規則會下潛巢狀記錄，萬用字元規則只比對頂層鍵名，而 `jsonb` 的巢狀鍵在被

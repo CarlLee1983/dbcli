@@ -108,6 +108,123 @@ request chose the case of; a `--fields` path is the operator naming keys of the
 document in front of them, where two keys differing only in case are two fields
 they may legitimately want to tell apart.
 
+## Decision 4: the fold is context-free, so folding a string and folding its characters agree
+
+`foldCase` in `src/utils/case-fold.ts` is the fold, and `foldFieldPath` calls
+it. It lower-cases and then maps `ς` onto `σ`.
+
+Decision 1 said one function, and there were two: `foldFieldPath` folded a whole
+string while `globMatches` folded one character at a time, and
+`String.prototype.toLowerCase` does not answer those the same way.
+`Final_Sigma` is the one context-sensitive rule in Unicode's default case
+conversion — `Σ` preceded by a letter and not followed by one folds to `ς`,
+anywhere else to `σ` — and a single character has no context. Measured
+2026-09-01: rule `ΑΣ*` against the field `ΑΣ_num` the read path had already
+folded returned `false`. The rule names the field and does not protect it.
+
+The rule that folds a name must not read the characters around it, or the two
+sides can only agree by accident. Collapsing `ς` onto `σ` is what makes it
+context-free; verified by comparing whole-string against per-character folding
+for every code point in the BMP in five surrounding contexts — 0 divergences,
+and the fold is idempotent, so folding an already-folded name is safe.
+
+The fold must also be **length-preserving**, which is a second constraint and
+not a restatement of the first. `globMatches` compares against a subject it has
+folded as a whole, and every `?` and every `*`-free run is a fixed-width window;
+a character that folds to two code units can never line up with one. `toLowerCase`
+has exactly one such character, `İ` (U+0130 → `i` + U+0307), so `foldCase` maps
+it to `i` instead — which is also the case relation Turkish gives it. The first
+attempt at this record folded `İ` the way `toLowerCase` does and emitted one
+literal token per code unit, which lines up a pattern's literal against the text
+but leaves `?` still consuming one unit: adversarial review found that rule
+`secret?` stopped blocking the table `secretİ`, on `isTableBlacklisted`, which
+refuses a query rather than filtering a display. Verified over U+0000–U+2FFFF:
+with `İ` mapped, no code point changes length under `foldCase`.
+
+And the two sides must fold at the same **granularity**, which is a third
+constraint that length-preservation does not imply. `parseGlobUncached` reads
+the pattern by code unit, so an astral character reached the token as half a
+surrogate pair, and `foldCase` on half a pair is the identity — while the
+subject, folded as a whole string, really did case-map the code point. Before
+this branch both sides were equally unfolded and agreed by accident; folding one
+of them exposed the gap. A second adversarial review found that rule `𐐀` no
+longer matched the field `𐐀` — a literal rule failing to match the name it *is*
+— across every cased astral script, Adlam among them, and that `maskMongoRows`
+sends every column rule through this matcher, so plain literal MongoDB rules
+were affected too. The parser now advances by code point, and a token still
+holds one code unit, because `runMatchesAt` indexes the subject by code unit.
+
+A character class compares against the name **as written**, not the folded one.
+Its case-insensitivity comes from the regex's own `i` flag, which is Decision 2:
+the pattern's text is never rewritten. Folding the subject first buys nothing in
+the BMP and replaces an astral character's low surrogate, so `[𐐀]` stopped
+matching `𐐀`.
+
+All of it is asserted as tests over the whole range in
+`tests/unit/core/contiguous-section-matcher.test.ts`, because these are claims
+about every code point rather than about the handful a reviewer thinks of. Two
+limitations are unchanged from before this record and stay: `?` consumes one
+code unit, so it never matched a whole astral character, and a character class
+is compiled without the `u` flag, so an astral range is a set of code units
+rather than of code points.
+
+**Mapping `İ` to `i` loses a comparison, and the loss is forced rather than
+chosen.** A literal rule `İ` reached the field spelled `i` + U+0307 on `main`,
+because `toLowerCase` sent both to that sequence; it no longer does, in either
+direction. Measured against a `main` worktree on 2026-09-01:
+
+| rule | field | main | as landed |
+| --- | --- | --- | --- |
+| `İ` | `i` + U+0307 | protected | **returned** |
+| `i` + U+0307 | `İ` | protected | **returned** |
+| `İ` | `i`, `I` | returned | protected |
+| `İ` | `İ` | protected | protected |
+
+There is no third option. Length-preservation says `foldCase(x).length` equals
+`x.length`; `İ` is one code unit and `i` + U+0307 is two, so no length-preserving
+fold can map them to one string. The alternative is the `?` misalignment above,
+which was fail-open on `isTableBlacklisted` for *every* rule using `?` rather
+than for one character pair, so the trade resolves the way the rest of this
+record resolves. The blacklist performs no Unicode normalisation anywhere — two
+spellings of a name are two names — and this is that existing boundary reaching
+one character further, not a new policy; a deployment that needs both spellings
+writes both rules.
+
+`globMatches` was not the path that lost it: a glob rule `İ*` matched `İd` on
+`main` and matches it now. This is the literal set, where `foldFieldPath` is the
+only comparison.
+
+**The table path was the second fold, and Decision 1's "one function" was not
+literally true until now.** `BlacklistManager` folded table names with a bare
+`.toLowerCase()` while columns went through `foldFieldPath`, so inside
+`isTableBlacklisted` alone the exact-set half and the `wildcardTables` half
+folded differently — one rule got two answers for `Σ` and for `İ`, decided by
+whether it carried a metacharacter. Both halves are now `foldFieldPath`. This
+propagates the `İ` cost above to table and collection names, which is the point:
+a path that keeps the old answer only because it never got the new fold is an
+accident, not a protection.
+
+**A class and a literal now answer `İ` differently.** `globMatches('İ', 'i')` is
+true and `globMatches('[İ]', 'i')` is false, because a class takes its
+case-insensitivity from the regex `i` flag rather than from `foldCase` —
+Decision 2, which forbids rewriting a pattern's text. Neither fails to protect
+the name it writes, so this is not fail-open, but it is a second answer inside
+one matcher and is recorded rather than hidden.
+
+The remaining cost is one more over-refusal in the direction this record already
+chose: a document holding a field ending `ς` and one ending `σ`, or one named
+`İd` and one named `id`, has both redacted by a rule naming either.
+
+An earlier draft of this section closed with "nothing that was protected stops
+being protected." That sentence was written three times and was false all three:
+once with the `?` regression live, once with the astral one, and once with the
+`İ`/`i` + U+0307 loss above, which it was standing in front of. It is gone
+rather than qualified. The range scans that replace it are tests, and the one
+`runMatchesAt` actually depends on — length-preservation over *arbitrary
+strings*, not over single code points — is asserted as such, because a
+per-code-point property does not compose for free through a fold that runs a
+`replaceAll` and a context-sensitive `toLowerCase` in sequence.
+
 ## Consequences
 
 A rule spelled in a case that disagrees with the data starts protecting it,
@@ -159,6 +276,34 @@ that path enforced no wildcard rule at all, so its 35ms bought nothing. 74ms is
 what enforcing costs, after the response's trail is folded once per level rather
 than per key.
 
+**The contiguous-section scan was O(depth³), and depth is not a configuration
+choice.** `namesProtectedField`, `redactFields` and MongoDB's
+`findProtectedFieldReference` each enumerated every start with every end and
+built a string per candidate. A literal rule has a fixed number of dotted
+components, so most of those candidates could never match; the scan now takes
+one window per rule width per start, and callers hand it the segment array they
+already walked instead of joining and re-splitting. The three of them share
+`reachesProtectedSegments` and one memoised rule compilation in
+`src/core/mongo/path-matcher.ts` — which also removes the second copy of the
+literal/pattern split, where `findProtectedFieldReference` was putting an entry
+carrying a metacharacter into both halves, the shape the falsification condition
+below names for the Elasticsearch shell.
+
+Measured 2026-09-01 against a `main` worktree on this machine, same round,
+median of five:
+
+| shape | main | as landed |
+| --- | --- | --- |
+| `redactFields`, 1000 hits x 20 fields | 79ms | 25ms |
+| `redactFields`, 5000 hits x 20 fields | 387ms | 119ms |
+| `namesProtectedField`, depth 5, 10000x | 34ms | 14ms |
+| `namesProtectedField`, depth 40, 10000x | 6175ms | 103ms |
+| `findProtectedFieldReference`, depth 40, 10000x | 6206ms | 90ms |
+
+8x the depth cost 182x before and costs 7.4x now. A response's nesting depth is
+chosen by the cluster, not by the config, so this was a cost the request side
+could push.
+
 **A gap this work found and did not close.** *(Closed on 2026-09-01, in the
 branch that followed this one; the paragraph is left as written because it is
 what the measurement said at the time.)* On the SQL and Elasticsearch read
@@ -172,6 +317,24 @@ top-level names, which is a change with its own cost. Recorded in
 
 **Falsified if:** a blacklist comparison folds a name without `foldFieldPath`
 from `src/core/blacklist-fold.ts` or `globMatches`'s `caseInsensitive` option;
+or `foldFieldPath` or `globMatches` folds by any means other than `foldCase` in
+`src/utils/case-fold.ts`; or `foldCase` stops being context-free or idempotent —
+folding a string and folding its characters separately must give one answer; or
+`foldCase` stops preserving code-unit length over arbitrary strings, which is
+what lets `runMatchesAt` in `src/utils/glob.ts` index the folded and the
+unfolded subject with one offset; or `parseGlobUncached` in `src/utils/glob.ts`
+advances the pattern by code unit rather than by code point, or a literal token
+it emits holds more than one code unit; or `runMatchesAt` folds a character of
+the subject rather than comparing against a subject `globMatches` already
+folded, or compares a character class against the folded subject rather than the
+name as written; or `parseGlob`'s memo key stops distinguishing both modes by a
+prefix; or `BlacklistManager` in `src/core/blacklist-manager.ts` folds a table
+name, a column-map key, or a table-qualification check by any means other than
+`foldFieldPath`; or
+`reachesProtectedSegments` in `src/core/mongo/path-matcher.ts` stops answering
+for all three of `namesProtectedField`, `redactFields` and
+`findProtectedFieldReference`, or any of them rebuilds the rule split rather
+than taking it from `contiguousRulesFor`;
 or `foldFieldPath` folds anything less than the whole path; or
 `BlacklistManager.loadBlacklist` in `src/core/blacklist-manager.ts` stores a
 column entry folded rather than as written; or `matchAny` in

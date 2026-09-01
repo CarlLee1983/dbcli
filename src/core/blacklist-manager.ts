@@ -47,7 +47,7 @@ export function normalizeBlacklistEntry(raw: string): string {
 function assertNotTableQualified(tableKey: string, column: string): void {
   const dot = column.indexOf('.')
   if (dot <= 0) return
-  if (column.slice(0, dot).toLowerCase() !== tableKey.toLowerCase()) return
+  if (foldFieldPath(column.slice(0, dot)) !== foldFieldPath(tableKey)) return
   throw new Error(
     `[BlacklistManager] blacklist.columns["${tableKey}"] entry ${JSON.stringify(column)} is ` +
       `qualified with its own table and would never match. Write it as ` +
@@ -106,7 +106,7 @@ export class BlacklistManager {
         if (typeof tableName === 'string') {
           const entry = normalizeBlacklistEntry(tableName)
           this.rawTables.push(entry)
-          tables.add(entry.toLowerCase())
+          tables.add(foldFieldPath(entry))
         } else {
           console.warn(
             `[BlacklistManager] Invalid table name in blacklist config: ${JSON.stringify(tableName)}`
@@ -158,7 +158,7 @@ export class BlacklistManager {
         }
 
         if (columnSet.size > 0) {
-          columns.set(normalizeBlacklistEntry(tableName).toLowerCase(), columnSet)
+          columns.set(foldFieldPath(normalizeBlacklistEntry(tableName)), columnSet)
         }
       }
     } else if (blacklistConfig.columns !== undefined) {
@@ -180,7 +180,11 @@ export class BlacklistManager {
    * @returns true if the table is blacklisted
    */
   isTableBlacklisted(tableName: string): boolean {
-    const name = tableName.toLowerCase()
+    // 精確比對與萬用字元比對必須折得一樣。裸的 `toLowerCase` 在這裡曾經是第二套
+    // 折疊：字面規則走 `state.tables`（整串 `toLowerCase`），萬用字元規則走
+    // `globMatches` 的 `caseInsensitive`（`foldCase`），於是同一個函式對 `Σ` 與
+    // `İ` 有兩個答案，取決於規則裡有沒有 metachar。ADR-0020 Decision 1。
+    const name = foldFieldPath(tableName)
     if (this.state.tables.has(name)) return true
     for (const pattern of this.wildcardTables) {
       if (globMatches(pattern, tableName, { caseInsensitive: true })) return true
@@ -215,7 +219,7 @@ export class BlacklistManager {
    * was equally true. ADR-0018 Decision 3.
    */
   private columnRulesFor(tableName: string): Set<string> | undefined {
-    const key = normalizeBlacklistEntry(tableName).toLowerCase()
+    const key = foldFieldPath(normalizeBlacklistEntry(tableName))
     const direct = this.state.columns.get(key)
     if (direct) return direct
 

@@ -1,3 +1,5 @@
+import { foldCase } from '@/utils/case-fold'
+
 /**
  * The one fold a blacklist comparison applies to a column or field name.
  *
@@ -16,11 +18,16 @@
  * accepted and stated there: a document carrying both `profile.SSN` and
  * `profile.ssn` has both redacted by a rule naming either.
  *
+ * 折疊本身在 `foldCase`（`src/utils/case-fold.ts`），`globMatches` 的
+ * `caseInsensitive` 也呼叫它：兩側折出同一個答案才是一套規則，而
+ * `toLowerCase` 單獨用不是——它的 `Final_Sigma` 規則看上下文，整串折與逐字折
+ * 對同一個 `Σ` 給出不同的字元。
+ *
  * Glob rules do not come through here — a pattern's text must not be rewritten,
  * since lower-casing `[A-z]` narrows the set it stands for. They fold inside
  * `globMatches` via its `caseInsensitive` option instead, which is the same
  * rule applied where the characters are compared.
  */
 export function foldFieldPath(path: string): string {
-  return path.toLowerCase()
+  return foldCase(path)
 }

@@ -53,7 +53,7 @@ describe('developer workflow skill guidance', () => {
     const skill = await read('assets/SKILL.md')
 
     expect(skill).toContain('**Business-language discovery:**')
-    expect(skill).toContain('dbcli skill context --format json')
+    expect(skill).toContain('dbcli skill context --context-version 2 --format json')
     expect(skill).toContain('dbcli semantic search <terms> --format json')
     expect(skill).toContain('If no semantic section exists or search returns no result')
     expect(skill).toContain(
@@ -122,7 +122,7 @@ describe('developer workflow skill guidance', () => {
     expect(skill).toContain('環境設定驗證')
     expect(skill).toContain('不要列印 credentials、複製的連線字串或 blacklisted 值')
     expect(skill).toContain('**業務語言探索：**')
-    expect(skill).toContain('dbcli skill context --format json')
+    expect(skill).toContain('dbcli skill context --context-version 2 --format json')
     expect(skill).toContain('dbcli semantic search <terms> --format json')
     expect(skill).toContain('若沒有 semantic 區塊，或搜尋沒有結果')
     expect(skill).toContain('除非人類明確要求，絕不可建立、更新或 migrate 此檔案')

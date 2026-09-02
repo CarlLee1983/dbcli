@@ -1416,6 +1416,30 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.
 9.  **Shared agent CLI interface**: package consumers can import `@carllee1983/dbcli/agent-core` for `loadEnvFile`, `resolveEnvRef`, `resolveConnectionSelector`, `parseConnectionNames`, and `trimAppliedLimit` plus `AppliedLimitMetadata`, `AppliedLimitResult`, and `ConnectionSelectorInputs`. This small interface is framework- and database-independent and follows semver. The broader `./core` product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside `agent-core`.
 
+### Bounded cross-engine context (version 2)
+
+Use `dbcli skill context --context-version 2 --format json` when handing database metadata to an external agent. Version 2 is the stable agent contract; it is offline and never opens a connection, constructs an adapter, scans Redis keys, reads documents, or reads project source. The agent may inspect project code itself, subject to its own workspace safety rules, to supply business meaning that context does not contain.
+
+```bash
+dbcli skill context --context-version 2 --format json
+```
+
+Give the agent this output and its own safely discovered code context; do not give dbcli source paths or ask it to interpret natural language. Treat `permission` and descriptive `capabilities` as limits, not authority to execute a command. Use only the returned resources and approved semantic/contracts metadata. If metadata is absent or a `gaps` entry is returned, do not infer names, types, relationships, keys, or meanings: inspect permitted project code or ask for the missing evidence.
+
+Version 2 emits only safe fields: configured engine and permission; blacklist policy; capability `command`, `status`, and `sideEffectTier`; resource and field IDs/names/types; visible SQL nullable/primary-key and visible foreign-key links; flattened Elasticsearch field paths/types; declared Redis families/fields; snippet metadata without bodies/defaults; declared data-access metadata without source paths; approved semantic/contracts metadata; truncation counts; and gaps. It never emits credentials, values/results, defaults/counts, raw Elasticsearch mappings or settings, Redis keys/values, query bodies/defaults, or project source paths/contents. Blacklisted identifiers appear only in `blacklist`.
+
+| Engine | Version 2 resources | Boundary |
+| --- | --- | --- |
+| PostgreSQL, MySQL, MariaDB | Cached visible tables, safe columns, and visible foreign-key links | No defaults, counts, indexes, comments, or filtered endpoints. |
+| Elasticsearch | Cached indices with flattened field paths and types | No raw mappings, `_meta`, settings, scripts, analyzers, documents, or counts. |
+| Redis | Repository-declared `dbcli.redis-context.json` key families and fields | No discovery, scans, concrete keys, live types, or values. |
+
+Redis declarations are intentionally small: context file ≤512 KiB; ≤500 families; a family name is lowercase kebab-case, pattern ≤200 characters with unique valid `{placeholder}` values and no glob tokens, whitespace, controls, or backslashes; type is `string`, `hash`, `list`, `set`, `zset`, or `stream`. Only `hash` and `stream` may declare fields (≤100); family descriptions/field descriptions are ≤1,000 characters and aliases are ≤20 of ≤100 characters. A declaration that is malformed, concrete, unsafe, blacklisted, or overlaps a Redis field mask fails rather than exposing a partial model.
+
+Missing optional evidence is explicit: `SQL_SCHEMA_UNAVAILABLE`, `ELASTICSEARCH_MAPPING_UNAVAILABLE`, `REDIS_KEY_FAMILIES_UNAVAILABLE`, `SEMANTIC_CONTEXT_UNAVAILABLE`, `SAVED_QUERIES_UNAVAILABLE`, `DATA_ACCESS_UNAVAILABLE`, or `ALL_RESOURCES_FILTERED`; truncation also reports `CONTEXT_TRUNCATED`. Present but invalid evidence fails with the corresponding `INVALID_SCHEMA_CACHE`, `INVALID_SEMANTIC_CONTEXT`, `INVALID_SAVED_QUERY`, `INVALID_DATA_ACCESS_MANIFEST`, `INVALID_REDIS_CONTEXT`, or `INVALID_RESOURCE_REFERENCE`. MongoDB (and unknown engines) reject explicit v2 with `UNSUPPORTED_CONTEXT_ENGINE`.
+
+Omitting `--context-version` keeps byte-compatible version 1 JSON, XML, and Markdown output. `version` remains configuration metadata; v2 adds the integer `contextVersion: 2`. Consumers must ignore unknown optional v2 fields; incompatible required-field or ID-encoding changes require a new context version.
+
 ### Intent confirmation for business requests
 
 The installed skill supports three **per-request conversational preferences**; they are

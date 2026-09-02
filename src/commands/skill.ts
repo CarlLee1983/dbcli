@@ -11,6 +11,12 @@ import { packageAssetPath } from '@/utils/package-root'
 import { Command, Option } from 'commander'
 import { gatherContext } from '@/core/context/context'
 import { serializeXml, serializeJson, serializeMarkdown } from '@/core/context/serializer'
+import { gatherContextV2 } from '@/core/context/context-v2'
+import {
+  serializeContextV2Json,
+  serializeContextV2Markdown,
+  serializeContextV2Xml,
+} from '@/core/context/serializer-v2'
 import { resolveConfigPath } from '@/utils/config-path'
 import { formatForPlatform } from '@/core/skill-install/platform-format'
 
@@ -327,33 +333,39 @@ export function registerSkillCommand(program: Command): Command {
     .command('context')
     .description(t('skill.context_description'))
     .option('--format <type>', 'Output format: xml, json, markdown', 'xml')
-    .action(async (options: { format?: 'xml' | 'json' | 'markdown' }, cmd) => {
-      try {
-        const format = options.format ?? 'xml'
-        if (!['xml', 'json', 'markdown'].includes(format)) {
-          throw new Error(`Invalid format: ${format}. Supported formats: xml, json, markdown`)
+    .option('--context-version <version>', 'Agent context contract version')
+    .action(
+      async (options: { format?: 'xml' | 'json' | 'markdown'; contextVersion?: string }, cmd) => {
+        try {
+          const format = options.format ?? 'xml'
+          if (!['xml', 'json', 'markdown'].includes(format)) {
+            throw new Error(`Invalid format: ${format}. Supported formats: xml, json, markdown`)
+          }
+
+          const configPath = resolveConfigPath(cmd)
+          const workspaceRoot = process.cwd()
+          let output = ''
+          if (options.contextVersion !== undefined) {
+            if (options.contextVersion !== '2') throw new Error('UNSUPPORTED_CONTEXT_VERSION')
+            const payload = await gatherContextV2(workspaceRoot, configPath)
+            if (format === 'xml') output = serializeContextV2Xml(payload)
+            else if (format === 'json') output = serializeContextV2Json(payload)
+            else output = serializeContextV2Markdown(payload)
+          } else {
+            const payload = await gatherContext(workspaceRoot, configPath)
+            if (format === 'xml') output = serializeXml(payload)
+            else if (format === 'json') output = serializeJson(payload)
+            else output = serializeMarkdown(payload)
+          }
+
+          console.log(output)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          console.error(t_vars('errors.message', { message }))
+          process.exit(1)
         }
-
-        const configPath = resolveConfigPath(cmd)
-        const workspaceRoot = process.cwd()
-        const payload = await gatherContext(workspaceRoot, configPath)
-
-        let output = ''
-        if (format === 'xml') {
-          output = serializeXml(payload)
-        } else if (format === 'json') {
-          output = serializeJson(payload)
-        } else if (format === 'markdown') {
-          output = serializeMarkdown(payload)
-        }
-
-        console.log(output)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        console.error(t_vars('errors.message', { message }))
-        process.exit(1)
       }
-    })
+    )
 
   return skill
 }

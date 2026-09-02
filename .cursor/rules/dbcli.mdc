@@ -127,7 +127,11 @@ still stop where those gates require human confirmation.
 
 **Business-language discovery:** When a user uses a business alias, metric, recurring
 term, or relationship/join intent instead of a physical table or field name, first run
-`dbcli skill context --format json`. If it includes `semantic`, treat that reviewed
+`dbcli skill context --context-version 2 --format json`. This offline, bounded contract
+does not read project source, open a connection, scan Redis, or interpret natural language.
+Read project code only through this agent's own workspace safety checks; never pass source
+paths or contents to dbcli. If `gaps` reports missing evidence, do not guess metadata: inspect
+permitted code or ask for it. If it includes `semantic`, treat that reviewed
 section as the governed vocabulary; use `dbcli semantic search <terms> --format json`
 to look up a specific term. If `contracts` is present, use only its approved terms and
 their descriptive evidence policy; it never authorizes an assertion or query. If no semantic section exists or search returns no result, fall back to `blacklist` → `schema` mapping and tell the user that optional

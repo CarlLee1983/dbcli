@@ -7,7 +7,7 @@
  * commander command so a regression in the agent-prompt payload surface is caught.
  */
 
-import { describe, test, expect, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test'
+import { describe, test, expect, spyOn, beforeEach, afterEach, afterAll } from 'bun:test'
 import { Command } from 'commander'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs'
@@ -112,8 +112,25 @@ describe('skill context (CLI entrypoint)', () => {
     expect(parsed.permission).toBe('read-write')
     expect(parsed.version).toBe('9.9.9')
     expect(parsed.schema.users).toBeDefined()
+    expect(parsed.contextVersion).toBeUndefined()
     expect(parsed.semantic).toBeUndefined()
     expect(errOut).toBe('')
+  })
+
+  test('--context-version 2 selects the explicit bounded contract', async () => {
+    await run('--context-version', '2', '--format', 'json')
+    expect(exitCode).toBeUndefined()
+    const parsed = JSON.parse(logOut.trim())
+    expect(parsed.contextVersion).toBe(2)
+    expect(parsed.resources.kind).toBe('sql')
+    expect(parsed.schema).toBeUndefined()
+    expect(errOut).toBe('')
+  })
+
+  test('rejects context versions other than 2', async () => {
+    await run('--context-version', '3', '--format', 'json')
+    expect(exitCode).toBe(1)
+    expect(errOut).toContain('UNSUPPORTED_CONTEXT_VERSION')
   })
 
   test('includes a valid project semantic context in the agent JSON payload', async () => {
@@ -202,14 +219,9 @@ describe('skill context (CLI entrypoint)', () => {
     expect(errOut).toMatch(/Invalid format/i)
   })
 
-  void logSpy
-  void errSpy
-  void exitSpy
-})
-
-// Restore spies once this file completes so they don't leak into later test
-// files (bun's spyOn persists across files within a process; file order differs
-// by OS, so leaked spies can fail unrelated tests on Linux CI).
-afterAll(() => {
-  mock.restore()
+  afterAll(() => {
+    logSpy.mockRestore()
+    errSpy.mockRestore()
+    exitSpy.mockRestore()
+  })
 })

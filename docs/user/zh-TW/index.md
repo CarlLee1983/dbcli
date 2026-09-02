@@ -1278,6 +1278,30 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**：repo root 採用 Ponytail-style plugin layout，包含 `.agents/plugins/marketplace.json`、`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.cursor-plugin/plugin.json`、`.github/skills/dbcli/` 與 `skills/dbcli/`。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`，其中包含提交 Cursor marketplace 審核/索引的步驟。
 9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit`，以及 `AppliedLimitMetadata`、`AppliedLimitResult`、`ConnectionSelectorInputs`。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
+### 受限跨引擎 context（版本 2）
+
+將資料庫 metadata 交給外部 agent 時，使用 `dbcli skill context --context-version 2 --format json`。版本 2 是穩定的 agent contract，離線執行，絕不開啟連線、建立 adapter、掃描 Redis key、讀取文件或讀取專案 source。Agent 可在自身 workspace safety rule 下自行檢查專案 code，以補足 context 未包含的業務意義。
+
+```bash
+dbcli skill context --context-version 2 --format json
+```
+
+將此輸出和 agent 自行安全發現的 code context 交給 agent；不要把 source path 交給 dbcli，也不要要求 dbcli 解讀自然語言。將 `permission` 與描述性的 `capabilities` 視為限制，不是執行指令的授權。只能使用回傳的 resources 與 approved semantic/contracts metadata。若 metadata 缺少或回傳 `gaps`，不可猜測名稱、type、relationship、key 或意義：檢查允許的 project code，或要求補上證據。
+
+版本 2 只輸出 safe fields：已設定的 engine 與 permission、blacklist policy、capability 的 `command`/`status`/`sideEffectTier`、resource 與 field ID/name/type、可見 SQL nullable/primary-key 與可見 foreign-key link、flattened Elasticsearch field path/type、已宣告的 Redis family/field、沒有 body/default 的 snippet metadata、沒有 source path 的 declared data-access metadata、approved semantic/contracts metadata、truncation count 與 gap。它絕不輸出 credentials、value/result、default/count、raw Elasticsearch mapping 或 setting、Redis key/value、query body/default，或 project source path/content。Blacklisted identifier 只會出現在 `blacklist`。
+
+| 引擎 | 版本 2 resources | 邊界 |
+| --- | --- | --- |
+| PostgreSQL、MySQL、MariaDB | 快取的可見 table、safe column 與可見 foreign-key link | 不含 default、count、index、comment 或被過濾 endpoint。 |
+| Elasticsearch | 快取 index 的 flattened field path 與 type | 不含 raw mapping、`_meta`、setting、script、analyzer、document 或 count。 |
+| Redis | repository 宣告的 `dbcli.redis-context.json` key family 與 field | 不做 discovery、scan，也不含 concrete key、live type 或 value。 |
+
+Redis declaration 有意保持很小：context file ≤512 KiB；family ≤500；family name 為小寫 kebab-case，pattern ≤200 字元，含唯一且有效的 `{placeholder}`，不得有 glob token、空白、control character 或 backslash；type 為 `string`、`hash`、`list`、`set`、`zset` 或 `stream`。僅 `hash` 與 `stream` 可宣告 field（≤100）；family/field description ≤1,000 字元，alias ≤20 個且每個 ≤100 字元。malformed、concrete、unsafe、blacklisted 或與 Redis field mask 重疊的 declaration 會直接失敗，不會輸出 partial model。
+
+缺少 optional evidence 時會明確輸出：`SQL_SCHEMA_UNAVAILABLE`、`ELASTICSEARCH_MAPPING_UNAVAILABLE`、`REDIS_KEY_FAMILIES_UNAVAILABLE`、`SEMANTIC_CONTEXT_UNAVAILABLE`、`SAVED_QUERIES_UNAVAILABLE`、`DATA_ACCESS_UNAVAILABLE` 或 `ALL_RESOURCES_FILTERED`；truncation 另輸出 `CONTEXT_TRUNCATED`。已存在但無效的 evidence 會以相應的 `INVALID_SCHEMA_CACHE`、`INVALID_SEMANTIC_CONTEXT`、`INVALID_SAVED_QUERY`、`INVALID_DATA_ACCESS_MANIFEST`、`INVALID_REDIS_CONTEXT` 或 `INVALID_RESOURCE_REFERENCE` 失敗。MongoDB（及 unknown engine）明確要求 v2 時會回傳 `UNSUPPORTED_CONTEXT_ENGINE`。
+
+省略 `--context-version` 時，維持 byte-compatible 的 version 1 JSON、XML 與 Markdown output。`version` 仍是 configuration metadata；v2 另加整數 `contextVersion: 2`。consumer 必須忽略未知的 optional v2 field；若要不相容地變更 required field 或 ID encoding，必須建立新的 context version。
+
 ### 業務請求的意圖確認
 
 已安裝的 skill 支援三種**當次請求的對話偏好**，它們不是 dbcli 旗標或儲存的設定。Agent

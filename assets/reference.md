@@ -3003,12 +3003,23 @@ Emit an AI-friendly snapshot of the connected database's schema and saved-query 
 dbcli skill context                      # XML (default)
 dbcli skill context --format json
 dbcli skill context --format markdown
+dbcli skill context --context-version 2 --format json
 ```
 
 **Options:**
 - `--format <xml|json|markdown>` — output format (default: `xml`)
+- `--context-version <version>` — explicit agent contract; version `2` supports
+  PostgreSQL, MySQL, MariaDB, Elasticsearch, and Redis. Omit it for byte-compatible v1.
 
-**Permission:** query-only+ — read-only; blacklisted objects are never emitted.
+Version 2 is offline and bounded: it emits only visible cached SQL tables/fields,
+flattened Elasticsearch fields, or declared Redis key families, plus safe capability,
+snippet, semantic, contract, and data-access metadata. It never connects, scans Redis,
+reads documents or project source, or emits values, credentials, query bodies/defaults,
+source paths, counts, or raw mappings. Missing evidence is reported in `gaps`; invalid
+evidence fails with a stable `INVALID_*` code. MongoDB rejects explicit v2.
+
+**Permission:** query-only+ — read-only; blacklisted objects are never emitted outside
+the blacklist policy.
 
 ### skill tasks (Agent Task Packs)
 

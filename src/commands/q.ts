@@ -13,6 +13,10 @@ import { enforcePermission, PermissionError, SQL_DIALECTS } from '@/core/permiss
 import { extractTableReferences } from '@/utils/sql-tables'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
+import {
+  buildSavedQueryProvenance,
+  resolveLogicalConnectionName,
+} from '@/core/dashboard/saved-query-provenance'
 import { openInBrowser } from '@/utils/opener'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
@@ -231,6 +235,14 @@ export async function qCommand(
           rows: filtered.filteredRows as Record<string, unknown>[],
           ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
           ...(securityNotification ? { securityNotification } : {}),
+          provenance: buildSavedQueryProvenance({
+            connectionName: resolveLogicalConnectionName(config),
+            system: connectionSystem,
+            savedQueryKey: snippet.query.meta.key,
+            savedQuerySource: snippet.query.source,
+            permission: config.permission,
+            ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
+          }),
         })
 
         if (options.ui) {

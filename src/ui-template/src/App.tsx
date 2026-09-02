@@ -25,6 +25,7 @@ import {
   Rows,
   TriangleAlert,
   ShieldAlert,
+  FileCheck,
 } from 'lucide-react'
 import { formatValue, type ValueFormat } from './lib/format-value'
 import { resolveKpi } from './lib/resolve-kpi'
@@ -43,21 +44,34 @@ interface Chart {
   y: string[]
 }
 
+interface Provenance {
+  version: 1
+  connection: { name: string; system: string }
+  savedQuery: { key: string; source: string }
+  permission: string
+  limit:
+    | { state: 'applied'; limitApplied: number; truncated: boolean }
+    | { state: 'not-applied'; truncated: false }
+}
+
+interface Display {
+  name: string
+  description?: string
+  visual?: {
+    title?: string
+    kpis?: KPI[]
+    charts?: Chart[]
+  }
+}
+
 declare global {
   interface Window {
     __DBCLI_PAYLOAD__?: {
-      meta: {
-        name: string
-        description?: string
-        visual?: {
-          title?: string
-          kpis?: KPI[]
-          charts?: Chart[]
-        }
-      }
+      display: Display
       rows: Array<Record<string, unknown>>
       appliedLimit?: { truncated: boolean; limitApplied: number }
       securityNotification?: string
+      provenance?: Provenance
     }
   }
 }
@@ -93,14 +107,15 @@ const CustomTooltip = ({
 
 export default function App() {
   const payload = window.__DBCLI_PAYLOAD__ || {
-    meta: { name: 'Report Preview', visual: { title: 'Operational Overview' } },
+    display: { name: 'Report Preview', visual: { title: 'Operational Overview' } },
     rows: [],
   }
 
-  const meta = payload.meta || { name: 'Database Report', key: 'default' }
+  const display = payload.display || { name: 'Database Report' }
   const rows = payload.rows || []
-  const visual = meta.visual || {}
+  const visual = display.visual || {}
   const appliedLimit = payload.appliedLimit
+  const provenance = payload.provenance
 
   return (
     <div className="min-h-screen bg-slate-50/50">
@@ -112,7 +127,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-slate-900 leading-none">
-              {visual.title || meta.name}
+              {visual.title || display.name}
             </h1>
             <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1">
               dbcli Interactive Intelligence
@@ -158,11 +173,81 @@ export default function App() {
           </div>
         )}
 
+        {provenance && (
+          <section
+            aria-label="Execution traceability"
+            className="card p-6 border-l-4 border-l-slate-400"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <FileCheck className="w-4 h-4 text-slate-400" />
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+                Execution Traceability
+              </h2>
+            </div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Connection
+                </dt>
+                <dd className="text-sm font-medium text-slate-900 break-all">
+                  {provenance.connection.name}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Engine
+                </dt>
+                <dd className="text-sm font-medium text-slate-900">
+                  {provenance.connection.system}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Saved Query
+                </dt>
+                <dd className="text-sm font-medium text-slate-900 break-all">
+                  {provenance.savedQuery.key}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Snippet Source
+                </dt>
+                <dd className="text-sm font-medium text-slate-900">
+                  {provenance.savedQuery.source}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Effective Permission
+                </dt>
+                <dd className="text-sm font-medium text-slate-900">{provenance.permission}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Applied Limit
+                </dt>
+                <dd className="text-sm font-medium text-slate-900">
+                  {provenance.limit.state === 'applied'
+                    ? `${provenance.limit.limitApplied} rows${
+                        provenance.limit.truncated ? ' (truncated)' : ' (not truncated)'
+                      }`
+                    : 'No limit applied'}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-4 text-[11px] text-slate-400 leading-relaxed">
+              Traceability travels with this file. It never carries query text, parameter values,
+              credentials, endpoints, or source paths.
+            </p>
+          </section>
+        )}
+
         {/* Description Header */}
-        {meta.description && (
+        {display.description && (
           <div className="flex items-start gap-3 p-4 bg-primary-50 border border-primary-100 rounded-xl text-primary-900">
             <Info className="w-5 h-5 mt-0.5 flex-shrink-0 text-primary-600" />
-            <p className="text-sm leading-relaxed">{meta.description}</p>
+            <p className="text-sm leading-relaxed">{display.description}</p>
           </div>
         )}
 

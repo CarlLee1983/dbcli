@@ -8,6 +8,10 @@ import {
 } from '@/core/mongo/collection-references'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
+import {
+  buildSavedQueryProvenance,
+  resolveLogicalConnectionName,
+} from '@/core/dashboard/saved-query-provenance'
 import { openInBrowser } from '@/utils/opener'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { tmpdir } from 'node:os'
@@ -89,6 +93,13 @@ export async function qMongoBranch(
         meta: snippet.query.meta,
         rows: masked,
         ...(securityNotification ? { securityNotification } : {}),
+        provenance: buildSavedQueryProvenance({
+          connectionName: resolveLogicalConnectionName(config),
+          system: config.connection.system,
+          savedQueryKey: snippet.query.meta.key,
+          savedQuerySource: snippet.query.source,
+          permission: config.permission,
+        }),
       })
       if (options.ui) {
         const tempPath = join(tmpdir(), `dbcli-report-${Date.now()}.html`)

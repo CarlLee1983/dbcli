@@ -737,9 +737,6 @@ async function presentSingleResult(
     const html = await generateHtmlReport({
       meta: {
         name: 'Query Results',
-        key: 'raw-sql',
-        params: [],
-        tags: [],
         description: query.length > 100 ? query.slice(0, 97) + '...' : query,
       },
       rows: execution.result.rows,

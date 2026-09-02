@@ -866,6 +866,19 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
             <pre><code>dbcli query "SELECT day, count(*) FROM sessions" --ui</code></pre>
             <p>Rich visualizations (charts, KPIs) can be configured via the <code>visual:</code> block in snippet frontmatter. Supported chart types are <code>line</code>, <code>bar</code>, <code>area</code>, and <code>pie</code>; any other type is rejected at parse time.</p>
             <p>When dbcli's lookahead proves that rows were truncated, the dashboard shows a warning <strong>before</strong> every KPI, chart, and table and names the applied limit. Blacklist redaction or omission notices appear there as well. This applies to query HTML/UI, saved-query HTML/UI, and HTML exports whenever the execution path produces the corresponding metadata.</p>
+            <h3>Execution traceability (saved queries)</h3>
+            <p>A dashboard generated from a saved query (<code>dbcli q @name --ui</code> or <code>--format html</code>) carries a standalone <strong>Execution Traceability</strong> section, shown after the truncation and blacklist notices and before the KPIs, charts, and table. It travels inside the HTML file, so a recipient sees it without dbcli, a database, or your workspace.</p>
+            <ul>
+                <li><strong>Connection</strong> — logical connection name: the v2 connection key, or <code>default</code> for a single-connection config. Never a host or endpoint.</li>
+                <li><strong>Engine</strong> — <code>postgresql</code>, <code>mysql</code>, <code>mariadb</code>, <code>mongodb</code>, <code>redis</code>, or <code>elasticsearch</code>.</li>
+                <li><strong>Saved Query</strong> — the snippet key, such as <code>@dau</code>. Never its file path.</li>
+                <li><strong>Snippet Source</strong> — <code>builtin</code>, <code>shared</code>, or <code>local</code>.</li>
+                <li><strong>Effective Permission</strong> — the permission that actually governed the execution: <code>query-only</code>, <code>read-write</code>, <code>data-admin</code>, or <code>admin</code>.</li>
+                <li><strong>Applied Limit</strong> — the row cap that actually applied and whether the result was truncated, or "No limit applied", stated explicitly rather than left blank.</li>
+            </ul>
+            <p>The applied-limit line always agrees with the truncation warning above it; a dashboard whose provenance and warning disagree is refused before the file is written.</p>
+            <p>Traceability is a closed contract. It never carries raw query bodies, parameter values or enums, credentials, endpoints, source paths, verification queries and expectations, target index or collection names, or rows beyond the ones displayed. The same allowlist governs the whole embedded payload, not just the visible section: only the displayed rows, the applied-limit and security notices, the provenance object, and the display name, description, and chart/KPI definitions that reference displayed fields are serialized. Invalid, oversized, or unknown metadata is rejected before any HTML is written, so a failed dashboard never leaves a partial file behind.</p>
+            <p>Direct-query dashboards (<code>dbcli query --ui</code>, <code>dbcli export --format html</code>) are unchanged and carry no traceability section.</p>
         </section>
 
         <!-- doc-key: engine-support -->

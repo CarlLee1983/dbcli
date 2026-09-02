@@ -290,6 +290,37 @@ describe('dbcli q', () => {
       expect(lastPrinted()).toContain('"appliedLimit":{"truncated":true,"limitApplied":1000}')
     })
 
+    test('HTML provenance agrees with the truncation it displays', async () => {
+      mock.rowsToReturn = 1001
+      await qCommand('@dau', { format: 'html' })
+      const html = lastPrinted()
+
+      expect(html).toContain('"provenance":{"version":1')
+      expect(html).toContain('"connection":{"name":"default","system":"postgresql"}')
+      expect(html).toContain('"savedQuery":{"key":"@dau","source":"shared"}')
+      expect(html).toContain('"permission":"query-only"')
+      expect(html).toContain('"limit":{"state":"applied","limitApplied":1000,"truncated":true}')
+    })
+
+    test('HTML provenance marks an execution that applied no limit', async () => {
+      mock.rowsToReturn = 3
+      await qCommand('@dau', { format: 'html', noLimit: true })
+      const html = lastPrinted()
+
+      expect(html).toContain('"limit":{"state":"not-applied","truncated":false}')
+      expect(html).not.toContain('"appliedLimit"')
+    })
+
+    test('HTML omits the snippet body, parameter defaults, and source path', async () => {
+      mock.rowsToReturn = 2
+      await qCommand('@dau', { format: 'html' })
+      const html = lastPrinted()
+
+      expect(html).not.toContain('SELECT COUNT(*) FROM events')
+      expect(html).not.toContain('"params"')
+      expect(html).not.toContain('dau.sql')
+    })
+
     test('--no-limit leaves rows untouched and reports no truncation', async () => {
       mock.rowsToReturn = 1500
       await qCommand('@dau', { format: 'json', noLimit: true })

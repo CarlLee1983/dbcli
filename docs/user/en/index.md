@@ -1205,6 +1205,23 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 When dbcli's lookahead proves that rows were truncated, the dashboard shows a warning **before** every KPI, chart, and table and names the applied limit. Blacklist redaction/omission notices appear there as well. This applies to query HTML/UI, saved-query HTML/UI, and HTML exports whenever that execution path produces the corresponding metadata.
 
+**Execution traceability (saved queries)**: a dashboard generated from a saved query (`dbcli q @name --ui` / `--format html`) carries a standalone **Execution Traceability** section, shown after the truncation and blacklist notices and before the KPIs, charts, and table. It travels inside the HTML file, so a recipient sees it without dbcli, a database, or your workspace.
+
+| Field | Meaning |
+| --- | --- |
+| Connection | Logical connection name — the v2 connection key, or `default` for a single-connection config. Never a host or endpoint. |
+| Engine | `postgresql`, `mysql`, `mariadb`, `mongodb`, `redis`, or `elasticsearch`. |
+| Saved Query | The snippet key, such as `@dau`. Never its file path. |
+| Snippet Source | `builtin`, `shared`, or `local`. |
+| Effective Permission | The permission that actually governed the execution: `query-only`, `read-write`, `data-admin`, or `admin`. |
+| Applied Limit | The row cap that actually applied, and whether the result was truncated — or "No limit applied", which is stated explicitly rather than left blank. |
+
+The applied-limit line always agrees with the truncation warning above it; a dashboard whose provenance and warning disagree is refused before the file is written.
+
+Traceability is a closed contract. It never carries raw query bodies, parameter values or enums, credentials, endpoints, source paths, verification queries and expectations, target index or collection names, or rows beyond the ones displayed. The same allowlist governs the whole embedded payload, not just the visible section: only the displayed rows, the applied-limit and security notices, the provenance object, and the display name, description, and chart/KPI definitions that reference displayed fields are serialized. Invalid, oversized, or unknown metadata is rejected before any HTML is written, so a failed dashboard never leaves a partial file behind.
+
+Direct-query dashboards (`dbcli query --ui`, `dbcli export --format html`) are unchanged and carry no traceability section.
+
 ---
 
 <!-- doc-key: engine-support -->

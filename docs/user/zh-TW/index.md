@@ -1080,6 +1080,23 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 
 當 dbcli 的 lookahead 證明結果遭截斷時，dashboard 會在所有 KPI、圖表與 table **之前**顯示警示並標出實際上限；blacklist 的遮蔽／省略通知也會顯示在同一區域。query HTML/UI、saved-query HTML/UI 與 HTML export 只要執行路徑有產生對應 metadata，都會沿用此行為。
 
+**執行溯源（saved query）**：由 saved query 產生的 dashboard（`dbcli q @name --ui` / `--format html`）會帶上獨立的 **Execution Traceability** 區塊，位置在截斷與 blacklist 通知之後、KPI／圖表／table 之前。它就存在 HTML 檔案裡，收檔的人不需要 dbcli、資料庫或你的工作目錄也看得到。
+
+| 欄位 | 意義 |
+| --- | --- |
+| Connection | 邏輯連線名稱 — v2 的連線 key，單一連線設定則為 `default`。不會是主機或 endpoint。 |
+| Engine | `postgresql`、`mysql`、`mariadb`、`mongodb`、`redis` 或 `elasticsearch`。 |
+| Saved Query | Snippet key，例如 `@dau`。不會是檔案路徑。 |
+| Snippet Source | `builtin`、`shared` 或 `local`。 |
+| Effective Permission | 實際約束該次執行的權限：`query-only`、`read-write`、`data-admin` 或 `admin`。 |
+| Applied Limit | 實際生效的筆數上限與是否截斷；若未套用上限，會明確寫出「No limit applied」而不是留白。 |
+
+Applied Limit 一定與上方的截斷警示一致；兩者矛盾的 dashboard 會在寫檔前就被拒絕。
+
+溯源是封閉契約，不會攜帶原始查詢內容、參數預設值或列舉、憑證、endpoint、來源路徑、verification 的 query 與 expects、目標 index 或 collection 名稱，也不會帶上未顯示的資料列。同一份 allowlist 管的是整個內嵌 payload，不只是看得見的那一區：只有已顯示的資料列、applied-limit 與安全通知、provenance 物件，以及顯示用的 name／description 與引用已顯示欄位的圖表／KPI 定義會被序列化。無效、超長或未知的 metadata 會在寫出任何 HTML 之前被拒絕，失敗的 dashboard 不會留下半成品檔案。
+
+直接查詢產生的 dashboard（`dbcli query --ui`、`dbcli export --format html`）行為不變，不會有溯源區塊。
+
 ---
 
 <!-- doc-key: engine-support -->

@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.1] - 2026-09-02 - agent 讀到的黑名單語意還停在 4.0.0
+
+### Documentation
+
+- **skill 的黑名單語意跟上 6.0.0 與 7.0.0。** `skill:check` 與 `plugin:check` 只驗結構、
+  清單項與 code token 對齊，不驗內容是否跟得上行為，於是 `assets/SKILL.md`、
+  `assets/SKILL.zh-TW.md` 與 `assets/reference.md` 在這兩版之間一個字都沒動——而這兩版改的
+  正是 agent 每次操作第一步要讀的東西。`reference.md` 的 `blacklist` 小節先前只列四個子指令，
+  現在寫明每個條目在所有引擎都是 glob（真的叫 `report*` 的表要寫成 `report\*`）、規則與回傳
+  名稱整條點分路徑不分大小寫、`--fields` 不受影響仍是精確比對、欄位層級是顯示過濾而非存取
+  控制，以及讀不出意思的規則會在載入時失敗而不是靜默不保護。Redis 的 Blacklist enforcement
+  小節補上 `q` 與 `report` 現在也強制執行、`SCAN` evidence 會移除受保護的 key 名稱。
+  `SKILL.md` 的 Notes 兩個語系同步擴寫。十份下游副本由 `plugin:sync` 帶上。
+
 ## [7.0.0] - 2026-09-02 - 一條規則擋得住寫、擋不住讀，差別只在大小寫
 
 ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。

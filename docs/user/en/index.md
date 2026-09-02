@@ -200,6 +200,26 @@ aliases, qualified column references, and SQL keywords such as `CREATE` — beca
 an extra identifier can only make the blacklist refuse more, and filtering the
 list for display would be a second parser disagreeing with the first.
 
+### Server-enforced SQL query-only mode
+
+On PostgreSQL, MySQL, and MariaDB, every caller-controlled statement whose
+effective permission is `query-only` runs inside a fresh database-native
+read-only transaction on the physical connection that executes it. This covers
+`query`, `export`, saved-query bodies and verification, report diagnostics, the
+SQL shell, analyzed explain plans, and fan-out even when the selected
+connections store a higher permission tier. If dbcli cannot establish that
+boundary, it fails before sending the target statement. Classifier, blacklist,
+hidden-write, and multi-statement checks still run first. If the target completes
+but transaction cleanup fails, dbcli reports the uncertain outcome and discards
+the affected connection; the SQL shell reconnects for later statements without
+replaying the completed target.
+
+The guarantee covers persistent, non-temporary data and schema. An engine may
+still permit temporary or session-local state under its native read-only rules,
+and the boundary cannot prevent effects outside the target database, such as a
+network call made by an unsafe extension. Database accounts and ACLs remain an
+important independent layer.
+
 ### Read-only query fan-out
 
 An explicit comma-separated `--use` can run one read-only query against several

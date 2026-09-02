@@ -196,7 +196,10 @@ export async function qCommand(
       const start = performance.now()
       const result = await adapter.execute<Record<string, unknown>>(
         prepared.driver.sql,
-        family === 'sql' ? prepared.driver.values : indexParams
+        family === 'sql' ? prepared.driver.values : indexParams,
+        family === 'sql'
+          ? { sqlMode: config.permission === 'query-only' ? 'native-read-only' : 'normal' }
+          : undefined
       )
       const executionTimeMs = Math.round(performance.now() - start)
       // Trim the guard's one-row lookahead before anything reads the rows, so
@@ -301,7 +304,13 @@ export async function qCommand(
                 })
               )
             }
-            const verifyResult = await adapter.execute<Record<string, unknown>>(verifySpec.query)
+            const verifyResult = await adapter.execute<Record<string, unknown>>(
+              verifySpec.query,
+              undefined,
+              family === 'sql'
+                ? { sqlMode: config.permission === 'query-only' ? 'native-read-only' : 'normal' }
+                : undefined
+            )
             const firstRow = verifyResult.rows[0]
             const evalResult = evaluateExpectation(firstRow, verifySpec.expects)
 

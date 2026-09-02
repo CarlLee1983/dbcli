@@ -13,6 +13,8 @@ export type DatabaseSystem =
 
 export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
 
+export type SqlExecutionMode = 'normal' | 'native-read-only'
+
 export type QueryableDatabaseSystem = Exclude<DatabaseSystem, SqlDatabaseSystem>
 
 /**
@@ -154,6 +156,7 @@ export type ConnectionErrorCode =
   | 'STATEMENT_TIMEOUT'
   | 'TABLE_NOT_FOUND'
   | 'COLUMN_NOT_FOUND'
+  | 'QUERY_ONLY_BOUNDARY_FAILED'
   | 'UNKNOWN'
 
 export class ConnectionError extends Error {
@@ -169,7 +172,9 @@ export class ConnectionError extends Error {
      * consumers can state it without parsing `message`; the recovery envelope needs
      * it to tell an agent what `--statement-timeout <ms>` it was already up against.
      */
-    public limitMs?: number
+    public limitMs?: number,
+    /** Whether an interactive caller may safely retry the statement after reconnecting. */
+    public readonly retrySafe = true
   ) {
     super(message)
     this.name = 'ConnectionError'
@@ -254,7 +259,7 @@ export interface DatabaseAdapter {
   execute<T>(
     sql: string,
     params?: (string | number | boolean | null)[],
-    options?: { noLimit?: boolean }
+    options?: { noLimit?: boolean; sqlMode?: SqlExecutionMode }
   ): Promise<ExecutionResult<T>>
 
   /**

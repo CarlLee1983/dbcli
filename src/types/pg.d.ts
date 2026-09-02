@@ -5,7 +5,11 @@ declare module 'pg' {
   }
 
   export interface PoolClient {
-    release(): void
+    query<T = Record<string, unknown>>(
+      sql: string,
+      params?: (string | number | boolean | null)[]
+    ): Promise<QueryResult<T>>
+    release(error?: Error): void
   }
 
   export class Pool {
@@ -14,6 +18,7 @@ declare module 'pg' {
       sql: string,
       params?: (string | number | boolean | null)[]
     ): Promise<QueryResult<T>>
+    connect(): Promise<PoolClient>
     end(): Promise<void>
   }
 }

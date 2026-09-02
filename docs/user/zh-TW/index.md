@@ -179,6 +179,21 @@ SQL 的紀錄另外帶 `metadata.blacklist_checked`——黑名單拿這句語�
 每筆 audit entry 都會從解析後的連線寫入非機密的 `metadata.connection_name` 與
 `metadata.environment`，絕不記錄連線憑證或 endpoint secret。
 
+### 伺服器強制的 SQL query-only 模式
+
+在 PostgreSQL、MySQL 與 MariaDB 上，只要操作的有效權限是 `query-only`，每一句
+由呼叫端提供的 SQL 都會在實際執行它的 physical connection 上，包進一個全新的
+資料庫原生唯讀 transaction。這涵蓋 `query`、`export`、saved query 本體與驗證、
+report diagnostics、SQL shell、會實際執行的 explain plan，以及所選連線即使儲存
+較高 permission tier 的 fan-out。dbcli 若無法建立此邊界，會在送出目標語句前
+fail closed。既有的 classifier、blacklist、hidden-write 與 multi-statement 檢查
+仍會先執行。若目標語句完成後 transaction 清理失敗，dbcli 會回報結果不確定並
+丟棄受影響的連線；SQL shell 會為後續語句重新連線，但不會重送已完成的目標語句。
+
+這項保證涵蓋持久、非 temporary 的資料與 schema。各引擎的原生唯讀規則仍可能
+允許 temporary 或 session-local state；此邊界也無法阻止目標資料庫之外的副作用，
+例如不安全 extension 發出的網路呼叫。資料庫帳號與 ACL 仍是重要的獨立防線。
+
 ### 唯讀 query fan-out
 
 明確指定逗號分隔的 `--use`，即可對多個具名連線執行同一個唯讀 query。

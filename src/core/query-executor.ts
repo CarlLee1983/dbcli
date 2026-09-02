@@ -138,7 +138,13 @@ export class QueryExecutor {
       }
 
       // 4. Execute query and measure time
-      const resultData = await this.adapter.execute<Record<string, unknown>>(executeSql)
+      const resultData = await this.adapter.execute<Record<string, unknown>>(
+        executeSql,
+        undefined,
+        {
+          sqlMode: this.permission === 'query-only' ? 'native-read-only' : 'normal',
+        }
+      )
       const executionTimeMs = Math.round(performance.now() - start)
 
       const limitedResult =

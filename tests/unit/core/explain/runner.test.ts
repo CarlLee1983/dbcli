@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import { runQueryExplain } from '@/core/explain/runner'
-import type { DatabaseAdapter } from '@/adapters/types'
+import type { DatabaseAdapter, SqlExecutionMode } from '@/adapters/types'
 
 function mysqlAdapter(): DatabaseAdapter {
   return {
@@ -37,6 +37,27 @@ test('runQueryExplain: ties adapter EXPLAIN + annotation', async () => {
   const plan = await runQueryExplain('mariadb', mysqlAdapter(), 'SELECT * FROM orders', {})
   expect(plan.rows[0]?.annotations.some((a) => a.rule === 'full-scan')).toBe(true)
   expect(plan.rows[0]?.annotations.some((a) => a.rule === 'filesort')).toBe(true)
+})
+
+test('runQueryExplain: forwards native read-only mode to analyzed execution', async () => {
+  const adapter = mysqlAdapter()
+  let sqlMode: string | undefined
+  const execute = adapter.execute
+  adapter.execute = (async <T>(
+    sql: string,
+    params?: (string | number | boolean | null)[],
+    options?: { noLimit?: boolean; sqlMode?: SqlExecutionMode }
+  ) => {
+    sqlMode = options?.sqlMode
+    return execute<T>(sql, params, options)
+  }) as DatabaseAdapter['execute']
+
+  await runQueryExplain('mariadb', adapter, 'SELECT 1', {
+    analyze: true,
+    executionMode: 'native-read-only',
+  })
+
+  expect(sqlMode).toBe('native-read-only')
 })
 
 test('runQueryExplain: queryLabel passes through when provided', async () => {

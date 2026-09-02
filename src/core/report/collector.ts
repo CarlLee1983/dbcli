@@ -102,6 +102,7 @@ export async function collectReport(opts: ReportOptions): Promise<ReportSnapshot
         engine,
         timeoutMs: timeout,
         maxRows,
+        permission: config.permission,
         blacklistValidator,
       })
       const sectionId = sectionForIntent(ev.intent)

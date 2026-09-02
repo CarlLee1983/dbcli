@@ -7,7 +7,7 @@
  * candidates with downgraded confidence.
  */
 
-import type { DatabaseAdapter, SqlDatabaseSystem } from '@/adapters/types'
+import type { DatabaseAdapter, SqlDatabaseSystem, SqlExecutionMode } from '@/adapters/types'
 import { runQueryExplain } from '@/core/explain/runner'
 import type { ExplainPlan } from '@/core/explain/types'
 import type { EnrichedPlanFacts } from './types'
@@ -17,13 +17,14 @@ type RunExplain = typeof runQueryExplain
 export function makeExplainEnricher(
   system: SqlDatabaseSystem,
   adapter: DatabaseAdapter,
+  executionMode: SqlExecutionMode = 'normal',
   runExplain: RunExplain = runQueryExplain
 ): (sql: string) => Promise<Map<string, EnrichedPlanFacts>> {
   return async (sql: string): Promise<Map<string, EnrichedPlanFacts>> => {
     const facts = new Map<string, EnrichedPlanFacts>()
     let plan: ExplainPlan
     try {
-      plan = await runExplain(system, adapter, sql, { analyze: false })
+      plan = await runExplain(system, adapter, sql, { analyze: false, executionMode })
     } catch {
       return facts
     }

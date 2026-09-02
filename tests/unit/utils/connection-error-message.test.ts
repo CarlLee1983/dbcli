@@ -31,6 +31,7 @@ const STATEMENT_CODES = [
   'SQL_SYNTAX_ERROR',
   'TABLE_NOT_FOUND',
   'COLUMN_NOT_FOUND',
+  'QUERY_ONLY_BOUNDARY_FAILED',
   'UNKNOWN',
 ] as const satisfies readonly ConnectionErrorCode[]
 

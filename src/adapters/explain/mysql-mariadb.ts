@@ -28,7 +28,9 @@ export async function runMysqlExplain(
   system: 'mysql' | 'mariadb' = 'mariadb'
 ): Promise<ExplainPlan> {
   const wrapped = options.analyze ? `ANALYZE ${sql}` : `EXPLAIN ${sql}`
-  const result = await adapter.execute<RawMysqlExplainRow>(wrapped)
+  const result = await adapter.execute<RawMysqlExplainRow>(wrapped, undefined, {
+    sqlMode: options.executionMode ?? 'normal',
+  })
   const rows: ExplainRow[] = result.rows.map(normalizeRow)
   return {
     rows,

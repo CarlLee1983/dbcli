@@ -5,18 +5,25 @@
 
 import { describe, it, expect, spyOn } from 'bun:test'
 import { QueryExecutor } from '@/core/query-executor'
-import type { DatabaseAdapter } from '@/adapters/types'
+import type { DatabaseAdapter, SqlExecutionMode } from '@/adapters/types'
 
 function makeSpyAdapter(rows: Record<string, unknown>[] = []): {
   adapter: DatabaseAdapter
   lastSql: () => string
+  lastMode: () => string | undefined
 } {
   let captured = ''
+  let mode: string | undefined
   const adapter: DatabaseAdapter = {
     connect: async () => {},
     disconnect: async () => {},
-    execute: async <T = Record<string, unknown>>(sql: string) => {
+    execute: async <T = Record<string, unknown>>(
+      sql: string,
+      _params?: (string | number | boolean | null)[],
+      options?: { noLimit?: boolean; sqlMode?: SqlExecutionMode }
+    ) => {
       captured = sql
+      mode = options?.sqlMode
       return { rows: rows as T[], affectedRows: rows.length }
     },
     listTables: async () => [],
@@ -30,15 +37,22 @@ function makeSpyAdapter(rows: Record<string, unknown>[] = []): {
     testConnection: async () => true,
     getServerVersion: async () => 'test',
   }
-  return { adapter, lastSql: () => captured }
+  return { adapter, lastSql: () => captured, lastMode: () => mode }
 }
 
 describe('QueryExecutor auto-LIMIT scope', () => {
   it('injects LIMIT for plain SELECT in query-only mode', async () => {
-    const { adapter, lastSql } = makeSpyAdapter()
+    const { adapter, lastSql, lastMode } = makeSpyAdapter()
     const exec = new QueryExecutor(adapter, 'query-only')
     await exec.execute('SELECT * FROM users', { detectTruncation: true })
     expect(lastSql()).toMatch(/LIMIT\s+1001/i)
+    expect(lastMode()).toBe('native-read-only')
+  })
+
+  it('uses normal adapter execution above query-only', async () => {
+    const { adapter, lastMode } = makeSpyAdapter()
+    await new QueryExecutor(adapter, 'admin').execute('SELECT 1')
+    expect(lastMode()).toBe('normal')
   })
 
   it('does NOT inject LIMIT for SHOW INDEX in query-only mode', async () => {

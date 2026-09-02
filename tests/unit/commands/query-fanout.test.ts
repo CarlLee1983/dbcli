@@ -11,6 +11,7 @@ import type { QueryableAdapter } from '@/adapters/types'
 class FanOutAdapter implements DatabaseAdapter {
   connected = 0
   disconnected = 0
+  sqlModes: Array<string | undefined> = []
 
   constructor(
     private readonly value: string,
@@ -29,7 +30,12 @@ class FanOutAdapter implements DatabaseAdapter {
     this.disconnected++
   }
 
-  async execute<T>(): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    _sql: string,
+    _params?: unknown[],
+    options?: { sqlMode?: 'normal' | 'native-read-only' }
+  ): Promise<ExecutionResult<T>> {
+    this.sqlModes.push(options?.sqlMode)
     if (this.executeGate) await this.executeGate
     if (this.failure) throw this.failure
     const rows = this.rows ?? [{ connection: this.value }]
@@ -143,6 +149,27 @@ describe('query command fan-out', () => {
     expect(process.exitCode).toBe(0)
     expect(adapters.primary.disconnected).toBe(1)
     expect(adapters.staging.disconnected).toBe(1)
+  })
+
+  test('narrows admin-stored fan-out connections to the native query-only boundary', async () => {
+    configReadSpy.mockImplementation(
+      async (_path, name) => ({ ...sqlConfig(name ?? 'default'), permission: 'admin' }) as never
+    )
+    const adapters = {
+      primary: new FanOutAdapter('primary'),
+      staging: new FanOutAdapter('staging'),
+    }
+    createAdapterSpy.mockImplementation(
+      (options: SqlConnectionOptions) => adapters[options.host as keyof typeof adapters]
+    )
+
+    await queryCommand('SELECT 1', {
+      format: 'json',
+      connectionSelector: 'primary,staging',
+    } as never)
+
+    expect(adapters.primary.sqlModes).toEqual(['native-read-only'])
+    expect(adapters.staging.sqlModes).toEqual(['native-read-only'])
   })
 
   test('preserves a successful sibling and returns exit 2 for partial failure', async () => {
@@ -446,7 +473,9 @@ describe('query command fan-out', () => {
       format: 'json',
       connectionSelector: 'primary',
     } as never)
-    expect(String(logSpy.mock.calls[0]?.[0])).toBe(defaultOutput)
+    expect(
+      String(logSpy.mock.calls[0]?.[0]).replace(/"executionTimeMs": \d+/, '"executionTimeMs": 0')
+    ).toBe(defaultOutput.replace(/"executionTimeMs": \d+/, '"executionTimeMs": 0'))
     expect(defaultOutput).not.toContain('"results"')
   })
 

@@ -9,8 +9,15 @@ import type {
   TableSchema,
   TableSchemaOptions,
   ExecutionResult,
+  SqlExecutionMode,
 } from './types'
-import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
+import {
+  queryOnlyBoundaryError,
+  queryOnlyCleanupError,
+  requireConnected,
+  withMappedConnectionError,
+} from './sql-adapter-utils'
+import { mapError } from './error-mapper'
 // 型別匯入在執行期會被抹除；driver 本體改在 connect() 時才載入，這樣查
 // Redis 或 Mongo 的命令不必為了 import 一個用不到的 SQL driver 付啟動成本
 // （MongoDB adapter 的動態 import 是既有先例）。
@@ -19,6 +26,7 @@ import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
 import { resolveTimeoutPolicy } from './timeout-policy'
+import { isTransportFailure } from '@/utils/connection-error-message'
 
 /**
  * PostgreSQL adapter implementation using pg library
@@ -118,11 +126,16 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async execute<T>(
     sql: string,
-    params?: (string | number | boolean | null)[]
+    params?: (string | number | boolean | null)[],
+    options?: { sqlMode?: SqlExecutionMode }
   ): Promise<ExecutionResult<T>> {
     const pool = requireConnected(this.pool)
 
     return withMappedConnectionError('postgresql', this.options, async () => {
+      if (options?.sqlMode === 'native-read-only') {
+        return this.executeReadOnly<T>(pool, sql, params)
+      }
+
       // Use parameterized query to prevent SQL injection
       // PostgreSQL uses $1, $2, ... placeholders
       const result = params ? await pool.query(sql, params) : await pool.query(sql)
@@ -133,6 +146,51 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         affectedRows: result.rowCount ?? 0,
       }
     })
+  }
+
+  private async executeReadOnly<T>(
+    pool: Pool,
+    sql: string,
+    params?: (string | number | boolean | null)[]
+  ): Promise<ExecutionResult<T>> {
+    const client = await pool.connect()
+    let primaryError: unknown
+    let cleanupError: unknown
+    let executionResult!: ExecutionResult<T>
+    let transactionStarted = false
+    let released = false
+    try {
+      try {
+        await client.query('BEGIN READ ONLY')
+        transactionStarted = true
+      } catch (error) {
+        const mapped = mapError(error, 'postgresql', this.options)
+        if (isTransportFailure(mapped)) throw mapped
+        throw queryOnlyBoundaryError('postgresql', error)
+      }
+
+      const result = params ? await client.query(sql, params) : await client.query(sql)
+      executionResult = { rows: result.rows as T[], affectedRows: result.rowCount ?? 0 }
+    } catch (error) {
+      primaryError = error
+    } finally {
+      if (transactionStarted) {
+        try {
+          await client.query('ROLLBACK')
+        } catch (error) {
+          client.release(error as Error)
+          released = true
+          cleanupError = error
+        }
+      }
+      if (!released) client.release()
+    }
+
+    if (cleanupError !== undefined) {
+      throw queryOnlyCleanupError('postgresql', cleanupError, primaryError === undefined)
+    }
+    if (primaryError !== undefined) throw primaryError
+    return executionResult
   }
 
   /**

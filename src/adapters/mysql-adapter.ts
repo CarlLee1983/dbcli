@@ -12,12 +12,20 @@ import type {
   TableSchema,
   TableSchemaOptions,
   ExecutionResult,
+  SqlExecutionMode,
 } from './types'
-import { requireConnected, withMappedConnectionError } from './sql-adapter-utils'
+import {
+  queryOnlyBoundaryError,
+  queryOnlyCleanupError,
+  requireConnected,
+  withMappedConnectionError,
+} from './sql-adapter-utils'
+import { mapError } from './error-mapper'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
 import { resolveTimeoutPolicy, statementTimeoutSql } from './timeout-policy'
+import { isTransportFailure } from '@/utils/connection-error-message'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -36,6 +44,7 @@ function parseEnumValues(columnType: string): string[] | undefined {
  */
 export class MySQLAdapter implements DatabaseAdapter {
   private db: mysql.Connection | null = null
+  private executionTail: Promise<void> = Promise.resolve()
   private options: ConnectionOptions
   private system: 'mysql' | 'mariadb'
 
@@ -137,31 +146,94 @@ export class MySQLAdapter implements DatabaseAdapter {
    */
   async execute<T>(
     sql: string,
-    params?: (string | number | boolean | null)[]
+    params?: (string | number | boolean | null)[],
+    options?: { sqlMode?: SqlExecutionMode }
   ): Promise<ExecutionResult<T>> {
     const db = requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {
-      // Use parameterized query to prevent SQL injection
-      // mysql2/promise returns [rows, fields]
-      const [result] = params ? await db.execute(sql, params) : await db.execute(sql)
+      const execution = this.executionTail.then(async () => {
+        if (options?.sqlMode === 'native-read-only') {
+          return this.executeReadOnly<T>(db, sql, params)
+        }
 
-      // Handle query results (array of rows)
-      if (Array.isArray(result)) {
+        // Use parameterized query to prevent SQL injection
+        // mysql2/promise returns [rows, fields]
+        const [result] = params ? await db.execute(sql, params) : await db.execute(sql)
+
+        // Handle query results (array of rows)
+        if (Array.isArray(result)) {
+          return {
+            rows: result as T[],
+            affectedRows: result.length,
+          }
+        }
+
+        // Handle DML results (ResultSetHeader)
+        const header = result as mysql.ResultSetHeader
         return {
-          rows: result as T[],
-          affectedRows: result.length,
+          rows: [],
+          affectedRows: header.affectedRows || 0,
+          lastInsertId: header.insertId,
+        }
+      })
+      this.executionTail = execution.then(
+        () => undefined,
+        () => undefined
+      )
+      return execution
+    })
+  }
+
+  private async executeReadOnly<T>(
+    db: mysql.Connection,
+    sql: string,
+    params?: (string | number | boolean | null)[]
+  ): Promise<ExecutionResult<T>> {
+    let primaryError: unknown
+    let cleanupError: unknown
+    let executionResult!: ExecutionResult<T>
+    let transactionStarted = false
+    try {
+      try {
+        await db.query('START TRANSACTION READ ONLY')
+        transactionStarted = true
+      } catch (error) {
+        const mapped = mapError(error, this.system, this.options)
+        if (isTransportFailure(mapped)) throw mapped
+        throw queryOnlyBoundaryError(this.system, error)
+      }
+
+      const [result] = params ? await db.execute(sql, params) : await db.execute(sql)
+      if (Array.isArray(result)) {
+        executionResult = { rows: result as T[], affectedRows: result.length }
+      } else {
+        const header = result as mysql.ResultSetHeader
+        executionResult = {
+          rows: [],
+          affectedRows: header.affectedRows || 0,
+          lastInsertId: header.insertId,
         }
       }
-
-      // Handle DML results (ResultSetHeader)
-      const header = result as mysql.ResultSetHeader
-      return {
-        rows: [],
-        affectedRows: header.affectedRows || 0,
-        lastInsertId: header.insertId,
+    } catch (error) {
+      primaryError = error
+    } finally {
+      if (transactionStarted) {
+        try {
+          await db.query('ROLLBACK')
+        } catch (error) {
+          db.destroy()
+          this.db = null
+          cleanupError = error
+        }
       }
-    })
+    }
+
+    if (cleanupError !== undefined) {
+      throw queryOnlyCleanupError(this.system, cleanupError, primaryError === undefined)
+    }
+    if (primaryError !== undefined) throw primaryError
+    return executionResult
   }
 
   /**

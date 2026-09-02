@@ -14,6 +14,7 @@ import { openInBrowser } from '@/utils/opener'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { QueryResult } from '@/types/query'
+import type { Permission } from '@/types'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { BlacklistManager } from '@/core/blacklist-manager'
@@ -91,6 +92,7 @@ interface QueryExecutionContext {
   config: DbcliConfig
   configPath: string
   connectionName?: string
+  effectivePermission?: Permission
 }
 
 /** What one connection's execution hands back. Exported so a caller substituting
@@ -322,7 +324,7 @@ async function runMultiConnectionQuery(
     const config = await configModule.read(configPath, connectionName, {
       loadLayeredSchema: false,
     })
-    contexts.push({ config, configPath, connectionName })
+    contexts.push({ config, configPath, connectionName, effectivePermission: 'query-only' })
   }
 
   // Complete validation for every selected connection before any adapter is
@@ -693,6 +695,7 @@ async function sqlQueryBranch(
   fieldSelection: FieldSelection | undefined
 ): Promise<QueryExecutionOutput> {
   const { config } = context
+  const effectivePermission = context.effectivePermission ?? config.permission
   const adapter = AdapterFactory.createSqlAdapter(
     requireSqlConnection(config.connection as ConnectionOptions)
   )
@@ -701,7 +704,7 @@ async function sqlQueryBranch(
   try {
     await adapter.connect()
     const blacklistValidator = new BlacklistValidator(new BlacklistManager(config))
-    const executor = new QueryExecutor(adapter, config.permission, blacklistValidator, config, {
+    const executor = new QueryExecutor(adapter, effectivePermission, blacklistValidator, config, {
       ...options,
       deferDiagnostics: true,
     })

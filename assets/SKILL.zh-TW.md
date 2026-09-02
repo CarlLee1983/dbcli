@@ -500,7 +500,7 @@ dbcli export "SELECT * FROM orders" --format html --output orders.html
 ## 備註
 
 - Query-only 模式自動補 `LIMIT 1000`；查 `information_schema` 或會被 `LIMIT` 破壞的語句請加 `--no-limit`。
-- 被 blacklist 的 table / column 會從查詢輸出中遮蔽。
+- 被 blacklist 的 table / column 會從查詢輸出中遮蔽。`blacklist.tables` 與 `blacklist.columns` 的每個條目在所有引擎上都是 glob（`*`、`?`、`[a-z]`），規則與名稱比對時整條點分路徑都不分大小寫——寫成 `password` 的規則同時涵蓋 `Password`，`profile.ssn` 也涵蓋 `profile.SSN`；真的叫 `report*` 的表要寫成 `report\*` 才能回到字面比對。`--fields` 不受影響，維持精確比對。讀不出意思的規則會在設定載入時就被拒絕，而不是靜默地什麼都不保護：以自己的表限定的欄位項（`{"users": ["users.password"]}`）會載入失敗，無法解析的規則則會讓每一個 `dbcli es` 請求失敗，直到改掉為止。
 - `schema` 回報 `estimatedRowCount` 與 `sizeCategory`（small / medium / large / huge）。大 / 巨大表要加 `WHERE` 或 `LIMIT` — 分界值見 [reference.md](reference.md#schema)。
 - 對 `mongodb+srv://` 連線，`doctor` 會回報 SRV 是用原生解析或走 DoH fallback — 在執行環境限制 DNS 時很有用。
 - **全域旗標：** `--version`、`--config <path>`、`--global`、`--use <name>`、`--timeout <ms>`、`--statement-timeout <ms>`、`-v` / `--verbose` / `-vv`、`-q` / `--quiet`、`--no-color`（也尊重 `NO_COLOR`）。除非指令明確宣告 command-level 選項，否則 root-level 旗標必須放在指令之前。

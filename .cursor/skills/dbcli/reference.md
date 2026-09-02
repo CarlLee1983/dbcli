@@ -1102,6 +1102,26 @@ dbcli blacklist column remove users.password
 
 **Subcommands:** `list`, `table add <name>`, `table remove <name>`, `column add <table.column>`, `column remove <table.column>`
 
+**Matching semantics (7.0.0):** every entry in `blacklist.tables` and `blacklist.columns` is a
+glob (`*`, `?`, `[abc]`, `[a-z]`) on **every** engine, not only Redis and Elasticsearch — `tables:
+["secrets*"]` blocks the SQL table `secrets_2026` and the MongoDB collection `secrets_2026` alike.
+A table literally named `report*` has to be written `report\*` to match literally again. Rules and
+returned names are compared over the **whole dotted path, case-insensitively**, so `password` also
+covers `Password` and `profile.ssn` covers `profile.SSN`; folding happens at the comparison and the
+config keeps rules as written. The cost is deliberate over-rejection: where PostgreSQL holds both
+`"Password"` and `"password"`, a rule naming either redacts both. `--fields` is unaffected and still
+matches exactly — it names keys in the document in front of the operator, not a protection rule.
+
+Column-level entries are a **display filter, not an access control**: masking matches returned
+names, so `SELECT password_hash AS x` still returns the value. Table-level entries are the
+enforceable half.
+
+A rule that cannot mean anything fails loudly instead of silently protecting nothing: a column entry
+qualified with its own table (`{"users": ["users.password"]}`) fails to load, and a rule the
+Elasticsearch shell cannot parse (`pass[word`, `a.**`) makes every `dbcli es` request fail until the
+config is fixed. Entries are trimmed and unquoted, and a rule filed under `public.users` applies to
+`SELECT * FROM users` and the reverse.
+
 **`list` options:** `--config <path>`, `--format <text|json>` (default: `text`). JSON writes one
 document to stdout: `{ "tables": string[], "columns": Record<string, string[]>, "warnings":
 [{ "collection", "raw", "reason" }] }`. Invalid MongoDB blacklist patterns appear in `warnings`;
@@ -3546,6 +3566,12 @@ dbcli query "KEYS *"                      # → returns only non-blacklisted key
 ```
 
 Rejections are written to the audit log with `success: false` and `metadata.rejection_reason: 'blacklist'` + `matched_pattern`.
+
+Enforcement covers `q` and `report` as well (7.0.0). Before that, saved queries and the built-in
+`@diag/redis-key-stats` diagnostic ran on an adapter that carried the connection but none of its
+rules, so `dbcli q @<name>` could read a protected key in plaintext and a report could persist
+protected key names. Both now resolve their key targets before execution, apply the connection's
+blacklist and `redis.mask` rules, and drop protected key names from `SCAN` evidence.
 
 ### Value / hash-field masking (v1.22)
 

@@ -5,7 +5,7 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 一條規則擋得住寫、擋不住讀，差別只在大小寫
+## [7.0.0] - 2026-09-02 - 一條規則擋得住寫、擋不住讀，差別只在大小寫
 
 ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。
 這一版把它收成一套，並在收的過程中發現同一份設定還有一條完全繞過它的路——規則從來

@@ -13,13 +13,14 @@ support branch and none is promised: an older major is fixed by upgrading.
 
 | Version | Status |
 | ------- | ------ |
-| **6.x** | :white_check_mark: **Supported** — use the latest 6.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
-| **5.x** | :x: **Not supported** — superseded by 6.x; upgrade to **6.x**. |
-| **4.x** | :x: **Not supported** — superseded by 6.x; upgrade to **6.x**. |
-| **3.x** | :x: **Not supported** — superseded by 6.x; upgrade to **6.x**. |
-| **2.x** | :x: **Not supported** — superseded by 6.x; upgrade to **6.x**. |
-| **1.x** | :x: **Not supported** — superseded by 6.x; upgrade to **6.x**. |
-| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **6.x**. |
+| **7.x** | :white_check_mark: **Supported** — use the latest 7.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
+| **6.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **5.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **4.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **3.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **2.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **1.x** | :x: **Not supported** — superseded by 7.x; upgrade to **7.x**. |
+| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **7.x**. |
 
 The supported major above is checked against `package.json` by
 `bun run manifest:check`, so this table cannot silently fall behind a release.

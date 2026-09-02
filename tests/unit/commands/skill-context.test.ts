@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { registerSkillCommand } from '../../../src/commands/skill'
+import { AdapterFactory } from '@/adapters/factory'
 
 const CONFIG = {
   connection: {
@@ -133,6 +134,42 @@ describe('skill context (CLI entrypoint)', () => {
     expect(JSON.parse(logOut.trim()).semantic).toMatchObject({
       models: [expect.objectContaining({ name: 'users', table: 'users' })],
     })
+  })
+
+  test('preserves semantic context when the optional contracts file is absent without creating an adapter', async () => {
+    const semantic = {
+      version: 1,
+      models: [
+        { name: 'users', table: 'users', fields: [{ column: 'email', aliases: ['contact'] }] },
+      ],
+      metrics: [],
+    }
+    const expectedSemantic = {
+      ...semantic,
+      relationships: [],
+      models: [{ ...semantic.models[0], aliases: [] }],
+    }
+    writeFileSync(join(sandbox, 'dbcli.semantic.json'), JSON.stringify(semantic))
+    const adapterSpies = [
+      spyOn(AdapterFactory, 'createAdapter'),
+      spyOn(AdapterFactory, 'createAdapterWithoutRules'),
+      spyOn(AdapterFactory, 'createSqlAdapter'),
+      spyOn(AdapterFactory, 'createMongoDBAdapter'),
+      spyOn(AdapterFactory, 'createRedisAdapter'),
+      spyOn(AdapterFactory, 'createElasticsearchAdapter'),
+    ]
+
+    try {
+      await run('--format', 'json')
+
+      const parsed = JSON.parse(logOut.trim())
+      expect(exitCode).toBeUndefined()
+      expect(parsed.semantic).toEqual(expectedSemantic)
+      expect(parsed.contracts).toBeUndefined()
+      for (const adapterSpy of adapterSpies) expect(adapterSpy).not.toHaveBeenCalled()
+    } finally {
+      for (const adapterSpy of adapterSpies) adapterSpy.mockRestore()
+    }
   })
 
   test('fails closed when the default semantic file is malformed', async () => {

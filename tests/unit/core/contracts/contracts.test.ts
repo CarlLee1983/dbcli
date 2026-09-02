@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +11,7 @@ import {
   renderSemanticContractsMarkdown,
   SemanticContractValidationError,
 } from '@/core/contracts'
+import { AdapterFactory } from '@/adapters/factory'
 
 let workspace: string | undefined
 
@@ -155,6 +156,37 @@ describe('semantic contracts', () => {
       status: 'unavailable',
       issues: [{ path: '$', message: 'contract file is unavailable' }],
     })
+  })
+
+  test('reports invalid drift without disclosing arbitrary input or creating an adapter', async () => {
+    const seededInput = 'contract-input-must-not-leak-9c731'
+    const filePath = await writeContracts({
+      version: 1,
+      contracts: seededInput,
+    })
+    const adapterSpies = [
+      spyOn(AdapterFactory, 'createAdapter'),
+      spyOn(AdapterFactory, 'createAdapterWithoutRules'),
+      spyOn(AdapterFactory, 'createSqlAdapter'),
+      spyOn(AdapterFactory, 'createMongoDBAdapter'),
+      spyOn(AdapterFactory, 'createRedisAdapter'),
+      spyOn(AdapterFactory, 'createElasticsearchAdapter'),
+    ]
+
+    try {
+      const report = await inspectSemanticContractDrift({
+        workspaceRoot: workspace!,
+        filePath,
+        references,
+      })
+
+      expect(report.status).toBe('invalid')
+      expect(report.issues.length).toBeGreaterThan(0)
+      expect(JSON.stringify(report)).not.toContain(seededInput)
+      for (const adapterSpy of adapterSpies) expect(adapterSpy).not.toHaveBeenCalled()
+    } finally {
+      for (const adapterSpy of adapterSpies) adapterSpy.mockRestore()
+    }
   })
 
   test('rejects unsupported lifecycle values and accepts canonical field references', async () => {

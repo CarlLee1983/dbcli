@@ -120,6 +120,29 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 - **Multi-language Parity**: Ensure updates are applied to all supported language directories (e.g., `docs/user/en/` and `docs/user/zh-TW/`).
 - **Format Parity**: Both `index.md` (Markdown) and `index.html` (Polished UI) must be kept in sync.
 
+## ForgeFlow Story Development
+
+When implementation is assigned by Story ID or from `specs/stories/`, use the
+repository-local `story-development` Skill and:
+
+1. Read the approved `story.md` and `acceptance.md`; treat `task.md` only as
+   optional progress context.
+2. Inspect the relevant existing code and implement the smallest coherent
+   in-scope change.
+3. Add or update tests for changed behavior.
+4. Run focused checks during development, then run `make verify` from the
+   repository root.
+5. Repair failures without changing the Story or weakening acceptance criteria,
+   and rerun the gate until it passes.
+
+`make verify` is the automated completion authority. PASS makes work eligible
+for human review; it does not approve or merge it. Do not bypass repository
+verification, remove failing tests to obtain PASS, or expand Story scope without
+explicit human instruction.
+
+The completion report must list changed files, implementation and test changes,
+the exact verification result, assumptions, and remaining risks.
+
 ## dbcli Usage Guidelines
 
 Before operating on the database, you must perform the following steps in order:

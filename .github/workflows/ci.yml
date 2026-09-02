@@ -143,10 +143,10 @@ jobs:
       - name: Services are reachable
         run: bun run services:check
 
-      - name: Integration tests
-        run: bun test tests/integration
-        env:
-          REQUIRE_INTEGRATION_SERVICES: 'true'
+      # This is the repository-owned ForgeFlow gate. The focused jobs above and
+      # below remain in place for platform-specific and fast failure signals.
+      - name: Canonical verification
+        run: make verify
 
       - name: Service logs (on failure)
         if: failure()

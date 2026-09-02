@@ -12,6 +12,7 @@ import {
   type AssertionOutcome,
   requireNonEmpty,
   normalizeFormat,
+  redactArtifactText,
   redactSqlForEvidence,
   shellQuote,
   renderAfterWriteCommand,
@@ -144,9 +145,13 @@ export function buildAfterWriteCommand(input: SafeBackfillInput): string {
 export function buildSafeBackfillSubject(input: SafeBackfillInput): VerificationSubject {
   return {
     kind: 'backfill',
-    name: input.subjectName ?? input.table,
+    name: redactArtifactText(input.subjectName ?? input.table),
     command: 'verify safe-backfill',
   }
+}
+
+function artifactSummary(input: SafeBackfillInput, status: VerificationStatus): string {
+  return redactArtifactText(input.summary ?? defaultSummary(status, input.table))
 }
 
 export interface SafeBackfillRunners {
@@ -172,12 +177,15 @@ async function runGuards(
   input: SafeBackfillInput,
   runners: SafeBackfillRunners
 ): Promise<GuardResult<GuardName>[]> {
-  return runGuardSequence<GuardName>([
-    ['blacklist', () => runners.blacklistGuard(input.table)],
-    ['schema', () => runners.schemaGuard(input.table)],
-    ['plan', () => runners.planGuard(input.query)],
-    ['verify-query-readonly', () => runners.verifyReadonlyGuard(input.verifyQuery)],
-  ])
+  return runGuardSequence<GuardName>(
+    [
+      ['blacklist', () => runners.blacklistGuard(input.table)],
+      ['schema', () => runners.schemaGuard(input.table)],
+      ['plan', () => runners.planGuard(input.query)],
+      ['verify-query-readonly', () => runners.verifyReadonlyGuard(input.verifyQuery)],
+    ],
+    { stopOnFailure: false }
+  )
 }
 
 export async function runSafeBackfillPreflight(
@@ -239,12 +247,13 @@ export async function runSafeBackfillAfterWrite(
     const failed = guards.find((g) => g.status === 'failed')
     const blockedReason =
       failed?.reason ?? 'A required guard failed before the read-back assertion.'
+    const artifactReason = 'A required guard failed before the read-back assertion.'
     const artifact = buildVerificationArtifact({
       status: 'blocked',
       subject,
-      summary: input.summary ?? defaultSummary('blocked', input.table),
+      summary: artifactSummary(input, 'blocked'),
       evidence: [TASK_PACK_EVIDENCE],
-      blockedReason,
+      blockedReason: artifactReason,
       now: clock.now,
       idFactory: clock.idFactory,
     })
@@ -262,6 +271,10 @@ export async function runSafeBackfillAfterWrite(
   // Guards passed: run the read-back assertion and map its verdict.
   const outcome = await runners.runAssertion(input)
   const status = mapAssertionToStatus(outcome)
+  const artifactReason =
+    status === 'indeterminate'
+      ? 'The read-back assertion did not produce a trustworthy verdict.'
+      : undefined
 
   const assertEvidence: VerificationEvidenceRef = {
     kind: 'assert',
@@ -269,16 +282,16 @@ export async function runSafeBackfillAfterWrite(
     // raw --expect (both can carry sensitive literal values).
     command: `assert <${redactSqlForEvidence(input.verifyQuery)}> --expect <${redactSqlForEvidence(input.expect)}>`,
     exitCode: status === 'verified' ? 0 : 1,
-    ...(outcome.auditRef ? { auditRef: outcome.auditRef } : {}),
-    ...(status === 'indeterminate' && outcome.reason ? { note: outcome.reason } : {}),
+    ...(outcome.auditRef ? { auditRef: redactArtifactText(outcome.auditRef) } : {}),
+    ...(artifactReason ? { note: artifactReason } : {}),
   }
 
   const artifact = buildVerificationArtifact({
     status,
     subject,
-    summary: input.summary ?? defaultSummary(status, input.table),
+    summary: artifactSummary(input, status),
     evidence: [TASK_PACK_EVIDENCE, assertEvidence],
-    ...(status === 'indeterminate' && outcome.reason ? { blockedReason: outcome.reason } : {}),
+    ...(artifactReason ? { blockedReason: artifactReason } : {}),
     now: clock.now,
     idFactory: clock.idFactory,
   })

@@ -1,5 +1,5 @@
 import type { VerificationStatus } from '@/core/verification'
-import { redactSql } from '@/utils/redaction'
+import { redactSensitive, redactSql } from '@/utils/redaction'
 
 export type VerifyMode = 'preflight' | 'after-write'
 export type GuardStatus = 'passed' | 'failed'
@@ -33,6 +33,23 @@ export const REASON_CAP = 200
 /** Cap a human-readable reason so artifacts never carry unbounded text. */
 export function boundedReason(message: string, cap: number = REASON_CAP): string {
   return message.length <= cap ? message : `${message.slice(0, cap - 1)}…`
+}
+
+/** Redact credentials and filesystem paths from user-controlled artifact labels. */
+export function redactArtifactText(text: string, maxLen = REASON_CAP): string {
+  const hasCredential =
+    redactSensitive(text) !== text ||
+    /\b(password|token|api[-_ ]?key|secret|auth(?:orization)?|credential|pass|pwd|sid|bearer|basic)\b/i.test(
+      text
+    )
+  const hasPath =
+    /(?:^|[^a-z0-9._-])(?:file:|~[\\/]|\.{1,2}[\\/]|[a-z]:[\\/]|\\\\|[\\/](?![\\/])(?=\S))/i.test(
+      text
+    )
+  if (hasCredential || hasPath) return '<redacted>'
+
+  const collapsed = text.replace(/\s+/g, ' ').trim()
+  return collapsed.length <= maxLen ? collapsed : `${collapsed.slice(0, maxLen - 1)}…`
 }
 
 /** Thrown for malformed CLI input, before any guard runs or DB connection opens. */
@@ -69,8 +86,12 @@ export function normalizeFormat(raw: unknown): 'table' | 'json' {
  * and numeric literals + sensitive key/value patterns), collapses whitespace, caps length.
  */
 export function redactSqlForEvidence(sql: string, maxLen = 100): string {
-  const collapsed = redactSql(sql).replace(/\s+/g, ' ').trim()
-  return collapsed.length <= maxLen ? collapsed : `${collapsed.slice(0, maxLen - 1)}…`
+  const uncommented = redactSql(sql)
+    .replace(/(?:--|#)[^\r\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?(?:\*\/|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return redactArtifactText(uncommented, maxLen)
 }
 
 /** POSIX shell single-quote escaping: wrap in '…', escape embedded quotes as '\''. */
@@ -121,12 +142,10 @@ export function tableRefsMatch(a: string, b: string): boolean {
   return true
 }
 
-/**
- * Run guards in order, stopping at the first failure. The returned array contains
- * only the guards that actually ran, so callers see exactly which guard blocked.
- */
+/** Run guards in order, stopping at the first failure unless explicitly disabled. */
 export async function runGuardSequence<Name extends string>(
-  specs: Array<[Name, () => Promise<GuardOutcome>]>
+  specs: Array<[Name, () => Promise<GuardOutcome>]>,
+  options: { stopOnFailure?: boolean } = {}
 ): Promise<GuardResult<Name>[]> {
   const results: GuardResult<Name>[] = []
   for (const [name, run] of specs) {
@@ -136,7 +155,7 @@ export async function runGuardSequence<Name extends string>(
       status: outcome.ok ? 'passed' : 'failed',
       ...(outcome.reason ? { reason: outcome.reason } : {}),
     })
-    if (!outcome.ok) break
+    if (!outcome.ok && options.stopOnFailure !== false) break
   }
   return results
 }

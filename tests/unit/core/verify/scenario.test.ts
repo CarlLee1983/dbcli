@@ -83,6 +83,18 @@ describe('runGuardSequence / allGuardsPassed', () => {
     expect(guards[1]?.reason).toBe('nope')
   })
 
+  test('can report every guard after a failure', async () => {
+    const guards = await runGuardSequence<'a' | 'b' | 'c'>(
+      [
+        ['a', ok],
+        ['b', bad],
+        ['c', ok],
+      ],
+      { stopOnFailure: false }
+    )
+    expect(guards.map((g) => g.status)).toEqual(['passed', 'failed', 'passed'])
+  })
+
   test('allGuardsPassed requires the expected count and all passed', async () => {
     const guards = await runGuardSequence<'a' | 'b'>([
       ['a', ok],

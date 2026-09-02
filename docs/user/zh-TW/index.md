@@ -640,6 +640,8 @@ After-write（寫入文物）：
 
 結果狀態：`verified`（回讀符合 `--expect`）、`not_verified`（回讀與 `--expect` 相悖）、`blocked`（防護失敗 — blacklist、schema、plan，或 verify-query 非唯讀）、`indeterminate`（斷言已執行但無法產生可信的結論）。
 
+即使其中一項失敗，四項防護仍會全部執行並分別回報結果。After-write 只有在四項全數通過時才執行斷言；持久化的失敗原因使用固定安全標籤，不會保存 driver 錯誤文字。持久化的自訂標籤與 SQL 證據也會遮蔽憑證、檔案系統路徑及 SQL 註解。
+
 **防護約束（fail closed）：**
 
 - `--verify-query` 必須是**單純的 `SELECT`**。`EXPLAIN` / `EXPLAIN ANALYZE`、`SHOW`、`DESCRIBE`，以及會寫入資料的 CTE（`WITH … (DELETE … RETURNING) …`）都會被拒絕 — 在 PostgreSQL 上 `EXPLAIN ANALYZE <write>` 會真的執行寫入，因此回讀僅限於絕不會變更資料的語句。

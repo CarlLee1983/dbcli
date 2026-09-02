@@ -276,8 +276,9 @@ describe('dbcli verify safe-backfill (integration)', () => {
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
     expect(j.status).toBe('blocked')
+    expect(j.blockedReason).toContain('plain SELECT')
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
-    expect(raw.blockedReason).toContain('plain SELECT')
+    expect(raw.blockedReason).toBe('A required guard failed before the read-back assertion.')
     // The probe row must be untouched: status stays NULL because EXPLAIN never ran.
     const { stdout: checkOut } = await run([
       'query',
@@ -309,8 +310,39 @@ describe('dbcli verify safe-backfill (integration)', () => {
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
     expect(j.status).toBe('blocked')
+    expect(j.blockedReason).toContain('must match --table')
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
-    expect(raw.blockedReason).toContain('must match --table')
+    expect(raw.blockedReason).toBe('A required guard failed before the read-back assertion.')
+  })
+
+  test('preflight blocks UPDATE without WHERE and multiple statements', async () => {
+    if (!DB_OK) return
+    for (const query of [
+      `UPDATE ${TABLE} SET status = 1`,
+      `${UPDATE_SQL}; UPDATE ${TABLE} SET status = 2 WHERE id = 1`,
+    ]) {
+      const { stdout, code } = await run([
+        'verify',
+        'safe-backfill',
+        '--table',
+        TABLE,
+        '--query',
+        query,
+        '--verify-query',
+        `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+        '--expect',
+        'value == 3',
+        '--format',
+        'json',
+      ])
+      expect(code).toBe(1)
+      const result = JSON.parse(stdout)
+      expect(result.status).toBe('blocked')
+      expect(result.guards).toHaveLength(4)
+      expect(result.guards.find((guard: { name: string }) => guard.name === 'plan').status).toBe(
+        'failed'
+      )
+    }
   })
 
   test('after-write with a non-read-only verify-query is blocked and writes a blocked artifact', async () => {
@@ -333,9 +365,10 @@ describe('dbcli verify safe-backfill (integration)', () => {
     const j = JSON.parse(stdout)
     expect(code).toBe(1)
     expect(j.status).toBe('blocked')
+    expect(j.blockedReason).toContain('read-only')
     const raw = JSON.parse(await readFile(j.artifact.path, 'utf8'))
     expect(raw.status).toBe('blocked')
-    expect(raw.blockedReason).toContain('read-only')
+    expect(raw.blockedReason).toBe('A required guard failed before the read-back assertion.')
   })
 
   test('invalid --format fails before running guards', async () => {

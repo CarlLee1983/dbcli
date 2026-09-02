@@ -694,6 +694,11 @@ contradicted `--expect`), `blocked` (a guard failed — blacklist, schema, plan,
 non-read-only verify-query), `indeterminate` (the assertion ran but could not yield a
 trustworthy verdict).
 
+All four guards run and report their individual outcomes even if one fails. After-write
+runs the assertion only when all four pass; persisted failure reasons are fixed safe
+labels rather than driver error text. Persisted custom labels and SQL evidence also
+redact credentials, filesystem paths, and SQL comments.
+
 **Guard constraints (fail closed):**
 
 - `--verify-query` must be a **plain `SELECT`**. `EXPLAIN` / `EXPLAIN ANALYZE`,

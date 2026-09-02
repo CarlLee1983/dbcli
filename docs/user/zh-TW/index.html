@@ -531,6 +531,7 @@ dbcli assert "SELECT count(*)::int FROM orders WHERE status IS NULL" \
             <p class="mt-4 mb-4">檢視結果：<code>dbcli verification show &lt;artifact-id&gt;</code>。</p>
             <p class="mb-4">預檢也會回顯<strong>預計執行的 update</strong>（你需自行執行的 <code>--query</code>），讓印出的內容成為此操作完整、可直接複製的紀錄。</p>
             <p class="mb-4">結果狀態：<code>verified</code>（回讀符合 <code>--expect</code>）、<code>not_verified</code>（回讀與 <code>--expect</code> 相悖）、<code>blocked</code>（防護失敗 — blacklist、schema、plan，或 verify-query 非唯讀）、<code>indeterminate</code>（斷言已執行但無法產生可信的結論）。</p>
+            <p class="mb-4">即使其中一項失敗，四項防護仍會全部執行並分別回報結果。After-write 只有在四項全數通過時才執行斷言；持久化的失敗原因使用固定安全標籤，不會保存 driver 錯誤文字。持久化的自訂標籤與 SQL 證據也會遮蔽憑證、檔案系統路徑及 SQL 註解。</p>
             <p class="mb-2 font-medium">防護約束（fail closed）：</p>
             <ul class="mb-4 ml-6 list-disc">
               <li><code>--verify-query</code> 必須是<strong>單純的 <code>SELECT</code></strong>。<code>EXPLAIN</code> / <code>EXPLAIN ANALYZE</code>、<code>SHOW</code>、<code>DESCRIBE</code>，以及會寫入資料的 CTE（<code>WITH … (DELETE … RETURNING) …</code>）都會被拒絕 — 在 PostgreSQL 上 <code>EXPLAIN ANALYZE &lt;write&gt;</code> 會真的執行寫入，因此回讀僅限於絕不會變更資料的語句。</li>

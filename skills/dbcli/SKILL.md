@@ -639,7 +639,7 @@ schema. Raw `query` / `export` invocations render a sortable table only.
 ## Notes
 
 - Query-only mode auto-appends `LIMIT 1000`; add `--no-limit` for `information_schema` or statements that break with `LIMIT`.
-- Blacklisted tables and columns are redacted from query output.
+- Blacklisted tables and columns are redacted from query output. Every entry in `blacklist.tables` and `blacklist.columns` is a glob (`*`, `?`, `[a-z]`) on every engine, and a rule is compared against the whole dotted path case-insensitively — a rule spelled `password` also covers `Password`, and `profile.ssn` covers `profile.SSN`; a table literally named `report*` has to be written `report\*` to match literally again. `--fields` is unaffected and still matches exactly. A rule that cannot mean anything is rejected when the config loads rather than silently protecting nothing: a column entry qualified with its own table (`{"users": ["users.password"]}`) fails to load, and an unparsable rule makes every `dbcli es` request fail until it is fixed.
 - `schema` reports `estimatedRowCount` and `sizeCategory` (small / medium / large / huge). For large/huge tables add `WHERE` or `LIMIT` — bands in [reference.md](reference.md#schema).
 - `doctor` on `mongodb+srv://` reports whether SRV resolves natively or through the DoH fallback — useful when the runtime restricts DNS.
 - **Global flags:** `--version`, `--config <path>`, `--global`, `--use <name>`, `--timeout <ms>`, `--statement-timeout <ms>`, `-v` / `--verbose` / `-vv`, `-q` / `--quiet`, `--no-color` (also honours `NO_COLOR`). Root-level flags must precede the command unless the command explicitly declares a command-level option.

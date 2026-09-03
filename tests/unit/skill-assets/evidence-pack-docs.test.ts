@@ -9,7 +9,9 @@ import { describe, expect, test } from 'bun:test'
  * Markdown and the HTML carry, so an unrelated section cannot satisfy a claim.
  */
 async function evidencePackSection(path: string): Promise<string> {
-  const raw = await Bun.file(path).text()
+  // Windows checks out CRLF, so line endings are not part of what these
+  // claims assert. Normalize before any `\n`-shaped matching below.
+  const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
   const marker = '<!-- doc-key: evidence-packs -->'
   const start = raw.indexOf(marker)
   expect(start).toBeGreaterThanOrEqual(0)

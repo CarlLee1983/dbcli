@@ -10,7 +10,9 @@ import { describe, expect, test } from 'bun:test'
  * covers a language's Markdown and HTML without encoding either's line breaks.
  */
 async function impactSection(path: string): Promise<string> {
-  const raw = await Bun.file(path).text()
+  // Windows checks out CRLF, so line endings are not part of what these
+  // claims assert. Normalize before any `\n`-shaped matching below.
+  const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
   // Scope to the impact topic: some claims recur elsewhere in these documents,
   // and a whole-file match would let an unrelated section satisfy them.
   const start = raw.indexOf('dbcli impact assess')

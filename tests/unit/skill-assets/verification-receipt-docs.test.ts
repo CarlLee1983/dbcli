@@ -11,7 +11,9 @@ import { describe, expect, test } from 'bun:test'
  * Markdown and HTML word the same claim differently, hence one list per surface.
  */
 async function receiptSection(path: string): Promise<string> {
-  const raw = await Bun.file(path).text()
+  // Windows checks out CRLF, so line endings are not part of what these
+  // claims assert. Normalize before any `\n`-shaped matching below.
+  const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
   const text = raw
     // Tags go before entities, so `&lt;path&gt;` cannot decode into something
     // the tag pass then deletes. A claim must therefore not contain a
@@ -90,7 +92,7 @@ describe('verification receipt documentation contract', () => {
   test.each(['docs/user/en/index.md', 'docs/user/zh-TW/index.md'])(
     '%s keeps the receipt flag table contiguous',
     async (path) => {
-      const raw = await Bun.file(path).text()
+      const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
       const header = raw.indexOf(
         '| :--- | :--- | :--- |',
         raw.indexOf('--write-verification-artifact')

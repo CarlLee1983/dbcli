@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-const read = async (path: string): Promise<string> => Bun.file(path).text()
+// Windows checks out CRLF, so line endings are not part of what these
+// claims assert.
+const read = async (path: string): Promise<string> =>
+  (await Bun.file(path).text()).replace(/\r\n/g, '\n')
 
 const commandStrings = [
   'dbcli diff --against-orm prisma/schema.prisma --format json',

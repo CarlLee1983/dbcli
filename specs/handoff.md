@@ -1,7 +1,8 @@
 # ForgeFlow Handoff
 
-十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`）。
-沒有已知的產品缺口，也沒有選定中的下一個 Story。
+十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`），
+合併後的收尾為 PR #145（`a2a05cc2`）。沒有已知的產品缺口，也沒有選定中的
+下一個 Story。
 
 ## 交付紀錄
 
@@ -14,7 +15,22 @@ DBCLI-007 到 DBCLI-011 是 baseline conformance：先逐條驗證現況，只�
 沒有一個在 happy path**。這是這批工作最值得記住的一件事：邊界本身大多早就是
 對的，會出問題的是它壞掉時說了什麼。
 
-DBCLI-001 由更早的交接紀錄記為已交付，該說法一路沿用，至今仍未重新驗證。
+DBCLI-001 的交付狀態已驗證並結案。它跨十份交接紀錄被記為已交付卻從未查證，
+其中四份還逐字寫著「該說法沿用至今，仍未重新驗證」。查證只花了兩分鐘：它是一個
+只加測試的 Story，兩項產出都在 `3a310d08` 裡——早於 `Story:` trailer 慣例，所以
+沒有 commit 認領它。兩支測試已重跑通過。結論是那個宣稱一直是真的；問題不在它是
+假的，而在沒有人檢查，而沒被檢查的宣稱會靠慣性一直活下去。
+
+## 流程版本
+
+採用 ForgeFlow 0.3.1（`specs/.forgeflow-adoption`）。0.3.1 新增上游的
+`story-check` 與 `handoff-check` 兩支靜態結構檢查——它們住在 ForgeFlow 的
+checkout 裡，CI 跑不到，而且文件明說它們不判斷宣告是否屬實。
+
+`make verify` 因此多了一步 `bun run forgeflow:check`，補的是上游明說不做的那一
+層：把 `completed_stories` 與 repository 實況對帳。升級到 0.3.1 時，上游的
+`handoff-check` 立刻抓出這份紀錄用了協議裡不存在的 `next_story: none` 與
+`status: all_delivered`，兩個值都是前一個 session 憑語意自己造的。
 
 ## 合併後的收尾
 
@@ -49,7 +65,7 @@ substring 比對。述詞落地後那個字不再承載任何東西，訊息已�
 ```yaml
 workflow:
   current_story: none
-  next_story: none
+  next_story: pending
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -63,12 +79,12 @@ workflow:
     - DBCLI-010
     - DBCLI-011
     - DBCLI-012
-  status: all_delivered
+  status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 04a88a44bdc5025febf77cd5a739d59226df35a7
+  commit: a2a05cc2e11e0754339e734d1db5319ec6744693
   dirty_worktree: false
   story_owned_paths: []
   known_unrelated_paths: []

@@ -8,6 +8,7 @@ const guideSlugs = [
   'agent-dashboard',
   'orm-schema-drift',
   'offline-impact-assessment',
+  'evidence-packs',
   'slow-endpoint',
   'why-dbcli',
   // Not `as const`, for the same reason as `locales` below.
@@ -151,6 +152,27 @@ test('offline impact pages name the same optional evidence in both languages', a
     expect(commands.join('\n')).toContain('--events ./.dbcli/proxy/events.jsonl')
     expect(article).toContain(events)
     expect(article).toContain(dataAccess)
+    expect(document.querySelector('.boundary')?.textContent).toContain(boundary)
+  }
+})
+
+test('evidence-pack pages refuse to turn a claim into a verdict, in both languages', async () => {
+  const pages = [
+    {
+      path: 'docs/guides/evidence-packs.html',
+      claim: '這是送審主張，不是 dbcli 自己下的結論',
+      boundary: '不會把 claims 變成證明',
+    },
+    {
+      path: 'docs/guides/en/evidence-packs.html',
+      claim: 'a review claim, not a verdict created by dbcli',
+      boundary: 'it does not make a claim true',
+    },
+  ]
+
+  for (const { path, claim, boundary } of pages) {
+    const { document } = await loadPage(path)
+    expect(document.querySelector('.workflow')?.textContent).toContain(claim)
     expect(document.querySelector('.boundary')?.textContent).toContain(boundary)
   }
 })

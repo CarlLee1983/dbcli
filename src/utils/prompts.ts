@@ -148,22 +148,59 @@ export async function select(message: string, choices: string[]): Promise<string
   return await inquirer.select({ message, choices })
 }
 
+/** How much of the unavailability message may reach the terminal. */
+const SECRET_ERROR_CAP = 300
+
+/** Guidance used when a caller does not name the inputs its own mode supports. */
+const DEFAULT_SECRET_GUIDANCE = 'pass the value with --stdin or --password instead'
+
+export interface SecretPromptOptions {
+  /**
+   * What the caller's own mode accepts instead of typing — `--password`,
+   * `--uri`, an environment reference. Named by the caller because only it
+   * knows which of those the active init mode actually supports.
+   */
+  unavailable?: string
+}
+
+/**
+ * The error raised when a secret cannot be collected without echoing it.
+ *
+ * The underlying cause is deliberately not reproduced: a bundler or loader
+ * message names internal paths and helps nobody choose a different input.
+ */
+export function maskedInputUnavailableError(guidance: string, _cause?: unknown): Error {
+  const message = `Masked input is unavailable; ${guidance.trim() || DEFAULT_SECRET_GUIDANCE}.`
+  return new Error(
+    message.length <= SECRET_ERROR_CAP ? message : `${message.slice(0, SECRET_ERROR_CAP - 1)}\u2026`
+  )
+}
+
 /**
  * Prompt for a secret. The value is masked while typing and never echoed back.
  *
- * Requires a TTY: without inquirer's masking, a plain-text fallback would print
- * the secret into the terminal scrollback, so callers must supply the value
- * through a flag or stdin instead.
+ * Requires a TTY and a working masked prompt. There is no plain-text fallback
+ * by design: falling back would print the secret into terminal scrollback,
+ * which is the exact outcome the caller asked to avoid. Callers must supply
+ * the value through an input their own mode supports instead.
  *
  * @param message - The prompt message to display
+ * @param options - Guidance naming the inputs the caller's mode supports
  * @returns The entered secret, exactly as typed
  */
-export async function secret(message: string): Promise<string> {
-  const inquirer = await loadInquirer()
-  if (!inquirer) {
-    throw new Error(
-      'Masked input is unavailable; pass the value with --stdin or --password instead.'
-    )
+export async function secret(message: string, options?: SecretPromptOptions): Promise<string> {
+  const guidance = options?.unavailable ?? DEFAULT_SECRET_GUIDANCE
+
+  if (!process.stdin.isTTY) throw maskedInputUnavailableError(guidance)
+
+  // Imported here rather than through `loadInquirer`: that helper reports the
+  // raw loader error on stderr before falling back, and a secret has no
+  // fallback to report.
+  let inquirer: typeof import('@inquirer/prompts')
+  try {
+    inquirer = await import('@inquirer/prompts')
+  } catch (error) {
+    throw maskedInputUnavailableError(guidance, error)
   }
 
   return await inquirer.password({ message, mask: '*' })

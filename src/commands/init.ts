@@ -19,6 +19,7 @@ import { configModule } from '@/core/config'
 import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
+import { redactSecretsForDisplay } from '@/utils/redaction'
 import type { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import type { DbcliConfigV2 } from '@/utils/validation'
@@ -220,7 +221,11 @@ async function initCommandHandler(
   // - If --no-interactive, do not prompt
   // - If --use-env-refs with all --env-* options provided, do not prompt
   // - Otherwise, prompt
-  const shouldPrompt = !options.noInteractive && !hasAllEnvOptions
+  //
+  // Commander stores `--no-interactive` as `interactive: false`; the old
+  // `options.noInteractive` read was always undefined, so the flag suppressed
+  // nothing.
+  const shouldPrompt = options.interactive !== false && !hasAllEnvOptions
 
   // 3. Attempt to parse database config from .env
   let envConfig = null
@@ -403,11 +408,16 @@ async function initCommandHandler(
     throw new Error(t('errors.require_user'))
   }
 
-  // Password
+  // Password. Masked, and with no plain-text fallback: an echoed credential
+  // stays in scrollback, logs, and recordings long after init finishes.
   connection.password =
     strOpt(options.password) ??
     envConfig?.password ??
-    (shouldPrompt ? await promptUser.text(t('init.prompt_password')) : '')
+    (shouldPrompt
+      ? await promptUser.secret(t('init.prompt_password'), {
+          unavailable: t('init.secret_alternatives_sql'),
+        })
+      : '')
 
   // Database name
   connection.database =
@@ -511,13 +521,15 @@ async function initCommandHandler(
         console.log(t('init.connection_success'))
       }
     } catch (error) {
+      // A driver is free to quote the credential back in its own message.
+      const safe = (text: string) => redactSecretsForDisplay(text, [testConnection.password ?? ''])
       if (error instanceof ConnectionError) {
-        console.error(t_vars('errors.connection_failed', { message: error.message }))
+        console.error(t_vars('errors.connection_failed', { message: safe(error.message) }))
         console.error(t('init.connection_hints'))
-        error.hints.forEach((hint) => console.error(`  • ${hint}`))
+        error.hints.forEach((hint) => console.error(`  • ${safe(hint)}`))
         process.exit(1)
       }
-      throw error
+      throw new Error(safe(error instanceof Error ? error.message : String(error)))
     } finally {
       await adapter.disconnect()
     }

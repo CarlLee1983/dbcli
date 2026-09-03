@@ -185,6 +185,11 @@ npm install -g @carllee1983/dbcli</code></pre>
 dbcli --global use --list --format json
 dbcli --global status --format json</code></pre>
             <p>Root 層級的 <code>--global</code> 必須放在指令之前。全域 registry 與專案 registry 彼此獨立；未帶 <code>--global</code> 時仍使用目前專案的 registry。全域檔案與 home storage 的專案設定一樣，會使用 integrity record 與私有檔案權限保護。</p>
+            <h3>遮蔽輸入憑證</h3>
+            <p>互動式 <code>init</code> 以遮蔽提示收集資料庫密碼，以及貼上的 MongoDB 連線字串（它本身就帶著憑證），輸入值不會留在終端機捲動紀錄、錄影或螢幕分享畫面裡。Host、Port、使用者名稱、資料庫名稱與環境變數名稱維持一般的可見提示。</p>
+            <p>沒有純文字的退路。當遮蔽輸入無法提供時——沒有終端機，或提示實作載入不到——<code>init</code> 會在寫出任何設定之前停下來，並指出你可以改用哪一種輸入：<code>--password</code>、從 <code>.env</code> 或行程環境變數解析到的憑證、<code>--use-env-refs</code>，MongoDB 則是 <code>--uri</code>。明確給定的 <code>--password</code> 或 <code>--uri</code> 會原樣保留，也不會被當成可見的提示預設值印出來；<code>--no-interactive</code> 則根本不會走到任何 secret 提示。</p>
+            <p>若接下來的連線測試失敗，driver 的訊息與提示會先遮蔽並截斷再輸出——driver 經常把憑證或整條連線 URI 原樣寫回錯誤訊息裡。</p>
+            <p>這解決的是終端機回顯，不是儲存：dbcli 不會加密靜態憑證。要讓憑證不落在設定檔裡，用的是 <code>--use-env-refs</code> 與家目錄儲存。</p>
         </section>
 
         <!-- doc-key: connection-management -->

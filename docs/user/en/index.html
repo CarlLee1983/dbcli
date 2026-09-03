@@ -185,6 +185,11 @@ npm install -g @carllee1983/dbcli</code></pre>
 dbcli --global use --list --format json
 dbcli --global status --format json</code></pre>
             <p>Root-level <code>--global</code> must appear before the command. Global and project registries are independent; commands continue to use the project registry unless <code>--global</code> is supplied. The global file is protected with the same integrity record and private file mode as home-stored project settings.</p>
+            <h3>Masked credential entry</h3>
+            <p>Interactive <code>init</code> collects the database password — and a pasted MongoDB connection string, which carries one — through a masked prompt, so the value never lands in terminal scrollback, a session recording, or a screen share. Hosts, ports, usernames, database names, and environment-variable names stay ordinary visible prompts.</p>
+            <p>There is no plain-text fallback. If masked input cannot be provided — no terminal attached, or the prompt implementation unavailable — <code>init</code> stops before writing any configuration and names an input you can use instead: <code>--password</code>, a credential parsed from <code>.env</code> or the process environment, <code>--use-env-refs</code>, or <code>--uri</code> for MongoDB. An explicit <code>--password</code> or <code>--uri</code> is kept exactly as given and is never offered back as a visible prompt default, and <code>--no-interactive</code> never reaches a secret prompt at all.</p>
+            <p>If the connection test then fails, the driver's own message and hints are redacted and bounded before they reach the terminal, because drivers routinely quote the credential or the whole connection URI back in an error.</p>
+            <p>This is about terminal echo, not storage: dbcli does not encrypt credentials at rest. Keeping them out of the config file is what <code>--use-env-refs</code> and home-directory storage are for.</p>
         </section>
 
         <!-- doc-key: connection-management -->

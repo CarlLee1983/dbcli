@@ -85,6 +85,14 @@ dbcli init
 
 Use `--use-env-refs` to keep secrets out of the config file and read them from environment variables instead. At runtime, a missing referenced variable fails closed with an error that identifies both the variable and config field; an empty value remains distinct from a missing variable.
 
+**Masked credential entry**: interactive `init` collects the database password — and a pasted MongoDB connection string, which carries one — through a masked prompt, so the value never lands in terminal scrollback, a session recording, or a screen share. Hosts, ports, usernames, database names, and environment-variable names stay ordinary visible prompts.
+
+There is no plain-text fallback. If masked input cannot be provided — no terminal attached, or the prompt implementation unavailable — `init` stops before writing any configuration and names an input you can use instead: `--password`, a credential parsed from `.env` or the process environment, `--use-env-refs`, or `--uri` for MongoDB. An explicit `--password` or `--uri` is kept exactly as given and is never offered back as a visible prompt default, and `--no-interactive` never reaches a secret prompt at all.
+
+If the connection test then fails, the driver's own message and hints are redacted and bounded before they reach the terminal, because drivers routinely quote the credential or the whole connection URI back in an error.
+
+This is about terminal echo, not storage: dbcli does not encrypt credentials at rest. Keeping them out of the config file is what `--use-env-refs` and home-directory storage are for.
+
 ---
 
 <!-- doc-key: connection-management -->

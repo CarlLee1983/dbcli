@@ -1298,6 +1298,10 @@ The normalized JSON escape hatch is Zod-validated and uses an array of tables
 with explicit exact `identity` objects; optional parsed identifiers must include
 their `quoted` flags, and every normalized JSON `unparsed.reason` must start with
 `blocked:`.
+A Drizzle snapshot or normalized JSON artifact that is not valid JSON, and a
+normalized JSON artifact that violates that contract, fail closed: the error
+names the offending file and lists the fields at fault, bounded with a count of
+the remainder, rather than degrading to `unparsed`.
 
 ```json
 {
@@ -2948,14 +2952,18 @@ The strict v1 artifact contains `version` and `contracts`. Each contract has a u
 canonical `name`, `status` (`draft`, `approved`, or `deprecated`), bounded plain-text
 `description` and `owner`, one or more canonical semantic `subjects`, optional aliases,
 and an `evidencePolicy` of `none`, `receipt-required`, or `verification-required`.
-Subjects must remain in the existing visible semantic registry; protected identifiers,
-unknown keys, duplicate names or subjects, SQL-like text, credentials, and stale
-references fail closed without exposing protected names.
+Each subject must use one of the canonical `model:` / `field:` / `relationship:` /
+`metric:` forms and must remain in the existing visible semantic registry; protected
+identifiers, unknown keys, duplicate names or subjects, SQL-like text, credentials, and
+stale references fail closed without exposing protected names. Diagnostics name the
+offending property or subject position, never a rejected key, value, or local path taken
+from the artifact or the local configuration.
 
 `contract validate` requires an explicit valid artifact. `contract context` and
 `contract search` return only valid approved contracts; draft and deprecated contracts
 remain local review artifacts. `contract drift` reports `valid`, `stale`, `invalid`, or
-`unavailable` evidence offline and exits non-zero except for `valid`. A missing default
+`unavailable` evidence offline and exits non-zero except for `valid`; a subject whose form
+is unsupported is `invalid`, while a well-formed subject that no longer exists is `stale`. A missing default
 file is allowed by `skill context` and leaves ordinary semantic context unchanged; a
 present invalid file fails closed. No contract command writes a file, opens a database
 connection, widens a `QueryDraft`, or changes permission/blacklist behavior.
@@ -3003,12 +3011,23 @@ Emit an AI-friendly snapshot of the connected database's schema and saved-query 
 dbcli skill context                      # XML (default)
 dbcli skill context --format json
 dbcli skill context --format markdown
+dbcli skill context --context-version 2 --format json
 ```
 
 **Options:**
 - `--format <xml|json|markdown>` — output format (default: `xml`)
+- `--context-version <version>` — explicit agent contract; version `2` supports
+  PostgreSQL, MySQL, MariaDB, Elasticsearch, and Redis. Omit it for byte-compatible v1.
 
-**Permission:** query-only+ — read-only; blacklisted objects are never emitted.
+Version 2 is offline and bounded: it emits only visible cached SQL tables/fields,
+flattened Elasticsearch fields, or declared Redis key families, plus safe capability,
+snippet, semantic, contract, and data-access metadata. It never connects, scans Redis,
+reads documents or project source, or emits values, credentials, query bodies/defaults,
+source paths, counts, or raw mappings. Missing evidence is reported in `gaps`; invalid
+evidence fails with a stable `INVALID_*` code. MongoDB rejects explicit v2.
+
+**Permission:** query-only+ — read-only; blacklisted objects are never emitted outside
+the blacklist policy.
 
 ### skill tasks (Agent Task Packs)
 

@@ -99,7 +99,9 @@ blacklist、schema、permission、dry-run、production 選取或寫入確認閘�
 確認，agent 仍必須停止。
 
 **業務語言探索：** 當使用者以業務別名、metric、反覆出現的術語或 relationship/join 意圖，
-而非實體 table 或 field 名稱提出需求時，先執行 `dbcli skill context --format json`。若輸出含有
+而非實體 table 或 field 名稱提出需求時，先執行 `dbcli skill context --context-version 2 --format json`。這個離線、受限的 contract
+不會讀取 project source、開啟連線、掃描 Redis 或解讀自然語言。只能在此 agent 自己的 workspace safety check 下讀取 project code；
+絕不可把 source path 或 content 交給 dbcli。若 `gaps` 回報缺少 evidence，不可猜測 metadata：檢查允許的 code 或要求補上證據。若輸出含有
 `semantic`，將該已檢閱的區塊視為受治理詞彙；需查找特定術語時，用
 `dbcli semantic search <terms> --format json`。若有 `contracts` 區塊，只能使用其中 approved 術語
 及描述性的 evidence policy；它絕不授權 assertion 或 query。若沒有 semantic 區塊，或搜尋沒有結果，就退回

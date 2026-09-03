@@ -13,6 +13,14 @@ records two remaining verification gaps: no test proves that an absent
 `dbcli.contracts.json` leaves skill context unchanged, and the contract-drift
 `invalid` branch has no direct coverage.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope

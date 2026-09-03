@@ -186,6 +186,7 @@ export const assertCommand = new Command()
       }
 
       let evidenceReceiptPath: string | undefined
+      let evidenceReceiptError: string | undefined
       if (typeof options.evidenceReceipt === 'string') {
         try {
           const receipt = buildEvidenceReceipt({
@@ -203,8 +204,11 @@ export const assertCommand = new Command()
             receipt
           )
         } catch {
-          console.error('Failed to write evidence receipt')
-          process.exit(1)
+          // Same rule as the artifact write above: a local write failure must not
+          // hide or flip the assertion verdict. The receipt is provenance, so its
+          // failure is reported beside the classified result, never instead of it.
+          // Unsafe detail collapses to a stable string because this reaches stderr.
+          evidenceReceiptError = 'Failed to write evidence receipt'
         }
       }
 
@@ -215,6 +219,7 @@ export const assertCommand = new Command()
               ...verdict,
               ...(verificationArtifactPath ? { verificationArtifactPath } : {}),
               ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}),
+              ...(evidenceReceiptError ? { evidenceReceiptError } : {}),
             },
             null,
             2
@@ -231,8 +236,9 @@ export const assertCommand = new Command()
           console.log(`Verification artifact: ${verificationArtifactPath}`)
         }
         if (evidenceReceiptPath) console.log(`Evidence receipt: ${evidenceReceiptPath}`)
+        if (evidenceReceiptError) console.error(evidenceReceiptError)
       }
-      process.exit(verdict.pass || options.fail === false ? 0 : 1)
+      process.exit((verdict.pass || options.fail === false) && !evidenceReceiptError ? 0 : 1)
     } catch (error) {
       if (error instanceof Error) {
         console.error(error.message)

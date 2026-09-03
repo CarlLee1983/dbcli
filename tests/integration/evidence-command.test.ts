@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { buildEvidenceReceipt } from '@/core/evidence-receipt'
@@ -338,6 +338,114 @@ describe('dbcli evidence (CLI)', () => {
     expect(rendered.code).toBe(1)
     expect(rendered.stderr).toContain('blocked identifier')
   })
+
+  test('bounded failures never print an absolute path or a raw filesystem error', async () => {
+    work = await seed()
+    const cases = [
+      ['--receipt', 'no-such-receipt.json'],
+      ['--verification', 'ver_does-not-exist'],
+      ['--audit', 'ffff'],
+    ] as const
+
+    for (const [flag, selector] of cases) {
+      const result = await run(
+        [
+          'evidence',
+          'compose',
+          '--claims',
+          'claims.json',
+          flag,
+          selector,
+          '--output',
+          `.dbcli/evidence/${flag.slice(2)}-missing.json`,
+        ],
+        work
+      )
+
+      expect(result.code).toBe(1)
+      // realpath, not the mkdtemp path: on macOS the temp dir resolves through
+      // /private, so comparing against `work` would never have matched the leak.
+      expect(result.stderr).not.toContain(await realpath(work))
+      expect(result.stderr).not.toMatch(/\s\/(?:private|var|Users|home|tmp)\//)
+      expect(result.stderr).not.toContain('ENOENT')
+      expect(result.stderr).not.toContain('realpath')
+      expect(
+        await Bun.file(join(work, `.dbcli/evidence/${flag.slice(2)}-missing.json`)).exists()
+      ).toBe(false)
+    }
+  })
+
+  test('refuses an output target outside the workspace or already present', async () => {
+    work = await seed()
+    const base = [
+      'evidence',
+      'compose',
+      '--claims',
+      'claims.json',
+      '--receipt',
+      'verify-receipt.json',
+    ]
+
+    const real = await realpath(work)
+    const outside = await run([...base, '--output', '../escaped-pack.json'], work)
+    expect(outside.code).toBe(1)
+    expect(outside.stderr).not.toContain(real)
+    expect(await Bun.file(resolve(work, '..', 'escaped-pack.json')).exists()).toBe(false)
+
+    const first = await run([...base, '--output', '.dbcli/evidence/once.json'], work)
+    expect(first.code).toBe(0)
+    const before = await Bun.file(join(work, '.dbcli/evidence/once.json')).text()
+
+    const again = await run([...base, '--output', '.dbcli/evidence/once.json'], work)
+    expect(again.code).toBe(1)
+    expect(again.stderr).not.toContain(real)
+    expect(await Bun.file(join(work, '.dbcli/evidence/once.json')).text()).toBe(before)
+  })
+
+  test('composition and rendering never open a database connection', async () => {
+    work = await seed()
+    // An unresolvable host: a connection attempt cannot silently succeed, and a
+    // swallowed one would still cost DNS time this test does not allow.
+    const seeded = JSON.parse(await Bun.file(join(work, 'config.json')).text())
+    await writeFile(
+      join(work, 'config.json'),
+      JSON.stringify(
+        { ...seeded, connection: { ...seeded.connection, host: 'unreachable.invalid' } },
+        null,
+        2
+      )
+    )
+    const auditBefore = await Bun.file(join(work, '.dbcli/audit/default.jsonl')).text()
+
+    const compose = await run(
+      [
+        'evidence',
+        'compose',
+        '--claims',
+        'claims.json',
+        '--receipt',
+        'verify-receipt.json',
+        '--output',
+        '.dbcli/evidence/offline.json',
+      ],
+      work
+    )
+    expect(compose.code).toBe(0)
+    expect(compose.stderr).toBe('')
+
+    const rendered = await run(
+      ['evidence', 'render', '--file', '.dbcli/evidence/offline.json', '--format', 'markdown'],
+      work
+    )
+    expect(rendered.code).toBe(0)
+    // Claims are labelled as external statements, never as a dbcli verdict.
+    expect(rendered.stdout).toContain('External claim')
+    expect(rendered.stdout).not.toContain('ALTER TABLE')
+    expect(rendered.stdout).not.toContain('must-not-leak')
+    expect(rendered.stderr).not.toContain('unreachable.invalid')
+    // Neither command wrote an audit entry of its own.
+    expect(await Bun.file(join(work, '.dbcli/audit/default.jsonl')).text()).toBe(auditBefore)
+  }, 15_000)
 
   test('rejects externally supplied claims that contain a blacklisted identifier', async () => {
     work = await seed(['secret_customer'])

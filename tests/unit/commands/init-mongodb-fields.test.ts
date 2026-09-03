@@ -56,6 +56,12 @@ async function runInit(
       return answer === '' ? (fallback ?? '') : String(answer)
     }
   )
+  // Credential-bearing prompts are masked, so they carry no visible default —
+  // an unanswered secret is an empty answer, not a fallback value.
+  const secretSpy = spyOn(promptUser, 'secret').mockImplementation(async (label: string) => {
+    const answer = answerFor(label)
+    return answer === '' ? '' : String(answer)
+  })
   const selectSpy = spyOn(promptUser, 'select').mockImplementation(
     async (label: string, choices: string[]) => {
       const answer = answerFor(label)
@@ -105,6 +111,7 @@ async function runInit(
     exited = true
   } finally {
     textSpy.mockRestore()
+    secretSpy.mockRestore()
     selectSpy.mockRestore()
     confirmSpy.mockRestore()
     writeSpy.mockRestore()

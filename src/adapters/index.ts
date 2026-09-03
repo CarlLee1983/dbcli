@@ -15,6 +15,7 @@ export type {
   SqlDatabaseSystem,
   QueryableDatabaseSystem,
   SqlConnectionOptions,
+  SqlExecutionMode,
   QueryableConnectionOptions,
 } from './types'
 export { ConnectionError } from './types'

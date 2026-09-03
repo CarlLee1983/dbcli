@@ -17,7 +17,7 @@ afterEach(() => {
 
 test('App renders title, KPIs, table headers, row count and null cell from payload', () => {
   setPayload({
-    meta: {
+    display: {
       name: 'Sales Report',
       description: 'Weekly snapshot',
       visual: {
@@ -37,7 +37,7 @@ test('App renders title, KPIs, table headers, row count and null cell from paylo
 
   render(<App />)
 
-  // visual.title takes precedence over meta.name
+  // visual.title takes precedence over display.name
   expect(screen.getByText('Weekly Sales')).toBeDefined()
 
   // KPI labels and formatted values — KPI displays comma-formatted number,
@@ -60,13 +60,13 @@ test('App renders title, KPIs, table headers, row count and null cell from paylo
 })
 
 test('App renders gracefully when rows is empty', () => {
-  setPayload({ meta: { name: 'Empty', visual: {} }, rows: [] })
+  setPayload({ display: { name: 'Empty', visual: {} }, rows: [] })
   expect(() => render(<App />)).not.toThrow()
 })
 
 test('App warns before presenting charts when the HTML result is truncated', () => {
   setPayload({
-    meta: {
+    display: {
       name: 'Truncated Report',
       visual: { charts: [{ type: 'bar', title: 'Partial Data', x: 'day', y: ['value'] }] },
     },
@@ -84,7 +84,7 @@ test('App warns before presenting charts when the HTML result is truncated', () 
 
 test('App shows an unsupported-chart placeholder instead of a pie chart for unknown types', () => {
   setPayload({
-    meta: {
+    display: {
       name: 'Unknown Chart',
       visual: { charts: [{ type: 'scatter', title: 'Scatter', x: 'a', y: ['b'] }] },
     },
@@ -97,7 +97,7 @@ test('App shows an unsupported-chart placeholder instead of a pie chart for unkn
 
 test('App renders a pie chart type without throwing', () => {
   setPayload({
-    meta: {
+    display: {
       name: 'Pie',
       visual: { charts: [{ type: 'pie', title: 'Share', x: 'cat', y: ['val'] }] },
     },
@@ -105,4 +105,60 @@ test('App renders a pie chart type without throwing', () => {
   })
 
   expect(() => render(<App />)).not.toThrow()
+})
+
+test('App renders the traceability section without dbcli, a database, or a workspace', () => {
+  setPayload({
+    display: { name: 'Traceable Report' },
+    rows: [{ day: 'Mon', value: 1 }],
+    appliedLimit: { truncated: true, limitApplied: 500 },
+    securityNotification: 'Security: 1 column was omitted',
+    provenance: {
+      version: 1,
+      connection: { name: 'analytics', system: 'postgresql' },
+      savedQuery: { key: '@dau', source: 'shared' },
+      permission: 'query-only',
+      limit: { state: 'applied', limitApplied: 500, truncated: true },
+    },
+  })
+
+  render(<App />)
+
+  const traceability = screen.getByLabelText('Execution traceability')
+  expect(within(traceability).getByText('analytics')).toBeDefined()
+  expect(within(traceability).getByText('postgresql')).toBeDefined()
+  expect(within(traceability).getByText('@dau')).toBeDefined()
+  expect(within(traceability).getByText('shared')).toBeDefined()
+  expect(within(traceability).getByText('query-only')).toBeDefined()
+  expect(within(traceability).getByText('500 rows (truncated)')).toBeDefined()
+
+  // Existing notices still precede the KPIs, charts, and table.
+  expect(screen.getByRole('alert').textContent).toContain('500')
+  expect(screen.getByRole('status').textContent).toContain('1 column was omitted')
+})
+
+test('App distinguishes an execution with no applied limit', () => {
+  setPayload({
+    display: { name: 'Unbounded Report' },
+    rows: [{ value: 1 }],
+    provenance: {
+      version: 1,
+      connection: { name: 'default', system: 'mysql' },
+      savedQuery: { key: '@all', source: 'local' },
+      permission: 'read-write',
+      limit: { state: 'not-applied', truncated: false },
+    },
+  })
+
+  render(<App />)
+  expect(
+    within(screen.getByLabelText('Execution traceability')).getByText('No limit applied')
+  ).toBeDefined()
+})
+
+test('App omits the traceability section for direct-query dashboards', () => {
+  setPayload({ display: { name: 'Query Results' }, rows: [{ value: 1 }] })
+
+  render(<App />)
+  expect(screen.queryByLabelText('Execution traceability')).toBeNull()
 })

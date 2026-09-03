@@ -12,9 +12,9 @@
       <div class="workflow">
         <article class="step"><h3>把術語寫成版本控制下的契約</h3><p>在 semantic 檔旁維護版本 1 的 <code>dbcli.contracts.json</code>。每份契約有 canonical name、<code>model:</code>／<code>field:</code>／<code>relationship:</code>／<code>metric:</code> subject 和 draft、approved、deprecated 狀態。</p></article>
         <article class="step"><h3>先驗證，再讓 Agent 看見已核准的定義</h3><p>契約檔有錯時，先修檔案，不要把它當 context。通過後可輸出或搜尋已核准契約，讓「客戶」指的內容有明確來源。</p><pre class="command"><code>dbcli contract validate --format json&#10;dbcli contract context --format json&#10;dbcli contract search customer --format json</code></pre></article>
-        <article class="step"><h3>變更前檢查定義是否還站得住腳</h3><p>evidence policy 可選 <code>none</code>、<code>receipt-required</code> 或 <code>verification-required</code>。設計要改前跑一次 drift；本機 semantic 證據過期或不一致時，就把它列為審查議題。</p><pre class="command"><code>dbcli contract drift --format json</code></pre></article>
+        <article class="step"><h3>變更前檢查定義是否還站得住腳</h3><p>evidence policy 可選 <code>none</code>、<code>receipt-required</code> 或 <code>verification-required</code>。設計要改前跑一次 drift；本機 semantic 證據過期或不一致時，就把它列為審查議題，格式不合的產物則會被判為 invalid 而非 stale。</p><pre class="command"><code>dbcli contract drift --format json</code></pre></article>
       </div>
-      <aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p>契約不得含 SQL、憑證、受保護識別字或可執行規則。所有 contract 指令都離線且唯讀；只有有效且 <code>approved</code> 的契約會進入一般 context。</p></aside>
+      <aside class="boundary"><h2>dbcli 不會替你做什麼</h2><p>契約不得含 SQL、憑證、受保護識別字或可執行規則。所有 contract 指令都離線且唯讀；只有有效且 <code>approved</code> 的契約會進入一般 context。診斷只指出出問題的屬性或 subject，不會複述產物或本機設定中的值。</p></aside>
       <aside class="next-card"><h2>下一步</h2><p>以<a href="./offline-impact-assessment.html">離線影響評估</a>將已審閱的契約納入設計變更審查。</p></aside>
     </div></section>
   </main>

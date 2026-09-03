@@ -80,7 +80,10 @@ export const explainCommand = new Command()
           system,
           adapter,
           input.sql,
-          { analyze: Boolean(options.analyze) },
+          {
+            analyze: Boolean(options.analyze),
+            executionMode: config.permission === 'query-only' ? 'native-read-only' : 'normal',
+          },
           input.label
         )
         plans.push(plan)

@@ -437,11 +437,30 @@ export function shouldFail(
   )
 }
 
+/**
+ * Surface only messages this command composes itself.
+ *
+ * Anything else may quote a supplied path or artifact content, so it collapses
+ * to a generic line. Membership is exact rather than by prefix: a prefix test
+ * would keep passing if one of these literals later grew an interpolated
+ * suffix, which is the leak this function exists to prevent.
+ */
+const SAFE_MESSAGES = new Set([
+  'format must be json or markdown',
+  'fail-on must be error, warn, or never',
+  'Choose exactly one of --against-cache or --against-orm',
+  'design contains validation errors',
+  'design and output paths must differ',
+  'impact assessment against cache requires a configured SQL connection',
+  'design dialect does not match the configured connection',
+  'schema cache is empty',
+  'output path must stay inside the workspace',
+  'impact output already exists',
+])
+
 function safeMessage(error: unknown): string {
   if (!(error instanceof Error)) return 'impact assessment failed'
-  return /^(format must|fail-on must|Choose exactly|design and output paths must differ|output path must|impact assessment against|design dialect|schema cache is empty|design contains validation errors)/.test(
-    error.message
-  )
+  return SAFE_MESSAGES.has(error.message)
     ? error.message
     : 'impact assessment failed; inspect the supplied local artifacts'
 }

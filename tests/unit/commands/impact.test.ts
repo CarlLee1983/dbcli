@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Command } from 'commander'
+import { AdapterFactory } from '@/adapters'
 import { impactCommand, shouldFail } from '@/commands/impact'
 
 function root(): Command {
@@ -343,6 +344,80 @@ describe('impact assess command', () => {
 
     expect(errors).toContain('Choose exactly one')
     expect(await Bun.file(join(sandbox, 'impact.json')).exists()).toBe(false)
+  })
+
+  test('rejects a combined cache and ORM baseline before writing output', async () => {
+    writeFileSync(join(sandbox, 'schema.sql'), 'CREATE TABLE accounts (id UUID PRIMARY KEY);\n')
+
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--against-orm',
+      'schema.sql',
+      '--output',
+      'impact.json'
+    )
+
+    expect(errors).toContain('Choose exactly one')
+    expect(await Bun.file(join(sandbox, 'impact.json')).exists()).toBe(false)
+  })
+
+  test('never constructs a database adapter, on the success or the failure path', async () => {
+    const adapterSpy = spyOn(AdapterFactory, 'createSqlAdapter')
+
+    try {
+      await run('--design', 'design.json', '--against-cache', '--output', 'impact.json')
+      expect(process.exitCode).toBe(0)
+
+      await run('--design', 'missing-design.json', '--against-cache', '--output', 'second.json')
+      expect(process.exitCode).toBe(1)
+
+      expect(adapterSpy).not.toHaveBeenCalled()
+    } finally {
+      adapterSpy.mockRestore()
+    }
+  })
+
+  test('an unreadable design fails without echoing the supplied path', async () => {
+    await run('--design', 'no-such-design.json', '--against-cache', '--output', 'impact.json')
+
+    expect(process.exitCode).toBe(1)
+    expect(errors).not.toContain('no-such-design.json')
+    expect(await Bun.file(join(sandbox, 'impact.json')).exists()).toBe(false)
+  })
+
+  test('an existing output target is refused by name and left untouched', async () => {
+    writeFileSync(join(sandbox, 'impact.json'), 'previous report\n')
+
+    await run('--design', 'design.json', '--against-cache', '--output', 'impact.json')
+
+    expect(process.exitCode).toBe(1)
+    expect(errors).toContain('impact output already exists')
+    expect(await Bun.file(join(sandbox, 'impact.json')).text()).toBe('previous report\n')
+  })
+
+  test('a missing events file becomes a workload gap without reaching the report', async () => {
+    await run(
+      '--design',
+      'design.json',
+      '--against-cache',
+      '--events',
+      'no-such-events.jsonl',
+      '--output',
+      'impact.json',
+      '--fail-on',
+      'warn'
+    )
+
+    // R5 — that a workload-only gap cannot by itself fail `--fail-on warn` — is
+    // pinned by the `shouldFail` unit test above; this sandbox also carries
+    // unrelated *_ABSENT gaps, so its exit code says nothing about R5.
+    const report = await Bun.file(join(sandbox, 'impact.json')).json()
+    expect(
+      report.coverage.gaps.some((gap: { code: string }) => gap.code.startsWith('WORKLOAD_'))
+    ).toBe(true)
+    expect(JSON.stringify(report)).not.toContain('no-such-events.jsonl')
   })
 
   test('rejects a symlinked output directory before creating files outside the workspace', async () => {

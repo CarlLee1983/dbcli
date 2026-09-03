@@ -85,6 +85,14 @@ dbcli init
 
 Use `--use-env-refs` to keep secrets out of the config file and read them from environment variables instead. At runtime, a missing referenced variable fails closed with an error that identifies both the variable and config field; an empty value remains distinct from a missing variable.
 
+**Masked credential entry**: interactive `init` collects the database password — and a pasted MongoDB connection string, which carries one — through a masked prompt, so the value never lands in terminal scrollback, a session recording, or a screen share. Hosts, ports, usernames, database names, and environment-variable names stay ordinary visible prompts.
+
+There is no plain-text fallback. If masked input cannot be provided — no terminal attached, or the prompt implementation unavailable — `init` stops before writing any configuration and names an input you can use instead: `--password`, a credential parsed from `.env` or the process environment, `--use-env-refs`, or `--uri` for MongoDB. An explicit `--password` or `--uri` is kept exactly as given and is never offered back as a visible prompt default, and `--no-interactive` never reaches a secret prompt at all.
+
+If the connection test then fails, the driver's own message and hints are redacted and bounded before they reach the terminal, because drivers routinely quote the credential or the whole connection URI back in an error.
+
+This is about terminal echo, not storage: dbcli does not encrypt credentials at rest. Keeping them out of the config file is what `--use-env-refs` and home-directory storage are for.
+
 ---
 
 <!-- doc-key: connection-management -->
@@ -199,6 +207,26 @@ blacklist saw it, which means it deliberately contains more than table names —
 aliases, qualified column references, and SQL keywords such as `CREATE` — because
 an extra identifier can only make the blacklist refuse more, and filtering the
 list for display would be a second parser disagreeing with the first.
+
+### Server-enforced SQL query-only mode
+
+On PostgreSQL, MySQL, and MariaDB, every caller-controlled statement whose
+effective permission is `query-only` runs inside a fresh database-native
+read-only transaction on the physical connection that executes it. This covers
+`query`, `export`, saved-query bodies and verification, report diagnostics, the
+SQL shell, analyzed explain plans, and fan-out even when the selected
+connections store a higher permission tier. If dbcli cannot establish that
+boundary, it fails before sending the target statement. Classifier, blacklist,
+hidden-write, and multi-statement checks still run first. If the target completes
+but transaction cleanup fails, dbcli reports the uncertain outcome and discards
+the affected connection; the SQL shell reconnects for later statements without
+replaying the completed target.
+
+The guarantee covers persistent, non-temporary data and schema. An engine may
+still permit temporary or session-local state under its native read-only rules,
+and the boundary cannot prevent effects outside the target database, such as a
+network call made by an unsafe extension. Database accounts and ACLs remain an
+important independent layer.
 
 ### Read-only query fan-out
 
@@ -563,7 +591,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json
 
 `--against-orm` is repeatable and accepts comma-separated paths. DDL-family inputs—raw DDL plus the `typeorm` and `sequelize` aliases—support real filesystem globs and multiple files; paths are deduplicated and put in deterministic order, then parsed as one shared ordered context so a later file's index can attach to an earlier file's table. Prisma, normalized JSON, and Drizzle accept exactly one file. Drizzle input must be a PostgreSQL drizzle-kit v7 snapshot at `drizzle/meta/<NNNN>_snapshot.json`. TypeORM `schema:log` prints the SQL that `schema:sync` would execute without applying it. Sequelize CLI has no universal `db:migrate --dry-run`, so migrations must run against a scratch database before `pg_dump --schema-only` or `mysqldump --no-data`. TypeORM entities and Sequelize models (`.ts`, `.js`, `.mjs`, or `.cjs`) are rejected with the exact generation recipe instead of being parsed. Use `--orm-format prisma|ddl|json|drizzle|typeorm|sequelize` to override detection; the TypeORM alias default-ignores `typeorm_metadata` and `migrations`, while the Sequelize alias default-ignores `SequelizeMeta`. Use `--ignore <globs>` for additional comma-separated, case-sensitive qualified table patterns and `--format json|table|markdown` for output. Errors are `missing_in_db`; DB-only objects are `missing_in_orm` warnings; incompatible type families or nullability are error-level `mismatch`; same-family type spelling, default, and primary-key differences are informational. Ignored tables are listed as `unmanaged` but not scored. Only scored errors determine the drift exit code: they exit `1`, while warnings, infos, `unmanaged`, or `unparsed` alone exit `0`; operational failures still exit `1`, and `--recovery` wraps them.
 
-Schema and table storage is exact and case-sensitive. PostgreSQL `users` and `"Users"` coexist. In parsed DDL, unquoted `Users` folds to `users`, while quoted `"Users"` resolves only to `Users`; quote state comes from the parsed identifier, never display capitalization. Qualified names are shown and ignored case-sensitively. Duplicate exact or resolved identities fail closed. Unsupported Prisma/DDL/Drizzle constructs appear in `unparsed` with a `blocked:` reason; this includes Drizzle enums and other unsupported snapshot constructs. Drizzle column defaults are accepted only when the snapshot value is a string, boolean, or finite number; an unsupported default blocks and omits that column. PostgreSQL `PARTITION BY` and MySQL/MariaDB table engine, charset, and other table options are unsupported: they emit a `blocked:` entry without a managed table. Normalized JSON also requires every `unparsed.reason` to start with `blocked:`. Indexes compare and deduplicate by structural columns plus uniqueness; drift entries sort deterministically by table/object/category/detail in Unicode code-point order, independent of locale.
+Schema and table storage is exact and case-sensitive. PostgreSQL `users` and `"Users"` coexist. In parsed DDL, unquoted `Users` folds to `users`, while quoted `"Users"` resolves only to `Users`; quote state comes from the parsed identifier, never display capitalization. Qualified names are shown and ignored case-sensitively. Duplicate exact or resolved identities fail closed. A Drizzle snapshot or normalized JSON artifact that is not valid JSON, and a normalized JSON artifact that violates the contract, fail closed naming the offending file and the fields at fault instead of degrading to `unparsed`. Unsupported Prisma/DDL/Drizzle constructs appear in `unparsed` with a `blocked:` reason; this includes Drizzle enums and other unsupported snapshot constructs. Drizzle column defaults are accepted only when the snapshot value is a string, boolean, or finite number; an unsupported default blocks and omits that column. PostgreSQL `PARTITION BY` and MySQL/MariaDB table engine, charset, and other table options are unsupported: they emit a `blocked:` entry without a managed table. Normalized JSON also requires every `unparsed.reason` to start with `blocked:`. Indexes compare and deduplicate by structural columns plus uniqueness; drift entries sort deterministically by table/object/category/detail in Unicode code-point order, independent of locale.
 
 Proposals are shell-safe text and remain dry-run by default. Safe unqualified column/index additions may emit `migrate`; schema-qualified or CLI-lossy index targets escalate to `migration-review` rather than emit a corrupt command. A table, column, or type positional beginning with `-` also escalates; leading-dash option values use option-safe attached syntax such as `--default=-1` or `--columns=--config,email`. Capture the dry-run DDL and pass both exact values as separate quoted parameters:
 
@@ -589,16 +617,16 @@ Verify data-processing correctness — capture a result fingerprint, then assert
 
 Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/verification/` whenever you need a durable audit trail for a read-back assertion. The verification artifact is always written to `<cwd>/.dbcli/verification/` (relative to the current working directory), regardless of where the `--config` file is located.
 
-**Flag trio:**
+**Flags:**
 
 | Flag | Required | Description |
 | :--- | :--- | :--- |
 | `--write-verification-artifact` | opt-in | Write a VerificationArtifact JSON after the assertion runs. |
 | `--evidence-receipt <path>` | opt-in | Atomically write safe assert provenance after the verdict, audit attempt, and optional artifact are authoritative; it contains no SQL or rows. |
-
-`evidence compose` may reference that explicit workspace-contained receipt with `--receipt <path>`; provenance is not execution approval.
 | `--verification-subject <kind:name>` | yes (when flag is set) | Subject being verified. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
 | `--verification-summary <text>` | no | Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state." |
+
+`evidence compose` may reference that explicit workspace-contained receipt with `--receipt <path>`; provenance is not execution approval.
 
 **Output contract:**
 
@@ -673,6 +701,11 @@ Result status: `verified` (read-back matched `--expect`), `not_verified` (read-b
 contradicted `--expect`), `blocked` (a guard failed — blacklist, schema, plan, or a
 non-read-only verify-query), `indeterminate` (the assertion ran but could not yield a
 trustworthy verdict).
+
+All four guards run and report their individual outcomes even if one fails. After-write
+runs the assertion only when all four pass; persisted failure reasons are fixed safe
+labels rather than driver error text. Persisted custom labels and SQL evidence also
+redact credentials, filesystem paths, and SQL comments.
 
 **Guard constraints (fail closed):**
 
@@ -1109,7 +1142,7 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > dbcli contract drift --format json
 > ```
 >
-> These commands never connect or execute queries. `context`, `search`, and `skill context` expose only valid `approved` contracts; draft and deprecated terms remain local review artifacts. A missing contract file leaves ordinary semantic context unchanged, while an explicitly requested missing or invalid file fails closed. `contract drift` distinguishes valid, stale, invalid, and unavailable local evidence.
+> These commands never connect or execute queries. `context`, `search`, and `skill context` expose only valid `approved` contracts; draft and deprecated terms remain local review artifacts. A missing contract file leaves ordinary semantic context unchanged, while an explicitly requested missing or invalid file fails closed. `contract drift` distinguishes valid, stale, invalid, and unavailable local evidence: a subject that is not one of the four canonical forms is invalid, while a well-formed subject that no longer exists is stale. Diagnostics name the offending property or subject position, never a rejected key, value, or local path taken from the artifact or the local configuration.
 >
 > **Agent query drafts.** First give the external agent the reviewed output of `dbcli semantic context --format json`; keep its provider account, credentials, prompt, and any other agent context outside dbcli. The agent returns an untrusted `QueryDraft` file shaped like this (use only the models and fields from that semantic context):
 >
@@ -1179,6 +1212,23 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 **KPIs & Charts**: Add a `visual:` block to your snippet's frontmatter to render custom charts and KPIs directly in the dashboard. Supported chart types are `line`, `bar`, `area`, and `pie`; any other type is rejected at parse time.
 
 When dbcli's lookahead proves that rows were truncated, the dashboard shows a warning **before** every KPI, chart, and table and names the applied limit. Blacklist redaction/omission notices appear there as well. This applies to query HTML/UI, saved-query HTML/UI, and HTML exports whenever that execution path produces the corresponding metadata.
+
+**Execution traceability (saved queries)**: a dashboard generated from a saved query (`dbcli q @name --ui` / `--format html`) carries a standalone **Execution Traceability** section, shown after the truncation and blacklist notices and before the KPIs, charts, and table. It travels inside the HTML file, so a recipient sees it without dbcli, a database, or your workspace.
+
+| Field | Meaning |
+| --- | --- |
+| Connection | Logical connection name — the v2 connection key, or `default` for a single-connection config. Never a host or endpoint. |
+| Engine | `postgresql`, `mysql`, `mariadb`, `mongodb`, `redis`, or `elasticsearch`. |
+| Saved Query | The snippet key, such as `@dau`. Never its file path. |
+| Snippet Source | `builtin`, `shared`, or `local`. |
+| Effective Permission | The permission that actually governed the execution: `query-only`, `read-write`, `data-admin`, or `admin`. |
+| Applied Limit | The row cap that actually applied, and whether the result was truncated — or "No limit applied", which is stated explicitly rather than left blank. |
+
+The applied-limit line always agrees with the truncation warning above it; a dashboard whose provenance and warning disagree is refused before the file is written.
+
+Traceability is a closed contract. It never carries raw query bodies, parameter values or enums, credentials, endpoints, source paths, verification queries and expectations, target index or collection names, or rows beyond the ones displayed. The same allowlist governs the whole embedded payload, not just the visible section: only the displayed rows, the applied-limit and security notices, the provenance object, and the display name, description, and chart/KPI definitions that reference displayed fields are serialized. Invalid, oversized, or unknown metadata is rejected before any HTML is written, so a failed dashboard never leaves a partial file behind.
+
+Direct-query dashboards (`dbcli query --ui`, `dbcli export --format html`) are unchanged and carry no traceability section.
 
 ---
 
@@ -1396,6 +1446,30 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**: the repo root follows the Ponytail-style plugin layout with `.agents/plugins/marketplace.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.github/skills/dbcli/`, and `skills/dbcli/`. If `dbcli` is not globally installed, the skill uses `bunx @carllee1983/dbcli <command>` as the fallback command prefix. See `plugins/dbcli-agent/INSTALL.md` for Codex, Claude Code, GitHub Copilot CLI, Antigravity, and Cursor install commands, including Cursor marketplace review/indexing steps.
 9.  **Shared agent CLI interface**: package consumers can import `@carllee1983/dbcli/agent-core` for `loadEnvFile`, `resolveEnvRef`, `resolveConnectionSelector`, `parseConnectionNames`, and `trimAppliedLimit` plus `AppliedLimitMetadata`, `AppliedLimitResult`, and `ConnectionSelectorInputs`. This small interface is framework- and database-independent and follows semver. The broader `./core` product interface remains separate; CLI option factories, config-storage binding, and connection-string parsing deliberately stay outside `agent-core`.
 
+### Bounded cross-engine context (version 2)
+
+Use `dbcli skill context --context-version 2 --format json` when handing database metadata to an external agent. Version 2 is the stable agent contract; it is offline and never opens a connection, constructs an adapter, scans Redis keys, reads documents, or reads project source. The agent may inspect project code itself, subject to its own workspace safety rules, to supply business meaning that context does not contain.
+
+```bash
+dbcli skill context --context-version 2 --format json
+```
+
+Give the agent this output and its own safely discovered code context; do not give dbcli source paths or ask it to interpret natural language. Treat `permission` and descriptive `capabilities` as limits, not authority to execute a command. Use only the returned resources and approved semantic/contracts metadata. If metadata is absent or a `gaps` entry is returned, do not infer names, types, relationships, keys, or meanings: inspect permitted project code or ask for the missing evidence.
+
+Version 2 emits only safe fields: configured engine and permission; blacklist policy; capability `command`, `status`, and `sideEffectTier`; resource and field IDs/names/types; visible SQL nullable/primary-key and visible foreign-key links; flattened Elasticsearch field paths/types; declared Redis families/fields; snippet metadata without bodies/defaults; declared data-access metadata without source paths; approved semantic/contracts metadata; truncation counts; and gaps. It never emits credentials, values/results, defaults/counts, raw Elasticsearch mappings or settings, Redis keys/values, query bodies/defaults, or project source paths/contents. Blacklisted identifiers appear only in `blacklist`.
+
+| Engine | Version 2 resources | Boundary |
+| --- | --- | --- |
+| PostgreSQL, MySQL, MariaDB | Cached visible tables, safe columns, and visible foreign-key links | No defaults, counts, indexes, comments, or filtered endpoints. |
+| Elasticsearch | Cached indices with flattened field paths and types | No raw mappings, `_meta`, settings, scripts, analyzers, documents, or counts. |
+| Redis | Repository-declared `dbcli.redis-context.json` key families and fields | No discovery, scans, concrete keys, live types, or values. |
+
+Redis declarations are intentionally small: context file ≤512 KiB; ≤500 families; a family name is lowercase kebab-case, pattern ≤200 characters with unique valid `{placeholder}` values and no glob tokens, whitespace, controls, or backslashes; type is `string`, `hash`, `list`, `set`, `zset`, or `stream`. Only `hash` and `stream` may declare fields (≤100); family descriptions/field descriptions are ≤1,000 characters and aliases are ≤20 of ≤100 characters. A declaration that is malformed, concrete, unsafe, blacklisted, or overlaps a Redis field mask fails rather than exposing a partial model.
+
+Missing optional evidence is explicit: `SQL_SCHEMA_UNAVAILABLE`, `ELASTICSEARCH_MAPPING_UNAVAILABLE`, `REDIS_KEY_FAMILIES_UNAVAILABLE`, `SEMANTIC_CONTEXT_UNAVAILABLE`, `SAVED_QUERIES_UNAVAILABLE`, `DATA_ACCESS_UNAVAILABLE`, or `ALL_RESOURCES_FILTERED`; truncation also reports `CONTEXT_TRUNCATED`. Present but invalid evidence fails with the corresponding `INVALID_SCHEMA_CACHE`, `INVALID_SEMANTIC_CONTEXT`, `INVALID_SAVED_QUERY`, `INVALID_DATA_ACCESS_MANIFEST`, `INVALID_REDIS_CONTEXT`, or `INVALID_RESOURCE_REFERENCE`. MongoDB (and unknown engines) reject explicit v2 with `UNSUPPORTED_CONTEXT_ENGINE`.
+
+Omitting `--context-version` keeps byte-compatible version 1 JSON, XML, and Markdown output. `version` remains configuration metadata; v2 adds the integer `contextVersion: 2`. Consumers must ignore unknown optional v2 fields; incompatible required-field or ID-encoding changes require a new context version.
+
 ### Intent confirmation for business requests
 
 The installed skill supports three **per-request conversational preferences**; they are
@@ -1499,6 +1573,8 @@ The Developer Workflows above are the *minimum safe paths*. This section maps co
 
 When a request matches a named workflow, discover and plan with a pack instead of inventing steps from memory. All packs are read-only `plan-only` and still inherit the blacklist → schema → dry-run rules.
 
+`slow-endpoint-investigation` takes a required `query` and a required `table`, and plans in evidence order: `blacklist list` → `proxy analyze --format json` → `schema <table> --format json` → `explain "<SQL>"` → `guide missing-index-for "<SQL>" --format json`. The schema step comes before explain and index guidance on purpose — a plan or index candidate read against a table whose live shape you have not confirmed is a guess. Planning emits the commands and nothing else: it opens no connection, reads no proxy events or schema, runs no SQL, and invokes none of the steps. A proxy finding is what was observed locally, not the proven cause of endpoint latency, and an index candidate is review material — the workflow creates no index, applies no migration, and runs no DDL. Omitting `query` or `table` fails with a bounded error and emits no partial plan.
+
 ```bash
 dbcli skill tasks list --format json                       # discover packs
 dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered, risk-labelled plan
@@ -1508,7 +1584,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered
 | --- | --- | --- |
 | "This SQL is slow" (you have the statement) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | "Table X is hot / heavy" (you have the table) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
-| "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"` (pairs `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>" --param table=<table>` (blacklist → `proxy analyze` → `schema` → `explain` → missing-index) | `slow-endpoint-investigation` |
 | Whole-environment perf scan | `report --section perf` → `guide slow-query` | _(report + guide, no pack)_ |
 | "Audit access before granting writes" | `skill tasks plan audit-permissions` (optional `--param table=<table>` to spot-check column coverage) | `audit-permissions` |
 | "Does the live schema match the committed cache?" | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |

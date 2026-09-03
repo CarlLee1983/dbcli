@@ -3,7 +3,7 @@
  * into a shared row schema for annotation + rendering.
  */
 
-import type { DatabaseSystem } from '@/adapters/types'
+import type { DatabaseSystem, SqlExecutionMode } from '@/adapters/types'
 
 export type AnnotationSeverity = 'red' | 'yellow' | 'gray'
 
@@ -58,4 +58,5 @@ export interface ExplainPlan {
 export interface ExplainOptions {
   /** True when --analyze flag is set — adapters issue EXPLAIN ANALYZE / ANALYZE SELECT instead. */
   analyze?: boolean
+  executionMode?: SqlExecutionMode
 }

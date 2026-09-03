@@ -353,6 +353,59 @@ export function globMatches(glob: string, subject: string, options?: GlobMatchOp
   return true
 }
 
+/** Whether the two Redis-style glob languages share at least one string. */
+export function globsOverlap(left: string, right: string): boolean {
+  type State = readonly [number, number]
+  type Token = GlobToken | { kind: 'star' }
+
+  const tokens = (glob: string): Token[] => {
+    const parsed = parseGlob(glob, false)
+    const out: Token[] = []
+    if (parsed.leadingStar) out.push({ kind: 'star' })
+    for (const [index, run] of parsed.runs.entries()) {
+      if (index > 0) out.push({ kind: 'star' })
+      out.push(...run)
+    }
+    if (parsed.trailingStar && out.at(-1)?.kind !== 'star') out.push({ kind: 'star' })
+    return out
+  }
+
+  const a = tokens(left)
+  const b = tokens(right)
+  const queue: State[] = [[0, 0]]
+  const seen = new Set<string>()
+
+  const compatible = (x: Token, y: Token): boolean => {
+    if (x.kind === 'star' || y.kind === 'star' || x.kind === 'any' || y.kind === 'any') return true
+    if (x.kind === 'literal') {
+      return y.kind === 'literal' ? x.char === y.char : y.test.test(x.char)
+    }
+    if (y.kind === 'literal') return x.test.test(y.char)
+    for (let unit = 0; unit <= 0xffff; unit++) {
+      const value = String.fromCharCode(unit)
+      if (x.test.test(value) && y.test.test(value)) return true
+    }
+    return false
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const [i, j] = queue[cursor]!
+    const key = `${i}:${j}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (i === a.length && j === b.length) return true
+
+    const x = a[i]
+    const y = b[j]
+    if (x?.kind === 'star') queue.push([i + 1, j])
+    if (y?.kind === 'star') queue.push([i, j + 1])
+    if (x && y && compatible(x, y)) {
+      queue.push([x.kind === 'star' ? i : i + 1, y.kind === 'star' ? j : j + 1])
+    }
+  }
+  return false
+}
+
 /**
  * Escape a literal string so `globMatches` treats it as the name it is.
  *

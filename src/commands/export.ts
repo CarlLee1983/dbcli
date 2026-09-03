@@ -9,6 +9,7 @@ import { t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
+import { boundedDashboardDescription } from '@/core/dashboard/display'
 import { QueryExecutor } from '@/core/query-executor'
 import { configModule } from '@/core/config'
 import { promptUser } from '@/utils/prompts'
@@ -126,10 +127,7 @@ export async function exportCommand(
         formatted = await generateHtmlReport({
           meta: {
             name: 'Exported Report',
-            key: 'export',
-            params: [],
-            tags: [],
-            description: sql,
+            description: boundedDashboardDescription(sql),
           },
           rows: result.rows as Record<string, unknown>[],
           ...(result.appliedLimit ? { appliedLimit: result.appliedLimit } : {}),
@@ -348,10 +346,7 @@ async function esExportBranch(
       formatted = await generateHtmlReport({
         meta: {
           name: 'Exported Report',
-          key: 'export',
-          params: [],
-          tags: [],
-          description: query,
+          description: boundedDashboardDescription(query),
         },
         rows,
         ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
@@ -463,10 +458,7 @@ async function mongoExportBranch(
       formatted = await generateHtmlReport({
         meta: {
           name: 'Exported Report',
-          key: 'export',
-          params: [],
-          tags: [],
-          description: query,
+          description: boundedDashboardDescription(query),
         },
         rows: maskedRows,
         ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),

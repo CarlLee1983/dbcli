@@ -20,13 +20,19 @@ import { BlacklistRejection } from '@/adapters/redis/types'
 class MockAdapter implements DatabaseAdapter {
   public lastSql = ''
   public lastParams: any[] = []
+  public sqlModes: Array<string | undefined> = []
   /** When set, execute() returns this many synthetic rows instead of the default single row. */
   public rowsToReturn: number | undefined
   async connect() {}
   async disconnect() {}
-  async execute<T>(sql: string, params?: any[]): Promise<ExecutionResult<T>> {
+  async execute<T>(
+    sql: string,
+    params?: any[],
+    options?: { sqlMode?: 'normal' | 'native-read-only' }
+  ): Promise<ExecutionResult<T>> {
     this.lastSql = sql
     this.lastParams = params ?? []
+    this.sqlModes.push(options?.sqlMode)
     if (this.rowsToReturn !== undefined) {
       const rows = Array.from({ length: this.rowsToReturn }, (_, i) => ({ dau: i }))
       return { rows: rows as T[], affectedRows: rows.length }
@@ -101,7 +107,19 @@ describe('dbcli q', () => {
     await qCommand('@dau', { format: 'json', noLimit: true })
     expect(mock.lastSql).toMatch(/\$1/)
     expect(mock.lastParams).toEqual([7])
+    expect(mock.sqlModes).toEqual(['native-read-only'])
     expect(logSpy).toHaveBeenCalled()
+  })
+
+  test('protects both the saved-query body and its verification statement', async () => {
+    writeFileSync(
+      join(workdir, '.dbcli-shared/queries/verified.sql'),
+      `-- ---\n-- name: Verified\n-- engine: postgres\n-- verify:\n--   query: "SELECT 42 AS dau"\n--   expects: "dau = 42"\n-- ---\nSELECT 42 AS dau;`
+    )
+
+    await qCommand('@verified', { format: 'json', noLimit: true, verify: true })
+
+    expect(mock.sqlModes).toEqual(['native-read-only', 'native-read-only'])
   })
 
   // `q` enforces the connection's permission on the rewritten SQL before it
@@ -270,6 +288,37 @@ describe('dbcli q', () => {
       mock.rowsToReturn = 1001
       await qCommand('@dau', { format: 'html' })
       expect(lastPrinted()).toContain('"appliedLimit":{"truncated":true,"limitApplied":1000}')
+    })
+
+    test('HTML provenance agrees with the truncation it displays', async () => {
+      mock.rowsToReturn = 1001
+      await qCommand('@dau', { format: 'html' })
+      const html = lastPrinted()
+
+      expect(html).toContain('"provenance":{"version":1')
+      expect(html).toContain('"connection":{"name":"default","system":"postgresql"}')
+      expect(html).toContain('"savedQuery":{"key":"@dau","source":"shared"}')
+      expect(html).toContain('"permission":"query-only"')
+      expect(html).toContain('"limit":{"state":"applied","limitApplied":1000,"truncated":true}')
+    })
+
+    test('HTML provenance marks an execution that applied no limit', async () => {
+      mock.rowsToReturn = 3
+      await qCommand('@dau', { format: 'html', noLimit: true })
+      const html = lastPrinted()
+
+      expect(html).toContain('"limit":{"state":"not-applied","truncated":false}')
+      expect(html).not.toContain('"appliedLimit"')
+    })
+
+    test('HTML omits the snippet body, parameter defaults, and source path', async () => {
+      mock.rowsToReturn = 2
+      await qCommand('@dau', { format: 'html' })
+      const html = lastPrinted()
+
+      expect(html).not.toContain('SELECT COUNT(*) FROM events')
+      expect(html).not.toContain('"params"')
+      expect(html).not.toContain('dau.sql')
     })
 
     test('--no-limit leaves rows untouched and reports no truncation', async () => {

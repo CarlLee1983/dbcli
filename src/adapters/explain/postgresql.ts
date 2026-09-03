@@ -29,7 +29,9 @@ export async function runPgExplain(
 ): Promise<ExplainPlan> {
   const opts = options.analyze ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)' : 'EXPLAIN (FORMAT JSON)'
   const wrapped = `${opts} ${sql}`
-  const result = await adapter.execute<{ 'QUERY PLAN': string | object }>(wrapped)
+  const result = await adapter.execute<{ 'QUERY PLAN': string | object }>(wrapped, undefined, {
+    sqlMode: options.executionMode ?? 'normal',
+  })
 
   // PG driver may return either a JSON string or an already-parsed object.
   const queryPlanCell = result.rows[0]?.['QUERY PLAN']

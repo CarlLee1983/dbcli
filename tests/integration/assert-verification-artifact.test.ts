@@ -186,6 +186,48 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     expect(raw.evidence[0].exitCode).toBe(1)
   })
 
+  test('a failed receipt write is reported beside the verdict, never instead of it', async () => {
+    if (!DB_OK) return
+    // An outside-workspace receipt path fails closed. The classified assertion
+    // result must still be produced: the receipt is provenance, not the verdict.
+    const { stdout, stderr, code } = await run([
+      'assert',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value >= 0',
+      '--evidence-receipt',
+      '../outside-the-workspace/receipt.json',
+    ])
+
+    const verdict = JSON.parse(stdout)
+    expect(verdict.pass).toBe(true)
+    expect(verdict.evidenceReceiptError).toBe('Failed to write evidence receipt')
+    expect(verdict.evidenceReceiptPath).toBeUndefined()
+    expect(code).toBe(1)
+    // Bounded failure output: no path, no SQL.
+    expect(stderr).not.toContain('outside-the-workspace')
+    expect(stderr).not.toContain('SELECT')
+  })
+
+  test('--no-fail still reports a failed receipt write and keeps the verdict', async () => {
+    if (!DB_OK) return
+    const { stdout, code } = await run([
+      'assert',
+      `SELECT count(*)::int AS n FROM ${TABLE} WHERE status IS NULL`,
+      '--expect',
+      'value == 0',
+      '--no-fail',
+      '--evidence-receipt',
+      '../outside-the-workspace/receipt.json',
+    ])
+
+    const verdict = JSON.parse(stdout)
+    expect(verdict.pass).toBe(false)
+    expect(verdict.evidenceReceiptError).toBe('Failed to write evidence receipt')
+    // `--no-fail` forgives the assertion, not a receipt that could not be written.
+    expect(code).toBe(1)
+  })
+
   test('malformed --verification-subject exits before connecting to the database', async () => {
     // No DB required: parse rejection happens before any connection attempt.
     const tmp = await mkdtemp(join(tmpdir(), 'dbcli-assert-bad-'))

@@ -37,7 +37,9 @@ const EXECUTE_CALL = /\w*[Aa]dapter\.(?:execute|insert|update|delete|request)\s*
 const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
   'core/query-executor.ts': {
     calls: 1,
-    gate: 'enforcePermission() — permission tier, stacked statements, blacklist',
+    gate:
+      'enforcePermission() — permission tier, stacked statements, blacklist; query-only ' +
+      'passes native-read-only mode to the SQL adapter boundary',
   },
   'core/data-executor.ts': {
     calls: 1,
@@ -57,13 +59,15 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
     calls: 1,
     gate:
       'checkPermission() before execution in the interactive shell, plus its own ' +
-      'blacklist table check and column masking — the shell does not use QueryExecutor',
+      'blacklist table check and column masking; query-only passes native-read-only mode ' +
+      'on the initial statement and reconnect retry — the shell does not use QueryExecutor',
   },
   'core/report/run-diagnostic.ts': {
     calls: 1,
     gate:
-      'snippet read-only contract at parse time — no permission tier is applied here, ' +
-      'and the collector loads shared/local user snippets, not just built-ins; ' +
+      'snippet read-only contract at parse time plus the connection permission, which ' +
+      'selects the native-read-only SQL adapter mode; the collector loads shared/local ' +
+      'user snippets, not just built-ins; ' +
       'blacklist table check and column masking applied around this call',
   },
   'commands/insert.ts': {
@@ -82,19 +86,21 @@ const REGISTERED_PATHS: Record<string, { calls: number; gate: string }> = {
     calls: 3,
     gate:
       'preflightQuery() — Redis/Elasticsearch permission, MongoDB write-stage guard, ' +
-      'and blacklist over every referenced table/collection including $lookup / $unionWith',
+      'blacklist over every referenced table/collection including $lookup / $unionWith, ' +
+      'and QueryExecutor native-read-only mode for effective query-only SQL including fan-out',
   },
   'commands/export.ts': {
     calls: 3,
     gate:
-      'QueryExecutor (with blacklist validator) for SQL; Redis permission; ' +
+      'QueryExecutor (with blacklist validator and native-read-only query-only mode) for SQL; Redis permission; ' +
       'MongoDB write-stage guard; Elasticsearch index check and column masking',
   },
   'commands/q.ts': {
     calls: 2,
     gate:
-      'snippet body and verify.query proven read-only at parse time; blacklist checked at ' +
-      'run time against every table referenced by the body AND by verify.query',
+      'snippet body and verify.query proven read-only at parse time; both statements use ' +
+      'the native-read-only SQL adapter mode on query-only connections; blacklist checked ' +
+      'at run time against every table referenced by the body AND by verify.query',
   },
   'commands/es-shell.ts': {
     calls: 1,

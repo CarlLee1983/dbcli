@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import { resolveConfigPath } from '@/utils/config-path'
 import { configModule } from '@/core/config'
 import { compactVisibleSchema } from '@/core/context/context'
-import { loadSnippets } from '@/core/saved-queries/loader'
+import { listSnippetKeys } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import {
   defaultSemanticContractsFile,
@@ -10,6 +10,7 @@ import {
   inspectSemanticContractDrift,
   loadSemanticContracts,
   renderSemanticContractsMarkdown,
+  SemanticContractValidationError,
   type SemanticContract,
 } from '@/core/contracts'
 import {
@@ -35,7 +36,9 @@ async function collectContractEvidence(
   const workspaceRoot = process.cwd()
   const config = await configModule.read(resolveConfigPath(command))
   const schema = compactVisibleSchema(config)
-  const snippets = await loadSnippets(resolveSnippetDirs(workspaceRoot))
+  // Keys only: `loadSnippets` would read and parse every saved-query SQL body
+  // and print parse diagnostics, neither of which a contract command may do.
+  const snippetKeys = await listSnippetKeys(resolveSnippetDirs(workspaceRoot))
   const blockedTerms = [
     ...(config.blacklist?.tables ?? []),
     ...Object.values(config.blacklist?.columns ?? {}).flat(),
@@ -45,7 +48,7 @@ async function collectContractEvidence(
     context = await loadSemanticContext({
       workspaceRoot,
       schema,
-      snippets: [...snippets.keys()].map((key) => ({ key })),
+      snippets: snippetKeys.map((key) => ({ key })),
       missingFile: 'allow',
     })
   } catch {
@@ -55,9 +58,7 @@ async function collectContractEvidence(
   return {
     workspaceRoot,
     filePath: filePath ?? defaultSemanticContractsFile(workspaceRoot),
-    references: context
-      ? semanticReferenceRegistry(context, schema, [...snippets.keys()])
-      : new Set(),
+    references: context ? semanticReferenceRegistry(context, schema, snippetKeys) : new Set(),
     referencesAvailable: context !== null,
     blockedTerms,
   }
@@ -117,8 +118,25 @@ function searchContracts(
   })
 }
 
+/**
+ * Only messages this command composed itself, matched exactly. A prefix test
+ * would keep passing once a literal grows an interpolated suffix, and config,
+ * snippet, and filesystem errors carry absolute local paths.
+ */
+const SAFE_MESSAGES = new Set([
+  'Invalid format: supported formats are text, json',
+  'Invalid format: supported formats are json, markdown',
+  'semantic context is unavailable',
+])
+
+function safeMessage(error: unknown): string {
+  if (error instanceof SemanticContractValidationError) return error.message
+  if (error instanceof Error && SAFE_MESSAGES.has(error.message)) return error.message
+  return 'contract command failed; inspect the local contract and semantic artifacts'
+}
+
 function fail(error: unknown): never {
-  console.error(error instanceof Error ? error.message : String(error))
+  console.error(safeMessage(error))
   process.exit(1)
 }
 

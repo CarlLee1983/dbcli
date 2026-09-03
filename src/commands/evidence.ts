@@ -27,8 +27,8 @@ import {
 import { readEntries } from '@/core/audit/reader'
 import type { AuditEntry } from '@/core/audit/types'
 import { resolveConfigPath } from '@/utils/config-path'
-import { validateFormat } from '@/utils/validation'
-import { readEvidenceReceipt } from '@/core/evidence-receipt'
+import { ConfigError } from '@/utils/errors'
+import { EvidenceReceiptValidationError, readEvidenceReceipt } from '@/core/evidence-receipt'
 
 const FORMATS = ['json', 'markdown'] as const
 const MAX_INPUT_BYTES = 256 * 1024
@@ -42,8 +42,33 @@ type EvidenceConfig = {
   effectiveConnectionName?: string
 }
 
+/**
+ * Only messages this command surface composed itself reach stderr.
+ *
+ * Both validation errors interpolate nothing but field labels and constants —
+ * including the legacy classifications, whose error types extend them — so they
+ * are safe by construction. Everything else may be a raw driver or filesystem
+ * error carrying an absolute path, and the pack contract forbids those in a
+ * failure just as much as in a pack. That is also why `assertFormat` below
+ * replaces the shared `validateFormat`: its message quotes the rejected value,
+ * and a caller may type a path there.
+ *
+ * `ConfigError` gets its own bounded line rather than the generic one: its own
+ * message names the config file by absolute path, but pointing the reader at
+ * the artifacts when the config is what failed sends them to the wrong place.
+ */
 function safeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Evidence command failed'
+  if (error instanceof EvidencePackValidationError) return error.message
+  if (error instanceof EvidenceReceiptValidationError) return error.message
+  if (error instanceof ConfigError) return 'dbcli configuration could not be read'
+  return 'Evidence command failed; inspect the supplied local artifacts'
+}
+
+function assertFormat(value: string): EvidenceFormat {
+  if (!FORMATS.includes(value as EvidenceFormat)) {
+    throw new EvidencePackValidationError(`format must be ${FORMATS.join(' or ')}`)
+  }
+  return value as EvidenceFormat
 }
 
 async function readClaimsInput(filePath: string): Promise<unknown> {
@@ -229,7 +254,10 @@ async function resolveReferences(
     const path = relative(workspace, requested)
     if (path === '' || path.startsWith(`..${sep}`) || path === '..' || path.includes(`..${sep}`))
       throw new EvidencePackValidationError('receipt evidence path must be workspace-relative')
-    const resolved = await realpath(requested)
+    const resolved = await realpath(requested).catch(() => {
+      // Bare `realpath` reports `ENOENT ... '<absolute path>'`.
+      throw new EvidencePackValidationError('receipt evidence reference was not found')
+    })
     const safePath = relative(workspace, resolved)
     if (safePath.startsWith(`..${sep}`) || safePath === '..' || safePath.includes(`..${sep}`))
       throw new EvidencePackValidationError('receipt evidence path must stay inside the workspace')
@@ -419,8 +447,7 @@ evidenceCommand
   .option('--format <format>', `stdout format: ${FORMATS.join(' | ')}`, 'json')
   .action(async (options: Record<string, unknown>, command: Command) => {
     try {
-      const format = options.format as EvidenceFormat
-      validateFormat(format, FORMATS, 'evidence compose')
+      const format = assertFormat(String(options.format))
       const verification = (options.verification as string[] | undefined) ?? []
       const audit = (options.audit as string[] | undefined) ?? []
       const receipt = (options.receipt as string[] | undefined) ?? []
@@ -451,8 +478,7 @@ evidenceCommand
   .option('--format <format>', `output format: ${FORMATS.join(' | ')}`, 'json')
   .action(async (options: Record<string, unknown>, command: Command) => {
     try {
-      const format = options.format as EvidenceFormat
-      validateFormat(format, FORMATS, 'evidence validate')
+      const format = assertFormat(String(options.format))
       const { configPath, config } = await readConfig(command)
       const raw = await readEvidenceArtifactJson(String(options.file))
       const classification = classifyEvidencePackArtifact(raw)
@@ -493,8 +519,7 @@ evidenceCommand
   .option('--format <format>', `output format: ${FORMATS.join(' | ')}`, 'markdown')
   .action(async (options: Record<string, unknown>, command: Command) => {
     try {
-      const format = options.format as EvidenceFormat
-      validateFormat(format, FORMATS, 'evidence render')
+      const format = assertFormat(String(options.format))
       const { config } = await readConfig(command)
       const pack = await readEvidencePack(String(options.file))
       assertClaimsSafe(

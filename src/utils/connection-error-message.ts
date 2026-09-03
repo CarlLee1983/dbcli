@@ -33,6 +33,7 @@ export const IS_TRANSPORT_FAILURE: Record<ConnectionErrorCode, boolean> = {
   SQL_SYNTAX_ERROR: false,
   TABLE_NOT_FOUND: false,
   COLUMN_NOT_FOUND: false,
+  QUERY_ONLY_BOUNDARY_FAILED: false,
   // 有 code 的 UNKNOWN 幾乎都是伺服器回報的語句錯誤；無 code 的那條後備路徑
   // 訊息本身已是 `Connection failed: …`，措辭不會失真。
   UNKNOWN: false,

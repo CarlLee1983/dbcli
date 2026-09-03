@@ -83,6 +83,14 @@ dbcli init
 
 使用 `--use-env-refs` 可把機密留在環境變數，不寫進設定檔；CI/CD 環境尤其適用。執行時若被引用的變數不存在，dbcli 會 fail closed，並在錯誤中指出變數與設定欄位；空字串仍與變數不存在有所區別。
 
+**遮蔽輸入憑證**：互動式 `init` 以遮蔽提示收集資料庫密碼，以及貼上的 MongoDB 連線字串（它本身就帶著憑證），輸入值不會留在終端機捲動紀錄、錄影或螢幕分享畫面裡。Host、Port、使用者名稱、資料庫名稱與環境變數名稱維持一般的可見提示。
+
+沒有純文字的退路。當遮蔽輸入無法提供時——沒有終端機，或提示實作載入不到——`init` 會在寫出任何設定之前停下來，並指出你可以改用哪一種輸入：`--password`、從 `.env` 或行程環境變數解析到的憑證、`--use-env-refs`，MongoDB 則是 `--uri`。明確給定的 `--password` 或 `--uri` 會原樣保留，也不會被當成可見的提示預設值印出來；`--no-interactive` 則根本不會走到任何 secret 提示。
+
+若接下來的連線測試失敗，driver 的訊息與提示會先遮蔽並截斷再輸出——driver 經常把憑證或整條連線 URI 原樣寫回錯誤訊息裡。
+
+這解決的是終端機回顯，不是儲存：dbcli 不會加密靜態憑證。要讓憑證不落在設定檔裡，用的是 `--use-env-refs` 與家目錄儲存。
+
 ---
 
 <!-- doc-key: connection-management -->
@@ -178,6 +186,21 @@ SQL 的紀錄另外帶 `metadata.blacklist_checked`——黑名單拿這句語�
 
 每筆 audit entry 都會從解析後的連線寫入非機密的 `metadata.connection_name` 與
 `metadata.environment`，絕不記錄連線憑證或 endpoint secret。
+
+### 伺服器強制的 SQL query-only 模式
+
+在 PostgreSQL、MySQL 與 MariaDB 上，只要操作的有效權限是 `query-only`，每一句
+由呼叫端提供的 SQL 都會在實際執行它的 physical connection 上，包進一個全新的
+資料庫原生唯讀 transaction。這涵蓋 `query`、`export`、saved query 本體與驗證、
+report diagnostics、SQL shell、會實際執行的 explain plan，以及所選連線即使儲存
+較高 permission tier 的 fan-out。dbcli 若無法建立此邊界，會在送出目標語句前
+fail closed。既有的 classifier、blacklist、hidden-write 與 multi-statement 檢查
+仍會先執行。若目標語句完成後 transaction 清理失敗，dbcli 會回報結果不確定並
+丟棄受影響的連線；SQL shell 會為後續語句重新連線，但不會重送已完成的目標語句。
+
+這項保證涵蓋持久、非 temporary 的資料與 schema。各引擎的原生唯讀規則仍可能
+允許 temporary 或 session-local state；此邊界也無法阻止目標資料庫之外的副作用，
+例如不安全 extension 發出的網路呼叫。資料庫帳號與 ACL 仍是重要的獨立防線。
 
 ### 唯讀 query fan-out
 
@@ -528,7 +551,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json
 
 `--against-orm` 可重複使用，也接受逗號分隔路徑。DDL family 輸入（raw DDL 加上 `typeorm`、`sequelize` alias）支援真實 filesystem glob 與多檔；路徑會去重並以 deterministic order 排列，再當成單一共享且有序的 context 解析，所以後一檔案的 index 可連到前一檔案宣告的 table。Prisma、normalized JSON 與 Drizzle 都只接受一個檔案。Drizzle 輸入必須是 `drizzle/meta/<NNNN>_snapshot.json` 的 PostgreSQL drizzle-kit v7 snapshot。TypeORM `schema:log` 會輸出 `schema:sync` 將執行但不會實際套用的 SQL。Sequelize CLI 沒有通用的 `db:migrate --dry-run`，因此必須先對 scratch database 執行 migration，再用 `pg_dump --schema-only` 或 `mysqldump --no-data` 匯出。TypeORM entity 與 Sequelize model（`.ts`、`.js`、`.mjs` 或 `.cjs`）不會被解析；dbcli 會拒絕它們，並顯示精確的產生步驟。用 `--orm-format prisma|ddl|json|drizzle|typeorm|sequelize` 覆寫偵測；TypeORM alias 預設忽略 `typeorm_metadata` 與 `migrations`，Sequelize alias 預設忽略 `SequelizeMeta`。`--ignore <globs>` 可加入逗號分隔且大小寫敏感的 qualified table pattern，並以 `--format json|table|markdown` 選擇輸出。ORM 有而 DB 沒有的是 error `missing_in_db`；只有 DB 有的是 warn `missing_in_orm`；型別 family 不相容或 nullability 不同是 error-level `mismatch`；同 family 型別拼字、default 與 primary-key 差異是 info。忽略的資料表會列為 `unmanaged`，但不計分。只有計分後的 error 會決定 drift exit code：有 error 時 exit `1`，只有 warning、info、`unmanaged` 或 `unparsed` 時 exit `0`；操作失敗仍會 exit `1`，並可由 `--recovery` 包裝。
 
-Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。不支援的 Prisma/DDL/Drizzle construct 會以 `blocked:` 原因出現在 `unparsed`，包含 Drizzle enum 與其他不支援的 snapshot construct。Drizzle column default 只接受 snapshot 中的 string、boolean 或有限 number；不支援的 default 會阻擋並省略該 column。PostgreSQL `PARTITION BY` 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 都不支援：它們會產生 `blocked:` 項目，且不建立 managed table。Normalized JSON 也要求每個 `unparsed.reason` 都以 `blocked:` 開頭。Index 依結構化欄位與 uniqueness 比對、去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。
+Schema 與 table storage 會精確保留且大小寫敏感。PostgreSQL 的 `users` 與 `"Users"` 可並存。解析 DDL 時，未引用的 `Users` 會折成 `users`，而引用的 `"Users"` 只會解析成 `Users`；quote state 來自 parsed identifier，絕不從顯示文字的大小寫推測。Qualified name 的顯示與 ignore 也區分大小寫。重複的 exact 或 resolved identity 會 fail closed。Drizzle snapshot 或 normalized JSON 檔本身不是合法 JSON，以及 normalized JSON 不符合契約時，都會 fail closed，並指名出錯的檔案與欄位，不會降級成 `unparsed`。不支援的 Prisma/DDL/Drizzle construct 會以 `blocked:` 原因出現在 `unparsed`，包含 Drizzle enum 與其他不支援的 snapshot construct。Drizzle column default 只接受 snapshot 中的 string、boolean 或有限 number；不支援的 default 會阻擋並省略該 column。PostgreSQL `PARTITION BY` 以及 MySQL/MariaDB 的 table engine、charset 與其他 table option 都不支援：它們會產生 `blocked:` 項目，且不建立 managed table。Normalized JSON 也要求每個 `unparsed.reason` 都以 `blocked:` 開頭。Index 依結構化欄位與 uniqueness 比對、去重；drift entry 會依 table/object/category/detail 的 Unicode code-point order 決定性排序，不受 locale 影響。
 
 提案是 shell-safe 文字，預設仍是 dry-run。安全且未 qualified 的欄位/index 新增可產生 `migrate`；schema-qualified 或 CLI 無法無損表達的 index target 會升級至 `migration-review`，不會輸出損壞指令。Table、column 或 type positional 若以 `-` 開頭也會升級；以 dash 開頭的 option value 則使用 option-safe attached syntax，例如 `--default=-1` 或 `--columns=--config,email`。擷取 dry-run DDL，並把兩個精確值分別作為單一 quoted parameter 傳入：
 
@@ -554,16 +577,16 @@ dbcli skill tasks plan migration-review \
 
 使用 `--write-verification-artifact` 可在 read-back 斷言執行後,將 **結果佐證記錄**（v1 VerificationArtifact JSON）寫入 `.dbcli/verification/`，提供可稽核的持久化軌跡。驗證文物會持續寫入 `<cwd>/.dbcli/verification/`（相對於當前工作目錄），不受 `--config` 檔案位置影響。
 
-**旗標三件組：**
+**旗標：**
 
 | 旗標 | 必填 | 說明 |
 | :--- | :--- | :--- |
 | `--write-verification-artifact` | 選用 | 斷言執行後寫入 VerificationArtifact JSON。 |
 | `--evidence-receipt <path>` | 選用 | 在 verdict、audit 嘗試與可選 artifact 確定後，原子寫入不含 SQL 或 rows 的安全 assert provenance。 |
-
-`evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 | `--verification-subject <kind:name>` | 是（啟用旗標時）| 被驗證的標的。允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。 |
 | `--verification-summary <text>` | 否 | 可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。 |
+
+`evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 
 **輸出合約：**
 
@@ -624,6 +647,8 @@ After-write（寫入文物）：
 預檢也會回顯**預計執行的 update**（你需自行執行的 `--query`），讓印出的內容成為此操作完整、可直接複製的紀錄。
 
 結果狀態：`verified`（回讀符合 `--expect`）、`not_verified`（回讀與 `--expect` 相悖）、`blocked`（防護失敗 — blacklist、schema、plan，或 verify-query 非唯讀）、`indeterminate`（斷言已執行但無法產生可信的結論）。
+
+即使其中一項失敗，四項防護仍會全部執行並分別回報結果。After-write 只有在四項全數通過時才執行斷言；持久化的失敗原因使用固定安全標籤，不會保存 driver 錯誤文字。持久化的自訂標籤與 SQL 證據也會遮蔽憑證、檔案系統路徑及 SQL 註解。
 
 **防護約束（fail closed）：**
 
@@ -992,7 +1017,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > dbcli contract drift --format json
 > ```
 >
-> 這些指令不會連線或執行查詢。`context`、`search` 與 `skill context` 只會輸出有效且 `approved` 的契約；draft 與 deprecated 術語保留為本機審閱產物。缺少契約檔不會改變一般 semantic context；但明確指定的缺檔或無效檔案會 fail closed。`contract drift` 會區分 valid、stale、invalid 與 unavailable 的本機證據。
+> 這些指令不會連線或執行查詢。`context`、`search` 與 `skill context` 只會輸出有效且 `approved` 的契約；draft 與 deprecated 術語保留為本機審閱產物。缺少契約檔不會改變一般 semantic context；但明確指定的缺檔或無效檔案會 fail closed。`contract drift` 會區分 valid、stale、invalid 與 unavailable 的本機證據：subject 不屬於四種 canonical 形式時判為 invalid，形式正確但已不存在的 subject 才是 stale。診斷只會指出出問題的屬性或 subject 位置，不會複述產物或本機設定中被拒絕的 key、值或路徑。
 >
 > **Agent query draft。** 先把已檢閱的 `dbcli semantic context --format json` 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 回傳不受信任的 `QueryDraft` 檔案，形狀如下（只能使用該 semantic context 中的 model 與 field）：
 >
@@ -1042,7 +1067,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.prisma --output ./impact.md --format markdown --fail-on never
 > ```
 >
-> 必須剛好選一種 baseline。指令只會讀取明確指定的 design／ORM 檔或既有本機 cache、semantic contracts、saved-query 名稱、verification artifact metadata，以及可選且已審閱的 `dbcli.data-access.json` operation metadata。此 manifest 必須使用 canonical semantic reference 與既存、workspace-relative 的 source path；dbcli 絕不讀取或解析那些 source file。可選的明確 `--events` 檔會先經 redaction-first 投影，只保留近期且安全的 table metadata；不會啟動 proxy、不會讀取 rotated log，也不會輸出 SQL、literal、error、session 或路徑。缺少、格式錯誤、過期、無法讀取或 redaction 失敗的 workload 證據會保留為 advisory coverage gap，且單獨存在時不會使 `--fail-on warn` 失敗。它不會連線、更新 cache、執行 SQL、讀取 query body，或輸出保護識別字。缺少、無效或被隱藏的證據會明確列為 `partial` coverage gap；v1 永不回報 complete。`--fail-on` 只在報告寫出後改變 exit code（`error`、`warn` 或 `never`）。
+> 必須剛好選一種 baseline。指令只會讀取明確指定的 design／ORM 檔或既有本機 cache、semantic contracts、saved-query 名稱、verification artifact metadata，以及可選且已審閱的 `dbcli.data-access.json` operation metadata。此 manifest 必須使用 canonical semantic reference 與既存、workspace-relative 的 source path；dbcli 絕不讀取或解析那些 source file。可選的明確 `--events` 檔會先經 redaction-first 投影，只保留近期且安全的 table metadata；不會啟動 proxy、不會讀取 rotated log，也不會輸出 SQL、literal、error、session 或路徑。缺少、格式錯誤、過期、無法讀取或 redaction 失敗的 workload 證據會保留為 advisory coverage gap，且單獨存在時不會使 `--fail-on warn` 失敗。它不會連線、更新 cache、執行 SQL、讀取 query body，或輸出受保護識別字。缺少、無效或被隱藏的證據會明確列為 `partial` coverage gap；v1 永不回報 complete。`--fail-on` 只在報告寫出後改變 exit code（`error`、`warn` 或 `never`）。
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`、`design-review` 與 `connection-health`。`design-review` 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
@@ -1062,6 +1087,23 @@ dbcli query "SELECT * FROM daily_metrics" --ui
 **KPI 與圖表**：在 Snippet 的 Frontmatter 中加入 `visual:` 區塊，即可直接在儀表板中呈現自定義圖表與 KPI。支援的圖表類型為 `line`（折線圖）、`bar`（長條圖）、`area`（區域圖）、`pie`（圓餅圖）四種；指定其他類型會在解析時報錯。
 
 當 dbcli 的 lookahead 證明結果遭截斷時，dashboard 會在所有 KPI、圖表與 table **之前**顯示警示並標出實際上限；blacklist 的遮蔽／省略通知也會顯示在同一區域。query HTML/UI、saved-query HTML/UI 與 HTML export 只要執行路徑有產生對應 metadata，都會沿用此行為。
+
+**執行溯源（saved query）**：由 saved query 產生的 dashboard（`dbcli q @name --ui` / `--format html`）會帶上獨立的 **Execution Traceability** 區塊，位置在截斷與 blacklist 通知之後、KPI／圖表／table 之前。它就存在 HTML 檔案裡，收檔的人不需要 dbcli、資料庫或你的工作目錄也看得到。
+
+| 欄位 | 意義 |
+| --- | --- |
+| Connection | 邏輯連線名稱 — v2 的連線 key，單一連線設定則為 `default`。不會是主機或 endpoint。 |
+| Engine | `postgresql`、`mysql`、`mariadb`、`mongodb`、`redis` 或 `elasticsearch`。 |
+| Saved Query | Snippet key，例如 `@dau`。不會是檔案路徑。 |
+| Snippet Source | `builtin`、`shared` 或 `local`。 |
+| Effective Permission | 實際約束該次執行的權限：`query-only`、`read-write`、`data-admin` 或 `admin`。 |
+| Applied Limit | 實際生效的筆數上限與是否截斷；若未套用上限，會明確寫出「No limit applied」而不是留白。 |
+
+Applied Limit 一定與上方的截斷警示一致；兩者矛盾的 dashboard 會在寫檔前就被拒絕。
+
+溯源是封閉契約，不會攜帶原始查詢內容、參數預設值或列舉、憑證、endpoint、來源路徑、verification 的 query 與 expects、目標 index 或 collection 名稱，也不會帶上未顯示的資料列。同一份 allowlist 管的是整個內嵌 payload，不只是看得見的那一區：只有已顯示的資料列、applied-limit 與安全通知、provenance 物件，以及顯示用的 name／description 與引用已顯示欄位的圖表／KPI 定義會被序列化。無效、超長或未知的 metadata 會在寫出任何 HTML 之前被拒絕，失敗的 dashboard 不會留下半成品檔案。
+
+直接查詢產生的 dashboard（`dbcli query --ui`、`dbcli export --format html`）行為不變，不會有溯源區塊。
 
 ---
 
@@ -1263,6 +1305,30 @@ dbcli export orders --format jsonl --output orders.jsonl
 8.  **Agent Plugin**：repo root 採用 Ponytail-style plugin layout，包含 `.agents/plugins/marketplace.json`、`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.cursor-plugin/plugin.json`、`.github/skills/dbcli/` 與 `skills/dbcli/`。若 `dbcli` 未全域安裝，skill 會以 `bunx @carllee1983/dbcli <command>` 作為 fallback 指令前綴。Codex、Claude Code、GitHub Copilot CLI、Antigravity、Cursor 的安裝命令請見 `plugins/dbcli-agent/INSTALL.md`，其中包含提交 Cursor marketplace 審核/索引的步驟。
 9.  **共用 agent CLI interface**：套件使用者可從 `@carllee1983/dbcli/agent-core` 匯入 `loadEnvFile`、`resolveEnvRef`、`resolveConnectionSelector`、`parseConnectionNames`、`trimAppliedLimit`，以及 `AppliedLimitMetadata`、`AppliedLimitResult`、`ConnectionSelectorInputs`。此小型 interface 不相依 CLI framework 或資料庫並遵守 semver；較廣的 `./core` 產品介面維持分離，CLI option factory、config storage binding 與連線字串解析刻意不納入 `agent-core`。
 
+### 受限跨引擎 context（版本 2）
+
+將資料庫 metadata 交給外部 agent 時，使用 `dbcli skill context --context-version 2 --format json`。版本 2 是穩定的 agent contract，離線執行，絕不開啟連線、建立 adapter、掃描 Redis key、讀取文件或讀取專案 source。Agent 可在自身 workspace safety rule 下自行檢查專案 code，以補足 context 未包含的業務意義。
+
+```bash
+dbcli skill context --context-version 2 --format json
+```
+
+將此輸出和 agent 自行安全發現的 code context 交給 agent；不要把 source path 交給 dbcli，也不要要求 dbcli 解讀自然語言。將 `permission` 與描述性的 `capabilities` 視為限制，不是執行指令的授權。只能使用回傳的 resources 與 approved semantic/contracts metadata。若 metadata 缺少或回傳 `gaps`，不可猜測名稱、type、relationship、key 或意義：檢查允許的 project code，或要求補上證據。
+
+版本 2 只輸出 safe fields：已設定的 engine 與 permission、blacklist policy、capability 的 `command`/`status`/`sideEffectTier`、resource 與 field ID/name/type、可見 SQL nullable/primary-key 與可見 foreign-key link、flattened Elasticsearch field path/type、已宣告的 Redis family/field、沒有 body/default 的 snippet metadata、沒有 source path 的 declared data-access metadata、approved semantic/contracts metadata、truncation count 與 gap。它絕不輸出 credentials、value/result、default/count、raw Elasticsearch mapping 或 setting、Redis key/value、query body/default，或 project source path/content。Blacklisted identifier 只會出現在 `blacklist`。
+
+| 引擎 | 版本 2 resources | 邊界 |
+| --- | --- | --- |
+| PostgreSQL、MySQL、MariaDB | 快取的可見 table、safe column 與可見 foreign-key link | 不含 default、count、index、comment 或被過濾 endpoint。 |
+| Elasticsearch | 快取 index 的 flattened field path 與 type | 不含 raw mapping、`_meta`、setting、script、analyzer、document 或 count。 |
+| Redis | repository 宣告的 `dbcli.redis-context.json` key family 與 field | 不做 discovery、scan，也不含 concrete key、live type 或 value。 |
+
+Redis declaration 有意保持很小：context file ≤512 KiB；family ≤500；family name 為小寫 kebab-case，pattern ≤200 字元，含唯一且有效的 `{placeholder}`，不得有 glob token、空白、control character 或 backslash；type 為 `string`、`hash`、`list`、`set`、`zset` 或 `stream`。僅 `hash` 與 `stream` 可宣告 field（≤100）；family/field description ≤1,000 字元，alias ≤20 個且每個 ≤100 字元。malformed、concrete、unsafe、blacklisted 或與 Redis field mask 重疊的 declaration 會直接失敗，不會輸出 partial model。
+
+缺少 optional evidence 時會明確輸出：`SQL_SCHEMA_UNAVAILABLE`、`ELASTICSEARCH_MAPPING_UNAVAILABLE`、`REDIS_KEY_FAMILIES_UNAVAILABLE`、`SEMANTIC_CONTEXT_UNAVAILABLE`、`SAVED_QUERIES_UNAVAILABLE`、`DATA_ACCESS_UNAVAILABLE` 或 `ALL_RESOURCES_FILTERED`；truncation 另輸出 `CONTEXT_TRUNCATED`。已存在但無效的 evidence 會以相應的 `INVALID_SCHEMA_CACHE`、`INVALID_SEMANTIC_CONTEXT`、`INVALID_SAVED_QUERY`、`INVALID_DATA_ACCESS_MANIFEST`、`INVALID_REDIS_CONTEXT` 或 `INVALID_RESOURCE_REFERENCE` 失敗。MongoDB（及 unknown engine）明確要求 v2 時會回傳 `UNSUPPORTED_CONTEXT_ENGINE`。
+
+省略 `--context-version` 時，維持 byte-compatible 的 version 1 JSON、XML 與 Markdown output。`version` 仍是 configuration metadata；v2 另加整數 `contextVersion: 2`。consumer 必須忽略未知的 optional v2 field；若要不相容地變更 required field 或 ID encoding，必須建立新的 context version。
+
 ### 業務請求的意圖確認
 
 已安裝的 skill 支援三種**當次請求的對話偏好**，它們不是 dbcli 旗標或儲存的設定。Agent
@@ -1362,6 +1428,8 @@ dbcli update <table> --where "<predicate>" --set '<json>' --dry-run
 
 當請求對應到某個具名工作流時,用 pack 來探索與產生計畫,而不是憑記憶拼步驟。所有 pack 都是唯讀 `plan-only`,且仍繼承 blacklist → schema → dry-run 規則。
 
+`slow-endpoint-investigation` 吃必填的 `query` 與必填的 `table`,依佐證順序產生計畫:`blacklist list` → `proxy analyze --format json` → `schema <table> --format json` → `explain "<SQL>"` → `guide missing-index-for "<SQL>" --format json`。schema 排在 explain 與索引建議之前是刻意的——在沒確認資料表當下形狀的情況下讀執行計畫或索引候選,那是猜測。規劃只產出這些指令,別的什麼都不做:不開連線、不讀 proxy 事件與 schema、不執行 SQL,也不執行計畫中的任何一步。proxy 的觀察結果是本地看到的現象,不是端點變慢的已證實原因;索引候選是供審查的材料——這個工作流不建立索引、不套用 migration、不執行 DDL。缺 `query` 或 `table` 會以有界的錯誤失敗,不會輸出半份計畫。
+
 ```bash
 dbcli skill tasks list --format json                       # 探索可用 pack
 dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標籤的有序計畫
@@ -1371,7 +1439,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標�
 | --- | --- | --- |
 | 「這條 SQL 很慢」(已有語句) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | 「X 表很重/很熱」(已有表名) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
-| 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"`(串接 `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>" --param table=<table>`(blacklist → `proxy analyze` → `schema` → `explain` → missing-index) | `slow-endpoint-investigation` |
 | 全環境效能掃描 | `report --section perf` → `guide slow-query` | _(report + guide,無 pack)_ |
 | 「給 agent 寫權限前先稽核」 | `skill tasks plan audit-permissions`(可選 `--param table=<table>` 抽查欄位覆蓋) | `audit-permissions` |
 | 「線上 schema 跟 committed cache 一致嗎?」 | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |

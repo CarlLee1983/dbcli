@@ -99,7 +99,11 @@ export function registerMissingIndexCommand(parent: Command): Command {
             parseSelect,
             extract,
             getExistingIndexes: makeIndexIntrospector(adapter),
-            enrich: makeExplainEnricher(system, adapter),
+            enrich: makeExplainEnricher(
+              system,
+              adapter,
+              config.permission === 'query-only' ? 'native-read-only' : 'normal'
+            ),
           },
           { minConfidence }
         )

@@ -435,6 +435,35 @@ describe('runDrift', () => {
     expect(report.unparsed.length).toBeGreaterThan(0)
   })
 
+  test('non-SQL connections are rejected before any ORM input is read', async () => {
+    // A path that does not exist: reading the artifact first would report
+    // 'ORM schema file not found' instead, so this pins the ordering.
+    const absent = 'tests/fixtures/orm-drift/does-not-exist.prisma'
+
+    await expect(
+      runDrift([absent], {}, {
+        ...config,
+        connection: { system: 'mongodb' },
+      } as never)
+    ).rejects.toThrow('This command requires a SQL connection, got: mongodb')
+
+    await expect(runDrift([absent], {}, { schema: config.schema } as never)).rejects.toThrow(
+      'This command requires a SQL connection, got: none'
+    )
+  })
+
+  test('ignore patterns mutate neither the schema cache nor the supplied artifact', async () => {
+    const path = await write('ignored.sql', ddl('users'))
+    const artifactBefore = await Bun.file(path).text()
+    const liveConfig = structuredClone(config)
+    const configBefore = structuredClone(config)
+
+    await runDrift([path], { ignore: 'public.*' }, liveConfig as never)
+
+    expect(liveConfig).toEqual(configBefore)
+    expect(await Bun.file(path).text()).toBe(artifactBefore)
+  })
+
   test('surfaces blocked DDL table options without silently managing the table', async () => {
     const path = await write(
       'partitioned.sql',
@@ -459,6 +488,23 @@ describe('runDrift', () => {
   })
 })
 
+describe('malformed JSON ORM artifacts', () => {
+  // Message shape and the Drizzle-by-path route are pinned in
+  // tests/unit/core/orm-drift/artifact-json.test.ts; this asserts runDrift
+  // surfaces that error instead of the raw parser text.
+  test('reach runDrift as a bounded error naming the file', async () => {
+    const path = await write('broken-normalized.json', '{ "tables": [')
+
+    const error = await runDrift([path], { ormFormat: 'json' }, config as never).catch(
+      (caught: unknown) => caught
+    )
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain('Malformed normalized JSON schema')
+    expect((error as Error).message).toContain(path)
+  })
+})
+
 describe('diff command drift mode', () => {
   test('advertises typeorm and sequelize ORM formats in help', () => {
     const help = diffCommand.helpInformation()
@@ -479,6 +525,38 @@ describe('diff command drift mode', () => {
         againstOrm: ['schema.prisma'],
       })
     ).toThrow('Choose exactly one')
+  })
+
+  test('rejects a diff invocation that selects no mode at all', () => {
+    expect(() => validateDiffModes({})).toThrow(
+      'Specify --snapshot <path> to save, --against <path> to compare, or --against-orm <path> for ORM drift'
+    )
+    expect(() => validateDiffModes({ againstOrm: [] })).toThrow('Specify --snapshot')
+  })
+
+  test('table output renders a drift report without creating an adapter', async () => {
+    const configSpy = spyOn(configModule, 'read').mockResolvedValue(config as never)
+    const adapterSpy = spyOn(AdapterFactory, 'createSqlAdapter')
+    const lines: string[] = []
+    const logSpy = spyOn(console, 'log').mockImplementation((message: unknown) => {
+      lines.push(String(message))
+    })
+
+    try {
+      await diffAction({
+        againstOrm: ['tests/fixtures/orm-drift/schema.prisma'],
+        format: 'table',
+        config: '.dbcli',
+      })
+
+      expect(lines.join('\n')).toContain('Drift vs prisma:')
+      expect(lines.join('\n')).toContain('Summary:')
+      expect(adapterSpy).not.toHaveBeenCalled()
+    } finally {
+      configSpy.mockRestore()
+      adapterSpy.mockRestore()
+      logSpy.mockRestore()
+    }
   })
 
   test('sets exit code 1 for drift errors and never creates an adapter', async () => {

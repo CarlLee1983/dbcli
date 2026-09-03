@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test'
 import { runDiagnostic } from '@/core/report/run-diagnostic'
 import type { ResolvedSnippet } from '@/core/saved-queries'
-import type { DatabaseAdapter, ExecutionResult } from '@/adapters/types'
+import type { DatabaseAdapter, ExecutionResult, SqlExecutionMode } from '@/adapters/types'
 import { BlacklistRejection } from '@/adapters/redis/types'
 
 function snippet(meta: Partial<ResolvedSnippet['query']['meta']> = {}): ResolvedSnippet {
@@ -38,6 +38,32 @@ function adapterReturning<T>(result: ExecutionResult<T>): DatabaseAdapter {
 }
 
 describe('runDiagnostic', () => {
+  test('uses the native boundary for query-only SQL diagnostics', async () => {
+    let sqlMode: string | undefined
+    const adapter: DatabaseAdapter = {
+      ...adapterReturning({ rows: [], affectedRows: 0 }),
+      execute: async <T>(
+        _sql: string,
+        _params?: (string | number | boolean | null)[],
+        options?: { noLimit?: boolean; sqlMode?: SqlExecutionMode }
+      ) => {
+        sqlMode = options?.sqlMode
+        return { rows: [{ one: 1 }] as T[], affectedRows: 0 }
+      },
+    }
+
+    await runDiagnostic({
+      snippet: snippet(),
+      adapter,
+      engine: 'postgres',
+      permission: 'query-only',
+      timeoutMs: 1000,
+      maxRows: 10,
+    })
+
+    expect(sqlMode).toBe('native-read-only')
+  })
+
   test('returns ok evidence with truncated rows + duration', async () => {
     const rows = Array.from({ length: 100 }, (_, i) => ({ i }))
     const adapter = adapterReturning({ rows, affectedRows: 0 })

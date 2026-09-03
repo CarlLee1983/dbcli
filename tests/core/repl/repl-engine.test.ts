@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ReplEngine } from '../../../src/core/repl/repl-engine'
 import type { ReplContext } from '../../../src/core/repl/types'
-import type { DatabaseAdapter } from '../../../src/adapters/types'
+import { ConnectionError, type DatabaseAdapter } from '../../../src/adapters/types'
 import type { DbcliConfig } from '../../../src/types'
 
 // Mock adapter
@@ -83,6 +83,22 @@ describe('ReplEngine', () => {
     expect(result.action).toBe('continue')
     expect(result.output).toBeDefined()
     expect(adapter.execute).toHaveBeenCalled()
+  })
+
+  test('query-only SQL execution carries the native boundary through the shell', async () => {
+    const adapter = createMockAdapter()
+    const engine = new ReplEngine(
+      adapter,
+      { ...mockContext, permission: 'query-only' },
+      historyPath
+    )
+
+    await engine.processInput('SELECT 1;')
+
+    expect((adapter.execute as any).mock.calls[0]?.[2]).toEqual({
+      noLimit: false,
+      sqlMode: 'native-read-only',
+    })
   })
 
   test('processInput accumulates multiline SQL', async () => {
@@ -503,6 +519,59 @@ describe('ReplEngine', () => {
     expect(result.action).toBe('continue')
     expect(adapter.connect).toHaveBeenCalledTimes(1) // reconnect call
     expect(result.output).toBeDefined()
+  })
+
+  test('reconnect retry re-establishes query-only mode before executing again', async () => {
+    const adapter = createMockAdapter()
+    let callCount = 0
+    ;(adapter.execute as any).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) throw Object.assign(new Error('lost'), { code: 'ECONNRESET' })
+      return Promise.resolve({ rows: [{ ok: 1 }], affectedRows: 0 })
+    })
+    const engine = new ReplEngine(
+      adapter,
+      { ...mockContext, permission: 'query-only' },
+      historyPath
+    )
+
+    await engine.processInput('SELECT 1;')
+
+    expect((adapter.execute as any).mock.calls.map((call: unknown[]) => call[2])).toEqual([
+      { noLimit: false, sqlMode: 'native-read-only' },
+      { noLimit: false, sqlMode: 'native-read-only' },
+    ])
+  })
+
+  test('reconnects after uncertain cleanup without retrying the completed target', async () => {
+    const adapter = createMockAdapter()
+    const cleanupError = new ConnectionError(
+      'CONNECTION_LOST',
+      'The query-only target completed, but transaction cleanup failed',
+      [],
+      undefined,
+      false
+    )
+    let callCount = 0
+    ;(adapter.execute as any).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) throw cleanupError
+      return Promise.resolve({ rows: [{ ok: 1 }], affectedRows: 0 })
+    })
+    const engine = new ReplEngine(
+      adapter,
+      { ...mockContext, permission: 'query-only', system: 'mysql' },
+      historyPath
+    )
+
+    const failed = await engine.processInput('SELECT external_effect();')
+
+    expect(adapter.connect).toHaveBeenCalledTimes(1)
+    expect(adapter.execute).toHaveBeenCalledTimes(1)
+    expect(failed.output).toContain('target completed')
+
+    await engine.processInput('SELECT 1;')
+    expect(adapter.execute).toHaveBeenCalledTimes(2)
   })
 
   // Issue 1 fix: test that INSERT INTO a blacklisted table is blocked

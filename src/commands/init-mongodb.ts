@@ -9,6 +9,7 @@
 import { t, t_vars } from '@/i18n/message-loader'
 import { configModule } from '@/core/config'
 import { promptUser } from '@/utils/prompts'
+import { redactSecretsForDisplay } from '@/utils/redaction'
 import type { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import {
@@ -56,9 +57,11 @@ export async function handleMongoDBInit(ctx: {
     useUriMode = mode === SETUP_MODES[URI_MODE_INDEX]
 
     while (useUriMode && !mongoUri) {
-      const input = await promptUser.text(
+      // The URI is credential-bearing by construction, so it is collected the
+      // same way a password is rather than echoed into scrollback.
+      const input = await promptUser.secret(
         'MongoDB 連線字串 / connection string (mongodb://user:pass@host:27017/db)',
-        ''
+        { unavailable: t('init.secret_alternatives_mongo_uri') }
       )
       if (input.trim()) {
         mongoUri = input.trim()
@@ -114,7 +117,13 @@ export async function handleMongoDBInit(ctx: {
     if (!useFieldEnvRefs) {
       fields.user = await promptUser.text('User（帳號，無認證請留空）', fields.user)
       if (fields.user) {
-        fields.password = await promptUser.text('Password（密碼）', fields.password)
+        // An explicit --password is kept as given. Offering it back as a
+        // prompt default would print the credential it was passed to hide.
+        if (!fields.password) {
+          fields.password = await promptUser.secret('Password（密碼）', {
+            unavailable: t('init.secret_alternatives_mongo_password'),
+          })
+        }
         fields.authSource = await promptUser.text(
           'authSource（認證資料庫）',
           fields.authSource || 'admin'
@@ -256,13 +265,17 @@ export async function handleMongoDBInit(ctx: {
       await mongoAdapter.testConnection()
       console.log(t('init.connection_success'))
     } catch (error) {
+      // The driver reproduces the resolved URI — credentials included — in its
+      // own error text, so nothing from this path reaches the terminal raw.
+      const safe = (text: string) =>
+        redactSecretsForDisplay(text, [fields.password, mongoUri ?? ''])
       if (error instanceof ConnectionError) {
-        console.error(t_vars('errors.connection_failed', { message: error.message }))
+        console.error(t_vars('errors.connection_failed', { message: safe(error.message) }))
         console.error(t('init.connection_hints'))
-        error.hints.forEach((hint) => console.error(`  • ${hint}`))
+        error.hints.forEach((hint) => console.error(`  • ${safe(hint)}`))
         process.exit(1)
       }
-      throw error
+      throw new Error(safe(error instanceof Error ? error.message : String(error)))
     } finally {
       await mongoAdapter.disconnect()
     }

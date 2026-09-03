@@ -324,3 +324,33 @@ export function escapeControlCharacters(text: string): string {
     }
   )
 }
+
+/** How much redacted text may reach the terminal in one message. */
+const DISPLAY_CAP = 300
+
+/**
+ * Redact a message before it is shown to a person: strip the literal secrets
+ * the caller collected, apply the shared credential patterns, make control
+ * characters visible, and bound the result.
+ *
+ * The literal pass exists because a driver is free to quote a credential in
+ * prose ("authentication failed for hunter2"), where no keyword or URI pattern
+ * can find it. Everything else goes through `redactSensitive`, so there is one
+ * credential boundary rather than one per engine.
+ */
+export function redactSecretsForDisplay(
+  text: string,
+  secrets: readonly string[],
+  maxLen = DISPLAY_CAP
+): string {
+  let redacted = text
+  for (const value of [...secrets].sort((left, right) => right.length - left.length)) {
+    // An empty or blank secret matches everywhere; an unauthenticated
+    // connection would otherwise have its whole error replaced.
+    if (value.trim().length === 0) continue
+    redacted = redacted.split(value).join('<redacted>')
+  }
+
+  redacted = escapeControlCharacters(redactSensitive(redacted))
+  return redacted.length <= maxLen ? redacted : `${redacted.slice(0, maxLen - 1)}…`
+}

@@ -1,5 +1,5 @@
 // src/core/repl/repl-engine.ts
-import type { DatabaseAdapter } from '../../adapters/types'
+import { ConnectionError, type DatabaseAdapter } from '../../adapters/types'
 import type { ReplAuditSink, ReplContext, ReplState, ReplWriteGate } from './types'
 import type { DbcliConfig } from '../../types'
 import { isTransportFailure } from '@/utils/connection-error-message'
@@ -360,6 +360,11 @@ export class ReplEngine {
     try {
       const result = await this.adapter.execute<Record<string, unknown>>(sql, undefined, {
         noLimit: this.state.noLimit,
+        sqlMode:
+          this.context.permission === 'query-only' &&
+          ['postgresql', 'mysql', 'mariadb'].includes(this.context.system)
+            ? 'native-read-only'
+            : 'normal',
       })
       const elapsed = Date.now() - startTime
       const fetched = result.rows
@@ -402,6 +407,13 @@ export class ReplEngine {
           await this.adapter.connect()
           this.state = { ...this.state, connected: true }
           console.error(pc.green(t('shell.error_reconnect_success')))
+          if (error instanceof ConnectionError && !error.retrySafe) {
+            await this.auditSink?.({ phase: 'outcome', success: false, statement: sql })
+            return {
+              action: 'continue',
+              output: pc.red(t_vars('shell.error_sql_failed', { message: error.message })),
+            }
+          }
           // Retry the query once. Back into `runStatement`, not `executeSql`:
           // the statement already passed the gate, and asking again after a
           // reconnect would make one typed statement two questions.

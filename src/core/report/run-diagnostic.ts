@@ -20,6 +20,7 @@ const ENGINE_DIALECT: Record<string, SqlTablesDialect | undefined> = {
 import type { BlacklistValidator } from '@/core/blacklist-validator'
 import { BlacklistError } from '@/types/blacklist'
 import type { ReportFinding } from './types'
+import type { Permission } from '@/types'
 
 export interface RunDiagnosticInput {
   snippet: ResolvedSnippet
@@ -27,6 +28,7 @@ export interface RunDiagnosticInput {
   engine: EngineTag
   timeoutMs: number
   maxRows: number
+  permission?: Permission
   /**
    * Blacklist rules for the connection. Evidence rows are embedded in the
    * report, and the collector loads user-writable snippet directories, so an
@@ -98,7 +100,12 @@ export async function runDiagnostic(input: RunDiagnosticInput): Promise<ReportFi
       family === 'es' && prepared.execHints?.index ? [prepared.execHints.index] : []
     return input.adapter.execute<Record<string, unknown>>(
       prepared.driver.sql,
-      family === 'sql' ? prepared.driver.values : indexParams
+      family === 'sql' ? prepared.driver.values : indexParams,
+      family === 'sql'
+        ? {
+            sqlMode: input.permission === 'query-only' ? 'native-read-only' : 'normal',
+          }
+        : undefined
     )
   })()
 

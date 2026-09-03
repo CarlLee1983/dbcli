@@ -1,7 +1,7 @@
 # ForgeFlow Stories
 
-This repository adopted ForgeFlow 0.2.1 from revision
-`a5e061a995640c7e1d6b33c53a526d79c9bc794f`.
+This repository adopted ForgeFlow 0.3.0 from revision
+`afca7600db01279ddfe74ac030bd226444cc8b11`.
 
 Create a Story by copying the template:
 

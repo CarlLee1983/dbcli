@@ -7,6 +7,7 @@ import {
   normalizeTableName,
   extractUpdateTargetTable,
   updateTargetMatchesTable,
+  redactArtifactText,
   redactSqlForEvidence,
   buildAfterWriteCommand,
   buildSafeBackfillSubject,
@@ -165,6 +166,47 @@ describe('redactSqlForEvidence', () => {
     expect(red.length).toBeLessThanOrEqual(40)
     expect(red.endsWith('…')).toBe(true)
   })
+
+  test('removes SQL comments before persisting evidence', () => {
+    const red = redactSqlForEvidence(
+      'SELECT 0 -- /Users/operator/private.sql\n/* password=hunter2 */ FROM users'
+    )
+    expect(red).not.toContain('/Users/operator')
+    expect(red).not.toContain('hunter2')
+  })
+
+  test('removes an unterminated SQL block comment', () => {
+    const red = redactSqlForEvidence('SELECT 0 /* /Users/operator/private.sql')
+    expect(red).toBe('SELECT 0')
+  })
+})
+
+describe('redactArtifactText', () => {
+  test('redacts credentials and filesystem paths from user-controlled labels', () => {
+    const red = redactArtifactText('password=hunter2 at /Users/operator/private.sql')
+    expect(red).not.toContain('hunter2')
+    expect(red).not.toContain('/Users/operator')
+  })
+
+  test('redacts UNC paths and authorization credentials', () => {
+    const red = redactArtifactText(
+      String.raw`Authorization: Bearer abc123 at \\server\share\private.sql`
+    )
+    expect(red).not.toContain('abc123')
+    expect(red).not.toContain('server')
+  })
+
+  test('redacts file URLs, punctuation-prefixed paths, and quoted bearer credentials', () => {
+    expect(redactArtifactText('file:///Users/operator/private.sql')).toBe('<redacted>')
+    expect(redactArtifactText('file,/Users/operator/private.sql')).toBe('<redacted>')
+    expect(redactArtifactText('Authorization: Bearer "abc123"')).toBe('<redacted>')
+    expect(redactArtifactText('Basic dXNlcjpwYXNz')).toBe('<redacted>')
+  })
+
+  test('preserves slash-bearing labels that are not filesystem paths', () => {
+    expect(redactArtifactText('batch/001')).toBe('batch/001')
+    expect(redactArtifactText('batch/002')).toBe('batch/002')
+  })
 })
 
 describe('buildAfterWriteCommand', () => {
@@ -255,7 +297,7 @@ describe('runSafeBackfillPreflight', () => {
     expect(result.afterWriteCommand).toContain('--after-write')
   })
 
-  test('a failing guard short-circuits, returns blocked with a bounded reason', async () => {
+  test('a failing guard returns blocked after reporting every guard', async () => {
     const input = normalizeSafeBackfillInput({ ...PRE_RAW })
     const result = await runSafeBackfillPreflight(
       input,
@@ -264,8 +306,12 @@ describe('runSafeBackfillPreflight', () => {
       })
     )
     expect(result.status).toBe('blocked')
-    // blacklist passed, schema failed, plan + readonly never ran (short-circuit).
-    expect(result.guards.map((g) => g.name)).toEqual(['blacklist', 'schema'])
+    expect(result.guards.map((g) => g.name)).toEqual([
+      'blacklist',
+      'schema',
+      'plan',
+      'verify-query-readonly',
+    ])
     const schema = result.guards.find((g) => g.name === 'schema')
     expect(schema?.status).toBe('failed')
     expect(schema?.reason).toContain('does not exist')
@@ -338,19 +384,28 @@ describe('runSafeBackfillAfterWrite', () => {
 
   test('failing guard -> blocked, artifact has blockedReason and no assert evidence', async () => {
     const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    let assertionCalled = false
     const result = await runSafeBackfillAfterWrite(
       input,
       passingRunners({
         planGuard: async () => ({ ok: false, reason: 'plan blocked the write (no WHERE)' }),
+        runAssertion: async () => {
+          assertionCalled = true
+          return { ran: true, pass: true }
+        },
       }),
       FIXED
     )
     expect(result.status).toBe('blocked')
     expect(result.blockedReason).toContain('plan blocked the write')
     expect(result.artifact.status).toBe('blocked')
-    expect(result.artifact.blockedReason).toContain('plan blocked the write')
+    expect(result.guards).toHaveLength(4)
+    expect(result.artifact.blockedReason).toBe(
+      'A required guard failed before the read-back assertion.'
+    )
     expect(result.artifact.evidence.some((e) => e.kind === 'assert')).toBe(false)
     expect(result.assertion).toBeUndefined()
+    expect(assertionCalled).toBe(false)
   })
 
   test('assertion engine error (ran=false) -> indeterminate', async () => {
@@ -367,6 +422,23 @@ describe('runSafeBackfillAfterWrite', () => {
     expect(result.assertion).toBeUndefined()
   })
 
+  test('artifact does not persist arbitrary runner error details', async () => {
+    const input = normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true })
+    const result = await runSafeBackfillAfterWrite(
+      input,
+      passingRunners({
+        runAssertion: async () => ({
+          ran: false,
+          reason: 'password=hunter2 at /Users/operator/private/query.sql',
+        }),
+      }),
+      FIXED
+    )
+    const blob = JSON.stringify(result.artifact)
+    expect(blob).not.toContain('hunter2')
+    expect(blob).not.toContain('/Users/operator')
+  })
+
   test('--subject-name overrides the artifact subject name', async () => {
     const input = normalizeSafeBackfillInput({
       ...PRE_RAW,
@@ -375,6 +447,46 @@ describe('runSafeBackfillAfterWrite', () => {
     })
     const result = await runSafeBackfillAfterWrite(input, passingRunners(), FIXED)
     expect(result.artifact.subject.name).toBe('nightly')
+  })
+
+  test('keeps distinct slash-bearing subject names distinct', async () => {
+    const first = await runSafeBackfillAfterWrite(
+      normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true, subjectName: 'batch/001' }),
+      passingRunners(),
+      FIXED
+    )
+    const second = await runSafeBackfillAfterWrite(
+      normalizeSafeBackfillInput({ ...PRE_RAW, afterWrite: true, subjectName: 'batch/002' }),
+      passingRunners(),
+      FIXED
+    )
+    expect(first.artifact.subject.name).toBe('batch/001')
+    expect(second.artifact.subject.name).toBe('batch/002')
+  })
+
+  test('artifact redacts unsafe subject, summary, SQL comments, and audit references', async () => {
+    const input = normalizeSafeBackfillInput({
+      ...PRE_RAW,
+      afterWrite: true,
+      subjectName: '/Users/operator/private.sql',
+      summary: 'Authorization: Bearer abc123',
+      verifyQuery: 'SELECT 0 /* /Users/operator/private.sql',
+    })
+    const result = await runSafeBackfillAfterWrite(
+      input,
+      passingRunners({
+        runAssertion: async () => ({
+          ran: true,
+          pass: true,
+          auditRef: String.raw`\\server\share\audit.json`,
+        }),
+      }),
+      FIXED
+    )
+    const blob = JSON.stringify(result.artifact)
+    expect(blob).not.toContain('abc123')
+    expect(blob).not.toContain('/Users/operator')
+    expect(blob).not.toContain('server')
   })
 
   test('evidence carries no raw rows or connection details', async () => {

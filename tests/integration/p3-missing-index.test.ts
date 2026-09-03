@@ -94,7 +94,7 @@ function runFor(system: SqlDatabaseSystem, opts: SqlConnectionOptions, available
           parseSelect,
           extract,
           getExistingIndexes: makeIndexIntrospector(adapter),
-          enrich: makeExplainEnricher(system, adapter),
+          enrich: makeExplainEnricher(system, adapter, 'normal'),
         },
         {}
       )

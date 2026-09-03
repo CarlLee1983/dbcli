@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-const read = async (path: string): Promise<string> => Bun.file(path).text()
+// Windows checks out CRLF, so line endings are not part of what these
+// claims assert.
+const read = async (path: string): Promise<string> =>
+  (await Bun.file(path).text()).replace(/\r\n/g, '\n')
 
 const commandStrings = [
   'dbcli diff --against-orm prisma/schema.prisma --format json',
@@ -93,6 +96,20 @@ describe('ORM drift documentation contract', () => {
       '--param "ddl=${captured_ddl}"',
     ]) {
       expect(reference).toContain(text)
+    }
+  })
+
+  test('every documented surface states that malformed JSON artifacts fail closed', async () => {
+    const surfaces = [
+      { path: 'docs/user/en/index.md', marker: 'that is not valid JSON' },
+      { path: 'docs/user/en/index.html', marker: 'that is not valid JSON' },
+      { path: 'docs/user/zh-TW/index.md', marker: '不是合法 JSON' },
+      { path: 'docs/user/zh-TW/index.html', marker: '不是合法 JSON' },
+      { path: 'assets/reference.md', marker: 'names the offending file' },
+    ] as const
+
+    for (const { path, marker } of surfaces) {
+      expect(await read(path)).toContain(marker)
     }
   })
 

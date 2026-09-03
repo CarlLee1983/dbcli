@@ -17,7 +17,11 @@ the completion authority.
 2. Extract the Goal, in-scope behavior, out-of-scope boundary, inputs, outputs,
    business rules, expected errors, constraints, and every acceptance item. The
    implementation contract is complete when each acceptance item maps to an
-   observable behavior or verification check.
+   observable behavior or verification check. When the Story is security
+   sensitive, treat every row of its security fixture matrix as a required case
+   with an exact payload and expected persisted output; when it declares
+   superseded behavior, change the named tests deliberately instead of treating
+   the conflict as a defect.
 3. Read the repository agent guide and inspect the relevant architecture, code,
    tests, dependencies, and documented commands. Project tooling is the source
    of truth for technology-specific mechanics.
@@ -55,6 +59,11 @@ After PASS, report:
 - the exact verification command and result
 - assumptions
 - remaining risks
+
+When the work changes hands, record the handoff lifecycle block: exactly one
+current Story, exactly one next Story or `pending`, completed Story IDs, the
+repository baseline commit and worktree state, and the last verification command
+and result. State that selection is pending rather than implying it by ordering.
 
 If specification-blocked, report the conflicting or missing requirement,
 evidence already inspected, and the smallest human decision needed. Do not

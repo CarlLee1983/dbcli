@@ -234,7 +234,9 @@ A customer with a paid order in the trailing 30 days.
 `)
   })
 
-  test('fails closed for unknown or noncanonical subjects and markdown-shaped text', async () => {
+  // DBCLI-011 R1: a noncanonical subject is now a form issue, so the two
+  // subjects below fail for two different, separately actionable reasons.
+  test('fails closed for malformed subjects, unknown subjects, and markdown-shaped text', async () => {
     const filePath = await writeContracts({
       ...contractFile,
       contracts: [
@@ -248,7 +250,9 @@ A customer with a paid order in the trailing 30 days.
 
     await expect(
       loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
-    ).rejects.toThrow(/bounded plain text.*available semantic entity.*available semantic entity/)
+    ).rejects.toThrow(
+      /bounded plain text.*supported semantic subject reference form.*available semantic entity/
+    )
   })
 
   test('uses semantic blacklist boundaries instead of substring matching plain text', async () => {
@@ -271,6 +275,150 @@ A customer with a paid order in the trailing 30 days.
         blockedTerms: ['order'],
       })
     ).resolves.toHaveLength(1)
+  })
+
+  test('reports an unsupported property without reproducing the rejected key', async () => {
+    const seededKey = 'SECRET-9f21-/Users/example/private/leak.txt'
+    const filePath = await writeContracts({
+      ...contractFile,
+      [seededKey]: 'x',
+      contracts: [{ ...contractFile.contracts[0], [seededKey]: 'x' }],
+    })
+
+    const report = await inspectSemanticContractDrift({
+      workspaceRoot: workspace!,
+      filePath,
+      references,
+    })
+
+    expect(report.status).toBe('invalid')
+    expect(JSON.stringify(report)).not.toContain(seededKey)
+    expect(JSON.stringify(report)).not.toContain('SECRET')
+    expect(report.issues.map((entry) => entry.path)).toEqual(['$', '$.contracts[0]'])
+    expect(report.issues[0]?.message).toContain('version, contracts')
+
+    await expect(
+      loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
+    ).rejects.toThrow(/must contain only/)
+  })
+
+  test('classifies an unsupported subject form as invalid rather than stale', async () => {
+    const seededSubject = 'table:customers--DROP'
+    const filePath = await writeContracts({
+      ...contractFile,
+      contracts: [{ ...contractFile.contracts[0], subjects: [seededSubject] }],
+    })
+
+    const report = await inspectSemanticContractDrift({
+      workspaceRoot: workspace!,
+      filePath,
+      references,
+    })
+
+    expect(report.status).toBe('invalid')
+    expect(JSON.stringify(report)).not.toContain(seededSubject)
+    expect(report.issues).toEqual([
+      {
+        path: '$.contracts[0].subjects[0]',
+        message: 'must use a supported semantic subject reference form',
+      },
+    ])
+  })
+
+  test('keeps a well-formed but absent subject stale, not invalid', async () => {
+    const filePath = await writeContracts({
+      ...contractFile,
+      contracts: [{ ...contractFile.contracts[0], subjects: ['model:renamed-customers'] }],
+    })
+
+    await expect(
+      inspectSemanticContractDrift({ workspaceRoot: workspace!, filePath, references })
+    ).resolves.toEqual({
+      status: 'stale',
+      issues: [
+        {
+          path: '$.contracts[0].subjects[0]',
+          message: 'must reference an available semantic entity',
+        },
+      ],
+    })
+  })
+
+  test('accepts every field subject the semantic registry can emit', async () => {
+    // Column names come from the visible schema, not from an identifier
+    // grammar: hyphens, dots, and non-ASCII all reach the registry. A form
+    // check narrower than this would fail an artifact that is not stale.
+    const registryEmitted = [
+      'field:orders.first-name',
+      'field:orders.user.email',
+      'field:orders.cr\u00e9\u00e9',
+      'field:orders.created_at',
+    ]
+    const filePath = await writeContracts({
+      ...contractFile,
+      contracts: [{ ...contractFile.contracts[0], subjects: registryEmitted }],
+    })
+
+    await expect(
+      inspectSemanticContractDrift({
+        workspaceRoot: workspace!,
+        filePath,
+        references: new Set(registryEmitted),
+      })
+    ).resolves.toEqual({ status: 'valid', issues: [] })
+  })
+
+  test('reports a malformed subject once, not twice', async () => {
+    const filePath = await writeContracts({
+      ...contractFile,
+      contracts: [{ ...contractFile.contracts[0], subjects: ['table:customers'] }],
+    })
+
+    try {
+      await loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
+      throw new Error('expected validation failure')
+    } catch (error) {
+      expect(error).toBeInstanceOf(SemanticContractValidationError)
+      expect((error as SemanticContractValidationError).issues).toEqual([
+        {
+          path: '$.contracts[0].subjects[0]',
+          message: 'must use a supported semantic subject reference form',
+        },
+      ])
+    }
+  })
+
+  test('still names a protected identifier when the subject form is also wrong', async () => {
+    const filePath = await writeContracts({
+      ...contractFile,
+      contracts: [{ ...contractFile.contracts[0], subjects: ['table:secrets'] }],
+    })
+
+    await expect(
+      inspectSemanticContractDrift({
+        workspaceRoot: workspace!,
+        filePath,
+        references,
+        blockedTerms: ['secrets'],
+      })
+    ).resolves.toMatchObject({
+      status: 'invalid',
+      issues: [
+        {
+          path: '$.contracts[0].subjects[0]',
+          message: 'must use a supported semantic subject reference form',
+        },
+      ],
+    })
+
+    await expect(
+      loadSemanticContracts({
+        workspaceRoot: workspace!,
+        filePath,
+        references,
+        blockedTerms: ['secrets'],
+      })
+    ).rejects.toThrow(/protected semantic reference/)
   })
 
   test('sorts approved contracts at the public filtering seam', () => {

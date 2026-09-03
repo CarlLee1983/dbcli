@@ -12,6 +12,14 @@ The HTML dashboard already presents query results, charts, truncation, and
 redaction notices. Sharing the standalone output needs a narrowly defined,
 non-secret provenance contract rather than an execution transcript.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope

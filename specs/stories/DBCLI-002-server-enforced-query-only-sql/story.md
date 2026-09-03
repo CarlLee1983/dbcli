@@ -19,6 +19,14 @@ The database must therefore provide the final read-only enforcement boundary
 for SQL execution. Existing classifier, blacklist, hidden-write, and
 multi-statement checks remain earlier defense layers.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: yes
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope
@@ -99,3 +107,16 @@ multi-statement checks remain earlier defense layers.
 * Do not add or upgrade dependencies.
 * Preserve existing CI checks and use `make verify` as the completion gate.
 * Tests must distinguish an unavailable test environment from a passing result.
+
+## Trust Boundary Fields
+
+* Caller-controlled SQL statement text submitted through the `query` command, e.g. `SELECT dbcli_query_only_boundary_mutate()`.
+* Caller-controlled SQL statement text submitted through the `export` command.
+* Caller-controlled SQL statement text submitted through saved-query execution and verification, read from `.dbcli/queries/*.sql`.
+* Caller-controlled SQL statement text submitted through report diagnostics via `runDiagnostic`.
+* Caller-controlled SQL statement text submitted through the SQL shell via `ReplEngine.processInput`.
+* Caller-controlled SQL statement text submitted through analyzed explain plans via `runQueryExplain` with `executionMode: 'native-read-only'`.
+* Caller-controlled SQL statement text submitted through multi-connection fan-out via `connectionSelector`, including connections with a stored `permission: 'admin'` that is narrowed at execution time.
+* The connection `permission` configuration value, one of `query-only`, `read-write`, `data-admin`, or `admin`.
+* Caller-controlled transaction or session-default statements that could weaken a later statement's boundary, e.g. `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE`.
+* Driver error text surfaced when a persistent write is rejected, e.g. the `ConnectionError.code` value `QUERY_ONLY_BOUNDARY_FAILED`.

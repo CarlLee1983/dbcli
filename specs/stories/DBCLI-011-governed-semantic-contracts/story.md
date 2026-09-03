@@ -17,6 +17,14 @@ The repository already exposes this workflow. This baseline-conformance Story
 formalizes the published Pages contract: execution begins by verifying current
 behavior and changes code only where an acceptance criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -82,3 +90,18 @@ behavior and changes code only where an acceptance criterion fails.
 * Preserve the offline, non-executable safety boundary.
 * Do not add dependencies or broaden database permissions.
 * Use focused tests first and `make verify` as the completion gate.
+
+## Superseded Behavior
+
+* `tests/unit/core/contracts/contracts.test.ts` — its validation, status, and
+  evidence-policy assertions are the baseline; this Story's R1, R2, and R6
+  take precedence where an accepted/rejected contract field differs.
+* `tests/unit/commands/contracts.test.ts` — its inspect/search/drift command
+  assertions are the baseline; R2–R5 take precedence where a command's
+  offline/read-only or context-filtering outcome differs.
+* `docs/guides/en/semantic-contracts.html` — its published contract-review
+  narrative is the baseline; this Story's Rules take precedence where a
+  documented step or boundary differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  semantic-contract usage descriptions are the baseline; this Story's Rules
+  take precedence where documented behavior differs.

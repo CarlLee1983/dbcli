@@ -21,6 +21,14 @@ meaning; the external agent reads that code directly. dbcli exposes validated
 repository declarations and semantic references, but not project source paths or
 contents.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: yes
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope
@@ -196,3 +204,19 @@ file is at most 512 KiB.
 * Do not add or upgrade dependencies.
 * Keep English and Traditional Chinese Markdown and HTML documentation aligned.
 * Preserve existing CI checks and use `make verify` as the completion gate.
+
+## Trust Boundary Fields
+
+* Repository-authored SQL, Elasticsearch, and Redis resource `name` values checked for unsafe or blocked text, e.g. a table named `audit_logs`.
+* Repository-authored `aliases` on Redis key families and fields, e.g. `sessions`.
+* Repository-authored `description` values on Redis key families, fields, snippets, and contracts, e.g. `Current session metadata.`.
+* Repository-authored snippet `intent` values, e.g. `customer.activity`.
+* Repository-authored contract `owner` values.
+* Repository-authored snippet `parameters` names and types, excluding parameter defaults.
+* Repository-authored Redis `pattern` values matched against `blacklist.tables` and `redis.mask[].keyPattern` globs, e.g. `session:{user_id}`.
+* Repository-authored semantic, contract, snippet, and data-access identifiers checked for blocked terms, e.g. `model:users` and `field:users.email`.
+* The cached SQL schema file consumed as evidence, including `estimatedRowCount`, column `default`, and `comment` values that must not reach the payload.
+* The cached Elasticsearch mapping file, including `_meta`, `settings`, `scripts`, and `analyzers` that must not reach the payload.
+* Saved-query files under `.dbcli/queries/*.sql`, including their query body text that must not reach the payload.
+* Data-access manifest declarations and their `source` path metadata, e.g. the `dataAccess[].name` and `dataAccess[].semanticReferences` fields, which are parsed and stat-validated but never read or emitted as file contents.
+* Credentials present in `dbcli.config.json`, which must never be used to construct an adapter or open a connection during context collection.

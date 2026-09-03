@@ -16,6 +16,14 @@ The repository already exposes this workflow. This baseline-conformance Story
 formalizes the published Pages contract: execution begins by verifying current
 behavior and changes code only where an acceptance criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -83,3 +91,22 @@ behavior and changes code only where an acceptance criterion fails.
 * Update `docs/user/en/` and `docs/user/zh-TW/`, keeping each Markdown/HTML
   pair in parity when behavior or commands change.
 * Use focused Bun tests and `make verify` for completion.
+
+## Superseded Behavior
+
+* `tests/integration/verify-safe-backfill-command.test.ts` — its preflight
+  `ready`/`blocked` and after-write `verified`/`not_verified`/`indeterminate`
+  assertions are the baseline; the acceptance criteria in this Story take
+  precedence where a guard or assertion outcome differs.
+* `tests/unit/core/verify/safe-backfill.test.ts` — its guard-ordering and
+  read-only read-back assertions are the baseline; this Story's R2–R6 take
+  precedence where a guard outcome differs.
+* `tests/unit/core/backfill-artifact.test.ts` — its result-artifact field
+  assertions are the baseline; R7's bounded, literal-free evidence rule takes
+  precedence where the artifact contract differs.
+* `docs/guides/en/safe-backfill.html` — its published preflight/write/result
+  narrative is the baseline; this Story's Rules take precedence where a
+  documented step or boundary differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  `verify safe-backfill` usage descriptions are the baseline; this Story's
+  Rules take precedence where documented behavior differs.

@@ -15,6 +15,14 @@ The repository already exposes this workflow. This baseline-conformance Story
 formalizes the published Pages contract: execution begins by verifying current
 behavior and changes code only where an acceptance criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -88,3 +96,21 @@ behavior and changes code only where an acceptance criterion fails.
 * Update `docs/user/en/` and `docs/user/zh-TW/`, keeping each Markdown/HTML
   pair in parity when behavior or supported formats change.
 * Use focused Bun tests and `make verify` for completion.
+
+## Superseded Behavior
+
+* `tests/unit/commands/diff-against-orm.test.ts` — its mode-exclusivity and
+  input-validation assertions are the baseline; this Story's R1–R5 take
+  precedence where an accepted/rejected input differs.
+* `tests/unit/agent-tasks/pack-orm-drift-review.test.ts` — its task-pack
+  guidance for the offline ORM-drift review is the baseline; this Story's
+  Rules take precedence where documented workflow behavior differs.
+* `tests/unit/skill-assets/orm-drift-docs.test.ts` — its documented parser
+  support and TypeScript-source rejection assertions are the baseline; R4
+  takes precedence where the required alternative artifact differs.
+* `docs/guides/en/orm-schema-drift.html` — its published offline
+  ORM-comparison narrative is the baseline; this Story's Rules take
+  precedence where a documented step or boundary differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  `diff --against-orm` usage descriptions are the baseline; this Story's
+  Rules take precedence where documented behavior differs.

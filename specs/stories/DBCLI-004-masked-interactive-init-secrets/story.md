@@ -21,6 +21,14 @@ MongoDB driver errors may also reproduce the resolved connection URI. Masking
 input is therefore incomplete unless init connection-test failures redact the
 same credentials before writing an error to the terminal.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: yes
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope
@@ -115,3 +123,15 @@ same credentials before writing an error to the terminal.
 * Do not print, log, snapshot, or include test canary secrets in failure output.
 * Keep English and Traditional Chinese Markdown and HTML documentation aligned.
 * Preserve existing CI checks and use `make verify` as the completion gate.
+
+## Trust Boundary Fields
+
+* Interactive password prompt for the shared PostgreSQL, MySQL, MariaDB, Redis, and Elasticsearch init flow, e.g. the label `password`.
+* Interactive `Password` prompt for the MongoDB field-based init flow.
+* Interactive `連線字串` (connection string) prompt for the MongoDB full-URI init flow, which may embed a credential.
+* The explicit `--password` flag value.
+* The explicit `--uri` flag value, which may embed a credential.
+* Parsed `.env` and process environment credentials consumed as a non-prompt password source.
+* Environment-reference names supplied through `--use-env-refs`, e.g. `DB_PASSWORD`, which remain visible text distinct from the referenced secret value.
+* Driver connection-test error messages and hints that may reproduce the entered password or full MongoDB URI, redacted via `redactSecretsForDisplay`.
+* The `maskedInputUnavailableError` guidance text and any underlying loader error it must not reproduce.

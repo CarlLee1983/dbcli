@@ -65,3 +65,24 @@ the prompt boundary for focused routing and failure tests, and verify that the
 existing masked primitive is invoked with no plaintext fallback. Do not add a
 PTY dependency solely for this Story. Never print the canary in an assertion
 message.
+
+## Security Fixture Matrix
+
+| Source field | Payload | Expected result | Persisted locations | Verification |
+| --- | --- | --- | --- | --- |
+| Interactive `password` prompt for PostgreSQL, MySQL, MariaDB, Redis, and Elasticsearch init | `Sup3r-Canary-Pw` | redact | `stdout`, `stderr` | `tests/unit/commands/init-masked-secrets.test.ts::${system} routes the password through the masked prompt and never echoes it` |
+| Interactive `password` prompt config write for PostgreSQL, MySQL, MariaDB, Redis, and Elasticsearch init | `Sup3r-Canary-Pw` | preserve | `.dbcli/connections.json#connection.password` | `tests/unit/commands/init-masked-secrets.test.ts::${system} routes the password through the masked prompt and never echoes it` |
+| Interactive `Password` prompt for MongoDB field-based init | `Sup3r-Canary-Pw` | redact | `stdout` | `tests/unit/commands/init-masked-secrets.test.ts::MongoDB field mode masks the password` |
+| Interactive `連線字串` prompt for MongoDB URI-based init | `mongodb://app:Sup3r-Canary-Pw@db.example.com:27017/shop` | redact | `stdout` | `tests/unit/commands/init-masked-secrets.test.ts::MongoDB URI mode masks the pasted connection string` |
+| Interactive `連線字串` prompt config write for MongoDB URI-based init | `mongodb://app:Sup3r-Canary-Pw@db.example.com:27017/shop` | preserve | `.dbcli/connections.json#connection.uri` | `tests/unit/commands/init-masked-secrets.test.ts::MongoDB URI mode masks the pasted connection string` |
+| Explicit `--password` flag value | `Sup3r-Canary-Pw` | preserve | `.dbcli/connections.json#connection.password` and stdout absence | `tests/unit/commands/init-masked-secrets.test.ts::--password is kept and never re-asked` |
+| Explicit `--uri` flag value for MongoDB | `mongodb://app:Sup3r-Canary-Pw@db.example.com:27017/shop` | preserve | `.dbcli/connections.json#connection.uri` | `tests/unit/commands/init-masked-secrets.test.ts::MongoDB --uri skips the setup-mode and URI prompts` |
+| `--use-env-refs` password field | `DB_PASSWORD` | preserve | `.dbcli/connections.json#connection.password` as `{ $env: 'DB_PASSWORD' }` | `tests/unit/commands/init-masked-secrets.test.ts::env-ref mode asks for variable names in the clear and never a value` |
+| `redactSecretsForDisplay` on a SQL driver connection-test error quoting the password | `password authentication failed: Sup3r-Canary-Pw` | redact | `stdout`, `stderr` showing `<redacted>` | `tests/unit/commands/init-masked-secrets.test.ts::a SQL driver error quoting the password is redacted` |
+| `redactSecretsForDisplay` on a MongoDB driver connection-test error reproducing the full URI | `connect ECONNREFUSED for mongodb://app:Sup3r-Canary-Pw@db.example.com:27017/shop` | redact | `stdout`, `stderr` | `tests/unit/commands/init-masked-secrets.test.ts::a MongoDB driver error reproducing the URI is redacted` |
+| `secret()` prompt call attempted on a non-TTY `process.stdin` | `Sup3r-Canary-Pw` typed answer never reached by the mocked failing prompt | reject | stdout, stderr, `.dbcli/connections.json` (not written) | `tests/unit/commands/init-masked-secrets.test.ts::a non-TTY run stops before writing rather than reading plaintext` |
+| `maskedInputUnavailableError` guidance and underlying loader error | `bundler stripped @inquirer/prompts` | omit | `stdout` | `tests/unit/commands/init-masked-secrets.test.ts::an unavailable masked prompt names a supported input and not --stdin` |
+| `secret()` prompt rejection on cancellation | `User force closed the prompt` | preserve | `stdout` showing cancellation, `.dbcli/connections.json` (not written) | `tests/unit/commands/init-masked-secrets.test.ts::cancelling the masked prompt propagates and writes nothing` |
+| `redactSecretsForDisplay` embedded MongoDB URI credential | `mongodb://app:hunter2@db:27017/shop` | redact | function return value (`hunter2` absent) | `tests/unit/utils/masked-secret-input.test.ts::still applies the shared credential patterns` |
+| `redactSecretsForDisplay` caller-collected literal secret | `Sup3rSecretCanary` | redact | function return value containing `<redacted>` | `tests/unit/utils/masked-secret-input.test.ts::removes a literal secret the caller collected` |
+| `maskedInputUnavailableError` raw loader error text | `ENOENT Sup3rSecretCanary` | omit | `error.message` | `tests/unit/utils/masked-secret-input.test.ts::never reproduces a raw loader error` |

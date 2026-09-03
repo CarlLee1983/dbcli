@@ -53,3 +53,20 @@ Run focused unit and Docker-backed SQL integration tests before `make verify`.
 The fixture routine must prove both rejection and unchanged persistent state. If
 any required database service is unavailable, report the environment blocker and
 do not claim complete PASS.
+
+## Security Fixture Matrix
+
+| Source field | Payload | Expected result | Persisted locations | Verification |
+| --- | --- | --- | --- | --- |
+| `query` command SQL statement (`sqlMode: 'native-read-only'`) invoking a write-capable routine | `SELECT dbcli_query_only_boundary_mutate()` | reject | `dbcli_query_only_boundary_fixture` table row count | `tests/integration/query-only-server-enforcement.test.ts` |
+| PostgreSQL native boundary setup (`BEGIN READ ONLY`) rejected by the server | `read-only transactions disabled` | reject | `ConnectionError.code` value `QUERY_ONLY_BOUNDARY_FAILED` | `tests/unit/adapters/query-only-boundary.test.ts::PostgreSQL fails closed when BEGIN READ ONLY is rejected` |
+| Caller `weakenDefault` session-default statement before a target statement | `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` | preserve | `dbcli_query_only_boundary_fixture` table row count | `tests/integration/query-only-server-enforcement.test.ts` |
+| `pool.connect()` transport failure during boundary setup | `Connection terminated unexpectedly` | reject | `ConnectionError.code` value `CONNECTION_LOST` | `tests/unit/adapters/query-only-boundary.test.ts::PostgreSQL preserves no-code transport failures during boundary setup` |
+| `ROLLBACK` cleanup failure after the target statement already ran | `socket closed during rollback` | reject | error message fragment `target completed` and hint fragment `target statement ran` | `tests/unit/adapters/query-only-boundary.test.ts::PostgreSQL reports that the target ran when rollback fails` |
+| `adapter.execute` retried after `ECONNRESET` during REPL reconnect | `SELECT 1;` | preserve | `adapter.execute` call arguments `{ sqlMode: 'native-read-only' }` on both attempts | `tests/core/repl/repl-engine.test.ts::reconnect retry re-establishes query-only mode before executing again` |
+| `q` command saved-snippet CTE statement on a query-only connection | `WITH src AS (SELECT 1 AS dau) SELECT dau FROM src;` | preserve | `mock.lastSql` | `tests/unit/commands/q.test.ts::read-only CTE snippet still reaches the adapter on a query-only connection` |
+| Fan-out connection stored with `permission: 'admin'` | `SELECT 1` via `connectionSelector: 'primary,staging'` | preserve | `adapters.primary.sqlModes` and `adapters.staging.sqlModes` equal `['native-read-only']` | `tests/unit/commands/query-fanout.test.ts::narrows admin-stored fan-out connections to the native query-only boundary` |
+| `runQueryExplain` `executionMode` forwarded to `adapter.execute` | `SELECT 1` with `executionMode: 'native-read-only'` | preserve | `sqlMode` captured by the adapter's `execute` wrapper | `tests/unit/core/explain/runner.test.ts::runQueryExplain: forwards native read-only mode to analyzed execution` |
+| `runDiagnostic` execution on a `permission: 'query-only'` connection | snippet executed with `permission: 'query-only'` | preserve | `sqlMode` captured by the adapter's `execute` wrapper | `tests/unit/core/report/run-diagnostic.test.ts::uses the native boundary for query-only SQL diagnostics` |
+| Direct execution on a non-`query-only` connection | `INSERT INTO t VALUES (1)` with `sqlMode: 'normal'` | preserve | ordered adapter `calls` array | `tests/unit/adapters/query-only-boundary.test.ts::normal mode preserves direct execution without transaction setup` |
+| Source file `adapter.execute(` call sites scanned by `REGISTERED_PATHS` | the repository's actual `.execute(` call-site count per file | preserve | `REGISTERED_PATHS` gate map compared against `findExecutionPaths()` | `tests/unit/core/execution-path-contract.test.ts::no adapter execution happens outside a registered path` |

@@ -18,6 +18,14 @@ The repository already exposes this workflow. This baseline-conformance Story
 formalizes the published Pages contract: execution begins by verifying current
 behavior and changes code only where an acceptance criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -104,3 +112,25 @@ behavior and changes code only where an acceptance criterion fails.
 * Keep `docs/user/en/index.md`, `docs/user/en/index.html`,
   `docs/user/zh-TW/index.md`, and `docs/user/zh-TW/index.html` aligned.
 * Use `make verify` as the completion gate.
+
+## Superseded Behavior
+
+* `tests/unit/core/evidence-pack/evidence-pack.test.ts` — its canonical
+  structure, digest, and identity assertions are the baseline; this Story's
+  R1, R3, and R5 take precedence where a validated pack field differs.
+* `tests/unit/core/evidence-pack/evidence-pack-legacy.test.ts` — its
+  legacy/unsupported classification assertions are the baseline; R6 takes
+  precedence where current-valid-versus-legacy classification differs.
+* `tests/integration/evidence-command.test.ts` — its `evidence compose`,
+  `evidence validate`, and `evidence render` command-behavior assertions are
+  the baseline; this Story's Rules take precedence where a command outcome
+  differs.
+* `tests/integration/evidence-legacy-command.test.ts` — its legacy-pack
+  handling assertions are the baseline; R6's no-migration rule takes
+  precedence where legacy-pack behavior differs.
+* `docs/guides/en/evidence-packs.html` — its published review/handoff and
+  claims-versus-references narrative is the baseline; this Story's Rules take
+  precedence where a documented step or boundary differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  evidence-pack usage descriptions are the baseline; this Story's Rules take
+  precedence where documented behavior differs.

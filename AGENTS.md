@@ -125,8 +125,12 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 When implementation is assigned by Story ID or from `specs/stories/`, use the
 repository-local `story-development` Skill and:
 
-1. Read the approved `story.md` and `acceptance.md`; treat `task.md` only as
-   optional progress context.
+1. Read the approved `story.md` and `acceptance.md`, including the Story's
+   Classification and, when present, its security fixture matrix (every row
+   is a required case with an exact payload and expected persisted output) and
+   superseded behavior (change the named tests deliberately instead of
+   treating the conflict as a defect); treat `task.md` only as optional
+   progress context.
 2. Inspect the relevant existing code and implement the smallest coherent
    in-scope change.
 3. Add or update tests for changed behavior.
@@ -142,6 +146,12 @@ explicit human instruction.
 
 The completion report must list changed files, implementation and test changes,
 the exact verification result, assumptions, and remaining risks.
+
+When work changes hands, record the handoff lifecycle block in
+`specs/handoff.md`: exactly one current Story, exactly one next Story or
+`pending`, completed Story IDs, the repository baseline commit and worktree
+state, and the last verification command and result. Never leave the next Story
+to be inferred from list order.
 
 ## dbcli Usage Guidelines
 

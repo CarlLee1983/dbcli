@@ -13,6 +13,14 @@ before explain or index guidance. The existing `slow-endpoint-investigation`
 task pack connects proxy, explain, and missing-index evidence but has no table
 parameter or schema step, so it does not yet encode the published sequence.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: no
+
 ## Scope
 
 ### In Scope

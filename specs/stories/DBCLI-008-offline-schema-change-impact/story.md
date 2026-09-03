@@ -19,6 +19,14 @@ formalizes the aligned user-documentation contract and requires the English and
 Traditional Chinese Pages guides to converge where their details currently
 differ. Execution changes code only where an acceptance criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -98,3 +106,21 @@ differ. Execution changes code only where an acceptance criterion fails.
 * Keep `docs/user/en/index.md`, `docs/user/en/index.html`,
   `docs/user/zh-TW/index.md`, and `docs/user/zh-TW/index.html` aligned.
 * Use `make verify` as the completion gate.
+
+## Superseded Behavior
+
+* `tests/unit/commands/impact.test.ts` — its baseline-exclusivity and
+  report-shape assertions are the baseline; this Story's R1–R6 take
+  precedence where a validated report field or exit status differs.
+* `tests/unit/core/impact/impact.test.ts` — its correlation and coverage-gap
+  assertions are the baseline; R4's `declared`/`partial` coverage rule takes
+  precedence where reported coverage differs.
+* `tests/unit/core/workload-impact/workload-impact.test.ts` — its
+  redaction-first workload-projection assertions are the baseline; R3 takes
+  precedence where retained workload metadata differs.
+* `docs/guides/en/offline-impact-assessment.html` — its published offline,
+  incomplete-by-design narrative is the baseline; this Story's Rules take
+  precedence where a documented step or boundary differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  `impact assess` usage descriptions are the baseline; this Story's Rules take
+  precedence where documented behavior differs.

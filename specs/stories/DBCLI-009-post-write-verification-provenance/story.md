@@ -20,6 +20,14 @@ baseline-conformance Story formalizes the published Pages contract: execution
 begins by verifying current behavior and changes code only where an acceptance
 criterion fails.
 
+## Classification
+
+Both declarations are required. `yes` makes the matching section below
+mandatory.
+
+* Security sensitive: no
+* Baseline conformance: yes
+
 ## Scope
 
 ### In Scope
@@ -104,3 +112,26 @@ criterion fails.
 * Keep `docs/user/en/index.md`, `docs/user/en/index.html`,
   `docs/user/zh-TW/index.md`, and `docs/user/zh-TW/index.html` aligned.
 * Use `make verify` as the completion gate.
+
+## Superseded Behavior
+
+* `tests/unit/commands/verify-receipt.test.ts` — its receipt-creation and
+  field-allowlist assertions are the baseline; this Story's R5–R8 take
+  precedence where an accepted/rejected receipt field differs.
+* `tests/unit/core/evidence-receipt/evidence-receipt.test.ts` — its
+  provenance-hash and atomic-write assertions are the baseline; R5 and R6
+  take precedence where write-safety behavior differs.
+* `tests/unit/core/evidence-receipt/evidence-receipt-legacy.test.ts` — its
+  legacy-receipt field-compatibility assertions are the baseline; R8's exact
+  versioned allowlist takes precedence where legacy-field handling differs.
+* `tests/integration/verify-safe-backfill-command.test.ts` — its receipt
+  ordering relative to the underlying verifier's outcome is the baseline;
+  R1, R3, and R7 take precedence where preflight-versus-authoritative receipt
+  eligibility differs.
+* `docs/guides/en/verification-evidence.html` — its published
+  planned-versus-result and receipt-provenance narrative is the baseline;
+  this Story's Rules take precedence where a documented step or boundary
+  differs.
+* `docs/user/en/index.md` and `docs/user/zh-TW/index.md` — their existing
+  verification-receipt usage descriptions are the baseline; this Story's
+  Rules take precedence where documented behavior differs.

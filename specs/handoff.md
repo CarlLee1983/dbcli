@@ -57,8 +57,13 @@ substring 比對。述詞落地後那個字不再承載任何東西，訊息已�
 
 - 四個 doc-contract 測試共用相似的文字正規化卻各自 scope。沿用 DBCLI-009 的
   決定不合併：合併會改到已交付 Story 的斷言語意。
-- `loadSemanticContext` 不拒絕 `version: 2` 的 semantic 產物——寫收尾測試時
-  發現的，與上述三件事無關，也還沒判斷它是不是缺陷。
+
+（先前這裡記著「`loadSemanticContext` 不拒絕 `version: 2` 的 semantic 產物，
+還沒判斷是不是缺陷」。已查證：不是缺陷。`src/core/semantic/index.ts:486` 明確
+接受 1 與 2，v2 就是加上 `relationships` 的版本，同檔案的 `migrateSemanticContext`
+專門把 v1 升成 v2。誤判來自我當時想找一個形狀錯誤的產物、隨手用了 `version: 2`。
+允許的 key 集合隨版本走，所以 v1 產物帶 `relationships` 會被擋而非靜默忽略；
+`version: 3` 與字串 `"2"` 都會被拒。）
 
 ## Lifecycle
 

@@ -14,6 +14,29 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
 版本建議 **8.0.0**。理由不是變更量，而是三處會拒絕先前被接受的輸入、以及一處會
 改變 JSON 判決值——SemVer 對這四項的答案都是 MAJOR，詳見下方 Breaking。
 
+### Added
+
+- **`dbcli capabilities` 與 `dbcli capabilities check`：外部 Skill 現在問得到「這個
+  工具能做什麼」。** Catalog 是靜態、有自己的 `schemaVersion`、依 id 排序，同一個
+  build 兩次輸出 byte-identical；`check --require <ids>` 只讀本機設定的 engine 與
+  permission。兩者都不建立資料庫連線，也不動檔案系統，這一點由 import graph 的
+  contract test 結構性地保證，不是靠註解宣稱。純型別與純函式從
+  `@carllee1983/dbcli/core` 匯出。
+
+  Capability 描述的是工具的原子能力（`schema.read`、`data.delete`），不是職務或
+  方法——後者屬於組合 dbcli 的 Role Skill 與 Method Skill。每一項 engine 與 risk
+  宣稱都由既有的 `ENGINE_CAPABILITIES` 推導，不另立第二張表；contract test 雙向
+  檢查 catalog 與實際 Commander tree 不會漂移。
+
+  Fail closed 是預設：不認得的 id 回 `unknown` 而不會被解析成長得像的那一個，缺少
+  設定回 `unavailable` + `context-unavailable` 而不是拿 `DEFAULT_CONFIG` 的
+  localhost PostgreSQL 充數。Exit code `0` / `1` / `2`。
+
+  v1 涵蓋 engine capability matrix 管轄的 34 個 command key；另外 16 個指令
+  （`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等）不在其中，
+  因為替它們寫 engine 支援度等於憑讀碼捏造未經稽核的宣稱。它們回 `unknown`，
+  擴充 matrix 是後續 Story。（DBCLI-PLAT-001，ADR-0022）
+
 ### Breaking
 
 - **query-only 的最後一道界線改由資料庫提供。** PostgreSQL / MySQL / MariaDB 上

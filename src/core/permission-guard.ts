@@ -473,14 +473,11 @@ export function enforcePermission(
   return result.classification
 }
 
-/** Permission ordering helper. Higher rank = more powerful tier. */
-const PERMISSION_RANK: Record<Permission, number> = {
-  'query-only': 1,
-  'read-write': 2,
-  'data-admin': 3,
-  admin: 4,
-}
-
-export function permissionAtLeast(actual: Permission, required: Permission): boolean {
-  return PERMISSION_RANK[actual] >= PERMISSION_RANK[required]
-}
+/**
+ * Permission ordering helper. Higher rank = more powerful tier.
+ *
+ * Defined in `@/core/permission/rank` so callers needing only the ladder do not
+ * pull this module's i18n and SQL-analysis graph in with it; re-exported here
+ * because this is where every existing caller imports it from.
+ */
+export { PERMISSION_RANK, permissionAtLeast } from '@/core/permission/rank'

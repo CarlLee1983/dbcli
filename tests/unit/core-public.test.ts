@@ -64,3 +64,36 @@ test('readConfig 對空目錄回傳預設 config（含 connection + permission�
 test('public API 不暴露未經 gate 的 adapter 工廠', () => {
   expect('AdapterFactory' in core).toBe(false)
 })
+
+/**
+ * Capability contract on the published `./core` surface (DBCLI-PLAT-001).
+ *
+ * External Skills pin these names. Exporting them is the deliverable; the
+ * point of the test is that a refactor cannot quietly drop one.
+ */
+test('public API 暴露 capability contract', () => {
+  expect(core.CAPABILITY_CONTRACT_SCHEMA_VERSION).toBe(1)
+  expect(typeof core.buildCapabilityCatalog).toBe('function')
+  expect(typeof core.findCapability).toBe('function')
+  expect(typeof core.listCapabilityIds).toBe('function')
+  expect(typeof core.checkCapabilities).toBe('function')
+  expect(typeof core.parseRequirements).toBe('function')
+  expect(typeof core.parseCapabilityCatalog).toBe('function')
+  expect(typeof core.parseCapabilityCheckReport).toBe('function')
+  expect(core.CapabilityRequirementError).toBeDefined()
+  expect(core.CapabilityContractError).toBeDefined()
+  expect(Array.isArray(core.CAPABILITIES)).toBe(true)
+})
+
+test('capability contract 在 public 表面上是可往返驗證的', () => {
+  const catalog = core.buildCapabilityCatalog()
+  expect(core.parseCapabilityCatalog(JSON.parse(JSON.stringify(catalog)))).toBeDefined()
+
+  const report = core.checkCapabilities(['schema.read'], {
+    engine: 'postgresql',
+    permission: 'query-only',
+    connectionName: null,
+  })
+  expect(report.ok).toBe(true)
+  expect(core.parseCapabilityCheckReport(JSON.parse(JSON.stringify(report)))).toBeDefined()
+})

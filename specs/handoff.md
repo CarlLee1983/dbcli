@@ -9,6 +9,27 @@
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
 `manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
 
+## 進行中：DBCLI-PLAT-001
+
+Agent Integration Contract v1 的第一個垂直切片。`dbcli capabilities` 與
+`dbcli capabilities check` 讓外部 Skill 在動工前問得到「這個工具能做什麼」、
+「這裡有沒有」，兩者都不建立資料庫連線。設計記錄在
+`docs/specs/2026-09-04-agent-integration-contract-v1.md`，決定在 ADR-0022。
+
+這個 Story 最值得留下的一句：**contract 說謊的兩次都是測試抓到的，不是人看出來的。**
+一次是缺設定時 `capabilities check` 拿 `DEFAULT_CONFIG` 的 localhost PostgreSQL
+當成真的環境回報；一次是手寫的 `supportsJson` 有四個指令是錯的。兩者都不會讓
+任何既有測試變紅，只會讓一份對外契約長期說錯話——所以這個切片的價值不在新指令，
+在那兩支對著實際 Commander tree 與實際 import graph 雙向比對的 contract test。
+
+已知邊界，不是疏漏：`ENGINE_CAPABILITIES` 只涵蓋 34 個 command key，dbcli 有 50 個
+top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等 16 個
+不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
+稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
+
+後續 backlog（DBCLI-PLAT-004 到 011）只寫進 spec，沒有實作。Task Pack 仍是
+`plan-only`，`safety.requires` 沒有動。
+
 ## 交付紀錄
 
 DBCLI-001 到 DBCLI-012 都在 `feat/forgeflow-stories-002-006` 上完成，該分支
@@ -119,7 +140,7 @@ revision 是否存在，所以不宣稱；能查的是這個 repository 對它�
 
 ```yaml
 workflow:
-  current_story: none
+  current_story: DBCLI-PLAT-001
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -135,28 +156,47 @@ workflow:
     - DBCLI-011
     - DBCLI-012
     - DBCLI-013
-  status: done
+  status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-013-forgeflow-adoption-hardening
-  # The DBCLI-013 delivery commit on
-  # feat/dbcli-013-forgeflow-adoption-hardening, not yet merged to main.
-  # `7f534be5` is its parent and the last state on main.
-  commit: 907b0f69
+  branch: feat/dbcli-plat-001-capability-contract
+  # The last state on main when DBCLI-PLAT-001 started.
+  commit: d1237f93
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-013-forgeflow-adoption-hardening/
-    - scripts/check-forgeflow-adoption.ts
-    - scripts/lib/forgeflow-adoption.ts
-    - tests/contract/forgeflow-adoption.test.ts
-    - specs/handoff.md
-    - package.json
+    - specs/stories/DBCLI-PLAT-001-capability-contract/
+    - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
+    - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - docs/plans/2026-09-04-agent-integration-contract-v1.md
+    - src/core/capabilities/
+    - src/core/permission/rank.ts
+    - src/commands/capabilities.ts
+    - tests/unit/core/capabilities/
+    - tests/contract/capability-contract.test.ts
+    - tests/integration/capabilities-command.test.ts
+    - src/adapters/types.ts
+    - src/core/permission-guard.ts
+    - src/core/public.ts
+    - src/program.ts
+    - src/program-lazy.ts
+    - tests/unit/core-public.test.ts
+    - assets/SKILL.md
+    - assets/SKILL.zh-TW.md
+    - assets/reference.md
+    - docs/user/
+    - CONTEXT.md
     - CHANGELOG.md
+    - specs/handoff.md
   known_unrelated_paths: []
 
 verification:
-  last_command: SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true make verify
+  last_command: bun test + 13 static gates + build + build:determinism
   result: pass
-  detail: 6403 tests across 552 files, 0 fail, integration included (docker services up)
+  detail: >-
+    6488 pass / 27 skip / 0 fail across 556 files. The 27 skips are the
+    Elasticsearch, live-DB and MySQL integration suites, which have no local
+    services; no DBCLI-PLAT-001 assertion depends on one. release:check was NOT
+    run to completion — it fails at step 1/9 on a `bun audit` network timeout,
+    before any repository check executes.
 ```

@@ -259,10 +259,26 @@ dbcli password prod --password "$NEW" --skip-test --format json</code></pre>
                     <tr><td><code>schema</code></td><td>顯示結構並重新整理本地元資料快取。</td></tr>
                     <tr><td><code>inspect</code></td><td>上下文快照（物件、權限、建議行動）。</td></tr>
                     <tr><td><code>status</code></td><td>配置與連線健康度摘要。</td></tr>
+                    <tr><td><code>capabilities</code></td><td>靜態 capability catalog（dbcli 能做什麼）。不連線資料庫。</td></tr>
+                    <tr><td><code>capabilities check</code></td><td>依本機設定檢查所需的 capability id。不建立連線。</td></tr>
                 </tbody>
             </table>
             <p><code>dbcli blacklist list --format json</code> 會在 stdout 輸出一個 machine-readable 文件，包含 <code>tables</code>、<code>columns</code> 與 <code>warnings</code>；不合法的 MongoDB blacklist path 會放進結構化的 <code>warnings</code> 陣列，不會把人類可讀診斷混入 stdout。</p>
             <p>在 PostgreSQL 中，<code>schema</code> 全程使用精確的 <code>public</code> catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 <code>public</code> relation。Row count 會同時 qualify 並 quote <code>"public"</code> 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。</p>
+
+            <h4 class="mt-8 font-bold text-text-main">給 Skill 的能力探索</h4>
+            <p><code>dbcli capabilities</code> 用一個有版本、可解析的形狀回答「這個工具能做什麼」，讓外部 Skill 在動工之前就能決定。<code>dbcli capabilities check --require &lt;ids&gt;</code> 接著依本機設定回答「這裡有沒有」。兩者都不會建立資料庫連線。</p>
+            <pre><code>dbcli capabilities --format json
+dbcli capabilities check --require schema.read,query.read --format json</code></pre>
+            <p>一個 <strong>capability</strong> 是 dbcli 的單一原子能力——<code>schema.read</code>、<code>data.delete</code>。它絕不是職務或方法：<code>dba.tune-production</code> 與 <code>crud.scaffold</code> 屬於組合 dbcli 的 Role Skill 或 Method Skill。分層是 <code>Story + AGENTS.md + Role Skill + Method Skill + Tool Skill + dbcli</code>，而 dbcli 只回答最後兩層。</p>
+            <p>輸出刻意不代表的四件事：</p>
+            <ul>
+                <li><strong>Discovery 不是授權。</strong> 列出一項能力只表示這個程式做得到，不表示你可以做。</li>
+                <li><strong><code>available</code> 不等於已核准。</strong> 它只說 engine 與 permission 不會拒絕。Blacklist、write gate、確認與 audit 仍然全部會跑，也沒有任何人類同意過什麼。設定檔裡的 <code>admin</code> 是權限等級，不是 DBA 的簽核。</li>
+                <li><strong><code>schemaVersion</code> 不是套件版本。</strong> 要 pin 的是 contract 版本，不是 <code>7.x</code>。</li>
+                <li><strong>Task Pack 的 plan 不是結果。</strong> <code>status: "planned"</code> 與驗證結果始終是兩回事。</li>
+            </ul>
+            <p>狀態有 <code>available</code>、<code>unavailable</code>（原因為 <code>engine</code>、<code>permission</code> 或 <code>context-unavailable</code>）與 <code>unknown</code>。無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：<code>0</code> 全部可用、<code>1</code> 有任一不可用或未知、<code>2</code> 輸入無效。</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>
             <p><code>dbcli inspect</code> 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：</p>

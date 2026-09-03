@@ -315,12 +315,47 @@ Blocked under `DBCLI_AGENT_MODE=1` like every other credential mutation.
 | `schema [table]` | Displays schema details for a specific object or scans the entire database. |
 | `inspect` | Provides a read-only snapshot for AI agents (objects, permissions, suggestions). |
 | `status` | Shows a safe summary of the current configuration (no credentials). |
+| `capabilities` | Lists the static capability catalog — what dbcli can do — without connecting to a database. |
+| `capabilities check` | Checks required capability ids against the local config's engine and permission. Never connects. |
 
 `dbcli blacklist list --format json` emits one machine-readable document with
 `tables`, `columns`, and `warnings`; malformed MongoDB blacklist paths are reported in
 the structured `warnings` array rather than mixed into stdout as human diagnostics.
 
 For PostgreSQL, `schema` uses exact `public` catalog identity throughout: full catalog/schema/table joins prevent reused constraint names from contaminating another table, composite foreign-key columns remain in declaration order, composite primary-key order comes from the exact table OID and index ordinality, and estimates are scoped to the exact `public` relation. Row counts qualify and quote both `"public"` and the exact table name, escaping embedded quotes so mixed-case and punctuation-bearing identifiers remain distinct and safe. Referenced schema/table spelling is preserved from the catalog.
+
+#### Capability discovery for Skills
+
+`dbcli capabilities` answers "what can this tool do?" in a versioned, parseable shape, so
+an external Skill can decide before it starts working. `dbcli capabilities check --require
+<ids>` then answers "are those available *here*?" against the local configuration. Neither
+opens a database connection.
+
+```bash
+dbcli capabilities --format json
+dbcli capabilities check --require schema.read,query.read --format json
+```
+
+A **capability** is one atomic dbcli ability — `schema.read`, `data.delete`. It is never a
+job or a method: `dba.tune-production` and `crud.scaffold` belong to the Role Skill or
+Method Skill that composes dbcli. The layering is `Story + AGENTS.md + Role Skill + Method
+Skill + Tool Skill + dbcli`, and dbcli only ever answers for the last two.
+
+Four things the output deliberately does not mean:
+
+*   **Discovery is not a grant.** A listed capability says the binary can do it, not that
+    you may.
+*   **`available` is not approval.** It says engine and permission would not refuse.
+    Blacklist, write gate, confirmation and audit all still run, and no human has agreed to
+    anything. `admin` in a config file is a permission level, not a DBA sign-off.
+*   **`schemaVersion` is not the package version.** Pin the contract version, not `7.x`.
+*   **A Task Pack plan is not a result.** `status: "planned"` remains distinct from a
+    verification outcome.
+
+Statuses are `available`, `unavailable` (reason `engine`, `permission`, or
+`context-unavailable`) and `unknown`. An unrecognised id fails closed and is never resolved
+to a similar-looking one. Exit codes: `0` all available, `1` any unavailable or unknown,
+`2` invalid input.
 
 #### `inspect` output for agents
 

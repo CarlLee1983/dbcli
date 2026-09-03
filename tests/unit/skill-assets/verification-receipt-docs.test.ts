@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readDocSource, stripMarkup } from './doc-section'
 
 /**
  * A receipt is provenance, never approval, and it cannot exist before the
@@ -11,17 +12,12 @@ import { describe, expect, test } from 'bun:test'
  * Markdown and HTML word the same claim differently, hence one list per surface.
  */
 async function receiptSection(path: string): Promise<string> {
-  // Windows checks out CRLF, so line endings are not part of what these
-  // claims assert. Normalize before any `\n`-shaped matching below.
-  const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
-  const text = raw
-    // Tags go before entities, so `&lt;path&gt;` cannot decode into something
-    // the tag pass then deletes. A claim must therefore not contain a
-    // `<placeholder>`: Markdown writes those literally and this pass eats them.
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
+  // `stripMarkup` takes tags before entities, so `&lt;path&gt;` cannot decode
+  // into something the tag pass then deletes. A claim must therefore not
+  // contain a `<placeholder>`: Markdown writes those literally and it eats
+  // them. Unlike the other three tests, the section is located after markup is
+  // stripped, not before.
+  const text = stripMarkup(await readDocSource(path))
     // Strip emphasis and code markers without inserting a space: `**not**`
     // between CJK characters would otherwise leave one behind.
     .replace(/[`*]/g, '')

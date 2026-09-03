@@ -53,10 +53,18 @@ checkout 裡，CI 跑不到，而且文件明說它們不判斷宣告是否屬�
 substring 比對。述詞落地後那個字不再承載任何東西，訊息已改回
 `must use a supported semantic subject form`。
 
-## 仍未處理
+## 結案紀錄
 
-- 四個 doc-contract 測試共用相似的文字正規化卻各自 scope。沿用 DBCLI-009 的
-  決定不合併：合併會改到已交付 Story 的斷言語意。
+沒有未處理項目。以下兩條原本記在這裡待辦，結論留在原地而不是刪掉——刪掉會讓下一
+個人重新踩一次同樣的誤判。
+
+
+（先前這裡記著四個 doc-contract 測試的正規化重複、沿用 DBCLI-009 的決定不合併。
+已處理，但範圍比原本描述的窄：四支裡只有兩支的正規化真的相同，`impact` 不做
+lowercase 也不收合 CJK 換行，`verification-receipt` 多一條標點貼合規則、而且是先
+去標記再定位段落。共用的只有讀檔與去標記，以及那兩支真正相同的部分；各自的 tail
+與 scoping 原封不動，所以沒有任何已交付 Story 的斷言語意被改動——這一點是以四支
+× 四個 surface 的正規化輸出雜湊逐位元組比對證明的，不是靠測試通過推論的。）
 
 （先前這裡記著「`loadSemanticContext` 不拒絕 `version: 2` 的 semantic 產物，
 還沒判斷是不是缺陷」。已查證：不是缺陷。`src/core/semantic/index.ts:486` 明確

@@ -130,6 +130,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          # `make verify` runs forgeflow:check, which reconciles the handoff's
+          # completed Stories against `Story:` commit trailers. A shallow clone
+          # has no trailers to read.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest

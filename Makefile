@@ -24,3 +24,4 @@ verify:
 	bun run docs:check
 	bun run contract:check
 	bun run plan:check
+	bun run forgeflow:check

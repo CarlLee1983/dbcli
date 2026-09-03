@@ -5,6 +5,143 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 建議版本 8.0.0
+
+ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`（`224ee59d`）
+早於 Story 的合併點 `04a88a44`，因此以下每一條都在 `7.0.1` 之外。DBCLI-013 補上
+採用漂移的檢查與這份紀錄本身。
+
+版本建議 **8.0.0**。理由不是變更量，而是三處會拒絕先前被接受的輸入、以及一處會
+改變 JSON 判決值——SemVer 對這四項的答案都是 MAJOR，詳見下方 Breaking。
+
+### Breaking
+
+- **query-only 的最後一道界線改由資料庫提供。** PostgreSQL / MySQL / MariaDB 上
+  每一句 caller-controlled SQL 都在該實體連線上開一個原生唯讀交易後才送出，涵蓋
+  `query`、`export`、saved query 及其 verification、`report` 診斷、SQL shell、
+  analyzed explain，以及會把較高權限收斂成 query-only 的多連線 fan-out。語句分類
+  只看得到語句形狀，看不到 `SELECT mutate_accounts()` 背後的函式會不會寫資料——
+  這類先前成功的呼叫現在會被資料庫本身擋下。邊界建立不起來就在送出目標語句前失敗；
+  目標語句跑完但交易收尾失敗時回報結果不確定並丟棄該連線。（DBCLI-002）
+
+- **slow-endpoint-investigation task pack 新增必填的 `table` 參數。** 計畫順序變成
+  blacklist → proxy analyze → schema `<table>` → explain → guide
+  missing-index-for。先前不帶 table 的呼叫現在會在產出任何計畫之前失敗。在沒確認
+  資料表形狀的情況下讀執行計畫或索引候選，那是猜測，不是佐證。（DBCLI-012）
+
+- **儀表板內嵌 payload 改為 allowlist。** `SavedQueryMeta` 先前是整包序列化進獨立
+  HTML 的，把參數預設值與列舉、目標 index / collection、verification 的 query 與
+  expects 一起帶進一個從未渲染它們的檔案。現在只有已顯示的資料列、applied-limit
+  與安全通知、provenance，以及顯示用的 name / description 與引用已顯示欄位的圖表
+  ／KPI 定義會被序列化。讀取那些欄位的下游消費者會發現它們不再存在。（DBCLI-006）
+
+- **語意契約中形式錯誤的 subject 判為 `invalid` 而非 `stale`。** `table:orders`
+  這類形式本身就不合法的 subject 先前與「model 被改名」得到同一個判決，
+  `contract drift --format json` 的消費者因此無法區分兩者。形式檢查移到 parse
+  階段。（DBCLI-011）
+
+- **`init --no-interactive` 從無效變成有效。** 它先前讀的是
+  `options.noInteractive`，而 Commander 存的是 `interactive`，所以那個旗標從來沒
+  擋掉任何提問。依賴舊行為（帶著 `--no-interactive` 卻仍期待被提問）的腳本會改變
+  行為。（DBCLI-004）
+
+- **互動式 `init` 的遮蔽輸入沒有純文字退路。** 沒有 TTY 或載入不到遮蔽實作時，
+  直接在寫出任何設定之前失敗，並指出當下模式支援的替代輸入（`--password`、
+  `.env` / 環境變數、`--use-env-refs`，MongoDB 則是 `--uri`）。先前這些情境會以
+  可見提示收下密碼。（DBCLI-004）
+
+- **`assert` 在 receipt 寫入失敗時的 stdout 形狀改變。** 先前是一行 stderr 且沒有
+  envelope，現在 `--format json` 的呼叫端拿得到完整 envelope，exit code 仍為 1。
+  解析舊有失敗輸出的呼叫端需要跟著改。（DBCLI-009）
+
+### Added
+
+- **`skill context --context-version 2`：給外部 agent 的穩定契約。** 離線、不開
+  連線、不掃 Redis key、不讀文件、不讀專案原始碼。輸出引擎、設定權限、能力、可見
+  資源、snippet metadata、semantic 與 contracts、truncation 與 gaps；不輸出憑證、
+  實際值、預設值與計數、原始 ES mapping、Redis key/value 或專案路徑。Elasticsearch
+  只以快取的扁平欄位呈現，Redis 只接受 repository 自己宣告的
+  `dbcli.redis-context.json`。缺證據時明確回報 gap，不推測名稱與語意。不帶旗標時
+  維持 byte-compatible 的 version 1 輸出。（DBCLI-003）
+
+- **saved-query 儀表板帶上可攜、封閉的執行溯源。** version 1 的 provenance 物件與
+  對應的 Execution Traceability 區塊：邏輯連線名稱與引擎、snippet key 與來源分類、
+  實際生效的權限，以及實際生效的筆數上限——沒有套上限時明講 `not-applied`，而不是
+  留白讓人分不出完整結果與被截斷的結果。applied-limit 與畫面上的截斷警示不一致就
+  在寫檔前拒絕。直接查詢的儀表板行為不變，也不帶溯源區塊。（DBCLI-006）
+
+- **`impact assess` 的不完整性契約寫進兩份 `index.html`。** coverage 永遠是
+  `declared` 或 `partial`、v1 不宣稱 `complete`、`--fail-on` 只在報告寫出後改變
+  exit code。（DBCLI-008）
+
+### Security
+
+- **互動式 `init` 的憑證改走遮蔽輸入。** PostgreSQL / MySQL / MariaDB / Redis /
+  Elasticsearch 的密碼、MongoDB 逐欄模式的密碼，以及貼上的 MongoDB 連線字串（它
+  本身就帶著帳密），先前都停在終端機捲動紀錄、session 錄影與螢幕分享畫面裡。連線
+  測試失敗時 driver 常把密碼或整條 URI 原樣寫回錯誤訊息，現在先經過共用的
+  `redactSecretsForDisplay` 遮蔽並截斷再輸出。（DBCLI-004）
+
+- **safe-backfill 的佐證文物不再外洩敏感字串。** 寫進佐證文物的失敗原因改用固定的
+  安全字串而非 driver 的錯誤訊息；使用者自訂的 subject / summary 與 SQL 佐證會先把
+  憑證、檔案系統路徑與 SQL 註解遮掉再落檔。（DBCLI-005）
+
+- **evidence pack 的失敗輸出不再帶出絕對路徑與原始錯誤。**
+  `evidence compose --receipt <不存在>` 先前會原樣印出
+  `ENOENT: ... lstat '/private/var/.../x.json'`。receipt 的 realpath 失敗改拋有界
+  訊息；`safeMessage` 只放行兩個 validation error 類別；`validateFormat` 換成自己的
+  有界檢查——它先前會把被拒的值原樣引用，而那個位置可以是路徑。（DBCLI-010）
+
+- **語意契約的診斷不再複述產物輸入。** `rejectUnknownKeys` 先前把被拒絕的 JSON
+  property key 內插進診斷路徑，而那個 key 由產物作者控制：`contract validate` 的
+  stderr 與 `contract drift --format json` 會原樣印出帶憑證與絕對路徑的 key。改為
+  列出允許的 property 名稱。`fail()` 與 `collectContractEvidence` 的邊界一併收
+  緊。（DBCLI-011）
+
+### Fixed
+
+- **safe-backfill 的四項防護全數執行。** 先前一失敗就中斷，操作者只看得到第一個
+  擋下來的原因。blacklist、schema、plan、verify-query-readonly 現在都會執行並各自
+  回報結果；after-write 仍只在四項全過時才跑回讀斷言。（DBCLI-005）
+
+- **`assert` 的 receipt 寫入失敗不再吞掉斷言判決。** 先前直接 `process.exit(1)`，
+  `--format json` 的呼叫端拿到的不是 envelope 而是一行 stderr，`--no-fail` 的語意
+  也被推翻。改成錯誤記在結果旁邊、判決照常輸出、exit code 仍為 1——與同一個檔案裡
+  相鄰的 artifact 寫入分支一致。（DBCLI-009）
+
+- **JSON 形態的 ORM 產物改為指名檔案的 fail closed。** Drizzle snapshot 與
+  normalized JSON 先前會把 `JSON.parse` 與 Zod 的原始錯誤直接丟出去，都沒有指出是
+  哪一個檔案壞掉；agent 一次審多份產物時無從得知該修哪一個。（DBCLI-007）
+
+- **`impact assess` 的輸出目標衝突看得出原因。** `impact output already exists`
+  不在 `safeMessage` 的清單裡而被壓成泛用句子，審查者無從得知是報告檔已存在。
+  同時把 prefix 比對改成完全比對——這是雙向的：`design dialect` 這類帶插值後綴的
+  訊息反而不再放行、收斂成泛用句。prefix 的寫法在某個字串日後長出插值後綴時會默默
+  漏資訊，而那正是這個函式存在的理由。（DBCLI-008）
+
+### Documentation
+
+- **`--context-version 2`、儀表板溯源、遮蔽輸入、safe-backfill、slow-endpoint pack
+  的說明同步到四份使用者文件與相關 Pages guide**，中英雙語、Markdown 與 HTML 兩種
+  格式皆同步。（DBCLI-002 到 DBCLI-012）
+
+- **三份長期落在檢查外的 guide 納入涵蓋範圍。** `evidence-packs`、
+  `offline-impact-assessment`、`semantic-contracts` 與 `verification-evidence`
+  併入 `guideSlugs`；該清單本身改由讀目錄的檢查守住，因為手維護的清單擋不住第四
+  份。（DBCLI-008、DBCLI-010、DBCLI-011）
+
+- **receipt 旗標表格不再被一句話切成兩張**，「Flag trio」／「旗標三件組」列了四個
+  旗標，四份文件一併改為「Flags」／「旗標」。（DBCLI-009）
+
+### Process
+
+- **ForgeFlow 採用版本現在只有一個可檢查的答案。** `specs/.forgeflow-adoption` 是
+  唯一權威，`bun run forgeflow:check` 新增的
+  `scripts/check-forgeflow-adoption.ts` 把 `specs/stories/README.md`、
+  `specs/handoff.md`、Story template 與本地 `story-development` Skill 全部對回它。
+  這條 gate 的起因是它已經失效過一次：marker 與 README 推進到 0.3.2 之後，handoff
+  跨兩個已合併的 PR 仍寫著 0.3.1，沒有任何東西比對過。（DBCLI-013）
+
 ## [7.0.1] - 2026-09-02 - agent 讀到的黑名單語意還停在 4.0.0
 
 ### Documentation

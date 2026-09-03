@@ -1,9 +1,13 @@
 # ForgeFlow Handoff
 
 十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`），
-合併後的收尾為 PR #145（`a2a05cc2`）。目前進行中的是 DBCLI-013，收 ForgeFlow
-導入本身的尾——採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。
-沒有已知的產品缺口。
+合併後的收尾為 PR #145（`a2a05cc2`）。DBCLI-013 已交付，收的是 ForgeFlow 導入本身的尾——
+採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。沒有已知的產品
+缺口，也沒有選定中的下一個 Story。
+
+未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
+release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
+`manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
 
 ## 交付紀錄
 
@@ -115,7 +119,7 @@ revision 是否存在，所以不宣稱；能查的是這個 repository 對它�
 
 ```yaml
 workflow:
-  current_story: DBCLI-013
+  current_story: none
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -130,16 +134,17 @@ workflow:
     - DBCLI-010
     - DBCLI-011
     - DBCLI-012
+    - DBCLI-013
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: main
-  # DBCLI-013 sits on top of this commit; it is the state the Story was
-  # developed against, not the state after it. `a2a05cc2` was the previous
-  # baseline and is an ancestor of this one.
-  commit: 7f534be5
-  dirty_worktree: true
+  branch: feat/dbcli-013-forgeflow-adoption-hardening
+  # The DBCLI-013 delivery commit on
+  # feat/dbcli-013-forgeflow-adoption-hardening, not yet merged to main.
+  # `7f534be5` is its parent and the last state on main.
+  commit: 907b0f69
+  dirty_worktree: false
   story_owned_paths:
     - specs/stories/DBCLI-013-forgeflow-adoption-hardening/
     - scripts/check-forgeflow-adoption.ts
@@ -151,6 +156,7 @@ baseline:
   known_unrelated_paths: []
 
 verification:
-  last_command: make verify
+  last_command: SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true make verify
   result: pass
+  detail: 6403 tests across 552 files, 0 fail, integration included (docker services up)
 ```

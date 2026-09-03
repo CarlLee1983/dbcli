@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { lstat, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AdapterFactory } from '@/adapters'
 import type { RuntimeDbcliConfig } from '@/core/config'
 import type { VerificationArtifact, VerificationStatus } from '@/core/verification'
 import { writeVerifyEvidenceReceipt } from '@/commands/verify-receipt'
@@ -85,6 +86,110 @@ describe('verify evidence receipt lifecycle boundary', () => {
         { kind: 'verify-outcome', status: 'blocked' },
       ])
     } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('keeps every seeded canary out of the receipt and out of its bounded failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dbcli-verify-receipt-'))
+    try {
+      // Realistic argv for this command surface, carrying one canary of every
+      // kind the Story forbids in a receipt.
+      const seeded = [
+        '/opt/homebrew/bin/bun',
+        'run',
+        '/Users/operator/secrets/workspace/src/cli.ts',
+        'verify',
+        'safe-backfill',
+        '--table',
+        'user_tokens',
+        '--query',
+        "UPDATE user_tokens SET secret = 'hunter2' WHERE id = 4711",
+        '--verify-query',
+        'SELECT count(*)::int AS n FROM user_tokens WHERE secret IS NULL',
+        '--expect',
+        'value == 0',
+        '--after-write',
+        '--evidence-receipt',
+        '/Users/operator/secrets/workspace/evidence/canary.json',
+      ]
+      // `user_tokens` is the load-bearing one: drop --table from the redaction
+      // list and the canonical command still passes SAFE_TEXT and the banned-word
+      // guard (\btoken\b does not match across the underscore), so it would land
+      // in the receipt. The rest are backstops — most regressions make
+      // canonicalization throw before a body is ever written.
+      const canaries = ['/Users/operator', 'hunter2', 'user_tokens', '4711', 'UPDATE', 'SELECT']
+
+      const written = await writeVerifyEvidenceReceipt({
+        workspaceRoot: root,
+        scenarioName: 'safe-backfill',
+        config,
+        artifact: artifact('verified'),
+        artifactPath: join(root, '.dbcli', 'verification', 'safe-backfill.json'),
+        outputPath: 'evidence/canary.json',
+        argv: seeded,
+      })
+
+      expect('path' in written).toBe(true)
+      if (!('path' in written)) return
+      const body = await readFile(written.path, 'utf8')
+      for (const canary of canaries) {
+        expect(body).not.toContain(canary)
+      }
+
+      // The failure path is a fixed string, so the same canaries — including
+      // the traversal target — cannot ride out on it either.
+      const refused = await writeVerifyEvidenceReceipt({
+        workspaceRoot: root,
+        scenarioName: 'safe-backfill',
+        config,
+        artifact: artifact('verified'),
+        artifactPath: join(root, '.dbcli', 'verification', 'safe-backfill.json'),
+        outputPath: '../../escape/user_tokens.json',
+        argv: seeded,
+      })
+
+      expect(refused).toEqual({ error: 'Failed to write evidence receipt' })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('writes a receipt without constructing a database adapter', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dbcli-verify-receipt-'))
+    // Every construction entry point, not just the SQL one: the context builder
+    // reads a semantic file, and that is the step most likely to reach for a
+    // connection if it ever changed.
+    const spies = (
+      [
+        'createSqlAdapter',
+        'createAdapter',
+        'createAdapterWithoutRules',
+        'createMongoDBAdapter',
+        'createRedisAdapter',
+        'createElasticsearchAdapter',
+      ] as const
+    ).map((method) => spyOn(AdapterFactory, method))
+    try {
+      // Seed the semantic file so loadSemanticContext actually runs.
+      await Bun.write(
+        join(root, 'dbcli.semantic.json'),
+        JSON.stringify({ version: 1, models: [], metrics: [] })
+      )
+      const result = await writeVerifyEvidenceReceipt({
+        workspaceRoot: root,
+        scenarioName: 'safe-backfill',
+        config,
+        artifact: artifact('verified'),
+        artifactPath: join(root, '.dbcli', 'verification', 'safe-backfill.json'),
+        outputPath: 'evidence/offline.json',
+        argv: argv('safe-backfill'),
+      })
+
+      expect('path' in result).toBe(true)
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled()
+    } finally {
+      for (const spy of spies) spy.mockRestore()
       await rm(root, { recursive: true, force: true })
     }
   })

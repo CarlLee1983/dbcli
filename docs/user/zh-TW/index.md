@@ -577,16 +577,16 @@ dbcli skill tasks plan migration-review \
 
 使用 `--write-verification-artifact` 可在 read-back 斷言執行後,將 **結果佐證記錄**（v1 VerificationArtifact JSON）寫入 `.dbcli/verification/`，提供可稽核的持久化軌跡。驗證文物會持續寫入 `<cwd>/.dbcli/verification/`（相對於當前工作目錄），不受 `--config` 檔案位置影響。
 
-**旗標三件組：**
+**旗標：**
 
 | 旗標 | 必填 | 說明 |
 | :--- | :--- | :--- |
 | `--write-verification-artifact` | 選用 | 斷言執行後寫入 VerificationArtifact JSON。 |
 | `--evidence-receipt <path>` | 選用 | 在 verdict、audit 嘗試與可選 artifact 確定後，原子寫入不含 SQL 或 rows 的安全 assert provenance。 |
-
-`evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 | `--verification-subject <kind:name>` | 是（啟用旗標時）| 被驗證的標的。允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。 |
 | `--verification-summary <text>` | 否 | 可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。 |
+
+`evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 
 **輸出合約：**
 

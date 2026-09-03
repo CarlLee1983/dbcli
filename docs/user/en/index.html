@@ -481,7 +481,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
 
             <h4 class="mt-6 mb-2 font-bold">assert --write-verification-artifact</h4>
             <p class="mb-4">Persist a <strong>result evidence record</strong> (v1 VerificationArtifact JSON) to <code>.dbcli/verification/</code> whenever you need a durable audit trail for a read-back assertion. The verification artifact is always written to <code>&lt;cwd&gt;/.dbcli/verification/</code> (relative to the current working directory), regardless of where the <code>--config</code> file is located.</p>
-            <p class="mb-2"><strong>Flag trio:</strong></p>
+            <p class="mb-2"><strong>Flags:</strong></p>
             <table>
                 <thead>
                     <tr><th>Flag</th><th>Required</th><th>Description</th></tr>
@@ -493,6 +493,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
                     <tr><td><code>--verification-summary &lt;text&gt;</code></td><td>no</td><td>Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state."</td></tr>
                 </tbody>
             </table>
+            <p class="mb-4"><code>evidence compose</code> may reference that explicit workspace-contained receipt with <code>--receipt &lt;path&gt;</code>; provenance is not execution approval.</p>
             <p class="mt-4 mb-2"><strong>Output contract:</strong></p>
             <ul>
                 <li><code>--format json</code> — adds <code>verificationArtifactPath</code> to the <code>AssertVerdict</code> envelope.</li>

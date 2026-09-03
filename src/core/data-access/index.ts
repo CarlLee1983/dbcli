@@ -27,6 +27,24 @@ export interface DataAccessManifestIssue {
   message: string
 }
 
+/**
+ * The issues that mean "the referenced entity is unavailable or protected".
+ * A duplicate reference, an unbounded reference list, and an unusable source
+ * path are malformed-manifest problems, so they are deliberately absent: the
+ * substring test this replaced classified all three as reference failures.
+ */
+const PROTECTED_REFERENCE = 'must not contain a protected semantic reference'
+const UNAVAILABLE_REFERENCE = 'must reference an available semantic entity'
+const REFERENCE_MESSAGES: ReadonlySet<string> = new Set([
+  PROTECTED_REFERENCE,
+  UNAVAILABLE_REFERENCE,
+])
+
+/** True when a failure is about the referenced entity, not the manifest shape. */
+export function hasDataAccessReferenceIssue(issues: readonly DataAccessManifestIssue[]): boolean {
+  return issues.some(({ message }) => REFERENCE_MESSAGES.has(message))
+}
+
 export class DataAccessManifestValidationError extends Error {
   readonly issues: readonly DataAccessManifestIssue[]
 
@@ -173,9 +191,9 @@ function parseReferences(
     if (!isCanonicalSemanticReference(reference)) {
       issue(issues, `${path}[${index}]`, 'must be a canonical semantic reference')
     } else if (containsBlockedSemanticIdentifier(reference, blocked)) {
-      issue(issues, `${path}[${index}]`, 'must not contain a protected semantic reference')
+      issue(issues, `${path}[${index}]`, PROTECTED_REFERENCE)
     } else if (!registry.has(reference)) {
-      issue(issues, `${path}[${index}]`, 'must reference an available semantic entity')
+      issue(issues, `${path}[${index}]`, UNAVAILABLE_REFERENCE)
     }
     return reference
   })
@@ -275,14 +293,19 @@ function text(value: unknown, path: string, issues: DataAccessManifestIssue[]): 
   return ''
 }
 
+/**
+ * Names the allowed properties rather than the rejected one: a rejected key is
+ * manifest input, and these diagnostics reach `impact assess` output.
+ */
 function rejectUnknownKeys(
   value: Record<string, unknown>,
   allowed: readonly string[],
   path: string,
   issues: DataAccessManifestIssue[]
 ): void {
-  for (const key of Object.keys(value))
-    if (!allowed.includes(key)) issue(issues, `${path}.${key}`, 'is not allowed')
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    issue(issues, path, `must contain only these properties: ${allowed.join(', ')}`)
+  }
 }
 
 function issue(issues: DataAccessManifestIssue[], path: string, message: string): void {

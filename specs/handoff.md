@@ -1,8 +1,13 @@
 # ForgeFlow Handoff
 
 十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`），
-合併後的收尾為 PR #145（`a2a05cc2`）。沒有已知的產品缺口，也沒有選定中的
-下一個 Story。
+合併後的收尾為 PR #145（`a2a05cc2`）。DBCLI-013 已交付，收的是 ForgeFlow 導入本身的尾——
+採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。沒有已知的產品
+缺口，也沒有選定中的下一個 Story。
+
+未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
+release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
+`manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
 
 ## 交付紀錄
 
@@ -23,9 +28,12 @@ DBCLI-001 的交付狀態已驗證並結案。它跨十份交接紀錄被記為�
 
 ## 流程版本
 
-採用 ForgeFlow 0.3.1（`specs/.forgeflow-adoption`）。0.3.1 新增上游的
-`story-check` 與 `handoff-check` 兩支靜態結構檢查——它們住在 ForgeFlow 的
-checkout 裡，CI 跑不到，而且文件明說它們不判斷宣告是否屬實。
+採用 ForgeFlow 0.3.2。權威記錄是 `specs/.forgeflow-adoption`，這裡只是複述，
+而複述正是 DBCLI-013 要修的東西：這段話在 marker 與 `specs/stories/README.md`
+都已經推進到 0.3.2 之後，還原樣說著 0.3.1，跨兩個已合併的 PR 沒有人看。
+
+0.3.1 新增上游的 `story-check` 與 `handoff-check` 兩支靜態結構檢查——它們住在
+ForgeFlow 的 checkout 裡，CI 跑不到，而且文件明說它們不判斷宣告是否屬實。
 
 `make verify` 因此多了一步 `bun run forgeflow:check`，補的是上游明說不做的那一
 層：把 `completed_stories` 與 repository 實況對帳。升級到 0.3.1 時，上游的
@@ -71,7 +79,41 @@ lowercase 也不收合 CJK 換行，`verification-receipt` 多一條標點貼合
 接受 1 與 2，v2 就是加上 `relationships` 的版本，同檔案的 `migrateSemanticContext`
 專門把 v1 升成 v2。誤判來自我當時想找一個形狀錯誤的產物、隨手用了 `version: 2`。
 允許的 key 集合隨版本走，所以 v1 產物帶 `relationships` 會被擋而非靜默忽略；
-`version: 3` 與字串 `"2"` 都會被拒。）
+`version: 3` 與字串 `"2"` 都會被拒。
+
+DBCLI-013 重驗了這個結論，成立。但重驗時發現真正該追蹤的不是那個懷疑，而是
+`grep -rn "equal 1 or 2" tests/` 沒有任何命中：這個接受集合完全沒有回歸測試。
+結論目前只靠一次原始碼閱讀與這段散文支撐，兩者都不會在有人改動 `parseContext`
+時發出聲音。已開成 issue #150，不再只留在這裡。)
+
+## DBCLI-013：採用版本的對帳
+
+`specs/.forgeflow-adoption` 與 `specs/stories/README.md` 在 `049d7d55` 推進到
+0.3.2 之後，這份文件仍宣告採用中的是 0.3.1，跨 `0c04d091`、`88ec1ad9`、
+`7f534be5` 三個已合併的狀態沒有任何東西比對過。版本從來不是行為的一部分，這正是
+它會漂的原因：沒有東西讀的欄位不記錄任何事情。
+
+`scripts/check-forgeflow-adoption.ts` 把 marker 定為唯一權威，README 必須以固定
+形式複述 version 與 revision 兩者，其餘採用面（本文件、Story template、本地
+`story-development` Skill）可以提到某個 ForgeFlow 版本，但不能指名另一個版本為
+採用中的版本。
+
+規則刻意畫得窄：只匹配緊接在 `ForgeFlow` 一詞之後的版本號。這些文件本來就會談論
+較早的 release——README 的「first adopted at 0.3.0」、本文件的「0.3.1 新增上游的
+`story-check`」與「升級到 0.3.1 時」——把句子裡任何位置的版本號都算成漂移的 gate，
+一週內就會被關掉。這是 `context-v2` 那次 `message.includes('reference')` 的教訓，
+換一個地方重演的機會。
+
+gate 分不出「宣告一個舊版本」與「引用一段宣告了舊版本的文字」——這一段原本
+逐字引用了那句漂掉的話，gate 立刻擋下來，於是改成不逐字引用。這是刻意留著的取捨：
+要分辨兩者需要理解語意，而一個會猜語意的 gate 比一個偶爾要求換句話說的 gate 危險
+得多。要引用時，把版本號寫在 `ForgeFlow` 一詞之外即可。
+
+gate 不碰網路。marker 記著一個上游 revision，但沒有任何東西去取它：離線查不到那個
+revision 是否存在，所以不宣稱；能查的是這個 repository 對它是否只給一個答案。
+
+既有的 `check-forgeflow-handoff.ts` 原封不動，兩支互不涵蓋——一支對帳交付宣稱，
+一支對帳流程版本。
 
 ## Lifecycle
 
@@ -92,17 +134,29 @@ workflow:
     - DBCLI-010
     - DBCLI-011
     - DBCLI-012
+    - DBCLI-013
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: main
-  commit: a2a05cc2e11e0754339e734d1db5319ec6744693
+  branch: feat/dbcli-013-forgeflow-adoption-hardening
+  # The DBCLI-013 delivery commit on
+  # feat/dbcli-013-forgeflow-adoption-hardening, not yet merged to main.
+  # `7f534be5` is its parent and the last state on main.
+  commit: 907b0f69
   dirty_worktree: false
-  story_owned_paths: []
+  story_owned_paths:
+    - specs/stories/DBCLI-013-forgeflow-adoption-hardening/
+    - scripts/check-forgeflow-adoption.ts
+    - scripts/lib/forgeflow-adoption.ts
+    - tests/contract/forgeflow-adoption.test.ts
+    - specs/handoff.md
+    - package.json
+    - CHANGELOG.md
   known_unrelated_paths: []
 
 verification:
-  last_command: make verify
+  last_command: SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true make verify
   result: pass
+  detail: 6403 tests across 552 files, 0 fail, integration included (docker services up)
 ```

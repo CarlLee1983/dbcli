@@ -7,6 +7,7 @@ const guideSlugs = [
   'safe-backfill',
   'agent-dashboard',
   'orm-schema-drift',
+  'offline-impact-assessment',
   'slow-endpoint',
   'why-dbcli',
   // Not `as const`, for the same reason as `locales` below.
@@ -121,6 +122,36 @@ test('ORM drift pages bootstrap the complete schema cache before comparison', as
     )
     expect(commands).toContain('dbcli blacklist list\ndbcli schema --format json')
     expect(commands.join('\n')).not.toContain('dbcli schema users --format json')
+  }
+})
+
+test('offline impact pages name the same optional evidence in both languages', async () => {
+  const pages = [
+    {
+      path: 'docs/guides/offline-impact-assessment.html',
+      events: 'workload',
+      dataAccess: 'data-access metadata',
+      boundary: '受保護識別字',
+    },
+    {
+      path: 'docs/guides/en/offline-impact-assessment.html',
+      events: 'workload evidence',
+      dataAccess: 'data-access metadata',
+      boundary: 'protected identifiers',
+    },
+  ]
+
+  for (const { path, events, dataAccess, boundary } of pages) {
+    const { document } = await loadPage(path)
+    const article = document.querySelector('.workflow')!.textContent!
+    const commands = [...document.querySelectorAll('.workflow .command')].map((node) =>
+      node.textContent?.trim()
+    )
+
+    expect(commands.join('\n')).toContain('--events ./.dbcli/proxy/events.jsonl')
+    expect(article).toContain(events)
+    expect(article).toContain(dataAccess)
+    expect(document.querySelector('.boundary')?.textContent).toContain(boundary)
   }
 })
 

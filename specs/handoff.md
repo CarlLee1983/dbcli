@@ -90,7 +90,7 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: feat/forgeflow-stories-002-006
-  commit: pending
+  commit: 9124a4bd876c321aae8c8dc2daa92f89f648e0a7
   dirty_worktree: false
   story_owned_paths: []
   known_unrelated_paths: []

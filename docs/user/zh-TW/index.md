@@ -1017,7 +1017,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 > dbcli contract drift --format json
 > ```
 >
-> 這些指令不會連線或執行查詢。`context`、`search` 與 `skill context` 只會輸出有效且 `approved` 的契約；draft 與 deprecated 術語保留為本機審閱產物。缺少契約檔不會改變一般 semantic context；但明確指定的缺檔或無效檔案會 fail closed。`contract drift` 會區分 valid、stale、invalid 與 unavailable 的本機證據。
+> 這些指令不會連線或執行查詢。`context`、`search` 與 `skill context` 只會輸出有效且 `approved` 的契約；draft 與 deprecated 術語保留為本機審閱產物。缺少契約檔不會改變一般 semantic context；但明確指定的缺檔或無效檔案會 fail closed。`contract drift` 會區分 valid、stale、invalid 與 unavailable 的本機證據：subject 不屬於四種 canonical 形式時判為 invalid，形式正確但已不存在的 subject 才是 stale。診斷只會指出出問題的屬性或 subject 位置，不會複述產物或本機設定中被拒絕的 key、值或路徑。
 >
 > **Agent query draft。** 先把已檢閱的 `dbcli semantic context --format json` 輸出交給外部 agent；provider 帳號、憑證、prompt 與其他 agent context 都留在 dbcli 外。agent 回傳不受信任的 `QueryDraft` 檔案，形狀如下（只能使用該 semantic context 中的 model 與 field）：
 >

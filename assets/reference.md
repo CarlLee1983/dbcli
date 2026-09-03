@@ -2952,14 +2952,18 @@ The strict v1 artifact contains `version` and `contracts`. Each contract has a u
 canonical `name`, `status` (`draft`, `approved`, or `deprecated`), bounded plain-text
 `description` and `owner`, one or more canonical semantic `subjects`, optional aliases,
 and an `evidencePolicy` of `none`, `receipt-required`, or `verification-required`.
-Subjects must remain in the existing visible semantic registry; protected identifiers,
-unknown keys, duplicate names or subjects, SQL-like text, credentials, and stale
-references fail closed without exposing protected names.
+Each subject must use one of the canonical `model:` / `field:` / `relationship:` /
+`metric:` forms and must remain in the existing visible semantic registry; protected
+identifiers, unknown keys, duplicate names or subjects, SQL-like text, credentials, and
+stale references fail closed without exposing protected names. Diagnostics name the
+offending property or subject position, never a rejected key, value, or local path taken
+from the artifact or the local configuration.
 
 `contract validate` requires an explicit valid artifact. `contract context` and
 `contract search` return only valid approved contracts; draft and deprecated contracts
 remain local review artifacts. `contract drift` reports `valid`, `stale`, `invalid`, or
-`unavailable` evidence offline and exits non-zero except for `valid`. A missing default
+`unavailable` evidence offline and exits non-zero except for `valid`; a subject whose form
+is unsupported is `invalid`, while a well-formed subject that no longer exists is `stale`. A missing default
 file is allowed by `skill context` and leaves ordinary semantic context unchanged; a
 present invalid file fails closed. No contract command writes a file, opens a database
 connection, widens a `QueryDraft`, or changes permission/blacklist behavior.

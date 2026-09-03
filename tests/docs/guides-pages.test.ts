@@ -9,6 +9,7 @@ const guideSlugs = [
   'orm-schema-drift',
   'offline-impact-assessment',
   'evidence-packs',
+  'semantic-contracts',
   'slow-endpoint',
   'why-dbcli',
   // Not `as const`, for the same reason as `locales` below.

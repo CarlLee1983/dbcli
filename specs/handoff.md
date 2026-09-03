@@ -1,73 +1,70 @@
 # ForgeFlow Handoff
 
-DBCLI-010 is delivered as `6af7592f`; the worktree is clean.
+DBCLI-011 是最後一個 Story，已交付；工作區乾淨。
 
-DBCLI-002 through DBCLI-009 and DBCLI-012 were delivered earlier on this branch
-(`ca123683`, `743688a3`, `49cbb6b8`, `bc8dd329`, `363436ff`, `41983853`,
-`3278b6fd`, `0861bd41`, `e84f889b`), and
-the ForgeFlow 0.3.0 migration landed as `ee3c9907`. DBCLI-001 was recorded as
-delivered by an earlier handoff; that claim is carried forward here and has
-still not been re-verified.
+DBCLI-002 到 DBCLI-010 與 DBCLI-012 先前已在本分支交付
+(`ca123683`、`743688a3`、`49cbb6b8`、`bc8dd329`、`363436ff`、`41983853`、
+`3278b6fd`、`0861bd41`、`e84f889b`、`6af7592f`)，ForgeFlow 0.3.0 遷移為
+`ee3c9907`。DBCLI-001 由更早的交接紀錄記為已交付；該說法沿用至今，仍未重新驗證。
 
-DBCLI-007 through DBCLI-010 were all executed as baseline-conformance Stories:
-current behavior was verified against every acceptance item first, and code
-changed only where a criterion failed.
+DBCLI-007 到 DBCLI-011 都以 baseline conformance 執行：先逐條驗證現況，只在
+驗收條件真的不成立的地方改碼。
 
-For DBCLI-007 that was Rule R5 — a malformed artifact must fail closed with an
-actionable error, but the two JSON-decoding input paths raised the raw
-`JSON.parse` or Zod failure, naming neither the file nor the fields.
-`src/core/orm-drift/artifact-json.ts` now bounds both.
+DBCLI-011 有兩個條件不成立，都落在失敗輸出。第一個是 R5：
+`rejectUnknownKeys` 把被拒絕的 JSON property key 內插進診斷路徑，而那個 key
+完全由產物作者控制——實測 `contract validate` 的 stderr 與
+`contract drift --format json` 會原樣印出帶憑證與絕對路徑的 key。現在改為列出
+允許的 property 名稱，不再複述被拒絕的那一個。第二個是 R1：subject 的形式從未
+被檢查，只檢查是否還在 registry 裡，所以 `table:orders` 這種不支援的形式被判為
+`stale`——與「model 被改名」同一個判決。形式檢查移到 parse 階段，形式不合現在是
+`invalid`，`stale` 只留給形式正確但已不存在的 reference。
 
-For DBCLI-008 three criteria failed: a conflicting output target was flattened
-into the generic message so the reason was invisible; the zh-TW Pages guide
-lacked the optional `--events` workload evidence and reviewed data-access
-metadata the English guide carries; and both `index.html` user docs omitted the
-incomplete-by-design contract their Markdown counterparts state. `safeMessage`
-in `src/commands/impact.ts` also moved from prefix matching to exact matching,
-so a literal that later grows an interpolated suffix cannot silently leak.
+Code review 又找出三件事。最重要的是形式檢查本身：第一版把 `field:` 的欄位部分
+限制成 `[A-Za-z_][A-Za-z0-9_$]*`，但 `semanticReferenceRegistry` 是直接用可見
+schema 的欄位名組出 `field:<model>.<column>`，帶連字號、點或非 ASCII 的欄位都
+會被它送出來。那會讓一份 subject 確實在 registry 裡的合法產物從 PASS 變成
+fail closed，是 baseline conformance Story 不該引入的回歸。欄位部分現在只排除
+換行，實際的邊界由 registry 成員檢查負責。`isCanonicalSemanticReference` 沒有
+被重用，因為它同樣窄——它守的是 agent 產生的 query draft，不是已審閱的本機產物。
 
-For DBCLI-009 every receipt boundary already conformed; two things did not. In
-`src/commands/assert.ts` a failed receipt write exited before the verdict was
-printed, so a `--format json` caller received a stderr line instead of the
-envelope and `--no-fail` was overridden — while the adjacent artifact branch
-already carried the opposite rule in a comment. And in both Markdown user docs
-a paragraph sat between rows of the receipt flag table, splitting it in two on
-render; that paragraph was also missing from both HTML docs.
+另外兩件是命令邊界：`fail()` 直接印任何 Error 的 message，而 `configModule.read`
+的錯誤帶絕對路徑（與 DBCLI-010 同一類），現在走 exact-match 的 `safeMessage`；
+`collectContractEvidence` 用 `loadSnippets` 卻只需要 key，等於讀並解析每一份
+saved query 的 SQL body 還把解析警告印到 stderr，違反 loader 自己寫明的邊界，
+改用 `listSnippetKeys`。
 
-For DBCLI-010 the failure was again in failure output: `evidence compose
---receipt <missing>` printed a raw `ENOENT` carrying an absolute path, because
-`safeMessage` passed through any Error message. It now allows only the two
-validation error classes plus a bounded `ConfigError` line, the receipt lookup
-raises a bounded not-found, and the shared `validateFormat` was replaced by a
-bounded check — its message quotes the rejected value, which a caller can make
-a path.
+新 subject 形式訊息刻意含 "reference" 一字，因為 `src/core/context/context-v2.ts`
+用 `message.includes('reference')` 分類錯誤碼；不這樣寫會把已交付的
+`INVALID_RESOURCE_REFERENCE` 悄悄改成 `INVALID_SEMANTIC_CONTEXT`。那個 substring
+判斷本身很脆弱，但收斂它不屬於本 Story。
 
-Every other criterion in all four Stories already conformed and is pinned by
-characterization tests rather than rewritten. No Superseded Behavior artifact
-had to be contradicted. `offline-impact-assessment` was added to `guideSlugs` in
-`tests/docs/guides-pages.test.ts`, and `evidence-packs` during DBCLI-010. Only
-`semantic-contracts` (DBCLI-011) and `verification-evidence` remain exempt from
-those structural checks; the latter's two language versions were read during
-DBCLI-009 and found already aligned.
+`validateSubjects` 先查 blacklist 再查形式，所以形式錯誤不會蓋掉「這個 subject
+指向受保護資料」這個對審查者更重要的訊號。
 
-Three doc-contract tests now share a similar text normalization
-(`impact-docs`, `verification-receipt-docs`, `evidence-pack-docs`) but scope
-their sections three different ways. They were deliberately not unified: doing
-so would change assertion semantics in two Stories that are already delivered.
+文件方面：英文版 Pages guide 缺了中文版有的 evidence policy 列舉；四個
+`docs/user/{en,zh-TW}/index.{md,html}` 版面本來就對齊，新增的兩條行為由
+`tests/unit/skill-assets/semantic-contract-docs.test.ts` 釘住。
+`semantic-contracts` 已加入 `tests/docs/guides-pages.test.ts` 的 `guideSlugs`，
+現在只剩 `verification-evidence` 不在結構檢查內。
 
-No Story is selected next. DBCLI-011 is the only remaining candidate; it is
-baseline-conformance, with no ordering dependency
-(see `specs/stories/SCENARIO-MAP.md`). Selection is pending a human decision and
-must not be inferred from the order of that list. No known product delta remains.
+新增的每一條斷言都做過 mutation 檢查：把行為改回舊版，對應的測試會紅。
 
-`make verify` cannot reach PASS for a reason unrelated to any Story: `bun audit`
-reports two pre-existing moderate advisories (`@humanfs/node` via eslint,
-`mysql2`). `package.json` and `bun.lock` are untouched by this work. The other
-22 steps of the gate were run individually and all passed, including
+`make verify` 仍因與任何 Story 無關的原因無法 PASS：`bun audit` 回報兩個既有的
+moderate 漏洞（eslint 依賴的 `@humanfs/node`、`mysql2`）。`package.json` 與
+`bun.lock` 未被本次工作動到。其餘 24 個步驟逐項執行全部通過，包含
 `SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test`
-(6338 pass, 0 fail).
+（6357 pass、0 fail）。
 
-The branch is still unpushed and has no PR.
+分支仍未推送，也沒有 PR。已知的產品缺口沒有剩下的了。
+
+## 未在本 Story 範圍內的待辦
+
+- `src/core/data-access/index.ts:285` 仍用 `` `${path}.${key}` `` 內插被拒絕的
+  key，與本 Story 修掉的是同一類。目前被 `src/commands/impact.ts` 的訊息
+  allowlist 擋住，但三個同級 validator 現在有三種寫法。
+- `context-v2.ts` 以 substring 判斷錯誤分類。
+- 四個 doc-contract 測試共用相似的文字正規化卻各自 scope；沿用 DBCLI-009 的
+  決定不合併，合併會改到已交付 Story 的斷言語意。
 
 ## Lifecycle
 
@@ -86,13 +83,14 @@ workflow:
     - DBCLI-008
     - DBCLI-009
     - DBCLI-010
+    - DBCLI-011
     - DBCLI-012
   status: awaiting_selection
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: feat/forgeflow-stories-002-006
-  commit: 6af7592fe1738bc8caa6cf89e4e5c5b7cdf66c69
+  commit: pending
   dirty_worktree: false
   story_owned_paths: []
   known_unrelated_paths: []

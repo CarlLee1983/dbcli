@@ -1142,7 +1142,7 @@ shell rc file and re-running it replaces that block rather than duplicating it.
 > dbcli contract drift --format json
 > ```
 >
-> These commands never connect or execute queries. `context`, `search`, and `skill context` expose only valid `approved` contracts; draft and deprecated terms remain local review artifacts. A missing contract file leaves ordinary semantic context unchanged, while an explicitly requested missing or invalid file fails closed. `contract drift` distinguishes valid, stale, invalid, and unavailable local evidence.
+> These commands never connect or execute queries. `context`, `search`, and `skill context` expose only valid `approved` contracts; draft and deprecated terms remain local review artifacts. A missing contract file leaves ordinary semantic context unchanged, while an explicitly requested missing or invalid file fails closed. `contract drift` distinguishes valid, stale, invalid, and unavailable local evidence: a subject that is not one of the four canonical forms is invalid, while a well-formed subject that no longer exists is stale. Diagnostics name the offending property or subject position, never a rejected key, value, or local path taken from the artifact or the local configuration.
 >
 > **Agent query drafts.** First give the external agent the reviewed output of `dbcli semantic context --format json`; keep its provider account, credentials, prompt, and any other agent context outside dbcli. The agent returns an untrusted `QueryDraft` file shaped like this (use only the models and fields from that semantic context):
 >

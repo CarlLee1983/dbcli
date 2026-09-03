@@ -63,6 +63,21 @@ const MAX_ALIASES = 20
 const MAX_NAME_LENGTH = 100
 const MAX_TEXT_LENGTH = 1_000
 const IDENTIFIER = /^[a-z][a-z0-9-]*$/
+/**
+ * The four subject forms `semanticReferenceRegistry` can emit. Checking the
+ * form while parsing keeps a malformed artifact `invalid`, so drift does not
+ * report it as `stale` alongside a genuinely renamed reference.
+ *
+ * The column half of a `field:` subject stays deliberately permissive: the
+ * registry emits whatever column the visible schema holds, including hyphens,
+ * dots, and non-ASCII, so a stricter class here would fail an artifact whose
+ * subject is present in the registry. `isCanonicalSemanticReference` is
+ * narrower on purpose — it guards agent-authored query drafts, not a reviewed
+ * local artifact — so this is not a duplicate of it. Registry membership,
+ * checked separately, is what bounds the value.
+ */
+const SUBJECT_FORM =
+  /^(?:model|relationship|metric):[a-z][a-z0-9-]*$|^field:[a-z][a-z0-9-]*\.[^\r\n]+$/
 const STATUSES = new Set<SemanticContractStatus>(['draft', 'approved', 'deprecated'])
 const EVIDENCE_POLICIES = new Set<SemanticContractEvidencePolicy>([
   'none',
@@ -255,7 +270,13 @@ function validateSubjects(
     for (const [subjectIndex, subject] of contract.subjects.entries()) {
       const path = `$.contracts[${contractIndex}].subjects[${subjectIndex}]`
       if (containsBlockedIdentifier(subject, blocked)) {
+        // Checked before the form guard below: a malformed subject that names
+        // blacklisted data is the more important thing to tell a reviewer.
         issue(issues, path, 'must not contain a protected semantic reference')
+      } else if (!SUBJECT_FORM.test(subject)) {
+        // A malformed subject already carries its own parse issue; asking the
+        // registry about it would report the same subject twice.
+        continue
       } else if (!registry.has(subject)) {
         issue(issues, path, 'must reference an available semantic entity')
       }
@@ -275,7 +296,11 @@ function parseSubjects(
   const seen = new Set<string>()
   return values.map((value, index) => {
     const subject = text(value, `${path}[${index}]`, MAX_NAME_LENGTH, issues)
-    if (seen.has(subject)) issue(issues, `${path}[${index}]`, 'duplicate subject')
+    if (subject.length > 0 && !SUBJECT_FORM.test(subject)) {
+      issue(issues, `${path}[${index}]`, 'must use a supported semantic subject reference form')
+    } else if (seen.has(subject)) {
+      issue(issues, `${path}[${index}]`, 'duplicate subject')
+    }
     seen.add(subject)
     return subject
   })
@@ -377,14 +402,18 @@ function text(
   return value
 }
 
+/**
+ * Names the allowed properties rather than the rejected one: a rejected key is
+ * artifact input, and diagnostics reach stderr and `drift --format json`.
+ */
 function rejectUnknownKeys(
   value: Record<string, unknown>,
   allowed: readonly string[],
   path: string,
   issues: SemanticContractValidationIssue[]
 ): void {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) issue(issues, `${path}.${key}`, 'is not allowed')
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    issue(issues, path, `must contain only these properties: ${allowed.join(', ')}`)
   }
 }
 

@@ -8,10 +8,14 @@ migration landed as `ee3c9907`. DBCLI-001 was recorded as delivered by an
 earlier handoff; that claim is carried forward here and was not re-verified in
 this session.
 
-No Story is selected next. Candidates, recorded as prose only: DBCLI-007,
-DBCLI-008, DBCLI-009, DBCLI-010, and DBCLI-011 are baseline-conformance Stories
-with no ordering dependency (see `specs/stories/SCENARIO-MAP.md`). No known
-product delta remains.
+DBCLI-007 (ORM schema drift review) is selected next. It is a
+baseline-conformance Story: start by verifying current `diff --against-orm`
+behavior against its acceptance criteria and change code only where a criterion
+fails. Its Superseded Behavior section names the tests and documents whose
+current assertions are the baseline. The remaining candidates, recorded as prose
+only, are DBCLI-008, DBCLI-009, DBCLI-010, and DBCLI-011 — also
+baseline-conformance, with no ordering dependency (see
+`specs/stories/SCENARIO-MAP.md`). No known product delta remains.
 
 `make verify` cannot reach PASS for a reason unrelated to any Story: `bun audit`
 reports two pre-existing moderate advisories (`@humanfs/node` via eslint,
@@ -25,7 +29,7 @@ reports two pre-existing moderate advisories (`@humanfs/node` via eslint,
 ```yaml
 workflow:
   current_story: none
-  next_story: pending
+  next_story: DBCLI-007
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -34,7 +38,7 @@ workflow:
     - DBCLI-005
     - DBCLI-006
     - DBCLI-012
-  status: awaiting_selection
+  status: selected
 
 baseline:
   repository: CarlLee1983/dbcli

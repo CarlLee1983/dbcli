@@ -1,7 +1,7 @@
 # ForgeFlow Stories
 
-This repository adopted ForgeFlow 0.3.1 from revision
-`1096ef5125f1e2d7c304f65d5c7405b76aadf335`; `specs/.forgeflow-adoption` is the
+This repository adopted ForgeFlow 0.3.2 from revision
+`7bbdf443ead484780e23df9abf055095d4c629e2`; `specs/.forgeflow-adoption` is the
 machine-readable record of that. It was first adopted at 0.3.0
 (`afca7600db01279ddfe74ac030bd226444cc8b11`).
 

@@ -27,6 +27,13 @@
  * Story must carry a trailer. An entry whose commit stops existing fails, and
  * so does an entry for a Story that has since acquired a trailer — a stale
  * exemption is drift of the same kind this gate exists to catch.
+ *
+ * A shallow clone is refused rather than tolerated. `actions/checkout` fetches
+ * `--depth=1` by default, and under it `git log` sees one commit, no trailers,
+ * and every Story looks unbacked — twelve confident failures with one real
+ * cause. Skipping instead would be worse: a gate that quietly passes wherever
+ * its evidence is missing is a gate that passes in CI and nowhere else. So it
+ * says which condition it cannot check, and CI hands it full history.
  */
 
 import { $ } from 'bun'
@@ -93,6 +100,17 @@ async function storyDirectories(): Promise<Map<string, string>> {
       return [directory.replace(/^(DBCLI-\d+).*$/, '$1'), directory]
     })
   )
+}
+
+if ((await $`git rev-parse --is-shallow-repository`.text()).trim() === 'true') {
+  console.error(
+    'ForgeFlow handoff reconciliation cannot run: this is a shallow clone.\n\n' +
+      '  Commit trailers are the evidence this gate reads, and a shallow clone has\n' +
+      '  almost none of them. Fetch full history first:\n\n' +
+      '    git fetch --unshallow          # locally\n' +
+      '    actions/checkout with fetch-depth: 0   # in CI\n'
+  )
+  process.exit(1)
 }
 
 const handoff = await Bun.file(handoffPath).text()

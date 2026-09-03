@@ -139,6 +139,27 @@ const MAX_TEXT_LENGTH = 1_000
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
 const IDENTIFIER = /^[a-z][a-z0-9-]*$/
+
+/**
+ * The issues that mean "the referenced entity is unavailable", as opposed to
+ * "the artifact is malformed". Consumers classify on these exact literals
+ * rather than searching the message for a word.
+ */
+const UNAVAILABLE_TABLE = 'must reference a visible cached table'
+const UNAVAILABLE_SAVED_QUERY = 'must reference an available saved query'
+const UNDECLARED_MODEL = 'must reference a declared model'
+const UNDECLARED_FIELD = 'must reference a declared field on the model'
+const REFERENCE_MESSAGES: ReadonlySet<string> = new Set([
+  UNAVAILABLE_TABLE,
+  UNAVAILABLE_SAVED_QUERY,
+  UNDECLARED_MODEL,
+  UNDECLARED_FIELD,
+])
+
+/** True when a failure is about the referenced entity, not the artifact shape. */
+export function hasSemanticReferenceIssue(issues: readonly SemanticValidationIssue[]): boolean {
+  return issues.some(({ message }) => REFERENCE_MESSAGES.has(message))
+}
 const CARDINALITIES = new Set<SemanticRelationshipCardinality>([
   'one-to-one',
   'one-to-many',
@@ -519,7 +540,7 @@ function validateReferences(
   for (const [modelIndex, model] of context.models.entries()) {
     const path = `$.models[${modelIndex}]`
     const table = schema[model.table]
-    if (!table) issue(issues, `${path}.table`, 'must reference a visible cached table')
+    if (!table) issue(issues, `${path}.table`, UNAVAILABLE_TABLE)
     for (const [fieldIndex, field] of model.fields.entries()) {
       if (table && !table.columns.some((candidate) => candidate.name === field.column)) {
         issue(
@@ -532,7 +553,7 @@ function validateReferences(
   }
   for (const [metricIndex, metric] of context.metrics.entries()) {
     if (!snippetKeys.has(metric.query)) {
-      issue(issues, `$.metrics[${metricIndex}].query`, 'must reference an available saved query')
+      issue(issues, `$.metrics[${metricIndex}].query`, UNAVAILABLE_SAVED_QUERY)
     }
   }
 }
@@ -613,9 +634,9 @@ function parseEndpoint(
   const model = namedString(value.model, `${path}.model`, issues)
   const field = requiredText(value.field, `${path}.field`, issues)
   const target = models.find((candidate) => candidate.name === model)
-  if (!target) issue(issues, `${path}.model`, 'must reference a declared model')
+  if (!target) issue(issues, `${path}.model`, UNDECLARED_MODEL)
   else if (!target.fields.some((candidate) => candidate.column === field)) {
-    issue(issues, `${path}.field`, 'must reference a declared field on the model')
+    issue(issues, `${path}.field`, UNDECLARED_FIELD)
   }
   return { model, field }
 }

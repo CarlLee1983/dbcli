@@ -282,7 +282,7 @@ describe('contract commands', () => {
       issues: [
         {
           path: '$.contracts[0].subjects[0]',
-          message: 'must use a supported semantic subject reference form',
+          message: 'must use a supported semantic subject form',
         },
       ],
     })

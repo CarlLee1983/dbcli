@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
+import { readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -10,6 +11,7 @@ const guideSlugs = [
   'offline-impact-assessment',
   'evidence-packs',
   'semantic-contracts',
+  'verification-evidence',
   'slow-endpoint',
   'why-dbcli',
   // Not `as const`, for the same reason as `locales` below.
@@ -40,6 +42,25 @@ async function loadPage(path: string) {
   window.document.write(html)
   return { html, document: window.document }
 }
+
+/**
+ * `guideSlugs` is a hand-kept list, and three guides once sat outside it for
+ * several releases with no hub, structure, link or English-purity checking.
+ * Reading the directory is what stops a fourth from doing the same.
+ */
+describe('guide coverage', () => {
+  test.each(locales.map(({ locale, directory }) => [locale, directory]))(
+    '%s: every published guide is listed in guideSlugs',
+    async (_locale, directory) => {
+      const published = (await readdir(directory))
+        .filter((entry) => entry.endsWith('.html') && entry !== 'index.html')
+        .map((entry) => entry.replace(/\.html$/, ''))
+        .sort()
+
+      expect(published).toEqual([...guideSlugs].sort())
+    }
+  )
+})
 
 describe.each(locales)(
   '$locale guide collection',

@@ -51,6 +51,38 @@ describe('data-access manifest', () => {
     ])
   })
 
+  test('reports an unsupported property without reproducing the rejected key', async () => {
+    const seededKey = 'SECRET-8d02-/Users/example/private/leak.txt'
+
+    try {
+      await normalizeDataAccessManifest(
+        {
+          version: 1,
+          [seededKey]: 'x',
+          operations: [
+            {
+              name: 'orders.list',
+              source: 'src/orders.ts',
+              kind: 'read',
+              references: ['model:orders'],
+              coverage: 'declared',
+              [seededKey]: 'x',
+            },
+          ],
+        },
+        { workspaceRoot: workspace, references }
+      )
+      throw new Error('expected validation failure')
+    } catch (error) {
+      expect(error).toBeInstanceOf(DataAccessManifestValidationError)
+      const issues = (error as DataAccessManifestValidationError).issues
+      expect(JSON.stringify(issues)).not.toContain(seededKey)
+      expect(JSON.stringify(issues)).not.toContain('SECRET')
+      expect(issues.map(({ path }) => path)).toEqual(['$', '$.operations[0]'])
+      expect(issues[0]?.message).toContain('version, operations')
+    }
+  })
+
   test('rejects duplicate names, unknown references, and missing declared coverage without exposing protected text', async () => {
     await expect(
       normalizeDataAccessManifest(

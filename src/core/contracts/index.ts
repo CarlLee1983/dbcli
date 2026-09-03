@@ -21,6 +21,23 @@ export interface SemanticContractValidationIssue {
   message: string
 }
 
+/**
+ * The issues that mean "the referenced entity is unavailable or protected",
+ * as opposed to "the artifact is malformed". Consumers classify on these
+ * exact literals rather than searching the message for a word: a substring
+ * test silently reclassifies every message that later grows that word.
+ */
+const PROTECTED_SUBJECT = 'must not contain a protected semantic reference'
+const UNAVAILABLE_SUBJECT = 'must reference an available semantic entity'
+const REFERENCE_MESSAGES: ReadonlySet<string> = new Set([PROTECTED_SUBJECT, UNAVAILABLE_SUBJECT])
+
+/** True when a failure is about the referenced entity, not the artifact shape. */
+export function hasSemanticContractReferenceIssue(
+  issues: readonly SemanticContractValidationIssue[]
+): boolean {
+  return issues.some(({ message }) => REFERENCE_MESSAGES.has(message))
+}
+
 export class SemanticContractValidationError extends Error {
   constructor(
     readonly filePath: string,
@@ -272,13 +289,13 @@ function validateSubjects(
       if (containsBlockedIdentifier(subject, blocked)) {
         // Checked before the form guard below: a malformed subject that names
         // blacklisted data is the more important thing to tell a reviewer.
-        issue(issues, path, 'must not contain a protected semantic reference')
+        issue(issues, path, PROTECTED_SUBJECT)
       } else if (!SUBJECT_FORM.test(subject)) {
         // A malformed subject already carries its own parse issue; asking the
         // registry about it would report the same subject twice.
         continue
       } else if (!registry.has(subject)) {
-        issue(issues, path, 'must reference an available semantic entity')
+        issue(issues, path, UNAVAILABLE_SUBJECT)
       }
     }
   }
@@ -297,7 +314,7 @@ function parseSubjects(
   return values.map((value, index) => {
     const subject = text(value, `${path}[${index}]`, MAX_NAME_LENGTH, issues)
     if (subject.length > 0 && !SUBJECT_FORM.test(subject)) {
-      issue(issues, `${path}[${index}]`, 'must use a supported semantic subject reference form')
+      issue(issues, `${path}[${index}]`, 'must use a supported semantic subject form')
     } else if (seen.has(subject)) {
       issue(issues, `${path}[${index}]`, 'duplicate subject')
     }

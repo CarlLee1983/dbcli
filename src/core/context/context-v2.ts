@@ -11,12 +11,14 @@ import { configModule } from '@/core/config'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import {
   filterApprovedSemanticContracts,
+  hasSemanticContractReferenceIssue,
   loadSemanticContracts,
   SemanticContractValidationError,
   type SemanticContract,
 } from '@/core/contracts'
 import {
   defaultDataAccessManifestFile,
+  hasDataAccessReferenceIssue,
   loadDataAccessManifest,
   DataAccessManifestValidationError,
   type DataAccessOperation,
@@ -27,6 +29,7 @@ import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import type { ResolvedSnippet } from '@/core/saved-queries/types'
 import {
   containsBlockedSemanticIdentifier,
+  hasSemanticReferenceIssue,
   loadSemanticContext,
   semanticReferenceRegistry,
   SemanticValidationError,
@@ -254,10 +257,7 @@ export async function gatherContextV2(
       missingFile: 'allow',
     })
   } catch (error) {
-    if (
-      error instanceof SemanticValidationError &&
-      error.issues.some(({ message }) => message.includes('reference'))
-    ) {
+    if (error instanceof SemanticValidationError && hasSemanticReferenceIssue(error.issues)) {
       throw new ContextV2Error('INVALID_RESOURCE_REFERENCE')
     }
     throw new ContextV2Error('INVALID_SEMANTIC_CONTEXT')
@@ -284,7 +284,7 @@ export async function gatherContextV2(
   } catch (error) {
     if (
       error instanceof SemanticContractValidationError &&
-      error.issues.some(({ message }) => message.includes('reference'))
+      hasSemanticContractReferenceIssue(error.issues)
     ) {
       throw new ContextV2Error('INVALID_RESOURCE_REFERENCE')
     }
@@ -303,7 +303,7 @@ export async function gatherContextV2(
   } catch (error) {
     if (
       error instanceof DataAccessManifestValidationError &&
-      error.issues.some(({ message }) => message.includes('reference'))
+      hasDataAccessReferenceIssue(error.issues)
     ) {
       throw new ContextV2Error('INVALID_RESOURCE_REFERENCE')
     }

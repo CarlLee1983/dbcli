@@ -1,77 +1,55 @@
 # ForgeFlow Handoff
 
-DBCLI-011 是最後一個 Story，已交付；工作區乾淨。
+十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`）。
+沒有已知的產品缺口，也沒有選定中的下一個 Story。
 
-DBCLI-002 到 DBCLI-010 與 DBCLI-012 先前已在本分支交付
-(`ca123683`、`743688a3`、`49cbb6b8`、`bc8dd329`、`363436ff`、`41983853`、
-`3278b6fd`、`0861bd41`、`e84f889b`、`6af7592f`)，ForgeFlow 0.3.0 遷移為
-`ee3c9907`。DBCLI-001 由更早的交接紀錄記為已交付；該說法沿用至今，仍未重新驗證。
+## 交付紀錄
 
-DBCLI-007 到 DBCLI-011 都以 baseline conformance 執行：先逐條驗證現況，只在
-驗收條件真的不成立的地方改碼。
+DBCLI-001 到 DBCLI-012 都在 `feat/forgeflow-stories-002-006` 上完成，該分支
+已合併並刪除。每個 Story 的理由寫在自己的 commit body 裡，比這份摘要完整——
+要理解某個決定為什麼是那樣，讀 commit，不要從這裡重新推導。
 
-DBCLI-011 有兩個條件不成立，都落在失敗輸出。第一個是 R5：
-`rejectUnknownKeys` 把被拒絕的 JSON property key 內插進診斷路徑，而那個 key
-完全由產物作者控制——實測 `contract validate` 的 stderr 與
-`contract drift --format json` 會原樣印出帶憑證與絕對路徑的 key。現在改為列出
-允許的 property 名稱，不再複述被拒絕的那一個。第二個是 R1：subject 的形式從未
-被檢查，只檢查是否還在 registry 裡，所以 `table:orders` 這種不支援的形式被判為
-`stale`——與「model 被改名」同一個判決。形式檢查移到 parse 階段，形式不合現在是
-`invalid`，`stale` 只留給形式正確但已不存在的 reference。
+DBCLI-007 到 DBCLI-011 是 baseline conformance：先逐條驗證現況，只在驗收條件
+真的不成立的地方改碼。五個 Story 加起來，**每一個不成立的條件都落在失敗輸出，
+沒有一個在 happy path**。這是這批工作最值得記住的一件事：邊界本身大多早就是
+對的，會出問題的是它壞掉時說了什麼。
 
-Code review 又找出三件事。最重要的是形式檢查本身：第一版把 `field:` 的欄位部分
-限制成 `[A-Za-z_][A-Za-z0-9_$]*`，但 `semanticReferenceRegistry` 是直接用可見
-schema 的欄位名組出 `field:<model>.<column>`，帶連字號、點或非 ASCII 的欄位都
-會被它送出來。那會讓一份 subject 確實在 registry 裡的合法產物從 PASS 變成
-fail closed，是 baseline conformance Story 不該引入的回歸。欄位部分現在只排除
-換行，實際的邊界由 registry 成員檢查負責。`isCanonicalSemanticReference` 沒有
-被重用，因為它同樣窄——它守的是 agent 產生的 query draft，不是已審閱的本機產物。
+DBCLI-001 由更早的交接紀錄記為已交付，該說法一路沿用，至今仍未重新驗證。
 
-另外兩件是命令邊界：`fail()` 直接印任何 Error 的 message，而 `configModule.read`
-的錯誤帶絕對路徑（與 DBCLI-010 同一類），現在走 exact-match 的 `safeMessage`；
-`collectContractEvidence` 用 `loadSnippets` 卻只需要 key，等於讀並解析每一份
-saved query 的 SQL body 還把解析警告印到 stderr，違反 loader 自己寫明的邊界，
-改用 `listSnippetKeys`。
+## 合併後的收尾
 
-新 subject 形式訊息刻意含 "reference" 一字，因為 `src/core/context/context-v2.ts`
-用 `message.includes('reference')` 分類錯誤碼；不這樣寫會把已交付的
-`INVALID_RESOURCE_REFERENCE` 悄悄改成 `INVALID_SEMANTIC_CONTEXT`。那個 substring
-判斷本身很脆弱，但收斂它不屬於本 Story。
+`chore/post-forgeflow-cleanup` 處理了 DBCLI-011 的 code review 留下、但不屬於
+該 Story 範圍的三件事：
 
-`validateSubjects` 先查 blacklist 再查形式，所以形式錯誤不會蓋掉「這個 subject
-指向受保護資料」這個對審查者更重要的訊號。
+- `src/core/data-access/index.ts` 的 `rejectUnknownKeys` 仍把被拒絕的 key 內插
+  進診斷路徑，與 DBCLI-011 修掉的是同一類。已改為列出允許的屬性名稱。
+- `context-v2.ts` 用 `message.includes('reference')` 判斷錯誤碼。實際查過之後
+  這個 substring 比對比 review 講的更糟：它把「重複的 reference」與「來源檔
+  路徑不可用」也一併判成 `INVALID_RESOURCE_REFERENCE`。三個模組現在各自匯出
+  一個以具名常數做精確比對的述詞，判斷留在擁有那些訊息的模組裡。
+  `INVALID_RESOURCE_REFERENCE` 先前完全沒有測試覆蓋，這正是過度分類沒被發現
+  的原因；現在六個分類情境都有測試。
+- `verification-evidence` 併入 `guides-pages` 的 `guideSlugs`。同時加上一個
+  讀目錄的檢查：`guideSlugs` 是手維護的清單，曾經有三份 guide 長期落在結構、
+  連結與英文純度檢查之外，靠人維護清單擋不住第四份。
 
-文件方面：英文版 Pages guide 缺了中文版有的 evidence policy 列舉；四個
-`docs/user/{en,zh-TW}/index.{md,html}` 版面本來就對齊，新增的兩條行為由
-`tests/unit/skill-assets/semantic-contract-docs.test.ts` 釘住。
-`semantic-contracts` 已加入 `tests/docs/guides-pages.test.ts` 的 `guideSlugs`，
-現在只剩 `verification-evidence` 不在結構檢查內。
+順帶：DBCLI-011 的 subject 形式訊息當初刻意含 "reference" 一字，只為了遷就那個
+substring 比對。述詞落地後那個字不再承載任何東西，訊息已改回
+`must use a supported semantic subject form`。
 
-新增的每一條斷言都做過 mutation 檢查：把行為改回舊版，對應的測試會紅。
+## 仍未處理
 
-`make verify` 仍因與任何 Story 無關的原因無法 PASS：`bun audit` 回報兩個既有的
-moderate 漏洞（eslint 依賴的 `@humanfs/node`、`mysql2`）。`package.json` 與
-`bun.lock` 未被本次工作動到。其餘 24 個步驟逐項執行全部通過，包含
-`SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test`
-（6357 pass、0 fail）。
-
-分支仍未推送，也沒有 PR。已知的產品缺口沒有剩下的了。
-
-## 未在本 Story 範圍內的待辦
-
-- `src/core/data-access/index.ts:285` 仍用 `` `${path}.${key}` `` 內插被拒絕的
-  key，與本 Story 修掉的是同一類。目前被 `src/commands/impact.ts` 的訊息
-  allowlist 擋住，但三個同級 validator 現在有三種寫法。
-- `context-v2.ts` 以 substring 判斷錯誤分類。
-- 四個 doc-contract 測試共用相似的文字正規化卻各自 scope；沿用 DBCLI-009 的
-  決定不合併，合併會改到已交付 Story 的斷言語意。
+- 四個 doc-contract 測試共用相似的文字正規化卻各自 scope。沿用 DBCLI-009 的
+  決定不合併：合併會改到已交付 Story 的斷言語意。
+- `loadSemanticContext` 不拒絕 `version: 2` 的 semantic 產物——寫收尾測試時
+  發現的，與上述三件事無關，也還沒判斷它是不是缺陷。
 
 ## Lifecycle
 
 ```yaml
 workflow:
   current_story: none
-  next_story: pending
+  next_story: none
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -85,17 +63,17 @@ workflow:
     - DBCLI-010
     - DBCLI-011
     - DBCLI-012
-  status: awaiting_selection
+  status: all_delivered
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/forgeflow-stories-002-006
-  commit: 9124a4bd876c321aae8c8dc2daa92f89f648e0a7
+  branch: main
+  commit: 04a88a44bdc5025febf77cd5a739d59226df35a7
   dirty_worktree: false
   story_owned_paths: []
   known_unrelated_paths: []
 
 verification:
   last_command: make verify
-  result: blocked_on_preexisting_bun_audit
+  result: pass
 ```

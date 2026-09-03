@@ -251,7 +251,7 @@ A customer with a paid order in the trailing 30 days.
     await expect(
       loadSemanticContracts({ workspaceRoot: workspace!, filePath, references })
     ).rejects.toThrow(
-      /bounded plain text.*supported semantic subject reference form.*available semantic entity/
+      /bounded plain text.*supported semantic subject form.*available semantic entity/
     )
   })
 
@@ -320,7 +320,7 @@ A customer with a paid order in the trailing 30 days.
     expect(report.issues).toEqual([
       {
         path: '$.contracts[0].subjects[0]',
-        message: 'must use a supported semantic subject reference form',
+        message: 'must use a supported semantic subject form',
       },
     ])
   })
@@ -382,7 +382,7 @@ A customer with a paid order in the trailing 30 days.
       expect((error as SemanticContractValidationError).issues).toEqual([
         {
           path: '$.contracts[0].subjects[0]',
-          message: 'must use a supported semantic subject reference form',
+          message: 'must use a supported semantic subject form',
         },
       ])
     }
@@ -406,7 +406,7 @@ A customer with a paid order in the trailing 30 days.
       issues: [
         {
           path: '$.contracts[0].subjects[0]',
-          message: 'must use a supported semantic subject reference form',
+          message: 'must use a supported semantic subject form',
         },
       ],
     })

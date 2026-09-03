@@ -429,6 +429,129 @@ SELECT 'CANARY_QUERY_BODY' FROM users WHERE id >= :min_id`)
     await expect(gatherContextV2(workspace, configPath)).rejects.toBeInstanceOf(ContextV2Error)
   })
 
+  /**
+   * `INVALID_RESOURCE_REFERENCE` had no coverage at all, which is how a
+   * substring test on the issue message ("reference") kept classifying a
+   * duplicate reference and an unusable source path as reference failures.
+   */
+  describe('invalid-evidence classification', () => {
+    const SCHEMA = {
+      orders: {
+        name: 'orders',
+        columns: [{ name: 'customer_id', type: 'int', nullable: false }],
+      },
+    }
+
+    async function writeSemantic(): Promise<void> {
+      await Bun.file(join(workspace, 'dbcli.semantic.json')).write(
+        JSON.stringify({
+          version: 1,
+          models: [{ name: 'orders', table: 'orders', fields: [{ column: 'customer_id' }] }],
+          metrics: [],
+        })
+      )
+    }
+
+    async function writeDataAccess(operation: Record<string, unknown>): Promise<void> {
+      await Bun.file(join(workspace, 'dbcli.data-access.json')).write(
+        JSON.stringify({ version: 1, operations: [operation] })
+      )
+    }
+
+    const VALID_OPERATION = {
+      name: 'orders.list',
+      source: 'src/orders.ts',
+      kind: 'read',
+      references: ['model:orders'],
+      coverage: 'declared',
+    }
+
+    beforeEach(async () => {
+      mkdirSync(join(workspace, 'src'), { recursive: true })
+      await Bun.file(join(workspace, 'src', 'orders.ts')).write('export {}\n')
+    })
+
+    test('an unknown semantic reference in the manifest is a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await writeSemantic()
+      await writeDataAccess({ ...VALID_OPERATION, references: ['model:not-declared'] })
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_RESOURCE_REFERENCE',
+      })
+    })
+
+    test('a duplicate reference is a malformed manifest, not a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await writeSemantic()
+      await writeDataAccess({ ...VALID_OPERATION, references: ['model:orders', 'model:orders'] })
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_DATA_ACCESS_MANIFEST',
+      })
+    })
+
+    test('an unusable source path is a malformed manifest, not a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await writeSemantic()
+      await writeDataAccess({ ...VALID_OPERATION, source: 'src/does-not-exist.ts' })
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_DATA_ACCESS_MANIFEST',
+      })
+    })
+
+    test('an unknown semantic model reference is a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await Bun.file(join(workspace, 'dbcli.semantic.json')).write(
+        JSON.stringify({
+          version: 1,
+          models: [{ name: 'orders', table: 'not-a-visible-table', fields: [] }],
+          metrics: [],
+        })
+      )
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_RESOURCE_REFERENCE',
+      })
+    })
+
+    test('a malformed semantic artifact is an invalid context, not a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await Bun.file(join(workspace, 'dbcli.semantic.json')).write(
+        JSON.stringify({ version: 1, models: 'not-an-array', metrics: [] })
+      )
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_SEMANTIC_CONTEXT',
+      })
+    })
+
+    test('an unknown contract subject is a reference failure', async () => {
+      await writeConfig('postgresql', SCHEMA)
+      await writeSemantic()
+      await Bun.file(join(workspace, 'dbcli.contracts.json')).write(
+        JSON.stringify({
+          version: 1,
+          contracts: [
+            {
+              name: 'active-customer',
+              status: 'approved',
+              description: 'A customer definition.',
+              subjects: ['model:not-declared'],
+              owner: 'growth',
+              evidencePolicy: 'none',
+            },
+          ],
+        })
+      )
+
+      await expect(gatherContextV2(workspace, configPath)).rejects.toMatchObject({
+        code: 'INVALID_RESOURCE_REFERENCE',
+      })
+    })
+  })
+
   test('emits stable missing-evidence gaps instead of ambiguous empty resources', async () => {
     await writeConfig('mysql')
 

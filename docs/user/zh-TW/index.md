@@ -1428,6 +1428,8 @@ dbcli update <table> --where "<predicate>" --set '<json>' --dry-run
 
 當請求對應到某個具名工作流時,用 pack 來探索與產生計畫,而不是憑記憶拼步驟。所有 pack 都是唯讀 `plan-only`,且仍繼承 blacklist → schema → dry-run 規則。
 
+`slow-endpoint-investigation` 吃必填的 `query` 與必填的 `table`,依佐證順序產生計畫:`blacklist list` → `proxy analyze --format json` → `schema <table> --format json` → `explain "<SQL>"` → `guide missing-index-for "<SQL>" --format json`。schema 排在 explain 與索引建議之前是刻意的——在沒確認資料表當下形狀的情況下讀執行計畫或索引候選,那是猜測。規劃只產出這些指令,別的什麼都不做:不開連線、不讀 proxy 事件與 schema、不執行 SQL,也不執行計畫中的任何一步。proxy 的觀察結果是本地看到的現象,不是端點變慢的已證實原因;索引候選是供審查的材料——這個工作流不建立索引、不套用 migration、不執行 DDL。缺 `query` 或 `table` 會以有界的錯誤失敗,不會輸出半份計畫。
+
 ```bash
 dbcli skill tasks list --format json                       # 探索可用 pack
 dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標籤的有序計畫
@@ -1437,7 +1439,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # 產生帶風險標�
 | --- | --- | --- |
 | 「這條 SQL 很慢」(已有語句) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | 「X 表很重/很熱」(已有表名) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
-| 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"`(串接 `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| 「這個 API 端點慢」 | `skill tasks plan slow-endpoint-investigation --param query="<SQL>" --param table=<table>`(blacklist → `proxy analyze` → `schema` → `explain` → missing-index) | `slow-endpoint-investigation` |
 | 全環境效能掃描 | `report --section perf` → `guide slow-query` | _(report + guide,無 pack)_ |
 | 「給 agent 寫權限前先稽核」 | `skill tasks plan audit-permissions`(可選 `--param table=<table>` 抽查欄位覆蓋) | `audit-permissions` |
 | 「線上 schema 跟 committed cache 一致嗎?」 | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |

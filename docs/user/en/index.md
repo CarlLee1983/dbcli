@@ -1573,6 +1573,8 @@ The Developer Workflows above are the *minimum safe paths*. This section maps co
 
 When a request matches a named workflow, discover and plan with a pack instead of inventing steps from memory. All packs are read-only `plan-only` and still inherit the blacklist → schema → dry-run rules.
 
+`slow-endpoint-investigation` takes a required `query` and a required `table`, and plans in evidence order: `blacklist list` → `proxy analyze --format json` → `schema <table> --format json` → `explain "<SQL>"` → `guide missing-index-for "<SQL>" --format json`. The schema step comes before explain and index guidance on purpose — a plan or index candidate read against a table whose live shape you have not confirmed is a guess. Planning emits the commands and nothing else: it opens no connection, reads no proxy events or schema, runs no SQL, and invokes none of the steps. A proxy finding is what was observed locally, not the proven cause of endpoint latency, and an index candidate is review material — the workflow creates no index, applies no migration, and runs no DDL. Omitting `query` or `table` fails with a bounded error and emits no partial plan.
+
 ```bash
 dbcli skill tasks list --format json                       # discover packs
 dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered, risk-labelled plan
@@ -1582,7 +1584,7 @@ dbcli skill tasks plan <pack> --param k=v --format json    # generate an ordered
 | --- | --- | --- |
 | "This SQL is slow" (you have the statement) | `skill tasks plan diagnose-slow-query --param query="<SQL>"` → `lint "<SQL>"` → `guide missing-index-for "<SQL>"` | `diagnose-slow-query` |
 | "Table X is hot / heavy" (you have the table) | `skill tasks plan analyze-table-perf --param table=<table>` | `analyze-table-perf` |
-| "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>"` (pairs `proxy` + `explain` + missing-index) | `slow-endpoint-investigation` |
+| "This API endpoint is slow" | `skill tasks plan slow-endpoint-investigation --param query="<SQL>" --param table=<table>` (blacklist → `proxy analyze` → `schema` → `explain` → missing-index) | `slow-endpoint-investigation` |
 | Whole-environment perf scan | `report --section perf` → `guide slow-query` | _(report + guide, no pack)_ |
 | "Audit access before granting writes" | `skill tasks plan audit-permissions` (optional `--param table=<table>` to spot-check column coverage) | `audit-permissions` |
 | "Does the live schema match the committed cache?" | `skill tasks plan schema-drift-review --param table=<table>` | `schema-drift-review` |

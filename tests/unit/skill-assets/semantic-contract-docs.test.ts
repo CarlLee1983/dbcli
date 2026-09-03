@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { collapseCjkWraps, docKeySection, readDocSource, stripMarkup } from './doc-section'
 
 /**
  * A contract is a reviewed local definition, not an executable rule and not a
@@ -10,40 +11,17 @@ import { describe, expect, test } from 'bun:test'
  * Markdown and the HTML carry, so an unrelated section cannot satisfy a claim.
  */
 async function advancedToolsSection(path: string): Promise<string> {
-  // Windows checks out CRLF, so line endings are not part of what these
-  // claims assert. Normalize before any `\n`-shaped matching below.
-  const raw = (await Bun.file(path).text()).replace(/\r\n/g, '\n')
-  const marker = '<!-- doc-key: advanced-tools -->'
-  const start = raw.indexOf(marker)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = raw.indexOf('<!-- doc-key:', start + marker.length)
-  expect(end).toBeGreaterThan(start)
+  const section = docKeySection(await readDocSource(path), 'advanced-tools')
+  expect(section).not.toBeNull()
 
-  return (
-    raw
-      .slice(start, end)
-      .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
+  return collapseCjkWraps(
+    stripMarkup(section ?? '')
       // Emphasis and code markers vanish without leaving a space behind, so
       // `**not**` between CJK characters does not split the sentence.
       .replace(/[`*]/g, '')
-      // Markdown hard-wraps mid-sentence. A newline between two CJK characters
-      // is that wrap and nothing else, so it disappears; every other newline
-      // collapses to a space below, which is what a wrap between CJK and a
-      // Latin word stood for.
-      .replace(
-        /([\u3000-\u303f\u3400-\u9fff\uff00-\uffef])\n\s*(?=[\u3000-\u303f\u3400-\u9fff\uff00-\uffef])/g,
-        '$1'
-      )
-      // Only a newline is a wrap. Matching any whitespace after the collapse
-      // above would also join two sentences across a full stop, letting a claim
-      // span text the document never wrote as one statement.
-      .replace(/([、。，；：！？])\n[ \t]*/g, '$1')
-      .replace(/\s+/g, ' ')
-      .toLowerCase()
   )
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
 }
 
 const en = [

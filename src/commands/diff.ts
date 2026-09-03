@@ -13,6 +13,10 @@ import { detectOrmFormat, type OrmFormat } from '@/core/orm-drift/adapters/detec
 import { parseDdl, parseDdlFiles } from '@/core/orm-drift/adapters/ddl'
 import { parseDrizzleSnapshot } from '@/core/orm-drift/adapters/drizzle'
 import { parsePrismaSchema } from '@/core/orm-drift/adapters/prisma'
+import {
+  parseDrizzleSnapshotJson,
+  parseNormalizedJsonArtifact,
+} from '@/core/orm-drift/artifact-json'
 import { compareNormalized, type DriftReport } from '@/core/orm-drift/compare'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
 import {
@@ -184,12 +188,13 @@ export async function loadOrmSchema(
         options.system
       )
     : mergeNormalizedSchemas(
-        inputs.map(({ content, format }) => {
+        inputs.map(({ path, content, format }) => {
           if (format === 'prisma') return parsePrismaSchema(content)
           if (format === 'ddl' || format in ORM_ALIASES) return parseDdl(content, options.system)
-          if (format === 'drizzle') return parseDrizzleSnapshot(JSON.parse(content))
-          const parsed = normalizedSchemaZod.parse(JSON.parse(content))
-          return { ...parsed, source: 'json' as const }
+          if (format === 'drizzle')
+            return parseDrizzleSnapshot(parseDrizzleSnapshotJson(path, content))
+          if (format === 'json') return parseNormalizedJsonArtifact(path, content)
+          throw new Error(`Unsupported ORM input format: ${String(format)}`)
         })
       )
   const alias = ormFormat && ormFormat in ORM_ALIASES ? (ormFormat as OrmAlias) : undefined

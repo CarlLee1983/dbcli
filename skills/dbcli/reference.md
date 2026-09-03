@@ -1298,6 +1298,10 @@ The normalized JSON escape hatch is Zod-validated and uses an array of tables
 with explicit exact `identity` objects; optional parsed identifiers must include
 their `quoted` flags, and every normalized JSON `unparsed.reason` must start with
 `blocked:`.
+A Drizzle snapshot or normalized JSON artifact that is not valid JSON, and a
+normalized JSON artifact that violates that contract, fail closed: the error
+names the offending file and lists the fields at fault, bounded with a count of
+the remainder, rather than degrading to `unparsed`.
 
 ```json
 {

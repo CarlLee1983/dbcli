@@ -96,6 +96,20 @@ describe('ORM drift documentation contract', () => {
     }
   })
 
+  test('every documented surface states that malformed JSON artifacts fail closed', async () => {
+    const surfaces = [
+      { path: 'docs/user/en/index.md', marker: 'that is not valid JSON' },
+      { path: 'docs/user/en/index.html', marker: 'that is not valid JSON' },
+      { path: 'docs/user/zh-TW/index.md', marker: '不是合法 JSON' },
+      { path: 'docs/user/zh-TW/index.html', marker: '不是合法 JSON' },
+      { path: 'assets/reference.md', marker: 'names the offending file' },
+    ] as const
+
+    for (const { path, marker } of surfaces) {
+      expect(await read(path)).toContain(marker)
+    }
+  })
+
   test('user Markdown and polished HTML docs mirror the ORM drift workflow in both languages', async () => {
     const documents = [
       {

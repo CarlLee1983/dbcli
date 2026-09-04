@@ -363,6 +363,14 @@ present and readable, and claiming there is no config would be false.
 An unrecognised id fails closed and is never resolved to a similar-looking one. Exit codes:
 `0` all available, `1` any unavailable or unknown, `2` invalid input.
 
+The catalog covers every public command, `capabilities` itself included, and every engine
+claim in it was read out of the implementation. Commands whose code refuses a non-SQL
+connection — `explain`, `plan`, `assert`, `snapshot`, `verify`, `proxy` — report
+`unavailable` with reason `engine` on MongoDB, Redis and Elasticsearch. Commands where only
+one mode needs SQL — `--against-cache` for `impact assess` and `design`, and `draft
+validate` for `semantic` — stay `available` and are marked `limited` on those engines.
+Nothing is marked supported on an engine the code does not settle.
+
 `required` and `results` hold your ids in first-seen input order, so `results[i]` answers
 `required[i]` and a duplicate appears once. Reordering the arguments reorders the output —
 identical input is byte-identical output, but a reordered `--require` is different input.

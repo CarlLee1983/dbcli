@@ -205,6 +205,95 @@ describe('checkCapabilities', () => {
     expect(byId(forward)).toEqual(byId(reverse))
   })
 
+  test('a SQL-only capability is unavailable on the engines whose code refuses it', () => {
+    // DBCLI-PLAT-011. Each of these is `unsupported` in the matrix because the
+    // command itself throws on a non-SQL connection; the reason has to be
+    // `engine`, not `permission`, or a caller goes and edits the wrong thing.
+    const SQL_ONLY = [
+      'query.explain',
+      'query.plan-risk',
+      'data.assert',
+      'data.snapshot',
+      'verification.run',
+      'diagnostic.proxy',
+    ]
+
+    for (const id of SQL_ONLY) {
+      const supported = checkCapabilities([id], PG_QUERY_ONLY)
+      expect({ id, status: supported.results[0]!.status }).toEqual({ id, status: 'available' })
+
+      for (const engine of ['mongodb', 'redis', 'elasticsearch'] as const) {
+        const report = checkCapabilities([id], {
+          engine,
+          permission: 'admin',
+          connectionName: null,
+          agentMode: false,
+        })
+        // `admin` on purpose: no permission level can make an engine support
+        // something its own command refuses.
+        expect({ id, engine, result: report.results[0] }).toEqual({
+          id,
+          engine,
+          result: { id, status: 'unavailable', reason: 'engine' },
+        })
+      }
+    }
+  })
+
+  test('a mode-limited capability stays available off SQL', () => {
+    // `schema.impact-assess`, `semantic.context` and `schema.design` lose one
+    // documented mode on a non-SQL connection — `--against-cache`, and
+    // `semantic draft validate` — and keep the rest. `unsupported` would have
+    // closed a command the caller can actually run.
+    for (const id of ['schema.impact-assess', 'semantic.context', 'schema.design']) {
+      for (const engine of ['mongodb', 'redis', 'elasticsearch'] as const) {
+        const report = checkCapabilities([id], {
+          engine,
+          permission: 'query-only',
+          connectionName: null,
+          agentMode: false,
+        })
+        expect({ id, engine, status: report.results[0]!.status }).toEqual({
+          id,
+          engine,
+          status: 'available',
+        })
+      }
+    }
+  })
+
+  test('an engine-independent capability is available wherever a context exists', () => {
+    for (const id of ['capability.discover', 'capability.check', 'recovery.codes']) {
+      for (const engine of ['postgresql', 'mongodb', 'redis', 'elasticsearch'] as const) {
+        const report = checkCapabilities([id], {
+          engine,
+          permission: 'query-only',
+          connectionName: null,
+          agentMode: false,
+        })
+        expect({ id, engine, status: report.results[0]!.status }).toEqual({
+          id,
+          engine,
+          status: 'available',
+        })
+      }
+    }
+  })
+
+  test('rotating a credential is refused under agent mode whatever the permission', () => {
+    const report = checkCapabilities(['connection.rotate-credential'], {
+      engine: 'postgresql',
+      permission: 'admin',
+      connectionName: null,
+      agentMode: true,
+    })
+    expect(report.results[0]).toEqual({
+      id: 'connection.rotate-credential',
+      status: 'unavailable',
+      reason: 'agent-mode',
+    })
+  })
+
   test('the report satisfies the strict schema', () => {
     for (const context of [PG_QUERY_ONLY, REDIS_ADMIN, null]) {
       const report = checkCapabilities(['schema.read', 'nope.nope'], context)

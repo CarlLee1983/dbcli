@@ -45,6 +45,25 @@ export type CommandCapabilityKey =
   | 'auditShow'
   | 'auditClear'
   | 'auditHealth'
+  | 'explain'
+  | 'plan'
+  | 'impactAssess'
+  | 'assert'
+  | 'snapshot'
+  | 'verify'
+  | 'semantic'
+  | 'design'
+  | 'proxy'
+  | 'proxyAnalyze'
+  | 'verification'
+  | 'verificationPrune'
+  | 'evidence'
+  | 'contract'
+  | 'recovery'
+  | 'backfillArtifact'
+  | 'password'
+  | 'capabilityDiscover'
+  | 'capabilityCheck'
 
 export interface CommandCapability {
   status: CapabilityStatus
@@ -89,6 +108,25 @@ export const COMMAND_CAPABILITY_KEYS = Object.freeze([
   'auditShow',
   'auditClear',
   'auditHealth',
+  'explain',
+  'plan',
+  'impactAssess',
+  'assert',
+  'snapshot',
+  'verify',
+  'semantic',
+  'design',
+  'proxy',
+  'proxyAnalyze',
+  'verification',
+  'verificationPrune',
+  'evidence',
+  'contract',
+  'recovery',
+  'backfillArtifact',
+  'password',
+  'capabilityDiscover',
+  'capabilityCheck',
 ] as const satisfies readonly CommandCapabilityKey[])
 
 function cap(
@@ -171,8 +209,158 @@ const SQL_BASE = {
   inspect: cap('supported', 'readonly', 'Agent context snapshot is supported.'),
   report: cap('supported', 'readonly', 'Diagnostic report is supported.'),
   guide: cap('supported', 'readonly', 'Deterministic next-command planner is supported.'),
+  explain: cap('supported', 'readonly', 'EXPLAIN plans are read from SQL engines.'),
+  plan: cap(
+    'supported',
+    'readonly',
+    'Offline write-risk analysis of SQL against the schema cache.'
+  ),
+  impactAssess: cap(
+    'supported',
+    'local-write',
+    'Offline impact assessment of a SQL schema change; writes its report locally.'
+  ),
+  assert: cap(
+    'supported',
+    'local-write',
+    'Data assertions over SQL results; optionally writes a verification artifact.'
+  ),
+  snapshot: cap(
+    'supported',
+    'local-write',
+    'Captures a SQL result fingerprint under .dbcli/snapshots/.'
+  ),
+  verify: cap(
+    'supported',
+    'local-write',
+    'Scenario verification over SQL; writes a verification artifact.'
+  ),
+  semantic: cap(
+    'supported',
+    'readonly',
+    'Governed semantic context and drift over a SQL schema cache.'
+  ),
+  design: cap(
+    'supported',
+    'local-write',
+    'Schema design authoring and comparison for SQL dialects; init writes a template.'
+  ),
+  proxy: cap(
+    'supported',
+    'interactive',
+    'Local observing proxy for the MySQL, MariaDB and PostgreSQL wire protocols.'
+  ),
+  password: cap(
+    'supported',
+    'interactive',
+    'Rotates the stored connection credential; refused under agent mode.'
+  ),
+  proxyAnalyze: cap(
+    'not-applicable',
+    'readonly',
+    'Reads locally recorded proxy events; never contacts an engine.'
+  ),
+  verification: cap(
+    'not-applicable',
+    'readonly',
+    'Inspects verification artifacts under .dbcli/verification/.'
+  ),
+  verificationPrune: cap(
+    'not-applicable',
+    'local-write',
+    'Deletes local verification artifacts; dry-run unless --execute --force.'
+  ),
+  evidence: cap(
+    'not-applicable',
+    'local-write',
+    'Composes, validates and renders evidence packs from local artifacts.'
+  ),
+  contract: cap(
+    'not-applicable',
+    'readonly',
+    'Validates and inspects governed semantic contracts offline.'
+  ),
+  recovery: cap(
+    'not-applicable',
+    'readonly',
+    'Renders recovery codes and their remediation steps from a static table.'
+  ),
+  backfillArtifact: cap(
+    'not-applicable',
+    'local-write',
+    'Builds a backfill artifact from a source manifest and v2 connection identity.'
+  ),
+  capabilityDiscover: cap(
+    'not-applicable',
+    'readonly',
+    'Emits the static capability catalog; opens no connection.'
+  ),
+  capabilityCheck: cap(
+    'not-applicable',
+    'readonly',
+    'Evaluates required capability ids against the local configuration only.'
+  ),
   ...ENGINE_INDEPENDENT,
 } satisfies EngineCapabilities
+
+/**
+ * The commands whose implementation refuses a non-SQL connection outright.
+ *
+ * One object rather than three copies: the reason each is unsupported is the
+ * same gate in the same file, so writing it once per engine would be three
+ * places to update when a gate moves, and three chances for them to disagree.
+ * Every note names the line that refuses.
+ */
+const SQL_ONLY_UNSUPPORTED = {
+  explain: cap('unsupported', 'none', 'src/commands/explain.ts refuses a non-SQL connection.'),
+  plan: cap(
+    'unsupported',
+    'none',
+    'Risk analysis is SQL-dialect based; toSqlDialect resolves no dialect here.'
+  ),
+  assert: cap('unsupported', 'none', 'src/commands/assert.ts refuses a non-SQL connection.'),
+  snapshot: cap('unsupported', 'none', 'src/commands/snapshot.ts refuses a non-SQL connection.'),
+  verify: cap('unsupported', 'none', 'src/commands/verify.ts refuses a non-SQL connection.'),
+  proxy: cap(
+    'unsupported',
+    'none',
+    'The proxy speaks the MySQL and PostgreSQL wire protocols only.'
+  ),
+} satisfies Pick<
+  EngineCapabilities,
+  'explain' | 'plan' | 'assert' | 'snapshot' | 'verify' | 'proxy'
+>
+
+/**
+ * Commands that run on any engine but lose one documented mode off SQL.
+ *
+ * These three were first written into `SQL_ONLY_UNSUPPORTED` on the strength of
+ * an engine check found by grep. Reading the callers showed the check guards a
+ * *mode*, not the command: `--against-cache` for `design diff` / `design
+ * propose` / `impact assess`, and `draft validate` for `semantic`. The
+ * `--against-orm` paths, `design init`, `design render` and the rest of
+ * `semantic` never look at the connection at all. `unsupported` would have told
+ * an agent on MongoDB that a command it can actually run is closed to it — a
+ * fail-closed error, but an error, and the kind that makes a contract less
+ * useful without ever looking wrong.
+ */
+const SQL_MODE_LIMITED = {
+  impactAssess: cap(
+    'limited',
+    'local-write',
+    'Runs against an ORM artifact; --against-cache needs a SQL connection.'
+  ),
+  semantic: cap(
+    'limited',
+    'readonly',
+    'Governed context, search and drift work; draft validate needs a SQL connection.'
+  ),
+  design: cap(
+    'limited',
+    'local-write',
+    'Authoring and ORM comparison work; --against-cache needs a SQL connection.'
+  ),
+} satisfies Pick<EngineCapabilities, 'impactAssess' | 'semantic' | 'design'>
 
 export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabilities>> =
   Object.freeze({
@@ -184,6 +372,10 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     mariadb: Object.freeze(SQL_BASE),
     mongodb: Object.freeze({
       ...SQL_BASE,
+      ...SQL_ONLY_UNSUPPORTED,
+      ...SQL_MODE_LIMITED,
+      ...SQL_MODE_LIMITED,
+      ...SQL_MODE_LIMITED,
       lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'MongoDB schema is sampled from documents.'),
       schemaFullScan: cap('limited', 'readonly', 'Full scan is sampled and document-oriented.'),
@@ -235,6 +427,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     }),
     redis: Object.freeze({
       ...SQL_BASE,
+      ...SQL_ONLY_UNSUPPORTED,
       lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'Per-key synthetic schema only.'),
       schemaFullScan: cap('unsupported', 'none', 'Redis has no full schema cache scan.'),
@@ -278,6 +471,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     }),
     elasticsearch: Object.freeze({
       ...SQL_BASE,
+      ...SQL_ONLY_UNSUPPORTED,
       lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'Schema flattens index mappings.'),
       schemaFullScan: cap('supported', 'readonly', 'Full scan iterates non-system indices.'),

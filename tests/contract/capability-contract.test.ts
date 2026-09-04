@@ -24,6 +24,37 @@ const toPosix = (file: string): string => file.replaceAll('\\', '/')
 const SRC = resolve(import.meta.dir, '../../src')
 const tree = buildCompletionTree(buildProgram())
 
+/**
+ * The module a command path is implemented in.
+ *
+ * Not `commands/<name>.ts`. That assumption held for every command the v1
+ * catalog covered and quietly stopped holding when DBCLI-PLAT-011 added
+ * `password` and `contract`, whose modules are `credential.ts` and
+ * `contracts.ts`: the file lookup missed, the checks below saw no source, and
+ * "this command writes no configuration" came back true for the command whose
+ * entire purpose is writing a credential. A miss that reads as a pass is worse
+ * than a miss that errors, so the mapping is read from the one place that
+ * records it — the lazy loader's `import('./commands/<module>')` — and a path
+ * with no module at all is a failure, not a skip.
+ */
+const LAZY_MODULES: ReadonlyMap<string, string> = new Map(
+  [
+    ...(await readFile(join(SRC, 'program-lazy.ts'), 'utf8')).matchAll(
+      /^\s{2}'?([a-z-]+)'?:\s*async[^\n]*\n\s*const \{[^}]*\} = await import\('\.\/commands\/([\w-]+)'\)/gm
+    ),
+  ].map(([, command, module]) => [command as string, module as string])
+)
+
+async function commandEntry(path: string): Promise<string> {
+  const top = path.split(' ')[0] as string
+  const module = LAZY_MODULES.get(top) ?? top
+  const entry = join(SRC, `commands/${module}.ts`)
+  if (!(await Bun.file(entry).exists())) {
+    throw new Error(`no module found for \`dbcli ${path}\` (looked for commands/${module}.ts)`)
+  }
+  return entry
+}
+
 /** Every distinct command path the catalog names. */
 const commandPaths = [...new Set(CAPABILITIES.map((capability) => capability.command))].sort()
 
@@ -233,8 +264,7 @@ const CONFIG_MUTATORS = [
 const INCIDENTAL_CONFIG_WRITERS = new Set<string>()
 
 async function commandWritesConfig(commandPath: string): Promise<boolean> {
-  const entry = join(SRC, `commands/${commandPath.split(' ')[0]}.ts`)
-  if (!(await Bun.file(entry).exists())) return false
+  const entry = await commandEntry(commandPath)
 
   const graph = [...(await importGraph(entry))].filter((file) => file.includes('/src/commands/'))
   for (const file of graph) {
@@ -298,22 +328,47 @@ describe('capability configuration-mutation parity', () => {
 
 // ── 3. evidence claims track the real evidence subsystem ─────────────────
 
+/**
+ * The modules that produce a durable receipt of what a command did.
+ *
+ * Until DBCLI-PLAT-011 this pair of tests asserted the opposite — that the
+ * catalog claimed no evidence anywhere — because the v1 catalog did not cover
+ * `assert`, `verify` or `evidence`, the three commands that write one. That was
+ * true of v1 and is exactly the kind of assertion that goes stale silently, so
+ * it is replaced by the parity it was standing in for: what the catalog claims
+ * equals what the import graphs reach, in both directions.
+ */
+const EVIDENCE_WRITERS = ['writeVerificationArtifact', 'writeEvidenceReceipt', 'writeEvidencePack']
+
 describe('capability evidence parity', () => {
-  test('no v1 capability claims evidence support', () => {
-    // The evidence receipt is emitted by `assert`, `verify` and `evidence`,
-    // none of which the v1 catalog covers (ADR-0022). A `true` here without a
-    // corresponding receipt would be a promise nothing keeps.
-    expect(COMMAND_SURFACE.evidenceCommands.size).toBe(0)
-    expect(CAPABILITIES.every((capability) => !capability.supportsEvidence)).toBe(true)
+  test('the declared evidence surface is exactly what the command graphs reach', async () => {
+    // Reaching an evidence module is not writing one: `insert`, `query` and a
+    // dozen others pull the receipt *types* in transitively. What a caller is
+    // promised by `supportsEvidence` is that a receipt gets written, so the
+    // check is the writer call itself, in the command layer — the same shape
+    // `commandWritesConfig` uses one section above.
+    const derived = new Set<string>()
+    for (const path of commandPaths) {
+      const graph = [...(await importGraph(await commandEntry(path)))].filter((file) =>
+        file.includes('/src/commands/')
+      )
+      for (const file of graph) {
+        const source = await readFile(file, 'utf8')
+        if (EVIDENCE_WRITERS.some((call) => source.includes(`${call}(`))) {
+          derived.add(path)
+          break
+        }
+      }
+    }
+    expect([...COMMAND_SURFACE.evidenceCommands].sort()).toEqual([...derived].sort())
   })
 
-  test('no catalogued command reaches the evidence receipt subsystem', async () => {
-    for (const path of commandPaths) {
-      const entry = join(SRC, `commands/${path.split(' ')[0]}.ts`)
-      if (!(await Bun.file(entry).exists())) continue
-      const graph = await importGraph(entry)
-      const emitsReceipt = [...graph].some((file) => file.includes('/src/core/evidence-receipt/'))
-      expect({ path, emitsReceipt }).toEqual({ path, emitsReceipt: false })
+  test('supportsEvidence on a capability matches its command', () => {
+    for (const capability of CAPABILITIES) {
+      expect({ id: capability.id, evidence: capability.supportsEvidence }).toEqual({
+        id: capability.id,
+        evidence: COMMAND_SURFACE.evidenceCommands.has(capability.command),
+      })
     }
   })
 })

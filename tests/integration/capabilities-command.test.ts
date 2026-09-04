@@ -144,7 +144,10 @@ describe('dbcli capabilities', () => {
   test('the catalog exposes no credential, host or endpoint', async () => {
     const dir = await emptyDir()
     const { stdout } = await run(['capabilities', '--format', 'json'], dir)
-    expect(stdout).not.toMatch(/localhost|127\.0\.0\.1|:\/\/|"host"|"port"|password/i)
+    // `password` is matched as a JSON *key*, not as a word. Since
+    // DBCLI-PLAT-011 the catalog describes `dbcli password`, so the bare word
+    // appears as a command path — which is a CLI name, not a credential.
+    expect(stdout).not.toMatch(/localhost|127\.0\.0\.1|:\/\/|"host"|"port"|"password"\s*:/i)
   })
 })
 

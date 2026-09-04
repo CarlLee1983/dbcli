@@ -6,8 +6,9 @@
 沒有已知的產品缺口。
 
 之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013 已交付並合併進
-`main`（PR #152、#164、#163、#162）。DBCLI-PLAT-004 Operation Envelope v1 的
-Story 與驗收規格已核准，現在是 current Story；下一個明定為 DBCLI-PLAT-005。
+`main`（PR #152、#164、#163、#162）。DBCLI-PLAT-004 Operation Envelope v1 已在
+本機完成實作、測試、文件與完整 gate，現在仍是 current Story，等待人類 review；下一個明定為
+DBCLI-PLAT-005。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -45,8 +46,8 @@ top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`eviden
 不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
 稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
 
-後續 backlog（DBCLI-PLAT-004 到 011）只寫進 spec，沒有實作。Task Pack 仍是
-`plan-only`，`safety.requires` 沒有動。
+後續 backlog（DBCLI-PLAT-005 到 010）只寫進 spec，沒有實作。Task Pack 仍是
+`plan-only`，`safety.requires` 沒有動；PLAT-004 只新增顯式輸出投影，沒有改 Task Pack。
 
 ## 交付紀錄
 
@@ -339,26 +340,53 @@ workflow:
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: main
-  commit: 4aa8c183213ccb44bdb03db18351797f3522e13f
-  dirty_worktree: true
+  branch: feat/dbcli-plat-004-operation-envelope-v1
+  commit: cc7427bedbd72215ccf370911bd262ba9f315717
+  dirty_worktree: false
   story_owned_paths:
-    - CONTEXT.md
-    - docs/adr/0024-operation-envelopes-use-an-explicit-root-output-mode.md
-    - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - .cursor/rules/dbcli.mdc
+    - .cursor/skills/dbcli/reference.md
+    - .github/skills/dbcli/
+    - .windsurfrules
+    - .windsurf/skills/dbcli/reference.md
+    - assets/SKILL.md
+    - assets/SKILL.zh-TW.md
+    - assets/reference.md
+    - docs/user/en/
+    - docs/user/zh-TW/
+    - plugins/dbcli-agent/skills/dbcli/
+    - resources/lang/en/messages.json
+    - resources/lang/zh-TW/messages.json
+    - skills/dbcli/
+    - src/cli-runtime.ts
+    - src/cli.ts
+    - src/commands/capabilities.ts
+    - src/core/capabilities/schema.ts
+    - src/core/operation-envelope.ts
+    - src/core/public.ts
+    - src/core/recovery/envelope-schema.ts
+    - src/program-root.ts
+    - src/utils/agent-output.ts
+    - src/utils/cli-output.ts
     - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/
     - specs/handoff.md
+    - tests/fixtures/plat004/
+    - tests/integration/capabilities-command.test.ts
+    - tests/integration/lazy-entry-path.test.ts
+    - tests/unit/core-public.test.ts
+    - tests/unit/core/operation-envelope.test.ts
+    - tests/unit/core/recovery/envelope-schema.test.ts
+    - tests/unit/i18n/root-help-messages.test.ts
   known_unrelated_paths: []
 
 verification:
-  last_command: bun run format:check && bun run forgeflow:check && git diff --check
+  last_command: make verify
   result: pass
   detail: >-
-    On this Story-document worktree, make verify passed before the final
-    reviewer-only Markdown corrections: 6658 pass / 0 fail across 565 files,
-    performance 21 pass / 2 intentional SQL skips / 0 fail, reproducible build,
-    and every static gate passed. After the corrections, format:check,
-    forgeflow:check, and git diff --check all passed. Product implementation and
-    its new acceptance tests have not started. release:check was not run because
-    no release was requested.
+    On the completed PLAT-004 worktree, make verify passed: 6711 tests passed
+    across 567 files with 0 failures; performance checks passed 21 tests with 2
+    intentional SQL skips and 0 failures; the build was reproducible; and every
+    static gate passed. The focused PLAT-004 suite passed 99 of 99 tests.
+    git diff --check passed; graft check reported an in-sync 5519-node graph.
+    release:check was not run because no release was requested.
 ```

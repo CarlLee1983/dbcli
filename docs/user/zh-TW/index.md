@@ -299,6 +299,32 @@ dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json
 ```
 
+#### Agent output v1
+
+`--agent-output` 是 root option，必須放在 subcommand 前。PLAT-004 只支援
+`dbcli --agent-output capabilities check --require <ids>`；它會在 stdout 輸出一份 compact
+UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：不會持久化、不是 evidence，
+也不會建立 timestamp 或 correlation id。
+
+v1 envelope 一律有十個 key：`schemaVersion`、`ok`、`operation`、`status`、`context`、`data`、
+`warnings`、`evidence`、`recovery` 與 `error`。`schemaVersion` 是 `1`；`operation` 是
+`capabilities.check`；`status` 是 `succeeded` 或 `failed`；consumer 必須依 key 名稱讀取，
+不能依欄位順序。文件連同換行上限為 64 KiB。
+
+不可把 `--agent-output` 和明確提供的 `--format` 或 `--for-agent` 一起使用；這類衝突、放在
+subcommand 後、無效輸入或不支援的 operation，都會回傳一份 envelope 並以 exit `2` 結束。成功
+exit `0`；需求未滿足或未預期的 internal failure exit `1`。未使用 `--agent-output` 時，既有輸出
+行為不變。
+
+error 與 warning 的 code/message vocabulary 永遠是 locale-independent English。Error code 為
+`INVALID_AGENT_OUTPUT_OPTIONS`（無效、位置錯誤或衝突的 output option）、
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION`（PLAT-004 範圍外的 operation）、
+`INVALID_CAPABILITY_REQUIREMENTS`（無效的 `--require`）、`CAPABILITY_REQUIREMENTS_UNMET`
+（已完成的 negative capability result）、`AGENT_OUTPUT_LIMIT_EXCEEDED`（64 KiB 上限）與
+`AGENT_OUTPUT_INTERNAL_ERROR`（未預期但安全的 failure）。Warning code 為
+`DUPLICATE_CAPABILITY_REQUIREMENT`、`CAPABILITY_CONTEXT_UNAVAILABLE`、
+`CAPABILITY_CONTEXT_UNRESOLVABLE` 與 `AGENT_MODE_RESTRICTION_ACTIVE`。
+
 一個 **capability** 是 dbcli 的單一原子能力——`schema.read`、`data.delete`。它絕不是職務或方法：
 `dba.tune-production` 與 `crud.scaffold` 屬於組合 dbcli 的 Role Skill 或 Method Skill。分層是
 `Story + AGENTS.md + Role Skill + Method Skill + Tool Skill + dbcli`，而 dbcli 只回答最後兩層。

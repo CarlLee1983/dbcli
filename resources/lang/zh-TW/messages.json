@@ -1,4 +1,7 @@
 {
+  "cli": {
+    "agent_output_option": "輸出一份 Operation Envelope v1（僅支援 capabilities check）"
+  },
   "init": {
     "description": "初始化 dbcli 配置，解析 .env 並進行互動式提示",
     "welcome": "歡迎使用 dbcli",

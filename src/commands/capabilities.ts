@@ -29,6 +29,15 @@ import { resolveConfigStoragePath } from '@/core/config-binding'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { DATABASE_SYSTEMS, type DatabaseSystem } from '@/adapters/types'
+import { CAPABILITY_ID_PATTERN } from '@/core/capabilities/schema'
+import {
+  MAX_OPERATION_ENVELOPE_IDENTIFIER_LENGTH,
+  MAX_OPERATION_ENVELOPE_ITEMS,
+  OPERATION_ENVELOPE_SCHEMA_VERSION,
+  type OperationEnvelope,
+  type OperationEnvelopeWarning,
+} from '@/core/operation-envelope'
+import { emitAgentOutputEnvelope, emitAgentOutputFailure } from '@/utils/agent-output'
 
 const CATALOG_FORMATS = ['text', 'json', 'markdown'] as const
 const CHECK_FORMATS = ['text', 'json'] as const
@@ -194,6 +203,60 @@ function renderCheckText(report: CapabilityCheckReport): string {
   return lines.join('\n')
 }
 
+function agentOutputRequested(command: Command): boolean {
+  return command.optsWithGlobals<Record<string, unknown>>().agentOutput === true
+}
+
+function validAgentRequirements(ids: readonly string[], warnings: readonly string[]): boolean {
+  return (
+    ids.length <= MAX_OPERATION_ENVELOPE_ITEMS &&
+    warnings.length <= MAX_OPERATION_ENVELOPE_ITEMS &&
+    ids.every(
+      (id) =>
+        id.length <= MAX_OPERATION_ENVELOPE_IDENTIFIER_LENGTH && CAPABILITY_ID_PATTERN.test(id)
+    )
+  )
+}
+
+function toAgentWarnings(warnings: readonly string[]): OperationEnvelopeWarning[] {
+  return warnings.map((message) => {
+    if (message.startsWith('Duplicate capability id ')) {
+      return { code: 'DUPLICATE_CAPABILITY_REQUIREMENT', message }
+    }
+    if (message.startsWith('No dbcli configuration was found')) {
+      return { code: 'CAPABILITY_CONTEXT_UNAVAILABLE', message }
+    }
+    if (message.startsWith('A dbcli configuration exists')) {
+      return { code: 'CAPABILITY_CONTEXT_UNRESOLVABLE', message }
+    }
+    if (message.startsWith('Agent mode is active')) {
+      return { code: 'AGENT_MODE_RESTRICTION_ACTIVE', message }
+    }
+    throw new Error('Unregistered capability warning')
+  })
+}
+
+function toAgentEnvelope(report: CapabilityCheckReport): OperationEnvelope {
+  const ok = report.ok
+  return {
+    schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
+    ok,
+    operation: 'capabilities.check',
+    status: ok ? 'succeeded' : 'failed',
+    context: report.context,
+    data: { required: report.required, results: report.results },
+    warnings: toAgentWarnings(report.warnings),
+    evidence: [],
+    recovery: null,
+    error: ok
+      ? null
+      : {
+          code: 'CAPABILITY_REQUIREMENTS_UNMET',
+          message: 'One or more required capabilities are unavailable.',
+        },
+  }
+}
+
 export const capabilitiesCommand = new Command('capabilities')
   .description('List the static dbcli capability catalog (no database connection)')
   // Both this command and `check` take `--format`. Without positional options
@@ -226,11 +289,15 @@ capabilitiesCommand
   .requiredOption('--require <ids>', 'Comma-separated capability ids, e.g. schema.read,query.read')
   .option('--format <type>', 'Output format: text, json', 'text')
   .action(async (options: { require: string; format: string }, command: Command) => {
+    const agentOutput = agentOutputRequested(command)
     let parsed
     try {
       validateFormat(options.format, CHECK_FORMATS, 'capabilities check')
       parsed = parseRequirements(options.require)
     } catch (error) {
+      if (agentOutput) {
+        process.exit(emitAgentOutputFailure('INVALID_CAPABILITY_REQUIREMENTS', 2))
+      }
       console.error(`Error: ${(error as Error).message}`)
       // `process.exit` is typed `never`, which is the only reason `parsed` reads
       // as defined below. A stub or wrapper that does not terminate would throw
@@ -240,8 +307,27 @@ capabilitiesCommand
       return
     }
 
+    if (agentOutput && !validAgentRequirements(parsed.ids, parsed.warnings)) {
+      process.exit(emitAgentOutputFailure('INVALID_CAPABILITY_REQUIREMENTS', 2))
+    }
+
     const { context, failure } = await resolveContext(command)
+    if (
+      agentOutput &&
+      context?.connectionName !== null &&
+      context?.connectionName !== undefined &&
+      context.connectionName.length > MAX_OPERATION_ENVELOPE_IDENTIFIER_LENGTH
+    ) {
+      process.exit(emitAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', 1))
+    }
     const report = checkCapabilities(parsed.ids, context, parsed.warnings, failure)
+
+    if (agentOutput) {
+      if (report.warnings.length > MAX_OPERATION_ENVELOPE_ITEMS) {
+        process.exit(emitAgentOutputFailure('INVALID_CAPABILITY_REQUIREMENTS', 2))
+      }
+      process.exit(emitAgentOutputEnvelope(toAgentEnvelope(report), report.ok ? 0 : 1))
+    }
 
     if (options.format === 'json') {
       console.log(JSON.stringify(report, null, 2))

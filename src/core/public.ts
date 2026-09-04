@@ -95,6 +95,24 @@ export type {
   CapabilityUnavailableReason,
 } from '@/core/capabilities'
 
+// ── Operation Envelope (agent-facing invocation result) ─
+export {
+  OPERATION_ENVELOPE_SCHEMA_VERSION,
+  parseOperationEnvelope,
+} from '@/core/operation-envelope'
+export type {
+  OperationEnvelope,
+  OperationEnvelopeCapabilitiesCheckData,
+  OperationEnvelopeCapabilityResult,
+  OperationEnvelopeContext,
+  OperationEnvelopeError,
+  OperationEnvelopeEvidenceKind,
+  OperationEnvelopeEvidenceReference,
+  OperationEnvelopeParseResult,
+  OperationEnvelopeStatus,
+  OperationEnvelopeWarning,
+} from '@/core/operation-envelope'
+
 // ── Safety ───────────────────────────────────────────────
 export { BlacklistManager } from '@/core/blacklist-manager'
 export { BlacklistValidator, BlacklistError } from '@/core/blacklist-validator'

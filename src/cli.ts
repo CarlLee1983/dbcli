@@ -11,7 +11,11 @@ export function isStandaloneVersionRequest(args: readonly string[]): boolean {
 
 let program: typeof import('./cli-runtime').default | undefined
 
-if (import.meta.main && isStandaloneVersionRequest(process.argv.slice(2))) {
+if (
+  import.meta.main &&
+  !process.argv.slice(2).includes('--agent-output') &&
+  isStandaloneVersionRequest(process.argv.slice(2))
+) {
   console.log(pkg.version)
 } else {
   // Keep this path non-literal for the production build: cli-runtime.mjs is a

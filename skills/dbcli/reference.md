@@ -86,6 +86,7 @@ command-level option is only valid after the command that declares it.
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
 | `--timeout <ms>` | Connection timeout in milliseconds (integer, 100–600000), overriding the connection config's `timeout` field for this invocation. Applies to every engine adapter. Without either the flag or the config field, adapters fall back to their built-in 5000ms default. |
 | `--statement-timeout <ms>` | How long a single statement may run, in milliseconds (integer, 0–3600000; `0` removes the limit), overriding the connection config's `statementTimeout` field. Independent of the connection timeout — raising it does not slow down detection of an unreachable host. Falls back to `--timeout` when unset, and to the server's own setting when neither is given. |
+| `--agent-output` | Request the PLAT-004 v1 Operation Envelope. It must precede the subcommand and currently supports only `capabilities check`; it conflicts with explicit `--format` and command-local `--for-agent`. |
 
 `--timeout` is applied only when the adapter is constructed for this invocation — it is
 never written back to `config.json`. Set the connection's `timeout` field instead for a
@@ -1728,7 +1729,42 @@ config; it does not connect to the database to find out.
 dbcli capabilities check --require schema.read,query.read
 dbcli capabilities check --require schema.read,data.delete --format json
 dbcli --use staging capabilities check --require schema.read --format json
+dbcli --agent-output capabilities check --require schema.read
 ```
+
+#### Agent output v1 (PLAT-004)
+
+`dbcli --agent-output capabilities check --require <ids>` is the only supported operation. It emits
+one compact UTF-8 JSON document followed by one newline on stdout, with stderr empty. The envelope
+always has, in stable order, `schemaVersion`, `ok`, `operation`, `status`, `context`, `data`,
+`warnings`, `evidence`, `recovery`, and `error`; consumers must use the names, not the order.
+`schemaVersion` is `1`, `operation` is `capabilities.check`, and `status` is `succeeded` or
+`failed`. The full document, including newline, is capped at 64 KiB.
+
+The flag must be before the subcommand and conflicts with explicitly supplied `--format` or
+`--for-agent`. Invalid placement/input and unsupported operations exit `2`; success exits `0`;
+unmet requirements and internal failures exit `1`. This output is ephemeral: it is not persisted,
+is not evidence, and adds no timestamp or correlation id.
+
+Code/message vocabulary is locale-independent English. Stable error codes mean:
+
+| Code | Meaning |
+|---|---|
+| `INVALID_AGENT_OUTPUT_OPTIONS` | The agent-output option is invalid, misplaced, or conflicts with explicit output options. |
+| `UNSUPPORTED_AGENT_OUTPUT_OPERATION` | The requested operation is outside PLAT-004 support. |
+| `INVALID_CAPABILITY_REQUIREMENTS` | `--require` is missing, empty, or malformed. |
+| `CAPABILITY_REQUIREMENTS_UNMET` | A completed check found one or more unavailable or unknown requirements. |
+| `AGENT_OUTPUT_LIMIT_EXCEEDED` | The otherwise valid serialized envelope exceeded 64 KiB. |
+| `AGENT_OUTPUT_INTERNAL_ERROR` | An unexpected failure was replaced with the safe agent-output failure. |
+
+Stable warning codes mean:
+
+| Code | Meaning |
+|---|---|
+| `DUPLICATE_CAPABILITY_REQUIREMENT` | A repeated required id was de-duplicated in first-seen order. |
+| `CAPABILITY_CONTEXT_UNAVAILABLE` | No local configuration was available to evaluate. |
+| `CAPABILITY_CONTEXT_UNRESOLVABLE` | Configuration exists but cannot yield an engine and permission. |
+| `AGENT_MODE_RESTRICTION_ACTIVE` | `DBCLI_AGENT_MODE=1` refuses configuration, permission, and credential changes. |
 
 | Flag | Purpose |
 |---|---|

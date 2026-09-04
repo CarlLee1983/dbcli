@@ -16,7 +16,8 @@ export function isMachineReadableCommand(actionCommand: Command, rootCommand?: C
 
   if (rootCommand) {
     const options = rootCommand.opts<Record<string, unknown>>()
-    if (options.forAgent === true || options.recovery === true) return true
+    if (options.agentOutput === true || options.forAgent === true || options.recovery === true)
+      return true
     if (typeof options.format === 'string' && !HUMAN_FORMATS.has(options.format)) return true
   }
   return false

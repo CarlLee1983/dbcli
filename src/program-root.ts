@@ -9,6 +9,7 @@ import {
   MAX_STATEMENT_TIMEOUT_MS,
 } from './utils/validation'
 import { parseSlowQueryThreshold } from './core/slow-query-advisory'
+import { t } from './i18n/message-loader'
 import pkg from '../package.json'
 
 /**
@@ -112,6 +113,7 @@ export function createRootProgram(): Command {
         0
       )
       .option('-q, --quiet', 'Suppress non-essential output')
+      .option('--agent-output', t('cli.agent_output_option'), false)
       .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
       .option('--global', 'Use the user-global connection registry (~/.config/dbcli)', false)
       .option(

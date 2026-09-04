@@ -98,3 +98,25 @@ test('capability contract 在 public 表面上是可往返驗證的', () => {
   expect(report.ok).toBe(true)
   expect(core.parseCapabilityCheckReport(JSON.parse(JSON.stringify(report)))).toBeDefined()
 })
+
+test('public API 暴露 Operation Envelope v1 parser', () => {
+  expect(core.OPERATION_ENVELOPE_SCHEMA_VERSION).toBe(1)
+  expect(typeof core.parseOperationEnvelope).toBe('function')
+
+  const parsed = core.parseOperationEnvelope({
+    schemaVersion: 1,
+    ok: true,
+    operation: 'capabilities.check',
+    status: 'succeeded',
+    context: null,
+    data: {
+      required: ['schema.read'],
+      results: [{ id: 'schema.read', status: 'available', reason: null }],
+    },
+    warnings: [],
+    evidence: [],
+    recovery: null,
+    error: null,
+  })
+  expect(parsed.ok).toBe(true)
+})

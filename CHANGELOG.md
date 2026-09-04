@@ -166,6 +166,14 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
 - **receipt 旗標表格不再被一句話切成兩張**，「Flag trio」／「旗標三件組」列了四個
   旗標，四份文件一併改為「Flags」／「旗標」。（DBCLI-009）
 
+- **`capabilities check --require` 的順序語意現在只有一種說法。** PLAT-001 的
+  Story 與 acceptance 宣告輸出「與 `--require` 參數順序無關」，實作從第一天起就在
+  `required` 與 `results` 保留 first-seen 輸入順序，而且它自己的單元測試逐字斷言
+  這件事。正式語意改為三條分開的話：相同輸入 byte-identical、兩個清單保留
+  first-seen 輸入順序、換順序不改變任何 capability 的判決與整體 `ok`。實作與輸出
+  一個位元都沒有動；`tests/docs/capability-ordering-parity.test.ts` 把八個表面
+  綁在一起，並拒絕被撤回的那句話重新長出來。（DBCLI-PLAT-013）
+
 ### Process
 
 - **ForgeFlow 採用版本現在只有一個可檢查的答案。** `specs/.forgeflow-adoption` 是
@@ -174,6 +182,17 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   `specs/handoff.md`、Story template 與本地 `story-development` Skill 全部對回它。
   這條 gate 的起因是它已經失效過一次：marker 與 README 推進到 0.3.2 之後，handoff
   跨兩個已合併的 PR 仍寫著 0.3.1，沒有任何東西比對過。（DBCLI-013）
+
+- **ForgeFlow delivery gate 不再認 Story ID 的形狀。**
+  `scripts/check-forgeflow-handoff.ts` 原本用 `/^(DBCLI-\d+).*$/` 從目錄名推 ID，
+  `DBCLI-PLAT-001-capability-contract` 不匹配就被鍵在自己的完整目錄名底下——把
+  `DBCLI-PLAT-001` 加進 `completed_stories` 會得到「找不到 Story directory」，
+  指著一個明明存在的目錄。現在 ID 從每份 `story.md` 的 `# Story: <ID>` 標題讀，
+  gate 不認任何形狀，新的 ID family 不需要改它；仍然比對宣告的 ID 是不是目錄名的
+  前綴。規則搬進 `scripts/lib/forgeflow-handoff.ts`，對 fixture 測，而且不 import
+  任何東西——「這個 gate 不碰網路」因此是檔案的性質，不是註解裡的承諾。同時新增
+  一條規則：同一個 Story 不能同時是 `current_story` 與 `completed_stories`。
+  （DBCLI-PLAT-013）
 
 ## [7.0.1] - 2026-09-02 - agent 讀到的黑名單語意還停在 4.0.0
 

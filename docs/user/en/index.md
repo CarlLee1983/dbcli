@@ -363,6 +363,11 @@ present and readable, and claiming there is no config would be false.
 An unrecognised id fails closed and is never resolved to a similar-looking one. Exit codes:
 `0` all available, `1` any unavailable or unknown, `2` invalid input.
 
+`required` and `results` hold your ids in first-seen input order, so `results[i]` answers
+`required[i]` and a duplicate appears once. Reordering the arguments reorders the output —
+identical input is byte-identical output, but a reordered `--require` is different input.
+What reordering never changes is a capability's status, its reason, or the overall `ok`.
+
 #### `inspect` output for agents
 
 `dbcli inspect` returns two parallel arrays so an agent can orient on the very first call:

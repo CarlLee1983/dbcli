@@ -73,8 +73,13 @@ support for something, silently.
 * R4: With no readable local config the context is `null` and every known
   capability is `unavailable` with reason `context-unavailable`. The default
   config is never reported as if it were configured.
-* R5: Output is deterministic: sorted by id, byte-identical across runs of the
-  same build, and independent of `--require` argument order.
+* R5: Output is deterministic: the catalog is sorted by id, and identical
+  input produces byte-identical output across runs of the same build. For
+  `check`, `required` and `results` hold the requested ids in
+  first-seen input order, so reordering the arguments reorders the answer; what
+  argument order never changes is any capability's verdict or the overall `ok`.
+  (Restated by DBCLI-PLAT-013, which withdrew a stronger ordering claim this
+  rule originally made and nothing ever implemented.)
 * R6: No credential, host, port, connection string or data row appears in any
   output.
 * R7: The engine vocabulary is `DatabaseSystem` (`postgresql`). No third

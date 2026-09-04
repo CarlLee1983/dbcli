@@ -20,8 +20,12 @@
 * [x] Every `COMMAND_CAPABILITY_KEYS` entry is covered by a capability, and
       every capability names a real matrix key — same file
 * [x] Ids are unique, sorted, and name abilities rather than jobs — same file
-* [x] Output is byte-identical across calls and independent of input order —
-      same file and `tests/unit/core/capabilities/check.test.ts`
+* [x] Identical input produces byte-identical output, and `required` and
+      `results` hold the requested ids in first-seen input order while argument
+      order changes neither any verdict nor `ok` — same file,
+      `tests/unit/core/capabilities/check.test.ts` and
+      `tests/docs/capability-ordering-parity.test.ts` (restated by
+      DBCLI-PLAT-013; see its Superseded Behavior)
 * [x] The strict schema rejects unknown fields and unknown schema versions —
       `tests/unit/core/capabilities/registry.test.ts`
 * [x] Every catalogued command path exists in the live Commander tree —

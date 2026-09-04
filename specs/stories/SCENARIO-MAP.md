@@ -21,6 +21,13 @@ and changes code only where a criterion fails.
 | [Use database evidence to find a slow API](../../docs/guides/en/slow-endpoint.html) | DBCLI-012 | Product delta | Add the missing schema step to the named plan-only workflow. |
 | [When should vibe coding use dbcli?](../../docs/guides/en/why-dbcli.html) | not a Story | Guide only | Product/tool-choice guidance has no bounded product delta. |
 
+The `DBCLI-PLAT-*` line is absent from this table on purpose, and will stay
+absent. This map inventories Pages scenarios — published guides a reader
+follows — and the Agent Platform Stories have no reader of that kind: their
+consumers are external Skills reading a contract. Giving them a row would mean
+inventing a scenario to be mapped to, which is the failure this map exists to
+avoid. They are ordered by `specs/handoff.md` instead.
+
 ## Suggested Execution Order
 
 There are no hard dependencies among these Story executions. The narrative

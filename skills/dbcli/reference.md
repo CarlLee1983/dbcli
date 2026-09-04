@@ -1740,6 +1740,13 @@ Each result is `available`, `unavailable` or `unknown`:
 A duplicate id in `--require` is de-duplicated in first-seen order and reported
 in `warnings`; `required` and `results` each hold it once.
 
+`required` and `results` hold the ids you asked for in first-seen input order,
+so `results[i]` answers `required[i]` and you never have to re-index by id to
+read your own answer. Reordering the arguments therefore reorders the output and
+the two byte streams differ; what reordering never changes is a capability's
+status, its reason, or the overall `ok`. Identical input is byte-identical
+output.
+
 **Exit codes:** `0` every requirement available · `1` any unavailable or
 unknown · `2` invalid input or an unreadable format.
 

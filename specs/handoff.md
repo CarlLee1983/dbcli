@@ -2,18 +2,22 @@
 
 十二個 Story 全數交付，已於 PR #144 合併進 `main`（merge commit `04a88a44`），
 合併後的收尾為 PR #145（`a2a05cc2`）。DBCLI-013 已交付，收的是 ForgeFlow 導入本身的尾——
-採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。沒有已知的產品
-缺口，也沒有選定中的下一個 Story。
+採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
+沒有已知的產品缺口。
+
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 已交付，DBCLI-PLAT-013 是目前
+進行中的 Story，收 PLAT-001 留下的契約與交接兩個尾，下一個是 DBCLI-PLAT-012。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
 `manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
 
-## 進行中：DBCLI-PLAT-001
+## 已交付：DBCLI-PLAT-001
 
-Agent Integration Contract v1 的第一個垂直切片。`dbcli capabilities` 與
-`dbcli capabilities check` 讓外部 Skill 在動工前問得到「這個工具能做什麼」、
-「這裡有沒有」，兩者都不建立資料庫連線。設計記錄在
+Agent Integration Contract v1 的第一個垂直切片，已由 PR #152 合併進 `main`
+（merge commit `9719eb49`），其後的 CI 修正是 PR #153（`c3e701a1`）。
+`dbcli capabilities` 與 `dbcli capabilities check` 讓外部 Skill 在動工前問得到
+「這個工具能做什麼」、「這裡有沒有」，兩者都不建立資料庫連線。設計記錄在
 `docs/specs/2026-09-04-agent-integration-contract-v1.md`，決定在 ADR-0022。
 
 這個 Story 最值得留下的一句：**contract 說謊了五次，沒有一次是讀碼看出來的。**
@@ -148,12 +152,63 @@ revision 是否存在，所以不宣稱；能查的是這個 repository 對它�
 既有的 `check-forgeflow-handoff.ts` 原封不動，兩支互不涵蓋——一支對帳交付宣稱，
 一支對帳流程版本。
 
+## DBCLI-PLAT-013：契約與交接的收尾
+
+三件事，同一個形狀：一句寫下來的宣稱，沒有任何東西拿它跟 repository 對帳。
+
+**`--require` 的順序語意有兩個答案。** PLAT-001 的 `story.md` R5 寫著輸出
+「independent of `--require` argument order」，`acceptance.md` 也照著勾了。實作
+從第一天起就在 `required` 與 `results` 保留 first-seen 輸入順序，它自己的單元
+測試逐字斷言這件事，設計記錄從來沒有講過另一句。所以四個表面裡有兩個宣告了
+一個沒有人實作、也沒有人測過的性質。
+
+窄的那個性質才是要的：`results[i]` 回答 `required[i]`。把 `results` 排序會讓
+呼叫端失去自己送出去那份清單的對應關係，得再用 id 重新索引一次才讀得懂自己的
+答案。所以正式語意是三條分開的話——相同輸入 byte-identical、兩個清單保留
+first-seen 順序、換順序不改變任何判決與 `ok`——並以
+`tests/docs/capability-ordering-parity.test.ts` 綁住八個表面。
+
+這一條值得記住的不是結論，是它怎麼活下來的：那個勾是對著一支**真的存在**的測試
+勾的，測試證明的是判決與順序無關，而它上面那句話長大了。沒有東西讀散文，於是
+散文可以說任何話。
+
+**交接紀錄還說 PLAT-001 在進行中。** `baseline.branch` 指著一個已合併並刪除的
+feature branch，`verification` 還寫著 `release:check` 沒跑完。寫下來的當時全部
+為真，現在全部不是。這正是 `check-forgeflow-handoff.ts` 存在的理由，而它剛好
+看不到這一格。
+
+**delivery gate 讀不到 PLAT 的 Story ID。** 舊版用
+`/^(DBCLI-\d+).*$/` 從目錄名推出 ID。`DBCLI-PLAT-001-capability-contract` 不匹配，
+`String.replace` 原樣回傳，Story 於是被鍵在自己的完整目錄名底下——把
+`DBCLI-PLAT-001` 加進 `completed_stories` 會得到「has no specs/stories directory」，
+一句聽起來為真、指著一個明明存在的目錄的錯誤訊息。
+
+把 regex 放寬只買到一個 ID family，下一個又會用同樣安靜的方式壞掉。所以改成
+不認任何 ID 形狀：每份 `story.md` 的 `# Story: <ID>` 標題本來就宣告了自己的 ID，
+gate 去讀它。仍然比對的只有一件事——宣告的 ID 必須是目錄名的前綴。一個 Story
+有兩個互相矛盾的名字，比只有一個壞名字更糟：交接紀錄引用其中一個，翻目錄的人
+看到另一個，而兩邊都不夠錯到會被發現。
+
+規則搬進 `scripts/lib/forgeflow-handoff.ts`，跟著 `check-forgeflow-adoption.ts`
+的 lib/shell 切法。這樣切有兩個收穫：規則可以對 fixture 測，不必對一個每交付
+一個 Story 就換答案的 repository 測；而且那個檔案不 import 任何東西，於是
+「這個 gate 不碰網路」從 header 裡的一句承諾變成檔案本身的性質——一支測試直接
+斷言它沒有 import。
+
+順帶補上一條新規則：同一個 Story 不能同時出現在 `current_story` 與
+`completed_stories`。兩者只有一個為真，另一個是沒人刪掉的舊行，而兩行併在一起
+什麼都沒說。
+
+shallow clone 仍然拒絕驗證，而且「既不是 true 也不是 false」的回答也拒絕：把
+讀不懂的答案當成「不是 shallow」，就是在證據缺席時假設證據沒事，正是這個 gate
+存在要防的事。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-001
-  next_story: pending
+  current_story: DBCLI-PLAT-013
+  next_story: DBCLI-PLAT-012
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -168,48 +223,48 @@ workflow:
     - DBCLI-011
     - DBCLI-012
     - DBCLI-013
+    - DBCLI-PLAT-001
   status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-001-capability-contract
-  # The last state on main when DBCLI-PLAT-001 started.
-  commit: d1237f93
+  branch: feat/dbcli-plat-013-agent-platform-closeout
+  # The state on main when DBCLI-PLAT-013 started: PR #153 merged, PLAT-001 shipped.
+  commit: c3e701a1
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-PLAT-001-capability-contract/
-    - tests/unit/adapters/database-systems-roster.test.ts
-    - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
+    - specs/stories/DBCLI-PLAT-013-agent-platform-closeout/
+    - specs/stories/DBCLI-PLAT-001-capability-contract/story.md
+    - specs/stories/DBCLI-PLAT-001-capability-contract/acceptance.md
+    - scripts/lib/forgeflow-handoff.ts
+    - scripts/check-forgeflow-handoff.ts
+    - tests/unit/scripts/forgeflow-handoff.test.ts
+    - tests/docs/capability-ordering-parity.test.ts
     - docs/specs/2026-09-04-agent-integration-contract-v1.md
-    - docs/plans/2026-09-04-agent-integration-contract-v1.md
-    - src/core/capabilities/
-    - src/core/permission/rank.ts
-    - src/commands/capabilities.ts
-    - tests/unit/core/capabilities/
-    - tests/contract/capability-contract.test.ts
-    - tests/integration/capabilities-command.test.ts
-    - src/adapters/types.ts
-    - src/core/permission-guard.ts
-    - src/core/public.ts
-    - src/program.ts
-    - src/program-lazy.ts
-    - tests/unit/core-public.test.ts
-    - assets/SKILL.md
-    - assets/SKILL.zh-TW.md
     - assets/reference.md
-    - docs/user/
-    - CONTEXT.md
+    - .cursor/skills/dbcli/reference.md
+    - .github/skills/dbcli/reference.md
+    - .windsurf/skills/dbcli/reference.md
+    - plugins/dbcli-agent/skills/dbcli/reference.md
+    - skills/dbcli/reference.md
+    - docs/user/en/index.md
+    - docs/user/en/index.html
+    - docs/user/zh-TW/index.md
+    - docs/user/zh-TW/index.html
     - CHANGELOG.md
     - specs/handoff.md
   known_unrelated_paths: []
 
 verification:
-  last_command: bun test + 13 static gates + build + build:determinism
+  last_command: make verify
   result: pass
   detail: >-
-    6509 pass / 27 skip / 0 fail across 557 files, after the code-review fixes. The 27 skips are the
-    Elasticsearch, live-DB and MySQL integration suites, which have no local
-    services; no DBCLI-PLAT-001 assertion depends on one. release:check was NOT
-    run to completion — it fails at step 1/9 on a `bun audit` network timeout,
-    before any repository check executes.
+    6576 pass / 0 fail / 0 skip across 560 files, with the docker-compose.test.yml
+    services running, so no integration suite skipped. Baseline on c3e701a1 under the
+    same services was 6533 / 558; the difference is this Story's two new files.
+    All 23 static gates passed, forgeflow:check included — it now reconciles 14
+    completed Stories, the fourteenth being DBCLI-PLAT-001. The first attempt failed
+    at step 2/23 on a `bun audit` registry timeout after its retries were exhausted;
+    the rerun completed. release:check was not run: it is the release gate, and this
+    Story publishes nothing.
 ```

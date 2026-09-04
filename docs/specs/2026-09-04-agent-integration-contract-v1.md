@@ -155,6 +155,17 @@ last is "unreadable"; none is "absent". All still fail closed.
 answering twice would make `results` a multiset the caller has to fold. Neither
 is guessable, so it is stated here.
 
+**`required` and `results` hold the requested ids in first-seen input order**,
+so reordering the arguments reorders the answer and the two byte streams
+differ. What argument order does not change is any capability's verdict or the
+overall `ok`. Sorting the lists would make reordering byte-identical and cost
+more than it bought: a caller would lose the correspondence between the list it
+sent and the list it got back, and would have to re-index by id to read its own
+answer. `results[i]` is about `required[i]`, and that is the property worth
+having. (DBCLI-PLAT-013 states this here. PLAT-001's Story text had made a
+stronger ordering claim, which nothing implemented and no test asserted; see
+that Story's Superseded Behavior for the withdrawn wording.)
+
 **An empty list is refused**, exit `2`. A requirement list that accidentally
 evaluated to "nothing required" would report `ok: true` and read as a green
 light.

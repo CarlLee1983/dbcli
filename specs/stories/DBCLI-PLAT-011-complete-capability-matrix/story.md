@@ -100,14 +100,27 @@ the gap was a second reader, not a better grep.
 ### What the audit could not settle, and what was done about it
 
 * **`plan` on a non-SQL engine, and why it is not `limited` like the three
-  above.** It does not refuse either: `toSqlDialect` returns `undefined` off SQL
-  and the risk analysis runs anyway. The difference is what is left. `design`
-  off SQL still has `--against-orm`, `semantic` still has context, search and
-  drift — a real mode a caller can use. `plan` is one thing end to end, "assess
-  the write risk of this SQL statement", and on a Redis connection there is no
-  SQL to assess. `limited` would promise a mode that does not exist, so it is
-  `unsupported`, and this paragraph is the reason rather than the asymmetry
-  looking like an oversight.
+  above.** It does not refuse either, and it does not even degrade quietly into
+  doing nothing. `plan`'s only connection guard checks that a connection is
+  *configured*, not what it is (`plan.ts:33-35`). `toSqlDialect` returns
+  `undefined` off SQL (`permission-guard.ts:150`), and an undefined dialect does
+  not narrow the analysis — it *widens* it, because `findWriteKeyword` falls
+  back to every SQL dialect when given none (`permission-guard.ts:179`). So on a
+  Redis connection the command SQL-parses whatever you passed it, prints a
+  verdict, and exits `0`.
+
+  That is worse than an error, because it looks authoritative, and it is why
+  `plan` is `unsupported` where the other three are `limited`. The distinction
+  is not "refuses" versus "does not refuse" — none of the four refuses. It is
+  what survives: `design` off SQL still has `--against-orm`, `semantic` still
+  has context, search and drift, and a caller can use those. `plan` has one mode
+  and one input, a SQL string, and every factor it can report comes from SQL
+  keyword analysis. `limited` would promise a mode that does not exist.
+
+  Recorded at this length because the asymmetry is the kind a later reader
+  "fixes" for consistency. The code fact is "runs without refusing"; that it
+  produces a meaningless verdict is a judgement, and it is stated as one. No
+  test covers `plan` on a non-SQL connection.
 * **`verify` on MySQL and MariaDB.** The code permits all three SQL engines
   (`verify.ts:75-83`), and all four `verify` integration suites pin
   `system: 'postgresql'`. So the claim is "the command does not refuse this

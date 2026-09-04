@@ -6,8 +6,9 @@
 沒有已知的產品缺口。
 
 之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 與 DBCLI-PLAT-013 已交付，
-目前進行中的是 DBCLI-PLAT-012——把 schema cache 的寫入從連線身分的閘門後面搬出來，
-關掉 PLAT-001 記下的那個已知過度宣稱。
+DBCLI-PLAT-012 已交付，關掉了 PLAT-001 記下的那個已知過度宣稱。目前進行中的是
+DBCLI-PLAT-011——把 catalog 之外的十六個公開指令納入 engine matrix，只在讀得出證據
+的地方寫支援度。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -39,7 +40,8 @@ Agent Integration Contract v1 的第一個垂直切片，已由 PR #152 合併�
 agent 以為完全讀不到 schema，反方向的錯更大。真正的修法是 schema *快取*的寫入
 本來就不該擋在「連線身分」的閘門後面：DBCLI-PLAT-012。
 
-已知邊界，不是疏漏：`ENGINE_CAPABILITIES` 只涵蓋 34 個 command key，dbcli 有 50 個
+已知邊界，不是疏漏（**DBCLI-PLAT-011 已關閉**，catalog 從 34 條增為 53
+條）：`ENGINE_CAPABILITIES` 只涵蓋 34 個 command key，dbcli 有 50 個
 top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等 16 個
 不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
 稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
@@ -204,7 +206,7 @@ shallow clone 仍然拒絕驗證，而且「既不是 true 也不是 false」的
 讀不懂的答案當成「不是 shallow」，就是在證據缺席時假設證據沒事，正是這個 gate
 存在要防的事。
 
-## DBCLI-PLAT-012：schema cache 的寫入邊界
+## 已交付：DBCLI-PLAT-012——schema cache 的寫入邊界
 
 PLAT-001 交付時記下的那個已知過度宣稱，起因已經移除：`DBCLI_AGENT_MODE=1` 下
 `capabilities check` 說 `schema.read` 可用，`dbcli schema` 卻 exit 1。
@@ -245,11 +247,64 @@ guard，清單外的都不准 guard。名冊的比對只讀程式碼、不讀註
 （macOS 的 `/var/folders` 對 `/private/var/folders`）讀到，完整性紀錄的 `targetPath`
 會對不上而被判成 tampering。整合測試用 `realpath` 迴避，原因寫在測試裡。
 
+## DBCLI-PLAT-011：完整的 Capability Matrix
+
+Catalog 從 34 條增為 53 條，涵蓋所有公開指令。
+
+這個 Story 最值得留下的一句：**四個 subagent 平行去稽核那十六個指令，沒有一個交回
+可用的報告，於是每一條都自己讀。對這個 Story 來說那反而是對的結果——它的整條規則
+就是「二手的支援度宣稱正是要防的東西」。**
+
+PLAT-001 把十六個指令留在 catalog 之外是對的：替沒稽核過的指令寫 engine 支援度，
+正是這份契約要防的那種捏造。所以這次的規則不是「把表填滿」，是「程式碼判定得了的
+就填，判定不了的寫 `unsupported`」。不新增第三種狀態——一個「我們沒查」的值，呼叫端
+拿到也不能做任何事，而且會永遠留在那裡沒人查；`unsupported` 用的是呼叫端已經會解析
+的詞彙，說的是同一件事：別建在這上面。判定不了的地方寫進 Story，給人看。
+
+九個指令的程式碼會直接拒絕非 SQL 連線，逐條指名那道 gate（`explain.ts:43`、
+`assert.ts:41`、`snapshot.ts:30`、`verify.ts:75`、`semantic.ts:104`、`design.ts:236`、
+`impact.ts:189`、`proxy.ts:15`、以及 `plan` 的 `toSqlDialect`）。完全不碰資料庫的標
+`not-applicable`。
+
+**contract test 抓到兩件讀碼沒抓到的事**，這是這批工作真正的收穫：
+
+第一，`commandWritesConfig` 用 `commands/<name>.ts` 找檔案，**找不到就跳過**。
+`password` 住在 `credential.ts`、`contract` 住在 `contracts.ts`，於是「這個指令不會寫
+設定」對著那個專門用來改憑證的指令回了 true，而且是靜悄悄地回。對照表改從
+`program-lazy.ts` 的 lazy loader 讀，找不到模組是失敗而不是跳過。一個在證據缺席時
+回「通過」的檢查，跟 shallow clone 那件事是同一類。
+
+第二，`impact assess` 與 `design` 的 `requiresConnection: false` 被拒絕了。兩個指令
+本身確實離線，但它們從 `commands/diff.ts` import ORM artifact 的讀取工具，於是把
+diff 的 adapter import 拖進自己的 static graph。那段程式碼的註解本來就寫著「never
+opens a database connection or reads dbcli configuration」——它住在 command 模組裡
+只是因為 diff 是第一個需要它的地方。搬到 `src/core/orm-drift/input.ts`，行為一個字
+沒改，差別是那個離線宣稱現在證明得出來，而不是被豁免。這是刻意選的：加一條例外
+會讓 R4 從此少一個能檢查的東西。
+
+`supportsEvidence` 原本是空集合，因為會寫 receipt 的三個指令都不在 v1 catalog 裡。
+現在由 contract test 從指令層的實際 writer 呼叫雙向推導。第一版寫成「import graph
+碰得到 evidence 模組」，結果 `insert`、`query`、`schema` 等十七個指令全中——它們只是
+遞移拉到型別。碰得到不等於會寫。順帶補上 `recover`：它一直在 catalog 裡，也一直能
+用 `--write-verification-artifact` 寫出 artifact，只是沒人對過。
+
+`capabilities` 自己也進 catalog，決定寫在 ADR-0023。反對的理由是真的：live 讀的時候
+`capability.check` 只可能是 `available`，是個常數。但 catalog 本來就是設計成可以被
+pin 住的——一個帶著舊 catalog 的 Skill 對著沒有這個指令的 dbcli 問
+`--require capability.check`，會拿到 `unknown-capability`，那正是它需要的訊號。而且
+「所有公開指令都被描述」是個能檢查的規則，「除了負責描述的那一個」是個帶例外的規則，
+沒寫下來的例外會被反覆重新爭論。
+
+三支既有測試刻意改動：`mutatesConfiguration` 名冊加入
+`connection.rotate-credential`；兩支憑證洩漏檢查原本比對裸字 `password`，而它現在是
+一個指令路徑——unit 版只豁免 `command` 欄位，integration 版改比對 `"password":` 這個
+JSON key，兩者都沒有為其他欄位放寬。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-012
+  current_story: DBCLI-PLAT-011
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -266,36 +321,37 @@ workflow:
     - DBCLI-012
     - DBCLI-013
     - DBCLI-PLAT-001
+    - DBCLI-PLAT-012
     - DBCLI-PLAT-013
   status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-012-schema-cache-write-boundary
-  # The state on main when DBCLI-PLAT-013 started; PLAT-012 continues from its commit.
+  branch: feat/dbcli-plat-011-capability-matrix
+  # The state on main when this Agent Platform run started; PLAT-013 → 012 → 011 stack on it.
   commit: c3e701a1
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-PLAT-012-schema-cache-write-boundary/
-    - src/core/schema-cache-persistence.ts
-    - src/commands/schema.ts
-    - tests/unit/core/schema-cache-persistence.test.ts
-    - tests/contract/config-mutation-boundary.test.ts
-    - tests/integration/schema-cache-agent-mode.test.ts
-    - tests/docs/schema-cache-deviation-closed.test.ts
+    - specs/stories/DBCLI-PLAT-011-complete-capability-matrix/
+    - src/adapters/capabilities.ts
+    - src/core/capabilities/registry.ts
+    - src/core/orm-drift/input.ts
+    - src/commands/diff.ts
+    - src/commands/impact.ts
+    - src/commands/design.ts
+    - docs/adr/0023-the-capability-catalog-describes-itself.md
     - tests/contract/capability-contract.test.ts
-    - tests/unit/commands/schema-refresh-bootstrap.test.ts
-    - specs/stories/DBCLI-PLAT-001-capability-contract/acceptance.md
-    - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - tests/unit/core/capabilities/registry.test.ts
+    - tests/integration/capabilities-command.test.ts
+    - tests/docs/capability-scope-parity.test.ts
     - docs/plans/2026-09-04-agent-integration-contract-v1.md
-    - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
     - assets/reference.md
     - .cursor/skills/dbcli/reference.md
     - .github/skills/dbcli/reference.md
     - .windsurf/skills/dbcli/reference.md
     - plugins/dbcli-agent/skills/dbcli/reference.md
     - skills/dbcli/reference.md
-    - CONTEXT.md
+    - docs/user/
     - CHANGELOG.md
     - specs/handoff.md
   known_unrelated_paths: []
@@ -304,12 +360,11 @@ verification:
   last_command: make verify
   result: pass
   detail: >-
-    6622 pass / 0 fail / 0 skip across 564 files, with the docker-compose.test.yml
-    services running, so nothing skipped. The PLAT-013 baseline under the same
-    services was 6576 / 560; the difference is this Story's four new files. All 23
-    static gates passed. Two pre-existing tests changed deliberately and are named
-    in the Story's Superseded Behavior: the capability contract's
-    INCIDENTAL_CONFIG_WRITERS exemption (now empty) and the schema-refresh
-    bootstrap fixture (now has the config it always implied). release:check was not
-    run: it is the release gate, and this Story publishes nothing.
+    6657 pass / 0 fail / 0 skip across 565 files, with the docker-compose.test.yml
+    services running. The PLAT-012 baseline under the same services was 6622 / 564.
+    All 23 static gates passed. Three pre-existing tests changed deliberately and
+    are named in the Story's Superseded Behavior. Two earlier attempts failed at
+    step 2/23 on a `bun audit` registry timeout after its retries were exhausted;
+    the registry recovered and the rerun completed. release:check was not run: it
+    is the release gate, and this Story publishes nothing.
 ```

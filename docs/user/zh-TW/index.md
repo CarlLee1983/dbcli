@@ -321,6 +321,12 @@ dbcli capabilities check --require schema.read,query.read --format json
 無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：`0` 全部可用、
 `1` 有任一不可用或未知、`2` 輸入無效。
 
+Catalog 涵蓋所有公開指令，包含 `capabilities` 自己，而且每一條 engine 宣稱都是從實作讀出
+來的。程式碼會直接拒絕非 SQL 連線的那些指令——`explain`、`plan`、`impact assess`、
+`assert`、`snapshot`、`verify`、`semantic`、`design`、`proxy`——在 MongoDB、Redis 與
+Elasticsearch 上會回 `unavailable` 加上 reason `engine`。程式碼判定不了的引擎，一律不會被
+標成支援。
+
 `required` 與 `results` 依**首次出現的輸入順序**（first-seen input order）保留你送進來的
 id，因此 `results[i]` 回答的就是 `required[i]`，重複的 id 只出現一次。把參數換個順序等於
 換了一份輸入，輸出也會跟著換順序——相同輸入才保證 byte-identical。換順序不會改變的是任何

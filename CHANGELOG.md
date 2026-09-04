@@ -47,6 +47,47 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   因為替它們寫 engine 支援度等於憑讀碼捏造未經稽核的宣稱。它們回 `unknown`，
   擴充 matrix 是後續 Story。（DBCLI-PLAT-001，ADR-0022）
 
+### Added
+
+- **Capability catalog 涵蓋所有公開指令，從 34 條增為 53 條。** PLAT-001 刻意把
+  十六個指令留在 catalog 之外——`explain`、`plan`、`impact`、`assert`、`snapshot`、
+  `verify`、`verification`、`evidence`、`contract`、`semantic`、`design`、`proxy`、
+  `recovery`、`backfill`、`password`，以及 `capabilities` 自己——理由是替沒有稽核過
+  的指令寫 engine 支援度，正是這份契約要防的那種捏造。
+
+  這次每一條宣稱都是從實作讀出來的，證據（`file:line`）逐條寫在 Story 裡。程式碼
+  會直接拒絕非 SQL 連線的九個指令標成 `unsupported`，並指名那道 gate；完全不碰資料庫
+  的標成 `not-applicable`。判定不了的一律 `unsupported`，不新增第三種狀態——一個
+  「我們沒查」的值，呼叫端拿到也不能做任何事，而且會永遠留在那裡沒人查。
+
+  `capabilities` 自己也在 catalog 裡（`capability.discover`、`capability.check`），
+  決定寫在 ADR-0023：live 讀的時候它確實是個常數，但 catalog 本來就是設計成可以被
+  pin 住的——一個帶著舊 catalog 的 Skill，對著沒有這個指令的 dbcli 問
+  `--require capability.check` 會拿到 `unknown-capability`，那正是它需要的訊號。
+  （DBCLI-PLAT-011）
+
+- **`supportsEvidence` 不再全部是 false。** 它原本是空集合，因為會寫 receipt 的
+  `assert`、`verify`、`evidence` 都不在 v1 catalog 裡。現在由 contract test 從指令層
+  的實際 writer 呼叫雙向推導——「import graph 碰得到 evidence 模組」不等於「會寫」，
+  `insert`、`query` 等十幾個指令只是遞移拉到型別而已。順帶補上 `recover`：它一直在
+  catalog 裡，也一直能用 `--write-verification-artifact` 寫出 artifact。
+  （DBCLI-PLAT-011）
+
+### Changed
+
+- **ORM artifact 的讀取搬進 `src/core/orm-drift/input.ts`。** 這段程式碼的註解本來就
+  寫著「never opens a database connection or reads dbcli configuration」，但它住在
+  `src/commands/diff.ts` 裡，於是 `impact assess` 與 `design` 只要 import 它，就會
+  把 diff 的 adapter import 拖進自己的 static graph——contract test 因此拒絕它們
+  `requiresConnection: false` 的宣稱。行為一個字都沒改，`diff` 原樣 re-export，
+  差別是那兩個指令的離線宣稱現在證明得出來，而不是被豁免。（DBCLI-PLAT-011）
+
+- **contract test 不再假設指令名等於檔名。** `commands/<name>.ts` 對 `password`
+  （`credential.ts`）與 `contract`（`contracts.ts`）都找不到檔案，而找不到時它是
+  「跳過」——於是「這個指令不會寫設定」對著那個專門用來改憑證的指令回了 true。
+  對照表改從 `program-lazy.ts` 的 lazy loader 讀，找不到模組是失敗而不是跳過。
+  （DBCLI-PLAT-011）
+
 ### Fixed
 
 - **Schema cache 的寫入不再是一次完整設定的重新發布。** `dbcli schema` 原本透過

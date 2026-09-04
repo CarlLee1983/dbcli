@@ -280,6 +280,7 @@ dbcli capabilities check --require schema.read,query.read --format json</code></
             </ul>
             <p>狀態有 <code>available</code>、<code>unavailable</code> 與 <code>unknown</code>。<code>unavailable</code> 的原因有 <code>engine</code>、<code>agent-mode</code>、<code>permission</code>、<code>context-unavailable</code> 與 <code>context-unresolvable</code>，依「最難修的排前面」回報，讓 reason 指到真正擋路的那一個。在 <code>DBCLI_AGENT_MODE=1</code> 之下，會變更設定的能力一律被拒，不管權限等級寫什麼。<code>context-unresolvable</code> 與 <code>context-unavailable</code> 刻意分開：<code>{"$env": "..."}</code> 密碼指向未設定變數的設定檔是存在且可讀的，宣稱「沒有設定」是假話。</p>
             <p>無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：<code>0</code> 全部可用、<code>1</code> 有任一不可用或未知、<code>2</code> 輸入無效。</p>
+            <p>Catalog 涵蓋所有公開指令，包含 <code>capabilities</code> 自己，而且每一條 engine 宣稱都是從實作讀出來的。程式碼會直接拒絕非 SQL 連線的那些指令——<code>explain</code>、<code>plan</code>、<code>impact assess</code>、<code>assert</code>、<code>snapshot</code>、<code>verify</code>、<code>semantic</code>、<code>design</code>、<code>proxy</code>——在 MongoDB、Redis 與 Elasticsearch 上會回 <code>unavailable</code> 加上 reason <code>engine</code>。程式碼判定不了的引擎，一律不會被標成支援。</p>
             <p><code>required</code> 與 <code>results</code> 依<strong>首次出現的輸入順序</strong>（first-seen input order）保留你送進來的 id，因此 <code>results[i]</code> 回答的就是 <code>required[i]</code>，重複的 id 只出現一次。把參數換個順序等於換了一份輸入，輸出也會跟著換順序——相同輸入才保證 byte-identical。換順序不會改變的是任何 capability 的 status、reason 與整體 <code>ok</code>。</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>

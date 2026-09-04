@@ -80,7 +80,10 @@ this work exists to prevent, and not one was found by reading the code.
 * Task Packs remain `plan-only`; `safety.requires` is untouched.
 * `ENGINE_CAPABILITIES` was not extended, so sixteen commands are absent from
   the catalog and return `unknown`. That is a known, documented boundary
-  (DBCLI-PLAT-011), not an oversight.
+  (DBCLI-PLAT-011), not an oversight. **Closed by DBCLI-PLAT-011**, which
+  audited all sixteen against the implementation and took the catalog from 34
+  capabilities to 53; the boundary above was true of this slice and is kept as
+  the record of it.
 
 ## Rollback
 

@@ -1700,11 +1700,18 @@ the same build are byte-identical.
 `schemaVersion` is the **capability contract** version, not the npm package
 version. Pin `schemaVersion`, never `7.x`.
 
-**Scope of v1:** the catalog covers the commands the engine capability matrix
-governs. Commands outside it — `explain`, `plan`, `impact`, `assert`, `verify`,
-`evidence`, `contract`, `semantic`, `design`, `snapshot`, `backfill`, `proxy` —
-are absent rather than described with engine claims nothing has audited. Ask for
-one and you get `unknown`, which fails closed.
+**Scope:** the catalog covers every public command, including `explain`, `plan`,
+`impact assess`, `assert`, `snapshot`, `verify`, `verification`, `evidence`,
+`contract`, `semantic`, `design`, `proxy`, `recovery`, `backfill artifact`,
+`password`, and `capabilities` itself. An id it does not know is still
+`unknown`, which fails closed.
+
+Every engine claim was read out of the implementation. Where the code refuses a
+non-SQL connection outright — `explain`, `plan`, `impact assess`, `assert`,
+`snapshot`, `verify`, `semantic`, `design`, `proxy` — the entry says
+`unsupported` for MongoDB, Redis and Elasticsearch and names the gate. Where a
+command never opens a connection at all, it is engine-independent. Nothing is
+marked supported on an engine the code does not settle.
 
 **Permission:** query-only+ (no connection is made)
 

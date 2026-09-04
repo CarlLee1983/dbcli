@@ -29,7 +29,7 @@ import {
 } from '@/core/semantic'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
 import { normalizeProposedChanges, type NormalizedChangeScope } from '@/core/orm-drift/change-set'
-import { loadOrmSchema, parseAgainstOrmValues } from '@/commands/diff'
+import { loadOrmSchema, parseAgainstOrmValues } from '@/core/orm-drift/input'
 import { listSnippetKeys } from '@/core/saved-queries/loader'
 import { resolveSnippetDirs } from '@/core/saved-queries/snippet-paths'
 import { readVerificationArtifacts } from '@/core/verification/reader'

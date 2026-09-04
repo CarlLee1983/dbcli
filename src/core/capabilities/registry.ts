@@ -337,6 +337,159 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     permission: 'query-only',
     requiresConnection: false,
   },
+  {
+    id: 'query.explain',
+    key: 'explain',
+    command: 'explain',
+    description: 'Read the engine execution plan for a statement without running it as a write.',
+    permission: 'query-only',
+    requiresConnection: true,
+  },
+  {
+    id: 'query.plan-risk',
+    key: 'plan',
+    command: 'plan',
+    description: 'Assess the write risk of a statement offline, against the cached schema.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'schema.impact-assess',
+    key: 'impactAssess',
+    command: 'impact assess',
+    description: 'Assess the known effects of a proposed schema change offline.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'data.assert',
+    key: 'assert',
+    command: 'assert',
+    description: 'Check a data expectation and report a pass or fail verdict.',
+    permission: 'query-only',
+    requiresConnection: true,
+  },
+  {
+    id: 'data.snapshot',
+    key: 'snapshot',
+    command: 'snapshot',
+    description: 'Capture a result fingerprint for later comparison.',
+    permission: 'query-only',
+    requiresConnection: true,
+  },
+  {
+    id: 'verification.run',
+    key: 'verify',
+    command: 'verify',
+    description: 'Verify a named change scenario and record the outcome.',
+    permission: 'query-only',
+    requiresConnection: true,
+  },
+  {
+    id: 'verification.inspect',
+    key: 'verification',
+    command: 'verification',
+    description: 'Inspect locally stored verification artifacts.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'verification.prune',
+    key: 'verificationPrune',
+    command: 'verification prune',
+    description: 'Delete locally stored verification artifacts by age or subject.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'evidence.pack',
+    key: 'evidence',
+    command: 'evidence',
+    description: 'Compose, validate and render an evidence pack from local artifacts.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'semantic.context',
+    key: 'semantic',
+    command: 'semantic',
+    description: 'Author and validate governed semantic context over the cached schema.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'semantic.contract',
+    key: 'contract',
+    command: 'contract',
+    description: 'Validate and search governed business contracts offline.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'schema.design',
+    key: 'design',
+    command: 'design',
+    description: 'Author a schema design and compare it against the database or an ORM.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'diagnostic.proxy',
+    key: 'proxy',
+    command: 'proxy',
+    description: 'Run a local observing proxy in front of a supported SQL engine.',
+    permission: 'query-only',
+    requiresConnection: true,
+  },
+  {
+    id: 'diagnostic.proxy-analyze',
+    key: 'proxyAnalyze',
+    command: 'proxy analyze',
+    description: 'Analyse locally recorded proxy events without contacting an engine.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'recovery.codes',
+    key: 'recovery',
+    command: 'recovery',
+    description: 'Describe a recovery code and its remediation steps.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'data.backfill-artifact',
+    key: 'backfillArtifact',
+    command: 'backfill artifact',
+    description: 'Build a backfill artifact from a source manifest and a connection identity.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'connection.rotate-credential',
+    key: 'password',
+    command: 'password',
+    description: 'Change the stored credential for a single connection.',
+    permission: 'query-only',
+    requiresConnection: true,
+    mutatesConfiguration: true,
+  },
+  {
+    id: 'capability.discover',
+    key: 'capabilityDiscover',
+    command: 'capabilities',
+    description: 'List the static capability catalog this build publishes.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
+  {
+    id: 'capability.check',
+    key: 'capabilityCheck',
+    command: 'capabilities check',
+    description: 'Check whether required capability ids are available in this project.',
+    permission: 'query-only',
+    requiresConnection: false,
+  },
 ]
 
 /**
@@ -469,9 +622,33 @@ export const COMMAND_SURFACE: CommandSurfaceFacts = Object.freeze({
       'audit tail',
       'audit show',
       'audit health',
+      // DBCLI-PLAT-011. `verify`, `semantic`, `design`, `evidence`, `contract`
+      // and `backfill artifact` are absent for the same reason `blacklist` and
+      // `migrate` are: their own node offers no `--format`, only their
+      // subcommands do, and a capability may claim only what the path it names
+      // actually offers.
+      'explain',
+      'plan',
+      'impact assess',
+      'assert',
+      'snapshot',
+      'verification prune',
+      'proxy',
+      'proxy analyze',
+      'recovery',
+      'password',
+      'capabilities',
+      'capabilities check',
     ])
   ) as ReadonlySet<string>,
-  evidenceCommands: Object.freeze(new Set<string>()) as ReadonlySet<string>,
+  evidenceCommands: Object.freeze(
+    // A command emits a receipt when it writes a verification artifact or an
+    // evidence pack. Empty until DBCLI-PLAT-011 audited the sixteen commands
+    // the catalog did not cover — and `recover`, which was catalogued all
+    // along and has written an artifact under `--write-verification-artifact`
+    // since before the contract existed.
+    new Set(['assert', 'verify', 'recover', 'evidence'])
+  ) as ReadonlySet<string>,
 })
 
 /**

@@ -155,7 +155,15 @@ describe('capability catalog', () => {
     const marked = CAPABILITIES.filter((capability) => capability.mutatesConfiguration).map(
       (capability) => capability.id
     )
-    expect(marked).toEqual(['blacklist.manage', 'connection.init', 'connection.select'])
+    // `connection.rotate-credential` joined the three when DBCLI-PLAT-011
+    // catalogued `dbcli password`. It is the most literal member of the set:
+    // changing a stored credential is precisely what agent mode refuses.
+    expect(marked).toEqual([
+      'blacklist.manage',
+      'connection.init',
+      'connection.rotate-credential',
+      'connection.select',
+    ])
   })
 
   test('ids name tool abilities, never job titles or methods', () => {
@@ -195,6 +203,13 @@ describe('capability catalog', () => {
     for (const capability of CAPABILITIES) {
       for (const [field, value] of Object.entries(capability)) {
         if (typeof value !== 'string') continue
+        // `command` is exempt from the credential-word half, and only that
+        // field. Since DBCLI-PLAT-011 the catalog contains `dbcli password`,
+        // whose command path is the literal string this pattern looks for. A
+        // command path cannot be a leaked secret: a contract test proves every
+        // one of them against the live Commander tree. Exempting the field is
+        // narrower than loosening the pattern for every field.
+        if (field === 'command' && /^[a-z][a-z- ]*$/.test(value)) continue
         expect({ id: capability.id, field, value: suspicious.test(value) }).toEqual({
           id: capability.id,
           field,

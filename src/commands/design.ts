@@ -11,7 +11,7 @@ import {
 import { configModule } from '@/core/config'
 import { normalizeDbSchema } from '@/core/orm-drift/from-db'
 import { compareNormalized } from '@/core/orm-drift/compare'
-import { loadOrmSchema, parseAgainstOrmValues } from '@/commands/diff'
+import { loadOrmSchema, parseAgainstOrmValues } from '@/core/orm-drift/input'
 import { formatDrift, type DriftFormat } from '@/formatters/orm-drift'
 import { resolveConfigPath } from '@/utils/config-path'
 import { formatDesign, formatDesignProposal, formatDesignReview } from '@/formatters/design'

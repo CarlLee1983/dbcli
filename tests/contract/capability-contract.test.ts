@@ -18,6 +18,9 @@ import { buildCompletionTree, findCommandPath } from '../../src/core/completion/
 import { CAPABILITIES, COMMAND_SURFACE } from '../../src/core/capabilities'
 import { COMMAND_LOADERS } from '../../src/program-lazy'
 
+/** Forward-slash form of a path, so the `/src/...` filters below hold on Windows too. */
+const toPosix = (file: string): string => file.replaceAll('\\', '/')
+
 const SRC = resolve(import.meta.dir, '../../src')
 const tree = buildCompletionTree(buildProgram())
 
@@ -97,7 +100,7 @@ async function importGraph(entry: string): Promise<Set<string>> {
   const queue = [entry]
 
   while (queue.length > 0) {
-    const file = queue.pop()!
+    const file = toPosix(queue.pop()!)
     if (seen.has(file)) continue
     seen.add(file)
 
